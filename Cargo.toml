@@ -1,0 +1,18 @@
+[package]
+name = "not_cuda"
+version = "0.1.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2018"
+
+[lib]
+name = "not_cuda"
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[[bin]]
+name = "not_cuda"
+path = "src/bin.rs"
+
+[dependencies]
+detours-sys = "0.1"
+clap = "2.33"
