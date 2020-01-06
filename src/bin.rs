@@ -9,7 +9,8 @@ use std::ptr;
 
 use clap::{App, AppSettings, Arg};
 
-mod win_err;
+#[macro_use]
+mod win;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let matches = App::new("notCUDA injector")
@@ -47,7 +48,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     cmd_line.push(0);
     let mut startup_info = unsafe { mem::zeroed::<detours_sys::_STARTUPINFOW>() };
     let mut proc_info = unsafe { mem::zeroed::<detours_sys::_PROCESS_INFORMATION>() };
-    let process_success = unsafe {
+    os_call!(
         detours_sys::DetourCreateProcessWithDllExW(
             ptr::null(),
             cmd_line.as_mut_ptr(),
@@ -60,13 +61,25 @@ fn main() -> Result<(), Box<dyn Error>> {
             &mut startup_info as *mut _,
             &mut proc_info as *mut _,
             "nvcuda_redirect.dll".as_ptr() as *const i8,
-            Option::None,
-        )
-    };
-    if process_success == 0 {
-        return Err(win_err::error_string(win_err::errno()))?;
-    }
+            Option::None
+        ),
+        0
+    );
     Ok(())
+    /*
+
+    cmd_line.as_mut_ptr(),
+    ptr::null_mut(),
+    ptr::null_mut(),
+    0,
+    0x10,
+    ptr::null_mut(),
+    ptr::null(),
+    &mut startup_info as *mut _,
+    &mut proc_info as *mut _,
+    "nvcuda_redirect.dll".as_ptr() as *const i8,
+    Option::None,
+    */
 }
 
 fn copy_to(from: &OsStr, to: &mut Vec<u16>) {
