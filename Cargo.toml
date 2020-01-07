@@ -16,3 +16,6 @@ path = "src/bin.rs"
 [dependencies]
 detours-sys = "0.1"
 clap = "2.33"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["processthreadsapi", "std", "synchapi"] }

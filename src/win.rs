@@ -1,7 +1,6 @@
 #![allow(non_snake_case)]
 
 use std::error;
-use std::error::Error;
 use std::fmt;
 use std::ptr;
 
@@ -50,7 +49,7 @@ macro_rules! last_ident {
 macro_rules! os_call {
     ($($path:ident)::+ ($($args:expr),*), $success:expr) => {
         let result = unsafe{ $($path)::+ ($($args),+) };
-        if result != $success {
+        if !($success)(result) {
             let name = last_ident!($($path),+);
             let err_code = $crate::win::errno();
             Err($crate::win::OsError{

@@ -1,11 +1,16 @@
 extern crate clap;
 extern crate detours_sys;
+extern crate winapi;
 
 use std::error::Error;
 use std::ffi::OsStr;
 use std::mem;
 use std::os::windows::ffi::OsStrExt;
 use std::ptr;
+
+use winapi::um::processthreadsapi::{GetExitCodeProcess, ResumeThread};
+use winapi::um::synchapi::WaitForSingleObject;
+use winapi::um::winbase::{INFINITE, WAIT_FAILED};
 
 use clap::{App, AppSettings, Arg};
 
@@ -63,23 +68,13 @@ fn main() -> Result<(), Box<dyn Error>> {
             "nvcuda_redirect.dll".as_ptr() as *const i8,
             Option::None
         ),
-        0
+        |x| x == 0
     );
-    Ok(())
-    /*
-
-    cmd_line.as_mut_ptr(),
-    ptr::null_mut(),
-    ptr::null_mut(),
-    0,
-    0x10,
-    ptr::null_mut(),
-    ptr::null(),
-    &mut startup_info as *mut _,
-    &mut proc_info as *mut _,
-    "nvcuda_redirect.dll".as_ptr() as *const i8,
-    Option::None,
-    */
+    os_call!(ResumeThread(proc_info.hThread), |x| x as i32 != -1);
+    os_call!(WaitForSingleObject(proc_info.hProcess, INFINITE), |x| x != WAIT_FAILED);
+    let mut child_exit_code : u32 = 0;
+    os_call!(GetExitCodeProcess(proc_info.hProcess, &mut child_exit_code as *mut _), |x| x != 0);
+    std::process::exit(child_exit_code as i32)
 }
 
 fn copy_to(from: &OsStr, to: &mut Vec<u16>) {
