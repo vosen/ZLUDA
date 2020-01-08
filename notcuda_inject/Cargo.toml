@@ -1,16 +1,11 @@
 [package]
-name = "not_cuda"
-version = "0.1.0"
+name = "notcuda"
+version = "0.0.0"
 authors = ["Andrzej Janik <vosen@vosen.pl>"]
 edition = "2018"
 
-[lib]
-name = "not_cuda"
-path = "src/lib.rs"
-crate-type = ["cdylib"]
-
 [[bin]]
-name = "not_cuda"
+name = "notcuda"
 path = "src/bin.rs"
 
 [dependencies]
