@@ -5,4 +5,5 @@ authors = ["Andrzej Janik <vosen@vosen.pl>"]
 edition = "2018"
 
 [lib]
+name = "nvcuda"
 crate-type = ["cdylib"]
