@@ -1,5 +1,5 @@
 [package]
-name = "notcuda"
+name = "notcuda_inject"
 version = "0.0.0"
 authors = ["Andrzej Janik <vosen@vosen.pl>"]
 edition = "2018"
@@ -9,6 +9,7 @@ name = "notcuda"
 path = "src/bin.rs"
 
 [dependencies]
+notcuda_redirect = { path = "../notcuda_redirect" }
 detours-sys = "0.1"
 clap = "2.33"
 

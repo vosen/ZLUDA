@@ -65,10 +65,10 @@ fn main() -> Result<(), Box<dyn Error>> {
             ptr::null(),
             &mut startup_info as *mut _,
             &mut proc_info as *mut _,
-            "nvcuda_redirect.dll".as_ptr() as *const i8,
+            "notcuda_redirect.dll\0".as_ptr() as *const i8,
             Option::None
         ),
-        |x| x == 0
+        |x| x != 0
     );
     os_call!(ResumeThread(proc_info.hThread), |x| x as i32 != -1);
     os_call!(WaitForSingleObject(proc_info.hProcess, INFINITE), |x| x != WAIT_FAILED);
