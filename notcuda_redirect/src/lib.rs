@@ -40,21 +40,19 @@ unsafe extern "system" fn NotCudaLoadLibraryExW(
 #[no_mangle]
 unsafe extern "system" fn DllMain(_: *const u8, dwReason: u32, _: *const u8) -> i32 {
     if dwReason == DLL_PROCESS_ATTACH {
-        let mut load_lib_ex = LoadLibraryExW as *mut _;
         DetourRestoreAfterWith();
         DetourTransactionBegin();
         DetourUpdateThread(GetCurrentThread());
         DetourAttach(
-            &mut load_lib_ex,
+            std::mem::transmute(&mut LOAD_LIBRARY_EX),
             NotCudaLoadLibraryExW as *mut _,
         );
         DetourTransactionCommit();
-        LOAD_LIBRARY_EX = std::mem::transmute(load_lib_ex);
     } else if dwReason == DLL_PROCESS_DETACH {
         DetourTransactionBegin();
         DetourUpdateThread(GetCurrentThread());
         DetourDetach(
-            &mut (LOAD_LIBRARY_EX as *mut _),
+            std::mem::transmute(&mut LOAD_LIBRARY_EX),
             NotCudaLoadLibraryExW as *mut _,
         );
         DetourTransactionCommit();
