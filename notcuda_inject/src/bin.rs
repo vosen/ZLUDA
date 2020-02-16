@@ -1,4 +1,6 @@
 extern crate clap;
+#[macro_use]
+extern crate guid;
 extern crate detours_sys;
 extern crate winapi;
 
@@ -60,7 +62,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             ptr::null_mut(),
             ptr::null_mut(),
             0,
-            0x10,
+            0,
             ptr::null_mut(),
             ptr::null(),
             &mut startup_info as *mut _,
@@ -70,10 +72,28 @@ fn main() -> Result<(), Box<dyn Error>> {
         ),
         |x| x != 0
     );
+    let mut exe_path = std::env::current_dir()?
+        .as_os_str()
+        .encode_wide()
+        .collect::<Vec<_>>();
+    let guid = guid! {"C225FC0C-00D7-40B8-935A-7E342A9344C1"};
+    os_call!(
+        detours_sys::DetourCopyPayloadToProcess(
+            proc_info.hProcess,
+            mem::transmute(&guid),
+            exe_path.as_mut_ptr() as *mut _,
+            (exe_path.len() * mem::size_of::<u16>()) as u32
+        ),
+        |x| x != 0
+    );
     os_call!(ResumeThread(proc_info.hThread), |x| x as i32 != -1);
-    os_call!(WaitForSingleObject(proc_info.hProcess, INFINITE), |x| x != WAIT_FAILED);
-    let mut child_exit_code : u32 = 0;
-    os_call!(GetExitCodeProcess(proc_info.hProcess, &mut child_exit_code as *mut _), |x| x != 0);
+    os_call!(WaitForSingleObject(proc_info.hProcess, INFINITE), |x| x
+        != WAIT_FAILED);
+    let mut child_exit_code: u32 = 0;
+    os_call!(
+        GetExitCodeProcess(proc_info.hProcess, &mut child_exit_code as *mut _),
+        |x| x != 0
+    );
     std::process::exit(child_exit_code as i32)
 }
 
@@ -82,3 +102,5 @@ fn copy_to(from: &OsStr, to: &mut Vec<u16>) {
         to.push(x);
     }
 }
+
+//

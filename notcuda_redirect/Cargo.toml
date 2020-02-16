@@ -7,9 +7,8 @@ edition = "2018"
 [lib]
 crate-type = ["cdylib"]
 
-[dependencies]
+[target.'cfg(windows)'.dependencies]
 detours-sys = "0.1"
 wchar = "0.6"
-
-[target.'cfg(windows)'.dependencies]
+guid = "0.1"
 winapi = { version = "0.3", features = ["processthreadsapi", "winbase", "winnt", "winerror", "libloaderapi", "std"] }

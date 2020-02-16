@@ -7,3 +7,7 @@ edition = "2018"
 [lib]
 name = "nvcuda"
 crate-type = ["cdylib"]
+
+[dependencies]
+level_zero-sys = { path = "../level_zero-sys" }
+lazy_static = "1.4"

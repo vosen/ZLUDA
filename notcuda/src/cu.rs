@@ -79,7 +79,24 @@ pub enum Result {
     ERROR_UNKNOWN = 999,
 }
 
+impl Result {
+    pub fn from_l0(result: l0::ze_result_t) -> Result {
+        match result {
+            l0::ze_result_t::ZE_RESULT_SUCCESS => Result::SUCCESS,
+            l0::ze_result_t::ZE_RESULT_ERROR_UNINITIALIZED => Result::ERROR_NOT_INITIALIZED,
+            l0::ze_result_t::ZE_RESULT_ERROR_INVALID_ENUMERATION => Result::ERROR_INVALID_VALUE,
+            l0::ze_result_t::ZE_RESULT_ERROR_OUT_OF_HOST_MEMORY => Result::ERROR_OUT_OF_MEMORY,
+            _ => Result::ERROR_UNKNOWN
+        }
+    }
+}
+
 #[repr(C)]
+#[derive(PartialEq, Eq)]
 pub struct Uuid {
-    x: [std::os::raw::c_char; 16]
+    pub x: [std::os::raw::c_uchar; 16]
+}
+
+pub struct Device {
+    base: level_zero_sys::ze_driver_handle_t
 }

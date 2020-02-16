@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    "level_zero-sys",
     "notcuda",
     "notcuda_inject",
     "notcuda_redirect",

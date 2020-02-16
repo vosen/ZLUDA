@@ -6,12 +6,11 @@ edition = "2018"
 
 [[bin]]
 name = "notcuda"
-path = "src/bin.rs"
-
-[dependencies]
-notcuda_redirect = { path = "../notcuda_redirect" }
-detours-sys = "0.1"
-clap = "2.33"
+path = "src/main.rs"
 
 [target.'cfg(windows)'.dependencies]
+notcuda_redirect = { path = "../notcuda_redirect" }
 winapi = { version = "0.3", features = ["processthreadsapi", "std", "synchapi"] }
+detours-sys = "0.1"
+clap = "2.33"
+guid = "0.1"
