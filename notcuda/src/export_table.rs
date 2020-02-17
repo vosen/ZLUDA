@@ -11,10 +11,12 @@ pub unsafe extern "C" fn cuGetExportTable(
 ) -> cu::Result {
     if *id == CU_ETID_ToolsRuntimeCallbackHooks {
         *table = TABLE0.as_ptr() as *const _;
+        return cu::Result::SUCCESS;
     } else if *id == CU_ETID_CudartInterface {
         *table = TABLE1.as_ptr() as *const _;
+        return cu::Result::SUCCESS;
     }
-    return cu::Result::SUCCESS;
+    cu::Result::ERROR_NOT_SUPPORTED
 }
 
 const CU_ETID_ToolsRuntimeCallbackHooks: cu::Uuid = cu::Uuid {
