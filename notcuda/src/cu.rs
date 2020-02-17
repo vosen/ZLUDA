@@ -1,3 +1,4 @@
+use num_enum::TryFromPrimitive;
 use std::os::raw::c_int;
 
 #[repr(C)]
@@ -81,7 +82,8 @@ pub enum Result {
     ERROR_UNKNOWN = 999,
 }
 
-#[repr(C)]
+#[repr(i32)]
+#[derive(Copy, Clone, TryFromPrimitive)]
 #[allow(non_camel_case_types)]
 pub enum DeviceAttribute {
     MAX_THREADS_PER_BLOCK = 1,
@@ -200,6 +202,7 @@ impl Result {
             l0::ze_result_t::ZE_RESULT_ERROR_INVALID_ENUMERATION => Result::ERROR_INVALID_VALUE,
             l0::ze_result_t::ZE_RESULT_ERROR_INVALID_ARGUMENT => Result::ERROR_INVALID_VALUE,
             l0::ze_result_t::ZE_RESULT_ERROR_OUT_OF_HOST_MEMORY => Result::ERROR_OUT_OF_MEMORY,
+            l0::ze_result_t::ZE_RESULT_ERROR_UNSUPPORTED_FEATURE => Result::ERROR_NOT_SUPPORTED,
             _ => Result::ERROR_UNKNOWN
         }
     }

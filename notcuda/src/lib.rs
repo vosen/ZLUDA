@@ -2,14 +2,12 @@ extern crate level_zero_sys as l0;
 #[macro_use]
 extern crate lazy_static;
 
+use std::convert::TryFrom;
 use std::sync::Mutex;
 use std::ptr;
 use std::os::raw::{c_char, c_int, c_uint};
 
-mod cu;
-mod export_table;
-mod ze;
-
+#[macro_use]
 macro_rules! l0_check_err {
     ($exp:expr) => {
         {
@@ -20,6 +18,10 @@ macro_rules! l0_check_err {
         }
     };
 }
+
+mod cu;
+mod export_table;
+mod ze;
 
 lazy_static! {
     pub static ref GLOBAL_STATE: Mutex<Option<Driver>> = Mutex::new(None);
@@ -149,13 +151,20 @@ pub extern "C" fn cuDeviceTotalMem_v2(bytes: *mut usize, dev_idx: cu::Device) ->
     Driver::call_device(dev_idx, |dev| dev.total_mem(bytes))
 }
 
-/*
 #[no_mangle]
-pub extern "C" fn cuDeviceGetAttribute(pi: *mut c_int, attrib: cu::DeviceAttribute, dev: cu::Device) -> cu::Result {
-    let cu::Device(dev_idx) = dev;
-    if pi == ptr::null_mut() || dev_idx < 0 {
+pub extern "C" fn cuDeviceGetAttribute(pi: *mut c_int, attrib: c_int, dev_idx: cu::Device) -> cu::Result {
+    if pi == ptr::null_mut() {
         return cu::Result::ERROR_INVALID_VALUE;
     }
-    Driver::call(|driver| driver.device_get_attribute(bytes, dev))
+    let attrib = match cu::DeviceAttribute::try_from(attrib) {
+        Ok(attrib) => attrib,
+        Err(_) => return cu::Result::ERROR_INVALID_VALUE
+    };
+    match ze::Device::try_get_attribute(attrib) {
+        Some(attrib) => {
+            unsafe { *pi = attrib };
+            cu::Result::SUCCESS
+        },
+        None => Driver::call_device(dev_idx, |dev| dev.get_attribute(pi, attrib)),
+    }
 }
-*/
