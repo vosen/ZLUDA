@@ -1,3 +1,5 @@
+use std::os::raw::c_int;
+
 #[repr(C)]
 #[allow(non_camel_case_types)]
 pub enum Result {
@@ -97,3 +99,6 @@ impl Result {
 pub struct Uuid {
     pub x: [std::os::raw::c_uchar; 16]
 }
+
+#[repr(transparent)]
+pub struct Device(pub c_int);

@@ -4,6 +4,8 @@ extern crate lazy_static;
 
 use std::sync::Mutex;
 use std::ptr;
+use std::cmp;
+use std::os::raw::{c_char, c_int};
 
 mod cu;
 mod export_table;
@@ -24,9 +26,9 @@ lazy_static! {
 }
 
 pub struct Driver {
-    base: l0::ze_driver_handle_t
+    base: l0::ze_driver_handle_t,
+    devices: Vec::<l0::ze_device_handle_t>
 }
-
 unsafe impl Send for Driver {}
 unsafe impl Sync for Driver {}
 
@@ -34,8 +36,15 @@ impl Driver {
     fn new() -> Result<Driver, l0::ze_result_t> {
         let mut driver_count = 1;
         let mut handle = ptr::null_mut();
-        l0_check!{ l0::zeDriverGet(&mut driver_count, &mut handle) }; 
-        Ok(Driver{ base: handle })
+        l0_check!{ l0::zeDriverGet(&mut driver_count, &mut handle) };
+        let mut count = 0;
+        l0_check! { l0::zeDeviceGet(handle, &mut count, ptr::null_mut()) }
+        let mut devices = vec![ptr::null_mut(); count as usize];
+        l0_check! { l0::zeDeviceGet(handle, &mut count, devices.as_mut_ptr()) }
+        if (count as usize) < devices.len() {
+            devices.truncate(count as usize);
+        }
+        Ok(Driver{ base: handle, devices: devices })
     }
 
     fn call<F: FnOnce(&mut Driver) -> l0::ze_result_t>(f: F) -> cu::Result {
@@ -53,33 +62,44 @@ impl Driver {
     }
 
     fn device_get_count(&self, count: *mut i32) -> l0::ze_result_t {
-        unsafe { l0::zeDeviceGet(self.base, count as *mut _ as *mut _, ptr::null_mut()) }
+        unsafe { *count = self.devices.len() as i32 };
+        l0::ze_result_t::ZE_RESULT_SUCCESS
     }
 
-    fn device_get(&self, device: *mut l0::ze_device_handle_t, ordinal: ::std::os::raw::c_int) -> l0::ze_result_t {
-        let count = (ordinal as u32) + 1;
-        let mut devices_found = count;
-        let mut handles = vec![ptr::null_mut(); count as usize];
-        let result = unsafe { l0::zeDeviceGet(self.base, &mut devices_found, handles.as_mut_ptr()) };
-        if  result != l0::ze_result_t::ZE_RESULT_SUCCESS {
-            return result;
-        }
-        if devices_found < count {
+    fn device_get(&self, device: *mut cu::Device, ordinal: c_int) -> l0::ze_result_t {
+        if ordinal < 0 || (ordinal as usize) >= self.devices.len() {
             return l0::ze_result_t::ZE_RESULT_ERROR_INVALID_ARGUMENT;
         }
-        unsafe { *device = handles[(count as usize) - 1] };
+        unsafe { *device = cu::Device(ordinal) };
+        l0::ze_result_t::ZE_RESULT_SUCCESS    
+    }
+
+    fn device_get_name(&self, name: *mut c_char, len: c_int, cu::Device(dev): cu::Device) -> l0::ze_result_t {
+        if len <= 0 || dev < 0 || (dev as usize) >= self.devices.len() {
+            return l0::ze_result_t::ZE_RESULT_ERROR_INVALID_ARGUMENT;
+        }
+        let mut props = Box::new(unsafe { std::mem::zeroed::<l0::ze_device_properties_t>() });
+        props.version = l0::ze_device_properties_version_t::ZE_DEVICE_PROPERTIES_VERSION_CURRENT;
+        let result = unsafe { l0::zeDeviceGetProperties(self.devices[dev as usize], props.as_mut()) };
+        if result != l0::ze_result_t::ZE_RESULT_SUCCESS {
+            return result;
+        }
+        let null_pos = props.name.iter().position(|&c| c == 0).unwrap_or(0);
+        let dst_null_pos = cmp::min((len - 1) as usize, null_pos);
+        unsafe { *(name.add(dst_null_pos)) = 0 };
+        unsafe { std::ptr::copy_nonoverlapping(props.name.as_ptr(), name, dst_null_pos) };
         l0::ze_result_t::ZE_RESULT_SUCCESS
     }
 }
 
 #[no_mangle]
-pub extern "stdcall" fn cuDriverGetVersion(version: &mut std::os::raw::c_int) -> cu::Result {
+pub extern "C" fn cuDriverGetVersion(version: &mut c_int) -> cu::Result {
     *version = i32::max_value();
     return cu::Result::SUCCESS;
 }
 
 #[no_mangle]
-pub unsafe extern "stdcall" fn cuInit(_: *const std::os::raw::c_uint) -> cu::Result {
+pub unsafe extern "C" fn cuInit(_: *const c_int) -> cu::Result {
     let l0_init = l0::zeInit(l0::ze_init_flag_t::ZE_INIT_FLAG_GPU_ONLY);
     if l0_init !=  l0::ze_result_t::ZE_RESULT_SUCCESS {
         return cu::Result::from_l0(l0_init);
@@ -99,11 +119,16 @@ pub unsafe extern "stdcall" fn cuInit(_: *const std::os::raw::c_uint) -> cu::Res
 }
 
 #[no_mangle]
-pub extern "stdcall" fn cuDeviceGetCount(count: *mut std::os::raw::c_int) -> cu::Result {
+pub extern "C" fn cuDeviceGetCount(count: *mut c_int) -> cu::Result {
     Driver::call(|driver| driver.device_get_count(count))
 }
 
 #[no_mangle]
-pub extern "stdcall" fn cuDeviceGet(device: *mut l0::ze_device_handle_t, ordinal: ::std::os::raw::c_int) -> cu::Result {
+pub extern "C" fn cuDeviceGet(device: *mut cu::Device, ordinal: c_int) -> cu::Result {
     Driver::call(|driver| driver.device_get(device, ordinal))
+}
+
+#[no_mangle]
+pub extern "C" fn cuDeviceGetName(name: *mut c_char, len: c_int, dev: cu::Device) -> cu::Result {
+    Driver::call(|driver| driver.device_get_name(name, len, dev))
 }
