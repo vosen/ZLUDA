@@ -153,18 +153,35 @@ pub extern "C" fn cuDeviceTotalMem_v2(bytes: *mut usize, dev_idx: cu::Device) ->
 
 #[no_mangle]
 pub extern "C" fn cuDeviceGetAttribute(pi: *mut c_int, attrib: c_int, dev_idx: cu::Device) -> cu::Result {
+
     if pi == ptr::null_mut() {
         return cu::Result::ERROR_INVALID_VALUE;
     }
-    let attrib = match cu::DeviceAttribute::try_from(attrib) {
-        Ok(attrib) => attrib,
+    let attrib = match u8::try_from(attrib) {
+        Ok(a) => a,
         Err(_) => return cu::Result::ERROR_INVALID_VALUE
     };
-    match ze::Device::try_get_attribute(attrib) {
-        Some(attrib) => {
-            unsafe { *pi = attrib };
+    match cu::DeviceAttribute::try_new(attrib) {
+        Some(cu::DeviceAttribute::Static(a)) => {
+            unsafe { *pi = ze::Device::get_attribute_static(a) };
             cu::Result::SUCCESS
         },
-        None => Driver::call_device(dev_idx, |dev| dev.get_attribute(pi, attrib)),
+        Some(cu::DeviceAttribute::Dynamic(a)) => Driver::call_device(dev_idx, |dev| dev.get_attribute(pi, a)),
+        // TODO: add support for more properties
+        None => cu::Result::SUCCESS
     }
+}
+
+#[no_mangle]
+pub extern "C" fn cuDeviceGetUuid(uuid: *mut cu::Uuid, dev_idx: cu::Device) -> cu::Result {
+    if uuid == ptr::null_mut() {
+        return cu::Result::ERROR_INVALID_VALUE;
+    }
+    Driver::call_device(dev_idx, |dev| dev.get_uuid(uuid))
+}
+
+
+#[no_mangle]
+pub extern "C" fn cuMemAlloc_v2(dptr: *mut cu::DevicePtr, bytesize: usize) -> cu::Result {
+    unimplemented!()
 }

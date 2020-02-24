@@ -25,6 +25,13 @@ macro_rules! l0_check {
     };
 }
 
+fn either<T>(r: Result<T, T>) -> T {
+    match r {
+        Ok(x) => x,
+        Err(x) => x
+    }
+}
+
 pub trait Versioned : Sized {
     type Version;
 
@@ -60,6 +67,16 @@ impl Versioned for ze_device_properties_t {
     }
 }
 
+impl Versioned for ze_device_image_properties_t {
+    type Version = ze_device_image_properties_version_t;
+    fn current() -> Self::Version {
+        ze_device_image_properties_version_t::ZE_DEVICE_IMAGE_PROPERTIES_VERSION_CURRENT
+    }
+    fn version(&mut self) -> &mut Self::Version {
+        &mut self.version
+    }
+}
+
 #[derive(Clone, Copy)]
 #[repr(transparent)] // required so a Vec<ze_device_handle_t> can be safely transmutted to Vec<Device>
 pub struct Device(pub ze_device_handle_t);
@@ -73,6 +90,12 @@ impl Device {
     fn get_device_properties(self) -> Result<Box<ze_device_properties_t>, ze_result_t> {
         let mut props = Box::new(l0::ze_device_properties_t::new());
         l0_check_err! { l0::zeDeviceGetProperties(self.0, props.as_mut()) };
+        Ok(props)
+    }
+
+    fn get_device_image_properties(self) -> Result<Box<ze_device_image_properties_t>, ze_result_t> {
+        let mut props = Box::new(l0::ze_device_image_properties_t::new());
+        l0_check_err! { l0::zeDeviceGetImageProperties(self.0, props.as_mut()) };
         Ok(props)
     }
 
@@ -105,40 +128,48 @@ impl Device {
         l0::ze_result_t::ZE_RESULT_SUCCESS
     }
 
-    pub fn try_get_attribute(attr: cu::DeviceAttribute) -> Option<c_int> {
+    pub fn get_attribute_static(attr: cu::DeviceStaticAttribute) -> c_int {
         match attr {
-            cu::DeviceAttribute::COMPUTE_CAPABILITY_MAJOR => Some(c_int::max_value()),
-            cu::DeviceAttribute::COMPUTE_CAPABILITY_MINOR => Some(c_int::max_value()),
-            cu::DeviceAttribute::GPU_OVERLAP => Some(1),
-            cu::DeviceAttribute::KERNEL_EXEC_TIMEOUT => Some(0),
-            _ => None
+            cu::DeviceStaticAttribute::GPU_OVERLAP => 1,
+            cu::DeviceStaticAttribute::KERNEL_EXEC_TIMEOUT => 0,
+            cu::DeviceStaticAttribute::INTEGRATED => 1,
+            cu::DeviceStaticAttribute::COMPUTE_CAPABILITY_MAJOR => c_int::max_value(),
+            cu::DeviceStaticAttribute::COMPUTE_CAPABILITY_MINOR => c_int::max_value(),
         }
     }
 
-    fn map_cuda_attribute(attr: cu::DeviceAttribute, props: &ze_device_properties_t) -> Option<c_int> {
+    fn get_attribute_general(attr: cu::DeviceGeneralAttribute, props: &l0::ze_device_properties_t) -> c_int {
         match attr {
-            cu::DeviceAttribute::ASYNC_ENGINE_COUNT => Some(props.numAsyncCopyEngines as i32),
-            cu::DeviceAttribute::MULTIPROCESSOR_COUNT => Some((props.numSlicesPerTile * props.numSubslicesPerSlice) as i32),
-            cu::DeviceAttribute::KERNEL_EXEC_TIMEOUT => Some(0),
-            // FIXME
-            cu::DeviceAttribute::INTEGRATED => Some(1),
-            cu::DeviceAttribute::CAN_MAP_HOST_MEMORY => Some(props.unifiedMemorySupported as i32),
-            _ => None
+            cu::DeviceGeneralAttribute::CAN_MAP_HOST_MEMORY => props.unifiedMemorySupported as i32,
+            cu::DeviceGeneralAttribute::ASYNC_ENGINE_COUNT => props.numAsyncCopyEngines as i32,
+            cu::DeviceGeneralAttribute::MULTIPROCESSOR_COUNT => (props.numSlicesPerTile * props.numSubslicesPerSlice) as i32,
         }
     }
 
-    pub fn get_attribute(self, pi: *mut c_int, attr: cu::DeviceAttribute) -> l0::ze_result_t {
-        match self.get_device_properties() {
-            Ok(props) => {
-                match Device::map_cuda_attribute(attr, &props) {
-                    Some(cuda_value) => {
-                        unsafe { *pi = cuda_value };
-                        l0::ze_result_t::ZE_RESULT_SUCCESS
-                    },
-                    None => l0::ze_result_t::ZE_RESULT_ERROR_UNSUPPORTED_FEATURE
-                }
+    fn get_attribute_texture(attr: cu::DeviceTextureAttribute, props: &l0::ze_device_image_properties_t) -> c_int {
+        match attr {
+            cu::DeviceTextureAttribute::MAXIMUM_TEXTURE1D_WIDTH => cmp::min(props.maxImageDims1D, c_int::max_value() as u32) as c_int,
+        }
+    }
+
+    pub fn get_attribute(self, pi: *mut c_int, attr: cu::DeviceDynamicAttribute) -> l0::ze_result_t {
+        let value_or_err = match attr {
+            cu::DeviceDynamicAttribute::General(a) => self.get_device_properties().map(|p| Device::get_attribute_general(a, &p)),
+            cu::DeviceDynamicAttribute::Texture(a) => self.get_device_image_properties().map(|p| Device::get_attribute_texture(a, &p)),
+        };
+        match value_or_err {
+            Ok(value) => {
+                unsafe { *pi = value };
+                l0::ze_result_t::ZE_RESULT_SUCCESS
             }
-            Err(err) => err
+            Err(e) => e
         }
+    }
+
+    pub fn get_uuid(self, uuid: *mut cu::Uuid) -> l0::ze_result_t {
+        either(self.get_device_properties().map(|prop| {
+            unsafe { *uuid = cu::Uuid{ x: prop.uuid.id } };
+            l0::ze_result_t::ZE_RESULT_SUCCESS
+        }))
     }
 }

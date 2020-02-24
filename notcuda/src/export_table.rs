@@ -9,14 +9,23 @@ pub unsafe extern "C" fn cuGetExportTable(
     table: *mut *const std::os::raw::c_void,
     id: *const cu::Uuid,
 ) -> cu::Result {
-    if *id == CU_ETID_ToolsRuntimeCallbackHooks {
+    if table == ptr::null_mut() || id == ptr::null_mut() {
+        cu::Result::ERROR_INVALID_VALUE
+    } else if *id == CU_ETID_ToolsRuntimeCallbackHooks {
         *table = TABLE0.as_ptr() as *const _;
-        return cu::Result::SUCCESS;
+        cu::Result::SUCCESS
     } else if *id == CU_ETID_CudartInterface {
         *table = TABLE1.as_ptr() as *const _;
-        return cu::Result::SUCCESS;
+        cu::Result::SUCCESS
+    } else if *id == CU_ETID_ToolsTls {
+        *table = 1 as _;
+        cu::Result::SUCCESS
+    } else if *id == CU_ETID_ContextLocalStorageInterface_v0301 {
+        *table = ContextLocalStorageInterface_v0301_VTABLE.as_ptr() as *const _;
+        cu::Result::SUCCESS
+    } else {
+        cu::Result::ERROR_NOT_SUPPORTED
     }
-    cu::Result::ERROR_NOT_SUPPORTED
 }
 
 const CU_ETID_ToolsRuntimeCallbackHooks: cu::Uuid = cu::Uuid {
@@ -26,24 +35,24 @@ const CU_ETID_ToolsRuntimeCallbackHooks: cu::Uuid = cu::Uuid {
     ],
 };
 #[repr(C)]
-union PtrOrLength {
+union VTableEntry {
     ptr: *const (),
     length: usize,
 }
-unsafe impl Sync for PtrOrLength {}
+unsafe impl Sync for VTableEntry {}
 const TABLE0_LEN: usize = 7;
-static TABLE0: [PtrOrLength; TABLE0_LEN] = [
-    PtrOrLength {
-        length: mem::size_of::<[PtrOrLength; TABLE0_LEN]>(),
+static TABLE0: [VTableEntry; TABLE0_LEN] = [
+    VTableEntry {
+        length: mem::size_of::<[VTableEntry; TABLE0_LEN]>(),
     },
-    PtrOrLength { ptr: ptr::null() },
-    PtrOrLength {
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry {
         ptr: table0_fn1 as *const (),
     },
-    PtrOrLength { ptr: ptr::null() },
-    PtrOrLength { ptr: ptr::null() },
-    PtrOrLength { ptr: ptr::null() },
-    PtrOrLength {
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry {
         ptr: table0_fn5 as *const (),
     },
 ];
@@ -69,17 +78,59 @@ const CU_ETID_CudartInterface: cu::Uuid = cu::Uuid {
     ],
 };
 
-const TABLE1_LEN: usize = 3;
-static TABLE1: [PtrOrLength; TABLE1_LEN] = [
-    PtrOrLength {
-        length: mem::size_of::<[PtrOrLength; TABLE1_LEN]>(),
+const TABLE1_LEN: usize = 10;
+static TABLE1: [VTableEntry; TABLE1_LEN] = [
+    VTableEntry {
+        length: mem::size_of::<[VTableEntry; TABLE1_LEN]>(),
     },
-    PtrOrLength { ptr: ptr::null() },
-    PtrOrLength {
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry {
         ptr: table1_fn1 as *const (),
     },
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry {
+        ptr: table1_fn6 as *const (),
+    },
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry { ptr: ptr::null() },
 ];
 
 unsafe extern "C" fn table1_fn1(_: *mut c_ulong, _: c_int) -> c_int {
+    0
+}
+
+unsafe extern "C" fn table1_fn6(_: u64) { }
+
+const CU_ETID_ToolsTls: cu::Uuid = cu::Uuid {
+    x: [0x42, 0xd8, 0x5a, 0x81, 0x23, 0xf6, 0xcb, 0x47, 0x82, 0x98, 0xf6, 0xe7, 0x8a, 0x3a, 0xec, 0xdc],
+};
+
+
+const CU_ETID_ContextLocalStorageInterface_v0301: cu::Uuid = cu::Uuid {
+    x: [0xc6, 0x93, 0x33, 0x6e, 0x11, 0x21, 0xdf, 0x11, 0xa8, 0xc3, 0x68, 0xf3, 0x55, 0xd8, 0x95, 0x93],
+};
+
+// the table is much bigger and start earlier
+static ContextLocalStorageInterface_v0301_VTABLE: [VTableEntry; 4] = [
+    VTableEntry { ptr: ContextLocalStorageInterface_v0301_VTABLE_fn0 as *const () },
+    VTableEntry { ptr: ContextLocalStorageInterface_v0301_VTABLE_fn1 as *const () },
+    VTableEntry { ptr: ContextLocalStorageInterface_v0301_VTABLE_fn2 as *const () },
+    VTableEntry { ptr: ptr::null() },
+];
+
+// some kind of ctor
+unsafe extern "C" fn ContextLocalStorageInterface_v0301_VTABLE_fn0(ms: *mut usize, _: *mut (), _: *mut (), _: *mut ()) -> u32 {
+    0
+}
+
+// some kind of dtor
+unsafe extern "C" fn ContextLocalStorageInterface_v0301_VTABLE_fn1(ms: *mut usize, _: *mut ()) -> u32 {
+    0
+}
+
+unsafe extern "C" fn ContextLocalStorageInterface_v0301_VTABLE_fn2(_: *mut *mut (), _: *mut (), _: *mut ()) -> u32 {
     0
 }
