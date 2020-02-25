@@ -1,6 +1,7 @@
 use num_enum::TryFromPrimitive;
 use std::convert::TryFrom;
 use std::os::raw::c_int;
+use std::ptr;
 
 #[repr(C)]
 #[allow(non_camel_case_types)]
@@ -156,4 +157,13 @@ pub struct Uuid {
 pub struct Device(pub c_int);
 
 #[repr(transparent)]
-pub struct DevicePtr(c_int);
+pub struct DevicePtr(usize);
+
+#[repr(transparent)]
+#[derive(Clone, PartialEq)]
+pub struct Context(*mut ());
+impl Context {
+    pub fn null() -> Context {
+        Context(ptr::null_mut())
+    }
+}

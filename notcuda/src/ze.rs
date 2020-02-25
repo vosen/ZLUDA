@@ -77,6 +77,16 @@ impl Versioned for ze_device_image_properties_t {
     }
 }
 
+impl Versioned for ze_device_mem_alloc_desc_t {
+    type Version = ze_device_mem_alloc_desc_version_t;
+    fn current() -> Self::Version {
+        ze_device_mem_alloc_desc_version_t::ZE_DEVICE_MEM_ALLOC_DESC_VERSION_CURRENT
+    }
+    fn version(&mut self) -> &mut Self::Version {
+        &mut self.version
+    }
+}
+
 #[derive(Clone, Copy)]
 #[repr(transparent)] // required so a Vec<ze_device_handle_t> can be safely transmutted to Vec<Device>
 pub struct Device(pub ze_device_handle_t);

@@ -1,1 +1,1 @@
-bindgen --default-enum-style=rust --whitelist-function ze.* /usr/include/level_zero/zex_api.h -o zex_api.rs -- -x c++ && sed -i 's/pub enum _ze_result_t/#[must_use]\npub enum _ze_result_t/g' zex_api.rs
+bindgen --size_t-is-usize --default-enum-style=rust --whitelist-function ze.* /usr/include/level_zero/zex_api.h -o zex_api.rs -- -x c++ && sed -i 's/pub enum _ze_result_t/#[must_use]\npub enum _ze_result_t/g' zex_api.rs

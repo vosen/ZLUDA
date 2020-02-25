@@ -3,9 +3,12 @@ extern crate level_zero_sys as l0;
 extern crate lazy_static;
 
 use std::convert::TryFrom;
-use std::sync::Mutex;
-use std::ptr;
 use std::os::raw::{c_char, c_int, c_uint};
+use std::ptr;
+use std::cell::RefCell;
+use std::sync::Mutex;
+
+use ze::Versioned;
 
 #[macro_use]
 macro_rules! l0_check_err {
@@ -23,11 +26,15 @@ mod cu;
 mod export_table;
 mod ze;
 
-lazy_static! {
-    pub static ref GLOBAL_STATE: Mutex<Option<Driver>> = Mutex::new(None);
+thread_local! {
+    static CONTEXT_STACK: RefCell<Vec<cu::Context>> = RefCell::new(Vec::new());
 }
 
-pub struct Driver {
+lazy_static! {
+    static ref GLOBAL_STATE: Mutex<Option<Driver>> = Mutex::new(None);
+}
+
+struct Driver {
     base: l0::ze_driver_handle_t,
     devices: Vec::<ze::Device>
 }
@@ -180,8 +187,40 @@ pub extern "C" fn cuDeviceGetUuid(uuid: *mut cu::Uuid, dev_idx: cu::Device) -> c
     Driver::call_device(dev_idx, |dev| dev.get_uuid(uuid))
 }
 
+#[no_mangle]
+pub extern "C" fn cuCtxGetCurrent(pctx: *mut cu::Context) -> cu::Result {
+    let ctx = CONTEXT_STACK.with(|stack| {
+        match stack.borrow().last() {
+            Some(ctx) => ctx.clone(),
+            None => cu::Context::null()
+        }        
+    });
+    unsafe { *pctx = ctx };
+    cu::Result::SUCCESS
+}
+
+#[no_mangle]
+pub extern "C" fn cuCtxSetCurrent(ctx: cu::Context) -> cu::Result {
+    CONTEXT_STACK.with(|stack| {
+        let mut stack = stack.borrow_mut();
+        stack.pop();
+        if ctx != cu::Context::null() {
+            stack.push(ctx);
+        }      
+    });
+    cu::Result::SUCCESS
+}
 
 #[no_mangle]
 pub extern "C" fn cuMemAlloc_v2(dptr: *mut cu::DevicePtr, bytesize: usize) -> cu::Result {
-    unimplemented!()
+    if dptr == ptr::null_mut() || bytesize == 0 {
+        return cu::Result::ERROR_INVALID_VALUE;
+    }
+    Driver::call(|drv| {
+        let mut descr = l0::ze_device_mem_alloc_desc_t::new();
+        descr.flags = l0::ze_device_mem_alloc_flag_t::ZE_DEVICE_MEM_ALLOC_FLAG_DEFAULT;
+        descr.ordinal = 0;
+        // TODO: check current context for the device
+        unsafe { l0::zeDriverAllocDeviceMem(drv.base, &descr, bytesize, 0, drv.devices[0].0, dptr as *mut _) }
+    })
 }

@@ -3,7 +3,6 @@
 pub type __uint8_t = ::std::os::raw::c_uchar;
 pub type __uint32_t = ::std::os::raw::c_uint;
 pub type __uint64_t = ::std::os::raw::c_ulong;
-pub type size_t = ::std::os::raw::c_ulong;
 #[doc = ""]
 #[doc = " @brief compiler-independent type"]
 pub type ze_bool_t = u8;
@@ -1990,14 +1989,14 @@ pub struct _ze_device_cache_properties_t {
     #[doc = "< section vs Generic Cache)"]
     pub intermediateCacheControlSupported: ze_bool_t,
     #[doc = "< [out] Per-cache Intermediate Cache (L1/L2) size, in bytes"]
-    pub intermediateCacheSize: size_t,
+    pub intermediateCacheSize: usize,
     #[doc = "< [out] Cacheline size in bytes for intermediate cacheline (L1/L2)."]
     pub intermediateCachelineSize: u32,
     #[doc = "< [out] Support User control on Last Level Cache (i.e. Resize SLM"]
     #[doc = "< section vs Generic Cache)."]
     pub lastLevelCacheSizeControlSupported: ze_bool_t,
     #[doc = "< [out] Per-cache Last Level Cache (L3) size, in bytes"]
-    pub lastLevelCacheSize: size_t,
+    pub lastLevelCacheSize: usize,
     #[doc = "< [out] Cacheline size in bytes for last-level cacheline (L3)."]
     pub lastLevelCachelineSize: u32,
 }
@@ -3062,7 +3061,7 @@ extern "C" {
     pub fn zeCommandListAppendMemoryRangesBarrier(
         hCommandList: ze_command_list_handle_t,
         numRanges: u32,
-        pRangeSizes: *const size_t,
+        pRangeSizes: *const usize,
         pRanges: *mut *const ::std::os::raw::c_void,
         hSignalEvent: ze_event_handle_t,
         numWaitEvents: u32,
@@ -3123,7 +3122,7 @@ extern "C" {
         hCommandList: ze_command_list_handle_t,
         dstptr: *mut ::std::os::raw::c_void,
         srcptr: *const ::std::os::raw::c_void,
-        size: size_t,
+        size: usize,
         hEvent: ze_event_handle_t,
     ) -> ze_result_t;
 }
@@ -3160,8 +3159,8 @@ extern "C" {
         hCommandList: ze_command_list_handle_t,
         ptr: *mut ::std::os::raw::c_void,
         pattern: *const ::std::os::raw::c_void,
-        pattern_size: size_t,
-        size: size_t,
+        pattern_size: usize,
+        size: usize,
         hEvent: ze_event_handle_t,
     ) -> ze_result_t;
 }
@@ -3554,7 +3553,7 @@ extern "C" {
     pub fn zeCommandListAppendMemoryPrefetch(
         hCommandList: ze_command_list_handle_t,
         ptr: *const ::std::os::raw::c_void,
-        size: size_t,
+        size: usize,
     ) -> ze_result_t;
 }
 #[repr(u32)]
@@ -3623,7 +3622,7 @@ extern "C" {
         hCommandList: ze_command_list_handle_t,
         hDevice: ze_device_handle_t,
         ptr: *const ::std::os::raw::c_void,
-        size: size_t,
+        size: usize,
         advice: ze_memory_advice_t,
     ) -> ze_result_t;
 }
@@ -5130,8 +5129,8 @@ extern "C" {
         hDriver: ze_driver_handle_t,
         device_desc: *const ze_device_mem_alloc_desc_t,
         host_desc: *const ze_host_mem_alloc_desc_t,
-        size: size_t,
-        alignment: size_t,
+        size: usize,
+        alignment: usize,
         hDevice: ze_device_handle_t,
         pptr: *mut *mut ::std::os::raw::c_void,
     ) -> ze_result_t;
@@ -5171,8 +5170,8 @@ extern "C" {
     pub fn zeDriverAllocDeviceMem(
         hDriver: ze_driver_handle_t,
         device_desc: *const ze_device_mem_alloc_desc_t,
-        size: size_t,
-        alignment: size_t,
+        size: usize,
+        alignment: usize,
         hDevice: ze_device_handle_t,
         pptr: *mut *mut ::std::os::raw::c_void,
     ) -> ze_result_t;
@@ -5213,8 +5212,8 @@ extern "C" {
     pub fn zeDriverAllocHostMem(
         hDriver: ze_driver_handle_t,
         host_desc: *const ze_host_mem_alloc_desc_t,
-        size: size_t,
-        alignment: size_t,
+        size: usize,
+        alignment: usize,
         pptr: *mut *mut ::std::os::raw::c_void,
     ) -> ze_result_t;
 }
@@ -5389,7 +5388,7 @@ extern "C" {
         hDriver: ze_driver_handle_t,
         ptr: *const ::std::os::raw::c_void,
         pBase: *mut *mut ::std::os::raw::c_void,
-        pSize: *mut size_t,
+        pSize: *mut usize,
     ) -> ze_result_t;
 }
 extern "C" {
@@ -5583,7 +5582,7 @@ pub struct _ze_module_desc_t {
     #[doc = "< [in] Module format passed in with pInputModule"]
     pub format: ze_module_format_t,
     #[doc = "< [in] size of input IL or ISA from pInputModule."]
-    pub inputSize: size_t,
+    pub inputSize: usize,
     #[doc = "< [in] pointer to IL or ISA"]
     pub pInputModule: *const u8,
     #[doc = "< [in] string containing compiler flags. See programming guide for build"]
@@ -5790,7 +5789,7 @@ extern "C" {
     #[doc = "         + `nullptr == pSize`"]
     pub fn zeModuleBuildLogGetString(
         hModuleBuildLog: ze_module_build_log_handle_t,
-        pSize: *mut size_t,
+        pSize: *mut usize,
         pBuildLog: *mut ::std::os::raw::c_char,
     ) -> ze_result_t;
 }
@@ -5820,7 +5819,7 @@ extern "C" {
     #[doc = "         + `nullptr == pSize`"]
     pub fn zeModuleGetNativeBinary(
         hModule: ze_module_handle_t,
-        pSize: *mut size_t,
+        pSize: *mut usize,
         pModuleNativeBinary: *mut u8,
     ) -> ze_result_t;
 }
@@ -6129,7 +6128,7 @@ extern "C" {
     pub fn zeKernelSetArgumentValue(
         hKernel: ze_kernel_handle_t,
         argIndex: u32,
-        argSize: size_t,
+        argSize: usize,
         pArgValue: *const ::std::os::raw::c_void,
     ) -> ze_result_t;
 }
@@ -6606,7 +6605,7 @@ extern "C" {
     pub fn zeDeviceMakeMemoryResident(
         hDevice: ze_device_handle_t,
         ptr: *mut ::std::os::raw::c_void,
-        size: size_t,
+        size: usize,
     ) -> ze_result_t;
 }
 extern "C" {
@@ -6633,7 +6632,7 @@ extern "C" {
     pub fn zeDeviceEvictMemory(
         hDevice: ze_device_handle_t,
         ptr: *mut ::std::os::raw::c_void,
-        size: size_t,
+        size: usize,
     ) -> ze_result_t;
 }
 extern "C" {
@@ -7090,7 +7089,7 @@ extern "C" {
         hCommandGraph: zex_command_graph_handle_t,
         phCommandNode: *mut zex_command_graph_handle_t,
         phParentNodes: *mut zex_command_graph_handle_t,
-        noParentNodes: size_t,
+        noParentNodes: usize,
         nodeType: COMMANDGRAPH_TYPE,
     ) -> ze_result_t;
 }
@@ -7099,7 +7098,7 @@ extern "C" {
         hCommandGraph: zex_command_graph_handle_t,
         phCommandNode: *mut zex_command_graph_handle_t,
         phParentNodes: *mut zex_command_graph_handle_t,
-        noParentNodes: size_t,
+        noParentNodes: usize,
         regDestination: ALU_REG,
         regSourceAddress: ALU_REG,
     ) -> ze_result_t;
@@ -7109,7 +7108,7 @@ extern "C" {
         hCommandGraph: zex_command_graph_handle_t,
         phCommandNode: *mut zex_command_graph_handle_t,
         phParentNodes: *mut zex_command_graph_handle_t,
-        noParentNodes: size_t,
+        noParentNodes: usize,
         regDestinationAddress: ALU_REG,
         regSource: ALU_REG,
     ) -> ze_result_t;
@@ -7118,7 +7117,7 @@ extern "C" {
     pub fn zexCommandGraphNodeAddChildren(
         hCommandNode: zex_command_graph_handle_t,
         phChildrenNodes: *mut zex_command_graph_handle_t,
-        noChildrenNodes: size_t,
+        noChildrenNodes: usize,
     ) -> ze_result_t;
 }
 extern "C" {
@@ -7152,7 +7151,7 @@ extern "C" {
     #[doc = "     - ::ZE_RESULT_ERROR_UNKNOWN"]
     pub fn zexCommandListReserveSpace(
         hCommandList: zex_command_list_handle_t,
-        size: size_t,
+        size: usize,
         ptr: *mut *mut ::std::os::raw::c_void,
     ) -> ze_result_t;
 }
@@ -7188,7 +7187,7 @@ extern "C" {
     pub fn zexCommandListAppendMIMath(
         hCommandList: zex_command_list_handle_t,
         opArray: *mut zex_alu_operation_t,
-        noOperations: size_t,
+        noOperations: usize,
     ) -> ze_result_t;
 }
 extern "C" {
