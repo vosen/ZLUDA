@@ -5,4 +5,5 @@ members = [
     "notcuda",
     "notcuda_inject",
     "notcuda_redirect",
+    "ptx",
 ]

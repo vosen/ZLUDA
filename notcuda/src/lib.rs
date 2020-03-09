@@ -224,3 +224,86 @@ pub extern "C" fn cuMemAlloc_v2(dptr: *mut cu::DevicePtr, bytesize: usize) -> cu
         unsafe { l0::zeDriverAllocDeviceMem(drv.base, &descr, bytesize, 0, drv.devices[0].0, dptr as *mut _) }
     })
 }
+
+#[no_mangle]
+pub extern "C" fn cuCtxDestroy_v2(ctx: cu::Context) -> cu::Result
+{
+    cu::Result::ERROR_NOT_SUPPORTED
+}
+
+#[no_mangle]
+pub extern "C" fn cuMemcpyDtoH_v2(dstHost: *mut (), srcDevice: cu::DevicePtr, byte_count: usize) -> cu::Result
+{
+    cu::Result::ERROR_NOT_SUPPORTED
+}
+
+#[no_mangle]
+pub extern "C" fn cuMemFree_v2(srcDevice: cu::DevicePtr) -> cu::Result
+{
+    cu::Result::ERROR_NOT_SUPPORTED
+}
+
+#[no_mangle]
+pub extern "C" fn cuModuleLoad(module: *mut cu::Module, fname: *const c_char) -> cu::Result
+{
+    cu::Result::ERROR_NOT_SUPPORTED
+}
+
+#[no_mangle]
+pub extern "C" fn cuGetErrorString(error: cu::Result, pStr: *mut *const c_char) -> cu::Result
+{
+    cu::Result::ERROR_NOT_SUPPORTED
+}
+
+#[no_mangle]
+pub extern "C" fn cuLaunchKernel(
+    f: cu::Function,
+    gridDimX: c_uint,
+    gridDimY: c_uint,
+    gridDimZ: c_uint,
+    blockDimX: c_uint,
+    blockDimY: c_uint,
+    blockDimZ: c_uint,
+    sharedMemBytes: c_uint,
+    hStream: cu::Stream,
+    kernelParams: *mut *mut (),
+    extra: *mut *mut ())
+    -> cu::Result
+{
+    cu::Result::ERROR_NOT_SUPPORTED
+}
+
+#[no_mangle]
+pub extern "C" fn cuModuleLoadDataEx(
+    module: *mut cu::Module,
+    image: *const (),
+    numOptions: c_uint,
+    options: *mut cu::JitOption,
+    optionValues: *mut *mut ()) -> cu::Result
+{
+    cu::Result::ERROR_NOT_SUPPORTED
+}
+
+#[no_mangle]
+pub extern "C" fn cuMemcpyHtoD_v2(
+    dstDevice: cu::DevicePtr,
+    srcHost: *const (),
+    ByteCount: usize) -> cu::Result
+{
+    cu::Result::ERROR_NOT_SUPPORTED
+}
+
+#[no_mangle]
+pub extern "C" fn cuCtxCreate_v2(pctx: *mut cu::Context, flags: c_uint, dev: cu::Device) -> cu::Result
+{
+    cu::Result::SUCCESS
+}
+
+#[no_mangle]
+pub extern "C" fn cuModuleGetFunction(
+    hfunc: *mut cu::Function,
+    hmod: cu::Module,
+    name: *const c_char) -> cu::Result
+{
+    cu::Result::ERROR_NOT_SUPPORTED
+}

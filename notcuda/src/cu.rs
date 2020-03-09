@@ -167,3 +167,39 @@ impl Context {
         Context(ptr::null_mut())
     }
 }
+
+#[repr(transparent)]
+pub struct Module(*mut ());
+
+#[repr(transparent)]
+pub struct Function(*mut ());
+
+#[repr(transparent)]
+pub struct Stream(*mut ());
+
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[allow(non_camel_case_types)]
+pub enum JitOption {
+    MAX_REGISTERS = 0,
+    THREADS_PER_BLOCK = 1,
+    WALL_TIME = 2,
+    INFO_LOG_BUFFER = 3,
+    INFO_LOG_BUFFER_SIZE_BYTES = 4,
+    ERROR_LOG_BUFFER = 5,
+    ERROR_LOG_BUFFER_SIZE_BYTES = 6,
+    OPTIMIZATION_LEVEL = 7,
+    TARGET_FROM_CUCONTEXT = 8,
+    TARGET = 9,
+    FALLBACK_STRATEGY = 10,
+    GENERATE_DEBUG_INFO = 11,
+    LOG_VERBOSE = 12,
+    GENERATE_LINE_INFO = 13,
+    CACHE_MODE = 14,
+    NEW_SM3X_OPT = 15,
+    FAST_COMPILE = 16,
+    GLOBAL_SYMBOL_NAMES = 17,
+    GLOBAL_SYMBOL_ADDRESSES = 18,
+    GLOBAL_SYMBOL_COUNT = 19,
+    NUM_OPTIONS = 20,
+}

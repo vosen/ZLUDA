@@ -1,0 +1,15 @@
+[package]
+name = "ptx"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2018"
+
+[lib]
+
+[dependencies]
+lalrpop-util = "0.18.1"
+regex = "1"
+
+[build-dependencies.lalrpop]
+version = "0.18.1"
+features = ["lexer"]

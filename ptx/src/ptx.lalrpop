@@ -1,0 +1,121 @@
+use std::str::FromStr;
+use super::ast;
+
+grammar;
+
+match {
+    r"\s*" => { },
+    r"//[^\n\r]*[\n\r]*" => { },
+    r"/\*([^\*]*\*+[^\*/])*([^\*]*\*+|[^\*])*\*/" => { },
+    _
+}
+
+pub Module: () = {
+    Version
+    Target
+    Directive*
+};
+
+Version = {
+    ".version" U8 "." U8
+};
+
+Target = {
+    ".target"
+};
+
+Directive : () = {
+    AddressSize,
+    Function
+};
+
+AddressSize = {
+    ".address_size" "32", 
+    ".address_size" "64"
+};
+
+Function: (bool, &'input str) = {
+    LinkingDirective* <is:IsKernel> <id:ID> FunctionInput FunctionBody => (is, id)
+};
+
+LinkingDirective = {
+    ".extern",
+    ".visible",
+    ".weak"
+};
+
+IsKernel: bool = {
+    ".entry" => true,
+    ".func" => false
+};
+
+FunctionInput = {
+    "(" (".param" Type ID)* ")"
+};
+
+FunctionBody = {
+    "{" Statement* "}"
+};
+
+StateSpaceSpecifier = {
+    ".reg",
+    ".sreg",
+    ".const",
+    ".global",
+    ".local",
+    ".param",
+    ".shared"
+};
+
+Type = FundamentalType;
+
+FundamentalType = {
+    ".s8", ".s16", ".s32", ".s64",
+    ".u8", ".u16", ".u32", ".u64",
+    ".f16", ".f16x2", ".f32", ".f64",
+    ".b8", ".b16", ".b32", ".b64",
+    ".pred"
+};
+
+Statement: () = {
+    Label,
+    StateSpace,
+    Instruction
+};
+
+Label = {
+    ID ":"
+};
+
+StateSpace = {
+    StateSpaceSpecifier Type
+};
+
+Instruction = {
+    OpCode Operands ";"
+};
+
+OpCode = {
+    "ld.param.u64"
+};
+
+Operands = Comma<Operand>;
+
+Comma<T>: Vec<T> = { // (1)
+    <v:(<T> ",")*> <e:T?> => match e { // (2)
+        None => v,
+        Some(e) => {
+            let mut v = v;
+            v.push(e);
+            v
+        }
+    }
+};
+
+Operand = {
+    ID
+};
+
+U8: u8 = <s:r"[0-9]+"> => u8::from_str(s).unwrap();
+
+ID: &'input str = <s:"[a-zA-Z][a-zA-Z0-9_$]*|[_$%][a-zA-Z0-9_$]"> => s;
