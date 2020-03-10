@@ -4,9 +4,19 @@ use super::ast;
 grammar;
 
 match {
-    r"\s*" => { },
+    r"\s+" => { },
     r"//[^\n\r]*[\n\r]*" => { },
     r"/\*([^\*]*\*+[^\*/])*([^\*]*\*+|[^\*])*\*/" => { },
+    "ld",
+    "texmode_unified",
+    "texmode_independent",
+    "debug",
+    "map_f64_to_f32",
+    r"sm_[0-9]+" => ShaderModel,
+} else {
+    r"(?:[a-zA-Z][a-zA-Z0-9_$]*|[_$%][a-zA-Z0-9_$]+)<[0-9]+>" => ParametrizedID,
+}
+else {
     _
 }
 
@@ -17,11 +27,20 @@ pub Module: () = {
 };
 
 Version = {
-    ".version" U8 "." U8
+    ".version" VersionNumber
 };
 
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#ptx-module-directives-target
 Target = {
-    ".target"
+    ".target" Comma<TargetSpecifier>
+};
+
+TargetSpecifier = {
+    ShaderModel,
+    "texmode_unified",
+    "texmode_independent",
+    "debug",
+    "map_f64_to_f32"
 };
 
 Directive : () = {
@@ -35,7 +54,7 @@ AddressSize = {
 };
 
 Function: (bool, &'input str) = {
-    LinkingDirective* <is:IsKernel> <id:ID> FunctionInput FunctionBody => (is, id)
+    LinkingDirective* <is:IsKernel> <id:ID> "(" Comma<FunctionInput> ")" FunctionBody => (is, id)
 };
 
 LinkingDirective = {
@@ -50,7 +69,7 @@ IsKernel: bool = {
 };
 
 FunctionInput = {
-    "(" (".param" Type ID)* ")"
+    ".param" Type ID
 };
 
 FunctionBody = {
@@ -63,46 +82,91 @@ StateSpaceSpecifier = {
     ".const",
     ".global",
     ".local",
-    ".param",
     ".shared"
 };
 
-Type = FundamentalType;
+Type = {
+    BaseType,
+    ".pred",
+    ".f16",
+    ".f16x2", 
+};
 
-FundamentalType = {
-    ".s8", ".s16", ".s32", ".s64",
-    ".u8", ".u16", ".u32", ".u64",
-    ".f16", ".f16x2", ".f32", ".f64",
+BaseType = {
     ".b8", ".b16", ".b32", ".b64",
-    ".pred"
+    ".u8", ".u16", ".u32", ".u64",
+    ".s8", ".s16", ".s32", ".s64",
+    ".f32", ".f64"
 };
 
 Statement: () = {
     Label,
-    StateSpace,
-    Instruction
+    DebugDirective,
+    Variable ";",
+    Instruction ";"
+};
+
+DebugDirective = {
+    DebugLocation
+};
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#debugging-directives-loc
+DebugLocation = {
+    ".loc" Num Num Num
 };
 
 Label = {
     ID ":"
 };
 
-StateSpace = {
-    StateSpaceSpecifier Type
+Variable = {
+    StateSpaceSpecifier Type VariableName
+};
+
+VariableName = {
+    ID,
+    ParametrizedID
 };
 
 Instruction = {
-    OpCode Operands ";"
+    InstLd
 };
 
-OpCode = {
-    "ld.param.u64"
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
+InstLd = {
+    "ld" LdQualifier? LdStateSpace? LdCacheOperator? Vector? BaseType ID "," "[" ID "]"
 };
 
-Operands = Comma<Operand>;
+LdQualifier = {
+    ".weak",
+    ".volatile",
+    ".relaxed.scope",
+    ".acquire.scope",
+};
 
-Comma<T>: Vec<T> = { // (1)
-    <v:(<T> ",")*> <e:T?> => match e { // (2)
+LdStateSpace = {
+    ".const",
+    ".global",
+    ".local",
+    ".param",
+    ".shared",
+};
+
+LdCacheOperator = {
+    ".ca",
+    ".cg",
+    ".cs",
+    ".lu",
+    ".cv",
+};
+
+Vector = {
+    ".v2",
+    ".v4"
+};
+
+Comma<T>: Vec<T> = {
+    <v:(<T> ",")*> <e:T?> => match e {
         None => v,
         Some(e) => {
             let mut v = v;
@@ -112,10 +176,7 @@ Comma<T>: Vec<T> = { // (1)
     }
 };
 
-Operand = {
-    ID
-};
-
-U8: u8 = <s:r"[0-9]+"> => u8::from_str(s).unwrap();
-
-ID: &'input str = <s:"[a-zA-Z][a-zA-Z0-9_$]*|[_$%][a-zA-Z0-9_$]"> => s;
+VersionNumber = r"[0-9]+\.[0-9]+";
+Num: u64 = <s:r"[0-9]+"> => u64::from_str(s).unwrap();
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#identifiers
+ID: &'input str = <s:r"[a-zA-Z][a-zA-Z0-9_$]*|[_$%][a-zA-Z0-9_$]+"> => s;
