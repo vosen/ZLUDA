@@ -7,16 +7,10 @@ match {
     r"\s+" => { },
     r"//[^\n\r]*[\n\r]*" => { },
     r"/\*([^\*]*\*+[^\*/])*([^\*]*\*+|[^\*])*\*/" => { },
-    "ld",
-    "texmode_unified",
-    "texmode_independent",
-    "debug",
-    "map_f64_to_f32",
     r"sm_[0-9]+" => ShaderModel,
 } else {
     r"(?:[a-zA-Z][a-zA-Z0-9_$]*|[_$%][a-zA-Z0-9_$]+)<[0-9]+>" => ParametrizedID,
-}
-else {
+} else {
     _
 }
 
@@ -128,8 +122,18 @@ VariableName = {
     ParametrizedID
 };
 
-Instruction = {
-    InstLd
+Instruction: () = {
+    InstLd,
+    InstMov,
+    InstMul,
+    InstAdd,
+    InstSetp,
+    InstNot,
+    InstBra,
+    InstCvt,
+    InstShl,
+    InstSt,
+    InstRet,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
@@ -137,11 +141,15 @@ InstLd = {
     "ld" LdQualifier? LdStateSpace? LdCacheOperator? Vector? BaseType ID "," "[" ID "]"
 };
 
-LdQualifier = {
+LdQualifier: () = {
     ".weak",
     ".volatile",
-    ".relaxed.scope",
-    ".acquire.scope",
+    ".relaxed" LdScope,
+    ".acquire" LdScope,
+};
+
+LdScope = {
+    ".cta", ".gpu", ".sys"
 };
 
 LdStateSpace = {
@@ -158,6 +166,174 @@ LdCacheOperator = {
     ".cs",
     ".lu",
     ".cv",
+};
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
+InstMov = {
+    "mov" MovType ID "," Operand
+};
+
+MovType = {
+    ".b16", ".b32", ".b64",
+    ".u16", ".u32", ".u64",
+    ".s16", ".s32", ".s64",
+    ".f32", ".f64",
+    ".pred"
+};
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-mul
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-mul
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#half-precision-floating-point-instructions-mul
+InstMul: () = {
+    "mul" MulIntControl? IntType ID "," Operand "," Operand,
+    "mul" RoundingMode? ".ftz"? ".sat"? ".f32" ID "," Operand "," Operand,
+    "mul" RoundingMode? ".f64" ID "," Operand "," Operand,
+    "mul" ".rn"? ".ftz"? ".sat"? ".f16" ID "," Operand "," Operand,
+    "mul" ".rn"? ".ftz"? ".sat"? ".f16x2" ID "," Operand "," Operand,
+};
+
+MulIntControl = {
+    "hi", ".lo", ".wide"
+};
+
+#[inline]
+RoundingMode = {
+    ".rn", ".rz", ".rm", ".rp"
+};
+
+IntType = {
+    ".u16", ".u32", ".u64",
+    ".s16", ".s32", ".s64",
+};
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-add
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-add
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#half-precision-floating-point-instructions-add
+InstAdd: () = {
+    "add" IntType ID "," Operand "," Operand,
+    "add" ".sat" ".s32" ID "," Operand "," Operand,
+    "add" RoundingMode? ".ftz"? ".sat"? ".f32" ID "," Operand "," Operand,
+    "add" RoundingMode? ".f64" ID "," Operand "," Operand,
+    "add" ".rn"? ".ftz"? ".sat"? ".f16" ID "," Operand "," Operand,
+    "add" ".rn"? ".ftz"? ".sat"? ".f16x2" ID "," Operand "," Operand,
+};
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions-setp
+InstSetp: () = {
+    "setp" SetpCmpOp ".ftz"? SetpType ID ("|" ID)? "," Operand "," Operand,
+    "setp" SetpCmpOp SetpBoolOp ".ftz"? SetpType ID ("|" ID)? "," Operand "," Operand "," "!"? ID
+};
+
+SetpCmpOp = {
+    ".eq", ".ne", ".lt", ".le", ".gt", ".ge", ".lo", ".ls", ".hi", ".hs",
+    ".equ", ".neu", ".ltu", ".leu", ".gtu", ".geu", ".num", ".nan"
+};
+
+SetpBoolOp = {
+    ".and", ".or", ".xor"
+};
+
+SetpType = {
+    ".b16", ".b32", ".b64",
+    ".u16", ".u32", ".u64",
+    ".s16", ".s32", ".s64",
+    ".f32", ".f64"
+};
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-not
+InstNot: () = {
+    "not" NotType ID "," Operand
+};
+
+NotType = {
+    ".pred", ".b16", ".b32", ".b64"
+};
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-at
+InstAt = {
+    "@" "!"? ID
+};
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-bra
+InstBra = {
+    InstAt? "bra" ".uni"? ID
+};
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt
+InstCvt = {
+    "cvt" CvtRnd? ".ftz"? ".sat"? CvtType CvtType ID "," Operand
+};
+
+CvtRnd = {
+    CvtIrnd,
+    CvtFrnd
+}
+
+CvtIrnd = {
+    ".rni", ".rzi", ".rmi", ".rpi"
+};
+
+CvtFrnd = {
+    ".rn",  ".rz",  ".rm", ".rp"
+};
+
+CvtType = {
+    ".u8", ".u16", ".u32", ".u64",
+    ".s8", ".s16", ".s32", ".s64",
+    ".f16", ".f32", ".f64"
+};
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-shl
+InstShl = {
+    "shl" ShlType ID "," Operand "," Operand
+};
+
+ShlType = {
+    ".b16", ".b32", ".b64"
+};
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-st
+InstSt = {
+    "st" LdQualifier? StStateSpace? StCacheOperator? Vector? BaseType "[" ID "]" "," Operand
+};
+
+StStateSpace = {
+    ".global",
+    ".local",
+    ".param",
+    ".shared",
+};
+
+StCacheOperator = {
+    ".wb",
+    ".cg",
+    ".cs",
+    ".wt",
+};
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-ret
+InstRet: () = {
+    "ret" ".uni"?
+};
+
+Operand: () = {
+    ID,
+    Num,
+    OffsetOperand,
+    ArrayOperand,
+    VectorOperand,
+};
+
+OffsetOperand = {
+    ID "+" Num,
+};
+
+ArrayOperand = {
+    ID "[" Num "]",
+};
+
+VectorOperand = {
+    ID "." ID,
 };
 
 Vector = {
@@ -177,6 +353,6 @@ Comma<T>: Vec<T> = {
 };
 
 VersionNumber = r"[0-9]+\.[0-9]+";
-Num: u64 = <s:r"[0-9]+"> => u64::from_str(s).unwrap();
+Num: i128 = <s:r"[0-9]+"> => i128::from_str(s).unwrap();
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#identifiers
 ID: &'input str = <s:r"[a-zA-Z][a-zA-Z0-9_$]*|[_$%][a-zA-Z0-9_$]+"> => s;
