@@ -8,6 +8,7 @@ match {
     r"//[^\n\r]*[\n\r]*" => { },
     r"/\*([^\*]*\*+[^\*/])*([^\*]*\*+|[^\*])*\*/" => { },
     r"sm_[0-9]+" => ShaderModel,
+    r"-?[?:0x]?[0-9]+" => Num
 } else {
     r"(?:[a-zA-Z][a-zA-Z0-9_$]*|[_$%][a-zA-Z0-9_$]+)<[0-9]+>" => ParametrizedID,
 } else {
@@ -39,12 +40,13 @@ TargetSpecifier = {
 
 Directive : () = {
     AddressSize,
-    Function
+    Function,
+    File,
+    Section
 };
 
 AddressSize = {
-    ".address_size" "32", 
-    ".address_size" "64"
+    ".address_size" Num
 };
 
 Function: (bool, &'input str) = {
@@ -332,13 +334,41 @@ ArrayOperand = {
     ID "[" Num "]",
 };
 
-VectorOperand = {
+VectorOperand: () = {
     ID "." ID,
+    ID DotID,
 };
 
 Vector = {
     ".v2",
     ".v4"
+};
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#debugging-directives-file
+File = {
+    ".file" Num String ("," Num "," Num)?
+};
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#debugging-directives-section
+Section = {
+    ".section" DotID "{" SectionDwarfLines* "}"
+};
+
+SectionDwarfLines: () = {
+    BitType Comma<Num>,
+    ".b32" SectionLabel,
+    ".b64" SectionLabel,
+    ".b32" SectionLabel "+" Num,
+    ".b64" SectionLabel "+" Num,
+};
+
+SectionLabel = {
+    ID,
+    DotID
+};
+
+BitType = {
+    ".b8", ".b16", ".b32", ".b64"
 };
 
 Comma<T>: Vec<T> = {
@@ -352,7 +382,9 @@ Comma<T>: Vec<T> = {
     }
 };
 
+String = r#""[^"]*""#;
 VersionNumber = r"[0-9]+\.[0-9]+";
-Num: i128 = <s:r"[0-9]+"> => i128::from_str(s).unwrap();
+//Num: i128 = <s:r"[?:0x][0-9]+"> => i128::from_str(s).unwrap();
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#identifiers
 ID: &'input str = <s:r"[a-zA-Z][a-zA-Z0-9_$]*|[_$%][a-zA-Z0-9_$]+"> => s;
+DotID: &'input str = <s:r"\.[a-zA-Z][a-zA-Z0-9_$]*"> => s;
