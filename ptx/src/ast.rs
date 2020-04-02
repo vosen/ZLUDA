@@ -1,18 +1,39 @@
-
-pub struct Module {
-    version: (u8, u8),
-    target: Target
+pub struct Module<'a> {
+    pub version: (u8, u8),
+    pub functions: Vec<Function<'a>>
 }
 
-pub struct Target {
-    arch: String,
-    texturing: TexturingMode,
-    debug: bool,
-    f64_to_f32: bool
+pub struct Function<'a> {
+    pub kernel: bool,
+    pub name: &'a str,
+    pub args: Vec<Argument>,
+    pub body: Vec<Statement<'a>>,
 }
 
-pub enum TexturingMode {
-    Unspecified,
-    Unified,
-    Independent
+pub struct Argument {
+
+}
+
+pub enum Statement<'a> {
+    Label(&'a str),
+    Variable(Variable),
+    Instruction(Instruction)
+}
+
+pub struct Variable {
+    
+}
+
+pub enum Instruction {
+    Ld,
+    Mov,
+    Mul,
+    Add,
+    Setp,
+    Not,
+    Bra,
+    Cvt,
+    Shl,
+    At,
+    Ret
 }

@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 lalrpop-util = "0.18.1"
 regex = "1"
+rspirv = "0.6"
 
 [build-dependencies.lalrpop]
 version = "0.18.1"
