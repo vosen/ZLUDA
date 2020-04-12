@@ -1,6 +1,6 @@
-use std::str::FromStr;
 use crate::ast;
-use std::convert::identity;
+use crate::ast::{WithErrors, WithErrorsExt};
+use crate::without_none;
 
 grammar;
 
@@ -16,19 +16,23 @@ match {
     _
 }
 
-pub Module: Option<ast::Module<'input>> = {
-    <v:Version> Target <f:Directive*> => v.map(|v| ast::Module { version: v, functions: f.into_iter().filter_map(identity).collect::<Vec<_>>() })
+pub Module: WithErrors<ast::Module<'input>, ast::PtxError> = {
+    <v:Version> Target <f:Directive*> => {
+        let funcs = WithErrors::from_vec(without_none(f));
+        WithErrors::map2(v, funcs,
+            |v, funcs| ast::Module { version: v, functions: funcs }
+        )
+    }
 };
 
-Version: Option<(u8, u8)> = {
+Version: WithErrors<(u8, u8), ast::PtxError> = {
     ".version" <v:VersionNumber> => {
         let dot = v.find('.').unwrap();
-        let major = v[..dot].parse::<u8>();
-        major.ok().and_then(|major| {
-            v[dot+1..].parse::<u8>().ok().map(|minor| {
-                (major, minor)
-            })
-        })
+        let major = v[..dot].parse::<u8>().map_err(Into::into);
+        let minor = v[dot+1..].parse::<u8>().map_err(Into::into);
+        WithErrors::from_results(major, minor,
+            |major, minor| (major, minor)
+        )
     }
 }
 
@@ -45,7 +49,7 @@ TargetSpecifier = {
     "map_f64_to_f32"
 };
 
-Directive: Option<ast::Function<'input>> = {
+Directive: Option<WithErrors<ast::Function<'input>, ast::PtxError>> = {
     AddressSize => None,
     <f:Function> => Some(f),
     File => None,
@@ -56,8 +60,11 @@ AddressSize = {
     ".address_size" Num
 };
 
-Function: ast::Function<'input> = {
-    LinkingDirective* <kernel:IsKernel> <name:ID> "(" <args:Comma<FunctionInput>> ")" <body:FunctionBody> => ast::Function {<>}
+Function: WithErrors<ast::Function<'input>, ast::PtxError>  = {
+    LinkingDirective* <k:IsKernel> <n:ID> "(" <args:Comma<FunctionInput>> ")" <b:FunctionBody> => {
+        WithErrors::from_vec(args)
+            .map(|args| ast::Function{kernel: k, name: n, args: args, body: b})
+    }
 };
 
 LinkingDirective = {
@@ -71,12 +78,21 @@ IsKernel: bool = {
     ".func" => false
 };
 
-FunctionInput: ast::Argument = {
-    ".param" Type ID => ast::Argument {}
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parameter-state-space
+FunctionInput: WithErrors<ast::Argument<'input>, ast::PtxError> = {
+    ".param" <_type:ScalarType> <name:ID> => { 
+        WithErrors::new(ast::Argument {a_type: _type, name: name, length: 1 })
+    },
+    ".param" <a_type:ScalarType> <name:ID> "[" <length:Num> "]" => {
+        let length = length.parse::<u32>().map_err(Into::into);
+        length.with_errors(
+            |l| ast::Argument { a_type: a_type, name: name, length: l }
+        )
+    }
 };
 
 FunctionBody: Vec<ast::Statement<'input>> = {
-    "{" <s:Statement*> "}" => { s.into_iter().filter_map(identity).collect() }
+    "{" <s:Statement*> "}" => { without_none(s) }
 };
 
 StateSpaceSpecifier = {
@@ -87,6 +103,25 @@ StateSpaceSpecifier = {
     ".local",
     ".shared"
 };
+
+ScalarType: ast::ScalarType = {
+    ".b8" => ast::ScalarType::B8,
+    ".b16" => ast::ScalarType::B16,
+    ".b32" => ast::ScalarType::B32,
+    ".b64" => ast::ScalarType::B64,
+    ".u8" => ast::ScalarType::U8,
+    ".u16" => ast::ScalarType::U16,
+    ".u32" => ast::ScalarType::U32,
+    ".u64" => ast::ScalarType::U64,
+    ".s8" => ast::ScalarType::S8,
+    ".s16" => ast::ScalarType::S16,
+    ".s32" => ast::ScalarType::S32,
+    ".s64" => ast::ScalarType::S64,
+    ".f16" => ast::ScalarType::F16,
+    ".f32" => ast::ScalarType::F32,
+    ".f64" => ast::ScalarType::F64,
+};
+
 
 Type = {
     BaseType,

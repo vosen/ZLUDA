@@ -10,6 +10,8 @@ edition = "2018"
 lalrpop-util = "0.18.1"
 regex = "1"
 rspirv = "0.6"
+spirv_headers = "1.4"
+quick-error = "1.2"
 
 [build-dependencies.lalrpop]
 version = "0.18.1"
