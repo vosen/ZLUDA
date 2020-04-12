@@ -1,4 +1,5 @@
 use std::convert::From;
+use std::convert::Into;
 use std::error::Error;
 use std::mem;
 use std::num::ParseIntError;
@@ -6,110 +7,42 @@ use std::num::ParseIntError;
 quick_error! {
     #[derive(Debug)]
     pub enum PtxError {
-        Parse (err: ParseIntError) {
+        ParseInt (err: ParseIntError) {
+            from()
             display("{}", err)
             cause(err)
-            from()
         }
     }
 }
 
-pub struct WithErrors<T, E> {
-    pub value: T,
-    pub errors: Vec<E>,
+pub trait UnwrapWithVec<E, To> {
+    fn unwrap_with(self, errs: &mut Vec<E>) -> To;
 }
 
-impl<T, E> WithErrors<T, E> {
-    pub fn new(t: T) -> Self {
-        WithErrors {
-            value: t,
-            errors: Vec::new(),
-        }
-    }
-
-    pub fn map<F: FnOnce(T) -> U, U>(self, f: F) -> WithErrors<U, E> {
-        WithErrors {
-            value: f(self.value),
-            errors: self.errors,
-        }
-    }
-
-    pub fn map2<X, Y, F: FnOnce(X, Y) -> T>(
-        x: WithErrors<X, E>,
-        y: WithErrors<Y, E>,
-        f: F,
-    ) -> Self {
-        let mut errors = x.errors;
-        let mut errors_other = y.errors;
-        if errors.len() < errors_other.len() {
-            mem::swap(&mut errors, &mut errors_other);
-        }
-        errors.extend(errors_other);
-        WithErrors {
-            value: f(x.value, y.value),
-            errors: errors,
-        }
+impl<R: Default, EFrom: std::convert::Into<EInto>, EInto> UnwrapWithVec<EInto, R>
+    for Result<R, EFrom>
+{
+    fn unwrap_with(self, errs: &mut Vec<EInto>) -> R {
+        self.unwrap_or_else(|e| {
+            errs.push(e.into());
+            R::default()
+        })
     }
 }
 
-impl<T:Default, E: Error> WithErrors<T, E> {
-    pub fn from_results<X: Default, Y: Default, F: FnOnce(X, Y) -> T>(
-        x: Result<X, E>,
-        y: Result<Y, E>,
-        f: F,
-    ) -> Self {
-        match (x, y) {
-            (Ok(x), Ok(y)) => WithErrors {
-                value: f(x, y),
-                errors: Vec::new(),
-            },
-            (Err(e), Ok(y)) => WithErrors {
-                value: f(X::default(), y),
-                errors: vec![e],
-            },
-            (Ok(x), Err(e)) => WithErrors {
-                value: f(x, Y::default()),
-                errors: vec![e],
-            },
-            (Err(e1), Err(e2)) => WithErrors {
-                value: T::default(),
-                errors: vec![e1, e2],
-            },
-        }
-    }
-}
-
-impl<T, E: Error> WithErrors<Vec<T>, E> {
-    pub fn from_vec(v: Vec<WithErrors<T, E>>) -> Self {
-        let mut values = Vec::with_capacity(v.len());
-        let mut errors = Vec::new();
-        for we in v.into_iter() {
-            values.push(we.value);
-            errors.extend(we.errors);
-        }
-        WithErrors {
-            value: values,
-            errors: errors,
-        }
-    }
-}
-
-pub trait WithErrorsExt<From, To, E> {
-    fn with_errors<F: FnOnce(From) -> To>(self, f: F) -> WithErrors<To, E>;
-}
-
-impl<From, To: Default, E> WithErrorsExt<From, To, E> for Result<From, E> {
-    fn with_errors<F: FnOnce(From) -> To>(self, f: F) -> WithErrors<To, E> {
-        self.map_or_else(
-            |e| WithErrors {
-                value: To::default(),
-                errors: vec![e],
-            },
-            |t| WithErrors {
-                value: f(t),
-                errors: Vec::new(),
-            },
-        )
+impl<
+        R1: Default,
+        EFrom1: std::convert::Into<EInto>,
+        R2: Default,
+        EFrom2: std::convert::Into<EInto>,
+        EInto,
+    > UnwrapWithVec<EInto, (R1, R2)> for (Result<R1, EFrom1>, Result<R2, EFrom2>)
+{
+    fn unwrap_with(self, errs: &mut Vec<EInto>) -> (R1, R2) {
+        let (x, y) = self;
+        let r1 = x.unwrap_with(errs);
+        let r2 = y.unwrap_with(errs);
+        (r1, r2)
     }
 }
 
@@ -132,6 +65,13 @@ pub struct Argument<'a> {
     pub length: u32,
 }
 
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+pub enum Type {
+    Scalar(ScalarType),
+    ExtendedScalar(ExtendedScalarType),
+}
+
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
 pub enum ScalarType {
     B8,
     B16,
@@ -150,6 +90,12 @@ pub enum ScalarType {
     F64,
 }
 
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+pub enum ExtendedScalarType {
+    F16x2,
+    Pred,
+}
+
 impl Default for ScalarType {
     fn default() -> Self {
         ScalarType::B8
@@ -158,11 +104,25 @@ impl Default for ScalarType {
 
 pub enum Statement<'a> {
     Label(&'a str),
-    Variable(Variable),
+    Variable(Variable<'a>),
     Instruction(Instruction),
 }
 
-pub struct Variable {}
+pub struct Variable<'a> {
+    pub space: StateSpace,
+    pub v_type: Type,
+    pub name: &'a str,
+    pub count: Option<u32>,
+}
+
+pub enum StateSpace {
+    Reg,
+    Sreg,
+    Const,
+    Global,
+    Local,
+    Shared,
+}
 
 pub enum Instruction {
     Ld,

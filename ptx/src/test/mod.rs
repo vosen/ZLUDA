@@ -1,12 +1,9 @@
 use super::ptx;
 
 fn parse_and_assert(s: &str) {
-    assert!(
-        ptx::ModuleParser::new()
-            .parse(s)
-            .unwrap()
-            .errors
-            .len() == 0);
+    let mut errors = Vec::new();
+    let ast = ptx::ModuleParser::new().parse(&mut errors, s).unwrap();
+    assert!(errors.len() == 0);
 }
 
 #[test]

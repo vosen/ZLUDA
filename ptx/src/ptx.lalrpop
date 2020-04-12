@@ -1,8 +1,8 @@
 use crate::ast;
-use crate::ast::{WithErrors, WithErrorsExt};
+use crate::ast::UnwrapWithVec;
 use crate::without_none;
 
-grammar;
+grammar<'a>(errors: &mut Vec<ast::PtxError>);
 
 match {
     r"\s+" => { },
@@ -16,23 +16,18 @@ match {
     _
 }
 
-pub Module: WithErrors<ast::Module<'input>, ast::PtxError> = {
+pub Module: ast::Module<'input> = {
     <v:Version> Target <f:Directive*> => {
-        let funcs = WithErrors::from_vec(without_none(f));
-        WithErrors::map2(v, funcs,
-            |v, funcs| ast::Module { version: v, functions: funcs }
-        )
+        ast::Module { version: v, functions: without_none(f) }
     }
 };
 
-Version: WithErrors<(u8, u8), ast::PtxError> = {
+Version: (u8, u8) = {
     ".version" <v:VersionNumber> => {
         let dot = v.find('.').unwrap();
-        let major = v[..dot].parse::<u8>().map_err(Into::into);
-        let minor = v[dot+1..].parse::<u8>().map_err(Into::into);
-        WithErrors::from_results(major, minor,
-            |major, minor| (major, minor)
-        )
+        let major = v[..dot].parse::<u8>();
+        let minor = v[dot+1..].parse::<u8>();
+        (major,minor).unwrap_with(errors)
     }
 }
 
@@ -49,7 +44,7 @@ TargetSpecifier = {
     "map_f64_to_f32"
 };
 
-Directive: Option<WithErrors<ast::Function<'input>, ast::PtxError>> = {
+Directive: Option<ast::Function<'input>> = {
     AddressSize => None,
     <f:Function> => Some(f),
     File => None,
@@ -60,11 +55,12 @@ AddressSize = {
     ".address_size" Num
 };
 
-Function: WithErrors<ast::Function<'input>, ast::PtxError>  = {
-    LinkingDirective* <k:IsKernel> <n:ID> "(" <args:Comma<FunctionInput>> ")" <b:FunctionBody> => {
-        WithErrors::from_vec(args)
-            .map(|args| ast::Function{kernel: k, name: n, args: args, body: b})
-    }
+Function: ast::Function<'input>  = {
+    LinkingDirective*
+    <kernel:IsKernel>
+    <name:ID>
+    "(" <args:Comma<FunctionInput>> ")"
+    <body:FunctionBody> => ast::Function{<>}
 };
 
 LinkingDirective = {
@@ -79,15 +75,14 @@ IsKernel: bool = {
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parameter-state-space
-FunctionInput: WithErrors<ast::Argument<'input>, ast::PtxError> = {
+FunctionInput: ast::Argument<'input> = {
     ".param" <_type:ScalarType> <name:ID> => { 
-        WithErrors::new(ast::Argument {a_type: _type, name: name, length: 1 })
+        ast::Argument {a_type: _type, name: name, length: 1 }
     },
     ".param" <a_type:ScalarType> <name:ID> "[" <length:Num> "]" => {
-        let length = length.parse::<u32>().map_err(Into::into);
-        length.with_errors(
-            |l| ast::Argument { a_type: a_type, name: name, length: l }
-        )
+        let length = length.parse::<u32>();
+        let length = length.unwrap_with(errors);
+        ast::Argument { a_type: a_type, name: name, length: length }
     }
 };
 
@@ -95,13 +90,19 @@ FunctionBody: Vec<ast::Statement<'input>> = {
     "{" <s:Statement*> "}" => { without_none(s) }
 };
 
-StateSpaceSpecifier = {
-    ".reg",
-    ".sreg",
-    ".const",
-    ".global",
-    ".local",
-    ".shared"
+StateSpaceSpecifier: ast::StateSpace = {
+    ".reg" => ast::StateSpace::Reg,
+    ".sreg" => ast::StateSpace::Sreg,
+    ".const" => ast::StateSpace::Const,
+    ".global" => ast::StateSpace::Global,
+    ".local" => ast::StateSpace::Local,
+    ".shared" => ast::StateSpace::Shared
+};
+
+
+Type: ast::Type = {
+    <t:ScalarType> => ast::Type::Scalar(t),
+    <t:ExtendedScalarType> => ast::Type::ExtendedScalar(t),
 };
 
 ScalarType: ast::ScalarType = {
@@ -122,12 +123,9 @@ ScalarType: ast::ScalarType = {
     ".f64" => ast::ScalarType::F64,
 };
 
-
-Type = {
-    BaseType,
-    ".pred",
-    ".f16",
-    ".f16x2", 
+ExtendedScalarType: ast::ExtendedScalarType = {
+    ".f16x2" => ast::ExtendedScalarType::F16x2,
+    ".pred" => ast::ExtendedScalarType::Pred,
 };
 
 BaseType = {
@@ -157,13 +155,24 @@ Label: &'input str = {
     <id:ID> ":" => id
 };
 
-Variable: ast::Variable = {
-    StateSpaceSpecifier Type VariableName => ast::Variable {}
+Variable: ast::Variable<'input> = {
+    <s:StateSpaceSpecifier> <t:Type> <v:VariableName> => {
+        let (name, count) = v;
+        ast::Variable { space: s, v_type: t, name: name, count: count }
+    }
 };
 
-VariableName = {
-    ID,
-    ParametrizedID
+VariableName: (&'input str, Option<u32>) = {
+    <id:ID> => (id, None),
+    <id:ParametrizedID> => {
+        let left_angle = id.as_bytes().iter().copied().position(|x| x == b'<').unwrap();
+        let count = id[left_angle+1..id.len()-1].parse::<u32>();
+        let count = match count {
+            Ok(c) => Some(c),
+            Err(e) => { errors.push(e.into()); None },
+        };
+        (&id[0..left_angle], count)
+    }
 };
 
 Instruction = {
