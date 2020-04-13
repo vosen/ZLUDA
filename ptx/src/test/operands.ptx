@@ -1,0 +1,33 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry foobar(
+	.param .u32 foobar_param_0
+)
+{
+	.reg .u32 	%reg<10>;
+	.reg .u64 	%reg_64;
+    .reg .pred  p;
+    .reg .pred  q;
+
+    // reg
+	ld.param.u32 	%reg0, [foobar_param_0];
+    // reg with offset
+	ld.param.u32 	%reg1, [foobar_param_0+1];
+    ld.param.u32 	%reg2, [foobar_param_0+-1];
+    // immediate - only in local
+    ld.local.u32 	%reg3, [1];
+
+    // ids
+    add.u32 %reg0, %reg1, %reg2;
+    // immediate
+    add.u32 %reg0, 1, %reg2;
+    // reg with offset
+    add.u32 %reg0, %reg1+1, %reg2+-1;
+    // suprisingly, setp accepts all forms
+    setp.eq.and.u32 p, %reg1+1, %reg2+-1, 2;
+
+    // vector index - only supported by mov (maybe: ld, st, tex)
+    mov.u32 %reg0, %ntid.x;
+}

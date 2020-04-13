@@ -128,10 +128,30 @@ fn emit_function<'a>(
                 builder.begin_block(Some(id))?;
             }
             ast::Statement::Variable(var) => panic!(),
-            ast::Statement::Instruction(i) => panic!(),
+            ast::Statement::Instruction(_,_) => panic!(),
         }
     }
     builder.ret()?;
     builder.end_function()?;
     Ok(())
+}
+
+enum Statement {
+    Label,
+    Instruction(Instruction),
+    Phi(Vec<spirv::Word>)
+}
+
+enum Instruction {
+    Ld,
+    Mov,
+    Mul,
+    Add,
+    Setp,
+    Not,
+    Bra,
+    Cvt,
+    Shl,
+    At,
+    Ret,
 }

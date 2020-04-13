@@ -139,7 +139,7 @@ Statement: Option<ast::Statement<'input>> = {
     <l:Label> => Some(ast::Statement::Label(l)),
     DebugDirective => None,
     <v:Variable> ";" => Some(ast::Statement::Variable(v)),
-    <i:Instruction> ";" => Some(ast::Statement::Instruction(i))
+    <p:PredAt?> <i:Instruction> ";" => Some(ast::Statement::Instruction(p, i))
 };
 
 DebugDirective: () = {
@@ -175,7 +175,7 @@ VariableName: (&'input str, Option<u32>) = {
     }
 };
 
-Instruction = {
+Instruction: ast::Instruction<'input> = {
     InstLd,
     InstMov,
     InstMul,
@@ -190,8 +190,10 @@ Instruction = {
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
-InstLd: ast::Instruction = {
-    "ld" LdQualifier? LdStateSpace? LdCacheOperator? Vector? BaseType ID "," "[" ID "]" => ast::Instruction::Ld
+InstLd: ast::Instruction<'input> = {
+    "ld" LdQualifier? LdStateSpace? LdCacheOperator? Vector? BaseType <dst:ID> "," "[" <src:Operand> "]" => {
+        ast::Instruction::Ld(ast::LdData{}, ast::Arg2{dst:dst, src:src})
+    }
 };
 
 LdQualifier: () = {
@@ -222,8 +224,10 @@ LdCacheOperator = {
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
-InstMov: ast::Instruction = {
-    "mov" MovType ID "," Operand => ast::Instruction::Mov
+InstMov: ast::Instruction<'input> = {
+    "mov" MovType <a:Arg2Mov> => {
+        ast::Instruction::Mov(ast::MovData{}, a)
+    }
 };
 
 MovType = {
@@ -237,12 +241,16 @@ MovType = {
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-mul
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-mul
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#half-precision-floating-point-instructions-mul
-InstMul: ast::Instruction = {
-    "mul" MulIntControl? IntType ID "," Operand "," Operand  => ast::Instruction::Mul,
-    "mul" RoundingMode? ".ftz"? ".sat"? ".f32" ID "," Operand "," Operand => ast::Instruction::Mul,
-    "mul" RoundingMode? ".f64" ID "," Operand "," Operand => ast::Instruction::Mul,
-    "mul" ".rn"? ".ftz"? ".sat"? ".f16" ID "," Operand "," Operand => ast::Instruction::Mul,
-    "mul" ".rn"? ".ftz"? ".sat"? ".f16x2" ID "," Operand "," Operand => ast::Instruction::Mul,
+InstMul: ast::Instruction<'input> = {
+    "mul" <d:InstMulMode> <a:Arg3> => ast::Instruction::Mul(d, a)
+};
+
+InstMulMode: ast::MulData = {
+    MulIntControl? IntType => ast::MulData{},
+    RoundingMode? ".ftz"? ".sat"? ".f32" => ast::MulData{},
+    RoundingMode? ".f64" => ast::MulData{},
+    ".rn"? ".ftz"? ".sat"? ".f16" => ast::MulData{},
+    ".rn"? ".ftz"? ".sat"? ".f16x2" => ast::MulData{}
 };
 
 MulIntControl = {
@@ -262,19 +270,33 @@ IntType = {
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-add
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-add
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#half-precision-floating-point-instructions-add
-InstAdd: ast::Instruction = {
-    "add" IntType ID "," Operand "," Operand => ast::Instruction::Add,
-    "add" ".sat" ".s32" ID "," Operand "," Operand => ast::Instruction::Add,
-    "add" RoundingMode? ".ftz"? ".sat"? ".f32" ID "," Operand "," Operand => ast::Instruction::Add,
-    "add" RoundingMode? ".f64" ID "," Operand "," Operand => ast::Instruction::Add,
-    "add" ".rn"? ".ftz"? ".sat"? ".f16" ID "," Operand "," Operand => ast::Instruction::Add,
-    "add" ".rn"? ".ftz"? ".sat"? ".f16x2" ID "," Operand "," Operand => ast::Instruction::Add,
+InstAdd: ast::Instruction<'input> = {
+    "add" <d:InstAddMode> <a:Arg3> => ast::Instruction::Add(d, a)
+};
+
+InstAddMode: ast::AddData = {
+    IntType => ast::AddData{},
+    ".sat" ".s32" => ast::AddData{},
+    RoundingMode? ".ftz"? ".sat"? ".f32" => ast::AddData{},
+    RoundingMode? ".f64" => ast::AddData{},
+    ".rn"? ".ftz"? ".sat"? ".f16" => ast::AddData{},
+    ".rn"? ".ftz"? ".sat"? ".f16x2" => ast::AddData{}
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions-setp
-InstSetp: ast::Instruction = {
-    "setp" SetpCmpOp ".ftz"? SetpType ID ("|" ID)? "," Operand "," Operand => ast::Instruction::Setp,
-    "setp" SetpCmpOp SetpBoolOp ".ftz"? SetpType ID ("|" ID)? "," Operand "," Operand "," "!"? ID => ast::Instruction::Setp
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#half-precision-comparison-instructions-setp
+// TODO: support f16 setp
+InstSetp: ast::Instruction<'input> = {
+    "setp" <d:SetpMode> <a:Arg4> => ast::Instruction::Setp(d, a),
+    "setp" <d:SetpBoolMode> <a:Arg5> => ast::Instruction::SetpBool(d, a),
+};
+
+SetpMode: ast::SetpData = {
+    SetpCmpOp ".ftz"? SetpType => ast::SetpData{}
+};
+
+SetpBoolMode: ast::SetpBoolData = {
+    SetpCmpOp SetpBoolOp ".ftz"? SetpType => ast::SetpBoolData{}
 };
 
 SetpCmpOp = {
@@ -294,8 +316,8 @@ SetpType = {
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-not
-InstNot: ast::Instruction = {
-    "not" NotType ID "," Operand => ast::Instruction::Not
+InstNot: ast::Instruction<'input> = {
+    "not" NotType <a:Arg2> => ast::Instruction::Not(ast::NotData{}, a)
 };
 
 NotType = {
@@ -303,18 +325,21 @@ NotType = {
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-at
-InstAt: ast::Instruction = {
-    "@" "!"? ID => ast::Instruction::At
+PredAt: ast::PredAt<'input> = {
+    "@" <label:ID> => ast::PredAt { not: false, label:label },
+    "@" "!" <label:ID> => ast::PredAt { not: true, label:label }
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-bra
-InstBra: ast::Instruction = {
-    InstAt? "bra" ".uni"? ID => ast::Instruction::Bra
+InstBra: ast::Instruction<'input> = {
+    "bra" ".uni"? <a:Arg1> => ast::Instruction::Bra(ast::BraData{}, a)
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt
-InstCvt: ast::Instruction = {
-    "cvt" CvtRnd? ".ftz"? ".sat"? CvtType CvtType ID "," Operand => ast::Instruction::Cvt
+InstCvt: ast::Instruction<'input> = {
+    "cvt" CvtRnd? ".ftz"? ".sat"? CvtType CvtType <a:Arg2> => {
+        ast::Instruction::Cvt(ast::CvtData{}, a)
+    }
 };
 
 CvtRnd = {
@@ -337,8 +362,8 @@ CvtType = {
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-shl
-InstShl: ast::Instruction = {
-    "shl" ShlType ID "," Operand "," Operand => ast::Instruction::Shl
+InstShl: ast::Instruction<'input> = {
+    "shl" ShlType <a:Arg3> => ast::Instruction::Shl(ast::ShlData{}, a)
 };
 
 ShlType = {
@@ -346,8 +371,10 @@ ShlType = {
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-st
-InstSt: ast::Instruction = {
-    "st" LdQualifier? StStateSpace? StCacheOperator? Vector? BaseType "[" ID "]" "," Operand => ast::Instruction::Shl
+InstSt: ast::Instruction<'input> = {
+    "st" LdQualifier? StStateSpace? StCacheOperator? Vector? BaseType "[" <dst:ID> "]" "," <src:Operand> => {
+        ast::Instruction::St(ast::StData{}, ast::Arg2{dst:dst, src:src})
+    }
 };
 
 StStateSpace = {
@@ -365,30 +392,65 @@ StCacheOperator = {
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-ret
-InstRet: ast::Instruction = {
-    "ret" ".uni"? => ast::Instruction::Ret
+InstRet: ast::Instruction<'input> = {
+    "ret" ".uni"? => ast::Instruction::Ret(ast::RetData{})
 };
 
-Operand: () = {
-    ID,
-    Num,
-    OffsetOperand,
-    ArrayOperand,
-    VectorOperand,
+Operand: ast::Operand<'input> = {
+    <r:ID> => ast::Operand::Reg(r),
+    <r:ID> "+" <o:Num> => {
+        let offset = o.parse::<i32>();
+        let offset = offset.unwrap_with(errors);
+        ast::Operand::RegOffset(r, offset)
+    },
+    <o:Num> => {
+        let offset = o.parse::<i128>();
+        let offset = offset.unwrap_with(errors);
+        ast::Operand::Imm(offset)
+    }
 };
 
-OffsetOperand = {
-    ID "+" Num,
+MovOperand: ast::MovOperand<'input> = {
+    <o:Operand> => ast::MovOperand::Op(o),
+    <o:VectorOperand> => {
+        let (pref, suf) = o;
+        ast::MovOperand::Vec(pref, suf)
+    }
 };
 
-ArrayOperand = {
-    ID "[" Num "]",
+VectorOperand: (&'input str, &'input str) = {
+    <pref:ID> "." <suf:ID> => (pref, suf),
+    <pref:ID> <suf:DotID> => (pref, &suf[1..]),
 };
 
-VectorOperand: () = {
-    ID "." ID,
-    ID DotID,
+Arg1: ast::Arg1<'input> = {
+    <dst:ID> => ast::Arg1{<>}
 };
+
+Arg2: ast::Arg2<'input> = {
+    <dst:ID> "," <src:Operand> => ast::Arg2{<>}
+};
+
+Arg2Mov: ast::Arg2Mov<'input> = {
+    <dst:ID> "," <src:MovOperand> => ast::Arg2Mov{<>}
+};
+
+Arg3: ast::Arg3<'input> = {
+    <dst:ID> "," <src1:Operand> "," <src2:Operand> => ast::Arg3{<>}
+};
+
+Arg4: ast::Arg4<'input> = {
+    <dst1:ID> <dst2:OptionalDst?> "," <src1:Operand> "," <src2:Operand> => ast::Arg4{<>}
+};
+
+// TODO: pass src3 negation somewhere
+Arg5: ast::Arg5<'input> = {
+    <dst1:ID> <dst2:OptionalDst?> "," <src1:Operand> "," <src2:Operand> "," "!"? <src3:Operand> => ast::Arg5{<>}
+};
+
+OptionalDst: &'input str = {
+    "|" <dst2:ID> => dst2
+}
 
 Vector = {
     ".v2",

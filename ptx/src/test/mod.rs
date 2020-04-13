@@ -12,7 +12,13 @@ fn empty() {
 }
 
 #[test]
-fn vector_add() {
+fn vectorAdd_kernel64_ptx() {
     let vector_add = include_str!("vectorAdd_kernel64.ptx");
+    parse_and_assert(vector_add);
+}
+
+#[test]
+fn operands_ptx() {
+    let vector_add = include_str!("operands.ptx");
     parse_and_assert(vector_add);
 }

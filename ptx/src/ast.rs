@@ -105,7 +105,7 @@ impl Default for ScalarType {
 pub enum Statement<'a> {
     Label(&'a str),
     Variable(Variable<'a>),
-    Instruction(Instruction),
+    Instruction(Option<PredAt<'a>>, Instruction<'a>),
 }
 
 pub struct Variable<'a> {
@@ -124,16 +124,95 @@ pub enum StateSpace {
     Shared,
 }
 
-pub enum Instruction {
-    Ld,
-    Mov,
-    Mul,
-    Add,
-    Setp,
-    Not,
-    Bra,
-    Cvt,
-    Shl,
-    At,
-    Ret,
+pub struct PredAt<'a> {
+    pub not: bool,
+    pub label: &'a str,
 }
+
+pub enum Instruction<'a> {
+    Ld(LdData, Arg2<'a>),
+    Mov(MovData, Arg2Mov<'a>),
+    Mul(MulData, Arg3<'a>),
+    Add(AddData, Arg3<'a>),
+    Setp(SetpData, Arg4<'a>),
+    SetpBool(SetpBoolData, Arg5<'a>),
+    Not(NotData, Arg2<'a>),
+    Bra(BraData, Arg1<'a>),
+    Cvt(CvtData, Arg2<'a>),
+    Shl(ShlData, Arg3<'a>),
+    St(StData, Arg2<'a>),
+    At(AtData, Arg1<'a>),
+    Ret(RetData),
+}
+
+pub struct Arg1<'a> {
+    pub dst: &'a str,
+}
+
+pub struct Arg2<'a> {
+    pub dst: &'a str,
+    pub src: Operand<'a>,
+}
+
+pub struct Arg2Mov<'a> {
+    pub dst: &'a str,
+    pub src: MovOperand<'a>,
+}
+
+pub struct Arg3<'a> {
+    pub dst: &'a str,
+    pub src1: Operand<'a>,
+    pub src2: Operand<'a>,
+}
+
+pub struct Arg4<'a> {
+    pub dst1: &'a str,
+    pub dst2: Option<&'a str>,
+    pub src1: Operand<'a>,
+    pub src2: Operand<'a>,
+}
+
+pub struct Arg5<'a> {
+    pub dst1: &'a str,
+    pub dst2: Option<&'a str>,
+    pub src1: Operand<'a>,
+    pub src2: Operand<'a>,
+    pub src3: Operand<'a>,
+}
+
+pub enum Operand<'a> {
+    Reg(&'a str),
+    RegOffset(&'a str, i32),
+    Imm(i128),
+}
+
+pub enum MovOperand<'a> {
+    Op(Operand<'a>),
+    Vec(&'a str, &'a str),
+}
+
+pub struct LdData {}
+
+pub struct MovData {}
+
+pub struct MulData {}
+
+pub struct AddData {}
+
+pub struct SetpData {}
+
+pub struct SetpBoolData {}
+
+pub struct NotData {}
+
+pub struct BraData {}
+
+pub struct CvtData {}
+
+pub struct ShlData {}
+
+pub struct StData {}
+
+pub struct AtData {}
+
+pub struct RetData {}
