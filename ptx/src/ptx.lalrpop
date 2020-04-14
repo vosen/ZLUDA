@@ -403,6 +403,8 @@ Operand: ast::Operand<'input> = {
         let offset = offset.unwrap_with(errors);
         ast::Operand::RegOffset(r, offset)
     },
+    // TODO: start parsing whole constants sub-language:
+    //       https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#constants
     <o:Num> => {
         let offset = o.parse::<i128>();
         let offset = offset.unwrap_with(errors);
