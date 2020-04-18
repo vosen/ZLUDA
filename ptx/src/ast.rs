@@ -55,7 +55,7 @@ pub struct Function<'a> {
     pub kernel: bool,
     pub name: &'a str,
     pub args: Vec<Argument<'a>>,
-    pub body: Vec<Statement<'a>>,
+    pub body: Vec<Statement<&'a str>>,
 }
 
 #[derive(Default)]
@@ -102,16 +102,16 @@ impl Default for ScalarType {
     }
 }
 
-pub enum Statement<'a> {
-    Label(&'a str),
-    Variable(Variable<'a>),
-    Instruction(Option<PredAt<'a>>, Instruction<'a>),
+pub enum Statement<ID> {
+    Label(ID),
+    Variable(Variable<ID>),
+    Instruction(Option<PredAt<ID>>, Instruction<ID>),
 }
 
-pub struct Variable<'a> {
+pub struct Variable<ID> {
     pub space: StateSpace,
     pub v_type: Type,
-    pub name: &'a str,
+    pub name: ID,
     pub count: Option<u32>,
 }
 
@@ -124,71 +124,71 @@ pub enum StateSpace {
     Shared,
 }
 
-pub struct PredAt<'a> {
+pub struct PredAt<ID> {
     pub not: bool,
-    pub label: &'a str,
+    pub label: ID,
 }
 
-pub enum Instruction<'a> {
-    Ld(LdData, Arg2<'a>),
-    Mov(MovData, Arg2Mov<'a>),
-    Mul(MulData, Arg3<'a>),
-    Add(AddData, Arg3<'a>),
-    Setp(SetpData, Arg4<'a>),
-    SetpBool(SetpBoolData, Arg5<'a>),
-    Not(NotData, Arg2<'a>),
-    Bra(BraData, Arg1<'a>),
-    Cvt(CvtData, Arg2<'a>),
-    Shl(ShlData, Arg3<'a>),
-    St(StData, Arg2<'a>),
-    At(AtData, Arg1<'a>),
+pub enum Instruction<ID> {
+    Ld(LdData, Arg2<ID>),
+    Mov(MovData, Arg2Mov<ID>),
+    Mul(MulData, Arg3<ID>),
+    Add(AddData, Arg3<ID>),
+    Setp(SetpData, Arg4<ID>),
+    SetpBool(SetpBoolData, Arg5<ID>),
+    Not(NotData, Arg2<ID>),
+    Bra(BraData, Arg1<ID>),
+    Cvt(CvtData, Arg2<ID>),
+    Shl(ShlData, Arg3<ID>),
+    St(StData, Arg2<ID>),
+    At(AtData, Arg1<ID>),
     Ret(RetData),
 }
 
-pub struct Arg1<'a> {
-    pub dst: &'a str,
+pub struct Arg1<ID> {
+    pub dst: ID,
 }
 
-pub struct Arg2<'a> {
-    pub dst: &'a str,
-    pub src: Operand<'a>,
+pub struct Arg2<ID> {
+    pub dst: ID,
+    pub src: Operand<ID>,
 }
 
-pub struct Arg2Mov<'a> {
-    pub dst: &'a str,
-    pub src: MovOperand<'a>,
+pub struct Arg2Mov<ID> {
+    pub dst: ID,
+    pub src: MovOperand<ID>,
 }
 
-pub struct Arg3<'a> {
-    pub dst: &'a str,
-    pub src1: Operand<'a>,
-    pub src2: Operand<'a>,
+pub struct Arg3<ID> {
+    pub dst: ID,
+    pub src1: Operand<ID>,
+    pub src2: Operand<ID>,
 }
 
-pub struct Arg4<'a> {
-    pub dst1: &'a str,
-    pub dst2: Option<&'a str>,
-    pub src1: Operand<'a>,
-    pub src2: Operand<'a>,
+pub struct Arg4<ID> {
+    pub dst1: ID,
+    pub dst2: Option<ID>,
+    pub src1: Operand<ID>,
+    pub src2: Operand<ID>,
 }
 
-pub struct Arg5<'a> {
-    pub dst1: &'a str,
-    pub dst2: Option<&'a str>,
-    pub src1: Operand<'a>,
-    pub src2: Operand<'a>,
-    pub src3: Operand<'a>,
+pub struct Arg5<ID> {
+    pub dst1: ID,
+    pub dst2: Option<ID>,
+    pub src1: Operand<ID>,
+    pub src2: Operand<ID>,
+    pub src3: Operand<ID>,
 }
 
-pub enum Operand<'a> {
-    Reg(&'a str),
-    RegOffset(&'a str, i32),
+pub enum Operand<ID> {
+    Reg(ID),
+    RegOffset(ID, i32),
     Imm(i128),
 }
 
-pub enum MovOperand<'a> {
-    Op(Operand<'a>),
-    Vec(&'a str, &'a str),
+pub enum MovOperand<ID> {
+    Op(Operand<ID>),
+    Vec(String, String),
 }
 
 pub struct LdData {}

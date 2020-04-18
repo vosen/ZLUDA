@@ -138,7 +138,7 @@ fn emit_function<'a>(
 }
 
 // TODO: support scopes
-fn normalize_identifiers<'a>(func: Vec<ast::Statement<'a>>) -> Vec<Statement> {
+fn normalize_identifiers<'a>(func: Vec<ast::Statement<&'a str>>) -> Vec<Statement> {
     let mut result = Vec::with_capacity(func.len());
     let mut id: u32 = 0;
     let mut known_ids = HashMap::new();
@@ -162,193 +162,124 @@ fn ssa_legalize(func: Vec<Statement>) -> Vec<Statement> {
 
 enum Statement {
     Label(u32),
-    Instruction(Option<PredAt>, Instruction),
+    Instruction(Option<ast::PredAt<u32>>, ast::Instruction<u32>),
     Phi(Vec<spirv::Word>),
 }
 
 impl Statement {
-    fn from_ast<'a, F: FnMut(&'a str) -> u32>(s: ast::Statement<'a>, f: &mut F) -> Option<Self> {
+    fn from_ast<'a, F: FnMut(&'a str) -> u32>(s: ast::Statement<&'a str>, f: &mut F) -> Option<Self> {
         match s {
             ast::Statement::Label(name) => Some(Statement::Label(f(name))),
             ast::Statement::Instruction(p, i) => Some(Statement::Instruction(
-                p.map(|p| PredAt::from_ast(p, f)),
-                Instruction::from_ast(i, f),
+                p.map(|p| p.map_id(f)),
+                i.map_id(f),
             )),
             ast::Statement::Variable(_) => None,
         }
     }
 }
 
-struct PredAt {
-    pub not: bool,
-    pub label: u32,
-}
-
-impl PredAt {
-    fn from_ast<'a, F: FnMut(&'a str) -> u32>(p: ast::PredAt<'a>, f: &mut F) -> Self {
-        PredAt {
-            not: p.not,
-            label: f(p.label),
+impl<T> ast::PredAt<T> {
+    fn map_id<U, F: FnMut(T) -> U>(self, f: &mut F) -> ast::PredAt<U> {
+        ast::PredAt {
+            not: self.not,
+            label: f(self.label),
         }
     }
 }
 
-enum Instruction {
-    Ld(ast::LdData, Arg2),
-    Mov(ast::MovData, Arg2Mov),
-    Mul(ast::MulData, Arg3),
-    Add(ast::AddData, Arg3),
-    Setp(ast::SetpData, Arg4),
-    SetpBool(ast::SetpBoolData, Arg5),
-    Not(ast::NotData, Arg2),
-    Bra(ast::BraData, Arg1),
-    Cvt(ast::CvtData, Arg2),
-    Shl(ast::ShlData, Arg3),
-    St(ast::StData, Arg2),
-    At(ast::AtData, Arg1),
-    Ret(ast::RetData),
-}
-
-impl Instruction {
-    fn from_ast<'a, F: FnMut(&'a str) -> u32>(i: ast::Instruction<'a>, f: &mut F) -> Self {
-        match i {
-            ast::Instruction::Ld(d, a) => Instruction::Ld(d, Arg2::from_ast(a, f)),
-            ast::Instruction::Mov(d, a) => Instruction::Mov(d, Arg2Mov::from_ast(a, f)),
-            ast::Instruction::Mul(d, a) => Instruction::Mul(d, Arg3::from_ast(a, f)),
-            ast::Instruction::Add(d, a) => Instruction::Add(d, Arg3::from_ast(a, f)),
-            ast::Instruction::Setp(d, a) => Instruction::Setp(d, Arg4::from_ast(a, f)),
-            ast::Instruction::SetpBool(d, a) => Instruction::SetpBool(d, Arg5::from_ast(a, f)),
-            ast::Instruction::Not(d, a) => Instruction::Not(d, Arg2::from_ast(a, f)),
-            ast::Instruction::Bra(d, a) => Instruction::Bra(d, Arg1::from_ast(a, f)),
-            ast::Instruction::Cvt(d, a) => Instruction::Cvt(d, Arg2::from_ast(a, f)),
-            ast::Instruction::Shl(d, a) => Instruction::Shl(d, Arg3::from_ast(a, f)),
-            ast::Instruction::St(d, a) => Instruction::St(d, Arg2::from_ast(a, f)),
-            ast::Instruction::At(d, a) => Instruction::At(d, Arg1::from_ast(a, f)),
-            ast::Instruction::Ret(d) => Instruction::Ret(d),
+impl<T>  ast::Instruction<T> {
+    fn map_id<U, F: FnMut(T) -> U>(self, f: &mut F) ->  ast::Instruction<U> {
+        match self {
+            ast::Instruction::Ld(d, a) => ast::Instruction::Ld(d, a.map_id(f)),
+            ast::Instruction::Mov(d, a) => ast::Instruction::Mov(d, a.map_id(f)),
+            ast::Instruction::Mul(d, a) => ast::Instruction::Mul(d, a.map_id(f)),
+            ast::Instruction::Add(d, a) => ast::Instruction::Add(d, a.map_id(f)),
+            ast::Instruction::Setp(d, a) => ast::Instruction::Setp(d, a.map_id(f)),
+            ast::Instruction::SetpBool(d, a) => ast::Instruction::SetpBool(d, a.map_id(f)),
+            ast::Instruction::Not(d, a) => ast::Instruction::Not(d, a.map_id(f)),
+            ast::Instruction::Bra(d, a) => ast::Instruction::Bra(d, a.map_id(f)),
+            ast::Instruction::Cvt(d, a) => ast::Instruction::Cvt(d, a.map_id(f)),
+            ast::Instruction::Shl(d, a) => ast::Instruction::Shl(d, a.map_id(f)),
+            ast::Instruction::St(d, a) => ast::Instruction::St(d, a.map_id(f)),
+            ast::Instruction::At(d, a) => ast::Instruction::At(d, a.map_id(f)),
+            ast::Instruction::Ret(d) => ast::Instruction::Ret(d),
         }
     }
 }
 
-pub struct Arg1 {
-    pub dst: u32,
-}
-
-impl Arg1 {
-    fn from_ast<'a, F: FnMut(&'a str) -> u32>(a: ast::Arg1<'a>, f: &mut F) -> Self {
-        Arg1 { dst: f(a.dst) }
+impl<T> ast::Arg1<T> {
+    fn map_id<U, F: FnMut(T) -> U>(self, f: &mut F) -> ast::Arg1<U> {
+        ast::Arg1 { dst: f(self.dst) }
     }
 }
 
-pub struct Arg2 {
-    pub dst: u32,
-    pub src: Operand,
-}
-
-impl Arg2 {
-    fn from_ast<'a, F: FnMut(&'a str) -> u32>(a: ast::Arg2<'a>, f: &mut F) -> Self {
-        Arg2 {
-            dst: f(a.dst),
-            src: Operand::from_ast(a.src, f),
+impl<T> ast::Arg2<T> {
+    fn map_id<U, F: FnMut(T) -> U>(self, f: &mut F) -> ast::Arg2<U> {
+        ast::Arg2 {
+            dst: f(self.dst),
+            src: self.src.map_id(f),
         }
     }
 }
 
-pub struct Arg2Mov {
-    pub dst: u32,
-    pub src: MovOperand,
-}
-
-impl Arg2Mov {
-    fn from_ast<'a, F: FnMut(&'a str) -> u32>(a: ast::Arg2Mov<'a>, f: &mut F) -> Self {
-        Arg2Mov {
-            dst: f(a.dst),
-            src: MovOperand::from_ast(a.src, f),
+impl<T> ast::Arg2Mov<T> {
+    fn map_id<U, F: FnMut(T) -> U>(self, f: &mut F) -> ast::Arg2Mov<U> {
+        ast::Arg2Mov {
+            dst: f(self.dst),
+            src: self.src.map_id(f),
         }
     }
 }
 
-pub struct Arg3 {
-    pub dst: u32,
-    pub src1: Operand,
-    pub src2: Operand,
-}
-
-impl Arg3 {
-    fn from_ast<'a, F: FnMut(&'a str) -> u32>(a: ast::Arg3<'a>, f: &mut F) -> Self {
-        Arg3 {
-            dst: f(a.dst),
-            src1: Operand::from_ast(a.src1, f),
-            src2: Operand::from_ast(a.src2, f),
+impl<T> ast::Arg3<T> {
+    fn map_id<U, F: FnMut(T) -> U>(self, f: &mut F) -> ast::Arg3<U> {
+        ast::Arg3 {
+            dst: f(self.dst),
+            src1: self.src1.map_id(f),
+            src2: self.src2.map_id(f),
         }
     }
 }
 
-pub struct Arg4 {
-    pub dst1: u32,
-    pub dst2: Option<u32>,
-    pub src1: Operand,
-    pub src2: Operand,
-}
-
-impl Arg4 {
-    fn from_ast<'a, F: FnMut(&'a str) -> u32>(a: ast::Arg4<'a>, f: &mut F) -> Self {
-        Arg4 {
-            dst1: f(a.dst1),
-            dst2: a.dst2.map(|i| f(i)),
-            src1: Operand::from_ast(a.src1, f),
-            src2: Operand::from_ast(a.src2, f),
+impl<T> ast::Arg4<T> {
+    fn map_id<U, F: FnMut(T) -> U>(self, f: &mut F) -> ast::Arg4<U> {
+        ast::Arg4 {
+            dst1: f(self.dst1),
+            dst2: self.dst2.map(|i| f(i)),
+            src1: self.src1.map_id(f),
+            src2: self.src2.map_id(f),
         }
     }
 }
 
-pub struct Arg5 {
-    pub dst1: u32,
-    pub dst2: Option<u32>,
-    pub src1: Operand,
-    pub src2: Operand,
-    pub src3: Operand,
-}
-
-impl Arg5 {
-    fn from_ast<'a, F: FnMut(&'a str) -> u32>(a: ast::Arg5<'a>, f: &mut F) -> Self {
-        Arg5 {
-            dst1: f(a.dst1),
-            dst2: a.dst2.map(|i| f(i)),
-            src1: Operand::from_ast(a.src1, f),
-            src2: Operand::from_ast(a.src2, f),
-            src3: Operand::from_ast(a.src3, f),
+impl<T> ast::Arg5<T> {
+    fn map_id<U, F: FnMut(T) -> U>(self, f: &mut F) -> ast::Arg5<U> {
+        ast::Arg5 {
+            dst1: f(self.dst1),
+            dst2: self.dst2.map(|i| f(i)),
+            src1: self.src1.map_id(f),
+            src2: self.src2.map_id(f),
+            src3: self.src3.map_id(f),
         }
     }
 }
 
-pub enum Operand {
-    Reg(u32),
-    RegOffset(u32, i32),
-    Imm(i128),
-}
-
-impl Operand {
-    fn from_ast<'a, F: FnMut(&'a str) -> u32>(a: ast::Operand<'a>, f: &mut F) -> Self {
-        match a {
-            ast::Operand::Reg(i) => Operand::Reg(f(i)),
-            ast::Operand::RegOffset(i, o) => Operand::RegOffset(f(i), o),
-            ast::Operand::Imm(v) => Operand::Imm(v),
+impl<T> ast::Operand<T> {
+    fn map_id<U, F: FnMut(T) -> U>(self, f: &mut F) -> ast::Operand<U> {
+        match self {
+            ast::Operand::Reg(i) => ast::Operand::Reg(f(i)),
+            ast::Operand::RegOffset(i, o) => ast::Operand::RegOffset(f(i), o),
+            ast::Operand::Imm(v) => ast::Operand::Imm(v),
         }
     }
 }
 
-pub enum MovOperand {
-    Op(Operand),
-    Vec(String, String),
-}
-
-impl MovOperand {
-    fn from_ast<'a, F: FnMut(&'a str) -> u32>(a: ast::MovOperand<'a>, f: &mut F) -> Self {
-        match a {
-            ast::MovOperand::Op(o) => MovOperand::Op(Operand::from_ast(o, f)),
-            ast::MovOperand::Vec(var, idx) => {
-                MovOperand::Vec(var.to_owned(), idx.to_string())
-            }
+impl<T> ast::MovOperand<T> {
+    fn map_id<U, F: FnMut(T) -> U>(self, f: &mut F) -> ast::MovOperand<U> {
+        match self {
+            ast::MovOperand::Op(o) => ast::MovOperand::Op(o.map_id(f)),
+            ast::MovOperand::Vec(s1, s2) => ast::MovOperand::Vec(s1, s2)
         }
     }
 }
