@@ -236,7 +236,9 @@ fn dominance_frontiers(bbs: &Vec<BasicBlock>, order: &Vec<BBIndex>) -> Vec<HashS
     let doms = immediate_dominators(bbs, order);
     let mut result = vec![HashSet::new(); bbs.len()];
     for (bb_idx, b) in bbs.iter().enumerate() {
-        if b.pred.len() < 2 { continue; }
+        if b.pred.len() < 2 {
+            continue;
+        }
         for p in b.pred.iter() {
             let mut runner = *p;
             while runner != doms[bb_idx] {
@@ -249,7 +251,8 @@ fn dominance_frontiers(bbs: &Vec<BasicBlock>, order: &Vec<BBIndex>) -> Vec<HashS
 }
 
 fn immediate_dominators(bbs: &Vec<BasicBlock>, order: &Vec<BBIndex>) -> Vec<BBIndex> {
-    let mut doms = vec![BBIndex(usize::max_value()); bbs.len() - 1];
+    let mut doms = vec![BBIndex(usize::max_value()); bbs.len()];
+    doms[0] = BBIndex(0);
     let mut changed = true;
     while changed {
         changed = false;
@@ -272,14 +275,16 @@ fn immediate_dominators(bbs: &Vec<BasicBlock>, order: &Vec<BBIndex>) -> Vec<BBIn
     return doms;
 }
 
+// Original paper uses reverse indexing: their entry node has index n,
+// that's why the compares are reversed
 fn intersect(doms: &mut Vec<BBIndex>, b1: BBIndex, b2: BBIndex) -> BBIndex {
     let mut finger1 = b1;
     let mut finger2 = b2;
     while finger1 != finger2 {
-        while finger1 < finger2 {
+        while finger1 > finger2 {
             finger1 = doms[finger1.0];
         }
-        while finger2 < finger1 {
+        while finger2 > finger1 {
             finger2 = doms[finger2.0];
         }
     }
@@ -480,8 +485,8 @@ impl<T> ast::MovOperand<T> {
 mod tests {
     use super::*;
 
-    #[test]
     // page 411
+    #[test]
     fn to_reverse_postorder1() {
         let input = vec![
             BasicBlock {
@@ -615,6 +620,182 @@ mod tests {
                 pred: vec![BBIndex(0)],
                 succ: vec![BBIndex(0)]
             }]
+        );
+    }
+
+    // "A Simple, Fast Dominance Algorithm" - Fig. 4
+    #[test]
+    fn immediate_dominators1() {
+        let input = vec![
+            BasicBlock {
+                start: StmtIndex(6),
+                pred: vec![],
+                succ: vec![BBIndex(1), BBIndex(2)],
+            },
+            BasicBlock {
+                start: StmtIndex(5),
+                pred: vec![BBIndex(0)],
+                succ: vec![BBIndex(5)],
+            },
+            BasicBlock {
+                start: StmtIndex(4),
+                pred: vec![BBIndex(0)],
+                succ: vec![BBIndex(3), BBIndex(4)],
+            },
+            BasicBlock {
+                start: StmtIndex(3),
+                pred: vec![BBIndex(2), BBIndex(4)],
+                succ: vec![BBIndex(4)],
+            },
+            BasicBlock {
+                start: StmtIndex(2),
+                pred: vec![BBIndex(2), BBIndex(3), BBIndex(5)],
+                succ: vec![BBIndex(3), BBIndex(5)],
+            },
+            BasicBlock {
+                start: StmtIndex(1),
+                pred: vec![BBIndex(1), BBIndex(4)],
+                succ: vec![BBIndex(4)],
+            },
+        ];
+        let reverse_postorder = vec![
+            BBIndex(0),
+            BBIndex(1),
+            BBIndex(2),
+            BBIndex(3),
+            BBIndex(4),
+            BBIndex(5),
+        ];
+        let imm_dominators = immediate_dominators(&input, &reverse_postorder);
+        assert_eq!(
+            imm_dominators,
+            vec![
+                BBIndex(0),
+                BBIndex(0),
+                BBIndex(0),
+                BBIndex(0),
+                BBIndex(0),
+                BBIndex(0)
+            ]
+        );
+    }
+
+    // page 411
+    #[test]
+    fn immediate_dominators2() {
+        let input = vec![
+            BasicBlock {
+                // A
+                start: StmtIndex(0),
+                pred: vec![],
+                succ: vec![BBIndex(1), BBIndex(2)],
+            },
+            BasicBlock {
+                // B
+                start: StmtIndex(1),
+                pred: vec![BBIndex(0), BBIndex(11)],
+                succ: vec![BBIndex(3), BBIndex(6)],
+            },
+            BasicBlock {
+                // C
+                start: StmtIndex(2),
+                pred: vec![BBIndex(0), BBIndex(4)],
+                succ: vec![BBIndex(4), BBIndex(7)],
+            },
+            BasicBlock {
+                // D
+                start: StmtIndex(3),
+                pred: vec![BBIndex(1)],
+                succ: vec![BBIndex(5), BBIndex(6)],
+            },
+            BasicBlock {
+                // E
+                start: StmtIndex(4),
+                pred: vec![BBIndex(2)],
+                succ: vec![BBIndex(2), BBIndex(7)],
+            },
+            BasicBlock {
+                // F
+                start: StmtIndex(5),
+                pred: vec![BBIndex(3)],
+                succ: vec![BBIndex(8), BBIndex(10)],
+            },
+            BasicBlock {
+                // G
+                start: StmtIndex(6),
+                pred: vec![BBIndex(1), BBIndex(3)],
+                succ: vec![BBIndex(9)],
+            },
+            BasicBlock {
+                // H
+                start: StmtIndex(7),
+                pred: vec![BBIndex(2), BBIndex(4)],
+                succ: vec![BBIndex(12)],
+            },
+            BasicBlock {
+                // I
+                start: StmtIndex(8),
+                pred: vec![BBIndex(5), BBIndex(9)],
+                succ: vec![BBIndex(11)],
+            },
+            BasicBlock {
+                // J
+                start: StmtIndex(9),
+                pred: vec![BBIndex(6)],
+                succ: vec![BBIndex(8)],
+            },
+            BasicBlock {
+                // K
+                start: StmtIndex(10),
+                pred: vec![BBIndex(5)],
+                succ: vec![BBIndex(11)],
+            },
+            BasicBlock {
+                // L
+                start: StmtIndex(11),
+                pred: vec![BBIndex(8), BBIndex(10)],
+                succ: vec![BBIndex(1), BBIndex(12)],
+            },
+            BasicBlock {
+                // M
+                start: StmtIndex(12),
+                pred: vec![BBIndex(7), BBIndex(11)],
+                succ: vec![],
+            },
+        ];
+        let reverse_postorder = vec![
+            BBIndex(0),  // A
+            BBIndex(2),  // C
+            BBIndex(4),  // E
+            BBIndex(7),  // H
+            BBIndex(1),  // B
+            BBIndex(3),  // D
+            BBIndex(6),  // G
+            BBIndex(9),  // J
+            BBIndex(5),  // F
+            BBIndex(10), // K
+            BBIndex(8),  // I
+            BBIndex(11), // L
+            BBIndex(12), // M
+        ];
+        let imm_dominators = immediate_dominators(&input, &reverse_postorder);
+        assert_eq!(
+            imm_dominators,
+            vec![
+                BBIndex(0),
+                BBIndex(0),
+                BBIndex(0),
+                BBIndex(1),
+                BBIndex(2),
+                BBIndex(3),
+                BBIndex(1),
+                BBIndex(2),
+                BBIndex(1),
+                BBIndex(6),
+                BBIndex(5),
+                BBIndex(1),
+                BBIndex(0)
+            ]
         );
     }
 }
