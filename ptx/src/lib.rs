@@ -1,7 +1,9 @@
 #[macro_use]
-extern crate quick_error;
-#[macro_use]
 extern crate lalrpop_util;
+#[macro_use]
+extern crate quick_error;
+
+extern crate bit_vec;
 extern crate rspirv;
 extern crate spirv_headers as spirv;
 
