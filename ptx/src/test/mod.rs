@@ -2,7 +2,7 @@ use super::ptx;
 
 fn parse_and_assert(s: &str) {
     let mut errors = Vec::new();
-    let ast = ptx::ModuleParser::new().parse(&mut errors, s).unwrap();
+    ptx::ModuleParser::new().parse(&mut errors, s).unwrap();
     assert!(errors.len() == 0);
 }
 
@@ -12,6 +12,7 @@ fn empty() {
 }
 
 #[test]
+#[allow(non_snake_case)]
 fn vectorAdd_kernel64_ptx() {
     let vector_add = include_str!("vectorAdd_kernel64.ptx");
     parse_and_assert(vector_add);

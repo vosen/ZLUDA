@@ -1,7 +1,4 @@
 use std::convert::From;
-use std::convert::Into;
-use std::error::Error;
-use std::mem;
 use std::num::ParseIntError;
 
 quick_error! {

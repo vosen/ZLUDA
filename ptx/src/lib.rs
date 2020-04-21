@@ -9,6 +9,7 @@ extern crate spirv_headers as spirv;
 
 lalrpop_mod!(ptx);
 
+#[cfg(test)]
 mod test;
 mod translate;
 pub mod ast;
