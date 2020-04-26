@@ -426,7 +426,7 @@ VectorOperand: (&'input str, &'input str) = {
 };
 
 Arg1: ast::Arg1<&'input str> = {
-    <dst:ID> => ast::Arg1{<>}
+    <src:ID> => ast::Arg1{<>}
 };
 
 Arg2: ast::Arg2<&'input str> = {

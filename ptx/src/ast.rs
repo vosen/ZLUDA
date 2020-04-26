@@ -138,12 +138,11 @@ pub enum Instruction<ID> {
     Cvt(CvtData, Arg2<ID>),
     Shl(ShlData, Arg3<ID>),
     St(StData, Arg2<ID>),
-    At(AtData, Arg1<ID>),
     Ret(RetData),
 }
 
 pub struct Arg1<ID> {
-    pub dst: ID,
+    pub src: ID, // it is a jump destination, but in terms of operands it is a source operand
 }
 
 pub struct Arg2<ID> {
@@ -209,7 +208,5 @@ pub struct CvtData {}
 pub struct ShlData {}
 
 pub struct StData {}
-
-pub struct AtData {}
 
 pub struct RetData {}

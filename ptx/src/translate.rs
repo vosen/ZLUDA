@@ -108,34 +108,32 @@ fn emit_function<'a>(
         let arg_type = map.get_or_add(builder, SpirvType::Base(arg.a_type));
         builder.function_parameter(arg_type)?;
     }
-    let normalized_ids = normalize_identifiers(f.body);
+    let (mut normalized_ids, max_id) = normalize_identifiers(f.body);
     let bbs = get_basic_blocks(&normalized_ids);
     let rpostorder = to_reverse_postorder(&bbs);
-    let dom_fronts = dominance_frontiers(&bbs, &rpostorder);
-    let (ops, phis) = ssa_legalize(normalized_ids, bbs, &dom_fronts);
-    emit_function_body_ops(builder, ops, phis);
+    let doms = immediate_dominators(&bbs, &rpostorder);
+    let dom_fronts = dominance_frontiers(&bbs, &rpostorder, &doms);
+    ssa_legalize(&mut normalized_ids, max_id, bbs, &doms, &dom_fronts);
+    emit_function_body_ops(builder);
     builder.ret()?;
     builder.end_function()?;
     Ok(func_id)
 }
 
-fn emit_function_body_ops(
-    builder: &mut dr::Builder,
-    ops: Vec<Statement>,
-    phis: Vec<RefCell<PhiBasicBlock>>,
-) {
+fn emit_function_body_ops(builder: &mut dr::Builder) {
     todo!()
 }
 
 // TODO: support scopes
-fn normalize_identifiers<'a>(func: Vec<ast::Statement<&'a str>>) -> Vec<Statement> {
+fn normalize_identifiers<'a>(func: Vec<ast::Statement<&'a str>>) -> (Vec<Statement>, spirv::Word) {
     let mut result = Vec::with_capacity(func.len());
     let mut id: u32 = 0;
     let mut known_ids = HashMap::new();
     let mut get_or_add = |key| {
         *known_ids.entry(key).or_insert_with(|| {
+            let to_insert = id;
             id += 1;
-            id
+            to_insert
         })
     };
     for s in func {
@@ -143,50 +141,184 @@ fn normalize_identifiers<'a>(func: Vec<ast::Statement<&'a str>>) -> Vec<Statemen
             result.push(s);
         }
     }
-    result
+    (result, id - 1)
 }
 
 fn ssa_legalize(
-    func: Vec<Statement>,
+    func: &mut [Statement],
+    max_id: spirv::Word,
     bbs: Vec<BasicBlock>,
+    doms: &Vec<BBIndex>,
     dom_fronts: &Vec<HashSet<BBIndex>>,
-) -> (Vec<Statement>, Vec<RefCell<PhiBasicBlock>>) {
-    let mut phis = gather_phi_sets(&func, &bbs, dom_fronts);
-    trim_singleton_phi_sets(&mut phis);
-    todo!()
+) {
+    let phis = gather_phi_sets(&func, &bbs, dom_fronts);
+    apply_ssa_renaming(func, &bbs, doms, max_id, &phis);
+}
+
+// "Modern Compiler Implementation in Java" - Algorithm 19.7
+fn apply_ssa_renaming(
+    func: &mut [Statement],
+    bbs: &[BasicBlock],
+    doms: &[BBIndex],
+    max_id: spirv::Word,
+    old_phi: &[Vec<spirv::Word>],
+) {
+    let mut dom_tree = vec![Vec::new(); bbs.len()];
+    for (bb, idom) in doms.iter().enumerate() {
+        dom_tree[idom.0].push(BBIndex(bb));
+    }
+    let mut old_dst_id = vec![Vec::new(); bbs.len()];
+    for bb in 0..bbs.len() {
+        for s in get_bb_body(func, bbs, BBIndex(bb)) {
+            s.for_dst_id(&mut |id| old_dst_id[bb].push(id));
+        }
+    }
+    let mut new_phi = old_phi
+        .iter()
+        .map(|ids| {
+            ids.iter()
+                .map(|id| (*id, Vec::new()))
+                .collect::<HashMap<_, _>>()
+        })
+        .collect::<Vec<_>>();
+    let mut ssa_state = SSARewriteState::new(max_id);
+    // once again, we do explicit stack
+    let mut state = Vec::new();
+    state.push((BBIndex(0), 0));
+    loop {
+        if let Some((BBIndex(bb), dom_succ_idx)) = state.last_mut() {
+            let bb = *bb;
+            if *dom_succ_idx == 0 {
+                rename_phi_dst(max_id, &mut ssa_state, &mut new_phi[bb]);
+                rename_bb_body(&mut ssa_state, func, bbs, BBIndex(bb));
+                for BBIndex(succ_idx) in bbs[bb].succ.iter() {
+                    rename_succesor_phi_src(&ssa_state, &mut new_phi[*succ_idx]);
+                }
+            }
+            if let Some(s) = dom_tree[bb].get(*dom_succ_idx) {
+                *dom_succ_idx += 1;
+                state.push((*s, 0));
+            } else {
+                state.pop();
+                pop_stacks(&mut ssa_state, &old_phi[bb], &old_dst_id[bb]);
+            }
+        } else {
+            break;
+        }
+    }
+}
+
+fn rename_phi_dst(
+    max_old_id: spirv::Word,
+    rewriter: &mut SSARewriteState,
+    phi: &mut HashMap<spirv::Word, Vec<spirv::Word>>,
+) {
+    let old_keys = phi
+        .keys()
+        .copied()
+        .filter(|id| *id <= max_old_id)
+        .collect::<Vec<_>>();
+    for k in old_keys.into_iter() {
+        let remapped_id = rewriter.redefine(k);
+        let values = phi.remove(&k).unwrap();
+        phi.insert(remapped_id, values);
+    }
+}
+
+fn rename_bb_body(
+    ssa_state: &mut SSARewriteState,
+    func: &mut [Statement],
+    all_bb: &[BasicBlock],
+    bb: BBIndex,
+) {
+    for s in get_bb_body_mut(func, all_bb, bb) {
+        s.visit_id_mut(&mut |is_dst, id| {
+            if is_dst {
+                *id = ssa_state.redefine(*id);
+            } else {
+                *id = ssa_state.get(*id);
+            }
+        });
+    }
+}
+
+fn rename_succesor_phi_src(
+    ssa_state: &SSARewriteState,
+    phi: &mut HashMap<spirv::Word, Vec<spirv::Word>>,
+) {
+    for (id, v) in phi.iter_mut() {
+        v.push(ssa_state.get(*id));
+    }
+}
+
+fn pop_stacks(ssa_state: &mut SSARewriteState, old_phi: &[spirv::Word], old_ids: &[spirv::Word]) {
+    for id in old_phi.iter().chain(old_ids) {
+        ssa_state.pop(*id);
+    }
+}
+
+fn get_bb_body_mut<'a>(
+    func: &'a mut [Statement],
+    all_bb: &[BasicBlock],
+    bb: BBIndex,
+) -> &'a mut [Statement] {
+    let (start, end) = get_bb_body_idx(all_bb, bb);
+    &mut func[start..end]
+}
+
+fn get_bb_body<'a>(func: &'a [Statement], all_bb: &[BasicBlock], bb: BBIndex) -> &'a [Statement] {
+    let (start, end) = get_bb_body_idx(all_bb, bb);
+    &func[start..end]
+}
+
+fn get_bb_body_idx(all_bb: &[BasicBlock], bb: BBIndex) -> (usize, usize) {
+    let BBIndex(bb_idx) = bb;
+    let start = all_bb[bb_idx].start.0;
+    let end = if bb_idx == all_bb.len() - 1 {
+        all_bb.len()
+    } else {
+        all_bb[bb_idx + 1].start.0
+    };
+    (start, end)
+}
+
+// We assume here that the variables are defined in the dense sequence 0..max
+struct SSARewriteState {
+    next: spirv::Word,
+    stack: Vec<Vec<spirv::Word>>,
+}
+
+impl SSARewriteState {
+    fn new(max: spirv::Word) -> Self {
+        let stack = vec![Vec::new(); max as usize];
+        SSARewriteState {
+            next: max + 1,
+            stack,
+        }
+    }
+
+    fn get(&self, x: spirv::Word) -> spirv::Word {
+        *self.stack[x as usize].last().unwrap()
+    }
+
+    fn redefine(&mut self, x: spirv::Word) -> spirv::Word {
+        let result = self.next;
+        self.next += 1;
+        self.stack[x as usize].push(result);
+        return result;
+    }
+
+    fn pop(&mut self, x: spirv::Word) {
+        self.stack[x as usize].pop();
+    }
 }
 
 fn gather_phi_sets(
-    func: &Vec<Statement>,
-    bbs: &Vec<BasicBlock>,
-    dom_fronts: &Vec<HashSet<BBIndex>>,
-) -> Vec<HashMap<spirv::Word, HashSet<BBIndex>>> {
-    let mut phis = vec![HashMap::new(); bbs.len()];
-    for (bb_idx, bb) in bbs.iter().enumerate() {
-        let StmtIndex(start) = bb.start;
-        let end = if bb_idx == bbs.len() - 1 {
-            bbs.len()
-        } else {
-            bbs[bb_idx + 1].start.0
-        };
-        for s in func[start..end].iter() {
-            s.for_dst_id(&mut |id| {
-                for BBIndex(phi_target) in dom_fronts[bb_idx].iter() {
-                    phis[*phi_target]
-                        .entry(id)
-                        .or_insert_with(|| HashSet::new())
-                        .insert(BBIndex(bb_idx));
-                }
-            });
-        }
-    }
-    phis
-}
-
-fn trim_singleton_phi_sets(phis: &mut Vec<HashMap<spirv::Word, HashSet<BBIndex>>>) {
-    for phi_map in phis.iter_mut() {
-        phi_map.retain(|_, set| set.len() > 1);
-    }
+    func: &[Statement],
+    bbs: &[BasicBlock],
+    dom_fronts: &[HashSet<BBIndex>],
+) -> Vec<Vec<spirv::Word>> {
+    todo!()
 }
 
 fn get_basic_blocks(fun: &Vec<Statement>) -> Vec<BasicBlock> {
@@ -258,8 +390,11 @@ fn get_basic_blocks(fun: &Vec<Statement>) -> Vec<BasicBlock> {
 
 // "A Simple, Fast Dominance Algorithm" - Keith D. Cooper, Timothy J. Harvey, and Ken Kennedy
 // https://www.cs.rice.edu/~keith/EMBED/dom.pdf
-fn dominance_frontiers(bbs: &Vec<BasicBlock>, order: &Vec<BBIndex>) -> Vec<HashSet<BBIndex>> {
-    let doms = immediate_dominators(bbs, order);
+fn dominance_frontiers(
+    bbs: &Vec<BasicBlock>,
+    order: &Vec<BBIndex>,
+    doms: &Vec<BBIndex>,
+) -> Vec<HashSet<BBIndex>> {
     let mut result = vec![HashSet::new(); bbs.len()];
     for (bb_idx, b) in bbs.iter().enumerate() {
         if b.pred.len() < 2 {
@@ -321,16 +456,16 @@ fn intersect(doms: &mut Vec<BBIndex>, b1: BBIndex, b2: BBIndex) -> BBIndex {
 fn to_reverse_postorder(input: &Vec<BasicBlock>) -> Vec<BBIndex> {
     let mut i = input.len();
     let mut old = BitVec::from_elem(input.len(), false);
-    // I would do just vec![BasicBlock::empty(), input.len()], but Vec<T> is not Copy
-    let mut result = Vec::with_capacity(input.len());
-    unsafe { result.set_len(input.len()) };
+    let mut result = vec![BBIndex(usize::max_value()); input.len()];
     // original uses recursion and implicit stack, we do it explictly
     let mut state = Vec::new();
     state.push((BBIndex(0), 0usize));
     loop {
         if let Some((BBIndex(bb), succ_iter_idx)) = state.last_mut() {
             let bb = *bb;
-            old.set(bb, true);
+            if *succ_iter_idx == 0 {
+                old.set(bb, true);
+            }
             if let Some(BBIndex(succ)) = &input[bb].succ.get(*succ_iter_idx) {
                 *succ_iter_idx += 1;
                 if !old.get(*succ).unwrap() {
@@ -346,11 +481,6 @@ fn to_reverse_postorder(input: &Vec<BasicBlock>) -> Vec<BBIndex> {
         }
     }
     result
-}
-
-struct PhiBasicBlock {
-    bb: BasicBlock,
-    phi: Vec<(spirv::Word, Vec<(spirv::Word, BBIndex)>)>,
 }
 
 #[derive(Eq, PartialEq, Debug, Clone)]
@@ -396,6 +526,16 @@ impl Statement {
             }
         }
     }
+
+    fn visit_id_mut<F: FnMut(bool, &mut spirv::Word)>(&mut self, f: &mut F) {
+        match self {
+            Statement::Label(id) => f(true, id),
+            Statement::Instruction(pred, inst) => {
+                pred.as_mut().map(|p| p.visit_id_mut(f));
+                inst.visit_id_mut(f);
+            }
+        }
+    }
 }
 
 impl<T> ast::PredAt<T> {
@@ -405,10 +545,14 @@ impl<T> ast::PredAt<T> {
             label: f(self.label),
         }
     }
+
+    fn visit_id_mut<F: FnMut(bool, &mut T)>(&mut self, f: &mut F) {
+        f(false, &mut self.label)
+    }
 }
 
 impl<T: Copy> ast::PredAt<T> {
-    fn for_dst_id<F: FnMut(T)>(&self, f: &mut F) {}
+    fn for_dst_id<F: FnMut(T)>(&self, _: &mut F) {}
 }
 
 impl<T> ast::Instruction<T> {
@@ -425,8 +569,24 @@ impl<T> ast::Instruction<T> {
             ast::Instruction::Cvt(d, a) => ast::Instruction::Cvt(d, a.map_id(f)),
             ast::Instruction::Shl(d, a) => ast::Instruction::Shl(d, a.map_id(f)),
             ast::Instruction::St(d, a) => ast::Instruction::St(d, a.map_id(f)),
-            ast::Instruction::At(d, a) => ast::Instruction::At(d, a.map_id(f)),
             ast::Instruction::Ret(d) => ast::Instruction::Ret(d),
+        }
+    }
+
+    fn visit_id_mut<F: FnMut(bool, &mut T)>(&mut self, f: &mut F) {
+        match self {
+            ast::Instruction::Ld(_, a) => a.visit_id_mut(f),
+            ast::Instruction::Mov(_, a) => a.visit_id_mut(f),
+            ast::Instruction::Mul(_, a) => a.visit_id_mut(f),
+            ast::Instruction::Add(_, a) => a.visit_id_mut(f),
+            ast::Instruction::Setp(_, a) => a.visit_id_mut(f),
+            ast::Instruction::SetpBool(_, a) => a.visit_id_mut(f),
+            ast::Instruction::Not(_, a) => a.visit_id_mut(f),
+            ast::Instruction::Cvt(_, a) => a.visit_id_mut(f),
+            ast::Instruction::Shl(_, a) => a.visit_id_mut(f),
+            ast::Instruction::St(_, a) => a.visit_id_mut(f),
+            ast::Instruction::Bra(_, a) => a.visit_id_mut(f),
+            ast::Instruction::Ret(_) => (),
         }
     }
 }
@@ -434,7 +594,7 @@ impl<T> ast::Instruction<T> {
 impl<T: Copy> ast::Instruction<T> {
     fn jump_target(&self) -> Option<T> {
         match self {
-            ast::Instruction::Bra(_, a) => Some(a.dst),
+            ast::Instruction::Bra(_, a) => Some(a.src),
             ast::Instruction::Ld(_, _)
             | ast::Instruction::Mov(_, _)
             | ast::Instruction::Mul(_, _)
@@ -445,14 +605,12 @@ impl<T: Copy> ast::Instruction<T> {
             | ast::Instruction::Cvt(_, _)
             | ast::Instruction::Shl(_, _)
             | ast::Instruction::St(_, _)
-            | ast::Instruction::At(_, _)
             | ast::Instruction::Ret(_) => None,
         }
     }
 
     fn for_dst_id<F: FnMut(T)>(&self, f: &mut F) {
         match self {
-            ast::Instruction::Bra(_, a) => a.for_dst_id(f),
             ast::Instruction::Ld(_, a) => a.for_dst_id(f),
             ast::Instruction::Mov(_, a) => a.for_dst_id(f),
             ast::Instruction::Mul(_, a) => a.for_dst_id(f),
@@ -463,7 +621,7 @@ impl<T: Copy> ast::Instruction<T> {
             ast::Instruction::Cvt(_, a) => a.for_dst_id(f),
             ast::Instruction::Shl(_, a) => a.for_dst_id(f),
             ast::Instruction::St(_, a) => a.for_dst_id(f),
-            ast::Instruction::At(_, a) => a.for_dst_id(f),
+            ast::Instruction::Bra(_, _) => (),
             ast::Instruction::Ret(_) => (),
         }
     }
@@ -471,13 +629,11 @@ impl<T: Copy> ast::Instruction<T> {
 
 impl<T> ast::Arg1<T> {
     fn map_id<U, F: FnMut(T) -> U>(self, f: &mut F) -> ast::Arg1<U> {
-        ast::Arg1 { dst: f(self.dst) }
+        ast::Arg1 { src: f(self.src) }
     }
-}
 
-impl<T: Copy> ast::Arg1<T> {
-    fn for_dst_id<F: FnMut(T)>(&self, f: &mut F) {
-        f(self.dst)
+    fn visit_id_mut<F: FnMut(bool, &mut T)>(&mut self, f: &mut F) {
+        f(false, &mut self.src);
     }
 }
 
@@ -487,6 +643,11 @@ impl<T> ast::Arg2<T> {
             dst: f(self.dst),
             src: self.src.map_id(f),
         }
+    }
+
+    fn visit_id_mut<F: FnMut(bool, &mut T)>(&mut self, f: &mut F) {
+        f(true, &mut self.dst);
+        self.src.visit_id_mut(f);
     }
 }
 
@@ -502,6 +663,11 @@ impl<T> ast::Arg2Mov<T> {
             dst: f(self.dst),
             src: self.src.map_id(f),
         }
+    }
+
+    fn visit_id_mut<F: FnMut(bool, &mut T)>(&mut self, f: &mut F) {
+        f(true, &mut self.dst);
+        self.src.visit_id_mut(f);
     }
 }
 
@@ -519,6 +685,12 @@ impl<T> ast::Arg3<T> {
             src2: self.src2.map_id(f),
         }
     }
+
+    fn visit_id_mut<F: FnMut(bool, &mut T)>(&mut self, f: &mut F) {
+        f(true, &mut self.dst);
+        self.src1.visit_id_mut(f);
+        self.src2.visit_id_mut(f);
+    }
 }
 
 impl<T: Copy> ast::Arg3<T> {
@@ -535,6 +707,13 @@ impl<T> ast::Arg4<T> {
             src1: self.src1.map_id(f),
             src2: self.src2.map_id(f),
         }
+    }
+
+    fn visit_id_mut<F: FnMut(bool, &mut T)>(&mut self, f: &mut F) {
+        f(true, &mut self.dst1);
+        self.dst2.as_mut().map(|i| f(true, i));
+        self.src1.visit_id_mut(f);
+        self.src2.visit_id_mut(f);
     }
 }
 
@@ -555,6 +734,14 @@ impl<T> ast::Arg5<T> {
             src3: self.src3.map_id(f),
         }
     }
+
+    fn visit_id_mut<F: FnMut(bool, &mut T)>(&mut self, f: &mut F) {
+        f(true, &mut self.dst1);
+        self.dst2.as_mut().map(|i| f(true, i));
+        self.src1.visit_id_mut(f);
+        self.src2.visit_id_mut(f);
+        self.src3.visit_id_mut(f);
+    }
 }
 
 impl<T: Copy> ast::Arg5<T> {
@@ -572,11 +759,13 @@ impl<T> ast::Operand<T> {
             ast::Operand::Imm(v) => ast::Operand::Imm(v),
         }
     }
-}
 
-impl<T: Copy> ast::Operand<T> {
-    fn for_dst_id<F: FnMut(T)>(&self, f: &mut F) {
-        unreachable!()
+    fn visit_id_mut<F: FnMut(bool, &mut T)>(&mut self, f: &mut F) {
+        match self {
+            ast::Operand::Reg(i) => f(false, i),
+            ast::Operand::RegOffset(i, _) => f(false, i),
+            ast::Operand::Imm(_) => (),
+        }
     }
 }
 
@@ -587,12 +776,10 @@ impl<T> ast::MovOperand<T> {
             ast::MovOperand::Vec(s1, s2) => ast::MovOperand::Vec(s1, s2),
         }
     }
-}
 
-impl<T: Copy> ast::MovOperand<T> {
-    fn for_dst_id<F: FnMut(T)>(&self, f: &mut F) {
+    fn visit_id_mut<F: FnMut(bool, &mut T)>(&mut self, f: &mut F) {
         match self {
-            ast::MovOperand::Op(o) => o.for_dst_id(f),
+            ast::MovOperand::Op(o) => o.visit_id_mut(f),
             ast::MovOperand::Vec(_, _) => (),
         }
     }
@@ -727,7 +914,7 @@ mod tests {
             Statement::Label(12),
             Statement::Instruction(
                 None,
-                ast::Instruction::Bra(ast::BraData {}, ast::Arg1 { dst: 12 }),
+                ast::Instruction::Bra(ast::BraData {}, ast::Arg1 { src: 12 }),
             ),
         ];
         let bbs = get_basic_blocks(&func);
