@@ -86,7 +86,7 @@ FunctionInput: ast::Argument<'input> = {
     }
 };
 
-FunctionBody: Vec<ast::Statement<&'input str>> = {
+pub(crate) FunctionBody: Vec<ast::Statement<&'input str>> = {
     "{" <s:Statement*> "}" => { without_none(s) }
 };
 
