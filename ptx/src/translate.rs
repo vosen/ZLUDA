@@ -112,7 +112,7 @@ fn emit_function<'a>(
     let bbs = get_basic_blocks(&normalized_ids);
     let rpostorder = to_reverse_postorder(&bbs);
     let doms = immediate_dominators(&bbs, &rpostorder);
-    let dom_fronts = dominance_frontiers(&bbs, &rpostorder, &doms);
+    let dom_fronts = dominance_frontiers(&bbs, &doms);
     ssa_legalize(&mut normalized_ids, max_id, bbs, &doms, &dom_fronts);
     emit_function_body_ops(builder);
     builder.ret()?;
@@ -448,11 +448,7 @@ fn get_basic_blocks(fun: &[Statement]) -> Vec<BasicBlock> {
 
 // "A Simple, Fast Dominance Algorithm" - Keith D. Cooper, Timothy J. Harvey, and Ken Kennedy
 // https://www.cs.rice.edu/~keith/EMBED/dom.pdf
-fn dominance_frontiers(
-    bbs: &Vec<BasicBlock>,
-    order: &Vec<BBIndex>,
-    doms: &Vec<BBIndex>,
-) -> Vec<HashSet<BBIndex>> {
+fn dominance_frontiers(bbs: &[BasicBlock], doms: &[BBIndex]) -> Vec<HashSet<BBIndex>> {
     let mut result = vec![HashSet::new(); bbs.len()];
     for (bb_idx, b) in bbs.iter().enumerate() {
         if b.pred.len() < 2 {
@@ -1006,9 +1002,8 @@ mod tests {
     }
 
     // "A Simple, Fast Dominance Algorithm" - Fig. 4
-    #[test]
-    fn immediate_dominators1() {
-        let input = vec![
+    fn simple_fast_dom_fig4() -> Vec<BasicBlock> {
+        vec![
             BasicBlock {
                 start: StmtIndex(6),
                 pred: vec![],
@@ -1039,7 +1034,12 @@ mod tests {
                 pred: vec![BBIndex(1), BBIndex(4)],
                 succ: vec![BBIndex(4)],
             },
-        ];
+        ]
+    }
+
+    #[test]
+    fn immediate_dominators1() {
+        let input = simple_fast_dom_fig4();
         let reverse_postorder = vec![
             BBIndex(0),
             BBIndex(1),
@@ -1259,5 +1259,67 @@ mod tests {
                 },
             ]
         );
+    }
+
+    fn cfg_fig_19_4() -> Vec<BasicBlock> {
+        vec![
+            BasicBlock {
+                start: StmtIndex(0),
+                pred: vec![],
+                succ: vec![BBIndex(1)],
+            },
+            BasicBlock {
+                start: StmtIndex(3),
+                pred: vec![BBIndex(0), BBIndex(5)],
+                succ: vec![BBIndex(2), BBIndex(6)],
+            },
+            BasicBlock {
+                start: StmtIndex(6),
+                pred: vec![BBIndex(1)],
+                succ: vec![BBIndex(3), BBIndex(4)],
+            },
+            BasicBlock {
+                start: StmtIndex(9),
+                pred: vec![BBIndex(2)],
+                succ: vec![BBIndex(5)],
+            },
+            BasicBlock {
+                start: StmtIndex(13),
+                pred: vec![BBIndex(2)],
+                succ: vec![BBIndex(5)],
+            },
+            BasicBlock {
+                start: StmtIndex(16),
+                pred: vec![BBIndex(3), BBIndex(4)],
+                succ: vec![BBIndex(1)],
+            },
+            BasicBlock {
+                start: StmtIndex(18),
+                pred: vec![BBIndex(1)],
+                succ: vec![],
+            },
+        ]
+    }
+
+    // page 403
+    #[test]
+    fn dominance_frontiers_fig_19_4() {
+        let cfg = cfg_fig_19_4();
+        let order = to_reverse_postorder(&cfg);
+        let doms = immediate_dominators(&cfg, &order);
+        let dom_fronts = dominance_frontiers(&cfg, &doms)
+            .into_iter()
+            .map(|hs| hs.into_iter().collect::<Vec<_>>())
+            .collect::<Vec<_>>();
+        let should = vec![
+            vec![],
+            vec![BBIndex(1)],
+            vec![BBIndex(1)],
+            vec![BBIndex(5)],
+            vec![BBIndex(5)],
+            vec![BBIndex(1)],
+            vec![],
+        ];
+        assert_eq!(dom_fronts, should);
     }
 }
