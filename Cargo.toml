@@ -7,3 +7,7 @@ members = [
     "notcuda_redirect",
     "ptx",
 ]
+
+[patch.crates-io]
+rspirv = { git = 'https://github.com/vosen/rspirv', branch = 'notcuda' }
+spirv_headers = { git = 'https://github.com/vosen/rspirv', branch = 'notcuda' }
