@@ -8,6 +8,7 @@ use std::fmt;
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
 enum SpirvType {
     Base(ast::ScalarType),
+    Pointer(ast::ScalarType, spirv::StorageClass),
 }
 
 struct TypeWordMap {
@@ -33,28 +34,40 @@ impl TypeWordMap {
         self.fn_void
     }
 
-    fn get_or_add(&mut self, b: &mut dr::Builder, t: SpirvType) -> spirv::Word {
-        *self.complex.entry(t).or_insert_with(|| match t {
-            SpirvType::Base(ast::ScalarType::B8) | SpirvType::Base(ast::ScalarType::U8) => {
+    fn get_or_add_scalar(&mut self, b: &mut dr::Builder, t: ast::ScalarType) -> spirv::Word {
+        *self.complex.entry(SpirvType::Base(t)).or_insert_with(|| match t {
+            ast::ScalarType::B8 | ast::ScalarType::U8 => {
                 b.type_int(8, 0)
             }
-            SpirvType::Base(ast::ScalarType::B16) | SpirvType::Base(ast::ScalarType::U16) => {
+            ast::ScalarType::B16 | ast::ScalarType::U16 => {
                 b.type_int(16, 0)
             }
-            SpirvType::Base(ast::ScalarType::B32) | SpirvType::Base(ast::ScalarType::U32) => {
+            ast::ScalarType::B32 | ast::ScalarType::U32 => {
                 b.type_int(32, 0)
             }
-            SpirvType::Base(ast::ScalarType::B64) | SpirvType::Base(ast::ScalarType::U64) => {
+            ast::ScalarType::B64 | ast::ScalarType::U64 => {
                 b.type_int(64, 0)
             }
-            SpirvType::Base(ast::ScalarType::S8) => b.type_int(8, 1),
-            SpirvType::Base(ast::ScalarType::S16) => b.type_int(16, 1),
-            SpirvType::Base(ast::ScalarType::S32) => b.type_int(32, 1),
-            SpirvType::Base(ast::ScalarType::S64) => b.type_int(64, 1),
-            SpirvType::Base(ast::ScalarType::F16) => b.type_float(16),
-            SpirvType::Base(ast::ScalarType::F32) => b.type_float(32),
-            SpirvType::Base(ast::ScalarType::F64) => b.type_float(64),
+            ast::ScalarType::S8 => b.type_int(8, 1),
+            ast::ScalarType::S16 => b.type_int(16, 1),
+            ast::ScalarType::S32 => b.type_int(32, 1),
+            ast::ScalarType::S64 => b.type_int(64, 1),
+            ast::ScalarType::F16 => b.type_float(16),
+            ast::ScalarType::F32 => b.type_float(32),
+            ast::ScalarType::F64 => b.type_float(64),
         })
+    }
+
+    fn get_or_add(&mut self, b: &mut dr::Builder, t: SpirvType) -> spirv::Word {
+        match t {
+            SpirvType::Base(scalar) => self.get_or_add_scalar(b, scalar),
+            SpirvType::Pointer(scalar, storage) => {
+                let base = self.get_or_add_scalar(b, scalar);
+                *self.complex.entry(t).or_insert_with(|| {
+                    b.type_pointer(None, storage, base)
+                })
+            }
+        }
     }
 }
 
@@ -123,7 +136,7 @@ fn emit_function<'a>(
     );
     let id_offset = builder.reserve_ids(unique_ids);
     emit_function_args(builder, id_offset, map, &f.args);
-    emit_function_body_ops(builder, id_offset, &normalized_ids, &bbs)?;
+    emit_function_body_ops(builder, id_offset, map, &normalized_ids, &bbs)?;
     builder.end_function()?;
     builder.ret()?;
     builder.end_function()?;
@@ -178,6 +191,7 @@ fn collect_label_ids<'a>(
 fn emit_function_body_ops(
     builder: &mut dr::Builder,
     id_offset: spirv::Word,
+    map: &mut TypeWordMap,
     func: &[Statement],
     cfg: &[BasicBlock],
 ) -> Result<(), dr::Error> {
@@ -193,12 +207,35 @@ fn emit_function_body_ops(
         };
         builder.begin_block(header_id)?;
         for s in body {
-            /*
             match s {
-                Statement::Instruction(pred, inst) => (),
+                // If block startd with a label it has already been emitted,
+                // all other labels in the block are unused
                 Statement::Label(_) => (),
+                Statement::Conditional(bra) => {
+                    builder.branch_conditional(bra.predicate, bra.if_true, bra.if_false, [])?;
+                }
+                Statement::Instruction(inst) => match inst {
+                    // Sadly, SPIR-V does not support marking jumps as guaranteed-converged
+                    ast::Instruction::Bra(_, arg) => {
+                        builder.branch(arg.src)?;
+                    }
+                    ast::Instruction::Ld(data, arg) => {
+                        if data.qualifier != ast::LdQualifier::Weak || data.vector.is_some() {
+                            todo!()
+                        }
+                        let storage_class = match data.state_space {
+                            ast::LdStateSpace::Generic => spirv::StorageClass::Generic,
+                            ast::LdStateSpace::Param => spirv::StorageClass::CrossWorkgroup,
+                            _ => todo!(),
+                        };
+                        let result_type = map.get_or_add(builder, SpirvType::Base(data.typ));
+                        let pointer_type =
+                            map.get_or_add(builder, SpirvType::Pointer(data.typ, storage_class));
+                        builder.load(result_type, None, pointer_type, None, [])?;
+                    }
+                    _ => todo!(),
+                },
             }
-            */
         }
     }
     Ok(())
@@ -1273,7 +1310,7 @@ mod tests {
         let func = vec![
             Statement::Label(12),
             Statement::Instruction(ast::Instruction::Bra(
-                ast::BraData {},
+                ast::BraData { uniform: false },
                 ast::Arg1 { src: 12 },
             )),
         ];

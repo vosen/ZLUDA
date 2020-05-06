@@ -187,7 +187,53 @@ pub enum MovOperand<ID> {
     Vec(String, String),
 }
 
-pub struct LdData {}
+pub enum VectorPrefix {
+    V2,
+    V4
+}
+
+pub struct LdData {
+    pub qualifier: LdQualifier,
+    pub state_space: LdStateSpace,
+    pub caching: LdCacheOperator,
+    pub vector: Option<VectorPrefix>,
+    pub typ: ScalarType
+}
+
+#[derive(PartialEq, Eq)]
+pub enum LdQualifier {
+    Weak,
+    Volatile,
+    Relaxed(LdScope),
+    Acquire(LdScope),
+}
+
+#[derive(PartialEq, Eq)]
+pub enum LdScope {
+    Cta,
+    Gpu,
+    Sys
+}
+
+#[derive(PartialEq, Eq)]
+pub enum LdStateSpace {
+    Generic,
+    Const,
+    Global,
+    Local,
+    Param,
+    Shared,
+}
+
+
+#[derive(PartialEq, Eq)]
+pub enum LdCacheOperator {
+    Cached,
+    L2Only,
+    Streaming,
+    LastUse,
+    Uncached
+}
 
 pub struct MovData {}
 
@@ -201,7 +247,9 @@ pub struct SetpBoolData {}
 
 pub struct NotData {}
 
-pub struct BraData {}
+pub struct BraData {
+    pub uniform: bool
+}
 
 pub struct CvtData {}
 

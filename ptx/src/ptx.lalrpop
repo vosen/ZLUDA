@@ -106,6 +106,16 @@ Type: ast::Type = {
 };
 
 ScalarType: ast::ScalarType = {
+    ".f16" => ast::ScalarType::F16,
+    MemoryType
+};
+
+ExtendedScalarType: ast::ExtendedScalarType = {
+    ".f16x2" => ast::ExtendedScalarType::F16x2,
+    ".pred" => ast::ExtendedScalarType::Pred,
+};
+
+MemoryType: ast::ScalarType = {
     ".b8" => ast::ScalarType::B8,
     ".b16" => ast::ScalarType::B16,
     ".b32" => ast::ScalarType::B32,
@@ -118,21 +128,8 @@ ScalarType: ast::ScalarType = {
     ".s16" => ast::ScalarType::S16,
     ".s32" => ast::ScalarType::S32,
     ".s64" => ast::ScalarType::S64,
-    ".f16" => ast::ScalarType::F16,
     ".f32" => ast::ScalarType::F32,
     ".f64" => ast::ScalarType::F64,
-};
-
-ExtendedScalarType: ast::ExtendedScalarType = {
-    ".f16x2" => ast::ExtendedScalarType::F16x2,
-    ".pred" => ast::ExtendedScalarType::Pred,
-};
-
-BaseType = {
-    ".b8", ".b16", ".b32", ".b64",
-    ".u8", ".u16", ".u32", ".u64",
-    ".s8", ".s16", ".s32", ".s64",
-    ".f32", ".f64"
 };
 
 Statement: Option<ast::Statement<&'input str>> = {
@@ -191,36 +188,47 @@ Instruction: ast::Instruction<&'input str> = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
 InstLd: ast::Instruction<&'input str> = {
-    "ld" LdQualifier? LdStateSpace? LdCacheOperator? Vector? BaseType <dst:ID> "," "[" <src:Operand> "]" => {
-        ast::Instruction::Ld(ast::LdData{}, ast::Arg2{dst:dst, src:src})
+    "ld" <q:LdQualifier?> <ss:LdStateSpace?> <cop:LdCacheOperator?> <v:VectorPrefix?> <t:MemoryType> <dst:ID> "," "[" <src:Operand> "]" => {
+        ast::Instruction::Ld(
+            ast::LdData {
+                qualifier: q.unwrap_or(ast::LdQualifier::Weak),
+                state_space: ss.unwrap_or(ast::LdStateSpace::Generic),
+                caching: cop.unwrap_or(ast::LdCacheOperator::Cached),
+                vector: v,
+                typ: t
+            },
+            ast::Arg2 { dst:dst, src:src }
+        )
     }
 };
 
-LdQualifier: () = {
-    ".weak",
-    ".volatile",
-    ".relaxed" LdScope,
-    ".acquire" LdScope,
+LdQualifier: ast::LdQualifier = {
+    ".weak" => ast::LdQualifier::Weak,
+    ".volatile" => ast::LdQualifier::Volatile,
+    ".relaxed" <s:LdScope> => ast::LdQualifier::Relaxed(s),
+    ".acquire" <s:LdScope> => ast::LdQualifier::Acquire(s),
 };
 
-LdScope = {
-    ".cta", ".gpu", ".sys"
+LdScope: ast::LdScope = {
+    ".cta" => ast::LdScope::Cta,
+    ".gpu" => ast::LdScope::Gpu,
+    ".sys" => ast::LdScope::Sys
 };
 
-LdStateSpace = {
-    ".const",
-    ".global",
-    ".local",
-    ".param",
-    ".shared",
+LdStateSpace: ast::LdStateSpace = {
+    ".const" => ast::LdStateSpace::Const,
+    ".global" => ast::LdStateSpace::Global,
+    ".local" => ast::LdStateSpace::Local,
+    ".param" => ast::LdStateSpace::Param,
+    ".shared" => ast::LdStateSpace::Shared,
 };
 
-LdCacheOperator = {
-    ".ca",
-    ".cg",
-    ".cs",
-    ".lu",
-    ".cv",
+LdCacheOperator: ast::LdCacheOperator = {
+    ".ca" => ast::LdCacheOperator::Cached,
+    ".cg" => ast::LdCacheOperator::L2Only,
+    ".cs" => ast::LdCacheOperator::Streaming,
+    ".lu" => ast::LdCacheOperator::LastUse,
+    ".cv" => ast::LdCacheOperator::Uncached,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
@@ -332,7 +340,7 @@ PredAt: ast::PredAt<&'input str> = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-bra
 InstBra: ast::Instruction<&'input str> = {
-    "bra" ".uni"? <a:Arg1> => ast::Instruction::Bra(ast::BraData{}, a)
+    "bra" <u:".uni"?> <a:Arg1> => ast::Instruction::Bra(ast::BraData{ uniform: u.is_some() }, a)
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt
@@ -372,7 +380,7 @@ ShlType = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-st
 InstSt: ast::Instruction<&'input str> = {
-    "st" LdQualifier? StStateSpace? StCacheOperator? Vector? BaseType "[" <dst:ID> "]" "," <src:Operand> => {
+    "st" LdQualifier? StStateSpace? StCacheOperator? VectorPrefix? MemoryType "[" <dst:ID> "]" "," <src:Operand> => {
         ast::Instruction::St(ast::StData{}, ast::Arg2{dst:dst, src:src})
     }
 };
@@ -454,9 +462,9 @@ OptionalDst: &'input str = {
     "|" <dst2:ID> => dst2
 }
 
-Vector = {
-    ".v2",
-    ".v4"
+VectorPrefix: ast::VectorPrefix = {
+    ".v2" => ast::VectorPrefix::V2,
+    ".v4" => ast::VectorPrefix::V4
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#debugging-directives-file
