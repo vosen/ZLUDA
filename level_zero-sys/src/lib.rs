@@ -1,3 +1,3 @@
 #![allow(warnings)]
-pub mod zex_api;
-pub use zex_api::*;
+pub mod ze_api;
+pub use ze_api::*;
