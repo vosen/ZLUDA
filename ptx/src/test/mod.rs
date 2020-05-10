@@ -1,5 +1,7 @@
 use super::ptx;
 
+mod ops;
+
 fn parse_and_assert(s: &str) {
     let mut errors = Vec::new();
     ptx::ModuleParser::new().parse(&mut errors, s).unwrap();

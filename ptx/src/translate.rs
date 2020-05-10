@@ -5,6 +5,8 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 
+use rspirv::binary::{Assemble, Disassemble};
+
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
 enum SpirvType {
     Base(ast::ScalarType),
@@ -13,7 +15,6 @@ enum SpirvType {
 
 struct TypeWordMap {
     void: spirv::Word,
-    fn_void: spirv::Word,
     complex: HashMap<SpirvType, spirv::Word>,
 }
 
@@ -22,7 +23,6 @@ impl TypeWordMap {
         let void = b.type_void();
         TypeWordMap {
             void: void,
-            fn_void: b.type_function(void, vec![]),
             complex: HashMap::<SpirvType, spirv::Word>::new(),
         }
     }
@@ -30,32 +30,24 @@ impl TypeWordMap {
     fn void(&self) -> spirv::Word {
         self.void
     }
-    fn fn_void(&self) -> spirv::Word {
-        self.fn_void
-    }
 
     fn get_or_add_scalar(&mut self, b: &mut dr::Builder, t: ast::ScalarType) -> spirv::Word {
-        *self.complex.entry(SpirvType::Base(t)).or_insert_with(|| match t {
-            ast::ScalarType::B8 | ast::ScalarType::U8 => {
-                b.type_int(8, 0)
-            }
-            ast::ScalarType::B16 | ast::ScalarType::U16 => {
-                b.type_int(16, 0)
-            }
-            ast::ScalarType::B32 | ast::ScalarType::U32 => {
-                b.type_int(32, 0)
-            }
-            ast::ScalarType::B64 | ast::ScalarType::U64 => {
-                b.type_int(64, 0)
-            }
-            ast::ScalarType::S8 => b.type_int(8, 1),
-            ast::ScalarType::S16 => b.type_int(16, 1),
-            ast::ScalarType::S32 => b.type_int(32, 1),
-            ast::ScalarType::S64 => b.type_int(64, 1),
-            ast::ScalarType::F16 => b.type_float(16),
-            ast::ScalarType::F32 => b.type_float(32),
-            ast::ScalarType::F64 => b.type_float(64),
-        })
+        *self
+            .complex
+            .entry(SpirvType::Base(t))
+            .or_insert_with(|| match t {
+                ast::ScalarType::B8 | ast::ScalarType::U8 => b.type_int(8, 0),
+                ast::ScalarType::B16 | ast::ScalarType::U16 => b.type_int(16, 0),
+                ast::ScalarType::B32 | ast::ScalarType::U32 => b.type_int(32, 0),
+                ast::ScalarType::B64 | ast::ScalarType::U64 => b.type_int(64, 0),
+                ast::ScalarType::S8 => b.type_int(8, 1),
+                ast::ScalarType::S16 => b.type_int(16, 1),
+                ast::ScalarType::S32 => b.type_int(32, 1),
+                ast::ScalarType::S64 => b.type_int(64, 1),
+                ast::ScalarType::F16 => b.type_float(16),
+                ast::ScalarType::F32 => b.type_float(32),
+                ast::ScalarType::F64 => b.type_float(64),
+            })
     }
 
     fn get_or_add(&mut self, b: &mut dr::Builder, t: SpirvType) -> spirv::Word {
@@ -63,15 +55,25 @@ impl TypeWordMap {
             SpirvType::Base(scalar) => self.get_or_add_scalar(b, scalar),
             SpirvType::Pointer(scalar, storage) => {
                 let base = self.get_or_add_scalar(b, scalar);
-                *self.complex.entry(t).or_insert_with(|| {
-                    b.type_pointer(None, storage, base)
-                })
+                *self
+                    .complex
+                    .entry(t)
+                    .or_insert_with(|| b.type_pointer(None, storage, base))
             }
         }
     }
+
+    fn get_or_add_fn<Args: Iterator<Item = SpirvType>>(
+        &mut self,
+        b: &mut dr::Builder,
+        args: Args,
+    ) -> spirv::Word {
+        let params = args.map(|a| self.get_or_add(b, a)).collect::<Vec<_>>();
+        b.type_function(self.void(), params)
+    }
 }
 
-pub fn to_spirv(ast: ast::Module) -> Result<Vec<u32>, rspirv::dr::Error> {
+pub fn to_spirv(ast: ast::Module) -> Result<Vec<u32>, dr::Error> {
     let mut builder = dr::Builder::new();
     // https://www.khronos.org/registry/spir-v/specs/unified1/SPIRV.html#_a_id_logicallayout_a_logical_layout_of_a_module
     builder.set_version(1, 0);
@@ -83,10 +85,12 @@ pub fn to_spirv(ast: ast::Module) -> Result<Vec<u32>, rspirv::dr::Error> {
     for f in ast.functions {
         emit_function(&mut builder, &mut map, f)?;
     }
-    Ok(vec![])
+    let module = builder.module();
+    Ok(module.assemble())
 }
 
 fn emit_capabilities(builder: &mut dr::Builder) {
+    builder.capability(spirv::Capability::GenericPointer);
     builder.capability(spirv::Capability::Linkage);
     builder.capability(spirv::Capability::Addresses);
     builder.capability(spirv::Capability::Kernel);
@@ -112,12 +116,12 @@ fn emit_function<'a>(
     map: &mut TypeWordMap,
     f: ast::Function<'a>,
 ) -> Result<spirv::Word, rspirv::dr::Error> {
-    let func_id = builder.begin_function(
-        map.void(),
-        None,
-        spirv::FunctionControl::NONE,
-        map.fn_void(),
-    )?;
+    let func_type = get_function_type(builder, map, &f.args);
+    let func_id =
+        builder.begin_function(map.void(), None, spirv::FunctionControl::NONE, func_type)?;
+    if f.kernel {
+        builder.entry_point(spirv::ExecutionModel::Kernel, func_id, f.name, &[]);
+    }
     let mut contant_ids = HashMap::new();
     collect_arg_ids(&mut contant_ids, &f.args);
     collect_label_ids(&mut contant_ids, &f.body);
@@ -126,7 +130,7 @@ fn emit_function<'a>(
     let rpostorder = to_reverse_postorder(&bbs);
     let doms = immediate_dominators(&bbs, &rpostorder);
     let dom_fronts = dominance_frontiers(&bbs, &doms);
-    let phis = ssa_legalize(
+    let (mut phis, unique_ids) = ssa_legalize(
         &mut normalized_ids,
         contant_ids.len() as u32,
         unique_ids,
@@ -138,9 +142,15 @@ fn emit_function<'a>(
     emit_function_args(builder, id_offset, map, &f.args);
     emit_function_body_ops(builder, id_offset, map, &normalized_ids, &bbs)?;
     builder.end_function()?;
-    builder.ret()?;
-    builder.end_function()?;
     Ok(func_id)
+}
+
+fn get_function_type(
+    builder: &mut dr::Builder,
+    map: &mut TypeWordMap,
+    args: &[ast::Argument],
+) -> spirv::Word {
+    map.get_or_add_fn(builder, args.iter().map(|arg| SpirvType::Base(arg.a_type)))
 }
 
 fn emit_function_args(
@@ -151,7 +161,7 @@ fn emit_function_args(
 ) {
     let mut id = id_offset;
     for arg in args {
-        let result_type = map.get_or_add(builder, SpirvType::Base(arg.a_type));
+        let result_type = map.get_or_add_scalar(builder, arg.a_type);
         let inst = dr::Instruction::new(
             spirv::Op::FunctionParameter,
             Some(result_type),
@@ -195,6 +205,8 @@ fn emit_function_body_ops(
     func: &[Statement],
     cfg: &[BasicBlock],
 ) -> Result<(), dr::Error> {
+    // TODO: entry basic block can't be target of jumps,
+    // we need to emit additional BB for this purpose
     for bb_idx in 0..cfg.len() {
         let body = get_bb_body(func, cfg, BBIndex(bb_idx));
         if body.len() == 0 {
@@ -215,24 +227,63 @@ fn emit_function_body_ops(
                     builder.branch_conditional(bra.predicate, bra.if_true, bra.if_false, [])?;
                 }
                 Statement::Instruction(inst) => match inst {
-                    // Sadly, SPIR-V does not support marking jumps as guaranteed-converged
+                    // SPIR-V does not support marking jumps as guaranteed-converged
                     ast::Instruction::Bra(_, arg) => {
-                        builder.branch(arg.src)?;
+                        builder.branch(arg.src + id_offset)?;
                     }
                     ast::Instruction::Ld(data, arg) => {
-                        if data.qualifier != ast::LdQualifier::Weak || data.vector.is_some() {
+                        if data.qualifier != ast::LdStQualifier::Weak || data.vector.is_some() {
                             todo!()
                         }
-                        let storage_class = match data.state_space {
-                            ast::LdStateSpace::Generic => spirv::StorageClass::Generic,
-                            ast::LdStateSpace::Param => spirv::StorageClass::CrossWorkgroup,
+                        let src = match arg.src {
+                            ast::Operand::Reg(id) => id + id_offset,
                             _ => todo!(),
                         };
-                        let result_type = map.get_or_add(builder, SpirvType::Base(data.typ));
-                        let pointer_type =
-                            map.get_or_add(builder, SpirvType::Pointer(data.typ, storage_class));
-                        builder.load(result_type, None, pointer_type, None, [])?;
+                        let result_type = map.get_or_add_scalar(builder, data.typ);
+                        match data.state_space {
+                            ast::LdStateSpace::Generic => {
+                                // TODO: make the cast optional
+                                let ptr_result_type = map.get_or_add(
+                                    builder,
+                                    SpirvType::Pointer(data.typ, spirv::StorageClass::CrossWorkgroup),
+                                );
+                                let bitcast = builder.convert_u_to_ptr(ptr_result_type, None, src - 5)?;
+                                builder.load(
+                                    result_type,
+                                    Some(arg.dst + id_offset),
+                                    bitcast,
+                                    None,
+                                    [],
+                                )?;
+                            }
+                            ast::LdStateSpace::Param => {
+                                //builder.copy_object(result_type, Some(arg.dst + id_offset), src)?;
+                            }
+                            _ => todo!(),
+                        }
                     }
+                    ast::Instruction::St(data, arg) => {
+                        if data.qualifier != ast::LdStQualifier::Weak
+                            || data.vector.is_some()
+                            || data.state_space != ast::StStateSpace::Generic
+                        {
+                            todo!()
+                        }
+                        let src = match arg.src {
+                            ast::Operand::Reg(id) => id + id_offset,
+                            _ => todo!(),
+                        };
+                        // TODO make cast optional
+                        let ptr_result_type = map.get_or_add(
+                            builder,
+                            SpirvType::Pointer(data.typ, spirv::StorageClass::CrossWorkgroup),
+                        );
+                        let bitcast =
+                            builder.convert_u_to_ptr(ptr_result_type, None, arg.dst + id_offset - 5)?;
+                        builder.store(bitcast, src, None, &[])?;
+                    }
+                    // SPIR-V does not support ret as guaranteed-converged
+                    ast::Instruction::Ret(_) => builder.ret()?,
                     _ => todo!(),
                 },
             }
@@ -279,7 +330,7 @@ fn ssa_legalize(
     bbs: &[BasicBlock],
     doms: &[BBIndex],
     dom_fronts: &[HashSet<BBIndex>],
-) -> Vec<Vec<PhiDef>> {
+) -> (Vec<Vec<PhiDef>>, spirv::Word) {
     let phis = gather_phi_sets(&func, constant_ids, unique_ids, &bbs, dom_fronts);
     apply_ssa_renaming(func, &bbs, doms, constant_ids, unique_ids, &phis)
 }
@@ -301,7 +352,7 @@ fn apply_ssa_renaming(
     constant_ids: spirv::Word,
     all_ids: spirv::Word,
     old_phi: &[HashSet<spirv::Word>],
-) -> Vec<Vec<PhiDef>> {
+) -> (Vec<Vec<PhiDef>>, spirv::Word) {
     let mut dom_tree = vec![Vec::new(); bbs.len()];
     for (bb, idom) in doms.iter().enumerate().skip(1) {
         dom_tree[idom.0].push(BBIndex(bb));
@@ -345,7 +396,7 @@ fn apply_ssa_renaming(
             break;
         }
     }
-    new_phi
+    let phi = new_phi
         .into_iter()
         .map(|map| {
             map.into_iter()
@@ -355,7 +406,8 @@ fn apply_ssa_renaming(
                 })
                 .collect::<Vec<_>>()
         })
-        .collect::<Vec<_>>()
+        .collect::<Vec<_>>();
+    (phi, ssa_state.next_id())
 }
 
 // before ssa-renaming every phi is x <- phi(x,x,x,x)
@@ -478,6 +530,10 @@ impl<'a> SSARewriteState {
         if x >= self.constant_ids {
             self.stack[(x - self.constant_ids) as usize].pop();
         }
+    }
+
+    fn next_id(&self) -> spirv::Word {
+        self.next
     }
 }
 
@@ -895,7 +951,10 @@ impl<T> ast::Instruction<T> {
             ast::Instruction::Not(_, a) => a.visit_id(f),
             ast::Instruction::Cvt(_, a) => a.visit_id(f),
             ast::Instruction::Shl(_, a) => a.visit_id(f),
-            ast::Instruction::St(_, a) => a.visit_id(f),
+            ast::Instruction::St(_, a) => {
+                f(false, &a.dst);
+                a.src.visit_id(f);
+            }
             ast::Instruction::Bra(_, a) => a.visit_id(f),
             ast::Instruction::Ret(_) => (),
         }
@@ -912,7 +971,10 @@ impl<T> ast::Instruction<T> {
             ast::Instruction::Not(_, a) => a.visit_id_mut(f),
             ast::Instruction::Cvt(_, a) => a.visit_id_mut(f),
             ast::Instruction::Shl(_, a) => a.visit_id_mut(f),
-            ast::Instruction::St(_, a) => a.visit_id_mut(f),
+            ast::Instruction::St(_, a) => {
+                f(false, &mut a.dst);
+                a.src.visit_id_mut(f);
+            }
             ast::Instruction::Bra(_, a) => a.visit_id_mut(f),
             ast::Instruction::Ret(_) => (),
         }
@@ -965,7 +1027,7 @@ impl<T: Copy> ast::Instruction<T> {
             ast::Instruction::Not(_, a) => a.for_dst_id(f),
             ast::Instruction::Cvt(_, a) => a.for_dst_id(f),
             ast::Instruction::Shl(_, a) => a.for_dst_id(f),
-            ast::Instruction::St(_, a) => a.for_dst_id(f),
+            ast::Instruction::St(_, _) => (),
             ast::Instruction::Bra(_, _) => (),
             ast::Instruction::Ret(_) => (),
         }
@@ -1736,7 +1798,7 @@ mod tests {
         let rpostorder = to_reverse_postorder(&bbs);
         let doms = immediate_dominators(&bbs, &rpostorder);
         let dom_fronts = dominance_frontiers(&bbs, &doms);
-        let mut ssa_phis = ssa_legalize(
+        let (mut ssa_phis, _) = ssa_legalize(
             &mut func,
             constant_ids.len() as u32,
             unique_ids,

@@ -188,10 +188,10 @@ Instruction: ast::Instruction<&'input str> = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
 InstLd: ast::Instruction<&'input str> = {
-    "ld" <q:LdQualifier?> <ss:LdStateSpace?> <cop:LdCacheOperator?> <v:VectorPrefix?> <t:MemoryType> <dst:ID> "," "[" <src:Operand> "]" => {
+    "ld" <q:LdStQualifier?> <ss:LdStateSpace?> <cop:LdCacheOperator?> <v:VectorPrefix?> <t:MemoryType> <dst:ID> "," "[" <src:Operand> "]" => {
         ast::Instruction::Ld(
             ast::LdData {
-                qualifier: q.unwrap_or(ast::LdQualifier::Weak),
+                qualifier: q.unwrap_or(ast::LdStQualifier::Weak),
                 state_space: ss.unwrap_or(ast::LdStateSpace::Generic),
                 caching: cop.unwrap_or(ast::LdCacheOperator::Cached),
                 vector: v,
@@ -202,11 +202,11 @@ InstLd: ast::Instruction<&'input str> = {
     }
 };
 
-LdQualifier: ast::LdQualifier = {
-    ".weak" => ast::LdQualifier::Weak,
-    ".volatile" => ast::LdQualifier::Volatile,
-    ".relaxed" <s:LdScope> => ast::LdQualifier::Relaxed(s),
-    ".acquire" <s:LdScope> => ast::LdQualifier::Acquire(s),
+LdStQualifier: ast::LdStQualifier = {
+    ".weak" => ast::LdStQualifier::Weak,
+    ".volatile" => ast::LdStQualifier::Volatile,
+    ".relaxed" <s:LdScope> => ast::LdStQualifier::Relaxed(s),
+    ".acquire" <s:LdScope> => ast::LdStQualifier::Acquire(s),
 };
 
 LdScope: ast::LdScope = {
@@ -379,29 +379,39 @@ ShlType = {
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-st
+// Warning: NVIDIA documentation is incorrect, you can specify scope only once
 InstSt: ast::Instruction<&'input str> = {
-    "st" LdQualifier? StStateSpace? StCacheOperator? VectorPrefix? MemoryType "[" <dst:ID> "]" "," <src:Operand> => {
-        ast::Instruction::St(ast::StData{}, ast::Arg2{dst:dst, src:src})
+    "st" <q:LdStQualifier?> <ss:StStateSpace?> <cop:StCacheOperator?> <v:VectorPrefix?> <t:MemoryType> "[" <dst:ID> "]" "," <src:Operand> => {
+        ast::Instruction::St(
+            ast::StData {
+                qualifier: q.unwrap_or(ast::LdStQualifier::Weak),
+                state_space: ss.unwrap_or(ast::StStateSpace::Generic),
+                caching: cop.unwrap_or(ast::StCacheOperator::Writeback),
+                vector: v,
+                typ: t
+            },
+            ast::Arg2{dst:dst, src:src}
+        )
     }
 };
 
-StStateSpace = {
-    ".global",
-    ".local",
-    ".param",
-    ".shared",
+StStateSpace: ast::StStateSpace = {
+    ".global" => ast::StStateSpace::Global,
+    ".local" => ast::StStateSpace::Local,
+    ".param" => ast::StStateSpace::Param,
+    ".shared" => ast::StStateSpace::Shared,
 };
 
-StCacheOperator = {
-    ".wb",
-    ".cg",
-    ".cs",
-    ".wt",
+StCacheOperator: ast::StCacheOperator = {
+    ".wb" => ast::StCacheOperator::Writeback,
+    ".cg" => ast::StCacheOperator::L2Only,
+    ".cs" => ast::StCacheOperator::Streaming,
+    ".wt" => ast::StCacheOperator::Writethrough,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-ret
 InstRet: ast::Instruction<&'input str> = {
-    "ret" ".uni"? => ast::Instruction::Ret(ast::RetData{})
+    "ret" <u:".uni"?> => ast::Instruction::Ret(ast::RetData { uniform: u.is_some() })
 };
 
 Operand: ast::Operand<&'input str> = {

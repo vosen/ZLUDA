@@ -189,19 +189,19 @@ pub enum MovOperand<ID> {
 
 pub enum VectorPrefix {
     V2,
-    V4
+    V4,
 }
 
 pub struct LdData {
-    pub qualifier: LdQualifier,
+    pub qualifier: LdStQualifier,
     pub state_space: LdStateSpace,
     pub caching: LdCacheOperator,
     pub vector: Option<VectorPrefix>,
-    pub typ: ScalarType
+    pub typ: ScalarType,
 }
 
 #[derive(PartialEq, Eq)]
-pub enum LdQualifier {
+pub enum LdStQualifier {
     Weak,
     Volatile,
     Relaxed(LdScope),
@@ -212,7 +212,7 @@ pub enum LdQualifier {
 pub enum LdScope {
     Cta,
     Gpu,
-    Sys
+    Sys,
 }
 
 #[derive(PartialEq, Eq)]
@@ -225,14 +225,13 @@ pub enum LdStateSpace {
     Shared,
 }
 
-
 #[derive(PartialEq, Eq)]
 pub enum LdCacheOperator {
     Cached,
     L2Only,
     Streaming,
     LastUse,
-    Uncached
+    Uncached,
 }
 
 pub struct MovData {}
@@ -248,13 +247,38 @@ pub struct SetpBoolData {}
 pub struct NotData {}
 
 pub struct BraData {
-    pub uniform: bool
+    pub uniform: bool,
 }
 
 pub struct CvtData {}
 
 pub struct ShlData {}
 
-pub struct StData {}
+pub struct StData {
+    pub qualifier: LdStQualifier,
+    pub state_space: StStateSpace,
+    pub caching: StCacheOperator,
+    pub vector: Option<VectorPrefix>,
+    pub typ: ScalarType,
+}
 
-pub struct RetData {}
+#[derive(PartialEq, Eq)]
+pub enum StStateSpace {
+    Generic,
+    Global,
+    Local,
+    Param,
+    Shared,
+}
+
+#[derive(PartialEq, Eq)]
+pub enum StCacheOperator {
+    Writeback,
+    L2Only,
+    Streaming,
+    Writethrough,
+}
+
+pub struct RetData {
+    pub uniform: bool,
+}

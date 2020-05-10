@@ -4,6 +4,8 @@ extern crate lalrpop_util;
 extern crate quick_error;
 
 extern crate bit_vec;
+#[cfg(test)]
+extern crate ocl;
 extern crate rspirv;
 extern crate spirv_headers as spirv;
 
