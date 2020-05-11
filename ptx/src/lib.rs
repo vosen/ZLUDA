@@ -6,6 +6,8 @@ extern crate quick_error;
 extern crate bit_vec;
 #[cfg(test)]
 extern crate ocl;
+#[cfg(test)]
+extern crate level_zero_sys as l0;
 extern crate rspirv;
 extern crate spirv_headers as spirv;
 

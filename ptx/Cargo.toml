@@ -19,4 +19,5 @@ version = "0.18.1"
 features = ["lexer"]
 
 [dev-dependencies]
+level_zero-sys = { path = "../level_zero-sys" }
 ocl = { version = "0.19", features = ["opencl_version_1_1", "opencl_version_1_2", "opencl_version_2_1"] }
