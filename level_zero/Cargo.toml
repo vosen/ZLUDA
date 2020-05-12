@@ -1,0 +1,10 @@
+[package]
+name = "level_zero"
+version = "0.1.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2018"
+
+[lib]
+
+[dependencies]
+level_zero-sys = { path = "../level_zero-sys" }
