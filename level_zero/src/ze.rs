@@ -1,5 +1,4 @@
 use crate::sys;
-use std::num::NonZeroUsize;
 use std::{
     ffi::{c_void, CStr},
     fmt::{Debug, Display},
@@ -310,7 +309,7 @@ impl Module {
         Self(x)
     }
 
-    pub fn new_spirv(d: &Device, bin: &[u8], opts: Option<&str>) -> Result<Self> {
+    pub fn new_spirv(d: &Device, bin: &[u8], opts: Option<&CStr>) -> Result<Self> {
         Module::new(true, d, bin, opts)
     }
 
@@ -318,7 +317,7 @@ impl Module {
         Module::new(false, d, bin, None)
     }
 
-    fn new(spirv: bool, d: &Device, bin: &[u8], opts: Option<&str>) -> Result<Self> {
+    fn new(spirv: bool, d: &Device, bin: &[u8], opts: Option<&CStr>) -> Result<Self> {
         let desc = sys::ze_module_desc_t {
             version: sys::ze_module_desc_version_t::ZE_MODULE_DESC_VERSION_CURRENT,
             format: if spirv {

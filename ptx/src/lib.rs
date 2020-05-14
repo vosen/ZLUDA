@@ -5,8 +5,6 @@ extern crate quick_error;
 
 extern crate bit_vec;
 #[cfg(test)]
-extern crate ocl;
-#[cfg(test)]
 extern crate level_zero_sys as l0;
 #[cfg(test)]
 extern crate level_zero as ze;

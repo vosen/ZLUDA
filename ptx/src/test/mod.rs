@@ -1,6 +1,6 @@
 use super::ptx;
 
-mod ops;
+mod spirv_run;
 
 fn parse_and_assert(s: &str) {
     let mut errors = Vec::new();
