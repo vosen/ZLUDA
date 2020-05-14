@@ -8,6 +8,8 @@ extern crate bit_vec;
 extern crate ocl;
 #[cfg(test)]
 extern crate level_zero_sys as l0;
+#[cfg(test)]
+extern crate level_zero as ze;
 extern crate rspirv;
 extern crate spirv_headers as spirv;
 

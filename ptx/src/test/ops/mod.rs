@@ -2,7 +2,7 @@ use crate::ptx;
 use crate::translate;
 use ocl::{Buffer, Context, Device, Kernel, OclPrm, Platform, Program, Queue};
 use std::error;
-use std::ffi::{c_void, CString};
+use std::ffi::{c_void, CStr, CString};
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::mem;
@@ -43,7 +43,7 @@ impl<T: Display + Debug> Debug for DisplayError<T> {
 
 impl<T: Display + Debug> error::Error for DisplayError<T> {}
 
-fn test_ptx_assert<'a, T: OclPrm + From<u8>>(
+fn test_ptx_assert<'a, T: OclPrm + From<u8> + ze::SafeRepr>(
     name: &str,
     ptx_text: &'a str,
     input: &[T],
@@ -58,242 +58,38 @@ fn test_ptx_assert<'a, T: OclPrm + From<u8>>(
     Ok(())
 }
 
-fn run_spirv<T: OclPrm + From<u8>>(
+fn run_spirv<T: OclPrm + From<u8> + ze::SafeRepr>(
     name: &str,
     spirv: &[u32],
     input: &[T],
     output: &mut [T],
-) -> ocl::Result<Vec<T>> {
-    let (drv, device, queue) = unsafe { l0_init() };
-    let (ocl_plat, ocl_dev) = get_ocl_platform_device();
-    let ocl_ctx = Context::builder()
-        .platform(ocl_plat)
-        .devices(ocl_dev)
-        .build()?;
-    let empty_cstr = CString::new("-cl-intel-greater-than-4GB-buffer-required").unwrap();
-    let src = CString::new(
-        "
-    __kernel void ld_st(ulong a, ulong b)
-    {
-        __global ulong* a_copy = (__global ulong*)a;
-        __global ulong* b_copy = (__global ulong*)b;
-        *b_copy = *a_copy;
-    }",
-    )?;
-    let prog = Program::with_source(&ocl_ctx, &[src], None, &empty_cstr)?;
-    let binaries_wrapped = prog.info(ocl::core::ProgramInfo::Binaries)?;
-    let binaries = if let ocl::core::ProgramInfoResult::Binaries(bins) = binaries_wrapped {
-        bins
-    } else {
-        panic!()
-    };
-    let module = l0_create_module(device, &binaries[0]);
-    let kernel_desc = l0::ze_kernel_desc_t {
-        version: l0::ze_kernel_desc_version_t::ZE_KERNEL_DESC_VERSION_CURRENT,
-        flags: l0::ze_kernel_flag_t::ZE_KERNEL_FLAG_NONE,
-        pKernelName: "ld_st".as_ptr() as *const _,
-    };
-    let mut kernel: l0::ze_kernel_handle_t = ptr::null_mut();
-    let mut err = unsafe { l0::zeKernelCreate(module, &kernel_desc, &mut kernel) };
-    assert_eq!(err, l0::ze_result_t::ZE_RESULT_SUCCESS);
-    let inp_b = l0_allocate_buffer(drv, device, &input);
-    let out_b = l0_allocate_buffer(drv, device, &output);
-    println!("inp_b: {:?}", inp_b);
-    println!("out_b: {:?}", out_b);
-    let mut cmd_list = l0_create_cmd_list(device);
-    println!("input: {:?}", input);
-    err = unsafe {
-        l0::zeCommandListAppendMemoryCopy(
-            cmd_list,
-            inp_b,
-            input.as_ptr() as *const _,
-            input.len() * mem::size_of::<T>(),
-            ptr::null_mut(),
-        )
-    };
-    assert_eq!(err, l0::ze_result_t::ZE_RESULT_SUCCESS);
-    let pattern = 0u8;
-    err = unsafe {
-        l0::zeCommandListAppendMemoryFill(
-            cmd_list,
-            out_b,
-            &pattern as *const u8 as *const _,
-            1,
-            input.len() * mem::size_of::<T>(),
-            ptr::null_mut(),
-        )
-    };
-    assert_eq!(err, l0::ze_result_t::ZE_RESULT_SUCCESS);
-    err = unsafe { l0::zeKernelSetGroupSize(kernel, 1, 1, 1) };
-    assert_eq!(err, l0::ze_result_t::ZE_RESULT_SUCCESS);
-    let wg_size = l0::ze_group_count_t {
-        groupCountX: 1,
-        groupCountY: 1,
-        groupCountZ: 1,
-    };
-    err = unsafe {
-        l0::zeKernelSetArgumentValue(
-            kernel,
-            0,
-            mem::size_of::<*mut c_void>(),
-            &inp_b as *const *mut _ as *const _,
-        )
-    };
-    assert_eq!(err, l0::ze_result_t::ZE_RESULT_SUCCESS);
-    err = unsafe {
-        l0::zeKernelSetArgumentValue(
-            kernel,
-            1,
-            mem::size_of::<*mut c_void>(),
-            &out_b as *const *mut _ as *const _,
-        )
-    };
-    assert_eq!(err, l0::ze_result_t::ZE_RESULT_SUCCESS);
-    err = unsafe {
-        l0::zeCommandListAppendBarrier(
-            cmd_list,
-            ptr::null_mut(),
-            0,
-            ptr::null_mut(),
-        )
-    };
-    assert_eq!(err, l0::ze_result_t::ZE_RESULT_SUCCESS);
-    err = unsafe {
-        l0::zeCommandListAppendLaunchKernel(
-            cmd_list,
-            kernel,
-            &wg_size,
-            ptr::null_mut(),
-            0,
-            ptr::null_mut(),
-        )
-    };
-    assert_eq!(err, l0::ze_result_t::ZE_RESULT_SUCCESS);
-    err = unsafe {
-        l0::zeCommandListAppendBarrier(
-            cmd_list,
-            ptr::null_mut(),
-            0,
-            ptr::null_mut(),
-        )
-    };
-    assert_eq!(err, l0::ze_result_t::ZE_RESULT_SUCCESS);
-    let mut result: Vec<T> = vec![0u8.into(); output.len()];
-    err = unsafe {
-        l0::zeCommandListAppendMemoryCopy(
-            cmd_list,
-            result.as_mut_ptr() as *mut _,
-            out_b,
-            result.len() * mem::size_of::<T>(),
-            ptr::null_mut(),
-        )
-    };
-    assert_eq!(err, l0::ze_result_t::ZE_RESULT_SUCCESS);
-    err = unsafe { l0::zeCommandListClose(cmd_list) };
-    assert_eq!(err, l0::ze_result_t::ZE_RESULT_SUCCESS);
-    err =
-        unsafe { l0::zeCommandQueueExecuteCommandLists(queue, 1, &mut cmd_list, ptr::null_mut()) };
-    assert_eq!(err, l0::ze_result_t::ZE_RESULT_SUCCESS);
-    err = unsafe { l0::zeCommandQueueSynchronize(queue, u32::max_value()) };
-    assert_eq!(err, l0::ze_result_t::ZE_RESULT_SUCCESS);
-    /*
-    let (plat, dev) = get_ocl_platform_device();
-    let ctx = Context::builder().platform(plat).devices(dev).build()?;
-    let empty_cstr = CString::new("-cl-intel-greater-than-4GB-buffer-required").unwrap();
-    let byte_il = unsafe {
-        slice::from_raw_parts::<u8>(
-            spirv.as_ptr() as *const _,
-            spirv.len() * mem::size_of::<u32>(),
-        )
-    };
-    let src = CString::new(
-        "
-    __kernel void ld_st(ulong a, ulong b)
-    {
-        __global ulong* a_copy = (__global ulong*)a;
-        __global ulong* b_copy = (__global ulong*)b;
-        *b_copy = *a_copy;
-    }",
-    )
-    .unwrap();
-    //let prog = Program::with_il(byte_il, Some(&[dev]), &empty_cstr, &ctx)?;
-    let prog = Program::with_source(&ctx, &[src], Some(&[dev]), &empty_cstr)?;
-    let queue = Queue::new(&ctx, dev, None)?;
-    let cl_device_mem_alloc_intel = get_cl_device_mem_alloc_intel(&plat)?;
-    let cl_enqueue_memcpy_intel = get_cl_enqueue_memcpy_intel(&plat)?;
-    let cl_enqueue_memset_intel = get_cl_enqueue_memset_intel(&plat)?;
-    let cl_set_kernel_arg_mem_pointer_intel = get_cl_set_kernel_arg_mem_pointer_intel(&plat)?;
-    let mut err_code = 0;
-    let inp_b = cl_device_mem_alloc_intel(
-        ctx.as_ptr(),
-        dev.as_raw(),
-        ptr::null_mut(),
-        input.len() * mem::size_of::<T>(),
-        mem::align_of::<T>() as u32,
-        &mut err_code,
-    );
-    assert_eq!(err_code, 0);
-    let out_b = cl_device_mem_alloc_intel(
-        ctx.as_ptr(),
-        dev.as_raw(),
-        ptr::null_mut(),
-        output.len() * mem::size_of::<T>(),
-        mem::align_of::<T>() as u32,
-        &mut err_code,
-    );
-    assert_eq!(err_code, 0);
-    err_code = cl_enqueue_memcpy_intel(
-        queue.as_ptr(),
-        1,
-        inp_b as *mut _,
-        input.as_ptr() as *const _,
-        input.len() * mem::size_of::<T>(),
-        0,
-        ptr::null(),
-        ptr::null_mut(),
-    );
-    assert_eq!(err_code, 0);
-    err_code = cl_enqueue_memset_intel(
-        queue.as_ptr(),
-        out_b as *mut _,
-        0,
-        input.len() * mem::size_of::<T>(),
-        0,
-        ptr::null(),
-        ptr::null_mut(),
-    );
-    assert_eq!(err_code, 0);
-    let kernel = ocl::core::create_kernel(prog.as_core(), name)?;
-    err_code = cl_set_kernel_arg_mem_pointer_intel(kernel.as_ptr(), 0, inp_b);
-    assert_eq!(err_code, 0);
-    err_code = cl_set_kernel_arg_mem_pointer_intel(kernel.as_ptr(), 1, out_b);
-    assert_eq!(err_code, 0);
-    unsafe {
-        ocl::core::enqueue_kernel::<(), ()>(
-            queue.as_core(),
-            &kernel,
-            1,
-            None,
-            &[1, 0, 0],
-            None,
-            None,
-            None,
-        )
-    }?;
-    let mut result: Vec<T> = vec![0u8.into(); output.len()];
-    err_code = cl_enqueue_memcpy_intel(
-        queue.as_ptr(),
-        1,
-        result.as_mut_ptr() as *mut _,
-        inp_b,
-        result.len() * mem::size_of::<T>(),
-        0,
-        ptr::null(),
-        ptr::null_mut(),
-    );
-    assert_eq!(err_code, 0);
-    queue.finish()?;
-    */
+) -> ze::Result<Vec<T>> {
+    ze::init()?;
+    let mut result = vec![0u8.into(); output.len()];
+    let mut drivers = ze::Driver::get()?;
+    let drv = drivers.drain(0..1).next().unwrap();
+    let mut devices = drv.devices()?;
+    let dev = devices.drain(0..1).next().unwrap();
+    let queue = ze::CommandQueue::new(&dev)?;
+    let native_bins = get_program_native().unwrap();
+    let module = ze::Module::new_native(&dev, &native_bins[0])?;
+    let kernel = ze::Kernel::new(&module, CStr::from_bytes_with_nul(b"ld_st\0").unwrap())?;
+    let mut inp_b = ze::DeviceBuffer::<T>::new(&drv, &dev, input.len())?;
+    let mut out_b = ze::DeviceBuffer::<T>::new(&drv, &dev, output.len())?;
+    let inp_b_ptr_mut: ze::BufferPtrMut<T> = (&mut inp_b).into();
+    let event_pool = ze::EventPool::new(&drv, 3, Some(&[&dev]))?;
+    let ev0 = ze::Event::new(&event_pool, 0)?;
+    let ev1 = ze::Event::new(&event_pool, 1)?;
+    let mut cmd_list = ze::CommandList::new(&dev)?;
+    let out_b_ptr: ze::BufferPtrMut<T> = (&mut out_b).into();
+    cmd_list.append_memory_copy(inp_b_ptr_mut, input, None, Some(&ev0))?;
+    cmd_list.append_memory_fill(out_b_ptr, 0u8.into(), Some(&ev1))?;
+    kernel.set_group_size(1, 1, 1)?;
+    kernel.set_arg_buffer(0, inp_b_ptr_mut)?;
+    kernel.set_arg_buffer(1, out_b_ptr)?;
+    cmd_list.append_launch_kernel(&kernel, &[1, 1, 1], None, &[&ev0, &ev1])?;
+    cmd_list.append_memory_copy(result.as_mut_slice(), inp_b_ptr_mut, None, Some(&ev0))?;
+    queue.execute(cmd_list)?;
     Ok(result)
 }
 
@@ -490,4 +286,29 @@ fn l0_create_cmd_list(dev: l0::ze_device_handle_t) -> l0::ze_command_list_handle
     let err = unsafe { l0::zeCommandListCreate(dev, &desc, &mut result) };
     assert_eq!(err, l0::ze_result_t::ZE_RESULT_SUCCESS);
     result
+}
+
+fn get_program_native() -> ocl::Result<Vec<Vec<u8>>> {
+    let (ocl_plat, ocl_dev) = get_ocl_platform_device();
+    let ocl_ctx = Context::builder()
+        .platform(ocl_plat)
+        .devices(ocl_dev)
+        .build()?;
+    let empty_cstr = CString::new("-cl-intel-greater-than-4GB-buffer-required").unwrap();
+    let src = CString::new(
+        "
+    __kernel void ld_st(ulong a, ulong b)
+    {
+        __global ulong* a_copy = (__global ulong*)a;
+        __global ulong* b_copy = (__global ulong*)b;
+        *b_copy = *a_copy;
+    }",
+    )?;
+    let prog = Program::with_source(&ocl_ctx, &[src], None, &empty_cstr)?;
+    let binaries_wrapped = prog.info(ocl::core::ProgramInfo::Binaries)?;
+    if let ocl::core::ProgramInfoResult::Binaries(bins) = binaries_wrapped {
+        Ok(bins)
+    } else {
+        panic!()
+    }
 }
