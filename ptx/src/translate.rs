@@ -247,7 +247,7 @@ fn emit_function_body_ops(
                                     builder,
                                     SpirvType::Pointer(data.typ, spirv::StorageClass::CrossWorkgroup),
                                 );
-                                let bitcast = builder.convert_u_to_ptr(ptr_result_type, None, src - 5)?;
+                                let bitcast = builder.convert_u_to_ptr(ptr_result_type, None, src)?;
                                 builder.load(
                                     result_type,
                                     Some(arg.dst + id_offset),
@@ -257,7 +257,7 @@ fn emit_function_body_ops(
                                 )?;
                             }
                             ast::LdStateSpace::Param => {
-                                //builder.copy_object(result_type, Some(arg.dst + id_offset), src)?;
+                                builder.copy_object(result_type, Some(arg.dst + id_offset), src)?;
                             }
                             _ => todo!(),
                         }
@@ -279,7 +279,7 @@ fn emit_function_body_ops(
                             SpirvType::Pointer(data.typ, spirv::StorageClass::CrossWorkgroup),
                         );
                         let bitcast =
-                            builder.convert_u_to_ptr(ptr_result_type, None, arg.dst + id_offset - 5)?;
+                            builder.convert_u_to_ptr(ptr_result_type, None, arg.dst + id_offset)?;
                         builder.store(bitcast, src, None, &[])?;
                     }
                     // SPIR-V does not support ret as guaranteed-converged
