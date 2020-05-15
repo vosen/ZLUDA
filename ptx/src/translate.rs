@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 
-use rspirv::binary::{Assemble, Disassemble};
+use rspirv::binary::Assemble;
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
 enum SpirvType {
@@ -130,7 +130,7 @@ fn emit_function<'a>(
     let rpostorder = to_reverse_postorder(&bbs);
     let doms = immediate_dominators(&bbs, &rpostorder);
     let dom_fronts = dominance_frontiers(&bbs, &doms);
-    let (mut phis, unique_ids) = ssa_legalize(
+    let (_, unique_ids) = ssa_legalize(
         &mut normalized_ids,
         contant_ids.len() as u32,
         unique_ids,
@@ -245,9 +245,13 @@ fn emit_function_body_ops(
                                 // TODO: make the cast optional
                                 let ptr_result_type = map.get_or_add(
                                     builder,
-                                    SpirvType::Pointer(data.typ, spirv::StorageClass::CrossWorkgroup),
+                                    SpirvType::Pointer(
+                                        data.typ,
+                                        spirv::StorageClass::CrossWorkgroup,
+                                    ),
                                 );
-                                let bitcast = builder.convert_u_to_ptr(ptr_result_type, None, src)?;
+                                let bitcast =
+                                    builder.convert_u_to_ptr(ptr_result_type, None, src)?;
                                 builder.load(
                                     result_type,
                                     Some(arg.dst + id_offset),
@@ -360,7 +364,11 @@ fn apply_ssa_renaming(
     let mut old_dst_id = vec![Vec::new(); bbs.len()];
     for bb in 0..bbs.len() {
         for s in get_bb_body(func, bbs, BBIndex(bb)) {
-            s.for_dst_id(&mut |id| old_dst_id[bb].push(id));
+            s.visit_id(&mut |is_dst, id| {
+                if is_dst {
+                    old_dst_id[bb].push(*id)
+                }
+            });
         }
     }
     let mut new_phi = old_phi
@@ -872,16 +880,6 @@ impl Statement {
         }
     }
 
-    fn for_dst_id<F: FnMut(spirv::Word)>(&self, f: &mut F) {
-        match self {
-            Statement::Label(id) => f(*id),
-            Statement::Instruction(inst) => {
-                inst.for_dst_id(f);
-            }
-            Statement::Conditional(_) => (),
-        }
-    }
-
     fn visit_id<F: FnMut(bool, &spirv::Word)>(&self, f: &mut F) {
         match self {
             Statement::Label(id) => f(false, id),
@@ -899,27 +897,6 @@ impl Statement {
             Statement::Conditional(bra) => bra.visit_id_mut(f),
         }
     }
-}
-
-impl<T> ast::PredAt<T> {
-    fn map_id<U, F: FnMut(T) -> U>(self, f: &mut F) -> ast::PredAt<U> {
-        ast::PredAt {
-            not: self.not,
-            label: f(self.label),
-        }
-    }
-
-    fn visit_id<F: FnMut(bool, &T)>(&self, f: &mut F) {
-        f(false, &self.label)
-    }
-
-    fn visit_id_mut<F: FnMut(bool, &mut T)>(&mut self, f: &mut F) {
-        f(false, &mut self.label)
-    }
-}
-
-impl<T: Copy> ast::PredAt<T> {
-    fn for_dst_id<F: FnMut(T)>(&self, _: &mut F) {}
 }
 
 impl<T> ast::Instruction<T> {
@@ -1015,23 +992,6 @@ impl<T: Copy> ast::Instruction<T> {
             | ast::Instruction::Bra(_, _) => false,
         }
     }
-
-    fn for_dst_id<F: FnMut(T)>(&self, f: &mut F) {
-        match self {
-            ast::Instruction::Ld(_, a) => a.for_dst_id(f),
-            ast::Instruction::Mov(_, a) => a.for_dst_id(f),
-            ast::Instruction::Mul(_, a) => a.for_dst_id(f),
-            ast::Instruction::Add(_, a) => a.for_dst_id(f),
-            ast::Instruction::Setp(_, a) => a.for_dst_id(f),
-            ast::Instruction::SetpBool(_, a) => a.for_dst_id(f),
-            ast::Instruction::Not(_, a) => a.for_dst_id(f),
-            ast::Instruction::Cvt(_, a) => a.for_dst_id(f),
-            ast::Instruction::Shl(_, a) => a.for_dst_id(f),
-            ast::Instruction::St(_, _) => (),
-            ast::Instruction::Bra(_, _) => (),
-            ast::Instruction::Ret(_) => (),
-        }
-    }
 }
 
 impl<T> ast::Arg1<T> {
@@ -1067,12 +1027,6 @@ impl<T> ast::Arg2<T> {
     }
 }
 
-impl<T: Copy> ast::Arg2<T> {
-    fn for_dst_id<F: FnMut(T)>(&self, f: &mut F) {
-        f(self.dst);
-    }
-}
-
 impl<T> ast::Arg2Mov<T> {
     fn map_id<U, F: FnMut(T) -> U>(self, f: &mut F) -> ast::Arg2Mov<U> {
         ast::Arg2Mov {
@@ -1089,12 +1043,6 @@ impl<T> ast::Arg2Mov<T> {
     fn visit_id_mut<F: FnMut(bool, &mut T)>(&mut self, f: &mut F) {
         self.src.visit_id_mut(f);
         f(true, &mut self.dst);
-    }
-}
-
-impl<T: Copy> ast::Arg2Mov<T> {
-    fn for_dst_id<F: FnMut(T)>(&self, f: &mut F) {
-        f(self.dst);
     }
 }
 
@@ -1117,12 +1065,6 @@ impl<T> ast::Arg3<T> {
         self.src1.visit_id_mut(f);
         self.src2.visit_id_mut(f);
         f(true, &mut self.dst);
-    }
-}
-
-impl<T: Copy> ast::Arg3<T> {
-    fn for_dst_id<F: FnMut(T)>(&self, f: &mut F) {
-        f(self.dst);
     }
 }
 
@@ -1151,13 +1093,6 @@ impl<T> ast::Arg4<T> {
     }
 }
 
-impl<T: Copy> ast::Arg4<T> {
-    fn for_dst_id<F: FnMut(T)>(&self, f: &mut F) {
-        f(self.dst1);
-        self.dst2.map(|t| f(t));
-    }
-}
-
 impl<T> ast::Arg5<T> {
     fn map_id<U, F: FnMut(T) -> U>(self, f: &mut F) -> ast::Arg5<U> {
         ast::Arg5 {
@@ -1183,13 +1118,6 @@ impl<T> ast::Arg5<T> {
         self.src3.visit_id_mut(f);
         f(true, &mut self.dst1);
         self.dst2.as_mut().map(|i| f(true, i));
-    }
-}
-
-impl<T: Copy> ast::Arg5<T> {
-    fn for_dst_id<F: FnMut(T)>(&self, f: &mut F) {
-        f(self.dst1);
-        self.dst2.map(|t| f(t));
     }
 }
 
@@ -1879,8 +1807,10 @@ mod tests {
     fn assert_dst_unique(func: &[Statement], phis: &[Vec<PhiDef>]) {
         let mut seen = HashSet::new();
         for s in func {
-            s.for_dst_id(&mut |id| {
-                assert!(seen.insert(id));
+            s.visit_id(&mut |is_dst, id| {
+                if is_dst {
+                    assert!(seen.insert(*id));
+                }
             });
         }
         for phi_set in phis {

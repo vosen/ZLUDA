@@ -2,6 +2,7 @@
 
 members = [
     "level_zero-sys",
+    "level_zero",
     "notcuda",
     "notcuda_inject",
     "notcuda_redirect",
