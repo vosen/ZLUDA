@@ -238,7 +238,9 @@ pub struct MovData {}
 
 pub struct MulData {}
 
-pub struct AddData {}
+pub struct AddData {
+    pub typ: ScalarType,
+}
 
 pub struct SetpData {}
 

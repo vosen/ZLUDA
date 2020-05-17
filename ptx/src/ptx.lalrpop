@@ -161,6 +161,7 @@ Variable: ast::Variable<&'input str> = {
 
 VariableName: (&'input str, Option<u32>) = {
     <id:ID> => (id, None),
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parameterized-variable-names
     <id:ParametrizedID> => {
         let left_angle = id.as_bytes().iter().copied().position(|x| x == b'<').unwrap();
         let count = id[left_angle+1..id.len()-1].parse::<u32>();
@@ -270,9 +271,13 @@ RoundingMode = {
     ".rn", ".rz", ".rm", ".rp"
 };
 
-IntType = {
-    ".u16", ".u32", ".u64",
-    ".s16", ".s32", ".s64",
+IntType : ast::ScalarType = {
+    ".u16" => ast::ScalarType::U16,
+    ".u32" => ast::ScalarType::U32,
+    ".u64" => ast::ScalarType::U64,
+    ".s16" => ast::ScalarType::S16,
+    ".s32" => ast::ScalarType::S32,
+    ".s64" => ast::ScalarType::S64,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-add
@@ -283,12 +288,12 @@ InstAdd: ast::Instruction<&'input str> = {
 };
 
 InstAddMode: ast::AddData = {
-    IntType => ast::AddData{},
-    ".sat" ".s32" => ast::AddData{},
-    RoundingMode? ".ftz"? ".sat"? ".f32" => ast::AddData{},
-    RoundingMode? ".f64" => ast::AddData{},
-    ".rn"? ".ftz"? ".sat"? ".f16" => ast::AddData{},
-    ".rn"? ".ftz"? ".sat"? ".f16x2" => ast::AddData{}
+    <t:IntType> => ast::AddData{ typ: t },
+    ".sat" ".s32" => ast::AddData{ typ: ast::ScalarType::S32 },
+    RoundingMode? ".ftz"? ".sat"? ".f32" => ast::AddData{ typ: ast::ScalarType::F32 },
+    RoundingMode? ".f64" => ast::AddData{ typ: ast::ScalarType::F64 },
+    ".rn"? ".ftz"? ".sat"? ".f16" => ast::AddData{ typ: ast::ScalarType::F16 },
+    ".rn"? ".ftz"? ".sat"? ".f16x2" => todo!()
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions-setp
