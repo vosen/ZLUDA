@@ -200,7 +200,7 @@ pub struct LdData {
     pub typ: ScalarType,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum LdStQualifier {
     Weak,
     Volatile,
@@ -208,14 +208,14 @@ pub enum LdStQualifier {
     Acquire(LdScope),
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum LdScope {
     Cta,
     Gpu,
     Sys,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum LdStateSpace {
     Generic,
     Const,
@@ -225,7 +225,7 @@ pub enum LdStateSpace {
     Shared,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum LdCacheOperator {
     Cached,
     L2Only,
