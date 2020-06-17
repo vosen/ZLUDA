@@ -137,7 +137,7 @@ pub enum Instruction<ID> {
     Bra(BraData, Arg1<ID>),
     Cvt(CvtData, Arg2<ID>),
     Shl(ShlData, Arg3<ID>),
-    St(StData, Arg2<ID>),
+    St(StData, Arg2St<ID>),
     Ret(RetData),
 }
 
@@ -148,6 +148,11 @@ pub struct Arg1<ID> {
 pub struct Arg2<ID> {
     pub dst: ID,
     pub src: Operand<ID>,
+}
+
+pub struct Arg2St<ID> {
+    pub src1: Operand<ID>,
+    pub src2: Operand<ID>,
 }
 
 pub struct Arg2Mov<ID> {
@@ -264,7 +269,7 @@ pub struct StData {
     pub typ: ScalarType,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Copy, Clone)]
 pub enum StStateSpace {
     Generic,
     Global,

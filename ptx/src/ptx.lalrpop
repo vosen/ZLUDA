@@ -386,7 +386,7 @@ ShlType = {
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-st
 // Warning: NVIDIA documentation is incorrect, you can specify scope only once
 InstSt: ast::Instruction<&'input str> = {
-    "st" <q:LdStQualifier?> <ss:StStateSpace?> <cop:StCacheOperator?> <v:VectorPrefix?> <t:MemoryType> "[" <dst:ID> "]" "," <src:Operand> => {
+    "st" <q:LdStQualifier?> <ss:StStateSpace?> <cop:StCacheOperator?> <v:VectorPrefix?> <t:MemoryType> "[" <src1:Operand> "]" "," <src2:Operand> => {
         ast::Instruction::St(
             ast::StData {
                 qualifier: q.unwrap_or(ast::LdStQualifier::Weak),
@@ -395,7 +395,7 @@ InstSt: ast::Instruction<&'input str> = {
                 vector: v,
                 typ: t
             },
-            ast::Arg2{dst:dst, src:src}
+            ast::Arg2St { src1:src1, src2:src2 }
         )
     }
 };

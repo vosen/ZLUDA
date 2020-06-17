@@ -12,8 +12,7 @@ extern crate rspirv;
 extern crate spirv_headers as spirv;
 
 lalrpop_mod!(
-    #[allow(dead_code)]
-    #[allow(unused_imports)]
+    #[allow(warnings)]
     ptx
 );
 

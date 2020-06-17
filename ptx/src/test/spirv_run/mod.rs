@@ -57,7 +57,7 @@ fn test_ptx_assert<'a, T: From<u8> + ze::SafeRepr + Debug + Copy + PartialEq>(
     Ok(())
 }
 
-fn run_spirv<T: From<u8> + ze::SafeRepr + Copy>(
+fn run_spirv<T: From<u8> + ze::SafeRepr + Copy + Debug>(
     name: &CStr,
     spirv: &[u32],
     input: &[T],
@@ -84,15 +84,16 @@ fn run_spirv<T: From<u8> + ze::SafeRepr + Copy>(
     let event_pool = ze::EventPool::new(&drv, 3, Some(&[&dev]))?;
     let ev0 = ze::Event::new(&event_pool, 0)?;
     let ev1 = ze::Event::new(&event_pool, 1)?;
+    let ev2 = ze::Event::new(&event_pool, 2)?;
     let mut cmd_list = ze::CommandList::new(&dev)?;
-    let out_b_ptr: ze::BufferPtrMut<T> = (&mut out_b).into();
+    let out_b_ptr_mut: ze::BufferPtrMut<T> = (&mut out_b).into();
     cmd_list.append_memory_copy(inp_b_ptr_mut, input, None, Some(&ev0))?;
-    cmd_list.append_memory_fill(out_b_ptr, 0u8.into(), Some(&ev1))?;
+    cmd_list.append_memory_fill(out_b_ptr_mut, 0u8.into(), Some(&ev1))?;
     kernel.set_group_size(1, 1, 1)?;
     kernel.set_arg_buffer(0, inp_b_ptr_mut)?;
-    kernel.set_arg_buffer(1, out_b_ptr)?;
-    cmd_list.append_launch_kernel(&kernel, &[1, 1, 1], None, &[&ev0, &ev1])?;
-    cmd_list.append_memory_copy(result.as_mut_slice(), inp_b_ptr_mut, None, Some(&ev0))?;
+    kernel.set_arg_buffer(1, out_b_ptr_mut)?;
+    cmd_list.append_launch_kernel(&kernel, &[1, 1, 1], Some(&ev2), &[&ev0, &ev1])?;
+    cmd_list.append_memory_copy(result.as_mut_slice(), out_b_ptr_mut, None, Some(&ev2))?;
     queue.execute(cmd_list)?;
     Ok(result)
 }
