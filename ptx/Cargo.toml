@@ -13,6 +13,7 @@ rspirv = "0.6"
 spirv_headers = "1.4"
 quick-error = "1.2"
 bit-vec = "0.6"
+paste = "0.1"
 
 [build-dependencies.lalrpop]
 version = "0.18.1"
@@ -21,3 +22,4 @@ features = ["lexer"]
 [dev-dependencies]
 level_zero-sys = { path = "../level_zero-sys" }
 level_zero = { path = "../level_zero" }
+spirv_tools-sys = { path = "../spirv_tools-sys" }

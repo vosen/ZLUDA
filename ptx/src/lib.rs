@@ -1,3 +1,5 @@
+#[cfg_attr(macro_use, test)]
+extern crate paste;
 #[macro_use]
 extern crate lalrpop_util;
 #[macro_use]
@@ -10,6 +12,9 @@ extern crate level_zero as ze;
 extern crate level_zero_sys as l0;
 extern crate rspirv;
 extern crate spirv_headers as spirv;
+
+#[cfg(test)]
+extern crate spirv_tools_sys as spirv_tools;
 
 lalrpop_mod!(
     #[allow(warnings)]

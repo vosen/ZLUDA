@@ -1,0 +1,7 @@
+[submodule "ext/spirv-tools"]
+	path = ext/spirv-tools
+	url = https://github.com/KhronosGroup/SPIRV-Tools
+	branch = master
+[submodule "ext/spirv-headers"]
+	path = ext/spirv-headers
+	url = https://github.com/KhronosGroup/SPIRV-Headers

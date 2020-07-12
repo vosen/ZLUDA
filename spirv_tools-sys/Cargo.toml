@@ -1,0 +1,10 @@
+[package]
+name = "spirv_tools-sys"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2018"
+
+[lib]
+
+[build-dependencies]
+cmake = "0.1"

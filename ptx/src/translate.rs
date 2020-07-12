@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::{borrow::Cow, fmt, mem};
 
-use rspirv::binary::{Assemble, Disassemble};
+use rspirv::binary::Assemble;
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
 enum SpirvType {
@@ -73,7 +73,7 @@ impl TypeWordMap {
     }
 }
 
-pub fn to_spirv(ast: ast::Module) -> Result<Vec<u32>, dr::Error> {
+pub fn to_spirv_module(ast: ast::Module) -> Result<dr::Module, dr::Error> {
     let mut builder = dr::Builder::new();
     // https://www.khronos.org/registry/spir-v/specs/unified1/SPIRV.html#_a_id_logicallayout_a_logical_layout_of_a_module
     builder.set_version(1, 0);
@@ -85,8 +85,11 @@ pub fn to_spirv(ast: ast::Module) -> Result<Vec<u32>, dr::Error> {
     for f in ast.functions {
         emit_function(&mut builder, &mut map, f)?;
     }
-    let module = builder.module();
-    println!("{}", module.disassemble());
+    Ok(builder.module())
+}
+
+pub fn to_spirv(ast: ast::Module) -> Result<Vec<u32>, dr::Error> {
+    let module = to_spirv_module(ast)?;
     Ok(module.assemble())
 }
 
