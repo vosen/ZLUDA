@@ -10,7 +10,17 @@ use rspirv::binary::Assemble;
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
 enum SpirvType {
     Base(ast::ScalarType),
+    Extended(ast::ExtendedScalarType),
     Pointer(ast::ScalarType, spirv::StorageClass),
+}
+
+impl From<ast::Type> for SpirvType {
+    fn from(t: ast::Type) -> Self {
+        match t {
+            ast::Type::Scalar(t) => SpirvType::Base(t),
+            ast::Type::ExtendedScalar(t) => SpirvType::Extended(t)
+        }
+    }
 }
 
 struct TypeWordMap {
@@ -50,9 +60,20 @@ impl TypeWordMap {
             })
     }
 
+    fn get_or_add_extended(&mut self, b: &mut dr::Builder, t: ast::ExtendedScalarType) -> spirv::Word {
+        *self
+            .complex
+            .entry(SpirvType::Extended(t))
+            .or_insert_with(|| match t {
+                ast::ExtendedScalarType::Pred => b.type_bool(),
+                ast::ExtendedScalarType::F16x2 => todo!(),
+            })
+    }
+
     fn get_or_add(&mut self, b: &mut dr::Builder, t: SpirvType) -> spirv::Word {
         match t {
             SpirvType::Base(scalar) => self.get_or_add_scalar(b, scalar),
+            SpirvType::Extended(t) => self.get_or_add_extended(b, t),
             SpirvType::Pointer(scalar, storage) => {
                 let base = self.get_or_add_scalar(b, scalar);
                 *self
@@ -416,6 +437,14 @@ fn emit_function_body_ops(
                     }
                     // SPIR-V does not support ret as guaranteed-converged
                     ast::Instruction::Ret(_) => builder.ret()?,
+                    ast::Instruction::Mov(mov, arg) => {
+                        let result_type = map.get_or_add(builder, SpirvType::from(mov.typ));
+                        let src = match arg.src {
+                            ast::MovOperand::Op(ast::Operand::Reg(id)) => id,
+                            _ => todo!(),
+                        };
+                        builder.copy_object(result_type, Some(arg.dst), src)?;
+                    }
                     _ => todo!(),
                 },
             }
@@ -1190,7 +1219,8 @@ impl<T> ast::Instruction<T> {
             ast::Instruction::Ret(_) => None,
             ast::Instruction::Ld(ld, _) => Some(ast::Type::Scalar(ld.typ)),
             ast::Instruction::St(st, _) => Some(ast::Type::Scalar(st.typ)),
-            _ => todo!(),
+            ast::Instruction::Mov(mov, _) => Some(mov.typ),
+            _ => todo!()
         }
     }
 }

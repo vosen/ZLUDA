@@ -48,4 +48,9 @@ Which is sensible, but completely untrue. In reality ptxas compiles silly code l
     ```
 * Surprise, surprise, there's two kind of implicit conversions at play in the example above:
     * "Relaxed type-checking rules": this is the conversion of b16 operation type to s32 dst register
-    * Undocumented type coercion when dereferencing param_1. The PTX behaviour is to coerce **every** type. It's something like `[param_1] = *(b16*)param_1`
+    * Undocumented type coercion when dereferencing param_1. The PTX behaviour is to coerce **every** type. It's something to the effect of `[param_1] = *(b16*)param_1`
+
+PTX grammar
+-----------
+* PTX grammar rules are atrocious, keywords can be freely reused as ids without escaping
+* Modifiers can be applied to instructions in any arbitrary order. We don't support it and hope we will never have to

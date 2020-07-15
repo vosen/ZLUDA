@@ -1,6 +1,6 @@
 use crate::ptx;
 use crate::translate;
-use rspirv::dr::{Block, Function, Instruction, Loader, Operand};
+use rspirv::{binary::Disassemble, dr::{Block, Function, Instruction, Loader, Operand}};
 use spirv_headers::Word;
 use spirv_tools_sys::{
     spv_binary, spv_endianness_t, spv_parsed_instruction_t, spv_result_t, spv_target_env,
@@ -37,6 +37,7 @@ macro_rules! test_ptx {
 }
 
 test_ptx!(ld_st, [1u64], [1u64]);
+test_ptx!(mov, [1u64], [1u64]);
 
 struct DisplayError<T: Display + Debug> {
     err: T,
@@ -148,73 +149,110 @@ fn test_spvtxt_assert<'a>(
             ptr::null_mut(),
         )
     };
+    assert!(result == spv_result_t::SPV_SUCCESS);
     let mut loader = Loader::new();
     rspirv::binary::parse_words(&parsed_spirv, &mut loader)?;
     let spvtxt_mod = loader.module();
-    assert_spirv_fn_equal(&ptx_mod.functions[0], &spvtxt_mod.functions[0]);
-    assert!(result == spv_result_t::SPV_SUCCESS);
+    if !is_spirv_fn_equal(&ptx_mod.functions[0], &spvtxt_mod.functions[0]) {
+        panic!(ptx_mod.disassemble())
+    }
     Ok(())
 }
 
-fn assert_spirv_fn_equal(fn1: &Function, fn2: &Function) {
+fn is_spirv_fn_equal(fn1: &Function, fn2: &Function) -> bool {
     let mut map = HashMap::new();
-    assert_option_equal(&fn1.def, &fn2.def, &mut map, assert_instr_equal);
-    assert_option_equal(&fn1.end, &fn2.end, &mut map, assert_instr_equal);
+    if !is_option_equal(&fn1.def, &fn2.def, &mut map, is_instr_equal) {
+        return false;
+    }
+    if !is_option_equal(&fn1.end, &fn2.end, &mut map, is_instr_equal) {
+        return false;
+    }
     for (inst1, inst2) in fn1.parameters.iter().zip(fn2.parameters.iter()) {
-        assert_instr_equal(inst1, inst2, &mut map);
+        if !is_instr_equal(inst1, inst2, &mut map) {
+            return false;
+        }
     }
     for (b1, b2) in fn1.blocks.iter().zip(fn2.blocks.iter()) {
-        assert_block_equal(b1, b2, &mut map);
+        if !is_block_equal(b1, b2, &mut map) {
+            return false;
+        }
     }
+    true
 }
 
-fn assert_block_equal(b1: &Block, b2: &Block, map: &mut HashMap<Word, Word>) {
-    assert_option_equal(&b1.label, &b2.label, map, assert_instr_equal);
+fn is_block_equal(b1: &Block, b2: &Block, map: &mut HashMap<Word, Word>) -> bool {
+    if !is_option_equal(&b1.label, &b2.label, map, is_instr_equal) {
+        return false;
+    }
     for (inst1, inst2) in b1.instructions.iter().zip(b2.instructions.iter()) {
-        assert_instr_equal(inst1, inst2, map);
+        if !is_instr_equal(inst1, inst2, map) {
+            return false;
+        }
     }
+    true
 }
 
-fn assert_instr_equal(instr1: &Instruction, instr2: &Instruction, map: &mut HashMap<Word, Word>) {
-    assert_option_equal(
-        &instr1.result_type,
-        &instr2.result_type,
-        map,
-        assert_word_equal,
-    );
-    assert_option_equal(&instr1.result_id, &instr2.result_id, map, assert_word_equal);
+fn is_instr_equal(
+    instr1: &Instruction,
+    instr2: &Instruction,
+    map: &mut HashMap<Word, Word>,
+) -> bool {
+    if !is_option_equal(&instr1.result_type, &instr2.result_type, map, is_word_equal) {
+        return false;
+    }
+    if !is_option_equal(&instr1.result_id, &instr2.result_id, map, is_word_equal) {
+        return false;
+    }
     for (o1, o2) in instr1.operands.iter().zip(instr2.operands.iter()) {
         match (o1, o2) {
             (Operand::IdMemorySemantics(w1), Operand::IdMemorySemantics(w2)) => {
-                assert_word_equal(w1, w2, map)
+                if !is_word_equal(w1, w2, map) {
+                    return false;
+                }
             }
-            (Operand::IdScope(w1), Operand::IdScope(w2)) => assert_word_equal(w1, w2, map),
-            (Operand::IdRef(w1), Operand::IdRef(w2)) => assert_word_equal(w1, w2, map),
-            (o1, o2) => assert_eq!(o1, o2),
+            (Operand::IdScope(w1), Operand::IdScope(w2)) => {
+                if !is_word_equal(w1, w2, map) {
+                    return false;
+                }
+            }
+            (Operand::IdRef(w1), Operand::IdRef(w2)) => {
+                if !is_word_equal(w1, w2, map) {
+                    return false;
+                }
+            }
+            (o1, o2) => {
+                if o1 != o2 {
+                    return false;
+                }
+            }
         }
     }
+    true
 }
 
-fn assert_word_equal(w1: &Word, w2: &Word, map: &mut HashMap<Word, Word>) {
+fn is_word_equal(w1: &Word, w2: &Word, map: &mut HashMap<Word, Word>) -> bool {
     match map.entry(*w1) {
         std::collections::hash_map::Entry::Occupied(entry) => {
-            assert_eq!(entry.get(), w2);
+            if entry.get() != w2 {
+                return false;
+            }
         }
         std::collections::hash_map::Entry::Vacant(entry) => {
             entry.insert(*w2);
         }
     }
+    true
 }
 
-fn assert_option_equal<T, F: FnOnce(&T, &T, &mut HashMap<Word, Word>)>(
+fn is_option_equal<T, F: FnOnce(&T, &T, &mut HashMap<Word, Word>) -> bool>(
     o1: &Option<T>,
     o2: &Option<T>,
     map: &mut HashMap<Word, Word>,
     f: F,
-) {
+) -> bool {
     match (o1, o2) {
         (Some(t1), Some(t2)) => f(t1, t2, map),
-        (None, None) => (),
+        (None, None) => true,
         _ => panic!(),
     }
 }

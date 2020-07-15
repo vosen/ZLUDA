@@ -239,7 +239,9 @@ pub enum LdCacheOperator {
     Uncached,
 }
 
-pub struct MovData {}
+pub struct MovData {
+    pub typ: Type,
+}
 
 pub struct MulData {}
 

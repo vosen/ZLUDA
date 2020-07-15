@@ -8,12 +8,149 @@ match {
     r"\s+" => { },
     r"//[^\n\r]*[\n\r]*" => { },
     r"/\*([^\*]*\*+[^\*/])*([^\*]*\*+|[^\*])*\*/" => { },
+    r"-?[?:0x]?[0-9]+" => Num,
+    r#""[^"]*""# => String,
+    r"[0-9]+\.[0-9]+" => VersionNumber,
+    "!",
+    "(", ")",
+    "+",
+    ",",
+    ".",
+    ":",
+    ";",
+    "@",
+    "[", "]",
+    "{", "}",
+    "|",
+    ".acquire",
+    ".address_size",
+    ".and",
+    ".b16",
+    ".b32",
+    ".b64",
+    ".b8",
+    ".ca",
+    ".cg",
+    ".const",
+    ".cs",
+    ".cta",
+    ".cv",
+    ".entry",
+    ".eq",
+    ".equ",
+    ".extern",
+    ".f16",
+    ".f16x2",
+    ".f32",
+    ".f64",
+    ".file",
+    ".ftz",
+    ".func",
+    ".ge",
+    ".geu",
+    ".global",
+    ".gpu",
+    ".gt",
+    ".gtu",
+    ".hi",
+    ".hs",
+    ".le",
+    ".leu",
+    ".lo",
+    ".loc",
+    ".local",
+    ".ls",
+    ".lt",
+    ".ltu",
+    ".lu",
+    ".nan",
+    ".ne",
+    ".neu",
+    ".num",
+    ".or",
+    ".param",
+    ".pred",
+    ".reg",
+    ".relaxed",
+    ".rm",
+    ".rmi",
+    ".rn",
+    ".rni",
+    ".rp",
+    ".rpi",
+    ".rz",
+    ".rzi",
+    ".s16",
+    ".s32",
+    ".s64",
+    ".s8" ,
+    ".sat",
+    ".section",
+    ".shared",
+    ".sreg",
+    ".sys",
+    ".target",
+    ".u16",
+    ".u32",
+    ".u64",
+    ".u8" ,
+    ".uni",
+    ".v2",
+    ".v4",
+    ".version",
+    ".visible",
+    ".volatile",
+    ".wb",
+    ".weak",
+    ".wide",
+    ".wt",
+    ".xor",
+} else {
+    // IF YOU ARE ADDING A NEW TOKEN HERE ALSO ADD IT BELOW TO ExtendedID
+    "add",
+    "bra",
+    "cvt",
+    "debug",
+    "ld",
+    "map_f64_to_f32",
+    "mov",
+    "mul",
+    "not",
+    "ret",
+    "setp",
+    "shl",
+    "shr",
     r"sm_[0-9]+" => ShaderModel,
-    r"-?[?:0x]?[0-9]+" => Num
+    "st",
+    "texmode_independent",
+    "texmode_unified",
+} else {
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#identifiers
+    r"[a-zA-Z][a-zA-Z0-9_$]*|[_$%][a-zA-Z0-9_$]+" => ID,
+    r"\.[a-zA-Z][a-zA-Z0-9_$]*" => DotID,
 } else {
     r"(?:[a-zA-Z][a-zA-Z0-9_$]*|[_$%][a-zA-Z0-9_$]+)<[0-9]+>" => ParametrizedID,
-} else {
-    _
+}
+
+ExtendedID : &'input str = {
+    "add",
+    "bra",
+    "cvt",
+    "debug",
+    "ld",
+    "map_f64_to_f32",
+    "mov",
+    "mul",
+    "not",
+    "ret",
+    "setp",
+    "shl",
+    "shr",
+    ShaderModel,
+    "st",
+    "texmode_independent",
+    "texmode_unified",
+    ID
 }
 
 pub Module: ast::Module<'input> = {
@@ -58,7 +195,7 @@ AddressSize = {
 Function: ast::Function<'input>  = {
     LinkingDirective*
     <kernel:IsKernel>
-    <name:ID>
+    <name:ExtendedID>
     "(" <args:Comma<FunctionInput>> ")"
     <body:FunctionBody> => ast::Function{<>}
 };
@@ -76,10 +213,10 @@ IsKernel: bool = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parameter-state-space
 FunctionInput: ast::Argument<'input> = {
-    ".param" <_type:ScalarType> <name:ID> => { 
+    ".param" <_type:ScalarType> <name:ExtendedID> => { 
         ast::Argument {a_type: _type, name: name, length: 1 }
     },
-    ".param" <a_type:ScalarType> <name:ID> "[" <length:Num> "]" => {
+    ".param" <a_type:ScalarType> <name:ExtendedID> "[" <length:Num> "]" => {
         let length = length.parse::<u32>();
         let length = length.unwrap_with(errors);
         ast::Argument { a_type: a_type, name: name, length: length }
@@ -149,7 +286,7 @@ DebugLocation = {
 };
 
 Label: &'input str = {
-    <id:ID> ":" => id
+    <id:ExtendedID> ":" => id
 };
 
 Variable: ast::Variable<&'input str> = {
@@ -160,7 +297,7 @@ Variable: ast::Variable<&'input str> = {
 };
 
 VariableName: (&'input str, Option<u32>) = {
-    <id:ID> => (id, None),
+    <id:ExtendedID> => (id, None),
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parameterized-variable-names
     <id:ParametrizedID> => {
         let left_angle = id.as_bytes().iter().copied().position(|x| x == b'<').unwrap();
@@ -189,7 +326,7 @@ Instruction: ast::Instruction<&'input str> = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
 InstLd: ast::Instruction<&'input str> = {
-    "ld" <q:LdStQualifier?> <ss:LdStateSpace?> <cop:LdCacheOperator?> <v:VectorPrefix?> <t:MemoryType> <dst:ID> "," "[" <src:Operand> "]" => {
+    "ld" <q:LdStQualifier?> <ss:LdStateSpace?> <cop:LdCacheOperator?> <v:VectorPrefix?> <t:MemoryType> <dst:ExtendedID> "," "[" <src:Operand> "]" => {
         ast::Instruction::Ld(
             ast::LdData {
                 qualifier: q.unwrap_or(ast::LdStQualifier::Weak),
@@ -234,17 +371,24 @@ LdCacheOperator: ast::LdCacheOperator = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
 InstMov: ast::Instruction<&'input str> = {
-    "mov" MovType <a:Arg2Mov> => {
-        ast::Instruction::Mov(ast::MovData{}, a)
+    "mov" <t:MovType> <a:Arg2Mov> => {
+        ast::Instruction::Mov(ast::MovData{ typ:t }, a)
     }
 };
 
-MovType = {
-    ".b16", ".b32", ".b64",
-    ".u16", ".u32", ".u64",
-    ".s16", ".s32", ".s64",
-    ".f32", ".f64",
-    ".pred"
+MovType: ast::Type = {
+    ".b16" => ast::Type::Scalar(ast::ScalarType::B16),
+    ".b32" => ast::Type::Scalar(ast::ScalarType::B32),
+    ".b64" => ast::Type::Scalar(ast::ScalarType::B64),
+    ".u16" => ast::Type::Scalar(ast::ScalarType::U16),
+    ".u32" => ast::Type::Scalar(ast::ScalarType::U32),
+    ".u64" => ast::Type::Scalar(ast::ScalarType::U64),
+    ".s16" => ast::Type::Scalar(ast::ScalarType::S16),
+    ".s32" => ast::Type::Scalar(ast::ScalarType::S32),
+    ".s64" => ast::Type::Scalar(ast::ScalarType::S64),
+    ".f32" => ast::Type::Scalar(ast::ScalarType::F32),
+    ".f64" => ast::Type::Scalar(ast::ScalarType::F64),
+    ".pred" => ast::Type::ExtendedScalar(ast::ExtendedScalarType::Pred)
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-mul
@@ -263,7 +407,7 @@ InstMulMode: ast::MulData = {
 };
 
 MulIntControl = {
-    "hi", ".lo", ".wide"
+    ".hi", ".lo", ".wide"
 };
 
 #[inline]
@@ -339,8 +483,8 @@ NotType = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-at
 PredAt: ast::PredAt<&'input str> = {
-    "@" <label:ID> => ast::PredAt { not: false, label:label },
-    "@" "!" <label:ID> => ast::PredAt { not: true, label:label }
+    "@" <label:ExtendedID> => ast::PredAt { not: false, label:label },
+    "@" "!" <label:ExtendedID> => ast::PredAt { not: true, label:label }
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-bra
@@ -420,8 +564,8 @@ InstRet: ast::Instruction<&'input str> = {
 };
 
 Operand: ast::Operand<&'input str> = {
-    <r:ID> => ast::Operand::Reg(r),
-    <r:ID> "+" <o:Num> => {
+    <r:ExtendedID> => ast::Operand::Reg(r),
+    <r:ExtendedID> "+" <o:Num> => {
         let offset = o.parse::<i32>();
         let offset = offset.unwrap_with(errors);
         ast::Operand::RegOffset(r, offset)
@@ -444,37 +588,37 @@ MovOperand: ast::MovOperand<&'input str> = {
 };
 
 VectorOperand: (&'input str, &'input str) = {
-    <pref:ID> "." <suf:ID> => (pref, suf),
-    <pref:ID> <suf:DotID> => (pref, &suf[1..]),
+    <pref:ExtendedID> "." <suf:ExtendedID> => (pref, suf),
+    <pref:ExtendedID> <suf:DotID> => (pref, &suf[1..]),
 };
 
 Arg1: ast::Arg1<&'input str> = {
-    <src:ID> => ast::Arg1{<>}
+    <src:ExtendedID> => ast::Arg1{<>}
 };
 
 Arg2: ast::Arg2<&'input str> = {
-    <dst:ID> "," <src:Operand> => ast::Arg2{<>}
+    <dst:ExtendedID> "," <src:Operand> => ast::Arg2{<>}
 };
 
 Arg2Mov: ast::Arg2Mov<&'input str> = {
-    <dst:ID> "," <src:MovOperand> => ast::Arg2Mov{<>}
+    <dst:ExtendedID> "," <src:MovOperand> => ast::Arg2Mov{<>}
 };
 
 Arg3: ast::Arg3<&'input str> = {
-    <dst:ID> "," <src1:Operand> "," <src2:Operand> => ast::Arg3{<>}
+    <dst:ExtendedID> "," <src1:Operand> "," <src2:Operand> => ast::Arg3{<>}
 };
 
 Arg4: ast::Arg4<&'input str> = {
-    <dst1:ID> <dst2:OptionalDst?> "," <src1:Operand> "," <src2:Operand> => ast::Arg4{<>}
+    <dst1:ExtendedID> <dst2:OptionalDst?> "," <src1:Operand> "," <src2:Operand> => ast::Arg4{<>}
 };
 
 // TODO: pass src3 negation somewhere
 Arg5: ast::Arg5<&'input str> = {
-    <dst1:ID> <dst2:OptionalDst?> "," <src1:Operand> "," <src2:Operand> "," "!"? <src3:Operand> => ast::Arg5{<>}
+    <dst1:ExtendedID> <dst2:OptionalDst?> "," <src1:Operand> "," <src2:Operand> "," "!"? <src3:Operand> => ast::Arg5{<>}
 };
 
 OptionalDst: &'input str = {
-    "|" <dst2:ID> => dst2
+    "|" <dst2:ExtendedID> => dst2
 }
 
 VectorPrefix: ast::VectorPrefix = {
@@ -519,9 +663,3 @@ Comma<T>: Vec<T> = {
         }
     }
 };
-
-String = r#""[^"]*""#;
-VersionNumber = r"[0-9]+\.[0-9]+";
-// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#identifiers
-ID: &'input str = <s:r"[a-zA-Z][a-zA-Z0-9_$]*|[_$%][a-zA-Z0-9_$]+"> => s;
-DotID: &'input str = <s:r"\.[a-zA-Z][a-zA-Z0-9_$]*"> => s;

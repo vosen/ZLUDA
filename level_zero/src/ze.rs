@@ -17,6 +17,15 @@ macro_rules! check {
     };
 }
 
+macro_rules! check_panic {
+    ($expr:expr) => {
+        let err = unsafe { $expr };
+        if err != crate::sys::ze_result_t::ZE_RESULT_SUCCESS {
+            panic!(err);
+        }
+    };
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Error {
     NotReady = 1,
@@ -295,7 +304,7 @@ impl CommandQueue {
 impl Drop for CommandQueue {
     #[allow(unused_must_use)]
     fn drop(&mut self) {
-        unsafe { sys::zeCommandQueueDestroy(self.0) };
+        check_panic! { sys::zeCommandQueueDestroy(self.0) };
     }
 }
 
@@ -344,7 +353,7 @@ impl Module {
 impl Drop for Module {
     #[allow(unused_must_use)]
     fn drop(&mut self) {
-        unsafe { sys::zeModuleDestroy(self.0) };
+        check_panic! { sys::zeModuleDestroy(self.0) };
     }
 }
 
@@ -408,7 +417,7 @@ impl<T: SafeRepr> DeviceBuffer<T> {
 impl<T: SafeRepr> Drop for DeviceBuffer<T> {
     #[allow(unused_must_use)]
     fn drop(&mut self) {
-        unsafe { sys::zeDriverFreeMem(self.driver, self.ptr) };
+        check_panic! { sys::zeDriverFreeMem(self.driver, self.ptr) };
     }
 }
 
@@ -506,7 +515,7 @@ impl<'a> CommandList<'a> {
 impl<'a> Drop for CommandList<'a> {
     #[allow(unused_must_use)]
     fn drop(&mut self) {
-        unsafe { sys::zeCommandListDestroy(self.0) };
+        check_panic! { sys::zeCommandListDestroy(self.0) };
     }
 }
 
@@ -531,9 +540,9 @@ impl<'a> FenceGuard<'a> {
 impl<'a> Drop for FenceGuard<'a> {
     #[allow(unused_must_use)]
     fn drop(&mut self) {
-        unsafe { sys::zeFenceHostSynchronize(self.0, u32::max_value()) };
-        unsafe { sys::zeFenceDestroy(self.0) };
-        unsafe { sys::zeCommandListDestroy(self.1) };
+        check_panic! { sys::zeFenceHostSynchronize(self.0, u32::max_value()) };
+        check_panic! { sys::zeFenceDestroy(self.0) };
+        check_panic! { sys::zeCommandListDestroy(self.1) };
     }
 }
 
@@ -653,7 +662,7 @@ impl<'a> EventPool<'a> {
 impl<'a> Drop for EventPool<'a> {
     #[allow(unused_must_use)]
     fn drop(&mut self) {
-        unsafe { sys::zeEventPoolDestroy(self.0) };
+        check_panic! { sys::zeEventPoolDestroy(self.0) };
     }
 }
 
@@ -684,7 +693,7 @@ impl<'a> Event<'a> {
 impl<'a> Drop for Event<'a> {
     #[allow(unused_must_use)]
     fn drop(&mut self) {
-        unsafe { sys::zeEventDestroy(self.0) };
+        check_panic! { sys::zeEventDestroy(self.0) };
     }
 }
 
@@ -744,6 +753,6 @@ impl<'a> Kernel<'a> {
 impl<'a> Drop for Kernel<'a> {
     #[allow(unused_must_use)]
     fn drop(&mut self) {
-        unsafe { sys::zeKernelDestroy(self.0) };
+        check_panic! { sys::zeKernelDestroy(self.0) };
     }
 }
