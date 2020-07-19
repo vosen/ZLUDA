@@ -399,20 +399,56 @@ InstMul: ast::Instruction<&'input str> = {
 };
 
 InstMulMode: ast::MulData = {
-    MulIntControl? IntType => ast::MulData{},
-    RoundingMode? ".ftz"? ".sat"? ".f32" => ast::MulData{},
-    RoundingMode? ".f64" => ast::MulData{},
-    ".rn"? ".ftz"? ".sat"? ".f16" => ast::MulData{},
-    ".rn"? ".ftz"? ".sat"? ".f16x2" => ast::MulData{}
+    <ctr:MulIntControl> <t:IntType> => ast::MulData{
+        typ: ast::Type::Scalar(t),
+        desc: ast::MulDescriptor::Int(ctr)
+    },
+    <r:RoundingMode?> <ftz:".ftz"?> <s:".sat"?> ".f32" => ast::MulData{
+        typ: ast::Type::Scalar(ast::ScalarType::F32),
+        desc: ast::MulDescriptor::Float(ast::MulFloatDesc {
+            rounding: r,
+            flush_to_zero: ftz.is_some(),
+            saturate: s.is_some()
+        })
+    },
+    <r:RoundingMode?> ".f64" => ast::MulData{
+        typ: ast::Type::Scalar(ast::ScalarType::F64),
+        desc: ast::MulDescriptor::Float(ast::MulFloatDesc {
+            rounding: r,
+            flush_to_zero: false,
+            saturate: false
+        })
+    },
+    <r:".rn"?> <ftz:".ftz"?> <s:".sat"?> ".f16" => ast::MulData{
+        typ: ast::Type::Scalar(ast::ScalarType::F16),
+        desc: ast::MulDescriptor::Float(ast::MulFloatDesc {
+            rounding: r.map(|_| ast::RoundingMode::NearestEven),
+            flush_to_zero: ftz.is_some(),
+            saturate: s.is_some()
+        })
+    },
+    <r:".rn"?> <ftz:".ftz"?> <s:".sat"?> ".f16x2" => ast::MulData{
+        typ: ast::Type::ExtendedScalar(ast::ExtendedScalarType::F16x2),
+        desc: ast::MulDescriptor::Float(ast::MulFloatDesc {
+            rounding: r.map(|_| ast::RoundingMode::NearestEven),
+            flush_to_zero: ftz.is_some(),
+            saturate: s.is_some()
+        })
+    }
 };
 
-MulIntControl = {
-    ".hi", ".lo", ".wide"
+MulIntControl: ast::MulIntControl = {
+    ".hi" => ast::MulIntControl::High,
+    ".lo" => ast::MulIntControl::Low,
+    ".wide" => ast::MulIntControl::Wide
 };
 
 #[inline]
-RoundingMode = {
-    ".rn", ".rz", ".rm", ".rp"
+RoundingMode : ast::RoundingMode = {
+    ".rn" => ast::RoundingMode::NearestEven,
+    ".rz" => ast::RoundingMode::Zero,
+    ".rm" => ast::RoundingMode::NegativeInf,
+    ".rp" => ast::RoundingMode::PositiveInf,
 };
 
 IntType : ast::ScalarType = {
@@ -449,27 +485,61 @@ InstSetp: ast::Instruction<&'input str> = {
 };
 
 SetpMode: ast::SetpData = {
-    SetpCmpOp ".ftz"? SetpType => ast::SetpData{}
+    <cmp_op:SetpCompareOp> <ftz:".ftz"?> <t:SetpType> => ast::SetpData{
+        typ: t,
+        flush_to_zero: ftz.is_some(),
+        cmp_op: cmp_op,
+    }
 };
 
 SetpBoolMode: ast::SetpBoolData = {
-    SetpCmpOp SetpBoolOp ".ftz"? SetpType => ast::SetpBoolData{}
+    <cmp_op:SetpCompareOp> <bool_op:SetpBoolPostOp> <ftz:".ftz"?> <t:SetpType> => ast::SetpBoolData{
+        typ: t,
+        flush_to_zero: ftz.is_some(),
+        cmp_op: cmp_op,
+        bool_op: bool_op,
+    }
 };
 
-SetpCmpOp = {
-    ".eq", ".ne", ".lt", ".le", ".gt", ".ge", ".lo", ".ls", ".hi", ".hs",
-    ".equ", ".neu", ".ltu", ".leu", ".gtu", ".geu", ".num", ".nan"
+SetpCompareOp: ast::SetpCompareOp = {
+    ".eq" => ast::SetpCompareOp::Eq,
+    ".ne" => ast::SetpCompareOp::NotEq,
+    ".lt" => ast::SetpCompareOp::Less,
+    ".le" => ast::SetpCompareOp::LessOrEq,
+    ".gt" => ast::SetpCompareOp::Greater,
+    ".ge" => ast::SetpCompareOp::GreaterOrEq,
+    ".lo" => ast::SetpCompareOp::Less,
+    ".ls" => ast::SetpCompareOp::LessOrEq,
+    ".hi" => ast::SetpCompareOp::Greater,
+    ".hs" => ast::SetpCompareOp::GreaterOrEq,
+    ".equ" => ast::SetpCompareOp::NanEq,
+    ".neu" => ast::SetpCompareOp::NanNotEq,
+    ".ltu" => ast::SetpCompareOp::NanLess,
+    ".leu" => ast::SetpCompareOp::NanLessOrEq,
+    ".gtu" => ast::SetpCompareOp::NanGreater,
+    ".geu" => ast::SetpCompareOp::NanGreaterOrEq,
+    ".num" => ast::SetpCompareOp::IsNotNan,
+    ".nan" => ast::SetpCompareOp::IsNan,
 };
 
-SetpBoolOp = {
-    ".and", ".or", ".xor"
+SetpBoolPostOp: ast::SetpBoolPostOp = {
+    ".and" => ast::SetpBoolPostOp::And,
+    ".or" => ast::SetpBoolPostOp::Or,
+    ".xor" => ast::SetpBoolPostOp::Xor,
 };
 
-SetpType = {
-    ".b16", ".b32", ".b64",
-    ".u16", ".u32", ".u64",
-    ".s16", ".s32", ".s64",
-    ".f32", ".f64"
+SetpType: ast::ScalarType = {
+    ".b16" => ast::ScalarType::B16,
+    ".b32" => ast::ScalarType::B32,
+    ".b64" => ast::ScalarType::B64,
+    ".u16" => ast::ScalarType::U16,
+    ".u32" => ast::ScalarType::U32,
+    ".u64" => ast::ScalarType::U64,
+    ".s16" => ast::ScalarType::S16,
+    ".s32" => ast::ScalarType::S32,
+    ".s64" => ast::ScalarType::S64,
+    ".f32" => ast::ScalarType::F32,
+    ".f64" => ast::ScalarType::F64,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-not

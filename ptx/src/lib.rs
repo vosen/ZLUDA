@@ -12,6 +12,7 @@ extern crate level_zero as ze;
 extern crate level_zero_sys as l0;
 extern crate rspirv;
 extern crate spirv_headers as spirv;
+extern crate half;
 
 #[cfg(test)]
 extern crate spirv_tools_sys as spirv_tools;

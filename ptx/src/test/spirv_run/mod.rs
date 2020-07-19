@@ -37,7 +37,9 @@ macro_rules! test_ptx {
 }
 
 test_ptx!(ld_st, [1u64], [1u64]);
-test_ptx!(mov, [1u64], [1u64]);
+//test_ptx!(mov, [1u64], [1u64]);
+//test_ptx!(mul_lo, [1u64], [2u64]);
+//test_ptx!(mul_hi, [u64::max_value()], [1u64]);
 
 struct DisplayError<T: Display + Debug> {
     err: T,

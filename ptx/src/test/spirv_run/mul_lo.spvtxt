@@ -1,0 +1,26 @@
+OpCapability GenericPointer
+OpCapability Linkage
+OpCapability Addresses
+OpCapability Kernel
+OpCapability Int64
+OpCapability Int8
+%1 = OpExtInstImport "OpenCL.std"
+OpMemoryModel Physical64 OpenCL
+OpEntryPoint Kernel %5 "mul_lo"
+%2 = OpTypeVoid
+%3 = OpTypeInt 64 0
+%4 = OpTypeFunction %2 %3 %3
+%19 = OpTypePointer Generic %3
+%5 = OpFunction  %2  None %4
+%6 = OpFunctionParameter  %3
+%7 = OpFunctionParameter  %3
+%18 = OpLabel
+%13 = OpCopyObject  %3  %6
+%14 = OpCopyObject  %3  %7
+%15 = OpConvertUToPtr  %19  %13
+%16 = OpLoad  %3  %15
+%100 = OpCopyObject  %3  %16
+%17 = OpConvertUToPtr  %19  %14
+OpStore %17 %100
+OpReturn
+OpFunctionEnd

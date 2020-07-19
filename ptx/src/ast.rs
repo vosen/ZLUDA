@@ -243,15 +243,74 @@ pub struct MovData {
     pub typ: Type,
 }
 
-pub struct MulData {}
+pub struct MulData {
+    pub typ: Type,
+    pub desc: MulDescriptor,
+}
+
+pub enum MulDescriptor {
+    Int(MulIntControl),
+    Float(MulFloatDesc),
+}
+
+pub enum MulIntControl {
+    Low,
+    High,
+    Wide
+}
+
+pub struct MulFloatDesc {
+    pub rounding: Option<RoundingMode>,
+    pub flush_to_zero: bool,
+    pub saturate: bool,
+}
+
+pub enum RoundingMode {
+    NearestEven,
+    Zero,
+    NegativeInf,
+    PositiveInf
+}
 
 pub struct AddData {
     pub typ: ScalarType,
 }
 
-pub struct SetpData {}
+pub struct SetpData {
+    pub typ: ScalarType,
+    pub flush_to_zero: bool,
+    pub cmp_op: SetpCompareOp,
+}
 
-pub struct SetpBoolData {}
+pub enum SetpCompareOp {
+    Eq,
+    NotEq,
+    Less,
+    LessOrEq,
+    Greater,
+    GreaterOrEq,
+    NanEq,
+    NanNotEq,
+    NanLess,
+    NanLessOrEq,
+    NanGreater,
+    NanGreaterOrEq,
+    IsNotNan,
+    IsNan,
+}
+
+pub enum SetpBoolPostOp {
+    And,
+    Or,
+    Xor,
+}
+
+pub struct SetpBoolData {
+    pub typ: ScalarType,
+    pub flush_to_zero: bool,
+    pub cmp_op: SetpCompareOp,
+    pub bool_op: SetpBoolPostOp
+}
 
 pub struct NotData {}
 
