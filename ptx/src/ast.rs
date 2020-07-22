@@ -112,6 +112,7 @@ pub struct Variable<ID> {
     pub count: Option<u32>,
 }
 
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum StateSpace {
     Reg,
     Sreg,
