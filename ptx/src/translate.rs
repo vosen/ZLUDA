@@ -107,11 +107,11 @@ pub fn to_spirv_module(ast: ast::Module) -> Result<dr::Module, dr::Error> {
     builder.set_version(1, 0);
     emit_capabilities(&mut builder);
     emit_extensions(&mut builder);
-    emit_extended_instruction_sets(&mut builder);
+    let opencl_id = emit_opencl_import(&mut builder);
     emit_memory_model(&mut builder);
     let mut map = TypeWordMap::new(&mut builder);
     for f in ast.functions {
-        emit_function(&mut builder, &mut map, f)?;
+        emit_function(&mut builder, &mut map, opencl_id, f)?;
     }
     Ok(builder.module())
 }
@@ -132,8 +132,8 @@ fn emit_capabilities(builder: &mut dr::Builder) {
 
 fn emit_extensions(_: &mut dr::Builder) {}
 
-fn emit_extended_instruction_sets(builder: &mut dr::Builder) {
-    builder.ext_inst_import("OpenCL.std");
+fn emit_opencl_import(builder: &mut dr::Builder) -> spirv::Word {
+    builder.ext_inst_import("OpenCL.std")
 }
 
 fn emit_memory_model(builder: &mut dr::Builder) {
@@ -146,6 +146,7 @@ fn emit_memory_model(builder: &mut dr::Builder) {
 fn emit_function<'a>(
     builder: &mut dr::Builder,
     map: &mut TypeWordMap,
+    opencl_id: spirv::Word,
     f: ast::Function<'a>,
 ) -> Result<spirv::Word, rspirv::dr::Error> {
     let func_type = get_function_type(builder, map, &f.args);
@@ -158,7 +159,7 @@ fn emit_function<'a>(
     let id_offset = builder.reserve_ids(unique_ids);
     emit_function_args(builder, id_offset, map, &f.args);
     apply_id_offset(&mut func_body, id_offset);
-    emit_function_body_ops(builder, map, &func_body)?;
+    emit_function_body_ops(builder, map, opencl_id, &func_body)?;
     builder.end_function()?;
     Ok(func_id)
 }
@@ -265,7 +266,9 @@ fn insert_mem_ssa_statements(
         match s {
             Statement::Instruction(inst) => match inst {
                 Instruction::Ld(
-                    ld @ ast::LdData {
+                    ld
+                    @
+                    ast::LdData {
                         state_space: ast::LdStateSpace::Param,
                         ..
                     },
@@ -638,6 +641,7 @@ fn collect_label_ids<'a>(
 fn emit_function_body_ops(
     builder: &mut dr::Builder,
     map: &mut TypeWordMap,
+    opencl: spirv::Word,
     func: &[ExpandedStatement],
 ) -> Result<(), dr::Error> {
     for s in func {
@@ -658,7 +662,36 @@ fn emit_function_body_ops(
                 }
                 builder.variable(type_id, Some(*id), spirv::StorageClass::Function, None);
             }
-            Statement::Constant(_) => todo!(),
+            Statement::Constant(cnst) => {
+                let typ_id = map.get_or_add_scalar(builder, cnst.typ);
+                match cnst.typ {
+                    ast::ScalarType::B8 | ast::ScalarType::U8 => {
+                        builder.constant_u32(typ_id, Some(cnst.dst), cnst.value as u8 as u32);
+                    }
+                    ast::ScalarType::B16 | ast::ScalarType::U16 => {
+                        builder.constant_u32(typ_id, Some(cnst.dst), cnst.value as u16 as u32);
+                    }
+                    ast::ScalarType::B32 | ast::ScalarType::U32 => {
+                        builder.constant_u32(typ_id, Some(cnst.dst), cnst.value as u32);
+                    }
+                    ast::ScalarType::B64 | ast::ScalarType::U64 => {
+                        builder.constant_u64(typ_id, Some(cnst.dst), cnst.value as u64);
+                    }
+                    ast::ScalarType::S8 => {
+                        builder.constant_u32(typ_id, Some(cnst.dst), cnst.value as i8 as u32);
+                    }
+                    ast::ScalarType::S16 => {
+                        builder.constant_u32(typ_id, Some(cnst.dst), cnst.value as i16 as u32);
+                    }
+                    ast::ScalarType::S32 => {
+                        builder.constant_u32(typ_id, Some(cnst.dst), cnst.value as i32 as u32);
+                    }
+                    ast::ScalarType::S64 => {
+                        builder.constant_u64(typ_id, Some(cnst.dst), cnst.value as i64 as u64);
+                    }
+                    _ => unreachable!(),
+                }
+            }
             Statement::Converison(cv) => emit_implicit_conversion(builder, map, cv)?,
             Statement::Conditional(bra) => {
                 builder.branch_conditional(bra.predicate, bra.if_true, bra.if_false, [])?;
@@ -700,17 +733,14 @@ fn emit_function_body_ops(
                 }
                 Instruction::Mul(mul, arg) => match mul.desc {
                     ast::MulDescriptor::Int(ref ctr) => {
-                        emit_mul_int(builder, map, mul.typ, ctr, arg)
+                        emit_mul_int(builder, map, opencl, mul.typ, ctr, arg)?;
                     }
                     ast::MulDescriptor::Float(_) => todo!(),
                 },
                 _ => todo!(),
             },
             Statement::LoadVar(arg, typ) => {
-                let type_id = map.get_or_add(
-                    builder,
-                    SpirvType::from(*typ),
-                );
+                let type_id = map.get_or_add(builder, SpirvType::from(*typ));
                 builder.load(type_id, Some(arg.dst), arg.src, None, [])?;
             }
             Statement::StoreVar(arg, typ) => {
@@ -722,14 +752,36 @@ fn emit_function_body_ops(
 }
 
 fn emit_mul_int(
-    _builder: &mut dr::Builder,
-    _map: &mut TypeWordMap,
-    _typ: ast::Type,
-    _ctr: &ast::MulIntControl,
-    _arg: &Arg3,
-) {
-    //let inst_type = map.get_or_add(builder, SpirvType::from(typ));
-    //builder.i_mul(inst_type, Some(arg.dst), Some(arg.src1), Some(arg.src2));
+    builder: &mut dr::Builder,
+    map: &mut TypeWordMap,
+    opencl: spirv::Word,
+    typ: ast::Type,
+    ctr: &ast::MulIntControl,
+    arg: &Arg3,
+) -> Result<(), dr::Error> {
+    let inst_type = map.get_or_add(builder, SpirvType::from(typ));
+    match ctr {
+        ast::MulIntControl::Low => {
+            builder.i_mul(inst_type, Some(arg.dst), arg.src1, arg.src2)?;
+        }
+        ast::MulIntControl::High => {
+            let ocl_mul_hi = match typ.try_as_scalar().unwrap().kind() {
+                ScalarKind::Signed => spirv::CLOp::s_mul_hi,
+                ScalarKind::Unsigned => spirv::CLOp::u_mul_hi,
+                ScalarKind::Float => unreachable!(),
+                ScalarKind::Byte => unreachable!(),
+            };
+            builder.ext_inst(
+                inst_type,
+                Some(arg.dst),
+                1,
+                ocl_mul_hi as spirv::Word,
+                [arg.src1, arg.src2],
+            )?;
+        }
+        ast::MulIntControl::Wide => todo!(),
+    }
+    Ok(())
 }
 
 fn emit_implicit_conversion(

@@ -158,25 +158,108 @@ pub enum spv_number_kind_t {
     SPV_NUMBER_SIGNED_INT = 2,
     SPV_NUMBER_FLOATING = 3,
 }
-#[repr(u32)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum spv_text_to_binary_options_t {
-    SPV_TEXT_TO_BINARY_OPTION_NONE = 1,
-    SPV_TEXT_TO_BINARY_OPTION_PRESERVE_NUMERIC_IDS = 2,
-    _spv_text_to_binary_options_t = 2147483647,
+impl spv_text_to_binary_options_t {
+    pub const SPV_TEXT_TO_BINARY_OPTION_NONE: spv_text_to_binary_options_t =
+        spv_text_to_binary_options_t(1);
 }
-#[repr(u32)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum spv_binary_to_text_options_t {
-    SPV_BINARY_TO_TEXT_OPTION_NONE = 1,
-    SPV_BINARY_TO_TEXT_OPTION_PRINT = 2,
-    SPV_BINARY_TO_TEXT_OPTION_COLOR = 4,
-    SPV_BINARY_TO_TEXT_OPTION_INDENT = 8,
-    SPV_BINARY_TO_TEXT_OPTION_SHOW_BYTE_OFFSET = 16,
-    SPV_BINARY_TO_TEXT_OPTION_NO_HEADER = 32,
-    SPV_BINARY_TO_TEXT_OPTION_FRIENDLY_NAMES = 64,
-    _spv_binary_to_text_options_t = 2147483647,
+impl spv_text_to_binary_options_t {
+    pub const SPV_TEXT_TO_BINARY_OPTION_PRESERVE_NUMERIC_IDS: spv_text_to_binary_options_t =
+        spv_text_to_binary_options_t(2);
 }
+impl spv_text_to_binary_options_t {
+    pub const _spv_text_to_binary_options_t: spv_text_to_binary_options_t =
+        spv_text_to_binary_options_t(2147483647);
+}
+impl ::std::ops::BitOr<spv_text_to_binary_options_t> for spv_text_to_binary_options_t {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        spv_text_to_binary_options_t(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for spv_text_to_binary_options_t {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: spv_text_to_binary_options_t) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<spv_text_to_binary_options_t> for spv_text_to_binary_options_t {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        spv_text_to_binary_options_t(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for spv_text_to_binary_options_t {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: spv_text_to_binary_options_t) {
+        self.0 &= rhs.0;
+    }
+}
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct spv_text_to_binary_options_t(pub u32);
+impl spv_binary_to_text_options_t {
+    pub const SPV_BINARY_TO_TEXT_OPTION_NONE: spv_binary_to_text_options_t =
+        spv_binary_to_text_options_t(1);
+}
+impl spv_binary_to_text_options_t {
+    pub const SPV_BINARY_TO_TEXT_OPTION_PRINT: spv_binary_to_text_options_t =
+        spv_binary_to_text_options_t(2);
+}
+impl spv_binary_to_text_options_t {
+    pub const SPV_BINARY_TO_TEXT_OPTION_COLOR: spv_binary_to_text_options_t =
+        spv_binary_to_text_options_t(4);
+}
+impl spv_binary_to_text_options_t {
+    pub const SPV_BINARY_TO_TEXT_OPTION_INDENT: spv_binary_to_text_options_t =
+        spv_binary_to_text_options_t(8);
+}
+impl spv_binary_to_text_options_t {
+    pub const SPV_BINARY_TO_TEXT_OPTION_SHOW_BYTE_OFFSET: spv_binary_to_text_options_t =
+        spv_binary_to_text_options_t(16);
+}
+impl spv_binary_to_text_options_t {
+    pub const SPV_BINARY_TO_TEXT_OPTION_NO_HEADER: spv_binary_to_text_options_t =
+        spv_binary_to_text_options_t(32);
+}
+impl spv_binary_to_text_options_t {
+    pub const SPV_BINARY_TO_TEXT_OPTION_FRIENDLY_NAMES: spv_binary_to_text_options_t =
+        spv_binary_to_text_options_t(64);
+}
+impl spv_binary_to_text_options_t {
+    pub const _spv_binary_to_text_options_t: spv_binary_to_text_options_t =
+        spv_binary_to_text_options_t(2147483647);
+}
+impl ::std::ops::BitOr<spv_binary_to_text_options_t> for spv_binary_to_text_options_t {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        spv_binary_to_text_options_t(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for spv_binary_to_text_options_t {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: spv_binary_to_text_options_t) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<spv_binary_to_text_options_t> for spv_binary_to_text_options_t {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        spv_binary_to_text_options_t(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for spv_binary_to_text_options_t {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: spv_binary_to_text_options_t) {
+        self.0 &= rhs.0;
+    }
+}
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct spv_binary_to_text_options_t(pub u32);
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct spv_parsed_operand_t {

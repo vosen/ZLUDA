@@ -1,1 +1,1 @@
-bindgen --whitelist-type="spv.*" --whitelist-function="spv.*" --size_t-is-usize --default-enum-style=rust ext/SPIRV-Tools/include/spirv-tools/libspirv.h -o lib.rs
+bindgen --whitelist-type="spv.*" --whitelist-function="spv.*" --size_t-is-usize --default-enum-style=rust --bitfield-enum="spv_text_to_binary_options_t|spv_binary_to_text_options_t" ../ext/SPIRV-Tools/include/spirv-tools/libspirv.h -o src/spirv_tools.rs

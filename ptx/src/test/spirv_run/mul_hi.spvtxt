@@ -1,26 +1,43 @@
-OpCapability GenericPointer
-OpCapability Linkage
-OpCapability Addresses
-OpCapability Kernel
-OpCapability Int64
-OpCapability Int8
-%1 = OpExtInstImport "OpenCL.std"
-OpMemoryModel Physical64 OpenCL
-OpEntryPoint Kernel %5 "mul_hi"
-%2 = OpTypeVoid
-%3 = OpTypeInt 64 0
-%4 = OpTypeFunction %2 %3 %3
-%19 = OpTypePointer Generic %3
-%5 = OpFunction  %2  None %4
-%6 = OpFunctionParameter  %3
-%7 = OpFunctionParameter  %3
-%18 = OpLabel
-%13 = OpCopyObject  %3  %6
-%14 = OpCopyObject  %3  %7
-%15 = OpConvertUToPtr  %19  %13
-%16 = OpLoad  %3  %15
-%100 = OpCopyObject  %3  %16
-%17 = OpConvertUToPtr  %19  %14
-OpStore %17 %100
-OpReturn
-OpFunctionEnd
+; SPIR-V
+; Version: 1.5
+; Generator: Khronos SPIR-V Tools Assembler; 0
+; Bound: 24
+; Schema: 0
+               OpCapability GenericPointer
+               OpCapability Linkage
+               OpCapability Addresses
+               OpCapability Kernel
+               OpCapability Int64
+               OpCapability Int8
+          %1 = OpExtInstImport "OpenCL.std"
+               OpMemoryModel Physical64 OpenCL
+               OpEntryPoint Kernel %2 "mul_hi"
+       %void = OpTypeVoid
+      %ulong = OpTypeInt 64 0
+          %5 = OpTypeFunction %void %ulong %ulong
+%_ptr_Function_ulong = OpTypePointer Function %ulong
+%_ptr_Generic_ulong = OpTypePointer Generic %ulong
+    %ulong_2 = OpConstant %ulong 2
+          %2 = OpFunction %void None %5
+          %9 = OpFunctionParameter %ulong
+         %10 = OpFunctionParameter %ulong
+         %11 = OpLabel
+         %12 = OpVariable %_ptr_Function_ulong Function
+         %13 = OpVariable %_ptr_Function_ulong Function
+         %14 = OpVariable %_ptr_Function_ulong Function
+         %15 = OpVariable %_ptr_Function_ulong Function
+               OpStore %12 %9
+               OpStore %13 %10
+         %16 = OpLoad %ulong %12
+         %17 = OpConvertUToPtr %_ptr_Generic_ulong %16
+         %18 = OpLoad %ulong %17
+               OpStore %14 %18
+         %19 = OpLoad %ulong %14
+         %20 = OpExtInst %ulong %1 u_mul_hi %19 %ulong_2
+               OpStore %15 %20
+         %21 = OpLoad %ulong %13
+         %22 = OpLoad %ulong %15
+         %23 = OpConvertUToPtr %_ptr_Generic_ulong %21
+               OpStore %23 %22
+               OpReturn
+               OpFunctionEnd

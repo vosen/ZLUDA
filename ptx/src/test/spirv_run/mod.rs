@@ -1,6 +1,9 @@
 use crate::ptx;
 use crate::translate;
-use rspirv::{binary::Disassemble, dr::{Block, Function, Instruction, Loader, Operand}};
+use rspirv::{
+    binary::Assemble,
+    dr::{Block, Function, Instruction, Loader, Operand},
+};
 use spirv_headers::Word;
 use spirv_tools_sys::{
     spv_binary, spv_endianness_t, spv_parsed_instruction_t, spv_result_t, spv_target_env,
@@ -37,9 +40,9 @@ macro_rules! test_ptx {
 }
 
 test_ptx!(ld_st, [1u64], [1u64]);
-//test_ptx!(mov, [1u64], [1u64]);
-//test_ptx!(mul_lo, [1u64], [2u64]);
-//test_ptx!(mul_hi, [u64::max_value()], [1u64]);
+test_ptx!(mov, [1u64], [1u64]);
+test_ptx!(mul_lo, [1u64], [2u64]);
+test_ptx!(mul_hi, [u64::max_value()], [1u64]);
 
 struct DisplayError<T: Display + Debug> {
     err: T,
@@ -155,9 +158,31 @@ fn test_spvtxt_assert<'a>(
     let mut loader = Loader::new();
     rspirv::binary::parse_words(&parsed_spirv, &mut loader)?;
     let spvtxt_mod = loader.module();
+    unsafe { spirv_tools::spvBinaryDestroy(spv_binary) };
     if !is_spirv_fn_equal(&ptx_mod.functions[0], &spvtxt_mod.functions[0]) {
-        panic!(ptx_mod.disassemble())
+        // We could simply use ptx_mod.disassemble, but SPIRV-Tools text formattinmg is so much nicer
+        let spv_from_ptx_binary = ptx_mod.assemble();
+        let mut spv_text: spirv_tools::spv_text = ptr::null_mut();
+        let result = unsafe {
+            spirv_tools::spvBinaryToText(
+                spv_context,
+                spv_from_ptx_binary.as_ptr(),
+                spv_from_ptx_binary.len(),
+                (spirv_tools::spv_binary_to_text_options_t::SPV_BINARY_TO_TEXT_OPTION_INDENT | spirv_tools::spv_binary_to_text_options_t::SPV_BINARY_TO_TEXT_OPTION_NO_HEADER |  spirv_tools::spv_binary_to_text_options_t::SPV_BINARY_TO_TEXT_OPTION_FRIENDLY_NAMES).0,
+                &mut spv_text as *mut _,
+                ptr::null_mut()
+            )
+        };
+        assert_eq!(result, spv_result_t::SPV_SUCCESS);
+        let raw_text = unsafe {
+            std::slice::from_raw_parts((*spv_text).str_ as *const u8, (*spv_text).length)
+        };
+        let spv_from_ptx_text = unsafe { str::from_utf8_unchecked(raw_text) };
+        // TODO: stop leaking kernel text
+        unsafe { spirv_tools::spvContextDestroy(spv_context) };
+        panic!(spv_from_ptx_text);
     }
+    unsafe { spirv_tools::spvContextDestroy(spv_context) };
     Ok(())
 }
 
