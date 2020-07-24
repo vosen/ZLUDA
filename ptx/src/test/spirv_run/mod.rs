@@ -169,10 +169,16 @@ fn is_spirv_fn_equal(fn1: &Function, fn2: &Function) -> bool {
     if !is_option_equal(&fn1.end, &fn2.end, &mut map, is_instr_equal) {
         return false;
     }
+    if fn1.parameters.len() != fn2.parameters.len() {
+        return false;
+    }
     for (inst1, inst2) in fn1.parameters.iter().zip(fn2.parameters.iter()) {
         if !is_instr_equal(inst1, inst2, &mut map) {
             return false;
         }
+    }
+    if fn1.blocks.len() != fn2.blocks.len() {
+        return false;
     }
     for (b1, b2) in fn1.blocks.iter().zip(fn2.blocks.iter()) {
         if !is_block_equal(b1, b2, &mut map) {
@@ -184,6 +190,9 @@ fn is_spirv_fn_equal(fn1: &Function, fn2: &Function) -> bool {
 
 fn is_block_equal(b1: &Block, b2: &Block, map: &mut HashMap<Word, Word>) -> bool {
     if !is_option_equal(&b1.label, &b2.label, map, is_instr_equal) {
+        return false;
+    }
+    if b1.instructions.len() != b2.instructions.len() {
         return false;
     }
     for (inst1, inst2) in b1.instructions.iter().zip(b2.instructions.iter()) {
@@ -203,6 +212,9 @@ fn is_instr_equal(
         return false;
     }
     if !is_option_equal(&instr1.result_id, &instr2.result_id, map, is_word_equal) {
+        return false;
+    }
+    if instr1.operands.len() != instr2.operands.len() {
         return false;
     }
     for (o1, o2) in instr1.operands.iter().zip(instr2.operands.iter()) {
