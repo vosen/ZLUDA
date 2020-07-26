@@ -398,43 +398,35 @@ InstMul: ast::Instruction<&'input str> = {
     "mul" <d:InstMulMode> <a:Arg3> => ast::Instruction::Mul(d, a)
 };
 
-InstMulMode: ast::MulData = {
-    <ctr:MulIntControl> <t:IntType> => ast::MulData{
-        typ: ast::Type::Scalar(t),
-        desc: ast::MulDescriptor::Int(ctr)
-    },
-    <r:RoundingMode?> <ftz:".ftz"?> <s:".sat"?> ".f32" => ast::MulData{
-        typ: ast::Type::Scalar(ast::ScalarType::F32),
-        desc: ast::MulDescriptor::Float(ast::MulFloatDesc {
-            rounding: r,
-            flush_to_zero: ftz.is_some(),
-            saturate: s.is_some()
-        })
-    },
-    <r:RoundingMode?> ".f64" => ast::MulData{
-        typ: ast::Type::Scalar(ast::ScalarType::F64),
-        desc: ast::MulDescriptor::Float(ast::MulFloatDesc {
-            rounding: r,
-            flush_to_zero: false,
-            saturate: false
-        })
-    },
-    <r:".rn"?> <ftz:".ftz"?> <s:".sat"?> ".f16" => ast::MulData{
-        typ: ast::Type::Scalar(ast::ScalarType::F16),
-        desc: ast::MulDescriptor::Float(ast::MulFloatDesc {
-            rounding: r.map(|_| ast::RoundingMode::NearestEven),
-            flush_to_zero: ftz.is_some(),
-            saturate: s.is_some()
-        })
-    },
-    <r:".rn"?> <ftz:".ftz"?> <s:".sat"?> ".f16x2" => ast::MulData{
-        typ: ast::Type::ExtendedScalar(ast::ExtendedScalarType::F16x2),
-        desc: ast::MulDescriptor::Float(ast::MulFloatDesc {
-            rounding: r.map(|_| ast::RoundingMode::NearestEven),
-            flush_to_zero: ftz.is_some(),
-            saturate: s.is_some()
-        })
-    }
+InstMulMode: ast::MulDetails = {
+    <ctr:MulIntControl> <t:IntType> => ast::MulDetails::Int(ast::MulIntDesc {
+        typ: t,
+        control: ctr
+    }),
+    <r:RoundingMode?> <ftz:".ftz"?> <s:".sat"?> ".f32" => ast::MulDetails::Float(ast::MulFloatDesc {
+        typ: ast::FloatType::F32,
+        rounding: r,
+        flush_to_zero: ftz.is_some(),
+        saturate: s.is_some()
+    }),
+    <r:RoundingMode?> ".f64" => ast::MulDetails::Float(ast::MulFloatDesc {
+        typ: ast::FloatType::F64,
+        rounding: r,
+        flush_to_zero: false,
+        saturate: false
+    }),
+    <r:".rn"?> <ftz:".ftz"?> <s:".sat"?> ".f16" => ast::MulDetails::Float(ast::MulFloatDesc {
+        typ: ast::FloatType::F16,
+        rounding: r.map(|_| ast::RoundingMode::NearestEven),
+        flush_to_zero: ftz.is_some(),
+        saturate: s.is_some()
+    }),
+    <r:".rn"?> <ftz:".ftz"?> <s:".sat"?> ".f16x2" => ast::MulDetails::Float(ast::MulFloatDesc {
+        typ: ast::FloatType::F16x2,
+        rounding: r.map(|_| ast::RoundingMode::NearestEven),
+        flush_to_zero: ftz.is_some(),
+        saturate: s.is_some()
+    })
 };
 
 MulIntControl: ast::MulIntControl = {
@@ -451,13 +443,13 @@ RoundingMode : ast::RoundingMode = {
     ".rp" => ast::RoundingMode::PositiveInf,
 };
 
-IntType : ast::ScalarType = {
-    ".u16" => ast::ScalarType::U16,
-    ".u32" => ast::ScalarType::U32,
-    ".u64" => ast::ScalarType::U64,
-    ".s16" => ast::ScalarType::S16,
-    ".s32" => ast::ScalarType::S32,
-    ".s64" => ast::ScalarType::S64,
+IntType : ast::IntType = {
+    ".u16" => ast::IntType::U16,
+    ".u32" => ast::IntType::U32,
+    ".u64" => ast::IntType::U64,
+    ".s16" => ast::IntType::S16,
+    ".s32" => ast::IntType::S32,
+    ".s64" => ast::IntType::S64,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-add
@@ -467,12 +459,33 @@ InstAdd: ast::Instruction<&'input str> = {
     "add" <d:InstAddMode> <a:Arg3> => ast::Instruction::Add(d, a)
 };
 
-InstAddMode: ast::AddData = {
-    <t:IntType> => ast::AddData{ typ: t },
-    ".sat" ".s32" => ast::AddData{ typ: ast::ScalarType::S32 },
-    RoundingMode? ".ftz"? ".sat"? ".f32" => ast::AddData{ typ: ast::ScalarType::F32 },
-    RoundingMode? ".f64" => ast::AddData{ typ: ast::ScalarType::F64 },
-    ".rn"? ".ftz"? ".sat"? ".f16" => ast::AddData{ typ: ast::ScalarType::F16 },
+InstAddMode: ast::AddDetails = {
+    <t:IntType> => ast::AddDetails::Int(ast::AddIntDesc {
+        typ: t,
+        saturate: false,
+    }),
+    ".sat" ".s32" => ast::AddDetails::Int(ast::AddIntDesc {
+        typ: ast::IntType::S32,
+        saturate: true,
+    }),
+    <rn:RoundingMode?> <ftz:".ftz"?> <sat:".sat"?> ".f32" => ast::AddDetails::Float(ast::AddFloatDesc {
+        typ: ast::FloatType::F32,
+        rounding: rn,
+        flush_to_zero: ftz.is_some(),
+        saturate: sat.is_some(),
+    }),
+    <rn:RoundingMode?> ".f64" => ast::AddDetails::Float(ast::AddFloatDesc {
+        typ: ast::FloatType::F64,
+        rounding: rn,
+        flush_to_zero: false,
+        saturate: false,
+    }),
+    <rn:".rn"?> <ftz:".ftz"?> <sat:".sat"?>".f16" => ast::AddDetails::Float(ast::AddFloatDesc {
+        typ: ast::FloatType::F16,
+        rounding: rn.map(|_| ast::RoundingMode::NearestEven),
+        flush_to_zero: ftz.is_some(),
+        saturate: sat.is_some(),
+    }),
     ".rn"? ".ftz"? ".sat"? ".f16x2" => todo!()
 };
 

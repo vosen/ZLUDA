@@ -355,11 +355,11 @@ fn normalize_insert_instruction(
             Instruction::Mov(d, arg)
         }
         Instruction::Mul(d, a) => {
-            let arg = normalize_expand_arg3(func, id_def, &|| d.typ.try_as_scalar(), a);
+            let arg = normalize_expand_arg3(func, id_def, &|| d.get_type().try_as_scalar(), a);
             Instruction::Mul(d, arg)
         }
         Instruction::Add(d, a) => {
-            let arg = normalize_expand_arg3(func, id_def, &|| Some(d.typ), a);
+            let arg = normalize_expand_arg3(func, id_def, &|| d.get_type().try_as_scalar(), a);
             Instruction::Add(d, arg)
         }
         Instruction::Setp(d, a) => {
@@ -731,11 +731,17 @@ fn emit_function_body_ops(
                     let result_type = map.get_or_add(builder, SpirvType::from(mov.typ));
                     builder.copy_object(result_type, Some(arg.dst), arg.src)?;
                 }
-                Instruction::Mul(mul, arg) => match mul.desc {
-                    ast::MulDescriptor::Int(ref ctr) => {
-                        emit_mul_int(builder, map, opencl, mul.typ, ctr, arg)?;
+                Instruction::Mul(mul, arg) => match mul {
+                    ast::MulDetails::Int(ref ctr) => {
+                        emit_mul_int(builder, map, opencl, ctr, arg)?;
                     }
-                    ast::MulDescriptor::Float(_) => todo!(),
+                    ast::MulDetails::Float(_) => todo!(),
+                },
+                Instruction::Add(add, arg) => match add {
+                    ast::AddDetails::Int(ref desc) => {
+                        emit_add_int(builder, map, desc, arg)?;
+                    }
+                    ast::AddDetails::Float(_) => todo!(),
                 },
                 _ => todo!(),
             },
@@ -755,32 +761,41 @@ fn emit_mul_int(
     builder: &mut dr::Builder,
     map: &mut TypeWordMap,
     opencl: spirv::Word,
-    typ: ast::Type,
-    ctr: &ast::MulIntControl,
+    desc: &ast::MulIntDesc,
     arg: &Arg3,
 ) -> Result<(), dr::Error> {
-    let inst_type = map.get_or_add(builder, SpirvType::from(typ));
-    match ctr {
+    let inst_type = map.get_or_add(builder, SpirvType::Base(desc.typ.into()));
+    match desc.control {
         ast::MulIntControl::Low => {
             builder.i_mul(inst_type, Some(arg.dst), arg.src1, arg.src2)?;
         }
         ast::MulIntControl::High => {
-            let ocl_mul_hi = match typ.try_as_scalar().unwrap().kind() {
-                ScalarKind::Signed => spirv::CLOp::s_mul_hi,
-                ScalarKind::Unsigned => spirv::CLOp::u_mul_hi,
-                ScalarKind::Float => unreachable!(),
-                ScalarKind::Byte => unreachable!(),
+            let ocl_mul_hi = if desc.typ.is_signed() {
+                spirv::CLOp::s_mul_hi
+            } else {
+                spirv::CLOp::u_mul_hi
             };
             builder.ext_inst(
                 inst_type,
                 Some(arg.dst),
-                1,
+                opencl,
                 ocl_mul_hi as spirv::Word,
                 [arg.src1, arg.src2],
             )?;
         }
         ast::MulIntControl::Wide => todo!(),
     }
+    Ok(())
+}
+
+fn emit_add_int(
+    builder: &mut dr::Builder,
+    map: &mut TypeWordMap,
+    ctr: &ast::AddIntDesc,
+    arg: &Arg3,
+) -> Result<(), dr::Error> {
+    let inst_type = map.get_or_add(builder, SpirvType::Base(ctr.typ.into()));
+    builder.i_add(inst_type, Some(arg.dst), arg.src1, arg.src2)?;
     Ok(())
 }
 
@@ -1059,8 +1074,8 @@ type ExpandedStatement = Statement<ExpandedArgs>;
 enum Instruction<A: Args> {
     Ld(ast::LdData, A::Arg2),
     Mov(ast::MovData, A::Arg2Mov),
-    Mul(ast::MulData, A::Arg3),
-    Add(ast::AddData, A::Arg3),
+    Mul(ast::MulDetails, A::Arg3),
+    Add(ast::AddDetails, A::Arg3),
     Setp(ast::SetpData, A::Arg4),
     SetpBool(ast::SetpBoolData, A::Arg5),
     Not(ast::NotData, A::Arg2),
@@ -1091,12 +1106,22 @@ impl<A: Args> Instruction<A> {
 
     fn get_type(&self) -> Option<ast::Type> {
         match self {
-            Instruction::Add(add, _) => Some(ast::Type::Scalar(add.typ)),
+            Instruction::Add(add, _) => match add {
+                ast::AddDetails::Int(ast::AddIntDesc { typ, .. }) => {
+                    Some(ast::Type::Scalar((*typ).into()))
+                }
+                ast::AddDetails::Float(ast::AddFloatDesc { typ, .. }) => Some((*typ).into()),
+            },
             Instruction::Ret(_) => None,
             Instruction::Ld(ld, _) => Some(ast::Type::Scalar(ld.typ)),
             Instruction::St(st, _) => Some(ast::Type::Scalar(st.typ)),
             Instruction::Mov(mov, _) => Some(mov.typ),
-            Instruction::Mul(mul, _) => Some(mul.typ),
+            Instruction::Mul(mul, _) => match mul {
+                ast::MulDetails::Int(ast::MulIntDesc { typ, .. }) => {
+                    Some(ast::Type::Scalar((*typ).into()))
+                }
+                ast::MulDetails::Float(ast::MulFloatDesc { typ, .. }) => Some((*typ).into()),
+            },
             _ => todo!(),
         }
     }
@@ -1437,12 +1462,12 @@ impl ast::Instruction<spirv::Word> {
 
     fn get_type(&self) -> Option<ast::Type> {
         match self {
-            ast::Instruction::Add(add, _) => Some(ast::Type::Scalar(add.typ)),
+            ast::Instruction::Add(add, _) => Some(add.get_type()),
             ast::Instruction::Ret(_) => None,
             ast::Instruction::Ld(ld, _) => Some(ast::Type::Scalar(ld.typ)),
             ast::Instruction::St(st, _) => Some(ast::Type::Scalar(st.typ)),
             ast::Instruction::Mov(mov, _) => Some(mov.typ),
-            ast::Instruction::Mul(mul, _) => Some(mul.typ),
+            ast::Instruction::Mul(mul, _) => Some(mul.get_type()),
             _ => todo!(),
         }
     }
@@ -1796,6 +1821,33 @@ impl ast::ScalarType {
                 8 => ast::ScalarType::U64,
                 _ => unreachable!(),
             },
+        }
+    }
+}
+
+impl ast::AddDetails {
+    fn get_type(&self) -> ast::Type {
+        match self {
+            ast::AddDetails::Int(ast::AddIntDesc { typ, .. }) => ast::Type::Scalar((*typ).into()),
+            ast::AddDetails::Float(ast::AddFloatDesc { typ, .. }) => (*typ).into(),
+        }
+    }
+}
+
+impl ast::MulDetails {
+    fn get_type(&self) -> ast::Type {
+        match self {
+            ast::MulDetails::Int(ast::MulIntDesc { typ, .. }) => ast::Type::Scalar((*typ).into()),
+            ast::MulDetails::Float(ast::MulFloatDesc { typ, .. }) => (*typ).into(),
+        }
+    }
+}
+
+impl ast::IntType {
+    fn is_signed(self) -> bool {
+        match self {
+            ast::IntType::S16 | ast::IntType::S32 | ast::IntType::S64 => true,
+            ast::IntType::U16 | ast::IntType::U32 | ast::IntType::U64 => false,
         }
     }
 }

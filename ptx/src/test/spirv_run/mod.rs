@@ -43,6 +43,7 @@ test_ptx!(ld_st, [1u64], [1u64]);
 test_ptx!(mov, [1u64], [1u64]);
 test_ptx!(mul_lo, [1u64], [2u64]);
 test_ptx!(mul_hi, [u64::max_value()], [1u64]);
+test_ptx!(add, [1u64], [2u64]);
 
 struct DisplayError<T: Display + Debug> {
     err: T,
@@ -233,6 +234,9 @@ fn is_instr_equal(
     instr2: &Instruction,
     map: &mut HashMap<Word, Word>,
 ) -> bool {
+    if instr1.class.opcode != instr2.class.opcode {
+        return false;
+    }
     if !is_option_equal(&instr1.result_type, &instr2.result_type, map, is_word_equal) {
         return false;
     }

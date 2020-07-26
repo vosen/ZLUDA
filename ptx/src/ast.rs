@@ -68,6 +68,17 @@ pub enum Type {
     ExtendedScalar(ExtendedScalarType),
 }
 
+impl From<FloatType> for Type {
+    fn from(t: FloatType) -> Self {
+        match t {
+            FloatType::F16 => Type::Scalar(ScalarType::F16),
+            FloatType::F16x2 => Type::ExtendedScalar(ExtendedScalarType::F16x2),
+            FloatType::F32 => Type::Scalar(ScalarType::F32),
+            FloatType::F64 => Type::Scalar(ScalarType::F64),
+        }
+    }
+}
+
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
 pub enum ScalarType {
     B8,
@@ -83,6 +94,37 @@ pub enum ScalarType {
     S32,
     S64,
     F16,
+    F32,
+    F64,
+}
+
+impl From<IntType> for ScalarType {
+    fn from(t: IntType) -> Self {
+        match t {
+            IntType::S16 => ScalarType::S16,
+            IntType::S32 => ScalarType::S32,
+            IntType::S64 => ScalarType::S64,
+            IntType::U16 => ScalarType::U16,
+            IntType::U32 => ScalarType::U32,
+            IntType::U64 => ScalarType::U64,
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+pub enum IntType {
+    U16,
+    U32,
+    U64,
+    S16,
+    S32,
+    S64,
+}
+
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+pub enum FloatType {
+    F16,
+    F16x2,
     F32,
     F64,
 }
@@ -130,8 +172,8 @@ pub struct PredAt<ID> {
 pub enum Instruction<ID> {
     Ld(LdData, Arg2<ID>),
     Mov(MovData, Arg2Mov<ID>),
-    Mul(MulData, Arg3<ID>),
-    Add(AddData, Arg3<ID>),
+    Mul(MulDetails, Arg3<ID>),
+    Add(AddDetails, Arg3<ID>),
     Setp(SetpData, Arg4<ID>),
     SetpBool(SetpBoolData, Arg5<ID>),
     Not(NotData, Arg2<ID>),
@@ -244,23 +286,24 @@ pub struct MovData {
     pub typ: Type,
 }
 
-pub struct MulData {
-    pub typ: Type,
-    pub desc: MulDescriptor,
+pub enum MulDetails {
+    Int(MulIntDesc),
+    Float(MulFloatDesc),
 }
 
-pub enum MulDescriptor {
-    Int(MulIntControl),
-    Float(MulFloatDesc),
+pub struct MulIntDesc {
+    pub typ: IntType,
+    pub control: MulIntControl,
 }
 
 pub enum MulIntControl {
     Low,
     High,
-    Wide
+    Wide,
 }
 
 pub struct MulFloatDesc {
+    pub typ: FloatType,
     pub rounding: Option<RoundingMode>,
     pub flush_to_zero: bool,
     pub saturate: bool,
@@ -270,11 +313,24 @@ pub enum RoundingMode {
     NearestEven,
     Zero,
     NegativeInf,
-    PositiveInf
+    PositiveInf,
 }
 
-pub struct AddData {
-    pub typ: ScalarType,
+pub enum AddDetails {
+    Int(AddIntDesc),
+    Float(AddFloatDesc),
+}
+
+pub struct AddIntDesc {
+    pub typ: IntType,
+    pub saturate: bool,
+}
+
+pub struct AddFloatDesc {
+    pub typ: FloatType,
+    pub rounding: Option<RoundingMode>,
+    pub flush_to_zero: bool,
+    pub saturate: bool,
 }
 
 pub struct SetpData {
@@ -310,7 +366,7 @@ pub struct SetpBoolData {
     pub typ: ScalarType,
     pub flush_to_zero: bool,
     pub cmp_op: SetpCompareOp,
-    pub bool_op: SetpBoolPostOp
+    pub bool_op: SetpBoolPostOp,
 }
 
 pub struct NotData {}

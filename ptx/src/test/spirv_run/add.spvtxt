@@ -1,0 +1,38 @@
+               OpCapability GenericPointer
+               OpCapability Linkage
+               OpCapability Addresses
+               OpCapability Kernel
+               OpCapability Int64
+               OpCapability Int8
+          %1 = OpExtInstImport "OpenCL.std"
+               OpMemoryModel Physical64 OpenCL
+               OpEntryPoint Kernel %5 "add"
+       %void = OpTypeVoid
+      %ulong = OpTypeInt 64 0
+          %4 = OpTypeFunction %void %ulong %ulong
+%_ptr_Function_ulong = OpTypePointer Function %ulong
+%_ptr_Generic_ulong = OpTypePointer Generic %ulong
+    %ulong_1 = OpConstant %ulong 1
+          %5 = OpFunction %void None %4
+          %6 = OpFunctionParameter %ulong
+          %7 = OpFunctionParameter %ulong
+         %21 = OpLabel
+          %8 = OpVariable %_ptr_Function_ulong Function
+          %9 = OpVariable %_ptr_Function_ulong Function
+         %10 = OpVariable %_ptr_Function_ulong Function
+         %11 = OpVariable %_ptr_Function_ulong Function
+               OpStore %8 %6
+               OpStore %9 %7
+         %12 = OpLoad %ulong %8
+         %19 = OpConvertUToPtr %_ptr_Generic_ulong %12
+         %13 = OpLoad %ulong %19
+               OpStore %10 %13
+         %14 = OpLoad %ulong %10
+         %15 = OpIAdd %ulong %14 %ulong_1
+               OpStore %11 %15
+         %16 = OpLoad %ulong %9
+         %17 = OpLoad %ulong %11
+         %20 = OpConvertUToPtr %_ptr_Generic_ulong %16
+               OpStore %20 %17
+               OpReturn
+               OpFunctionEnd
