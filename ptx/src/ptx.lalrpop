@@ -223,7 +223,7 @@ FunctionInput: ast::Argument<'input> = {
     }
 };
 
-pub(crate) FunctionBody: Vec<ast::Statement<&'input str>> = {
+pub(crate) FunctionBody: Vec<ast::Statement<ast::ParsedArgParams<'input>>> = {
     "{" <s:Statement*> "}" => { without_none(s) }
 };
 
@@ -269,7 +269,7 @@ MemoryType: ast::ScalarType = {
     ".f64" => ast::ScalarType::F64,
 };
 
-Statement: Option<ast::Statement<&'input str>> = {
+Statement: Option<ast::Statement<ast::ParsedArgParams<'input>>> = {
     <l:Label> => Some(ast::Statement::Label(l)),
     DebugDirective => None,
     <v:Variable> ";" => Some(ast::Statement::Variable(v)),
@@ -289,7 +289,7 @@ Label: &'input str = {
     <id:ExtendedID> ":" => id
 };
 
-Variable: ast::Variable<&'input str> = {
+Variable: ast::Variable<ast::ParsedArgParams<'input>> = {
     <s:StateSpaceSpecifier> <t:Type> <v:VariableName> => {
         let (name, count) = v;
         ast::Variable { space: s, v_type: t, name: name, count: count }
@@ -310,7 +310,7 @@ VariableName: (&'input str, Option<u32>) = {
     }
 };
 
-Instruction: ast::Instruction<&'input str> = {
+Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
     InstLd,
     InstMov,
     InstMul,
@@ -325,7 +325,7 @@ Instruction: ast::Instruction<&'input str> = {
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
-InstLd: ast::Instruction<&'input str> = {
+InstLd: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "ld" <q:LdStQualifier?> <ss:LdStateSpace?> <cop:LdCacheOperator?> <v:VectorPrefix?> <t:MemoryType> <dst:ExtendedID> "," "[" <src:Operand> "]" => {
         ast::Instruction::Ld(
             ast::LdData {
@@ -370,7 +370,7 @@ LdCacheOperator: ast::LdCacheOperator = {
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
-InstMov: ast::Instruction<&'input str> = {
+InstMov: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "mov" <t:MovType> <a:Arg2Mov> => {
         ast::Instruction::Mov(ast::MovData{ typ:t }, a)
     }
@@ -394,7 +394,7 @@ MovType: ast::Type = {
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-mul
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-mul
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#half-precision-floating-point-instructions-mul
-InstMul: ast::Instruction<&'input str> = {
+InstMul: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "mul" <d:InstMulMode> <a:Arg3> => ast::Instruction::Mul(d, a)
 };
 
@@ -455,7 +455,7 @@ IntType : ast::IntType = {
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-add
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-add
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#half-precision-floating-point-instructions-add
-InstAdd: ast::Instruction<&'input str> = {
+InstAdd: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "add" <d:InstAddMode> <a:Arg3> => ast::Instruction::Add(d, a)
 };
 
@@ -492,7 +492,7 @@ InstAddMode: ast::AddDetails = {
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions-setp
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#half-precision-comparison-instructions-setp
 // TODO: support f16 setp
-InstSetp: ast::Instruction<&'input str> = {
+InstSetp: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "setp" <d:SetpMode> <a:Arg4> => ast::Instruction::Setp(d, a),
     "setp" <d:SetpBoolMode> <a:Arg5> => ast::Instruction::SetpBool(d, a),
 };
@@ -556,7 +556,7 @@ SetpType: ast::ScalarType = {
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-not
-InstNot: ast::Instruction<&'input str> = {
+InstNot: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "not" NotType <a:Arg2> => ast::Instruction::Not(ast::NotData{}, a)
 };
 
@@ -571,12 +571,12 @@ PredAt: ast::PredAt<&'input str> = {
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-bra
-InstBra: ast::Instruction<&'input str> = {
+InstBra: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "bra" <u:".uni"?> <a:Arg1> => ast::Instruction::Bra(ast::BraData{ uniform: u.is_some() }, a)
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt
-InstCvt: ast::Instruction<&'input str> = {
+InstCvt: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "cvt" CvtRnd? ".ftz"? ".sat"? CvtType CvtType <a:Arg2> => {
         ast::Instruction::Cvt(ast::CvtData{}, a)
     }
@@ -602,7 +602,7 @@ CvtType = {
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-shl
-InstShl: ast::Instruction<&'input str> = {
+InstShl: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "shl" ShlType <a:Arg3> => ast::Instruction::Shl(ast::ShlData{}, a)
 };
 
@@ -612,7 +612,7 @@ ShlType = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-st
 // Warning: NVIDIA documentation is incorrect, you can specify scope only once
-InstSt: ast::Instruction<&'input str> = {
+InstSt: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "st" <q:LdStQualifier?> <ss:StStateSpace?> <cop:StCacheOperator?> <v:VectorPrefix?> <t:MemoryType> "[" <src1:Operand> "]" "," <src2:Operand> => {
         ast::Instruction::St(
             ast::StData {
@@ -642,7 +642,7 @@ StCacheOperator: ast::StCacheOperator = {
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-ret
-InstRet: ast::Instruction<&'input str> = {
+InstRet: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "ret" <u:".uni"?> => ast::Instruction::Ret(ast::RetData { uniform: u.is_some() })
 };
 
@@ -675,28 +675,28 @@ VectorOperand: (&'input str, &'input str) = {
     <pref:ExtendedID> <suf:DotID> => (pref, &suf[1..]),
 };
 
-Arg1: ast::Arg1<&'input str> = {
+Arg1: ast::Arg1<ast::ParsedArgParams<'input>> = {
     <src:ExtendedID> => ast::Arg1{<>}
 };
 
-Arg2: ast::Arg2<&'input str> = {
+Arg2: ast::Arg2<ast::ParsedArgParams<'input>> = {
     <dst:ExtendedID> "," <src:Operand> => ast::Arg2{<>}
 };
 
-Arg2Mov: ast::Arg2Mov<&'input str> = {
+Arg2Mov: ast::Arg2Mov<ast::ParsedArgParams<'input>> = {
     <dst:ExtendedID> "," <src:MovOperand> => ast::Arg2Mov{<>}
 };
 
-Arg3: ast::Arg3<&'input str> = {
+Arg3: ast::Arg3<ast::ParsedArgParams<'input>> = {
     <dst:ExtendedID> "," <src1:Operand> "," <src2:Operand> => ast::Arg3{<>}
 };
 
-Arg4: ast::Arg4<&'input str> = {
+Arg4: ast::Arg4<ast::ParsedArgParams<'input>> = {
     <dst1:ExtendedID> <dst2:OptionalDst?> "," <src1:Operand> "," <src2:Operand> => ast::Arg4{<>}
 };
 
 // TODO: pass src3 negation somewhere
-Arg5: ast::Arg5<&'input str> = {
+Arg5: ast::Arg5<ast::ParsedArgParams<'input>> = {
     <dst1:ExtendedID> <dst2:OptionalDst?> "," <src1:Operand> "," <src2:Operand> "," "!"? <src3:Operand> => ast::Arg5{<>}
 };
 

@@ -1,5 +1,5 @@
 use std::convert::From;
-use std::num::ParseIntError;
+use std::{marker::PhantomData, num::ParseIntError};
 
 quick_error! {
     #[derive(Debug)]
@@ -52,7 +52,7 @@ pub struct Function<'a> {
     pub kernel: bool,
     pub name: &'a str,
     pub args: Vec<Argument<'a>>,
-    pub body: Vec<Statement<&'a str>>,
+    pub body: Vec<Statement<ParsedArgParams<'a>>>,
 }
 
 #[derive(Default)]
@@ -141,16 +141,16 @@ impl Default for ScalarType {
     }
 }
 
-pub enum Statement<ID> {
-    Label(ID),
-    Variable(Variable<ID>),
-    Instruction(Option<PredAt<ID>>, Instruction<ID>),
+pub enum Statement<P: ArgParams> {
+    Label(P::ID),
+    Variable(Variable<P>),
+    Instruction(Option<PredAt<P::ID>>, Instruction<P>),
 }
 
-pub struct Variable<ID> {
+pub struct Variable<P: ArgParams> {
     pub space: StateSpace,
     pub v_type: Type,
-    pub name: ID,
+    pub name: P::ID,
     pub count: Option<u32>,
 }
 
@@ -169,59 +169,75 @@ pub struct PredAt<ID> {
     pub label: ID,
 }
 
-pub enum Instruction<ID> {
-    Ld(LdData, Arg2<ID>),
-    Mov(MovData, Arg2Mov<ID>),
-    Mul(MulDetails, Arg3<ID>),
-    Add(AddDetails, Arg3<ID>),
-    Setp(SetpData, Arg4<ID>),
-    SetpBool(SetpBoolData, Arg5<ID>),
-    Not(NotData, Arg2<ID>),
-    Bra(BraData, Arg1<ID>),
-    Cvt(CvtData, Arg2<ID>),
-    Shl(ShlData, Arg3<ID>),
-    St(StData, Arg2St<ID>),
+pub enum Instruction<P: ArgParams> {
+    Ld(LdData, Arg2<P>),
+    Mov(MovData, Arg2Mov<P>),
+    Mul(MulDetails, Arg3<P>),
+    Add(AddDetails, Arg3<P>),
+    Setp(SetpData, Arg4<P>),
+    SetpBool(SetpBoolData, Arg5<P>),
+    Not(NotData, Arg2<P>),
+    Bra(BraData, Arg1<P>),
+    Cvt(CvtData, Arg2<P>),
+    Shl(ShlData, Arg3<P>),
+    St(StData, Arg2St<P>),
     Ret(RetData),
 }
 
-pub struct Arg1<ID> {
-    pub src: ID, // it is a jump destination, but in terms of operands it is a source operand
+pub trait ArgParams {
+    type ID;
+    type Operand;
+    type MovOperand;
 }
 
-pub struct Arg2<ID> {
-    pub dst: ID,
-    pub src: Operand<ID>,
+pub struct ParsedArgParams<'a> {
+    _marker: PhantomData<&'a ()>,
 }
 
-pub struct Arg2St<ID> {
-    pub src1: Operand<ID>,
-    pub src2: Operand<ID>,
+impl<'a> ArgParams for ParsedArgParams<'a> {
+    type ID = &'a str;
+    type Operand = Operand<&'a str>;
+    type MovOperand = MovOperand<&'a str>;
 }
 
-pub struct Arg2Mov<ID> {
-    pub dst: ID,
-    pub src: MovOperand<ID>,
+pub struct Arg1<P: ArgParams> {
+    pub src: P::ID, // it is a jump destination, but in terms of operands it is a source operand
 }
 
-pub struct Arg3<ID> {
-    pub dst: ID,
-    pub src1: Operand<ID>,
-    pub src2: Operand<ID>,
+pub struct Arg2<P: ArgParams> {
+    pub dst: P::ID,
+    pub src: P::Operand,
 }
 
-pub struct Arg4<ID> {
-    pub dst1: ID,
-    pub dst2: Option<ID>,
-    pub src1: Operand<ID>,
-    pub src2: Operand<ID>,
+pub struct Arg2St<P: ArgParams> {
+    pub src1: P::Operand,
+    pub src2: P::Operand,
 }
 
-pub struct Arg5<ID> {
-    pub dst1: ID,
-    pub dst2: Option<ID>,
-    pub src1: Operand<ID>,
-    pub src2: Operand<ID>,
-    pub src3: Operand<ID>,
+pub struct Arg2Mov<P: ArgParams> {
+    pub dst: P::ID,
+    pub src: P::MovOperand,
+}
+
+pub struct Arg3<P: ArgParams> {
+    pub dst: P::ID,
+    pub src1: P::Operand,
+    pub src2: P::Operand,
+}
+
+pub struct Arg4<P: ArgParams> {
+    pub dst1: P::ID,
+    pub dst2: Option<P::ID>,
+    pub src1: P::Operand,
+    pub src2: P::Operand,
+}
+
+pub struct Arg5<P: ArgParams> {
+    pub dst1: P::ID,
+    pub dst2: Option<P::ID>,
+    pub src1: P::Operand,
+    pub src2: P::Operand,
+    pub src3: P::Operand,
 }
 
 pub enum Operand<ID> {
