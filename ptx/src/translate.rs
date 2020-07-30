@@ -326,7 +326,8 @@ fn expand_arguments(
     for s in func {
         match s {
             Statement::Instruction(inst) => {
-                let new_inst = normalize_insert_instruction(&mut result, id_def, inst);
+                let mut visitor = FlattenArguments::new(&mut result, id_def);
+                let new_inst = inst.map(&mut visitor);
                 result.push(Statement::Instruction(new_inst));
             }
             Statement::Variable(id, typ, ss) => result.push(Statement::Variable(id, typ, ss)),
@@ -340,170 +341,56 @@ fn expand_arguments(
     result
 }
 
-#[must_use]
-fn normalize_insert_instruction(
-    func: &mut Vec<ExpandedStatement>,
-    id_def: &mut NumericIdResolver,
-    instr: ast::Instruction<NormalizedArgParams>,
-) -> ast::Instruction<ExpandedArgParams> {
-    match instr {
-        ast::Instruction::Ld(d, a) => {
-            let arg = normalize_expand_arg2(func, id_def, &|| Some(d.typ), a);
-            ast::Instruction::Ld(d, arg)
-        }
-        ast::Instruction::Mov(d, a) => {
-            let arg = normalize_expand_arg2mov(func, id_def, &|| d.typ.try_as_scalar(), a);
-            ast::Instruction::Mov(d, arg)
-        }
-        ast::Instruction::Mul(d, a) => {
-            let arg = normalize_expand_arg3(func, id_def, &|| d.get_type().try_as_scalar(), a);
-            ast::Instruction::Mul(d, arg)
-        }
-        ast::Instruction::Add(d, a) => {
-            let arg = normalize_expand_arg3(func, id_def, &|| d.get_type().try_as_scalar(), a);
-            ast::Instruction::Add(d, arg)
-        }
-        ast::Instruction::Setp(d, a) => {
-            let arg = normalize_expand_arg4(func, id_def, &|| Some(d.typ), a);
-            ast::Instruction::Setp(d, arg)
-        }
-        ast::Instruction::SetpBool(d, a) => {
-            let arg = normalize_expand_arg5(func, id_def, &|| Some(d.typ), a);
-            ast::Instruction::SetpBool(d, arg)
-        }
-        ast::Instruction::Not(d, a) => {
-            let arg = normalize_expand_arg2(func, id_def, &|| todo!(), a);
-            ast::Instruction::Not(d, arg)
-        }
-        ast::Instruction::Bra(d, a) => ast::Instruction::Bra(d, ast::Arg1 { src: a.src }),
-        ast::Instruction::Cvt(d, a) => {
-            let arg = normalize_expand_arg2(func, id_def, &|| todo!(), a);
-            ast::Instruction::Cvt(d, arg)
-        }
-        ast::Instruction::Shl(d, a) => {
-            let arg = normalize_expand_arg3(func, id_def, &|| todo!(), a);
-            ast::Instruction::Shl(d, arg)
-        }
-        ast::Instruction::St(d, a) => {
-            let arg = normalize_expand_arg2st(func, id_def, &|| todo!(), a);
-            ast::Instruction::St(d, arg)
-        }
-        ast::Instruction::Ret(d) => ast::Instruction::Ret(d),
+struct FlattenArguments<'a> {
+    func: &'a mut Vec<ExpandedStatement>,
+    id_def: &'a mut NumericIdResolver,
+}
+
+impl<'a> FlattenArguments<'a> {
+    fn new(func: &'a mut Vec<ExpandedStatement>, id_def: &'a mut NumericIdResolver) -> Self {
+        FlattenArguments { func, id_def }
     }
 }
 
-fn normalize_expand_arg2(
-    func: &mut Vec<ExpandedStatement>,
-    id_def: &mut NumericIdResolver,
-    inst_type: &impl Fn() -> Option<ast::ScalarType>,
-    a: ast::Arg2<NormalizedArgParams>,
-) -> ast::Arg2<ExpandedArgParams> {
-    ast::Arg2 {
-        dst: a.dst,
-        src: normalize_expand_operand(func, id_def, inst_type, a.src),
+impl<'a> ArgumentMapVisitor<NormalizedArgParams, ExpandedArgParams> for FlattenArguments<'a> {
+    fn dst_variable(&mut self, x: spirv::Word, _: Option<ast::Type>) -> spirv::Word {
+        x
     }
-}
 
-fn normalize_expand_arg2mov(
-    func: &mut Vec<ExpandedStatement>,
-    id_def: &mut NumericIdResolver,
-    inst_type: &impl Fn() -> Option<ast::ScalarType>,
-    a: ast::Arg2Mov<NormalizedArgParams>,
-) -> ast::Arg2Mov<ExpandedArgParams> {
-    ast::Arg2Mov {
-        dst: a.dst,
-        src: normalize_expand_mov_operand(func, id_def, inst_type, a.src),
-    }
-}
-
-fn normalize_expand_arg2st(
-    func: &mut Vec<ExpandedStatement>,
-    id_def: &mut NumericIdResolver,
-    inst_type: &impl Fn() -> Option<ast::ScalarType>,
-    a: ast::Arg2St<NormalizedArgParams>,
-) -> ast::Arg2St<ExpandedArgParams> {
-    ast::Arg2St {
-        src1: normalize_expand_operand(func, id_def, inst_type, a.src1),
-        src2: normalize_expand_operand(func, id_def, inst_type, a.src2),
-    }
-}
-
-fn normalize_expand_arg3(
-    func: &mut Vec<ExpandedStatement>,
-    id_def: &mut NumericIdResolver,
-    inst_type: &impl Fn() -> Option<ast::ScalarType>,
-    a: ast::Arg3<NormalizedArgParams>,
-) -> ast::Arg3<ExpandedArgParams> {
-    ast::Arg3 {
-        dst: a.dst,
-        src1: normalize_expand_operand(func, id_def, inst_type, a.src1),
-        src2: normalize_expand_operand(func, id_def, inst_type, a.src2),
-    }
-}
-
-fn normalize_expand_arg4(
-    func: &mut Vec<ExpandedStatement>,
-    id_def: &mut NumericIdResolver,
-    inst_type: &impl Fn() -> Option<ast::ScalarType>,
-    a: ast::Arg4<NormalizedArgParams>,
-) -> ast::Arg4<ExpandedArgParams> {
-    ast::Arg4 {
-        dst1: a.dst1,
-        dst2: a.dst2,
-        src1: normalize_expand_operand(func, id_def, inst_type, a.src1),
-        src2: normalize_expand_operand(func, id_def, inst_type, a.src2),
-    }
-}
-
-fn normalize_expand_arg5(
-    func: &mut Vec<ExpandedStatement>,
-    id_def: &mut NumericIdResolver,
-    inst_type: &impl Fn() -> Option<ast::ScalarType>,
-    a: ast::Arg5<NormalizedArgParams>,
-) -> ast::Arg5<ExpandedArgParams> {
-    ast::Arg5 {
-        dst1: a.dst1,
-        dst2: a.dst2,
-        src1: normalize_expand_operand(func, id_def, inst_type, a.src1),
-        src2: normalize_expand_operand(func, id_def, inst_type, a.src2),
-        src3: normalize_expand_operand(func, id_def, inst_type, a.src3),
-    }
-}
-
-fn normalize_expand_operand(
-    func: &mut Vec<ExpandedStatement>,
-    id_def: &mut NumericIdResolver,
-    inst_type: &impl Fn() -> Option<ast::ScalarType>,
-    opr: ast::Operand<spirv::Word>,
-) -> spirv::Word {
-    match opr {
-        ast::Operand::Reg(r) => r,
-        ast::Operand::Imm(x) => {
-            if let Some(typ) = inst_type() {
-                let id = id_def.new_id(Some(ast::Type::Scalar(typ)));
-                func.push(Statement::Constant(ConstantDefinition {
-                    dst: id,
-                    typ: typ,
-                    value: x,
-                }));
-                id
-            } else {
-                todo!()
+    fn src_operand(&mut self, op: ast::Operand<spirv::Word>, t: Option<ast::Type>) -> spirv::Word {
+        match op {
+            ast::Operand::Reg(r) => r,
+            ast::Operand::Imm(x) => {
+                if let Some(typ) = t {
+                    let scalar_t = if let ast::Type::Scalar(scalar) = typ {
+                        scalar
+                    } else {
+                        todo!()
+                    };
+                    let id = self.id_def.new_id(Some(ast::Type::Scalar(scalar_t)));
+                    self.func.push(Statement::Constant(ConstantDefinition {
+                        dst: id,
+                        typ: scalar_t,
+                        value: x,
+                    }));
+                    id
+                } else {
+                    todo!()
+                }
             }
+            _ => todo!(),
         }
-        _ => todo!(),
     }
-}
 
-fn normalize_expand_mov_operand(
-    func: &mut Vec<ExpandedStatement>,
-    id_def: &mut NumericIdResolver,
-    inst_type: &impl Fn() -> Option<ast::ScalarType>,
-    opr: ast::MovOperand<spirv::Word>,
-) -> spirv::Word {
-    match opr {
-        ast::MovOperand::Op(opr) => normalize_expand_operand(func, id_def, inst_type, opr),
-        _ => todo!(),
+    fn src_mov_operand(
+        &mut self,
+        op: ast::MovOperand<spirv::Word>,
+        t: Option<ast::Type>,
+    ) -> spirv::Word {
+        match op {
+            ast::MovOperand::Op(opr) => self.src_operand(opr, t),
+            ast::MovOperand::Vec(_, _) => todo!(),
+        }
     }
 }
 
@@ -1023,53 +910,6 @@ trait ArgumentMapVisitor<T: ast::ArgParams, U: ast::ArgParams> {
     fn src_mov_operand(&mut self, o: T::MovOperand, typ: Option<ast::Type>) -> U::MovOperand;
 }
 
-struct FlattenArguments<'a> {
-    func: &'a mut Vec<ExpandedStatement>,
-    id_def: &'a mut NumericIdResolver,
-}
-
-impl<'a> ArgumentMapVisitor<NormalizedArgParams, ExpandedArgParams> for FlattenArguments<'a> {
-    fn dst_variable(&mut self, x: spirv::Word, _: Option<ast::Type>) -> spirv::Word {
-        x
-    }
-
-    fn src_operand(&mut self, op: ast::Operand<spirv::Word>, t: Option<ast::Type>) -> spirv::Word {
-        match op {
-            ast::Operand::Reg(r) => r,
-            ast::Operand::Imm(x) => {
-                if let Some(typ) = t {
-                    let scalar_t = if let ast::Type::Scalar(scalar) = typ {
-                        scalar
-                    } else {
-                        todo!()
-                    };
-                    let id = self.id_def.new_id(Some(ast::Type::Scalar(scalar_t)));
-                    self.func.push(Statement::Constant(ConstantDefinition {
-                        dst: id,
-                        typ: scalar_t,
-                        value: x,
-                    }));
-                    id
-                } else {
-                    todo!()
-                }
-            }
-            _ => todo!(),
-        }
-    }
-
-    fn src_mov_operand(
-        &mut self,
-        op: ast::MovOperand<spirv::Word>,
-        t: Option<ast::Type>,
-    ) -> spirv::Word {
-        match op {
-            ast::MovOperand::Op(opr) => self.src_operand(opr, t),
-            ast::MovOperand::Vec(_, _) => todo!(),
-        }
-    }
-}
-
 impl<T> ArgumentMapVisitor<ExpandedArgParams, ExpandedArgParams> for T
 where
     T: FnMut(spirv::Word, bool, Option<ast::Type>) -> spirv::Word,
@@ -1118,7 +958,7 @@ where
 }
 
 impl<T: ast::ArgParams> ast::Instruction<T> {
-    fn map_variable_new<U: ast::ArgParams, V: ArgumentMapVisitor<T, U>>(
+    fn map<U: ast::ArgParams, V: ArgumentMapVisitor<T, U>>(
         self,
         visitor: &mut V,
     ) -> ast::Instruction<U> {
@@ -1165,7 +1005,7 @@ impl ast::Instruction<NormalizedArgParams> {
         self,
         f: &mut F,
     ) -> ast::Instruction<NormalizedArgParams> {
-        self.map_variable_new(f)
+        self.map(f)
     }
 }
 
@@ -1213,14 +1053,14 @@ fn reduced_visitor<'a>(
 impl ast::Instruction<ExpandedArgParams> {
     fn visit_variable<F: FnMut(spirv::Word) -> spirv::Word>(self, f: &mut F) -> Self {
         let mut visitor = reduced_visitor(f);
-        self.map_variable_new(&mut visitor)
+        self.map(&mut visitor)
     }
 
     fn visit_variable_extended<F: FnMut(spirv::Word, bool, Option<ast::Type>) -> spirv::Word>(
         self,
         f: &mut F,
     ) -> Self {
-        self.map_variable_new(f)
+        self.map(f)
     }
 
     fn jump_target(&self) -> Option<spirv::Word> {
@@ -1319,7 +1159,7 @@ impl<'a> ast::Instruction<ast::ParsedArgParams<'a>> {
         self,
         f: &mut F,
     ) -> ast::Instruction<NormalizedArgParams> {
-        self.map_variable_new(f)
+        self.map(f)
     }
 }
 
@@ -1456,15 +1296,6 @@ enum ScalarKind {
     Unsigned,
     Signed,
     Float,
-}
-
-impl ast::Type {
-    fn try_as_scalar(self) -> Option<ast::ScalarType> {
-        match self {
-            ast::Type::Scalar(s) => Some(s),
-            ast::Type::ExtendedScalar(_) => None,
-        }
-    }
 }
 
 impl ast::ScalarType {

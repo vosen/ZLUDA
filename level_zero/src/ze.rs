@@ -708,15 +708,30 @@ impl<'a> Kernel<'a> {
         Self(x, PhantomData)
     }
 
-    pub fn new(module: &'a Module, name: &CStr) -> Result<Self> {
+    pub fn new_resident(module: &'a Module, name: &CStr) -> Result<Self> {
         let desc = sys::ze_kernel_desc_t {
             version: sys::ze_kernel_desc_version_t::ZE_KERNEL_DESC_VERSION_CURRENT,
-            flags: sys::ze_kernel_flag_t::ZE_KERNEL_FLAG_NONE,
+            flags: sys::ze_kernel_flag_t::ZE_KERNEL_FLAG_FORCE_RESIDENCY,
             pKernelName: name.as_ptr() as *const _,
         };
         let mut result = ptr::null_mut();
         check!(sys::zeKernelCreate(module.0, &desc, &mut result));
         Ok(Self(result, PhantomData))
+    }
+
+    pub fn set_attribute_bool(
+        &mut self,
+        attr: sys::ze_kernel_attribute_t,
+        value: bool,
+    ) -> Result<()> {
+        let ze_bool: sys::ze_bool_t = if value { 1 } else { 0 };
+        check!(sys::zeKernelSetAttribute(
+            self.0,
+            attr,
+            mem::size_of::<sys::ze_bool_t>() as u32,
+            &ze_bool as *const _ as *const _
+        ));
+        Ok(())
     }
 
     pub fn set_arg_buffer<T: 'a, Buff: Into<BufferPtr<'a, T>>>(

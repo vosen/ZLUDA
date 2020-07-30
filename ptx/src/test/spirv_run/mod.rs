@@ -100,7 +100,11 @@ fn run_spirv<T: From<u8> + ze::SafeRepr + Copy + Debug>(
     let dev = devices.drain(0..1).next().unwrap();
     let queue = ze::CommandQueue::new(&dev)?;
     let module = ze::Module::new_spirv(&dev, byte_il, None)?;
-    let kernel = ze::Kernel::new(&module, name)?;
+    let mut kernel = ze::Kernel::new_resident(&module, name)?;
+    kernel.set_attribute_bool(
+        ze::sys::ze_kernel_attribute_t::ZE_KERNEL_ATTR_INDIRECT_DEVICE_ACCESS,
+        true,
+    )?;
     let mut inp_b = ze::DeviceBuffer::<T>::new(&drv, &dev, input.len())?;
     let mut out_b = ze::DeviceBuffer::<T>::new(&drv, &dev, output.len())?;
     let inp_b_ptr_mut: ze::BufferPtrMut<T> = (&mut inp_b).into();
