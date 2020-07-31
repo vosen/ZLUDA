@@ -179,7 +179,7 @@ pub enum Instruction<P: ArgParams> {
     Not(NotType, Arg2<P>),
     Bra(BraData, Arg1<P>),
     Cvt(CvtData, Arg2<P>),
-    Shl(ShlData, Arg3<P>),
+    Shl(ShlType, Arg3<P>),
     St(StData, Arg2St<P>),
     Ret(RetData),
 }
@@ -400,7 +400,12 @@ pub struct BraData {
 
 pub struct CvtData {}
 
-pub struct ShlData {}
+#[derive(PartialEq, Eq, Copy, Clone)]
+pub enum ShlType {
+    B16,
+    B32,
+    B64,
+}
 
 pub struct StData {
     pub qualifier: LdStQualifier,

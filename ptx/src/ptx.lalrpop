@@ -606,11 +606,13 @@ CvtType = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-shl
 InstShl: ast::Instruction<ast::ParsedArgParams<'input>> = {
-    "shl" ShlType <a:Arg3> => ast::Instruction::Shl(ast::ShlData{}, a)
+    "shl" <t:ShlType> <a:Arg3> => ast::Instruction::Shl(t, a)
 };
 
-ShlType = {
-    ".b16", ".b32", ".b64"
+ShlType: ast::ShlType = {
+    ".b16" => ast::ShlType::B16,
+    ".b32" => ast::ShlType::B32,
+    ".b64" => ast::ShlType::B64,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-st

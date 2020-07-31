@@ -668,6 +668,10 @@ fn emit_function_body_ops(
                         _ => builder.not(result_type, result_id, operand),
                     }?;
                 }
+                ast::Instruction::Shl(t, a) => {
+                    let result_type = map.get_or_add(builder, SpirvType::from(t.to_type()));
+                    builder.shift_left_logical(result_type, Some(a.dst), a.src1, a.src2)?;
+                }
                 _ => todo!(),
             },
             Statement::LoadVar(arg, typ) => {
@@ -1121,11 +1125,11 @@ impl<T: ast::ArgParams> ast::Instruction<T> {
             }
             ast::Instruction::Mul(d, a) => {
                 let inst_type = d.get_type();
-                ast::Instruction::Mul(d, a.map(visitor, Some(inst_type)))
+                ast::Instruction::Mul(d, a.map_non_shift(visitor, Some(inst_type)))
             }
             ast::Instruction::Add(d, a) => {
                 let inst_type = d.get_type();
-                ast::Instruction::Add(d, a.map(visitor, Some(inst_type)))
+                ast::Instruction::Add(d, a.map_non_shift(visitor, Some(inst_type)))
             }
             ast::Instruction::Setp(d, a) => {
                 let inst_type = d.typ;
@@ -1139,7 +1143,9 @@ impl<T: ast::ArgParams> ast::Instruction<T> {
                 ast::Instruction::Not(t, a.map(visitor, Some(t.to_type())))
             }
             ast::Instruction::Cvt(_, _) => todo!(),
-            ast::Instruction::Shl(_, _) => todo!(),
+            ast::Instruction::Shl(t, a) => {
+                ast::Instruction::Shl(t, a.map_shift(visitor, Some(t.to_type())))
+            }
             ast::Instruction::St(d, a) => {
                 let inst_type = d.typ;
                 ast::Instruction::St(d, a.map(visitor, Some(ast::Type::Scalar(inst_type))))
@@ -1365,7 +1371,7 @@ impl<T: ast::ArgParams> ast::Arg2Mov<T> {
 }
 
 impl<T: ast::ArgParams> ast::Arg3<T> {
-    fn map<U: ast::ArgParams, V: ArgumentMapVisitor<T, U>>(
+    fn map_non_shift<U: ast::ArgParams, V: ArgumentMapVisitor<T, U>>(
         self,
         visitor: &mut V,
         t: Option<ast::Type>,
@@ -1374,6 +1380,18 @@ impl<T: ast::ArgParams> ast::Arg3<T> {
             dst: visitor.dst_variable(self.dst, t),
             src1: visitor.src_operand(self.src1, t),
             src2: visitor.src_operand(self.src2, t),
+        }
+    }
+
+    fn map_shift<U: ast::ArgParams, V: ArgumentMapVisitor<T, U>>(
+        self,
+        visitor: &mut V,
+        t: Option<ast::Type>,
+    ) -> ast::Arg3<U> {
+        ast::Arg3 {
+            dst: visitor.dst_variable(self.dst, t),
+            src1: visitor.src_operand(self.src1, t),
+            src2: visitor.src_operand(self.src2, Some(ast::Type::Scalar(ast::ScalarType::U32))),
         }
     }
 }
@@ -1529,6 +1547,16 @@ impl ast::NotType {
             ast::NotType::B16 => ast::Type::Scalar(ast::ScalarType::B16),
             ast::NotType::B32 => ast::Type::Scalar(ast::ScalarType::B32),
             ast::NotType::B64 => ast::Type::Scalar(ast::ScalarType::B64),
+        }
+    }
+}
+
+impl ast::ShlType {
+    fn to_type(self) -> ast::Type {
+        match self {
+            ast::ShlType::B16 => ast::Type::Scalar(ast::ScalarType::B16),
+            ast::ShlType::B32 => ast::Type::Scalar(ast::ScalarType::B32),
+            ast::ShlType::B64 => ast::Type::Scalar(ast::ScalarType::B64),
         }
     }
 }
