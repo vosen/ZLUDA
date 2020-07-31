@@ -44,6 +44,7 @@ test_ptx!(mov, [1u64], [1u64]);
 test_ptx!(mul_lo, [1u64], [2u64]);
 test_ptx!(mul_hi, [u64::max_value()], [1u64]);
 test_ptx!(add, [1u64], [2u64]);
+test_ptx!(setp, [10u64, 11u64], [1u64, 0u64]);
 
 struct DisplayError<T: Display + Debug> {
     err: T,

@@ -355,6 +355,7 @@ pub struct SetpData {
     pub cmp_op: SetpCompareOp,
 }
 
+#[derive(PartialEq, Eq, Copy, Clone)]
 pub enum SetpCompareOp {
     Eq,
     NotEq,
