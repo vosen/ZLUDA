@@ -557,11 +557,14 @@ SetpType: ast::ScalarType = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-not
 InstNot: ast::Instruction<ast::ParsedArgParams<'input>> = {
-    "not" NotType <a:Arg2> => ast::Instruction::Not(ast::NotData{}, a)
+    "not" <t:NotType> <a:Arg2> => ast::Instruction::Not(t, a)
 };
 
-NotType = {
-    ".pred", ".b16", ".b32", ".b64"
+NotType: ast::NotType = {
+    ".pred" => ast::NotType::Pred,
+    ".b16" => ast::NotType::B16,
+    ".b32" => ast::NotType::B32,
+    ".b64" => ast::NotType::B64,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-at

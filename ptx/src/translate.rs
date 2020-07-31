@@ -659,6 +659,15 @@ fn emit_function_body_ops(
                     }
                     emit_setp(builder, map, setp, arg)?;
                 }
+                ast::Instruction::Not(t, a) => {
+                    let result_type = map.get_or_add(builder, SpirvType::from(t.to_type()));
+                    let result_id = Some(a.dst);
+                    let operand = a.src;
+                    match t {
+                        ast::NotType::Pred => builder.logical_not(result_type, result_id, operand),
+                        _ => builder.not(result_type, result_id, operand),
+                    }?;
+                }
                 _ => todo!(),
             },
             Statement::LoadVar(arg, typ) => {
@@ -887,9 +896,7 @@ fn expand_map_variables<'a>(
     s: ast::Statement<ast::ParsedArgParams<'a>>,
 ) {
     match s {
-        ast::Statement::Label(name) => {
-            result.push(ast::Statement::Label(id_defs.get_id(name)))
-        }
+        ast::Statement::Label(name) => result.push(ast::Statement::Label(id_defs.get_id(name))),
         ast::Statement::Instruction(p, i) => result.push(ast::Statement::Instruction(
             p.map(|p| p.map_variable(&mut |id| id_defs.get_id(id))),
             i.map_variable(&mut |id| id_defs.get_id(id)),
@@ -1128,7 +1135,9 @@ impl<T: ast::ArgParams> ast::Instruction<T> {
                 let inst_type = d.typ;
                 ast::Instruction::SetpBool(d, a.map(visitor, Some(ast::Type::Scalar(inst_type))))
             }
-            ast::Instruction::Not(_, _) => todo!(),
+            ast::Instruction::Not(t, a) => {
+                ast::Instruction::Not(t, a.map(visitor, Some(t.to_type())))
+            }
             ast::Instruction::Cvt(_, _) => todo!(),
             ast::Instruction::Shl(_, _) => todo!(),
             ast::Instruction::St(d, a) => {
@@ -1509,6 +1518,17 @@ impl ast::ScalarType {
                 8 => ast::ScalarType::U64,
                 _ => unreachable!(),
             },
+        }
+    }
+}
+
+impl ast::NotType {
+    fn to_type(self) -> ast::Type {
+        match self {
+            ast::NotType::Pred => ast::Type::ExtendedScalar(ast::ExtendedScalarType::Pred),
+            ast::NotType::B16 => ast::Type::Scalar(ast::ScalarType::B16),
+            ast::NotType::B32 => ast::Type::Scalar(ast::ScalarType::B32),
+            ast::NotType::B64 => ast::Type::Scalar(ast::ScalarType::B64),
         }
     }
 }

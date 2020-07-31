@@ -176,7 +176,7 @@ pub enum Instruction<P: ArgParams> {
     Add(AddDetails, Arg3<P>),
     Setp(SetpData, Arg4<P>),
     SetpBool(SetpBoolData, Arg5<P>),
-    Not(NotData, Arg2<P>),
+    Not(NotType, Arg2<P>),
     Bra(BraData, Arg1<P>),
     Cvt(CvtData, Arg2<P>),
     Shl(ShlData, Arg3<P>),
@@ -386,7 +386,13 @@ pub struct SetpBoolData {
     pub bool_op: SetpBoolPostOp,
 }
 
-pub struct NotData {}
+#[derive(PartialEq, Eq, Copy, Clone)]
+pub enum NotType {
+    Pred,
+    B16,
+    B32,
+    B64,
+}
 
 pub struct BraData {
     pub uniform: bool,
