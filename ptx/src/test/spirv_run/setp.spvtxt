@@ -1,0 +1,65 @@
+               OpCapability GenericPointer
+               OpCapability Linkage
+               OpCapability Addresses
+               OpCapability Kernel
+               OpCapability Int64
+               OpCapability Int8
+          %1 = OpExtInstImport "OpenCL.std"
+               OpMemoryModel Physical64 OpenCL
+               OpEntryPoint Kernel %5 "setp"
+       %void = OpTypeVoid
+      %ulong = OpTypeInt 64 0
+          %4 = OpTypeFunction %void %ulong %ulong
+%_ptr_Function_ulong = OpTypePointer Function %ulong
+       %bool = OpTypeBool
+%_ptr_Function_bool = OpTypePointer Function %bool
+%_ptr_Generic_ulong = OpTypePointer Generic %ulong
+    %ulong_8 = OpConstant %ulong 8
+    %ulong_1 = OpConstant %ulong 1
+    %ulong_2 = OpConstant %ulong 2
+          %5 = OpFunction %void None %4
+          %6 = OpFunctionParameter %ulong
+          %7 = OpFunctionParameter %ulong
+         %38 = OpLabel
+          %8 = OpVariable %_ptr_Function_ulong Function
+          %9 = OpVariable %_ptr_Function_ulong Function
+         %10 = OpVariable %_ptr_Function_ulong Function
+         %11 = OpVariable %_ptr_Function_ulong Function
+         %12 = OpVariable %_ptr_Function_ulong Function
+         %13 = OpVariable %_ptr_Function_bool Function
+               OpStore %8 %6
+               OpStore %9 %7
+         %19 = OpLoad %ulong %8
+         %35 = OpConvertUToPtr %_ptr_Generic_ulong %19
+         %18 = OpLoad %ulong %35
+               OpStore %10 %18
+         %21 = OpLoad %ulong %8
+         %32 = OpIAdd %ulong %21 %ulong_8
+         %36 = OpConvertUToPtr %_ptr_Generic_ulong %32
+         %20 = OpLoad %ulong %36
+               OpStore %11 %20
+         %23 = OpLoad %ulong %10
+         %24 = OpLoad %ulong %11
+         %22 = OpULessThan %bool %23 %24
+               OpStore %13 %22
+         %25 = OpLoad %bool %13
+               OpBranchConditional %25 %14 %15
+         %14 = OpLabel
+         %26 = OpCopyObject %ulong %ulong_1
+               OpStore %12 %26
+               OpBranch %15
+         %15 = OpLabel
+         %27 = OpLoad %bool %13
+               OpBranchConditional %27 %17 %16
+         %16 = OpLabel
+         %28 = OpCopyObject %ulong %ulong_2
+               OpStore %12 %28
+               OpBranch %17
+         %17 = OpLabel
+         %29 = OpLoad %ulong %9
+         %30 = OpLoad %ulong %12
+         %37 = OpConvertUToPtr %_ptr_Generic_ulong %29
+               OpStore %37 %30
+               OpReturn
+               OpFunctionEnd
+               

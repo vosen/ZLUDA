@@ -554,6 +554,14 @@ fn emit_function_body_ops(
                 }
                 builder.begin_block(Some(*id))?;
             }
+            _ => {
+                if builder.block.is_none() {
+                    builder.begin_block(None)?;
+                }
+            }
+        }
+        match s {
+            Statement::Label(_) => (),
             Statement::Variable(id, typ, ss) => {
                 let type_id = map.get_or_add(
                     builder,
@@ -858,6 +866,14 @@ fn normalize_identifiers<'a, 'b>(
     for arg in args {
         id_defs.add_def(arg.name, Some(ast::Type::Scalar(arg.a_type)));
     }
+    for s in func.iter() {
+        match s {
+            ast::Statement::Label(id) => {
+                id_defs.add_def(*id, None);
+            }
+            _ => (),
+        }
+    }
     let mut result = Vec::new();
     for s in func {
         expand_map_variables(&mut id_defs, &mut result, s);
@@ -872,7 +888,7 @@ fn expand_map_variables<'a>(
 ) {
     match s {
         ast::Statement::Label(name) => {
-            result.push(ast::Statement::Label(id_defs.add_def(name, None)))
+            result.push(ast::Statement::Label(id_defs.get_id(name)))
         }
         ast::Statement::Instruction(p, i) => result.push(ast::Statement::Instruction(
             p.map(|p| p.map_variable(&mut |id| id_defs.get_id(id))),
