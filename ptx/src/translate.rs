@@ -1580,13 +1580,6 @@ impl ast::MulDetails {
 }
 
 impl ast::IntType {
-    fn is_signed(self) -> bool {
-        match self {
-            ast::IntType::S16 | ast::IntType::S32 | ast::IntType::S64 => true,
-            ast::IntType::U16 | ast::IntType::U32 | ast::IntType::U64 => false,
-        }
-    }
-
     fn try_new(t: ast::ScalarType) -> Option<Self> {
         match t {
             ast::ScalarType::U16 => Some(ast::IntType::U16),

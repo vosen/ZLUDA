@@ -403,13 +403,13 @@ InstMulMode: ast::MulDetails = {
         typ: t,
         control: ctr
     }),
-    <r:RoundingMode?> <ftz:".ftz"?> <s:".sat"?> ".f32" => ast::MulDetails::Float(ast::MulFloatDesc {
+    <r:RoundingModeFloat?> <ftz:".ftz"?> <s:".sat"?> ".f32" => ast::MulDetails::Float(ast::MulFloatDesc {
         typ: ast::FloatType::F32,
         rounding: r,
         flush_to_zero: ftz.is_some(),
         saturate: s.is_some()
     }),
-    <r:RoundingMode?> ".f64" => ast::MulDetails::Float(ast::MulFloatDesc {
+    <r:RoundingModeFloat?> ".f64" => ast::MulDetails::Float(ast::MulFloatDesc {
         typ: ast::FloatType::F64,
         rounding: r,
         flush_to_zero: false,
@@ -436,11 +436,18 @@ MulIntControl: ast::MulIntControl = {
 };
 
 #[inline]
-RoundingMode : ast::RoundingMode = {
+RoundingModeFloat : ast::RoundingMode = {
     ".rn" => ast::RoundingMode::NearestEven,
     ".rz" => ast::RoundingMode::Zero,
     ".rm" => ast::RoundingMode::NegativeInf,
     ".rp" => ast::RoundingMode::PositiveInf,
+};
+
+RoundingModeInt : ast::RoundingMode = {
+    ".rni" => ast::RoundingMode::NearestEven,
+    ".rzi" => ast::RoundingMode::Zero,
+    ".rmi" => ast::RoundingMode::NegativeInf,
+    ".rpi" => ast::RoundingMode::PositiveInf,
 };
 
 IntType : ast::IntType = {
@@ -468,13 +475,13 @@ InstAddMode: ast::AddDetails = {
         typ: ast::IntType::S32,
         saturate: true,
     }),
-    <rn:RoundingMode?> <ftz:".ftz"?> <sat:".sat"?> ".f32" => ast::AddDetails::Float(ast::AddFloatDesc {
+    <rn:RoundingModeFloat?> <ftz:".ftz"?> <sat:".sat"?> ".f32" => ast::AddDetails::Float(ast::AddFloatDesc {
         typ: ast::FloatType::F32,
         rounding: rn,
         flush_to_zero: ftz.is_some(),
         saturate: sat.is_some(),
     }),
-    <rn:RoundingMode?> ".f64" => ast::AddDetails::Float(ast::AddFloatDesc {
+    <rn:RoundingModeFloat?> ".f64" => ast::AddDetails::Float(ast::AddFloatDesc {
         typ: ast::FloatType::F64,
         rounding: rn,
         flush_to_zero: false,
@@ -580,28 +587,153 @@ InstBra: ast::Instruction<ast::ParsedArgParams<'input>> = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt
 InstCvt: ast::Instruction<ast::ParsedArgParams<'input>> = {
-    "cvt" CvtRnd? ".ftz"? ".sat"? CvtType CvtType <a:Arg2> => {
-        ast::Instruction::Cvt(ast::CvtData{}, a)
-    }
+    "cvt" <s:".sat"?> <dst_t:CvtTypeInt> <src_t:CvtTypeInt> <a:Arg2> => {
+        ast::Instruction::Cvt(ast::CvtDetails::new_int_from_int_checked(
+            s.is_some(),
+            dst_t,
+            src_t,
+            errors
+        ),
+        a)
+    },
+    "cvt" <r:RoundingModeFloat> <f:".ftz"?> <s:".sat"?> <dst_t:CvtTypeFloat> <src_t:CvtTypeInt> <a:Arg2> => {
+        ast::Instruction::Cvt(ast::CvtDetails::new_float_from_int_checked(
+            r,
+            f.is_some(),
+            s.is_some(),
+            dst_t,
+            src_t,
+            errors
+        ),
+        a)
+    },
+    "cvt" <r:RoundingModeInt> <f:".ftz"?> <s:".sat"?> <dst_t:CvtTypeInt> <src_t:CvtTypeFloat> <a:Arg2> => {
+        ast::Instruction::Cvt(ast::CvtDetails::new_int_from_float_checked(
+            r,
+            f.is_some(),
+            s.is_some(),
+            dst_t,
+            src_t,
+            errors
+        ),
+        a)
+    },
+    "cvt" <r:RoundingModeInt?> <s:".sat"?> ".f16" ".f16" <a:Arg2> => {
+        ast::Instruction::Cvt(ast::CvtDetails::FloatFromFloat(
+            ast::CvtDesc {
+                rounding: r,
+                flush_to_zero: false,
+                saturate: s.is_some(),
+                dst: ast::FloatType::F16,
+                src: ast::FloatType::F16
+            }
+        ), a)
+    },
+    "cvt" <f:".ftz"?> <s:".sat"?> ".f32" ".f16" <a:Arg2> => {
+        ast::Instruction::Cvt(ast::CvtDetails::FloatFromFloat(
+            ast::CvtDesc {
+                rounding: None,
+                flush_to_zero: f.is_some(),
+                saturate: s.is_some(),
+                dst: ast::FloatType::F32,
+                src: ast::FloatType::F16
+            }
+        ), a)
+    },
+    "cvt" <s:".sat"?> ".f64" ".f16" <a:Arg2> => {
+        ast::Instruction::Cvt(ast::CvtDetails::FloatFromFloat(
+            ast::CvtDesc {
+                rounding: None,
+                flush_to_zero: false,
+                saturate: s.is_some(),
+                dst: ast::FloatType::F64,
+                src: ast::FloatType::F16
+            }
+        ), a)
+    },
+    "cvt" <r:RoundingModeFloat> <f:".ftz"?> <s:".sat"?> ".f16" ".f32" <a:Arg2> => {
+        ast::Instruction::Cvt(ast::CvtDetails::FloatFromFloat(
+            ast::CvtDesc {
+                rounding: Some(r),
+                flush_to_zero: f.is_some(),
+                saturate: s.is_some(),
+                dst: ast::FloatType::F16,
+                src: ast::FloatType::F32
+            }
+        ), a)
+    },
+    "cvt" <r:RoundingModeFloat?> <f:".ftz"?> <s:".sat"?> ".f32" ".f32" <a:Arg2> => {
+        ast::Instruction::Cvt(ast::CvtDetails::FloatFromFloat(
+            ast::CvtDesc {
+                rounding: r,
+                flush_to_zero: f.is_some(),
+                saturate: s.is_some(),
+                dst: ast::FloatType::F32,
+                src: ast::FloatType::F32
+            }
+        ), a)
+    },
+    "cvt" <s:".sat"?> ".f64" ".f32" <a:Arg2> => {
+        ast::Instruction::Cvt(ast::CvtDetails::FloatFromFloat(
+            ast::CvtDesc {
+                rounding: None,
+                flush_to_zero: false,
+                saturate: s.is_some(),
+                dst: ast::FloatType::F64,
+                src: ast::FloatType::F32
+            }
+        ), a)
+    },
+    "cvt" <r:RoundingModeFloat> <s:".sat"?> ".f16" ".f64" <a:Arg2> => {
+        ast::Instruction::Cvt(ast::CvtDetails::FloatFromFloat(
+            ast::CvtDesc {
+                rounding: Some(r),
+                flush_to_zero: false,
+                saturate: s.is_some(),
+                dst: ast::FloatType::F16,
+                src: ast::FloatType::F64
+            }
+        ), a)
+    },
+    "cvt" <r:RoundingModeFloat> <f:".ftz"?> <s:".sat"?> ".f32" ".f64" <a:Arg2> => {
+        ast::Instruction::Cvt(ast::CvtDetails::FloatFromFloat(
+            ast::CvtDesc {
+                rounding: Some(r),
+                flush_to_zero: s.is_some(),
+                saturate: s.is_some(),
+                dst: ast::FloatType::F32,
+                src: ast::FloatType::F64
+            }
+        ), a)
+    },
+    "cvt" <r:RoundingModeFloat?> <s:".sat"?> ".f64" ".f64" <a:Arg2> => {
+        ast::Instruction::Cvt(ast::CvtDetails::FloatFromFloat(
+            ast::CvtDesc {
+                rounding: r,
+                flush_to_zero: false,
+                saturate: s.is_some(),
+                dst: ast::FloatType::F64,
+                src: ast::FloatType::F64
+            }
+        ), a)
+    },
 };
 
-CvtRnd = {
-    CvtIrnd,
-    CvtFrnd
-}
-
-CvtIrnd = {
-    ".rni", ".rzi", ".rmi", ".rpi"
+CvtTypeInt: ast::IntType = {
+    ".u8" => ast::IntType::U8,
+    ".u16" => ast::IntType::U16,
+    ".u32" => ast::IntType::U32,
+    ".u64" => ast::IntType::U64,
+    ".s8" => ast::IntType::S8,
+    ".s16" => ast::IntType::S16,
+    ".s32" => ast::IntType::S32,
+    ".s64" => ast::IntType::S64,
 };
 
-CvtFrnd = {
-    ".rn",  ".rz",  ".rm", ".rp"
-};
-
-CvtType = {
-    ".u8", ".u16", ".u32", ".u64",
-    ".s8", ".s16", ".s32", ".s64",
-    ".f16", ".f32", ".f64"
+CvtTypeFloat: ast::FloatType = {
+    ".f16" => ast::FloatType::F16,
+    ".f32" => ast::FloatType::F32,
+    ".f64" => ast::FloatType::F64,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-shl

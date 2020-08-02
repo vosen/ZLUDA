@@ -9,6 +9,8 @@ quick_error! {
             display("{}", err)
             cause(err)
         }
+        SyntaxError {}
+        NonF32Ftz {}
     }
 }
 
@@ -101,9 +103,11 @@ pub enum ScalarType {
 impl From<IntType> for ScalarType {
     fn from(t: IntType) -> Self {
         match t {
+            IntType::S8 => ScalarType::S8,
             IntType::S16 => ScalarType::S16,
             IntType::S32 => ScalarType::S32,
             IntType::S64 => ScalarType::S64,
+            IntType::U8 => ScalarType::U8,
             IntType::U16 => ScalarType::U16,
             IntType::U32 => ScalarType::U32,
             IntType::U64 => ScalarType::U64,
@@ -113,12 +117,36 @@ impl From<IntType> for ScalarType {
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
 pub enum IntType {
+    U8,
     U16,
     U32,
     U64,
+    S8,
     S16,
     S32,
     S64,
+}
+
+impl IntType {
+    pub fn is_signed(self) -> bool {
+        match self {
+            IntType::U8 | IntType::U16 | IntType::U32 | IntType::U64 => false,
+            IntType::S8 | IntType::S16 | IntType::S32 | IntType::S64 => true,
+        }
+    }
+
+    pub fn width(self) -> u8 {
+        match self {
+            IntType::U8 => 1,
+            IntType::U16 => 2,
+            IntType::U32 => 4,
+            IntType::U64 => 8,
+            IntType::S8 => 1,
+            IntType::S16 => 2,
+            IntType::S32 => 4,
+            IntType::S64 => 8,
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
@@ -178,7 +206,7 @@ pub enum Instruction<P: ArgParams> {
     SetpBool(SetpBoolData, Arg5<P>),
     Not(NotType, Arg2<P>),
     Bra(BraData, Arg1<P>),
-    Cvt(CvtData, Arg2<P>),
+    Cvt(CvtDetails, Arg2<P>),
     Shl(ShlType, Arg3<P>),
     St(StData, Arg2St<P>),
     Ret(RetData),
@@ -398,7 +426,88 @@ pub struct BraData {
     pub uniform: bool,
 }
 
-pub struct CvtData {}
+pub enum CvtDetails {
+    IntFromInt(CvtIntToIntDesc),
+    FloatFromFloat(CvtDesc<FloatType, FloatType>),
+    IntFromFloat(CvtDesc<IntType, FloatType>),
+    FloatFromInt(CvtDesc<FloatType, IntType>),
+}
+
+pub struct CvtIntToIntDesc {
+    pub dst: IntType,
+    pub src: IntType,
+    pub saturate: bool,
+}
+
+pub struct CvtDesc<Dst, Src> {
+    pub rounding: Option<RoundingMode>,
+    pub flush_to_zero: bool,
+    pub saturate: bool,
+    pub dst: Dst,
+    pub src: Src,
+}
+
+impl CvtDetails {
+    pub fn new_int_from_int_checked(
+        saturate: bool,
+        dst: IntType,
+        src: IntType,
+        err: &mut Vec<PtxError>,
+    ) -> Self {
+        if saturate {
+            if src.is_signed() {
+                if dst.is_signed() && dst.width() >= src.width() {
+                    err.push(PtxError::SyntaxError);
+                }
+            } else {
+                if dst == src || dst.width() >= src.width() {
+                    err.push(PtxError::SyntaxError);
+                }
+            }
+        }
+        CvtDetails::IntFromInt(CvtIntToIntDesc { dst, src, saturate })
+    }
+
+    pub fn new_float_from_int_checked(
+        rounding: RoundingMode,
+        flush_to_zero: bool,
+        saturate: bool,
+        dst: FloatType,
+        src: IntType,
+        err: &mut Vec<PtxError>,
+    ) -> Self {
+        if flush_to_zero && dst != FloatType::F32 {
+            err.push(PtxError::NonF32Ftz);
+        }
+        CvtDetails::FloatFromInt(CvtDesc {
+            dst,
+            src,
+            saturate,
+            flush_to_zero,
+            rounding: Some(rounding),
+        })
+    }
+
+    pub fn new_int_from_float_checked(
+        rounding: RoundingMode,
+        flush_to_zero: bool,
+        saturate: bool,
+        dst: IntType,
+        src: FloatType,
+        err: &mut Vec<PtxError>,
+    ) -> Self {
+        if flush_to_zero && src != FloatType::F32 {
+            err.push(PtxError::NonF32Ftz);
+        }
+        CvtDetails::IntFromFloat(CvtDesc {
+            dst,
+            src,
+            saturate,
+            flush_to_zero,
+            rounding: Some(rounding),
+        })
+    }
+}
 
 #[derive(PartialEq, Eq, Copy, Clone)]
 pub enum ShlType {
