@@ -268,6 +268,7 @@ pub struct Arg5<P: ArgParams> {
     pub src3: P::Operand,
 }
 
+#[derive(Copy, Clone)]
 pub enum Operand<ID> {
     Reg(ID),
     RegOffset(ID, i32),
@@ -353,6 +354,7 @@ pub struct MulFloatDesc {
     pub saturate: bool,
 }
 
+#[derive(PartialEq, Eq, Copy, Clone)]
 pub enum RoundingMode {
     NearestEven,
     Zero,

@@ -20,7 +20,7 @@
           %5 = OpFunction %void None %4
           %6 = OpFunctionParameter %ulong
           %7 = OpFunctionParameter %ulong
-         %38 = OpLabel
+         %39 = OpLabel
           %8 = OpVariable %_ptr_Function_ulong Function
           %9 = OpVariable %_ptr_Function_ulong Function
          %10 = OpVariable %_ptr_Function_ulong Function
@@ -34,9 +34,10 @@
          %18 = OpLoad %ulong %35
                OpStore %10 %18
          %21 = OpLoad %ulong %8
-         %32 = OpIAdd %ulong %21 %ulong_8
-         %36 = OpConvertUToPtr %_ptr_Generic_ulong %32
-         %20 = OpLoad %ulong %36
+         %36 = OpCopyObject %ulong %21
+         %32 = OpIAdd %ulong %36 %ulong_8
+         %37 = OpConvertUToPtr %_ptr_Generic_ulong %32
+         %20 = OpLoad %ulong %37
                OpStore %11 %20
          %23 = OpLoad %ulong %10
          %24 = OpLoad %ulong %11
@@ -58,8 +59,7 @@
          %17 = OpLabel
          %29 = OpLoad %ulong %9
          %30 = OpLoad %ulong %12
-         %37 = OpConvertUToPtr %_ptr_Generic_ulong %29
-               OpStore %37 %30
+         %38 = OpConvertUToPtr %_ptr_Generic_ulong %29
+               OpStore %38 %30
                OpReturn
                OpFunctionEnd
-               

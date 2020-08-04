@@ -743,7 +743,7 @@ impl<'a> Kernel<'a> {
         check!(sys::zeKernelSetArgumentValue(
             self.0,
             index,
-            mem::size_of::<T>(),
+            mem::size_of::<*const ()>(),
             &ptr as *const _ as *const _,
         ));
         Ok(())

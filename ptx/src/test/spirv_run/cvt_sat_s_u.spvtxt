@@ -1,0 +1,43 @@
+               OpCapability GenericPointer
+               OpCapability Linkage
+               OpCapability Addresses
+               OpCapability Kernel
+               OpCapability Int64
+               OpCapability Int8
+          %1 = OpExtInstImport "OpenCL.std"
+               OpMemoryModel Physical64 OpenCL
+               OpEntryPoint Kernel %5 "cvt_sat_s_u"
+       %void = OpTypeVoid
+      %ulong = OpTypeInt 64 0
+          %4 = OpTypeFunction %void %ulong %ulong
+%_ptr_Function_ulong = OpTypePointer Function %ulong
+       %uint = OpTypeInt 32 0
+%_ptr_Function_uint = OpTypePointer Function %uint
+%_ptr_Generic_uint = OpTypePointer Generic %uint
+          %5 = OpFunction %void None %4
+          %6 = OpFunctionParameter %ulong
+          %7 = OpFunctionParameter %ulong
+         %23 = OpLabel
+          %8 = OpVariable %_ptr_Function_ulong Function
+          %9 = OpVariable %_ptr_Function_ulong Function
+         %10 = OpVariable %_ptr_Function_uint Function
+         %11 = OpVariable %_ptr_Function_uint Function
+         %12 = OpVariable %_ptr_Function_uint Function
+               OpStore %8 %6
+               OpStore %9 %7
+         %14 = OpLoad %ulong %8
+         %21 = OpConvertUToPtr %_ptr_Generic_uint %14
+         %13 = OpLoad %uint %21
+               OpStore %10 %13
+         %16 = OpLoad %uint %10
+         %15 = OpSatConvertSToU %uint %16
+               OpStore %11 %15
+         %18 = OpLoad %uint %11
+         %17 = OpBitcast %uint %18
+               OpStore %12 %17
+         %19 = OpLoad %ulong %9
+         %20 = OpLoad %uint %12
+         %22 = OpConvertUToPtr %_ptr_Generic_uint %19
+               OpStore %22 %20
+               OpReturn
+               OpFunctionEnd
