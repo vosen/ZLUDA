@@ -1,0 +1,42 @@
+               OpCapability GenericPointer
+               OpCapability Linkage
+               OpCapability Addresses
+               OpCapability Kernel
+               OpCapability Int64
+               OpCapability Int8
+          %1 = OpExtInstImport "OpenCL.std"
+               OpMemoryModel Physical64 OpenCL
+               OpEntryPoint Kernel %5 "cvta"
+       %void = OpTypeVoid
+      %ulong = OpTypeInt 64 0
+          %4 = OpTypeFunction %void %ulong %ulong
+%_ptr_Function_ulong = OpTypePointer Function %ulong
+      %float = OpTypeFloat 32
+%_ptr_Function_float = OpTypePointer Function %float
+%_ptr_CrossWorkgroup_float = OpTypePointer CrossWorkgroup %float
+          %5 = OpFunction %void None %4
+          %6 = OpFunctionParameter %ulong
+          %7 = OpFunctionParameter %ulong
+         %21 = OpLabel
+          %8 = OpVariable %_ptr_Function_ulong Function
+          %9 = OpVariable %_ptr_Function_ulong Function
+         %10 = OpVariable %_ptr_Function_float Function
+               OpStore %8 %6
+               OpStore %9 %7
+         %12 = OpLoad %ulong %8
+         %11 = OpCopyObject %ulong %12
+               OpStore %8 %11
+         %14 = OpLoad %ulong %9
+         %13 = OpCopyObject %ulong %14
+               OpStore %9 %13
+         %16 = OpLoad %ulong %8
+         %19 = OpConvertUToPtr %_ptr_CrossWorkgroup_float %16
+         %15 = OpLoad %float %19
+               OpStore %10 %15
+         %17 = OpLoad %ulong %9
+         %18 = OpLoad %float %10
+         %20 = OpConvertUToPtr %_ptr_CrossWorkgroup_float %17
+               OpStore %20 %18
+               OpReturn
+               OpFunctionEnd
+               

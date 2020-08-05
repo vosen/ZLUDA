@@ -90,6 +90,7 @@ match {
     ".sreg",
     ".sys",
     ".target",
+    ".to",
     ".u16",
     ".u32",
     ".u64",
@@ -110,6 +111,7 @@ match {
     "add",
     "bra",
     "cvt",
+    "cvta",
     "debug",
     "ld",
     "map_f64_to_f32",
@@ -136,6 +138,7 @@ ExtendedID : &'input str = {
     "add",
     "bra",
     "cvt",
+    "cvta",
     "debug",
     "ld",
     "map_f64_to_f32",
@@ -322,6 +325,7 @@ Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
     InstShl,
     InstSt,
     InstRet,
+    InstCvta,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
@@ -782,6 +786,38 @@ StCacheOperator: ast::StCacheOperator = {
 InstRet: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "ret" <u:".uni"?> => ast::Instruction::Ret(ast::RetData { uniform: u.is_some() })
 };
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvta
+InstCvta: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "cvta" <to:CvtaStateSpace> <s:CvtaSize> <a:Arg2> => {
+        ast::Instruction::Cvta(ast::CvtaDetails {
+            to: to,
+            from: ast::CvtaStateSpace::Generic,
+            size: s
+        },
+        a)
+    },
+    "cvta" ".to" <from:CvtaStateSpace> <s:CvtaSize> <a:Arg2> => {
+        ast::Instruction::Cvta(ast::CvtaDetails {
+            to: ast::CvtaStateSpace::Generic,
+            from: from,
+            size: s
+        },
+        a)
+    }
+}
+
+CvtaStateSpace: ast::CvtaStateSpace = {
+    ".const" => ast::CvtaStateSpace::Const,
+    ".global" => ast::CvtaStateSpace::Global,
+    ".local" => ast::CvtaStateSpace::Local,
+    ".shared" => ast::CvtaStateSpace::Shared,
+}
+
+CvtaSize: ast::CvtaSize = {
+    ".u32" => ast::CvtaSize::U32,
+    ".u64" => ast::CvtaSize::U64,
+}
 
 Operand: ast::Operand<&'input str> = {
     <r:ExtendedID> => ast::Operand::Reg(r),

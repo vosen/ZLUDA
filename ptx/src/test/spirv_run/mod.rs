@@ -48,7 +48,8 @@ test_ptx!(setp, [10u64, 11u64], [1u64, 0u64]);
 test_ptx!(bra, [10u64], [11u64]);
 test_ptx!(not, [0u64], [u64::max_value()]);
 test_ptx!(shl, [11u64], [44u64]);
-test_ptx!(cvt_sat_s_u, [0i32], [0i32]);
+test_ptx!(cvt_sat_s_u, [-1i32], [0i32]);
+test_ptx!(cvta, [3.0f32], [3.0f32]);
 
 struct DisplayError<T: Display + Debug> {
     err: T,

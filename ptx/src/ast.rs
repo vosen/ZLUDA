@@ -207,6 +207,7 @@ pub enum Instruction<P: ArgParams> {
     Not(NotType, Arg2<P>),
     Bra(BraData, Arg1<P>),
     Cvt(CvtDetails, Arg2<P>),
+    Cvta(CvtaDetails, Arg2<P>),
     Shl(ShlType, Arg3<P>),
     St(StData, Arg2St<P>),
     Ret(RetData),
@@ -308,7 +309,7 @@ pub enum LdScope {
     Sys,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum LdStateSpace {
     Generic,
     Const,
@@ -509,6 +510,26 @@ impl CvtDetails {
             rounding: Some(rounding),
         })
     }
+}
+
+pub struct CvtaDetails {
+    pub to: CvtaStateSpace,
+    pub from: CvtaStateSpace,
+    pub size: CvtaSize,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum CvtaStateSpace {
+    Generic,
+    Const,
+    Global,
+    Local,
+    Shared,
+}
+
+pub enum CvtaSize {
+    U32,
+    U64,
 }
 
 #[derive(PartialEq, Eq, Copy, Clone)]

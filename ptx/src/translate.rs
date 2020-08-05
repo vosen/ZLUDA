@@ -671,7 +671,7 @@ fn emit_function_body_ops(
                     }
                     let result_type = map.get_or_add_scalar(builder, data.typ);
                     match data.state_space {
-                        ast::LdStateSpace::Generic => {
+                        ast::LdStateSpace::Generic | ast::LdStateSpace::Global => {
                             builder.load(result_type, Some(arg.dst), arg.src, None, [])?;
                         }
                         ast::LdStateSpace::Param => {
@@ -683,7 +683,8 @@ fn emit_function_body_ops(
                 ast::Instruction::St(data, arg) => {
                     if data.qualifier != ast::LdStQualifier::Weak
                         || data.vector.is_some()
-                        || data.state_space != ast::StStateSpace::Generic
+                        || (data.state_space != ast::StStateSpace::Generic
+                            && data.state_space != ast::StStateSpace::Global)
                     {
                         todo!()
                     }
@@ -728,6 +729,13 @@ fn emit_function_body_ops(
                 }
                 ast::Instruction::Cvt(dets, arg) => {
                     emit_cvt(builder, map, opencl, dets, arg)?;
+                }
+                ast::Instruction::Cvta(_, arg) => {
+                    // This would be only meaningful if const/slm/global pointers
+                    // had a different format than generic pointers, but they don't pretty much by ptx definition
+                    // Honestly, I have no idea why this instruction exists and is emitted by the compiler
+                    let result_type = map.get_or_add_scalar(builder, ast::ScalarType::B64);
+                    builder.copy_object(result_type, Some(arg.dst), arg.src)?;
                 }
                 ast::Instruction::SetpBool(_, _) => todo!(),
             },
@@ -997,13 +1005,10 @@ fn emit_implicit_conversion(
         _ => todo!(),
     };
     match cv.kind {
-        ConversionKind::Ptr => {
+        ConversionKind::Ptr(space) => {
             let dst_type = map.get_or_add(
                 builder,
-                SpirvType::Pointer(
-                    SpirvScalarKey::from(to_type),
-                    spirv_headers::StorageClass::Generic,
-                ),
+                SpirvType::Pointer(SpirvScalarKey::from(to_type), space.to_spirv()),
             );
             builder.convert_u_to_ptr(dst_type, Some(cv.dst), cv.src)?;
         }
@@ -1365,6 +1370,10 @@ impl<T: ast::ArgParams> ast::Instruction<T> {
             }
             ast::Instruction::Bra(d, a) => ast::Instruction::Bra(d, a.map(visitor, None)),
             ast::Instruction::Ret(d) => ast::Instruction::Ret(d),
+            ast::Instruction::Cvta(d, a) => {
+                let inst_type = ast::Type::Scalar(ast::ScalarType::B64);
+                ast::Instruction::Cvta(d, a.map(visitor, Some(inst_type)))
+            }
         }
     }
 }
@@ -1443,6 +1452,7 @@ impl ast::Instruction<ExpandedArgParams> {
             | ast::Instruction::SetpBool(_, _)
             | ast::Instruction::Not(_, _)
             | ast::Instruction::Cvt(_, _)
+            | ast::Instruction::Cvta(_, _)
             | ast::Instruction::Shl(_, _)
             | ast::Instruction::St(_, _)
             | ast::Instruction::Ret(_) => None,
@@ -1498,7 +1508,7 @@ enum ConversionKind {
     Default,
     // zero-extend/chop/bitcast depending on types
     SignExtend,
-    Ptr,
+    Ptr(ast::LdStateSpace),
 }
 
 impl ImplicitConversion {
@@ -1944,6 +1954,19 @@ impl ast::IntType {
     }
 }
 
+impl ast::LdStateSpace {
+    fn to_spirv(self) -> spirv::StorageClass {
+        match self {
+            ast::LdStateSpace::Const => spirv::StorageClass::UniformConstant,
+            ast::LdStateSpace::Generic => spirv::StorageClass::Generic,
+            ast::LdStateSpace::Global => spirv::StorageClass::CrossWorkgroup,
+            ast::LdStateSpace::Local => spirv::StorageClass::Function,
+            ast::LdStateSpace::Shared => spirv::StorageClass::Workgroup,
+            ast::LdStateSpace::Param => unreachable!(),
+        }
+    }
+}
+
 fn should_bitcast(instr: ast::Type, operand: ast::Type) -> bool {
     match (instr, operand) {
         (ast::Type::Scalar(inst), ast::Type::Scalar(operand)) => {
@@ -1980,7 +2003,7 @@ fn insert_implicit_conversions_ld_src(
             src,
             should_convert_ld_param_src,
         ),
-        ast::LdStateSpace::Generic => {
+        ast::LdStateSpace::Generic | ast::LdStateSpace::Global => {
             let new_src_type = ast::Type::Scalar(ast::ScalarType::from_parts(
                 mem::size_of::<usize>() as u8,
                 ScalarKind::Byte,
@@ -1998,7 +2021,7 @@ fn insert_implicit_conversions_ld_src(
                 new_src,
                 new_src_type,
                 instr_type,
-                ConversionKind::Ptr,
+                ConversionKind::Ptr(state_space),
             )
         }
         _ => todo!(),
