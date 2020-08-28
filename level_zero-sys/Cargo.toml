@@ -1,6 +1,6 @@
 [package]
 name = "level_zero-sys"
-version = "0.91.0"
+version = "1.0.4"
 authors = ["Andrzej Janik <vosen@vosen.pl>"]
 edition = "2018"
 links = "ze_loader"

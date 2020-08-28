@@ -6,13 +6,14 @@ use std::{
     mem, ptr,
 };
 
-pub type Result<T> = std::result::Result<T, Error>;
-
 macro_rules! check {
     ($expr:expr) => {
-        let err = unsafe { $expr };
-        if err != crate::sys::ze_result_t::ZE_RESULT_SUCCESS {
-            return Result::Err(Error::err(err));
+        #[allow(unused_unsafe)]
+        {
+            let err = unsafe { $expr };
+            if err != crate::sys::ze_result_t::ZE_RESULT_SUCCESS {
+                return Result::Err(Error(err));
+            }
         }
     };
 }
@@ -26,173 +27,17 @@ macro_rules! check_panic {
     };
 }
 
+pub type Result<T> = std::result::Result<T, Error>;
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum Error {
-    NotReady = 1,
-    DeviceLost = 1879048193,
-    OutOfHostMemory = 1879048194,
-    OutOfDeviceMemory = 1879048195,
-    ModuleBuildFailure = 1879048196,
-    InsufficientPermissions = 1879113728,
-    NotAvailable = 1879113729,
-    Uninitialized = 2013265921,
-    UnsupportedVersion = 2013265922,
-    UnsupportedFeature = 2013265923,
-    InvalidArgument = 2013265924,
-    InvalidNullHandle = 2013265925,
-    HandleObjectInUse = 2013265926,
-    InvalidNullPointer = 2013265927,
-    InvalidSize = 2013265928,
-    UnsupportedSize = 2013265929,
-    UnsupportedAlignment = 2013265930,
-    InvalidSynchronizationObject = 2013265931,
-    InvalidEnumeration = 2013265932,
-    UnsupportedEnumeration = 2013265933,
-    UnsupportedImageFormat = 2013265934,
-    InvalidNativeBinary = 2013265935,
-    InvalidGlobalName = 2013265936,
-    InvalidKernelName = 2013265937,
-    InvalidFunctionName = 2013265938,
-    InvalidGroupSizeDimension = 2013265939,
-    InvalidGlobalWidthDimension = 2013265940,
-    InvalidKernelArgumentIndex = 2013265941,
-    InvalidKernelArgumentSize = 2013265942,
-    InvalidKernelAttributeValue = 2013265943,
-    InvalidCommandListType = 2013265944,
-    OverlappingRegions = 2013265945,
-    Unknown = 2147483647,
-}
+pub struct Error(pub sys::ze_result_t);
 
 impl Error {
-    pub fn new<T>(r: sys::ze_result_t, t: T) -> Result<T> {
-        Error::new_with(r, || t)
-    }
-
-    pub fn new_with<T, F: FnOnce() -> T>(r: sys::ze_result_t, f: F) -> Result<T> {
-        match r {
-            sys::ze_result_t::ZE_RESULT_SUCCESS => Ok(f()),
-            sys::ze_result_t::ZE_RESULT_NOT_READY => Err(Error::NotReady),
-            sys::ze_result_t::ZE_RESULT_ERROR_DEVICE_LOST => Err(Error::DeviceLost),
-            sys::ze_result_t::ZE_RESULT_ERROR_OUT_OF_HOST_MEMORY => Err(Error::OutOfHostMemory),
-            sys::ze_result_t::ZE_RESULT_ERROR_OUT_OF_DEVICE_MEMORY => Err(Error::OutOfDeviceMemory),
-            sys::ze_result_t::ZE_RESULT_ERROR_MODULE_BUILD_FAILURE => {
-                Err(Error::ModuleBuildFailure)
-            }
-            sys::ze_result_t::ZE_RESULT_ERROR_INSUFFICIENT_PERMISSIONS => {
-                Err(Error::InsufficientPermissions)
-            }
-            sys::ze_result_t::ZE_RESULT_ERROR_NOT_AVAILABLE => Err(Error::NotAvailable),
-            sys::ze_result_t::ZE_RESULT_ERROR_UNINITIALIZED => Err(Error::Uninitialized),
-            sys::ze_result_t::ZE_RESULT_ERROR_UNSUPPORTED_VERSION => Err(Error::UnsupportedVersion),
-            sys::ze_result_t::ZE_RESULT_ERROR_UNSUPPORTED_FEATURE => Err(Error::UnsupportedFeature),
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_ARGUMENT => Err(Error::InvalidArgument),
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_NULL_HANDLE => Err(Error::InvalidNullHandle),
-            sys::ze_result_t::ZE_RESULT_ERROR_HANDLE_OBJECT_IN_USE => Err(Error::HandleObjectInUse),
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_NULL_POINTER => {
-                Err(Error::InvalidNullPointer)
-            }
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_SIZE => Err(Error::InvalidSize),
-            sys::ze_result_t::ZE_RESULT_ERROR_UNSUPPORTED_SIZE => Err(Error::UnsupportedSize),
-            sys::ze_result_t::ZE_RESULT_ERROR_UNSUPPORTED_ALIGNMENT => {
-                Err(Error::UnsupportedAlignment)
-            }
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_SYNCHRONIZATION_OBJECT => {
-                Err(Error::InvalidSynchronizationObject)
-            }
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_ENUMERATION => Err(Error::InvalidEnumeration),
-            sys::ze_result_t::ZE_RESULT_ERROR_UNSUPPORTED_ENUMERATION => {
-                Err(Error::UnsupportedEnumeration)
-            }
-            sys::ze_result_t::ZE_RESULT_ERROR_UNSUPPORTED_IMAGE_FORMAT => {
-                Err(Error::UnsupportedImageFormat)
-            }
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_NATIVE_BINARY => {
-                Err(Error::InvalidNativeBinary)
-            }
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_GLOBAL_NAME => Err(Error::InvalidGlobalName),
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_KERNEL_NAME => Err(Error::InvalidKernelName),
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_FUNCTION_NAME => {
-                Err(Error::InvalidFunctionName)
-            }
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_GROUP_SIZE_DIMENSION => {
-                Err(Error::InvalidGroupSizeDimension)
-            }
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_GLOBAL_WIDTH_DIMENSION => {
-                Err(Error::InvalidGlobalWidthDimension)
-            }
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_KERNEL_ARGUMENT_INDEX => {
-                Err(Error::InvalidKernelArgumentIndex)
-            }
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_KERNEL_ARGUMENT_SIZE => {
-                Err(Error::InvalidKernelArgumentSize)
-            }
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_KERNEL_ATTRIBUTE_VALUE => {
-                Err(Error::InvalidKernelAttributeValue)
-            }
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_COMMAND_LIST_TYPE => {
-                Err(Error::InvalidCommandListType)
-            }
-            sys::ze_result_t::ZE_RESULT_ERROR_OVERLAPPING_REGIONS => Err(Error::OverlappingRegions),
-            sys::ze_result_t::ZE_RESULT_ERROR_UNKNOWN => Err(Error::Unknown),
-        }
-    }
-
-    fn err(r: sys::ze_result_t) -> Self {
-        match r {
-            sys::ze_result_t::ZE_RESULT_SUCCESS => unreachable!(),
-            sys::ze_result_t::ZE_RESULT_NOT_READY => Error::NotReady,
-            sys::ze_result_t::ZE_RESULT_ERROR_DEVICE_LOST => Error::DeviceLost,
-            sys::ze_result_t::ZE_RESULT_ERROR_OUT_OF_HOST_MEMORY => Error::OutOfHostMemory,
-            sys::ze_result_t::ZE_RESULT_ERROR_OUT_OF_DEVICE_MEMORY => Error::OutOfDeviceMemory,
-            sys::ze_result_t::ZE_RESULT_ERROR_MODULE_BUILD_FAILURE => Error::ModuleBuildFailure,
-            sys::ze_result_t::ZE_RESULT_ERROR_INSUFFICIENT_PERMISSIONS => {
-                Error::InsufficientPermissions
-            }
-            sys::ze_result_t::ZE_RESULT_ERROR_NOT_AVAILABLE => Error::NotAvailable,
-            sys::ze_result_t::ZE_RESULT_ERROR_UNINITIALIZED => Error::Uninitialized,
-            sys::ze_result_t::ZE_RESULT_ERROR_UNSUPPORTED_VERSION => Error::UnsupportedVersion,
-            sys::ze_result_t::ZE_RESULT_ERROR_UNSUPPORTED_FEATURE => Error::UnsupportedFeature,
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_ARGUMENT => Error::InvalidArgument,
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_NULL_HANDLE => Error::InvalidNullHandle,
-            sys::ze_result_t::ZE_RESULT_ERROR_HANDLE_OBJECT_IN_USE => Error::HandleObjectInUse,
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_NULL_POINTER => Error::InvalidNullPointer,
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_SIZE => Error::InvalidSize,
-            sys::ze_result_t::ZE_RESULT_ERROR_UNSUPPORTED_SIZE => Error::UnsupportedSize,
-            sys::ze_result_t::ZE_RESULT_ERROR_UNSUPPORTED_ALIGNMENT => Error::UnsupportedAlignment,
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_SYNCHRONIZATION_OBJECT => {
-                Error::InvalidSynchronizationObject
-            }
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_ENUMERATION => Error::InvalidEnumeration,
-            sys::ze_result_t::ZE_RESULT_ERROR_UNSUPPORTED_ENUMERATION => {
-                Error::UnsupportedEnumeration
-            }
-            sys::ze_result_t::ZE_RESULT_ERROR_UNSUPPORTED_IMAGE_FORMAT => {
-                Error::UnsupportedImageFormat
-            }
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_NATIVE_BINARY => Error::InvalidNativeBinary,
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_GLOBAL_NAME => Error::InvalidGlobalName,
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_KERNEL_NAME => Error::InvalidKernelName,
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_FUNCTION_NAME => Error::InvalidFunctionName,
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_GROUP_SIZE_DIMENSION => {
-                Error::InvalidGroupSizeDimension
-            }
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_GLOBAL_WIDTH_DIMENSION => {
-                Error::InvalidGlobalWidthDimension
-            }
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_KERNEL_ARGUMENT_INDEX => {
-                Error::InvalidKernelArgumentIndex
-            }
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_KERNEL_ARGUMENT_SIZE => {
-                Error::InvalidKernelArgumentSize
-            }
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_KERNEL_ATTRIBUTE_VALUE => {
-                Error::InvalidKernelAttributeValue
-            }
-            sys::ze_result_t::ZE_RESULT_ERROR_INVALID_COMMAND_LIST_TYPE => {
-                Error::InvalidCommandListType
-            }
-            sys::ze_result_t::ZE_RESULT_ERROR_OVERLAPPING_REGIONS => Error::OverlappingRegions,
-            sys::ze_result_t::ZE_RESULT_ERROR_UNKNOWN => Error::Unknown,
+    fn new<T>(res: sys::ze_result_t, default: T) -> Result<T> {
+        if res == sys::ze_result_t::ZE_RESULT_SUCCESS {
+            Ok(default)
+        } else {
+            Err(Self(res))
         }
     }
 }
@@ -207,7 +52,7 @@ impl std::error::Error for Error {}
 
 pub fn init() -> Result<()> {
     Error::new(
-        unsafe { sys::zeInit(sys::ze_init_flag_t::ZE_INIT_FLAG_NONE) },
+        unsafe { sys::zeInit(sys::ze_init_flags_t::ZE_INIT_FLAG_GPU_ONLY) },
         (),
     )
 }
@@ -246,6 +91,9 @@ impl Driver {
             &mut len,
             result.as_mut_ptr() as *mut _
         ));
+        if (len as usize) < result.len() {
+            result.truncate(len as usize);
+        }
         Ok(result)
     }
 }
@@ -260,6 +108,80 @@ impl Device {
     pub unsafe fn from_ffi(x: sys::ze_device_handle_t) -> Self {
         Self(x)
     }
+
+    pub fn get_properties(&self) -> Result<Box<sys::ze_device_properties_t>> {
+        let mut props = Box::new(unsafe { mem::zeroed::<sys::ze_device_properties_t>() });
+        check! { sys::zeDeviceGetProperties(self.0, props.as_mut()) };
+        Ok(props)
+    }
+
+    pub fn get_image_properties(&self) -> Result<Box<sys::ze_device_image_properties_t>> {
+        let mut props = Box::new(unsafe { mem::zeroed::<sys::ze_device_image_properties_t>() });
+        check! { sys::zeDeviceGetImageProperties(self.0,  props.as_mut()) };
+        Ok(props)
+    }
+
+    pub fn get_memory_properties(&self) -> Result<Vec<sys::ze_device_memory_properties_t>> {
+        let mut count = 0u32;
+        check! { sys::zeDeviceGetMemoryProperties(self.0, &mut count, ptr::null_mut()) };
+        if count == 0 {
+            return Ok(Vec::new());
+        }
+        let mut props =
+            vec![unsafe { mem::zeroed::<sys::ze_device_memory_properties_t>() }; count as usize];
+        check! { sys::zeDeviceGetMemoryProperties(self.0, &mut count, props.as_mut_ptr()) };
+        Ok(props)
+    }
+
+    pub unsafe fn mem_alloc_device(
+        &mut self,
+        ctx: &mut Context,
+        size: usize,
+        alignment: usize,
+    ) -> Result<*mut c_void> {
+        let descr = sys::ze_device_mem_alloc_desc_t {
+            stype: sys::ze_structure_type_t::ZE_STRUCTURE_TYPE_DEVICE_MEM_ALLOC_DESC,
+            pNext: ptr::null(),
+            flags: sys::ze_device_mem_alloc_flags_t(0),
+            ordinal: 0,
+        };
+        let mut result = ptr::null_mut();
+        // TODO: check current context for the device
+        check! {
+            sys::zeMemAllocDevice(
+                ctx.0,
+                &descr,
+                size,
+                alignment,
+                self.0,
+                &mut result,
+            )
+        };
+        Ok(result)
+    }
+}
+
+#[repr(transparent)]
+pub struct Context(sys::ze_context_handle_t);
+
+impl Context {
+    pub unsafe fn as_ffi(&self) -> sys::ze_context_handle_t {
+        self.0
+    }
+    pub unsafe fn from_ffi(x: sys::ze_context_handle_t) -> Self {
+        Self(x)
+    }
+
+    pub fn new(drv: &Driver) -> Result<Self> {
+        let ctx_desc = sys::ze_context_desc_t {
+            stype: sys::ze_structure_type_t::ZE_STRUCTURE_TYPE_CONTEXT_DESC,
+            pNext: ptr::null(),
+            flags: sys::ze_context_flags_t(0),
+        };
+        let mut result = ptr::null_mut();
+        check!(sys::zeContextCreate(drv.0, &ctx_desc, &mut result));
+        Ok(Context(result))
+    }
 }
 
 #[repr(transparent)]
@@ -273,16 +195,23 @@ impl CommandQueue {
         Self(x)
     }
 
-    pub fn new(d: &Device) -> Result<Self> {
+    pub fn new(ctx: &mut Context, d: &Device) -> Result<Self> {
         let que_desc = sys::ze_command_queue_desc_t {
-            version: sys::ze_command_queue_desc_version_t::ZE_COMMAND_QUEUE_DESC_VERSION_CURRENT,
-            flags: sys::ze_command_queue_flag_t::ZE_COMMAND_QUEUE_FLAG_NONE,
+            stype: sys::ze_structure_type_t::ZE_STRUCTURE_TYPE_COMMAND_QUEUE_DESC,
+            pNext: ptr::null(),
+            ordinal: 0,
+            index: 0,
+            flags: sys::ze_command_queue_flags_t(0),
             mode: sys::ze_command_queue_mode_t::ZE_COMMAND_QUEUE_MODE_DEFAULT,
             priority: sys::ze_command_queue_priority_t::ZE_COMMAND_QUEUE_PRIORITY_NORMAL,
-            ordinal: 0,
         };
         let mut result = ptr::null_mut();
-        check!(sys::zeCommandQueueCreate(d.0, &que_desc, &mut result));
+        check!(sys::zeCommandQueueCreate(
+            ctx.0,
+            d.0,
+            &que_desc,
+            &mut result
+        ));
         Ok(CommandQueue(result))
     }
 
@@ -318,17 +247,29 @@ impl Module {
         Self(x)
     }
 
-    pub fn new_spirv(d: &Device, bin: &[u8], opts: Option<&CStr>) -> Result<Self> {
-        Module::new(true, d, bin, opts)
+    pub fn new_spirv(
+        ctx: &mut Context,
+        d: &Device,
+        bin: &[u8],
+        opts: Option<&CStr>,
+    ) -> Result<Self> {
+        Module::new(ctx, true, d, bin, opts)
     }
 
-    pub fn new_native(d: &Device, bin: &[u8]) -> Result<Self> {
-        Module::new(false, d, bin, None)
+    pub fn new_native(ctx: &mut Context, d: &Device, bin: &[u8]) -> Result<Self> {
+        Module::new(ctx, false, d, bin, None)
     }
 
-    fn new(spirv: bool, d: &Device, bin: &[u8], opts: Option<&CStr>) -> Result<Self> {
+    fn new(
+        ctx: &mut Context,
+        spirv: bool,
+        d: &Device,
+        bin: &[u8],
+        opts: Option<&CStr>,
+    ) -> Result<Self> {
         let desc = sys::ze_module_desc_t {
-            version: sys::ze_module_desc_version_t::ZE_MODULE_DESC_VERSION_CURRENT,
+            stype: sys::ze_structure_type_t::ZE_STRUCTURE_TYPE_MODULE_DESC,
+            pNext: ptr::null(),
             format: if spirv {
                 sys::ze_module_format_t::ZE_MODULE_FORMAT_IL_SPIRV
             } else {
@@ -341,6 +282,7 @@ impl Module {
         };
         let mut result: sys::ze_module_handle_t = ptr::null_mut();
         check!(sys::zeModuleCreate(
+            ctx.0,
             d.0,
             &desc,
             &mut result,
@@ -371,7 +313,7 @@ impl SafeRepr for f64 {}
 
 pub struct DeviceBuffer<T: SafeRepr> {
     ptr: *mut c_void,
-    driver: sys::ze_driver_handle_t,
+    ctx: sys::ze_context_handle_t,
     len: usize,
     marker: PhantomData<T>,
 }
@@ -380,33 +322,33 @@ impl<T: SafeRepr> DeviceBuffer<T> {
     pub unsafe fn as_ffi(&self) -> *mut c_void {
         self.ptr
     }
-    pub unsafe fn from_ffi(driver: sys::ze_driver_handle_t, ptr: *mut c_void, len: usize) -> Self {
+    pub unsafe fn from_ffi(ctx: sys::ze_context_handle_t, ptr: *mut c_void, len: usize) -> Self {
         let marker = PhantomData::<T>;
         Self {
             ptr,
-            driver,
+            ctx,
             len,
             marker,
         }
     }
 
-    pub fn new(drv: &Driver, dev: &Device, len: usize) -> Result<Self> {
+    pub fn new(ctx: &mut Context, dev: &Device, len: usize) -> Result<Self> {
         let desc = sys::_ze_device_mem_alloc_desc_t {
-            version:
-                sys::ze_device_mem_alloc_desc_version_t::ZE_DEVICE_MEM_ALLOC_DESC_VERSION_CURRENT,
-            flags: sys::ze_device_mem_alloc_flag_t::ZE_DEVICE_MEM_ALLOC_FLAG_DEFAULT,
+            stype: sys::ze_structure_type_t::ZE_STRUCTURE_TYPE_DEVICE_MEM_ALLOC_DESC,
+            pNext: ptr::null(),
+            flags: sys::ze_device_mem_alloc_flags_t(0),
             ordinal: 0,
         };
         let mut result = ptr::null_mut();
-        check!(sys::zeDriverAllocDeviceMem(
-            drv.0,
+        check!(sys::zeMemAllocDevice(
+            ctx.0,
             &desc,
             len * mem::size_of::<T>(),
             mem::align_of::<T>(),
             dev.0,
             &mut result
         ));
-        Ok(unsafe { Self::from_ffi(drv.0, result, len) })
+        Ok(unsafe { Self::from_ffi(ctx.0, result, len) })
     }
 
     pub fn len(&self) -> usize {
@@ -417,7 +359,7 @@ impl<T: SafeRepr> DeviceBuffer<T> {
 impl<T: SafeRepr> Drop for DeviceBuffer<T> {
     #[allow(unused_must_use)]
     fn drop(&mut self) {
-        check_panic! { sys::zeDriverFreeMem(self.driver, self.ptr) };
+        check_panic! { sys::zeMemFree(self.ctx, self.ptr) };
     }
 }
 
@@ -431,13 +373,15 @@ impl<'a> CommandList<'a> {
         Self(x, PhantomData)
     }
 
-    pub fn new(dev: &Device) -> Result<Self> {
+    pub fn new(ctx: &mut Context, dev: &Device) -> Result<Self> {
         let desc = sys::ze_command_list_desc_t {
-            version: sys::ze_command_list_desc_version_t::ZE_COMMAND_LIST_DESC_VERSION_CURRENT,
-            flags: sys::ze_command_list_flag_t::ZE_COMMAND_LIST_FLAG_NONE,
+            stype: sys::_ze_structure_type_t::ZE_STRUCTURE_TYPE_COMMAND_LIST_DESC,
+            commandQueueGroupOrdinal: 0,
+            pNext: ptr::null(),
+            flags: sys::ze_command_list_flags_t(0),
         };
         let mut result: sys::ze_command_list_handle_t = ptr::null_mut();
-        check!(sys::zeCommandListCreate(dev.0, &desc, &mut result));
+        check!(sys::zeCommandListCreate(ctx.0, dev.0, &desc, &mut result));
         Ok(Self(result, PhantomData))
     }
 
@@ -449,19 +393,34 @@ impl<'a> CommandList<'a> {
         &mut self,
         dst: Dst,
         src: Src,
-        length: Option<usize>,
-        signal: Option<&Event<'a>>,
+        signal: Option<&mut Event<'a>>,
+        wait: &mut [Event<'a>],
     ) -> Result<()> {
         let dst = dst.into();
         let src = src.into();
-        let elements = length.unwrap_or(std::cmp::max(dst.len(), src.len()));
-        let event = signal.map(|e| e.0).unwrap_or(ptr::null_mut());
+        let elements = std::cmp::min(dst.len(), src.len());
+        let length = elements * mem::size_of::<T>();
+        unsafe { self.append_memory_copy_unsafe(dst.get(), src.get(), length, signal, wait) }
+    }
+
+    pub unsafe fn append_memory_copy_unsafe(
+        &mut self,
+        dst: *mut c_void,
+        src: *const c_void,
+        length: usize,
+        signal: Option<&mut Event<'a>>,
+        wait: &mut [Event<'a>],
+    ) -> Result<()> {
+        let signal_event = signal.map(|e| e.0).unwrap_or(ptr::null_mut());
+        let (wait_len, wait_ptr) = Event::raw_slice(wait);
         check!(sys::zeCommandListAppendMemoryCopy(
             self.0,
-            dst.get(),
-            src.get(),
-            elements * std::mem::size_of::<T>(),
-            event,
+            dst,
+            src,
+            length,
+            signal_event,
+            wait_len,
+            wait_ptr
         ));
         Ok(())
     }
@@ -469,19 +428,23 @@ impl<'a> CommandList<'a> {
     pub fn append_memory_fill<T>(
         &mut self,
         dst: BufferPtrMut<'a, T>,
-        pattern: T,
-        signal: Option<&Event<'a>>,
+        pattern: u8,
+        signal: Option<&mut Event<'a>>,
+        wait: &mut [Event<'a>],
     ) -> Result<()> {
-        let raw_pattern = &pattern as *const T as *const _;
-        let event = signal.map(|e| e.0).unwrap_or(ptr::null_mut());
+        let raw_pattern = &pattern as *const u8 as *const _;
+        let signal_event = signal.map(|e| e.0).unwrap_or(ptr::null_mut());
+        let (wait_len, wait_ptr) = unsafe { Event::raw_slice(wait) };
         let byte_len = dst.len() * mem::size_of::<T>();
         check!(sys::zeCommandListAppendMemoryFill(
             self.0,
             dst.get(),
             raw_pattern,
-            mem::size_of::<T>(),
+            mem::size_of::<u8>(),
             byte_len,
-            event,
+            signal_event,
+            wait_len,
+            wait_ptr
         ));
         Ok(())
     }
@@ -490,23 +453,23 @@ impl<'a> CommandList<'a> {
         &mut self,
         kernel: &'a Kernel,
         group_count: &[u32; 3],
-        signal: Option<&Event<'a>>,
-        wait: &[&Event<'a>],
+        signal: Option<&mut Event<'a>>,
+        wait: &mut [Event<'a>],
     ) -> Result<()> {
         let gr_count = sys::ze_group_count_t {
             groupCountX: group_count[0],
             groupCountY: group_count[1],
             groupCountZ: group_count[2],
         };
-        let event = signal.map(|e| e.0).unwrap_or(ptr::null_mut());
-        let mut wait_ptrs = wait.iter().map(|e| e.0).collect::<Vec<_>>();
+        let signal_event = signal.map(|e| e.0).unwrap_or(ptr::null_mut());
+        let (wait_len, wait_ptr) = unsafe { Event::raw_slice(wait) };
         check!(sys::zeCommandListAppendLaunchKernel(
             self.0,
             kernel.0,
             &gr_count,
-            event,
-            wait.len() as u32,
-            wait_ptrs.as_mut_ptr(),
+            signal_event,
+            wait_len,
+            wait_ptr,
         ));
         Ok(())
     }
@@ -528,8 +491,9 @@ pub struct FenceGuard<'a>(
 impl<'a> FenceGuard<'a> {
     fn new(q: &'a CommandQueue, cmd_list: sys::ze_command_list_handle_t) -> Result<Self> {
         let desc = sys::_ze_fence_desc_t {
-            version: sys::ze_fence_desc_version_t::ZE_FENCE_DESC_VERSION_CURRENT,
-            flags: sys::ze_fence_flag_t::ZE_FENCE_FLAG_NONE,
+            stype: sys::ze_structure_type_t::ZE_STRUCTURE_TYPE_FENCE_DESC,
+            pNext: ptr::null(),
+            flags: sys::ze_fence_flags_t(0),
         };
         let mut result = ptr::null_mut();
         check!(sys::zeFenceCreate(q.0, &desc, &mut result));
@@ -540,7 +504,7 @@ impl<'a> FenceGuard<'a> {
 impl<'a> Drop for FenceGuard<'a> {
     #[allow(unused_must_use)]
     fn drop(&mut self) {
-        check_panic! { sys::zeFenceHostSynchronize(self.0, u32::max_value()) };
+        check_panic! { sys::zeFenceHostSynchronize(self.0, u64::max_value()) };
         check_panic! { sys::zeFenceDestroy(self.0) };
         check_panic! { sys::zeCommandListDestroy(self.1) };
     }
@@ -638,10 +602,11 @@ impl<'a> EventPool<'a> {
     pub unsafe fn from_ffi(x: sys::ze_event_pool_handle_t) -> Self {
         Self(x, PhantomData)
     }
-    pub fn new(driver: &Driver, count: u32, dev: Option<&[&'a Device]>) -> Result<Self> {
+    pub fn new(ctx: &mut Context, count: u32, dev: Option<&[&'a Device]>) -> Result<Self> {
         let desc = sys::ze_event_pool_desc_t {
-            version: sys::ze_event_pool_desc_version_t::ZE_EVENT_POOL_DESC_VERSION_CURRENT,
-            flags: sys::ze_event_pool_flag_t::ZE_EVENT_POOL_FLAG_DEFAULT,
+            stype: sys::ze_structure_type_t::ZE_STRUCTURE_TYPE_EVENT_POOL_DESC,
+            pNext: ptr::null(),
+            flags: sys::ze_event_pool_flags_t(0),
             count: count,
         };
         let mut dev = dev.map(|d| d.iter().map(|d| d.0).collect::<Vec<_>>());
@@ -649,7 +614,7 @@ impl<'a> EventPool<'a> {
         let dev_ptr = dev.as_mut().map_or(ptr::null_mut(), |d| d.as_mut_ptr());
         let mut result = ptr::null_mut();
         check!(sys::zeEventPoolCreate(
-            driver.0,
+            ctx.0,
             &desc,
             dev_len,
             dev_ptr,
@@ -679,14 +644,24 @@ impl<'a> Event<'a> {
 
     pub fn new(pool: &'a EventPool, index: u32) -> Result<Self> {
         let desc = sys::ze_event_desc_t {
-            version: sys::ze_event_desc_version_t::ZE_EVENT_DESC_VERSION_CURRENT,
+            stype: sys::ze_structure_type_t::ZE_STRUCTURE_TYPE_EVENT_DESC,
+            pNext: ptr::null(),
             index: index,
-            signal: sys::ze_event_scope_flag_t::ZE_EVENT_SCOPE_FLAG_NONE,
-            wait: sys::ze_event_scope_flag_t::ZE_EVENT_SCOPE_FLAG_NONE,
+            signal: sys::ze_event_scope_flags_t(0),
+            wait: sys::ze_event_scope_flags_t(0),
         };
         let mut result = ptr::null_mut();
         check!(sys::zeEventCreate(pool.0, &desc, &mut result));
         Ok(Self(result, PhantomData))
+    }
+
+    unsafe fn raw_slice(e: &mut [Event]) -> (u32, *mut sys::ze_event_handle_t) {
+        let ptr = if e.len() == 0 {
+            ptr::null_mut()
+        } else {
+            e.as_mut_ptr()
+        };
+        (e.len() as u32, ptr as *mut sys::ze_event_handle_t)
     }
 }
 
@@ -710,8 +685,9 @@ impl<'a> Kernel<'a> {
 
     pub fn new_resident(module: &'a Module, name: &CStr) -> Result<Self> {
         let desc = sys::ze_kernel_desc_t {
-            version: sys::ze_kernel_desc_version_t::ZE_KERNEL_DESC_VERSION_CURRENT,
-            flags: sys::ze_kernel_flag_t::ZE_KERNEL_FLAG_FORCE_RESIDENCY,
+            stype: sys::ze_structure_type_t::ZE_STRUCTURE_TYPE_KERNEL_DESC,
+            pNext: ptr::null(),
+            flags: sys::ze_kernel_flags_t::ZE_KERNEL_FLAG_FORCE_RESIDENCY,
             pKernelName: name.as_ptr() as *const _,
         };
         let mut result = ptr::null_mut();
@@ -719,18 +695,11 @@ impl<'a> Kernel<'a> {
         Ok(Self(result, PhantomData))
     }
 
-    pub fn set_attribute_bool(
+    pub fn set_indirect_access(
         &mut self,
-        attr: sys::ze_kernel_attribute_t,
-        value: bool,
+        flags: sys::ze_kernel_indirect_access_flags_t,
     ) -> Result<()> {
-        let ze_bool: sys::ze_bool_t = if value { 1 } else { 0 };
-        check!(sys::zeKernelSetAttribute(
-            self.0,
-            attr,
-            mem::size_of::<sys::ze_bool_t>() as u32,
-            &ze_bool as *const _ as *const _
-        ));
+        check!(sys::zeKernelSetIndirectAccess(self.0, flags));
         Ok(())
     }
 
@@ -769,5 +738,18 @@ impl<'a> Drop for Kernel<'a> {
     #[allow(unused_must_use)]
     fn drop(&mut self) {
         check_panic! { sys::zeKernelDestroy(self.0) };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn event_has_correct_layout() {
+        assert_eq!(
+            mem::size_of::<Event>(),
+            mem::size_of::<sys::ze_event_handle_t>()
+        );
     }
 }

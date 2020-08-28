@@ -1,9 +1,10 @@
 use num_enum::TryFromPrimitive;
 use std::convert::TryFrom;
 use std::os::raw::c_int;
-use std::ptr;
+use std::{mem, ptr};
+use crate::ze;
 
-#[repr(C)]
+#[repr(u32)]
 #[allow(non_camel_case_types)]
 pub enum Result {
     SUCCESS = 0,
@@ -134,14 +135,14 @@ pub enum DeviceTextureAttribute {
 
 
 impl Result {
-    pub fn from_l0(result: l0::ze_result_t) -> Result {
+    pub fn from_l0(result: l0_sys::ze_result_t) -> Result {
         match result {
-            l0::ze_result_t::ZE_RESULT_SUCCESS => Result::SUCCESS,
-            l0::ze_result_t::ZE_RESULT_ERROR_UNINITIALIZED => Result::ERROR_NOT_INITIALIZED,
-            l0::ze_result_t::ZE_RESULT_ERROR_INVALID_ENUMERATION => Result::ERROR_INVALID_VALUE,
-            l0::ze_result_t::ZE_RESULT_ERROR_INVALID_ARGUMENT => Result::ERROR_INVALID_VALUE,
-            l0::ze_result_t::ZE_RESULT_ERROR_OUT_OF_HOST_MEMORY => Result::ERROR_OUT_OF_MEMORY,
-            l0::ze_result_t::ZE_RESULT_ERROR_UNSUPPORTED_FEATURE => Result::ERROR_NOT_SUPPORTED,
+            l0_sys::ze_result_t::ZE_RESULT_SUCCESS => Result::SUCCESS,
+            l0_sys::ze_result_t::ZE_RESULT_ERROR_UNINITIALIZED => Result::ERROR_NOT_INITIALIZED,
+            l0_sys::ze_result_t::ZE_RESULT_ERROR_INVALID_ENUMERATION => Result::ERROR_INVALID_VALUE,
+            l0_sys::ze_result_t::ZE_RESULT_ERROR_INVALID_ARGUMENT => Result::ERROR_INVALID_VALUE,
+            l0_sys::ze_result_t::ZE_RESULT_ERROR_OUT_OF_HOST_MEMORY => Result::ERROR_OUT_OF_MEMORY,
+            l0_sys::ze_result_t::ZE_RESULT_ERROR_UNSUPPORTED_FEATURE => Result::ERROR_NOT_SUPPORTED,
             _ => Result::ERROR_UNKNOWN
         }
     }
@@ -157,11 +158,11 @@ pub struct Uuid {
 pub struct Device(pub c_int);
 
 #[repr(transparent)]
-pub struct DevicePtr(usize);
+pub struct DevicePtr(pub usize);
 
 #[repr(transparent)]
-#[derive(Clone, PartialEq)]
-pub struct Context(*mut ());
+#[derive(Clone, Copy, PartialEq)]
+pub struct Context(pub *mut ze::Context);
 impl Context {
     pub fn null() -> Context {
         Context(ptr::null_mut())
@@ -169,7 +170,21 @@ impl Context {
 }
 
 #[repr(transparent)]
-pub struct Module(*mut ());
+#[derive(Clone, Copy, PartialEq)]
+pub struct Module(*mut ze::Module);
+
+impl Module {
+    pub fn null() -> Module {
+        Module(ptr::null_mut())
+    }
+
+    pub fn new(inner: ze::Module) -> Module {
+        let mut boxed = Box::new(inner);
+        let result = Module(boxed.as_mut());
+        mem::forget(boxed);
+        result
+    }
+}
 
 #[repr(transparent)]
 pub struct Function(*mut ());

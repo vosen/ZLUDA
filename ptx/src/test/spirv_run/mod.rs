@@ -100,34 +100,37 @@ fn run_spirv<T: From<u8> + ze::SafeRepr + Copy + Debug>(
         )
     };
     let mut result = vec![0u8.into(); output.len()];
-    let mut drivers = ze::Driver::get()?;
-    let drv = drivers.drain(0..1).next().unwrap();
-    let mut devices = drv.devices()?;
-    let dev = devices.drain(0..1).next().unwrap();
-    let queue = ze::CommandQueue::new(&dev)?;
-    let module = ze::Module::new_spirv(&dev, byte_il, None)?;
-    let mut kernel = ze::Kernel::new_resident(&module, name)?;
-    kernel.set_attribute_bool(
-        ze::sys::ze_kernel_attribute_t::ZE_KERNEL_ATTR_INDIRECT_DEVICE_ACCESS,
-        true,
-    )?;
-    let mut inp_b = ze::DeviceBuffer::<T>::new(&drv, &dev, input.len())?;
-    let mut out_b = ze::DeviceBuffer::<T>::new(&drv, &dev, output.len())?;
-    let inp_b_ptr_mut: ze::BufferPtrMut<T> = (&mut inp_b).into();
-    let event_pool = ze::EventPool::new(&drv, 3, Some(&[&dev]))?;
-    let ev0 = ze::Event::new(&event_pool, 0)?;
-    let ev1 = ze::Event::new(&event_pool, 1)?;
-    let ev2 = ze::Event::new(&event_pool, 2)?;
-    let mut cmd_list = ze::CommandList::new(&dev)?;
-    let out_b_ptr_mut: ze::BufferPtrMut<T> = (&mut out_b).into();
-    cmd_list.append_memory_copy(inp_b_ptr_mut, input, None, Some(&ev0))?;
-    cmd_list.append_memory_fill(out_b_ptr_mut, 0u8.into(), Some(&ev1))?;
-    kernel.set_group_size(1, 1, 1)?;
-    kernel.set_arg_buffer(0, inp_b_ptr_mut)?;
-    kernel.set_arg_buffer(1, out_b_ptr_mut)?;
-    cmd_list.append_launch_kernel(&kernel, &[1, 1, 1], Some(&ev2), &[&ev0, &ev1])?;
-    cmd_list.append_memory_copy(result.as_mut_slice(), out_b_ptr_mut, None, Some(&ev2))?;
-    queue.execute(cmd_list)?;
+    {
+        let mut drivers = ze::Driver::get()?;
+        let drv = drivers.drain(0..1).next().unwrap();
+        let mut ctx = ze::Context::new(&drv)?;
+        let mut devices = drv.devices()?;
+        let dev = devices.drain(0..1).next().unwrap();
+        let queue = ze::CommandQueue::new(&mut ctx, &dev)?;
+        let module = ze::Module::new_spirv(&mut ctx, &dev, byte_il, None)?;
+        let mut kernel = ze::Kernel::new_resident(&module, name)?;
+        kernel.set_indirect_access(
+            ze::sys::ze_kernel_indirect_access_flags_t::ZE_KERNEL_INDIRECT_ACCESS_FLAG_DEVICE,
+        )?;
+        let mut inp_b = ze::DeviceBuffer::<T>::new(&mut ctx, &dev, input.len())?;
+        let mut out_b = ze::DeviceBuffer::<T>::new(&mut ctx, &dev, output.len())?;
+        let inp_b_ptr_mut: ze::BufferPtrMut<T> = (&mut inp_b).into();
+        let event_pool = ze::EventPool::new(&mut ctx, 3, Some(&[&dev]))?;
+        let ev0 = ze::Event::new(&event_pool, 0)?;
+        let ev1 = ze::Event::new(&event_pool, 1)?;
+        let mut ev2 = ze::Event::new(&event_pool, 2)?;
+        let mut cmd_list = ze::CommandList::new(&mut ctx, &dev)?;
+        let out_b_ptr_mut: ze::BufferPtrMut<T> = (&mut out_b).into();
+        let mut init_evs = [ev0, ev1];
+        cmd_list.append_memory_copy(inp_b_ptr_mut, input, Some(&mut init_evs[0]), &mut [])?;
+        cmd_list.append_memory_fill(out_b_ptr_mut, 0, Some(&mut init_evs[1]), &mut [])?;
+        kernel.set_group_size(1, 1, 1)?;
+        kernel.set_arg_buffer(0, inp_b_ptr_mut)?;
+        kernel.set_arg_buffer(1, out_b_ptr_mut)?;
+        cmd_list.append_launch_kernel(&kernel, &[1, 1, 1], Some(&mut ev2), &mut init_evs)?;
+        cmd_list.append_memory_copy(result.as_mut_slice(), out_b_ptr_mut, None, &mut [ev2])?;
+        queue.execute(cmd_list)?;
+    }
     Ok(result)
 }
 

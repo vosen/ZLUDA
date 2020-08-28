@@ -54,3 +54,24 @@ PTX grammar
 -----------
 * PTX grammar rules are atrocious, keywords can be freely reused as ids without escaping
 * Modifiers can be applied to instructions in any arbitrary order. We don't support it and hope we will never have to
+
+
+Rust debugging
+--------------
+* Nothing works 100% well on vscode/Windows:
+    * MSVC/lldb - always garbage (simple enums are fubar)
+    * MSVC/cppvsdbg - sometimes garbage (nested enums are fubar)
+    * GNU/lldb - mostly fine, but can't follow child processes
+    * GNU/gdb - always garbage (I don't have the patience to manually QA rust-gdb on Windows) and doesn't quite understand file paths for break points
+* Neither on vscode/Linux:
+    * lldb - mostly fine, but can't follow child processes
+    * gdb - visualizes variables somewhat awkardly (shows all possible variants of an enum)
+* CLion could be the solution, but intellij-rust can't load this project
+
+CUDA <-> L0
+-----------
+* device ~= device
+* stream ~= command queue
+* context ~= context (1.0+)
+* graph ~= command list
+* module ~= module

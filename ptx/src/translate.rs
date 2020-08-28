@@ -121,19 +121,10 @@ impl TypeWordMap {
             })
     }
 
-    fn get_or_add_extended(
-        &mut self,
-        b: &mut dr::Builder,
-        t: ast::ExtendedScalarType,
-    ) -> spirv::Word {
-        let key: SpirvScalarKey = t.into();
-        self.get_or_add_spirv_scalar(b, key)
-    }
-
     fn get_or_add(&mut self, b: &mut dr::Builder, t: SpirvType) -> spirv::Word {
         match t {
             SpirvType::Base(key) => self.get_or_add_spirv_scalar(b, key),
-            SpirvType::Pointer(typ, mut storage) => {
+            SpirvType::Pointer(typ, storage) => {
                 let base = self.get_or_add_spirv_scalar(b, typ);
                 *self
                     .complex
@@ -728,7 +719,7 @@ fn emit_function_body_ops(
                     builder.shift_left_logical(result_type, Some(a.dst), a.src1, a.src2)?;
                 }
                 ast::Instruction::Cvt(dets, arg) => {
-                    emit_cvt(builder, map, opencl, dets, arg)?;
+                    emit_cvt(builder, map, dets, arg)?;
                 }
                 ast::Instruction::Cvta(_, arg) => {
                     // This would be only meaningful if const/slm/global pointers
@@ -754,7 +745,6 @@ fn emit_function_body_ops(
 fn emit_cvt(
     builder: &mut dr::Builder,
     map: &mut TypeWordMap,
-    opencl: spirv::Word,
     dets: &ast::CvtDetails,
     arg: &ast::Arg2<ExpandedArgParams>,
 ) -> Result<(), dr::Error> {
@@ -841,7 +831,6 @@ fn emit_cvt(
                 builder.bitcast(result_type, Some(arg.dst), src)?;
             }
         }
-        _ => todo!(),
     }
     Ok(())
 }

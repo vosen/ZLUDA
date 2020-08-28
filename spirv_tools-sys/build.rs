@@ -18,6 +18,10 @@ fn main() -> Result<(), VarError> {
         "cargo:rustc-link-search=native={}/bin",
         spirv_tools_dir.display()
     );
+    println!(
+        "cargo:rustc-link-search=native={}/lib",
+        spirv_tools_dir.display()
+    );
     // dynamic linking to avoid linking to C++ runtime
     println!("cargo:rustc-link-lib=dylib=SPIRV-Tools-shared");
     Ok(())
