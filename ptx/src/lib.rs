@@ -1,4 +1,4 @@
-#[cfg_attr(macro_use, test)]
+#[cfg(test)]
 extern crate paste;
 #[macro_use]
 extern crate lalrpop_util;

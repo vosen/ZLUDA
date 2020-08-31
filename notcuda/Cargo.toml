@@ -5,7 +5,7 @@ authors = ["Andrzej Janik <vosen@vosen.pl>"]
 edition = "2018"
 
 [lib]
-name = "nvcuda"
+name = "notcuda"
 crate-type = ["cdylib"]
 
 [dependencies]
@@ -15,3 +15,7 @@ level_zero-sys = { path = "../level_zero-sys" }
 lazy_static = "1.4"
 num_enum = "0.4"
 lz4 = "1.23"
+
+[dev-dependencies]
+cuda-driver-sys = "0.3.0"
+paste = "1.0"

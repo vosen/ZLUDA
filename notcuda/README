@@ -1,0 +1,3 @@
+bindgen /usr/local/cuda/include/cuda.h -o cuda.rs --whitelist-function="^cu.*" --size_t-is-usize --default-enum-style=newtype --no-layout-tests --no-doc-comments --no-derive-debug --new-type-alias "^CUdevice$|^CUdeviceptr$"
+sed -i -e 's/extern "C" {//g' -e 's/-> CUresult;/-> CUresult { impl_::unsupported()/g' -e 's/pub fn /#[no_mangle] pub extern "C" fn /g' cuda.rs
+rustfmt cuda.rs

@@ -1,36 +1,42 @@
-use crate::cu;
-use crate::{cuda, ze};
+use crate::cuda::CUresult;
+use crate::{
+    cuda::{CUcontext, CUdevice, CUmodule, CUuuid},
+    cuda_impl,
+};
 
+use super::{context, device, Decuda, Encuda};
 use std::mem;
-use std::os::raw::{c_int, c_uint, c_ulong, c_ushort};
+use std::os::raw::{c_uint, c_ulong, c_ushort};
 use std::{ffi::c_void, ptr, slice};
 
-#[no_mangle]
-pub unsafe extern "C" fn cuGetExportTable(
-    table: *mut *const std::os::raw::c_void,
-    id: *const cu::Uuid,
-) -> cu::Result {
+pub fn get(table: *mut *const std::os::raw::c_void, id: *const CUuuid) -> CUresult {
     if table == ptr::null_mut() || id == ptr::null_mut() {
-        cu::Result::ERROR_INVALID_VALUE
-    } else if *id == TOOLS_RUNTIME_CALLBACK_HOOKS_GUID {
-        *table = TOOLS_RUNTIME_CALLBACK_HOOKS_VTABLE.as_ptr() as *const _;
-        cu::Result::SUCCESS
-    } else if *id == CUDART_INTERFACE_GUID {
-        *table = CUDART_INTERFACE_VTABLE.as_ptr() as *const _;
-        cu::Result::SUCCESS
-    } else if *id == TOOLS_TLS_GUID {
-        *table = 1 as _;
-        cu::Result::SUCCESS
-    } else if *id == CONTEXT_LOCAL_STORAGE_INTERFACE_V0301_GUID {
-        *table = CONTEXT_LOCAL_STORAGE_INTERFACE_V0301_VTABLE.as_ptr() as *const _;
-        cu::Result::SUCCESS
-    } else {
-        cu::Result::ERROR_NOT_SUPPORTED
+        return CUresult::CUDA_ERROR_INVALID_VALUE;
+    }
+    let id = unsafe { *id };
+    match id {
+        TOOLS_RUNTIME_CALLBACK_HOOKS_GUID => {
+            unsafe { *table = TOOLS_RUNTIME_CALLBACK_HOOKS_VTABLE.as_ptr() as *const _ };
+            CUresult::CUDA_SUCCESS
+        }
+        CUDART_INTERFACE_GUID => {
+            unsafe { *table = CUDART_INTERFACE_VTABLE.as_ptr() as *const _ };
+            CUresult::CUDA_SUCCESS
+        }
+        TOOLS_TLS_GUID => {
+            unsafe { *table = 1 as _ };
+            CUresult::CUDA_SUCCESS
+        }
+        CONTEXT_LOCAL_STORAGE_INTERFACE_V0301_GUID => {
+            unsafe { *table = CONTEXT_LOCAL_STORAGE_INTERFACE_V0301_VTABLE.as_ptr() as *const _ };
+            CUresult::CUDA_SUCCESS
+        }
+        _ => CUresult::CUDA_ERROR_NOT_SUPPORTED,
     }
 }
 
-const TOOLS_RUNTIME_CALLBACK_HOOKS_GUID: cu::Uuid = cu::Uuid {
-    x: [
+const TOOLS_RUNTIME_CALLBACK_HOOKS_GUID: CUuuid = CUuuid {
+    bytes: [
         0xa0, 0x94, 0x79, 0x8c, 0x2e, 0x74, 0x2e, 0x74, 0x93, 0xf2, 0x08, 0x00, 0x20, 0x0c, 0x0a,
         0x66,
     ],
@@ -73,8 +79,8 @@ unsafe extern "C" fn runtime_callback_hooks_fn5(ptr: *mut *mut u8, size: *mut us
     return TOOLS_RUNTIME_CALLBACK_HOOKS_FN5_SPACE.as_mut_ptr();
 }
 
-const CUDART_INTERFACE_GUID: cu::Uuid = cu::Uuid {
-    x: [
+const CUDART_INTERFACE_GUID: CUuuid = CUuuid {
+    bytes: [
         0x6b, 0xd5, 0xfb, 0x6c, 0x5b, 0xf4, 0xe7, 0x4a, 0x89, 0x87, 0xd9, 0x39, 0x12, 0xfd, 0x9d,
         0xf9,
     ],
@@ -102,8 +108,17 @@ static CUDART_INTERFACE_VTABLE: [VTableEntry; CUDART_INTERFACE_LENGTH] = [
     VTableEntry { ptr: ptr::null() },
 ];
 
-unsafe extern "C" fn cudart_interface_fn1(_: *mut c_ulong, _: c_int) -> c_int {
-    0
+unsafe extern "C" fn cudart_interface_fn1(pctx: *mut CUcontext, dev: CUdevice) -> CUresult {
+    cudart_interface_fn1_impl(pctx.decuda(), dev.decuda()).encuda()
+}
+
+fn cudart_interface_fn1_impl(
+    pctx: *mut *mut context::Context,
+    dev: device::Index,
+) -> Result<(), CUresult> {
+    let ctx_ptr = device::with_exclusive(dev, |d| &mut d.primary_context as *mut context::Context)?;
+    unsafe { *pctx = ctx_ptr };
+    Ok(())
 }
 
 /*
@@ -178,17 +193,20 @@ struct FatbinFileHeader {
 }
 
 unsafe extern "C" fn get_module_from_cubin(
-    result: *mut cu::Module,
+    result: *mut CUmodule,
     fatbinc_wrapper: *const FatbincWrapper,
     _: *mut c_void,
     _: *mut c_void,
-) -> cu::Result {
-    if result == ptr::null_mut() || (*fatbinc_wrapper).magic != FATBINC_MAGIC || (*fatbinc_wrapper).version != FATBINC_VERSION {
-        return cu::Result::ERROR_INVALID_VALUE;
+) -> CUresult {
+    if result == ptr::null_mut()
+        || (*fatbinc_wrapper).magic != FATBINC_MAGIC
+        || (*fatbinc_wrapper).version != FATBINC_VERSION
+    {
+        return CUresult::CUDA_ERROR_INVALID_VALUE;
     }
     let fatbin_header = (*fatbinc_wrapper).data;
     if (*fatbin_header).magic != FATBIN_MAGIC || (*fatbin_header).version != FATBIN_VERSION {
-        return cu::Result::ERROR_INVALID_VALUE;
+        return CUresult::CUDA_ERROR_INVALID_VALUE;
     }
     let file = (fatbin_header as *const u8).add((*fatbin_header).header_size as usize);
     let end = file.add((*fatbin_header).files_size as usize);
@@ -201,13 +219,9 @@ unsafe extern "C" fn get_module_from_cubin(
         );
         let kernel_text =
             lz4::block::decompress(slice, Some((*file).uncompressed_payload as i32)).unwrap();
-        let module = ze::Module {
-            ptx_text: kernel_text,
-        };
-        *result = cu::Module::new(module);
-        return cu::Result::SUCCESS
+        return CUresult::CUDA_SUCCESS;
     }
-    cu::Result::ERROR_COMPAT_NOT_SUPPORTED_ON_DEVICE
+    CUresult::CUDA_ERROR_COMPAT_NOT_SUPPORTED_ON_DEVICE
 }
 
 unsafe fn get_ptx_files(file: *const u8, end: *const u8) -> Vec<*const FatbinFileHeader> {
@@ -227,15 +241,15 @@ unsafe fn get_ptx_files(file: *const u8, end: *const u8) -> Vec<*const FatbinFil
 
 unsafe extern "C" fn cudart_interface_fn6(_: u64) {}
 
-const TOOLS_TLS_GUID: cu::Uuid = cu::Uuid {
-    x: [
+const TOOLS_TLS_GUID: CUuuid = CUuuid {
+    bytes: [
         0x42, 0xd8, 0x5a, 0x81, 0x23, 0xf6, 0xcb, 0x47, 0x82, 0x98, 0xf6, 0xe7, 0x8a, 0x3a, 0xec,
         0xdc,
     ],
 };
 
-const CONTEXT_LOCAL_STORAGE_INTERFACE_V0301_GUID: cu::Uuid = cu::Uuid {
-    x: [
+const CONTEXT_LOCAL_STORAGE_INTERFACE_V0301_GUID: CUuuid = CUuuid {
+    bytes: [
         0xc6, 0x93, 0x33, 0x6e, 0x11, 0x21, 0xdf, 0x11, 0xa8, 0xc3, 0x68, 0xf3, 0x55, 0xd8, 0x95,
         0x93,
     ],
@@ -257,23 +271,50 @@ static CONTEXT_LOCAL_STORAGE_INTERFACE_V0301_VTABLE: [VTableEntry; 4] = [
 
 // some kind of ctor
 unsafe extern "C" fn context_local_storage_ctor(
-    cu_ctx: cu::Context, // always zero
-    mgr: *mut cuda::rt::ContextStateManager,
-    ctx_state: *mut cuda::rt::ContextState,
+    cu_ctx: CUcontext, // always zero
+    mgr: *mut cuda_impl::rt::ContextStateManager,
+    ctx_state: *mut cuda_impl::rt::ContextState,
     // clsContextDestroyCallback,  have to be called on cuDevicePrimaryCtxReset
-    dtor_cb: extern "C" fn(
-        cu::Context,
-        *mut cuda::rt::ContextStateManager,
-        *mut cuda::rt::ContextState,
-    ),
-) -> cu::Result {
-    if cu_ctx.0 == ptr::null_mut() {
-        return cu::Result::ERROR_NOT_SUPPORTED;
+    dtor_cb: Option<
+        extern "C" fn(
+            CUcontext,
+            *mut cuda_impl::rt::ContextStateManager,
+            *mut cuda_impl::rt::ContextState,
+        ),
+    >,
+) -> CUresult {
+    context_local_storage_ctor_impl(cu_ctx.decuda(), mgr, ctx_state, dtor_cb).encuda()
+}
+
+fn context_local_storage_ctor_impl(
+    cu_ctx: *mut context::Context,
+    mgr: *mut cuda_impl::rt::ContextStateManager,
+    ctx_state: *mut cuda_impl::rt::ContextState,
+    dtor_cb: Option<
+        extern "C" fn(
+            CUcontext,
+            *mut cuda_impl::rt::ContextStateManager,
+            *mut cuda_impl::rt::ContextState,
+        ),
+    >,
+) -> Result<(), CUresult> {
+    if cu_ctx == ptr::null_mut() {
+        return Err(CUresult::CUDA_ERROR_NOT_SUPPORTED);
     }
-    (*cu_ctx.0).cuda_manager = mgr;
-    (*cu_ctx.0).cuda_state = ctx_state;
-    (*cu_ctx.0).cuda_dtor_cb = dtor_cb;
-    cu::Result::SUCCESS
+    unsafe { &*cu_ctx }
+        .as_ref()
+        .ok_or(CUresult::CUDA_ERROR_INVALID_CONTEXT)
+        .and_then(|ctx| {
+            ctx.mutable
+                .try_lock()
+                .map_err(|_| CUresult::CUDA_ERROR_ILLEGAL_STATE)
+                .map(|mut mutable| {
+                    mutable.cuda_manager = mgr;
+                    mutable.cuda_state = ctx_state;
+                    mutable.cuda_dtor_cb = dtor_cb;
+                })
+        })?;
+    Ok(())
 }
 
 // some kind of dtor
@@ -282,13 +323,30 @@ unsafe extern "C" fn context_local_storage_dtor(_: *mut usize, _: *mut ()) -> u3
 }
 
 unsafe extern "C" fn context_local_storage_get_state(
-    ctx_state: *mut *mut cuda::rt::ContextState,
-    cu_ctx: cu::Context,
-    _: *mut cuda::rt::ContextStateManager,
-) -> cu::Result {
-    if cu_ctx == cu::Context::null() {
-        return cu::Result::ERROR_INVALID_CONTEXT;
+    ctx_state: *mut *mut cuda_impl::rt::ContextState,
+    cu_ctx: CUcontext,
+    state_mgr: *mut cuda_impl::rt::ContextStateManager,
+) -> CUresult {
+    context_local_storage_get_state_impl(ctx_state, cu_ctx.decuda(), state_mgr).encuda()
+}
+
+fn context_local_storage_get_state_impl(
+    ctx_state: *mut *mut cuda_impl::rt::ContextState,
+    cu_ctx: *mut context::Context,
+    _: *mut cuda_impl::rt::ContextStateManager,
+) -> Result<(), CUresult> {
+    if cu_ctx == ptr::null_mut() {
+        return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
     }
-    *ctx_state = (*cu_ctx.0).cuda_state;
-    cu::Result::SUCCESS
+    let cuda_state = unsafe { &*cu_ctx }
+        .as_ref()
+        .ok_or(CUresult::CUDA_ERROR_INVALID_CONTEXT)
+        .and_then(|ctx| {
+            ctx.mutable
+                .try_lock()
+                .map_err(|_| CUresult::CUDA_ERROR_ILLEGAL_STATE)
+                .map(|mutable| mutable.cuda_state)
+        })?;
+    unsafe { *ctx_state = cuda_state };
+    Ok(())
 }

@@ -1,7 +1,7 @@
 use crate::sys;
 use std::{
     ffi::{c_void, CStr},
-    fmt::{Debug, Display},
+    fmt::Debug,
     marker::PhantomData,
     mem, ptr,
 };
@@ -12,7 +12,7 @@ macro_rules! check {
         {
             let err = unsafe { $expr };
             if err != crate::sys::ze_result_t::ZE_RESULT_SUCCESS {
-                return Result::Err(Error(err));
+                return Result::Err(err);
             }
         }
     };
@@ -27,38 +27,23 @@ macro_rules! check_panic {
     };
 }
 
-pub type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, sys::ze_result_t>;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Error(pub sys::ze_result_t);
 
-impl Error {
-    fn new<T>(res: sys::ze_result_t, default: T) -> Result<T> {
-        if res == sys::ze_result_t::ZE_RESULT_SUCCESS {
-            Ok(default)
-        } else {
-            Err(Self(res))
-        }
-    }
-}
-
-impl Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Debug::fmt(self, f)
-    }
-}
-
-impl std::error::Error for Error {}
-
 pub fn init() -> Result<()> {
-    Error::new(
-        unsafe { sys::zeInit(sys::ze_init_flags_t::ZE_INIT_FLAG_GPU_ONLY) },
-        (),
-    )
+    match unsafe { sys::zeInit(sys::ze_init_flags_t::ZE_INIT_FLAG_GPU_ONLY) } {
+        sys::ze_result_t::ZE_RESULT_SUCCESS => Ok(()),
+        e => Err(e),
+    }
 }
 
 #[repr(transparent)]
 pub struct Driver(sys::ze_driver_handle_t);
+
+unsafe impl Send for Driver {}
+unsafe impl Sync for Driver {}
 
 impl Driver {
     pub unsafe fn as_ffi(&self) -> sys::ze_driver_handle_t {
@@ -181,6 +166,13 @@ impl Context {
         let mut result = ptr::null_mut();
         check!(sys::zeContextCreate(drv.0, &ctx_desc, &mut result));
         Ok(Context(result))
+    }
+}
+
+impl Drop for Context {
+    #[allow(unused_must_use)]
+    fn drop(&mut self) {
+        check_panic! { sys::zeContextDestroy(self.0) };
     }
 }
 

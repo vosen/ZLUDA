@@ -51,23 +51,23 @@ test_ptx!(shl, [11u64], [44u64]);
 test_ptx!(cvt_sat_s_u, [-1i32], [0i32]);
 test_ptx!(cvta, [3.0f32], [3.0f32]);
 
-struct DisplayError<T: Display + Debug> {
+struct DisplayError<T: Debug> {
     err: T,
 }
 
-impl<T: Display + Debug> Display for DisplayError<T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        Display::fmt(&self.err, f)
-    }
-}
-
-impl<T: Display + Debug> Debug for DisplayError<T> {
+impl<T: Debug> Display for DisplayError<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         Debug::fmt(&self.err, f)
     }
 }
 
-impl<T: Display + Debug> error::Error for DisplayError<T> {}
+impl<T: Debug> Debug for DisplayError<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Debug::fmt(&self.err, f)
+    }
+}
+
+impl<T: Debug> error::Error for DisplayError<T> {}
 
 fn test_ptx_assert<'a, T: From<u8> + ze::SafeRepr + Debug + Copy + PartialEq>(
     name: &str,
