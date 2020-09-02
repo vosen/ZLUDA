@@ -8,6 +8,7 @@ extern crate lz4;
 #[cfg(test)]
 #[macro_use]
 extern crate paste;
+extern crate ptx;
 
 #[allow(warnings)]
 mod cuda;

@@ -16,6 +16,7 @@ impl SpirvType {
         let key = match t {
             ast::Type::Scalar(typ) => SpirvScalarKey::from(typ),
             ast::Type::ExtendedScalar(typ) => SpirvScalarKey::from(typ),
+            ast::Type::Array(_, _) => todo!(),
         };
         SpirvType::Pointer(key, sc)
     }
@@ -26,6 +27,7 @@ impl From<ast::Type> for SpirvType {
         match t {
             ast::Type::Scalar(t) => SpirvType::Base(t.into()),
             ast::Type::ExtendedScalar(t) => SpirvType::Base(t.into()),
+            ast::Type::Array(_, _) => todo!(),
         }
     }
 }
@@ -195,10 +197,13 @@ fn emit_function<'a>(
     let func_type = get_function_type(builder, map, &f.args);
     let func_id =
         builder.begin_function(map.void(), None, spirv::FunctionControl::NONE, func_type)?;
-    if f.kernel {
-        builder.entry_point(spirv::ExecutionModel::Kernel, func_id, f.name, &[]);
+    match f.func_directive {
+        ast::FunctionReturn::Kernel => {
+            builder.entry_point(spirv::ExecutionModel::Kernel, func_id, f.name, &[])
+        }
+        _ => todo!(),
     }
-    let (mut func_body, unique_ids) = to_ssa(&f.args, f.body);
+    let (mut func_body, unique_ids) = to_ssa(&f.args, f.body.unwrap_or_else(|| todo!()));
     let id_offset = builder.reserve_ids(unique_ids);
     emit_function_args(builder, id_offset, map, &f.args);
     func_body = apply_id_offset(func_body, id_offset);
@@ -266,6 +271,7 @@ fn normalize_predicates(
     let mut result = Vec::with_capacity(func.len());
     for s in func {
         match s {
+            ast::Statement::Block(_) => todo!(),
             ast::Statement::Label(id) => result.push(Statement::Label(id)),
             ast::Statement::Instruction(pred, inst) => {
                 if let Some(pred) = pred {
@@ -652,6 +658,8 @@ fn emit_function_body_ops(
                 builder.branch_conditional(bra.predicate, bra.if_true, bra.if_false, [])?;
             }
             Statement::Instruction(inst) => match inst {
+                ast::Instruction::Abs(_, _) => todo!(),
+                ast::Instruction::Call(_,_) => todo!(),
                 // SPIR-V does not support marking jumps as guaranteed-converged
                 ast::Instruction::Bra(_, arg) => {
                     builder.branch(arg.src)?;
@@ -1076,6 +1084,7 @@ fn expand_map_variables<'a>(
     s: ast::Statement<ast::ParsedArgParams<'a>>,
 ) {
     match s {
+        ast::Statement::Block(_) => todo!(),
         ast::Statement::Label(name) => result.push(ast::Statement::Label(id_defs.get_id(name))),
         ast::Statement::Instruction(p, i) => result.push(ast::Statement::Instruction(
             p.map(|p| p.map_variable(&mut |id| id_defs.get_id(id))),
@@ -1086,6 +1095,7 @@ fn expand_map_variables<'a>(
                 for new_id in id_defs.add_defs(var.name, count, var.v_type) {
                     result.push(ast::Statement::Variable(ast::Variable {
                         space: var.space,
+                        align: var.align,
                         v_type: var.v_type,
                         name: new_id,
                         count: None,
@@ -1096,6 +1106,7 @@ fn expand_map_variables<'a>(
                 let new_id = id_defs.add_def(var.name, Some(var.v_type));
                 result.push(ast::Statement::Variable(ast::Variable {
                     space: var.space,
+                    align: var.align,
                     v_type: var.v_type,
                     name: new_id,
                     count: None,
@@ -1307,6 +1318,8 @@ impl<T: ast::ArgParams> ast::Instruction<T> {
         visitor: &mut V,
     ) -> ast::Instruction<U> {
         match self {
+            ast::Instruction::Abs(_, _) => todo!(),
+            ast::Instruction::Call(_, _) => todo!(),
             ast::Instruction::Ld(d, a) => {
                 let inst_type = d.typ;
                 ast::Instruction::Ld(d, a.map_ld(visitor, Some(ast::Type::Scalar(inst_type))))
@@ -1432,6 +1445,8 @@ impl ast::Instruction<ExpandedArgParams> {
 
     fn jump_target(&self) -> Option<spirv::Word> {
         match self {
+            ast::Instruction::Abs(_, _) => todo!(),
+            ast::Instruction::Call(_, _) => todo!(),
             ast::Instruction::Bra(_, a) => Some(a.src),
             ast::Instruction::Ld(_, _)
             | ast::Instruction::Mov(_, _)

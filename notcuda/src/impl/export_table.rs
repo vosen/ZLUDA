@@ -4,10 +4,13 @@ use crate::{
     cuda_impl,
 };
 
-use super::{context, device, Decuda, Encuda};
+use super::{context, device, module, Decuda, Encuda};
 use std::mem;
 use std::os::raw::{c_uint, c_ulong, c_ushort};
-use std::{ffi::c_void, ptr, slice};
+use std::{
+    ffi::{c_void, CStr, CString},
+    ptr, slice,
+};
 
 pub fn get(table: *mut *const std::os::raw::c_void, id: *const CUuuid) -> CUresult {
     if table == ptr::null_mut() || id == ptr::null_mut() {
@@ -204,6 +207,12 @@ unsafe extern "C" fn get_module_from_cubin(
     {
         return CUresult::CUDA_ERROR_INVALID_VALUE;
     }
+    let result = result.decuda();
+    let mut dev_count = 0;
+    let cu_result = device::get_count(&mut dev_count);
+    if cu_result != CUresult::CUDA_SUCCESS {
+        return cu_result;
+    }
     let fatbin_header = (*fatbinc_wrapper).data;
     if (*fatbin_header).magic != FATBIN_MAGIC || (*fatbin_header).version != FATBIN_VERSION {
         return CUresult::CUDA_ERROR_INVALID_VALUE;
@@ -219,7 +228,21 @@ unsafe extern "C" fn get_module_from_cubin(
         );
         let kernel_text =
             lz4::block::decompress(slice, Some((*file).uncompressed_payload as i32)).unwrap();
-        return CUresult::CUDA_SUCCESS;
+        let kernel_text_string = match CStr::from_bytes_with_nul(&kernel_text) {
+            Ok(c_str) => match c_str.to_str() {
+                Ok(s) => s,
+                Err(_) => continue,
+            },
+            Err(_) => continue,
+        };
+        let module = module::Module::compile(kernel_text_string, dev_count as usize);
+        match module {
+            Ok(module) => {
+                *result = Box::into_raw(Box::new(module));
+                return CUresult::CUDA_SUCCESS;
+            }
+            Err(_) => continue,
+        }
     }
     CUresult::CUDA_ERROR_COMPAT_NOT_SUPPORTED_ON_DEVICE
 }

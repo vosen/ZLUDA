@@ -11,6 +11,7 @@ quick_error! {
         }
         SyntaxError {}
         NonF32Ftz {}
+        WrongArrayType {}
     }
 }
 
@@ -50,11 +51,16 @@ pub struct Module<'a> {
     pub functions: Vec<Function<'a>>,
 }
 
+pub enum FunctionReturn<'a> {
+    Func(Vec<Argument<'a>>),
+    Kernel,
+}
+
 pub struct Function<'a> {
-    pub kernel: bool,
+    pub func_directive: FunctionReturn<'a>,
     pub name: &'a str,
     pub args: Vec<Argument<'a>>,
-    pub body: Vec<Statement<ParsedArgParams<'a>>>,
+    pub body: Option<Vec<Statement<ParsedArgParams<'a>>>>,
 }
 
 #[derive(Default)]
@@ -68,6 +74,7 @@ pub struct Argument<'a> {
 pub enum Type {
     Scalar(ScalarType),
     ExtendedScalar(ExtendedScalarType),
+    Array(ScalarType, u32),
 }
 
 impl From<FloatType> for Type {
@@ -173,10 +180,12 @@ pub enum Statement<P: ArgParams> {
     Label(P::ID),
     Variable(Variable<P>),
     Instruction(Option<PredAt<P::ID>>, Instruction<P>),
+    Block(Vec<Statement<P>>),
 }
 
 pub struct Variable<P: ArgParams> {
     pub space: StateSpace,
+    pub align: Option<u32>,
     pub v_type: Type,
     pub name: P::ID,
     pub count: Option<u32>,
@@ -190,6 +199,7 @@ pub enum StateSpace {
     Global,
     Local,
     Shared,
+    Param,
 }
 
 pub struct PredAt<ID> {
@@ -211,6 +221,23 @@ pub enum Instruction<P: ArgParams> {
     Shl(ShlType, Arg3<P>),
     St(StData, Arg2St<P>),
     Ret(RetData),
+    Call(CallData, ArgCall<P>),
+    Abs(AbsDetails, Arg2<P>),
+}
+
+pub struct CallData {
+    pub uniform: bool,
+}
+
+pub struct AbsDetails {
+    pub flush_to_zero: bool,
+    pub typ: ScalarType
+}
+
+pub struct ArgCall<P: ArgParams> {
+    pub ret_params: Vec<P::ID>,
+    pub func: P::ID,
+    pub param_list: Vec<P::ID>,
 }
 
 pub trait ArgParams {

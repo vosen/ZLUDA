@@ -25,3 +25,11 @@ fn operands_ptx() {
     let vector_add = include_str!("operands.ptx");
     parse_and_assert(vector_add);
 }
+
+#[test]
+#[allow(non_snake_case)]
+fn _Z9vectorAddPKfS0_Pfi_ptx() {
+    let vector_add = include_str!("_Z9vectorAddPKfS0_Pfi.ptx");
+    parse_and_assert(vector_add);
+}
+

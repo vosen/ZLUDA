@@ -24,6 +24,7 @@ match {
     "|",
     ".acquire",
     ".address_size",
+    ".align",
     ".and",
     ".b16",
     ".b32",
@@ -108,8 +109,10 @@ match {
     ".xor",
 } else {
     // IF YOU ARE ADDING A NEW TOKEN HERE ALSO ADD IT BELOW TO ExtendedID
+    "abs",
     "add",
     "bra",
+    "call",
     "cvt",
     "cvta",
     "debug",
@@ -135,8 +138,10 @@ match {
 }
 
 ExtendedID : &'input str = {
+    "abs",
     "add",
     "bra",
+    "call",
     "cvt",
     "cvta",
     "debug",
@@ -197,9 +202,9 @@ AddressSize = {
 
 Function: ast::Function<'input>  = {
     LinkingDirective*
-    <kernel:IsKernel>
+    <func_directive:FunctionReturn>
     <name:ExtendedID>
-    "(" <args:Comma<FunctionInput>> ")"
+    <args:Arguments>
     <body:FunctionBody> => ast::Function{<>}
 };
 
@@ -209,10 +214,14 @@ LinkingDirective = {
     ".weak"
 };
 
-IsKernel: bool = {
-    ".entry" => true,
-    ".func" => false
+FunctionReturn: ast::FunctionReturn<'input> = {
+    ".entry" => ast::FunctionReturn::Kernel,
+    ".func" <args:Arguments?> => ast::FunctionReturn::Func(args.unwrap_or_else(|| Vec::new()))
 };
+
+Arguments: Vec<ast::Argument<'input>> = {
+    "(" <args:Comma<FunctionInput>> ")" => args
+}
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parameter-state-space
 FunctionInput: ast::Argument<'input> = {
@@ -226,8 +235,9 @@ FunctionInput: ast::Argument<'input> = {
     }
 };
 
-pub(crate) FunctionBody: Vec<ast::Statement<ast::ParsedArgParams<'input>>> = {
-    "{" <s:Statement*> "}" => { without_none(s) }
+pub(crate) FunctionBody: Option<Vec<ast::Statement<ast::ParsedArgParams<'input>>>> = {
+    "{" <s:Statement*> "}" => { Some(without_none(s)) },
+    ";" => { None }
 };
 
 StateSpaceSpecifier: ast::StateSpace = {
@@ -236,7 +246,8 @@ StateSpaceSpecifier: ast::StateSpace = {
     ".const" => ast::StateSpace::Const,
     ".global" => ast::StateSpace::Global,
     ".local" => ast::StateSpace::Local,
-    ".shared" => ast::StateSpace::Shared
+    ".shared" => ast::StateSpace::Shared,
+    ".param" => ast::StateSpace::Param, // used to prepare function call
 };
 
 
@@ -276,7 +287,8 @@ Statement: Option<ast::Statement<ast::ParsedArgParams<'input>>> = {
     <l:Label> => Some(ast::Statement::Label(l)),
     DebugDirective => None,
     <v:Variable> ";" => Some(ast::Statement::Variable(v)),
-    <p:PredAt?> <i:Instruction> ";" => Some(ast::Statement::Instruction(p, i))
+    <p:PredAt?> <i:Instruction> ";" => Some(ast::Statement::Instruction(p, i)),
+    "{" <s:Statement*> "}" => Some(ast::Statement::Block(without_none(s)))
 };
 
 DebugDirective: () = {
@@ -292,10 +304,32 @@ Label: &'input str = {
     <id:ExtendedID> ":" => id
 };
 
+Align: u32 = {
+    ".align" <a:Num> => {
+        let align = a.parse::<u32>();
+        align.unwrap_with(errors)
+    }
+};
+
 Variable: ast::Variable<ast::ParsedArgParams<'input>> = {
-    <s:StateSpaceSpecifier> <t:Type> <v:VariableName> => {
+    <s:StateSpaceSpecifier> <a:Align?> <t:Type> <v:VariableName> <arr: ArraySpecifier?> => {
         let (name, count) = v;
-        ast::Variable { space: s, v_type: t, name: name, count: count }
+        let t = match (t, arr) {
+            (ast::Type::Scalar(st), Some(arr_size)) => ast::Type::Array(st, arr_size),
+            (t, Some(_)) => {
+                errors.push(ast::PtxError::WrongArrayType);
+                t
+            },
+            (t, None) => t,
+        };
+        ast::Variable { space: s, align: a, v_type: t, name: name, count: count }
+    }
+};
+
+ArraySpecifier: u32 = {
+    "[" <n:Num> "]" => {
+        let size = n.parse::<u32>();
+        size.unwrap_with(errors)
     }
 };
 
@@ -326,6 +360,8 @@ Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
     InstSt,
     InstRet,
     InstCvta,
+    InstCall,
+    InstAbs,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
@@ -819,6 +855,36 @@ CvtaSize: ast::CvtaSize = {
     ".u64" => ast::CvtaSize::U64,
 }
 
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-call
+InstCall: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "call" <u:".uni"?> <a:ArgCall> => ast::Instruction::Call(ast::CallData { uniform: u.is_some() }, a)
+};
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-abs
+InstAbs: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "abs" <t:SignedIntType> <a:Arg2> => {
+        ast::Instruction::Abs(ast::AbsDetails { flush_to_zero: false, typ: t }, a)
+    },
+    "abs" <f:".ftz"?> ".f32" <a:Arg2> => {
+        ast::Instruction::Abs(ast::AbsDetails { flush_to_zero: f.is_some(), typ: ast::ScalarType::F32 }, a)
+    },
+    "abs" ".f64" <a:Arg2> => {
+        ast::Instruction::Abs(ast::AbsDetails { flush_to_zero: false, typ: ast::ScalarType::F64 }, a)
+    },
+    "abs" <f:".ftz"?> ".f16" <a:Arg2> => {
+        ast::Instruction::Abs(ast::AbsDetails { flush_to_zero: f.is_some(), typ: ast::ScalarType::F16 }, a)
+    },
+    "abs" <f:".ftz"?> ".f16x2" <a:Arg2> => {
+        todo!()
+    },
+};
+
+SignedIntType: ast::ScalarType = {
+    ".s16" => ast::ScalarType::S16,
+    ".s32" => ast::ScalarType::S32,
+    ".s64" => ast::ScalarType::S64,
+};
+
 Operand: ast::Operand<&'input str> = {
     <r:ExtendedID> => ast::Operand::Reg(r),
     <r:ExtendedID> "+" <o:Num> => {
@@ -871,6 +937,12 @@ Arg4: ast::Arg4<ast::ParsedArgParams<'input>> = {
 // TODO: pass src3 negation somewhere
 Arg5: ast::Arg5<ast::ParsedArgParams<'input>> = {
     <dst1:ExtendedID> <dst2:OptionalDst?> "," <src1:Operand> "," <src2:Operand> "," "!"? <src3:Operand> => ast::Arg5{<>}
+};
+
+ArgCall: ast::ArgCall<ast::ParsedArgParams<'input>> = {
+    "(" <ret_params:Comma<ExtendedID>> ")" "," <func:ExtendedID> "," "(" <param_list:Comma<ExtendedID>> ")" => ast::ArgCall{<>},
+    <func:ExtendedID> "," "(" <param_list:Comma<ExtendedID>> ")" => ast::ArgCall{ret_params: Vec::new(), func, param_list},
+    <func:ExtendedID> => ast::ArgCall{ret_params: Vec::new(), func, param_list: Vec::new()},
 };
 
 OptionalDst: &'input str = {

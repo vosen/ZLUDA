@@ -27,8 +27,11 @@ pub mod ast;
 mod test;
 mod translate;
 
-pub use ast::Module;
-pub use translate::to_spirv;
+pub use lalrpop_util::ParseError as ParseError;
+pub use lalrpop_util::lexer::Token as Token;
+pub use crate::ptx::ModuleParser as ModuleParser;
+pub use translate::to_spirv as to_spirv;
+pub use rspirv::dr::Error as SpirvError;
 
 pub(crate) fn without_none<T>(x: Vec<Option<T>>) -> Vec<T> {
     x.into_iter().filter_map(|x| x).collect()

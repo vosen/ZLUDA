@@ -1,4 +1,4 @@
-use crate::cuda::{CUctx_st, CUdevice, CUdeviceptr, CUresult};
+use crate::cuda::{CUctx_st, CUdevice, CUdeviceptr, CUresult, CUmodule};
 use std::{ffi::c_void, mem::ManuallyDrop, os::raw::c_int, sync::Mutex};
 
 #[cfg(test)]
@@ -8,6 +8,7 @@ pub mod context;
 pub mod device;
 pub mod export_table;
 pub mod memory;
+pub mod module;
 
 #[cfg(debug_assertions)]
 pub fn unimplemented() -> CUresult {
@@ -232,3 +233,8 @@ impl Decuda<*mut c_void> for CUdeviceptr {
         self.0 as *mut _
     }
 }
+
+impl<'a> CudaRepr for CUmodule {
+    type Impl = *mut module::Module;
+}
+
