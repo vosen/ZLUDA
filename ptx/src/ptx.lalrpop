@@ -189,7 +189,7 @@ TargetSpecifier = {
     "map_f64_to_f32"
 };
 
-Directive: Option<ast::Function<'input>> = {
+Directive: Option<ast::Function<'input, ast::ParsedArgParams<'input>, ast::Statement<ast::ParsedArgParams<'input>>>> = {
     AddressSize => None,
     <f:Function> => Some(f),
     File => None,
@@ -200,12 +200,11 @@ AddressSize = {
     ".address_size" Num
 };
 
-Function: ast::Function<'input>  = {
+Function: ast::Function<'input, ast::ParsedArgParams<'input>, ast::Statement<ast::ParsedArgParams<'input>>>  = {
     LinkingDirective*
-    <func_directive:FunctionReturn>
-    <name:ExtendedID>
+    <func_directive:FunctionHeader>
     <args:Arguments>
-    <body:FunctionBody> => ast::Function{<>}
+    <body:FunctionBody> =>  ast::Function{<>}
 };
 
 LinkingDirective = {
@@ -214,17 +213,17 @@ LinkingDirective = {
     ".weak"
 };
 
-FunctionReturn: ast::FunctionReturn<'input> = {
-    ".entry" => ast::FunctionReturn::Kernel,
-    ".func" <args:Arguments?> => ast::FunctionReturn::Func(args.unwrap_or_else(|| Vec::new()))
+FunctionHeader: ast::FunctionHeader<'input, ast::ParsedArgParams<'input>> = {
+    ".entry" <name:ExtendedID> => ast::FunctionHeader::Kernel(name),
+    ".func" <args:Arguments?> <name:ExtendedID> => ast::FunctionHeader::Func(args.unwrap_or_else(|| Vec::new()), name)
 };
 
-Arguments: Vec<ast::Argument<'input>> = {
+Arguments: Vec<ast::Argument<ast::ParsedArgParams<'input>>> = {
     "(" <args:Comma<FunctionInput>> ")" => args
 }
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parameter-state-space
-FunctionInput: ast::Argument<'input> = {
+FunctionInput: ast::Argument<ast::ParsedArgParams<'input>> = {
     ".param" <_type:ScalarType> <name:ExtendedID> => { 
         ast::Argument {a_type: _type, name: name, length: 1 }
     },

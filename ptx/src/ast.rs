@@ -48,24 +48,25 @@ impl<
 
 pub struct Module<'a> {
     pub version: (u8, u8),
-    pub functions: Vec<Function<'a>>,
+    pub functions: Vec<ParsedFunction<'a>>,
 }
 
-pub enum FunctionReturn<'a> {
-    Func(Vec<Argument<'a>>),
-    Kernel,
+pub enum FunctionHeader<'a, P: ArgParams> {
+    Func(Vec<Argument<P>>, P::ID),
+    Kernel(&'a str),
 }
 
-pub struct Function<'a> {
-    pub func_directive: FunctionReturn<'a>,
-    pub name: &'a str,
-    pub args: Vec<Argument<'a>>,
-    pub body: Option<Vec<Statement<ParsedArgParams<'a>>>>,
+pub struct Function<'a, P: ArgParams, S> {
+    pub func_directive: FunctionHeader<'a, P>,
+    pub args: Vec<Argument<P>>,
+    pub body: Option<Vec<S>>,
 }
+
+pub type ParsedFunction<'a> = Function<'a, ParsedArgParams<'a>, Statement<ParsedArgParams<'a>>>;
 
 #[derive(Default)]
-pub struct Argument<'a> {
-    pub name: &'a str,
+pub struct Argument<P: ArgParams> {
+    pub name: P::ID,
     pub a_type: ScalarType,
     pub length: u32,
 }
@@ -231,7 +232,7 @@ pub struct CallData {
 
 pub struct AbsDetails {
     pub flush_to_zero: bool,
-    pub typ: ScalarType
+    pub typ: ScalarType,
 }
 
 pub struct ArgCall<P: ArgParams> {

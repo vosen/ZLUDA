@@ -14,10 +14,7 @@ pub enum ModuleCompileError<'a> {
 }
 
 impl<'a> ModuleCompileError<'a> {
-    pub fn get_build_log(&self) {
-
-    }
-
+    pub fn get_build_log(&self) {}
 }
 
 impl<'a> From<ptx::SpirvError> for ModuleCompileError<'a> {
