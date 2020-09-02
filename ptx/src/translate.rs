@@ -271,7 +271,6 @@ fn normalize_predicates(
     let mut result = Vec::with_capacity(func.len());
     for s in func {
         match s {
-            ast::Statement::Block(_) => todo!(),
             ast::Statement::Label(id) => result.push(Statement::Label(id)),
             ast::Statement::Instruction(pred, inst) => {
                 if let Some(pred) = pred {
@@ -302,6 +301,8 @@ fn normalize_predicates(
             ast::Statement::Variable(var) => {
                 result.push(Statement::Variable(var.name, var.v_type, var.space))
             }
+            // Blocks are flattened when resolving ids
+            ast::Statement::Block(_) => unreachable!(),
         }
     }
     result
@@ -659,7 +660,7 @@ fn emit_function_body_ops(
             }
             Statement::Instruction(inst) => match inst {
                 ast::Instruction::Abs(_, _) => todo!(),
-                ast::Instruction::Call(_,_) => todo!(),
+                ast::Instruction::Call(_, _) => todo!(),
                 // SPIR-V does not support marking jumps as guaranteed-converged
                 ast::Instruction::Bra(_, arg) => {
                     builder.branch(arg.src)?;
@@ -1084,7 +1085,13 @@ fn expand_map_variables<'a>(
     s: ast::Statement<ast::ParsedArgParams<'a>>,
 ) {
     match s {
-        ast::Statement::Block(_) => todo!(),
+        ast::Statement::Block(block) => {
+            id_defs.start_block();
+            for s in block {
+                expand_map_variables(id_defs, result, s);
+            }
+            id_defs.end_block();
+        }
         ast::Statement::Label(name) => result.push(ast::Statement::Label(id_defs.get_id(name))),
         ast::Statement::Instruction(p, i) => result.push(ast::Statement::Instruction(
             p.map(|p| p.map_variable(&mut |id| id_defs.get_id(id))),
@@ -1118,7 +1125,7 @@ fn expand_map_variables<'a>(
 
 struct StringIdResolver<'a> {
     current_id: spirv::Word,
-    variables: HashMap<Cow<'a, str>, spirv::Word>,
+    variables: Vec<HashMap<Cow<'a, str>, spirv::Word>>,
     type_check: HashMap<u32, ast::Type>,
 }
 
@@ -1126,7 +1133,7 @@ impl<'a> StringIdResolver<'a> {
     fn new() -> Self {
         StringIdResolver {
             current_id: 0u32,
-            variables: HashMap::new(),
+            variables: vec![HashMap::new(); 1],
             type_check: HashMap::new(),
         }
     }
@@ -1138,13 +1145,30 @@ impl<'a> StringIdResolver<'a> {
         }
     }
 
+    fn start_block(&mut self) {
+        self.variables.push(HashMap::new())
+    }
+
+    fn end_block(&mut self) {
+        self.variables.pop();
+    }
+
     fn get_id(&self, id: &'a str) -> spirv::Word {
-        self.variables[id]
+        for scope in self.variables.iter().rev() {
+            match scope.get(id) {
+                Some(id) => return *id,
+                None => continue,
+            }
+        }
+        panic!()
     }
 
     fn add_def(&mut self, id: &'a str, typ: Option<ast::Type>) -> spirv::Word {
         let numeric_id = self.current_id;
-        self.variables.insert(Cow::Borrowed(id), numeric_id);
+        self.variables
+            .last_mut()
+            .unwrap()
+            .insert(Cow::Borrowed(id), numeric_id);
         if let Some(typ) = typ {
             self.type_check.insert(numeric_id, typ);
         }
@@ -1162,6 +1186,8 @@ impl<'a> StringIdResolver<'a> {
         let numeric_id = self.current_id;
         for i in 0..count {
             self.variables
+                .last_mut()
+                .unwrap()
                 .insert(Cow::Owned(format!("{}{}", base_id, i)), numeric_id + i);
             self.type_check.insert(numeric_id + i, typ);
         }
