@@ -190,14 +190,17 @@ fn test_spvtxt_assert<'a>(
                 ptr::null_mut()
             )
         };
-        assert_eq!(result, spv_result_t::SPV_SUCCESS);
-        let raw_text = unsafe {
-            std::slice::from_raw_parts((*spv_text).str_ as *const u8, (*spv_text).length)
-        };
-        let spv_from_ptx_text = unsafe { str::from_utf8_unchecked(raw_text) };
-        // TODO: stop leaking kernel text
         unsafe { spirv_tools::spvContextDestroy(spv_context) };
-        panic!(spv_from_ptx_text);
+        if result == spv_result_t::SPV_SUCCESS {
+            let raw_text = unsafe {
+                std::slice::from_raw_parts((*spv_text).str_ as *const u8, (*spv_text).length)
+            };
+            let spv_from_ptx_text = unsafe { str::from_utf8_unchecked(raw_text) };
+            // TODO: stop leaking kernel text
+            panic!(spv_from_ptx_text);
+        } else {
+            panic!(ptx_mod.disassemble());
+        }
     }
     unsafe { spirv_tools::spvContextDestroy(spv_context) };
     Ok(())

@@ -8,7 +8,7 @@ use super::{context, device, module, Decuda, Encuda};
 use std::mem;
 use std::os::raw::{c_uint, c_ulong, c_ushort};
 use std::{
-    ffi::{c_void, CStr, CString},
+    ffi::{c_void, CStr},
     ptr, slice,
 };
 
