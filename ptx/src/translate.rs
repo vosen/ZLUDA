@@ -1,6 +1,6 @@
 use crate::ast;
 use rspirv::dr;
-use std::collections::{HashMap, HashSet};
+use std::collections::{hash_map, HashMap, HashSet};
 use std::{borrow::Cow, iter, mem};
 
 use rspirv::binary::Assemble;
@@ -10,6 +10,7 @@ enum SpirvType {
     Base(SpirvScalarKey),
     Array(SpirvScalarKey, u32),
     Pointer(Box<SpirvType>, spirv::StorageClass),
+    Func(Option<Box<SpirvType>>, Vec<SpirvType>),
 }
 
 impl SpirvType {
@@ -141,16 +142,44 @@ impl TypeWordMap {
                     .entry(t)
                     .or_insert_with(|| b.type_array(base, len))
             }
+            SpirvType::Func(ref out_params, ref in_params) => {
+                let out_t = match out_params {
+                    Some(p) => self.get_or_add(b, *p.clone()),
+                    None => self.void(),
+                };
+                let in_t = in_params
+                    .iter()
+                    .map(|t| self.get_or_add(b, t.clone()))
+                    .collect::<Vec<_>>();
+                *self
+                    .complex
+                    .entry(t)
+                    .or_insert_with(|| b.type_function(out_t, in_t))
+            }
         }
     }
 
-    fn get_or_add_fn<Args: Iterator<Item = SpirvType>>(
+    fn get_or_add_fn(
         &mut self,
         b: &mut dr::Builder,
-        args: Args,
-    ) -> spirv::Word {
-        let params = args.map(|a| self.get_or_add(b, a)).collect::<Vec<_>>();
-        b.type_function(self.void(), params)
+        mut out_params: impl ExactSizeIterator<Item = SpirvType>,
+        in_params: impl ExactSizeIterator<Item = SpirvType>,
+    ) -> (spirv::Word, spirv::Word) {
+        let (out_args, out_spirv_type) = if out_params.len() == 0 {
+            (None, self.void())
+        } else if out_params.len() == 1 {
+            let arg_as_key = out_params.next().unwrap();
+            (
+                Some(Box::new(arg_as_key.clone())),
+                self.get_or_add(b, arg_as_key),
+            )
+        } else {
+            todo!()
+        };
+        (
+            out_spirv_type,
+            self.get_or_add(b, SpirvType::Func(out_args, in_params.collect::<Vec<_>>())),
+        )
     }
 }
 
@@ -171,29 +200,31 @@ pub fn to_spirv_module<'a>(ast: ast::Module<'a>) -> Result<dr::Module, dr::Error
     emit_memory_model(&mut builder);
     let mut map = TypeWordMap::new(&mut builder);
     for f in ssa_functions {
-        emit_function_header(&mut builder, &mut map, &id_defs, f.func_directive, &*f.args)?;
-        emit_function_args(&mut builder, &mut map, &*f.args);
-        emit_function_body_ops(&mut builder, &mut map, opencl_id, &f.body)?;
+        let f_body = match f.body {
+            Some(f) => f,
+            None => continue,
+        };
+        emit_function_header(&mut builder, &mut map, &id_defs, f.func_directive)?;
+        emit_function_body_ops(&mut builder, &mut map, opencl_id, &f_body)?;
         builder.end_function()?;
     }
     Ok(builder.module())
 }
 
-fn emit_function_header(
+fn emit_function_header<'a>(
     builder: &mut dr::Builder,
     map: &mut TypeWordMap,
-    global: &GlobalStringIdResolver,
-    func_directive: ast::FunctionHeader<ExpandedArgParams>,
-    params: &[ast::Argument<ExpandedArgParams>],
+    global: &GlobalStringIdResolver<'a>,
+    func_directive: ast::MethodDecl<ExpandedArgParams>,
 ) -> Result<(), dr::Error> {
-    let func_type = get_function_type(builder, map, params);
-    let (fn_id, ret_type) = match func_directive {
-        ast::FunctionHeader::Kernel(name) => {
+    let (ret_type, func_type) = get_function_type(builder, map, &func_directive);
+    let fn_id = match func_directive {
+        ast::MethodDecl::Kernel(name, _) => {
             let fn_id = global.get_id(name);
             builder.entry_point(spirv::ExecutionModel::Kernel, fn_id, name, &[]);
-            (fn_id, map.void())
+            fn_id
         }
-        ast::FunctionHeader::Func(params, name) => todo!(),
+        ast::MethodDecl::Func(_, name, _) => name,
     };
     builder.begin_function(
         ret_type,
@@ -201,6 +232,16 @@ fn emit_function_header(
         spirv::FunctionControl::NONE,
         func_type,
     )?;
+    func_directive.visit_args(|arg| {
+        let result_type = map.get_or_add_scalar(builder, arg.a_type);
+        let inst = dr::Instruction::new(
+            spirv::Op::FunctionParameter,
+            Some(result_type),
+            Some(arg.name),
+            Vec::new(),
+        );
+        builder.function.as_mut().unwrap().parameters.push(inst);
+    });
     Ok(())
 }
 
@@ -235,50 +276,116 @@ fn to_ssa_function<'a>(
     id_defs: &mut GlobalStringIdResolver<'a>,
     f: ast::ParsedFunction<'a>,
 ) -> ExpandedFunction<'a> {
-    let mut fn_resolver = FnStringIdResolver::new(id_defs, f.func_directive.name());
-    let f_header = match f.func_directive {
-        ast::FunctionHeader::Kernel(name) => ast::FunctionHeader::Kernel(name),
-        ast::FunctionHeader::Func(ret_params, name) => {
-            let name_id = fn_resolver.add_global_def(name);
-            let ret_ids = expand_fn_params(&mut fn_resolver, ret_params);
-            ast::FunctionHeader::Func(ret_ids, name_id)
-        }
-    };
-    let f_args = expand_fn_params(&mut fn_resolver, f.args);
-    let f_body = Some(to_ssa(fn_resolver, f.body.unwrap_or_else(|| Vec::new())));
-    ExpandedFunction {
-        func_directive: f_header,
-        args: f_args,
-        body: f_body,
-    }
+    let (str_resolver, fn_resolver, fn_decl) = id_defs.start_fn(&f.func_directive);
+    to_ssa(str_resolver, fn_resolver, fn_decl, f.body)
+}
+
+fn expand_kernel_params<'a, 'b>(
+    fn_resolver: &mut FnStringIdResolver<'a, 'b>,
+    args: impl Iterator<Item = &'b ast::KernelArgument<ast::ParsedArgParams<'a>>>,
+) -> Vec<ast::KernelArgument<ExpandedArgParams>> {
+    args.map(|a| ast::KernelArgument {
+        name: fn_resolver.add_def(a.name, Some(ast::Type::Scalar(a.a_type))),
+        a_type: a.a_type,
+        length: a.length,
+    })
+    .collect()
 }
 
 fn expand_fn_params<'a, 'b>(
     fn_resolver: &mut FnStringIdResolver<'a, 'b>,
-    args: Vec<ast::Argument<ast::ParsedArgParams<'a>>>,
-) -> Vec<ast::Argument<ExpandedArgParams>> {
-    args.into_iter()
-        .map(|a| ast::Argument {
-            name: fn_resolver.add_def(a.name, Some(ast::Type::Scalar(a.a_type))),
-            a_type: a.a_type,
-            length: a.length,
-        })
-        .collect()
+    args: impl Iterator<Item = &'b ast::FnArgument<ast::ParsedArgParams<'a>>>,
+) -> Vec<ast::FnArgument<ExpandedArgParams>> {
+    args.map(|a| ast::FnArgument {
+        state_space: a.state_space,
+        base: ast::KernelArgument {
+            name: fn_resolver.add_def(a.base.name, Some(ast::Type::Scalar(a.base.a_type))),
+            a_type: a.base.a_type,
+            length: a.base.length,
+        },
+    })
+    .collect()
 }
 
-fn to_ssa<'a, 'b>(
-    mut id_defs: FnStringIdResolver<'a, 'b>,
-    f_body: Vec<ast::Statement<ast::ParsedArgParams<'a>>>,
-) -> Vec<ExpandedStatement> {
-    let normalized_ids = normalize_identifiers(&mut id_defs, f_body);
+fn to_ssa<'input, 'b>(
+    mut id_defs: FnStringIdResolver<'input, 'b>,
+    fn_defs: GlobalFnDeclResolver<'input, 'b>,
+    f_args: ast::MethodDecl<'input, ExpandedArgParams>,
+    f_body: Option<Vec<ast::Statement<ast::ParsedArgParams<'input>>>>,
+) -> ExpandedFunction<'input> {
+    let f_body = match f_body {
+        Some(vec) => vec,
+        None => {
+            return ExpandedFunction {
+                func_directive: f_args,
+                body: None,
+            }
+        }
+    };
+    let normalized_ids = normalize_identifiers(&mut id_defs, &fn_defs, f_body);
     let mut numeric_id_defs = id_defs.finish();
-    let normalized_statements = normalize_predicates(normalized_ids, &mut numeric_id_defs);
-    let ssa_statements = insert_mem_ssa_statements(normalized_statements, &mut numeric_id_defs);
+    let unadorned_statements = normalize_predicates(normalized_ids, &mut numeric_id_defs);
+    let unadorned_statements = resolve_fn_calls(&fn_defs, unadorned_statements);
+    let (f_args, ssa_statements) =
+        insert_mem_ssa_statements(unadorned_statements, &mut numeric_id_defs, f_args);
     let expanded_statements = expand_arguments(ssa_statements, &mut numeric_id_defs);
     let expanded_statements =
         insert_implicit_conversions(expanded_statements, &mut numeric_id_defs);
     let labeled_statements = normalize_labels(expanded_statements, &mut numeric_id_defs);
-    labeled_statements
+    let sorted_statements = normalize_variable_decls(labeled_statements);
+    ExpandedFunction {
+        func_directive: f_args,
+        body: Some(sorted_statements),
+    }
+}
+
+fn normalize_variable_decls(mut func: Vec<ExpandedStatement>) -> Vec<ExpandedStatement> {
+    func[1..].sort_by_key(|s| match s {
+        Statement::Variable(_) => 0,
+        _ => 1,
+    });
+    func
+}
+
+fn resolve_fn_calls(
+    fn_defs: &GlobalFnDeclResolver,
+    func: Vec<UnadornedStatement>,
+) -> Vec<UnadornedStatement> {
+    func.into_iter()
+        .map(|s| {
+            match s {
+                Statement::Instruction(ast::Instruction::Call(call)) => {
+                    // TODO: error out if lengths don't match
+                    let fn_def = fn_defs.get_fn_decl(call.func);
+                    let ret_params = to_resolved_fn_args(call.ret_params, &*fn_def.ret_vals);
+                    let param_list = to_resolved_fn_args(call.param_list, &*fn_def.params);
+                    let resolved_call = ResolvedCall {
+                        uniform: call.uniform,
+                        ret_params,
+                        func: call.func,
+                        param_list,
+                    };
+                    Statement::Call(resolved_call)
+                }
+                s => s,
+            }
+        })
+        .collect()
+}
+
+fn to_resolved_fn_args<T>(
+    params: Vec<T>,
+    params_decl: &[(ast::FnArgStateSpace, ast::ScalarType)],
+) -> Vec<ArgCall<T>> {
+    params
+        .into_iter()
+        .zip(params_decl.iter())
+        .map(|(id, &(space, typ))| ArgCall {
+            id,
+            typ: ast::Type::Scalar(typ),
+            space: space,
+        })
+        .collect::<Vec<_>>()
 }
 
 fn normalize_labels(
@@ -297,9 +404,11 @@ fn normalize_labels(
                 labels_in_use.insert(cond.if_true);
                 labels_in_use.insert(cond.if_false);
             }
-            Statement::Variable(_, _, _, _)
+            Statement::Call(_)
+            | Statement::Variable(_)
             | Statement::LoadVar(_, _)
             | Statement::StoreVar(_, _)
+            | Statement::RetValue(_, _)
             | Statement::Conversion(_)
             | Statement::Constant(_)
             | Statement::Label(_) => (),
@@ -314,14 +423,14 @@ fn normalize_labels(
 }
 
 fn normalize_predicates(
-    func: Vec<ast::Statement<NormalizedArgParams>>,
+    func: Vec<NormalizedStatement>,
     id_def: &mut NumericIdResolver,
-) -> Vec<NormalizedStatement> {
+) -> Vec<UnadornedStatement> {
     let mut result = Vec::with_capacity(func.len());
     for s in func {
         match s {
-            ast::Statement::Label(id) => result.push(Statement::Label(id)),
-            ast::Statement::Instruction(pred, inst) => {
+            Statement::Label(id) => result.push(Statement::Label(id)),
+            Statement::Instruction((pred, inst)) => {
                 if let Some(pred) = pred {
                     let if_true = id_def.new_id(None);
                     let if_false = id_def.new_id(None);
@@ -347,66 +456,100 @@ fn normalize_predicates(
                     result.push(Statement::Instruction(inst));
                 }
             }
-            ast::Statement::Variable(var) => result.push(Statement::Variable(
-                var.name, var.v_type, var.space, var.align,
-            )),
+            Statement::Variable(var) => result.push(Statement::Variable(var)),
             // Blocks are flattened when resolving ids
-            ast::Statement::Block(_) => unreachable!(),
+            _ => unreachable!(),
         }
     }
     result
 }
 
-fn insert_mem_ssa_statements(
-    func: Vec<NormalizedStatement>,
+fn insert_mem_ssa_statements<'a, 'b>(
+    func: Vec<UnadornedStatement>,
     id_def: &mut NumericIdResolver,
-) -> Vec<NormalizedStatement> {
+    mut f_args: ast::MethodDecl<'a, ExpandedArgParams>,
+) -> (
+    ast::MethodDecl<'a, ExpandedArgParams>,
+    Vec<UnadornedStatement>,
+) {
     let mut result = Vec::with_capacity(func.len());
+    let out_param = match &mut f_args {
+        ast::MethodDecl::Kernel(_, in_params) => {
+            for p in in_params.iter_mut() {
+                let typ = ast::Type::Scalar(p.a_type);
+                let new_id = id_def.new_id(Some(typ));
+                result.push(Statement::Variable(VariableDecl {
+                    space: ast::StateSpace::Reg,
+                    align: None,
+                    v_type: typ,
+                    name: p.name,
+                }));
+                result.push(Statement::StoreVar(
+                    ast::Arg2St {
+                        src1: p.name,
+                        src2: new_id,
+                    },
+                    typ,
+                ));
+                p.name = new_id;
+            }
+            None
+        }
+        ast::MethodDecl::Func(out_params, _, in_params) => {
+            for p in in_params.iter_mut() {
+                let typ = ast::Type::Scalar(p.base.a_type);
+                let new_id = id_def.new_id(Some(typ));
+                result.push(Statement::Variable(VariableDecl {
+                    space: ast::StateSpace::Reg,
+                    align: None,
+                    v_type: typ,
+                    name: p.base.name,
+                }));
+                result.push(Statement::StoreVar(
+                    ast::Arg2St {
+                        src1: p.base.name,
+                        src2: new_id,
+                    },
+                    typ,
+                ));
+                p.base.name = new_id;
+            }
+            match &mut **out_params {
+                [p] => {
+                    result.push(Statement::Variable(VariableDecl {
+                        space: ast::StateSpace::Reg,
+                        align: None,
+                        v_type: ast::Type::Scalar(p.base.a_type),
+                        name: p.base.name,
+                    }));
+                    Some(p.base.name)
+                }
+                [] => None,
+                _ => todo!(),
+            }
+        }
+    };
     for s in func {
         match s {
+            Statement::Call(call) => insert_mem_ssa_statement_default(id_def, &mut result, call),
             Statement::Instruction(inst) => match inst {
-                ast::Instruction::Ld(
-                    ld
-                    @
-                    ast::LdData {
-                        state_space: ast::LdStateSpace::Param,
-                        ..
-                    },
-                    arg,
-                ) => {
-                    result.push(Statement::Instruction(ast::Instruction::Ld(ld, arg)));
+                ast::Instruction::Ret(d) => {
+                    if let Some(out_param) = out_param {
+                        let typ = id_def.get_type(out_param);
+                        let new_id = id_def.new_id(Some(typ));
+                        result.push(Statement::LoadVar(
+                            ast::Arg2 {
+                                dst: new_id,
+                                src: out_param,
+                            },
+                            typ,
+                        ));
+                        result.push(Statement::RetValue(d, new_id));
+                    } else {
+                        result.push(Statement::Instruction(ast::Instruction::Ret(d)))
+                    }
                 }
-                inst => {
-                    let mut post_statements = Vec::new();
-                    let inst = inst.visit_variable(&mut |desc| {
-                        let id_type = match (desc.typ, desc.is_pointer) {
-                            (Some(t), false) => t,
-                            (Some(_), true) => ast::Type::Scalar(ast::ScalarType::B64),
-                            (None, _) => return desc.op,
-                        };
-                        let generated_id = id_def.new_id(Some(id_type));
-                        if !desc.is_dst {
-                            result.push(Statement::LoadVar(
-                                Arg2 {
-                                    dst: generated_id,
-                                    src: desc.op,
-                                },
-                                id_type,
-                            ));
-                        } else {
-                            post_statements.push(Statement::StoreVar(
-                                Arg2St {
-                                    src1: desc.op,
-                                    src2: generated_id,
-                                },
-                                id_type,
-                            ));
-                        }
-                        generated_id
-                    });
-                    result.push(Statement::Instruction(inst));
-                    result.append(&mut post_statements);
-                }
+                inst => insert_mem_ssa_statement_default(id_def, &mut result, inst),
             },
             Statement::Conditional(mut bra) => {
                 let generated_id = id_def.new_id(Some(ast::Type::ExtendedScalar(
@@ -422,65 +565,116 @@ fn insert_mem_ssa_statements(
                 bra.predicate = generated_id;
                 result.push(Statement::Conditional(bra));
             }
-            s @ Statement::Variable(_, _, _, _) | s @ Statement::Label(_) => result.push(s),
+            s @ Statement::Variable(_) | s @ Statement::Label(_) => result.push(s),
             Statement::LoadVar(_, _)
             | Statement::StoreVar(_, _)
             | Statement::Conversion(_)
+            | Statement::RetValue(_, _)
             | Statement::Constant(_) => unreachable!(),
         }
     }
-    result
+    (f_args, result)
 }
 
-fn expand_arguments<'a, 'b, 'c>(
-    func: Vec<NormalizedStatement>,
-    id_def: &'c mut NumericIdResolver<'a, 'b>,
+trait VisitVariable: Sized {
+    fn visit_variable<'a, F: FnMut(ArgumentDescriptor<spirv::Word>) -> spirv::Word>(
+        self,
+        f: &mut F,
+    ) -> UnadornedStatement;
+}
+trait VisitVariableExpanded {
+    fn visit_variable_extended<F: FnMut(ArgumentDescriptor<spirv::Word>) -> spirv::Word>(
+        self,
+        f: &mut F,
+    ) -> ExpandedStatement;
+}
+
+fn insert_mem_ssa_statement_default<'a, F: VisitVariable>(
+    id_def: &mut NumericIdResolver,
+    result: &mut Vec<UnadornedStatement>,
+    stmt: F,
+) {
+    let mut post_statements = Vec::new();
+    let new_statement = stmt.visit_variable(&mut |desc: ArgumentDescriptor<spirv::Word>| {
+        let id_type = match (desc.typ, desc.is_pointer) {
+            (Some(t), false) => t,
+            (Some(_), true) => ast::Type::Scalar(ast::ScalarType::B64),
+            (None, _) => return desc.op,
+        };
+        let generated_id = id_def.new_id(Some(id_type));
+        if !desc.is_dst {
+            result.push(Statement::LoadVar(
+                Arg2 {
+                    dst: generated_id,
+                    src: desc.op,
+                },
+                id_type,
+            ));
+        } else {
+            post_statements.push(Statement::StoreVar(
+                Arg2St {
+                    src1: desc.op,
+                    src2: generated_id,
+                },
+                id_type,
+            ));
+        }
+        generated_id
+    });
+    result.push(new_statement);
+    result.append(&mut post_statements);
+}
+
+fn expand_arguments<'a, 'b>(
+    func: Vec<UnadornedStatement>,
+    id_def: &'b mut NumericIdResolver<'a>,
 ) -> Vec<ExpandedStatement> {
     let mut result = Vec::with_capacity(func.len());
     for s in func {
         match s {
+            Statement::Call(call) => {
+                let mut visitor = FlattenArguments::new(&mut result, id_def);
+                let new_call = call.map(&mut visitor);
+                result.push(Statement::Call(new_call));
+            }
             Statement::Instruction(inst) => {
                 let mut visitor = FlattenArguments::new(&mut result, id_def);
                 let new_inst = inst.map(&mut visitor);
                 result.push(Statement::Instruction(new_inst));
             }
-            Statement::Variable(id, typ, ss, align) => {
-                result.push(Statement::Variable(id, typ, ss, align))
-            }
+            Statement::Variable(v_decl) => result.push(Statement::Variable(v_decl)),
             Statement::Label(id) => result.push(Statement::Label(id)),
             Statement::Conditional(bra) => result.push(Statement::Conditional(bra)),
             Statement::LoadVar(arg, typ) => result.push(Statement::LoadVar(arg, typ)),
             Statement::StoreVar(arg, typ) => result.push(Statement::StoreVar(arg, typ)),
+            Statement::RetValue(d, id) => result.push(Statement::RetValue(d, id)),
             Statement::Conversion(_) | Statement::Constant(_) => unreachable!(),
         }
     }
     result
 }
 
-struct FlattenArguments<'a, 'b, 'c> {
-    func: &'c mut Vec<ExpandedStatement>,
-    id_def: &'c mut NumericIdResolver<'a, 'b>,
+struct FlattenArguments<'a, 'b> {
+    func: &'b mut Vec<ExpandedStatement>,
+    id_def: &'b mut NumericIdResolver<'a>,
 }
 
-impl<'a, 'b, 'c> FlattenArguments<'a, 'b, 'c> {
-    fn new(
-        func: &'c mut Vec<ExpandedStatement>,
-        id_def: &'c mut NumericIdResolver<'a, 'b>,
-    ) -> Self {
+impl<'a, 'b> FlattenArguments<'a, 'b> {
+    fn new(func: &'b mut Vec<ExpandedStatement>, id_def: &'b mut NumericIdResolver<'a>) -> Self {
         FlattenArguments { func, id_def }
     }
 }
 
-impl<'a, 'b, 'c> ArgumentMapVisitor<NormalizedArgParams, ExpandedArgParams>
-    for FlattenArguments<'a, 'b, 'c>
+impl<'a, 'b> ArgumentMapVisitor<NormalizedArgParams, ExpandedArgParams>
+    for FlattenArguments<'a, 'b>
 {
-    fn dst_variable(&mut self, desc: ArgumentDescriptor<spirv::Word>) -> spirv::Word {
+    fn variable(&mut self, desc: ArgumentDescriptor<spirv::Word>) -> spirv::Word {
         desc.op
     }
 
-    fn src_operand(&mut self, desc: ArgumentDescriptor<ast::Operand<spirv::Word>>) -> spirv::Word {
+    fn operand(&mut self, desc: ArgumentDescriptor<ast::Operand<spirv::Word>>) -> spirv::Word {
         match desc.op {
-            ast::Operand::Reg(r) => r,
+            ast::Operand::Reg(r) => self.variable(desc.new_op(r)),
             ast::Operand::Imm(x) => {
                 if let Some(typ) = desc.typ {
                     let scalar_t = if let ast::Type::Scalar(scalar) = typ {
@@ -535,12 +729,22 @@ impl<'a, 'b, 'c> ArgumentMapVisitor<NormalizedArgParams, ExpandedArgParams>
         }
     }
 
+    fn src_call_operand(
+        &mut self,
+        desc: ArgumentDescriptor<ast::CallOperand<spirv::Word>>,
+    ) -> spirv::Word {
+        match desc.op {
+            ast::CallOperand::Reg(reg) => self.variable(desc.new_op(reg)),
+            ast::CallOperand::Imm(x) => self.operand(desc.new_op(ast::Operand::Imm(x))),
+        }
+    }
+
     fn src_mov_operand(
         &mut self,
         desc: ArgumentDescriptor<ast::MovOperand<spirv::Word>>,
     ) -> spirv::Word {
         match &desc.op {
-            ast::MovOperand::Op(opr) => self.src_operand(desc.new_op(*opr)),
+            ast::MovOperand::Op(opr) => self.operand(desc.new_op(*opr)),
             ast::MovOperand::Vec(_, _) => todo!(),
         }
     }
@@ -553,11 +757,12 @@ impl<'a, 'b, 'c> ArgumentMapVisitor<NormalizedArgParams, ExpandedArgParams>
    - ld.param: not documented, but for instruction `ld.param.<type> x, [y]`,
      semantics are to first zext/chop/bitcast `y` as needed and then do
      documented special ld/st/cvt conversion rules for destination operands
-   - generic ld: for instruction `ld x, [y]`, y must be of type b64/u64/s64,
-     which is bitcast to a pointer, dereferenced and then documented special
-     ld/st/cvt conversion rules are applied to dst
-   - generic st: for instruction `st [x], y`, x must be of type b64/u64/s64,
-     which is bitcast to a pointer
+   - st.param [x] y (used as function return arguments) same rule as above applies
+   - generic/global ld: for instruction `ld x, [y]`, y must be of type
+     b64/u64/s64, which is bitcast to a pointer, dereferenced and then
+     documented special ld/st/cvt conversion rules are applied to dst
+   - generic/global st: for instruction `st [x], y`, x must be of type
+     b64/u64/s64, which is bitcast to a pointer
 */
 fn insert_implicit_conversions(
     func: Vec<ExpandedStatement>,
@@ -566,6 +771,7 @@ fn insert_implicit_conversions(
     let mut result = Vec::with_capacity(func.len());
     for s in func.into_iter() {
         match s {
+            Statement::Call(call) => insert_implicit_bitcasts(&mut result, id_def, call),
             Statement::Instruction(inst) => match inst {
                 ast::Instruction::Ld(ld, mut arg) => {
                     arg.src = insert_implicit_conversions_ld_src(
@@ -611,9 +817,10 @@ fn insert_implicit_conversions(
             s @ Statement::Conditional(_)
             | s @ Statement::Label(_)
             | s @ Statement::Constant(_)
-            | s @ Statement::Variable(_, _, _, _)
+            | s @ Statement::Variable(_)
             | s @ Statement::LoadVar(_, _)
-            | s @ Statement::StoreVar(_, _) => result.push(s),
+            | s @ Statement::StoreVar(_, _)
+            | s @ Statement::RetValue(_, _) => result.push(s),
             Statement::Conversion(_) => unreachable!(),
         }
     }
@@ -623,25 +830,19 @@ fn insert_implicit_conversions(
 fn get_function_type(
     builder: &mut dr::Builder,
     map: &mut TypeWordMap,
-    args: &[ast::Argument<ExpandedArgParams>],
-) -> spirv::Word {
-    map.get_or_add_fn(builder, args.iter().map(|arg| SpirvType::from(arg.a_type)))
-}
-
-fn emit_function_args(
-    builder: &mut dr::Builder,
-    map: &mut TypeWordMap,
-    args: &[ast::Argument<ExpandedArgParams>],
-) {
-    for arg in args {
-        let result_type = map.get_or_add_scalar(builder, arg.a_type);
-        let inst = dr::Instruction::new(
-            spirv::Op::FunctionParameter,
-            Some(result_type),
-            Some(arg.name),
-            Vec::new(),
-        );
-        builder.function.as_mut().unwrap().parameters.push(inst);
+    method_decl: &ast::MethodDecl<ExpandedArgParams>,
+) -> (spirv::Word, spirv::Word) {
+    match method_decl {
+        ast::MethodDecl::Func(out_params, _, in_params) => map.get_or_add_fn(
+            builder,
+            out_params.iter().map(|p| SpirvType::from(p.base.a_type)),
+            in_params.iter().map(|p| SpirvType::from(p.base.a_type)),
+        ),
+        ast::MethodDecl::Kernel(_, params) => map.get_or_add_fn(
+            builder,
+            iter::empty(),
+            params.iter().map(|p| SpirvType::from(p.a_type)),
+        ),
     }
 }
 
@@ -649,9 +850,9 @@ fn emit_function_body_ops(
     builder: &mut dr::Builder,
     map: &mut TypeWordMap,
     opencl: spirv::Word,
-    func: &Option<Vec<ExpandedStatement>>,
+    func: &[ExpandedStatement],
 ) -> Result<(), dr::Error> {
-    for s in func.as_ref().unwrap() {
+    for s in func {
         match s {
             Statement::Label(id) => {
                 if builder.block.is_some() {
@@ -667,13 +868,26 @@ fn emit_function_body_ops(
         }
         match s {
             Statement::Label(_) => (),
-            Statement::Variable(id, typ, ss, align) => {
+            Statement::Call(call) => {
+                let (result_type, result_id) = match &*call.ret_params {
+                    [p] => (map.get_or_add(builder, SpirvType::from(p.typ)), p.id),
+                    _ => todo!(),
+                };
+                let arg_list = call.param_list.iter().map(|p| p.id).collect::<Vec<_>>();
+                builder.function_call(result_type, Some(result_id), call.func, arg_list)?;
+            }
+            Statement::Variable(VariableDecl {
+                name: id,
+                v_type: typ,
+                space: ss,
+                align,
+            }) => {
                 let type_id = map.get_or_add(
                     builder,
                     SpirvType::new_pointer(*typ, spirv::StorageClass::Function),
                 );
                 let st_class = match ss {
-                    ast::StateSpace::Reg => spirv::StorageClass::Function,
+                    ast::StateSpace::Reg | ast::StateSpace::Param => spirv::StorageClass::Function,
                     ast::StateSpace::Local => spirv::StorageClass::Workgroup,
                     _ => todo!(),
                 };
@@ -722,7 +936,7 @@ fn emit_function_body_ops(
             }
             Statement::Instruction(inst) => match inst {
                 ast::Instruction::Abs(_, _) => todo!(),
-                ast::Instruction::Call(_, _) => todo!(),
+                ast::Instruction::Call(_) => unreachable!(),
                 // SPIR-V does not support marking jumps as guaranteed-converged
                 ast::Instruction::Bra(_, arg) => {
                     builder.branch(arg.src)?;
@@ -737,7 +951,8 @@ fn emit_function_body_ops(
                             builder.load(result_type, Some(arg.dst), arg.src, None, [])?;
                         }
                         ast::LdStateSpace::Param => {
-                            builder.store(arg.dst, arg.src, None, [])?;
+                            let result_type = map.get_or_add(builder, SpirvType::from(data.typ));
+                            builder.copy_object(result_type, Some(arg.dst), arg.src)?;
                         }
                         _ => todo!(),
                     }
@@ -746,11 +961,17 @@ fn emit_function_body_ops(
                     if data.qualifier != ast::LdStQualifier::Weak
                         || data.vector.is_some()
                         || (data.state_space != ast::StStateSpace::Generic
+                            && data.state_space != ast::StStateSpace::Param
                             && data.state_space != ast::StStateSpace::Global)
                     {
                         todo!()
                     }
-                    builder.store(arg.src1, arg.src2, None, &[])?;
+                    if data.state_space == ast::StStateSpace::Param {
+                        let result_type = map.get_or_add(builder, SpirvType::from(data.typ));
+                        builder.copy_object(result_type, Some(arg.src1), arg.src2)?;
+                    } else {
+                        builder.store(arg.src1, arg.src2, None, &[])?;
+                    }
                 }
                 // SPIR-V does not support ret as guaranteed-converged
                 ast::Instruction::Ret(_) => builder.ret()?,
@@ -807,6 +1028,9 @@ fn emit_function_body_ops(
             }
             Statement::StoreVar(arg, _) => {
                 builder.store(arg.src1, arg.src2, None, [])?;
+            }
+            Statement::RetValue(_, id) => {
+                builder.ret_value(*id)?;
             }
         }
     }
@@ -1123,8 +1347,9 @@ fn emit_implicit_conversion(
 // TODO: support scopes
 fn normalize_identifiers<'a, 'b>(
     id_defs: &mut FnStringIdResolver<'a, 'b>,
+    fn_defs: &GlobalFnDeclResolver<'a, 'b>,
     func: Vec<ast::Statement<ast::ParsedArgParams<'a>>>,
-) -> Vec<ast::Statement<NormalizedArgParams>> {
+) -> Vec<NormalizedStatement> {
     for s in func.iter() {
         match s {
             ast::Statement::Label(id) => {
@@ -1135,58 +1360,63 @@ fn normalize_identifiers<'a, 'b>(
     }
     let mut result = Vec::new();
     for s in func {
-        expand_map_variables(id_defs, &mut result, s);
+        expand_map_variables(id_defs, fn_defs, &mut result, s);
     }
     result
 }
 
 fn expand_map_variables<'a, 'b>(
     id_defs: &mut FnStringIdResolver<'a, 'b>,
-    result: &mut Vec<ast::Statement<NormalizedArgParams>>,
+    fn_defs: &GlobalFnDeclResolver,
+    result: &mut Vec<NormalizedStatement>,
     s: ast::Statement<ast::ParsedArgParams<'a>>,
 ) {
     match s {
         ast::Statement::Block(block) => {
             id_defs.start_block();
             for s in block {
-                expand_map_variables(id_defs, result, s);
+                expand_map_variables(id_defs, fn_defs, result, s);
             }
             id_defs.end_block();
         }
-        ast::Statement::Label(name) => result.push(ast::Statement::Label(id_defs.get_id(name))),
-        ast::Statement::Instruction(p, i) => result.push(ast::Statement::Instruction(
+        ast::Statement::Label(name) => result.push(Statement::Label(id_defs.get_id(name))),
+        ast::Statement::Instruction(p, i) => result.push(Statement::Instruction((
             p.map(|p| p.map_variable(&mut |id| id_defs.get_id(id))),
             i.map_variable(&mut |id| id_defs.get_id(id)),
-        )),
+        ))),
         ast::Statement::Variable(var) => match var.count {
             Some(count) => {
                 for new_id in id_defs.add_defs(var.name, count, var.v_type) {
-                    result.push(ast::Statement::Variable(ast::Variable {
+                    result.push(Statement::Variable(VariableDecl {
                         space: var.space,
                         align: var.align,
                         v_type: var.v_type,
                         name: new_id,
-                        count: None,
                     }))
                 }
             }
             None => {
                 let new_id = id_defs.add_def(var.name, Some(var.v_type));
-                result.push(ast::Statement::Variable(ast::Variable {
+                result.push(Statement::Variable(VariableDecl {
                     space: var.space,
                     align: var.align,
                     v_type: var.v_type,
                     name: new_id,
-                    count: None,
                 }));
             }
         },
     }
 }
 
-struct GlobalStringIdResolver<'a> {
+struct GlobalStringIdResolver<'input> {
     current_id: spirv::Word,
-    variables: HashMap<Cow<'a, str>, spirv::Word>,
+    variables: HashMap<Cow<'input, str>, spirv::Word>,
+    fns: HashMap<spirv::Word, FnDecl>,
+}
+
+pub struct FnDecl {
+    ret_vals: Vec<(ast::FnArgStateSpace, ast::ScalarType)>,
+    params: Vec<(ast::FnArgStateSpace, ast::ScalarType)>,
 }
 
 impl<'a> GlobalStringIdResolver<'a> {
@@ -1194,14 +1424,20 @@ impl<'a> GlobalStringIdResolver<'a> {
         Self {
             current_id: start_id,
             variables: HashMap::new(),
+            fns: HashMap::new(),
         }
     }
 
-    fn add_def(&mut self, id: &'a str) -> spirv::Word {
-        let numeric_id = self.current_id;
-        self.variables.insert(Cow::Borrowed(id), numeric_id);
-        self.current_id += 1;
-        numeric_id
+    fn get_or_add_def(&mut self, id: &'a str) -> spirv::Word {
+        match self.variables.entry(Cow::Borrowed(id)) {
+            hash_map::Entry::Occupied(e) => *(e.get()),
+            hash_map::Entry::Vacant(e) => {
+                let numeric_id = self.current_id;
+                e.insert(numeric_id);
+                self.current_id += 1;
+                numeric_id
+            }
+        }
     }
 
     fn get_id(&self, id: &str) -> spirv::Word {
@@ -1211,27 +1447,84 @@ impl<'a> GlobalStringIdResolver<'a> {
     fn current_id(&self) -> spirv::Word {
         self.current_id
     }
+
+    fn start_fn<'b>(
+        &'b mut self,
+        header: &'b ast::MethodDecl<'a, ast::ParsedArgParams<'a>>,
+    ) -> (
+        FnStringIdResolver<'a, 'b>,
+        GlobalFnDeclResolver<'a, 'b>,
+        ast::MethodDecl<'a, ExpandedArgParams>,
+    ) {
+        // In case a function decl was inserted eearlier we want to use its id
+        let name_id = self.get_or_add_def(header.name());
+        let mut fn_resolver = FnStringIdResolver {
+            current_id: &mut self.current_id,
+            global_variables: &self.variables,
+            variables: vec![HashMap::new(); 1],
+            type_check: HashMap::new(),
+        };
+        let new_fn_decl = match header {
+            ast::MethodDecl::Kernel(name, params) => {
+                ast::MethodDecl::Kernel(name, expand_kernel_params(&mut fn_resolver, params.iter()))
+            }
+            ast::MethodDecl::Func(ret_params, _, params) => {
+                let ret_params_ids = expand_fn_params(&mut fn_resolver, ret_params.iter());
+                let params_ids = expand_fn_params(&mut fn_resolver, params.iter());
+                self.fns.insert(
+                    name_id,
+                    FnDecl {
+                        ret_vals: ret_params_ids
+                            .iter()
+                            .map(|p| (p.state_space, p.base.a_type))
+                            .collect(),
+                        params: params_ids
+                            .iter()
+                            .map(|p| (p.state_space, p.base.a_type))
+                            .collect(),
+                    },
+                );
+                ast::MethodDecl::Func(ret_params_ids, name_id, params_ids)
+            }
+        };
+        (
+            fn_resolver,
+            GlobalFnDeclResolver {
+                variables: &self.variables,
+                fns: &self.fns,
+            },
+            new_fn_decl,
+        )
+    }
 }
 
-struct FnStringIdResolver<'a, 'b> {
-    global: &'b mut GlobalStringIdResolver<'a>,
-    variables: Vec<HashMap<Cow<'a, str>, spirv::Word>>,
+pub struct GlobalFnDeclResolver<'input, 'a> {
+    variables: &'a HashMap<Cow<'input, str>, spirv::Word>,
+    fns: &'a HashMap<spirv::Word, FnDecl>,
+}
+
+impl<'input, 'a> GlobalFnDeclResolver<'input, 'a> {
+    fn get_fn_decl(&self, id: spirv::Word) -> &FnDecl {
+        &self.fns[&id]
+    }
+
+    fn get_fn_decl_str(&self, id: &str) -> &'a FnDecl {
+        &self.fns[&self.variables[id]]
+    }
+}
+
+struct FnStringIdResolver<'input, 'b> {
+    current_id: &'b mut spirv::Word,
+    global_variables: &'b HashMap<Cow<'input, str>, spirv::Word>,
+    //global: &'b mut GlobalStringIdResolver<'a>,
+    variables: Vec<HashMap<Cow<'input, str>, spirv::Word>>,
     type_check: HashMap<u32, ast::Type>,
 }
 
 impl<'a, 'b> FnStringIdResolver<'a, 'b> {
-    fn new(global: &'b mut GlobalStringIdResolver<'a>, f_name: &'a str) -> Self {
-        global.add_def(f_name);
-        Self {
-            global: global,
-            variables: vec![HashMap::new(); 1],
-            type_check: HashMap::new(),
-        }
-    }
-
-    fn finish(self) -> NumericIdResolver<'a, 'b> {
+    fn finish(self) -> NumericIdResolver<'b> {
         NumericIdResolver {
-            global: self.global,
+            current_id: self.current_id,
             type_check: self.type_check,
         }
     }
@@ -1251,15 +1544,11 @@ impl<'a, 'b> FnStringIdResolver<'a, 'b> {
                 None => continue,
             }
         }
-        self.global.variables[id]
-    }
-
-    fn add_global_def(&mut self, id: &'a str) -> spirv::Word {
-        self.global.add_def(id)
+        self.global_variables[id]
     }
 
     fn add_def(&mut self, id: &'a str, typ: Option<ast::Type>) -> spirv::Word {
-        let numeric_id = self.global.current_id;
+        let numeric_id = *self.current_id;
         self.variables
             .last_mut()
             .unwrap()
@@ -1267,7 +1556,7 @@ impl<'a, 'b> FnStringIdResolver<'a, 'b> {
         if let Some(typ) = typ {
             self.type_check.insert(numeric_id, typ);
         }
-        self.global.current_id += 1;
+        *self.current_id += 1;
         numeric_id
     }
 
@@ -1278,7 +1567,7 @@ impl<'a, 'b> FnStringIdResolver<'a, 'b> {
         count: u32,
         typ: ast::Type,
     ) -> impl Iterator<Item = spirv::Word> {
-        let numeric_id = self.global.current_id;
+        let numeric_id = *self.current_id;
         for i in 0..count {
             self.variables
                 .last_mut()
@@ -1286,65 +1575,191 @@ impl<'a, 'b> FnStringIdResolver<'a, 'b> {
                 .insert(Cow::Owned(format!("{}{}", base_id, i)), numeric_id + i);
             self.type_check.insert(numeric_id + i, typ);
         }
-        self.global.current_id += count;
+        *self.current_id += count;
         (0..count).into_iter().map(move |i| i + numeric_id)
     }
 }
 
-struct NumericIdResolver<'a, 'b> {
-    global: &'b mut GlobalStringIdResolver<'a>,
+struct NumericIdResolver<'b> {
+    current_id: &'b mut spirv::Word,
     type_check: HashMap<u32, ast::Type>,
 }
 
-impl<'a, 'b> NumericIdResolver<'a, 'b> {
+impl<'b> NumericIdResolver<'b> {
     fn get_type(&self, id: spirv::Word) -> ast::Type {
         self.type_check[&id]
     }
 
     fn new_id(&mut self, typ: Option<ast::Type>) -> spirv::Word {
-        let new_id = self.global.current_id;
+        let new_id = *self.current_id;
         if let Some(typ) = typ {
             self.type_check.insert(new_id, typ);
         }
-        self.global.current_id += 1;
+        *self.current_id += 1;
         new_id
     }
 }
 
-enum Statement<I> {
-    Variable(spirv::Word, ast::Type, ast::StateSpace, Option<u32>),
+enum Statement<I, P: ast::ArgParams> {
+    Label(u32),
+    Variable(VariableDecl),
+    Instruction(I),
     LoadVar(ast::Arg2<ExpandedArgParams>, ast::Type),
     StoreVar(ast::Arg2St<ExpandedArgParams>, ast::Type),
-    Label(u32),
-    Instruction(I),
+    Call(ResolvedCall<P>),
     // SPIR-V compatible replacement for PTX predicates
     Conditional(BrachCondition),
     Conversion(ImplicitConversion),
     Constant(ConstantDefinition),
+    RetValue(ast::RetData, spirv::Word),
+}
+
+struct VariableDecl {
+    pub space: ast::StateSpace,
+    pub align: Option<u32>,
+    pub v_type: ast::Type,
+    pub name: spirv::Word,
+}
+
+struct ResolvedCall<P: ast::ArgParams> {
+    pub uniform: bool,
+    pub ret_params: Vec<ArgCall<spirv::Word>>,
+    pub func: spirv::Word,
+    pub param_list: Vec<ArgCall<P::CallOperand>>,
+}
+
+impl<From: ArgParamsEx<ID = spirv::Word>> ResolvedCall<From> {
+    fn map<To: ArgParamsEx<ID = spirv::Word>, V: ArgumentMapVisitor<From, To>>(
+        self,
+        visitor: &mut V,
+    ) -> ResolvedCall<To> {
+        let ret_params = self
+            .ret_params
+            .into_iter()
+            .map(|p| {
+                let new_id = visitor.variable(ArgumentDescriptor {
+                    op: p.id,
+                    typ: Some(p.typ),
+                    is_dst: true,
+                    is_pointer: false,
+                });
+                ArgCall {
+                    id: new_id,
+                    typ: p.typ,
+                    space: p.space,
+                }
+            })
+            .collect();
+        let func = visitor.variable(ArgumentDescriptor {
+            op: self.func,
+            typ: None,
+            is_dst: false,
+            is_pointer: false,
+        });
+        let param_list = self
+            .param_list
+            .into_iter()
+            .map(|p| {
+                let new_id = visitor.src_call_operand(ArgumentDescriptor {
+                    op: p.id,
+                    typ: Some(p.typ),
+                    is_dst: false,
+                    is_pointer: false,
+                });
+                ArgCall {
+                    id: new_id,
+                    typ: p.typ,
+                    space: p.space,
+                }
+            })
+            .collect();
+        ResolvedCall {
+            uniform: self.uniform,
+            ret_params,
+            func,
+            param_list,
+        }
+    }
+}
+
+impl VisitVariable for ResolvedCall<NormalizedArgParams> {
+    fn visit_variable<'a, F: FnMut(ArgumentDescriptor<spirv::Word>) -> spirv::Word>(
+        self,
+        f: &mut F,
+    ) -> UnadornedStatement {
+        Statement::Call(self.map(f))
+    }
+}
+
+impl VisitVariableExpanded for ResolvedCall<ExpandedArgParams> {
+    fn visit_variable_extended<F: FnMut(ArgumentDescriptor<spirv::Word>) -> spirv::Word>(
+        self,
+        f: &mut F,
+    ) -> ExpandedStatement {
+        Statement::Call(self.map(f))
+    }
+}
+
+struct ArgCall<ID> {
+    id: ID,
+    typ: ast::Type,
+    space: ast::FnArgStateSpace,
+}
+
+pub trait ArgParamsEx: ast::ArgParams {
+    fn get_fn_decl<'x, 'b>(id: &Self::ID, decl: &'b GlobalFnDeclResolver<'x, 'b>) -> &'b FnDecl;
+}
+
+impl<'input> ArgParamsEx for ast::ParsedArgParams<'input> {
+    fn get_fn_decl<'x, 'b>(id: &Self::ID, decl: &'b GlobalFnDeclResolver<'x, 'b>) -> &'b FnDecl {
+        decl.get_fn_decl_str(id)
+    }
 }
 
 enum NormalizedArgParams {}
-type NormalizedStatement = Statement<ast::Instruction<NormalizedArgParams>>;
+type NormalizedStatement = Statement<
+    (
+        Option<ast::PredAt<spirv::Word>>,
+        ast::Instruction<NormalizedArgParams>,
+    ),
+    NormalizedArgParams,
+>;
+type UnadornedStatement = Statement<ast::Instruction<NormalizedArgParams>, NormalizedArgParams>;
 
 impl ast::ArgParams for NormalizedArgParams {
     type ID = spirv::Word;
     type Operand = ast::Operand<spirv::Word>;
+    type CallOperand = ast::CallOperand<spirv::Word>;
     type MovOperand = ast::MovOperand<spirv::Word>;
 }
 
+impl ArgParamsEx for NormalizedArgParams {
+    fn get_fn_decl<'a, 'b>(id: &Self::ID, decl: &'b GlobalFnDeclResolver<'a, 'b>) -> &'b FnDecl {
+        decl.get_fn_decl(*id)
+    }
+}
+
 enum ExpandedArgParams {}
-type ExpandedStatement = Statement<ast::Instruction<ExpandedArgParams>>;
+type ExpandedStatement = Statement<ast::Instruction<ExpandedArgParams>, ExpandedArgParams>;
 type ExpandedFunction<'a> = ast::Function<'a, ExpandedArgParams, ExpandedStatement>;
 
 impl ast::ArgParams for ExpandedArgParams {
     type ID = spirv::Word;
     type Operand = spirv::Word;
+    type CallOperand = spirv::Word;
     type MovOperand = spirv::Word;
 }
 
-trait ArgumentMapVisitor<T: ast::ArgParams, U: ast::ArgParams> {
-    fn dst_variable(&mut self, desc: ArgumentDescriptor<T::ID>) -> U::ID;
-    fn src_operand(&mut self, desc: ArgumentDescriptor<T::Operand>) -> U::Operand;
+impl ArgParamsEx for ExpandedArgParams {
+    fn get_fn_decl<'a, 'b>(id: &Self::ID, decl: &'b GlobalFnDeclResolver<'a, 'b>) -> &'b FnDecl {
+        decl.get_fn_decl(*id)
+    }
+}
+
+trait ArgumentMapVisitor<T: ArgParamsEx, U: ArgParamsEx> {
+    fn variable(&mut self, desc: ArgumentDescriptor<T::ID>) -> U::ID;
+    fn operand(&mut self, desc: ArgumentDescriptor<T::Operand>) -> U::Operand;
+    fn src_call_operand(&mut self, desc: ArgumentDescriptor<T::CallOperand>) -> U::CallOperand;
     fn src_mov_operand(&mut self, desc: ArgumentDescriptor<T::MovOperand>) -> U::MovOperand;
 }
 
@@ -1352,11 +1767,15 @@ impl<T> ArgumentMapVisitor<ExpandedArgParams, ExpandedArgParams> for T
 where
     T: FnMut(ArgumentDescriptor<spirv::Word>) -> spirv::Word,
 {
-    fn dst_variable(&mut self, desc: ArgumentDescriptor<spirv::Word>) -> spirv::Word {
+    fn variable(&mut self, desc: ArgumentDescriptor<spirv::Word>) -> spirv::Word {
         self(desc)
     }
-    fn src_operand(&mut self, desc: ArgumentDescriptor<spirv::Word>) -> spirv::Word {
+    fn operand(&mut self, desc: ArgumentDescriptor<spirv::Word>) -> spirv::Word {
         self(desc)
+    }
+    fn src_call_operand(&mut self, mut desc: ArgumentDescriptor<spirv::Word>) -> spirv::Word {
+        desc.op = self(desc.new_op(desc.op));
+        desc.op
     }
     fn src_mov_operand(&mut self, desc: ArgumentDescriptor<spirv::Word>) -> spirv::Word {
         self(desc)
@@ -1367,11 +1786,11 @@ impl<'a, T> ArgumentMapVisitor<ast::ParsedArgParams<'a>, NormalizedArgParams> fo
 where
     T: FnMut(&str) -> spirv::Word,
 {
-    fn dst_variable(&mut self, desc: ArgumentDescriptor<&str>) -> spirv::Word {
+    fn variable(&mut self, desc: ArgumentDescriptor<&str>) -> spirv::Word {
         self(desc.op)
     }
 
-    fn src_operand(
+    fn operand(
         &mut self,
         desc: ArgumentDescriptor<ast::Operand<&str>>,
     ) -> ast::Operand<spirv::Word> {
@@ -1382,12 +1801,22 @@ where
         }
     }
 
+    fn src_call_operand(
+        &mut self,
+        desc: ArgumentDescriptor<ast::CallOperand<&str>>,
+    ) -> ast::CallOperand<spirv::Word> {
+        match desc.op {
+            ast::CallOperand::Reg(id) => ast::CallOperand::Reg(self(id)),
+            ast::CallOperand::Imm(imm) => ast::CallOperand::Imm(imm),
+        }
+    }
+
     fn src_mov_operand(
         &mut self,
         desc: ArgumentDescriptor<ast::MovOperand<&str>>,
     ) -> ast::MovOperand<spirv::Word> {
         match desc.op {
-            ast::MovOperand::Op(op) => ast::MovOperand::Op(self.src_operand(desc.new_op(op))),
+            ast::MovOperand::Op(op) => ast::MovOperand::Op(self.operand(desc.new_op(op))),
             ast::MovOperand::Vec(x1, x2) => ast::MovOperand::Vec(x1, x2),
         }
     }
@@ -1411,17 +1840,21 @@ impl<T> ArgumentDescriptor<T> {
     }
 }
 
-impl<T: ast::ArgParams> ast::Instruction<T> {
-    fn map<U: ast::ArgParams, V: ArgumentMapVisitor<T, U>>(
+impl<T: ArgParamsEx> ast::Instruction<T> {
+    fn map<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
         self,
         visitor: &mut V,
     ) -> ast::Instruction<U> {
         match self {
             ast::Instruction::Abs(_, _) => todo!(),
-            ast::Instruction::Call(_, _) => todo!(),
+            ast::Instruction::Call(_) => unreachable!(),
             ast::Instruction::Ld(d, a) => {
                 let inst_type = d.typ;
-                ast::Instruction::Ld(d, a.map_ld(visitor, Some(ast::Type::Scalar(inst_type))))
+                let src_is_pointer = d.state_space != ast::LdStateSpace::Param;
+                ast::Instruction::Ld(
+                    d,
+                    a.map_ld(visitor, Some(ast::Type::Scalar(inst_type)), src_is_pointer),
+                )
             }
             ast::Instruction::Mov(d, a) => {
                 let inst_type = d.typ;
@@ -1467,7 +1900,11 @@ impl<T: ast::ArgParams> ast::Instruction<T> {
             }
             ast::Instruction::St(d, a) => {
                 let inst_type = d.typ;
-                ast::Instruction::St(d, a.map(visitor, Some(ast::Type::Scalar(inst_type))))
+                let param_space = d.state_space == ast::StStateSpace::Param;
+                ast::Instruction::St(
+                    d,
+                    a.map(visitor, Some(ast::Type::Scalar(inst_type)), param_space),
+                )
             }
             ast::Instruction::Bra(d, a) => ast::Instruction::Bra(d, a.map(visitor, None)),
             ast::Instruction::Ret(d) => ast::Instruction::Ret(d),
@@ -1479,12 +1916,12 @@ impl<T: ast::ArgParams> ast::Instruction<T> {
     }
 }
 
-impl ast::Instruction<NormalizedArgParams> {
-    fn visit_variable<F: FnMut(ArgumentDescriptor<spirv::Word>) -> spirv::Word>(
+impl VisitVariable for ast::Instruction<NormalizedArgParams> {
+    fn visit_variable<'a, F: FnMut(ArgumentDescriptor<spirv::Word>) -> spirv::Word>(
         self,
         f: &mut F,
-    ) -> ast::Instruction<NormalizedArgParams> {
-        self.map(f)
+    ) -> UnadornedStatement {
+        Statement::Instruction(self.map(f))
     }
 }
 
@@ -1492,11 +1929,11 @@ impl<T> ArgumentMapVisitor<NormalizedArgParams, NormalizedArgParams> for T
 where
     T: FnMut(ArgumentDescriptor<spirv::Word>) -> spirv::Word,
 {
-    fn dst_variable(&mut self, desc: ArgumentDescriptor<spirv::Word>) -> spirv::Word {
+    fn variable(&mut self, desc: ArgumentDescriptor<spirv::Word>) -> spirv::Word {
         self(desc)
     }
 
-    fn src_operand(
+    fn operand(
         &mut self,
         desc: ArgumentDescriptor<ast::Operand<spirv::Word>>,
     ) -> ast::Operand<spirv::Word> {
@@ -1504,6 +1941,16 @@ where
             ast::Operand::Reg(id) => ast::Operand::Reg(self(desc.new_op(id))),
             ast::Operand::Imm(imm) => ast::Operand::Imm(imm),
             ast::Operand::RegOffset(id, imm) => ast::Operand::RegOffset(self(desc.new_op(id)), imm),
+        }
+    }
+
+    fn src_call_operand(
+        &mut self,
+        desc: ArgumentDescriptor<ast::CallOperand<spirv::Word>>,
+    ) -> ast::CallOperand<spirv::Word> {
+        match desc.op {
+            ast::CallOperand::Reg(id) => ast::CallOperand::Reg(self(desc.new_op(id))),
+            ast::CallOperand::Imm(imm) => ast::CallOperand::Imm(imm),
         }
     }
 
@@ -1515,7 +1962,7 @@ where
             ast::MovOperand::Op(op) => ast::MovOperand::Op(ArgumentMapVisitor::<
                 NormalizedArgParams,
                 NormalizedArgParams,
-            >::src_operand(
+            >::operand(
                 self, desc.new_op(op)
             )),
             ast::MovOperand::Vec(x1, x2) => ast::MovOperand::Vec(x1, x2),
@@ -1524,17 +1971,8 @@ where
 }
 
 impl ast::Instruction<ExpandedArgParams> {
-    fn visit_variable_extended<F: FnMut(ArgumentDescriptor<spirv::Word>) -> spirv::Word>(
-        self,
-        f: &mut F,
-    ) -> Self {
-        self.map(f)
-    }
-
     fn jump_target(&self) -> Option<spirv::Word> {
         match self {
-            ast::Instruction::Abs(_, _) => todo!(),
-            ast::Instruction::Call(_, _) => todo!(),
             ast::Instruction::Bra(_, a) => Some(a.src),
             ast::Instruction::Ld(_, _)
             | ast::Instruction::Mov(_, _)
@@ -1547,8 +1985,19 @@ impl ast::Instruction<ExpandedArgParams> {
             | ast::Instruction::Cvta(_, _)
             | ast::Instruction::Shl(_, _)
             | ast::Instruction::St(_, _)
-            | ast::Instruction::Ret(_) => None,
+            | ast::Instruction::Ret(_)
+            | ast::Instruction::Abs(_, _)
+            | ast::Instruction::Call(_) => None,
         }
+    }
+}
+
+impl VisitVariableExpanded for ast::Instruction<ExpandedArgParams> {
+    fn visit_variable_extended<F: FnMut(ArgumentDescriptor<spirv::Word>) -> spirv::Word>(
+        self,
+        f: &mut F,
+    ) -> ExpandedStatement {
+        Statement::Instruction(self.map(f))
     }
 }
 
@@ -1592,24 +2041,38 @@ impl<T> ast::PredAt<T> {
     }
 }
 
-// REMOVE
 impl<'a> ast::Instruction<ast::ParsedArgParams<'a>> {
     fn map_variable<F: FnMut(&str) -> spirv::Word>(
         self,
         f: &mut F,
     ) -> ast::Instruction<NormalizedArgParams> {
-        self.map(f)
+        match self {
+            ast::Instruction::Call(call) => {
+                let call_inst = ast::CallInst {
+                    uniform: call.uniform,
+                    ret_params: call.ret_params.into_iter().map(|p| f(p)).collect(),
+                    func: f(call.func),
+                    param_list: call
+                        .param_list
+                        .into_iter()
+                        .map(|p| p.map_variable(f))
+                        .collect(),
+                };
+                ast::Instruction::Call(call_inst)
+            }
+            i => i.map(f),
+        }
     }
 }
 
-impl<T: ast::ArgParams> ast::Arg1<T> {
-    fn map<U: ast::ArgParams, V: ArgumentMapVisitor<T, U>>(
+impl<T: ArgParamsEx> ast::Arg1<T> {
+    fn map<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
         self,
         visitor: &mut V,
         t: Option<ast::Type>,
     ) -> ast::Arg1<U> {
         ast::Arg1 {
-            src: visitor.dst_variable(ArgumentDescriptor {
+            src: visitor.variable(ArgumentDescriptor {
                 op: self.src,
                 typ: t,
                 is_dst: false,
@@ -1619,20 +2082,20 @@ impl<T: ast::ArgParams> ast::Arg1<T> {
     }
 }
 
-impl<T: ast::ArgParams> ast::Arg2<T> {
-    fn map<U: ast::ArgParams, V: ArgumentMapVisitor<T, U>>(
+impl<T: ArgParamsEx> ast::Arg2<T> {
+    fn map<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
         self,
         visitor: &mut V,
         t: Option<ast::Type>,
     ) -> ast::Arg2<U> {
         ast::Arg2 {
-            dst: visitor.dst_variable(ArgumentDescriptor {
+            dst: visitor.variable(ArgumentDescriptor {
                 op: self.dst,
                 typ: t,
                 is_dst: true,
                 is_pointer: false,
             }),
-            src: visitor.src_operand(ArgumentDescriptor {
+            src: visitor.operand(ArgumentDescriptor {
                 op: self.src,
                 typ: t,
                 is_dst: false,
@@ -1641,41 +2104,42 @@ impl<T: ast::ArgParams> ast::Arg2<T> {
         }
     }
 
-    fn map_ld<U: ast::ArgParams, V: ArgumentMapVisitor<T, U>>(
+    fn map_ld<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
         self,
         visitor: &mut V,
         t: Option<ast::Type>,
+        is_src_pointer: bool,
     ) -> ast::Arg2<U> {
         ast::Arg2 {
-            dst: visitor.dst_variable(ArgumentDescriptor {
+            dst: visitor.variable(ArgumentDescriptor {
                 op: self.dst,
                 typ: t,
                 is_dst: true,
                 is_pointer: false,
             }),
-            src: visitor.src_operand(ArgumentDescriptor {
+            src: visitor.operand(ArgumentDescriptor {
                 op: self.src,
                 typ: t,
                 is_dst: false,
-                is_pointer: true,
+                is_pointer: is_src_pointer,
             }),
         }
     }
 
-    fn map_cvt<U: ast::ArgParams, V: ArgumentMapVisitor<T, U>>(
+    fn map_cvt<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
         self,
         visitor: &mut V,
         dst_t: ast::Type,
         src_t: ast::Type,
     ) -> ast::Arg2<U> {
         ast::Arg2 {
-            dst: visitor.dst_variable(ArgumentDescriptor {
+            dst: visitor.variable(ArgumentDescriptor {
                 op: self.dst,
                 typ: Some(dst_t),
                 is_dst: true,
                 is_pointer: false,
             }),
-            src: visitor.src_operand(ArgumentDescriptor {
+            src: visitor.operand(ArgumentDescriptor {
                 op: self.src,
                 typ: Some(src_t),
                 is_dst: false,
@@ -1685,20 +2149,21 @@ impl<T: ast::ArgParams> ast::Arg2<T> {
     }
 }
 
-impl<T: ast::ArgParams> ast::Arg2St<T> {
-    fn map<U: ast::ArgParams, V: ArgumentMapVisitor<T, U>>(
+impl<T: ArgParamsEx> ast::Arg2St<T> {
+    fn map<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
         self,
         visitor: &mut V,
         t: Option<ast::Type>,
+        param_space: bool,
     ) -> ast::Arg2St<U> {
         ast::Arg2St {
-            src1: visitor.src_operand(ArgumentDescriptor {
+            src1: visitor.operand(ArgumentDescriptor {
                 op: self.src1,
                 typ: t,
-                is_dst: false,
-                is_pointer: true,
+                is_dst: param_space,
+                is_pointer: !param_space,
             }),
-            src2: visitor.src_operand(ArgumentDescriptor {
+            src2: visitor.operand(ArgumentDescriptor {
                 op: self.src2,
                 typ: t,
                 is_dst: false,
@@ -1708,14 +2173,14 @@ impl<T: ast::ArgParams> ast::Arg2St<T> {
     }
 }
 
-impl<T: ast::ArgParams> ast::Arg2Mov<T> {
-    fn map<U: ast::ArgParams, V: ArgumentMapVisitor<T, U>>(
+impl<T: ArgParamsEx> ast::Arg2Mov<T> {
+    fn map<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
         self,
         visitor: &mut V,
         t: Option<ast::Type>,
     ) -> ast::Arg2Mov<U> {
         ast::Arg2Mov {
-            dst: visitor.dst_variable(ArgumentDescriptor {
+            dst: visitor.variable(ArgumentDescriptor {
                 op: self.dst,
                 typ: t,
                 is_dst: true,
@@ -1731,26 +2196,26 @@ impl<T: ast::ArgParams> ast::Arg2Mov<T> {
     }
 }
 
-impl<T: ast::ArgParams> ast::Arg3<T> {
-    fn map_non_shift<U: ast::ArgParams, V: ArgumentMapVisitor<T, U>>(
+impl<T: ArgParamsEx> ast::Arg3<T> {
+    fn map_non_shift<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
         self,
         visitor: &mut V,
         t: Option<ast::Type>,
     ) -> ast::Arg3<U> {
         ast::Arg3 {
-            dst: visitor.dst_variable(ArgumentDescriptor {
+            dst: visitor.variable(ArgumentDescriptor {
                 op: self.dst,
                 typ: t,
                 is_dst: true,
                 is_pointer: false,
             }),
-            src1: visitor.src_operand(ArgumentDescriptor {
+            src1: visitor.operand(ArgumentDescriptor {
                 op: self.src1,
                 typ: t,
                 is_dst: false,
                 is_pointer: false,
             }),
-            src2: visitor.src_operand(ArgumentDescriptor {
+            src2: visitor.operand(ArgumentDescriptor {
                 op: self.src2,
                 typ: t,
                 is_dst: false,
@@ -1759,25 +2224,25 @@ impl<T: ast::ArgParams> ast::Arg3<T> {
         }
     }
 
-    fn map_shift<U: ast::ArgParams, V: ArgumentMapVisitor<T, U>>(
+    fn map_shift<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
         self,
         visitor: &mut V,
         t: Option<ast::Type>,
     ) -> ast::Arg3<U> {
         ast::Arg3 {
-            dst: visitor.dst_variable(ArgumentDescriptor {
+            dst: visitor.variable(ArgumentDescriptor {
                 op: self.dst,
                 typ: t,
                 is_dst: true,
                 is_pointer: false,
             }),
-            src1: visitor.src_operand(ArgumentDescriptor {
+            src1: visitor.operand(ArgumentDescriptor {
                 op: self.src1,
                 typ: t,
                 is_dst: false,
                 is_pointer: false,
             }),
-            src2: visitor.src_operand(ArgumentDescriptor {
+            src2: visitor.operand(ArgumentDescriptor {
                 op: self.src2,
                 typ: Some(ast::Type::Scalar(ast::ScalarType::U32)),
                 is_dst: false,
@@ -1787,34 +2252,34 @@ impl<T: ast::ArgParams> ast::Arg3<T> {
     }
 }
 
-impl<T: ast::ArgParams> ast::Arg4<T> {
-    fn map<U: ast::ArgParams, V: ArgumentMapVisitor<T, U>>(
+impl<T: ArgParamsEx> ast::Arg4<T> {
+    fn map<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
         self,
         visitor: &mut V,
         t: Option<ast::Type>,
     ) -> ast::Arg4<U> {
         ast::Arg4 {
-            dst1: visitor.dst_variable(ArgumentDescriptor {
+            dst1: visitor.variable(ArgumentDescriptor {
                 op: self.dst1,
                 typ: Some(ast::Type::ExtendedScalar(ast::ExtendedScalarType::Pred)),
                 is_dst: true,
                 is_pointer: false,
             }),
             dst2: self.dst2.map(|dst2| {
-                visitor.dst_variable(ArgumentDescriptor {
+                visitor.variable(ArgumentDescriptor {
                     op: dst2,
                     typ: Some(ast::Type::ExtendedScalar(ast::ExtendedScalarType::Pred)),
                     is_dst: true,
                     is_pointer: false,
                 })
             }),
-            src1: visitor.src_operand(ArgumentDescriptor {
+            src1: visitor.operand(ArgumentDescriptor {
                 op: self.src1,
                 typ: t,
                 is_dst: false,
                 is_pointer: false,
             }),
-            src2: visitor.src_operand(ArgumentDescriptor {
+            src2: visitor.operand(ArgumentDescriptor {
                 op: self.src2,
                 typ: t,
                 is_dst: false,
@@ -1824,45 +2289,113 @@ impl<T: ast::ArgParams> ast::Arg4<T> {
     }
 }
 
-impl<T: ast::ArgParams> ast::Arg5<T> {
-    fn map<U: ast::ArgParams, V: ArgumentMapVisitor<T, U>>(
+impl<T: ArgParamsEx> ast::Arg5<T> {
+    fn map<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
         self,
         visitor: &mut V,
         t: Option<ast::Type>,
     ) -> ast::Arg5<U> {
         ast::Arg5 {
-            dst1: visitor.dst_variable(ArgumentDescriptor {
+            dst1: visitor.variable(ArgumentDescriptor {
                 op: self.dst1,
                 typ: Some(ast::Type::ExtendedScalar(ast::ExtendedScalarType::Pred)),
                 is_dst: true,
                 is_pointer: false,
             }),
             dst2: self.dst2.map(|dst2| {
-                visitor.dst_variable(ArgumentDescriptor {
+                visitor.variable(ArgumentDescriptor {
                     op: dst2,
                     typ: Some(ast::Type::ExtendedScalar(ast::ExtendedScalarType::Pred)),
                     is_dst: true,
                     is_pointer: false,
                 })
             }),
-            src1: visitor.src_operand(ArgumentDescriptor {
+            src1: visitor.operand(ArgumentDescriptor {
                 op: self.src1,
                 typ: t,
                 is_dst: false,
                 is_pointer: false,
             }),
-            src2: visitor.src_operand(ArgumentDescriptor {
+            src2: visitor.operand(ArgumentDescriptor {
                 op: self.src2,
                 typ: t,
                 is_dst: false,
                 is_pointer: false,
             }),
-            src3: visitor.src_operand(ArgumentDescriptor {
+            src3: visitor.operand(ArgumentDescriptor {
                 op: self.src3,
                 typ: Some(ast::Type::ExtendedScalar(ast::ExtendedScalarType::Pred)),
                 is_dst: false,
                 is_pointer: false,
             }),
+        }
+    }
+}
+
+/*
+impl<T: ArgParamsEx> ast::ArgCall<T> {
+    fn map<'a, U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
+        self,
+        visitor: &mut V,
+        fn_resolve: &GlobalFnDeclResolver<'a>,
+    ) -> ast::ArgCall<U> {
+        // TODO: error out if lengths don't match
+        let fn_decl = T::get_fn_decl(&self.func, fn_resolve);
+        let ret_params = self
+            .ret_params
+            .into_iter()
+            .zip(fn_decl.ret_vals.iter().copied())
+            .map(|(a, (space, typ))| {
+                visitor.variable(ArgumentDescriptor {
+                    op: a,
+                    typ: Some(ast::Type::Scalar(typ)),
+                    is_dst: true,
+                    is_pointer: if space == ast::FnArgStateSpace::Reg {
+                        false
+                    } else {
+                        true
+                    },
+                })
+            })
+            .collect();
+        let func = visitor.variable(ArgumentDescriptor {
+            op: self.func,
+            typ: None,
+            is_dst: false,
+            is_pointer: false,
+        });
+        let param_list = self
+            .param_list
+            .into_iter()
+            .zip(fn_decl.params.iter().copied())
+            .map(|(a, (space, typ))| {
+                visitor.src_call_operand(ArgumentDescriptor {
+                    op: a,
+                    typ: Some(ast::Type::Scalar(typ)),
+                    is_dst: false,
+                    is_pointer: if space == ast::FnArgStateSpace::Reg {
+                        false
+                    } else {
+                        true
+                    },
+                })
+            })
+            .collect();
+        ast::ArgCall {
+            uniform: false,
+            ret_params,
+            func: func,
+            param_list: param_list,
+        }
+    }
+}
+*/
+
+impl<T> ast::CallOperand<T> {
+    fn map_variable<U, F: FnMut(T) -> U>(self, f: &mut F) -> ast::CallOperand<U> {
+        match self {
+            ast::CallOperand::Reg(id) => ast::CallOperand::Reg(f(id)),
+            ast::CallOperand::Imm(x) => ast::CallOperand::Imm(x),
         }
     }
 }
@@ -2282,10 +2815,10 @@ fn should_convert_relaxed_dst(
 fn insert_implicit_bitcasts(
     func: &mut Vec<ExpandedStatement>,
     id_def: &mut NumericIdResolver,
-    instr: ast::Instruction<ExpandedArgParams>,
+    stmt: impl VisitVariableExpanded,
 ) {
     let mut dst_coercion = None;
-    let instr = instr.visit_variable_extended(&mut |mut desc| {
+    let instr = stmt.visit_variable_extended(&mut |mut desc| {
         let id_type_from_instr = match desc.typ {
             Some(t) => t,
             None => return desc.op,
@@ -2315,17 +2848,25 @@ fn insert_implicit_bitcasts(
             desc.op
         }
     });
-    func.push(Statement::Instruction(instr));
+    func.push(instr);
     if let Some(cond) = dst_coercion {
         func.push(cond);
     }
 }
-
-impl<'a> ast::FunctionHeader<'a, ast::ParsedArgParams<'a>> {
+impl<'a> ast::MethodDecl<'a, ast::ParsedArgParams<'a>> {
     fn name(&self) -> &'a str {
         match self {
-            ast::FunctionHeader::Kernel(name) => name,
-            ast::FunctionHeader::Func(_, name) => name,
+            ast::MethodDecl::Kernel(name, _) => name,
+            ast::MethodDecl::Func(_, name, _) => name,
+        }
+    }
+}
+
+impl<'a, P: ArgParamsEx> ast::MethodDecl<'a, P> {
+    fn visit_args(&self, f: impl FnMut(&ast::KernelArgument<P>)) {
+        match self {
+            ast::MethodDecl::Kernel(_, params) => params.iter().for_each(f),
+            ast::MethodDecl::Func(_, _, params) => params.iter().map(|a| &a.base).for_each(f),
         }
     }
 }

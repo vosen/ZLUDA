@@ -14,7 +14,7 @@ use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::mem;
 use std::slice;
-use std::{collections::HashMap, ptr, str};
+use std::{borrow::Cow, collections::HashMap, env, fs, path::PathBuf, ptr, str};
 
 macro_rules! test_ptx {
     ($fn_name:ident, $input:expr, $output:expr) => {
@@ -32,8 +32,9 @@ macro_rules! test_ptx {
             #[test]
             fn [<$fn_name _spvtxt>]() -> Result<(), Box<dyn std::error::Error>> {
                 let ptx_txt = include_str!(concat!(stringify!($fn_name), ".ptx"));
+                let spirv_file_name = concat!(stringify!($fn_name), ".spvtxt");
                 let spirv_txt = include_bytes!(concat!(stringify!($fn_name), ".spvtxt"));
-                test_spvtxt_assert(ptx_txt, spirv_txt)
+                test_spvtxt_assert(ptx_txt, spirv_txt, spirv_file_name)
             }
         }
     };
@@ -140,6 +141,7 @@ fn run_spirv<T: From<u8> + ze::SafeRepr + Copy + Debug>(
 fn test_spvtxt_assert<'a>(
     ptx_txt: &'a str,
     spirv_txt: &'a [u8],
+    spirv_file_name: &'a str,
 ) -> Result<(), Box<dyn error::Error + 'a>> {
     let mut errors = Vec::new();
     let ast = ptx::ModuleParser::new().parse(&mut errors, ptx_txt)?;
@@ -191,16 +193,27 @@ fn test_spvtxt_assert<'a>(
             )
         };
         unsafe { spirv_tools::spvContextDestroy(spv_context) };
-        if result == spv_result_t::SPV_SUCCESS {
+        let spirv_text = if result == spv_result_t::SPV_SUCCESS {
             let raw_text = unsafe {
                 std::slice::from_raw_parts((*spv_text).str_ as *const u8, (*spv_text).length)
             };
             let spv_from_ptx_text = unsafe { str::from_utf8_unchecked(raw_text) };
             // TODO: stop leaking kernel text
-            panic!(spv_from_ptx_text);
+            Cow::Borrowed(spv_from_ptx_text)
         } else {
-            panic!(ptx_mod.disassemble());
+            Cow::Owned(ptx_mod.disassemble())
+        };
+        if let Ok(dump_path) = env::var("NOTCUDA_TEST_SPIRV_DUMP_DIR") {
+            let mut path = PathBuf::from(dump_path);
+            if let Ok(()) = fs::create_dir_all(&path) {
+                path.push(spirv_file_name);
+                #[allow(unused_must_use)]
+                {
+                    fs::write(path, spirv_text.as_bytes());
+                }
+            }
         }
+        panic!(spirv_text);
     }
     unsafe { spirv_tools::spvContextDestroy(spv_context) };
     Ok(())

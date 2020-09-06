@@ -51,23 +51,34 @@ pub struct Module<'a> {
     pub functions: Vec<ParsedFunction<'a>>,
 }
 
-pub enum FunctionHeader<'a, P: ArgParams> {
-    Func(Vec<Argument<P>>, P::ID),
-    Kernel(&'a str),
+pub enum MethodDecl<'a, P: ArgParams> {
+    Func(Vec<FnArgument<P>>, P::ID, Vec<FnArgument<P>>),
+    Kernel(&'a str, Vec<KernelArgument<P>>),
 }
 
 pub struct Function<'a, P: ArgParams, S> {
-    pub func_directive: FunctionHeader<'a, P>,
-    pub args: Vec<Argument<P>>,
+    pub func_directive: MethodDecl<'a, P>,
     pub body: Option<Vec<S>>,
 }
 
 pub type ParsedFunction<'a> = Function<'a, ParsedArgParams<'a>, Statement<ParsedArgParams<'a>>>;
 
-#[derive(Default)]
-pub struct Argument<P: ArgParams> {
+pub struct FnArgument<P: ArgParams> {
+    pub base: KernelArgument<P>,
+    pub state_space: FnArgStateSpace,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum FnArgStateSpace {
+    Reg,
+    Param,
+}
+
+#[derive(Default, Copy, Clone)]
+pub struct KernelArgument<P: ArgParams> {
     pub name: P::ID,
     pub a_type: ScalarType,
+    // TODO: turn length into part of type definition
     pub length: u32,
 }
 
@@ -222,12 +233,8 @@ pub enum Instruction<P: ArgParams> {
     Shl(ShlType, Arg3<P>),
     St(StData, Arg2St<P>),
     Ret(RetData),
-    Call(CallData, ArgCall<P>),
+    Call(CallInst<P>),
     Abs(AbsDetails, Arg2<P>),
-}
-
-pub struct CallData {
-    pub uniform: bool,
 }
 
 pub struct AbsDetails {
@@ -235,15 +242,17 @@ pub struct AbsDetails {
     pub typ: ScalarType,
 }
 
-pub struct ArgCall<P: ArgParams> {
+pub struct CallInst<P: ArgParams> {
+    pub uniform: bool,
     pub ret_params: Vec<P::ID>,
     pub func: P::ID,
-    pub param_list: Vec<P::ID>,
+    pub param_list: Vec<P::CallOperand>,
 }
 
 pub trait ArgParams {
     type ID;
     type Operand;
+    type CallOperand;
     type MovOperand;
 }
 
@@ -254,6 +263,7 @@ pub struct ParsedArgParams<'a> {
 impl<'a> ArgParams for ParsedArgParams<'a> {
     type ID = &'a str;
     type Operand = Operand<&'a str>;
+    type CallOperand = CallOperand<&'a str>;
     type MovOperand = MovOperand<&'a str>;
 }
 
@@ -301,6 +311,12 @@ pub struct Arg5<P: ArgParams> {
 pub enum Operand<ID> {
     Reg(ID),
     RegOffset(ID, i32),
+    Imm(i128),
+}
+
+#[derive(Copy, Clone)]
+pub enum CallOperand<ID> {
+    Reg(ID),
     Imm(i128),
 }
 

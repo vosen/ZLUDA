@@ -1,43 +1,45 @@
-; SPIR-V
-; Version: 1.5
-; Generator: Khronos SPIR-V Tools Assembler; 0
-; Bound: 23
-; Schema: 0
                OpCapability GenericPointer
                OpCapability Linkage
                OpCapability Addresses
                OpCapability Kernel
                OpCapability Int64
                OpCapability Int8
-          %1 = OpExtInstImport "OpenCL.std"
+         %24 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
-               OpEntryPoint Kernel %2 "mov"
+               OpEntryPoint Kernel %1 "mov"
        %void = OpTypeVoid
       %ulong = OpTypeInt 64 0
-          %5 = OpTypeFunction %void %ulong %ulong
+         %27 = OpTypeFunction %void %ulong %ulong
 %_ptr_Function_ulong = OpTypePointer Function %ulong
 %_ptr_Generic_ulong = OpTypePointer Generic %ulong
-          %2 = OpFunction %void None %5
+          %1 = OpFunction %void None %27
           %8 = OpFunctionParameter %ulong
           %9 = OpFunctionParameter %ulong
-         %10 = OpLabel
-         %11 = OpVariable %_ptr_Function_ulong Function
-         %12 = OpVariable %_ptr_Function_ulong Function
-         %13 = OpVariable %_ptr_Function_ulong Function
-         %14 = OpVariable %_ptr_Function_ulong Function
-               OpStore %11 %8
-               OpStore %12 %9
-         %15 = OpLoad %ulong %11
-         %16 = OpConvertUToPtr %_ptr_Generic_ulong %15
-         %17 = OpLoad %ulong %16
-               OpStore %13 %17
-         %18 = OpLoad %ulong %13
-         %19 = OpCopyObject %ulong %18
-               OpStore %14 %19
-         %20 = OpLoad %ulong %12
-         %21 = OpLoad %ulong %14
-         %22 = OpConvertUToPtr %_ptr_Generic_ulong %20
-               OpStore %22 %21
+         %22 = OpLabel
+          %2 = OpVariable %_ptr_Function_ulong Function
+          %3 = OpVariable %_ptr_Function_ulong Function
+          %4 = OpVariable %_ptr_Function_ulong Function
+          %5 = OpVariable %_ptr_Function_ulong Function
+          %6 = OpVariable %_ptr_Function_ulong Function
+          %7 = OpVariable %_ptr_Function_ulong Function
+               OpStore %2 %8
+               OpStore %3 %9
+         %11 = OpLoad %ulong %2
+         %10 = OpCopyObject %ulong %11
+               OpStore %4 %10
+         %13 = OpLoad %ulong %3
+         %12 = OpCopyObject %ulong %13
+               OpStore %5 %12
+         %15 = OpLoad %ulong %4
+         %20 = OpConvertUToPtr %_ptr_Generic_ulong %15
+         %14 = OpLoad %ulong %20
+               OpStore %6 %14
+         %17 = OpLoad %ulong %6
+         %16 = OpCopyObject %ulong %17
+               OpStore %7 %16
+         %18 = OpLoad %ulong %5
+         %19 = OpLoad %ulong %7
+         %21 = OpConvertUToPtr %_ptr_Generic_ulong %18
+               OpStore %21 %19
                OpReturn
                OpFunctionEnd
-               

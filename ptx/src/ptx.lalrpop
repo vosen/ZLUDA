@@ -202,8 +202,7 @@ AddressSize = {
 
 Function: ast::Function<'input, ast::ParsedArgParams<'input>, ast::Statement<ast::ParsedArgParams<'input>>>  = {
     LinkingDirective*
-    <func_directive:FunctionHeader>
-    <args:Arguments>
+    <func_directive:MethodDecl>
     <body:FunctionBody> =>  ast::Function{<>}
 };
 
@@ -213,24 +212,43 @@ LinkingDirective = {
     ".weak"
 };
 
-FunctionHeader: ast::FunctionHeader<'input, ast::ParsedArgParams<'input>> = {
-    ".entry" <name:ExtendedID> => ast::FunctionHeader::Kernel(name),
-    ".func" <args:Arguments?> <name:ExtendedID> => ast::FunctionHeader::Func(args.unwrap_or_else(|| Vec::new()), name)
+MethodDecl: ast::MethodDecl<'input, ast::ParsedArgParams<'input>> = {
+    ".entry" <name:ExtendedID> <params:KernelArguments> => ast::MethodDecl::Kernel(name, params),
+    ".func" <ret_vals:FnArguments?> <name:ExtendedID> <params:FnArguments> => ast::MethodDecl::Func(ret_vals.unwrap_or_else(|| Vec::new()), name, params)
 };
 
-Arguments: Vec<ast::Argument<ast::ParsedArgParams<'input>>> = {
-    "(" <args:Comma<FunctionInput>> ")" => args
-}
+KernelArguments: Vec<ast::KernelArgument<ast::ParsedArgParams<'input>>> = {
+    "(" <args:Comma<KernelInput>> ")" => args
+};
+
+FnArguments: Vec<ast::FnArgument<ast::ParsedArgParams<'input>>> = {
+    "(" <args:Comma<FnInput>> ")" => args
+};
+
+FnInput: ast::FnArgument<ast::ParsedArgParams<'input>> = {
+    ".reg" <_type:ScalarType> <name:ExtendedID> => { 
+        ast::FnArgument {
+            base: ast::KernelArgument {a_type: _type, name: name, length: 1 },
+            state_space: ast::FnArgStateSpace::Reg,
+        }
+    },
+    <p:KernelInput> => {
+        ast::FnArgument {
+            base: p,
+            state_space: ast::FnArgStateSpace::Param,
+        }
+    }
+};
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parameter-state-space
-FunctionInput: ast::Argument<ast::ParsedArgParams<'input>> = {
+KernelInput: ast::KernelArgument<ast::ParsedArgParams<'input>> = {
     ".param" <_type:ScalarType> <name:ExtendedID> => { 
-        ast::Argument {a_type: _type, name: name, length: 1 }
+        ast::KernelArgument {a_type: _type, name: name, length: 1 }
     },
     ".param" <a_type:ScalarType> <name:ExtendedID> "[" <length:Num> "]" => {
         let length = length.parse::<u32>();
         let length = length.unwrap_with(errors);
-        ast::Argument { a_type: a_type, name: name, length: length }
+        ast::KernelArgument { a_type: a_type, name: name, length: length }
     }
 };
 
@@ -856,7 +874,10 @@ CvtaSize: ast::CvtaSize = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-call
 InstCall: ast::Instruction<ast::ParsedArgParams<'input>> = {
-    "call" <u:".uni"?> <a:ArgCall> => ast::Instruction::Call(ast::CallData { uniform: u.is_some() }, a)
+    "call" <u:".uni"?> <args:ArgCall> => {
+        let (ret_params, func, param_list) = args;
+        ast::Instruction::Call(ast::CallInst { uniform: u.is_some(), ret_params, func, param_list })
+    }
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-abs
@@ -900,6 +921,15 @@ Operand: ast::Operand<&'input str> = {
     }
 };
 
+CallOperand: ast::CallOperand<&'input str> = {
+    <r:ExtendedID> => ast::CallOperand::Reg(r),
+    <o:Num> => {
+        let offset = o.parse::<i128>();
+        let offset = offset.unwrap_with(errors);
+        ast::CallOperand::Imm(offset)
+    }
+};
+
 MovOperand: ast::MovOperand<&'input str> = {
     <o:Operand> => ast::MovOperand::Op(o),
     <o:VectorOperand> => {
@@ -938,10 +968,12 @@ Arg5: ast::Arg5<ast::ParsedArgParams<'input>> = {
     <dst1:ExtendedID> <dst2:OptionalDst?> "," <src1:Operand> "," <src2:Operand> "," "!"? <src3:Operand> => ast::Arg5{<>}
 };
 
-ArgCall: ast::ArgCall<ast::ParsedArgParams<'input>> = {
-    "(" <ret_params:Comma<ExtendedID>> ")" "," <func:ExtendedID> "," "(" <param_list:Comma<ExtendedID>> ")" => ast::ArgCall{<>},
-    <func:ExtendedID> "," "(" <param_list:Comma<ExtendedID>> ")" => ast::ArgCall{ret_params: Vec::new(), func, param_list},
-    <func:ExtendedID> => ast::ArgCall{ret_params: Vec::new(), func, param_list: Vec::new()},
+ArgCall: (Vec<&'input str>, &'input str, Vec<ast::CallOperand<&'input str>>) = {
+    "(" <ret_params:Comma<ExtendedID>> ")" "," <func:ExtendedID> "," "(" <param_list:Comma<CallOperand>> ")" => {
+        (ret_params, func, param_list)
+    },
+    <func:ExtendedID> "," "(" <param_list:Comma<CallOperand>> ")" => (Vec::new(), func, param_list),
+    <func:ExtendedID> => (Vec::new(), func, Vec::<ast::CallOperand<_>>::new()),
 };
 
 OptionalDst: &'input str = {

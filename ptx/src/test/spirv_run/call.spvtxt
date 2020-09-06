@@ -1,0 +1,73 @@
+               OpCapability GenericPointer
+               OpCapability Linkage
+               OpCapability Addresses
+               OpCapability Kernel
+               OpCapability Int64
+               OpCapability Int8
+         %45 = OpExtInstImport "OpenCL.std"
+               OpMemoryModel Physical64 OpenCL
+               OpEntryPoint Kernel %4 "call"
+       %void = OpTypeVoid
+      %ulong = OpTypeInt 64 0
+         %48 = OpTypeFunction %void %ulong %ulong
+%_ptr_Function_ulong = OpTypePointer Function %ulong
+%_ptr_CrossWorkgroup_ulong = OpTypePointer CrossWorkgroup %ulong
+         %51 = OpTypeFunction %ulong %ulong
+    %ulong_1 = OpConstant %ulong 1
+          %4 = OpFunction %void None %48
+         %12 = OpFunctionParameter %ulong
+         %13 = OpFunctionParameter %ulong
+         %30 = OpLabel
+          %5 = OpVariable %_ptr_Function_ulong Function
+          %6 = OpVariable %_ptr_Function_ulong Function
+          %7 = OpVariable %_ptr_Function_ulong Function
+          %8 = OpVariable %_ptr_Function_ulong Function
+          %9 = OpVariable %_ptr_Function_ulong Function
+         %10 = OpVariable %_ptr_Function_ulong Function
+         %11 = OpVariable %_ptr_Function_ulong Function
+               OpStore %5 %12
+               OpStore %6 %13
+         %15 = OpLoad %ulong %5
+         %14 = OpCopyObject %ulong %15
+               OpStore %7 %14
+         %17 = OpLoad %ulong %6
+         %16 = OpCopyObject %ulong %17
+               OpStore %8 %16
+         %19 = OpLoad %ulong %7
+         %28 = OpConvertUToPtr %_ptr_CrossWorkgroup_ulong %19
+         %18 = OpLoad %ulong %28
+               OpStore %9 %18
+         %21 = OpLoad %ulong %9
+         %20 = OpCopyObject %ulong %21
+               OpStore %10 %20
+         %23 = OpLoad %ulong %10
+         %22 = OpFunctionCall %ulong %1 %23
+               OpStore %11 %22
+         %25 = OpLoad %ulong %11
+         %24 = OpCopyObject %ulong %25
+               OpStore %9 %24
+         %26 = OpLoad %ulong %8
+         %27 = OpLoad %ulong %9
+         %29 = OpConvertUToPtr %_ptr_CrossWorkgroup_ulong %26
+               OpStore %29 %27
+               OpReturn
+               OpFunctionEnd
+          %1 = OpFunction %ulong None %51
+         %34 = OpFunctionParameter %ulong
+         %43 = OpLabel
+         %32 = OpVariable %_ptr_Function_ulong Function
+         %31 = OpVariable %_ptr_Function_ulong Function
+         %33 = OpVariable %_ptr_Function_ulong Function
+               OpStore %32 %34
+         %36 = OpLoad %ulong %32
+         %35 = OpCopyObject %ulong %36
+               OpStore %33 %35
+         %38 = OpLoad %ulong %33
+         %37 = OpIAdd %ulong %38 %ulong_1
+               OpStore %33 %37
+         %40 = OpLoad %ulong %33
+         %39 = OpCopyObject %ulong %40
+               OpStore %31 %39
+         %41 = OpLoad %ulong %31
+               OpReturnValue %41
+               OpFunctionEnd

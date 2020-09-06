@@ -75,3 +75,9 @@ CUDA <-> L0
 * context ~= context (1.0+)
 * graph ~= command list
 * module ~= module
+
+IGC
+---
+* IGC is extremely brittle and segfaults on fairly innocent code:
+    * OpBitcast of pointer to uint
+    * OpCopyMemory of alloca'd variable
