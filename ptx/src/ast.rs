@@ -12,8 +12,116 @@ quick_error! {
         SyntaxError {}
         NonF32Ftz {}
         WrongArrayType {}
+        WrongVectorElement {}
+        MultiArrayVariable {}
     }
 }
+
+macro_rules! sub_scalar_type {
+    ($name:ident { $($variant:ident),+ $(,)? }) => {
+        #[derive(PartialEq, Eq, Clone, Copy)]
+        pub enum $name {
+            $(
+                $variant,
+            )+
+        }
+
+        impl From<$name> for ScalarType {
+            fn from(t: $name) -> ScalarType {
+                match t {
+                    $(
+                        $name::$variant => ScalarType::$variant,
+                    )+
+                }
+            }
+        }
+    };
+}
+
+macro_rules! sub_type {
+    ($type_name:ident { $($variant:ident ( $($field_type:ident),+ ) ),+ $(,)? } ) => {
+        #[derive(PartialEq, Eq, Clone, Copy)]
+        pub enum $type_name {
+            $(
+                $variant ($($field_type),+),
+            )+
+        }
+
+        impl From<$type_name> for Type {
+            #[allow(non_snake_case)]
+            fn from(t: $type_name) -> Type {
+                match t {
+                    $(
+                        $type_name::$variant ( $($field_type),+ ) => Type::$variant ( $($field_type.into()),+),
+                    )+
+                }
+            }
+        }
+    };
+}
+
+sub_type! {
+    VariableRegType {
+        Scalar(ScalarType),
+        Vector(SizedScalarType, u8),
+    }
+}
+
+sub_type! {
+    VariableLocalType {
+        Scalar(SizedScalarType),
+        Vector(SizedScalarType, u8),
+        Array(SizedScalarType, u32),
+    }
+}
+
+// For some weird reson this is illegal:
+//   .param .f16x2 foobar;
+// but this is legal:
+//   .param .f16x2 foobar[1];
+sub_type! {
+    VariableParamType {
+        Scalar(ParamScalarType),
+        Array(SizedScalarType, u32),
+    }
+}
+
+sub_scalar_type!(SizedScalarType {
+    B8,
+    B16,
+    B32,
+    B64,
+    U8,
+    U16,
+    U32,
+    U64,
+    S8,
+    S16,
+    S32,
+    S64,
+    F16,
+    F16x2,
+    F32,
+    F64,
+});
+
+sub_scalar_type!(ParamScalarType {
+    B8,
+    B16,
+    B32,
+    B64,
+    U8,
+    U16,
+    U32,
+    U64,
+    S8,
+    S16,
+    S32,
+    S64,
+    F16,
+    F32,
+    F64,
+});
 
 pub trait UnwrapWithVec<E, To> {
     fn unwrap_with(self, errs: &mut Vec<E>) -> To;
@@ -56,6 +164,9 @@ pub enum MethodDecl<'a, P: ArgParams> {
     Kernel(&'a str, Vec<KernelArgument<P>>),
 }
 
+pub type FnArgument<P: ArgParams> = Variable<FnArgumentType, P>;
+pub type KernelArgument<P: ArgParams> = Variable<VariableParamType, P>;
+
 pub struct Function<'a, P: ArgParams, S> {
     pub func_directive: MethodDecl<'a, P>,
     pub body: Option<Vec<S>>,
@@ -63,41 +174,26 @@ pub struct Function<'a, P: ArgParams, S> {
 
 pub type ParsedFunction<'a> = Function<'a, ParsedArgParams<'a>, Statement<ParsedArgParams<'a>>>;
 
-pub struct FnArgument<P: ArgParams> {
-    pub base: KernelArgument<P>,
-    pub state_space: FnArgStateSpace,
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub enum FnArgumentType {
+    Reg(VariableRegType),
+    Param(VariableParamType),
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub enum FnArgStateSpace {
-    Reg,
-    Param,
-}
-
-#[derive(Default, Copy, Clone)]
-pub struct KernelArgument<P: ArgParams> {
-    pub name: P::ID,
-    pub a_type: ScalarType,
-    // TODO: turn length into part of type definition
-    pub length: u32,
+impl From<FnArgumentType> for Type {
+    fn from(t: FnArgumentType) -> Self {
+        match t {
+            FnArgumentType::Reg(x) => x.into(),
+            FnArgumentType::Param(x) => x.into(),
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
 pub enum Type {
     Scalar(ScalarType),
-    ExtendedScalar(ExtendedScalarType),
+    Vector(ScalarType, u8),
     Array(ScalarType, u32),
-}
-
-impl From<FloatType> for Type {
-    fn from(t: FloatType) -> Self {
-        match t {
-            FloatType::F16 => Type::Scalar(ScalarType::F16),
-            FloatType::F16x2 => Type::ExtendedScalar(ExtendedScalarType::F16x2),
-            FloatType::F32 => Type::Scalar(ScalarType::F32),
-            FloatType::F64 => Type::Scalar(ScalarType::F64),
-        }
-    }
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
@@ -117,25 +213,11 @@ pub enum ScalarType {
     F16,
     F32,
     F64,
+    F16x2,
+    Pred,
 }
 
-impl From<IntType> for ScalarType {
-    fn from(t: IntType) -> Self {
-        match t {
-            IntType::S8 => ScalarType::S8,
-            IntType::S16 => ScalarType::S16,
-            IntType::S32 => ScalarType::S32,
-            IntType::S64 => ScalarType::S64,
-            IntType::U8 => ScalarType::U8,
-            IntType::U16 => ScalarType::U16,
-            IntType::U32 => ScalarType::U32,
-            IntType::U64 => ScalarType::U64,
-        }
-    }
-}
-
-#[derive(PartialEq, Eq, Hash, Clone, Copy)]
-pub enum IntType {
+sub_scalar_type!(IntType {
     U8,
     U16,
     U32,
@@ -143,8 +225,8 @@ pub enum IntType {
     S8,
     S16,
     S32,
-    S64,
-}
+    S64
+});
 
 impl IntType {
     pub fn is_signed(self) -> bool {
@@ -168,19 +250,12 @@ impl IntType {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy)]
-pub enum FloatType {
+sub_scalar_type!(FloatType {
     F16,
     F16x2,
     F32,
-    F64,
-}
-
-#[derive(PartialEq, Eq, Hash, Clone, Copy)]
-pub enum ExtendedScalarType {
-    F16x2,
-    Pred,
-}
+    F64
+});
 
 impl Default for ScalarType {
     fn default() -> Self {
@@ -190,17 +265,37 @@ impl Default for ScalarType {
 
 pub enum Statement<P: ArgParams> {
     Label(P::ID),
-    Variable(Variable<P>),
+    Variable(MultiVariable<P>),
     Instruction(Option<PredAt<P::ID>>, Instruction<P>),
     Block(Vec<Statement<P>>),
 }
 
-pub struct Variable<P: ArgParams> {
-    pub space: StateSpace,
-    pub align: Option<u32>,
-    pub v_type: Type,
-    pub name: P::ID,
+pub struct MultiVariable<P: ArgParams> {
+    pub var: Variable<VariableType, P>,
     pub count: Option<u32>,
+}
+
+pub struct Variable<T, P: ArgParams> {
+    pub align: Option<u32>,
+    pub v_type: T,
+    pub name: P::ID,
+}
+
+#[derive(Eq, PartialEq, Copy, Clone)]
+pub enum VariableType {
+    Reg(VariableRegType),
+    Local(VariableLocalType),
+    Param(VariableParamType),
+}
+
+impl From<VariableType> for Type {
+    fn from(t: VariableType) -> Self {
+        match t {
+            VariableType::Reg(t) => t.into(),
+            VariableType::Local(t) => t.into(),
+            VariableType::Param(t) => t.into(),
+        }
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -322,7 +417,7 @@ pub enum CallOperand<ID> {
 
 pub enum MovOperand<ID> {
     Op(Operand<ID>),
-    Vec(String, String),
+    Vec(ID, u8),
 }
 
 pub enum VectorPrefix {
@@ -334,7 +429,7 @@ pub struct LdData {
     pub qualifier: LdStQualifier,
     pub state_space: LdStateSpace,
     pub caching: LdCacheOperator,
-    pub vector: Option<VectorPrefix>,
+    pub vector: Option<u8>,
     pub typ: ScalarType,
 }
 
@@ -374,6 +469,37 @@ pub enum LdCacheOperator {
 
 pub struct MovData {
     pub typ: Type,
+}
+
+sub_scalar_type!(MovScalarType {
+    B16,
+    B32,
+    B64,
+    U16,
+    U32,
+    U64,
+    S16,
+    S32,
+    S64,
+    F32,
+    F64,
+    Pred,
+});
+
+enum MovType {
+    Scalar(MovScalarType),
+    Vector(MovScalarType, u8),
+    Array(MovScalarType, u32),
+}
+
+impl From<MovType> for Type {
+    fn from(t: MovType) -> Self {
+        match t {
+            MovType::Scalar(t) => Type::Scalar(t.into()),
+            MovType::Vector(t, len) => Type::Vector(t.into(), len),
+            MovType::Array(t, len) => Type::Array(t.into(), len),
+        }
+    }
 }
 
 pub enum MulDetails {
@@ -587,7 +713,7 @@ pub struct StData {
     pub qualifier: LdStQualifier,
     pub state_space: StStateSpace,
     pub caching: StCacheOperator,
-    pub vector: Option<VectorPrefix>,
+    pub vector: Option<u8>,
     pub typ: ScalarType,
 }
 

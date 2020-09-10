@@ -8,16 +8,16 @@ fn parse_and_assert(s: &str) {
     assert!(errors.len() == 0);
 }
 
-#[test]
-fn empty() {
-    parse_and_assert(".version 6.5 .target sm_30, debug");
+fn compile_and_assert(s: &str) -> Result<(), rspirv::dr::Error> {
+    let mut errors = Vec::new();
+    let ast = ptx::ModuleParser::new().parse(&mut errors, s).unwrap();
+    crate::to_spirv(ast)?;
+    Ok(())
 }
 
 #[test]
-#[allow(non_snake_case)]
-fn vectorAdd_kernel64_ptx() {
-    let vector_add = include_str!("vectorAdd_kernel64.ptx");
-    parse_and_assert(vector_add);
+fn empty() {
+    parse_and_assert(".version 6.5 .target sm_30, debug");
 }
 
 #[test]
@@ -28,8 +28,14 @@ fn operands_ptx() {
 
 #[test]
 #[allow(non_snake_case)]
-fn _Z9vectorAddPKfS0_Pfi_ptx() {
-    let vector_add = include_str!("_Z9vectorAddPKfS0_Pfi.ptx");
-    parse_and_assert(vector_add);
+fn vectorAdd_kernel64_ptx() -> Result<(), rspirv::dr::Error> {
+    let vector_add = include_str!("vectorAdd_kernel64.ptx");
+    compile_and_assert(vector_add)
 }
 
+#[test]
+#[allow(non_snake_case)]
+fn _Z9vectorAddPKfS0_Pfi_ptx() -> Result<(), rspirv::dr::Error> {
+    let vector_add = include_str!("_Z9vectorAddPKfS0_Pfi.ptx");
+    compile_and_assert(vector_add)
+}

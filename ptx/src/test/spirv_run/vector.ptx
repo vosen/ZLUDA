@@ -1,0 +1,44 @@
+// Excersise as many features of vector types as possible
+
+.version 6.5
+.target sm_53
+.address_size 64
+
+.func (.reg .v2 .u32 output) impl(
+    .reg .v2 .u32 input
+)
+{
+    .reg .v2 .u32   temp_v;
+    .reg .u32       temp1;
+    .reg .u32       temp2;
+
+    mov.u32       temp1, input.x;
+    mov.u32       temp2, input.y;
+    add.u32       temp2, temp1, temp2;
+    mov.u32       temp_v.x, temp2;
+    mov.u32       temp_v.y, temp2;
+    mov.v2.u32    output, temp_v;
+    ret;
+}
+
+.visible .entry vector(
+    .param .u64 input_p,
+    .param .u64 output_p
+)
+{
+    .reg .u64       in_addr;
+    .reg .u64       out_addr;
+    .reg .v2 .u32   temp;
+    .reg .u32       temp1;
+    .reg .u32       temp2;
+    .reg .b64       packed;
+
+    ld.param.u64    in_addr, [input_p];
+    ld.param.u64    out_addr, [output_p];
+
+    ld.v2.u32     temp, [in_addr];
+    call (temp),  impl, (temp);
+    mov.b64       packed, temp;
+    st.v2.u32     [out_addr], temp;
+    ret;
+}

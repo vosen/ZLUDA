@@ -54,6 +54,7 @@ test_ptx!(cvta, [3.0f32], [3.0f32]);
 test_ptx!(block, [1u64], [2u64]);
 test_ptx!(local_align, [1u64], [1u64]);
 test_ptx!(call, [1u64], [2u64]);
+test_ptx!(vector, [1u32, 2u32], [3u32, 3u32]);
 
 struct DisplayError<T: Debug> {
     err: T,
