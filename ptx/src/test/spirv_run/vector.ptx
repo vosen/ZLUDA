@@ -1,7 +1,7 @@
 // Excersise as many features of vector types as possible
 
 .version 6.5
-.target sm_53
+.target sm_60
 .address_size 64
 
 .func (.reg .v2 .u32 output) impl(
@@ -17,6 +17,7 @@
     add.u32       temp2, temp1, temp2;
     mov.u32       temp_v.x, temp2;
     mov.u32       temp_v.y, temp2;
+    mov.u32       temp_v.x, temp_v.y;
     mov.v2.u32    output, temp_v;
     ret;
 }

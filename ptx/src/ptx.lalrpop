@@ -1,8 +1,12 @@
 use crate::ast;
 use crate::ast::UnwrapWithVec;
-use crate::without_none;
+use crate::{without_none, vector_index};
 
 grammar<'a>(errors: &mut Vec<ast::PtxError>);
+
+extern {
+    type Error = ast::PtxError;
+}
 
 match {
     r"\s+" => { },
@@ -487,24 +491,49 @@ LdCacheOperator: ast::LdCacheOperator = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
 InstMov: ast::Instruction<ast::ParsedArgParams<'input>> = {
-    "mov" <t:MovType> <a:Arg2Mov> => {
-        ast::Instruction::Mov(ast::MovData{ typ:t }, a)
+    "mov" <t:MovType> <a:Arg2> => {
+        ast::Instruction::Mov(t, a)
+    },
+    "mov" <t:MovVectorType> <a:Arg2Vec> => {
+        ast::Instruction::MovVector(t, a)
     }
 };
 
-MovType: ast::Type = {
-    ".b16" => ast::Type::Scalar(ast::ScalarType::B16),
-    ".b32" => ast::Type::Scalar(ast::ScalarType::B32),
-    ".b64" => ast::Type::Scalar(ast::ScalarType::B64),
-    ".u16" => ast::Type::Scalar(ast::ScalarType::U16),
-    ".u32" => ast::Type::Scalar(ast::ScalarType::U32),
-    ".u64" => ast::Type::Scalar(ast::ScalarType::U64),
-    ".s16" => ast::Type::Scalar(ast::ScalarType::S16),
-    ".s32" => ast::Type::Scalar(ast::ScalarType::S32),
-    ".s64" => ast::Type::Scalar(ast::ScalarType::S64),
-    ".f32" => ast::Type::Scalar(ast::ScalarType::F32),
-    ".f64" => ast::Type::Scalar(ast::ScalarType::F64),
-    ".pred" => ast::Type::Scalar(ast::ScalarType::Pred)
+#[inline]
+MovType: ast::MovType = {
+    <t:MovScalarType> => ast::MovType::Scalar(t),
+    <pref:VectorPrefix> <t:MovVectorType> => ast::MovType::Vector(t, pref)
+}
+
+#[inline]
+MovScalarType: ast::MovScalarType = {
+    ".b16" => ast::MovScalarType::B16,
+    ".b32" => ast::MovScalarType::B32,
+    ".b64" => ast::MovScalarType::B64,
+    ".u16" => ast::MovScalarType::U16,
+    ".u32" => ast::MovScalarType::U32,
+    ".u64" => ast::MovScalarType::U64,
+    ".s16" => ast::MovScalarType::S16,
+    ".s32" => ast::MovScalarType::S32,
+    ".s64" => ast::MovScalarType::S64,
+    ".f32" => ast::MovScalarType::F32,
+    ".f64" => ast::MovScalarType::F64,
+    ".pred" => ast::MovScalarType::Pred
+};
+
+#[inline]
+MovVectorType: ast::MovVectorType = {
+    ".b16" => ast::MovVectorType::B16,
+    ".b32" => ast::MovVectorType::B32,
+    ".b64" => ast::MovVectorType::B64,
+    ".u16" => ast::MovVectorType::U16,
+    ".u32" => ast::MovVectorType::U32,
+    ".u64" => ast::MovVectorType::U64,
+    ".s16" => ast::MovVectorType::S16,
+    ".s32" => ast::MovVectorType::S32,
+    ".s64" => ast::MovVectorType::S64,
+    ".f32" => ast::MovVectorType::F32,
+    ".f64" => ast::MovVectorType::F64,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-mul
@@ -989,29 +1018,6 @@ CallOperand: ast::CallOperand<&'input str> = {
     }
 };
 
-MovOperand: ast::MovOperand<&'input str> = {
-    <o:Operand> => ast::MovOperand::Op(o),
-    <o:VectorOperand> => {
-        let (pref, suf) = o;
-        let suf_idx = match suf {
-            "x" | "r" => 0,
-            "y" | "g" => 1,
-            "z" | "b" => 2,
-            "w" | "a" => 3,
-            _ => {
-                errors.push(ast::PtxError::WrongVectorElement);
-                0
-            }
-        };
-        ast::MovOperand::Vec(pref, suf_idx)
-    }
-};
-
-VectorOperand: (&'input str, &'input str) = {
-    <pref:ExtendedID> "." <suf:ExtendedID> => (pref, suf),
-    <pref:ExtendedID> <suf:DotID> => (pref, &suf[1..]),
-};
-
 Arg1: ast::Arg1<ast::ParsedArgParams<'input>> = {
     <src:ExtendedID> => ast::Arg1{<>}
 };
@@ -1020,8 +1026,21 @@ Arg2: ast::Arg2<ast::ParsedArgParams<'input>> = {
     <dst:ExtendedID> "," <src:Operand> => ast::Arg2{<>}
 };
 
-Arg2Mov: ast::Arg2Mov<ast::ParsedArgParams<'input>> = {
-    <dst:ExtendedID> "," <src:MovOperand> => ast::Arg2Mov{<>}
+Arg2Vec: ast::Arg2Vec<ast::ParsedArgParams<'input>> = {
+    <dst:VectorOperand> "," <src:ExtendedID> => ast::Arg2Vec::Dst(dst, src),
+    <dst:ExtendedID> "," <src:VectorOperand> => ast::Arg2Vec::Src(dst, src),
+    <dst:VectorOperand> "," <src:VectorOperand> => ast::Arg2Vec::Both(dst, src),
+};
+
+VectorOperand: (&'input str, u8) = {
+    <pref:ExtendedID> "." <suf:ExtendedID> =>? {
+        let suf_idx = vector_index(suf)?;
+        Ok((pref, suf_idx))
+    },
+    <pref:ExtendedID> <suf:DotID>  =>? {
+        let suf_idx = vector_index(&suf[1..])?;
+        Ok((pref, suf_idx))
+    }
 };
 
 Arg3: ast::Arg3<ast::ParsedArgParams<'input>> = {

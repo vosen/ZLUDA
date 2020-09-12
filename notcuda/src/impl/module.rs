@@ -8,7 +8,7 @@ pub struct Module {
 pub enum ModuleCompileError<'a> {
     Parse(
         Vec<ptx::ast::PtxError>,
-        Option<ptx::ParseError<usize, ptx::Token<'a>, &'a str>>,
+        Option<ptx::ParseError<usize, ptx::Token<'a>, ptx::ast::PtxError>>,
     ),
     Compile(ptx::SpirvError),
 }

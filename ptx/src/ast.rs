@@ -316,7 +316,8 @@ pub struct PredAt<ID> {
 
 pub enum Instruction<P: ArgParams> {
     Ld(LdData, Arg2<P>),
-    Mov(MovData, Arg2Mov<P>),
+    Mov(MovType, Arg2<P>),
+    MovVector(MovVectorType, Arg2Vec<P>),
     Mul(MulDetails, Arg3<P>),
     Add(AddDetails, Arg3<P>),
     Setp(SetpData, Arg4<P>),
@@ -348,7 +349,6 @@ pub trait ArgParams {
     type ID;
     type Operand;
     type CallOperand;
-    type MovOperand;
 }
 
 pub struct ParsedArgParams<'a> {
@@ -359,7 +359,6 @@ impl<'a> ArgParams for ParsedArgParams<'a> {
     type ID = &'a str;
     type Operand = Operand<&'a str>;
     type CallOperand = CallOperand<&'a str>;
-    type MovOperand = MovOperand<&'a str>;
 }
 
 pub struct Arg1<P: ArgParams> {
@@ -376,9 +375,10 @@ pub struct Arg2St<P: ArgParams> {
     pub src2: P::Operand,
 }
 
-pub struct Arg2Mov<P: ArgParams> {
-    pub dst: P::ID,
-    pub src: P::MovOperand,
+pub enum Arg2Vec<P: ArgParams> {
+    Dst((P::ID, u8), P::ID),
+    Src(P::ID, (P::ID, u8)),
+    Both((P::ID, u8), (P::ID, u8)),
 }
 
 pub struct Arg3<P: ArgParams> {
@@ -413,11 +413,6 @@ pub enum Operand<ID> {
 pub enum CallOperand<ID> {
     Reg(ID),
     Imm(i128),
-}
-
-pub enum MovOperand<ID> {
-    Op(Operand<ID>),
-    Vec(ID, u8),
 }
 
 pub enum VectorPrefix {
@@ -467,10 +462,6 @@ pub enum LdCacheOperator {
     Uncached,
 }
 
-pub struct MovData {
-    pub typ: Type,
-}
-
 sub_scalar_type!(MovScalarType {
     B16,
     B32,
@@ -486,19 +477,25 @@ sub_scalar_type!(MovScalarType {
     Pred,
 });
 
-enum MovType {
-    Scalar(MovScalarType),
-    Vector(MovScalarType, u8),
-    Array(MovScalarType, u32),
-}
+// pred vectors are illegal
+sub_scalar_type!(MovVectorType {
+    B16,
+    B32,
+    B64,
+    U16,
+    U32,
+    U64,
+    S16,
+    S32,
+    S64,
+    F32,
+    F64,
+});
 
-impl From<MovType> for Type {
-    fn from(t: MovType) -> Self {
-        match t {
-            MovType::Scalar(t) => Type::Scalar(t.into()),
-            MovType::Vector(t, len) => Type::Vector(t.into(), len),
-            MovType::Array(t, len) => Type::Array(t.into(), len),
-        }
+sub_type! {
+    MovType {
+        Scalar(MovScalarType),
+        Vector(MovVectorType, u8),
     }
 }
 

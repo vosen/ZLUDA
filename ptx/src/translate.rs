@@ -737,14 +737,11 @@ impl<'a, 'b> ArgumentMapVisitor<NormalizedArgParams, ExpandedArgParams>
         }
     }
 
-    fn src_mov_operand(
+    fn src_vec_operand(
         &mut self,
-        desc: ArgumentDescriptor<ast::MovOperand<spirv::Word>>,
-    ) -> spirv::Word {
-        match &desc.op {
-            ast::MovOperand::Op(opr) => self.operand(desc.new_op(*opr)),
-            ast::MovOperand::Vec(opr, _) => self.variable(desc.new_op(*opr)),
-        }
+        desc: ArgumentDescriptor<(spirv::Word, u8)>,
+    ) -> (spirv::Word, u8) {
+        (self.variable(desc.new_op(desc.op.0)), desc.op.1)
     }
 }
 
@@ -986,8 +983,9 @@ fn emit_function_body_ops(
                 }
                 // SPIR-V does not support ret as guaranteed-converged
                 ast::Instruction::Ret(_) => builder.ret()?,
-                ast::Instruction::Mov(mov, arg) => {
-                    let result_type = map.get_or_add(builder, SpirvType::from(mov.typ));
+                ast::Instruction::Mov(mov_type, arg) => {
+                    let result_type =
+                        map.get_or_add(builder, SpirvType::from(ast::Type::from(*mov_type)));
                     builder.copy_object(result_type, Some(arg.dst), arg.src)?;
                 }
                 ast::Instruction::Mul(mul, arg) => match mul {
@@ -1032,6 +1030,7 @@ fn emit_function_body_ops(
                     builder.copy_object(result_type, Some(arg.dst), arg.src)?;
                 }
                 ast::Instruction::SetpBool(_, _) => todo!(),
+                ast::Instruction::MovVector(_, _) => todo!(),
             },
             Statement::LoadVar(arg, typ) => {
                 let type_id = map.get_or_add(builder, SpirvType::from(*typ));
@@ -1751,7 +1750,6 @@ impl ast::ArgParams for NormalizedArgParams {
     type ID = spirv::Word;
     type Operand = ast::Operand<spirv::Word>;
     type CallOperand = ast::CallOperand<spirv::Word>;
-    type MovOperand = ast::MovOperand<spirv::Word>;
 }
 
 impl ArgParamsEx for NormalizedArgParams {
@@ -1768,7 +1766,6 @@ impl ast::ArgParams for ExpandedArgParams {
     type ID = spirv::Word;
     type Operand = spirv::Word;
     type CallOperand = spirv::Word;
-    type MovOperand = spirv::Word;
 }
 
 impl ArgParamsEx for ExpandedArgParams {
@@ -1781,7 +1778,7 @@ trait ArgumentMapVisitor<T: ArgParamsEx, U: ArgParamsEx> {
     fn variable(&mut self, desc: ArgumentDescriptor<T::ID>) -> U::ID;
     fn operand(&mut self, desc: ArgumentDescriptor<T::Operand>) -> U::Operand;
     fn src_call_operand(&mut self, desc: ArgumentDescriptor<T::CallOperand>) -> U::CallOperand;
-    fn src_mov_operand(&mut self, desc: ArgumentDescriptor<T::MovOperand>) -> U::MovOperand;
+    fn src_vec_operand(&mut self, desc: ArgumentDescriptor<(T::ID, u8)>) -> (U::ID, u8);
 }
 
 impl<T> ArgumentMapVisitor<ExpandedArgParams, ExpandedArgParams> for T
@@ -1794,12 +1791,14 @@ where
     fn operand(&mut self, desc: ArgumentDescriptor<spirv::Word>) -> spirv::Word {
         self(desc)
     }
-    fn src_call_operand(&mut self, mut desc: ArgumentDescriptor<spirv::Word>) -> spirv::Word {
-        desc.op = self(desc.new_op(desc.op));
-        desc.op
+    fn src_call_operand(&mut self, desc: ArgumentDescriptor<spirv::Word>) -> spirv::Word {
+        self(desc.new_op(desc.op))
     }
-    fn src_mov_operand(&mut self, desc: ArgumentDescriptor<spirv::Word>) -> spirv::Word {
-        self(desc)
+    fn src_vec_operand(
+        &mut self,
+        desc: ArgumentDescriptor<(spirv::Word, u8)>,
+    ) -> (spirv::Word, u8) {
+        (self(desc.new_op(desc.op.0)), desc.op.1)
     }
 }
 
@@ -1832,16 +1831,8 @@ where
         }
     }
 
-    fn src_mov_operand(
-        &mut self,
-        desc: ArgumentDescriptor<ast::MovOperand<&str>>,
-    ) -> ast::MovOperand<spirv::Word> {
-        match desc.op {
-            ast::MovOperand::Op(op) => ast::MovOperand::Op(self.operand(desc.new_op(op))),
-            ast::MovOperand::Vec(reg, x2) => {
-                ast::MovOperand::Vec(self.variable(desc.new_op(reg)), x2)
-            }
-        }
+    fn src_vec_operand(&mut self, desc: ArgumentDescriptor<(&str, u8)>) -> (spirv::Word, u8) {
+        (self(desc.op.0), desc.op.1)
     }
 }
 
@@ -1869,6 +1860,7 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
         visitor: &mut V,
     ) -> ast::Instruction<U> {
         match self {
+            ast::Instruction::MovVector(_, _) => todo!(),
             ast::Instruction::Abs(_, _) => todo!(),
             ast::Instruction::Call(_) => unreachable!(),
             ast::Instruction::Ld(d, a) => {
@@ -1879,9 +1871,8 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
                     a.map_ld(visitor, Some(ast::Type::Scalar(inst_type)), src_is_pointer),
                 )
             }
-            ast::Instruction::Mov(d, a) => {
-                let inst_type = d.typ;
-                ast::Instruction::Mov(d, a.map(visitor, Some(inst_type)))
+            ast::Instruction::Mov(mov_type, a) => {
+                ast::Instruction::Mov(mov_type, a.map(visitor, Some(mov_type.into())))
             }
             ast::Instruction::Mul(d, a) => {
                 let inst_type = d.get_type();
@@ -1982,19 +1973,11 @@ where
         }
     }
 
-    fn src_mov_operand(
+    fn src_vec_operand(
         &mut self,
-        desc: ArgumentDescriptor<ast::MovOperand<spirv::Word>>,
-    ) -> ast::MovOperand<spirv::Word> {
-        match desc.op {
-            ast::MovOperand::Op(op) => ast::MovOperand::Op(ArgumentMapVisitor::<
-                NormalizedArgParams,
-                NormalizedArgParams,
-            >::operand(
-                self, desc.new_op(op)
-            )),
-            ast::MovOperand::Vec(x1, x2) => ast::MovOperand::Vec(x1, x2),
-        }
+        desc: ArgumentDescriptor<(spirv::Word, u8)>,
+    ) -> (spirv::Word, u8) {
+        (self(desc.new_op(desc.op.0)), desc.op.1)
     }
 }
 
@@ -2004,6 +1987,7 @@ impl ast::Instruction<ExpandedArgParams> {
             ast::Instruction::Bra(_, a) => Some(a.src),
             ast::Instruction::Ld(_, _)
             | ast::Instruction::Mov(_, _)
+            | ast::Instruction::MovVector(_, _)
             | ast::Instruction::Mul(_, _)
             | ast::Instruction::Add(_, _)
             | ast::Instruction::Setp(_, _)
@@ -2201,25 +2185,55 @@ impl<T: ArgParamsEx> ast::Arg2St<T> {
     }
 }
 
-impl<T: ArgParamsEx> ast::Arg2Mov<T> {
+impl<T: ArgParamsEx> ast::Arg2Vec<T> {
     fn map<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
         self,
         visitor: &mut V,
-        t: Option<ast::Type>,
-    ) -> ast::Arg2Mov<U> {
-        ast::Arg2Mov {
-            dst: visitor.variable(ArgumentDescriptor {
-                op: self.dst,
-                typ: t,
-                is_dst: true,
-                is_pointer: false,
-            }),
-            src: visitor.src_mov_operand(ArgumentDescriptor {
-                op: self.src,
-                typ: t,
-                is_dst: false,
-                is_pointer: false,
-            }),
+        t: ast::Type,
+    ) -> ast::Arg2Vec<U> {
+        match self {
+            ast::Arg2Vec::Dst(dst, src) => ast::Arg2Vec::Dst(
+                visitor.src_vec_operand(ArgumentDescriptor {
+                    op: dst,
+                    typ: Some(t),
+                    is_dst: true,
+                    is_pointer: false,
+                }),
+                visitor.variable(ArgumentDescriptor {
+                    op: src,
+                    typ: Some(t),
+                    is_dst: false,
+                    is_pointer: false,
+                }),
+            ),
+            ast::Arg2Vec::Src(dst, src) => ast::Arg2Vec::Src (
+                visitor.variable(ArgumentDescriptor {
+                    op: dst,
+                    typ: Some(t),
+                    is_dst: true,
+                    is_pointer: false,
+                }),
+                visitor.src_vec_operand(ArgumentDescriptor {
+                    op: src,
+                    typ: Some(t),
+                    is_dst: false,
+                    is_pointer: false,
+                }),
+            ),
+            ast::Arg2Vec::Both(dst, src) => ast::Arg2Vec::Both (
+                visitor.src_vec_operand(ArgumentDescriptor {
+                    op: dst,
+                    typ: Some(t),
+                    is_dst: true,
+                    is_pointer: false,
+                }),
+                visitor.src_vec_operand(ArgumentDescriptor {
+                    op: src,
+                    typ: Some(t),
+                    is_dst: false,
+                    is_pointer: false,
+                }),
+            ),
         }
     }
 }
