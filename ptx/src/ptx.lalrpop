@@ -269,10 +269,10 @@ ScalarType: ast::ScalarType = {
     ".f16" => ast::ScalarType::F16,
     ".f16x2" => ast::ScalarType::F16x2,
     ".pred" => ast::ScalarType::Pred,
-    MemoryType
+    LdStScalarType
 };
 
-MemoryType: ast::ScalarType = {
+LdStScalarType: ast::ScalarType = {
     ".b8" => ast::ScalarType::B8,
     ".b16" => ast::ScalarType::B16,
     ".b32" => ast::ScalarType::B32,
@@ -446,19 +446,23 @@ Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
 InstLd: ast::Instruction<ast::ParsedArgParams<'input>> = {
-    "ld" <q:LdStQualifier?> <ss:LdStateSpace?> <cop:LdCacheOperator?> <v:VectorPrefix?> <t:MemoryType> <dst:ExtendedID> "," "[" <src:Operand> "]" => {
+    "ld" <q:LdStQualifier?> <ss:LdStateSpace?> <cop:LdCacheOperator?> <t:LdStType> <dst:ExtendedID> "," "[" <src:Operand> "]" => {
         ast::Instruction::Ld(
             ast::LdData {
                 qualifier: q.unwrap_or(ast::LdStQualifier::Weak),
                 state_space: ss.unwrap_or(ast::LdStateSpace::Generic),
                 caching: cop.unwrap_or(ast::LdCacheOperator::Cached),
-                vector: v,
                 typ: t
             },
             ast::Arg2 { dst:dst, src:src }
         )
     }
 };
+
+LdStType: ast::Type = {
+    <v:VectorPrefix> <t:LdStScalarType> => ast::Type::Vector(t, v),
+    <t:LdStScalarType> => ast::Type::Scalar(t),
+}
 
 LdStQualifier: ast::LdStQualifier = {
     ".weak" => ast::LdStQualifier::Weak,
@@ -895,13 +899,12 @@ ShlType: ast::ShlType = {
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-st
 // Warning: NVIDIA documentation is incorrect, you can specify scope only once
 InstSt: ast::Instruction<ast::ParsedArgParams<'input>> = {
-    "st" <q:LdStQualifier?> <ss:StStateSpace?> <cop:StCacheOperator?> <v:VectorPrefix?> <t:MemoryType> "[" <src1:Operand> "]" "," <src2:Operand> => {
+    "st" <q:LdStQualifier?> <ss:StStateSpace?> <cop:StCacheOperator?> <t:LdStType> "[" <src1:Operand> "]" "," <src2:Operand> => {
         ast::Instruction::St(
             ast::StData {
                 qualifier: q.unwrap_or(ast::LdStQualifier::Weak),
                 state_space: ss.unwrap_or(ast::StStateSpace::Generic),
                 caching: cop.unwrap_or(ast::StCacheOperator::Writeback),
-                vector: v,
                 typ: t
             },
             ast::Arg2St { src1:src1, src2:src2 }

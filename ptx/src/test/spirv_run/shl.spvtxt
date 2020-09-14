@@ -4,20 +4,20 @@
                OpCapability Kernel
                OpCapability Int64
                OpCapability Int8
-         %25 = OpExtInstImport "OpenCL.std"
+         %27 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
                OpEntryPoint Kernel %1 "shl"
        %void = OpTypeVoid
       %ulong = OpTypeInt 64 0
-         %28 = OpTypeFunction %void %ulong %ulong
+         %30 = OpTypeFunction %void %ulong %ulong
 %_ptr_Function_ulong = OpTypePointer Function %ulong
 %_ptr_Generic_ulong = OpTypePointer Generic %ulong
        %uint = OpTypeInt 32 0
      %uint_2 = OpConstant %uint 2
-          %1 = OpFunction %void None %28
+          %1 = OpFunction %void None %30
           %8 = OpFunctionParameter %ulong
           %9 = OpFunctionParameter %ulong
-         %23 = OpLabel
+         %25 = OpLabel
           %2 = OpVariable %_ptr_Function_ulong Function
           %3 = OpVariable %_ptr_Function_ulong Function
           %4 = OpVariable %_ptr_Function_ulong Function
@@ -37,11 +37,13 @@
          %14 = OpLoad %ulong %21
                OpStore %6 %14
          %17 = OpLoad %ulong %6
-         %16 = OpShiftLeftLogical %ulong %17 %uint_2
+         %23 = OpCopyObject %ulong %17
+         %22 = OpShiftLeftLogical %ulong %23 %uint_2
+         %16 = OpCopyObject %ulong %22
                OpStore %7 %16
          %18 = OpLoad %ulong %5
          %19 = OpLoad %ulong %7
-         %22 = OpConvertUToPtr %_ptr_Generic_ulong %18
-               OpStore %22 %19
+         %24 = OpConvertUToPtr %_ptr_Generic_ulong %18
+               OpStore %24 %19
                OpReturn
                OpFunctionEnd

@@ -349,6 +349,7 @@ pub trait ArgParams {
     type ID;
     type Operand;
     type CallOperand;
+    type VecOperand;
 }
 
 pub struct ParsedArgParams<'a> {
@@ -359,6 +360,7 @@ impl<'a> ArgParams for ParsedArgParams<'a> {
     type ID = &'a str;
     type Operand = Operand<&'a str>;
     type CallOperand = CallOperand<&'a str>;
+    type VecOperand = (&'a str, u8);
 }
 
 pub struct Arg1<P: ArgParams> {
@@ -376,9 +378,9 @@ pub struct Arg2St<P: ArgParams> {
 }
 
 pub enum Arg2Vec<P: ArgParams> {
-    Dst((P::ID, u8), P::ID),
-    Src(P::ID, (P::ID, u8)),
-    Both((P::ID, u8), (P::ID, u8)),
+    Dst(P::VecOperand, P::ID),
+    Src(P::ID, P::VecOperand),
+    Both(P::VecOperand, P::VecOperand),
 }
 
 pub struct Arg3<P: ArgParams> {
@@ -424,8 +426,7 @@ pub struct LdData {
     pub qualifier: LdStQualifier,
     pub state_space: LdStateSpace,
     pub caching: LdCacheOperator,
-    pub vector: Option<u8>,
-    pub typ: ScalarType,
+    pub typ: Type,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -710,8 +711,7 @@ pub struct StData {
     pub qualifier: LdStQualifier,
     pub state_space: StStateSpace,
     pub caching: StCacheOperator,
-    pub vector: Option<u8>,
-    pub typ: ScalarType,
+    pub typ: Type,
 }
 
 #[derive(PartialEq, Eq, Copy, Clone)]

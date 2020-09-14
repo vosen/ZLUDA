@@ -4,43 +4,92 @@
                OpCapability Kernel
                OpCapability Int64
                OpCapability Int8
-         %25 = OpExtInstImport "OpenCL.std"
+         %58 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
-               OpEntryPoint Kernel %1 "add"
+               OpEntryPoint Kernel %31 "vector"
        %void = OpTypeVoid
+       %uint = OpTypeInt 32 0
+     %v2uint = OpTypeVector %uint 2
+         %62 = OpTypeFunction %v2uint %v2uint
+%_ptr_Function_v2uint = OpTypePointer Function %v2uint
+%_ptr_Function_uint = OpTypePointer Function %uint
       %ulong = OpTypeInt 64 0
-         %28 = OpTypeFunction %void %ulong %ulong
+         %66 = OpTypeFunction %void %ulong %ulong
 %_ptr_Function_ulong = OpTypePointer Function %ulong
-%_ptr_Generic_ulong = OpTypePointer Generic %ulong
-    %ulong_1 = OpConstant %ulong 1
-          %1 = OpFunction %void None %28
-          %8 = OpFunctionParameter %ulong
-          %9 = OpFunctionParameter %ulong
-         %23 = OpLabel
-          %2 = OpVariable %_ptr_Function_ulong Function
-          %3 = OpVariable %_ptr_Function_ulong Function
-          %4 = OpVariable %_ptr_Function_ulong Function
-          %5 = OpVariable %_ptr_Function_ulong Function
-          %6 = OpVariable %_ptr_Function_ulong Function
-          %7 = OpVariable %_ptr_Function_ulong Function
-               OpStore %2 %8
-               OpStore %3 %9
-         %11 = OpLoad %ulong %2
-         %10 = OpCopyObject %ulong %11
-               OpStore %4 %10
-         %13 = OpLoad %ulong %3
-         %12 = OpCopyObject %ulong %13
-               OpStore %5 %12
-         %15 = OpLoad %ulong %4
-         %21 = OpConvertUToPtr %_ptr_Generic_ulong %15
-         %14 = OpLoad %ulong %21
-               OpStore %6 %14
-         %17 = OpLoad %ulong %6
-         %16 = OpIAdd %ulong %17 %ulong_1
-               OpStore %7 %16
-         %18 = OpLoad %ulong %5
-         %19 = OpLoad %ulong %7
-         %22 = OpConvertUToPtr %_ptr_Generic_ulong %18
-               OpStore %22 %19
+%_ptr_Generic_v2uint = OpTypePointer Generic %v2uint
+          %1 = OpFunction %v2uint None %62
+          %7 = OpFunctionParameter %v2uint
+         %30 = OpLabel
+          %3 = OpVariable %_ptr_Function_v2uint Function
+          %2 = OpVariable %_ptr_Function_v2uint Function
+          %4 = OpVariable %_ptr_Function_v2uint Function
+          %5 = OpVariable %_ptr_Function_uint Function
+          %6 = OpVariable %_ptr_Function_uint Function
+               OpStore %3 %7
+          %9 = OpLoad %v2uint %3
+         %24 = OpCompositeExtract %uint %9 0
+          %8 = OpCopyObject %uint %24
+               OpStore %5 %8
+         %11 = OpLoad %v2uint %3
+         %25 = OpCompositeExtract %uint %11 1
+         %10 = OpCopyObject %uint %25
+               OpStore %6 %10
+         %13 = OpLoad %uint %5
+         %14 = OpLoad %uint %6
+         %12 = OpIAdd %uint %13 %14
+               OpStore %6 %12
+         %16 = OpLoad %uint %6
+         %26 = OpCopyObject %uint %16
+         %15 = OpCompositeInsert %uint %26 %15 0
+               OpStore %4 %15
+         %18 = OpLoad %uint %6
+         %27 = OpCopyObject %uint %18
+         %17 = OpCompositeInsert %uint %27 %17 1
+               OpStore %4 %17
+         %20 = OpLoad %v2uint %4
+         %29 = OpCompositeExtract %uint %20 1
+         %28 = OpCopyObject %uint %29
+         %19 = OpCompositeInsert %uint %28 %19 0
+               OpStore %4 %19
+         %22 = OpLoad %v2uint %4
+         %21 = OpCopyObject %v2uint %22
+               OpStore %2 %21
+         %23 = OpLoad %v2uint %2
+               OpReturnValue %23
+               OpFunctionEnd
+         %31 = OpFunction %void None %66
+         %40 = OpFunctionParameter %ulong
+         %41 = OpFunctionParameter %ulong
+         %56 = OpLabel
+         %32 = OpVariable %_ptr_Function_ulong Function
+         %33 = OpVariable %_ptr_Function_ulong Function
+         %34 = OpVariable %_ptr_Function_ulong Function
+         %35 = OpVariable %_ptr_Function_ulong Function
+         %36 = OpVariable %_ptr_Function_v2uint Function
+         %37 = OpVariable %_ptr_Function_uint Function
+         %38 = OpVariable %_ptr_Function_uint Function
+         %39 = OpVariable %_ptr_Function_ulong Function
+               OpStore %32 %40
+               OpStore %33 %41
+         %43 = OpLoad %ulong %32
+         %42 = OpCopyObject %ulong %43
+               OpStore %34 %42
+         %45 = OpLoad %ulong %33
+         %44 = OpCopyObject %ulong %45
+               OpStore %35 %44
+         %47 = OpLoad %ulong %34
+         %54 = OpConvertUToPtr %_ptr_Generic_v2uint %47
+         %46 = OpLoad %v2uint %54
+               OpStore %36 %46
+         %49 = OpLoad %v2uint %36
+         %48 = OpFunctionCall %v2uint %1 %49
+               OpStore %36 %48
+         %51 = OpLoad %v2uint %36
+         %50 = OpCopyObject %ulong %51
+               OpStore %39 %50
+         %52 = OpLoad %ulong %35
+         %53 = OpLoad %v2uint %36
+         %55 = OpConvertUToPtr %_ptr_Generic_v2uint %52
+               OpStore %55 %53
                OpReturn
                OpFunctionEnd

@@ -8,10 +8,12 @@ use spirv_headers::Word;
 use spirv_tools_sys::{
     spv_binary, spv_endianness_t, spv_parsed_instruction_t, spv_result_t, spv_target_env,
 };
+use std::collections::hash_map::Entry;
 use std::error;
 use std::ffi::{c_void, CStr, CString};
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
+use std::hash::Hash;
 use std::mem;
 use std::slice;
 use std::{borrow::Cow, collections::HashMap, env, fs, path::PathBuf, ptr, str};
@@ -41,6 +43,7 @@ macro_rules! test_ptx {
 }
 
 test_ptx!(ld_st, [1u64], [1u64]);
+test_ptx!(ld_st_implicit, [0.5f32], [0.5f32]);
 test_ptx!(mov, [1u64], [1u64]);
 test_ptx!(mul_lo, [1u64], [2u64]);
 test_ptx!(mul_hi, [u64::max_value()], [1u64]);
@@ -214,14 +217,45 @@ fn test_spvtxt_assert<'a>(
                 }
             }
         }
-        panic!(spirv_text);
+        panic!(spirv_text.to_string());
     }
     unsafe { spirv_tools::spvContextDestroy(spv_context) };
     Ok(())
 }
 
+struct EqMap<T>
+where
+    T: Eq + Copy + Hash,
+{
+    m1: HashMap<T, T>,
+    m2: HashMap<T, T>,
+}
+
+impl<T: Copy + Eq + Hash> EqMap<T> {
+    fn new() -> Self {
+        EqMap {
+            m1: HashMap::new(),
+            m2: HashMap::new(),
+        }
+    }
+
+    fn is_equal(&mut self, t1: T, t2: T) -> bool {
+        match (self.m1.entry(t1), self.m2.entry(t2)) {
+            (Entry::Occupied(entry1), Entry::Occupied(entry2)) => {
+                *entry1.get() == t2 && *entry2.get() == t1
+            }
+            (Entry::Vacant(entry1), Entry::Vacant(entry2)) => {
+                entry1.insert(t2);
+                entry2.insert(t1);
+                true
+            }
+            _ => false,
+        }
+    }
+}
+
 fn is_spirv_fn_equal(fn1: &Function, fn2: &Function) -> bool {
-    let mut map = HashMap::new();
+    let mut map = EqMap::new();
     if !is_option_equal(&fn1.def, &fn2.def, &mut map, is_instr_equal) {
         return false;
     }
@@ -247,7 +281,7 @@ fn is_spirv_fn_equal(fn1: &Function, fn2: &Function) -> bool {
     true
 }
 
-fn is_block_equal(b1: &Block, b2: &Block, map: &mut HashMap<Word, Word>) -> bool {
+fn is_block_equal(b1: &Block, b2: &Block, map: &mut EqMap<Word>) -> bool {
     if !is_option_equal(&b1.label, &b2.label, map, is_instr_equal) {
         return false;
     }
@@ -262,11 +296,7 @@ fn is_block_equal(b1: &Block, b2: &Block, map: &mut HashMap<Word, Word>) -> bool
     true
 }
 
-fn is_instr_equal(
-    instr1: &Instruction,
-    instr2: &Instruction,
-    map: &mut HashMap<Word, Word>,
-) -> bool {
+fn is_instr_equal(instr1: &Instruction, instr2: &Instruction, map: &mut EqMap<Word>) -> bool {
     if instr1.class.opcode != instr2.class.opcode {
         return false;
     }
@@ -306,24 +336,14 @@ fn is_instr_equal(
     true
 }
 
-fn is_word_equal(w1: &Word, w2: &Word, map: &mut HashMap<Word, Word>) -> bool {
-    match map.entry(*w1) {
-        std::collections::hash_map::Entry::Occupied(entry) => {
-            if entry.get() != w2 {
-                return false;
-            }
-        }
-        std::collections::hash_map::Entry::Vacant(entry) => {
-            entry.insert(*w2);
-        }
-    }
-    true
+fn is_word_equal(t1: &Word, t2: &Word, map: &mut EqMap<Word>) -> bool {
+    map.is_equal(*t1, *t2)
 }
 
-fn is_option_equal<T, F: FnOnce(&T, &T, &mut HashMap<Word, Word>) -> bool>(
+fn is_option_equal<T, F: FnOnce(&T, &T, &mut EqMap<Word>) -> bool>(
     o1: &Option<T>,
     o2: &Option<T>,
-    map: &mut HashMap<Word, Word>,
+    map: &mut EqMap<Word>,
     f: F,
 ) -> bool {
     match (o1, o2) {
