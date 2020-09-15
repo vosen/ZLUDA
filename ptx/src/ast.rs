@@ -338,6 +338,7 @@ pub struct MovVectorDetails {
     pub typ: MovVectorType,
     pub length: u8,
 }
+#[derive(Copy, Clone)]
 pub struct AbsDetails {
     pub flush_to_zero: bool,
     pub typ: ScalarType,
