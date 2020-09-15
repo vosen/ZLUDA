@@ -317,7 +317,7 @@ pub struct PredAt<ID> {
 pub enum Instruction<P: ArgParams> {
     Ld(LdData, Arg2<P>),
     Mov(MovType, Arg2<P>),
-    MovVector(MovVectorType, Arg2Vec<P>),
+    MovVector(MovVectorDetails, Arg2Vec<P>),
     Mul(MulDetails, Arg3<P>),
     Add(AddDetails, Arg3<P>),
     Setp(SetpData, Arg4<P>),
@@ -333,6 +333,11 @@ pub enum Instruction<P: ArgParams> {
     Abs(AbsDetails, Arg2<P>),
 }
 
+#[derive(Copy, Clone)]
+pub struct MovVectorDetails {
+    pub typ: MovVectorType,
+    pub length: u8,
+}
 pub struct AbsDetails {
     pub flush_to_zero: bool,
     pub typ: ScalarType,
@@ -377,10 +382,12 @@ pub struct Arg2St<P: ArgParams> {
     pub src2: P::Operand,
 }
 
+// We duplicate dst here because during further compilation
+// composite dst and composite src will receive different ids
 pub enum Arg2Vec<P: ArgParams> {
-    Dst(P::VecOperand, P::ID),
+    Dst((P::ID, u8), P::ID, P::ID),
     Src(P::ID, P::VecOperand),
-    Both(P::VecOperand, P::VecOperand),
+    Both((P::ID, u8), P::ID, P::VecOperand),
 }
 
 pub struct Arg3<P: ArgParams> {

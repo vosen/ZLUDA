@@ -499,7 +499,7 @@ InstMov: ast::Instruction<ast::ParsedArgParams<'input>> = {
         ast::Instruction::Mov(t, a)
     },
     "mov" <t:MovVectorType> <a:Arg2Vec> => {
-        ast::Instruction::MovVector(t, a)
+        ast::Instruction::MovVector(ast::MovVectorDetails{typ: t, length: 0}, a)
     }
 };
 
@@ -1030,9 +1030,9 @@ Arg2: ast::Arg2<ast::ParsedArgParams<'input>> = {
 };
 
 Arg2Vec: ast::Arg2Vec<ast::ParsedArgParams<'input>> = {
-    <dst:VectorOperand> "," <src:ExtendedID> => ast::Arg2Vec::Dst(dst, src),
+    <dst:VectorOperand> "," <src:ExtendedID> => ast::Arg2Vec::Dst(dst, dst.0, src),
     <dst:ExtendedID> "," <src:VectorOperand> => ast::Arg2Vec::Src(dst, src),
-    <dst:VectorOperand> "," <src:VectorOperand> => ast::Arg2Vec::Both(dst, src),
+    <dst:VectorOperand> "," <src:VectorOperand> => ast::Arg2Vec::Both(dst, dst.0, src),
 };
 
 VectorOperand: (&'input str, u8) = {
