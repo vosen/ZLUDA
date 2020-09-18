@@ -154,10 +154,11 @@ impl TypeWordMap {
             }
             SpirvType::Array(typ, len) => {
                 let base = self.get_or_add_spirv_scalar(b, typ);
-                *self
-                    .complex
-                    .entry(t)
-                    .or_insert_with(|| b.type_array(base, len))
+                let u32_type = self.get_or_add_scalar(b, ast::ScalarType::U32);
+                *self.complex.entry(t).or_insert_with(|| {
+                    let len_word = b.constant_u32(u32_type, None, len);
+                    b.type_array(base, len_word)
+                })
             }
             SpirvType::Func(ref out_params, ref in_params) => {
                 let out_t = match out_params {
@@ -350,18 +351,16 @@ fn to_ssa<'input, 'b>(
     let mut numeric_id_defs = numeric_id_defs.finish();
     let (f_args, ssa_statements) =
         insert_mem_ssa_statements(unadorned_statements, &mut numeric_id_defs, f_args)?;
-    todo!()
-    /*
-    let expanded_statements = expand_arguments(ssa_statements, &mut numeric_id_defs);
+    let expanded_statements = expand_arguments(ssa_statements, &mut numeric_id_defs)?;
     let expanded_statements =
-        insert_implicit_conversions(expanded_statements, &mut numeric_id_defs);
+        insert_implicit_conversions(expanded_statements, &mut numeric_id_defs)?;
+    let mut numeric_id_defs = numeric_id_defs.unmut();
     let labeled_statements = normalize_labels(expanded_statements, &mut numeric_id_defs);
     let sorted_statements = normalize_variable_decls(labeled_statements);
-    ExpandedFunction {
+    Ok(ExpandedFunction {
         func_directive: f_args,
         body: Some(sorted_statements),
-    }
-    */
+    })
 }
 
 fn normalize_variable_decls(mut func: Vec<ExpandedStatement>) -> Vec<ExpandedStatement> {
@@ -410,7 +409,7 @@ fn add_types_to_statements(
                     match arg.src.underlying() {
                         None => return Ok(Statement::Instruction(ast::Instruction::Ld(d, arg))),
                         Some(u) => {
-                            let (ss, typ) = id_defs.get_typed(*u)?;
+                            let (ss, _) = id_defs.get_typed(*u)?;
                             match (d.state_space, ss) {
                                 (ast::LdStateSpace::Generic, StateSpace::Local) => {
                                     d.state_space = ast::LdStateSpace::Local;
@@ -426,7 +425,7 @@ fn add_types_to_statements(
                     match arg.src1.underlying() {
                         None => return Ok(Statement::Instruction(ast::Instruction::St(d, arg))),
                         Some(u) => {
-                            let (ss, typ) = id_defs.get_typed(*u)?;
+                            let (ss, _) = id_defs.get_typed(*u)?;
                             match (d.state_space, ss) {
                                 (ast::StStateSpace::Generic, StateSpace::Local) => {
                                     d.state_space = ast::StStateSpace::Local;
@@ -440,7 +439,7 @@ fn add_types_to_statements(
                 Statement::Instruction(ast::Instruction::Mov(d, mut arg)) => {
                     arg.src = match arg.src {
                         ast::MovOperand::Reg(id) => {
-                            let (ss, typ) = id_defs.get_typed(id)?;
+                            let (ss, _) = id_defs.get_typed(id)?;
                             match ss {
                                 StateSpace::Reg => ast::MovOperand::Reg(id),
                                 StateSpace::Const
@@ -452,7 +451,7 @@ fn add_types_to_statements(
                             }
                         }
                         ast::MovOperand::RegOffset(id, imm) => {
-                            let (ss, typ) = id_defs.get_typed(id)?;
+                            let (ss, _) = id_defs.get_typed(id)?;
                             match ss {
                                 StateSpace::Reg => ast::MovOperand::RegOffset(id, imm),
                                 StateSpace::Const
@@ -469,6 +468,16 @@ fn add_types_to_statements(
                         }
                     };
                     Ok(Statement::Instruction(ast::Instruction::Mov(d, arg)))
+                }
+                Statement::Instruction(ast::Instruction::MovVector(dets, args)) => {
+                    let new_dets = match id_defs.get_typed(*args.dst())? {
+                        (_, ast::Type::Vector(_, len)) => ast::MovVectorDetails {
+                            length: len,
+                            ..dets
+                        },
+                        _ => dets,
+                    };
+                    Ok(Statement::Instruction(ast::Instruction::MovVector(new_dets, args)))
                 }
                 s => Ok(s),
             }
@@ -706,41 +715,46 @@ fn insert_mem_ssa_statement_default<'a, F: VisitVariable>(
     stmt: F,
 ) -> Result<(), TranslateError> {
     let mut post_statements = Vec::new();
-    let new_statement = stmt.visit_variable(&mut |desc: ArgumentDescriptor<spirv::Word>, _| {
-        let id_type = match (id_def.get_typed(desc.op)?, desc.sema) {
-            (t, ArgumentSemantics::ParamPtr) | (t, ArgumentSemantics::Default) => t,
-            (t, ArgumentSemantics::Ptr) => ast::Type::Scalar(ast::ScalarType::B64),
-        };
-        let generated_id = id_def.new_id(id_type);
-        if !desc.is_dst {
-            result.push(Statement::LoadVar(
-                Arg2 {
-                    dst: generated_id,
-                    src: desc.op,
-                },
-                id_type,
-            ));
-        } else {
-            post_statements.push(Statement::StoreVar(
-                Arg2St {
-                    src1: desc.op,
-                    src2: generated_id,
-                },
-                id_type,
-            ));
-        }
-        Ok(generated_id)
-    })?;
+    let new_statement =
+        stmt.visit_variable(&mut |desc: ArgumentDescriptor<spirv::Word>, instr_type| {
+            if instr_type.is_none() {
+                return Ok(desc.op);
+            }
+            let id_type = match (id_def.get_typed(desc.op)?, desc.sema) {
+                (_, ArgumentSemantics::Address) => return Ok(desc.op),
+                (t, ArgumentSemantics::RegisterPointer)
+                | (t, ArgumentSemantics::Default)
+                | (t, ArgumentSemantics::Ptr) => t,
+            };
+            let generated_id = id_def.new_id(id_type);
+            if !desc.is_dst {
+                result.push(Statement::LoadVar(
+                    Arg2 {
+                        dst: generated_id,
+                        src: desc.op,
+                    },
+                    id_type,
+                ));
+            } else {
+                post_statements.push(Statement::StoreVar(
+                    Arg2St {
+                        src1: desc.op,
+                        src2: generated_id,
+                    },
+                    id_type,
+                ));
+            }
+            Ok(generated_id)
+        })?;
     result.push(new_statement);
     result.append(&mut post_statements);
     Ok(())
 }
 
-/*
 fn expand_arguments<'a, 'b>(
     func: Vec<UnadornedStatement>,
-    id_def: &'b mut NumericIdResolver<'a>,
-) -> Vec<ExpandedStatement> {
+    id_def: &'b mut MutableNumericIdResolver<'a>,
+) -> Result<Vec<ExpandedStatement>, TranslateError> {
     let mut result = Vec::with_capacity(func.len());
     for s in func {
         match s {
@@ -752,7 +766,7 @@ fn expand_arguments<'a, 'b>(
             }
             Statement::Instruction(inst) => {
                 let mut visitor = FlattenArguments::new(&mut result, id_def);
-                let (new_inst, post_stmts) = (inst.map(&mut visitor), visitor.post_stmts);
+                let (new_inst, post_stmts) = (inst.map(&mut visitor)?, visitor.post_stmts);
                 result.push(Statement::Instruction(new_inst));
                 result.extend(post_stmts);
             }
@@ -775,18 +789,20 @@ fn expand_arguments<'a, 'b>(
             }
         }
     }
-    result
+    Ok(result)
 }
-*/
 
 struct FlattenArguments<'a, 'b> {
     func: &'b mut Vec<ExpandedStatement>,
-    id_def: &'b mut NumericIdResolver<'a>,
+    id_def: &'b mut MutableNumericIdResolver<'a>,
     post_stmts: Vec<ExpandedStatement>,
 }
 
 impl<'a, 'b> FlattenArguments<'a, 'b> {
-    fn new(func: &'b mut Vec<ExpandedStatement>, id_def: &'b mut NumericIdResolver<'a>) -> Self {
+    fn new(
+        func: &'b mut Vec<ExpandedStatement>,
+        id_def: &'b mut MutableNumericIdResolver<'a>,
+    ) -> Self {
         FlattenArguments {
             func,
             id_def,
@@ -819,9 +835,7 @@ impl<'a, 'b> ArgumentMapVisitor<NormalizedArgParams, ExpandedArgParams>
                 } else {
                     todo!()
                 };
-                let id = self
-                    .id_def
-                    .new_id(Some((StateSpace::Reg, ast::Type::Scalar(scalar_t))));
+                let id = self.id_def.new_id(ast::Type::Scalar(scalar_t));
                 self.func.push(Statement::Constant(ConstantDefinition {
                     dst: id,
                     typ: scalar_t,
@@ -836,10 +850,8 @@ impl<'a, 'b> ArgumentMapVisitor<NormalizedArgParams, ExpandedArgParams>
                     } else {
                         todo!()
                     };
-                    let id_constant_stmt = self
-                        .id_def
-                        .new_id(Some((StateSpace::Reg, ast::Type::Scalar(scalar_t))));
-                    let result_id = self.id_def.new_id(Some((StateSpace::Reg, typ)));
+                    let id_constant_stmt = self.id_def.new_id(ast::Type::Scalar(scalar_t));
+                    let result_id = self.id_def.new_id(typ);
                     self.func.push(Statement::Constant(ConstantDefinition {
                         dst: id_constant_stmt,
                         typ: scalar_t,
@@ -863,10 +875,8 @@ impl<'a, 'b> ArgumentMapVisitor<NormalizedArgParams, ExpandedArgParams>
                 }
                 ArgumentSemantics::Ptr => {
                     let scalar_t = ast::ScalarType::U64;
-                    let id_constant_stmt = self
-                        .id_def
-                        .new_id(Some((StateSpace::Reg, ast::Type::Scalar(scalar_t))));
-                    let result_id = self.id_def.new_id(Some((StateSpace::Reg, typ)));
+                    let id_constant_stmt = self.id_def.new_id(ast::Type::Scalar(scalar_t));
+                    let result_id = self.id_def.new_id(typ);
                     self.func.push(Statement::Constant(ConstantDefinition {
                         dst: id_constant_stmt,
                         typ: scalar_t,
@@ -888,12 +898,13 @@ impl<'a, 'b> ArgumentMapVisitor<NormalizedArgParams, ExpandedArgParams>
                     ));
                     Ok(result_id)
                 }
-                ArgumentSemantics::ParamPtr => {
+                ArgumentSemantics::RegisterPointer => {
                     if offset == 0 {
                         return Ok(reg);
                     }
                     todo!()
                 }
+                ArgumentSemantics::Address => todo!(),
             },
         }
     }
@@ -914,10 +925,9 @@ impl<'a, 'b> ArgumentMapVisitor<NormalizedArgParams, ExpandedArgParams>
         desc: ArgumentDescriptor<(spirv::Word, u8)>,
         (scalar_type, vec_len): (ast::MovVectorType, u8),
     ) -> Result<spirv::Word, TranslateError> {
-        let new_id = self.id_def.new_id(Some((
-            StateSpace::Reg,
-            ast::Type::Vector(scalar_type.into(), vec_len),
-        )));
+        let new_id = self
+            .id_def
+            .new_id(ast::Type::Vector(scalar_type.into(), vec_len));
         self.func.push(Statement::Composite(CompositeRead {
             typ: scalar_type,
             dst: new_id,
@@ -932,7 +942,17 @@ impl<'a, 'b> ArgumentMapVisitor<NormalizedArgParams, ExpandedArgParams>
         desc: ArgumentDescriptor<ast::MovOperand<spirv::Word>>,
         typ: ast::Type,
     ) -> Result<spirv::Word, TranslateError> {
-        todo!()
+        match desc.op {
+            ast::MovOperand::Reg(r) => self.operand(desc.new_op(ast::Operand::Reg(r)), typ),
+            ast::MovOperand::RegOffset(r, imm) => {
+                self.operand(desc.new_op(ast::Operand::RegOffset(r, imm)), typ)
+            }
+            ast::MovOperand::Imm(x) => self.operand(desc.new_op(ast::Operand::Imm(x)), typ),
+            ast::MovOperand::Address(r) => self.operand(desc.new_op(ast::Operand::Reg(r)), typ),
+            ast::MovOperand::AddressOffset(r, imm) => {
+                self.operand(desc.new_op(ast::Operand::RegOffset(r, imm)), typ)
+            }
+        }
     }
 }
 
@@ -950,26 +970,25 @@ impl<'a, 'b> ArgumentMapVisitor<NormalizedArgParams, ExpandedArgParams>
    - generic/global st: for instruction `st [x], y`, x must be of type
      b64/u64/s64, which is bitcast to a pointer
 */
-/*
 fn insert_implicit_conversions(
     func: Vec<ExpandedStatement>,
     id_def: &mut MutableNumericIdResolver,
-) -> Vec<ExpandedStatement> {
+) -> Result<Vec<ExpandedStatement>, TranslateError> {
     let mut result = Vec::with_capacity(func.len());
     for s in func.into_iter() {
         match s {
-            Statement::Call(call) => insert_implicit_bitcasts(&mut result, id_def, call),
+            Statement::Call(call) => insert_implicit_bitcasts(&mut result, id_def, call)?,
             Statement::Instruction(inst) => match inst {
                 ast::Instruction::Ld(ld, arg) => {
                     let pre_conv =
-                        get_implicit_conversions_ld_src(id_def, ld.typ, ld.state_space, arg.src);
+                        get_implicit_conversions_ld_src(id_def, ld.typ, ld.state_space, arg.src)?;
                     let post_conv = get_implicit_conversions_ld_dst(
                         id_def,
                         ld.typ,
                         arg.dst,
                         should_convert_relaxed_dst,
                         false,
-                    );
+                    )?;
                     insert_with_conversions(
                         &mut result,
                         id_def,
@@ -989,13 +1008,13 @@ fn insert_implicit_conversions(
                         arg.src2,
                         should_convert_relaxed_src,
                         true,
-                    );
+                    )?;
                     let post_conv = get_implicit_conversions_ld_src(
                         id_def,
                         st.typ,
                         st.state_space.to_ld_ss(),
                         arg.src1,
-                    );
+                    )?;
                     let (pre_conv_dest, post_conv) = if st.state_space == ast::StStateSpace::Param {
                         (Vec::new(), post_conv)
                     } else {
@@ -1038,7 +1057,7 @@ fn insert_implicit_conversions(
                             did_vector_implicit = true;
                         }
                         let dst_type = id_def.get_typed(arg.dst)?;
-                        if let ast::Type::Vector(_, _) = src_type {
+                        if let ast::Type::Vector(_, _) = dst_type {
                             post_conv = Some(get_conversion_dst(
                                 id_def,
                                 &mut arg.dst,
@@ -1056,13 +1075,13 @@ fn insert_implicit_conversions(
                             &mut result,
                             id_def,
                             ast::Instruction::Mov(d, arg),
-                        );
+                        )?;
                     }
                     if let Some(post_conv) = post_conv {
                         result.push(post_conv);
                     }
                 }
-                inst @ _ => insert_implicit_bitcasts(&mut result, id_def, inst),
+                inst @ _ => insert_implicit_bitcasts(&mut result, id_def, inst)?,
             },
             s @ Statement::Composite(_)
             | s @ Statement::Conditional(_)
@@ -1075,9 +1094,8 @@ fn insert_implicit_conversions(
             Statement::Conversion(_) => unreachable!(),
         }
     }
-    result
+    Ok(result)
 }
-*/
 
 fn get_function_type(
     builder: &mut dr::Builder,
@@ -1147,16 +1165,16 @@ fn emit_function_body_ops(
                 v_type,
                 name,
             }) => {
-                let type_id = map.get_or_add(
-                    builder,
-                    SpirvType::new_pointer(ast::Type::from(*v_type), spirv::StorageClass::Function),
-                );
                 let st_class = match v_type {
                     ast::VariableType::Reg(_) | ast::VariableType::Param(_) => {
                         spirv::StorageClass::Function
                     }
                     ast::VariableType::Local(_) => spirv::StorageClass::Workgroup,
                 };
+                let type_id = map.get_or_add(
+                    builder,
+                    SpirvType::new_pointer(ast::Type::from(*v_type), st_class),
+                );
                 builder.variable(type_id, Some(*name), st_class, None);
                 if let Some(align) = align {
                     builder.decorate(
@@ -1685,6 +1703,10 @@ fn emit_implicit_conversion(
             let into_type = map.get_or_add(builder, SpirvType::from(cv.to));
             builder.bitcast(into_type, Some(cv.dst), cv.src)?;
         }
+        (TypeKind::Array, TypeKind::Scalar, ConversionKind::Default) => {
+            let into_type = map.get_or_add(builder, SpirvType::from(cv.to));
+            builder.convert_ptr_to_u(into_type, Some(cv.dst), cv.src)?;
+        }
         _ => unreachable!(),
     }
     Ok(())
@@ -2027,6 +2049,10 @@ struct MutableNumericIdResolver<'b> {
 }
 
 impl<'b> MutableNumericIdResolver<'b> {
+    fn unmut(self) -> NumericIdResolver<'b> {
+        self.base
+    }
+
     fn get_typed(&self, id: spirv::Word) -> Result<ast::Type, TranslateError> {
         self.base.get_typed(id).map(|(_, t)| t)
     }
@@ -2144,6 +2170,7 @@ pub trait ArgParamsEx: ast::ArgParams {
         id: &Self::ID,
         decl: &'b GlobalFnDeclResolver<'x, 'b>,
     ) -> Result<&'b FnDecl, TranslateError>;
+    fn get_src_semantics(m: &Self::MovOperand) -> ArgumentSemantics;
 }
 
 impl<'input> ArgParamsEx for ast::ParsedArgParams<'input> {
@@ -2152,6 +2179,10 @@ impl<'input> ArgParamsEx for ast::ParsedArgParams<'input> {
         decl: &'b GlobalFnDeclResolver<'x, 'b>,
     ) -> Result<&'b FnDecl, TranslateError> {
         decl.get_fn_decl_str(id)
+    }
+
+    fn get_src_semantics(m: &Self::MovOperand) -> ArgumentSemantics {
+        ArgumentSemantics::Default
     }
 }
 
@@ -2179,6 +2210,10 @@ impl ArgParamsEx for NormalizedArgParams {
         decl: &'b GlobalFnDeclResolver<'a, 'b>,
     ) -> Result<&'b FnDecl, TranslateError> {
         decl.get_fn_decl(*id)
+    }
+
+    fn get_src_semantics(m: &ast::MovOperand<spirv::Word>) -> ArgumentSemantics {
+        m.src_semantics()
     }
 }
 
@@ -2211,6 +2246,10 @@ impl ArgParamsEx for ExpandedArgParams {
         decl: &'b GlobalFnDeclResolver<'a, 'b>,
     ) -> Result<&'b FnDecl, TranslateError> {
         decl.get_fn_decl(*id)
+    }
+
+    fn get_src_semantics(m: &Self::MovOperand) -> ArgumentSemantics {
+        ArgumentSemantics::Default
     }
 }
 
@@ -2339,9 +2378,17 @@ where
     fn mov_operand(
         &mut self,
         desc: ArgumentDescriptor<ast::MovOperand<&str>>,
-        typ: ast::Type,
+        _: ast::Type,
     ) -> Result<ast::MovOperand<spirv::Word>, TranslateError> {
-        todo!()
+        match desc.op {
+            ast::MovOperand::Reg(r) => Ok(ast::MovOperand::Reg(self(r)?)),
+            ast::MovOperand::Address(a) => Ok(ast::MovOperand::Address(self(a)?)),
+            ast::MovOperand::RegOffset(r, imm) => Ok(ast::MovOperand::RegOffset(self(r)?, imm)),
+            ast::MovOperand::AddressOffset(a, imm) => {
+                Ok(ast::MovOperand::AddressOffset(self(a)?, imm))
+            }
+            ast::MovOperand::Imm(x) => Ok(ast::MovOperand::Imm(x)),
+        }
     }
 }
 
@@ -2352,10 +2399,15 @@ struct ArgumentDescriptor<Op> {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
-enum ArgumentSemantics {
+pub enum ArgumentSemantics {
+    // normal register access
     Default,
+    // st/ld global
     Ptr,
-    ParamPtr,
+    // st/ld .param, .local
+    RegisterPointer,
+    // mov of .local/.global variables
+    Address,
 }
 
 impl<T> ArgumentDescriptor<T> {
@@ -2519,9 +2571,23 @@ where
     fn mov_operand(
         &mut self,
         desc: ArgumentDescriptor<ast::MovOperand<spirv::Word>>,
-        typ: ast::Type,
+        t: ast::Type,
     ) -> Result<ast::MovOperand<spirv::Word>, TranslateError> {
-        todo!()
+        match desc.op {
+            ast::MovOperand::Reg(r) => Ok(ast::MovOperand::Reg(self(desc.new_op(r), Some(t))?)),
+            ast::MovOperand::Address(a) => {
+                Ok(ast::MovOperand::Address(self(desc.new_op(a), Some(t))?))
+            }
+            ast::MovOperand::RegOffset(r, imm) => Ok(ast::MovOperand::RegOffset(
+                self(desc.new_op(r), Some(t))?,
+                imm,
+            )),
+            ast::MovOperand::AddressOffset(a, imm) => Ok(ast::MovOperand::AddressOffset(
+                self(desc.new_op(a), Some(t))?,
+                imm,
+            )),
+            ast::MovOperand::Imm(x) => Ok(ast::MovOperand::Imm(x)),
+        }
     }
 }
 
@@ -2763,7 +2829,7 @@ impl<T: ArgParamsEx> ast::Arg2<T> {
                 op: self.src,
                 is_dst: false,
                 sema: if is_param {
-                    ArgumentSemantics::ParamPtr
+                    ArgumentSemantics::RegisterPointer
                 } else {
                     ArgumentSemantics::Ptr
                 },
@@ -2813,15 +2879,29 @@ impl<T: ArgParamsEx> ast::Arg2Mov<T> {
             },
             Some(t),
         )?;
+        let src_sema = T::get_src_semantics(&self.src);
         let src = visitor.mov_operand(
             ArgumentDescriptor {
                 op: self.src,
                 is_dst: false,
-                sema: ArgumentSemantics::Default,
+                sema: src_sema,
             },
             t,
         )?;
         Ok(ast::Arg2Mov { dst, src })
+    }
+}
+
+impl<T> ast::MovOperand<T> {
+    fn src_semantics(&self) -> ArgumentSemantics {
+        match self {
+            ast::MovOperand::Reg(_)
+            | ast::MovOperand::RegOffset(_, _)
+            | ast::MovOperand::Imm(_) => ArgumentSemantics::Default,
+            ast::MovOperand::Address(_) | ast::MovOperand::AddressOffset(_, _) => {
+                ArgumentSemantics::Address
+            }
+        }
     }
 }
 
@@ -2837,7 +2917,7 @@ impl<T: ArgParamsEx> ast::Arg2St<T> {
                 op: self.src1,
                 is_dst: is_param,
                 sema: if is_param {
-                    ArgumentSemantics::ParamPtr
+                    ArgumentSemantics::RegisterPointer
                 } else {
                     ArgumentSemantics::Ptr
                 },
@@ -3128,7 +3208,10 @@ impl<T: ArgParamsEx> ast::Arg5<T> {
 }
 
 impl<T> ast::CallOperand<T> {
-    fn map_variable<U, F: FnMut(T) -> Result<U, TranslateError>>(self, f: &mut F) -> Result<ast::CallOperand<U>, TranslateError> {
+    fn map_variable<U, F: FnMut(T) -> Result<U, TranslateError>>(
+        self,
+        f: &mut F,
+    ) -> Result<ast::CallOperand<U>, TranslateError> {
         match self {
             ast::CallOperand::Reg(id) => Ok(ast::CallOperand::Reg(f(id)?)),
             ast::CallOperand::Imm(x) => Ok(ast::CallOperand::Imm(x)),
@@ -3359,7 +3442,7 @@ fn should_bitcast(instr: ast::Type, operand: ast::Type) -> bool {
 
 fn insert_with_conversions<T, ToInstruction: FnOnce(T) -> ast::Instruction<ExpandedArgParams>>(
     func: &mut Vec<ExpandedStatement>,
-    id_def: &mut NumericIdResolver,
+    id_def: &mut MutableNumericIdResolver,
     mut instr: T,
     pre_conv_src: impl ExactSizeIterator<Item = ImplicitConversion>,
     pre_conv_dst: impl ExactSizeIterator<Item = ImplicitConversion>,
@@ -3371,7 +3454,7 @@ fn insert_with_conversions<T, ToInstruction: FnOnce(T) -> ast::Instruction<Expan
     insert_with_conversions_pre_conv(func, id_def, &mut instr, pre_conv_src, &mut src);
     insert_with_conversions_pre_conv(func, id_def, &mut instr, pre_conv_dst, &mut dst);
     if post_conv.len() > 0 {
-        let new_id = id_def.new_id(Some((StateSpace::Reg, post_conv[0].from)));
+        let new_id = id_def.new_id(post_conv[0].from);
         post_conv[0].src = new_id;
         post_conv.last_mut().unwrap().dst = *dst(&mut instr);
         *dst(&mut instr) = new_id;
@@ -3384,7 +3467,7 @@ fn insert_with_conversions<T, ToInstruction: FnOnce(T) -> ast::Instruction<Expan
 
 fn insert_with_conversions_pre_conv<T>(
     func: &mut Vec<ExpandedStatement>,
-    id_def: &mut NumericIdResolver,
+    id_def: &mut MutableNumericIdResolver,
     mut instr: &mut T,
     pre_conv: impl ExactSizeIterator<Item = ImplicitConversion>,
     src: &mut impl FnMut(&mut T) -> &mut spirv::Word,
@@ -3396,7 +3479,7 @@ fn insert_with_conversions_pre_conv<T>(
             conv.src = *original_src;
         }
         if i == pre_conv_len - 1 {
-            let new_id = id_def.new_id(Some((StateSpace::Reg, conv.to)));
+            let new_id = id_def.new_id(conv.to);
             conv.dst = new_id;
             *original_src = new_id;
         }
