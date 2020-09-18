@@ -496,7 +496,7 @@ LdCacheOperator: ast::LdCacheOperator = {
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
 InstMov: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "mov" <t:MovType> <a:Arg2> => {
-        ast::Instruction::Mov(t, a)
+        ast::Instruction::Mov(t, a.into())
     },
     "mov" <t:MovVectorType> <a:Arg2Vec> => {
         ast::Instruction::MovVector(ast::MovVectorDetails{typ: t, length: 0}, a)

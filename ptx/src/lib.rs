@@ -31,6 +31,7 @@ pub use crate::ptx::ModuleParser;
 pub use lalrpop_util::lexer::Token;
 pub use lalrpop_util::ParseError;
 pub use rspirv::dr::Error as SpirvError;
+pub use translate::TranslateError as TranslateError;
 pub use translate::to_spirv;
 
 pub(crate) fn without_none<T>(x: Vec<Option<T>>) -> Vec<T> {

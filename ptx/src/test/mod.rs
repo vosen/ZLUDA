@@ -1,4 +1,5 @@
 use super::ptx;
+use super::TranslateError;
 
 mod spirv_run;
 
@@ -8,7 +9,7 @@ fn parse_and_assert(s: &str) {
     assert!(errors.len() == 0);
 }
 
-fn compile_and_assert(s: &str) -> Result<(), rspirv::dr::Error> {
+fn compile_and_assert(s: &str) -> Result<(), TranslateError> {
     let mut errors = Vec::new();
     let ast = ptx::ModuleParser::new().parse(&mut errors, s).unwrap();
     crate::to_spirv(ast)?;
@@ -28,14 +29,14 @@ fn operands_ptx() {
 
 #[test]
 #[allow(non_snake_case)]
-fn vectorAdd_kernel64_ptx() -> Result<(), rspirv::dr::Error> {
+fn vectorAdd_kernel64_ptx() -> Result<(), TranslateError> {
     let vector_add = include_str!("vectorAdd_kernel64.ptx");
     compile_and_assert(vector_add)
 }
 
 #[test]
 #[allow(non_snake_case)]
-fn _Z9vectorAddPKfS0_Pfi_ptx() -> Result<(), rspirv::dr::Error> {
+fn _Z9vectorAddPKfS0_Pfi_ptx() -> Result<(), TranslateError> {
     let vector_add = include_str!("_Z9vectorAddPKfS0_Pfi.ptx");
     compile_and_assert(vector_add)
 }

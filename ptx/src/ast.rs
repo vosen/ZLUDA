@@ -164,8 +164,8 @@ pub enum MethodDecl<'a, P: ArgParams> {
     Kernel(&'a str, Vec<KernelArgument<P>>),
 }
 
-pub type FnArgument<P: ArgParams> = Variable<FnArgumentType, P>;
-pub type KernelArgument<P: ArgParams> = Variable<VariableParamType, P>;
+pub type FnArgument<P> = Variable<FnArgumentType, P>;
+pub type KernelArgument<P> = Variable<VariableParamType, P>;
 
 pub struct Function<'a, P: ArgParams, S> {
     pub func_directive: MethodDecl<'a, P>,
@@ -316,7 +316,7 @@ pub struct PredAt<ID> {
 
 pub enum Instruction<P: ArgParams> {
     Ld(LdData, Arg2<P>),
-    Mov(MovType, Arg2<P>),
+    Mov(MovType, Arg2Mov<P>),
     MovVector(MovVectorDetails, Arg2Vec<P>),
     Mul(MulDetails, Arg3<P>),
     Add(AddDetails, Arg3<P>),
@@ -354,7 +354,7 @@ pub struct CallInst<P: ArgParams> {
 pub trait ArgParams {
     type ID;
     type Operand;
-    type MemoryOperand;
+    type MovOperand;
     type CallOperand;
     type VecOperand;
 }
@@ -366,7 +366,7 @@ pub struct ParsedArgParams<'a> {
 impl<'a> ArgParams for ParsedArgParams<'a> {
     type ID = &'a str;
     type Operand = Operand<&'a str>;
-    type MemoryOperand = Operand<&'a str>;
+    type MovOperand = MovOperand<&'a str>;
     type CallOperand = CallOperand<&'a str>;
     type VecOperand = (&'a str, u8);
 }
@@ -380,13 +380,27 @@ pub struct Arg2<P: ArgParams> {
     pub src: P::Operand,
 }
 
-pub struct Arg2Ld<P: ArgParams> {
+pub struct Arg2Mov<P: ArgParams> {
     pub dst: P::ID,
-    pub src: P::MemoryOperand,
+    pub src: P::MovOperand,
+}
+
+impl<'input> From<Arg2<ParsedArgParams<'input>>> for Arg2Mov<ParsedArgParams<'input>> {
+    fn from(a: Arg2<ParsedArgParams<'input>>) -> Arg2Mov<ParsedArgParams<'input>> {
+        let new_src = match a.src {
+            Operand::Reg(r) => MovOperand::Reg(r),
+            Operand::RegOffset(r, imm) => MovOperand::RegOffset(r, imm),
+            Operand::Imm(x) => MovOperand::Imm(x),
+        };
+        Arg2Mov {
+            dst: a.dst,
+            src: new_src,
+        }
+    }
 }
 
 pub struct Arg2St<P: ArgParams> {
-    pub src1: P::MemoryOperand,
+    pub src1: P::Operand,
     pub src2: P::Operand,
 }
 
@@ -419,6 +433,14 @@ pub struct Arg5<P: ArgParams> {
     pub src3: P::Operand,
 }
 
+#[derive(Copy, Clone)]
+pub enum MovOperand<ID> {
+    Reg(ID),
+    Address(ID),
+    RegOffset(ID, i32),
+    AddressOffset(ID, i32),
+    Imm(u32),
+}
 #[derive(Copy, Clone)]
 pub enum Operand<ID> {
     Reg(ID),
