@@ -354,6 +354,7 @@ pub struct CallInst<P: ArgParams> {
 pub trait ArgParams {
     type ID;
     type Operand;
+    type MemoryOperand;
     type CallOperand;
     type VecOperand;
 }
@@ -365,6 +366,7 @@ pub struct ParsedArgParams<'a> {
 impl<'a> ArgParams for ParsedArgParams<'a> {
     type ID = &'a str;
     type Operand = Operand<&'a str>;
+    type MemoryOperand = Operand<&'a str>;
     type CallOperand = CallOperand<&'a str>;
     type VecOperand = (&'a str, u8);
 }
@@ -378,8 +380,13 @@ pub struct Arg2<P: ArgParams> {
     pub src: P::Operand,
 }
 
+pub struct Arg2Ld<P: ArgParams> {
+    pub dst: P::ID,
+    pub src: P::MemoryOperand,
+}
+
 pub struct Arg2St<P: ArgParams> {
-    pub src1: P::Operand,
+    pub src1: P::MemoryOperand,
     pub src2: P::Operand,
 }
 
@@ -416,13 +423,13 @@ pub struct Arg5<P: ArgParams> {
 pub enum Operand<ID> {
     Reg(ID),
     RegOffset(ID, i32),
-    Imm(i128),
+    Imm(u32),
 }
 
 #[derive(Copy, Clone)]
 pub enum CallOperand<ID> {
     Reg(ID),
-    Imm(i128),
+    Imm(u32),
 }
 
 pub enum VectorPrefix {

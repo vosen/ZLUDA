@@ -446,7 +446,7 @@ Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
 InstLd: ast::Instruction<ast::ParsedArgParams<'input>> = {
-    "ld" <q:LdStQualifier?> <ss:LdStateSpace?> <cop:LdCacheOperator?> <t:LdStType> <dst:ExtendedID> "," "[" <src:Operand> "]" => {
+    "ld" <q:LdStQualifier?> <ss:LdStateSpace?> <cop:LdCacheOperator?> <t:LdStType> <dst:ExtendedID> "," <src:MemoryOperand> => {
         ast::Instruction::Ld(
             ast::LdData {
                 qualifier: q.unwrap_or(ast::LdStQualifier::Weak),
@@ -899,7 +899,7 @@ ShlType: ast::ShlType = {
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-st
 // Warning: NVIDIA documentation is incorrect, you can specify scope only once
 InstSt: ast::Instruction<ast::ParsedArgParams<'input>> = {
-    "st" <q:LdStQualifier?> <ss:StStateSpace?> <cop:StCacheOperator?> <t:LdStType> "[" <src1:Operand> "]" "," <src2:Operand> => {
+    "st" <q:LdStQualifier?> <ss:StStateSpace?> <cop:StCacheOperator?> <t:LdStType> <src1:MemoryOperand> "," <src2:Operand> => {
         ast::Instruction::St(
             ast::StData {
                 qualifier: q.unwrap_or(ast::LdStQualifier::Weak),
@@ -911,6 +911,11 @@ InstSt: ast::Instruction<ast::ParsedArgParams<'input>> = {
         )
     }
 };
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#using-addresses-arrays-and-vectors
+MemoryOperand: ast::Operand<&'input str> = {
+    "[" <o:Operand> "]" => o
+}
 
 StStateSpace: ast::StStateSpace = {
     ".global" => ast::StStateSpace::Global,
@@ -1006,7 +1011,7 @@ Operand: ast::Operand<&'input str> = {
     // TODO: start parsing whole constants sub-language:
     //       https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#constants
     <o:Num> => {
-        let offset = o.parse::<i128>();
+        let offset = o.parse::<u32>();
         let offset = offset.unwrap_with(errors);
         ast::Operand::Imm(offset)
     }
@@ -1015,7 +1020,7 @@ Operand: ast::Operand<&'input str> = {
 CallOperand: ast::CallOperand<&'input str> = {
     <r:ExtendedID> => ast::CallOperand::Reg(r),
     <o:Num> => {
-        let offset = o.parse::<i128>();
+        let offset = o.parse::<u32>();
         let offset = offset.unwrap_with(errors);
         ast::CallOperand::Imm(offset)
     }
