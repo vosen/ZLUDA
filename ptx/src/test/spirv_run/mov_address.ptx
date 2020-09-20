@@ -1,0 +1,15 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry mov_address(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+    .local .b8  __local_depot0[8];
+	.reg .u64   temp;
+
+    mov.u64     temp, __local_depot0;
+	ret;
+}

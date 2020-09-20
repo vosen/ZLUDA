@@ -8,7 +8,7 @@ use spirv_headers::Word;
 use spirv_tools_sys::{
     spv_binary, spv_endianness_t, spv_parsed_instruction_t, spv_result_t, spv_target_env,
 };
-use std::collections::hash_map::Entry;
+use std::{collections::hash_map::Entry, cmp};
 use std::error;
 use std::ffi::{c_void, CStr, CString};
 use std::fmt;
@@ -59,8 +59,9 @@ test_ptx!(local_align, [1u64], [1u64]);
 test_ptx!(call, [1u64], [2u64]);
 test_ptx!(vector, [1u32, 2u32], [3u32, 3u32]);
 test_ptx!(ld_st_offset, [1u32, 2u32], [2u32, 1u32]);
-//test_ptx!(ntid, [3u32], [4u32]);
-//test_ptx!(reg_slm, [12u64], [12u64]);
+test_ptx!(ntid, [3u32], [4u32]);
+test_ptx!(reg_local, [12u64], [12u64]);
+test_ptx!(mov_address, [0xDEADu64], [0u64]);
 
 struct DisplayError<T: Debug> {
     err: T,
@@ -123,8 +124,8 @@ fn run_spirv<T: From<u8> + ze::SafeRepr + Copy + Debug>(
         kernel.set_indirect_access(
             ze::sys::ze_kernel_indirect_access_flags_t::ZE_KERNEL_INDIRECT_ACCESS_FLAG_DEVICE,
         )?;
-        let mut inp_b = ze::DeviceBuffer::<T>::new(&mut ctx, &dev, input.len())?;
-        let mut out_b = ze::DeviceBuffer::<T>::new(&mut ctx, &dev, output.len())?;
+        let mut inp_b = ze::DeviceBuffer::<T>::new(&mut ctx, &dev, cmp::max(input.len(),1))?;
+        let mut out_b = ze::DeviceBuffer::<T>::new(&mut ctx, &dev, cmp::max(output.len(), 1))?;
         let inp_b_ptr_mut: ze::BufferPtrMut<T> = (&mut inp_b).into();
         let event_pool = ze::EventPool::new(&mut ctx, 3, Some(&[&dev]))?;
         let ev0 = ze::Event::new(&event_pool, 0)?;
