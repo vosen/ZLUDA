@@ -1,0 +1,25 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry b64tof64(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .f64 	    in_addr_f;
+    .reg .b64 	    in_addr;
+    .reg .u64 	    out_addr;
+
+    .reg.u64        temp;
+
+	ld.param.f64 	in_addr_f, [input];
+    ld.param.u64 	out_addr, [output];
+
+    mov.b64         in_addr, in_addr_f;
+
+    ld.u64          temp, [in_addr];
+    st.u64          [out_addr], temp;
+
+	ret;
+}

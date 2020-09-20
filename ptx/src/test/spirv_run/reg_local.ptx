@@ -17,7 +17,7 @@
     ld.param.u64 	out_addr, [output];
 
     ld.global.u64   temp, [in_addr];
-    st.u64          [local_x], temp;
+    st.u64          [local_x], temp + 1;
     ld.u64          temp, [local_x];
     st.global.u64   [out_addr], temp;
 	ret;

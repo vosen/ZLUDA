@@ -60,8 +60,10 @@ test_ptx!(call, [1u64], [2u64]);
 test_ptx!(vector, [1u32, 2u32], [3u32, 3u32]);
 test_ptx!(ld_st_offset, [1u32, 2u32], [2u32, 1u32]);
 test_ptx!(ntid, [3u32], [4u32]);
-test_ptx!(reg_local, [12u64], [12u64]);
+test_ptx!(reg_local, [12u64], [13u64]);
 test_ptx!(mov_address, [0xDEADu64], [0u64]);
+test_ptx!(b64tof64, [111u64], [111u64]);
+test_ptx!(implicit_param, [34u32], [34u32]);
 
 struct DisplayError<T: Debug> {
     err: T,

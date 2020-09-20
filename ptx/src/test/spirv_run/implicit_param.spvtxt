@@ -1,0 +1,55 @@
+               OpCapability GenericPointer
+               OpCapability Linkage
+               OpCapability Addresses
+               OpCapability Kernel
+               OpCapability Int64
+               OpCapability Int8
+               OpCapability Float64
+         %28 = OpExtInstImport "OpenCL.std"
+               OpMemoryModel Physical64 OpenCL
+               OpEntryPoint Kernel %1 "implicit_param"
+       %void = OpTypeVoid
+      %ulong = OpTypeInt 64 0
+         %31 = OpTypeFunction %void %ulong %ulong
+%_ptr_Function_ulong = OpTypePointer Function %ulong
+      %float = OpTypeFloat 32
+%_ptr_Function_float = OpTypePointer Function %float
+       %uint = OpTypeInt 32 0
+%_ptr_Function_uint = OpTypePointer Function %uint
+%_ptr_CrossWorkgroup_float = OpTypePointer CrossWorkgroup %float
+          %1 = OpFunction %void None %31
+          %8 = OpFunctionParameter %ulong
+          %9 = OpFunctionParameter %ulong
+         %26 = OpLabel
+          %2 = OpVariable %_ptr_Function_ulong Function
+          %3 = OpVariable %_ptr_Function_ulong Function
+          %4 = OpVariable %_ptr_Function_ulong Function
+          %5 = OpVariable %_ptr_Function_ulong Function
+          %6 = OpVariable %_ptr_Function_float Function
+          %7 = OpVariable %_ptr_Function_uint Function
+               OpStore %2 %8
+               OpStore %3 %9
+         %11 = OpLoad %ulong %2
+         %10 = OpCopyObject %ulong %11
+               OpStore %4 %10
+         %13 = OpLoad %ulong %3
+         %12 = OpCopyObject %ulong %13
+               OpStore %5 %12
+         %15 = OpLoad %ulong %4
+         %22 = OpConvertUToPtr %_ptr_CrossWorkgroup_float %15
+         %14 = OpLoad %float %22
+               OpStore %6 %14
+         %17 = OpLoad %float %6
+         %23 = OpCopyObject %float %17
+         %16 = OpBitcast %uint %23
+               OpStore %7 %16
+         %19 = OpLoad %uint %7
+         %24 = OpBitcast %float %19
+         %18 = OpCopyObject %float %24
+               OpStore %6 %18
+         %20 = OpLoad %ulong %5
+         %21 = OpLoad %float %6
+         %25 = OpConvertUToPtr %_ptr_CrossWorkgroup_float %20
+               OpStore %25 %21
+               OpReturn
+               OpFunctionEnd
