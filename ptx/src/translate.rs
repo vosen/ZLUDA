@@ -480,37 +480,19 @@ fn add_types_to_statements(
                     };
                     Ok(Statement::Instruction(ast::Instruction::St(d, arg)))
                 }
-                Statement::Instruction(ast::Instruction::Mov(d, mut arg)) => {
-                    arg.src = match arg.src {
-                        ast::MovOperand::Reg(id) => {
-                            let (ss, _) = id_defs.get_typed(id)?;
-                            match ss {
-                                StateSpace::Reg => ast::MovOperand::Reg(id),
-                                StateSpace::Const
-                                | StateSpace::Global
-                                | StateSpace::Local
-                                | StateSpace::Shared
-                                | StateSpace::Param
-                                | StateSpace::ParamReg => ast::MovOperand::Address(id),
-                            }
-                        }
-                        ast::MovOperand::RegOffset(id, imm) => {
-                            let (ss, _) = id_defs.get_typed(id)?;
-                            match ss {
-                                StateSpace::Reg => ast::MovOperand::RegOffset(id, imm),
-                                StateSpace::Const
-                                | StateSpace::Global
-                                | StateSpace::Local
-                                | StateSpace::Shared
-                                | StateSpace::Param
-                                | StateSpace::ParamReg => ast::MovOperand::AddressOffset(id, imm),
-                            }
-                        }
-                        a @ ast::MovOperand::Imm(_) => a,
-                        ast::MovOperand::Address(_) | ast::MovOperand::AddressOffset(_, _) => {
-                            unreachable!()
-                        }
-                    };
+                Statement::Instruction(ast::Instruction::Mov(mut d, arg)) => {
+                    if let Some(src_id) = arg.src.underlying() {
+                        let (scope, _) = id_defs.get_typed(*src_id)?;
+                        d.src_is_address = match scope {
+                            StateSpace::Reg => false,
+                            StateSpace::Const
+                            | StateSpace::Global
+                            | StateSpace::Local
+                            | StateSpace::Shared
+                            | StateSpace::Param
+                            | StateSpace::ParamReg => true,
+                        };
+                    }
                     Ok(Statement::Instruction(ast::Instruction::Mov(d, arg)))
                 }
                 Statement::Instruction(ast::Instruction::MovVector(dets, args)) => {
@@ -982,24 +964,6 @@ impl<'a, 'b> ArgumentMapVisitor<NormalizedArgParams, ExpandedArgParams>
         }));
         Ok(new_id)
     }
-
-    fn mov_operand(
-        &mut self,
-        desc: ArgumentDescriptor<ast::MovOperand<spirv::Word>>,
-        typ: ast::Type,
-    ) -> Result<spirv::Word, TranslateError> {
-        match desc.op {
-            ast::MovOperand::Reg(r) => self.operand(desc.new_op(ast::Operand::Reg(r)), typ),
-            ast::MovOperand::RegOffset(r, imm) => {
-                self.operand(desc.new_op(ast::Operand::RegOffset(r, imm)), typ)
-            }
-            ast::MovOperand::Imm(x) => self.operand(desc.new_op(ast::Operand::Imm(x)), typ),
-            ast::MovOperand::Address(r) => self.operand(desc.new_op(ast::Operand::Reg(r)), typ),
-            ast::MovOperand::AddressOffset(r, imm) => {
-                self.operand(desc.new_op(ast::Operand::RegOffset(r, imm)), typ)
-            }
-        }
-    }
 }
 
 /*
@@ -1081,7 +1045,7 @@ fn insert_implicit_conversions(
                 ast::Instruction::Mov(d, mut arg) => {
                     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov-2
                     // TODO: handle the case of mixed vector/scalar implicit conversions
-                    let inst_typ_is_bit = match d {
+                    let inst_typ_is_bit = match d.typ {
                         ast::MovType::Scalar(t) => {
                             ast::ScalarType::from(t).kind() == ScalarKind::Bit
                         }
@@ -1097,7 +1061,7 @@ fn insert_implicit_conversions(
                                 id_def,
                                 arg.src,
                                 src_type,
-                                d.into(),
+                                d.typ.into(),
                                 ConversionKind::Default,
                             );
                             did_vector_implicit = true;
@@ -1107,7 +1071,7 @@ fn insert_implicit_conversions(
                             post_conv = Some(get_conversion_dst(
                                 id_def,
                                 &mut arg.dst,
-                                d.into(),
+                                d.typ.into(),
                                 dst_type,
                                 ConversionKind::Default,
                             ));
@@ -1305,9 +1269,9 @@ fn emit_function_body_ops(
                 }
                 // SPIR-V does not support ret as guaranteed-converged
                 ast::Instruction::Ret(_) => builder.ret()?,
-                ast::Instruction::Mov(mov_type, arg) => {
+                ast::Instruction::Mov(d, arg) => {
                     let result_type =
-                        map.get_or_add(builder, SpirvType::from(ast::Type::from(*mov_type)));
+                        map.get_or_add(builder, SpirvType::from(ast::Type::from(d.typ)));
                     builder.copy_object(result_type, Some(arg.dst), arg.src)?;
                 }
                 ast::Instruction::Mul(mul, arg) => match mul {
@@ -1690,6 +1654,10 @@ fn emit_implicit_conversion(
     let from_parts = cv.from.to_parts();
     let to_parts = cv.to.to_parts();
     match (from_parts.kind, to_parts.kind, cv.kind) {
+        (_, _, ConversionKind::PtrToBit) => {
+            let dst_type = map.get_or_add_scalar(builder, ast::ScalarType::B64);
+            builder.convert_ptr_to_u(dst_type, Some(cv.dst), cv.src)?;
+        }
         (_, _, ConversionKind::BitToPtr(space)) => {
             let dst_type = map.get_or_add(
                 builder,
@@ -2214,7 +2182,6 @@ pub trait ArgParamsEx: ast::ArgParams {
         id: &Self::ID,
         decl: &'b GlobalFnDeclResolver<'x, 'b>,
     ) -> Result<&'b FnDecl, TranslateError>;
-    fn get_src_semantics(m: &Self::MovOperand) -> ArgumentSemantics;
 }
 
 impl<'input> ArgParamsEx for ast::ParsedArgParams<'input> {
@@ -2223,10 +2190,6 @@ impl<'input> ArgParamsEx for ast::ParsedArgParams<'input> {
         decl: &'b GlobalFnDeclResolver<'x, 'b>,
     ) -> Result<&'b FnDecl, TranslateError> {
         decl.get_fn_decl_str(id)
-    }
-
-    fn get_src_semantics(_: &Self::MovOperand) -> ArgumentSemantics {
-        ArgumentSemantics::Default
     }
 }
 
@@ -2243,7 +2206,6 @@ type UnadornedStatement = Statement<ast::Instruction<NormalizedArgParams>, Norma
 impl ast::ArgParams for NormalizedArgParams {
     type ID = spirv::Word;
     type Operand = ast::Operand<spirv::Word>;
-    type MovOperand = ast::MovOperand<spirv::Word>;
     type CallOperand = ast::CallOperand<spirv::Word>;
     type VecOperand = (spirv::Word, u8);
 }
@@ -2254,10 +2216,6 @@ impl ArgParamsEx for NormalizedArgParams {
         decl: &'b GlobalFnDeclResolver<'a, 'b>,
     ) -> Result<&'b FnDecl, TranslateError> {
         decl.get_fn_decl(*id)
-    }
-
-    fn get_src_semantics(m: &ast::MovOperand<spirv::Word>) -> ArgumentSemantics {
-        m.src_semantics()
     }
 }
 
@@ -2284,7 +2242,6 @@ struct Function<'input> {
 impl ast::ArgParams for ExpandedArgParams {
     type ID = spirv::Word;
     type Operand = spirv::Word;
-    type MovOperand = spirv::Word;
     type CallOperand = spirv::Word;
     type VecOperand = spirv::Word;
 }
@@ -2295,10 +2252,6 @@ impl ArgParamsEx for ExpandedArgParams {
         decl: &'b GlobalFnDeclResolver<'a, 'b>,
     ) -> Result<&'b FnDecl, TranslateError> {
         decl.get_fn_decl(*id)
-    }
-
-    fn get_src_semantics(_: &spirv::Word) -> ArgumentSemantics {
-        ArgumentSemantics::Default
     }
 }
 
@@ -2313,11 +2266,6 @@ trait ArgumentMapVisitor<T: ArgParamsEx, U: ArgParamsEx> {
         desc: ArgumentDescriptor<T::Operand>,
         typ: ast::Type,
     ) -> Result<U::Operand, TranslateError>;
-    fn mov_operand(
-        &mut self,
-        desc: ArgumentDescriptor<T::MovOperand>,
-        typ: ast::Type,
-    ) -> Result<U::MovOperand, TranslateError>;
     fn src_call_operand(
         &mut self,
         desc: ArgumentDescriptor<T::CallOperand>,
@@ -2346,14 +2294,6 @@ where
     }
 
     fn operand(
-        &mut self,
-        desc: ArgumentDescriptor<spirv::Word>,
-        t: ast::Type,
-    ) -> Result<spirv::Word, TranslateError> {
-        self(desc, Some(t))
-    }
-
-    fn mov_operand(
         &mut self,
         desc: ArgumentDescriptor<spirv::Word>,
         t: ast::Type,
@@ -2423,22 +2363,6 @@ where
     ) -> Result<(spirv::Word, u8), TranslateError> {
         Ok((self(desc.op.0)?, desc.op.1))
     }
-
-    fn mov_operand(
-        &mut self,
-        desc: ArgumentDescriptor<ast::MovOperand<&str>>,
-        _: ast::Type,
-    ) -> Result<ast::MovOperand<spirv::Word>, TranslateError> {
-        match desc.op {
-            ast::MovOperand::Reg(r) => Ok(ast::MovOperand::Reg(self(r)?)),
-            ast::MovOperand::Address(a) => Ok(ast::MovOperand::Address(self(a)?)),
-            ast::MovOperand::RegOffset(r, imm) => Ok(ast::MovOperand::RegOffset(self(r)?, imm)),
-            ast::MovOperand::AddressOffset(a, imm) => {
-                Ok(ast::MovOperand::AddressOffset(self(a)?, imm))
-            }
-            ast::MovOperand::Imm(x) => Ok(ast::MovOperand::Imm(x)),
-        }
-    }
 }
 
 struct ArgumentDescriptor<Op> {
@@ -2479,7 +2403,7 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
                 ast::Instruction::MovVector(t, a.map(visitor, (t.typ, t.length))?)
             }
             ast::Instruction::Abs(d, arg) => {
-                ast::Instruction::Abs(d, arg.map(visitor, ast::Type::Scalar(d.typ))?)
+                ast::Instruction::Abs(d, arg.map(visitor, false, ast::Type::Scalar(d.typ))?)
             }
             // Call instruction is converted to a call statement early on
             ast::Instruction::Call(_) => unreachable!(),
@@ -2488,8 +2412,9 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
                 let is_param = d.state_space == ast::LdStateSpace::Param;
                 ast::Instruction::Ld(d, a.map_ld(visitor, inst_type, is_param)?)
             }
-            ast::Instruction::Mov(mov_type, a) => {
-                ast::Instruction::Mov(mov_type, a.map(visitor, mov_type.into())?)
+            ast::Instruction::Mov(d, a) => {
+                let mapped = a.map(visitor, d.src_is_address, d.typ.into())?;
+                ast::Instruction::Mov(d, mapped)
             }
             ast::Instruction::Mul(d, a) => {
                 let inst_type = d.get_type();
@@ -2507,7 +2432,7 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
                 let inst_type = d.typ;
                 ast::Instruction::SetpBool(d, a.map(visitor, ast::Type::Scalar(inst_type))?)
             }
-            ast::Instruction::Not(t, a) => ast::Instruction::Not(t, a.map(visitor, t.to_type())?),
+            ast::Instruction::Not(t, a) => ast::Instruction::Not(t, a.map(visitor, false, t.to_type())?),
             ast::Instruction::Cvt(d, a) => {
                 let (dst_t, src_t) = match &d {
                     ast::CvtDetails::FloatFromFloat(desc) => (
@@ -2541,7 +2466,7 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
             ast::Instruction::Ret(d) => ast::Instruction::Ret(d),
             ast::Instruction::Cvta(d, a) => {
                 let inst_type = ast::Type::Scalar(ast::ScalarType::B64);
-                ast::Instruction::Cvta(d, a.map(visitor, inst_type)?)
+                ast::Instruction::Cvta(d, a.map(visitor, false, inst_type)?)
             }
         })
     }
@@ -2615,28 +2540,6 @@ where
             )?,
             desc.op.1,
         ))
-    }
-
-    fn mov_operand(
-        &mut self,
-        desc: ArgumentDescriptor<ast::MovOperand<spirv::Word>>,
-        t: ast::Type,
-    ) -> Result<ast::MovOperand<spirv::Word>, TranslateError> {
-        match desc.op {
-            ast::MovOperand::Reg(r) => Ok(ast::MovOperand::Reg(self(desc.new_op(r), Some(t))?)),
-            ast::MovOperand::Address(a) => {
-                Ok(ast::MovOperand::Address(self(desc.new_op(a), Some(t))?))
-            }
-            ast::MovOperand::RegOffset(r, imm) => Ok(ast::MovOperand::RegOffset(
-                self(desc.new_op(r), Some(t))?,
-                imm,
-            )),
-            ast::MovOperand::AddressOffset(a, imm) => Ok(ast::MovOperand::AddressOffset(
-                self(desc.new_op(a), Some(t))?,
-                imm,
-            )),
-            ast::MovOperand::Imm(x) => Ok(ast::MovOperand::Imm(x)),
-        }
     }
 }
 
@@ -2836,6 +2739,7 @@ impl<T: ArgParamsEx> ast::Arg2<T> {
     fn map<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
         self,
         visitor: &mut V,
+        src_is_addr: bool,
         t: ast::Type,
     ) -> Result<ast::Arg2<U>, TranslateError> {
         let new_dst = visitor.variable(
@@ -2850,7 +2754,11 @@ impl<T: ArgParamsEx> ast::Arg2<T> {
             ArgumentDescriptor {
                 op: self.src,
                 is_dst: false,
-                sema: ArgumentSemantics::Default,
+                sema: if src_is_addr {
+                    ArgumentSemantics::Address
+                } else {
+                    ArgumentSemantics::Default
+                },
             },
             t,
         )?;
@@ -2912,46 +2820,6 @@ impl<T: ArgParamsEx> ast::Arg2<T> {
             src_t,
         )?;
         Ok(ast::Arg2 { dst, src })
-    }
-}
-
-impl<T: ArgParamsEx> ast::Arg2Mov<T> {
-    fn map<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
-        self,
-        visitor: &mut V,
-        t: ast::Type,
-    ) -> Result<ast::Arg2Mov<U>, TranslateError> {
-        let dst = visitor.variable(
-            ArgumentDescriptor {
-                op: self.dst,
-                is_dst: true,
-                sema: ArgumentSemantics::Default,
-            },
-            Some(t),
-        )?;
-        let src_sema = T::get_src_semantics(&self.src);
-        let src = visitor.mov_operand(
-            ArgumentDescriptor {
-                op: self.src,
-                is_dst: false,
-                sema: src_sema,
-            },
-            t,
-        )?;
-        Ok(ast::Arg2Mov { dst, src })
-    }
-}
-
-impl<T> ast::MovOperand<T> {
-    fn src_semantics(&self) -> ArgumentSemantics {
-        match self {
-            ast::MovOperand::Reg(_)
-            | ast::MovOperand::RegOffset(_, _)
-            | ast::MovOperand::Imm(_) => ArgumentSemantics::Default,
-            ast::MovOperand::Address(_) | ast::MovOperand::AddressOffset(_, _) => {
-                ArgumentSemantics::Address
-            }
-        }
     }
 }
 

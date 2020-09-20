@@ -316,7 +316,7 @@ pub struct PredAt<ID> {
 
 pub enum Instruction<P: ArgParams> {
     Ld(LdData, Arg2<P>),
-    Mov(MovType, Arg2Mov<P>),
+    Mov(MovDetails, Arg2<P>),
     MovVector(MovVectorDetails, Arg2Vec<P>),
     Mul(MulDetails, Arg3<P>),
     Add(AddDetails, Arg3<P>),
@@ -354,7 +354,6 @@ pub struct CallInst<P: ArgParams> {
 pub trait ArgParams {
     type ID;
     type Operand;
-    type MovOperand;
     type CallOperand;
     type VecOperand;
 }
@@ -366,7 +365,6 @@ pub struct ParsedArgParams<'a> {
 impl<'a> ArgParams for ParsedArgParams<'a> {
     type ID = &'a str;
     type Operand = Operand<&'a str>;
-    type MovOperand = MovOperand<&'a str>;
     type CallOperand = CallOperand<&'a str>;
     type VecOperand = (&'a str, u8);
 }
@@ -378,25 +376,6 @@ pub struct Arg1<P: ArgParams> {
 pub struct Arg2<P: ArgParams> {
     pub dst: P::ID,
     pub src: P::Operand,
-}
-
-pub struct Arg2Mov<P: ArgParams> {
-    pub dst: P::ID,
-    pub src: P::MovOperand,
-}
-
-impl<'input> From<Arg2<ParsedArgParams<'input>>> for Arg2Mov<ParsedArgParams<'input>> {
-    fn from(a: Arg2<ParsedArgParams<'input>>) -> Arg2Mov<ParsedArgParams<'input>> {
-        let new_src = match a.src {
-            Operand::Reg(r) => MovOperand::Reg(r),
-            Operand::RegOffset(r, imm) => MovOperand::RegOffset(r, imm),
-            Operand::Imm(x) => MovOperand::Imm(x),
-        };
-        Arg2Mov {
-            dst: a.dst,
-            src: new_src,
-        }
-    }
 }
 
 pub struct Arg2St<P: ArgParams> {
@@ -433,14 +412,6 @@ pub struct Arg5<P: ArgParams> {
     pub src3: P::Operand,
 }
 
-#[derive(Copy, Clone)]
-pub enum MovOperand<ID> {
-    Reg(ID),
-    Address(ID),
-    RegOffset(ID, i32),
-    AddressOffset(ID, i32),
-    Imm(u32),
-}
 #[derive(Copy, Clone)]
 pub enum Operand<ID> {
     Reg(ID),
@@ -529,6 +500,11 @@ sub_scalar_type!(MovVectorType {
     F32,
     F64,
 });
+
+pub struct MovDetails {
+    pub typ: MovType,
+    pub src_is_address: bool
+}
 
 sub_type! {
     MovType {
