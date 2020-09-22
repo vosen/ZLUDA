@@ -299,7 +299,6 @@ fn emit_function_header<'a>(
 
 pub fn to_spirv<'a>(ast: ast::Module<'a>) -> Result<Vec<u32>, TranslateError> {
     let module = to_spirv_module(ast)?;
-    eprintln!("{}", module.disassemble());
     Ok(module.assemble())
 }
 
@@ -1305,7 +1304,18 @@ fn emit_function_body_ops(
                     let result_id = Some(a.dst);
                     let operand = a.src;
                     match t {
-                        ast::NotType::Pred => builder.logical_not(result_type, result_id, operand),
+                        ast::NotType::Pred => {
+                            // HACK ALERT
+                            // Temporary workaround until IGC gets its shit together
+                            // Currently IGC carries two copies of SPIRV-LLVM translator
+                            // a new one in /llvm-spirv/ and old one in /IGC/AdaptorOCL/SPIRV/.
+                            // Obviously, old and buggy one is used for compiling L0 SPIRV
+                            // https://github.com/intel/intel-graphics-compiler/issues/148
+                            let type_pred = map.get_or_add_scalar(builder, ast::ScalarType::Pred);
+                            let const_true = builder.constant_true(type_pred);
+                            let const_false = builder.constant_false(type_pred);
+                            builder.select(result_type, result_id, operand,  const_false, const_true)
+                        },
                         _ => builder.not(result_type, result_id, operand),
                     }?;
                 }
