@@ -1,5 +1,5 @@
-use crate::cuda::{CUctx_st, CUdevice, CUdeviceptr, CUresult, CUmodule};
-use std::{ffi::c_void, mem::ManuallyDrop, os::raw::c_int, sync::Mutex};
+use crate::cuda::{CUctx_st, CUdevice, CUdeviceptr, CUfunction, CUmod_st, CUmodule, CUresult};
+use std::{ffi::c_void, mem::{self, ManuallyDrop}, os::raw::c_int, sync::Mutex};
 
 #[cfg(test)]
 #[macro_use]
@@ -206,6 +206,10 @@ pub fn init() -> l0::Result<()> {
     Ok(())
 }
 
+unsafe fn transmute_lifetime<'a, 'b, T: ?Sized>(t: &'a T) -> &'b T {
+    mem::transmute(t)
+}
+
 pub fn driver_get_version() -> c_int {
     i32::max_value()
 }
@@ -234,7 +238,10 @@ impl Decuda<*mut c_void> for CUdeviceptr {
     }
 }
 
-impl<'a> CudaRepr for CUmodule {
-    type Impl = *mut module::Module;
+impl<'a> CudaRepr for CUmod_st {
+    type Impl = module::Module;
 }
 
+impl<'a> CudaRepr for CUfunction {
+    type Impl = *mut module::Function;
+}

@@ -2501,7 +2501,7 @@ pub extern "C" fn cuModuleGetFunction(
     hmod: CUmodule,
     name: *const ::std::os::raw::c_char,
 ) -> CUresult {
-    r#impl::unimplemented()
+    r#impl::module::get_function(hfunc.decuda(), hmod.decuda(), name).encuda()
 }
 
 #[no_mangle]

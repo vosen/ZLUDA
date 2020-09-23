@@ -118,6 +118,12 @@ impl Device {
         Ok(props)
     }
 
+    pub fn get_compute_properties(&self) -> Result<Box<sys::ze_device_compute_properties_t>> {
+        let mut props = Box::new(unsafe { mem::zeroed::<sys::ze_device_compute_properties_t>() });
+        check! { sys::zeDeviceGetComputeProperties(self.0, props.as_mut()) };
+        Ok(props)
+    }
+
     pub unsafe fn mem_alloc_device(
         &mut self,
         ctx: &mut Context,

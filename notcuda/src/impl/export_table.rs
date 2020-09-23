@@ -66,12 +66,11 @@ static TOOLS_RUNTIME_CALLBACK_HOOKS_VTABLE: [VTableEntry; TOOLS_RUNTIME_CALLBACK
         ptr: runtime_callback_hooks_fn5 as *const (),
     },
 ];
-static mut TOOLS_RUNTIME_CALLBACK_HOOKS_FN1_SPACE: [u8; 512] = [0; 512];
+static mut TOOLS_RUNTIME_CALLBACK_HOOKS_FN1_SPACE: [usize; 512] = [0; 512];
 
-unsafe extern "C" fn runtime_callback_hooks_fn1(ptr: *mut *mut u8, size: *mut usize) -> *mut u8 {
+unsafe extern "C" fn runtime_callback_hooks_fn1(ptr: *mut *mut usize, size: *mut usize) {
     *ptr = TOOLS_RUNTIME_CALLBACK_HOOKS_FN1_SPACE.as_mut_ptr();
     *size = TOOLS_RUNTIME_CALLBACK_HOOKS_FN1_SPACE.len();
-    return TOOLS_RUNTIME_CALLBACK_HOOKS_FN1_SPACE.as_mut_ptr();
 }
 
 static mut TOOLS_RUNTIME_CALLBACK_HOOKS_FN5_SPACE: [u8; 2] = [0; 2];
@@ -198,9 +197,14 @@ struct FatbinFileHeader {
 unsafe extern "C" fn get_module_from_cubin(
     result: *mut CUmodule,
     fatbinc_wrapper: *const FatbincWrapper,
-    _: *mut c_void,
-    _: *mut c_void,
+    ptr1: *mut c_void,
+    ptr2: *mut c_void,
 ) -> CUresult {
+    // Not sure what those twoparameters are actually used for,
+    // they are somehow involved in __cudaRegisterHostVar
+    if ptr1 != ptr::null_mut() || ptr2 != ptr::null_mut() {
+        return CUresult::CUDA_ERROR_NOT_SUPPORTED;
+    }
     if result == ptr::null_mut()
         || (*fatbinc_wrapper).magic != FATBINC_MAGIC
         || (*fatbinc_wrapper).version != FATBINC_VERSION
@@ -208,11 +212,6 @@ unsafe extern "C" fn get_module_from_cubin(
         return CUresult::CUDA_ERROR_INVALID_VALUE;
     }
     let result = result.decuda();
-    let mut dev_count = 0;
-    let cu_result = device::get_count(&mut dev_count);
-    if cu_result != CUresult::CUDA_SUCCESS {
-        return cu_result;
-    }
     let fatbin_header = (*fatbinc_wrapper).data;
     if (*fatbin_header).magic != FATBIN_MAGIC || (*fatbin_header).version != FATBIN_VERSION {
         return CUresult::CUDA_ERROR_INVALID_VALUE;
@@ -235,7 +234,7 @@ unsafe extern "C" fn get_module_from_cubin(
             },
             Err(_) => continue,
         };
-        let module = module::Module::compile(kernel_text_string, dev_count as usize);
+        let module = module::ModuleData::compile_spirv(kernel_text_string);
         match module {
             Ok(module) => {
                 *result = Box::into_raw(Box::new(module));
@@ -310,7 +309,7 @@ unsafe extern "C" fn context_local_storage_ctor(
 }
 
 fn context_local_storage_ctor_impl(
-    cu_ctx: *mut context::Context,
+    mut cu_ctx: *mut context::Context,
     mgr: *mut cuda_impl::rt::ContextStateManager,
     ctx_state: *mut cuda_impl::rt::ContextState,
     dtor_cb: Option<
@@ -322,7 +321,7 @@ fn context_local_storage_ctor_impl(
     >,
 ) -> Result<(), CUresult> {
     if cu_ctx == ptr::null_mut() {
-        return Err(CUresult::CUDA_ERROR_NOT_SUPPORTED);
+        context::get_current(&mut cu_ctx)?;
     }
     unsafe { &*cu_ctx }
         .as_ref()

@@ -1,4 +1,4 @@
-use super::{context, CUresult, Error};
+use super::{context, transmute_lifetime, CUresult, Error};
 use crate::cuda;
 use cuda::{CUdevice_attribute, CUuuid_st};
 use std::{
@@ -25,6 +25,7 @@ pub struct Device {
     properties: Option<Box<l0::sys::ze_device_properties_t>>,
     image_properties: Option<Box<l0::sys::ze_device_image_properties_t>>,
     memory_properties: Option<Vec<l0::sys::ze_device_memory_properties_t>>,
+    compute_properties: Option<Box<l0::sys::ze_device_compute_properties_t>>,
 }
 
 unsafe impl Send for Device {}
@@ -48,6 +49,7 @@ impl Device {
             properties: None,
             image_properties: None,
             memory_properties: None,
+            compute_properties: None,
         })
     }
 
@@ -77,6 +79,16 @@ impl Device {
         }
         match self.base.get_memory_properties() {
             Ok(prop) => Ok(self.memory_properties.get_or_insert(prop)),
+            Err(e) => Err(e),
+        }
+    }
+
+    fn get_compute_properties(&mut self) -> l0::Result<&l0::sys::ze_device_compute_properties_t> {
+        if let Some(ref prop) = self.compute_properties {
+            return Ok(prop);
+        }
+        match self.base.get_compute_properties() {
+            Ok(prop) => Ok(self.compute_properties.get_or_insert(prop)),
             Err(e) => Err(e),
         }
     }
@@ -166,10 +178,6 @@ pub fn get_name(name: *mut c_char, len: i32, dev: Index) -> Result<(), CUresult>
     Ok(())
 }
 
-unsafe fn transmute_lifetime<'a, 'b, T: ?Sized>(t: &'a T) -> &'b T {
-    mem::transmute(t)
-}
-
 pub fn total_mem_v2(bytes: *mut usize, dev: Index) -> Result<(), CUresult> {
     if bytes == ptr::null_mut() {
         return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
@@ -232,6 +240,34 @@ pub fn get_attribute(pi: *mut i32, attrib: CUdevice_attribute, dev: Index) -> Re
                 .maxImageDims1D,
             c_int::max_value() as u32,
         ) as c_int,
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X => {
+            let props = dev.get_compute_properties().map_err(Error::L0)?;
+            cmp::max(i32::max_value() as u32, props.maxGroupCountX) as i32
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y => {
+            let props = dev.get_compute_properties().map_err(Error::L0)?;
+            cmp::max(i32::max_value() as u32, props.maxGroupCountY) as i32
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Z => {
+            let props = dev.get_compute_properties().map_err(Error::L0)?;
+            cmp::max(i32::max_value() as u32, props.maxGroupCountZ) as i32
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X => {
+            let props = dev.get_compute_properties().map_err(Error::L0)?;
+            cmp::max(i32::max_value() as u32, props.maxGroupSizeX) as i32
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y => {
+            let props = dev.get_compute_properties().map_err(Error::L0)?;
+            cmp::max(i32::max_value() as u32, props.maxGroupSizeY) as i32
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Z => {
+            let props = dev.get_compute_properties().map_err(Error::L0)?;
+            cmp::max(i32::max_value() as u32, props.maxGroupSizeZ) as i32
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK => {
+            let props = dev.get_compute_properties().map_err(Error::L0)?;
+            cmp::max(i32::max_value() as u32, props.maxTotalGroupSize) as i32
+        }
         _ => {
             // TODO: support more attributes for CUDA runtime
             /*
@@ -311,8 +347,6 @@ pub fn primary_ctx_retain(pctx: *mut *mut context::Context, dev: Index) -> Resul
 mod tests {
     use super::super::test::CudaDriverFns;
     use super::super::CUresult;
-    use crate::cuda::CUuuid;
-    use std::{ffi::c_void, mem, ptr};
 
     cuda_driver_test!(primary_ctx_default_inactive);
 
