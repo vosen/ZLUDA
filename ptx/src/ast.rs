@@ -35,6 +35,19 @@ macro_rules! sub_scalar_type {
                 }
             }
         }
+
+        impl std::convert::TryFrom<ScalarType> for $name {
+            type Error = ();
+
+            fn try_from(t: ScalarType) -> Result<Self, Self::Error> {
+                match t {
+                    $(
+                        ScalarType::$variant => Ok($name::$variant),
+                    )+
+                        _ => Err(()),
+                }
+            }
+        }
     };
 }
 
@@ -159,20 +172,20 @@ pub struct Module<'a> {
     pub functions: Vec<ParsedFunction<'a>>,
 }
 
-pub enum MethodDecl<'a, P: ArgParams> {
-    Func(Vec<FnArgument<P>>, P::ID, Vec<FnArgument<P>>),
-    Kernel(&'a str, Vec<KernelArgument<P>>),
+pub enum MethodDecl<'a, ID> {
+    Func(Vec<FnArgument<ID>>, ID, Vec<FnArgument<ID>>),
+    Kernel(&'a str, Vec<KernelArgument<ID>>),
 }
 
-pub type FnArgument<P> = Variable<FnArgumentType, P>;
-pub type KernelArgument<P> = Variable<VariableParamType, P>;
+pub type FnArgument<ID> = Variable<FnArgumentType, ID>;
+pub type KernelArgument<ID> = Variable<VariableParamType, ID>;
 
-pub struct Function<'a, P: ArgParams, S> {
-    pub func_directive: MethodDecl<'a, P>,
+pub struct Function<'a, ID, S> {
+    pub func_directive: MethodDecl<'a, ID>,
     pub body: Option<Vec<S>>,
 }
 
-pub type ParsedFunction<'a> = Function<'a, ParsedArgParams<'a>, Statement<ParsedArgParams<'a>>>;
+pub type ParsedFunction<'a> = Function<'a, &'a str, Statement<ParsedArgParams<'a>>>;
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum FnArgumentType {
@@ -264,21 +277,21 @@ impl Default for ScalarType {
 }
 
 pub enum Statement<P: ArgParams> {
-    Label(P::ID),
-    Variable(MultiVariable<P>),
-    Instruction(Option<PredAt<P::ID>>, Instruction<P>),
+    Label(P::Id),
+    Variable(MultiVariable<P::Id>),
+    Instruction(Option<PredAt<P::Id>>, Instruction<P>),
     Block(Vec<Statement<P>>),
 }
 
-pub struct MultiVariable<P: ArgParams> {
-    pub var: Variable<VariableType, P>,
+pub struct MultiVariable<ID> {
+    pub var: Variable<VariableType, ID>,
     pub count: Option<u32>,
 }
 
-pub struct Variable<T, P: ArgParams> {
+pub struct Variable<T, ID> {
     pub align: Option<u32>,
     pub v_type: T,
-    pub name: P::ID,
+    pub name: ID,
 }
 
 #[derive(Eq, PartialEq, Copy, Clone)]
@@ -315,9 +328,8 @@ pub struct PredAt<ID> {
 }
 
 pub enum Instruction<P: ArgParams> {
-    Ld(LdData, Arg2<P>),
-    Mov(MovDetails, Arg2<P>),
-    MovVector(MovVectorDetails, Arg2Vec<P>),
+    Ld(LdDetails, Arg2Ld<P>),
+    Mov(MovDetails, Arg2Mov<P>),
     Mul(MulDetails, Arg3<P>),
     Add(AddDetails, Arg3<P>),
     Setp(SetpData, Arg4Setp<P>),
@@ -338,11 +350,6 @@ pub enum Instruction<P: ArgParams> {
 pub struct MadFloatDesc {}
 
 #[derive(Copy, Clone)]
-pub struct MovVectorDetails {
-    pub typ: MovVectorType,
-    pub length: u8,
-}
-#[derive(Copy, Clone)]
 pub struct AbsDetails {
     pub flush_to_zero: bool,
     pub typ: ScalarType,
@@ -350,16 +357,18 @@ pub struct AbsDetails {
 
 pub struct CallInst<P: ArgParams> {
     pub uniform: bool,
-    pub ret_params: Vec<P::ID>,
-    pub func: P::ID,
+    pub ret_params: Vec<P::Id>,
+    pub func: P::Id,
     pub param_list: Vec<P::CallOperand>,
 }
 
 pub trait ArgParams {
-    type ID;
+    type Id;
     type Operand;
+    type IdOrVector;
+    type OperandOrVector;
     type CallOperand;
-    type VecOperand;
+    type SrcMemberOperand;
 }
 
 pub struct ParsedArgParams<'a> {
@@ -367,57 +376,73 @@ pub struct ParsedArgParams<'a> {
 }
 
 impl<'a> ArgParams for ParsedArgParams<'a> {
-    type ID = &'a str;
+    type Id = &'a str;
     type Operand = Operand<&'a str>;
     type CallOperand = CallOperand<&'a str>;
-    type VecOperand = (&'a str, u8);
+    type IdOrVector = IdOrVector<&'a str>;
+    type OperandOrVector = OperandOrVector<&'a str>;
+    type SrcMemberOperand = (&'a str, u8);
 }
 
 pub struct Arg1<P: ArgParams> {
-    pub src: P::ID, // it is a jump destination, but in terms of operands it is a source operand
+    pub src: P::Id, // it is a jump destination, but in terms of operands it is a source operand
 }
 
 pub struct Arg2<P: ArgParams> {
-    pub dst: P::ID,
+    pub dst: P::Id,
+    pub src: P::Operand,
+}
+pub struct Arg2Ld<P: ArgParams> {
+    pub dst: P::IdOrVector,
     pub src: P::Operand,
 }
 
 pub struct Arg2St<P: ArgParams> {
     pub src1: P::Operand,
-    pub src2: P::Operand,
+    pub src2: P::OperandOrVector,
+}
+
+pub enum Arg2Mov<P: ArgParams> {
+    Normal(Arg2MovNormal<P>),
+    Member(Arg2MovMember<P>),
+}
+
+pub struct Arg2MovNormal<P: ArgParams> {
+    pub dst: P::IdOrVector,
+    pub src: P::OperandOrVector,
 }
 
 // We duplicate dst here because during further compilation
 // composite dst and composite src will receive different ids
-pub enum Arg2Vec<P: ArgParams> {
-    Dst((P::ID, u8), P::ID, P::ID),
-    Src(P::ID, P::VecOperand),
-    Both((P::ID, u8), P::ID, P::VecOperand),
+pub enum Arg2MovMember<P: ArgParams> {
+    Dst((P::Id, u8), P::Id, P::Id),
+    Src(P::Id, P::SrcMemberOperand),
+    Both((P::Id, u8), P::Id, P::SrcMemberOperand),
 }
 
 pub struct Arg3<P: ArgParams> {
-    pub dst: P::ID,
+    pub dst: P::Id,
     pub src1: P::Operand,
     pub src2: P::Operand,
 }
 
 pub struct Arg4<P: ArgParams> {
-    pub dst: P::ID,
+    pub dst: P::Id,
     pub src1: P::Operand,
     pub src2: P::Operand,
     pub src3: P::Operand,
 }
 
 pub struct Arg4Setp<P: ArgParams> {
-    pub dst1: P::ID,
-    pub dst2: Option<P::ID>,
+    pub dst1: P::Id,
+    pub dst2: Option<P::Id>,
     pub src1: P::Operand,
     pub src2: P::Operand,
 }
 
 pub struct Arg5<P: ArgParams> {
-    pub dst1: P::ID,
-    pub dst2: Option<P::ID>,
+    pub dst1: P::Id,
+    pub dst2: Option<P::Id>,
     pub src1: P::Operand,
     pub src2: P::Operand,
     pub src3: P::Operand,
@@ -436,12 +461,34 @@ pub enum CallOperand<ID> {
     Imm(u32),
 }
 
+pub enum IdOrVector<ID> {
+    Reg(ID),
+    Vec(Vec<ID>)
+}
+
+pub enum OperandOrVector<ID> {
+    Reg(ID),
+    RegOffset(ID, i32),
+    Imm(u32),
+    Vec(Vec<ID>)
+}
+
+impl<T> From<Operand<T>> for OperandOrVector<T> {
+    fn from(this: Operand<T>) -> Self {
+        match this {
+            Operand::Reg(r) => OperandOrVector::Reg(r),
+            Operand::RegOffset(r, imm) => OperandOrVector::RegOffset(r, imm),
+            Operand::Imm(imm) => OperandOrVector::Imm(imm),
+        }
+    }
+}
+
 pub enum VectorPrefix {
     V2,
     V4,
 }
 
-pub struct LdData {
+pub struct LdDetails {
     pub qualifier: LdStQualifier,
     pub state_space: LdStateSpace,
     pub caching: LdCacheOperator,
@@ -482,45 +529,23 @@ pub enum LdCacheOperator {
     Uncached,
 }
 
-sub_scalar_type!(MovScalarType {
-    B16,
-    B32,
-    B64,
-    U16,
-    U32,
-    U64,
-    S16,
-    S32,
-    S64,
-    F32,
-    F64,
-    Pred,
-});
-
-// pred vectors are illegal
-sub_scalar_type!(MovVectorType {
-    B16,
-    B32,
-    B64,
-    U16,
-    U32,
-    U64,
-    S16,
-    S32,
-    S64,
-    F32,
-    F64,
-});
-
+#[derive(Copy, Clone)]
 pub struct MovDetails {
-    pub typ: MovType,
+    pub typ: Type,
     pub src_is_address: bool,
+    // two fields below are in use by member moves
+    pub dst_width: u8,
+    pub src_width: u8,
 }
 
-sub_type! {
-    MovType {
-        Scalar(MovScalarType),
-        Vector(MovVectorType, u8),
+impl MovDetails {
+    pub fn new(typ: Type) -> Self {
+        MovDetails {
+            typ,
+            src_is_address: false,
+            dst_width: 0,
+            src_width: 0
+        }
     }
 }
 

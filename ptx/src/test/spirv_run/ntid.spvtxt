@@ -4,15 +4,16 @@
                OpCapability Kernel
                OpCapability Int64
                OpCapability Int8
+               OpCapability Float64
          %29 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
-               OpEntryPoint Kernel %1 "add" %GlobalSize
-               OpDecorate %GlobalSize BuiltIn GlobalSize
+               OpEntryPoint Kernel %1 "ntid" %gl_WorkGroupSize
+               OpDecorate %gl_WorkGroupSize BuiltIn WorkgroupSize
        %void = OpTypeVoid
        %uint = OpTypeInt 32 0
-     %v3uint = OpTypeVector %uint 3
-%_ptr_UniformConstant_v3uint = OpTypePointer UniformConstant %v3uint
- %GlobalSize = OpVariable %_ptr_UniformConstant_v3uint UniformConstant
+     %v4uint = OpTypeVector %uint 4
+%_ptr_UniformConstant_v4uint = OpTypePointer UniformConstant %v4uint
+%gl_WorkGroupSize = OpVariable %_ptr_UniformConstant_v4uint UniformConstant
       %ulong = OpTypeInt 64 0
          %35 = OpTypeFunction %void %ulong %ulong
 %_ptr_Function_ulong = OpTypePointer Function %ulong
@@ -40,7 +41,7 @@
          %25 = OpConvertUToPtr %_ptr_Generic_uint %16
          %15 = OpLoad %uint %25
                OpStore %6 %15
-         %18 = OpLoad %v3uint %GlobalSize
+         %18 = OpLoad %v4uint %gl_WorkGroupSize
          %24 = OpCompositeExtract %uint %18 0
          %17 = OpCopyObject %uint %24
                OpStore %7 %17
