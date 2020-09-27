@@ -28,6 +28,7 @@ enum SpirvType {
     Array(SpirvScalarKey, u32),
     Pointer(Box<SpirvType>, spirv::StorageClass),
     Func(Option<Box<SpirvType>>, Vec<SpirvType>),
+    Struct(Vec<SpirvScalarKey>),
 }
 
 impl SpirvType {
@@ -174,6 +175,16 @@ impl TypeWordMap {
                     .entry(t)
                     .or_insert_with(|| b.type_function(out_t, in_t))
             }
+            SpirvType::Struct(ref underlying) => {
+                let underlying_ids = underlying
+                    .iter()
+                    .map(|t| self.get_or_add_spirv_scalar(b, *t))
+                    .collect::<Vec<_>>();
+                *self
+                    .complex
+                    .entry(t)
+                    .or_insert_with(|| b.type_struct(underlying_ids))
+            }
         }
     }
 
@@ -201,7 +212,9 @@ impl TypeWordMap {
     }
 }
 
-pub fn to_spirv_module<'a>(ast: ast::Module<'a>) -> Result<dr::Module, TranslateError> {
+pub fn to_spirv_module<'a>(
+    ast: ast::Module<'a>,
+) -> Result<(dr::Module, HashMap<String, Vec<usize>>), TranslateError> {
     let mut id_defs = GlobalStringIdResolver::new(1);
     let ssa_functions = ast
         .functions
@@ -218,17 +231,24 @@ pub fn to_spirv_module<'a>(ast: ast::Module<'a>) -> Result<dr::Module, Translate
     emit_memory_model(&mut builder);
     let mut map = TypeWordMap::new(&mut builder);
     emit_builtins(&mut builder, &mut map, &id_defs);
+    let mut args_len = HashMap::new();
     for f in ssa_functions {
         let f_body = match f.body {
             Some(f) => f,
             None => continue,
         };
         emit_function_body_ops(&mut builder, &mut map, opencl_id, &f.globals)?;
-        emit_function_header(&mut builder, &mut map, &id_defs, f.func_directive)?;
+        emit_function_header(
+            &mut builder,
+            &mut map,
+            &id_defs,
+            f.func_directive,
+            &mut args_len,
+        )?;
         emit_function_body_ops(&mut builder, &mut map, opencl_id, &f_body)?;
         builder.end_function()?;
     }
-    Ok(builder.module())
+    Ok((builder.module(), args_len))
 }
 
 fn emit_builtins(
@@ -263,7 +283,12 @@ fn emit_function_header<'a>(
     map: &mut TypeWordMap,
     global: &GlobalStringIdResolver<'a>,
     func_directive: ast::MethodDecl<ExpandedArgParams>,
+    all_args_lens: &mut HashMap<String, Vec<usize>>,
 ) -> Result<(), TranslateError> {
+    if let ast::MethodDecl::Kernel(name, args) = &func_directive {
+        let args_lens = args.iter().map(|param| param.v_type.width()).collect();
+        all_args_lens.insert(name.to_string(), args_lens);
+    }
     let (ret_type, func_type) = get_function_type(builder, map, &func_directive);
     let fn_id = match func_directive {
         ast::MethodDecl::Kernel(name, _) => {
@@ -297,9 +322,11 @@ fn emit_function_header<'a>(
     Ok(())
 }
 
-pub fn to_spirv<'a>(ast: ast::Module<'a>) -> Result<Vec<u32>, TranslateError> {
-    let module = to_spirv_module(ast)?;
-    Ok(module.assemble())
+pub fn to_spirv<'a>(
+    ast: ast::Module<'a>,
+) -> Result<(Vec<u32>, HashMap<String, Vec<usize>>), TranslateError> {
+    let (module, all_args_lens) = to_spirv_module(ast)?;
+    Ok((module.assemble(), all_args_lens))
 }
 
 fn emit_capabilities(builder: &mut dr::Builder) {
@@ -905,7 +932,7 @@ impl<'a, 'b> ArgumentMapVisitor<NormalizedArgParams, ExpandedArgParams>
                 ArgumentSemantics::PhysicalPointer => {
                     let scalar_t = ast::ScalarType::U64;
                     let id_constant_stmt = self.id_def.new_id(ast::Type::Scalar(scalar_t));
-                    let result_id = self.id_def.new_id(typ);
+                    let result_id = self.id_def.new_id(ast::Type::Scalar(scalar_t));
                     self.func.push(Statement::Constant(ConstantDefinition {
                         dst: id_constant_stmt,
                         typ: scalar_t,
@@ -1314,8 +1341,8 @@ fn emit_function_body_ops(
                             let type_pred = map.get_or_add_scalar(builder, ast::ScalarType::Pred);
                             let const_true = builder.constant_true(type_pred);
                             let const_false = builder.constant_false(type_pred);
-                            builder.select(result_type, result_id, operand,  const_false, const_true)
-                        },
+                            builder.select(result_type, result_id, operand, const_false, const_true)
+                        }
                         _ => builder.not(result_type, result_id, operand),
                     }?;
                 }
@@ -1359,6 +1386,12 @@ fn emit_function_body_ops(
                         builder.copy_object(result_type, Some(*dst), *src)?;
                     }
                 },
+                ast::Instruction::Mad(mad, arg) => match mad {
+                    ast::MulDetails::Int(ref desc) => {
+                        emit_mad_int(builder, map, opencl, desc, arg)?
+                    }
+                    ast::MulDetails::Float(desc) => emit_mad_float(builder, map, desc, arg)?,
+                },
             },
             Statement::LoadVar(arg, typ) => {
                 let type_id = map.get_or_add(builder, SpirvType::from(*typ));
@@ -1383,6 +1416,47 @@ fn emit_function_body_ops(
         }
     }
     Ok(())
+}
+
+fn emit_mad_int(
+    builder: &mut dr::Builder,
+    map: &mut TypeWordMap,
+    opencl: spirv::Word,
+    desc: &ast::MulIntDesc,
+    arg: &ast::Arg4<ExpandedArgParams>,
+) -> Result<(), dr::Error> {
+    let inst_type = map.get_or_add(builder, SpirvType::from(ast::ScalarType::from(desc.typ)));
+    match desc.control {
+        ast::MulIntControl::Low => {
+            let mul_result = builder.i_mul(inst_type, None, arg.src1, arg.src2)?;
+            builder.i_add(inst_type, Some(arg.dst), arg.src3, mul_result)?;
+        }
+        ast::MulIntControl::High => {
+            let cl_op = if desc.typ.is_signed() {
+                spirv::CLOp::s_mad_hi
+            } else {
+                spirv::CLOp::u_mad_hi
+            };
+            builder.ext_inst(
+                inst_type,
+                Some(arg.dst),
+                opencl,
+                cl_op as spirv::Word,
+                [arg.src1, arg.src2, arg.src3],
+            )?;
+        }
+        ast::MulIntControl::Wide => todo!(),
+    };
+    Ok(())
+}
+
+fn emit_mad_float(
+    builder: &mut dr::Builder,
+    map: &mut TypeWordMap,
+    desc: &ast::MulFloatDesc,
+    arg: &ast::Arg4<ExpandedArgParams>,
+) -> Result<(), dr::Error> {
+    todo!()
 }
 
 fn emit_add_float(
@@ -1529,7 +1603,7 @@ fn emit_setp(
     builder: &mut dr::Builder,
     map: &mut TypeWordMap,
     setp: &ast::SetpData,
-    arg: &ast::Arg4<ExpandedArgParams>,
+    arg: &ast::Arg4Setp<ExpandedArgParams>,
 ) -> Result<(), dr::Error> {
     if setp.flush_to_zero {
         todo!()
@@ -1607,6 +1681,7 @@ fn emit_mul_int(
     desc: &ast::MulIntDesc,
     arg: &ast::Arg3<ExpandedArgParams>,
 ) -> Result<(), dr::Error> {
+    let instruction_type = ast::ScalarType::from(desc.typ);
     let inst_type = map.get_or_add(builder, SpirvType::from(ast::ScalarType::from(desc.typ)));
     match desc.control {
         ast::MulIntControl::Low => {
@@ -1626,8 +1701,50 @@ fn emit_mul_int(
                 [arg.src1, arg.src2],
             )?;
         }
-        ast::MulIntControl::Wide => todo!(),
+        ast::MulIntControl::Wide => {
+            let mul_ext_type = SpirvType::Struct(vec![
+                SpirvScalarKey::from(instruction_type),
+                SpirvScalarKey::from(instruction_type),
+            ]);
+            let mul_ext_type_id = map.get_or_add(builder, mul_ext_type);
+            let mul = if desc.typ.is_signed() {
+                builder.s_mul_extended(mul_ext_type_id, None, arg.src1, arg.src2)?
+            } else {
+                builder.u_mul_extended(mul_ext_type_id, None, arg.src1, arg.src2)?
+            };
+            let instr_width = instruction_type.width();
+            let instr_kind = instruction_type.kind();
+            let dst_type = ast::ScalarType::from_parts(instr_width * 2, instr_kind);
+            let dst_type_id = map.get_or_add_scalar(builder, dst_type);
+            struct2_bitcast_to_wide(
+                builder,
+                map,
+                SpirvScalarKey::from(instruction_type),
+                inst_type,
+                arg.dst,
+                dst_type_id,
+                mul,
+            )?;
+        }
     }
+    Ok(())
+}
+
+// Surprisingly, structs can't be bitcast, so we route everything through a vector
+fn struct2_bitcast_to_wide(
+    builder: &mut dr::Builder,
+    map: &mut TypeWordMap,
+    base_type_key: SpirvScalarKey,
+    instruction_type: spirv::Word,
+    dst: spirv::Word,
+    dst_type_id: spirv::Word,
+    src: spirv::Word,
+) -> Result<(), dr::Error> {
+    let low_bits = builder.composite_extract(instruction_type, None, src, [0])?;
+    let high_bits = builder.composite_extract(instruction_type, None, src, [1])?;
+    let vector_type = map.get_or_add(builder, SpirvType::Vector(base_type_key, 2));
+    let vector = builder.composite_construct(vector_type, None, [low_bits, high_bits])?;
+    builder.bitcast(dst_type_id, Some(dst), vector)?;
     Ok(())
 }
 
@@ -1844,8 +1961,8 @@ impl PtxSpecialRegister {
 
     fn get_builtin(self) -> spirv::BuiltIn {
         match self {
-            PtxSpecialRegister::Tid => spirv::BuiltIn::GlobalInvocationId,
-            PtxSpecialRegister::Ntid => spirv::BuiltIn::GlobalSize,
+            PtxSpecialRegister::Tid => spirv::BuiltIn::LocalInvocationId,
+            PtxSpecialRegister::Ntid => spirv::BuiltIn::WorkgroupSize,
             PtxSpecialRegister::Ctaid => spirv::BuiltIn::WorkgroupId,
             PtxSpecialRegister::Nctaid => spirv::BuiltIn::NumWorkgroups,
         }
@@ -2492,6 +2609,10 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
                 let inst_type = ast::Type::Scalar(ast::ScalarType::B64);
                 ast::Instruction::Cvta(d, a.map(visitor, false, inst_type)?)
             }
+            ast::Instruction::Mad(d, a) => {
+                let inst_type = d.get_type();
+                ast::Instruction::Mad(d, a.map(visitor, inst_type)?)
+            }
         })
     }
 }
@@ -2641,7 +2762,8 @@ impl ast::Instruction<ExpandedArgParams> {
             | ast::Instruction::St(_, _)
             | ast::Instruction::Ret(_)
             | ast::Instruction::Abs(_, _)
-            | ast::Instruction::Call(_) => None,
+            | ast::Instruction::Call(_)
+            | ast::Instruction::Mad(_, _) => None,
         }
     }
 }
@@ -2737,6 +2859,17 @@ impl<'a> ast::Instruction<ast::ParsedArgParams<'a>> {
                 Ok(ast::Instruction::Call(call_inst))
             }
             i => i.map(f),
+        }
+    }
+}
+
+impl ast::VariableParamType {
+    fn width(self) -> usize {
+        match self {
+            ast::VariableParamType::Scalar(t) => ast::ScalarType::from(t).width() as usize,
+            ast::VariableParamType::Array(t, len) => {
+                (ast::ScalarType::from(t).width() as usize) * (len as usize)
+            }
         }
     }
 }
@@ -3042,6 +3175,53 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
         visitor: &mut V,
         t: ast::Type,
     ) -> Result<ast::Arg4<U>, TranslateError> {
+        let dst = visitor.variable(
+            ArgumentDescriptor {
+                op: self.dst,
+                is_dst: true,
+                sema: ArgumentSemantics::Default,
+            },
+            Some(t),
+        )?;
+        let src1 = visitor.operand(
+            ArgumentDescriptor {
+                op: self.src1,
+                is_dst: false,
+                sema: ArgumentSemantics::Default,
+            },
+            t,
+        )?;
+        let src2 = visitor.operand(
+            ArgumentDescriptor {
+                op: self.src2,
+                is_dst: false,
+                sema: ArgumentSemantics::Default,
+            },
+            t,
+        )?;
+        let src3 = visitor.operand(
+            ArgumentDescriptor {
+                op: self.src3,
+                is_dst: false,
+                sema: ArgumentSemantics::Default,
+            },
+            t,
+        )?;
+        Ok(ast::Arg4 {
+            dst,
+            src1,
+            src2,
+            src3,
+        })
+    }
+}
+
+impl<T: ArgParamsEx> ast::Arg4Setp<T> {
+    fn map<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
+        self,
+        visitor: &mut V,
+        t: ast::Type,
+    ) -> Result<ast::Arg4Setp<U>, TranslateError> {
         let dst1 = visitor.variable(
             ArgumentDescriptor {
                 op: self.dst1,
@@ -3079,7 +3259,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             },
             t,
         )?;
-        Ok(ast::Arg4 {
+        Ok(ast::Arg4Setp {
             dst1,
             dst2,
             src1,

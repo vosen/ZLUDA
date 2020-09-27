@@ -8,7 +8,6 @@ use spirv_headers::Word;
 use spirv_tools_sys::{
     spv_binary, spv_endianness_t, spv_parsed_instruction_t, spv_result_t, spv_target_env,
 };
-use std::{collections::hash_map::Entry, cmp};
 use std::error;
 use std::ffi::{c_void, CStr, CString};
 use std::fmt;
@@ -17,6 +16,7 @@ use std::hash::Hash;
 use std::mem;
 use std::slice;
 use std::{borrow::Cow, collections::HashMap, env, fs, path::PathBuf, ptr, str};
+use std::{cmp, collections::hash_map::Entry};
 
 macro_rules! test_ptx {
     ($fn_name:ident, $input:expr, $output:expr) => {
@@ -65,6 +65,8 @@ test_ptx!(mov_address, [0xDEADu64], [0u64]);
 test_ptx!(b64tof64, [111u64], [111u64]);
 test_ptx!(implicit_param, [34u32], [34u32]);
 test_ptx!(pred_not, [10u64, 11u64], [2u64, 0u64]);
+test_ptx!(mad_s32, [2i32, 3i32, 4i32], [10i32, 10i32, 10i32]);
+test_ptx!(mul_wide, [0x01_00_00_00__01_00_00_00i64], [0x1_00_00_00_00_00_00i64]);
 
 struct DisplayError<T: Debug> {
     err: T,
@@ -93,7 +95,7 @@ fn test_ptx_assert<'a, T: From<u8> + ze::SafeRepr + Debug + Copy + PartialEq>(
     let mut errors = Vec::new();
     let ast = ptx::ModuleParser::new().parse(&mut errors, ptx_text)?;
     assert!(errors.len() == 0);
-    let spirv = translate::to_spirv(ast)?;
+    let (spirv, _) = translate::to_spirv(ast)?;
     let name = CString::new(name)?;
     let result =
         run_spirv(name.as_c_str(), &spirv, input, output).map_err(|err| DisplayError { err })?;
@@ -127,7 +129,7 @@ fn run_spirv<T: From<u8> + ze::SafeRepr + Copy + Debug>(
         kernel.set_indirect_access(
             ze::sys::ze_kernel_indirect_access_flags_t::ZE_KERNEL_INDIRECT_ACCESS_FLAG_DEVICE,
         )?;
-        let mut inp_b = ze::DeviceBuffer::<T>::new(&mut ctx, &dev, cmp::max(input.len(),1))?;
+        let mut inp_b = ze::DeviceBuffer::<T>::new(&mut ctx, &dev, cmp::max(input.len(), 1))?;
         let mut out_b = ze::DeviceBuffer::<T>::new(&mut ctx, &dev, cmp::max(output.len(), 1))?;
         let inp_b_ptr_mut: ze::BufferPtrMut<T> = (&mut inp_b).into();
         let event_pool = ze::EventPool::new(&mut ctx, 3, Some(&[&dev]))?;
@@ -157,7 +159,7 @@ fn test_spvtxt_assert<'a>(
     let mut errors = Vec::new();
     let ast = ptx::ModuleParser::new().parse(&mut errors, ptx_txt)?;
     assert!(errors.len() == 0);
-    let ptx_mod = translate::to_spirv_module(ast)?;
+    let (ptx_mod, _) = translate::to_spirv_module(ast)?;
     let spv_context =
         unsafe { spirv_tools::spvContextCreate(spv_target_env::SPV_ENV_UNIVERSAL_1_3) };
     assert!(spv_context != ptr::null_mut());

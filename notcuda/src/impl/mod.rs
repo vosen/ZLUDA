@@ -1,4 +1,4 @@
-use crate::cuda::{CUctx_st, CUdevice, CUdeviceptr, CUfunction, CUmod_st, CUmodule, CUresult};
+use crate::cuda::{CUctx_st, CUdevice, CUdeviceptr, CUfunc_st, CUfunction, CUmod_st, CUmodule, CUresult, CUstream, CUstream_st};
 use std::{ffi::c_void, mem::{self, ManuallyDrop}, os::raw::c_int, sync::Mutex};
 
 #[cfg(test)]
@@ -9,6 +9,8 @@ pub mod device;
 pub mod export_table;
 pub mod memory;
 pub mod module;
+pub mod function;
+pub mod stream;
 
 #[cfg(debug_assertions)]
 pub fn unimplemented() -> CUresult {
@@ -242,6 +244,10 @@ impl<'a> CudaRepr for CUmod_st {
     type Impl = module::Module;
 }
 
-impl<'a> CudaRepr for CUfunction {
-    type Impl = *mut module::Function;
+impl<'a> CudaRepr for CUfunc_st {
+    type Impl = function::Function;
+}
+
+impl<'a> CudaRepr for CUstream_st {
+    type Impl = stream::Stream;
 }

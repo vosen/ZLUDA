@@ -320,7 +320,7 @@ pub enum Instruction<P: ArgParams> {
     MovVector(MovVectorDetails, Arg2Vec<P>),
     Mul(MulDetails, Arg3<P>),
     Add(AddDetails, Arg3<P>),
-    Setp(SetpData, Arg4<P>),
+    Setp(SetpData, Arg4Setp<P>),
     SetpBool(SetpBoolData, Arg5<P>),
     Not(NotType, Arg2<P>),
     Bra(BraData, Arg1<P>),
@@ -331,7 +331,11 @@ pub enum Instruction<P: ArgParams> {
     Ret(RetData),
     Call(CallInst<P>),
     Abs(AbsDetails, Arg2<P>),
+    Mad(MulDetails, Arg4<P>),
 }
+
+#[derive(Copy, Clone)]
+pub struct MadFloatDesc {}
 
 #[derive(Copy, Clone)]
 pub struct MovVectorDetails {
@@ -398,6 +402,13 @@ pub struct Arg3<P: ArgParams> {
 }
 
 pub struct Arg4<P: ArgParams> {
+    pub dst: P::ID,
+    pub src1: P::Operand,
+    pub src2: P::Operand,
+    pub src3: P::Operand,
+}
+
+pub struct Arg4Setp<P: ArgParams> {
     pub dst1: P::ID,
     pub dst2: Option<P::ID>,
     pub src1: P::Operand,
@@ -503,7 +514,7 @@ sub_scalar_type!(MovVectorType {
 
 pub struct MovDetails {
     pub typ: MovType,
-    pub src_is_address: bool
+    pub src_is_address: bool,
 }
 
 sub_type! {
@@ -518,17 +529,20 @@ pub enum MulDetails {
     Float(MulFloatDesc),
 }
 
+#[derive(Copy, Clone)]
 pub struct MulIntDesc {
     pub typ: IntType,
     pub control: MulIntControl,
 }
 
+#[derive(Copy, Clone)]
 pub enum MulIntControl {
     Low,
     High,
     Wide,
 }
 
+#[derive(Copy, Clone)]
 pub struct MulFloatDesc {
     pub typ: FloatType,
     pub rounding: Option<RoundingMode>,

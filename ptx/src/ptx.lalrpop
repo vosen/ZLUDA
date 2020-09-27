@@ -122,6 +122,7 @@ match {
     "cvta",
     "debug",
     "ld",
+    "mad",
     "map_f64_to_f32",
     "mov",
     "mul",
@@ -149,6 +150,7 @@ ExtendedID : &'input str = {
     "cvta",
     "debug",
     "ld",
+    "mad",
     "map_f64_to_f32",
     "mov",
     "mul",
@@ -442,6 +444,7 @@ Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
     InstCvta,
     InstCall,
     InstAbs,
+    InstMad
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
@@ -649,7 +652,7 @@ InstAddMode: ast::AddDetails = {
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#half-precision-comparison-instructions-setp
 // TODO: support f16 setp
 InstSetp: ast::Instruction<ast::ParsedArgParams<'input>> = {
-    "setp" <d:SetpMode> <a:Arg4> => ast::Instruction::Setp(d, a),
+    "setp" <d:SetpMode> <a:Arg4Setp> => ast::Instruction::Setp(d, a),
     "setp" <d:SetpBoolMode> <a:Arg5> => ast::Instruction::SetpBool(d, a),
 };
 
@@ -995,6 +998,13 @@ InstAbs: ast::Instruction<ast::ParsedArgParams<'input>> = {
     },
 };
 
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-mad
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-mad
+InstMad: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "mad" <d:InstMulMode> <a:Arg4> => ast::Instruction::Mad(d, a),
+    "mad" ".hi" ".sat" ".s32" => todo!()
+};
+
 SignedIntType: ast::ScalarType = {
     ".s16" => ast::ScalarType::S16,
     ".s32" => ast::ScalarType::S32,
@@ -1056,7 +1066,11 @@ Arg3: ast::Arg3<ast::ParsedArgParams<'input>> = {
 };
 
 Arg4: ast::Arg4<ast::ParsedArgParams<'input>> = {
-    <dst1:ExtendedID> <dst2:OptionalDst?> "," <src1:Operand> "," <src2:Operand> => ast::Arg4{<>}
+    <dst:ExtendedID> "," <src1:Operand> "," <src2:Operand> ","  <src3:Operand> => ast::Arg4{<>}
+};
+
+Arg4Setp: ast::Arg4Setp<ast::ParsedArgParams<'input>> = {
+    <dst1:ExtendedID> <dst2:OptionalDst?> "," <src1:Operand> "," <src2:Operand> => ast::Arg4Setp{<>}
 };
 
 // TODO: pass src3 negation somewhere

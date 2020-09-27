@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 
-use crate::r#impl as notcuda;
+use crate::{cuda::CUcontext, cuda::CUstream, r#impl as notcuda};
 use crate::r#impl::CUresult;
 use crate::{cuda::CUuuid, r#impl::Encuda};
 use ::std::{
@@ -36,14 +36,14 @@ pub trait CudaDriverFns {
     fn cuMemAlloc_v2(dptr: *mut *mut c_void, bytesize: usize) -> CUresult;
     fn cuDeviceGetUuid(uuid: *mut CUuuid, dev: c_int) -> CUresult;
     fn cuDevicePrimaryCtxGetState(dev: c_int, flags: *mut c_uint, active: *mut c_int) -> CUresult;
+    fn cuStreamGetCtx(hStream: CUstream, pctx: *mut *mut c_void) -> CUresult;
 }
 
 pub struct NotCuda();
 
 impl CudaDriverFns for NotCuda {
     fn cuInit(_flags: c_uint) -> CUresult {
-        assert!(notcuda::context::is_context_stack_empty());
-        notcuda::init().encuda()
+        crate::cuda::cuInit(_flags as _)
     }
 
     fn cuCtxCreate_v2(pctx: *mut *mut c_void, flags: c_uint, dev: c_int) -> CUresult {
@@ -75,6 +75,10 @@ impl CudaDriverFns for NotCuda {
 
     fn cuDevicePrimaryCtxGetState(dev: c_int, flags: *mut c_uint, active: *mut c_int) -> CUresult {
         notcuda::device::primary_ctx_get_state(notcuda::device::Index(dev), flags, active).encuda()
+    }
+
+    fn cuStreamGetCtx(hStream: CUstream, pctx: *mut *mut c_void) -> CUresult {
+        crate::cuda::cuStreamGetCtx(hStream, pctx as _)
     }
 }
 
@@ -114,5 +118,9 @@ impl CudaDriverFns for Cuda {
 
     fn cuDevicePrimaryCtxGetState(dev: c_int, flags: *mut c_uint, active: *mut c_int) -> CUresult {
         unsafe { CUresult(cuda::cuDevicePrimaryCtxGetState(dev, flags, active) as c_uint) }
+    }
+
+    fn cuStreamGetCtx(hStream: CUstream, pctx: *mut *mut c_void) -> CUresult {
+        unsafe { CUresult(cuda::cuStreamGetCtx(hStream as _, pctx as _) as c_uint) }
     }
 }

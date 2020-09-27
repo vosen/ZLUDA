@@ -726,6 +726,11 @@ impl<'a> Kernel<'a> {
         Ok(())
     }
 
+    pub unsafe fn set_arg_raw(&self, index: u32, size: usize, value: *const c_void) -> Result<()> {
+        check!(sys::zeKernelSetArgumentValue(self.0, index, size, value));
+        Ok(())
+    }
+
     pub fn set_group_size(&self, x: u32, y: u32, z: u32) -> Result<()> {
         check!(sys::zeKernelSetGroupSize(self.0, x, y, z));
         Ok(())

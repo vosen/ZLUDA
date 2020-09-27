@@ -1,6 +1,9 @@
-use std::{ffi::c_void, ffi::CStr, mem, os::raw::c_char, ptr, slice, sync::Mutex};
+use std::{
+    collections::HashMap, ffi::c_void, ffi::CStr, ffi::CString, mem, os::raw::c_char, ptr, slice,
+    sync::Mutex,
+};
 
-use super::{transmute_lifetime, CUresult};
+use super::{function::Function, transmute_lifetime, CUresult};
 use ptx;
 
 use super::context;
@@ -9,6 +12,7 @@ pub type Module = Mutex<ModuleData>;
 
 pub struct ModuleData {
     base: l0::Module,
+    arg_lens: HashMap<CString, Vec<usize>>,
 }
 
 pub enum ModuleCompileError<'a> {
@@ -52,7 +56,7 @@ impl ModuleData {
             Ok(_) if errors.len() > 0 => return Err(ModuleCompileError::Parse(errors, None)),
             Ok(ast) => ast,
         };
-        let spirv = ptx::to_spirv(ast)?;
+        let (spirv, all_arg_lens) = ptx::to_spirv(ast)?;
         let byte_il = unsafe {
             slice::from_raw_parts::<u8>(
                 spirv.as_ptr() as *const _,
@@ -63,15 +67,17 @@ impl ModuleData {
             l0::Module::new_spirv(&mut dev.l0_context, &dev.base, byte_il, None)
         });
         match module {
-            Ok(Ok(module)) => Ok(Mutex::new(Self { base: module })),
+            Ok(Ok(module)) => Ok(Mutex::new(Self {
+                base: module,
+                arg_lens: all_arg_lens
+                    .into_iter()
+                    .map(|(k, v)| (CString::new(k).unwrap(), v))
+                    .collect(),
+            })),
             Ok(Err(err)) => Err(ModuleCompileError::from(err)),
             Err(err) => Err(ModuleCompileError::from(err)),
         }
     }
-}
-
-pub struct Function {
-    base: l0::Kernel<'static>,
 }
 
 pub fn get_function(
@@ -83,10 +89,33 @@ pub fn get_function(
         return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
     }
     let name = unsafe { CStr::from_ptr(name) };
-    let kernel = unsafe { &*hmod }
+    let (mut kernel, args_len) = unsafe { &*hmod }
         .try_lock()
-        .map(|module| l0::Kernel::new_resident(unsafe { transmute_lifetime(&module.base) }, name))
+        .map(|module| {
+            Result::<_, CUresult>::Ok((
+                l0::Kernel::new_resident(unsafe { transmute_lifetime(&module.base) }, name)?,
+                module
+                    .arg_lens
+                    .get(name)
+                    .ok_or(CUresult::CUDA_ERROR_NOT_FOUND)?
+                    .clone(),
+            ))
+        })
         .map_err(|_| CUresult::CUDA_ERROR_ILLEGAL_STATE)??;
-    unsafe { *hfunc = Box::into_raw(Box::new(Function { base: kernel })) };
+    kernel.set_indirect_access(
+        l0::sys::ze_kernel_indirect_access_flags_t::ZE_KERNEL_INDIRECT_ACCESS_FLAG_DEVICE
+            | l0::sys::ze_kernel_indirect_access_flags_t::ZE_KERNEL_INDIRECT_ACCESS_FLAG_HOST
+            | l0::sys::ze_kernel_indirect_access_flags_t::ZE_KERNEL_INDIRECT_ACCESS_FLAG_SHARED,
+    )?;
+    unsafe {
+        *hfunc = Box::into_raw(Box::new(Function {
+            base: kernel,
+            arg_size: args_len,
+        }))
+    };
+    Ok(())
+}
+
+pub(crate) fn unload(decuda: *mut Module) -> Result<(), CUresult> {
     Ok(())
 }
