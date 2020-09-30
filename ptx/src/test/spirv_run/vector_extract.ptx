@@ -15,6 +15,9 @@
     .reg .u16           temp4;
     .reg .v4.u16        foo;
 
+	ld.param.u64    in_addr, [input_p];
+    ld.param.u64    out_addr, [output_p];
+
     ld.global.v4.u8     {temp1, temp2, temp3, temp4}, [in_addr];
     mov.v4.u16          foo, {temp2, temp3, temp4, temp1};
     mov.v4.u16          {temp3, temp4, temp1, temp2}, foo;

@@ -2,8 +2,10 @@
                OpCapability Linkage
                OpCapability Addresses
                OpCapability Kernel
-               OpCapability Int64
                OpCapability Int8
+               OpCapability Int16
+               OpCapability Int64
+               OpCapability Float16
                OpCapability Float64
          %23 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
@@ -33,17 +35,17 @@
          %11 = OpCopyObject %ulong %12
                OpStore %5 %11
          %14 = OpLoad %ulong %4
-         %17 = OpConvertUToPtr %_ptr_CrossWorkgroup_float %14
-         %18 = OpLoad %float %17
-         %31 = OpBitcast %uint %18
+         %18 = OpConvertUToPtr %_ptr_CrossWorkgroup_float %14
+         %17 = OpLoad %float %18
+         %31 = OpBitcast %uint %17
          %13 = OpUConvert %ulong %31
                OpStore %6 %13
          %15 = OpLoad %ulong %5
          %16 = OpLoad %ulong %6
+         %19 = OpConvertUToPtr %_ptr_CrossWorkgroup_float %15
          %32 = OpBitcast %ulong %16
          %33 = OpUConvert %uint %32
-         %19 = OpBitcast %float %33
-         %20 = OpConvertUToPtr %_ptr_CrossWorkgroup_float %15
-               OpStore %20 %19
+         %20 = OpBitcast %float %33
+               OpStore %19 %20
                OpReturn
                OpFunctionEnd

@@ -463,14 +463,14 @@ pub enum CallOperand<ID> {
 
 pub enum IdOrVector<ID> {
     Reg(ID),
-    Vec(Vec<ID>)
+    Vec(Vec<ID>),
 }
 
 pub enum OperandOrVector<ID> {
     Reg(ID),
     RegOffset(ID, i32),
     Imm(u32),
-    Vec(Vec<ID>)
+    Vec(Vec<ID>),
 }
 
 impl<T> From<Operand<T>> for OperandOrVector<T> {
@@ -536,6 +536,8 @@ pub struct MovDetails {
     // two fields below are in use by member moves
     pub dst_width: u8,
     pub src_width: u8,
+    // This is in use by auto-generated movs
+    pub relaxed_src2_conv: bool,
 }
 
 impl MovDetails {
@@ -544,7 +546,8 @@ impl MovDetails {
             typ,
             src_is_address: false,
             dst_width: 0,
-            src_width: 0
+            src_width: 0,
+            relaxed_src2_conv: false,
         }
     }
 }
@@ -560,7 +563,7 @@ pub struct MulIntDesc {
     pub control: MulIntControl,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum MulIntControl {
     Low,
     High,
