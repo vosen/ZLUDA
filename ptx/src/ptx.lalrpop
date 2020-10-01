@@ -439,6 +439,7 @@ Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
     InstBra,
     InstCvt,
     InstShl,
+    InstShr,
     InstSt,
     InstRet,
     InstCvta,
@@ -916,6 +917,23 @@ ShlType: ast::ShlType = {
     ".b16" => ast::ShlType::B16,
     ".b32" => ast::ShlType::B32,
     ".b64" => ast::ShlType::B64,
+};
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-shr
+InstShr: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "shr" <t:ShrType> <a:Arg3> => ast::Instruction::Shr(t, a)
+};
+
+ShrType: ast::ShrType = {
+    ".b16" => ast::ShrType::B16,
+    ".b32" => ast::ShrType::B32,
+    ".b64" => ast::ShrType::B64,
+    ".u16" => ast::ShrType::U16,
+    ".u32" => ast::ShrType::U32,
+    ".u64" => ast::ShrType::U64,
+    ".s16" => ast::ShrType::S16,
+    ".s32" => ast::ShrType::S32,
+    ".s64" => ast::ShrType::S64,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-st

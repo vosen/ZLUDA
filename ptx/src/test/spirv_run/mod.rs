@@ -68,6 +68,8 @@ test_ptx!(pred_not, [10u64, 11u64], [2u64, 0u64]);
 test_ptx!(mad_s32, [2i32, 3i32, 4i32], [10i32, 10i32, 10i32]);
 test_ptx!(mul_wide, [0x01_00_00_00__01_00_00_00i64], [0x1_00_00_00_00_00_00i64]);
 test_ptx!(vector_extract, [1u8, 2u8, 3u8, 4u8], [3u8, 4u8, 1u8, 2u8]);
+test_ptx!(shr, [-2i32], [-1i32]);
+
 
 struct DisplayError<T: Debug> {
     err: T,

@@ -339,6 +339,7 @@ pub enum Instruction<P: ArgParams> {
     Cvt(CvtDetails, Arg2<P>),
     Cvta(CvtaDetails, Arg2<P>),
     Shl(ShlType, Arg3<P>),
+    Shr(ShrType, Arg3<P>),
     St(StData, Arg2St<P>),
     Ret(RetData),
     Call(CallInst<P>),
@@ -761,6 +762,18 @@ pub enum ShlType {
     B32,
     B64,
 }
+
+sub_scalar_type!(ShrType {
+    B16,
+    B32,
+    B64,
+    U16,
+    U32,
+    U64,
+    S16,
+    S32,
+    S64,
+});
 
 pub struct StData {
     pub qualifier: LdStQualifier,

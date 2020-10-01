@@ -589,6 +589,9 @@ fn convert_to_typed_statements(
                 ast::Instruction::Mad(d, a) => {
                     result.push(Statement::Instruction(ast::Instruction::Mad(d, a.cast())))
                 }
+                ast::Instruction::Shr(d, a) => {
+                    result.push(Statement::Instruction(ast::Instruction::Shr(d, a.cast())))
+                }
             },
             Statement::Label(i) => result.push(Statement::Label(i)),
             Statement::Variable(v) => result.push(Statement::Variable(v)),
@@ -1554,6 +1557,14 @@ fn emit_function_body_ops(
                 ast::Instruction::Shl(t, a) => {
                     let result_type = map.get_or_add(builder, SpirvType::from(t.to_type()));
                     builder.shift_left_logical(result_type, Some(a.dst), a.src1, a.src2)?;
+                }
+                ast::Instruction::Shr(t, a) => {
+                    let result_type = map.get_or_add_scalar(builder, ast::ScalarType::from(*t));
+                    if t.signed() {
+                        builder.shift_right_arithmetic(result_type, Some(a.dst), a.src1, a.src2)?;
+                    } else {
+                        builder.shift_right_logical(result_type, Some(a.dst), a.src1, a.src2)?;
+                    }
                 }
                 ast::Instruction::Cvt(dets, arg) => {
                     emit_cvt(builder, map, dets, arg)?;
@@ -2874,6 +2885,9 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
             ast::Instruction::Shl(t, a) => {
                 ast::Instruction::Shl(t, a.map_shift(visitor, t.to_type())?)
             }
+            ast::Instruction::Shr(t, a) => {
+                ast::Instruction::Shr(t, a.map_shift(visitor, ast::Type::Scalar(t.into()))?)
+            }
             ast::Instruction::St(d, a) => {
                 let inst_type = d.typ;
                 let is_param = d.state_space == ast::StStateSpace::Param
@@ -3094,6 +3108,7 @@ impl ast::Instruction<ExpandedArgParams> {
             | ast::Instruction::Cvt(_, _)
             | ast::Instruction::Cvta(_, _)
             | ast::Instruction::Shl(_, _)
+            | ast::Instruction::Shr(_, _)
             | ast::Instruction::St(_, _)
             | ast::Instruction::Ret(_)
             | ast::Instruction::Abs(_, _)
@@ -4005,6 +4020,15 @@ impl ast::ShlType {
             ast::ShlType::B16 => ast::Type::Scalar(ast::ScalarType::B16),
             ast::ShlType::B32 => ast::Type::Scalar(ast::ScalarType::B32),
             ast::ShlType::B64 => ast::Type::Scalar(ast::ScalarType::B64),
+        }
+    }
+}
+
+impl ast::ShrType {
+    fn signed(&self) -> bool {
+        match self {
+            ast::ShrType::S16 | ast::ShrType::S32 | ast::ShrType::S64 => true,
+            _ => false,
         }
     }
 }
