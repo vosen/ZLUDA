@@ -592,6 +592,9 @@ fn convert_to_typed_statements(
                 ast::Instruction::Shr(d, a) => {
                     result.push(Statement::Instruction(ast::Instruction::Shr(d, a.cast())))
                 }
+                ast::Instruction::Or(d, a) => {
+                    result.push(Statement::Instruction(ast::Instruction::Or(d, a.cast())))
+                }
             },
             Statement::Label(i) => result.push(Statement::Label(i)),
             Statement::Variable(v) => result.push(Statement::Variable(v)),
@@ -1583,6 +1586,14 @@ fn emit_function_body_ops(
                     }
                     ast::MulDetails::Float(desc) => emit_mad_float(builder, map, desc, arg)?,
                 },
+                ast::Instruction::Or(t, a) => {
+                    let result_type = map.get_or_add_scalar(builder, ast::ScalarType::from(*t));
+                    if *t == ast::OrType::Pred {
+                        builder.logical_or(result_type, Some(a.dst), a.src1, a.src2)?;
+                    } else {
+                        builder.bitwise_or(result_type, Some(a.dst), a.src1, a.src2)?;
+                    }
+                }
             },
             Statement::LoadVar(arg, typ) => {
                 let type_id = map.get_or_add(builder, SpirvType::from(*typ));
@@ -2905,6 +2916,10 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
                 let is_wide = d.is_wide();
                 ast::Instruction::Mad(d, a.map(visitor, inst_type, is_wide)?)
             }
+            ast::Instruction::Or(t, a) => ast::Instruction::Or(
+                t,
+                a.map_non_shift(visitor, ast::Type::Scalar(t.into()), false)?,
+            ),
         })
     }
 }
@@ -3113,6 +3128,7 @@ impl ast::Instruction<ExpandedArgParams> {
             | ast::Instruction::Ret(_)
             | ast::Instruction::Abs(_, _)
             | ast::Instruction::Call(_)
+            | ast::Instruction::Or(_, _)
             | ast::Instruction::Mad(_, _) => None,
         }
     }

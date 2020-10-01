@@ -127,6 +127,7 @@ match {
     "mov",
     "mul",
     "not",
+    "or",
     "ret",
     "setp",
     "shl",
@@ -155,6 +156,7 @@ ExtendedID : &'input str = {
     "mov",
     "mul",
     "not",
+    "or",
     "ret",
     "setp",
     "shl",
@@ -445,7 +447,8 @@ Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
     InstCvta,
     InstCall,
     InstAbs,
-    InstMad
+    InstMad,
+    InstOr
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
@@ -1047,6 +1050,18 @@ SignedIntType: ast::ScalarType = {
     ".s32" => ast::ScalarType::S32,
     ".s64" => ast::ScalarType::S64,
 };
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-or
+InstOr: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "or" <d:OrType> <a:Arg3> => ast::Instruction::Or(d, a),
+};
+
+OrType: ast::OrType = {
+    ".pred" => ast::OrType::Pred,
+    ".b16" => ast::OrType::B16,
+    ".b32" => ast::OrType::B32,
+    ".b64" => ast::OrType::B64,
+}
 
 Operand: ast::Operand<&'input str> = {
     <r:ExtendedID> => ast::Operand::Reg(r),

@@ -345,6 +345,7 @@ pub enum Instruction<P: ArgParams> {
     Call(CallInst<P>),
     Abs(AbsDetails, Arg2<P>),
     Mad(MulDetails, Arg4<P>),
+    Or(OrType, Arg3<P>),
 }
 
 #[derive(Copy, Clone)]
@@ -802,3 +803,10 @@ pub enum StCacheOperator {
 pub struct RetData {
     pub uniform: bool,
 }
+
+sub_scalar_type!(OrType {
+    Pred,
+    B16,
+    B32,
+    B64,
+});
