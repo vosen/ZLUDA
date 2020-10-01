@@ -241,6 +241,10 @@ sub_scalar_type!(IntType {
     S64
 });
 
+sub_scalar_type!(UIntType { U8, U16, U32, U64 });
+
+sub_scalar_type!(SIntType { S8, S16, S32, S64 });
+
 impl IntType {
     pub fn is_signed(self) -> bool {
         match self {
@@ -331,7 +335,7 @@ pub enum Instruction<P: ArgParams> {
     Ld(LdDetails, Arg2Ld<P>),
     Mov(MovDetails, Arg2Mov<P>),
     Mul(MulDetails, Arg3<P>),
-    Add(AddDetails, Arg3<P>),
+    Add(ArithDetails, Arg3<P>),
     Setp(SetpData, Arg4Setp<P>),
     SetpBool(SetpBoolData, Arg5<P>),
     Not(NotType, Arg2<P>),
@@ -346,6 +350,9 @@ pub enum Instruction<P: ArgParams> {
     Abs(AbsDetails, Arg2<P>),
     Mad(MulDetails, Arg4<P>),
     Or(OrType, Arg3<P>),
+    Sub(ArithDetails, Arg3<P>),
+    Min(MinMaxDetails, Arg3<P>),
+    Max(MinMaxDetails, Arg3<P>),
 }
 
 #[derive(Copy, Clone)]
@@ -554,11 +561,6 @@ impl MovDetails {
     }
 }
 
-pub enum MulDetails {
-    Int(MulIntDesc),
-    Float(MulFloatDesc),
-}
-
 #[derive(Copy, Clone)]
 pub struct MulIntDesc {
     pub typ: IntType,
@@ -572,14 +574,6 @@ pub enum MulIntControl {
     Wide,
 }
 
-#[derive(Copy, Clone)]
-pub struct MulFloatDesc {
-    pub typ: FloatType,
-    pub rounding: Option<RoundingMode>,
-    pub flush_to_zero: bool,
-    pub saturate: bool,
-}
-
 #[derive(PartialEq, Eq, Copy, Clone)]
 pub enum RoundingMode {
     NearestEven,
@@ -588,20 +582,8 @@ pub enum RoundingMode {
     PositiveInf,
 }
 
-pub enum AddDetails {
-    Int(AddIntDesc),
-    Float(AddFloatDesc),
-}
-
 pub struct AddIntDesc {
     pub typ: IntType,
-    pub saturate: bool,
-}
-
-pub struct AddFloatDesc {
-    pub typ: FloatType,
-    pub rounding: Option<RoundingMode>,
-    pub flush_to_zero: bool,
     pub saturate: bool,
 }
 
@@ -810,3 +792,57 @@ sub_scalar_type!(OrType {
     B32,
     B64,
 });
+
+#[derive(Copy, Clone)]
+pub enum MulDetails {
+    Unsigned(MulUInt),
+    Signed(MulSInt),
+    Float(ArithFloat),
+}
+
+#[derive(Copy, Clone)]
+pub struct MulUInt {
+    pub typ: UIntType,
+    pub control: MulIntControl,
+}
+
+#[derive(Copy, Clone)]
+pub struct MulSInt {
+    pub typ: SIntType,
+    pub control: MulIntControl,
+}
+
+#[derive(Copy, Clone)]
+pub enum ArithDetails {
+    Unsigned(UIntType),
+    Signed(ArithSInt),
+    Float(ArithFloat),
+}
+
+#[derive(Copy, Clone)]
+pub struct ArithSInt {
+    pub typ: SIntType,
+    pub saturate: bool,
+}
+
+#[derive(Copy, Clone)]
+pub struct ArithFloat {
+    pub typ: FloatType,
+    pub rounding: Option<RoundingMode>,
+    pub flush_to_zero: bool,
+    pub saturate: bool,
+}
+
+#[derive(Copy, Clone)]
+pub enum MinMaxDetails {
+    Signed(SIntType),
+    Unsigned(UIntType),
+    Float(MinMaxFloat),
+}
+
+#[derive(Copy, Clone)]
+pub struct MinMaxFloat {
+    pub ftz: bool,
+    pub nan: bool,
+    pub typ: FloatType,
+}

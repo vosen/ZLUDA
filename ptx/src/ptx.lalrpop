@@ -70,6 +70,7 @@ match {
     ".ltu",
     ".lu",
     ".nan",
+    ".NaN",
     ".ne",
     ".neu",
     ".num",
@@ -124,6 +125,8 @@ match {
     "ld",
     "mad",
     "map_f64_to_f32",
+    "max",
+    "min",
     "mov",
     "mul",
     "not",
@@ -134,6 +137,7 @@ match {
     "shr",
     r"sm_[0-9]+" => ShaderModel,
     "st",
+    "sub",
     "texmode_independent",
     "texmode_unified",
 } else {
@@ -153,6 +157,8 @@ ExtendedID : &'input str = {
     "ld",
     "mad",
     "map_f64_to_f32",
+    "max",
+    "min",
     "mov",
     "mul",
     "not",
@@ -163,6 +169,7 @@ ExtendedID : &'input str = {
     "shr",
     ShaderModel,
     "st",
+    "sub",
     "texmode_independent",
     "texmode_unified",
     ID
@@ -448,7 +455,10 @@ Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
     InstCall,
     InstAbs,
     InstMad,
-    InstOr
+    InstOr,
+    InstSub,
+    InstMin,
+    InstMax,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
@@ -570,38 +580,19 @@ MovVectorType: ast::ScalarType = {
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-mul
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#half-precision-floating-point-instructions-mul
 InstMul: ast::Instruction<ast::ParsedArgParams<'input>> = {
-    "mul" <d:InstMulMode> <a:Arg3> => ast::Instruction::Mul(d, a)
+    "mul" <d:MulDetails> <a:Arg3> => ast::Instruction::Mul(d, a)
 };
 
-InstMulMode: ast::MulDetails = {
-    <ctr:MulIntControl> <t:IntType> => ast::MulDetails::Int(ast::MulIntDesc {
+MulDetails: ast::MulDetails = {
+    <ctr:MulIntControl> <t:UIntType> => ast::MulDetails::Unsigned(ast::MulUInt{
         typ: t,
         control: ctr
     }),
-    <r:RoundingModeFloat?> <ftz:".ftz"?> <s:".sat"?> ".f32" => ast::MulDetails::Float(ast::MulFloatDesc {
-        typ: ast::FloatType::F32,
-        rounding: r,
-        flush_to_zero: ftz.is_some(),
-        saturate: s.is_some()
+    <ctr:MulIntControl> <t:SIntType> => ast::MulDetails::Signed(ast::MulSInt{
+        typ: t,
+        control: ctr
     }),
-    <r:RoundingModeFloat?> ".f64" => ast::MulDetails::Float(ast::MulFloatDesc {
-        typ: ast::FloatType::F64,
-        rounding: r,
-        flush_to_zero: false,
-        saturate: false
-    }),
-    <r:".rn"?> <ftz:".ftz"?> <s:".sat"?> ".f16" => ast::MulDetails::Float(ast::MulFloatDesc {
-        typ: ast::FloatType::F16,
-        rounding: r.map(|_| ast::RoundingMode::NearestEven),
-        flush_to_zero: ftz.is_some(),
-        saturate: s.is_some()
-    }),
-    <r:".rn"?> <ftz:".ftz"?> <s:".sat"?> ".f16x2" => ast::MulDetails::Float(ast::MulFloatDesc {
-        typ: ast::FloatType::F16x2,
-        rounding: r.map(|_| ast::RoundingMode::NearestEven),
-        flush_to_zero: ftz.is_some(),
-        saturate: s.is_some()
-    })
+    <f:ArithFloat> => ast::MulDetails::Float(f)
 };
 
 MulIntControl: ast::MulIntControl = {
@@ -634,41 +625,23 @@ IntType : ast::IntType = {
     ".s64" => ast::IntType::S64,
 };
 
+UIntType: ast::UIntType = {
+    ".u16" => ast::UIntType::U16,
+    ".u32" => ast::UIntType::U32,
+    ".u64" => ast::UIntType::U64,
+};
+
+SIntType: ast::SIntType = {
+    ".s16" => ast::SIntType::S16,
+    ".s32" => ast::SIntType::S32,
+    ".s64" => ast::SIntType::S64,
+};
+
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-add
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-add
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#half-precision-floating-point-instructions-add
 InstAdd: ast::Instruction<ast::ParsedArgParams<'input>> = {
-    "add" <d:InstAddMode> <a:Arg3> => ast::Instruction::Add(d, a)
-};
-
-InstAddMode: ast::AddDetails = {
-    <t:IntType> => ast::AddDetails::Int(ast::AddIntDesc {
-        typ: t,
-        saturate: false,
-    }),
-    ".sat" ".s32" => ast::AddDetails::Int(ast::AddIntDesc {
-        typ: ast::IntType::S32,
-        saturate: true,
-    }),
-    <rn:RoundingModeFloat?> <ftz:".ftz"?> <sat:".sat"?> ".f32" => ast::AddDetails::Float(ast::AddFloatDesc {
-        typ: ast::FloatType::F32,
-        rounding: rn,
-        flush_to_zero: ftz.is_some(),
-        saturate: sat.is_some(),
-    }),
-    <rn:RoundingModeFloat?> ".f64" => ast::AddDetails::Float(ast::AddFloatDesc {
-        typ: ast::FloatType::F64,
-        rounding: rn,
-        flush_to_zero: false,
-        saturate: false,
-    }),
-    <rn:".rn"?> <ftz:".ftz"?> <sat:".sat"?>".f16" => ast::AddDetails::Float(ast::AddFloatDesc {
-        typ: ast::FloatType::F16,
-        rounding: rn.map(|_| ast::RoundingMode::NearestEven),
-        flush_to_zero: ftz.is_some(),
-        saturate: sat.is_some(),
-    }),
-    ".rn"? ".ftz"? ".sat"? ".f16x2" => todo!()
+    "add" <d:ArithDetails> <a:Arg3> => ast::Instruction::Add(d, a)
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions-setp
@@ -1041,7 +1014,7 @@ InstAbs: ast::Instruction<ast::ParsedArgParams<'input>> = {
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-mad
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-mad
 InstMad: ast::Instruction<ast::ParsedArgParams<'input>> = {
-    "mad" <d:InstMulMode> <a:Arg4> => ast::Instruction::Mad(d, a),
+    "mad" <d:MulDetails> <a:Arg4> => ast::Instruction::Mad(d, a),
     "mad" ".hi" ".sat" ".s32" => todo!()
 };
 
@@ -1061,6 +1034,84 @@ OrType: ast::OrType = {
     ".b16" => ast::OrType::B16,
     ".b32" => ast::OrType::B32,
     ".b64" => ast::OrType::B64,
+}
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-sub
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-sub
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#half-precision-floating-point-instructions-sub
+InstSub: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "sub" <d:ArithDetails> <a:Arg3> => ast::Instruction::Sub(d, a),
+};
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-min
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-min
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#half-precision-floating-point-instructions-min
+InstMin: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "min" <d:MinMaxDetails> <a:Arg3> => ast::Instruction::Min(d, a),
+};
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-max
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-max
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#half-precision-floating-point-instructions-max
+InstMax: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "max" <d:MinMaxDetails> <a:Arg3> => ast::Instruction::Max(d, a),
+};
+
+MinMaxDetails: ast::MinMaxDetails = {
+    <t:UIntType> => ast::MinMaxDetails::Unsigned(t),
+    <t:SIntType> => ast::MinMaxDetails::Signed(t),
+    <ftz:".ftz"?> <nan:".NaN"?> ".f32" => ast::MinMaxDetails::Float(
+        ast::MinMaxFloat{ ftz: ftz.is_some(), nan: nan.is_some(), typ: ast::FloatType::F32 }
+    ),
+    ".f64" => ast::MinMaxDetails::Float(
+        ast::MinMaxFloat{ ftz: false, nan: false, typ: ast::FloatType::F64 }
+    ),
+    <ftz:".ftz"?> <nan:".NaN"?> ".f16" => ast::MinMaxDetails::Float(
+        ast::MinMaxFloat{ ftz: ftz.is_some(), nan: nan.is_some(), typ: ast::FloatType::F16 }
+    ),
+    <ftz:".ftz"?> <nan:".NaN"?> ".f16x2" => ast::MinMaxDetails::Float(
+        ast::MinMaxFloat{ ftz: ftz.is_some(), nan: nan.is_some(), typ: ast::FloatType::F16x2 }
+    )
+}
+
+ArithDetails: ast::ArithDetails = {
+    <t:UIntType> => ast::ArithDetails::Unsigned(t),
+    <t:SIntType> => ast::ArithDetails::Signed(ast::ArithSInt {
+        typ: t,
+        saturate: false,
+    }),
+    ".sat" ".s32" => ast::ArithDetails::Signed(ast::ArithSInt {
+        typ: ast::SIntType::S32,
+        saturate: true,
+    }),
+    <f:ArithFloat> => ast::ArithDetails::Float(f)
+}
+
+ArithFloat: ast::ArithFloat = {
+    <rn:RoundingModeFloat?> <ftz:".ftz"?> <sat:".sat"?> ".f32" => ast::ArithFloat {
+        typ: ast::FloatType::F32,
+        rounding: rn,
+        flush_to_zero: ftz.is_some(),
+        saturate: sat.is_some(),
+    },
+    <rn:RoundingModeFloat?> ".f64" => ast::ArithFloat {
+        typ: ast::FloatType::F64,
+        rounding: rn,
+        flush_to_zero: false,
+        saturate: false,
+    },
+    <rn:".rn"?> <ftz:".ftz"?> <sat:".sat"?> ".f16" => ast::ArithFloat {
+        typ: ast::FloatType::F16,
+        rounding: rn.map(|_| ast::RoundingMode::NearestEven),
+        flush_to_zero: ftz.is_some(),
+        saturate: sat.is_some(),
+    },
+    <rn:".rn"?> <ftz:".ftz"?> <sat:".sat"?> ".f16x2" => ast::ArithFloat {
+        typ: ast::FloatType::F16x2,
+        rounding: rn.map(|_| ast::RoundingMode::NearestEven),
+        flush_to_zero: ftz.is_some(),
+        saturate: sat.is_some(),
+    },
 }
 
 Operand: ast::Operand<&'input str> = {

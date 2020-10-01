@@ -595,6 +595,15 @@ fn convert_to_typed_statements(
                 ast::Instruction::Or(d, a) => {
                     result.push(Statement::Instruction(ast::Instruction::Or(d, a.cast())))
                 }
+                ast::Instruction::Sub(d, a) => {
+                    result.push(Statement::Instruction(ast::Instruction::Sub(d, a.cast())))
+                }
+                ast::Instruction::Min(d, a) => {
+                    result.push(Statement::Instruction(ast::Instruction::Min(d, a.cast())))
+                }
+                ast::Instruction::Max(d, a) => {
+                    result.push(Statement::Instruction(ast::Instruction::Max(d, a.cast())))
+                }
             },
             Statement::Label(i) => result.push(Statement::Label(i)),
             Statement::Variable(v) => result.push(Statement::Variable(v)),
@@ -968,62 +977,74 @@ impl<'a, 'b> FlattenArguments<'a, 'b> {
     fn reg_offset(
         &mut self,
         desc: ArgumentDescriptor<(spirv::Word, i32)>,
-        typ: ast::Type,
+        mut typ: ast::Type,
     ) -> Result<spirv::Word, TranslateError> {
         let (reg, offset) = desc.op;
         match desc.sema {
-            ArgumentSemantics::Default | ArgumentSemantics::DefaultRelaxed => {
-                let scalar_t = if let ast::Type::Scalar(scalar) = typ {
-                    scalar
-                } else {
-                    todo!()
+            ArgumentSemantics::Default
+            | ArgumentSemantics::DefaultRelaxed
+            | ArgumentSemantics::PhysicalPointer => {
+                if desc.sema == ArgumentSemantics::PhysicalPointer {
+                    typ = ast::Type::Scalar(ast::ScalarType::U64);
+                }
+                let (width, kind) = match typ {
+                    ast::Type::Scalar(scalar_t) => {
+                        let kind = match scalar_t.kind() {
+                            kind @ ScalarKind::Bit
+                            | kind @ ScalarKind::Unsigned
+                            | kind @ ScalarKind::Signed => kind,
+                            ScalarKind::Float => return Err(TranslateError::MismatchedType),
+                            ScalarKind::Float2 => return Err(TranslateError::MismatchedType),
+                            ScalarKind::Pred => return Err(TranslateError::MismatchedType),
+                        };
+                        (scalar_t.width(), kind)
+                    }
+                    _ => return Err(TranslateError::MismatchedType),
                 };
-                let id_constant_stmt = self.id_def.new_id(ast::Type::Scalar(scalar_t));
+                let arith_detail = if kind == ScalarKind::Signed {
+                    ast::ArithDetails::Signed(ast::ArithSInt {
+                        typ: ast::SIntType::from_size(width),
+                        saturate: false,
+                    })
+                } else {
+                    ast::ArithDetails::Unsigned(ast::UIntType::from_size(width))
+                };
+                let id_constant_stmt = self.id_def.new_id(typ);
                 let result_id = self.id_def.new_id(typ);
-                self.func.push(Statement::Constant(ConstantDefinition {
-                    dst: id_constant_stmt,
-                    typ: scalar_t,
-                    value: offset as i64,
-                }));
-                let int_type = ast::IntType::try_new(scalar_t).unwrap_or_else(|| todo!());
-                self.func.push(Statement::Instruction(
-                    ast::Instruction::<ExpandedArgParams>::Add(
-                        ast::AddDetails::Int(ast::AddIntDesc {
-                            typ: int_type,
-                            saturate: false,
-                        }),
-                        ast::Arg3 {
-                            dst: result_id,
-                            src1: reg,
-                            src2: id_constant_stmt,
-                        },
-                    ),
-                ));
-                Ok(result_id)
-            }
-            ArgumentSemantics::PhysicalPointer => {
-                let scalar_t = ast::ScalarType::U64;
-                let id_constant_stmt = self.id_def.new_id(ast::Type::Scalar(scalar_t));
-                let result_id = self.id_def.new_id(ast::Type::Scalar(scalar_t));
-                self.func.push(Statement::Constant(ConstantDefinition {
-                    dst: id_constant_stmt,
-                    typ: scalar_t,
-                    value: offset as i64,
-                }));
-                let int_type = ast::IntType::U64;
-                self.func.push(Statement::Instruction(
-                    ast::Instruction::<ExpandedArgParams>::Add(
-                        ast::AddDetails::Int(ast::AddIntDesc {
-                            typ: int_type,
-                            saturate: false,
-                        }),
-                        ast::Arg3 {
-                            dst: result_id,
-                            src1: reg,
-                            src2: id_constant_stmt,
-                        },
-                    ),
-                ));
+                // TODO: check for edge cases around min value/max value/wrapping
+                if offset < 0 && kind != ScalarKind::Signed {
+                    self.func.push(Statement::Constant(ConstantDefinition {
+                        dst: id_constant_stmt,
+                        typ: ast::ScalarType::from_parts(width, kind),
+                        value: -(offset as i64),
+                    }));
+                    self.func.push(Statement::Instruction(
+                        ast::Instruction::<ExpandedArgParams>::Sub(
+                            arith_detail,
+                            ast::Arg3 {
+                                dst: result_id,
+                                src1: reg,
+                                src2: id_constant_stmt,
+                            },
+                        ),
+                    ));
+                } else {
+                    self.func.push(Statement::Constant(ConstantDefinition {
+                        dst: id_constant_stmt,
+                        typ: ast::ScalarType::from_parts(width, kind),
+                        value: offset as i64,
+                    }));
+                    self.func.push(Statement::Instruction(
+                        ast::Instruction::<ExpandedArgParams>::Add(
+                            arith_detail,
+                            ast::Arg3 {
+                                dst: result_id,
+                                src1: reg,
+                                src2: id_constant_stmt,
+                            },
+                        ),
+                    ));
+                }
                 Ok(result_id)
             }
             ArgumentSemantics::RegisterPointer => {
@@ -1522,14 +1543,22 @@ fn emit_function_body_ops(
                     }
                 },
                 ast::Instruction::Mul(mul, arg) => match mul {
-                    ast::MulDetails::Int(ref ctr) => {
-                        emit_mul_int(builder, map, opencl, ctr, arg)?;
+                    ast::MulDetails::Signed(ref ctr) => {
+                        emit_mul_sint(builder, map, opencl, ctr, arg)?
+                    }
+                    ast::MulDetails::Unsigned(ref ctr) => {
+                        emit_mul_uint(builder, map, opencl, ctr, arg)?
                     }
                     ast::MulDetails::Float(_) => todo!(),
                 },
                 ast::Instruction::Add(add, arg) => match add {
-                    ast::AddDetails::Int(ref desc) => emit_add_int(builder, map, desc, arg)?,
-                    ast::AddDetails::Float(desc) => emit_add_float(builder, map, desc, arg)?,
+                    ast::ArithDetails::Signed(ref desc) => {
+                        emit_add_int(builder, map, desc.typ.into(), desc.saturate, arg)?
+                    }
+                    ast::ArithDetails::Unsigned(ref desc) => {
+                        emit_add_int(builder, map, (*desc).into(), false, arg)?
+                    }
+                    ast::ArithDetails::Float(desc) => emit_add_float(builder, map, desc, arg)?,
                 },
                 ast::Instruction::Setp(setp, arg) => {
                     if arg.dst2.is_some() {
@@ -1581,8 +1610,11 @@ fn emit_function_body_ops(
                 }
                 ast::Instruction::SetpBool(_, _) => todo!(),
                 ast::Instruction::Mad(mad, arg) => match mad {
-                    ast::MulDetails::Int(ref desc) => {
-                        emit_mad_int(builder, map, opencl, desc, arg)?
+                    ast::MulDetails::Signed(ref desc) => {
+                        emit_mad_sint(builder, map, opencl, desc, arg)?
+                    }
+                    ast::MulDetails::Unsigned(ref desc) => {
+                        emit_mad_uint(builder, map, opencl, desc, arg)?
                     }
                     ast::MulDetails::Float(desc) => emit_mad_float(builder, map, desc, arg)?,
                 },
@@ -1593,6 +1625,23 @@ fn emit_function_body_ops(
                     } else {
                         builder.bitwise_or(result_type, Some(a.dst), a.src1, a.src2)?;
                     }
+                }
+                ast::Instruction::Sub(d, arg) => match d {
+                    ast::ArithDetails::Signed(desc) => {
+                        emit_sub_int(builder, map, desc.typ.into(), desc.saturate, arg)?;
+                    }
+                    ast::ArithDetails::Unsigned(desc) => {
+                        emit_sub_int(builder, map, (*desc).into(), false, arg)?;
+                    }
+                    ast::ArithDetails::Float(desc) => {
+                        emit_sub_float(builder, map, desc, arg)?;
+                    }
+                },
+                ast::Instruction::Min(d, a) => {
+                    emit_min(builder, map, opencl, d, a)?;
+                }
+                ast::Instruction::Max(d, a) => {
+                    emit_max(builder, map, opencl, d, a)?;
                 }
             },
             Statement::LoadVar(arg, typ) => {
@@ -1624,11 +1673,11 @@ fn emit_function_body_ops(
     Ok(())
 }
 
-fn emit_mad_int(
+fn emit_mad_uint(
     builder: &mut dr::Builder,
     map: &mut TypeWordMap,
     opencl: spirv::Word,
-    desc: &ast::MulIntDesc,
+    desc: &ast::MulUInt,
     arg: &ast::Arg4<ExpandedArgParams>,
 ) -> Result<(), dr::Error> {
     let inst_type = map.get_or_add(builder, SpirvType::from(ast::ScalarType::from(desc.typ)));
@@ -1638,16 +1687,38 @@ fn emit_mad_int(
             builder.i_add(inst_type, Some(arg.dst), arg.src3, mul_result)?;
         }
         ast::MulIntControl::High => {
-            let cl_op = if desc.typ.is_signed() {
-                spirv::CLOp::s_mad_hi
-            } else {
-                spirv::CLOp::u_mad_hi
-            };
             builder.ext_inst(
                 inst_type,
                 Some(arg.dst),
                 opencl,
-                cl_op as spirv::Word,
+                spirv::CLOp::u_mad_hi as spirv::Word,
+                [arg.src1, arg.src2, arg.src3],
+            )?;
+        }
+        ast::MulIntControl::Wide => todo!(),
+    };
+    Ok(())
+}
+
+fn emit_mad_sint(
+    builder: &mut dr::Builder,
+    map: &mut TypeWordMap,
+    opencl: spirv::Word,
+    desc: &ast::MulSInt,
+    arg: &ast::Arg4<ExpandedArgParams>,
+) -> Result<(), dr::Error> {
+    let inst_type = map.get_or_add(builder, SpirvType::from(ast::ScalarType::from(desc.typ)));
+    match desc.control {
+        ast::MulIntControl::Low => {
+            let mul_result = builder.i_mul(inst_type, None, arg.src1, arg.src2)?;
+            builder.i_add(inst_type, Some(arg.dst), arg.src3, mul_result)?;
+        }
+        ast::MulIntControl::High => {
+            builder.ext_inst(
+                inst_type,
+                Some(arg.dst),
+                opencl,
+                spirv::CLOp::s_mad_hi as spirv::Word,
                 [arg.src1, arg.src2, arg.src3],
             )?;
         }
@@ -1659,7 +1730,7 @@ fn emit_mad_int(
 fn emit_mad_float(
     builder: &mut dr::Builder,
     map: &mut TypeWordMap,
-    desc: &ast::MulFloatDesc,
+    desc: &ast::ArithFloat,
     arg: &ast::Arg4<ExpandedArgParams>,
 ) -> Result<(), dr::Error> {
     todo!()
@@ -1668,7 +1739,7 @@ fn emit_mad_float(
 fn emit_add_float(
     builder: &mut dr::Builder,
     map: &mut TypeWordMap,
-    desc: &ast::AddFloatDesc,
+    desc: &ast::ArithFloat,
     arg: &ast::Arg3<ExpandedArgParams>,
 ) -> Result<(), dr::Error> {
     if desc.flush_to_zero {
@@ -1677,6 +1748,67 @@ fn emit_add_float(
     let inst_type = map.get_or_add(builder, SpirvType::from(ast::ScalarType::from(desc.typ)));
     builder.f_add(inst_type, Some(arg.dst), arg.src1, arg.src2)?;
     emit_rounding_decoration(builder, arg.dst, desc.rounding);
+    Ok(())
+}
+
+fn emit_sub_float(
+    builder: &mut dr::Builder,
+    map: &mut TypeWordMap,
+    desc: &ast::ArithFloat,
+    arg: &ast::Arg3<ExpandedArgParams>,
+) -> Result<(), dr::Error> {
+    if desc.flush_to_zero {
+        todo!()
+    }
+    let inst_type = map.get_or_add(builder, SpirvType::from(ast::ScalarType::from(desc.typ)));
+    builder.f_sub(inst_type, Some(arg.dst), arg.src1, arg.src2)?;
+    emit_rounding_decoration(builder, arg.dst, desc.rounding);
+    Ok(())
+}
+
+fn emit_min(
+    builder: &mut dr::Builder,
+    map: &mut TypeWordMap,
+    opencl: spirv::Word,
+    desc: &ast::MinMaxDetails,
+    arg: &ast::Arg3<ExpandedArgParams>,
+) -> Result<(), dr::Error> {
+    let cl_op = match desc {
+        ast::MinMaxDetails::Signed(_) => spirv::CLOp::s_min,
+        ast::MinMaxDetails::Unsigned(_) => spirv::CLOp::u_min,
+        ast::MinMaxDetails::Float(_) => spirv::CLOp::fmin,
+    };
+    let inst_type = map.get_or_add(builder, SpirvType::from(desc.get_type()));
+    builder.ext_inst(
+        inst_type,
+        Some(arg.dst),
+        opencl,
+        cl_op as spirv::Word,
+        [arg.src1, arg.src2],
+    )?;
+    Ok(())
+}
+
+fn emit_max(
+    builder: &mut dr::Builder,
+    map: &mut TypeWordMap,
+    opencl: spirv::Word,
+    desc: &ast::MinMaxDetails,
+    arg: &ast::Arg3<ExpandedArgParams>,
+) -> Result<(), dr::Error> {
+    let cl_op = match desc {
+        ast::MinMaxDetails::Signed(_) => spirv::CLOp::s_max,
+        ast::MinMaxDetails::Unsigned(_) => spirv::CLOp::u_max,
+        ast::MinMaxDetails::Float(_) => spirv::CLOp::fmax,
+    };
+    let inst_type = map.get_or_add(builder, SpirvType::from(desc.get_type()));
+    builder.ext_inst(
+        inst_type,
+        Some(arg.dst),
+        opencl,
+        cl_op as spirv::Word,
+        [arg.src1, arg.src2],
+    )?;
     Ok(())
 }
 
@@ -1880,11 +2012,11 @@ fn emit_setp(
     Ok(())
 }
 
-fn emit_mul_int(
+fn emit_mul_sint(
     builder: &mut dr::Builder,
     map: &mut TypeWordMap,
     opencl: spirv::Word,
-    desc: &ast::MulIntDesc,
+    desc: &ast::MulSInt,
     arg: &ast::Arg3<ExpandedArgParams>,
 ) -> Result<(), dr::Error> {
     let instruction_type = ast::ScalarType::from(desc.typ);
@@ -1894,16 +2026,11 @@ fn emit_mul_int(
             builder.i_mul(inst_type, Some(arg.dst), arg.src1, arg.src2)?;
         }
         ast::MulIntControl::High => {
-            let ocl_mul_hi = if desc.typ.is_signed() {
-                spirv::CLOp::s_mul_hi
-            } else {
-                spirv::CLOp::u_mul_hi
-            };
             builder.ext_inst(
                 inst_type,
                 Some(arg.dst),
                 opencl,
-                ocl_mul_hi as spirv::Word,
+                spirv::CLOp::s_mul_hi as spirv::Word,
                 [arg.src1, arg.src2],
             )?;
         }
@@ -1913,11 +2040,54 @@ fn emit_mul_int(
                 SpirvScalarKey::from(instruction_type),
             ]);
             let mul_ext_type_id = map.get_or_add(builder, mul_ext_type);
-            let mul = if desc.typ.is_signed() {
-                builder.s_mul_extended(mul_ext_type_id, None, arg.src1, arg.src2)?
-            } else {
-                builder.u_mul_extended(mul_ext_type_id, None, arg.src1, arg.src2)?
-            };
+            let mul = builder.s_mul_extended(mul_ext_type_id, None, arg.src1, arg.src2)?;
+            let instr_width = instruction_type.width();
+            let instr_kind = instruction_type.kind();
+            let dst_type = ast::ScalarType::from_parts(instr_width * 2, instr_kind);
+            let dst_type_id = map.get_or_add_scalar(builder, dst_type);
+            struct2_bitcast_to_wide(
+                builder,
+                map,
+                SpirvScalarKey::from(instruction_type),
+                inst_type,
+                arg.dst,
+                dst_type_id,
+                mul,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn emit_mul_uint(
+    builder: &mut dr::Builder,
+    map: &mut TypeWordMap,
+    opencl: spirv::Word,
+    desc: &ast::MulUInt,
+    arg: &ast::Arg3<ExpandedArgParams>,
+) -> Result<(), dr::Error> {
+    let instruction_type = ast::ScalarType::from(desc.typ);
+    let inst_type = map.get_or_add(builder, SpirvType::from(ast::ScalarType::from(desc.typ)));
+    match desc.control {
+        ast::MulIntControl::Low => {
+            builder.i_mul(inst_type, Some(arg.dst), arg.src1, arg.src2)?;
+        }
+        ast::MulIntControl::High => {
+            builder.ext_inst(
+                inst_type,
+                Some(arg.dst),
+                opencl,
+                spirv::CLOp::u_mul_hi as spirv::Word,
+                [arg.src1, arg.src2],
+            )?;
+        }
+        ast::MulIntControl::Wide => {
+            let mul_ext_type = SpirvType::Struct(vec![
+                SpirvScalarKey::from(instruction_type),
+                SpirvScalarKey::from(instruction_type),
+            ]);
+            let mul_ext_type_id = map.get_or_add(builder, mul_ext_type);
+            let mul = builder.u_mul_extended(mul_ext_type_id, None, arg.src1, arg.src2)?;
             let instr_width = instruction_type.width();
             let instr_kind = instruction_type.kind();
             let dst_type = ast::ScalarType::from_parts(instr_width * 2, instr_kind);
@@ -1981,11 +2151,30 @@ fn emit_abs(
 fn emit_add_int(
     builder: &mut dr::Builder,
     map: &mut TypeWordMap,
-    ctr: &ast::AddIntDesc,
+    typ: ast::ScalarType,
+    saturate: bool,
     arg: &ast::Arg3<ExpandedArgParams>,
 ) -> Result<(), dr::Error> {
-    let inst_type = map.get_or_add(builder, SpirvType::from(ast::ScalarType::from(ctr.typ)));
+    if saturate {
+        todo!()
+    }
+    let inst_type = map.get_or_add(builder, SpirvType::from(ast::ScalarType::from(typ)));
     builder.i_add(inst_type, Some(arg.dst), arg.src1, arg.src2)?;
+    Ok(())
+}
+
+fn emit_sub_int(
+    builder: &mut dr::Builder,
+    map: &mut TypeWordMap,
+    typ: ast::ScalarType,
+    saturate: bool,
+    arg: &ast::Arg3<ExpandedArgParams>,
+) -> Result<(), dr::Error> {
+    if saturate {
+        todo!()
+    }
+    let inst_type = map.get_or_add(builder, SpirvType::from(ast::ScalarType::from(typ)));
+    builder.i_sub(inst_type, Some(arg.dst), arg.src1, arg.src2)?;
     Ok(())
 }
 
@@ -2920,6 +3109,18 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
                 t,
                 a.map_non_shift(visitor, ast::Type::Scalar(t.into()), false)?,
             ),
+            ast::Instruction::Sub(d, a) => {
+                let typ = d.get_type();
+                ast::Instruction::Sub(d, a.map_non_shift(visitor, typ, false)?)
+            }
+            ast::Instruction::Min(d, a) => {
+                let typ = d.get_type();
+                ast::Instruction::Min(d, a.map_non_shift(visitor, typ, false)?)
+            }
+            ast::Instruction::Max(d, a) => {
+                let typ = d.get_type();
+                ast::Instruction::Max(d, a.map_non_shift(visitor, typ, false)?)
+            }
         })
     }
 }
@@ -3129,6 +3330,9 @@ impl ast::Instruction<ExpandedArgParams> {
             | ast::Instruction::Abs(_, _)
             | ast::Instruction::Call(_)
             | ast::Instruction::Or(_, _)
+            | ast::Instruction::Sub(_, _)
+            | ast::Instruction::Min(_, _)
+            | ast::Instruction::Max(_, _)
             | ast::Instruction::Mad(_, _) => None,
         }
     }
@@ -4049,25 +4253,33 @@ impl ast::ShrType {
     }
 }
 
-impl ast::AddDetails {
+impl ast::ArithDetails {
     fn get_type(&self) -> ast::Type {
-        match self {
-            ast::AddDetails::Int(ast::AddIntDesc { typ, .. }) => ast::Type::Scalar((*typ).into()),
-            ast::AddDetails::Float(ast::AddFloatDesc { typ, .. }) => {
-                ast::Type::Scalar((*typ).into())
-            }
-        }
+        ast::Type::Scalar(match self {
+            ast::ArithDetails::Unsigned(t) => (*t).into(),
+            ast::ArithDetails::Signed(d) => d.typ.into(),
+            ast::ArithDetails::Float(d) => d.typ.into(),
+        })
     }
 }
 
 impl ast::MulDetails {
     fn get_type(&self) -> ast::Type {
-        match self {
-            ast::MulDetails::Int(ast::MulIntDesc { typ, .. }) => ast::Type::Scalar((*typ).into()),
-            ast::MulDetails::Float(ast::MulFloatDesc { typ, .. }) => {
-                ast::Type::Scalar((*typ).into())
-            }
-        }
+        ast::Type::Scalar(match self {
+            ast::MulDetails::Unsigned(d) => d.typ.into(),
+            ast::MulDetails::Signed(d) => d.typ.into(),
+            ast::MulDetails::Float(d) => d.typ.into(),
+        })
+    }
+}
+
+impl ast::MinMaxDetails {
+    fn get_type(&self) -> ast::Type {
+        ast::Type::Scalar(match self {
+            ast::MinMaxDetails::Signed(t) => (*t).into(),
+            ast::MinMaxDetails::Unsigned(t) => (*t).into(),
+            ast::MinMaxDetails::Float(d) => d.typ.into(),
+        })
     }
 }
 
@@ -4081,6 +4293,30 @@ impl ast::IntType {
             ast::ScalarType::S32 => Some(ast::IntType::S32),
             ast::ScalarType::S64 => Some(ast::IntType::S64),
             _ => None,
+        }
+    }
+}
+
+impl ast::SIntType {
+    fn from_size(width: u8) -> Self {
+        match width {
+            1 => ast::SIntType::S8,
+            2 => ast::SIntType::S16,
+            4 => ast::SIntType::S32,
+            8 => ast::SIntType::S64,
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl ast::UIntType {
+    fn from_size(width: u8) -> Self {
+        match width {
+            1 => ast::UIntType::U8,
+            2 => ast::UIntType::U16,
+            4 => ast::UIntType::U32,
+            8 => ast::UIntType::U64,
+            _ => unreachable!(),
         }
     }
 }
@@ -4128,7 +4364,8 @@ impl<T> ast::OperandOrVector<T> {
 impl ast::MulDetails {
     fn is_wide(&self) -> bool {
         match self {
-            ast::MulDetails::Int(desc) => desc.control == ast::MulIntControl::Wide,
+            ast::MulDetails::Unsigned(d) => d.control == ast::MulIntControl::Wide,
+            ast::MulDetails::Signed(d) => d.control == ast::MulIntControl::Wide,
             ast::MulDetails::Float(_) => false,
         }
     }

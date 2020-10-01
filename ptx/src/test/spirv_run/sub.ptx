@@ -1,0 +1,22 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry sub(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .u64 	    temp;
+    .reg .u64 	    temp2;
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.u64          temp, [in_addr];
+	sub.u64		    temp2, temp, 1;
+    st.u64          [out_addr], temp2;
+	ret;
+}
