@@ -66,14 +66,18 @@ test_ptx!(b64tof64, [111u64], [111u64]);
 test_ptx!(implicit_param, [34u32], [34u32]);
 test_ptx!(pred_not, [10u64, 11u64], [2u64, 0u64]);
 test_ptx!(mad_s32, [2i32, 3i32, 4i32], [10i32, 10i32, 10i32]);
-test_ptx!(mul_wide, [0x01_00_00_00__01_00_00_00i64], [0x1_00_00_00_00_00_00i64]);
+test_ptx!(
+    mul_wide,
+    [0x01_00_00_00__01_00_00_00i64],
+    [0x1_00_00_00_00_00_00i64]
+);
 test_ptx!(vector_extract, [1u8, 2u8, 3u8, 4u8], [3u8, 4u8, 1u8, 2u8]);
 test_ptx!(shr, [-2i32], [-1i32]);
 test_ptx!(or, [1u64, 2u64], [3u64]);
 test_ptx!(sub, [2u64], [1u64]);
 test_ptx!(min, [555i32, 444i32], [444i32]);
 test_ptx!(max, [555i32, 444i32], [555i32]);
-
+test_ptx!(global_array, [0xDEADu32], [1u32]);
 
 struct DisplayError<T: Debug> {
     err: T,
@@ -131,7 +135,15 @@ fn run_spirv<T: From<u8> + ze::SafeRepr + Copy + Debug>(
         let mut devices = drv.devices()?;
         let dev = devices.drain(0..1).next().unwrap();
         let queue = ze::CommandQueue::new(&mut ctx, &dev)?;
-        let module = ze::Module::new_spirv(&mut ctx, &dev, byte_il, None)?;
+        let (module, log) = ze::Module::new_spirv(&mut ctx, &dev, byte_il, None);
+        let module = match module {
+            Ok(m) => m,
+            Err(err) => {
+                let raw_err_string  = log.get_cstring()?;
+                let err_string = raw_err_string.to_string_lossy();
+                panic!("{:?}\n{}", err, err_string);
+            }
+        };
         let mut kernel = ze::Kernel::new_resident(&module, name)?;
         kernel.set_indirect_access(
             ze::sys::ze_kernel_indirect_access_flags_t::ZE_KERNEL_INDIRECT_ACCESS_FLAG_DEVICE,

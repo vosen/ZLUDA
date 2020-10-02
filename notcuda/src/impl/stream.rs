@@ -30,7 +30,7 @@ mod tests {
 
     use super::super::test::CudaDriverFns;
     use super::super::CUresult;
-    use std::{ffi::c_void, ptr};
+    use std::ptr;
 
     const CU_STREAM_LEGACY: CUstream = 1 as *mut _;
     const CU_STREAM_PER_THREAD: CUstream = 2 as *mut _;
@@ -41,7 +41,7 @@ mod tests {
     fn default_stream_uses_current_ctx_legacy<T: CudaDriverFns>() {
         default_stream_uses_current_ctx_impl::<T>(CU_STREAM_LEGACY);
     }
-    
+
     fn default_stream_uses_current_ctx_ptsd<T: CudaDriverFns>() {
         default_stream_uses_current_ctx_impl::<T>(CU_STREAM_PER_THREAD);
     }

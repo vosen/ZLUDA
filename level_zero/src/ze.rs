@@ -1,6 +1,6 @@
 use crate::sys;
 use std::{
-    ffi::{c_void, CStr},
+    ffi::{c_void, CStr, CString},
     fmt::Debug,
     marker::PhantomData,
     mem, ptr,
@@ -238,23 +238,16 @@ impl Drop for CommandQueue {
 pub struct Module(sys::ze_module_handle_t);
 
 impl Module {
-    pub unsafe fn as_ffi(&self) -> sys::ze_module_handle_t {
-        self.0
-    }
-    pub unsafe fn from_ffi(x: sys::ze_module_handle_t) -> Self {
-        Self(x)
-    }
-
     pub fn new_spirv(
         ctx: &mut Context,
         d: &Device,
         bin: &[u8],
         opts: Option<&CStr>,
-    ) -> Result<Self> {
+    ) -> (Result<Self>, BuildLog) {
         Module::new(ctx, true, d, bin, opts)
     }
 
-    pub fn new_native(ctx: &mut Context, d: &Device, bin: &[u8]) -> Result<Self> {
+    pub fn new_native(ctx: &mut Context, d: &Device, bin: &[u8]) -> (Result<Self>, BuildLog) {
         Module::new(ctx, false, d, bin, None)
     }
 
@@ -264,7 +257,7 @@ impl Module {
         d: &Device,
         bin: &[u8],
         opts: Option<&CStr>,
-    ) -> Result<Self> {
+    ) -> (Result<Self>, BuildLog) {
         let desc = sys::ze_module_desc_t {
             stype: sys::ze_structure_type_t::ZE_STRUCTURE_TYPE_MODULE_DESC,
             pNext: ptr::null(),
@@ -279,14 +272,14 @@ impl Module {
             pConstants: ptr::null(),
         };
         let mut result: sys::ze_module_handle_t = ptr::null_mut();
-        check!(sys::zeModuleCreate(
-            ctx.0,
-            d.0,
-            &desc,
-            &mut result,
-            ptr::null_mut()
-        ));
-        Ok(Module(result))
+        let mut log_handle = ptr::null_mut();
+        let err = unsafe { sys::zeModuleCreate(ctx.0, d.0, &desc, &mut result, &mut log_handle) };
+        let log = BuildLog(log_handle);
+        if err != crate::sys::ze_result_t::ZE_RESULT_SUCCESS {
+            (Result::Err(err), log)
+        } else {
+            (Ok(Module(result)), log)
+        }
     }
 }
 
@@ -294,6 +287,32 @@ impl Drop for Module {
     #[allow(unused_must_use)]
     fn drop(&mut self) {
         check_panic! { sys::zeModuleDestroy(self.0) };
+    }
+}
+
+pub struct BuildLog(sys::ze_module_build_log_handle_t);
+
+impl BuildLog {
+    pub unsafe fn as_ffi(&self) -> sys::ze_module_build_log_handle_t {
+        self.0
+    }
+    pub unsafe fn from_ffi(x: sys::ze_module_build_log_handle_t) -> Self {
+        Self(x)
+    }
+
+    pub fn get_cstring(&self) -> Result<CString> {
+        let mut size = 0;
+        check! { sys::zeModuleBuildLogGetString(self.0, &mut size, ptr::null_mut()) };
+        let mut str_vec = vec![0u8; size];
+        check! { sys::zeModuleBuildLogGetString(self.0, &mut size, str_vec.as_mut_ptr() as *mut i8) };
+        str_vec.pop();
+        Ok(CString::new(str_vec).map_err(|_| sys::ze_result_t::ZE_RESULT_ERROR_UNKNOWN)?)
+    }
+}
+
+impl Drop for BuildLog {
+    fn drop(&mut self) {
+        check_panic!(sys::zeModuleBuildLogDestroy(self.0));
     }
 }
 

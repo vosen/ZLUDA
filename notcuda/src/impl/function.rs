@@ -1,7 +1,7 @@
 use ::std::os::raw::{c_uint, c_void};
 use std::ptr;
 
-use super::{context, device, stream::Stream, CUresult};
+use super::{device, stream::Stream, CUresult};
 
 pub struct Function {
     pub base: l0::Kernel<'static>,

@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 
-use crate::{cuda::CUcontext, cuda::CUstream, r#impl as notcuda};
+use crate::{cuda::CUstream, r#impl as notcuda};
 use crate::r#impl::CUresult;
 use crate::{cuda::CUuuid, r#impl::Encuda};
 use ::std::{

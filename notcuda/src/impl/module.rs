@@ -1,12 +1,9 @@
 use std::{
-    collections::HashMap, ffi::c_void, ffi::CStr, ffi::CString, mem, os::raw::c_char, ptr, slice,
-    sync::Mutex,
+    collections::HashMap, ffi::CStr, ffi::CString, mem, os::raw::c_char, ptr, slice, sync::Mutex,
 };
 
 use super::{function::Function, transmute_lifetime, CUresult};
 use ptx;
-
-use super::context;
 
 pub type Module = Mutex<ModuleData>;
 
@@ -67,14 +64,14 @@ impl ModuleData {
             l0::Module::new_spirv(&mut dev.l0_context, &dev.base, byte_il, None)
         });
         match module {
-            Ok(Ok(module)) => Ok(Mutex::new(Self {
+            Ok((Ok(module), _)) => Ok(Mutex::new(Self {
                 base: module,
                 arg_lens: all_arg_lens
                     .into_iter()
                     .map(|(k, v)| (CString::new(k).unwrap(), v))
                     .collect(),
             })),
-            Ok(Err(err)) => Err(ModuleCompileError::from(err)),
+            Ok((Err(err), _)) => Err(ModuleCompileError::from(err)),
             Err(err) => Err(ModuleCompileError::from(err)),
         }
     }
@@ -116,6 +113,6 @@ pub fn get_function(
     Ok(())
 }
 
-pub(crate) fn unload(decuda: *mut Module) -> Result<(), CUresult> {
+pub(crate) fn unload(_: *mut Module) -> Result<(), CUresult> {
     Ok(())
 }

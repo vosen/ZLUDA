@@ -1,5 +1,7 @@
-use std::convert::From;
+use std::{convert::From, mem, num::ParseFloatError, str::FromStr};
 use std::{marker::PhantomData, num::ParseIntError};
+
+use half::f16;
 
 quick_error! {
     #[derive(Debug)]
@@ -9,11 +11,17 @@ quick_error! {
             display("{}", err)
             cause(err)
         }
+        ParseFloat (err: ParseFloatError) {
+            from()
+            display("{}", err)
+            cause(err)
+        }
         SyntaxError {}
         NonF32Ftz {}
         WrongArrayType {}
         WrongVectorElement {}
         MultiArrayVariable {}
+        ZeroDimensionArray {}
     }
 }
 
@@ -53,7 +61,7 @@ macro_rules! sub_scalar_type {
 
 macro_rules! sub_type {
     ($type_name:ident { $($variant:ident ( $($field_type:ident),+ ) ),+ $(,)? } ) => {
-        #[derive(PartialEq, Eq, Clone, Copy)]
+        #[derive(PartialEq, Eq, Clone)]
         pub enum $type_name {
             $(
                 $variant ($($field_type),+),
@@ -80,11 +88,13 @@ sub_type! {
     }
 }
 
+type VecU32 = Vec<u32>;
+
 sub_type! {
     VariableLocalType {
         Scalar(SizedScalarType),
         Vector(SizedScalarType, u8),
-        Array(SizedScalarType, u32),
+        Array(SizedScalarType, VecU32),
     }
 }
 
@@ -95,7 +105,7 @@ sub_type! {
 sub_type! {
     VariableParamType {
         Scalar(ParamScalarType),
-        Array(SizedScalarType, u32),
+        Array(SizedScalarType, VecU32),
     }
 }
 
@@ -169,7 +179,12 @@ impl<
 
 pub struct Module<'a> {
     pub version: (u8, u8),
-    pub functions: Vec<ParsedFunction<'a>>,
+    pub directives: Vec<Directive<'a, ParsedArgParams<'a>>>,
+}
+
+pub enum Directive<'a, P: ArgParams> {
+    Variable(Variable<VariableType, P::Id>),
+    Method(Function<'a, &'a str, Statement<P>>),
 }
 
 pub enum MethodDecl<'a, ID> {
@@ -187,7 +202,7 @@ pub struct Function<'a, ID, S> {
 
 pub type ParsedFunction<'a> = Function<'a, &'a str, Statement<ParsedArgParams<'a>>>;
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone)]
 pub enum FnArgumentType {
     Reg(VariableRegType),
     Param(VariableParamType),
@@ -202,11 +217,11 @@ impl From<FnArgumentType> for Type {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(PartialEq, Eq, Hash, Clone)]
 pub enum Type {
     Scalar(ScalarType),
     Vector(ScalarType, u8),
-    Array(ScalarType, u32),
+    Array(ScalarType, Vec<u32>),
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
@@ -274,6 +289,30 @@ sub_scalar_type!(FloatType {
     F64
 });
 
+impl ScalarType {
+    pub fn size_of(self) -> u8 {
+        match self {
+            ScalarType::U8 => 1,
+            ScalarType::S8 => 1,
+            ScalarType::B8 => 1,
+            ScalarType::U16 => 2,
+            ScalarType::S16 => 2,
+            ScalarType::B16 => 2,
+            ScalarType::F16 => 2,
+            ScalarType::U32 => 4,
+            ScalarType::S32 => 4,
+            ScalarType::B32 => 4,
+            ScalarType::F32 => 4,
+            ScalarType::U64 => 8,
+            ScalarType::S64 => 8,
+            ScalarType::B64 => 8,
+            ScalarType::F64 => 8,
+            ScalarType::F16x2 => 4,
+            ScalarType::Pred => 1,
+        }
+    }
+}
+
 impl Default for ScalarType {
     fn default() -> Self {
         ScalarType::B8
@@ -296,13 +335,26 @@ pub struct Variable<T, ID> {
     pub align: Option<u32>,
     pub v_type: T,
     pub name: ID,
+    pub array_init: Vec<u8>,
 }
 
-#[derive(Eq, PartialEq, Copy, Clone)]
+#[derive(Eq, PartialEq, Clone)]
 pub enum VariableType {
     Reg(VariableRegType),
     Local(VariableLocalType),
     Param(VariableParamType),
+    Global(VariableLocalType),
+}
+
+impl VariableType {
+    pub fn to_type(&self) -> (StateSpace, Type) {
+        match self {
+            VariableType::Reg(t) => (StateSpace::Reg, t.clone().into()),
+            VariableType::Local(t) => (StateSpace::Local, t.clone().into()),
+            VariableType::Param(t) => (StateSpace::Param, t.clone().into()),
+            VariableType::Global(t) => (StateSpace::Global, t.clone().into()),
+        }
+    }
 }
 
 impl From<VariableType> for Type {
@@ -311,6 +363,7 @@ impl From<VariableType> for Type {
             VariableType::Reg(t) => t.into(),
             VariableType::Local(t) => t.into(),
             VariableType::Param(t) => t.into(),
+            VariableType::Global(t) => t.into(),
         }
     }
 }
@@ -318,7 +371,6 @@ impl From<VariableType> for Type {
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum StateSpace {
     Reg,
-    Sreg,
     Const,
     Global,
     Local,
@@ -538,7 +590,7 @@ pub enum LdCacheOperator {
     Uncached,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct MovDetails {
     pub typ: Type,
     pub src_is_address: bool,
@@ -845,4 +897,195 @@ pub struct MinMaxFloat {
     pub ftz: bool,
     pub nan: bool,
     pub typ: FloatType,
+}
+
+pub enum NumsOrArrays<'a> {
+    Nums(Vec<&'a str>),
+    Arrays(Vec<NumsOrArrays<'a>>),
+}
+
+impl<'a> NumsOrArrays<'a> {
+    pub fn to_vec(self, typ: SizedScalarType, dimensions: &mut [u32]) -> Result<Vec<u8>, PtxError> {
+        self.normalize_dimensions(dimensions)?;
+        let sizeof_t = ScalarType::from(typ).size_of() as usize;
+        let result_size = dimensions.iter().fold(sizeof_t, |x, y| x * (*y as usize));
+        let mut result = vec![0; result_size];
+        self.parse_and_copy(typ, sizeof_t, dimensions, &mut result)?;
+        Ok(result)
+    }
+
+    fn normalize_dimensions(&self, dimensions: &mut [u32]) -> Result<(), PtxError> {
+        match dimensions.first_mut() {
+            Some(first) => {
+                if *first == 0 {
+                    *first = match self {
+                        NumsOrArrays::Nums(v) => v.len() as u32,
+                        NumsOrArrays::Arrays(v) => v.len() as u32,
+                    };
+                }
+            }
+            None => return Err(PtxError::ZeroDimensionArray),
+        }
+        for dim in dimensions {
+            if *dim == 0 {
+                return Err(PtxError::ZeroDimensionArray);
+            }
+        }
+        Ok(())
+    }
+
+    fn parse_and_copy(
+        &self,
+        t: SizedScalarType,
+        size_of_t: usize,
+        dimensions: &[u32],
+        result: &mut [u8],
+    ) -> Result<(), PtxError> {
+        match dimensions {
+            [] => unreachable!(),
+            [dim] => match self {
+                NumsOrArrays::Nums(vec) => {
+                    if vec.len() > *dim as usize {
+                        return Err(PtxError::ZeroDimensionArray);
+                    }
+                    for (idx, val) in vec.iter().enumerate() {
+                        Self::parse_and_copy_single(t, idx, val, result)?;
+                    }
+                }
+                NumsOrArrays::Arrays(_) => return Err(PtxError::ZeroDimensionArray),
+            },
+            [first_dim, rest @ ..] => match self {
+                NumsOrArrays::Arrays(vec) => {
+                    if vec.len() > *first_dim as usize {
+                        return Err(PtxError::ZeroDimensionArray);
+                    }
+                    let size_of_element = rest.iter().fold(size_of_t, |x, y| x * (*y as usize));
+                    for (idx, this) in vec.iter().enumerate() {
+                        this.parse_and_copy(
+                            t,
+                            size_of_t,
+                            rest,
+                            &mut result[(size_of_element * idx)..],
+                        )?;
+                    }
+                }
+                NumsOrArrays::Nums(_) => return Err(PtxError::ZeroDimensionArray),
+            },
+        }
+        Ok(())
+    }
+
+    fn parse_and_copy_single(
+        t: SizedScalarType,
+        idx: usize,
+        str_val: &str,
+        output: &mut [u8],
+    ) -> Result<(), PtxError> {
+        match t {
+            SizedScalarType::B8 | SizedScalarType::U8 => {
+                Self::parse_and_copy_single_t::<u8>(idx, str_val, output)?;
+            }
+            SizedScalarType::B16 | SizedScalarType::U16 => {
+                Self::parse_and_copy_single_t::<u16>(idx, str_val, output)?;
+            }
+            SizedScalarType::B32 | SizedScalarType::U32 => {
+                Self::parse_and_copy_single_t::<u32>(idx, str_val, output)?;
+            }
+            SizedScalarType::B64 | SizedScalarType::U64 => {
+                Self::parse_and_copy_single_t::<u64>(idx, str_val, output)?;
+            }
+            SizedScalarType::S8 => {
+                Self::parse_and_copy_single_t::<i8>(idx, str_val, output)?;
+            }
+            SizedScalarType::S16 => {
+                Self::parse_and_copy_single_t::<i16>(idx, str_val, output)?;
+            }
+            SizedScalarType::S32 => {
+                Self::parse_and_copy_single_t::<i32>(idx, str_val, output)?;
+            }
+            SizedScalarType::S64 => {
+                Self::parse_and_copy_single_t::<i64>(idx, str_val, output)?;
+            }
+            SizedScalarType::F16 => {
+                Self::parse_and_copy_single_t::<f16>(idx, str_val, output)?;
+            }
+            SizedScalarType::F16x2 => todo!(),
+            SizedScalarType::F32 => {
+                Self::parse_and_copy_single_t::<f32>(idx, str_val, output)?;
+            }
+            SizedScalarType::F64 => {
+                Self::parse_and_copy_single_t::<f64>(idx, str_val, output)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn parse_and_copy_single_t<T: Copy + FromStr>(
+        idx: usize,
+        str_val: &str,
+        output: &mut [u8],
+    ) -> Result<(), PtxError>
+    where
+        T::Err: Into<PtxError>,
+    {
+        let typed_output = unsafe {
+            std::slice::from_raw_parts_mut::<T>(
+                output.as_mut_ptr() as *mut _,
+                output.len() / mem::size_of::<T>(),
+            )
+        };
+        typed_output[idx] = str_val.parse::<T>().map_err(|e| e.into())?;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn array_fails_multiple_0_dmiensions() {
+        let inp = NumsOrArrays::Nums(Vec::new());
+        assert!(inp.to_vec(SizedScalarType::B8, &mut vec![0, 0]).is_err());
+    }
+
+    #[test]
+    fn array_fails_on_empty() {
+        let inp = NumsOrArrays::Nums(Vec::new());
+        assert!(inp.to_vec(SizedScalarType::B8, &mut vec![0]).is_err());
+    }
+
+    #[test]
+    fn array_auto_sizes_0_dimension() {
+        let inp = NumsOrArrays::Arrays(vec![
+            NumsOrArrays::Nums(vec!["1", "2"]),
+            NumsOrArrays::Nums(vec!["3", "4"]),
+        ]);
+        let mut dimensions = vec![0u32, 2];
+        assert_eq!(
+            vec![1u8, 2, 3, 4],
+            inp.to_vec(SizedScalarType::B8, &mut dimensions).unwrap()
+        );
+        assert_eq!(dimensions, vec![2u32, 2]);
+    }
+
+    #[test]
+    fn array_fails_wrong_structure() {
+        let inp = NumsOrArrays::Arrays(vec![
+            NumsOrArrays::Nums(vec!["1", "2"]),
+            NumsOrArrays::Arrays(vec![NumsOrArrays::Nums(vec!["1"])]),
+        ]);
+        let mut dimensions = vec![0u32, 2];
+        assert!(inp.to_vec(SizedScalarType::B8, &mut dimensions).is_err());
+    }
+
+    #[test]
+    fn array_fails_too_long_component() {
+        let inp = NumsOrArrays::Arrays(vec![
+            NumsOrArrays::Nums(vec!["1", "2", "3"]),
+            NumsOrArrays::Nums(vec!["4", "5"]),
+        ]);
+        let mut dimensions = vec![0u32, 2];
+        assert!(inp.to_vec(SizedScalarType::B8, &mut dimensions).is_err());
+    }
 }

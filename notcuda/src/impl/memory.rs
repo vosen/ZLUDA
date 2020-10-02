@@ -46,7 +46,7 @@ unsafe fn memcpy_impl(
     Ok(())
 }
 
-pub(crate) fn free_v2(mem: *mut c_void)-> l0::Result<()>  {
+pub(crate) fn free_v2(_: *mut c_void)-> l0::Result<()>  {
     Ok(())
 }
 

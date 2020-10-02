@@ -2,6 +2,8 @@ use crate::ast;
 use crate::ast::UnwrapWithVec;
 use crate::{without_none, vector_index};
 
+use lalrpop_util::ParseError;
+
 grammar<'a>(errors: &mut Vec<ast::PtxError>);
 
 extern {
@@ -27,6 +29,7 @@ match {
     "{", "}",
     "<", ">",
     "|",
+    "=",
     ".acquire",
     ".address_size",
     ".align",
@@ -94,7 +97,6 @@ match {
     ".sat",
     ".section",
     ".shared",
-    ".sreg",
     ".sys",
     ".target",
     ".to",
@@ -176,8 +178,8 @@ ExtendedID : &'input str = {
 }
 
 pub Module: ast::Module<'input> = {
-    <v:Version> Target <f:Directive*> => {
-        ast::Module { version: v, functions: without_none(f) }
+    <v:Version> Target <d:Directive*> => {
+        ast::Module { version: v, directives: without_none(d) }
     }
 };
 
@@ -203,11 +205,12 @@ TargetSpecifier = {
     "map_f64_to_f32"
 };
 
-Directive: Option<ast::Function<'input, &'input str, ast::Statement<ast::ParsedArgParams<'input>>>> = {
+Directive: Option<ast::Directive<'input, ast::ParsedArgParams<'input>>> = {
     AddressSize => None,
-    <f:Function> => Some(f),
+    <f:Function> => Some(ast::Directive::Method(f)),
     File => None,
-    Section => None
+    Section => None,
+    <v:GlobalVariable> ";" => Some(ast::Directive::Variable(v)),
 };
 
 AddressSize = {
@@ -242,9 +245,9 @@ FnArguments: Vec<ast::FnArgument<&'input str>> = {
 };
 
 KernelInput: ast::Variable<ast::VariableParamType, &'input str> = {
-    <v:ParamVariable> => {
+    <v:ParamDeclaration> => {
         let (align, v_type, name) = v;
-        ast::Variable{ align, v_type, name }
+        ast::Variable{ align, v_type, name, array_init: Vec::new() }
     }
 }
 
@@ -252,12 +255,12 @@ FnInput: ast::Variable<ast::FnArgumentType, &'input str> = {
     <v:RegVariable> => {
         let (align, v_type, name) = v;
         let v_type = ast::FnArgumentType::Reg(v_type);
-        ast::Variable{ align, v_type, name }
+        ast::Variable{ align, v_type, name, array_init: Vec::new() }
     },
-    <v:ParamVariable> => {
+    <v:ParamDeclaration> => {
         let (align, v_type, name) = v;
         let v_type = ast::FnArgumentType::Param(v_type);
-        ast::Variable{ align, v_type, name }
+        ast::Variable{ align, v_type, name, array_init: Vec::new() }
     }
 }
 
@@ -268,7 +271,6 @@ pub(crate) FunctionBody: Option<Vec<ast::Statement<ast::ParsedArgParams<'input>>
 
 StateSpaceSpecifier: ast::StateSpace = {
     ".reg" => ast::StateSpace::Reg,
-    ".sreg" => ast::StateSpace::Sreg,
     ".const" => ast::StateSpace::Const,
     ".global" => ast::StateSpace::Global,
     ".local" => ast::StateSpace::Local,
@@ -344,13 +346,13 @@ Variable: ast::Variable<ast::VariableType, &'input str> = {
     <v:RegVariable> => {
         let (align, v_type, name) = v;
         let v_type = ast::VariableType::Reg(v_type);
-        ast::Variable {align, v_type, name}
+        ast::Variable {align, v_type, name, array_init: Vec::new()}
     },
     LocalVariable,
     <v:ParamVariable> => {
-        let (align, v_type, name) = v;
+        let (align, array_init, v_type, name) = v;
         let v_type = ast::VariableType::Param(v_type);
-        ast::Variable {align, v_type, name}
+        ast::Variable {align, v_type, name, array_init}
     },
 };
 
@@ -366,29 +368,57 @@ RegVariable: (Option<u32>, ast::VariableRegType, &'input str) = {
 }
 
 LocalVariable: ast::Variable<ast::VariableType, &'input str> = {
-    ".local" <align:Align?> <t:SizedScalarType> <name:ExtendedID> => {
-        let v_type = ast::VariableType::Local(ast::VariableLocalType::Scalar(t));
-        ast::Variable {align, v_type, name}
-    },
-    ".local" <align:Align?> <v_len:VectorPrefix> <t:SizedScalarType> <name:ExtendedID> => {
-        let v_type = ast::VariableType::Local(ast::VariableLocalType::Vector(t, v_len));
-        ast::Variable {align, v_type, name}
-    },
-    ".local" <align:Align?> <t:SizedScalarType> <name:ExtendedID> <arr:ArraySpecifier> => {
-        let v_type = ast::VariableType::Local(ast::VariableLocalType::Array(t, arr));
-        ast::Variable {align, v_type, name}
+    ".local" <def:LocalVariableDefinition> => {
+        let (align, array_init, v_type, name) = def;
+        ast::Variable { align, v_type: ast::VariableType::Local(v_type), name, array_init }
+    }
+}
+
+GlobalVariable: ast::Variable<ast::VariableType, &'input str> = {
+    ".global" <def:LocalVariableDefinition> => {
+        let (align, array_init, v_type, name) = def;
+        ast::Variable { align, v_type: ast::VariableType::Global(v_type), name, array_init }
     }
 }
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parameter-state-space
-ParamVariable: (Option<u32>, ast::VariableParamType, &'input str) = {
+ParamVariable: (Option<u32>, Vec<u8>, ast::VariableParamType, &'input str) = {
+    ".param" <align:Align?> <t:ParamScalarType> <name:ExtendedID> => {
+        let v_type = ast::VariableParamType::Scalar(t);
+        (align, Vec::new(), v_type, name)
+    },
+    ".param" <align:Align?> <arr:ArrayDefinition> => {
+        let (array_init, name, (t, dimensions)) = arr;
+        let v_type = ast::VariableParamType::Array(t, dimensions);
+        (align, array_init, v_type, name)
+    }
+}
+
+ParamDeclaration: (Option<u32>, ast::VariableParamType, &'input str) = {
     ".param" <align:Align?> <t:ParamScalarType> <name:ExtendedID> => {
         let v_type = ast::VariableParamType::Scalar(t);
         (align, v_type, name)
     },
-    ".param" <align:Align?> <t:SizedScalarType> <name:ExtendedID> <arr:ArraySpecifier> => {
-        let v_type = ast::VariableParamType::Array(t, arr);
+    ".param" <align:Align?> <arr:ArrayDeclaration> => {
+        let (name, (t, dimensions)) = arr;
+        let v_type = ast::VariableParamType::Array(t, dimensions);
         (align, v_type, name)
+    }
+}
+
+LocalVariableDefinition: (Option<u32>, Vec<u8>, ast::VariableLocalType, &'input str) = {
+    <align:Align?> <t:SizedScalarType> <name:ExtendedID> => {
+        let v_type = ast::VariableLocalType::Scalar(t);
+        (align, Vec::new(), v_type, name)
+    },
+    <align:Align?> <v_len:VectorPrefix> <t:SizedScalarType> <name:ExtendedID> => {
+        let v_type = ast::VariableLocalType::Vector(t, v_len);
+        (align, Vec::new(), v_type, name)
+    },
+    <align:Align?> <arr:ArrayDefinition> => {
+        let (array_init, name, (t, dimensions)) = arr;
+        let v_type = ast::VariableLocalType::Array(t, dimensions);
+        (align, array_init, v_type, name)
     }
 }
 
@@ -431,12 +461,59 @@ ParamScalarType: ast::ParamScalarType = {
     ".f64" => ast::ParamScalarType::F64,
 }
 
-ArraySpecifier: u32 = {
-    "[" <n:Num> "]" => {
-        let size = n.parse::<u32>();
-        size.unwrap_with(errors)
+ArrayDefinition: (Vec<u8>, &'input str, (ast::SizedScalarType, Vec<u32>)) = {
+    <typ:SizedScalarType> <name:ExtendedID> <dims:ArrayDimensions> <init:ArrayInitializer?> =>? {
+        let mut dims = dims;
+        let array_init = init.unwrap_or(ast::NumsOrArrays::Nums(Vec::new())).to_vec(typ, &mut dims)?;
+        Ok((
+            array_init,
+            name,
+            (typ, dims)
+        ))
     }
-};
+}
+
+ArrayDeclaration: (&'input str, (ast::SizedScalarType, Vec<u32>)) = {
+    <typ:SizedScalarType> <name:ExtendedID> <dims:ArrayDimension+> =>? {
+        let dims = dims.into_iter().map(|x| if x > 0 { Ok(x) } else { Err(ParseError::User { error: ast::PtxError::ZeroDimensionArray }) }).collect::<Result<_,_>>()?;
+        Ok((name, (typ, dims)))
+    }
+}
+
+// [0] and [] are treated the same
+ArrayDimensions: Vec<u32> = {
+    ArrayEmptyDimension => vec![0u32],
+    ArrayEmptyDimension <dims:ArrayDimension+> => {
+        let mut dims = dims;
+        let mut result = vec![0u32];
+        result.append(&mut dims);
+        result
+    },
+    <dims:ArrayDimension+> => dims
+}
+
+ArrayEmptyDimension = {
+    "[" "]" 
+}
+
+ArrayDimension: u32  = {
+    "[" <n:Num> "]" =>?  {
+        str::parse::<u32>(n).map_err(|e| ParseError::User { error: ast::PtxError::ParseInt(e) })
+    }
+}
+
+ArrayInitializer: ast::NumsOrArrays<'input> = {
+    "=" <nums:NumsOrArraysBracket> => nums
+}
+
+NumsOrArraysBracket: ast::NumsOrArrays<'input> = {
+    "{" <nums:NumsOrArrays> "}" => nums
+}
+
+NumsOrArrays: ast::NumsOrArrays<'input> = {
+    <n:Comma<NumsOrArraysBracket>> => ast::NumsOrArrays::Arrays(n),
+    <n:CommaNonEmpty<Num>> => ast::NumsOrArrays::Nums(n),
+}
 
 Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
     InstLd,
@@ -1242,5 +1319,13 @@ Comma<T>: Vec<T> = {
             v.push(e);
             v
         }
+    }
+};
+
+CommaNonEmpty<T>: Vec<T> = {
+    <v:(<T> ",")*> <e:T> => {
+        let mut v = v;
+        v.push(e);
+        v
     }
 };
