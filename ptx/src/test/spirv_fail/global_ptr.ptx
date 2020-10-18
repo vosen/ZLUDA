@@ -1,0 +1,5 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.global .b32 foobar [];

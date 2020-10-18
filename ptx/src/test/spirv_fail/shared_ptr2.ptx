@@ -1,0 +1,13 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.extern .shared .b32 foobar1 [];
+
+.visible .func _Z4dupaPf(
+	.param .b64 _Z4dupaPf_param_0
+)
+{
+.shared .b32 foobar2 [];
+ret;
+}

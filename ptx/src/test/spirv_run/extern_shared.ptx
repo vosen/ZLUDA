@@ -1,0 +1,24 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.extern .shared .b32 shared_mem [];
+
+.visible .entry extern_shared(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	        in_addr;
+    .reg .u64 	        out_addr;
+    .reg .u64 	        temp;
+
+	ld.param.u64 	    in_addr, [input];
+    ld.param.u64 	    out_addr, [output];
+
+    ld.global.u64       temp, [in_addr];
+    st.shared.u64       [shared_mem], temp;
+    ld.shared.u64       temp, [shared_mem];
+    st.global.u64       [out_addr], temp;
+	ret;
+}

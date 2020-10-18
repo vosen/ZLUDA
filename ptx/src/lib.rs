@@ -17,6 +17,9 @@ extern crate spirv_headers as spirv;
 #[cfg(test)]
 extern crate spirv_tools_sys as spirv_tools;
 
+#[macro_use]
+extern crate bitflags;
+
 lalrpop_mod!(
     #[allow(warnings)]
     ptx

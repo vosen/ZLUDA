@@ -1,0 +1,10 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .func foobar(
+	.param .b32 .v2 foobar
+)
+{
+ret;
+}

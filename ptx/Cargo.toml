@@ -14,6 +14,7 @@ spirv_headers = "~1.4.2"
 quick-error = "1.2"
 bit-vec = "0.6"
 half ="1.6"
+bitflags = "1.2"
 
 [build-dependencies.lalrpop]
 version = "0.19"

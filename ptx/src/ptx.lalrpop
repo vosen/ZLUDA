@@ -3,6 +3,7 @@ use crate::ast::UnwrapWithVec;
 use crate::{without_none, vector_index};
 
 use lalrpop_util::ParseError;
+use std::convert::TryInto;
 
 grammar<'a>(errors: &mut Vec<ast::PtxError>);
 
@@ -210,7 +211,7 @@ Directive: Option<ast::Directive<'input, ast::ParsedArgParams<'input>>> = {
     <f:Function> => Some(ast::Directive::Method(f)),
     File => None,
     Section => None,
-    <v:GlobalVariable> ";" => Some(ast::Directive::Variable(v)),
+    <v:ModuleVariable> ";" => Some(ast::Directive::Variable(v)),
 };
 
 AddressSize = {
@@ -218,16 +219,22 @@ AddressSize = {
 };
 
 Function: ast::Function<'input, &'input str, ast::Statement<ast::ParsedArgParams<'input>>>  = {
-    LinkingDirective*
+    LinkingDirectives
     <func_directive:MethodDecl>
     <body:FunctionBody> =>  ast::Function{<>}
 };
 
-LinkingDirective = {
-    ".extern",
-    ".visible",
-    ".weak"
+LinkingDirective: ast::LinkingDirective = {
+    ".extern" => ast::LinkingDirective::EXTERN,
+    ".visible" => ast::LinkingDirective::VISIBLE,
+    ".weak" => ast::LinkingDirective::WEAK,
 };
+
+LinkingDirectives: ast::LinkingDirective = {
+    <ldirs:LinkingDirective*> => {
+        ldirs.into_iter().fold(ast::LinkingDirective::NONE, |x, y| x | y)
+    }
+}
 
 MethodDecl: ast::MethodDecl<'input, &'input str> = {
     ".entry" <name:ExtendedID> <params:KernelArguments> => ast::MethodDecl::Kernel(name, params),
@@ -244,10 +251,15 @@ FnArguments: Vec<ast::FnArgument<&'input str>> = {
     "(" <args:Comma<FnInput>> ")" => args
 };
 
-KernelInput: ast::Variable<ast::VariableParamType, &'input str> = {
+KernelInput: ast::Variable<ast::KernelArgumentType, &'input str> = {
     <v:ParamDeclaration> => {
         let (align, v_type, name) = v;
-        ast::Variable{ align, v_type, name, array_init: Vec::new() }
+        ast::Variable {
+            align,
+            v_type: ast::KernelArgumentType::Normal(v_type),
+            name,
+            array_init: Vec::new()
+        }
     }
 }
 
@@ -357,69 +369,120 @@ Variable: ast::Variable<ast::VariableType, &'input str> = {
 };
 
 RegVariable: (Option<u32>, ast::VariableRegType, &'input str) = {
-    ".reg" <align:Align?> <t:ScalarType> <name:ExtendedID> => {
+    ".reg" <var:VariableScalar<ScalarType>> => {
+        let (align, t, name) = var;
         let v_type = ast::VariableRegType::Scalar(t);
         (align, v_type, name)
     },
-    ".reg" <align:Align?> <v_len:VectorPrefix> <t:SizedScalarType> <name:ExtendedID> => {
+    ".reg" <var:VariableVector<SizedScalarType>> => {
+        let (align, v_len, t, name) = var;
         let v_type = ast::VariableRegType::Vector(t, v_len);
         (align, v_type, name)
     }
 }
 
 LocalVariable: ast::Variable<ast::VariableType, &'input str> = {
-    ".local" <def:LocalVariableDefinition> => {
-        let (align, array_init, v_type, name) = def;
-        ast::Variable { align, v_type: ast::VariableType::Local(v_type), name, array_init }
+    ".local" <var:VariableScalar<SizedScalarType>> => {
+        let (align, t, name) = var;
+        let v_type = ast::VariableType::Local(ast::VariableLocalType::Scalar(t));
+        ast::Variable { align, v_type, name, array_init: Vec::new() }
+    },
+    ".local" <var:VariableVector<SizedScalarType>> => {
+        let (align, v_len, t, name) = var;
+        let v_type = ast::VariableType::Local(ast::VariableLocalType::Vector(t, v_len));
+        ast::Variable { align, v_type, name, array_init: Vec::new() }
+    },
+    ".local" <var:VariableArrayOrPointer<SizedScalarType>> =>? {
+        let (align, t, name, arr_or_ptr) = var;
+        let (v_type, array_init) = match arr_or_ptr {
+            ast::ArrayOrPointer::Array { dimensions, init } => {
+                (ast::VariableLocalType::Array(t, dimensions), init)
+            }
+            ast::ArrayOrPointer::Pointer => {
+                return Err(ParseError::User { error: ast::PtxError::ZeroDimensionArray });
+            }
+        };
+        Ok(ast::Variable { align, v_type: ast::VariableType::Local(v_type), name, array_init })
     }
 }
 
-GlobalVariable: ast::Variable<ast::VariableType, &'input str> = {
-    ".global" <def:LocalVariableDefinition> => {
-        let (align, array_init, v_type, name) = def;
+ModuleVariable: ast::Variable<ast::VariableType, &'input str> = {
+    LinkingDirectives ".global" <def:GlobalVariableDefinitionNoArray> => {
+        let (align, v_type, name, array_init) = def;
         ast::Variable { align, v_type: ast::VariableType::Global(v_type), name, array_init }
+    },
+    LinkingDirectives ".shared" <def:GlobalVariableDefinitionNoArray> => {
+        let (align, v_type, name, array_init) = def;
+        ast::Variable { align, v_type: ast::VariableType::Shared(v_type), name, array_init: Vec::new() }
+    },
+    <ldirs:LinkingDirectives> <space:Or<".global", ".shared">> <var:VariableArrayOrPointer<SizedScalarType>> =>? {
+        let (align, t, name, arr_or_ptr) = var;
+        let (v_type, array_init) = match arr_or_ptr {
+            ast::ArrayOrPointer::Array { dimensions, init } => {
+                if space == ".global" {
+                    (ast::VariableType::Global(ast::VariableGlobalType::Array(t, dimensions)), init)
+                } else {
+                    (ast::VariableType::Shared(ast::VariableGlobalType::Array(t, dimensions)), init)
+                }
+            }
+            ast::ArrayOrPointer::Pointer => {
+                if !ldirs.contains(ast::LinkingDirective::EXTERN) {
+                    return Err(ParseError::User { error: ast::PtxError::NonExternPointer });
+                }
+                if space == ".global" {
+                    (ast::VariableType::Global(ast::VariableGlobalType::Pointer(t, ast::PointerStateSpace::Global)), Vec::new())
+                } else {
+                    (ast::VariableType::Shared(ast::VariableGlobalType::Pointer(t, ast::PointerStateSpace::Shared)), Vec::new())
+                }
+            }
+        };
+        Ok(ast::Variable{ align, array_init, v_type, name })
     }
 }
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parameter-state-space
 ParamVariable: (Option<u32>, Vec<u8>, ast::VariableParamType, &'input str) = {
-    ".param" <align:Align?> <t:ParamScalarType> <name:ExtendedID> => {
+    ".param" <var:VariableScalar<ParamScalarType>> => {
+        let (align, t, name) = var;
         let v_type = ast::VariableParamType::Scalar(t);
         (align, Vec::new(), v_type, name)
     },
-    ".param" <align:Align?> <arr:ArrayDefinition> => {
-        let (array_init, name, (t, dimensions)) = arr;
-        let v_type = ast::VariableParamType::Array(t, dimensions);
+    ".param" <var:VariableArrayOrPointer<SizedScalarType>> => {
+        let (align, t, name, arr_or_ptr) = var;
+        let (v_type, array_init) = match arr_or_ptr {
+            ast::ArrayOrPointer::Array { dimensions, init } => {
+                (ast::VariableParamType::Array(t, dimensions), init)
+            }
+            ast::ArrayOrPointer::Pointer => {
+                (ast::VariableParamType::Pointer(t, ast::PointerStateSpace::Param), Vec::new())
+            }
+        };
         (align, array_init, v_type, name)
     }
 }
 
 ParamDeclaration: (Option<u32>, ast::VariableParamType, &'input str) = {
-    ".param" <align:Align?> <t:ParamScalarType> <name:ExtendedID> => {
-        let v_type = ast::VariableParamType::Scalar(t);
-        (align, v_type, name)
-    },
-    ".param" <align:Align?> <arr:ArrayDeclaration> => {
-        let (name, (t, dimensions)) = arr;
-        let v_type = ast::VariableParamType::Array(t, dimensions);
-        (align, v_type, name)
+    <var:ParamVariable> =>? {
+        let (align, array_init, v_type, name) = var;
+        if array_init.len() > 0 {
+            Err(ParseError::User { error: ast::PtxError::ArrayInitalizer })
+        } else {
+            Ok((align, v_type, name))
+        }
     }
 }
 
-LocalVariableDefinition: (Option<u32>, Vec<u8>, ast::VariableLocalType, &'input str) = {
-    <align:Align?> <t:SizedScalarType> <name:ExtendedID> => {
-        let v_type = ast::VariableLocalType::Scalar(t);
-        (align, Vec::new(), v_type, name)
+GlobalVariableDefinitionNoArray: (Option<u32>, ast::VariableGlobalType, &'input str, Vec<u8>) = {
+    <scalar:VariableScalar<SizedScalarType>> => {
+        let (align, t, name) = scalar;
+        let v_type = ast::VariableGlobalType::Scalar(t);
+        (align, v_type, name, Vec::new())
     },
-    <align:Align?> <v_len:VectorPrefix> <t:SizedScalarType> <name:ExtendedID> => {
-        let v_type = ast::VariableLocalType::Vector(t, v_len);
-        (align, Vec::new(), v_type, name)
+    <var:VariableVector<SizedScalarType>> => {
+        let (align, v_len, t, name) = var;
+        let v_type = ast::VariableGlobalType::Vector(t, v_len);
+        (align, v_type, name, Vec::new())
     },
-    <align:Align?> <arr:ArrayDefinition> => {
-        let (array_init, name, (t, dimensions)) = arr;
-        let v_type = ast::VariableLocalType::Array(t, dimensions);
-        (align, array_init, v_type, name)
-    }
 }
 
 #[inline]
@@ -459,60 +522,6 @@ ParamScalarType: ast::ParamScalarType = {
     ".f16" => ast::ParamScalarType::F16,
     ".f32" => ast::ParamScalarType::F32,
     ".f64" => ast::ParamScalarType::F64,
-}
-
-ArrayDefinition: (Vec<u8>, &'input str, (ast::SizedScalarType, Vec<u32>)) = {
-    <typ:SizedScalarType> <name:ExtendedID> <dims:ArrayDimensions> <init:ArrayInitializer?> =>? {
-        let mut dims = dims;
-        let array_init = init.unwrap_or(ast::NumsOrArrays::Nums(Vec::new())).to_vec(typ, &mut dims)?;
-        Ok((
-            array_init,
-            name,
-            (typ, dims)
-        ))
-    }
-}
-
-ArrayDeclaration: (&'input str, (ast::SizedScalarType, Vec<u32>)) = {
-    <typ:SizedScalarType> <name:ExtendedID> <dims:ArrayDimension+> =>? {
-        let dims = dims.into_iter().map(|x| if x > 0 { Ok(x) } else { Err(ParseError::User { error: ast::PtxError::ZeroDimensionArray }) }).collect::<Result<_,_>>()?;
-        Ok((name, (typ, dims)))
-    }
-}
-
-// [0] and [] are treated the same
-ArrayDimensions: Vec<u32> = {
-    ArrayEmptyDimension => vec![0u32],
-    ArrayEmptyDimension <dims:ArrayDimension+> => {
-        let mut dims = dims;
-        let mut result = vec![0u32];
-        result.append(&mut dims);
-        result
-    },
-    <dims:ArrayDimension+> => dims
-}
-
-ArrayEmptyDimension = {
-    "[" "]" 
-}
-
-ArrayDimension: u32  = {
-    "[" <n:Num> "]" =>?  {
-        str::parse::<u32>(n).map_err(|e| ParseError::User { error: ast::PtxError::ParseInt(e) })
-    }
-}
-
-ArrayInitializer: ast::NumsOrArrays<'input> = {
-    "=" <nums:NumsOrArraysBracket> => nums
-}
-
-NumsOrArraysBracket: ast::NumsOrArrays<'input> = {
-    "{" <nums:NumsOrArrays> "}" => nums
-}
-
-NumsOrArrays: ast::NumsOrArrays<'input> = {
-    <n:Comma<NumsOrArraysBracket>> => ast::NumsOrArrays::Arrays(n),
-    <n:CommaNonEmpty<Num>> => ast::NumsOrArrays::Nums(n),
 }
 
 Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
@@ -1311,6 +1320,73 @@ BitType = {
     ".b8", ".b16", ".b32", ".b64"
 };
 
+VariableScalar<T>: (Option<u32>, T, &'input str) = {
+    <align:Align?> <v_type:T> <name:ExtendedID> => {
+        (align, v_type, name)
+    }
+}
+
+VariableVector<T>: (Option<u32>, u8, T, &'input str) = {
+    <align:Align?> <v_len:VectorPrefix> <v_type:T> <name:ExtendedID> => {
+        (align, v_len, v_type, name)
+    }
+}
+
+// empty dimensions [0] means it's a pointer
+VariableArrayOrPointer<T>: (Option<u32>, T, &'input str, ast::ArrayOrPointer) = {
+    <align:Align?> <typ:SizedScalarType> <name:ExtendedID> <dims:ArrayDimensions> <init:ArrayInitializer?> =>? {
+        let mut dims = dims;
+        let array_init = match init {
+            Some(init) => {
+                let init_vec = init.to_vec(typ, &mut dims)?;
+                ast::ArrayOrPointer::Array { dimensions: dims, init: init_vec }
+            }
+            None => {
+                if dims.len() > 1 && dims.contains(&0) {
+                    return Err(ParseError::User { error: ast::PtxError::ZeroDimensionArray })
+                }
+                ast::ArrayOrPointer::Pointer
+            }
+        };
+        Ok((align, typ, name, array_init))
+    }
+}
+
+// [0] and [] are treated the same
+ArrayDimensions: Vec<u32> = {
+    ArrayEmptyDimension => vec![0u32],
+    ArrayEmptyDimension <dims:ArrayDimension+> => {
+        let mut dims = dims;
+        let mut result = vec![0u32];
+        result.append(&mut dims);
+        result
+    },
+    <dims:ArrayDimension+> => dims
+}
+
+ArrayEmptyDimension = {
+    "[" "]" 
+}
+
+ArrayDimension: u32  = {
+    "[" <n:Num> "]" =>?  {
+        str::parse::<u32>(n).map_err(|e| ParseError::User { error: ast::PtxError::ParseInt(e) })
+    }
+}
+
+ArrayInitializer: ast::NumsOrArrays<'input> = {
+    "=" <nums:NumsOrArraysBracket> => nums
+}
+
+NumsOrArraysBracket: ast::NumsOrArrays<'input> = {
+    "{" <nums:NumsOrArrays> "}" => nums
+}
+
+NumsOrArrays: ast::NumsOrArrays<'input> = {
+    <n:Comma<NumsOrArraysBracket>> => ast::NumsOrArrays::Arrays(n),
+    <n:CommaNonEmpty<Num>> => ast::NumsOrArrays::Nums(n),
+}
+
 Comma<T>: Vec<T> = {
     <v:(<T> ",")*> <e:T?> => match e {
         None => v,
@@ -1329,3 +1405,9 @@ CommaNonEmpty<T>: Vec<T> = {
         v
     }
 };
+
+#[inline]
+Or<T1, T2>: T1 = {
+    T1,
+    T2
+}
