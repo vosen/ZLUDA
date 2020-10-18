@@ -1345,7 +1345,10 @@ VariableArrayOrPointer<T>: (Option<u32>, T, &'input str, ast::ArrayOrPointer) = 
                 if dims.len() > 1 && dims.contains(&0) {
                     return Err(ParseError::User { error: ast::PtxError::ZeroDimensionArray })
                 }
-                ast::ArrayOrPointer::Pointer
+                match &*dims {
+                    [0] => ast::ArrayOrPointer::Pointer,
+                    _ => ast::ArrayOrPointer::Array { dimensions: dims, init: Vec::new() }
+                }
             }
         };
         Ok((align, typ, name, array_init))
