@@ -237,7 +237,8 @@ LinkingDirectives: ast::LinkingDirective = {
 }
 
 MethodDecl: ast::MethodDecl<'input, &'input str> = {
-    ".entry" <name:ExtendedID> <params:KernelArguments> => ast::MethodDecl::Kernel(name, params),
+    ".entry" <name:ExtendedID> <in_args:KernelArguments> =>
+        ast::MethodDecl::Kernel{ name, in_args, uses_shared_mem: false },
     ".func" <ret_vals:FnArguments?> <name:ExtendedID> <params:FnArguments> => {
         ast::MethodDecl::Func(ret_vals.unwrap_or_else(|| Vec::new()), name, params)
     }
@@ -294,10 +295,6 @@ ScalarType: ast::ScalarType = {
     ".f16" => ast::ScalarType::F16,
     ".f16x2" => ast::ScalarType::F16x2,
     ".pred" => ast::ScalarType::Pred,
-    LdStScalarType
-};
-
-LdStScalarType: ast::ScalarType = {
     ".b8" => ast::ScalarType::B8,
     ".b16" => ast::ScalarType::B16,
     ".b32" => ast::ScalarType::B32,
@@ -442,7 +439,7 @@ ModuleVariable: ast::Variable<ast::VariableType, &'input str> = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parameter-state-space
 ParamVariable: (Option<u32>, Vec<u8>, ast::VariableParamType, &'input str) = {
-    ".param" <var:VariableScalar<ParamScalarType>> => {
+    ".param" <var:VariableScalar<LdStScalarType>> => {
         let (align, t, name) = var;
         let v_type = ast::VariableParamType::Scalar(t);
         (align, Vec::new(), v_type, name)
@@ -506,22 +503,22 @@ SizedScalarType: ast::SizedScalarType = {
 }
 
 #[inline]
-ParamScalarType: ast::ParamScalarType = {
-    ".b8" => ast::ParamScalarType::B8,
-    ".b16" => ast::ParamScalarType::B16,
-    ".b32" => ast::ParamScalarType::B32,
-    ".b64" => ast::ParamScalarType::B64,
-    ".u8" => ast::ParamScalarType::U8,
-    ".u16" => ast::ParamScalarType::U16,
-    ".u32" => ast::ParamScalarType::U32,
-    ".u64" => ast::ParamScalarType::U64,
-    ".s8" => ast::ParamScalarType::S8,
-    ".s16" => ast::ParamScalarType::S16,
-    ".s32" => ast::ParamScalarType::S32,
-    ".s64" => ast::ParamScalarType::S64,
-    ".f16" => ast::ParamScalarType::F16,
-    ".f32" => ast::ParamScalarType::F32,
-    ".f64" => ast::ParamScalarType::F64,
+LdStScalarType: ast::LdStScalarType = {
+    ".b8" => ast::LdStScalarType::B8,
+    ".b16" => ast::LdStScalarType::B16,
+    ".b32" => ast::LdStScalarType::B32,
+    ".b64" => ast::LdStScalarType::B64,
+    ".u8" => ast::LdStScalarType::U8,
+    ".u16" => ast::LdStScalarType::U16,
+    ".u32" => ast::LdStScalarType::U32,
+    ".u64" => ast::LdStScalarType::U64,
+    ".s8" => ast::LdStScalarType::S8,
+    ".s16" => ast::LdStScalarType::S16,
+    ".s32" => ast::LdStScalarType::S32,
+    ".s64" => ast::LdStScalarType::S64,
+    ".f16" => ast::LdStScalarType::F16,
+    ".f32" => ast::LdStScalarType::F32,
+    ".f64" => ast::LdStScalarType::F64,
 }
 
 Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
@@ -572,9 +569,9 @@ OperandOrVector: ast::OperandOrVector<&'input str> = {
     <dst:VectorExtract> => ast::OperandOrVector::Vec(dst)
 }
 
-LdStType: ast::Type = {
-    <v:VectorPrefix> <t:LdStScalarType> => ast::Type::Vector(t, v),
-    <t:LdStScalarType> => ast::Type::Scalar(t),
+LdStType: ast::LdStType = {
+    <v:VectorPrefix> <t:LdStScalarType> => ast::LdStType::Vector(t, v),
+    <t:LdStScalarType> => ast::LdStType::Scalar(t),
 }
 
 LdStQualifier: ast::LdStQualifier = {

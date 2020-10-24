@@ -2,52 +2,67 @@
                OpCapability Linkage
                OpCapability Addresses
                OpCapability Kernel
-               OpCapability Int64
                OpCapability Int8
-         %29 = OpExtInstImport "OpenCL.std"
+               OpCapability Int16
+               OpCapability Int64
+               OpCapability Float16
+               OpCapability Float64
+         %32 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
-               OpEntryPoint Kernel %1 "cvta"
+               OpEntryPoint Kernel %2 "extern_shared" %1
        %void = OpTypeVoid
+       %uint = OpTypeInt 32 0
+%_ptr_Workgroup_uint = OpTypePointer Workgroup %uint
+%_ptr_Workgroup__ptr_Workgroup_uint = OpTypePointer Workgroup %_ptr_Workgroup_uint
+          %1 = OpVariable %_ptr_Workgroup__ptr_Workgroup_uint Workgroup
       %ulong = OpTypeInt 64 0
-         %32 = OpTypeFunction %void %ulong %ulong
+      %uchar = OpTypeInt 8 0
+%_ptr_Workgroup_uchar = OpTypePointer Workgroup %uchar
+         %40 = OpTypeFunction %void %ulong %ulong %_ptr_Workgroup_uchar
+%_ptr_Function__ptr_Workgroup_uchar = OpTypePointer Function %_ptr_Workgroup_uchar
 %_ptr_Function_ulong = OpTypePointer Function %ulong
-      %float = OpTypeFloat 32
-%_ptr_Function_float = OpTypePointer Function %float
-%_ptr_CrossWorkgroup_float = OpTypePointer CrossWorkgroup %float
-          %1 = OpFunction %void None %32
-          %7 = OpFunctionParameter %ulong
+%_ptr_CrossWorkgroup_ulong = OpTypePointer CrossWorkgroup %ulong
+%_ptr_Function__ptr_Workgroup_uint = OpTypePointer Function %_ptr_Workgroup_uint
+%_ptr_Workgroup_ulong = OpTypePointer Workgroup %ulong
+          %2 = OpFunction %void None %40
           %8 = OpFunctionParameter %ulong
-         %27 = OpLabel
-          %2 = OpVariable %_ptr_Function_ulong Function
+          %9 = OpFunctionParameter %ulong
+         %28 = OpFunctionParameter %_ptr_Workgroup_uchar
+         %41 = OpLabel
+         %29 = OpVariable %_ptr_Function__ptr_Workgroup_uchar Function
           %3 = OpVariable %_ptr_Function_ulong Function
           %4 = OpVariable %_ptr_Function_ulong Function
           %5 = OpVariable %_ptr_Function_ulong Function
-          %6 = OpVariable %_ptr_Function_float Function
-               OpStore %2 %7
+          %6 = OpVariable %_ptr_Function_ulong Function
+          %7 = OpVariable %_ptr_Function_ulong Function
+               OpStore %29 %28
+               OpBranch %26
+         %26 = OpLabel
                OpStore %3 %8
-         %10 = OpLoad %ulong %2
-          %9 = OpCopyObject %ulong %10
                OpStore %4 %9
-         %12 = OpLoad %ulong %3
-         %11 = OpCopyObject %ulong %12
-               OpStore %5 %11
-         %14 = OpLoad %ulong %4
-         %22 = OpCopyObject %ulong %14
-         %21 = OpCopyObject %ulong %22
-         %13 = OpCopyObject %ulong %21
-               OpStore %4 %13
-         %16 = OpLoad %ulong %5
-         %24 = OpCopyObject %ulong %16
-         %23 = OpCopyObject %ulong %24
-         %15 = OpCopyObject %ulong %23
-               OpStore %5 %15
-         %18 = OpLoad %ulong %4
-         %25 = OpConvertUToPtr %_ptr_CrossWorkgroup_float %18
-         %17 = OpLoad %float %25
-               OpStore %6 %17
-         %19 = OpLoad %ulong %5
-         %20 = OpLoad %float %6
-         %26 = OpConvertUToPtr %_ptr_CrossWorkgroup_float %19
-               OpStore %26 %20
+         %11 = OpLoad %ulong %3
+         %10 = OpCopyObject %ulong %11
+               OpStore %5 %10
+         %13 = OpLoad %ulong %4
+         %12 = OpCopyObject %ulong %13
+               OpStore %6 %12
+         %15 = OpLoad %ulong %5
+         %22 = OpConvertUToPtr %_ptr_CrossWorkgroup_ulong %15
+         %14 = OpLoad %ulong %22
+               OpStore %7 %14
+         %30 = OpBitcast %_ptr_Function__ptr_Workgroup_uint %29
+         %16 = OpLoad %_ptr_Workgroup_uint %30
+         %17 = OpLoad %ulong %7
+         %23 = OpBitcast %_ptr_Workgroup_ulong %16
+               OpStore %23 %17
+         %31 = OpBitcast %_ptr_Function__ptr_Workgroup_uint %29
+         %19 = OpLoad %_ptr_Workgroup_uint %31
+         %24 = OpBitcast %_ptr_Workgroup_ulong %19
+         %18 = OpLoad %ulong %24
+               OpStore %7 %18
+         %20 = OpLoad %ulong %6
+         %21 = OpLoad %ulong %7
+         %25 = OpConvertUToPtr %_ptr_CrossWorkgroup_ulong %20
+               OpStore %25 %21
                OpReturn
                OpFunctionEnd
