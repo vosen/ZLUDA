@@ -4,28 +4,17 @@
 
 .extern .shared .align 4 .b32 shared_mem[];
 
-.func (.param .u64 output) incr_shared_2_param(
-    .param .u64 .ptr .shared shared_mem_addr
-)
-{
-    .reg .u64 	    temp;
-    ld.shared.u64   temp, [shared_mem_addr];
-    add.u64         temp, temp, 2;
-    st.param.u64    [output], temp;
-    ret;
-}
-
-.func (.param .u64 output) incr_shared_2_global()
+.func incr_shared_2_global()
 {
     .reg .u64 	    temp;
     ld.shared.u64   temp, [shared_mem];
     add.u64         temp, temp, 2;
-    st.param.u64    [output], temp;
+    st.shared.u64    [shared_mem], temp;
     ret;
 }
 
 
-.visible .entry extern_shared(
+.visible .entry extern_shared_call(
 	.param .u64 input,
 	.param .u64 output
 )
@@ -39,6 +28,7 @@
 
     ld.global.u64       temp, [in_addr];
     st.shared.u64       [shared_mem], temp;
+    call incr_shared_2_global;
     ld.shared.u64       temp, [shared_mem];
     st.global.u64       [out_addr], temp;
 	ret;

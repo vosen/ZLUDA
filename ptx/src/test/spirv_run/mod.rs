@@ -79,6 +79,7 @@ test_ptx!(min, [555i32, 444i32], [444i32]);
 test_ptx!(max, [555i32, 444i32], [555i32]);
 test_ptx!(global_array, [0xDEADu32], [1u32]);
 test_ptx!(extern_shared, [127u64], [127u64]);
+test_ptx!(extern_shared_call, [121u64], [123u64]);
 
 struct DisplayError<T: Debug> {
     err: T,
