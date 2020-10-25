@@ -11,5 +11,5 @@ members = [
 ]
 
 [patch.crates-io]
-rspirv = { git = 'https://github.com/vosen/rspirv', rev = '0f5761918624f4a95107c14abe64946c5c5f60ce' }
-spirv_headers = { git = 'https://github.com/vosen/rspirv', rev = '0f5761918624f4a95107c14abe64946c5c5f60ce' }
+rspirv = { git = 'https://github.com/vosen/rspirv', rev = '40f5aa4dedb0d9f1ec24bdd8b6019e01996d1d74' }
+spirv_headers = { git = 'https://github.com/vosen/rspirv', rev = '40f5aa4dedb0d9f1ec24bdd8b6019e01996d1d74' }

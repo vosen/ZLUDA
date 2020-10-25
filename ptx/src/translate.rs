@@ -761,8 +761,7 @@ fn denorm_count_map_merge<T: Eq + Hash + Copy>(
 // and emit suitable execution mode
 fn compute_denorm_information<'input>(
     module: &[Directive<'input>],
-) -> HashMap<&'input str, HashMap<u8, spirv::ExecutionMode>> {
-    let mut direct_func_calls = MultiHashMap::new();
+) -> HashMap<CallgraphKey<'input>, HashMap<u8, spirv::FPDenormMode>> {
     let mut denorm_methods = HashMap::new();
     for directive in module.iter() {
         match directive {
@@ -783,9 +782,7 @@ fn compute_denorm_information<'input>(
                         }
                         Statement::LoadVar(_, _) => {}
                         Statement::StoreVar(_, _) => {}
-                        Statement::Call(ResolvedCall { func, .. }) => {
-                            multi_hash_map_append(&mut direct_func_calls, method_key, *func);
-                        }
+                        Statement::Call(_) => {}
                         Statement::Composite(_) => {}
                         Statement::Conditional(_) => {}
                         Statement::Conversion(_) => {}
@@ -800,76 +797,23 @@ fn compute_denorm_information<'input>(
             }
         }
     }
-    let summed_denorm_methods = sum_up_denorm_use(module, denorm_methods, &direct_func_calls);
-    summed_denorm_methods
+    denorm_methods
         .into_iter()
-        .filter_map(|(name, v)| {
+        .map(|(name, v)| {
             let width_to_denorm = v
                 .into_iter()
                 .map(|(k, ftz_over_preserve)| {
                     let mode = if ftz_over_preserve > 0 {
-                        spirv::ExecutionMode::DenormFlushToZero
+                        spirv::FPDenormMode::FlushToZero
                     } else {
-                        spirv::ExecutionMode::DenormPreserve
+                        spirv::FPDenormMode::Preserve
                     };
                     (k, mode)
                 })
                 .collect();
-            Some((name, width_to_denorm))
+            (name, width_to_denorm)
         })
         .collect()
-}
-
-fn sum_up_denorm_use<'input>(
-    module: &[Directive<'input>],
-    denorm_methods: HashMap<CallgraphKey<'input>, DenormCountMap<u8>>,
-    direct_func_calls: &MultiHashMap<CallgraphKey<'input>, spirv::Word>,
-) -> HashMap<&'input str, DenormCountMap<u8>> {
-    let mut result = HashMap::new();
-    let empty = Vec::new();
-    for (method_key, denorm_map) in denorm_methods.iter() {
-        match method_key {
-            CallgraphKey::Kernel(name) => {
-                let mut sum = denorm_map.clone();
-                let mut visited = HashSet::new();
-                for child in direct_func_calls
-                    .get(&CallgraphKey::Kernel(name))
-                    .unwrap_or(&empty)
-                {
-                    sum_up_denorm_use_single(
-                        &denorm_methods,
-                        direct_func_calls,
-                        &mut sum,
-                        &mut visited,
-                        *child,
-                    );
-                }
-                result.insert(*name, sum);
-            }
-            CallgraphKey::Func(_) => {}
-        }
-    }
-    result
-}
-
-fn sum_up_denorm_use_single<'input>(
-    denorm_methods: &HashMap<CallgraphKey<'input>, DenormCountMap<u8>>,
-    direct_func_calls: &MultiHashMap<CallgraphKey<'input>, spirv::Word>,
-    sum: &mut DenormCountMap<u8>,
-    visited: &mut HashSet<spirv::Word>,
-    current: spirv::Word,
-) {
-    if !visited.insert(current) {
-        return;
-    }
-    if let Some(denorm_map) = denorm_methods.get(&CallgraphKey::Func(current)) {
-        denorm_count_map_merge(sum, denorm_map);
-    }
-    if let Some(children) = direct_func_calls.get(&CallgraphKey::Func(current)) {
-        for child in children {
-            sum_up_denorm_use_single(denorm_methods, direct_func_calls, sum, visited, *child);
-        }
-    }
 }
 
 #[derive(Hash, PartialEq, Eq, Copy, Clone)]
@@ -919,7 +863,7 @@ fn emit_function_header<'a>(
     map: &mut TypeWordMap,
     global: &GlobalStringIdResolver<'a>,
     func_directive: ast::MethodDecl<spirv::Word>,
-    denorm_information: &HashMap<&'a str, HashMap<u8, spirv::ExecutionMode>>,
+    denorm_information: &HashMap<CallgraphKey<'a>, HashMap<u8, spirv::FPDenormMode>>,
     kernel_info: &mut HashMap<String, KernelInfo>,
 ) -> Result<(), TranslateError> {
     if let ast::MethodDecl::Kernel {
@@ -953,11 +897,6 @@ fn emit_function_header<'a>(
                 .collect::<Vec<_>>();
             global_variables.append(&mut interface);
             builder.entry_point(spirv::ExecutionModel::Kernel, fn_id, name, global_variables);
-            if let Some(exec_modes) = denorm_information.get(name) {
-                for (size_of, exec_mode) in exec_modes {
-                    builder.execution_mode(fn_id, *exec_mode, [(*size_of as u32) * 8])
-                }
-            }
             fn_id
         }
         ast::MethodDecl::Func(_, name, _) => name,
@@ -968,6 +907,18 @@ fn emit_function_header<'a>(
         spirv::FunctionControl::NONE,
         func_type,
     )?;
+    if let Some(denorm_modes) = denorm_information.get(&CallgraphKey::new(&func_directive)) {
+        for (size_of, denorm_mode) in denorm_modes {
+            builder.decorate(
+                fn_id,
+                spirv::Decoration::FunctionDenormModeINTEL,
+                [
+                    dr::Operand::LiteralInt32((*size_of as u32) * 8),
+                    dr::Operand::FPDenormMode(*denorm_mode),
+                ],
+            )
+        }
+    }
     func_directive.visit_args(&mut |arg| {
         let result_type = map.get_or_add(builder, ast::Type::from(arg.v_type.clone()).into());
         let inst = dr::Instruction::new(
@@ -1005,13 +956,12 @@ fn emit_capabilities(builder: &mut dr::Builder) {
     builder.capability(spirv::Capability::Int64);
     builder.capability(spirv::Capability::Float16);
     builder.capability(spirv::Capability::Float64);
-    builder.capability(spirv::Capability::DenormFlushToZero);
-    builder.capability(spirv::Capability::DenormPreserve);
+    builder.capability(spirv::Capability::FunctionFloatControlINTEL);
 }
 
 // http://htmlpreview.github.io/?https://github.com/KhronosGroup/SPIRV-Registry/blob/master/extensions/KHR/SPV_KHR_float_controls.html
 fn emit_extensions(builder: &mut dr::Builder) {
-    builder.extension("SPV_KHR_float_controls");
+    builder.extension("SPV_INTEL_float_controls2");
 }
 
 fn emit_opencl_import(builder: &mut dr::Builder) -> spirv::Word {

@@ -1,46 +1,64 @@
-               OpCapability GenericPointer
-               OpCapability Linkage
-               OpCapability Addresses
-               OpCapability Kernel
-               OpCapability Int64
-               OpCapability Int8
-         %25 = OpExtInstImport "OpenCL.std"
-               OpMemoryModel Physical64 OpenCL
-               OpEntryPoint Kernel %1 "mul_lo"
-       %void = OpTypeVoid
-      %ulong = OpTypeInt 64 0
-         %28 = OpTypeFunction %void %ulong %ulong
-%_ptr_Function_ulong = OpTypePointer Function %ulong
-%_ptr_Generic_ulong = OpTypePointer Generic %ulong
-    %ulong_2 = OpConstant %ulong 2
-          %1 = OpFunction %void None %28
-          %8 = OpFunctionParameter %ulong
-          %9 = OpFunctionParameter %ulong
-         %23 = OpLabel
-          %2 = OpVariable %_ptr_Function_ulong Function
-          %3 = OpVariable %_ptr_Function_ulong Function
-          %4 = OpVariable %_ptr_Function_ulong Function
-          %5 = OpVariable %_ptr_Function_ulong Function
-          %6 = OpVariable %_ptr_Function_ulong Function
-          %7 = OpVariable %_ptr_Function_ulong Function
-               OpStore %2 %8
-               OpStore %3 %9
-         %11 = OpLoad %ulong %2
-         %10 = OpCopyObject %ulong %11
-               OpStore %4 %10
-         %13 = OpLoad %ulong %3
-         %12 = OpCopyObject %ulong %13
-               OpStore %5 %12
-         %15 = OpLoad %ulong %4
-         %21 = OpConvertUToPtr %_ptr_Generic_ulong %15
-         %14 = OpLoad %ulong %21
-               OpStore %6 %14
-         %17 = OpLoad %ulong %6
-         %16 = OpIMul %ulong %17 %ulong_2
-               OpStore %7 %16
-         %18 = OpLoad %ulong %5
-         %19 = OpLoad %ulong %7
-         %22 = OpConvertUToPtr %_ptr_Generic_ulong %18
-               OpStore %22 %19
-               OpReturn
-               OpFunctionEnd
+; SPIR-V
+; Version: 1.3
+; Generator: rspirv
+; Bound: 38
+OpCapability GenericPointer
+OpCapability Linkage
+OpCapability Addresses
+OpCapability Kernel
+OpCapability Int8
+OpCapability Int16
+OpCapability Int64
+OpCapability Float16
+OpCapability Float64
+OpCapability FunctionFloatControlINTEL
+OpExtension "SPV_INTEL_float_controls2"
+%30 = OpExtInstImport "OpenCL.std"
+OpMemoryModel Physical64 OpenCL
+OpEntryPoint Kernel %1 "mul_ftz"
+OpDecorate %1 FunctionDenormModeINTEL 32 FlushToZero
+%31 = OpTypeVoid
+%32 = OpTypeInt 64 0
+%33 = OpTypeFunction %31 %32 %32
+%34 = OpTypePointer Function %32
+%35 = OpTypeFloat 32
+%36 = OpTypePointer Function %35
+%37 = OpTypePointer Generic %35
+%23 = OpConstant  %32  4
+%1 = OpFunction  %31  None %33
+%8 = OpFunctionParameter  %32
+%9 = OpFunctionParameter  %32
+%28 = OpLabel
+%2 = OpVariable  %34  Function
+%3 = OpVariable  %34  Function
+%4 = OpVariable  %34  Function
+%5 = OpVariable  %34  Function
+%6 = OpVariable  %36  Function
+%7 = OpVariable  %36  Function
+OpStore %2 %8
+OpStore %3 %9
+%11 = OpLoad  %32  %2
+%10 = OpCopyObject  %32  %11
+OpStore %4 %10
+%13 = OpLoad  %32  %3
+%12 = OpCopyObject  %32  %13
+OpStore %5 %12
+%15 = OpLoad  %32  %4
+%25 = OpConvertUToPtr  %37  %15
+%14 = OpLoad  %35  %25
+OpStore %6 %14
+%17 = OpLoad  %32  %4
+%24 = OpIAdd  %32  %17 %23
+%26 = OpConvertUToPtr  %37  %24
+%16 = OpLoad  %35  %26
+OpStore %7 %16
+%19 = OpLoad  %35  %6
+%20 = OpLoad  %35  %7
+%18 = OpFMul  %35  %19 %20
+OpStore %6 %18
+%21 = OpLoad  %32  %5
+%22 = OpLoad  %35  %6
+%27 = OpConvertUToPtr  %37  %21
+OpStore %27 %22
+OpReturn
+OpFunctionEnd
