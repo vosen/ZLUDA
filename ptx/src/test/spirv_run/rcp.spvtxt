@@ -7,9 +7,11 @@
                OpCapability Int64
                OpCapability Float16
                OpCapability Float64
+               OpExtension "SPV_KHR_float_controls"
          %23 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
                OpEntryPoint Kernel %1 "rcp"
+               OpExecutionMode %1 DenormPreserve 32
                OpDecorate %15 FPFastMathMode AllowRecip
        %void = OpTypeVoid
       %ulong = OpTypeInt 64 0

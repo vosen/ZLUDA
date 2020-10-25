@@ -518,13 +518,13 @@ pub struct MadFloatDesc {}
 
 #[derive(Copy, Clone)]
 pub struct AbsDetails {
-    pub flush_to_zero: bool,
+    pub flush_to_zero: Option<bool>,
     pub typ: ScalarType,
 }
 #[derive(Copy, Clone)]
 pub struct RcpDetails {
     pub rounding: Option<RoundingMode>,
-    pub flush_to_zero: bool,
+    pub flush_to_zero: Option<bool>,
     pub is_f64: bool,
 }
 
@@ -769,7 +769,7 @@ pub struct AddIntDesc {
 
 pub struct SetpData {
     pub typ: ScalarType,
-    pub flush_to_zero: bool,
+    pub flush_to_zero: Option<bool>,
     pub cmp_op: SetpCompareOp,
 }
 
@@ -799,7 +799,7 @@ pub enum SetpBoolPostOp {
 
 pub struct SetpBoolData {
     pub typ: ScalarType,
-    pub flush_to_zero: bool,
+    pub flush_to_zero: Option<bool>,
     pub cmp_op: SetpCompareOp,
     pub bool_op: SetpBoolPostOp,
 }
@@ -831,7 +831,7 @@ pub struct CvtIntToIntDesc {
 
 pub struct CvtDesc<Dst, Src> {
     pub rounding: Option<RoundingMode>,
-    pub flush_to_zero: bool,
+    pub flush_to_zero: Option<bool>,
     pub saturate: bool,
     pub dst: Dst,
     pub src: Src,
@@ -873,7 +873,7 @@ impl CvtDetails {
             dst,
             src,
             saturate,
-            flush_to_zero,
+            flush_to_zero: Some(flush_to_zero),
             rounding: Some(rounding),
         })
     }
@@ -893,7 +893,7 @@ impl CvtDetails {
             dst,
             src,
             saturate,
-            flush_to_zero,
+            flush_to_zero: Some(flush_to_zero),
             rounding: Some(rounding),
         })
     }
@@ -1009,7 +1009,7 @@ pub struct ArithSInt {
 pub struct ArithFloat {
     pub typ: FloatType,
     pub rounding: Option<RoundingMode>,
-    pub flush_to_zero: bool,
+    pub flush_to_zero: Option<bool>,
     pub saturate: bool,
 }
 
@@ -1022,7 +1022,7 @@ pub enum MinMaxDetails {
 
 #[derive(Copy, Clone)]
 pub struct MinMaxFloat {
-    pub ftz: bool,
+    pub flush_to_zero: Option<bool>,
     pub nan: bool,
     pub typ: FloatType,
 }

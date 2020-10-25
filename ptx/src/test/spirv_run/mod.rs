@@ -81,6 +81,10 @@ test_ptx!(global_array, [0xDEADu32], [1u32]);
 test_ptx!(extern_shared, [127u64], [127u64]);
 test_ptx!(extern_shared_call, [121u64], [123u64]);
 test_ptx!(rcp, [2f32], [0.5f32]);
+// 0b1_00000000_10000000000000000000000u32 is a large denormal
+// 0x3f000000 is 0.5
+test_ptx!(mul_ftz, [0b1_00000000_10000000000000000000000u32, 0x3f000000u32], [0u32]);
+test_ptx!(mul_non_ftz, [0b1_00000000_10000000000000000000000u32, 0x3f000000u32], [0b1_00000000_01000000000000000000000u32]);
 
 struct DisplayError<T: Debug> {
     err: T,
