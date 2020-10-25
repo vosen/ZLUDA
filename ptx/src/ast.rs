@@ -510,6 +510,7 @@ pub enum Instruction<P: ArgParams> {
     Sub(ArithDetails, Arg3<P>),
     Min(MinMaxDetails, Arg3<P>),
     Max(MinMaxDetails, Arg3<P>),
+    Rcp(RcpDetails, Arg2<P>),
 }
 
 #[derive(Copy, Clone)]
@@ -519,6 +520,12 @@ pub struct MadFloatDesc {}
 pub struct AbsDetails {
     pub flush_to_zero: bool,
     pub typ: ScalarType,
+}
+#[derive(Copy, Clone)]
+pub struct RcpDetails {
+    pub rounding: Option<RoundingMode>,
+    pub flush_to_zero: bool,
+    pub is_f64: bool,
 }
 
 pub struct CallInst<P: ArgParams> {

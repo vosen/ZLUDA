@@ -1144,6 +1144,9 @@ fn convert_to_typed_statements(
                 ast::Instruction::Max(d, a) => {
                     result.push(Statement::Instruction(ast::Instruction::Max(d, a.cast())))
                 }
+                ast::Instruction::Rcp(d, a) => {
+                    result.push(Statement::Instruction(ast::Instruction::Rcp(d, a.cast())))
+                }
             },
             Statement::Label(i) => result.push(Statement::Label(i)),
             Statement::Variable(v) => result.push(Statement::Variable(v)),
@@ -2179,6 +2182,9 @@ fn emit_function_body_ops(
                 ast::Instruction::Max(d, a) => {
                     emit_max(builder, map, opencl, d, a)?;
                 }
+                ast::Instruction::Rcp(d, a) => {
+                    emit_rcp(builder, map, d, a)?;
+                }
             },
             Statement::LoadVar(arg, typ) => {
                 let type_id = map.get_or_add(builder, SpirvType::from(typ.clone()));
@@ -2207,6 +2213,40 @@ fn emit_function_body_ops(
         }
     }
     Ok(())
+}
+
+fn emit_rcp(
+    builder: &mut dr::Builder,
+    map: &mut TypeWordMap,
+    desc: &ast::RcpDetails,
+    a: &ast::Arg2<ExpandedArgParams>,
+) -> Result<(), TranslateError> {
+    if desc.flush_to_zero {
+        todo!()
+    }
+    let (instr_type, constant) = if desc.is_f64 {
+        (ast::ScalarType::F64, vec_repr(1.0f64))
+    } else {
+        (ast::ScalarType::F32, vec_repr(1.0f32))
+    };
+    let one = map.get_or_add_constant(builder, &ast::Type::Scalar(instr_type), &constant)?;
+    let result_type = map.get_or_add_scalar(builder, instr_type);
+    builder.f_div(result_type, Some(a.dst), one, a.src)?;
+    emit_rounding_decoration(builder, a.dst, desc.rounding);
+    builder.decorate(
+        a.dst,
+        spirv::Decoration::FPFastMathMode,
+        &[dr::Operand::FPFastMathMode(
+            spirv::FPFastMathMode::ALLOW_RECIP,
+        )],
+    );
+    Ok(())
+}
+
+fn vec_repr<T: Copy>(t: T) -> Vec<u8> {
+    let mut result = vec![0; mem::size_of::<T>()];
+    unsafe { std::ptr::copy_nonoverlapping(&t, result.as_mut_ptr() as *mut _, 1) };
+    result
 }
 
 fn emit_variable(
@@ -3735,7 +3775,7 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
     ) -> Result<ast::Instruction<U>, TranslateError> {
         Ok(match self {
             ast::Instruction::Abs(d, arg) => {
-                ast::Instruction::Abs(d, arg.map(visitor, false, &ast::Type::Scalar(d.typ))?)
+                ast::Instruction::Abs(d, arg.map(visitor, &ast::Type::Scalar(d.typ))?)
             }
             // Call instruction is converted to a call statement early on
             ast::Instruction::Call(_) => return Err(TranslateError::Unreachable),
@@ -3766,9 +3806,7 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
                 let inst_type = d.typ;
                 ast::Instruction::SetpBool(d, a.map(visitor, &ast::Type::Scalar(inst_type))?)
             }
-            ast::Instruction::Not(t, a) => {
-                ast::Instruction::Not(t, a.map(visitor, false, &t.to_type())?)
-            }
+            ast::Instruction::Not(t, a) => ast::Instruction::Not(t, a.map(visitor, &t.to_type())?),
             ast::Instruction::Cvt(d, a) => {
                 let (dst_t, src_t) = match &d {
                     ast::CvtDetails::FloatFromFloat(desc) => (
@@ -3806,7 +3844,7 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
             ast::Instruction::Ret(d) => ast::Instruction::Ret(d),
             ast::Instruction::Cvta(d, a) => {
                 let inst_type = ast::Type::Scalar(ast::ScalarType::B64);
-                ast::Instruction::Cvta(d, a.map(visitor, false, &inst_type)?)
+                ast::Instruction::Cvta(d, a.map(visitor, &inst_type)?)
             }
             ast::Instruction::Mad(d, a) => {
                 let inst_type = d.get_type();
@@ -3828,6 +3866,14 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
             ast::Instruction::Max(d, a) => {
                 let typ = d.get_type();
                 ast::Instruction::Max(d, a.map_non_shift(visitor, &typ, false)?)
+            }
+            ast::Instruction::Rcp(d, a) => {
+                let typ = ast::Type::Scalar(if d.is_f64 {
+                    ast::ScalarType::F64
+                } else {
+                    ast::ScalarType::F32
+                });
+                ast::Instruction::Rcp(d, a.map(visitor, &typ)?)
             }
         })
     }
@@ -4072,6 +4118,7 @@ impl ast::Instruction<ExpandedArgParams> {
             | ast::Instruction::Sub(_, _)
             | ast::Instruction::Min(_, _)
             | ast::Instruction::Max(_, _)
+            | ast::Instruction::Rcp(_, _)
             | ast::Instruction::Mad(_, _) => None,
         }
     }
@@ -4289,7 +4336,6 @@ impl<T: ArgParamsEx> ast::Arg2<T> {
     fn map<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
         self,
         visitor: &mut V,
-        src_is_addr: bool,
         t: &ast::Type,
     ) -> Result<ast::Arg2<U>, TranslateError> {
         let new_dst = visitor.id(
@@ -4304,11 +4350,7 @@ impl<T: ArgParamsEx> ast::Arg2<T> {
             ArgumentDescriptor {
                 op: self.src,
                 is_dst: false,
-                sema: if src_is_addr {
-                    ArgumentSemantics::Address
-                } else {
-                    ArgumentSemantics::Default
-                },
+                sema: ArgumentSemantics::Default,
             },
             t,
         )?;
