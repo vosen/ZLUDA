@@ -2343,7 +2343,9 @@ fn emit_function_body_ops(
                     ast::MulDetails::Unsigned(ref desc) => {
                         emit_mad_uint(builder, map, opencl, desc, arg)?
                     }
-                    ast::MulDetails::Float(desc) => emit_mad_float(builder, map, desc, arg)?,
+                    ast::MulDetails::Float(desc) => {
+                        emit_mad_float(builder, map, opencl, desc, arg)?
+                    }
                 },
                 ast::Instruction::Or(t, a) => {
                     let result_type = map.get_or_add_scalar(builder, ast::ScalarType::from(*t));
@@ -2560,10 +2562,19 @@ fn emit_mad_sint(
 fn emit_mad_float(
     builder: &mut dr::Builder,
     map: &mut TypeWordMap,
+    opencl: spirv::Word,
     desc: &ast::ArithFloat,
     arg: &ast::Arg4<ExpandedArgParams>,
 ) -> Result<(), dr::Error> {
-    todo!()
+    let inst_type = map.get_or_add(builder, SpirvType::from(ast::ScalarType::from(desc.typ)));
+    builder.ext_inst(
+        inst_type,
+        Some(arg.dst),
+        opencl,
+        spirv::CLOp::mad as spirv::Word,
+        [arg.src1, arg.src2, arg.src3],
+    )?;
+    Ok(())
 }
 
 fn emit_add_float(

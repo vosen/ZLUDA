@@ -131,6 +131,7 @@ match {
     "cvt",
     "cvta",
     "debug",
+    "fma",
     "ld",
     "mad",
     "map_f64_to_f32",
@@ -166,6 +167,7 @@ ExtendedID : &'input str = {
     "cvt",
     "cvta",
     "debug",
+    "fma",
     "ld",
     "mad",
     "map_f64_to_f32",
@@ -1185,7 +1187,8 @@ InstAbs: ast::Instruction<ast::ParsedArgParams<'input>> = {
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-mad
 InstMad: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "mad" <d:MulDetails> <a:Arg4> => ast::Instruction::Mad(d, a),
-    "mad" ".hi" ".sat" ".s32" => todo!()
+    "mad" ".hi" ".sat" ".s32" => todo!(),
+    "fma" <f:ArithFloatMustRound> <a:Arg4> => ast::Instruction::Mad(ast::MulDetails::Float(f), a),
 };
 
 SignedIntType: ast::ScalarType = {
@@ -1328,6 +1331,33 @@ ArithFloat: ast::ArithFloat = {
     <rn:".rn"?> <ftz:".ftz"?> <sat:".sat"?> ".f16x2" => ast::ArithFloat {
         typ: ast::FloatType::F16x2,
         rounding: rn.map(|_| ast::RoundingMode::NearestEven),
+        flush_to_zero: Some(ftz.is_some()),
+        saturate: sat.is_some(),
+    },
+}
+
+ArithFloatMustRound: ast::ArithFloat = {
+    <rn:RoundingModeFloat> <ftz:".ftz"?> <sat:".sat"?> ".f32" => ast::ArithFloat {
+        typ: ast::FloatType::F32,
+        rounding: Some(rn),
+        flush_to_zero: Some(ftz.is_some()),
+        saturate: sat.is_some(),
+    },
+    <rn:RoundingModeFloat> ".f64" => ast::ArithFloat {
+        typ: ast::FloatType::F64,
+        rounding: Some(rn),
+        flush_to_zero: None,
+        saturate: false,
+    },
+    ".rn" <ftz:".ftz"?> <sat:".sat"?> ".f16" => ast::ArithFloat {
+        typ: ast::FloatType::F16,
+        rounding: Some(ast::RoundingMode::NearestEven),
+        flush_to_zero: Some(ftz.is_some()),
+        saturate: sat.is_some(),
+    },
+    ".rn" <ftz:".ftz"?> <sat:".sat"?> ".f16x2" => ast::ArithFloat {
+        typ: ast::FloatType::F16x2,
+        rounding: Some(ast::RoundingMode::NearestEven),
         flush_to_zero: Some(ftz.is_some()),
         saturate: sat.is_some(),
     },
