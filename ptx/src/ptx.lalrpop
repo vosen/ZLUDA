@@ -15,12 +15,16 @@ match {
     r"\s+" => { },
     r"//[^\n\r]*[\n\r]*" => { },
     r"/\*([^\*]*\*+[^\*/])*([^\*]*\*+|[^\*])*\*/" => { },
-    r"-?[?:0x]?[0-9]+" => Num,
+    r"0[fF][0-9a-zA-Z]{8}" => F32NumToken,
+    r"0[dD][0-9a-zA-Z]{16}" => F64NumToken,
+    r"0[xX][0-9a-zA-Z]+U?" => HexNumToken,
+    r"[0-9]+U?" => DecimalNumToken,
     r#""[^"]*""# => String,
     r"[0-9]+\.[0-9]+" => VersionNumber,
     "!",
     "(", ")",
     "+",
+    "-",
     ",",
     ".",
     ":",
@@ -181,6 +185,74 @@ ExtendedID : &'input str = {
     ID
 }
 
+NumToken: (&'input str, u32, bool) = {
+    <s:HexNumToken> => {
+        if s.ends_with('U') {
+            (&s[2..s.len() - 1], 16, true)
+        } else {
+            (&s[2..], 16, false)
+        }
+    },
+    <s:DecimalNumToken> => {
+        let radix = if s.starts_with('0') { 8 } else { 10 };
+        if s.ends_with('U') {
+            (&s[..s.len() - 1], radix, true)
+        } else {
+            (s, radix, false)
+        }
+    }
+}
+
+F32Num: f32 = {
+    <s:F32NumToken> =>? {
+        match u32::from_str_radix(&s[2..], 16) {
+            Ok(x) => Ok(unsafe { std::mem::transmute::<_, f32>(x) }),
+            Err(err) => Err(ParseError::User { error: ast::PtxError::from(err) })
+        }
+        
+    }
+}
+
+F64Num: f64 = {
+    <s:F64NumToken> =>? {
+        match u64::from_str_radix(&s[2..], 16) {
+            Ok(x) => Ok(unsafe { std::mem::transmute::<_, f64>(x) }),
+            Err(err) => Err(ParseError::User { error: ast::PtxError::from(err) })
+        }
+    }
+}
+
+U8Num: u8 = {
+    <x:NumToken> =>? {
+        let (text, radix, _) = x;
+        match u8::from_str_radix(text, radix) {
+            Ok(x) => Ok(x),
+            Err(err) => Err(ParseError::User { error: ast::PtxError::from(err) })
+        }
+    }
+}
+
+U32Num: u32 = {
+    <x:NumToken> =>? {
+        let (text, radix, _) = x;
+        match u32::from_str_radix(text, radix) {
+            Ok(x) => Ok(x),
+            Err(err) => Err(ParseError::User { error: ast::PtxError::from(err) })
+        }
+    }
+}
+
+// TODO: handle negative number properly
+S32Num: i32 = {
+    <sign:"-"?> <x:NumToken> =>? {
+        let (text, radix, _) = x;
+        match i32::from_str_radix(text, radix) {
+            Ok(x) => Ok(if sign.is_some() { -x } else { x }),
+            Err(err) => Err(ParseError::User { error: ast::PtxError::from(err) })
+        }
+    }
+}
+
 pub Module: ast::Module<'input> = {
     <v:Version> Target <d:Directive*> => {
         ast::Module { version: v, directives: without_none(d) }
@@ -218,7 +290,7 @@ Directive: Option<ast::Directive<'input, ast::ParsedArgParams<'input>>> = {
 };
 
 AddressSize = {
-    ".address_size" Num
+    ".address_size" U8Num
 };
 
 Function: ast::Function<'input, &'input str, ast::Statement<ast::ParsedArgParams<'input>>>  = {
@@ -328,7 +400,7 @@ DebugDirective: () = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#debugging-directives-loc
 DebugLocation = {
-    ".loc" Num Num Num
+    ".loc" U32Num U32Num U32Num
 };
 
 Label: &'input str = {
@@ -336,10 +408,7 @@ Label: &'input str = {
 };
 
 Align: u32 = {
-    ".align" <a:Num> => {
-        let align = a.parse::<u32>();
-        align.unwrap_with(errors)
-    }
+    ".align" <x:U32Num> => x
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parameterized-variable-names
@@ -348,10 +417,7 @@ MultiVariable: ast::MultiVariable<&'input str> = {
 }
 
 VariableParam: u32 = {
-    "<" <n:Num> ">" => { 
-        let size = n.parse::<u32>();
-        size.unwrap_with(errors)
-    }
+    "<" <n:U32Num> ">" => n
 }
 
 Variable: ast::Variable<ast::VariableType, &'input str> = {
@@ -1239,28 +1305,50 @@ ArithFloat: ast::ArithFloat = {
 
 Operand: ast::Operand<&'input str> = {
     <r:ExtendedID> => ast::Operand::Reg(r),
-    <r:ExtendedID> "+" <o:Num> => {
-        let offset = o.parse::<i32>();
-        let offset = offset.unwrap_with(errors);
-        ast::Operand::RegOffset(r, offset)
-    },
-    // TODO: start parsing whole constants sub-language:
-    //       https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#constants
-    <o:Num> => {
-        let offset = o.parse::<u32>();
-        let offset = offset.unwrap_with(errors);
-        ast::Operand::Imm(offset)
-    }
+    <r:ExtendedID> "+" <offset:S32Num> => ast::Operand::RegOffset(r, offset),
+    <x:ImmediateValue> => ast::Operand::Imm(x)
 };
 
 CallOperand: ast::CallOperand<&'input str> = {
     <r:ExtendedID> => ast::CallOperand::Reg(r),
-    <o:Num> => {
-        let offset = o.parse::<u32>();
-        let offset = offset.unwrap_with(errors);
-        ast::CallOperand::Imm(offset)
-    }
+    <x:ImmediateValue> => ast::CallOperand::Imm(x)
 };
+
+// TODO: start parsing whole constants sub-language:
+//       https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#constants
+ImmediateValue: ast::ImmediateValue = {
+    // TODO: treat negation correctly
+    <neg:"-"?> <x:NumToken> =>? {
+        let (num, radix, is_unsigned) = x;
+        if neg.is_some() {
+            match i64::from_str_radix(num, radix) {
+                Ok(x) => Ok(ast::ImmediateValue::S64(-x)),
+                Err(err) => Err(ParseError::User { error: ast::PtxError::ParseInt(err) })
+            }
+        } else if is_unsigned {
+            match u64::from_str_radix(num, radix) {
+                Ok(x) => Ok(ast::ImmediateValue::U64(x)),
+                Err(err) => Err(ParseError::User { error: ast::PtxError::ParseInt(err) })
+            }
+        } else {
+            match i64::from_str_radix(num, radix) {
+                Ok(x) => Ok(ast::ImmediateValue::S64(x)),
+                Err(_) => {
+                    match u64::from_str_radix(num, radix) {
+                        Ok(x) => Ok(ast::ImmediateValue::U64(x)),
+                        Err(err) => Err(ParseError::User { error: ast::PtxError::ParseInt(err) })
+                    }
+                }
+            }
+        }
+    },
+    <f:F32Num> => {
+        ast::ImmediateValue::F32(f)
+    },
+    <f:F64Num> => {
+        ast::ImmediateValue::F64(f)
+    }
+}
 
 Arg1: ast::Arg1<ast::ParsedArgParams<'input>> = {
     <src:ExtendedID> => ast::Arg1{<>}
@@ -1332,7 +1420,7 @@ VectorPrefix: u8 = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#debugging-directives-file
 File = {
-    ".file" Num String ("," Num "," Num)?
+    ".file" U32Num String ("," U32Num "," U32Num)?
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#debugging-directives-section
@@ -1341,11 +1429,11 @@ Section = {
 };
 
 SectionDwarfLines: () = {
-    BitType Comma<Num>,
+    BitType Comma<U32Num>,
     ".b32" SectionLabel,
     ".b64" SectionLabel,
-    ".b32" SectionLabel "+" Num,
-    ".b64" SectionLabel "+" Num,
+    ".b32" SectionLabel "+" U32Num,
+    ".b64" SectionLabel "+" U32Num,
 };
 
 SectionLabel = {
@@ -1409,9 +1497,7 @@ ArrayEmptyDimension = {
 }
 
 ArrayDimension: u32  = {
-    "[" <n:Num> "]" =>?  {
-        str::parse::<u32>(n).map_err(|e| ParseError::User { error: ast::PtxError::ParseInt(e) })
-    }
+    "[" <n:U32Num> "]" => n,
 }
 
 ArrayInitializer: ast::NumsOrArrays<'input> = {
@@ -1424,7 +1510,7 @@ NumsOrArraysBracket: ast::NumsOrArrays<'input> = {
 
 NumsOrArrays: ast::NumsOrArrays<'input> = {
     <n:Comma<NumsOrArraysBracket>> => ast::NumsOrArrays::Arrays(n),
-    <n:CommaNonEmpty<Num>> => ast::NumsOrArrays::Nums(n),
+    <n:CommaNonEmpty<NumToken>> => ast::NumsOrArrays::Nums(n.into_iter().map(|(x,radix,_)| (x, radix)).collect()),
 }
 
 Comma<T>: Vec<T> = {

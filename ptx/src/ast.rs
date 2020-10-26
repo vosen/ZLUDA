@@ -622,16 +622,24 @@ pub struct Arg5<P: ArgParams> {
 }
 
 #[derive(Copy, Clone)]
+pub enum ImmediateValue {
+    U64(u64),
+    S64(i64),
+    F32(f32),
+    F64(f64),
+}
+
+#[derive(Copy, Clone)]
 pub enum Operand<ID> {
     Reg(ID),
     RegOffset(ID, i32),
-    Imm(u32),
+    Imm(ImmediateValue),
 }
 
 #[derive(Copy, Clone)]
 pub enum CallOperand<ID> {
     Reg(ID),
-    Imm(u32),
+    Imm(ImmediateValue),
 }
 
 pub enum IdOrVector<ID> {
@@ -642,7 +650,7 @@ pub enum IdOrVector<ID> {
 pub enum OperandOrVector<ID> {
     Reg(ID),
     RegOffset(ID, i32),
-    Imm(u32),
+    Imm(ImmediateValue),
     Vec(Vec<ID>),
 }
 
@@ -1028,7 +1036,7 @@ pub struct MinMaxFloat {
 }
 
 pub enum NumsOrArrays<'a> {
-    Nums(Vec<&'a str>),
+    Nums(Vec<(&'a str, u32)>),
     Arrays(Vec<NumsOrArrays<'a>>),
 }
 
@@ -1076,8 +1084,8 @@ impl<'a> NumsOrArrays<'a> {
                     if vec.len() > *dim as usize {
                         return Err(PtxError::ZeroDimensionArray);
                     }
-                    for (idx, val) in vec.iter().enumerate() {
-                        Self::parse_and_copy_single(t, idx, val, result)?;
+                    for (idx, (val, radix)) in vec.iter().enumerate() {
+                        Self::parse_and_copy_single(t, idx, val, *radix, result)?;
                     }
                 }
                 NumsOrArrays::Arrays(_) => return Err(PtxError::ZeroDimensionArray),
@@ -1107,42 +1115,43 @@ impl<'a> NumsOrArrays<'a> {
         t: SizedScalarType,
         idx: usize,
         str_val: &str,
+        radix: u32,
         output: &mut [u8],
     ) -> Result<(), PtxError> {
         match t {
             SizedScalarType::B8 | SizedScalarType::U8 => {
-                Self::parse_and_copy_single_t::<u8>(idx, str_val, output)?;
+                Self::parse_and_copy_single_t::<u8>(idx, str_val, radix, output)?;
             }
             SizedScalarType::B16 | SizedScalarType::U16 => {
-                Self::parse_and_copy_single_t::<u16>(idx, str_val, output)?;
+                Self::parse_and_copy_single_t::<u16>(idx, str_val, radix, output)?;
             }
             SizedScalarType::B32 | SizedScalarType::U32 => {
-                Self::parse_and_copy_single_t::<u32>(idx, str_val, output)?;
+                Self::parse_and_copy_single_t::<u32>(idx, str_val, radix, output)?;
             }
             SizedScalarType::B64 | SizedScalarType::U64 => {
-                Self::parse_and_copy_single_t::<u64>(idx, str_val, output)?;
+                Self::parse_and_copy_single_t::<u64>(idx, str_val, radix, output)?;
             }
             SizedScalarType::S8 => {
-                Self::parse_and_copy_single_t::<i8>(idx, str_val, output)?;
+                Self::parse_and_copy_single_t::<i8>(idx, str_val, radix, output)?;
             }
             SizedScalarType::S16 => {
-                Self::parse_and_copy_single_t::<i16>(idx, str_val, output)?;
+                Self::parse_and_copy_single_t::<i16>(idx, str_val, radix, output)?;
             }
             SizedScalarType::S32 => {
-                Self::parse_and_copy_single_t::<i32>(idx, str_val, output)?;
+                Self::parse_and_copy_single_t::<i32>(idx, str_val, radix, output)?;
             }
             SizedScalarType::S64 => {
-                Self::parse_and_copy_single_t::<i64>(idx, str_val, output)?;
+                Self::parse_and_copy_single_t::<i64>(idx, str_val, radix, output)?;
             }
             SizedScalarType::F16 => {
-                Self::parse_and_copy_single_t::<f16>(idx, str_val, output)?;
+                Self::parse_and_copy_single_t::<f16>(idx, str_val, radix, output)?;
             }
             SizedScalarType::F16x2 => todo!(),
             SizedScalarType::F32 => {
-                Self::parse_and_copy_single_t::<f32>(idx, str_val, output)?;
+                Self::parse_and_copy_single_t::<f32>(idx, str_val, radix, output)?;
             }
             SizedScalarType::F64 => {
-                Self::parse_and_copy_single_t::<f64>(idx, str_val, output)?;
+                Self::parse_and_copy_single_t::<f64>(idx, str_val, radix, output)?;
             }
         }
         Ok(())
@@ -1151,6 +1160,7 @@ impl<'a> NumsOrArrays<'a> {
     fn parse_and_copy_single_t<T: Copy + FromStr>(
         idx: usize,
         str_val: &str,
+        _radix: u32, // TODO: use this to properly support hex literals
         output: &mut [u8],
     ) -> Result<(), PtxError>
     where
@@ -1200,8 +1210,8 @@ mod tests {
     #[test]
     fn array_auto_sizes_0_dimension() {
         let inp = NumsOrArrays::Arrays(vec![
-            NumsOrArrays::Nums(vec!["1", "2"]),
-            NumsOrArrays::Nums(vec!["3", "4"]),
+            NumsOrArrays::Nums(vec![("1", 10), ("2", 10)]),
+            NumsOrArrays::Nums(vec![("3", 10), ("4", 10)]),
         ]);
         let mut dimensions = vec![0u32, 2];
         assert_eq!(
@@ -1214,8 +1224,8 @@ mod tests {
     #[test]
     fn array_fails_wrong_structure() {
         let inp = NumsOrArrays::Arrays(vec![
-            NumsOrArrays::Nums(vec!["1", "2"]),
-            NumsOrArrays::Arrays(vec![NumsOrArrays::Nums(vec!["1"])]),
+            NumsOrArrays::Nums(vec![("1", 10), ("2", 10)]),
+            NumsOrArrays::Arrays(vec![NumsOrArrays::Nums(vec![("1", 10)])]),
         ]);
         let mut dimensions = vec![0u32, 2];
         assert!(inp.to_vec(SizedScalarType::B8, &mut dimensions).is_err());
@@ -1224,8 +1234,8 @@ mod tests {
     #[test]
     fn array_fails_too_long_component() {
         let inp = NumsOrArrays::Arrays(vec![
-            NumsOrArrays::Nums(vec!["1", "2", "3"]),
-            NumsOrArrays::Nums(vec!["4", "5"]),
+            NumsOrArrays::Nums(vec![("1", 10), ("2", 10), ("3", 10)]),
+            NumsOrArrays::Nums(vec![("4", 10), ("5", 10)]),
         ]);
         let mut dimensions = vec![0u32, 2];
         assert!(inp.to_vec(SizedScalarType::B8, &mut dimensions).is_err());

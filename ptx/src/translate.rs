@@ -1681,7 +1681,7 @@ impl<'a, 'b> FlattenArguments<'a, 'b> {
                     self.func.push(Statement::Constant(ConstantDefinition {
                         dst: id_constant_stmt,
                         typ: ast::ScalarType::from_parts(width, kind),
-                        value: -(offset as i64),
+                        value: ast::ImmediateValue::S64(-(offset as i64)),
                     }));
                     self.func.push(Statement::Instruction(
                         ast::Instruction::<ExpandedArgParams>::Sub(
@@ -1697,7 +1697,7 @@ impl<'a, 'b> FlattenArguments<'a, 'b> {
                     self.func.push(Statement::Constant(ConstantDefinition {
                         dst: id_constant_stmt,
                         typ: ast::ScalarType::from_parts(width, kind),
-                        value: offset as i64,
+                        value: ast::ImmediateValue::S64(offset as i64),
                     }));
                     self.func.push(Statement::Instruction(
                         ast::Instruction::<ExpandedArgParams>::Add(
@@ -1724,7 +1724,7 @@ impl<'a, 'b> FlattenArguments<'a, 'b> {
 
     fn immediate(
         &mut self,
-        desc: ArgumentDescriptor<u32>,
+        desc: ArgumentDescriptor<ast::ImmediateValue>,
         typ: &ast::Type,
     ) -> Result<spirv::Word, TranslateError> {
         let scalar_t = if let ast::Type::Scalar(scalar) = typ {
@@ -1736,7 +1736,7 @@ impl<'a, 'b> FlattenArguments<'a, 'b> {
         self.func.push(Statement::Constant(ConstantDefinition {
             dst: id,
             typ: scalar_t,
-            value: desc.op as i64,
+            value: desc.op,
         }));
         Ok(id)
     }
@@ -2081,32 +2081,82 @@ fn emit_function_body_ops(
             }
             Statement::Constant(cnst) => {
                 let typ_id = map.get_or_add_scalar(builder, cnst.typ);
-                match cnst.typ {
-                    ast::ScalarType::B8 | ast::ScalarType::U8 => {
-                        builder.constant_u32(typ_id, Some(cnst.dst), cnst.value as u8 as u32);
+                match (cnst.typ, cnst.value) {
+                    (ast::ScalarType::B8, ast::ImmediateValue::U64(value))
+                    | (ast::ScalarType::U8, ast::ImmediateValue::U64(value)) => {
+                        builder.constant_u32(typ_id, Some(cnst.dst), value as u8 as u32);
                     }
-                    ast::ScalarType::B16 | ast::ScalarType::U16 => {
-                        builder.constant_u32(typ_id, Some(cnst.dst), cnst.value as u16 as u32);
+                    (ast::ScalarType::B16, ast::ImmediateValue::U64(value))
+                    | (ast::ScalarType::U16, ast::ImmediateValue::U64(value)) => {
+                        builder.constant_u32(typ_id, Some(cnst.dst), value as u16 as u32);
                     }
-                    ast::ScalarType::B32 | ast::ScalarType::U32 => {
-                        builder.constant_u32(typ_id, Some(cnst.dst), cnst.value as u32);
+                    (ast::ScalarType::B32, ast::ImmediateValue::U64(value))
+                    | (ast::ScalarType::U32, ast::ImmediateValue::U64(value)) => {
+                        builder.constant_u32(typ_id, Some(cnst.dst), value as u32);
                     }
-                    ast::ScalarType::B64 | ast::ScalarType::U64 => {
-                        builder.constant_u64(typ_id, Some(cnst.dst), cnst.value as u64);
+                    (ast::ScalarType::B64, ast::ImmediateValue::U64(value))
+                    | (ast::ScalarType::U64, ast::ImmediateValue::U64(value)) => {
+                        builder.constant_u64(typ_id, Some(cnst.dst), value);
                     }
-                    ast::ScalarType::S8 => {
-                        builder.constant_u32(typ_id, Some(cnst.dst), cnst.value as i8 as u32);
+                    (ast::ScalarType::S8, ast::ImmediateValue::U64(value)) => {
+                        builder.constant_u32(typ_id, Some(cnst.dst), value as i8 as u32);
                     }
-                    ast::ScalarType::S16 => {
-                        builder.constant_u32(typ_id, Some(cnst.dst), cnst.value as i16 as u32);
+                    (ast::ScalarType::S16, ast::ImmediateValue::U64(value)) => {
+                        builder.constant_u32(typ_id, Some(cnst.dst), value as i16 as u32);
                     }
-                    ast::ScalarType::S32 => {
-                        builder.constant_u32(typ_id, Some(cnst.dst), cnst.value as i32 as u32);
+                    (ast::ScalarType::S32, ast::ImmediateValue::U64(value)) => {
+                        builder.constant_u32(typ_id, Some(cnst.dst), value as i32 as u32);
                     }
-                    ast::ScalarType::S64 => {
-                        builder.constant_u64(typ_id, Some(cnst.dst), cnst.value as i64 as u64);
+                    (ast::ScalarType::S64, ast::ImmediateValue::U64(value)) => {
+                        builder.constant_u64(typ_id, Some(cnst.dst), value as i64 as u64);
                     }
-                    _ => unreachable!(),
+                    (ast::ScalarType::B8, ast::ImmediateValue::S64(value))
+                    | (ast::ScalarType::U8, ast::ImmediateValue::S64(value)) => {
+                        builder.constant_u32(typ_id, Some(cnst.dst), value as u8 as u32);
+                    }
+                    (ast::ScalarType::B16, ast::ImmediateValue::S64(value))
+                    | (ast::ScalarType::U16, ast::ImmediateValue::S64(value)) => {
+                        builder.constant_u32(typ_id, Some(cnst.dst), value as u16 as u32);
+                    }
+                    (ast::ScalarType::B32, ast::ImmediateValue::S64(value))
+                    | (ast::ScalarType::U32, ast::ImmediateValue::S64(value)) => {
+                        builder.constant_u32(typ_id, Some(cnst.dst), value as u32);
+                    }
+                    (ast::ScalarType::B64, ast::ImmediateValue::S64(value))
+                    | (ast::ScalarType::U64, ast::ImmediateValue::S64(value)) => {
+                        builder.constant_u64(typ_id, Some(cnst.dst), value as u64);
+                    }
+                    (ast::ScalarType::S8, ast::ImmediateValue::S64(value)) => {
+                        builder.constant_u32(typ_id, Some(cnst.dst), value as i8 as u32);
+                    }
+                    (ast::ScalarType::S16, ast::ImmediateValue::S64(value)) => {
+                        builder.constant_u32(typ_id, Some(cnst.dst), value as i16 as u32);
+                    }
+                    (ast::ScalarType::S32, ast::ImmediateValue::S64(value)) => {
+                        builder.constant_u32(typ_id, Some(cnst.dst), value as i32 as u32);
+                    }
+                    (ast::ScalarType::S64, ast::ImmediateValue::S64(value)) => {
+                        builder.constant_u64(typ_id, Some(cnst.dst), value as u64);
+                    }
+                    (ast::ScalarType::F16, ast::ImmediateValue::F32(value)) => {
+                        builder.constant_f32(typ_id, Some(cnst.dst), f16::from_f32(value).to_f32());
+                    }
+                    (ast::ScalarType::F32, ast::ImmediateValue::F32(value)) => {
+                        builder.constant_f32(typ_id, Some(cnst.dst), value);
+                    }
+                    (ast::ScalarType::F64, ast::ImmediateValue::F32(value)) => {
+                        builder.constant_f64(typ_id, Some(cnst.dst), value as f64);
+                    }
+                    (ast::ScalarType::F16, ast::ImmediateValue::F64(value)) => {
+                        builder.constant_f32(typ_id, Some(cnst.dst), f16::from_f64(value).to_f32());
+                    }
+                    (ast::ScalarType::F32, ast::ImmediateValue::F64(value)) => {
+                        builder.constant_f32(typ_id, Some(cnst.dst), value as f32);
+                    }
+                    (ast::ScalarType::F64, ast::ImmediateValue::F64(value)) => {
+                        builder.constant_f64(typ_id, Some(cnst.dst), value);
+                    }
+                    _ => return Err(TranslateError::MismatchedType),
                 }
             }
             Statement::Conversion(cv) => emit_implicit_conversion(builder, map, cv)?,
@@ -4371,7 +4421,7 @@ impl VisitVariableExpanded for CompositeRead {
 struct ConstantDefinition {
     pub dst: spirv::Word,
     pub typ: ast::ScalarType,
-    pub value: i64,
+    pub value: ast::ImmediateValue,
 }
 
 struct BrachCondition {
