@@ -125,6 +125,7 @@ match {
     // IF YOU ARE ADDING A NEW TOKEN HERE ALSO ADD IT BELOW TO ExtendedID
     "abs",
     "add",
+    "and",
     "bra",
     "call",
     "cvt",
@@ -158,6 +159,7 @@ match {
 ExtendedID : &'input str = {
     "abs",
     "add",
+    "and",
     "bra",
     "call",
     "cvt",
@@ -608,6 +610,7 @@ Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
     InstAbs,
     InstMad,
     InstOr,
+    InstAnd,
     InstSub,
     InstMin,
     InstMax,
@@ -1190,15 +1193,20 @@ SignedIntType: ast::ScalarType = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-or
 InstOr: ast::Instruction<ast::ParsedArgParams<'input>> = {
-    "or" <d:OrType> <a:Arg3> => ast::Instruction::Or(d, a),
+    "or" <d:OrAndType> <a:Arg3> => ast::Instruction::Or(d, a),
 };
 
-OrType: ast::OrType = {
-    ".pred" => ast::OrType::Pred,
-    ".b16" => ast::OrType::B16,
-    ".b32" => ast::OrType::B32,
-    ".b64" => ast::OrType::B64,
+OrAndType: ast::OrAndType = {
+    ".pred" => ast::OrAndType::Pred,
+    ".b16" => ast::OrAndType::B16,
+    ".b32" => ast::OrAndType::B32,
+    ".b64" => ast::OrAndType::B64,
 }
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-and
+InstAnd: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "and" <d:OrAndType> <a:Arg3> => ast::Instruction::And(d, a),
+};
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-rcp
 InstRcp: ast::Instruction<ast::ParsedArgParams<'input>> = {

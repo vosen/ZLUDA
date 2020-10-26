@@ -1,0 +1,66 @@
+; SPIR-V
+; Version: 1.3
+; Generator: rspirv
+; Bound: 41
+OpCapability GenericPointer
+OpCapability Linkage
+OpCapability Addresses
+OpCapability Kernel
+OpCapability Int8
+OpCapability Int16
+OpCapability Int64
+OpCapability Float16
+OpCapability Float64
+OpCapability FunctionFloatControlINTEL
+OpExtension "SPV_INTEL_float_controls2"
+%33 = OpExtInstImport "OpenCL.std"
+OpMemoryModel Physical64 OpenCL
+OpEntryPoint Kernel %1 "and"
+%34 = OpTypeVoid
+%35 = OpTypeInt 64 0
+%36 = OpTypeFunction %34 %35 %35
+%37 = OpTypePointer Function %35
+%38 = OpTypeInt 32 0
+%39 = OpTypePointer Function %38
+%40 = OpTypePointer Generic %38
+%23 = OpConstant  %35  4
+%1 = OpFunction  %34  None %36
+%8 = OpFunctionParameter  %35 
+%9 = OpFunctionParameter  %35 
+%31 = OpLabel
+%2 = OpVariable  %37  Function
+%3 = OpVariable  %37  Function
+%4 = OpVariable  %37  Function
+%5 = OpVariable  %37  Function
+%6 = OpVariable  %39  Function
+%7 = OpVariable  %39  Function
+OpStore %2 %8
+OpStore %3 %9
+%11 = OpLoad  %35  %2
+%10 = OpCopyObject  %35  %11
+OpStore %4 %10
+%13 = OpLoad  %35  %3
+%12 = OpCopyObject  %35  %13
+OpStore %5 %12
+%15 = OpLoad  %35  %4
+%25 = OpConvertUToPtr  %40  %15
+%14 = OpLoad  %38  %25
+OpStore %6 %14
+%17 = OpLoad  %35  %4
+%24 = OpIAdd  %35  %17 %23
+%26 = OpConvertUToPtr  %40  %24
+%16 = OpLoad  %38  %26
+OpStore %7 %16
+%19 = OpLoad  %38  %6
+%20 = OpLoad  %38  %7
+%28 = OpCopyObject  %38  %19
+%29 = OpCopyObject  %38  %20
+%27 = OpBitwiseAnd  %38  %28 %29
+%18 = OpCopyObject  %38  %27
+OpStore %6 %18
+%21 = OpLoad  %35  %5
+%22 = OpLoad  %38  %6
+%30 = OpConvertUToPtr  %40  %21
+OpStore %30 %22
+OpReturn
+OpFunctionEnd

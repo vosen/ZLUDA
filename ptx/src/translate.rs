@@ -1263,6 +1263,9 @@ fn convert_to_typed_statements(
                 ast::Instruction::Rcp(d, a) => {
                     result.push(Statement::Instruction(ast::Instruction::Rcp(d, a.cast())))
                 }
+                ast::Instruction::And(d, a) => {
+                    result.push(Statement::Instruction(ast::Instruction::And(d, a.cast())))
+                }
             },
             Statement::Label(i) => result.push(Statement::Label(i)),
             Statement::Variable(v) => result.push(Statement::Variable(v)),
@@ -2325,7 +2328,7 @@ fn emit_function_body_ops(
                 },
                 ast::Instruction::Or(t, a) => {
                     let result_type = map.get_or_add_scalar(builder, ast::ScalarType::from(*t));
-                    if *t == ast::OrType::Pred {
+                    if *t == ast::OrAndType::Pred {
                         builder.logical_or(result_type, Some(a.dst), a.src1, a.src2)?;
                     } else {
                         builder.bitwise_or(result_type, Some(a.dst), a.src1, a.src2)?;
@@ -2350,6 +2353,14 @@ fn emit_function_body_ops(
                 }
                 ast::Instruction::Rcp(d, a) => {
                     emit_rcp(builder, map, d, a)?;
+                }
+                ast::Instruction::And(t, a) => {
+                    let result_type = map.get_or_add_scalar(builder, ast::ScalarType::from(*t));
+                    if *t == ast::OrAndType::Pred {
+                        builder.logical_and(result_type, Some(a.dst), a.src1, a.src2)?;
+                    } else {
+                        builder.bitwise_and(result_type, Some(a.dst), a.src1, a.src2)?;
+                    }
                 }
             },
             Statement::LoadVar(arg, typ) => {
@@ -4041,6 +4052,10 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
                 });
                 ast::Instruction::Rcp(d, a.map(visitor, &typ)?)
             }
+            ast::Instruction::And(t, a) => ast::Instruction::And(
+                t,
+                a.map_non_shift(visitor, &ast::Type::Scalar(t.into()), false)?,
+            ),
         })
     }
 }
@@ -4285,6 +4300,7 @@ impl ast::Instruction<ExpandedArgParams> {
             | ast::Instruction::Min(_, _)
             | ast::Instruction::Max(_, _)
             | ast::Instruction::Rcp(_, _)
+            | ast::Instruction::And(_, _)
             | ast::Instruction::Mad(_, _) => None,
         }
     }
@@ -4303,6 +4319,7 @@ impl ast::Instruction<ExpandedArgParams> {
             ast::Instruction::Ret(_) => None,
             ast::Instruction::Call(_) => None,
             ast::Instruction::Or(_, _) => None,
+            ast::Instruction::And(_, _) => None,
             ast::Instruction::Cvta(_, _) => None,
             ast::Instruction::Sub(ast::ArithDetails::Signed(_), _) => None,
             ast::Instruction::Sub(ast::ArithDetails::Unsigned(_), _) => None,

@@ -506,11 +506,12 @@ pub enum Instruction<P: ArgParams> {
     Call(CallInst<P>),
     Abs(AbsDetails, Arg2<P>),
     Mad(MulDetails, Arg4<P>),
-    Or(OrType, Arg3<P>),
+    Or(OrAndType, Arg3<P>),
     Sub(ArithDetails, Arg3<P>),
     Min(MinMaxDetails, Arg3<P>),
     Max(MinMaxDetails, Arg3<P>),
     Rcp(RcpDetails, Arg2<P>),
+    And(OrAndType, Arg3<P>),
 }
 
 #[derive(Copy, Clone)]
@@ -974,7 +975,7 @@ pub struct RetData {
     pub uniform: bool,
 }
 
-sub_enum!(OrType {
+sub_enum!(OrAndType {
     Pred,
     B16,
     B32,

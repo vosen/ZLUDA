@@ -89,6 +89,7 @@ test_ptx!(rcp, [2f32], [0.5f32]);
 test_ptx!(mul_non_ftz, [0b1_00000000_10000000000000000000000u32, 0x3f000000u32], [0b1_00000000_01000000000000000000000u32]);
 test_ptx!(constant_f32, [10f32], [5f32]);
 test_ptx!(constant_negative, [-101i32], [101i32]);
+test_ptx!(and, [6u32, 3u32], [2u32]);
 
 struct DisplayError<T: Debug> {
     err: T,
