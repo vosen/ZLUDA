@@ -1266,6 +1266,9 @@ fn convert_to_typed_statements(
                 ast::Instruction::And(d, a) => {
                     result.push(Statement::Instruction(ast::Instruction::And(d, a.cast())))
                 }
+                ast::Instruction::Selp(d, a) => {
+                    result.push(Statement::Instruction(ast::Instruction::Selp(d, a.cast())))
+                }
             },
             Statement::Label(i) => result.push(Statement::Label(i)),
             Statement::Variable(v) => result.push(Statement::Variable(v)),
@@ -2159,6 +2162,22 @@ fn emit_function_body_ops(
                     (ast::ScalarType::F64, ast::ImmediateValue::F64(value)) => {
                         builder.constant_f64(typ_id, Some(cnst.dst), value);
                     }
+                    (ast::ScalarType::Pred, ast::ImmediateValue::U64(value)) => {
+                        let bool_type = map.get_or_add_scalar(builder, ast::ScalarType::Pred);
+                        if value == 0 {
+                            builder.constant_false(bool_type, Some(cnst.dst));
+                        } else {
+                            builder.constant_true(bool_type, Some(cnst.dst));
+                        }
+                    }
+                    (ast::ScalarType::Pred, ast::ImmediateValue::S64(value)) => {
+                        let bool_type = map.get_or_add_scalar(builder, ast::ScalarType::Pred);
+                        if value == 0 {
+                            builder.constant_false(bool_type, Some(cnst.dst));
+                        } else {
+                            builder.constant_true(bool_type, Some(cnst.dst));
+                        }
+                    }
                     _ => return Err(TranslateError::MismatchedType),
                 }
             }
@@ -2361,6 +2380,10 @@ fn emit_function_body_ops(
                     } else {
                         builder.bitwise_and(result_type, Some(a.dst), a.src1, a.src2)?;
                     }
+                }
+                ast::Instruction::Selp(t, a) => {
+                    let result_type = map.get_or_add_scalar(builder, ast::ScalarType::from(*t));
+                    builder.select(result_type, Some(a.dst), a.src3, a.src2, a.src2)?;
                 }
             },
             Statement::LoadVar(arg, typ) => {
@@ -4056,6 +4079,7 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
                 t,
                 a.map_non_shift(visitor, &ast::Type::Scalar(t.into()), false)?,
             ),
+            ast::Instruction::Selp(t, a) => ast::Instruction::Selp(t, a.map_selp(visitor, t)?),
         })
     }
 }
@@ -4301,6 +4325,7 @@ impl ast::Instruction<ExpandedArgParams> {
             | ast::Instruction::Max(_, _)
             | ast::Instruction::Rcp(_, _)
             | ast::Instruction::And(_, _)
+            | ast::Instruction::Selp(_, _)
             | ast::Instruction::Mad(_, _) => None,
         }
     }
@@ -4321,6 +4346,7 @@ impl ast::Instruction<ExpandedArgParams> {
             ast::Instruction::Or(_, _) => None,
             ast::Instruction::And(_, _) => None,
             ast::Instruction::Cvta(_, _) => None,
+            ast::Instruction::Selp(_, _) => None,
             ast::Instruction::Sub(ast::ArithDetails::Signed(_), _) => None,
             ast::Instruction::Sub(ast::ArithDetails::Unsigned(_), _) => None,
             ast::Instruction::Add(ast::ArithDetails::Signed(_), _) => None,
@@ -5039,6 +5065,51 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
                 sema: ArgumentSemantics::Default,
             },
             t,
+        )?;
+        Ok(ast::Arg4 {
+            dst,
+            src1,
+            src2,
+            src3,
+        })
+    }
+
+    fn map_selp<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
+        self,
+        visitor: &mut V,
+        t: ast::SelpType,
+    ) -> Result<ast::Arg4<U>, TranslateError> {
+        let dst = visitor.id(
+            ArgumentDescriptor {
+                op: self.dst,
+                is_dst: true,
+                sema: ArgumentSemantics::Default,
+            },
+            Some(&ast::Type::Scalar(t.into())),
+        )?;
+        let src1 = visitor.operand(
+            ArgumentDescriptor {
+                op: self.src1,
+                is_dst: false,
+                sema: ArgumentSemantics::Default,
+            },
+            &ast::Type::Scalar(t.into()),
+        )?;
+        let src2 = visitor.operand(
+            ArgumentDescriptor {
+                op: self.src2,
+                is_dst: false,
+                sema: ArgumentSemantics::Default,
+            },
+            &ast::Type::Scalar(t.into()),
+        )?;
+        let src3 = visitor.operand(
+            ArgumentDescriptor {
+                op: self.src3,
+                is_dst: false,
+                sema: ArgumentSemantics::Default,
+            },
+            &ast::Type::Scalar(ast::ScalarType::Pred),
         )?;
         Ok(ast::Arg4 {
             dst,

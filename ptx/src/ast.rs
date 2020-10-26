@@ -201,6 +201,20 @@ sub_enum!(LdStScalarType {
     F64,
 });
 
+sub_enum!(SelpType {
+    B16,
+    B32,
+    B64,
+    U16,
+    U32,
+    U64,
+    S16,
+    S32,
+    S64,
+    F32,
+    F64,
+});
+
 pub trait UnwrapWithVec<E, To> {
     fn unwrap_with(self, errs: &mut Vec<E>) -> To;
 }
@@ -512,6 +526,7 @@ pub enum Instruction<P: ArgParams> {
     Max(MinMaxDetails, Arg3<P>),
     Rcp(RcpDetails, Arg2<P>),
     And(OrAndType, Arg3<P>),
+    Selp(SelpType, Arg4<P>),
 }
 
 #[derive(Copy, Clone)]

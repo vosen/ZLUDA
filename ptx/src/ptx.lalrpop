@@ -142,6 +142,7 @@ match {
     "or",
     "rcp",
     "ret",
+    "selp",
     "setp",
     "shl",
     "shr",
@@ -176,6 +177,7 @@ ExtendedID : &'input str = {
     "or",
     "rcp",
     "ret",
+    "selp",
     "setp",
     "shl",
     "shr",
@@ -614,7 +616,8 @@ Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
     InstSub,
     InstMin,
     InstMax,
-    InstRcp
+    InstRcp,
+    InstSelp
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
@@ -1270,6 +1273,25 @@ MinMaxDetails: ast::MinMaxDetails = {
         ast::MinMaxFloat{ flush_to_zero: Some(ftz.is_some()), nan: nan.is_some(), typ: ast::FloatType::F16x2 }
     )
 }
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions-selp
+InstSelp: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "selp" <t:SelpType> <a:Arg4> => ast::Instruction::Selp(t, a),
+};
+
+SelpType: ast::SelpType = {
+    ".b16" => ast::SelpType::B16,
+    ".b32" => ast::SelpType::B32,
+    ".b64" => ast::SelpType::B64,
+    ".u16" => ast::SelpType::U16,
+    ".u32" => ast::SelpType::U32,
+    ".u64" => ast::SelpType::U64,
+    ".s16" => ast::SelpType::S16,
+    ".s32" => ast::SelpType::S32,
+    ".s64" => ast::SelpType::S64,
+    ".f32" => ast::SelpType::F32,
+    ".f64" => ast::SelpType::F64,
+};
 
 ArithDetails: ast::ArithDetails = {
     <t:UIntType> => ast::ArithDetails::Unsigned(t),
