@@ -86,12 +86,20 @@ test_ptx!(rcp, [2f32], [0.5f32]);
 // 0x3f000000 is 0.5
 // TODO: mul_ftz fails because IGC does not yet handle SPV_INTEL_float_controls2
 // test_ptx!(mul_ftz, [0b1_00000000_10000000000000000000000u32, 0x3f000000u32], [0u32]);
-test_ptx!(mul_non_ftz, [0b1_00000000_10000000000000000000000u32, 0x3f000000u32], [0b1_00000000_01000000000000000000000u32]);
+test_ptx!(
+    mul_non_ftz,
+    [0b1_00000000_10000000000000000000000u32, 0x3f000000u32],
+    [0b1_00000000_01000000000000000000000u32]
+);
 test_ptx!(constant_f32, [10f32], [5f32]);
 test_ptx!(constant_negative, [-101i32], [101i32]);
 test_ptx!(and, [6u32, 3u32], [2u32]);
 test_ptx!(selp, [100u16, 200u16], [200u16]);
-test_ptx!(fma,  [2f32, 3f32, 5f32], [11f32]);
+test_ptx!(fma, [2f32, 3f32, 5f32], [11f32]);
+test_ptx!(shared_variable, [513u64], [513u64]);
+test_ptx!(atom_cas, [91u32, 91u32], [91u32, 100u32]);
+test_ptx!(atom_inc, [100u32], [100u32, 101u32, 0u32]);
+test_ptx!(atom_add, [2u32, 4u32], [2u32, 6u32]);
 
 struct DisplayError<T: Debug> {
     err: T,
@@ -124,7 +132,7 @@ fn test_ptx_assert<'a, T: From<u8> + ze::SafeRepr + Debug + Copy + PartialEq>(
     let name = CString::new(name)?;
     let result = run_spirv(name.as_c_str(), notcuda_module, input, output)
         .map_err(|err| DisplayError { err })?;
-    assert_eq!(output, result.as_slice());
+    assert_eq!(result.as_slice(), output);
     Ok(())
 }
 
@@ -145,8 +153,8 @@ fn run_spirv<T: From<u8> + ze::SafeRepr + Copy + Debug>(
     let use_shared_mem = module
         .kernel_info
         .get(name.to_str().unwrap())
-        .unwrap()
-        .uses_shared_mem;
+        .map(|info| info.uses_shared_mem)
+        .unwrap_or(false);
     let mut result = vec![0u8.into(); output.len()];
     {
         let mut drivers = ze::Driver::get()?;
@@ -155,11 +163,20 @@ fn run_spirv<T: From<u8> + ze::SafeRepr + Copy + Debug>(
         let mut devices = drv.devices()?;
         let dev = devices.drain(0..1).next().unwrap();
         let queue = ze::CommandQueue::new(&mut ctx, &dev)?;
-        let (module, log) = ze::Module::new_spirv(&mut ctx, &dev, byte_il, None);
+        let (module, maybe_log) = match module.should_link_ptx_impl {
+            Some(ptx_impl) => ze::Module::build_link_spirv(&mut ctx, &dev, &[ptx_impl, byte_il]),
+            None => {
+                let (module, log) = ze::Module::build_spirv(&mut ctx, &dev, byte_il, None);
+                (module, Some(log))
+            }
+        };
         let module = match module {
             Ok(m) => m,
             Err(err) => {
-                let raw_err_string = log.get_cstring()?;
+                let raw_err_string = maybe_log
+                    .map(|log| log.get_cstring())
+                    .transpose()?
+                    .unwrap_or(CString::default());
                 let err_string = raw_err_string.to_string_lossy();
                 panic!("{:?}\n{}", err, err_string);
             }
@@ -215,7 +232,11 @@ fn test_spvtxt_assert<'a>(
             ptr::null_mut(),
         )
     };
-    assert!(result == spv_result_t::SPV_SUCCESS);
+    if result != spv_result_t::SPV_SUCCESS {
+        panic!("{:?}\n{}", result, unsafe {
+            str::from_utf8_unchecked(spirv_txt)
+        });
+    }
     let mut parsed_spirv = Vec::<u32>::new();
     let result = unsafe {
         spirv_tools::spvBinaryParse(

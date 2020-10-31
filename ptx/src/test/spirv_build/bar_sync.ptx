@@ -1,0 +1,10 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry bar_sync()
+{
+    .reg .u32 	    temp_32;
+    bar.sync temp_32;
+	ret;
+}

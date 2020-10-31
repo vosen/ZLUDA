@@ -109,11 +109,12 @@ macro_rules! sub_type {
     };
 }
 
-// Pointer is used when doing SLM converison to SPIRV
 sub_type! {
     VariableRegType {
         Scalar(ScalarType),
         Vector(SizedScalarType, u8),
+        // Pointer variant is used when passing around SLM pointer between
+        // function calls for dynamic SLM
         Pointer(SizedScalarType, PointerStateSpace)
     }
 }
@@ -215,6 +216,11 @@ sub_enum!(SelpType {
     F64,
 });
 
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum BarDetails {
+    SyncAligned,
+}
+
 pub trait UnwrapWithVec<E, To> {
     fn unwrap_with(self, errs: &mut Vec<E>) -> To;
 }
@@ -301,6 +307,7 @@ impl From<FnArgumentType> for Type {
 
 sub_enum!(
     PointerStateSpace : LdStateSpace {
+        Generic,
         Global,
         Const,
         Shared,
@@ -371,6 +378,8 @@ sub_enum!(IntType {
     S32,
     S64
 });
+
+sub_enum!(BitType { B8, B16, B32, B64 });
 
 sub_enum!(UIntType { U8, U16, U32, U64 });
 
@@ -527,6 +536,9 @@ pub enum Instruction<P: ArgParams> {
     Rcp(RcpDetails, Arg2<P>),
     And(OrAndType, Arg3<P>),
     Selp(SelpType, Arg4<P>),
+    Bar(BarDetails, Arg1Bar<P>),
+    Atom(AtomDetails, Arg3<P>),
+    AtomCas(AtomCasDetails, Arg4<P>),
 }
 
 #[derive(Copy, Clone)]
@@ -575,6 +587,10 @@ impl<'a> ArgParams for ParsedArgParams<'a> {
 
 pub struct Arg1<P: ArgParams> {
     pub src: P::Id, // it is a jump destination, but in terms of operands it is a source operand
+}
+
+pub struct Arg1Bar<P: ArgParams> {
+    pub src: P::Operand,
 }
 
 pub struct Arg2<P: ArgParams> {
@@ -712,12 +728,12 @@ impl From<LdStType> for PointerType {
 pub enum LdStQualifier {
     Weak,
     Volatile,
-    Relaxed(LdScope),
-    Acquire(LdScope),
+    Relaxed(MemScope),
+    Acquire(MemScope),
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
-pub enum LdScope {
+pub enum MemScope {
     Cta,
     Gpu,
     Sys,
@@ -1049,6 +1065,74 @@ pub struct MinMaxFloat {
     pub flush_to_zero: Option<bool>,
     pub nan: bool,
     pub typ: FloatType,
+}
+
+#[derive(Copy, Clone)]
+pub struct AtomDetails {
+    pub semantics: AtomSemantics,
+    pub scope: MemScope,
+    pub space: AtomSpace,
+    pub inner: AtomInnerDetails,
+}
+
+#[derive(Copy, Clone)]
+pub enum AtomSemantics {
+    Relaxed,
+    Acquire,
+    Release,
+    AcquireRelease,
+}
+
+#[derive(Copy, Clone)]
+pub enum AtomSpace {
+    Generic,
+    Global,
+    Shared,
+}
+
+#[derive(Copy, Clone)]
+pub enum AtomInnerDetails {
+    Bit { op: AtomBitOp, typ: BitType },
+    Unsigned { op: AtomUIntOp, typ: UIntType },
+    Signed { op: AtomSIntOp, typ: SIntType },
+    Float { op: AtomFloatOp, typ: FloatType },
+}
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum AtomBitOp {
+    And,
+    Or,
+    Xor,
+    Exchange,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum AtomUIntOp {
+    Add,
+    Inc,
+    Dec,
+    Min,
+    Max,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum AtomSIntOp {
+    Add,
+    Min,
+    Max,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum AtomFloatOp {
+    Add,
+}
+
+#[derive(Copy, Clone)]
+pub struct AtomCasDetails {
+    pub semantics: AtomSemantics,
+    pub scope: MemScope,
+    pub space: AtomSpace,
+    pub typ: BitType
 }
 
 pub enum NumsOrArrays<'a> {

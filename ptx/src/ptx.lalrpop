@@ -35,9 +35,12 @@ match {
     "<", ">",
     "|",
     "=",
+    ".acq_rel",
     ".acquire",
+    ".add",
     ".address_size",
     ".align",
+    ".aligned",
     ".and",
     ".approx",
     ".b16",
@@ -45,14 +48,17 @@ match {
     ".b64",
     ".b8",
     ".ca",
+    ".cas",
     ".cg",
     ".const",
     ".cs",
     ".cta",
     ".cv",
+    ".dec",
     ".entry",
     ".eq",
     ".equ",
+    ".exch",
     ".extern",
     ".f16",
     ".f16x2",
@@ -69,6 +75,7 @@ match {
     ".gtu",
     ".hi",
     ".hs",
+    ".inc",
     ".le",
     ".leu",
     ".lo",
@@ -78,6 +85,8 @@ match {
     ".lt",
     ".ltu",
     ".lu",
+    ".max",
+    ".min",
     ".nan",
     ".NaN",
     ".ne",
@@ -88,6 +97,7 @@ match {
     ".pred",
     ".reg",
     ".relaxed",
+    ".release",
     ".rm",
     ".rmi",
     ".rn",
@@ -103,6 +113,7 @@ match {
     ".sat",
     ".section",
     ".shared",
+    ".sync",
     ".sys",
     ".target",
     ".to",
@@ -126,6 +137,9 @@ match {
     "abs",
     "add",
     "and",
+    "atom",
+    "bar",
+    "barrier",
     "bra",
     "call",
     "cvt",
@@ -162,6 +176,9 @@ ExtendedID : &'input str = {
     "abs",
     "add",
     "and",
+    "atom",
+    "bar",
+    "barrier",
     "bra",
     "call",
     "cvt",
@@ -372,6 +389,7 @@ StateSpaceSpecifier: ast::StateSpace = {
     ".param" => ast::StateSpace::Param, // used to prepare function call
 };
 
+#[inline]
 ScalarType: ast::ScalarType = {
     ".f16" => ast::ScalarType::F16,
     ".f16x2" => ast::ScalarType::F16x2,
@@ -438,6 +456,7 @@ Variable: ast::Variable<ast::VariableType, &'input str> = {
         let v_type = ast::VariableType::Param(v_type);
         ast::Variable {align, v_type, name, array_init}
     },
+    SharedVariable,
 };
 
 RegVariable: (Option<u32>, ast::VariableRegType, &'input str) = {
@@ -477,6 +496,32 @@ LocalVariable: ast::Variable<ast::VariableType, &'input str> = {
         Ok(ast::Variable { align, v_type: ast::VariableType::Local(v_type), name, array_init })
     }
 }
+
+SharedVariable: ast::Variable<ast::VariableType, &'input str> = {
+    ".shared" <var:VariableScalar<SizedScalarType>> => {
+        let (align, t, name) = var;
+        let v_type = ast::VariableGlobalType::Scalar(t);
+        ast::Variable { align, v_type: ast::VariableType::Shared(v_type), name, array_init: Vec::new() }
+    },
+    ".shared" <var:VariableVector<SizedScalarType>> => {
+        let (align, v_len, t, name) = var;
+        let v_type = ast::VariableGlobalType::Vector(t, v_len);
+        ast::Variable { align, v_type: ast::VariableType::Shared(v_type), name, array_init: Vec::new() }
+    },
+    ".shared" <var:VariableArrayOrPointer<SizedScalarType>> =>? {
+        let (align, t, name, arr_or_ptr) = var;
+        let (v_type, array_init) = match arr_or_ptr {
+            ast::ArrayOrPointer::Array { dimensions, init } => {
+                (ast::VariableGlobalType::Array(t, dimensions), init)
+            }
+            ast::ArrayOrPointer::Pointer => {
+                return Err(ParseError::User { error: ast::PtxError::ZeroDimensionArray });
+            }
+        };
+        Ok(ast::Variable { align, v_type: ast::VariableType::Shared(v_type), name, array_init })
+    }
+}
+
 
 ModuleVariable: ast::Variable<ast::VariableType, &'input str> = {
     LinkingDirectives ".global" <def:GlobalVariableDefinitionNoArray> => {
@@ -619,7 +664,10 @@ Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
     InstMin,
     InstMax,
     InstRcp,
-    InstSelp
+    InstSelp,
+    InstBar,
+    InstAtom,
+    InstAtomCas
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
@@ -655,14 +703,14 @@ LdStType: ast::LdStType = {
 LdStQualifier: ast::LdStQualifier = {
     ".weak" => ast::LdStQualifier::Weak,
     ".volatile" => ast::LdStQualifier::Volatile,
-    ".relaxed" <s:LdScope> => ast::LdStQualifier::Relaxed(s),
-    ".acquire" <s:LdScope> => ast::LdStQualifier::Acquire(s),
+    ".relaxed" <s:MemScope> => ast::LdStQualifier::Relaxed(s),
+    ".acquire" <s:MemScope> => ast::LdStQualifier::Acquire(s),
 };
 
-LdScope: ast::LdScope = {
-    ".cta" => ast::LdScope::Cta,
-    ".gpu" => ast::LdScope::Gpu,
-    ".sys" => ast::LdScope::Sys
+MemScope: ast::MemScope = {
+    ".cta" => ast::MemScope::Cta,
+    ".gpu" => ast::MemScope::Gpu,
+    ".sys" => ast::MemScope::Sys
 };
 
 LdStateSpace: ast::LdStateSpace = {
@@ -796,6 +844,13 @@ SIntType: ast::SIntType = {
     ".s16" => ast::SIntType::S16,
     ".s32" => ast::SIntType::S32,
     ".s64" => ast::SIntType::S64,
+};
+
+FloatType: ast::FloatType = {
+    ".f16" => ast::FloatType::F16,
+    ".f16x2" => ast::FloatType::F16x2,
+    ".f32" => ast::FloatType::F32,
+    ".f64" => ast::FloatType::F64,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-add
@@ -1296,6 +1351,140 @@ SelpType: ast::SelpType = {
     ".f64" => ast::SelpType::F64,
 };
 
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-bar
+InstBar: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "barrier" ".sync" ".aligned" <a:Arg1Bar> => ast::Instruction::Bar(ast::BarDetails::SyncAligned, a),
+    "bar" ".sync" <a:Arg1Bar> => ast::Instruction::Bar(ast::BarDetails::SyncAligned, a)
+}
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-atom
+// The documentation does not mention all spported operations:
+// * Operation .add requires .u32 or .s32 or .u64 or .f64 or f16 or f16x2 or .f32
+// * Operation .inc requires .u32 type for instuction
+// * Operation .dec requires .u32 type for instuction
+// Otherwise as documented
+InstAtom: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "atom" <sema:AtomSemantics?> <scope:MemScope?> <space:AtomSpace?> <op:AtomBitOp> <typ:AtomBitType> <a:Arg3Atom> => {
+        let details = ast::AtomDetails {
+            semantics: sema.unwrap_or(ast::AtomSemantics::Relaxed),
+            scope: scope.unwrap_or(ast::MemScope::Gpu),
+            space: space.unwrap_or(ast::AtomSpace::Generic),
+            inner: ast::AtomInnerDetails::Bit { op, typ }
+        };
+        ast::Instruction::Atom(details,a)
+    },
+    "atom" <sema:AtomSemantics?> <scope:MemScope?> <space:AtomSpace?> ".inc" ".u32" <a:Arg3Atom> => {
+        let details = ast::AtomDetails {
+            semantics: sema.unwrap_or(ast::AtomSemantics::Relaxed),
+            scope: scope.unwrap_or(ast::MemScope::Gpu),
+            space: space.unwrap_or(ast::AtomSpace::Generic),
+            inner: ast::AtomInnerDetails::Unsigned {
+                op: ast::AtomUIntOp::Inc,
+                typ: ast::UIntType::U32
+            }
+        };
+        ast::Instruction::Atom(details,a)
+    },
+    "atom" <sema:AtomSemantics?> <scope:MemScope?> <space:AtomSpace?> ".dec" ".u32" <a:Arg3Atom> => {
+        let details = ast::AtomDetails {
+            semantics: sema.unwrap_or(ast::AtomSemantics::Relaxed),
+            scope: scope.unwrap_or(ast::MemScope::Gpu),
+            space: space.unwrap_or(ast::AtomSpace::Generic),
+            inner: ast::AtomInnerDetails::Unsigned {
+                op: ast::AtomUIntOp::Dec,
+                typ: ast::UIntType::U32
+            }
+        };
+        ast::Instruction::Atom(details,a)
+    },
+    "atom" <sema:AtomSemantics?> <scope:MemScope?> <space:AtomSpace?> ".add" <typ:FloatType> <a:Arg3Atom> => {
+        let op = ast::AtomFloatOp::Add;
+        let details = ast::AtomDetails {
+            semantics: sema.unwrap_or(ast::AtomSemantics::Relaxed),
+            scope: scope.unwrap_or(ast::MemScope::Gpu),
+            space: space.unwrap_or(ast::AtomSpace::Generic),
+            inner: ast::AtomInnerDetails::Float { op, typ }
+        };
+        ast::Instruction::Atom(details,a)
+    },
+    "atom" <sema:AtomSemantics?> <scope:MemScope?> <space:AtomSpace?> <op: AtomUIntOp> <typ:AtomUIntType> <a:Arg3Atom> => {
+        let details = ast::AtomDetails {
+            semantics: sema.unwrap_or(ast::AtomSemantics::Relaxed),
+            scope: scope.unwrap_or(ast::MemScope::Gpu),
+            space: space.unwrap_or(ast::AtomSpace::Generic),
+            inner: ast::AtomInnerDetails::Unsigned { op, typ }
+        };
+        ast::Instruction::Atom(details,a)
+    },
+    "atom" <sema:AtomSemantics?> <scope:MemScope?> <space:AtomSpace?> <op: AtomSIntOp> <typ:AtomSIntType> <a:Arg3Atom> => {
+        let details = ast::AtomDetails {
+            semantics: sema.unwrap_or(ast::AtomSemantics::Relaxed),
+            scope: scope.unwrap_or(ast::MemScope::Gpu),
+            space: space.unwrap_or(ast::AtomSpace::Generic),
+            inner: ast::AtomInnerDetails::Signed { op, typ }
+        };
+        ast::Instruction::Atom(details,a)
+    }
+}
+
+InstAtomCas: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "atom" <sema:AtomSemantics?> <scope:MemScope?> <space:AtomSpace?> ".cas" <typ:AtomBitType> <a:Arg4Atom> => {
+        let details = ast::AtomCasDetails {
+            semantics: sema.unwrap_or(ast::AtomSemantics::Relaxed),
+            scope: scope.unwrap_or(ast::MemScope::Gpu),
+            space: space.unwrap_or(ast::AtomSpace::Generic),
+            typ,
+        };
+        ast::Instruction::AtomCas(details,a)
+    },
+}
+
+AtomSemantics: ast::AtomSemantics = {
+    ".relaxed" => ast::AtomSemantics::Relaxed,
+    ".acquire" => ast::AtomSemantics::Acquire,
+    ".release" => ast::AtomSemantics::Release,
+    ".acq_rel" => ast::AtomSemantics::AcquireRelease
+}
+
+AtomSpace: ast::AtomSpace = {
+    ".global" => ast::AtomSpace::Global,
+    ".shared" => ast::AtomSpace::Shared
+}
+
+AtomBitOp: ast::AtomBitOp = {
+    ".and" => ast::AtomBitOp::And,
+    ".or" => ast::AtomBitOp::Or,
+    ".xor" => ast::AtomBitOp::Xor,
+    ".exch" => ast::AtomBitOp::Exchange,
+}
+
+AtomUIntOp: ast::AtomUIntOp = {
+    ".add" => ast::AtomUIntOp::Add,
+    ".min" => ast::AtomUIntOp::Min,
+    ".max" => ast::AtomUIntOp::Max,
+}
+
+AtomSIntOp: ast::AtomSIntOp = {
+    ".add" => ast::AtomSIntOp::Add,
+    ".min" => ast::AtomSIntOp::Min,
+    ".max" => ast::AtomSIntOp::Max,
+}
+
+AtomBitType: ast::BitType = {
+    ".b32" => ast::BitType::B32,
+    ".b64" => ast::BitType::B64,
+}
+
+AtomUIntType: ast::UIntType = {
+    ".u32" => ast::UIntType::U32,
+    ".u64" => ast::UIntType::U64,
+}
+
+AtomSIntType: ast::SIntType = {
+    ".s32" => ast::SIntType::S32,
+    ".s64" => ast::SIntType::S64,
+}
+
 ArithDetails: ast::ArithDetails = {
     <t:UIntType> => ast::ArithDetails::Unsigned(t),
     <t:SIntType> => ast::ArithDetails::Signed(ast::ArithSInt {
@@ -1414,6 +1603,10 @@ Arg1: ast::Arg1<ast::ParsedArgParams<'input>> = {
     <src:ExtendedID> => ast::Arg1{<>}
 };
 
+Arg1Bar: ast::Arg1Bar<ast::ParsedArgParams<'input>> = {
+    <src:Operand> => ast::Arg1Bar{<>}
+};
+
 Arg2: ast::Arg2<ast::ParsedArgParams<'input>> = {
     <dst:ExtendedID> "," <src:Operand> => ast::Arg2{<>}
 };
@@ -1448,8 +1641,16 @@ Arg3: ast::Arg3<ast::ParsedArgParams<'input>> = {
     <dst:ExtendedID> "," <src1:Operand> "," <src2:Operand> => ast::Arg3{<>}
 };
 
+Arg3Atom: ast::Arg3<ast::ParsedArgParams<'input>> = {
+    <dst:ExtendedID> "," "[" <src1:Operand> "]" "," <src2:Operand> => ast::Arg3{<>}
+};
+
 Arg4: ast::Arg4<ast::ParsedArgParams<'input>> = {
     <dst:ExtendedID> "," <src1:Operand> "," <src2:Operand> ","  <src3:Operand> => ast::Arg4{<>}
+};
+
+Arg4Atom: ast::Arg4<ast::ParsedArgParams<'input>> = {
+    <dst:ExtendedID> "," "[" <src1:Operand> "]" "," <src2:Operand> ","  <src3:Operand> => ast::Arg4{<>}
 };
 
 Arg4Setp: ast::Arg4Setp<ast::ParsedArgParams<'input>> = {

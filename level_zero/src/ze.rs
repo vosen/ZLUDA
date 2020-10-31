@@ -238,7 +238,76 @@ impl Drop for CommandQueue {
 pub struct Module(sys::ze_module_handle_t);
 
 impl Module {
-    pub fn new_spirv(
+    // HACK ALERT
+    // We use OpenCL for now to do SPIR-V linking, because Level0 
+    // does not allow linking. Don't let presence of zeModuleDynamicLink fool
+    // you, it's not currently possible to create non-compiled modules.
+    // zeModuleCreate always compiles (builds and links).
+    pub fn build_link_spirv<'a>(
+        ctx: &mut Context,
+        d: &Device,
+        binaries: &[&'a [u8]],
+    ) -> (Result<Self>, Option<BuildLog>) {
+        let ocl_program = match Self::build_link_spirv_impl(binaries) {
+            Err(_) => return (Err(sys::ze_result_t::ZE_RESULT_ERROR_UNKNOWN), None),
+            Ok(prog) => prog,
+        };
+        match ocl_core::get_program_info(&ocl_program, ocl_core::ProgramInfo::Binaries) {
+            Ok(ocl_core::ProgramInfoResult::Binaries(binaries)) => {
+                let (module, build_log) = Self::build_native(ctx, d, &binaries[0]);
+                (module, Some(build_log))
+            }
+            _ => return (Err(sys::ze_result_t::ZE_RESULT_ERROR_UNKNOWN), None),
+        }
+    }
+
+    fn build_link_spirv_impl<'a>(binaries: &[&'a [u8]]) -> ocl_core::Result<ocl_core::Program> {
+        let platforms = ocl_core::get_platform_ids()?;
+        let (platform, device) = platforms
+            .iter()
+            .find_map(|plat| {
+                let devices =
+                    ocl_core::get_device_ids(plat, Some(ocl_core::DeviceType::GPU), None).ok()?;
+                for dev in devices {
+                    let vendor =
+                        ocl_core::get_device_info(dev, ocl_core::DeviceInfo::VendorId).ok()?;
+                    if let ocl_core::DeviceInfoResult::VendorId(0x8086) = vendor {
+                        let dev_type =
+                            ocl_core::get_device_info(dev, ocl_core::DeviceInfo::Type).ok()?;
+                        if let ocl_core::DeviceInfoResult::Type(ocl_core::DeviceType::GPU) =
+                            dev_type
+                        {
+                            return Some((plat.clone(), dev));
+                        }
+                    }
+                }
+                None
+            })
+            .ok_or("")?;
+        let ctx_props = ocl_core::ContextProperties::new().platform(platform);
+        let ocl_ctx = ocl_core::create_context_from_type::<ocl_core::DeviceId>(
+            Some(&ctx_props),
+            ocl_core::DeviceType::GPU,
+            None,
+            None,
+        )?;
+        let mut programs = Vec::with_capacity(binaries.len());
+        for binary in binaries {
+            programs.push(ocl_core::create_program_with_il(&ocl_ctx, binary, None)?);
+        }
+        let options = CString::default();
+        ocl_core::link_program::<ocl_core::DeviceId, _>(
+            &ocl_ctx,
+            Some(&[device]),
+            &options,
+            &programs.iter().collect::<Vec<_>>(),
+            None,
+            None,
+            None,
+        )
+    }
+
+    pub fn build_spirv(
         ctx: &mut Context,
         d: &Device,
         bin: &[u8],
@@ -247,7 +316,7 @@ impl Module {
         Module::new(ctx, true, d, bin, opts)
     }
 
-    pub fn new_native(ctx: &mut Context, d: &Device, bin: &[u8]) -> (Result<Self>, BuildLog) {
+    pub fn build_native(ctx: &mut Context, d: &Device, bin: &[u8]) -> (Result<Self>, BuildLog) {
         Module::new(ctx, false, d, bin, None)
     }
 

@@ -1,0 +1,26 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+
+.visible .entry shared_variable(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+    .shared .align 4 .b8    shared_mem1[128];
+
+	.reg .u64 	            in_addr;
+    .reg .u64 	            out_addr;
+    .reg .u64 	            temp1;
+    .reg .u64 	            temp2;
+
+	ld.param.u64 	        in_addr, [input];
+    ld.param.u64 	        out_addr, [output];
+
+    ld.global.u64           temp1, [in_addr];
+    st.shared.u64           [shared_mem1], temp1;
+    ld.shared.u64           temp2, [shared_mem1];
+    st.global.u64           [out_addr], temp2;
+	ret;
+}

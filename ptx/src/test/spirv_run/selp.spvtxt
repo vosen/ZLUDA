@@ -11,8 +11,8 @@ OpCapability Int16
 OpCapability Int64
 OpCapability Float16
 OpCapability Float64
-OpCapability FunctionFloatControlINTEL
-OpExtension "SPV_INTEL_float_controls2"
+; OpCapability FunctionFloatControlINTEL
+; OpExtension "SPV_INTEL_float_controls2"
 %31 = OpExtInstImport "OpenCL.std"
 OpMemoryModel Physical64 OpenCL
 OpEntryPoint Kernel %1 "selp"

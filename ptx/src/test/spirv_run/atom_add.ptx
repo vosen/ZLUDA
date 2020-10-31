@@ -1,0 +1,28 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry atom_add(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.shared .align 4 .b8 shared_mem[1024];
+
+	.reg .u64 	        in_addr;
+    .reg .u64 	        out_addr;
+    .reg .u32 	        temp1;
+    .reg .u32 	        temp2;
+
+	ld.param.u64 	    in_addr, [input];
+    ld.param.u64 	    out_addr, [output];
+
+    ld.u32              temp1, [in_addr];
+    ld.u32              temp2, [in_addr+4];
+    st.shared.u32       [shared_mem], temp1;
+    atom.shared.add.u32 temp1, [shared_mem], temp2;
+    ld.shared.u32       temp2, [shared_mem];
+    st.u32              [out_addr], temp1;
+    st.u32              [out_addr+4], temp2;
+	ret;
+}

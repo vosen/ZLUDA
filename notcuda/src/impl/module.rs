@@ -53,7 +53,7 @@ impl ModuleData {
             Ok(_) if errors.len() > 0 => return Err(ModuleCompileError::Parse(errors, None)),
             Ok(ast) => ast,
         };
-        let (spirv, all_arg_lens) = ptx::to_spirv(ast)?;
+        let (_, spirv, all_arg_lens) = ptx::to_spirv(ast)?;
         let byte_il = unsafe {
             slice::from_raw_parts::<u8>(
                 spirv.as_ptr() as *const _,
@@ -61,7 +61,7 @@ impl ModuleData {
             )
         };
         let module = super::device::with_current_exclusive(|dev| {
-            l0::Module::new_spirv(&mut dev.l0_context, &dev.base, byte_il, None)
+            l0::Module::build_spirv(&mut dev.l0_context, &dev.base, byte_il, None)
         });
         match module {
             Ok((Ok(module), _)) => Ok(Mutex::new(Self {

@@ -1,13 +1,12 @@
 use crate::ast;
 use half::f16;
 use rspirv::{binary::Disassemble, dr};
+use std::collections::{hash_map, HashMap, HashSet};
 use std::{borrow::Cow, hash::Hash, iter, mem};
-use std::{
-    collections::{hash_map, HashMap, HashSet},
-    convert::TryFrom,
-};
 
 use rspirv::binary::Assemble;
+
+static NOTCUDA_PTX_IMPL: &'static [u8] = include_bytes!("../lib/notcuda_ptx_impl.spv");
 
 quick_error! {
     #[derive(Debug)]
@@ -69,6 +68,7 @@ impl Into<spirv::StorageClass> for ast::PointerStateSpace {
             ast::PointerStateSpace::Global => spirv::StorageClass::CrossWorkgroup,
             ast::PointerStateSpace::Shared => spirv::StorageClass::Workgroup,
             ast::PointerStateSpace::Param => spirv::StorageClass::Function,
+            ast::PointerStateSpace::Generic => spirv::StorageClass::Generic,
         }
     }
 }
@@ -419,6 +419,7 @@ impl TypeWordMap {
 pub struct Module {
     pub spirv: dr::Module,
     pub kernel_info: HashMap<String, KernelInfo>,
+    pub should_link_ptx_impl: Option<&'static [u8]>,
 }
 
 pub struct KernelInfo {
@@ -428,15 +429,22 @@ pub struct KernelInfo {
 
 pub fn to_spirv_module<'a>(ast: ast::Module<'a>) -> Result<Module, TranslateError> {
     let mut id_defs = GlobalStringIdResolver::new(1);
+    let mut ptx_impl_imports = HashMap::new();
     let directives = ast
         .directives
         .into_iter()
-        .map(|f| translate_directive(&mut id_defs, f))
+        .map(|directive| translate_directive(&mut id_defs, &mut ptx_impl_imports, directive))
         .collect::<Result<Vec<_>, _>>()?;
+    let must_link_ptx_impl = ptx_impl_imports.len() > 0;
+    let directives = ptx_impl_imports
+        .into_iter()
+        .map(|(_, v)| v)
+        .chain(directives.into_iter())
+        .collect::<Vec<_>>();
     let mut builder = dr::Builder::new();
     builder.reserve_ids(id_defs.current_id());
-    let mut directives =
-        convert_dynamic_shared_memory_usage(&mut id_defs, directives, &mut || builder.id());
+    let call_map = get_call_map(&directives);
+    let mut directives = convert_dynamic_shared_memory_usage(directives, &mut || builder.id());
     normalize_variable_decls(&mut directives);
     let denorm_information = compute_denorm_information(&directives);
     // https://www.khronos.org/registry/spir-v/specs/unified1/SPIRV.html#_a_id_logicallayout_a_logical_layout_of_a_module
@@ -448,32 +456,142 @@ pub fn to_spirv_module<'a>(ast: ast::Module<'a>) -> Result<Module, TranslateErro
     let mut map = TypeWordMap::new(&mut builder);
     emit_builtins(&mut builder, &mut map, &id_defs);
     let mut kernel_info = HashMap::new();
-    for d in directives {
+    emit_directives(
+        &mut builder,
+        &mut map,
+        &id_defs,
+        opencl_id,
+        &denorm_information,
+        &call_map,
+        directives,
+        &mut kernel_info,
+    )?;
+    let spirv = builder.module();
+    Ok(Module {
+        spirv,
+        kernel_info,
+        should_link_ptx_impl: if must_link_ptx_impl {
+            Some(NOTCUDA_PTX_IMPL)
+        } else {
+            None
+        },
+    })
+}
+
+fn emit_directives<'input>(
+    builder: &mut dr::Builder,
+    map: &mut TypeWordMap,
+    id_defs: &GlobalStringIdResolver<'input>,
+    opencl_id: spirv::Word,
+    denorm_information: &HashMap<CallgraphKey<'input>, HashMap<u8, spirv::FPDenormMode>>,
+    call_map: &HashMap<&'input str, HashSet<spirv::Word>>,
+    directives: Vec<Directive>,
+    kernel_info: &mut HashMap<String, KernelInfo>,
+) -> Result<(), TranslateError> {
+    let empty_body = Vec::new();
+    for d in directives.iter() {
         match d {
             Directive::Variable(var) => {
-                emit_variable(&mut builder, &mut map, &var)?;
+                emit_variable(builder, map, &var)?;
             }
             Directive::Method(f) => {
-                let f_body = match f.body {
+                let f_body = match &f.body {
                     Some(f) => f,
-                    None => continue,
+                    None => {
+                        if f.import_as.is_some() {
+                            &empty_body
+                        } else {
+                            continue;
+                        }
+                    }
                 };
-                emit_function_body_ops(&mut builder, &mut map, opencl_id, &f.globals)?;
+                for var in f.globals.iter() {
+                    emit_variable(builder, map, var)?;
+                }
                 emit_function_header(
-                    &mut builder,
-                    &mut map,
+                    builder,
+                    map,
                     &id_defs,
-                    f.func_decl,
+                    &f.globals,
+                    &f.func_decl,
                     &denorm_information,
-                    &mut kernel_info,
+                    call_map,
+                    &directives,
+                    kernel_info,
                 )?;
-                emit_function_body_ops(&mut builder, &mut map, opencl_id, &f_body)?;
+                emit_function_body_ops(builder, map, opencl_id, &f_body)?;
                 builder.end_function()?;
+                if let (ast::MethodDecl::Func(_, fn_id, _), Some(name)) =
+                    (&f.func_decl, &f.import_as)
+                {
+                    builder.decorate(
+                        *fn_id,
+                        spirv::Decoration::LinkageAttributes,
+                        &[
+                            dr::Operand::LiteralString(name.clone()),
+                            dr::Operand::LinkageType(spirv::LinkageType::Import),
+                        ],
+                    );
+                }
             }
         }
     }
-    let spirv = builder.module();
-    Ok(Module { spirv, kernel_info })
+    Ok(())
+}
+
+fn get_call_map<'input>(
+    module: &[Directive<'input>],
+) -> HashMap<&'input str, HashSet<spirv::Word>> {
+    let mut directly_called_by = HashMap::new();
+    for directive in module {
+        match directive {
+            Directive::Method(Function {
+                func_decl,
+                body: Some(statements),
+                ..
+            }) => {
+                let call_key = CallgraphKey::new(&func_decl);
+                for statement in statements {
+                    match statement {
+                        Statement::Call(call) => {
+                            multi_hash_map_append(&mut directly_called_by, call_key, call.func);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut result = HashMap::new();
+    for (method_key, children) in directly_called_by.iter() {
+        match method_key {
+            CallgraphKey::Kernel(name) => {
+                let mut visited = HashSet::new();
+                for child in children {
+                    add_call_map_single(&directly_called_by, &mut visited, *child);
+                }
+                result.insert(*name, visited);
+            }
+            CallgraphKey::Func(_) => {}
+        }
+    }
+    result
+}
+
+fn add_call_map_single<'input>(
+    directly_called_by: &MultiHashMap<CallgraphKey<'input>, spirv::Word>,
+    visited: &mut HashSet<spirv::Word>,
+    current: spirv::Word,
+) {
+    if !visited.insert(current) {
+        return;
+    }
+    if let Some(children) = directly_called_by.get(&CallgraphKey::Func(current)) {
+        for child in children {
+            add_call_map_single(directly_called_by, visited, *child);
+        }
+    }
 }
 
 type MultiHashMap<K, V> = HashMap<K, Vec<V>>;
@@ -495,7 +613,6 @@ fn multi_hash_map_append<K: Eq + std::hash::Hash, V>(m: &mut MultiHashMap<K, V>,
 // This pass looks for all uses of .extern .shared and converts them to
 // an additional method argument
 fn convert_dynamic_shared_memory_usage<'input>(
-    id_defs: &mut GlobalStringIdResolver<'input>,
     module: Vec<Directive<'input>>,
     new_id: &mut impl FnMut() -> spirv::Word,
 ) -> Vec<Directive<'input>> {
@@ -524,6 +641,7 @@ fn convert_dynamic_shared_memory_usage<'input>(
                 func_decl,
                 globals,
                 body: Some(statements),
+                import_as,
             }) => {
                 let call_key = CallgraphKey::new(&func_decl);
                 let statements = statements
@@ -545,6 +663,7 @@ fn convert_dynamic_shared_memory_usage<'input>(
                     func_decl,
                     globals,
                     body: Some(statements),
+                    import_as,
                 })
             }
             directive => directive,
@@ -561,6 +680,7 @@ fn convert_dynamic_shared_memory_usage<'input>(
                 mut func_decl,
                 globals,
                 body: Some(statements),
+                import_as,
             }) => {
                 let call_key = CallgraphKey::new(&func_decl);
                 if !methods_using_extern_shared.contains(&call_key) {
@@ -568,6 +688,7 @@ fn convert_dynamic_shared_memory_usage<'input>(
                         func_decl,
                         globals,
                         body: Some(statements),
+                        import_as,
                     });
                 }
                 let shared_id_param = new_id();
@@ -625,6 +746,7 @@ fn convert_dynamic_shared_memory_usage<'input>(
                     func_decl,
                     globals,
                     body: Some(new_statements),
+                    import_as,
                 })
             }
             directive => directive,
@@ -744,15 +866,6 @@ fn denorm_count_map_update_impl<T: Eq + Hash>(
     }
 }
 
-fn denorm_count_map_merge<T: Eq + Hash + Copy>(
-    dst: &mut DenormCountMap<T>,
-    src: &DenormCountMap<T>,
-) {
-    for (k, count) in src {
-        denorm_count_map_update_impl(dst, *k, *count);
-    }
-}
-
 // HACK ALERT!
 // This function is a "good enough" heuristic of whetever to mark f16/f32 operations
 // in the kernel as flushing denorms to zero or preserving them
@@ -763,7 +876,7 @@ fn compute_denorm_information<'input>(
     module: &[Directive<'input>],
 ) -> HashMap<CallgraphKey<'input>, HashMap<u8, spirv::FPDenormMode>> {
     let mut denorm_methods = HashMap::new();
-    for directive in module.iter() {
+    for directive in module {
         match directive {
             Directive::Variable(_) | Directive::Method(Function { body: None, .. }) => {}
             Directive::Method(Function {
@@ -861,9 +974,12 @@ fn emit_builtins(
 fn emit_function_header<'a>(
     builder: &mut dr::Builder,
     map: &mut TypeWordMap,
-    global: &GlobalStringIdResolver<'a>,
-    func_directive: ast::MethodDecl<spirv::Word>,
+    defined_globals: &GlobalStringIdResolver<'a>,
+    synthetic_globals: &[ast::Variable<ast::VariableType, spirv::Word>],
+    func_directive: &ast::MethodDecl<spirv::Word>,
     denorm_information: &HashMap<CallgraphKey<'a>, HashMap<u8, spirv::FPDenormMode>>,
+    call_map: &HashMap<&'a str, HashSet<spirv::Word>>,
+    direcitves: &[Directive],
     kernel_info: &mut HashMap<String, KernelInfo>,
 ) -> Result<(), TranslateError> {
     if let ast::MethodDecl::Kernel {
@@ -884,22 +1000,49 @@ fn emit_function_header<'a>(
     let (ret_type, func_type) = get_function_type(builder, map, &func_directive);
     let fn_id = match func_directive {
         ast::MethodDecl::Kernel { name, .. } => {
-            let fn_id = global.get_id(name)?;
-            let mut global_variables = global
+            let fn_id = defined_globals.get_id(name)?;
+            let mut global_variables = defined_globals
                 .variables_type_check
                 .iter()
                 .filter_map(|(k, t)| t.as_ref().map(|_| *k))
                 .collect::<Vec<_>>();
-            let mut interface = global
+            let mut interface = defined_globals
                 .special_registers
                 .iter()
                 .map(|(_, id)| *id)
                 .collect::<Vec<_>>();
+            for ast::Variable { name, .. } in synthetic_globals {
+                interface.push(*name);
+            }
+            let empty_hash_set = HashSet::new();
+            let child_fns = call_map.get(name).unwrap_or(&empty_hash_set);
+            for directive in direcitves {
+                match directive {
+                    Directive::Method(Function {
+                        func_decl: ast::MethodDecl::Func(_, name, _),
+                        globals,
+                        ..
+                    }) => {
+                        if child_fns.contains(name) {
+                            for var in globals {
+                                interface.push(var.name);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
             global_variables.append(&mut interface);
-            builder.entry_point(spirv::ExecutionModel::Kernel, fn_id, name, global_variables);
+            builder.entry_point(
+                spirv::ExecutionModel::Kernel,
+                fn_id,
+                *name,
+                global_variables,
+            );
             fn_id
         }
-        ast::MethodDecl::Func(_, name, _) => name,
+        ast::MethodDecl::Func(_, name, _) => *name,
     };
     builder.begin_function(
         ret_type,
@@ -934,9 +1077,10 @@ fn emit_function_header<'a>(
 
 pub fn to_spirv<'a>(
     ast: ast::Module<'a>,
-) -> Result<(Vec<u32>, HashMap<String, Vec<usize>>), TranslateError> {
+) -> Result<(Option<&'static [u8]>, Vec<u32>, HashMap<String, Vec<usize>>), TranslateError> {
     let module = to_spirv_module(ast)?;
     Ok((
+        module.should_link_ptx_impl,
         module.spirv.assemble(),
         module
             .kernel_info
@@ -977,11 +1121,14 @@ fn emit_memory_model(builder: &mut dr::Builder) {
 
 fn translate_directive<'input>(
     id_defs: &mut GlobalStringIdResolver<'input>,
+    ptx_impl_imports: &mut HashMap<String, Directive>,
     d: ast::Directive<'input, ast::ParsedArgParams<'input>>,
 ) -> Result<Directive<'input>, TranslateError> {
     Ok(match d {
         ast::Directive::Variable(v) => Directive::Variable(translate_variable(id_defs, v)?),
-        ast::Directive::Method(f) => Directive::Method(translate_function(id_defs, f)?),
+        ast::Directive::Method(f) => {
+            Directive::Method(translate_function(id_defs, ptx_impl_imports, f)?)
+        }
     })
 }
 
@@ -1000,10 +1147,11 @@ fn translate_variable<'a>(
 
 fn translate_function<'a>(
     id_defs: &mut GlobalStringIdResolver<'a>,
+    ptx_impl_imports: &mut HashMap<String, Directive>,
     f: ast::ParsedFunction<'a>,
 ) -> Result<Function<'a>, TranslateError> {
     let (str_resolver, fn_resolver, fn_decl) = id_defs.start_fn(&f.func_directive);
-    to_ssa(str_resolver, fn_resolver, fn_decl, f.body)
+    to_ssa(ptx_impl_imports, str_resolver, fn_resolver, fn_decl, f.body)
 }
 
 fn expand_kernel_params<'a, 'b>(
@@ -1043,6 +1191,7 @@ fn expand_fn_params<'a, 'b>(
 }
 
 fn to_ssa<'input, 'b>(
+    ptx_impl_imports: &mut HashMap<String, Directive>,
     mut id_defs: FnStringIdResolver<'input, 'b>,
     fn_defs: GlobalFnDeclResolver<'input, 'b>,
     f_args: ast::MethodDecl<'input, spirv::Word>,
@@ -1055,6 +1204,7 @@ fn to_ssa<'input, 'b>(
                 func_decl: f_args,
                 body: None,
                 globals: Vec::new(),
+                import_as: None,
             })
         }
     };
@@ -1071,19 +1221,90 @@ fn to_ssa<'input, 'b>(
         insert_implicit_conversions(expanded_statements, &mut numeric_id_defs)?;
     let mut numeric_id_defs = numeric_id_defs.unmut();
     let labeled_statements = normalize_labels(expanded_statements, &mut numeric_id_defs);
-    let (f_body, globals) = extract_globals(labeled_statements);
+    let (f_body, globals) =
+        extract_globals(labeled_statements, ptx_impl_imports, &mut numeric_id_defs);
     Ok(Function {
         func_decl: f_args,
         globals: globals,
         body: Some(f_body),
+        import_as: None,
     })
 }
 
-fn extract_globals(
+fn extract_globals<'input, 'b>(
     sorted_statements: Vec<ExpandedStatement>,
-) -> (Vec<ExpandedStatement>, Vec<ExpandedStatement>) {
-    // This fn will be used for SLM
-    (sorted_statements, Vec::new())
+    ptx_impl_imports: &mut HashMap<String, Directive>,
+    id_def: &mut NumericIdResolver,
+) -> (
+    Vec<ExpandedStatement>,
+    Vec<ast::Variable<ast::VariableType, spirv::Word>>,
+) {
+    let mut local = Vec::with_capacity(sorted_statements.len());
+    let mut global = Vec::new();
+    for statement in sorted_statements {
+        match statement {
+            Statement::Variable(
+                var
+                @
+                ast::Variable {
+                    v_type: ast::VariableType::Shared(_),
+                    ..
+                },
+            )
+            | Statement::Variable(
+                var
+                @
+                ast::Variable {
+                    v_type: ast::VariableType::Global(_),
+                    ..
+                },
+            ) => global.push(var),
+            Statement::Instruction(ast::Instruction::Atom(
+                d
+                @
+                ast::AtomDetails {
+                    inner:
+                        ast::AtomInnerDetails::Unsigned {
+                            op: ast::AtomUIntOp::Inc,
+                            ..
+                        },
+                    ..
+                },
+                a,
+            )) => {
+                local.push(to_ptx_impl_atomic_call(
+                    id_def,
+                    ptx_impl_imports,
+                    d,
+                    a,
+                    "inc",
+                ));
+            }
+            Statement::Instruction(ast::Instruction::Atom(
+                d
+                @
+                ast::AtomDetails {
+                    inner:
+                        ast::AtomInnerDetails::Unsigned {
+                            op: ast::AtomUIntOp::Dec,
+                            ..
+                        },
+                    ..
+                },
+                a,
+            )) => {
+                local.push(to_ptx_impl_atomic_call(
+                    id_def,
+                    ptx_impl_imports,
+                    d,
+                    a,
+                    "dec",
+                ));
+            }
+            s => local.push(s),
+        }
+    }
+    (local, global)
 }
 
 fn normalize_variable_decls(directives: &mut Vec<Directive>) {
@@ -1269,6 +1490,15 @@ fn convert_to_typed_statements(
                 ast::Instruction::Selp(d, a) => {
                     result.push(Statement::Instruction(ast::Instruction::Selp(d, a.cast())))
                 }
+                ast::Instruction::Bar(d, a) => {
+                    result.push(Statement::Instruction(ast::Instruction::Bar(d, a.cast())))
+                }
+                ast::Instruction::Atom(d, a) => {
+                    result.push(Statement::Instruction(ast::Instruction::Atom(d, a.cast())))
+                }
+                ast::Instruction::AtomCas(d, a) => result.push(Statement::Instruction(
+                    ast::Instruction::AtomCas(d, a.cast()),
+                )),
             },
             Statement::Label(i) => result.push(Statement::Label(i)),
             Statement::Variable(v) => result.push(Statement::Variable(v)),
@@ -1284,6 +1514,99 @@ fn convert_to_typed_statements(
         }
     }
     Ok(result)
+}
+
+fn to_ptx_impl_atomic_call(
+    id_defs: &mut NumericIdResolver,
+    ptx_impl_imports: &mut HashMap<String, Directive>,
+    details: ast::AtomDetails,
+    arg: ast::Arg3<ExpandedArgParams>,
+    op: &'static str,
+) -> ExpandedStatement {
+    let semantics = ptx_semantics_name(details.semantics);
+    let scope = ptx_scope_name(details.scope);
+    let space = ptx_space_name(details.space);
+    let fn_name = format!(
+        "__notcuda_ptx_impl__atom_{}_{}_{}_{}",
+        semantics, scope, space, op
+    );
+    // TODO: extract to a function
+    let ptr_space = match details.space {
+        ast::AtomSpace::Generic => ast::PointerStateSpace::Generic,
+        ast::AtomSpace::Global => ast::PointerStateSpace::Global,
+        ast::AtomSpace::Shared => ast::PointerStateSpace::Shared,
+    };
+    let fn_id = match ptx_impl_imports.entry(fn_name) {
+        hash_map::Entry::Vacant(entry) => {
+            let fn_id = id_defs.new_id(None);
+            let func_decl = ast::MethodDecl::Func::<spirv::Word>(
+                vec![ast::FnArgument {
+                    align: None,
+                    v_type: ast::FnArgumentType::Reg(ast::VariableRegType::Scalar(
+                        ast::ScalarType::U32,
+                    )),
+                    name: id_defs.new_id(None),
+                    array_init: Vec::new(),
+                }],
+                fn_id,
+                vec![
+                    ast::FnArgument {
+                        align: None,
+                        v_type: ast::FnArgumentType::Reg(ast::VariableRegType::Pointer(
+                            ast::SizedScalarType::U32,
+                            ptr_space,
+                        )),
+                        name: id_defs.new_id(None),
+                        array_init: Vec::new(),
+                    },
+                    ast::FnArgument {
+                        align: None,
+                        v_type: ast::FnArgumentType::Reg(ast::VariableRegType::Scalar(
+                            ast::ScalarType::U32,
+                        )),
+                        name: id_defs.new_id(None),
+                        array_init: Vec::new(),
+                    },
+                ],
+            );
+            let func = Function {
+                func_decl,
+                globals: Vec::new(),
+                body: None,
+                import_as: Some(entry.key().clone()),
+            };
+            entry.insert(Directive::Method(func));
+            fn_id
+        }
+        hash_map::Entry::Occupied(entry) => match entry.get() {
+            Directive::Method(Function {
+                func_decl: ast::MethodDecl::Func(_, name, _),
+                ..
+            }) => *name,
+            _ => unreachable!(),
+        },
+    };
+    Statement::Call(ResolvedCall {
+        uniform: false,
+        func: fn_id,
+        ret_params: vec![(
+            arg.dst,
+            ast::FnArgumentType::Reg(ast::VariableRegType::Scalar(ast::ScalarType::U32)),
+        )],
+        param_list: vec![
+            (
+                arg.src1,
+                ast::FnArgumentType::Reg(ast::VariableRegType::Pointer(
+                    ast::SizedScalarType::U32,
+                    ptr_space,
+                )),
+            ),
+            (
+                arg.src2,
+                ast::FnArgumentType::Reg(ast::VariableRegType::Scalar(ast::ScalarType::U32)),
+            ),
+        ],
+    })
 }
 
 fn to_resolved_fn_args<T>(
@@ -1529,6 +1852,9 @@ fn insert_mem_ssa_statement_default<'a, F: VisitVariable>(
                 | (t, ArgumentSemantics::DefaultRelaxed)
                 | (t, ArgumentSemantics::PhysicalPointer) => t,
             };
+            if let ast::Type::Array(_, _) = id_type {
+                return Ok(desc.op);
+            }
             let generated_id = id_def.new_id(id_type.clone());
             if !desc.is_dst {
                 result.push(Statement::LoadVar(
@@ -1915,6 +2241,12 @@ fn insert_implicit_conversions(
                 }
                 if let ast::Instruction::St(d, _) = &inst {
                     state_space = Some(d.state_space.to_ld_ss());
+                }
+                if let ast::Instruction::Atom(d, _) = &inst {
+                    state_space = Some(d.space.to_ld_ss());
+                }
+                if let ast::Instruction::AtomCas(d, _) = &inst {
+                    state_space = Some(d.space.to_ld_ss());
                 }
                 if let ast::Instruction::Mov(_, ast::Arg2Mov::Normal(_)) = &inst {
                     default_conversion_fn = should_bitcast_packed;
@@ -2387,6 +2719,52 @@ fn emit_function_body_ops(
                     let result_type = map.get_or_add_scalar(builder, ast::ScalarType::from(*t));
                     builder.select(result_type, Some(a.dst), a.src3, a.src2, a.src2)?;
                 }
+                // TODO: implement named barriers
+                ast::Instruction::Bar(d, _) => {
+                    let workgroup_scope = map.get_or_add_constant(
+                        builder,
+                        &ast::Type::Scalar(ast::ScalarType::U32),
+                        &vec_repr(spirv::Scope::Workgroup as u32),
+                    )?;
+                    let barrier_semantics = match d {
+                        ast::BarDetails::SyncAligned => map.get_or_add_constant(
+                            builder,
+                            &ast::Type::Scalar(ast::ScalarType::U32),
+                            &vec_repr(
+                                spirv::MemorySemantics::CROSS_WORKGROUP_MEMORY
+                                    | spirv::MemorySemantics::WORKGROUP_MEMORY
+                                    | spirv::MemorySemantics::SEQUENTIALLY_CONSISTENT,
+                            ),
+                        )?,
+                    };
+                    builder.control_barrier(workgroup_scope, workgroup_scope, barrier_semantics)?;
+                }
+                ast::Instruction::Atom(details, arg) => {
+                    emit_atom(builder, map, details, arg)?;
+                }
+                ast::Instruction::AtomCas(details, arg) => {
+                    let result_type = map.get_or_add_scalar(builder, details.typ.into());
+                    let memory_const = map.get_or_add_constant(
+                        builder,
+                        &ast::Type::Scalar(ast::ScalarType::U32),
+                        &vec_repr(details.scope.to_spirv() as u32),
+                    )?;
+                    let semantics_const = map.get_or_add_constant(
+                        builder,
+                        &ast::Type::Scalar(ast::ScalarType::U32),
+                        &vec_repr(details.semantics.to_spirv().bits()),
+                    )?;
+                    builder.atomic_compare_exchange(
+                        result_type,
+                        Some(arg.dst),
+                        arg.src1,
+                        memory_const,
+                        semantics_const,
+                        semantics_const,
+                        arg.src3,
+                        arg.src2,
+                    )?;
+                }
             },
             Statement::LoadVar(arg, typ) => {
                 let type_id = map.get_or_add(builder, SpirvType::from(typ.clone()));
@@ -2415,6 +2793,99 @@ fn emit_function_body_ops(
         }
     }
     Ok(())
+}
+
+fn emit_atom(
+    builder: &mut dr::Builder,
+    map: &mut TypeWordMap,
+    details: &ast::AtomDetails,
+    arg: &ast::Arg3<ExpandedArgParams>,
+) -> Result<(), TranslateError> {
+    let (spirv_op, typ) = match details.inner {
+        ast::AtomInnerDetails::Bit { op, typ } => {
+            let spirv_op = match op {
+                ast::AtomBitOp::And => dr::Builder::atomic_and,
+                ast::AtomBitOp::Or => dr::Builder::atomic_or,
+                ast::AtomBitOp::Xor => dr::Builder::atomic_xor,
+                ast::AtomBitOp::Exchange => dr::Builder::atomic_exchange,
+            };
+            (spirv_op, ast::ScalarType::from(typ))
+        }
+        ast::AtomInnerDetails::Unsigned { op, typ } => {
+            let spirv_op = match op {
+                ast::AtomUIntOp::Add => dr::Builder::atomic_i_add,
+                ast::AtomUIntOp::Inc | ast::AtomUIntOp::Dec => {
+                    return Err(TranslateError::Unreachable);
+                }
+                ast::AtomUIntOp::Min => dr::Builder::atomic_u_min,
+                ast::AtomUIntOp::Max => dr::Builder::atomic_u_max,
+            };
+            (spirv_op, typ.into())
+        }
+        ast::AtomInnerDetails::Signed { op, typ } => {
+            let spirv_op = match op {
+                ast::AtomSIntOp::Add => dr::Builder::atomic_i_add,
+                ast::AtomSIntOp::Min => dr::Builder::atomic_s_min,
+                ast::AtomSIntOp::Max => dr::Builder::atomic_s_max,
+            };
+            (spirv_op, typ.into())
+        }
+        // TODO: Hardware is capable of this, implement it through builtin
+        ast::AtomInnerDetails::Float { .. } => todo!(),
+    };
+    let result_type = map.get_or_add_scalar(builder, typ);
+    let memory_const = map.get_or_add_constant(
+        builder,
+        &ast::Type::Scalar(ast::ScalarType::U32),
+        &vec_repr(details.scope.to_spirv() as u32),
+    )?;
+    let semantics_const = map.get_or_add_constant(
+        builder,
+        &ast::Type::Scalar(ast::ScalarType::U32),
+        &vec_repr(details.semantics.to_spirv().bits()),
+    )?;
+    spirv_op(
+        builder,
+        result_type,
+        Some(arg.dst),
+        arg.src1,
+        memory_const,
+        semantics_const,
+        arg.src2,
+    )?;
+    Ok(())
+}
+
+#[derive(Clone)]
+struct PtxImplImport {
+    out_arg: ast::Type,
+    fn_id: u32,
+    in_args: Vec<ast::Type>,
+}
+
+fn ptx_semantics_name(sema: ast::AtomSemantics) -> &'static str {
+    match sema {
+        ast::AtomSemantics::Relaxed => "relaxed",
+        ast::AtomSemantics::Acquire => "acquire",
+        ast::AtomSemantics::Release => "release",
+        ast::AtomSemantics::AcquireRelease => "acq_rel",
+    }
+}
+
+fn ptx_scope_name(scope: ast::MemScope) -> &'static str {
+    match scope {
+        ast::MemScope::Cta => "cta",
+        ast::MemScope::Gpu => "gpu",
+        ast::MemScope::Sys => "sys",
+    }
+}
+
+fn ptx_space_name(space: ast::AtomSpace) -> &'static str {
+    match space {
+        ast::AtomSpace::Generic => "generic",
+        ast::AtomSpace::Global => "global",
+        ast::AtomSpace::Shared => "shared",
+    }
 }
 
 fn emit_mul_float(
@@ -2652,7 +3123,7 @@ fn emit_cvt(
     map: &mut TypeWordMap,
     dets: &ast::CvtDetails,
     arg: &ast::Arg2<ExpandedArgParams>,
-) -> Result<(), dr::Error> {
+) -> Result<(), TranslateError> {
     match dets {
         ast::CvtDetails::FloatFromFloat(desc) => {
             if desc.dst == desc.src {
@@ -3011,7 +3482,7 @@ fn emit_implicit_conversion(
     builder: &mut dr::Builder,
     map: &mut TypeWordMap,
     cv: &ImplicitConversion,
-) -> Result<(), dr::Error> {
+) -> Result<(), TranslateError> {
     let from_parts = cv.from.to_parts();
     let to_parts = cv.to.to_parts();
     match (from_parts.kind, to_parts.kind, cv.kind) {
@@ -3019,7 +3490,7 @@ fn emit_implicit_conversion(
             let dst_type = map.get_or_add_scalar(builder, ast::ScalarType::B64);
             builder.convert_ptr_to_u(dst_type, Some(cv.dst), cv.src)?;
         }
-        (_, _, ConversionKind::BitToPtr(space)) => {
+        (_, _, ConversionKind::BitToPtr(_)) => {
             let dst_type = map.get_or_add(builder, SpirvType::from(cv.to.clone()));
             builder.convert_u_to_ptr(dst_type, Some(cv.dst), cv.src)?;
         }
@@ -3782,8 +4253,9 @@ enum Directive<'input> {
 
 struct Function<'input> {
     pub func_decl: ast::MethodDecl<'input, spirv::Word>,
-    pub globals: Vec<ExpandedStatement>,
+    pub globals: Vec<ast::Variable<ast::VariableType, spirv::Word>>,
     pub body: Option<Vec<ExpandedStatement>>,
+    import_as: Option<String>,
 }
 
 pub trait ArgumentMapVisitor<T: ArgParamsEx, U: ArgParamsEx> {
@@ -4091,6 +4563,13 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
                 a.map_non_shift(visitor, &ast::Type::Scalar(t.into()), false)?,
             ),
             ast::Instruction::Selp(t, a) => ast::Instruction::Selp(t, a.map_selp(visitor, t)?),
+            ast::Instruction::Bar(d, a) => ast::Instruction::Bar(d, a.map(visitor)?),
+            ast::Instruction::Atom(d, a) => {
+                ast::Instruction::Atom(d, a.map_atom(visitor, d.inner.get_type(), d.space)?)
+            }
+            ast::Instruction::AtomCas(d, a) => {
+                ast::Instruction::AtomCas(d, a.map_atom(visitor, d.typ, d.space)?)
+            }
         })
     }
 }
@@ -4337,6 +4816,9 @@ impl ast::Instruction<ExpandedArgParams> {
             | ast::Instruction::Rcp(_, _)
             | ast::Instruction::And(_, _)
             | ast::Instruction::Selp(_, _)
+            | ast::Instruction::Bar(_, _)
+            | ast::Instruction::Atom(_, _)
+            | ast::Instruction::AtomCas(_, _)
             | ast::Instruction::Mad(_, _) => None,
         }
     }
@@ -4358,6 +4840,9 @@ impl ast::Instruction<ExpandedArgParams> {
             ast::Instruction::And(_, _) => None,
             ast::Instruction::Cvta(_, _) => None,
             ast::Instruction::Selp(_, _) => None,
+            ast::Instruction::Bar(_, _) => None,
+            ast::Instruction::Atom(_, _) => None,
+            ast::Instruction::AtomCas(_, _) => None,
             ast::Instruction::Sub(ast::ArithDetails::Signed(_), _) => None,
             ast::Instruction::Sub(ast::ArithDetails::Unsigned(_), _) => None,
             ast::Instruction::Add(ast::ArithDetails::Signed(_), _) => None,
@@ -4609,6 +5094,27 @@ impl<T: ArgParamsEx> ast::Arg1<T> {
             t,
         )?;
         Ok(ast::Arg1 { src: new_src })
+    }
+}
+
+impl<T: ArgParamsEx> ast::Arg1Bar<T> {
+    fn cast<U: ArgParamsEx<Operand = T::Operand>>(self) -> ast::Arg1Bar<U> {
+        ast::Arg1Bar { src: self.src }
+    }
+
+    fn map<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
+        self,
+        visitor: &mut V,
+    ) -> Result<ast::Arg1Bar<U>, TranslateError> {
+        let new_src = visitor.operand(
+            ArgumentDescriptor {
+                op: self.src,
+                is_dst: false,
+                sema: ArgumentSemantics::Default,
+            },
+            &ast::Type::Scalar(ast::ScalarType::U32),
+        )?;
+        Ok(ast::Arg1Bar { src: new_src })
     }
 }
 
@@ -5022,6 +5528,43 @@ impl<T: ArgParamsEx> ast::Arg3<T> {
         )?;
         Ok(ast::Arg3 { dst, src1, src2 })
     }
+
+    fn map_atom<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
+        self,
+        visitor: &mut V,
+        t: ast::ScalarType,
+        state_space: ast::AtomSpace,
+    ) -> Result<ast::Arg3<U>, TranslateError> {
+        let scalar_type = ast::ScalarType::from(t);
+        let dst = visitor.id(
+            ArgumentDescriptor {
+                op: self.dst,
+                is_dst: true,
+                sema: ArgumentSemantics::Default,
+            },
+            Some(&ast::Type::Scalar(scalar_type)),
+        )?;
+        let src1 = visitor.operand(
+            ArgumentDescriptor {
+                op: self.src1,
+                is_dst: false,
+                sema: ArgumentSemantics::PhysicalPointer,
+            },
+            &ast::Type::Pointer(
+                ast::PointerType::Scalar(scalar_type),
+                state_space.to_ld_ss(),
+            ),
+        )?;
+        let src2 = visitor.operand(
+            ArgumentDescriptor {
+                op: self.src2,
+                is_dst: false,
+                sema: ArgumentSemantics::Default,
+            },
+            &ast::Type::Scalar(scalar_type),
+        )?;
+        Ok(ast::Arg3 { dst, src1, src2 })
+    }
 }
 
 impl<T: ArgParamsEx> ast::Arg4<T> {
@@ -5121,6 +5664,56 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
                 sema: ArgumentSemantics::Default,
             },
             &ast::Type::Scalar(ast::ScalarType::Pred),
+        )?;
+        Ok(ast::Arg4 {
+            dst,
+            src1,
+            src2,
+            src3,
+        })
+    }
+
+    fn map_atom<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
+        self,
+        visitor: &mut V,
+        t: ast::BitType,
+        state_space: ast::AtomSpace,
+    ) -> Result<ast::Arg4<U>, TranslateError> {
+        let scalar_type = ast::ScalarType::from(t);
+        let dst = visitor.id(
+            ArgumentDescriptor {
+                op: self.dst,
+                is_dst: true,
+                sema: ArgumentSemantics::Default,
+            },
+            Some(&ast::Type::Scalar(scalar_type)),
+        )?;
+        let src1 = visitor.operand(
+            ArgumentDescriptor {
+                op: self.src1,
+                is_dst: false,
+                sema: ArgumentSemantics::PhysicalPointer,
+            },
+            &ast::Type::Pointer(
+                ast::PointerType::Scalar(scalar_type),
+                state_space.to_ld_ss(),
+            ),
+        )?;
+        let src2 = visitor.operand(
+            ArgumentDescriptor {
+                op: self.src2,
+                is_dst: false,
+                sema: ArgumentSemantics::Default,
+            },
+            &ast::Type::Scalar(scalar_type),
+        )?;
+        let src3 = visitor.operand(
+            ArgumentDescriptor {
+                op: self.src3,
+                is_dst: false,
+                sema: ArgumentSemantics::Default,
+            },
+            &ast::Type::Scalar(scalar_type),
         )?;
         Ok(ast::Arg4 {
             dst,
@@ -5434,6 +6027,17 @@ impl ast::MinMaxDetails {
     }
 }
 
+impl ast::AtomInnerDetails {
+    fn get_type(&self) -> ast::ScalarType {
+        match self {
+            ast::AtomInnerDetails::Bit { typ, .. } => (*typ).into(),
+            ast::AtomInnerDetails::Unsigned { typ, .. } => (*typ).into(),
+            ast::AtomInnerDetails::Signed { typ, .. } => (*typ).into(),
+            ast::AtomInnerDetails::Float { typ, .. } => (*typ).into(),
+        }
+    }
+}
+
 impl ast::SIntType {
     fn from_size(width: u8) -> Self {
         match width {
@@ -5509,6 +6113,37 @@ impl ast::MulDetails {
     }
 }
 
+impl ast::AtomSpace {
+    fn to_ld_ss(self) -> ast::LdStateSpace {
+        match self {
+            ast::AtomSpace::Generic => ast::LdStateSpace::Generic,
+            ast::AtomSpace::Global => ast::LdStateSpace::Global,
+            ast::AtomSpace::Shared => ast::LdStateSpace::Shared,
+        }
+    }
+}
+
+impl ast::MemScope {
+    fn to_spirv(self) -> spirv::Scope {
+        match self {
+            ast::MemScope::Cta => spirv::Scope::Workgroup,
+            ast::MemScope::Gpu => spirv::Scope::Device,
+            ast::MemScope::Sys => spirv::Scope::CrossDevice,
+        }
+    }
+}
+
+impl ast::AtomSemantics {
+    fn to_spirv(self) -> spirv::MemorySemantics {
+        match self {
+            ast::AtomSemantics::Relaxed => spirv::MemorySemantics::RELAXED,
+            ast::AtomSemantics::Acquire => spirv::MemorySemantics::ACQUIRE,
+            ast::AtomSemantics::Release => spirv::MemorySemantics::RELEASE,
+            ast::AtomSemantics::AcquireRelease => spirv::MemorySemantics::ACQUIRE_RELEASE,
+        }
+    }
+}
+
 fn bitcast_logical_pointer(
     operand: &ast::Type,
     instr: &ast::Type,
@@ -5528,7 +6163,27 @@ fn bitcast_physical_pointer(
 ) -> Result<Option<ConversionKind>, TranslateError> {
     match operand_type {
         // array decays to a pointer
-        ast::Type::Array(_, _) => todo!(),
+        ast::Type::Array(op_scalar_t, _) => {
+            if let ast::Type::Pointer(instr_scalar_t, instr_space) = instr_type {
+                if ss == Some(*instr_space) {
+                    if ast::Type::Scalar(*op_scalar_t) == ast::Type::from(instr_scalar_t.clone()) {
+                        Ok(None)
+                    } else {
+                        Ok(Some(ConversionKind::PtrToPtr { spirv_ptr: false }))
+                    }
+                } else {
+                    if ss == Some(ast::LdStateSpace::Generic)
+                        || *instr_space == ast::LdStateSpace::Generic
+                    {
+                        Ok(Some(ConversionKind::PtrToPtr { spirv_ptr: false }))
+                    } else {
+                        Err(TranslateError::MismatchedType)
+                    }
+                }
+            } else {
+                Err(TranslateError::MismatchedType)
+            }
+        }
         ast::Type::Scalar(ast::ScalarType::B64)
         | ast::Type::Scalar(ast::ScalarType::U64)
         | ast::Type::Scalar(ast::ScalarType::S64) => {
