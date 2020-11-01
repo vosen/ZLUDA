@@ -66,6 +66,7 @@ match {
     ".f64",
     ".file",
     ".ftz",
+    ".full",
     ".func",
     ".ge",
     ".geu",
@@ -94,6 +95,7 @@ match {
     ".num",
     ".or",
     ".param",
+    ".pragma",
     ".pred",
     ".reg",
     ".relaxed",
@@ -145,6 +147,7 @@ match {
     "cvt",
     "cvta",
     "debug",
+    "div",
     "fma",
     "ld",
     "mad",
@@ -157,11 +160,13 @@ match {
     "or",
     "rcp",
     "ret",
+    "rsqrt",
     "selp",
     "setp",
     "shl",
     "shr",
     r"sm_[0-9]+" => ShaderModel,
+    "sqrt",
     "st",
     "sub",
     "texmode_independent",
@@ -184,6 +189,7 @@ ExtendedID : &'input str = {
     "cvt",
     "cvta",
     "debug",
+    "div",
     "fma",
     "ld",
     "mad",
@@ -196,11 +202,13 @@ ExtendedID : &'input str = {
     "or",
     "rcp",
     "ret",
+    "rsqrt",
     "selp",
     "setp",
     "shl",
     "shr",
     ShaderModel,
+    "sqrt",
     "st",
     "sub",
     "texmode_independent",
@@ -415,8 +423,13 @@ Statement: Option<ast::Statement<ast::ParsedArgParams<'input>>> = {
     DebugDirective => None,
     <v:MultiVariable> ";" => Some(ast::Statement::Variable(v)),
     <p:PredAt?> <i:Instruction> ";" => Some(ast::Statement::Instruction(p, i)),
+    PragmaStatement => None,
     "{" <s:Statement*> "}" => Some(ast::Statement::Block(without_none(s)))
 };
+
+PragmaStatement: () = {
+    ".pragma" String  ";"
+}
 
 DebugDirective: () = {
     DebugLocation
@@ -667,7 +680,10 @@ Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
     InstSelp,
     InstBar,
     InstAtom,
-    InstAtomCas
+    InstAtomCas,
+    InstDiv,
+    InstSqrt,
+    InstRsqrt,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
@@ -1483,6 +1499,82 @@ AtomUIntType: ast::UIntType = {
 AtomSIntType: ast::SIntType = {
     ".s32" => ast::SIntType::S32,
     ".s64" => ast::SIntType::S64,
+}
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-div
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-div
+InstDiv: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "div" <t:UIntType> <a:Arg3> => ast::Instruction::Div(ast::DivDetails::Unsigned(t), a),
+    "div" <t:SIntType> <a:Arg3> => ast::Instruction::Div(ast::DivDetails::Signed(t), a),
+    "div" <kind:DivFloatKind> <ftz:".ftz"?> ".f32" <a:Arg3> => {
+        let inner = ast::DivFloatDetails {
+            typ: ast::FloatType::F32,
+            flush_to_zero: Some(ftz.is_some()),
+            kind
+        };
+        ast::Instruction::Div(ast::DivDetails::Float(inner), a)
+    },
+    "div" <rnd:RoundingModeFloat> ".f64" <a:Arg3> => {
+        let inner = ast::DivFloatDetails {
+            typ: ast::FloatType::F64,
+            flush_to_zero: None,
+            kind: ast::DivFloatKind::Rounding(rnd)
+        };
+        ast::Instruction::Div(ast::DivDetails::Float(inner), a)
+    },
+}
+
+DivFloatKind: ast::DivFloatKind = {
+    ".approx" => ast::DivFloatKind::Approx,
+    ".full" => ast::DivFloatKind::Full,
+    <rnd:RoundingModeFloat> => ast::DivFloatKind::Rounding(rnd),
+}
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-sqrt
+InstSqrt: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "sqrt" ".approx" <ftz:".ftz"?> ".f32" <a:Arg2> => {
+        let details = ast::SqrtDetails {
+            typ: ast::FloatType::F32,
+            flush_to_zero: Some(ftz.is_some()),
+            kind: ast::SqrtKind::Approx,
+        };
+        ast::Instruction::Sqrt(details, a)
+    },
+    "sqrt" <rnd:RoundingModeFloat> <ftz:".ftz"?> ".f32" <a:Arg2> => {
+        let details = ast::SqrtDetails {
+            typ: ast::FloatType::F32,
+            flush_to_zero: Some(ftz.is_some()),
+            kind: ast::SqrtKind::Rounding(rnd),
+        };
+        ast::Instruction::Sqrt(details, a)
+    },
+    "sqrt" <rnd:RoundingModeFloat> ".f64" <a:Arg2> => {
+        let details = ast::SqrtDetails {
+            typ: ast::FloatType::F64,
+            flush_to_zero: None,
+            kind: ast::SqrtKind::Rounding(rnd),
+        };
+        ast::Instruction::Sqrt(details, a)
+    }
+}
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-rsqrt
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-rsqrt-approx-ftz-f64
+InstRsqrt: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "rsqrt" ".approx" <ftz:".ftz"?> ".f32" <a:Arg2> => {
+        let details = ast::RsqrtDetails {
+            typ: ast::FloatType::F32,
+            flush_to_zero: ftz.is_some(),
+        };
+        ast::Instruction::Rsqrt(details, a)
+    },
+    "rsqrt" ".approx" <ftz:".ftz"?> ".f64" <a:Arg2> => {
+        let details = ast::RsqrtDetails {
+            typ: ast::FloatType::F64,
+            flush_to_zero: ftz.is_some(),
+        };
+        ast::Instruction::Rsqrt(details, a)
+    },
 }
 
 ArithDetails: ast::ArithDetails = {

@@ -539,6 +539,9 @@ pub enum Instruction<P: ArgParams> {
     Bar(BarDetails, Arg1Bar<P>),
     Atom(AtomDetails, Arg3<P>),
     AtomCas(AtomCasDetails, Arg4<P>),
+    Div(DivDetails, Arg3<P>),
+    Sqrt(SqrtDetails, Arg2<P>),
+    Rsqrt(RsqrtDetails, Arg2<P>),
 }
 
 #[derive(Copy, Clone)]
@@ -1132,12 +1135,52 @@ pub struct AtomCasDetails {
     pub semantics: AtomSemantics,
     pub scope: MemScope,
     pub space: AtomSpace,
-    pub typ: BitType
+    pub typ: BitType,
+}
+
+#[derive(Copy, Clone)]
+pub enum DivDetails {
+    Unsigned(UIntType),
+    Signed(SIntType),
+    Float(DivFloatDetails),
+}
+
+#[derive(Copy, Clone)]
+pub struct DivFloatDetails {
+    pub typ: FloatType,
+    pub flush_to_zero: Option<bool>,
+    pub kind: DivFloatKind,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum DivFloatKind {
+    Approx,
+    Full,
+    Rounding(RoundingMode),
 }
 
 pub enum NumsOrArrays<'a> {
     Nums(Vec<(&'a str, u32)>),
     Arrays(Vec<NumsOrArrays<'a>>),
+}
+
+#[derive(Copy, Clone)]
+pub struct SqrtDetails {
+    pub typ: FloatType,
+    pub flush_to_zero: Option<bool>,
+    pub kind: SqrtKind,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum SqrtKind {
+    Approx,
+    Rounding(RoundingMode),
+}
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub struct RsqrtDetails {
+    pub typ: FloatType,
+    pub flush_to_zero: bool,
 }
 
 impl<'a> NumsOrArrays<'a> {

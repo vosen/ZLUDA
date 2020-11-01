@@ -1,0 +1,29 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+
+.visible .entry shared_ptr_32(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+    .shared .align 4 .b8    shared_mem1[128];
+
+	.reg .u64 	            in_addr;
+    .reg .u64 	            out_addr;
+    .reg .u32 	            shared_addr;
+
+    .reg .u64 	            temp1;
+    .reg .u64 	            temp2;
+
+	ld.param.u64 	        in_addr, [input];
+    ld.param.u64 	        out_addr, [output];
+    mov.u32                 shared_addr, shared_mem1;
+
+    ld.global.u64           temp1, [in_addr];
+    st.shared.u64           [shared_addr], temp1;
+    ld.shared.u64           temp2, [shared_addr+0];
+    st.global.u64           [out_addr], temp2;
+	ret;
+}

@@ -97,9 +97,13 @@ test_ptx!(and, [6u32, 3u32], [2u32]);
 test_ptx!(selp, [100u16, 200u16], [200u16]);
 test_ptx!(fma, [2f32, 3f32, 5f32], [11f32]);
 test_ptx!(shared_variable, [513u64], [513u64]);
+test_ptx!(shared_ptr_32, [513u64], [513u64]);
 test_ptx!(atom_cas, [91u32, 91u32], [91u32, 100u32]);
 test_ptx!(atom_inc, [100u32], [100u32, 101u32, 0u32]);
 test_ptx!(atom_add, [2u32, 4u32], [2u32, 6u32]);
+test_ptx!(div_approx, [1f32, 2f32], [0.5f32]);
+test_ptx!(sqrt, [0.25f32], [0.5f32]);
+test_ptx!(rsqrt, [0.25f64], [2f64]);
 
 struct DisplayError<T: Debug> {
     err: T,
