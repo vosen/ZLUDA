@@ -1511,6 +1511,9 @@ fn convert_to_typed_statements(
                 ast::Instruction::Rsqrt(d, a) => {
                     result.push(Statement::Instruction(ast::Instruction::Rsqrt(d, a.cast())))
                 }
+                ast::Instruction::Neg(d, a) => {
+                    result.push(Statement::Instruction(ast::Instruction::Neg(d, a.cast())))
+                }
             },
             Statement::Label(i) => result.push(Statement::Label(i)),
             Statement::Variable(v) => result.push(Statement::Variable(v)),
@@ -2805,6 +2808,15 @@ fn emit_function_body_ops(
                         &[a.src],
                     )?;
                 }
+                ast::Instruction::Neg(details, arg) => {
+                    let result_type = map.get_or_add_scalar(builder, details.typ);
+                    let negate_func = if details.typ.kind() == ScalarKind::Float {
+                        dr::Builder::f_negate
+                    } else {
+                        dr::Builder::s_negate
+                    };
+                    negate_func(builder, result_type, Some(arg.dst), arg.src)?;
+                }
             },
             Statement::LoadVar(arg, typ) => {
                 let type_id = map.get_or_add(builder, SpirvType::from(typ.clone()));
@@ -3406,7 +3418,7 @@ fn emit_setp(
         (ast::SetpCompareOp::NanGreaterOrEq, _) => {
             builder.f_unord_greater_than_equal(result_type, result_id, operand_1, operand_2)
         }
-        _ => todo!()
+        _ => todo!(),
     }?;
     Ok(())
 }
@@ -4678,6 +4690,9 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
             ast::Instruction::Rsqrt(d, a) => {
                 ast::Instruction::Rsqrt(d, a.map(visitor, &ast::Type::Scalar(d.typ.into()))?)
             }
+            ast::Instruction::Neg(d, a) => {
+                ast::Instruction::Neg(d, a.map(visitor, &ast::Type::Scalar(d.typ))?)
+            }
         })
     }
 }
@@ -4984,6 +4999,9 @@ impl ast::Instruction<ExpandedArgParams> {
                 details.flush_to_zero,
                 ast::ScalarType::from(details.typ).size_of(),
             )),
+            ast::Instruction::Neg(details, _) => details
+                .flush_to_zero
+                .map(|ftz| (ftz, details.typ.size_of())),
         }
     }
 }

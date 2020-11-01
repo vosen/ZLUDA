@@ -156,6 +156,7 @@ match {
     "min",
     "mov",
     "mul",
+    "neg",
     "not",
     "or",
     "rcp",
@@ -198,6 +199,7 @@ ExtendedID : &'input str = {
     "min",
     "mov",
     "mul",
+    "neg",
     "not",
     "or",
     "rcp",
@@ -684,6 +686,7 @@ Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
     InstDiv,
     InstSqrt,
     InstRsqrt,
+    InstNeg,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
@@ -1575,6 +1578,39 @@ InstRsqrt: ast::Instruction<ast::ParsedArgParams<'input>> = {
         };
         ast::Instruction::Rsqrt(details, a)
     },
+}
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-neg
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-neg
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#half-precision-floating-point-instructions-neg
+InstNeg: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "neg" <ftz:".ftz"?> <typ:NegTypeFtz> <a:Arg2> => {
+        let details = ast::NegDetails {
+            typ,
+            flush_to_zero: Some(ftz.is_some()),
+        };
+        ast::Instruction::Neg(details, a)
+    },
+    "neg" <typ:NegTypeNonFtz> <a:Arg2> => {
+        let details = ast::NegDetails {
+            typ,
+            flush_to_zero: None,
+        };
+        ast::Instruction::Neg(details, a)
+    },
+}
+
+NegTypeFtz: ast::ScalarType = {
+    ".f16" => ast::ScalarType::F16,
+    ".f16x2" => ast::ScalarType::F16x2,
+    ".f32" => ast::ScalarType::F32,
+}
+
+NegTypeNonFtz: ast::ScalarType = {
+    ".s16" => ast::ScalarType::S16,
+    ".s32" => ast::ScalarType::S32,
+    ".s64" => ast::ScalarType::S64,
+    ".f64" => ast::ScalarType::F64
 }
 
 ArithDetails: ast::ArithDetails = {

@@ -542,6 +542,7 @@ pub enum Instruction<P: ArgParams> {
     Div(DivDetails, Arg3<P>),
     Sqrt(SqrtDetails, Arg2<P>),
     Rsqrt(RsqrtDetails, Arg2<P>),
+    Neg(NegDetails, Arg2<P>),
 }
 
 #[derive(Copy, Clone)]
@@ -1181,6 +1182,12 @@ pub enum SqrtKind {
 pub struct RsqrtDetails {
     pub typ: FloatType,
     pub flush_to_zero: bool,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub struct NegDetails {
+    pub typ: ScalarType,
+    pub flush_to_zero: Option<bool>,
 }
 
 impl<'a> NumsOrArrays<'a> {

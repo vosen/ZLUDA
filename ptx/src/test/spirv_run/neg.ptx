@@ -1,0 +1,21 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry neg(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	        in_addr;
+    .reg .u64 	        out_addr;
+    .reg .s32 	        temp1;
+
+	ld.param.u64 	    in_addr, [input];
+    ld.param.u64 	    out_addr, [output];
+
+    ld.s32              temp1, [in_addr];
+	neg.s32			    temp1, temp1;
+    st.s32              [out_addr], temp1;
+	ret;
+}
