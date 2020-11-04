@@ -60,8 +60,7 @@ test_ptx!(call, [1u64], [2u64]);
 test_ptx!(vector, [1u32, 2u32], [3u32, 3u32]);
 test_ptx!(ld_st_offset, [1u32, 2u32], [2u32, 1u32]);
 test_ptx!(ntid, [3u32], [4u32]);
-// TODO: enable test below
-// test_ptx!(reg_local, [12u64], [13u64]);
+test_ptx!(reg_local, [12u64], [13u64]);
 test_ptx!(mov_address, [0xDEADu64], [0u64]);
 test_ptx!(b64tof64, [111u64], [111u64]);
 test_ptx!(implicit_param, [34u32], [34u32]);
@@ -105,6 +104,10 @@ test_ptx!(div_approx, [1f32, 2f32], [0.5f32]);
 test_ptx!(sqrt, [0.25f32], [0.5f32]);
 test_ptx!(rsqrt, [0.25f64], [2f64]);
 test_ptx!(neg, [181i32], [-181i32]);
+test_ptx!(sin, [std::f32::consts::PI/2f32], [1f32]);
+test_ptx!(cos, [std::f32::consts::PI], [-1f32]);
+test_ptx!(lg2, [512f32], [9f32]);
+test_ptx!(ex2, [10f32], [1024f32]);
 
 struct DisplayError<T: Debug> {
     err: T,

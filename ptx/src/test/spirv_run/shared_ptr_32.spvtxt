@@ -1,74 +1,66 @@
-; SPIR-V
-; Version: 1.3
-; Generator: rspirv
-; Bound: 47
-OpCapability GenericPointer
-OpCapability Linkage
-OpCapability Addresses
-OpCapability Kernel
-OpCapability Int8
-OpCapability Int16
-OpCapability Int64
-OpCapability Float16
-OpCapability Float64
-; OpCapability FunctionFloatControlINTEL
-; OpExtension "SPV_INTEL_float_controls2"
-%34 = OpExtInstImport "OpenCL.std"
-OpMemoryModel Physical64 OpenCL
-OpEntryPoint Kernel %1 "shared_ptr_32" %4
-OpDecorate %4 Alignment 4
-%35 = OpTypeVoid
-%36 = OpTypeInt 32 0
-%37 = OpTypeInt 8 0
-%38 = OpConstant  %36  128
-%39 = OpTypeArray %37 %38
-%40 = OpTypePointer Workgroup %39
-%4 = OpVariable  %40  Workgroup
-%41 = OpTypeInt 64 0
-%42 = OpTypeFunction %35 %41 %41
-%43 = OpTypePointer Function %41
-%44 = OpTypePointer Function %36
-%45 = OpTypePointer CrossWorkgroup %41
-%46 = OpTypePointer Workgroup %41
-%25 = OpConstant  %36  0
-%1 = OpFunction  %35  None %42
-%10 = OpFunctionParameter  %41 
-%11 = OpFunctionParameter  %41 
-%32 = OpLabel
-%2 = OpVariable  %43  Function
-%3 = OpVariable  %43  Function
-%5 = OpVariable  %43  Function
-%6 = OpVariable  %43  Function
-%7 = OpVariable  %44  Function
-%8 = OpVariable  %43  Function
-%9 = OpVariable  %43  Function
-OpStore %2 %10
-OpStore %3 %11
-%13 = OpLoad  %41  %2
-%12 = OpCopyObject  %41  %13
-OpStore %5 %12
-%15 = OpLoad  %41  %3
-%14 = OpCopyObject  %41  %15
-OpStore %6 %14
-%27 = OpConvertPtrToU  %36  %4
-%16 = OpCopyObject  %36  %27
-OpStore %7 %16
-%18 = OpLoad  %41  %5
-%28 = OpConvertUToPtr  %45  %18
-%17 = OpLoad  %41  %28
-OpStore %8 %17
-%19 = OpLoad  %36  %7
-%20 = OpLoad  %41  %8
-%29 = OpConvertUToPtr  %46  %19
-OpStore %29 %20
-%22 = OpLoad  %36  %7
-%26 = OpIAdd  %36  %22 %25
-%30 = OpConvertUToPtr  %46  %26
-%21 = OpLoad  %41  %30
-OpStore %9 %21
-%23 = OpLoad  %41  %6
-%24 = OpLoad  %41  %9
-%31 = OpConvertUToPtr  %45  %23
-OpStore %31 %24
-OpReturn
-OpFunctionEnd
+               OpCapability GenericPointer
+               OpCapability Linkage
+               OpCapability Addresses
+               OpCapability Kernel
+               OpCapability Int8
+               OpCapability Int16
+               OpCapability Int64
+               OpCapability Float16
+               OpCapability Float64
+         %32 = OpExtInstImport "OpenCL.std"
+               OpMemoryModel Physical64 OpenCL
+               OpEntryPoint Kernel %1 "shared_ptr_32" %4
+               OpDecorate %4 Alignment 4
+       %void = OpTypeVoid
+       %uint = OpTypeInt 32 0
+      %uchar = OpTypeInt 8 0
+   %uint_128 = OpConstant %uint 128
+%_arr_uchar_uint_128 = OpTypeArray %uchar %uint_128
+%_ptr_Workgroup__arr_uchar_uint_128 = OpTypePointer Workgroup %_arr_uchar_uint_128
+          %4 = OpVariable %_ptr_Workgroup__arr_uchar_uint_128 Workgroup
+      %ulong = OpTypeInt 64 0
+         %40 = OpTypeFunction %void %ulong %ulong
+%_ptr_Function_ulong = OpTypePointer Function %ulong
+%_ptr_Function_uint = OpTypePointer Function %uint
+%_ptr_CrossWorkgroup_ulong = OpTypePointer CrossWorkgroup %ulong
+%_ptr_Workgroup_ulong = OpTypePointer Workgroup %ulong
+     %uint_0 = OpConstant %uint 0
+          %1 = OpFunction %void None %40
+         %10 = OpFunctionParameter %ulong
+         %11 = OpFunctionParameter %ulong
+         %30 = OpLabel
+          %2 = OpVariable %_ptr_Function_ulong Function
+          %3 = OpVariable %_ptr_Function_ulong Function
+          %5 = OpVariable %_ptr_Function_ulong Function
+          %6 = OpVariable %_ptr_Function_ulong Function
+          %7 = OpVariable %_ptr_Function_uint Function
+          %8 = OpVariable %_ptr_Function_ulong Function
+          %9 = OpVariable %_ptr_Function_ulong Function
+               OpStore %2 %10
+               OpStore %3 %11
+         %12 = OpLoad %ulong %2
+               OpStore %5 %12
+         %13 = OpLoad %ulong %3
+               OpStore %6 %13
+         %25 = OpConvertPtrToU %uint %4
+         %14 = OpCopyObject %uint %25
+               OpStore %7 %14
+         %16 = OpLoad %ulong %5
+         %26 = OpConvertUToPtr %_ptr_CrossWorkgroup_ulong %16
+         %15 = OpLoad %ulong %26
+               OpStore %8 %15
+         %17 = OpLoad %uint %7
+         %18 = OpLoad %ulong %8
+         %27 = OpConvertUToPtr %_ptr_Workgroup_ulong %17
+               OpStore %27 %18
+         %20 = OpLoad %uint %7
+         %24 = OpIAdd %uint %20 %uint_0
+         %28 = OpConvertUToPtr %_ptr_Workgroup_ulong %24
+         %19 = OpLoad %ulong %28
+               OpStore %9 %19
+         %21 = OpLoad %ulong %6
+         %22 = OpLoad %ulong %9
+         %29 = OpConvertUToPtr %_ptr_CrossWorkgroup_ulong %21
+               OpStore %29 %22
+               OpReturn
+               OpFunctionEnd

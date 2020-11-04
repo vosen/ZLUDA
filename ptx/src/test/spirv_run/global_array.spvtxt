@@ -7,28 +7,28 @@
                OpCapability Int64
                OpCapability Float16
                OpCapability Float64
-         %22 = OpExtInstImport "OpenCL.std"
+         %21 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
                OpEntryPoint Kernel %2 "global_array" %1
        %void = OpTypeVoid
        %uint = OpTypeInt 32 0
      %uint_4 = OpConstant %uint 4
 %_arr_uint_uint_4 = OpTypeArray %uint %uint_4
-%_ptr_CrossWorkgroup__arr_uint_uint_4 = OpTypePointer CrossWorkgroup %_arr_uint_uint_4
-   %uint_4_0 = OpConstant %uint 4
      %uint_1 = OpConstant %uint 1
      %uint_0 = OpConstant %uint 0
-         %31 = OpConstantComposite %_arr_uint_uint_4 %uint_1 %uint_0 %uint_0 %uint_0
-          %1 = OpVariable %_ptr_CrossWorkgroup__arr_uint_uint_4 CrossWorkgroup %31
+         %28 = OpConstantComposite %_arr_uint_uint_4 %uint_1 %uint_0 %uint_0 %uint_0
+   %uint_4_0 = OpConstant %uint 4
+%_ptr_CrossWorkgroup__arr_uint_uint_4 = OpTypePointer CrossWorkgroup %_arr_uint_uint_4
+          %1 = OpVariable %_ptr_CrossWorkgroup__arr_uint_uint_4 CrossWorkgroup %28
       %ulong = OpTypeInt 64 0
-         %33 = OpTypeFunction %void %ulong %ulong
+         %32 = OpTypeFunction %void %ulong %ulong
 %_ptr_Function_ulong = OpTypePointer Function %ulong
 %_ptr_Function_uint = OpTypePointer Function %uint
 %_ptr_CrossWorkgroup_uint = OpTypePointer CrossWorkgroup %uint
-          %2 = OpFunction %void None %33
+          %2 = OpFunction %void None %32
           %8 = OpFunctionParameter %ulong
           %9 = OpFunctionParameter %ulong
-         %20 = OpLabel
+         %19 = OpLabel
           %3 = OpVariable %_ptr_Function_ulong Function
           %4 = OpVariable %_ptr_Function_ulong Function
           %5 = OpVariable %_ptr_Function_ulong Function
@@ -36,19 +36,18 @@
           %7 = OpVariable %_ptr_Function_uint Function
                OpStore %3 %8
                OpStore %4 %9
-         %17 = OpConvertPtrToU %ulong %1
-         %10 = OpCopyObject %ulong %17
+         %16 = OpConvertPtrToU %ulong %1
+         %10 = OpCopyObject %ulong %16
                OpStore %5 %10
-         %12 = OpLoad %ulong %4
-         %11 = OpCopyObject %ulong %12
+         %11 = OpLoad %ulong %4
                OpStore %6 %11
-         %14 = OpLoad %ulong %5
+         %13 = OpLoad %ulong %5
+         %17 = OpConvertUToPtr %_ptr_CrossWorkgroup_uint %13
+         %12 = OpLoad %uint %17
+               OpStore %7 %12
+         %14 = OpLoad %ulong %6
+         %15 = OpLoad %uint %7
          %18 = OpConvertUToPtr %_ptr_CrossWorkgroup_uint %14
-         %13 = OpLoad %uint %18
-               OpStore %7 %13
-         %15 = OpLoad %ulong %6
-         %16 = OpLoad %uint %7
-         %19 = OpConvertUToPtr %_ptr_CrossWorkgroup_uint %15
-               OpStore %19 %16
+               OpStore %18 %15
                OpReturn
                OpFunctionEnd

@@ -113,6 +113,8 @@ sub_type! {
     VariableRegType {
         Scalar(ScalarType),
         Vector(SizedScalarType, u8),
+        // Array type is used when emiting SSA statements at the start of a method
+        Array(ScalarType, VecU32),
         // Pointer variant is used when passing around SLM pointer between
         // function calls for dynamic SLM
         Pointer(SizedScalarType, PointerStateSpace)
@@ -267,7 +269,6 @@ pub enum MethodDecl<'a, ID> {
     Kernel {
         name: &'a str,
         in_args: Vec<KernelArgument<ID>>,
-        uses_shared_mem: bool,
     },
 }
 
@@ -293,14 +294,49 @@ pub enum KernelArgumentType {
     Shared,
 }
 
-impl From<FnArgumentType> for Type {
-    fn from(t: FnArgumentType) -> Self {
-        match t {
-            FnArgumentType::Reg(x) => x.into(),
-            FnArgumentType::Param(x) => x.into(),
+impl FnArgumentType {
+    pub fn to_type(&self, is_kernel: bool) -> Type {
+        if is_kernel {
+            self.to_kernel_type()
+        } else {
+            self.to_func_type()
+        }
+    }
+
+    pub fn to_kernel_type(&self) -> Type {
+        match self {
+            FnArgumentType::Reg(x) => x.clone().into(),
+            FnArgumentType::Param(x) => x.clone().into(),
             FnArgumentType::Shared => {
                 Type::Pointer(PointerType::Scalar(ScalarType::B8), LdStateSpace::Shared)
             }
+        }
+    }
+
+    pub fn to_func_type(&self) -> Type {
+        match self {
+            FnArgumentType::Reg(x) => x.clone().into(),
+            FnArgumentType::Param(VariableParamType::Scalar(t)) => {
+                Type::Pointer(PointerType::Scalar((*t).into()), LdStateSpace::Param)
+            }
+            FnArgumentType::Param(VariableParamType::Array(t, dims)) => Type::Pointer(
+                PointerType::Array((*t).into(), dims.clone()),
+                LdStateSpace::Param,
+            ),
+            FnArgumentType::Param(VariableParamType::Pointer(t, space)) => Type::Pointer(
+                PointerType::Pointer((*t).into(), (*space).into()),
+                LdStateSpace::Param,
+            ),
+            FnArgumentType::Shared => {
+                Type::Pointer(PointerType::Scalar(ScalarType::B8), LdStateSpace::Shared)
+            }
+        }
+    }
+
+    pub fn is_param(&self) -> bool {
+        match self {
+            FnArgumentType::Param(_) => true,
+            _ => false,
         }
     }
 }
@@ -323,11 +359,12 @@ pub enum Type {
     Pointer(PointerType, LdStateSpace),
 }
 
-sub_type! {
-    PointerType {
-        Scalar(ScalarType),
-        Vector(ScalarType, u8),
-    }
+#[derive(PartialEq, Eq, Clone)]
+pub enum PointerType {
+    Scalar(ScalarType),
+    Vector(ScalarType, u8),
+    Array(ScalarType, VecU32),
+    Pointer(ScalarType, LdStateSpace),
 }
 
 impl From<SizedScalarType> for PointerType {
@@ -343,6 +380,8 @@ impl TryFrom<PointerType> for SizedScalarType {
         match value {
             PointerType::Scalar(t) => Ok(t.try_into()?),
             PointerType::Vector(_, _) => Err(()),
+            PointerType::Array(_, _) => Err(()),
+            PointerType::Pointer(_, _) => Err(()),
         }
     }
 }
@@ -456,6 +495,7 @@ pub struct MultiVariable<ID> {
     pub count: Option<u32>,
 }
 
+#[derive(Clone)]
 pub struct Variable<T, ID> {
     pub align: Option<u32>,
     pub v_type: T,
@@ -543,6 +583,10 @@ pub enum Instruction<P: ArgParams> {
     Sqrt(SqrtDetails, Arg2<P>),
     Rsqrt(RsqrtDetails, Arg2<P>),
     Neg(NegDetails, Arg2<P>),
+    Sin { flush_to_zero: bool, arg: Arg2<P> },
+    Cos { flush_to_zero: bool, arg: Arg2<P> },
+    Lg2 { flush_to_zero: bool, arg: Arg2<P> },
+    Ex2 { flush_to_zero: bool, arg: Arg2<P> },
 }
 
 #[derive(Copy, Clone)]
@@ -744,6 +788,7 @@ pub enum MemScope {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[repr(u8)]
 pub enum LdStateSpace {
     Generic,
     Const,

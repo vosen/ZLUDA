@@ -144,12 +144,15 @@ match {
     "barrier",
     "bra",
     "call",
+    "cos",
     "cvt",
     "cvta",
     "debug",
     "div",
+    "ex2",
     "fma",
     "ld",
+    "lg2",
     "mad",
     "map_f64_to_f32",
     "max",
@@ -166,6 +169,7 @@ match {
     "setp",
     "shl",
     "shr",
+    "sin",
     r"sm_[0-9]+" => ShaderModel,
     "sqrt",
     "st",
@@ -187,12 +191,15 @@ ExtendedID : &'input str = {
     "barrier",
     "bra",
     "call",
+    "cos",
     "cvt",
     "cvta",
     "debug",
     "div",
+    "ex2",
     "fma",
     "ld",
+    "lg2",
     "mad",
     "map_f64_to_f32",
     "max",
@@ -209,6 +216,7 @@ ExtendedID : &'input str = {
     "setp",
     "shl",
     "shr",
+    "sin",
     ShaderModel,
     "sqrt",
     "st",
@@ -346,7 +354,7 @@ LinkingDirectives: ast::LinkingDirective = {
 
 MethodDecl: ast::MethodDecl<'input, &'input str> = {
     ".entry" <name:ExtendedID> <in_args:KernelArguments> =>
-        ast::MethodDecl::Kernel{ name, in_args, uses_shared_mem: false },
+        ast::MethodDecl::Kernel{ name, in_args },
     ".func" <ret_vals:FnArguments?> <name:ExtendedID> <params:FnArguments> => {
         ast::MethodDecl::Func(ret_vals.unwrap_or_else(|| Vec::new()), name, params)
     }
@@ -687,6 +695,10 @@ Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
     InstSqrt,
     InstRsqrt,
     InstNeg,
+    InstSin,
+    InstCos,
+    InstLg2,
+    InstEx2,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
@@ -1597,6 +1609,34 @@ InstNeg: ast::Instruction<ast::ParsedArgParams<'input>> = {
             flush_to_zero: None,
         };
         ast::Instruction::Neg(details, a)
+    },
+}
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-sin
+InstSin: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "sin" ".approx" <ftz:".ftz"?> ".f32" <arg:Arg2> => {
+        ast::Instruction::Sin{ flush_to_zero: ftz.is_some(), arg }
+    },
+}
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-cos
+InstCos: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "cos" ".approx" <ftz:".ftz"?> ".f32" <arg:Arg2> => {
+        ast::Instruction::Cos{ flush_to_zero: ftz.is_some(), arg }
+    },
+}
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-lg2
+InstLg2: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "lg2" ".approx" <ftz:".ftz"?> ".f32" <arg:Arg2> => {
+        ast::Instruction::Lg2{ flush_to_zero: ftz.is_some(), arg }
+    },
+}
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-ex2
+InstEx2: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "ex2" ".approx" <ftz:".ftz"?> ".f32" <arg:Arg2> => {
+        ast::Instruction::Ex2{ flush_to_zero: ftz.is_some(), arg }
     },
 }
 

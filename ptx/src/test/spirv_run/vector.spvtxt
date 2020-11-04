@@ -2,26 +2,29 @@
                OpCapability Linkage
                OpCapability Addresses
                OpCapability Kernel
-               OpCapability Int64
                OpCapability Int8
-         %60 = OpExtInstImport "OpenCL.std"
+               OpCapability Int16
+               OpCapability Int64
+               OpCapability Float16
+               OpCapability Float64
+         %57 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
                OpEntryPoint Kernel %31 "vector"
        %void = OpTypeVoid
        %uint = OpTypeInt 32 0
      %v2uint = OpTypeVector %uint 2
-         %64 = OpTypeFunction %v2uint %v2uint
+         %61 = OpTypeFunction %v2uint %v2uint
 %_ptr_Function_v2uint = OpTypePointer Function %v2uint
 %_ptr_Function_uint = OpTypePointer Function %uint
       %ulong = OpTypeInt 64 0
-         %68 = OpTypeFunction %void %ulong %ulong
+         %65 = OpTypeFunction %void %ulong %ulong
 %_ptr_Function_ulong = OpTypePointer Function %ulong
 %_ptr_Generic_v2uint = OpTypePointer Generic %v2uint
-          %1 = OpFunction %v2uint None %64
+          %1 = OpFunction %v2uint None %61
           %7 = OpFunctionParameter %v2uint
          %30 = OpLabel
-          %3 = OpVariable %_ptr_Function_v2uint Function
           %2 = OpVariable %_ptr_Function_v2uint Function
+          %3 = OpVariable %_ptr_Function_v2uint Function
           %4 = OpVariable %_ptr_Function_v2uint Function
           %5 = OpVariable %_ptr_Function_uint Function
           %6 = OpVariable %_ptr_Function_uint Function
@@ -57,10 +60,10 @@
          %26 = OpLoad %v2uint %2
                OpReturnValue %26
                OpFunctionEnd
-         %31 = OpFunction %void None %68
+         %31 = OpFunction %void None %65
          %40 = OpFunctionParameter %ulong
          %41 = OpFunctionParameter %ulong
-         %58 = OpLabel
+         %55 = OpLabel
          %32 = OpVariable %_ptr_Function_ulong Function
          %33 = OpVariable %_ptr_Function_ulong Function
          %34 = OpVariable %_ptr_Function_ulong Function
@@ -71,27 +74,24 @@
          %39 = OpVariable %_ptr_Function_ulong Function
                OpStore %32 %40
                OpStore %33 %41
-         %43 = OpLoad %ulong %32
-         %42 = OpCopyObject %ulong %43
+         %42 = OpLoad %ulong %32
                OpStore %34 %42
-         %45 = OpLoad %ulong %33
-         %44 = OpCopyObject %ulong %45
-               OpStore %35 %44
-         %47 = OpLoad %ulong %34
-         %54 = OpConvertUToPtr %_ptr_Generic_v2uint %47
-         %46 = OpLoad %v2uint %54
+         %43 = OpLoad %ulong %33
+               OpStore %35 %43
+         %45 = OpLoad %ulong %34
+         %52 = OpConvertUToPtr %_ptr_Generic_v2uint %45
+         %44 = OpLoad %v2uint %52
+               OpStore %36 %44
+         %47 = OpLoad %v2uint %36
+         %46 = OpFunctionCall %v2uint %1 %47
                OpStore %36 %46
          %49 = OpLoad %v2uint %36
-         %48 = OpFunctionCall %v2uint %1 %49
-               OpStore %36 %48
+         %53 = OpBitcast %ulong %49
+         %48 = OpCopyObject %ulong %53
+               OpStore %39 %48
+         %50 = OpLoad %ulong %35
          %51 = OpLoad %v2uint %36
-         %55 = OpBitcast %ulong %51
-         %56 = OpCopyObject %ulong %55
-         %50 = OpCopyObject %ulong %56
-               OpStore %39 %50
-         %52 = OpLoad %ulong %35
-         %53 = OpLoad %v2uint %36
-         %57 = OpConvertUToPtr %_ptr_Generic_v2uint %52
-               OpStore %57 %53
+         %54 = OpConvertUToPtr %_ptr_Generic_v2uint %50
+               OpStore %54 %51
                OpReturn
                OpFunctionEnd

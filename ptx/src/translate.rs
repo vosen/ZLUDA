@@ -1,7 +1,7 @@
 use crate::ast;
 use half::f16;
 use rspirv::{binary::Disassemble, dr};
-use std::{borrow::Cow, hash::Hash, iter, mem};
+use std::{borrow::Cow, convert::TryFrom, hash::Hash, iter, mem};
 use std::{
     collections::{hash_map, HashMap, HashSet},
     convert::TryInto,
@@ -50,17 +50,42 @@ impl From<ast::Type> for SpirvType {
             ast::Type::Scalar(t) => SpirvType::Base(t.into()),
             ast::Type::Vector(typ, len) => SpirvType::Vector(typ.into(), len),
             ast::Type::Array(t, len) => SpirvType::Array(t.into(), len),
-            ast::Type::Pointer(ast::PointerType::Scalar(typ), state_space) => SpirvType::Pointer(
-                Box::new(SpirvType::Base(typ.into())),
+            ast::Type::Pointer(pointer_t, state_space) => SpirvType::Pointer(
+                Box::new(SpirvType::from(ast::Type::from(pointer_t))),
                 state_space.to_spirv(),
             ),
-            ast::Type::Pointer(ast::PointerType::Vector(typ, len), state_space) => {
-                SpirvType::Pointer(
-                    Box::new(SpirvType::Vector(typ.into(), len)),
-                    state_space.to_spirv(),
-                )
+        }
+    }
+}
+
+impl From<ast::PointerType> for ast::Type {
+    fn from(t: ast::PointerType) -> Self {
+        match t {
+            ast::PointerType::Scalar(t) => ast::Type::Scalar(t),
+            ast::PointerType::Vector(t, len) => ast::Type::Vector(t, len),
+            ast::PointerType::Array(t, dims) => ast::Type::Array(t, dims),
+            ast::PointerType::Pointer(t, space) => {
+                ast::Type::Pointer(ast::PointerType::Scalar(t), space)
             }
         }
+    }
+}
+
+impl ast::Type {
+    fn pointer_to(self, space: ast::LdStateSpace) -> Result<Self, TranslateError> {
+        Ok(match self {
+            ast::Type::Scalar(t) => ast::Type::Pointer(ast::PointerType::Scalar(t), space),
+            ast::Type::Vector(t, len) => {
+                ast::Type::Pointer(ast::PointerType::Vector(t, len), space)
+            }
+            ast::Type::Array(t, dims) => {
+                ast::Type::Pointer(ast::PointerType::Array(t, dims), space)
+            }
+            ast::Type::Pointer(ast::PointerType::Scalar(t), space) => {
+                ast::Type::Pointer(ast::PointerType::Pointer(t, space), space)
+            }
+            ast::Type::Pointer(_, _) => return Err(TranslateError::Unreachable),
+        })
     }
 }
 
@@ -229,8 +254,8 @@ impl TypeWordMap {
     fn get_or_add_fn(
         &mut self,
         b: &mut dr::Builder,
-        mut out_params: impl ExactSizeIterator<Item = SpirvType>,
         in_params: impl ExactSizeIterator<Item = SpirvType>,
+        mut out_params: impl ExactSizeIterator<Item = SpirvType>,
     ) -> (spirv::Word, spirv::Word) {
         let (out_args, out_spirv_type) = if out_params.len() == 0 {
             (None, self.void())
@@ -486,7 +511,7 @@ fn emit_directives<'input>(
     map: &mut TypeWordMap,
     id_defs: &GlobalStringIdResolver<'input>,
     opencl_id: spirv::Word,
-    denorm_information: &HashMap<CallgraphKey<'input>, HashMap<u8, spirv::FPDenormMode>>,
+    denorm_information: &HashMap<MethodName<'input>, HashMap<u8, spirv::FPDenormMode>>,
     call_map: &HashMap<&'input str, HashSet<spirv::Word>>,
     directives: Vec<Directive>,
     kernel_info: &mut HashMap<String, KernelInfo>,
@@ -516,7 +541,7 @@ fn emit_directives<'input>(
                     map,
                     &id_defs,
                     &f.globals,
-                    &f.func_decl,
+                    &f.spirv_decl,
                     &denorm_information,
                     call_map,
                     &directives,
@@ -553,7 +578,7 @@ fn get_call_map<'input>(
                 body: Some(statements),
                 ..
             }) => {
-                let call_key = CallgraphKey::new(&func_decl);
+                let call_key = MethodName::new(&func_decl);
                 for statement in statements {
                     match statement {
                         Statement::Call(call) => {
@@ -569,28 +594,28 @@ fn get_call_map<'input>(
     let mut result = HashMap::new();
     for (method_key, children) in directly_called_by.iter() {
         match method_key {
-            CallgraphKey::Kernel(name) => {
+            MethodName::Kernel(name) => {
                 let mut visited = HashSet::new();
                 for child in children {
                     add_call_map_single(&directly_called_by, &mut visited, *child);
                 }
                 result.insert(*name, visited);
             }
-            CallgraphKey::Func(_) => {}
+            MethodName::Func(_) => {}
         }
     }
     result
 }
 
 fn add_call_map_single<'input>(
-    directly_called_by: &MultiHashMap<CallgraphKey<'input>, spirv::Word>,
+    directly_called_by: &MultiHashMap<MethodName<'input>, spirv::Word>,
     visited: &mut HashSet<spirv::Word>,
     current: spirv::Word,
 ) {
     if !visited.insert(current) {
         return;
     }
-    if let Some(children) = directly_called_by.get(&CallgraphKey::Func(current)) {
+    if let Some(children) = directly_called_by.get(&MethodName::Func(current)) {
         for child in children {
             add_call_map_single(directly_called_by, visited, *child);
         }
@@ -645,8 +670,9 @@ fn convert_dynamic_shared_memory_usage<'input>(
                 globals,
                 body: Some(statements),
                 import_as,
+                spirv_decl,
             }) => {
-                let call_key = CallgraphKey::new(&func_decl);
+                let call_key = MethodName::new(&func_decl);
                 let statements = statements
                     .into_iter()
                     .map(|statement| match statement {
@@ -667,6 +693,7 @@ fn convert_dynamic_shared_memory_usage<'input>(
                     globals,
                     body: Some(statements),
                     import_as,
+                    spirv_decl,
                 })
             }
             directive => directive,
@@ -680,44 +707,34 @@ fn convert_dynamic_shared_memory_usage<'input>(
         .into_iter()
         .map(|directive| match directive {
             Directive::Method(Function {
-                mut func_decl,
+                func_decl,
                 globals,
                 body: Some(statements),
                 import_as,
+                mut spirv_decl,
             }) => {
-                let call_key = CallgraphKey::new(&func_decl);
-                if !methods_using_extern_shared.contains(&call_key) {
+                if !methods_using_extern_shared.contains(&spirv_decl.name) {
                     return Directive::Method(Function {
                         func_decl,
                         globals,
                         body: Some(statements),
                         import_as,
+                        spirv_decl,
                     });
                 }
                 let shared_id_param = new_id();
-                match &mut func_decl {
-                    ast::MethodDecl::Func(_, _, input_args) => {
-                        input_args.push(ast::Variable {
-                            align: None,
-                            v_type: ast::FnArgumentType::Shared,
-                            array_init: Vec::new(),
-                            name: shared_id_param,
-                        });
+                spirv_decl.input.push({
+                    ast::Variable {
+                        align: None,
+                        v_type: ast::Type::Pointer(
+                            ast::PointerType::Scalar(ast::ScalarType::U8),
+                            ast::LdStateSpace::Shared,
+                        ),
+                        array_init: Vec::new(),
+                        name: shared_id_param,
                     }
-                    ast::MethodDecl::Kernel {
-                        in_args,
-                        uses_shared_mem,
-                        ..
-                    } => {
-                        *uses_shared_mem = true;
-                        in_args.push(ast::Variable {
-                            align: None,
-                            v_type: ast::KernelArgumentType::Shared,
-                            array_init: Vec::new(),
-                            name: shared_id_param,
-                        });
-                    }
-                }
+                });
+                spirv_decl.uses_shared_mem = true;
                 let shared_var_id = new_id();
                 let shared_var = ExpandedStatement::Variable(ast::Variable {
                     align: None,
@@ -750,6 +767,7 @@ fn convert_dynamic_shared_memory_usage<'input>(
                     globals,
                     body: Some(new_statements),
                     import_as,
+                    spirv_decl,
                 })
             }
             directive => directive,
@@ -761,7 +779,7 @@ fn replace_uses_of_shared_memory<'a>(
     result: &mut Vec<ExpandedStatement>,
     new_id: &mut impl FnMut() -> spirv::Word,
     extern_shared_decls: &HashMap<spirv::Word, ast::SizedScalarType>,
-    methods_using_extern_shared: &mut HashSet<CallgraphKey<'a>>,
+    methods_using_extern_shared: &mut HashSet<MethodName<'a>>,
     shared_id_param: spirv::Word,
     shared_var_id: spirv::Word,
     statements: Vec<ExpandedStatement>,
@@ -772,7 +790,7 @@ fn replace_uses_of_shared_memory<'a>(
                 // We can safely skip checking call arguments,
                 // because there's simply no way to pass shared ptr
                 // without converting it to .b64 first
-                if methods_using_extern_shared.contains(&CallgraphKey::Func(call.func)) {
+                if methods_using_extern_shared.contains(&MethodName::Func(call.func)) {
                     call.param_list
                         .push((shared_id_param, ast::FnArgumentType::Shared));
                 }
@@ -809,13 +827,13 @@ fn replace_uses_of_shared_memory<'a>(
 }
 
 fn get_callers_of_extern_shared<'a>(
-    methods_using_extern_shared: &mut HashSet<CallgraphKey<'a>>,
-    directly_called_by: &MultiHashMap<spirv::Word, CallgraphKey<'a>>,
+    methods_using_extern_shared: &mut HashSet<MethodName<'a>>,
+    directly_called_by: &MultiHashMap<spirv::Word, MethodName<'a>>,
 ) {
     let direct_uses_of_extern_shared = methods_using_extern_shared
         .iter()
         .filter_map(|method| {
-            if let CallgraphKey::Func(f_id) = method {
+            if let MethodName::Func(f_id) = method {
                 Some(*f_id)
             } else {
                 None
@@ -828,14 +846,14 @@ fn get_callers_of_extern_shared<'a>(
 }
 
 fn get_callers_of_extern_shared_single<'a>(
-    methods_using_extern_shared: &mut HashSet<CallgraphKey<'a>>,
-    directly_called_by: &MultiHashMap<spirv::Word, CallgraphKey<'a>>,
+    methods_using_extern_shared: &mut HashSet<MethodName<'a>>,
+    directly_called_by: &MultiHashMap<spirv::Word, MethodName<'a>>,
     fn_id: spirv::Word,
 ) {
     if let Some(callers) = directly_called_by.get(&fn_id) {
         for caller in callers {
             if methods_using_extern_shared.insert(*caller) {
-                if let CallgraphKey::Func(caller_fn) = caller {
+                if let MethodName::Func(caller_fn) = caller {
                     get_callers_of_extern_shared_single(
                         methods_using_extern_shared,
                         directly_called_by,
@@ -877,7 +895,7 @@ fn denorm_count_map_update_impl<T: Eq + Hash>(
 // and emit suitable execution mode
 fn compute_denorm_information<'input>(
     module: &[Directive<'input>],
-) -> HashMap<CallgraphKey<'input>, HashMap<u8, spirv::FPDenormMode>> {
+) -> HashMap<MethodName<'input>, HashMap<u8, spirv::FPDenormMode>> {
     let mut denorm_methods = HashMap::new();
     for directive in module {
         match directive {
@@ -888,7 +906,7 @@ fn compute_denorm_information<'input>(
                 ..
             }) => {
                 let mut flush_counter = DenormCountMap::new();
-                let method_key = CallgraphKey::new(func_decl);
+                let method_key = MethodName::new(func_decl);
                 for statement in statements {
                     match statement {
                         Statement::Instruction(inst) => {
@@ -907,6 +925,7 @@ fn compute_denorm_information<'input>(
                         Statement::Undef(_, _) => {}
                         Statement::Label(_) => {}
                         Statement::Variable(_) => {}
+                        Statement::PtrAdd { .. } => {}
                     }
                 }
                 denorm_methods.insert(method_key, flush_counter);
@@ -933,16 +952,16 @@ fn compute_denorm_information<'input>(
 }
 
 #[derive(Hash, PartialEq, Eq, Copy, Clone)]
-enum CallgraphKey<'input> {
+enum MethodName<'input> {
     Kernel(&'input str),
     Func(spirv::Word),
 }
 
-impl<'input> CallgraphKey<'input> {
+impl<'input> MethodName<'input> {
     fn new(decl: &ast::MethodDecl<'input, spirv::Word>) -> Self {
         match decl {
-            ast::MethodDecl::Kernel { name, .. } => CallgraphKey::Kernel(name),
-            ast::MethodDecl::Func(_, id, _) => CallgraphKey::Func(*id),
+            ast::MethodDecl::Kernel { name, .. } => MethodName::Kernel(name),
+            ast::MethodDecl::Func(_, id, _) => MethodName::Func(*id),
         }
     }
 }
@@ -979,30 +998,30 @@ fn emit_function_header<'a>(
     map: &mut TypeWordMap,
     defined_globals: &GlobalStringIdResolver<'a>,
     synthetic_globals: &[ast::Variable<ast::VariableType, spirv::Word>],
-    func_directive: &ast::MethodDecl<spirv::Word>,
-    denorm_information: &HashMap<CallgraphKey<'a>, HashMap<u8, spirv::FPDenormMode>>,
+    func_decl: &SpirvMethodDecl<'a>,
+    _denorm_information: &HashMap<MethodName<'a>, HashMap<u8, spirv::FPDenormMode>>,
     call_map: &HashMap<&'a str, HashSet<spirv::Word>>,
     direcitves: &[Directive],
     kernel_info: &mut HashMap<String, KernelInfo>,
 ) -> Result<(), TranslateError> {
-    if let ast::MethodDecl::Kernel {
-        name,
-        in_args,
-        uses_shared_mem,
-    } = &func_directive
-    {
-        let args_lens = in_args.iter().map(|param| param.v_type.width()).collect();
+    if let MethodName::Kernel(name) = func_decl.name {
+        let args_lens = func_decl
+            .input
+            .iter()
+            .map(|param| param.v_type.size_of())
+            .collect();
         kernel_info.insert(
             name.to_string(),
             KernelInfo {
                 arguments_sizes: args_lens,
-                uses_shared_mem: *uses_shared_mem,
+                uses_shared_mem: func_decl.uses_shared_mem,
             },
         );
     }
-    let (ret_type, func_type) = get_function_type(builder, map, &func_directive);
-    let fn_id = match func_directive {
-        ast::MethodDecl::Kernel { name, .. } => {
+    let (ret_type, func_type) =
+        get_function_type(builder, map, &func_decl.input, &func_decl.output);
+    let fn_id = match func_decl.name {
+        MethodName::Kernel(name) => {
             let fn_id = defined_globals.get_id(name)?;
             let mut global_variables = defined_globals
                 .variables_type_check
@@ -1035,17 +1054,11 @@ fn emit_function_header<'a>(
                     _ => {}
                 }
             }
-
             global_variables.append(&mut interface);
-            builder.entry_point(
-                spirv::ExecutionModel::Kernel,
-                fn_id,
-                *name,
-                global_variables,
-            );
+            builder.entry_point(spirv::ExecutionModel::Kernel, fn_id, name, global_variables);
             fn_id
         }
-        ast::MethodDecl::Func(_, name, _) => *name,
+        MethodName::Func(name) => name,
     };
     builder.begin_function(
         ret_type,
@@ -1053,7 +1066,9 @@ fn emit_function_header<'a>(
         spirv::FunctionControl::NONE,
         func_type,
     )?;
-    if let Some(denorm_modes) = denorm_information.get(&CallgraphKey::new(&func_directive)) {
+    // TODO: re-enable when Intel float control extension works
+    /*
+    if let Some(denorm_modes) = denorm_information.get(&func_decl.name) {
         for (size_of, denorm_mode) in denorm_modes {
             builder.decorate(
                 fn_id,
@@ -1065,16 +1080,17 @@ fn emit_function_header<'a>(
             )
         }
     }
-    func_directive.visit_args(&mut |arg| {
-        let result_type = map.get_or_add(builder, ast::Type::from(arg.v_type.clone()).into());
+    */
+    for input in &func_decl.input {
+        let result_type = map.get_or_add(builder, SpirvType::from(input.v_type.clone()));
         let inst = dr::Instruction::new(
             spirv::Op::FunctionParameter,
             Some(result_type),
-            Some(arg.name),
+            Some(input.name),
             Vec::new(),
         );
         builder.function.as_mut().unwrap().parameters.push(inst);
-    });
+    }
     Ok(())
 }
 
@@ -1103,12 +1119,14 @@ fn emit_capabilities(builder: &mut dr::Builder) {
     builder.capability(spirv::Capability::Int64);
     builder.capability(spirv::Capability::Float16);
     builder.capability(spirv::Capability::Float64);
-    builder.capability(spirv::Capability::FunctionFloatControlINTEL);
+    // TODO: re-enable when Intel float control extension works
+    //builder.capability(spirv::Capability::FunctionFloatControlINTEL);
 }
 
 // http://htmlpreview.github.io/?https://github.com/KhronosGroup/SPIRV-Registry/blob/master/extensions/KHR/SPV_KHR_float_controls.html
-fn emit_extensions(builder: &mut dr::Builder) {
-    builder.extension("SPV_INTEL_float_controls2");
+fn emit_extensions(_builder: &mut dr::Builder) {
+    // TODO: re-enable when Intel float control extension works
+    //builder.extension("SPV_INTEL_float_controls2");
 }
 
 fn emit_opencl_import(builder: &mut dr::Builder) -> spirv::Word {
@@ -1153,42 +1171,48 @@ fn translate_function<'a>(
     ptx_impl_imports: &mut HashMap<String, Directive>,
     f: ast::ParsedFunction<'a>,
 ) -> Result<Function<'a>, TranslateError> {
-    let (str_resolver, fn_resolver, fn_decl) = id_defs.start_fn(&f.func_directive);
+    let (str_resolver, fn_resolver, fn_decl) = id_defs.start_fn(&f.func_directive)?;
     to_ssa(ptx_impl_imports, str_resolver, fn_resolver, fn_decl, f.body)
 }
 
 fn expand_kernel_params<'a, 'b>(
     fn_resolver: &mut FnStringIdResolver<'a, 'b>,
     args: impl Iterator<Item = &'b ast::KernelArgument<&'a str>>,
-) -> Vec<ast::KernelArgument<spirv::Word>> {
-    args.map(|a| ast::KernelArgument {
-        name: fn_resolver.add_def(
-            a.name,
-            Some((StateSpace::Param, ast::Type::from(a.v_type.clone()))),
-        ),
-        v_type: a.v_type.clone(),
-        align: a.align,
-        array_init: Vec::new(),
+) -> Result<Vec<ast::KernelArgument<spirv::Word>>, TranslateError> {
+    args.map(|a| {
+        Ok(ast::KernelArgument {
+            name: fn_resolver.add_def(
+                a.name,
+                Some((
+                    StateSpace::Param,
+                    ast::Type::from(a.v_type.clone()).pointer_to(ast::LdStateSpace::Param)?,
+                )),
+            ),
+            v_type: a.v_type.clone(),
+            align: a.align,
+            array_init: Vec::new(),
+        })
     })
-    .collect()
+    .collect::<Result<_, _>>()
 }
 
 fn expand_fn_params<'a, 'b>(
     fn_resolver: &mut FnStringIdResolver<'a, 'b>,
     args: impl Iterator<Item = &'b ast::FnArgument<&'a str>>,
-) -> Vec<ast::FnArgument<spirv::Word>> {
+) -> Result<Vec<ast::FnArgument<spirv::Word>>, TranslateError> {
     args.map(|a| {
+        let var_type = a.v_type.to_func_type();
         let ss = match a.v_type {
             ast::FnArgumentType::Reg(_) => StateSpace::Reg,
             ast::FnArgumentType::Param(_) => StateSpace::Param,
             ast::FnArgumentType::Shared => StateSpace::Shared,
         };
-        ast::FnArgument {
-            name: fn_resolver.add_def(a.name, Some((ss, ast::Type::from(a.v_type.clone())))),
+        Ok(ast::FnArgument {
+            name: fn_resolver.add_def(a.name, Some((ss, var_type))),
             v_type: a.v_type.clone(),
             align: a.align,
             array_init: Vec::new(),
-        }
+        })
     })
     .collect()
 }
@@ -1200,6 +1224,7 @@ fn to_ssa<'input, 'b>(
     f_args: ast::MethodDecl<'input, spirv::Word>,
     f_body: Option<Vec<ast::Statement<ast::ParsedArgParams<'input>>>>,
 ) -> Result<Function<'input>, TranslateError> {
+    let mut spirv_decl = SpirvMethodDecl::new(&f_args);
     let f_body = match f_body {
         Some(vec) => vec,
         None => {
@@ -1208,6 +1233,7 @@ fn to_ssa<'input, 'b>(
                 body: None,
                 globals: Vec::new(),
                 import_as: None,
+                spirv_decl,
             })
         }
     };
@@ -1217,8 +1243,8 @@ fn to_ssa<'input, 'b>(
     let typed_statements =
         convert_to_typed_statements(unadorned_statements, &fn_defs, &numeric_id_defs)?;
     let mut numeric_id_defs = numeric_id_defs.finish();
-    let (f_args, ssa_statements) =
-        insert_mem_ssa_statements(typed_statements, &mut numeric_id_defs, f_args)?;
+    let ssa_statements =
+        insert_mem_ssa_statements(typed_statements, &mut numeric_id_defs, &mut spirv_decl)?;
     let expanded_statements = expand_arguments(ssa_statements, &mut numeric_id_defs)?;
     let expanded_statements =
         insert_implicit_conversions(expanded_statements, &mut numeric_id_defs)?;
@@ -1231,6 +1257,7 @@ fn to_ssa<'input, 'b>(
         globals: globals,
         body: Some(f_body),
         import_as: None,
+        spirv_decl,
     })
 }
 
@@ -1338,13 +1365,21 @@ fn convert_to_typed_statements(
                 ast::Instruction::Call(call) => {
                     // TODO: error out if lengths don't match
                     let fn_def = fn_defs.get_fn_decl(call.func)?;
-                    let ret_params = to_resolved_fn_args(call.ret_params, &*fn_def.ret_vals);
-                    let param_list = to_resolved_fn_args(call.param_list, &*fn_def.params);
+                    let out_args = to_resolved_fn_args(call.ret_params, &*fn_def.ret_vals);
+                    let in_args = to_resolved_fn_args(call.param_list, &*fn_def.params);
+                    let (out_params, out_non_params): (Vec<_>, Vec<_>) = out_args
+                        .into_iter()
+                        .partition(|(_, arg_type)| arg_type.is_param());
+                    let normalized_input_args = out_params
+                        .into_iter()
+                        .map(|(id, typ)| (ast::CallOperand::Reg(id), typ))
+                        .chain(in_args.into_iter())
+                        .collect();
                     let resolved_call = ResolvedCall {
                         uniform: call.uniform,
-                        ret_params,
+                        ret_params: out_non_params,
                         func: call.func,
-                        param_list,
+                        param_list: normalized_input_args,
                     };
                     result.push(Statement::Call(resolved_call));
                 }
@@ -1514,6 +1549,30 @@ fn convert_to_typed_statements(
                 ast::Instruction::Neg(d, a) => {
                     result.push(Statement::Instruction(ast::Instruction::Neg(d, a.cast())))
                 }
+                ast::Instruction::Sin { flush_to_zero, arg } => {
+                    result.push(Statement::Instruction(ast::Instruction::Sin {
+                        flush_to_zero,
+                        arg: arg.cast(),
+                    }))
+                }
+                ast::Instruction::Cos { flush_to_zero, arg } => {
+                    result.push(Statement::Instruction(ast::Instruction::Cos {
+                        flush_to_zero,
+                        arg: arg.cast(),
+                    }))
+                }
+                ast::Instruction::Lg2 { flush_to_zero, arg } => {
+                    result.push(Statement::Instruction(ast::Instruction::Lg2 {
+                        flush_to_zero,
+                        arg: arg.cast(),
+                    }))
+                }
+                ast::Instruction::Ex2 { flush_to_zero, arg } => {
+                    result.push(Statement::Instruction(ast::Instruction::Ex2 {
+                        flush_to_zero,
+                        arg: arg.cast(),
+                    }))
+                }
             },
             Statement::Label(i) => result.push(Statement::Label(i)),
             Statement::Variable(v) => result.push(Statement::Variable(v)),
@@ -1525,7 +1584,9 @@ fn convert_to_typed_statements(
             Statement::Conversion(c) => result.push(Statement::Conversion(c)),
             Statement::Constant(c) => result.push(Statement::Constant(c)),
             Statement::RetValue(d, id) => result.push(Statement::RetValue(d, id)),
-            Statement::Undef(_, _) => return Err(TranslateError::Unreachable),
+            Statement::Undef(_, _) | Statement::PtrAdd { .. } => {
+                return Err(TranslateError::Unreachable)
+            }
         }
     }
     Ok(result)
@@ -1584,11 +1645,13 @@ fn to_ptx_impl_atomic_call(
                     },
                 ],
             );
+            let spirv_decl = SpirvMethodDecl::new(&func_decl);
             let func = Function {
                 func_decl,
                 globals: Vec::new(),
                 body: None,
                 import_as: Some(entry.key().clone()),
+                spirv_decl,
             };
             entry.insert(Directive::Method(func));
             fn_id
@@ -1660,7 +1723,8 @@ fn normalize_labels(
             | Statement::Conversion(_)
             | Statement::Constant(_)
             | Statement::Label(_)
-            | Statement::Undef(_, _) => (),
+            | Statement::Undef(_, _)
+            | Statement::PtrAdd { .. } => {}
         }
     }
     iter::once(Statement::Label(id_def.new_id(None)))
@@ -1716,66 +1780,45 @@ fn normalize_predicates(
 fn insert_mem_ssa_statements<'a, 'b>(
     func: Vec<TypedStatement>,
     id_def: &mut MutableNumericIdResolver,
-    mut f_args: ast::MethodDecl<'a, spirv::Word>,
-) -> Result<(ast::MethodDecl<'a, spirv::Word>, Vec<TypedStatement>), TranslateError> {
+    fn_decl: &mut SpirvMethodDecl,
+) -> Result<Vec<TypedStatement>, TranslateError> {
     let mut result = Vec::with_capacity(func.len());
-    let out_param = match &mut f_args {
-        ast::MethodDecl::Kernel { in_args, .. } => {
-            for p in in_args.iter_mut() {
-                let typ = ast::Type::from(p.v_type.clone());
+    for arg in fn_decl.output.iter() {
+        match type_to_variable_type(&arg.v_type)? {
+            Some(var_type) => {
+                result.push(Statement::Variable(ast::Variable {
+                    align: arg.align,
+                    v_type: var_type,
+                    name: arg.name,
+                    array_init: arg.array_init.clone(),
+                }));
+            }
+            None => return Err(TranslateError::Unreachable),
+        }
+    }
+    for arg in fn_decl.input.iter_mut() {
+        match type_to_variable_type(&arg.v_type)? {
+            Some(var_type) => {
+                let typ = arg.v_type.clone();
                 let new_id = id_def.new_id(typ.clone());
                 result.push(Statement::Variable(ast::Variable {
-                    align: p.align,
-                    v_type: ast::VariableType::Param(p.v_type.clone().to_param()),
-                    name: p.name,
-                    array_init: p.array_init.clone(),
+                    align: arg.align,
+                    v_type: var_type,
+                    name: arg.name,
+                    array_init: arg.array_init.clone(),
                 }));
                 result.push(Statement::StoreVar(
                     ast::Arg2St {
-                        src1: p.name,
+                        src1: arg.name,
                         src2: new_id,
                     },
                     typ,
                 ));
-                p.name = new_id;
+                arg.name = new_id;
             }
-            None
+            None => {}
         }
-        ast::MethodDecl::Func(out_params, _, in_params) => {
-            for p in in_params.iter_mut() {
-                let typ = ast::Type::from(p.v_type.clone());
-                let new_id = id_def.new_id(typ.clone());
-                let var_typ = ast::VariableType::from(p.v_type.clone());
-                result.push(Statement::Variable(ast::Variable {
-                    align: p.align,
-                    v_type: var_typ,
-                    name: p.name,
-                    array_init: p.array_init.clone(),
-                }));
-                result.push(Statement::StoreVar(
-                    ast::Arg2St {
-                        src1: p.name,
-                        src2: new_id,
-                    },
-                    typ.clone(),
-                ));
-                p.name = new_id;
-            }
-            match &mut **out_params {
-                [p] => {
-                    result.push(Statement::Variable(ast::Variable {
-                        align: p.align,
-                        v_type: ast::VariableType::from(p.v_type.clone()),
-                        name: p.name,
-                        array_init: p.array_init.clone(),
-                    }));
-                    Some(p.name)
-                }
-                [] => None,
-                _ => todo!(),
-            }
-        }
-    };
+    }
     for s in func {
         match s {
             Statement::Call(call) => {
@@ -1783,13 +1826,14 @@ fn insert_mem_ssa_statements<'a, 'b>(
             }
             Statement::Instruction(inst) => match inst {
                 ast::Instruction::Ret(d) => {
-                    if let Some(out_param) = out_param {
-                        let typ = id_def.get_typed(out_param)?;
+                    // TODO: handle multiple output args
+                    if let &[out_param] = &fn_decl.output.as_slice() {
+                        let typ = id_def.get_typed(out_param.name)?;
                         let new_id = id_def.new_id(typ.clone());
                         result.push(Statement::LoadVar(
                             ast::Arg2 {
                                 dst: new_id,
-                                src: out_param,
+                                src: out_param.name,
                             },
                             typ.clone(),
                         ));
@@ -1818,11 +1862,31 @@ fn insert_mem_ssa_statements<'a, 'b>(
             | Statement::Conversion(_)
             | Statement::RetValue(_, _)
             | Statement::Constant(_)
-            | Statement::Undef(_, _) => {}
+            | Statement::Undef(_, _)
+            | Statement::PtrAdd { .. } => {}
             Statement::Composite(_) => todo!(),
         }
     }
-    Ok((f_args, result))
+    Ok(result)
+}
+
+fn type_to_variable_type(t: &ast::Type) -> Result<Option<ast::VariableType>, TranslateError> {
+    Ok(match t {
+        ast::Type::Scalar(typ) => Some(ast::VariableType::Reg(ast::VariableRegType::Scalar(*typ))),
+        ast::Type::Vector(typ, len) => Some(ast::VariableType::Reg(ast::VariableRegType::Vector(
+            (*typ)
+                .try_into()
+                .map_err(|_| TranslateError::MismatchedType)?,
+            *len,
+        ))),
+        ast::Type::Array(typ, len) => Some(ast::VariableType::Reg(ast::VariableRegType::Array(
+            (*typ)
+                .try_into()
+                .map_err(|_| TranslateError::MismatchedType)?,
+            len.clone(),
+        ))),
+        ast::Type::Pointer(_, _) => None,
+    })
 }
 
 trait VisitVariable: Sized {
@@ -1849,6 +1913,28 @@ trait VisitVariableExpanded {
     ) -> Result<ExpandedStatement, TranslateError>;
 }
 
+struct VisitArgumentDescriptor<'a, Ctor: FnOnce(spirv::Word) -> ExpandedStatement> {
+    desc: ArgumentDescriptor<spirv::Word>,
+    typ: &'a ast::Type,
+    stmt_ctor: Ctor,
+}
+
+impl<'a, Ctor: FnOnce(spirv::Word) -> ExpandedStatement> VisitVariableExpanded
+    for VisitArgumentDescriptor<'a, Ctor>
+{
+    fn visit_variable_extended<
+        F: FnMut(
+            ArgumentDescriptor<spirv::Word>,
+            Option<&ast::Type>,
+        ) -> Result<spirv::Word, TranslateError>,
+    >(
+        self,
+        f: &mut F,
+    ) -> Result<ExpandedStatement, TranslateError> {
+        f(self.desc, Some(self.typ)).map(self.stmt_ctor)
+    }
+}
+
 fn insert_mem_ssa_statement_default<'a, F: VisitVariable>(
     id_def: &mut MutableNumericIdResolver,
     result: &mut Vec<TypedStatement>,
@@ -1857,7 +1943,7 @@ fn insert_mem_ssa_statement_default<'a, F: VisitVariable>(
     let mut post_statements = Vec::new();
     let new_statement =
         stmt.visit_variable(&mut |desc: ArgumentDescriptor<spirv::Word>, instr_type| {
-            if instr_type.is_none() {
+            if instr_type.is_none() || desc.sema == ArgumentSemantics::RegisterPointer {
                 return Ok(desc.op);
             }
             let id_type = match (id_def.get_typed(desc.op)?, desc.sema) {
@@ -1925,6 +2011,56 @@ fn expand_arguments<'a, 'b>(
                 name,
                 array_init,
             })),
+            Statement::PtrAdd {
+                underlying_type,
+                state_space,
+                dst,
+                ptr_src,
+                constant_src,
+            } => {
+                let mut visitor = FlattenArguments::new(&mut result, id_def);
+                let sema = match state_space {
+                    ast::LdStateSpace::Const
+                    | ast::LdStateSpace::Global
+                    | ast::LdStateSpace::Shared
+                    | ast::LdStateSpace::Generic => ArgumentSemantics::PhysicalPointer,
+                    ast::LdStateSpace::Local | ast::LdStateSpace::Param => {
+                        ArgumentSemantics::RegisterPointer
+                    }
+                };
+                let ptr_type = ast::Type::Pointer(underlying_type.clone(), state_space);
+                let new_dst = visitor.id(
+                    ArgumentDescriptor {
+                        op: dst,
+                        is_dst: true,
+                        sema,
+                    },
+                    Some(&ptr_type),
+                )?;
+                let new_ptr_src = visitor.id(
+                    ArgumentDescriptor {
+                        op: ptr_src,
+                        is_dst: false,
+                        sema,
+                    },
+                    Some(&ptr_type),
+                )?;
+                let new_constant_src = visitor.id(
+                    ArgumentDescriptor {
+                        op: constant_src,
+                        is_dst: false,
+                        sema: ArgumentSemantics::Default,
+                    },
+                    Some(&ast::Type::Scalar(ast::ScalarType::S64)),
+                )?;
+                result.push(Statement::PtrAdd {
+                    underlying_type,
+                    state_space,
+                    dst: new_dst,
+                    ptr_src: new_ptr_src,
+                    constant_src: new_constant_src,
+                })
+            }
             Statement::Label(id) => result.push(Statement::Label(id)),
             Statement::Conditional(bra) => result.push(Statement::Conditional(bra)),
             Statement::LoadVar(arg, typ) => result.push(Statement::LoadVar(arg, typ)),
@@ -1990,83 +2126,94 @@ impl<'a, 'b> FlattenArguments<'a, 'b> {
         desc: ArgumentDescriptor<(spirv::Word, i32)>,
         typ: &ast::Type,
     ) -> Result<spirv::Word, TranslateError> {
-        let mut typ = typ.clone();
         let (reg, offset) = desc.op;
-        match desc.sema {
-            ArgumentSemantics::Default
-            | ArgumentSemantics::DefaultRelaxed
-            | ArgumentSemantics::PhysicalPointer => {
-                if desc.sema == ArgumentSemantics::PhysicalPointer {
-                    typ = self.id_def.get_typed(reg)?;
-                }
-                let (width, kind) = match typ {
-                    ast::Type::Scalar(scalar_t) => {
-                        let kind = match scalar_t.kind() {
-                            kind @ ScalarKind::Bit
-                            | kind @ ScalarKind::Unsigned
-                            | kind @ ScalarKind::Signed => kind,
-                            ScalarKind::Float => return Err(TranslateError::MismatchedType),
-                            ScalarKind::Float2 => return Err(TranslateError::MismatchedType),
-                            ScalarKind::Pred => return Err(TranslateError::MismatchedType),
-                        };
-                        (scalar_t.size_of(), kind)
-                    }
-                    _ => return Err(TranslateError::MismatchedType),
-                };
-                let arith_detail = if kind == ScalarKind::Signed {
-                    ast::ArithDetails::Signed(ast::ArithSInt {
-                        typ: ast::SIntType::from_size(width),
-                        saturate: false,
-                    })
-                } else {
-                    ast::ArithDetails::Unsigned(ast::UIntType::from_size(width))
-                };
-                let id_constant_stmt = self.id_def.new_id(typ.clone());
-                let result_id = self.id_def.new_id(typ);
-                // TODO: check for edge cases around min value/max value/wrapping
-                if offset < 0 && kind != ScalarKind::Signed {
+        let add_type;
+        match typ {
+            ast::Type::Pointer(underlying_type, state_space) => {
+                let reg_typ = self.id_def.get_typed(reg)?;
+                if let ast::Type::Pointer(_, _) = reg_typ {
+                    let id_constant_stmt = self.id_def.new_id(typ.clone());
                     self.func.push(Statement::Constant(ConstantDefinition {
                         dst: id_constant_stmt,
-                        typ: ast::ScalarType::from_parts(width, kind),
-                        value: ast::ImmediateValue::U64(-(offset as i64) as u64),
-                    }));
-                    self.func.push(Statement::Instruction(
-                        ast::Instruction::<ExpandedArgParams>::Sub(
-                            arith_detail,
-                            ast::Arg3 {
-                                dst: result_id,
-                                src1: reg,
-                                src2: id_constant_stmt,
-                            },
-                        ),
-                    ));
-                } else {
-                    self.func.push(Statement::Constant(ConstantDefinition {
-                        dst: id_constant_stmt,
-                        typ: ast::ScalarType::from_parts(width, kind),
+                        typ: ast::ScalarType::S64,
                         value: ast::ImmediateValue::S64(offset as i64),
                     }));
-                    self.func.push(Statement::Instruction(
-                        ast::Instruction::<ExpandedArgParams>::Add(
-                            arith_detail,
-                            ast::Arg3 {
-                                dst: result_id,
-                                src1: reg,
-                                src2: id_constant_stmt,
-                            },
-                        ),
-                    ));
+                    let dst = self.id_def.new_id(typ.clone());
+                    self.func.push(Statement::PtrAdd {
+                        underlying_type: underlying_type.clone(),
+                        state_space: *state_space,
+                        dst,
+                        ptr_src: reg,
+                        constant_src: id_constant_stmt,
+                    });
+                    return Ok(dst);
+                } else {
+                    add_type = self.id_def.get_typed(reg)?;
                 }
-                Ok(result_id)
             }
-            ArgumentSemantics::RegisterPointer => {
-                if offset == 0 {
-                    return Ok(reg);
-                }
-                todo!()
+            _ => {
+                add_type = typ.clone();
             }
-            ArgumentSemantics::Address => todo!(),
+        };
+        let (width, kind) = match add_type {
+            ast::Type::Scalar(scalar_t) => {
+                let kind = match scalar_t.kind() {
+                    kind @ ScalarKind::Bit
+                    | kind @ ScalarKind::Unsigned
+                    | kind @ ScalarKind::Signed => kind,
+                    ScalarKind::Float => return Err(TranslateError::MismatchedType),
+                    ScalarKind::Float2 => return Err(TranslateError::MismatchedType),
+                    ScalarKind::Pred => return Err(TranslateError::MismatchedType),
+                };
+                (scalar_t.size_of(), kind)
+            }
+            _ => return Err(TranslateError::MismatchedType),
+        };
+        let arith_detail = if kind == ScalarKind::Signed {
+            ast::ArithDetails::Signed(ast::ArithSInt {
+                typ: ast::SIntType::from_size(width),
+                saturate: false,
+            })
+        } else {
+            ast::ArithDetails::Unsigned(ast::UIntType::from_size(width))
+        };
+        let id_constant_stmt = self.id_def.new_id(add_type.clone());
+        let result_id = self.id_def.new_id(add_type);
+        // TODO: check for edge cases around min value/max value/wrapping
+        if offset < 0 && kind != ScalarKind::Signed {
+            self.func.push(Statement::Constant(ConstantDefinition {
+                dst: id_constant_stmt,
+                typ: ast::ScalarType::from_parts(width, kind),
+                value: ast::ImmediateValue::U64(-(offset as i64) as u64),
+            }));
+            self.func.push(Statement::Instruction(
+                ast::Instruction::<ExpandedArgParams>::Sub(
+                    arith_detail,
+                    ast::Arg3 {
+                        dst: result_id,
+                        src1: reg,
+                        src2: id_constant_stmt,
+                    },
+                ),
+            ));
+        } else {
+            self.func.push(Statement::Constant(ConstantDefinition {
+                dst: id_constant_stmt,
+                typ: ast::ScalarType::from_parts(width, kind),
+                value: ast::ImmediateValue::S64(offset as i64),
+            }));
+            self.func.push(Statement::Instruction(
+                ast::Instruction::<ExpandedArgParams>::Add(
+                    arith_detail,
+                    ast::Arg3 {
+                        dst: result_id,
+                        src1: reg,
+                        src2: id_constant_stmt,
+                    },
+                ),
+            ));
         }
+        Ok(result_id)
     }
 
     fn immediate(
@@ -2281,6 +2428,36 @@ fn insert_implicit_conversions(
                 should_bitcast_wrapper,
                 None,
             )?,
+            Statement::PtrAdd {
+                underlying_type,
+                state_space,
+                dst,
+                ptr_src,
+                constant_src,
+            } => {
+                let visit_desc = VisitArgumentDescriptor {
+                    desc: ArgumentDescriptor {
+                        op: ptr_src,
+                        is_dst: false,
+                        sema: ArgumentSemantics::PhysicalPointer,
+                    },
+                    typ: &ast::Type::Pointer(underlying_type.clone(), state_space),
+                    stmt_ctor: |new_ptr_src| Statement::PtrAdd {
+                        underlying_type,
+                        state_space,
+                        dst,
+                        ptr_src: new_ptr_src,
+                        constant_src,
+                    },
+                };
+                insert_implicit_conversions_impl(
+                    &mut result,
+                    id_def,
+                    visit_desc,
+                    bitcast_physical_pointer,
+                    Some(state_space),
+                )?;
+            }
             s @ Statement::Conditional(_)
             | s @ Statement::Label(_)
             | s @ Statement::Constant(_)
@@ -2327,7 +2504,7 @@ fn insert_implicit_conversions_impl(
                 conversion_fn = bitcast_physical_pointer;
             }
             ArgumentSemantics::RegisterPointer => {
-                conversion_fn = bitcast_logical_pointer;
+                conversion_fn = bitcast_register_pointer;
             }
             ArgumentSemantics::Address => {
                 conversion_fn = force_bitcast_ptr_to_bit;
@@ -2369,26 +2546,18 @@ fn insert_implicit_conversions_impl(
 fn get_function_type(
     builder: &mut dr::Builder,
     map: &mut TypeWordMap,
-    method_decl: &ast::MethodDecl<spirv::Word>,
+    spirv_input: &[ast::Variable<ast::Type, spirv::Word>],
+    spirv_output: &[ast::Variable<ast::Type, spirv::Word>],
 ) -> (spirv::Word, spirv::Word) {
-    match method_decl {
-        ast::MethodDecl::Func(out_params, _, in_params) => map.get_or_add_fn(
-            builder,
-            out_params
-                .iter()
-                .map(|p| SpirvType::from(ast::Type::from(p.v_type.clone()))),
-            in_params
-                .iter()
-                .map(|p| SpirvType::from(ast::Type::from(p.v_type.clone()))),
-        ),
-        ast::MethodDecl::Kernel { in_args, .. } => map.get_or_add_fn(
-            builder,
-            iter::empty(),
-            in_args
-                .iter()
-                .map(|p| SpirvType::from(ast::Type::from(p.v_type.clone()))),
-        ),
-    }
+    map.get_or_add_fn(
+        builder,
+        spirv_input
+            .iter()
+            .map(|var| SpirvType::from(var.v_type.clone())),
+        spirv_output
+            .iter()
+            .map(|var| SpirvType::from(var.v_type.clone())),
+    )
 }
 
 fn emit_function_body_ops(
@@ -2416,7 +2585,7 @@ fn emit_function_body_ops(
             Statement::Call(call) => {
                 let (result_type, result_id) = match &*call.ret_params {
                     [(id, typ)] => (
-                        map.get_or_add(builder, SpirvType::from(ast::Type::from(typ.clone()))),
+                        map.get_or_add(builder, SpirvType::from(typ.to_func_type())),
                         Some(*id),
                     ),
                     [] => (map.void(), None),
@@ -2545,42 +2714,13 @@ fn emit_function_body_ops(
                     }
                     let result_type =
                         map.get_or_add(builder, SpirvType::from(ast::Type::from(data.typ.clone())));
-                    match data.state_space {
-                        ast::LdStateSpace::Generic
-                        | ast::LdStateSpace::Global
-                        | ast::LdStateSpace::Shared => {
-                            builder.load(result_type, Some(arg.dst), arg.src, None, [])?;
-                        }
-                        ast::LdStateSpace::Param | ast::LdStateSpace::Local => {
-                            let result_type = map.get_or_add(
-                                builder,
-                                SpirvType::from(ast::Type::from(data.typ.clone())),
-                            );
-                            builder.copy_object(result_type, Some(arg.dst), arg.src)?;
-                        }
-                        _ => todo!(),
-                    }
+                    builder.load(result_type, Some(arg.dst), arg.src, None, [])?;
                 }
                 ast::Instruction::St(data, arg) => {
                     if data.qualifier != ast::LdStQualifier::Weak {
                         todo!()
                     }
-                    if data.state_space == ast::StStateSpace::Param
-                        || data.state_space == ast::StStateSpace::Local
-                    {
-                        let result_type = map.get_or_add(
-                            builder,
-                            SpirvType::from(ast::Type::from(data.typ.clone())),
-                        );
-                        builder.copy_object(result_type, Some(arg.src1), arg.src2)?;
-                    } else if data.state_space == ast::StStateSpace::Generic
-                        || data.state_space == ast::StStateSpace::Global
-                        || data.state_space == ast::StStateSpace::Shared
-                    {
-                        builder.store(arg.src1, arg.src2, None, &[])?;
-                    } else {
-                        todo!()
-                    }
+                    builder.store(arg.src1, arg.src2, None, &[])?;
                 }
                 // SPIR-V does not support ret as guaranteed-converged
                 ast::Instruction::Ret(_) => builder.ret()?,
@@ -2817,6 +2957,46 @@ fn emit_function_body_ops(
                     };
                     negate_func(builder, result_type, Some(arg.dst), arg.src)?;
                 }
+                ast::Instruction::Sin { arg, .. } => {
+                    let result_type = map.get_or_add_scalar(builder, ast::ScalarType::F32);
+                    builder.ext_inst(
+                        result_type,
+                        Some(arg.dst),
+                        opencl,
+                        spirv::CLOp::sin as u32,
+                        [arg.src],
+                    )?;
+                }
+                ast::Instruction::Cos { arg, .. } => {
+                    let result_type = map.get_or_add_scalar(builder, ast::ScalarType::F32);
+                    builder.ext_inst(
+                        result_type,
+                        Some(arg.dst),
+                        opencl,
+                        spirv::CLOp::cos as u32,
+                        [arg.src],
+                    )?;
+                }
+                ast::Instruction::Lg2 { arg, .. } => {
+                    let result_type = map.get_or_add_scalar(builder, ast::ScalarType::F32);
+                    builder.ext_inst(
+                        result_type,
+                        Some(arg.dst),
+                        opencl,
+                        spirv::CLOp::log2 as u32,
+                        [arg.src],
+                    )?;
+                }
+                ast::Instruction::Ex2 { arg, .. } => {
+                    let result_type = map.get_or_add_scalar(builder, ast::ScalarType::F32);
+                    builder.ext_inst(
+                        result_type,
+                        Some(arg.dst),
+                        opencl,
+                        spirv::CLOp::exp2 as u32,
+                        [arg.src],
+                    )?;
+                }
             },
             Statement::LoadVar(arg, typ) => {
                 let type_id = map.get_or_add(builder, SpirvType::from(typ.clone()));
@@ -2841,6 +3021,22 @@ fn emit_function_body_ops(
             Statement::Undef(t, id) => {
                 let result_type = map.get_or_add(builder, SpirvType::from(t.clone()));
                 builder.undef(result_type, Some(*id));
+            }
+            Statement::PtrAdd {
+                underlying_type,
+                state_space,
+                dst,
+                ptr_src,
+                constant_src,
+            } => {
+                let s64_type = map.get_or_add_scalar(builder, ast::ScalarType::S64);
+                let ptr_as_s64 = builder.bitcast(s64_type, None, *ptr_src)?;
+                let added_ptr = builder.i_add(s64_type, None, ptr_as_s64, *constant_src)?;
+                let result_type = map.get_or_add(
+                    builder,
+                    SpirvType::from(ast::Type::Pointer(underlying_type.clone(), *state_space)),
+                );
+                builder.bitcast(result_type, Some(*dst), added_ptr)?;
             }
         }
     }
@@ -3722,16 +3918,21 @@ fn expand_map_variables<'a, 'b>(
         ast::Statement::Variable(var) => {
             let ss = match var.var.v_type {
                 ast::VariableType::Reg(_) => StateSpace::Reg,
-                ast::VariableType::Local(_) => StateSpace::Local,
-                ast::VariableType::Param(_) => StateSpace::ParamReg,
                 ast::VariableType::Global(_) => StateSpace::Global,
                 ast::VariableType::Shared(_) => StateSpace::Shared,
+                ast::VariableType::Param(_) => StateSpace::ParamReg,
+                ast::VariableType::Local(_) => StateSpace::Local,
+            };
+            let mut var_type = ast::Type::from(var.var.v_type.clone());
+            var_type = match var.var.v_type {
+                ast::VariableType::Reg(_) | ast::VariableType::Shared(_) => var_type,
+                ast::VariableType::Global(_) => var_type.pointer_to(ast::LdStateSpace::Global)?,
+                ast::VariableType::Param(_) => var_type.pointer_to(ast::LdStateSpace::Param)?,
+                ast::VariableType::Local(_) => var_type.pointer_to(ast::LdStateSpace::Local)?,
             };
             match var.count {
                 Some(count) => {
-                    for new_id in
-                        id_defs.add_defs(var.var.name, count, ss, var.var.v_type.clone().into())
-                    {
+                    for new_id in id_defs.add_defs(var.var.name, count, ss, var_type) {
                         result.push(Statement::Variable(ast::Variable {
                             align: var.var.align,
                             v_type: var.var.v_type.clone(),
@@ -3741,8 +3942,7 @@ fn expand_map_variables<'a, 'b>(
                     }
                 }
                 None => {
-                    let new_id =
-                        id_defs.add_def(var.var.name, Some((ss, var.var.v_type.clone().into())));
+                    let new_id = id_defs.add_def(var.var.name, Some((ss, var_type)));
                     result.push(Statement::Variable(ast::Variable {
                         align: var.var.align,
                         v_type: var.var.v_type.clone(),
@@ -3858,11 +4058,14 @@ impl<'a> GlobalStringIdResolver<'a> {
     fn start_fn<'b>(
         &'b mut self,
         header: &'b ast::MethodDecl<'a, &'a str>,
-    ) -> (
-        FnStringIdResolver<'a, 'b>,
-        GlobalFnDeclResolver<'a, 'b>,
-        ast::MethodDecl<'a, spirv::Word>,
-    ) {
+    ) -> Result<
+        (
+            FnStringIdResolver<'a, 'b>,
+            GlobalFnDeclResolver<'a, 'b>,
+            ast::MethodDecl<'a, spirv::Word>,
+        ),
+        TranslateError,
+    > {
         // In case a function decl was inserted earlier we want to use its id
         let name_id = self.get_or_add_def(header.name());
         let mut fn_resolver = FnStringIdResolver {
@@ -3874,18 +4077,13 @@ impl<'a> GlobalStringIdResolver<'a> {
             type_check: HashMap::new(),
         };
         let new_fn_decl = match header {
-            ast::MethodDecl::Kernel {
+            ast::MethodDecl::Kernel { name, in_args } => ast::MethodDecl::Kernel {
                 name,
-                in_args,
-                uses_shared_mem,
-            } => ast::MethodDecl::Kernel {
-                name,
-                in_args: expand_kernel_params(&mut fn_resolver, in_args.iter()),
-                uses_shared_mem: *uses_shared_mem,
+                in_args: expand_kernel_params(&mut fn_resolver, in_args.iter())?,
             },
             ast::MethodDecl::Func(ret_params, _, params) => {
-                let ret_params_ids = expand_fn_params(&mut fn_resolver, ret_params.iter());
-                let params_ids = expand_fn_params(&mut fn_resolver, params.iter());
+                let ret_params_ids = expand_fn_params(&mut fn_resolver, ret_params.iter())?;
+                let params_ids = expand_fn_params(&mut fn_resolver, params.iter())?;
                 self.fns.insert(
                     name_id,
                     FnDecl {
@@ -3896,14 +4094,14 @@ impl<'a> GlobalStringIdResolver<'a> {
                 ast::MethodDecl::Func(ret_params_ids, name_id, params_ids)
             }
         };
-        (
+        Ok((
             fn_resolver,
             GlobalFnDeclResolver {
                 variables: &self.variables,
                 fns: &self.fns,
             },
             new_fn_decl,
-        )
+        ))
     }
 }
 
@@ -4080,6 +4278,13 @@ enum Statement<I, P: ast::ArgParams> {
     Constant(ConstantDefinition),
     RetValue(ast::RetData, spirv::Word),
     Undef(ast::Type, spirv::Word),
+    PtrAdd {
+        underlying_type: ast::PointerType,
+        state_space: ast::LdStateSpace,
+        dst: spirv::Word,
+        ptr_src: spirv::Word,
+        constant_src: spirv::Word,
+    },
 }
 
 impl ExpandedStatement {
@@ -4141,6 +4346,24 @@ impl ExpandedStatement {
                 let id = f(id);
                 Statement::Undef(typ, id)
             }
+            Statement::PtrAdd {
+                underlying_type,
+                state_space,
+                dst,
+                ptr_src,
+                constant_src,
+            } => {
+                let dst = f(dst);
+                let ptr_src = f(ptr_src);
+                let constant_src = f(constant_src);
+                Statement::PtrAdd {
+                    underlying_type,
+                    state_space,
+                    dst,
+                    ptr_src,
+                    constant_src,
+                }
+            }
         }
     }
 }
@@ -4175,10 +4398,10 @@ impl<From: ArgParamsEx<Id = spirv::Word>> ResolvedCall<From> {
                 let new_id = visitor.id(
                     ArgumentDescriptor {
                         op: id,
-                        is_dst: true,
-                        sema: ArgumentSemantics::Default,
+                        is_dst: !typ.is_param(),
+                        sema: typ.semantics(),
                     },
-                    Some(&typ.clone().into()),
+                    Some(&typ.to_func_type()),
                 )?;
                 Ok((new_id, typ))
             })
@@ -4199,9 +4422,9 @@ impl<From: ArgParamsEx<Id = spirv::Word>> ResolvedCall<From> {
                     ArgumentDescriptor {
                         op: id,
                         is_dst: false,
-                        sema: ArgumentSemantics::Default,
+                        sema: typ.semantics(),
                     },
-                    &typ.clone().into(),
+                    &typ.to_func_type(),
                 )?;
                 Ok((new_id, typ))
             })
@@ -4364,6 +4587,7 @@ enum Directive<'input> {
 
 struct Function<'input> {
     pub func_decl: ast::MethodDecl<'input, spirv::Word>,
+    pub spirv_decl: SpirvMethodDecl<'input>,
     pub globals: Vec<ast::Variable<ast::VariableType, spirv::Word>>,
     pub body: Option<Vec<ExpandedStatement>>,
     import_as: Option<String>,
@@ -4574,9 +4798,7 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
             // Call instruction is converted to a call statement early on
             ast::Instruction::Call(_) => return Err(TranslateError::Unreachable),
             ast::Instruction::Ld(d, a) => {
-                let is_param = d.state_space == ast::LdStateSpace::Param
-                    || d.state_space == ast::LdStateSpace::Local;
-                let new_args = a.map(visitor, &d, is_param)?;
+                let new_args = a.map(visitor, &d)?;
                 ast::Instruction::Ld(d, new_args)
             }
             ast::Instruction::Mov(d, a) => {
@@ -4629,9 +4851,7 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
                 ast::Instruction::Shr(t, a.map_shift(visitor, &ast::Type::Scalar(t.into()))?)
             }
             ast::Instruction::St(d, a) => {
-                let is_param = d.state_space == ast::StStateSpace::Param
-                    || d.state_space == ast::StStateSpace::Local;
-                let new_args = a.map(visitor, &d, is_param)?;
+                let new_args = a.map(visitor, &d)?;
                 ast::Instruction::St(d, new_args)
             }
             ast::Instruction::Bra(d, a) => ast::Instruction::Bra(d, a.map(visitor, None)?),
@@ -4692,6 +4912,34 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
             }
             ast::Instruction::Neg(d, a) => {
                 ast::Instruction::Neg(d, a.map(visitor, &ast::Type::Scalar(d.typ))?)
+            }
+            ast::Instruction::Sin { flush_to_zero, arg } => {
+                let typ = ast::Type::Scalar(ast::ScalarType::F32);
+                ast::Instruction::Sin {
+                    flush_to_zero,
+                    arg: arg.map(visitor, &typ)?,
+                }
+            }
+            ast::Instruction::Cos { flush_to_zero, arg } => {
+                let typ = ast::Type::Scalar(ast::ScalarType::F32);
+                ast::Instruction::Cos {
+                    flush_to_zero,
+                    arg: arg.map(visitor, &typ)?,
+                }
+            }
+            ast::Instruction::Lg2 { flush_to_zero, arg } => {
+                let typ = ast::Type::Scalar(ast::ScalarType::F32);
+                ast::Instruction::Lg2 {
+                    flush_to_zero,
+                    arg: arg.map(visitor, &typ)?,
+                }
+            }
+            ast::Instruction::Ex2 { flush_to_zero, arg } => {
+                let typ = ast::Type::Scalar(ast::ScalarType::F32);
+                ast::Instruction::Ex2 {
+                    flush_to_zero,
+                    arg: arg.map(visitor, &typ)?,
+                }
             }
         })
     }
@@ -4864,6 +5112,24 @@ impl ast::Type {
                 components: vec![*len as u32],
                 state_space: *state_space,
             },
+            ast::Type::Pointer(ast::PointerType::Array(scalar, components), state_space) => {
+                TypeParts {
+                    kind: TypeKind::PointerArray,
+                    scalar_kind: scalar.kind(),
+                    width: scalar.size_of(),
+                    components: components.clone(),
+                    state_space: *state_space,
+                }
+            }
+            ast::Type::Pointer(ast::PointerType::Pointer(scalar, inner_space), state_space) => {
+                TypeParts {
+                    kind: TypeKind::PointerPointer,
+                    scalar_kind: scalar.kind(),
+                    width: scalar.size_of(),
+                    components: vec![*inner_space as u32],
+                    state_space: *state_space,
+                }
+            }
         }
     }
 
@@ -4891,6 +5157,31 @@ impl ast::Type {
                 ),
                 t.state_space,
             ),
+            TypeKind::PointerArray => ast::Type::Pointer(
+                ast::PointerType::Array(
+                    ast::ScalarType::from_parts(t.width, t.scalar_kind),
+                    t.components,
+                ),
+                t.state_space,
+            ),
+            TypeKind::PointerPointer => ast::Type::Pointer(
+                ast::PointerType::Pointer(
+                    ast::ScalarType::from_parts(t.width, t.scalar_kind),
+                    unsafe { mem::transmute::<_, ast::LdStateSpace>(t.components[0] as u8) },
+                ),
+                t.state_space,
+            ),
+        }
+    }
+
+    fn size_of(&self) -> usize {
+        match self {
+            ast::Type::Scalar(typ) => typ.size_of() as usize,
+            ast::Type::Vector(typ, len) => (typ.size_of() as usize) * (*len as usize),
+            ast::Type::Array(typ, len) => len
+                .iter()
+                .fold(typ.size_of() as usize, |x, y| (x as usize) * (*y as usize)),
+            ast::Type::Pointer(_, _) => mem::size_of::<usize>(),
         }
     }
 }
@@ -4911,6 +5202,8 @@ enum TypeKind {
     Array,
     PointerScalar,
     PointerVector,
+    PointerArray,
+    PointerPointer,
 }
 
 impl ast::Instruction<ExpandedArgParams> {
@@ -5002,6 +5295,12 @@ impl ast::Instruction<ExpandedArgParams> {
             ast::Instruction::Neg(details, _) => details
                 .flush_to_zero
                 .map(|ftz| (ftz, details.typ.size_of())),
+            ast::Instruction::Sin { flush_to_zero, .. }
+            | ast::Instruction::Cos { flush_to_zero, .. }
+            | ast::Instruction::Lg2 { flush_to_zero, .. }
+            | ast::Instruction::Ex2 { flush_to_zero, .. } => {
+                Some((*flush_to_zero, mem::size_of::<f32>() as u8))
+            }
         }
     }
 }
@@ -5139,28 +5438,6 @@ impl<'a> ast::Instruction<ast::ParsedArgParams<'a>> {
     }
 }
 
-impl ast::VariableParamType {
-    fn width(&self) -> usize {
-        match self {
-            ast::VariableParamType::Scalar(t) => ast::ScalarType::from(*t).size_of() as usize,
-            ast::VariableParamType::Array(t, len) => {
-                (ast::ScalarType::from(*t).size_of() as usize)
-                    * (len.iter().fold(1, |x, y| x * (*y)) as usize)
-            }
-            ast::VariableParamType::Pointer(_, _) => mem::size_of::<usize>(),
-        }
-    }
-}
-
-impl ast::KernelArgumentType {
-    fn width(&self) -> usize {
-        match self {
-            ast::KernelArgumentType::Normal(t) => t.width(),
-            ast::KernelArgumentType::Shared => mem::size_of::<usize>(),
-        }
-    }
-}
-
 impl From<ast::KernelArgumentType> for ast::Type {
     fn from(this: ast::KernelArgumentType) -> Self {
         match this {
@@ -5168,18 +5445,6 @@ impl From<ast::KernelArgumentType> for ast::Type {
             ast::KernelArgumentType::Shared => ast::Type::Pointer(
                 ast::PointerType::Scalar(ast::ScalarType::B8),
                 ast::LdStateSpace::Shared,
-            ),
-        }
-    }
-}
-
-impl ast::KernelArgumentType {
-    fn to_param(self) -> ast::VariableParamType {
-        match self {
-            ast::KernelArgumentType::Normal(p) => p,
-            ast::KernelArgumentType::Shared => ast::VariableParamType::Pointer(
-                ast::SizedScalarType::B8,
-                ast::PointerStateSpace::Shared,
             ),
         }
     }
@@ -5303,7 +5568,6 @@ impl<T: ArgParamsEx> ast::Arg2Ld<T> {
         self,
         visitor: &mut V,
         details: &ast::LdDetails,
-        is_param: bool,
     ) -> Result<ast::Arg2Ld<U>, TranslateError> {
         let dst = visitor.id_or_vector(
             ArgumentDescriptor {
@@ -5313,24 +5577,22 @@ impl<T: ArgParamsEx> ast::Arg2Ld<T> {
             },
             &ast::Type::from(details.typ.clone()),
         )?;
+        let is_logical_ptr = details.state_space == ast::LdStateSpace::Param
+            || details.state_space == ast::LdStateSpace::Local;
         let src = visitor.operand(
             ArgumentDescriptor {
                 op: self.src,
                 is_dst: false,
-                sema: if is_param {
+                sema: if is_logical_ptr {
                     ArgumentSemantics::RegisterPointer
                 } else {
                     ArgumentSemantics::PhysicalPointer
                 },
             },
-            &(if is_param {
-                ast::Type::from(details.typ.clone())
-            } else {
-                ast::Type::Pointer(
-                    ast::PointerType::from(details.typ.clone()),
-                    details.state_space,
-                )
-            }),
+            &ast::Type::Pointer(
+                ast::PointerType::from(details.typ.clone()),
+                details.state_space,
+            ),
         )?;
         Ok(ast::Arg2Ld { dst, src })
     }
@@ -5350,26 +5612,23 @@ impl<T: ArgParamsEx> ast::Arg2St<T> {
         self,
         visitor: &mut V,
         details: &ast::StData,
-        is_param: bool,
     ) -> Result<ast::Arg2St<U>, TranslateError> {
+        let is_logical_ptr = details.state_space == ast::StStateSpace::Param
+            || details.state_space == ast::StStateSpace::Local;
         let src1 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src1,
-                is_dst: is_param,
-                sema: if is_param {
+                is_dst: false,
+                sema: if is_logical_ptr {
                     ArgumentSemantics::RegisterPointer
                 } else {
                     ArgumentSemantics::PhysicalPointer
                 },
             },
-            &(if is_param {
-                details.typ.clone().into()
-            } else {
-                ast::Type::Pointer(
-                    ast::PointerType::from(details.typ.clone()),
-                    details.state_space.to_ld_ss(),
-                )
-            }),
+            &ast::Type::Pointer(
+                ast::PointerType::from(details.typ.clone()),
+                details.state_space.to_ld_ss(),
+            ),
         )?;
         let src2 = visitor.operand_or_vector(
             ArgumentDescriptor {
@@ -6190,7 +6449,7 @@ impl ast::LdStateSpace {
             ast::LdStateSpace::Global => spirv::StorageClass::CrossWorkgroup,
             ast::LdStateSpace::Local => spirv::StorageClass::Function,
             ast::LdStateSpace::Shared => spirv::StorageClass::Workgroup,
-            ast::LdStateSpace::Param => unreachable!(),
+            ast::LdStateSpace::Param => spirv::StorageClass::Function,
         }
     }
 }
@@ -6264,16 +6523,22 @@ impl ast::AtomSemantics {
     }
 }
 
-fn bitcast_logical_pointer(
-    operand: &ast::Type,
-    instr: &ast::Type,
-    _: Option<ast::LdStateSpace>,
-) -> Result<Option<ConversionKind>, TranslateError> {
-    if instr != operand {
-        Ok(Some(ConversionKind::Default))
-    } else {
-        Ok(None)
+impl ast::FnArgumentType {
+    fn semantics(&self) -> ArgumentSemantics {
+        match self {
+            ast::FnArgumentType::Reg(_) => ArgumentSemantics::Default,
+            ast::FnArgumentType::Param(_) => ArgumentSemantics::RegisterPointer,
+            ast::FnArgumentType::Shared => ArgumentSemantics::PhysicalPointer,
+        }
     }
+}
+
+fn bitcast_register_pointer(
+    operand_type: &ast::Type,
+    instr_type: &ast::Type,
+    ss: Option<ast::LdStateSpace>,
+) -> Result<Option<ConversionKind>, TranslateError> {
+    bitcast_physical_pointer(operand_type, instr_type, ss)
 }
 
 fn bitcast_physical_pointer(
@@ -6315,13 +6580,15 @@ fn bitcast_physical_pointer(
         }
         ast::Type::Scalar(ast::ScalarType::B32)
         | ast::Type::Scalar(ast::ScalarType::U32)
-        | ast::Type::Scalar(ast::ScalarType::S32) => {
-            if let Some(ast::LdStateSpace::Shared) = ss {
+        | ast::Type::Scalar(ast::ScalarType::S32) => match ss {
+            Some(ast::LdStateSpace::Shared)
+            | Some(ast::LdStateSpace::Generic)
+            | Some(ast::LdStateSpace::Param)
+            | Some(ast::LdStateSpace::Local) => {
                 Ok(Some(ConversionKind::BitToPtr(ast::LdStateSpace::Shared)))
-            } else {
-                Err(TranslateError::MismatchedType)
             }
-        }
+            _ => Err(TranslateError::MismatchedType),
+        },
         ast::Type::Pointer(op_scalar_t, op_space) => {
             if let ast::Type::Pointer(instr_scalar_t, instr_space) = instr_type {
                 if op_space == instr_space {
@@ -6566,21 +6833,68 @@ impl<'a> ast::MethodDecl<'a, &'a str> {
     }
 }
 
-impl<'a> ast::MethodDecl<'a, spirv::Word> {
-    fn visit_args(&self, f: &mut impl FnMut(&ast::FnArgument<spirv::Word>)) {
-        match self {
-            ast::MethodDecl::Func(_, _, params) => params.iter().for_each(f),
-            ast::MethodDecl::Kernel { in_args, .. } => in_args.iter().for_each(|arg| {
-                f(&ast::FnArgument {
-                    align: arg.align,
-                    name: arg.name,
-                    v_type: match arg.v_type.clone() {
-                        ast::KernelArgumentType::Normal(typ) => ast::FnArgumentType::Param(typ),
-                        ast::KernelArgumentType::Shared => ast::FnArgumentType::Shared,
-                    },
-                    array_init: arg.array_init.clone(),
-                })
-            }),
+struct SpirvMethodDecl<'input> {
+    input: Vec<ast::Variable<ast::Type, spirv::Word>>,
+    output: Vec<ast::Variable<ast::Type, spirv::Word>>,
+    name: MethodName<'input>,
+    uses_shared_mem: bool,
+}
+
+impl<'input> SpirvMethodDecl<'input> {
+    fn new(ast_decl: &ast::MethodDecl<'input, spirv::Word>) -> Self {
+        let (input, output) = match ast_decl {
+            ast::MethodDecl::Kernel { in_args, .. } => {
+                let spirv_input = in_args
+                    .iter()
+                    .map(|var| {
+                        let v_type = match &var.v_type {
+                            ast::KernelArgumentType::Normal(t) => {
+                                ast::FnArgumentType::Param(t.clone())
+                            }
+                            ast::KernelArgumentType::Shared => ast::FnArgumentType::Shared,
+                        };
+                        ast::Variable {
+                            name: var.name,
+                            align: var.align,
+                            v_type: v_type.to_kernel_type(),
+                            array_init: var.array_init.clone(),
+                        }
+                    })
+                    .collect();
+                (spirv_input, Vec::new())
+            }
+            ast::MethodDecl::Func(out_args, _, in_args) => {
+                let (param_output, non_param_output): (Vec<_>, Vec<_>) =
+                    out_args.iter().partition(|var| var.v_type.is_param());
+                let spirv_output = non_param_output
+                    .into_iter()
+                    .cloned()
+                    .map(|var| ast::Variable {
+                        name: var.name,
+                        align: var.align,
+                        v_type: var.v_type.to_func_type(),
+                        array_init: var.array_init.clone(),
+                    })
+                    .collect();
+                let spirv_input = param_output
+                    .into_iter()
+                    .cloned()
+                    .chain(in_args.iter().cloned())
+                    .map(|var| ast::Variable {
+                        name: var.name,
+                        align: var.align,
+                        v_type: var.v_type.to_func_type(),
+                        array_init: var.array_init.clone(),
+                    })
+                    .collect();
+                (spirv_input, spirv_output)
+            }
+        };
+        SpirvMethodDecl {
+            input,
+            output,
+            name: MethodName::new(ast_decl),
+            uses_shared_mem: false,
         }
     }
 }

@@ -1,56 +1,48 @@
-; SPIR-V
-; Version: 1.3
-; Generator: rspirv
-; Bound: 32
-OpCapability GenericPointer
-OpCapability Linkage
-OpCapability Addresses
-OpCapability Kernel
-OpCapability Int8
-OpCapability Int16
-OpCapability Int64
-OpCapability Float16
-OpCapability Float64
-; OpCapability FunctionFloatControlINTEL
-; OpExtension "SPV_INTEL_float_controls2"
-%24 = OpExtInstImport "OpenCL.std"
-OpMemoryModel Physical64 OpenCL
-OpEntryPoint Kernel %1 "constant_negative"
-%25 = OpTypeVoid
-%26 = OpTypeInt 64 0
-%27 = OpTypeFunction %25 %26 %26
-%28 = OpTypePointer Function %26
-%29 = OpTypeInt 32 0
-%30 = OpTypePointer Function %29
-%31 = OpTypePointer Generic %29
-%19 = OpConstant  %29  4294967295
-%1 = OpFunction  %25  None %27
-%7 = OpFunctionParameter  %26 
-%8 = OpFunctionParameter  %26 
-%22 = OpLabel
-%2 = OpVariable  %28  Function
-%3 = OpVariable  %28  Function
-%4 = OpVariable  %28  Function
-%5 = OpVariable  %28  Function
-%6 = OpVariable  %30  Function
-OpStore %2 %7
-OpStore %3 %8
-%10 = OpLoad  %26  %2
-%9 = OpCopyObject  %26  %10
-OpStore %4 %9
-%12 = OpLoad  %26  %3
-%11 = OpCopyObject  %26  %12
-OpStore %5 %11
-%14 = OpLoad  %26  %4
-%20 = OpConvertUToPtr  %31  %14
-%13 = OpLoad  %29  %20
-OpStore %6 %13
-%16 = OpLoad  %29  %6
-%15 = OpIMul  %29  %16 %19
-OpStore %6 %15
-%17 = OpLoad  %26  %5
-%18 = OpLoad  %29  %6
-%21 = OpConvertUToPtr  %31  %17
-OpStore %21 %18
-OpReturn
-OpFunctionEnd
+               OpCapability GenericPointer
+               OpCapability Linkage
+               OpCapability Addresses
+               OpCapability Kernel
+               OpCapability Int8
+               OpCapability Int16
+               OpCapability Int64
+               OpCapability Float16
+               OpCapability Float64
+         %22 = OpExtInstImport "OpenCL.std"
+               OpMemoryModel Physical64 OpenCL
+               OpEntryPoint Kernel %1 "constant_negative"
+       %void = OpTypeVoid
+      %ulong = OpTypeInt 64 0
+         %25 = OpTypeFunction %void %ulong %ulong
+%_ptr_Function_ulong = OpTypePointer Function %ulong
+       %uint = OpTypeInt 32 0
+%_ptr_Function_uint = OpTypePointer Function %uint
+%_ptr_Generic_uint = OpTypePointer Generic %uint
+%uint_4294967295 = OpConstant %uint 4294967295
+          %1 = OpFunction %void None %25
+          %7 = OpFunctionParameter %ulong
+          %8 = OpFunctionParameter %ulong
+         %20 = OpLabel
+          %2 = OpVariable %_ptr_Function_ulong Function
+          %3 = OpVariable %_ptr_Function_ulong Function
+          %4 = OpVariable %_ptr_Function_ulong Function
+          %5 = OpVariable %_ptr_Function_ulong Function
+          %6 = OpVariable %_ptr_Function_uint Function
+               OpStore %2 %7
+               OpStore %3 %8
+          %9 = OpLoad %ulong %2
+               OpStore %4 %9
+         %10 = OpLoad %ulong %3
+               OpStore %5 %10
+         %12 = OpLoad %ulong %4
+         %18 = OpConvertUToPtr %_ptr_Generic_uint %12
+         %11 = OpLoad %uint %18
+               OpStore %6 %11
+         %14 = OpLoad %uint %6
+         %13 = OpIMul %uint %14 %uint_4294967295
+               OpStore %6 %13
+         %15 = OpLoad %ulong %5
+         %16 = OpLoad %uint %6
+         %19 = OpConvertUToPtr %_ptr_Generic_uint %15
+               OpStore %19 %16
+               OpReturn
+               OpFunctionEnd
