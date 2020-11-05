@@ -2813,7 +2813,7 @@ fn emit_function_body_ops(
                     }
                 }
                 ast::Instruction::Cvt(dets, arg) => {
-                    emit_cvt(builder, map, dets, arg)?;
+                    emit_cvt(builder, map, opencl, dets, arg)?;
                 }
                 ast::Instruction::Cvta(_, arg) => {
                     // This would be only meaningful if const/slm/global pointers
@@ -3410,21 +3410,63 @@ fn emit_max(
 fn emit_cvt(
     builder: &mut dr::Builder,
     map: &mut TypeWordMap,
+    opencl: spirv::Word,
     dets: &ast::CvtDetails,
     arg: &ast::Arg2<ExpandedArgParams>,
 ) -> Result<(), TranslateError> {
     match dets {
         ast::CvtDetails::FloatFromFloat(desc) => {
-            if desc.dst == desc.src {
-                return Ok(());
-            }
             if desc.saturate {
                 todo!()
             }
             let dest_t: ast::ScalarType = desc.dst.into();
             let result_type = map.get_or_add(builder, SpirvType::from(dest_t));
-            builder.f_convert(result_type, Some(arg.dst), arg.src)?;
-            emit_rounding_decoration(builder, arg.dst, desc.rounding);
+            if desc.dst == desc.src {
+                match desc.rounding {
+                    Some(ast::RoundingMode::NearestEven) => {
+                        builder.ext_inst(
+                            result_type,
+                            Some(arg.dst),
+                            opencl,
+                            spirv::CLOp::rint as u32,
+                            [arg.src],
+                        )?;
+                    }
+                    Some(ast::RoundingMode::Zero) => {
+                        builder.ext_inst(
+                            result_type,
+                            Some(arg.dst),
+                            opencl,
+                            spirv::CLOp::trunc as u32,
+                            [arg.src],
+                        )?;
+                    }
+                    Some(ast::RoundingMode::NegativeInf) => {
+                        builder.ext_inst(
+                            result_type,
+                            Some(arg.dst),
+                            opencl,
+                            spirv::CLOp::floor as u32,
+                            [arg.src],
+                        )?;
+                    }
+                    Some(ast::RoundingMode::PositiveInf) => {
+                        builder.ext_inst(
+                            result_type,
+                            Some(arg.dst),
+                            opencl,
+                            spirv::CLOp::ceil as u32,
+                            [arg.src],
+                        )?;
+                    }
+                    None => {
+                        builder.copy_object(result_type, Some(arg.dst), arg.src)?;
+                    }
+                }
+            } else {
+                builder.f_convert(result_type, Some(arg.dst), arg.src)?;
+                emit_rounding_decoration(builder, arg.dst, desc.rounding);
+            }
         }
         ast::CvtDetails::FloatFromInt(desc) => {
             if desc.saturate {
@@ -3451,9 +3493,6 @@ fn emit_cvt(
             emit_saturating_decoration(builder, arg.dst, desc.saturate);
         }
         ast::CvtDetails::IntFromInt(desc) => {
-            if desc.dst == desc.src {
-                return Ok(());
-            }
             let dest_t: ast::ScalarType = desc.dst.into();
             let src_t: ast::ScalarType = desc.src.into();
             // first do shortening/widening

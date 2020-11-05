@@ -108,6 +108,7 @@ test_ptx!(sin, [std::f32::consts::PI/2f32], [1f32]);
 test_ptx!(cos, [std::f32::consts::PI], [-1f32]);
 test_ptx!(lg2, [512f32], [9f32]);
 test_ptx!(ex2, [10f32], [1024f32]);
+test_ptx!(cvt_rni, [9.5f32, 10.5f32], [10f32, 10f32]);
 
 struct DisplayError<T: Debug> {
     err: T,

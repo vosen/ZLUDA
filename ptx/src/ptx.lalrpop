@@ -1068,7 +1068,7 @@ InstCvt: ast::Instruction<ast::ParsedArgParams<'input>> = {
             }
         ), a)
     },
-    "cvt" <r:RoundingModeFloat?> <f:".ftz"?> <s:".sat"?> ".f32" ".f32" <a:Arg2> => {
+    "cvt" <r:RoundingModeInt?> <f:".ftz"?> <s:".sat"?> ".f32" ".f32" <a:Arg2> => {
         ast::Instruction::Cvt(ast::CvtDetails::FloatFromFloat(
             ast::CvtDesc {
                 rounding: r,
@@ -1112,7 +1112,7 @@ InstCvt: ast::Instruction<ast::ParsedArgParams<'input>> = {
             }
         ), a)
     },
-    "cvt" <r:RoundingModeFloat?> <s:".sat"?> ".f64" ".f64" <a:Arg2> => {
+    "cvt" <r:RoundingModeInt?> <s:".sat"?> ".f64" ".f64" <a:Arg2> => {
         ast::Instruction::Cvt(ast::CvtDetails::FloatFromFloat(
             ast::CvtDesc {
                 rounding: r,
