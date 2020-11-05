@@ -1573,6 +1573,24 @@ fn convert_to_typed_statements(
                         arg: arg.cast(),
                     }))
                 }
+                ast::Instruction::Clz { typ, arg } => {
+                    result.push(Statement::Instruction(ast::Instruction::Clz {
+                        typ,
+                        arg: arg.cast(),
+                    }))
+                }
+                ast::Instruction::Brev { typ, arg } => {
+                    result.push(Statement::Instruction(ast::Instruction::Brev {
+                        typ,
+                        arg: arg.cast(),
+                    }))
+                }
+                ast::Instruction::Popc { typ, arg } => {
+                    result.push(Statement::Instruction(ast::Instruction::Popc {
+                        typ,
+                        arg: arg.cast(),
+                    }))
+                }
             },
             Statement::Label(i) => result.push(Statement::Label(i)),
             Statement::Variable(v) => result.push(Statement::Variable(v)),
@@ -2996,6 +3014,24 @@ fn emit_function_body_ops(
                         spirv::CLOp::exp2 as u32,
                         [arg.src],
                     )?;
+                }
+                ast::Instruction::Clz { typ, arg } => {
+                    let result_type = map.get_or_add_scalar(builder, (*typ).into());
+                    builder.ext_inst(
+                        result_type,
+                        Some(arg.dst),
+                        opencl,
+                        spirv::CLOp::clz as u32,
+                        [arg.src],
+                    )?;
+                }
+                ast::Instruction::Brev { typ, arg } => {
+                    let result_type = map.get_or_add_scalar(builder, (*typ).into());
+                    builder.bit_reverse(result_type, Some(arg.dst), arg.src)?;
+                }
+                ast::Instruction::Popc { typ, arg } => {
+                    let result_type = map.get_or_add_scalar(builder, (*typ).into());
+                    builder.bit_count(result_type, Some(arg.dst), arg.src)?;
                 }
             },
             Statement::LoadVar(arg, typ) => {
@@ -4881,7 +4917,7 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
                         ast::Type::Scalar(desc.src.into()),
                     ),
                 };
-                ast::Instruction::Cvt(d, a.map_cvt(visitor, &dst_t, &src_t)?)
+                ast::Instruction::Cvt(d, a.map_different_types(visitor, &dst_t, &src_t)?)
             }
             ast::Instruction::Shl(t, a) => {
                 ast::Instruction::Shl(t, a.map_shift(visitor, &t.to_type())?)
@@ -4978,6 +5014,29 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
                 ast::Instruction::Ex2 {
                     flush_to_zero,
                     arg: arg.map(visitor, &typ)?,
+                }
+            }
+            ast::Instruction::Clz { typ, arg } => {
+                let dst_type = ast::Type::Scalar(ast::ScalarType::B32);
+                let src_type = ast::Type::Scalar(typ.into());
+                ast::Instruction::Clz {
+                    typ,
+                    arg: arg.map_different_types(visitor, &dst_type, &src_type)?,
+                }
+            }
+            ast::Instruction::Brev { typ, arg } => {
+                let full_type = ast::Type::Scalar(typ.into());
+                ast::Instruction::Brev {
+                    typ,
+                    arg: arg.map(visitor, &full_type)?,
+                }
+            }
+            ast::Instruction::Popc { typ, arg } => {
+                let dst_type = ast::Type::Scalar(ast::ScalarType::B32);
+                let src_type = ast::Type::Scalar(typ.into());
+                ast::Instruction::Popc {
+                    typ,
+                    arg: arg.map_different_types(visitor, &dst_type, &src_type)?,
                 }
             }
         })
@@ -5289,6 +5348,9 @@ impl ast::Instruction<ExpandedArgParams> {
             ast::Instruction::Cvt(ast::CvtDetails::FloatFromInt(_), _) => None,
             ast::Instruction::Div(ast::DivDetails::Unsigned(_), _) => None,
             ast::Instruction::Div(ast::DivDetails::Signed(_), _) => None,
+            ast::Instruction::Clz { .. } => None,
+            ast::Instruction::Brev { .. } => None,
+            ast::Instruction::Popc { .. } => None,
             ast::Instruction::Sub(ast::ArithDetails::Float(float_control), _)
             | ast::Instruction::Add(ast::ArithDetails::Float(float_control), _)
             | ast::Instruction::Mul(ast::MulDetails::Float(float_control), _)
@@ -5567,7 +5629,7 @@ impl<T: ArgParamsEx> ast::Arg2<T> {
         })
     }
 
-    fn map_cvt<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
+    fn map_different_types<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
         self,
         visitor: &mut V,
         dst_t: &ast::Type,

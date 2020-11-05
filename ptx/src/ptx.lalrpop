@@ -143,7 +143,9 @@ match {
     "bar",
     "barrier",
     "bra",
+    "brev",
     "call",
+    "clz",
     "cos",
     "cvt",
     "cvta",
@@ -162,6 +164,7 @@ match {
     "neg",
     "not",
     "or",
+    "popc",
     "rcp",
     "ret",
     "rsqrt",
@@ -190,7 +193,9 @@ ExtendedID : &'input str = {
     "bar",
     "barrier",
     "bra",
+    "brev",
     "call",
+    "clz",
     "cos",
     "cvt",
     "cvta",
@@ -209,6 +214,7 @@ ExtendedID : &'input str = {
     "neg",
     "not",
     "or",
+    "popc",
     "rcp",
     "ret",
     "rsqrt",
@@ -699,6 +705,9 @@ Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
     InstCos,
     InstLg2,
     InstEx2,
+    InstClz,
+    InstBrev,
+    InstPopc,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
@@ -1395,7 +1404,7 @@ InstBar: ast::Instruction<ast::ParsedArgParams<'input>> = {
 // * Operation .dec requires .u32 type for instuction
 // Otherwise as documented
 InstAtom: ast::Instruction<ast::ParsedArgParams<'input>> = {
-    "atom" <sema:AtomSemantics?> <scope:MemScope?> <space:AtomSpace?> <op:AtomBitOp> <typ:AtomBitType> <a:Arg3Atom> => {
+    "atom" <sema:AtomSemantics?> <scope:MemScope?> <space:AtomSpace?> <op:AtomBitOp> <typ:BitType> <a:Arg3Atom> => {
         let details = ast::AtomDetails {
             semantics: sema.unwrap_or(ast::AtomSemantics::Relaxed),
             scope: scope.unwrap_or(ast::MemScope::Gpu),
@@ -1459,7 +1468,7 @@ InstAtom: ast::Instruction<ast::ParsedArgParams<'input>> = {
 }
 
 InstAtomCas: ast::Instruction<ast::ParsedArgParams<'input>> = {
-    "atom" <sema:AtomSemantics?> <scope:MemScope?> <space:AtomSpace?> ".cas" <typ:AtomBitType> <a:Arg4Atom> => {
+    "atom" <sema:AtomSemantics?> <scope:MemScope?> <space:AtomSpace?> ".cas" <typ:BitType> <a:Arg4Atom> => {
         let details = ast::AtomCasDetails {
             semantics: sema.unwrap_or(ast::AtomSemantics::Relaxed),
             scope: scope.unwrap_or(ast::MemScope::Gpu),
@@ -1501,7 +1510,7 @@ AtomSIntOp: ast::AtomSIntOp = {
     ".max" => ast::AtomSIntOp::Max,
 }
 
-AtomBitType: ast::BitType = {
+BitType: ast::BitType = {
     ".b32" => ast::BitType::B32,
     ".b64" => ast::BitType::B64,
 }
@@ -1638,6 +1647,21 @@ InstEx2: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "ex2" ".approx" <ftz:".ftz"?> ".f32" <arg:Arg2> => {
         ast::Instruction::Ex2{ flush_to_zero: ftz.is_some(), arg }
     },
+}
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-clz
+InstClz: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "clz" <typ:BitType> <arg:Arg2> => ast::Instruction::Clz{ <> }
+}
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-brev
+InstBrev: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "brev" <typ:BitType> <arg:Arg2> => ast::Instruction::Brev{ <> }
+}
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-popc
+InstPopc: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "popc" <typ:BitType> <arg:Arg2> => ast::Instruction::Popc{ <> }
 }
 
 NegTypeFtz: ast::ScalarType = {
@@ -1858,7 +1882,7 @@ Section = {
 };
 
 SectionDwarfLines: () = {
-    BitType Comma<U32Num>,
+    AnyBitType Comma<U32Num>,
     ".b32" SectionLabel,
     ".b64" SectionLabel,
     ".b32" SectionLabel "+" U32Num,
@@ -1870,7 +1894,7 @@ SectionLabel = {
     DotID
 };
 
-BitType = {
+AnyBitType = {
     ".b8", ".b16", ".b32", ".b64"
 };
 

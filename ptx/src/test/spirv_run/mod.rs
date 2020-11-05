@@ -104,11 +104,18 @@ test_ptx!(div_approx, [1f32, 2f32], [0.5f32]);
 test_ptx!(sqrt, [0.25f32], [0.5f32]);
 test_ptx!(rsqrt, [0.25f64], [2f64]);
 test_ptx!(neg, [181i32], [-181i32]);
-test_ptx!(sin, [std::f32::consts::PI/2f32], [1f32]);
+test_ptx!(sin, [std::f32::consts::PI / 2f32], [1f32]);
 test_ptx!(cos, [std::f32::consts::PI], [-1f32]);
 test_ptx!(lg2, [512f32], [9f32]);
 test_ptx!(ex2, [10f32], [1024f32]);
 test_ptx!(cvt_rni, [9.5f32, 10.5f32], [10f32, 10f32]);
+test_ptx!(clz, [0b00000101_00101101_00010011_10101011u32], [5u32]);
+test_ptx!(popc, [0b10111100_10010010_01001001_10001010u32], [14u32]);
+test_ptx!(
+    brev,
+    [0b11000111_01011100_10101110_11111011u32],
+    [0b11011111_01110101_00111010_11100011u32]
+);
 
 struct DisplayError<T: Debug> {
     err: T,

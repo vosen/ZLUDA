@@ -587,6 +587,9 @@ pub enum Instruction<P: ArgParams> {
     Cos { flush_to_zero: bool, arg: Arg2<P> },
     Lg2 { flush_to_zero: bool, arg: Arg2<P> },
     Ex2 { flush_to_zero: bool, arg: Arg2<P> },
+    Clz { typ: BitType, arg: Arg2<P> },
+    Brev { typ: BitType, arg: Arg2<P> },
+    Popc { typ: BitType, arg: Arg2<P> },
 }
 
 #[derive(Copy, Clone)]
