@@ -142,6 +142,7 @@ match {
     "atom",
     "bar",
     "barrier",
+    "bfe",
     "bra",
     "brev",
     "call",
@@ -166,6 +167,7 @@ match {
     "or",
     "popc",
     "rcp",
+    "rem",
     "ret",
     "rsqrt",
     "selp",
@@ -179,6 +181,7 @@ match {
     "sub",
     "texmode_independent",
     "texmode_unified",
+    "xor",
 } else {
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#identifiers
     r"[a-zA-Z][a-zA-Z0-9_$]*|[_$%][a-zA-Z0-9_$]+" => ID,
@@ -192,6 +195,7 @@ ExtendedID : &'input str = {
     "atom",
     "bar",
     "barrier",
+    "bfe",
     "bra",
     "brev",
     "call",
@@ -216,6 +220,7 @@ ExtendedID : &'input str = {
     "or",
     "popc",
     "rcp",
+    "rem",
     "ret",
     "rsqrt",
     "selp",
@@ -229,6 +234,7 @@ ExtendedID : &'input str = {
     "sub",
     "texmode_independent",
     "texmode_unified",
+    "xor",
     ID
 }
 
@@ -708,6 +714,9 @@ Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
     InstClz,
     InstBrev,
     InstPopc,
+    InstXor,
+    InstRem,
+    InstBfe,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
@@ -874,6 +883,13 @@ IntType : ast::IntType = {
     ".s64" => ast::IntType::S64,
 };
 
+IntType3264: ast::IntType = {
+    ".u32" => ast::IntType::U32,
+    ".u64" => ast::IntType::U64,
+    ".s32" => ast::IntType::S32,
+    ".s64" => ast::IntType::S64,
+}
+
 UIntType: ast::UIntType = {
     ".u16" => ast::UIntType::U16,
     ".u32" => ast::UIntType::U32,
@@ -979,14 +995,14 @@ SetpTypeNoF32: ast::ScalarType = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-not
 InstNot: ast::Instruction<ast::ParsedArgParams<'input>> = {
-    "not" <t:NotType> <a:Arg2> => ast::Instruction::Not(t, a)
+    "not" <t:BooleanType> <a:Arg2> => ast::Instruction::Not(t, a)
 };
 
-NotType: ast::NotType = {
-    ".pred" => ast::NotType::Pred,
-    ".b16" => ast::NotType::B16,
-    ".b32" => ast::NotType::B32,
-    ".b64" => ast::NotType::B64,
+BooleanType: ast::BooleanType = {
+    ".pred" => ast::BooleanType::Pred,
+    ".b16" => ast::BooleanType::B16,
+    ".b32" => ast::BooleanType::B32,
+    ".b64" => ast::BooleanType::B64,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-at
@@ -1294,19 +1310,12 @@ SignedIntType: ast::ScalarType = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-or
 InstOr: ast::Instruction<ast::ParsedArgParams<'input>> = {
-    "or" <d:OrAndType> <a:Arg3> => ast::Instruction::Or(d, a),
+    "or" <d:BooleanType> <a:Arg3> => ast::Instruction::Or(d, a),
 };
-
-OrAndType: ast::OrAndType = {
-    ".pred" => ast::OrAndType::Pred,
-    ".b16" => ast::OrAndType::B16,
-    ".b32" => ast::OrAndType::B32,
-    ".b64" => ast::OrAndType::B64,
-}
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-and
 InstAnd: ast::Instruction<ast::ParsedArgParams<'input>> = {
-    "and" <d:OrAndType> <a:Arg3> => ast::Instruction::And(d, a),
+    "and" <d:BooleanType> <a:Arg3> => ast::Instruction::And(d, a),
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-rcp
@@ -1447,7 +1456,7 @@ InstAtom: ast::Instruction<ast::ParsedArgParams<'input>> = {
         };
         ast::Instruction::Atom(details,a)
     },
-    "atom" <sema:AtomSemantics?> <scope:MemScope?> <space:AtomSpace?> <op: AtomUIntOp> <typ:AtomUIntType> <a:Arg3Atom> => {
+    "atom" <sema:AtomSemantics?> <scope:MemScope?> <space:AtomSpace?> <op: AtomUIntOp> <typ:UIntType3264> <a:Arg3Atom> => {
         let details = ast::AtomDetails {
             semantics: sema.unwrap_or(ast::AtomSemantics::Relaxed),
             scope: scope.unwrap_or(ast::MemScope::Gpu),
@@ -1456,7 +1465,7 @@ InstAtom: ast::Instruction<ast::ParsedArgParams<'input>> = {
         };
         ast::Instruction::Atom(details,a)
     },
-    "atom" <sema:AtomSemantics?> <scope:MemScope?> <space:AtomSpace?> <op: AtomSIntOp> <typ:AtomSIntType> <a:Arg3Atom> => {
+    "atom" <sema:AtomSemantics?> <scope:MemScope?> <space:AtomSpace?> <op: AtomSIntOp> <typ:SIntType3264> <a:Arg3Atom> => {
         let details = ast::AtomDetails {
             semantics: sema.unwrap_or(ast::AtomSemantics::Relaxed),
             scope: scope.unwrap_or(ast::MemScope::Gpu),
@@ -1515,12 +1524,12 @@ BitType: ast::BitType = {
     ".b64" => ast::BitType::B64,
 }
 
-AtomUIntType: ast::UIntType = {
+UIntType3264: ast::UIntType = {
     ".u32" => ast::UIntType::U32,
     ".u64" => ast::UIntType::U64,
 }
 
-AtomSIntType: ast::SIntType = {
+SIntType3264: ast::SIntType = {
     ".s32" => ast::SIntType::S32,
     ".s64" => ast::SIntType::S64,
 }
@@ -1663,6 +1672,22 @@ InstBrev: ast::Instruction<ast::ParsedArgParams<'input>> = {
 InstPopc: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "popc" <typ:BitType> <arg:Arg2> => ast::Instruction::Popc{ <> }
 }
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-xor
+InstXor: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "xor" <typ:BooleanType> <arg:Arg3> => ast::Instruction::Xor{ <> }
+}
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-bfe
+InstBfe: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "bfe" <typ:IntType3264> <arg:Arg4> => ast::Instruction::Bfe{ <> }
+}
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-rem
+InstRem: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "rem" <typ:IntType> <arg:Arg3> => ast::Instruction::Rem{ <> }
+}
+
 
 NegTypeFtz: ast::ScalarType = {
     ".f16" => ast::ScalarType::F16,

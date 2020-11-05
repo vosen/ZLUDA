@@ -558,7 +558,7 @@ pub enum Instruction<P: ArgParams> {
     Add(ArithDetails, Arg3<P>),
     Setp(SetpData, Arg4Setp<P>),
     SetpBool(SetpBoolData, Arg5<P>),
-    Not(NotType, Arg2<P>),
+    Not(BooleanType, Arg2<P>),
     Bra(BraData, Arg1<P>),
     Cvt(CvtDetails, Arg2<P>),
     Cvta(CvtaDetails, Arg2<P>),
@@ -569,12 +569,12 @@ pub enum Instruction<P: ArgParams> {
     Call(CallInst<P>),
     Abs(AbsDetails, Arg2<P>),
     Mad(MulDetails, Arg4<P>),
-    Or(OrAndType, Arg3<P>),
+    Or(BooleanType, Arg3<P>),
     Sub(ArithDetails, Arg3<P>),
     Min(MinMaxDetails, Arg3<P>),
     Max(MinMaxDetails, Arg3<P>),
     Rcp(RcpDetails, Arg2<P>),
-    And(OrAndType, Arg3<P>),
+    And(BooleanType, Arg3<P>),
     Selp(SelpType, Arg4<P>),
     Bar(BarDetails, Arg1Bar<P>),
     Atom(AtomDetails, Arg3<P>),
@@ -590,6 +590,9 @@ pub enum Instruction<P: ArgParams> {
     Clz { typ: BitType, arg: Arg2<P> },
     Brev { typ: BitType, arg: Arg2<P> },
     Popc { typ: BitType, arg: Arg2<P> },
+    Xor { typ: BooleanType, arg: Arg3<P> },
+    Bfe { typ: IntType, arg: Arg4<P> },
+    Rem { typ: IntType, arg: Arg3<P> },
 }
 
 #[derive(Copy, Clone)]
@@ -896,14 +899,6 @@ pub struct SetpBoolData {
     pub bool_op: SetpBoolPostOp,
 }
 
-#[derive(PartialEq, Eq, Copy, Clone)]
-pub enum NotType {
-    Pred,
-    B16,
-    B32,
-    B64,
-}
-
 pub struct BraData {
     pub uniform: bool,
 }
@@ -1058,7 +1053,7 @@ pub struct RetData {
     pub uniform: bool,
 }
 
-sub_enum!(OrAndType {
+sub_enum!(BooleanType {
     Pred,
     B16,
     B32,

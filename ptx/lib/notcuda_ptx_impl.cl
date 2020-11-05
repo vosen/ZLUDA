@@ -1,5 +1,5 @@
 // Every time this file changes it must te rebuilt:
-//  ocloc -file notcuda_ptx_impl.cl -64 -options "-cl-std=CL2.0" -out_dir . -device kbl -output_no_suffix -spv_only
+//  ocloc -file notcuda_ptx_impl.cl -64 -options "-cl-std=CL2.0 -Dcl_intel_bit_instructions" -out_dir . -device kbl -output_no_suffix -spv_only
 // Additionally you should strip names:
 //  spirv-opt --strip-debug notcuda_ptx_impl.spv -o notcuda_ptx_impl.spv
 
@@ -119,3 +119,23 @@ atomic_dec(atom_relaxed_sys_shared_dec, memory_order_relaxed, memory_order_relax
 atomic_dec(atom_acquire_sys_shared_dec, memory_order_acquire, memory_order_acquire, memory_scope_device, __local);
 atomic_dec(atom_release_sys_shared_dec, memory_order_release, memory_order_acquire, memory_scope_device, __local);
 atomic_dec(atom_acq_rel_sys_shared_dec, memory_order_acq_rel, memory_order_acquire, memory_scope_device, __local);
+
+uint FUNC(bfe_u32)(uint base, uint pos, uint len)
+{
+    return intel_ubfe(base, pos, len);
+}
+
+ulong FUNC(bfe_u64)(ulong base, uint pos, uint len)
+{
+    return intel_ubfe(base, pos, len);
+}
+
+int FUNC(bfe_s32)(int base, uint pos, uint len)
+{
+    return intel_sbfe(base, pos, len);
+}
+
+long FUNC(bfe_s64)(long base, uint pos, uint len)
+{
+    return intel_sbfe(base, pos, len);
+}
