@@ -11,6 +11,7 @@ use std::{
     },
 };
 
+const PROJECT_URL_SUFFIX: &'static str = " [github.com/vosen/notCUDA]";
 static mut DEVICES: Option<Vec<Mutex<Device>>> = None;
 
 #[repr(transparent)]
@@ -172,8 +173,18 @@ pub fn get_name(name: *mut c_char, len: i32, dev: Index) -> Result<(), CUresult>
     let name_len = (0..256)
         .position(|i| unsafe { *name_ptr.add(i) } == 0)
         .unwrap_or(256);
-    let dst_null_pos = cmp::min((len - 1) as usize, name_len);
+    let mut dst_null_pos = cmp::min((len - 1) as usize, name_len);
     unsafe { std::ptr::copy_nonoverlapping(name_ptr, name, dst_null_pos) };
+    if name_len + PROJECT_URL_SUFFIX.len() < (len as usize) {
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                PROJECT_URL_SUFFIX.as_ptr(),
+                name.add(name_len) as *mut _,
+                PROJECT_URL_SUFFIX.len(),
+            )
+        };
+        dst_null_pos += PROJECT_URL_SUFFIX.len();
+    }
     unsafe { *(name.add(dst_null_pos)) = 0 };
     Ok(())
 }

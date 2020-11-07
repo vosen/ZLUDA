@@ -2275,8 +2275,21 @@ pub extern "C" fn cuDevicePrimaryCtxRetain(pctx: *mut CUcontext, dev: CUdevice) 
 }
 
 #[cfg_attr(not(test), no_mangle)]
+pub extern "C" fn cuDevicePrimaryCtxRelease(dev: CUdevice) -> CUresult {
+    cuDevicePrimaryCtxRelease_v2(dev)
+}
+
+#[cfg_attr(not(test), no_mangle)]
 pub extern "C" fn cuDevicePrimaryCtxRelease_v2(dev: CUdevice) -> CUresult {
     r#impl::unimplemented()
+}
+
+#[cfg_attr(not(test), no_mangle)]
+pub extern "C" fn cuDevicePrimaryCtxSetFlags(
+    dev: CUdevice,
+    flags: ::std::os::raw::c_uint,
+) -> CUresult {
+    cuDevicePrimaryCtxSetFlags_v2(dev, flags)
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2295,6 +2308,12 @@ pub extern "C" fn cuDevicePrimaryCtxGetState(
 ) -> CUresult {
     r#impl::device::primary_ctx_get_state(dev.decuda(), flags, active).encuda()
 }
+
+#[cfg_attr(not(test), no_mangle)]
+pub extern "C" fn cuDevicePrimaryCtxReset(dev: CUdevice) -> CUresult {
+    cuDevicePrimaryCtxReset_v2(dev)
+}
+
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "C" fn cuDevicePrimaryCtxReset_v2(dev: CUdevice) -> CUresult {
