@@ -1,7 +1,7 @@
 use crate::ast;
 use half::f16;
 use rspirv::{binary::Disassemble, dr};
-use std::{borrow::Cow, convert::TryFrom, hash::Hash, iter, mem};
+use std::{borrow::Cow, convert::TryFrom, ffi::CString, hash::Hash, iter, mem};
 use std::{
     collections::{hash_map, HashMap, HashSet},
     convert::TryInto,
@@ -448,6 +448,7 @@ pub struct Module {
     pub spirv: dr::Module,
     pub kernel_info: HashMap<String, KernelInfo>,
     pub should_link_ptx_impl: Option<&'static [u8]>,
+    pub build_options: CString,
 }
 
 pub struct KernelInfo {
@@ -484,6 +485,7 @@ pub fn to_spirv_module<'a>(ast: ast::Module<'a>) -> Result<Module, TranslateErro
     let mut map = TypeWordMap::new(&mut builder);
     emit_builtins(&mut builder, &mut map, &id_defs);
     let mut kernel_info = HashMap::new();
+    let build_options = emit_denorm_build_string(&call_map, &denorm_information);
     emit_directives(
         &mut builder,
         &mut map,
@@ -503,7 +505,43 @@ pub fn to_spirv_module<'a>(ast: ast::Module<'a>) -> Result<Module, TranslateErro
         } else {
             None
         },
+        build_options,
     })
+}
+
+// TODO: remove this once we have perf-function support for denorms
+fn emit_denorm_build_string(
+    call_map: &HashMap<&str, HashSet<u32>>,
+    denorm_information: &HashMap<MethodName, HashMap<u8, (spirv::FPDenormMode, isize)>>,
+) -> CString {
+    let denorm_counts = denorm_information
+        .iter()
+        .map(|(method, meth_denorm)| {
+            let f16_count = meth_denorm
+                .get(&(mem::size_of::<f16>() as u8))
+                .unwrap_or(&(spirv::FPDenormMode::FlushToZero, 0))
+                .1;
+            let f32_count = meth_denorm
+                .get(&(mem::size_of::<f32>() as u8))
+                .unwrap_or(&(spirv::FPDenormMode::FlushToZero, 0))
+                .1;
+            (method, (f16_count + f32_count))
+        })
+        .collect::<HashMap<_, _>>();
+    let mut flush_over_preserve = 0;
+    for (kernel, children) in call_map {
+        flush_over_preserve += *denorm_counts.get(&MethodName::Kernel(kernel)).unwrap_or(&0);
+        for child_fn in children {
+            flush_over_preserve += *denorm_counts
+                .get(&MethodName::Func(*child_fn))
+                .unwrap_or(&0);
+        }
+    }
+    if flush_over_preserve > 0 {
+        CString::new("-cl-denorms-are-zero").unwrap()
+    } else {
+        CString::default()
+    }
 }
 
 fn emit_directives<'input>(
@@ -511,7 +549,7 @@ fn emit_directives<'input>(
     map: &mut TypeWordMap,
     id_defs: &GlobalStringIdResolver<'input>,
     opencl_id: spirv::Word,
-    denorm_information: &HashMap<MethodName<'input>, HashMap<u8, spirv::FPDenormMode>>,
+    denorm_information: &HashMap<MethodName<'input>, HashMap<u8, (spirv::FPDenormMode, isize)>>,
     call_map: &HashMap<&'input str, HashSet<spirv::Word>>,
     directives: Vec<Directive>,
     kernel_info: &mut HashMap<String, KernelInfo>,
@@ -579,6 +617,9 @@ fn get_call_map<'input>(
                 ..
             }) => {
                 let call_key = MethodName::new(&func_decl);
+                if let hash_map::Entry::Vacant(entry) = directly_called_by.entry(call_key) {
+                    entry.insert(Vec::new());
+                }
                 for statement in statements {
                     match statement {
                         Statement::Call(call) => {
@@ -895,7 +936,7 @@ fn denorm_count_map_update_impl<T: Eq + Hash>(
 // and emit suitable execution mode
 fn compute_denorm_information<'input>(
     module: &[Directive<'input>],
-) -> HashMap<MethodName<'input>, HashMap<u8, spirv::FPDenormMode>> {
+) -> HashMap<MethodName<'input>, HashMap<u8, (spirv::FPDenormMode, isize)>> {
     let mut denorm_methods = HashMap::new();
     for directive in module {
         match directive {
@@ -937,13 +978,13 @@ fn compute_denorm_information<'input>(
         .map(|(name, v)| {
             let width_to_denorm = v
                 .into_iter()
-                .map(|(k, ftz_over_preserve)| {
-                    let mode = if ftz_over_preserve > 0 {
+                .map(|(k, flush_over_preserve)| {
+                    let mode = if flush_over_preserve > 0 {
                         spirv::FPDenormMode::FlushToZero
                     } else {
                         spirv::FPDenormMode::Preserve
                     };
-                    (k, mode)
+                    (k, (mode, flush_over_preserve))
                 })
                 .collect();
             (name, width_to_denorm)
@@ -999,7 +1040,7 @@ fn emit_function_header<'a>(
     defined_globals: &GlobalStringIdResolver<'a>,
     synthetic_globals: &[ast::Variable<ast::VariableType, spirv::Word>],
     func_decl: &SpirvMethodDecl<'a>,
-    _denorm_information: &HashMap<MethodName<'a>, HashMap<u8, spirv::FPDenormMode>>,
+    _denorm_information: &HashMap<MethodName<'a>, HashMap<u8, (spirv::FPDenormMode, isize)>>,
     call_map: &HashMap<&'a str, HashSet<spirv::Word>>,
     direcitves: &[Directive],
     kernel_info: &mut HashMap<String, KernelInfo>,

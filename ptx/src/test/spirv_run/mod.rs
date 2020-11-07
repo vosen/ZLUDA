@@ -83,8 +83,11 @@ test_ptx!(extern_shared_call, [121u64], [123u64]);
 test_ptx!(rcp, [2f32], [0.5f32]);
 // 0b1_00000000_10000000000000000000000u32 is a large denormal
 // 0x3f000000 is 0.5
-// TODO: mul_ftz fails because IGC does not yet handle SPV_INTEL_float_controls2
-// test_ptx!(mul_ftz, [0b1_00000000_10000000000000000000000u32, 0x3f000000u32], [0u32]);
+test_ptx!(
+    mul_ftz,
+    [0b1_00000000_10000000000000000000000u32, 0x3f000000u32],
+    [0b1_00000000_00000000000000000000000u32]
+);
 test_ptx!(
     mul_non_ftz,
     [0b1_00000000_10000000000000000000000u32, 0x3f000000u32],
@@ -196,7 +199,12 @@ fn run_spirv<T: From<u8> + ze::SafeRepr + Copy + Debug>(
         let (module, maybe_log) = match module.should_link_ptx_impl {
             Some(ptx_impl) => ze::Module::build_link_spirv(&mut ctx, &dev, &[ptx_impl, byte_il]),
             None => {
-                let (module, log) = ze::Module::build_spirv(&mut ctx, &dev, byte_il, None);
+                let (module, log) = ze::Module::build_spirv(
+                    &mut ctx,
+                    &dev,
+                    byte_il,
+                    Some(module.build_options.as_c_str()),
+                );
                 (module, Some(log))
             }
         };
