@@ -2210,12 +2210,12 @@ pub extern "C" fn cuDriverGetVersion(driverVersion: *mut ::std::os::raw::c_int) 
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "C" fn cuDeviceGet(device: *mut CUdevice, ordinal: ::std::os::raw::c_int) -> CUresult {
-    r#impl::device::get(device.decuda(), ordinal)
+    r#impl::device::get(device.decuda(), ordinal).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "C" fn cuDeviceGetCount(count: *mut ::std::os::raw::c_int) -> CUresult {
-    r#impl::device::get_count(count)
+    r#impl::device::get_count(count).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2314,7 +2314,6 @@ pub extern "C" fn cuDevicePrimaryCtxReset(dev: CUdevice) -> CUresult {
     cuDevicePrimaryCtxReset_v2(dev)
 }
 
-
 #[cfg_attr(not(test), no_mangle)]
 pub extern "C" fn cuDevicePrimaryCtxReset_v2(dev: CUdevice) -> CUresult {
     r#impl::unimplemented()
@@ -2331,7 +2330,7 @@ pub extern "C" fn cuCtxCreate_v2(
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "C" fn cuCtxDestroy_v2(ctx: CUcontext) -> CUresult {
-    r#impl::context::destroy_v2(ctx.decuda())
+    r#impl::context::destroy_v2(ctx.decuda()).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2356,7 +2355,7 @@ pub extern "C" fn cuCtxGetCurrent(pctx: *mut CUcontext) -> CUresult {
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "C" fn cuCtxGetDevice(device: *mut CUdevice) -> CUresult {
-    r#impl::context::get_device(device.decuda())
+    r#impl::context::get_device(device.decuda()).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2404,7 +2403,7 @@ pub extern "C" fn cuCtxGetApiVersion(
     ctx: CUcontext,
     version: *mut ::std::os::raw::c_uint,
 ) -> CUresult {
-    r#impl::context::get_api_version(ctx.decuda(), version)
+    r#impl::context::get_api_version(ctx.decuda(), version).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2422,12 +2421,12 @@ pub extern "C" fn cuCtxResetPersistingL2Cache() -> CUresult {
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "C" fn cuCtxAttach(pctx: *mut CUcontext, flags: ::std::os::raw::c_uint) -> CUresult {
-    r#impl::unimplemented()
+    r#impl::context::attach(pctx.decuda(), flags).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "C" fn cuCtxDetach(ctx: CUcontext) -> CUresult {
-    r#impl::unimplemented()
+    r#impl::context::detach(ctx.decuda()).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2443,7 +2442,7 @@ pub extern "C" fn cuModuleLoadData(
     module: *mut CUmodule,
     image: *const ::std::os::raw::c_void,
 ) -> CUresult {
-    r#impl::unimplemented()
+    r#impl::module::load_data(module.decuda(), image).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2564,7 +2563,7 @@ pub extern "C" fn cuMemGetInfo_v2(free: *mut usize, total: *mut usize) -> CUresu
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "C" fn cuMemAlloc_v2(dptr: *mut CUdeviceptr, bytesize: usize) -> CUresult {
-    r#impl::memory::alloc_v2(dptr.decuda(), bytesize)
+    r#impl::memory::alloc_v2(dptr.decuda(), bytesize).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -3281,7 +3280,7 @@ pub extern "C" fn cuStreamCreate(
     phStream: *mut CUstream,
     Flags: ::std::os::raw::c_uint,
 ) -> CUresult {
-    r#impl::unimplemented()
+    r#impl::stream::create(phStream.decuda(), Flags).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -3311,7 +3310,7 @@ pub extern "C" fn cuStreamGetFlags(
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "C" fn cuStreamGetCtx(hStream: CUstream, pctx: *mut CUcontext) -> CUresult {
-    r#impl::unimplemented()
+    r#impl::stream::get_ctx(hStream.decuda(), pctx.decuda()).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -3390,7 +3389,7 @@ pub extern "C" fn cuStreamSynchronize(hStream: CUstream) -> CUresult {
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "C" fn cuStreamDestroy_v2(hStream: CUstream) -> CUresult {
-    r#impl::unimplemented()
+    r#impl::stream::destroy_v2(hStream.decuda()).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]

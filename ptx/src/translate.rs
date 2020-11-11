@@ -1,7 +1,7 @@
 use crate::ast;
 use half::f16;
 use rspirv::{binary::Disassemble, dr};
-use std::{borrow::Cow, convert::TryFrom, ffi::CString, hash::Hash, iter, mem};
+use std::{borrow::Cow, ffi::CString, hash::Hash, iter, mem};
 use std::{
     collections::{hash_map, HashMap, HashSet},
     convert::TryInto,
@@ -449,6 +449,11 @@ pub struct Module {
     pub kernel_info: HashMap<String, KernelInfo>,
     pub should_link_ptx_impl: Option<&'static [u8]>,
     pub build_options: CString,
+}
+impl Module {
+    pub fn assemble(&self) -> Vec<u32> {
+        self.spirv.assemble()
+    }
 }
 
 pub struct KernelInfo {
@@ -1046,8 +1051,12 @@ fn emit_function_header<'a>(
     kernel_info: &mut HashMap<String, KernelInfo>,
 ) -> Result<(), TranslateError> {
     if let MethodName::Kernel(name) = func_decl.name {
-        let args_lens = func_decl
-            .input
+        let input_args = if !func_decl.uses_shared_mem {
+            func_decl.input.as_slice()
+        } else {
+            &func_decl.input[0..func_decl.input.len() - 1]
+        };
+        let args_lens = input_args
             .iter()
             .map(|param| param.v_type.size_of())
             .collect();
@@ -1133,21 +1142,6 @@ fn emit_function_header<'a>(
         builder.function.as_mut().unwrap().parameters.push(inst);
     }
     Ok(())
-}
-
-pub fn to_spirv<'a>(
-    ast: ast::Module<'a>,
-) -> Result<(Option<&'static [u8]>, Vec<u32>, HashMap<String, Vec<usize>>), TranslateError> {
-    let module = to_spirv_module(ast)?;
-    Ok((
-        module.should_link_ptx_impl,
-        module.spirv.assemble(),
-        module
-            .kernel_info
-            .into_iter()
-            .map(|(k, v)| (k, v.arguments_sizes))
-            .collect(),
-    ))
 }
 
 fn emit_capabilities(builder: &mut dr::Builder) {

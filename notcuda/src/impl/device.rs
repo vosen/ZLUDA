@@ -1,24 +1,21 @@
-use super::{context, transmute_lifetime, CUresult, Error};
+use super::{context, CUresult, GlobalState};
 use crate::cuda;
 use cuda::{CUdevice_attribute, CUuuid_st};
 use std::{
     cmp, mem,
     os::raw::{c_char, c_int},
     ptr,
-    sync::{
-        atomic::{AtomicU32, Ordering},
-        Mutex, MutexGuard,
-    },
+    sync::atomic::{AtomicU32, Ordering},
 };
 
 const PROJECT_URL_SUFFIX: &'static str = " [github.com/vosen/notCUDA]";
-static mut DEVICES: Option<Vec<Mutex<Device>>> = None;
 
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub struct Index(pub c_int);
 
 pub struct Device {
+    pub index: Index,
     pub base: l0::Device,
     pub default_queue: l0::CommandQueue,
     pub l0_context: l0::Context,
@@ -33,17 +30,19 @@ unsafe impl Send for Device {}
 
 impl Device {
     // Unsafe because it does not fully initalize primary_context
-    unsafe fn new(drv: &l0::Driver, d: l0::Device, idx: usize) -> l0::Result<Self> {
+    unsafe fn new(drv: &l0::Driver, l0_dev: l0::Device, idx: usize) -> Result<Self, CUresult> {
         let mut ctx = l0::Context::new(drv)?;
-        let queue = l0::CommandQueue::new(&mut ctx, &d)?;
+        let queue = l0::CommandQueue::new(&mut ctx, &l0_dev)?;
         let primary_context = context::Context::new(context::ContextData::new(
+            &mut ctx,
+            &l0_dev,
             0,
             true,
-            Index(idx as c_int),
-            ptr::null(),
-        ));
+            ptr::null_mut(),
+        )?);
         Ok(Self {
-            base: d,
+            index: Index(idx as c_int),
+            base: l0_dev,
             default_queue: queue,
             l0_context: ctx,
             primary_context: primary_context,
@@ -93,83 +92,53 @@ impl Device {
             Err(e) => Err(e),
         }
     }
+
+    pub fn late_init(&mut self) {
+        self.primary_context.as_option_mut().unwrap().device = self as *mut _;
+    }
 }
 
-pub fn init(driver: &l0::Driver) -> l0::Result<()> {
+pub fn init(driver: &l0::Driver) -> Result<Vec<Device>, CUresult> {
     let ze_devices = driver.devices()?;
     let mut devices = ze_devices
         .into_iter()
         .enumerate()
-        .map(|(idx, d)| unsafe { Device::new(driver, d, idx) }.map(Mutex::new))
+        .map(|(idx, d)| unsafe { Device::new(driver, d, idx) })
         .collect::<Result<Vec<_>, _>>()?;
-    for d in devices.iter_mut() {
-        d.get_mut()
-            .unwrap()
-            .primary_context
-            .as_mut()
-            .unwrap()
-            .device = d;
+    for dev in devices.iter_mut() {
+        dev.late_init();
+        dev.primary_context.late_init();
     }
-    unsafe { DEVICES = Some(devices) };
+    Ok(devices)
+}
+
+pub fn get_count(count: *mut c_int) -> Result<(), CUresult> {
+    let len = GlobalState::lock(|state| state.devices.len())?;
+    unsafe { *count = len as c_int };
     Ok(())
 }
 
-fn devices() -> Result<&'static Vec<Mutex<Device>>, CUresult> {
-    match unsafe { &DEVICES } {
-        Some(devs) => Ok(devs),
-        None => Err(CUresult::CUDA_ERROR_NOT_INITIALIZED),
-    }
-}
-
-pub fn get_device_ref(Index(dev_idx): Index) -> Result<&'static Mutex<Device>, CUresult> {
-    let devs = devices()?;
-    if dev_idx < 0 || dev_idx >= devs.len() as c_int {
-        return Err(CUresult::CUDA_ERROR_INVALID_DEVICE);
-    }
-    Ok(&devs[dev_idx as usize])
-}
-
-pub fn get_device(dev_idx: Index) -> Result<MutexGuard<'static, Device>, CUresult> {
-    let dev = get_device_ref(dev_idx)?;
-    dev.lock().map_err(|_| CUresult::CUDA_ERROR_ILLEGAL_STATE)
-}
-
-pub fn get_count(count: *mut c_int) -> CUresult {
-    let len = devices().map(|d| d.len());
-    match len {
-        Ok(len) => {
-            unsafe { *count = len as c_int };
-            CUresult::CUDA_SUCCESS
-        }
-        Err(e) => e,
-    }
-}
-
-pub fn get(device: *mut Index, ordinal: c_int) -> CUresult {
+pub fn get(device: *mut Index, ordinal: c_int) -> Result<(), CUresult> {
     if device == ptr::null_mut() || ordinal < 0 {
-        return CUresult::CUDA_ERROR_INVALID_VALUE;
+        return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
     }
-    let len = devices().map(|d| d.len());
-    match len {
-        Ok(len) if ordinal < (len as i32) => {
-            unsafe { *device = Index(ordinal) };
-            CUresult::CUDA_SUCCESS
-        }
-        Ok(_) => CUresult::CUDA_ERROR_INVALID_VALUE,
-        Err(e) => e,
+    let len = GlobalState::lock(|state| state.devices.len())?;
+    if ordinal < (len as i32) {
+        unsafe { *device = Index(ordinal) };
+        Ok(())
+    } else {
+        Err(CUresult::CUDA_ERROR_INVALID_VALUE)
     }
 }
 
-pub fn get_name(name: *mut c_char, len: i32, dev: Index) -> Result<(), CUresult> {
+pub fn get_name(name: *mut c_char, len: i32, dev_idx: Index) -> Result<(), CUresult> {
     if name == ptr::null_mut() || len < 0 {
         return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
     }
-    // This is safe because devices are 'static
-    let name_ptr = {
-        let mut dev = get_device(dev)?;
-        let props = dev.get_properties().map_err(Into::<CUresult>::into)?;
-        props.name.as_ptr()
-    };
+    let name_ptr = GlobalState::lock_device(dev_idx, |dev| {
+        let props = dev.get_properties()?;
+        Ok::<_, l0::sys::ze_result_t>(props.name.as_ptr())
+    })??;
     let name_len = (0..256)
         .position(|i| unsafe { *name_ptr.add(i) } == 0)
         .unwrap_or(256);
@@ -189,20 +158,14 @@ pub fn get_name(name: *mut c_char, len: i32, dev: Index) -> Result<(), CUresult>
     Ok(())
 }
 
-pub fn total_mem_v2(bytes: *mut usize, dev: Index) -> Result<(), CUresult> {
+pub fn total_mem_v2(bytes: *mut usize, dev_idx: Index) -> Result<(), CUresult> {
     if bytes == ptr::null_mut() {
         return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
     }
-    // This is safe because devices are 'static
-    let mem_props = {
-        let mut dev = get_device(dev)?;
-        unsafe {
-            transmute_lifetime(
-                dev.get_memory_properties()
-                    .map_err(Into::<CUresult>::into)?,
-            )
-        }
-    };
+    let mem_props = GlobalState::lock_device(dev_idx, |dev| {
+        let mem_props = dev.get_memory_properties()?;
+        Ok::<_, l0::sys::ze_result_t>(mem_props)
+    })??;
     let max_mem = mem_props
         .iter()
         .map(|p| p.totalSize)
@@ -228,56 +191,101 @@ impl CUdevice_attribute {
     }
 }
 
-pub fn get_attribute(pi: *mut i32, attrib: CUdevice_attribute, dev: Index) -> Result<(), Error> {
+pub fn get_attribute(
+    pi: *mut i32,
+    attrib: CUdevice_attribute,
+    dev_idx: Index,
+) -> Result<(), CUresult> {
     if pi == ptr::null_mut() {
-        return Err(Error::Cuda(CUresult::CUDA_ERROR_INVALID_VALUE));
+        return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
     }
     if let Some(value) = attrib.get_static_value() {
         unsafe { *pi = value };
         return Ok(());
     }
-    let mut dev = get_device(dev).map_err(Error::Cuda)?;
     let value = match attrib {
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_ASYNC_ENGINE_COUNT => {
-            dev.get_properties().map_err(Error::L0)?.maxHardwareContexts as i32
+            GlobalState::lock_device(dev_idx, |dev| {
+                let props = dev.get_properties()?;
+                Ok::<_, l0::sys::ze_result_t>(props.maxHardwareContexts as i32)
+            })??
         }
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT => {
-            let props = dev.get_properties().map_err(Error::L0)?;
-            (props.numSlices * props.numSubslicesPerSlice * props.numEUsPerSubslice) as i32
+            GlobalState::lock_device(dev_idx, |dev| {
+                let props = dev.get_properties()?;
+                Ok::<_, l0::sys::ze_result_t>(
+                    (props.numSlices * props.numSubslicesPerSlice * props.numEUsPerSubslice) as i32,
+                )
+            })??
         }
-        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE1D_WIDTH => cmp::min(
-            dev.get_image_properties()
-                .map_err(Error::L0)?
-                .maxImageDims1D,
-            c_int::max_value() as u32,
-        ) as c_int,
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE1D_WIDTH => {
+            GlobalState::lock_device(dev_idx, |dev| {
+                let props = dev.get_image_properties()?;
+                Ok::<_, l0::sys::ze_result_t>(cmp::min(
+                    props.maxImageDims1D,
+                    c_int::max_value() as u32,
+                ) as c_int)
+            })??
+        }
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X => {
-            let props = dev.get_compute_properties().map_err(Error::L0)?;
-            cmp::max(i32::max_value() as u32, props.maxGroupCountX) as i32
+            GlobalState::lock_device(dev_idx, |dev| {
+                let props = dev.get_compute_properties()?;
+                Ok::<_, l0::sys::ze_result_t>(cmp::max(
+                    i32::max_value() as u32,
+                    props.maxGroupCountX,
+                ) as i32)
+            })??
         }
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y => {
-            let props = dev.get_compute_properties().map_err(Error::L0)?;
-            cmp::max(i32::max_value() as u32, props.maxGroupCountY) as i32
+            GlobalState::lock_device(dev_idx, |dev| {
+                let props = dev.get_compute_properties()?;
+                Ok::<_, l0::sys::ze_result_t>(cmp::max(
+                    i32::max_value() as u32,
+                    props.maxGroupCountY,
+                ) as i32)
+            })??
         }
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Z => {
-            let props = dev.get_compute_properties().map_err(Error::L0)?;
-            cmp::max(i32::max_value() as u32, props.maxGroupCountZ) as i32
+            GlobalState::lock_device(dev_idx, |dev| {
+                let props = dev.get_compute_properties()?;
+                Ok::<_, l0::sys::ze_result_t>(cmp::max(
+                    i32::max_value() as u32,
+                    props.maxGroupCountZ,
+                ) as i32)
+            })??
         }
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X => {
-            let props = dev.get_compute_properties().map_err(Error::L0)?;
-            cmp::max(i32::max_value() as u32, props.maxGroupSizeX) as i32
+            GlobalState::lock_device(dev_idx, |dev| {
+                let props = dev.get_compute_properties()?;
+                Ok::<_, l0::sys::ze_result_t>(
+                    cmp::max(i32::max_value() as u32, props.maxGroupSizeX) as i32,
+                )
+            })??
         }
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y => {
-            let props = dev.get_compute_properties().map_err(Error::L0)?;
-            cmp::max(i32::max_value() as u32, props.maxGroupSizeY) as i32
+            GlobalState::lock_device(dev_idx, |dev| {
+                let props = dev.get_compute_properties()?;
+                Ok::<_, l0::sys::ze_result_t>(
+                    cmp::max(i32::max_value() as u32, props.maxGroupSizeY) as i32,
+                )
+            })??
         }
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Z => {
-            let props = dev.get_compute_properties().map_err(Error::L0)?;
-            cmp::max(i32::max_value() as u32, props.maxGroupSizeZ) as i32
+            GlobalState::lock_device(dev_idx, |dev| {
+                let props = dev.get_compute_properties()?;
+                Ok::<_, l0::sys::ze_result_t>(
+                    cmp::max(i32::max_value() as u32, props.maxGroupSizeZ) as i32,
+                )
+            })??
         }
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK => {
-            let props = dev.get_compute_properties().map_err(Error::L0)?;
-            cmp::max(i32::max_value() as u32, props.maxTotalGroupSize) as i32
+            GlobalState::lock_device(dev_idx, |dev| {
+                let props = dev.get_compute_properties()?;
+                Ok::<_, l0::sys::ze_result_t>(cmp::max(
+                    i32::max_value() as u32,
+                    props.maxTotalGroupSize,
+                ) as i32)
+            })??
         }
         _ => {
             // TODO: support more attributes for CUDA runtime
@@ -293,14 +301,11 @@ pub fn get_attribute(pi: *mut i32, attrib: CUdevice_attribute, dev: Index) -> Re
     Ok(())
 }
 
-pub fn get_uuid(uuid: *mut CUuuid_st, dev: Index) -> Result<(), Error> {
-    let ze_uuid = {
-        get_device(dev)
-            .map_err(Error::Cuda)?
-            .get_properties()
-            .map_err(Error::L0)?
-            .uuid
-    };
+pub fn get_uuid(uuid: *mut CUuuid_st, dev_idx: Index) -> Result<(), CUresult> {
+    let ze_uuid = GlobalState::lock_device(dev_idx, |dev| {
+        let props = dev.get_properties()?;
+        Ok::<_, l0::sys::ze_result_t>(props.uuid)
+    })??;
     unsafe {
         *uuid = CUuuid_st {
             bytes: mem::transmute(ze_uuid.id),
@@ -309,53 +314,39 @@ pub fn get_uuid(uuid: *mut CUuuid_st, dev: Index) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn with_current_exclusive<F: FnOnce(&mut Device) -> R, R>(f: F) -> Result<R, CUresult> {
-    let dev = super::context::with_current(|ctx| ctx.device);
-    dev.and_then(|dev| {
-        unsafe { &*dev }
-            .try_lock()
-            .map(|mut dev| f(&mut dev))
-            .map_err(|_| CUresult::CUDA_ERROR_ILLEGAL_STATE)
-    })
-}
-
-pub fn with_exclusive<F: FnOnce(&mut Device) -> R, R>(dev: Index, f: F) -> Result<R, CUresult> {
-    let dev = get_device_ref(dev)?;
-    dev.try_lock()
-        .map(|mut dev| f(&mut dev))
-        .map_err(|_| CUresult::CUDA_ERROR_ILLEGAL_STATE)
-}
-
 pub fn primary_ctx_get_state(
-    idx: Index,
+    dev_idx: Index,
     flags: *mut u32,
     active: *mut i32,
 ) -> Result<(), CUresult> {
-    let (ctx_ptr, flags_ptr) = with_exclusive(idx, |dev| {
+    let (is_active, flags_value) = GlobalState::lock_device(dev_idx, |dev| {
         // This is safe because primary context can't be dropped
-        let ctx_ptr = &dev.primary_context as *const _;
+        let ctx_ptr = &mut dev.primary_context as *mut _;
         let flags_ptr =
             (&unsafe { dev.primary_context.as_ref_unchecked() }.flags) as *const AtomicU32;
-        (ctx_ptr, flags_ptr)
-    })?;
-    let is_active = context::CONTEXT_STACK
-        .with(|stack| stack.borrow().last().map(|x| *x))
-        .map(|current| current == ctx_ptr)
-        .unwrap_or(false);
-    let flags_value = unsafe { &*flags_ptr }.load(Ordering::Relaxed);
-    unsafe { *flags = flags_value };
+        let is_active = context::CONTEXT_STACK
+            .with(|stack| stack.borrow().last().map(|x| *x))
+            .map(|current| current == ctx_ptr)
+            .unwrap_or(false);
+        let flags_value = unsafe { &*flags_ptr }.load(Ordering::Relaxed);
+        Ok::<_, l0::sys::ze_result_t>((is_active, flags_value))
+    })??;
     unsafe { *active = if is_active { 1 } else { 0 } };
+    unsafe { *flags = flags_value };
     Ok(())
 }
 
-pub fn primary_ctx_retain(pctx: *mut *mut context::Context, dev: Index) -> Result<(), CUresult> {
-    let ctx_ptr = with_exclusive(dev, |dev| &mut dev.primary_context as *mut _)?;
+pub fn primary_ctx_retain(
+    pctx: *mut *mut context::Context,
+    dev_idx: Index,
+) -> Result<(), CUresult> {
+    let ctx_ptr = GlobalState::lock_device(dev_idx, |dev| &mut dev.primary_context as *mut _)?;
     unsafe { *pctx = ctx_ptr };
     Ok(())
 }
 
 #[cfg(test)]
-mod tests {
+mod test {
     use super::super::test::CudaDriverFns;
     use super::super::CUresult;
 

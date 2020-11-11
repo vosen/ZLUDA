@@ -12,7 +12,7 @@ fn parse_and_assert(s: &str) {
 fn compile_and_assert(s: &str) -> Result<(), TranslateError> {
     let mut errors = Vec::new();
     let ast = ptx::ModuleParser::new().parse(&mut errors, s).unwrap();
-    crate::to_spirv(ast)?;
+    crate::to_spirv_module(ast)?;
     Ok(())
 }
 

@@ -173,6 +173,16 @@ impl Context {
         check!(sys::zeContextCreate(drv.0, &ctx_desc, &mut result));
         Ok(Context(result))
     }
+
+    pub unsafe fn mem_free(&mut self, ptr: *mut c_void) -> Result<()> {
+        check! {
+            sys::zeMemFree(
+                self.0,
+                ptr,
+            )
+        };
+        Ok(())
+    }
 }
 
 impl Drop for Context {
@@ -239,7 +249,7 @@ pub struct Module(sys::ze_module_handle_t);
 
 impl Module {
     // HACK ALERT
-    // We use OpenCL for now to do SPIR-V linking, because Level0 
+    // We use OpenCL for now to do SPIR-V linking, because Level0
     // does not allow linking. Don't let presence of zeModuleDynamicLink fool
     // you, it's not currently possible to create non-compiled modules.
     // zeModuleCreate always compiles (builds and links).
