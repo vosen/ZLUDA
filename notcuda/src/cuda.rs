@@ -2281,7 +2281,7 @@ pub extern "C" fn cuDevicePrimaryCtxRelease(dev: CUdevice) -> CUresult {
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "C" fn cuDevicePrimaryCtxRelease_v2(dev: CUdevice) -> CUresult {
-    r#impl::unimplemented()
+    r#impl::device::primary_ctx_release_v2(dev.decuda())
 }
 
 #[cfg_attr(not(test), no_mangle)]

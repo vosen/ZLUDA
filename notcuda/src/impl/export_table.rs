@@ -4,7 +4,7 @@ use crate::{
     cuda_impl,
 };
 
-use super::{context, context::ContextData, module, Decuda, Encuda, GlobalState};
+use super::{context, context::ContextData, device, module, Decuda, Encuda, GlobalState};
 use std::mem;
 use std::os::raw::{c_uint, c_ulong, c_ushort};
 use std::{
@@ -110,8 +110,17 @@ static CUDART_INTERFACE_VTABLE: [VTableEntry; CUDART_INTERFACE_LENGTH] = [
     VTableEntry { ptr: ptr::null() },
 ];
 
-unsafe extern "C" fn cudart_interface_fn1(_pctx: *mut CUcontext, _dev: CUdevice) -> CUresult {
-    super::unimplemented()
+unsafe extern "C" fn cudart_interface_fn1(pctx: *mut CUcontext, dev: CUdevice) -> CUresult {
+    cudart_interface_fn1_impl(pctx.decuda(), dev.decuda()).encuda()
+}
+
+fn cudart_interface_fn1_impl(
+    pctx: *mut *mut context::Context,
+    dev: device::Index,
+) -> Result<(), CUresult> {
+    let ctx_ptr = GlobalState::lock_device(dev, |d| &mut d.primary_context as *mut _)?;
+    unsafe { *pctx = ctx_ptr };
+    Ok(())
 }
 
 /*

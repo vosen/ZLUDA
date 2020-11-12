@@ -345,6 +345,11 @@ pub fn primary_ctx_retain(
     Ok(())
 }
 
+// TODO: allow for retain/reset/release of primary context
+pub(crate) fn primary_ctx_release_v2(_dev_idx: Index) -> CUresult {
+    CUresult::CUDA_SUCCESS
+}
+
 #[cfg(test)]
 mod test {
     use super::super::test::CudaDriverFns;

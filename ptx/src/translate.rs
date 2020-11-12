@@ -1,6 +1,6 @@
 use crate::ast;
 use half::f16;
-use rspirv::{binary::Disassemble, dr};
+use rspirv::dr;
 use std::{borrow::Cow, ffi::CString, hash::Hash, iter, mem};
 use std::{
     collections::{hash_map, HashMap, HashSet},
@@ -6662,7 +6662,7 @@ impl ast::ScalarType {
             ast::ScalarType::F16 => ScalarKind::Float,
             ast::ScalarType::F32 => ScalarKind::Float,
             ast::ScalarType::F64 => ScalarKind::Float,
-            ast::ScalarType::F16x2 => ScalarKind::Float,
+            ast::ScalarType::F16x2 => ScalarKind::Float2,
             ast::ScalarType::Pred => ScalarKind::Pred,
         }
     }
