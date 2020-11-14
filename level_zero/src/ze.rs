@@ -833,6 +833,12 @@ impl<'a> Kernel<'a> {
         check!(sys::zeKernelSetGroupSize(self.0, x, y, z));
         Ok(())
     }
+
+    pub fn get_properties(&self) -> Result<Box<sys::ze_kernel_properties_t>> {
+        let mut props = Box::new(unsafe { mem::zeroed::<sys::ze_kernel_properties_t>() });
+        check!(sys::zeKernelGetProperties(self.0, props.as_mut() as *mut _));
+        Ok(props)
+    }
 }
 
 impl<'a> Drop for Kernel<'a> {

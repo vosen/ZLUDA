@@ -2365,7 +2365,7 @@ pub extern "C" fn cuCtxGetFlags(flags: *mut ::std::os::raw::c_uint) -> CUresult 
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "C" fn cuCtxSynchronize() -> CUresult {
-    r#impl::unimplemented()
+    r#impl::context::synchronize()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -3569,7 +3569,7 @@ pub extern "C" fn cuFuncGetAttribute(
     attrib: CUfunction_attribute,
     hfunc: CUfunction,
 ) -> CUresult {
-    r#impl::unimplemented()
+    r#impl::function::get_attribute(pi, attrib, hfunc.decuda()).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]

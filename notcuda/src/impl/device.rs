@@ -96,6 +96,14 @@ impl Device {
     pub fn late_init(&mut self) {
         self.primary_context.as_option_mut().unwrap().device = self as *mut _;
     }
+
+    fn get_max_simd(&mut self) -> l0::Result<u32> {
+        let props = self.get_compute_properties()?;
+        Ok(*props.subGroupSizes[0..props.numSubGroupSizes as usize]
+            .iter()
+            .max()
+            .unwrap())
+    }
 }
 
 pub fn init(driver: &l0::Driver) -> Result<Vec<Device>, CUresult> {
@@ -210,12 +218,30 @@ pub fn get_attribute(
                 Ok::<_, l0::sys::ze_result_t>(props.maxHardwareContexts as i32)
             })??
         }
+        // Streaming Multiprocessor corresponds roughly to a sub-slice (thread group can't cross either)
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT => {
             GlobalState::lock_device(dev_idx, |dev| {
                 let props = dev.get_properties()?;
+                Ok::<_, l0::sys::ze_result_t>((props.numSlices * props.numSubslicesPerSlice) as i32)
+            })??
+        }
+        // I honestly don't know how to answer this query
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR => {
+            GlobalState::lock_device(dev_idx, |dev| {
+                let max_simd = dev.get_max_simd()?;
+                let props = dev.get_properties()?;
                 Ok::<_, l0::sys::ze_result_t>(
-                    (props.numSlices * props.numSubslicesPerSlice * props.numEUsPerSubslice) as i32,
+                    (props.numEUsPerSubslice * props.numThreadsPerEU * max_simd) as i32,
                 )
+            })??
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK => {
+            GlobalState::lock_device(dev_idx, |dev| {
+                let props = dev.get_compute_properties()?;
+                Ok::<_, l0::sys::ze_result_t>(cmp::min(
+                    i32::max_value() as u32,
+                    props.maxTotalGroupSize,
+                ) as i32)
             })??
         }
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE1D_WIDTH => {
@@ -230,7 +256,7 @@ pub fn get_attribute(
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X => {
             GlobalState::lock_device(dev_idx, |dev| {
                 let props = dev.get_compute_properties()?;
-                Ok::<_, l0::sys::ze_result_t>(cmp::max(
+                Ok::<_, l0::sys::ze_result_t>(cmp::min(
                     i32::max_value() as u32,
                     props.maxGroupCountX,
                 ) as i32)
@@ -239,7 +265,7 @@ pub fn get_attribute(
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y => {
             GlobalState::lock_device(dev_idx, |dev| {
                 let props = dev.get_compute_properties()?;
-                Ok::<_, l0::sys::ze_result_t>(cmp::max(
+                Ok::<_, l0::sys::ze_result_t>(cmp::min(
                     i32::max_value() as u32,
                     props.maxGroupCountY,
                 ) as i32)
@@ -248,7 +274,7 @@ pub fn get_attribute(
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Z => {
             GlobalState::lock_device(dev_idx, |dev| {
                 let props = dev.get_compute_properties()?;
-                Ok::<_, l0::sys::ze_result_t>(cmp::max(
+                Ok::<_, l0::sys::ze_result_t>(cmp::min(
                     i32::max_value() as u32,
                     props.maxGroupCountZ,
                 ) as i32)
@@ -258,7 +284,7 @@ pub fn get_attribute(
             GlobalState::lock_device(dev_idx, |dev| {
                 let props = dev.get_compute_properties()?;
                 Ok::<_, l0::sys::ze_result_t>(
-                    cmp::max(i32::max_value() as u32, props.maxGroupSizeX) as i32,
+                    cmp::min(i32::max_value() as u32, props.maxGroupSizeX) as i32,
                 )
             })??
         }
@@ -266,7 +292,7 @@ pub fn get_attribute(
             GlobalState::lock_device(dev_idx, |dev| {
                 let props = dev.get_compute_properties()?;
                 Ok::<_, l0::sys::ze_result_t>(
-                    cmp::max(i32::max_value() as u32, props.maxGroupSizeY) as i32,
+                    cmp::min(i32::max_value() as u32, props.maxGroupSizeY) as i32,
                 )
             })??
         }
@@ -274,18 +300,18 @@ pub fn get_attribute(
             GlobalState::lock_device(dev_idx, |dev| {
                 let props = dev.get_compute_properties()?;
                 Ok::<_, l0::sys::ze_result_t>(
-                    cmp::max(i32::max_value() as u32, props.maxGroupSizeZ) as i32,
+                    cmp::min(i32::max_value() as u32, props.maxGroupSizeZ) as i32,
                 )
             })??
         }
-        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK => {
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK => {
             GlobalState::lock_device(dev_idx, |dev| {
                 let props = dev.get_compute_properties()?;
-                Ok::<_, l0::sys::ze_result_t>(cmp::max(
-                    i32::max_value() as u32,
-                    props.maxTotalGroupSize,
-                ) as i32)
+                Ok::<_, l0::sys::ze_result_t>(props.maxSharedLocalMemory as i32)
             })??
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_WARP_SIZE => {
+            GlobalState::lock_device(dev_idx, |dev| Ok::<_, CUresult>(dev.get_max_simd()? as i32))??
         }
         _ => {
             // TODO: support more attributes for CUDA runtime

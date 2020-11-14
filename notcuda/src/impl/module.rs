@@ -131,6 +131,7 @@ pub fn get_function(
                     base: kernel,
                     arg_size: kernel_info.arguments_sizes.clone(),
                     use_shared_mem: kernel_info.uses_shared_mem,
+                    properties: None,
                 })))
             }
         };

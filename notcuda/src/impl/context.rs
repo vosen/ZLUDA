@@ -249,6 +249,11 @@ pub fn detach(pctx: *mut Context) -> Result<(), CUresult> {
     })?
 }
 
+pub(crate) fn synchronize() -> CUresult {
+    // TODO: change the implementation once we do async stream operations
+    CUresult::CUDA_SUCCESS
+}
+
 #[cfg(test)]
 mod test {
     use super::super::test::CudaDriverFns;

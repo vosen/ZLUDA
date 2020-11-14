@@ -268,6 +268,19 @@ impl GlobalState {
             })?
         }
     }
+
+    fn lock_function<T>(
+        func: *mut function::Function,
+        f: impl FnOnce(&mut function::FunctionData) -> T,
+    ) -> Result<T, CUresult> {
+        if func == ptr::null_mut() {
+            return Err(CUresult::CUDA_ERROR_INVALID_HANDLE);
+        }
+        Self::lock(|_| {
+            let func = unsafe { &mut *func }.as_result_mut()?;
+            Ok(f(func))
+        })?
+    }
 }
 
 // TODO: implement
