@@ -766,6 +766,8 @@ sub_type! {
     LdStType {
         Scalar(LdStScalarType),
         Vector(LdStScalarType, u8),
+        // Used in generated code
+        Pointer(PointerType, LdStateSpace),
     }
 }
 
@@ -774,6 +776,10 @@ impl From<LdStType> for PointerType {
         match t {
             LdStType::Scalar(t) => PointerType::Scalar(t.into()),
             LdStType::Vector(t, len) => PointerType::Vector(t.into(), len),
+            LdStType::Pointer(PointerType::Scalar(scalar_type), space) => {
+                PointerType::Pointer(scalar_type, space)
+            }
+            LdStType::Pointer(..) => unreachable!(),
         }
     }
 }

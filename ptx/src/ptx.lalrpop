@@ -1237,18 +1237,18 @@ InstRet: ast::Instruction<ast::ParsedArgParams<'input>> = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvta
 InstCvta: ast::Instruction<ast::ParsedArgParams<'input>> = {
-    "cvta" <to:CvtaStateSpace> <s:CvtaSize> <a:Arg2> => {
+    "cvta" <from:CvtaStateSpace> <s:CvtaSize> <a:Arg2> => {
         ast::Instruction::Cvta(ast::CvtaDetails {
-            to: to,
-            from: ast::CvtaStateSpace::Generic,
+            to: ast::CvtaStateSpace::Generic,
+            from,
             size: s
         },
         a)
     },
-    "cvta" ".to" <from:CvtaStateSpace> <s:CvtaSize> <a:Arg2> => {
+    "cvta" ".to" <to:CvtaStateSpace> <s:CvtaSize> <a:Arg2> => {
         ast::Instruction::Cvta(ast::CvtaDetails {
-            to: ast::CvtaStateSpace::Generic,
-            from: from,
+            to,
+            from: ast::CvtaStateSpace::Generic,
             size: s
         },
         a)

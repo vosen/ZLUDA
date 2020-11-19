@@ -22,7 +22,9 @@
 %_ptr_Function__arr_uchar_uint_8 = OpTypePointer Function %_arr_uchar_uint_8
 %_ptr_CrossWorkgroup_ulong = OpTypePointer CrossWorkgroup %ulong
     %ulong_1 = OpConstant %ulong 1
+%_ptr_Generic_ulong = OpTypePointer Generic %ulong
     %ulong_0 = OpConstant %ulong 0
+%_ptr_Generic_uchar = OpTypePointer Generic %uchar
   %ulong_0_0 = OpConstant %ulong 0
           %1 = OpFunction %void None %37
           %8 = OpFunctionParameter %ulong
@@ -48,12 +50,12 @@
          %14 = OpLoad %ulong %7
          %26 = OpCopyObject %ulong %14
          %19 = OpIAdd %ulong %26 %ulong_1
-         %27 = OpBitcast %_ptr_Function_ulong %4
+         %27 = OpBitcast %_ptr_Generic_ulong %4
                OpStore %27 %19
-         %28 = OpBitcast %_ptr_Function_ulong %4
-         %45 = OpBitcast %ulong %28
-         %46 = OpIAdd %ulong %45 %ulong_0
-         %21 = OpBitcast %_ptr_Function_ulong %46
+         %28 = OpBitcast %_ptr_Generic_ulong %4
+         %47 = OpBitcast %_ptr_Generic_uchar %28
+         %48 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %47 %ulong_0
+         %21 = OpBitcast %_ptr_Generic_ulong %48
          %29 = OpLoad %ulong %21
          %15 = OpCopyObject %ulong %29
                OpStore %7 %15

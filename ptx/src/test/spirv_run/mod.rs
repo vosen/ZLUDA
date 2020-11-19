@@ -133,6 +133,10 @@ test_ptx!(
     [0b11111000_11000001_00100010_10100000u32, 16u32, 8u32],
     [0b11000001u32]
 );
+test_ptx!(stateful_ld_st_simple, [121u64], [121u64]);
+test_ptx!(stateful_ld_st_ntid, [123u64], [123u64]);
+test_ptx!(stateful_ld_st_ntid_chain, [12651u64], [12651u64]);
+test_ptx!(stateful_ld_st_ntid_sub, [96311u64], [96311u64]);
 
 struct DisplayError<T: Debug> {
     err: T,
@@ -292,7 +296,7 @@ fn test_spvtxt_assert<'a>(
     rspirv::binary::parse_words(&parsed_spirv, &mut loader)?;
     let spvtxt_mod = loader.module();
     unsafe { spirv_tools::spvBinaryDestroy(spv_binary) };
-    if !is_spirv_fn_equal(&spirv_module.spirv.functions[0], &spvtxt_mod.functions[0]) {
+    if !is_spirv_fns_equal(&spirv_module.spirv.functions, &spvtxt_mod.functions) {
         // We could simply use ptx_mod.disassemble, but SPIRV-Tools text formattinmg is so much nicer
         let spv_from_ptx_binary = spirv_module.spirv.assemble();
         let mut spv_text: spirv_tools::spv_text = ptr::null_mut();
@@ -362,6 +366,18 @@ impl<T: Copy + Eq + Hash> EqMap<T> {
             _ => false,
         }
     }
+}
+
+fn is_spirv_fns_equal(fns1: &[Function], fns2: &[Function]) -> bool {
+    if fns1.len() != fns2.len() {
+        return false;
+    }
+    for (fn1, fn2) in fns1.iter().zip(fns2.iter()) {
+        if !is_spirv_fn_equal(fn1, fn2) {
+            return false;
+        }
+    }
+    true
 }
 
 fn is_spirv_fn_equal(fn1: &Function, fn2: &Function) -> bool {
