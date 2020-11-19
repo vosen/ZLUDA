@@ -843,24 +843,25 @@ fn replace_uses_of_shared_memory<'a>(
             statement => {
                 let new_statement = statement.map_id(&mut |id, _| {
                     if let Some(typ) = extern_shared_decls.get(&id) {
-                        let replacement_id = new_id();
-                        if *typ != ast::SizedScalarType::B8 {
-                            result.push(Statement::Conversion(ImplicitConversion {
-                                src: shared_var_id,
-                                dst: replacement_id,
-                                from: ast::Type::Pointer(
-                                    ast::PointerType::Scalar(ast::ScalarType::B8),
-                                    ast::LdStateSpace::Shared,
-                                ),
-                                to: ast::Type::Pointer(
-                                    ast::PointerType::Scalar((*typ).into()),
-                                    ast::LdStateSpace::Shared,
-                                ),
-                                kind: ConversionKind::PtrToPtr { spirv_ptr: true },
-                                src_sema: ArgumentSemantics::Default,
-                                dst_sema: ArgumentSemantics::Default,
-                            }));
+                        if *typ == ast::SizedScalarType::B8 {
+                            return shared_var_id;
                         }
+                        let replacement_id = new_id();
+                        result.push(Statement::Conversion(ImplicitConversion {
+                            src: shared_var_id,
+                            dst: replacement_id,
+                            from: ast::Type::Pointer(
+                                ast::PointerType::Scalar(ast::ScalarType::B8),
+                                ast::LdStateSpace::Shared,
+                            ),
+                            to: ast::Type::Pointer(
+                                ast::PointerType::Scalar((*typ).into()),
+                                ast::LdStateSpace::Shared,
+                            ),
+                            kind: ConversionKind::PtrToPtr { spirv_ptr: true },
+                            src_sema: ArgumentSemantics::Default,
+                            dst_sema: ArgumentSemantics::Default,
+                        }));
                         replacement_id
                     } else {
                         id

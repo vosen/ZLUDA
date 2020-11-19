@@ -137,6 +137,7 @@ test_ptx!(stateful_ld_st_simple, [121u64], [121u64]);
 test_ptx!(stateful_ld_st_ntid, [123u64], [123u64]);
 test_ptx!(stateful_ld_st_ntid_chain, [12651u64], [12651u64]);
 test_ptx!(stateful_ld_st_ntid_sub, [96311u64], [96311u64]);
+test_ptx!(shared_ptr_take_address, [97815231u64], [97815231u64]);
 
 struct DisplayError<T: Debug> {
     err: T,
@@ -261,6 +262,7 @@ fn test_spvtxt_assert<'a>(
     let ast = ptx::ModuleParser::new().parse(&mut errors, ptx_txt)?;
     assert!(errors.len() == 0);
     let spirv_module = translate::to_spirv_module(ast)?;
+    eprintln!("{}", rspirv::binary::Disassemble::disassemble(&spirv_module.spirv));
     let spv_context =
         unsafe { spirv_tools::spvContextCreate(spv_target_env::SPV_ENV_UNIVERSAL_1_3) };
     assert!(spv_context != ptr::null_mut());
