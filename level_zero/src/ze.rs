@@ -257,9 +257,15 @@ impl Module {
         ctx: &mut Context,
         d: &Device,
         binaries: &[&'a [u8]],
+        opts: Option<&CStr>,
     ) -> (Result<Self>, Option<BuildLog>) {
-        let ocl_program = match Self::build_link_spirv_impl(binaries) {
-            Err(_) => return (Err(sys::ze_result_t::ZE_RESULT_ERROR_UNKNOWN), None),
+        let ocl_program = match Self::build_link_spirv_impl(binaries, opts) {
+            Err(_) => {
+                return (
+                    Err(sys::ze_result_t::ZE_RESULT_ERROR_MODULE_LINK_FAILURE),
+                    None,
+                )
+            }
             Ok(prog) => prog,
         };
         match ocl_core::get_program_info(&ocl_program, ocl_core::ProgramInfo::Binaries) {
@@ -271,7 +277,10 @@ impl Module {
         }
     }
 
-    fn build_link_spirv_impl<'a>(binaries: &[&'a [u8]]) -> ocl_core::Result<ocl_core::Program> {
+    fn build_link_spirv_impl<'a>(
+        binaries: &[&'a [u8]],
+        opts: Option<&CStr>,
+    ) -> ocl_core::Result<ocl_core::Program> {
         let platforms = ocl_core::get_platform_ids()?;
         let (platform, device) = platforms
             .iter()
@@ -305,7 +314,22 @@ impl Module {
         for binary in binaries {
             programs.push(ocl_core::create_program_with_il(&ocl_ctx, binary, None)?);
         }
-        let options = CString::default();
+        let options = match opts {
+            Some(o) => o.to_owned(),
+            None => CString::default(),
+        };
+        for program in programs.iter() {
+            ocl_core::compile_program(
+                program,
+                Some(&[device]),
+                &options,
+                &[],
+                &[],
+                None,
+                None,
+                None,
+            )?;
+        }
         ocl_core::link_program::<ocl_core::DeviceId, _>(
             &ocl_ctx,
             Some(&[device]),

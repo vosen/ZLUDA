@@ -2920,15 +2920,31 @@ fn emit_function_body_ops(
                     }?;
                 }
                 ast::Instruction::Shl(t, a) => {
-                    let result_type = map.get_or_add(builder, SpirvType::from(t.to_type()));
-                    builder.shift_left_logical(result_type, Some(a.dst), a.src1, a.src2)?;
+                    let full_type = t.to_type();
+                    let size_of = full_type.size_of();
+                    let result_type = map.get_or_add(builder, SpirvType::from(full_type));
+                    let offset_src = insert_shift_hack(builder, map, a.src2, size_of)?;
+                    builder.shift_left_logical(result_type, Some(a.dst), a.src1, offset_src)?;
                 }
                 ast::Instruction::Shr(t, a) => {
-                    let result_type = map.get_or_add_scalar(builder, ast::ScalarType::from(*t));
+                    let full_type = ast::ScalarType::from(*t);
+                    let size_of = full_type.size_of();
+                    let result_type = map.get_or_add_scalar(builder, full_type);
+                    let offset_src = insert_shift_hack(builder, map, a.src2, size_of as usize)?;
                     if t.signed() {
-                        builder.shift_right_arithmetic(result_type, Some(a.dst), a.src1, a.src2)?;
+                        builder.shift_right_arithmetic(
+                            result_type,
+                            Some(a.dst),
+                            a.src1,
+                            offset_src,
+                        )?;
                     } else {
-                        builder.shift_right_logical(result_type, Some(a.dst), a.src1, a.src2)?;
+                        builder.shift_right_logical(
+                            result_type,
+                            Some(a.dst),
+                            a.src1,
+                            offset_src,
+                        )?;
                     }
                 }
                 ast::Instruction::Cvt(dets, arg) => {
@@ -3223,6 +3239,23 @@ fn emit_function_body_ops(
         }
     }
     Ok(())
+}
+
+// HACK ALERT
+// For some reason IGC fails linking if the value and shift size are of different type
+fn insert_shift_hack(
+    builder: &mut dr::Builder,
+    map: &mut TypeWordMap,
+    offset_var: spirv::Word,
+    size_of: usize,
+) -> Result<spirv::Word, TranslateError> {
+    let result_type = match size_of {
+        2 => map.get_or_add_scalar(builder, ast::ScalarType::B16),
+        8 => map.get_or_add_scalar(builder, ast::ScalarType::B64),
+        4 => return Ok(offset_var),
+        _ => return Err(TranslateError::Unreachable),
+    };
+    Ok(builder.u_convert(result_type, None, offset_var)?)
 }
 
 // TODO: check what kind of assembly do we emit

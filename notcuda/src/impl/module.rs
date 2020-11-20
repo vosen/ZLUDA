@@ -83,8 +83,21 @@ impl SpirvModule {
                 self.binaries.len() * mem::size_of::<u32>(),
             )
         };
-        let l0_module = l0::Module::build_spirv(ctx, dev, byte_il, None).0?;
-        Ok(l0_module)
+        let l0_module = match self.should_link_ptx_impl {
+            None => {
+                l0::Module::build_spirv(ctx, dev, byte_il, Some(self.build_options.as_c_str())).0
+            }
+            Some(ptx_impl) => {
+                l0::Module::build_link_spirv(
+                    ctx,
+                    &dev,
+                    &[ptx_impl, byte_il],
+                    Some(self.build_options.as_c_str()),
+                )
+                .0
+            }
+        };
+        Ok(l0_module?)
     }
 }
 

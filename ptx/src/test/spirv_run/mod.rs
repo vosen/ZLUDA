@@ -52,6 +52,7 @@ test_ptx!(setp, [10u64, 11u64], [1u64, 0u64]);
 test_ptx!(bra, [10u64], [11u64]);
 test_ptx!(not, [0u64], [u64::max_value()]);
 test_ptx!(shl, [11u64], [44u64]);
+test_ptx!(shl_link_hack, [11u64], [44u64]);
 test_ptx!(cvt_sat_s_u, [-1i32], [0i32]);
 test_ptx!(cvta, [3.0f32], [3.0f32]);
 test_ptx!(block, [1u64], [2u64]);
@@ -202,7 +203,12 @@ fn run_spirv<T: From<u8> + ze::SafeRepr + Copy + Debug>(
         let dev = devices.drain(0..1).next().unwrap();
         let queue = ze::CommandQueue::new(&mut ctx, &dev)?;
         let (module, maybe_log) = match module.should_link_ptx_impl {
-            Some(ptx_impl) => ze::Module::build_link_spirv(&mut ctx, &dev, &[ptx_impl, byte_il]),
+            Some(ptx_impl) => ze::Module::build_link_spirv(
+                &mut ctx,
+                &dev,
+                &[ptx_impl, byte_il],
+                Some(module.build_options.as_c_str()),
+            ),
             None => {
                 let (module, log) = ze::Module::build_spirv(
                     &mut ctx,
@@ -262,7 +268,6 @@ fn test_spvtxt_assert<'a>(
     let ast = ptx::ModuleParser::new().parse(&mut errors, ptx_txt)?;
     assert!(errors.len() == 0);
     let spirv_module = translate::to_spirv_module(ast)?;
-    eprintln!("{}", rspirv::binary::Disassemble::disassemble(&spirv_module.spirv));
     let spv_context =
         unsafe { spirv_tools::spvContextCreate(spv_target_env::SPV_ENV_UNIVERSAL_1_3) };
     assert!(spv_context != ptr::null_mut());
