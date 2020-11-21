@@ -120,22 +120,27 @@ atomic_dec(atom_acquire_sys_shared_dec, memory_order_acquire, memory_order_acqui
 atomic_dec(atom_release_sys_shared_dec, memory_order_release, memory_order_acquire, memory_scope_device, __local);
 atomic_dec(atom_acq_rel_sys_shared_dec, memory_order_acq_rel, memory_order_acquire, memory_scope_device, __local);
 
-uint FUNC(bfe_u32)(uint base, uint pos, uint len)
-{
+uint FUNC(bfe_u32)(uint base, uint pos, uint len) {
     return intel_ubfe(base, pos, len);
 }
 
-ulong FUNC(bfe_u64)(ulong base, uint pos, uint len)
-{
+ulong FUNC(bfe_u64)(ulong base, uint pos, uint len) {
     return intel_ubfe(base, pos, len);
 }
 
-int FUNC(bfe_s32)(int base, uint pos, uint len)
-{
+int FUNC(bfe_s32)(int base, uint pos, uint len) {
     return intel_sbfe(base, pos, len);
 }
 
-long FUNC(bfe_s64)(long base, uint pos, uint len)
-{
+long FUNC(bfe_s64)(long base, uint pos, uint len) {
     return intel_sbfe(base, pos, len);
+}
+
+void FUNC(__assertfail)(
+    __private ulong* message,
+    __private ulong* file,
+    __private uint* line,
+    __private ulong* function,
+    __private ulong* charSize
+) {
 }

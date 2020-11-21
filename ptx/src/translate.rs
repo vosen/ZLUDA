@@ -465,7 +465,9 @@ pub fn to_spirv_module<'a>(ast: ast::Module<'a>) -> Result<Module, TranslateErro
     let directives = ast
         .directives
         .into_iter()
-        .map(|directive| translate_directive(&mut id_defs, &mut ptx_impl_imports, directive))
+        .filter_map(|directive| {
+            translate_directive(&mut id_defs, &mut ptx_impl_imports, directive).transpose()
+        })
         .collect::<Result<Vec<_>, _>>()?;
     let must_link_ptx_impl = ptx_impl_imports.len() > 0;
     let directives = ptx_impl_imports
@@ -1173,13 +1175,13 @@ fn emit_memory_model(builder: &mut dr::Builder) {
 
 fn translate_directive<'input>(
     id_defs: &mut GlobalStringIdResolver<'input>,
-    ptx_impl_imports: &mut HashMap<String, Directive>,
+    ptx_impl_imports: &mut HashMap<String, Directive<'input>>,
     d: ast::Directive<'input, ast::ParsedArgParams<'input>>,
-) -> Result<Directive<'input>, TranslateError> {
+) -> Result<Option<Directive<'input>>, TranslateError> {
     Ok(match d {
-        ast::Directive::Variable(v) => Directive::Variable(translate_variable(id_defs, v)?),
+        ast::Directive::Variable(v) => Some(Directive::Variable(translate_variable(id_defs, v)?)),
         ast::Directive::Method(f) => {
-            Directive::Method(translate_function(id_defs, ptx_impl_imports, f)?)
+            translate_function(id_defs, ptx_impl_imports, f)?.map(Directive::Method)
         }
     })
 }
@@ -1219,11 +1221,27 @@ fn translate_variable<'a>(
 
 fn translate_function<'a>(
     id_defs: &mut GlobalStringIdResolver<'a>,
-    ptx_impl_imports: &mut HashMap<String, Directive>,
+    ptx_impl_imports: &mut HashMap<String, Directive<'a>>,
     f: ast::ParsedFunction<'a>,
-) -> Result<Function<'a>, TranslateError> {
+) -> Result<Option<Function<'a>>, TranslateError> {
+    let import_as = match &f.func_directive {
+        ast::MethodDecl::Func(_, "__assertfail", _) => {
+            Some("__notcuda_ptx_impl____assertfail".to_owned())
+        }
+        _ => None,
+    };
     let (str_resolver, fn_resolver, fn_decl) = id_defs.start_fn(&f.func_directive)?;
-    to_ssa(ptx_impl_imports, str_resolver, fn_resolver, fn_decl, f.body)
+    let mut func = to_ssa(ptx_impl_imports, str_resolver, fn_resolver, fn_decl, f.body)?;
+    func.import_as = import_as;
+    if func.import_as.is_some() {
+        ptx_impl_imports.insert(
+            func.import_as.as_ref().unwrap().clone(),
+            Directive::Method(func),
+        );
+        Ok(None)
+    } else {
+        Ok(Some(func))
+    }
 }
 
 fn expand_kernel_params<'a, 'b>(
@@ -5302,7 +5320,6 @@ pub enum StateSpace {
     Local,
     Shared,
     Param,
-    ParamReg,
 }
 
 impl From<ast::StateSpace> for StateSpace {

@@ -139,6 +139,8 @@ test_ptx!(stateful_ld_st_ntid, [123u64], [123u64]);
 test_ptx!(stateful_ld_st_ntid_chain, [12651u64], [12651u64]);
 test_ptx!(stateful_ld_st_ntid_sub, [96311u64], [96311u64]);
 test_ptx!(shared_ptr_take_address, [97815231u64], [97815231u64]);
+// For now, we just that it builds and links
+test_ptx!(assertfail, [716523871u64], [716523872u64]);
 
 struct DisplayError<T: Debug> {
     err: T,

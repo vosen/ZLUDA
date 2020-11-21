@@ -569,6 +569,29 @@ impl<'a> CommandList<'a> {
         Ok(())
     }
 
+    pub unsafe fn append_memory_fill_unsafe<T: Copy + Sized>(
+        &mut self,
+        dst: *mut c_void,
+        pattern: &T,
+        byte_size: usize,
+        signal: Option<&mut Event<'a>>,
+        wait: &mut [Event<'a>],
+    ) -> Result<()> {
+        let signal_event = signal.map(|e| e.0).unwrap_or(ptr::null_mut());
+        let (wait_len, wait_ptr) = Event::raw_slice(wait);
+        check!(sys::zeCommandListAppendMemoryFill(
+            self.0,
+            dst,
+            pattern as *const T as *const _,
+            mem::size_of::<T>(),
+            byte_size,
+            signal_event,
+            wait_len,
+            wait_ptr
+        ));
+        Ok(())
+    }
+
     pub fn append_launch_kernel(
         &mut self,
         kernel: &'a Kernel,

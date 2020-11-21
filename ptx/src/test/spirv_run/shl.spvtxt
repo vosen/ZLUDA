@@ -39,7 +39,8 @@
                OpStore %6 %12
          %15 = OpLoad %ulong %6
          %21 = OpCopyObject %ulong %15
-         %20 = OpShiftLeftLogical %ulong %21 %uint_2
+         %32 = OpUConvert %ulong %uint_2
+         %20 = OpShiftLeftLogical %ulong %21 %32
          %14 = OpCopyObject %ulong %20
                OpStore %7 %14
          %16 = OpLoad %ulong %5

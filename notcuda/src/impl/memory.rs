@@ -1,5 +1,5 @@
 use super::{stream, CUresult, GlobalState};
-use std::ffi::c_void;
+use std::{ffi::c_void, mem};
 
 pub fn alloc_v2(dptr: *mut *mut c_void, bytesize: usize) -> Result<(), CUresult> {
     let ptr = GlobalState::lock_current_context(|ctx| {
@@ -25,6 +25,17 @@ pub fn free_v2(ptr: *mut c_void) -> Result<(), CUresult> {
         Ok::<_, CUresult>(unsafe { dev.l0_context.mem_free(ptr) }?)
     })
     .map_err(|_| CUresult::CUDA_ERROR_INVALID_VALUE)?
+}
+
+pub(crate) fn set_d32_v2(dst: *mut c_void, ui: u32, n: usize) -> Result<(), CUresult> {
+    GlobalState::lock_stream(stream::CU_STREAM_LEGACY, |stream| {
+        let mut cmd_list = stream.command_list()?;
+        unsafe {
+            cmd_list.append_memory_fill_unsafe(dst, &ui, mem::size_of::<u32>() * n, None, &mut [])
+        }?;
+        stream.queue.execute(cmd_list)?;
+        Ok::<_, CUresult>(())
+    })?
 }
 
 #[cfg(test)]

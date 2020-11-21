@@ -2932,7 +2932,7 @@ pub extern "C" fn cuMemsetD32_v2(
     ui: ::std::os::raw::c_uint,
     N: usize,
 ) -> CUresult {
-    r#impl::unimplemented()
+    r#impl::memory::set_d32_v2(dstDevice.decuda(), ui, N).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
