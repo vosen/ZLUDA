@@ -38,6 +38,17 @@ pub(crate) fn set_d32_v2(dst: *mut c_void, ui: u32, n: usize) -> Result<(), CUre
     })?
 }
 
+pub(crate) fn set_d8_v2(dst: *mut c_void, uc: u8, n: usize) -> Result<(), CUresult> {
+    GlobalState::lock_stream(stream::CU_STREAM_LEGACY, |stream| {
+        let mut cmd_list = stream.command_list()?;
+        unsafe {
+            cmd_list.append_memory_fill_unsafe(dst, &uc, mem::size_of::<u8>() * n, None, &mut [])
+        }?;
+        stream.queue.execute(cmd_list)?;
+        Ok::<_, CUresult>(())
+    })?
+}
+
 #[cfg(test)]
 mod test {
     use super::super::test::CudaDriverFns;

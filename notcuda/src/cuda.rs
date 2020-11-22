@@ -2914,7 +2914,7 @@ pub extern "C" fn cuMemsetD8_v2(
     uc: ::std::os::raw::c_uchar,
     N: usize,
 ) -> CUresult {
-    r#impl::unimplemented()
+    r#impl::memory::set_d8_v2(dstDevice.decuda(), uc, N).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
