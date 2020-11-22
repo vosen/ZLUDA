@@ -9,7 +9,7 @@
                OpCapability Float64
          %29 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
-               OpEntryPoint Kernel %1 "selp"
+               OpEntryPoint Kernel %1 "selp_true"
        %void = OpTypeVoid
       %ulong = OpTypeInt 64 0
          %32 = OpTypeFunction %void %ulong %ulong
@@ -19,7 +19,7 @@
 %_ptr_Generic_ushort = OpTypePointer Generic %ushort
     %ulong_2 = OpConstant %ulong 2
        %bool = OpTypeBool
-      %false = OpConstantFalse %bool
+       %true = OpConstantTrue %bool
           %1 = OpFunction %void None %32
           %8 = OpFunctionParameter %ulong
           %9 = OpFunctionParameter %ulong
@@ -47,7 +47,7 @@
                OpStore %7 %14
          %17 = OpLoad %ushort %6
          %18 = OpLoad %ushort %7
-         %16 = OpSelect %ushort %false %17 %18
+         %16 = OpSelect %ushort %true %17 %18
                OpStore %6 %16
          %19 = OpLoad %ulong %5
          %20 = OpLoad %ushort %6

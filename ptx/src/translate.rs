@@ -3025,7 +3025,7 @@ fn emit_function_body_ops(
                 }
                 ast::Instruction::Selp(t, a) => {
                     let result_type = map.get_or_add_scalar(builder, ast::ScalarType::from(*t));
-                    builder.select(result_type, Some(a.dst), a.src3, a.src2, a.src2)?;
+                    builder.select(result_type, Some(a.dst), a.src3, a.src1, a.src2)?;
                 }
                 // TODO: implement named barriers
                 ast::Instruction::Bar(d, _) => {
