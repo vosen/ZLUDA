@@ -20,11 +20,11 @@ use clap::{App, AppSettings, Arg};
 mod win;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let matches = App::new("notCUDA injector")
+    let matches = App::new("ZLUDA injector")
         .setting(AppSettings::TrailingVarArg)
         .arg(
             Arg::with_name("EXE")
-                .help("Path to the executable to be injected with notCUDA")
+                .help("Path to the executable to be injected with ZLUDA")
                 .required(true),
         )
         .arg(
@@ -67,7 +67,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             ptr::null(),
             &mut startup_info as *mut _,
             &mut proc_info as *mut _,
-            "notcuda_redirect.dll\0".as_ptr() as *const i8,
+            "zluda_redirect.dll\0".as_ptr() as *const i8,
             Option::None
         ),
         |x| x != 0

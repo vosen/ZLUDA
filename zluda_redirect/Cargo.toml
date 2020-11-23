@@ -1,5 +1,5 @@
 [package]
-name = "notcuda_redirect"
+name = "zluda_redirect"
 version = "0.0.0"
 authors = ["Andrzej Janik <vosen@vosen.pl>"]
 edition = "2018"

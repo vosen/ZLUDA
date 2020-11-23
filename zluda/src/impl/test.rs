@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 
-use crate::cuda as notcuda;
+use crate::cuda as zluda;
 use crate::cuda::CUstream;
 use crate::cuda::CUuuid;
 use crate::{
@@ -18,8 +18,8 @@ macro_rules! cuda_driver_test {
     ($func:ident) => {
         paste! {
             #[test]
-            fn [<$func _notcuda>]() {
-                $func::<crate::r#impl::test::NotCuda>()
+            fn [<$func _zluda>]() {
+                $func::<crate::r#impl::test::Zluda>()
             }
 
             #[test]
@@ -46,58 +46,58 @@ pub trait CudaDriverFns {
     fn cuStreamDestroy_v2(stream: CUstream) -> CUresult;
 }
 
-pub struct NotCuda();
+pub struct Zluda();
 
-impl CudaDriverFns for NotCuda {
+impl CudaDriverFns for Zluda {
     fn cuInit(_flags: c_uint) -> CUresult {
-        notcuda::cuInit(_flags as _)
+        zluda::cuInit(_flags as _)
     }
 
     fn cuCtxCreate_v2(pctx: *mut *mut c_void, flags: c_uint, dev: c_int) -> CUresult {
-        notcuda::cuCtxCreate_v2(pctx as *mut _, flags, CUdevice(dev))
+        zluda::cuCtxCreate_v2(pctx as *mut _, flags, CUdevice(dev))
     }
 
     fn cuCtxDestroy_v2(ctx: *mut c_void) -> CUresult {
-        notcuda::cuCtxDestroy_v2(ctx as *mut _)
+        zluda::cuCtxDestroy_v2(ctx as *mut _)
     }
 
     fn cuCtxPopCurrent_v2(pctx: *mut *mut c_void) -> CUresult {
-        notcuda::cuCtxPopCurrent_v2(pctx as *mut _)
+        zluda::cuCtxPopCurrent_v2(pctx as *mut _)
     }
 
     fn cuCtxGetApiVersion(ctx: *mut c_void, version: *mut c_uint) -> CUresult {
-        notcuda::cuCtxGetApiVersion(ctx as *mut _, version)
+        zluda::cuCtxGetApiVersion(ctx as *mut _, version)
     }
 
     fn cuCtxGetCurrent(pctx: *mut *mut c_void) -> CUresult {
-        notcuda::cuCtxGetCurrent(pctx as *mut _)
+        zluda::cuCtxGetCurrent(pctx as *mut _)
     }
     fn cuMemAlloc_v2(dptr: *mut *mut c_void, bytesize: usize) -> CUresult {
-        notcuda::cuMemAlloc_v2(dptr as *mut _, bytesize)
+        zluda::cuMemAlloc_v2(dptr as *mut _, bytesize)
     }
 
     fn cuDeviceGetUuid(uuid: *mut CUuuid, dev: c_int) -> CUresult {
-        notcuda::cuDeviceGetUuid(uuid, CUdevice(dev))
+        zluda::cuDeviceGetUuid(uuid, CUdevice(dev))
     }
 
     fn cuDevicePrimaryCtxGetState(dev: c_int, flags: *mut c_uint, active: *mut c_int) -> CUresult {
-        notcuda::cuDevicePrimaryCtxGetState(CUdevice(dev), flags, active)
+        zluda::cuDevicePrimaryCtxGetState(CUdevice(dev), flags, active)
     }
 
     fn cuStreamGetCtx(hStream: CUstream, pctx: *mut *mut c_void) -> CUresult {
-        notcuda::cuStreamGetCtx(hStream, pctx as _)
+        zluda::cuStreamGetCtx(hStream, pctx as _)
     }
 
     fn cuStreamCreate(stream: *mut CUstream, flags: c_uint) -> CUresult {
-        notcuda::cuStreamCreate(stream, flags)
+        zluda::cuStreamCreate(stream, flags)
     }
 
     fn cuMemFree_v2(dptr: *mut c_void) -> CUresult {
-        notcuda::cuMemFree_v2(CUdeviceptr(dptr as _))
+        zluda::cuMemFree_v2(CUdeviceptr(dptr as _))
     }
 
     fn cuStreamDestroy_v2(stream: CUstream) -> CUresult {
-        notcuda::cuStreamDestroy_v2(stream)
+        zluda::cuStreamDestroy_v2(stream)
     }
 }
 

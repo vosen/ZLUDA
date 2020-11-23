@@ -1,9 +1,9 @@
 // Every time this file changes it must te rebuilt:
-//  ocloc -file notcuda_ptx_impl.cl -64 -options "-cl-std=CL2.0 -Dcl_intel_bit_instructions" -out_dir . -device kbl -output_no_suffix -spv_only
+//  ocloc -file zluda_ptx_impl.cl -64 -options "-cl-std=CL2.0 -Dcl_intel_bit_instructions" -out_dir . -device kbl -output_no_suffix -spv_only
 // Additionally you should strip names:
-//  spirv-opt --strip-debug notcuda_ptx_impl.spv -o notcuda_ptx_impl.spv
+//  spirv-opt --strip-debug zluda_ptx_impl.spv -o zluda_ptx_impl.spv
 
-#define FUNC(NAME) __notcuda_ptx_impl__ ## NAME
+#define FUNC(NAME) __zluda_ptx_impl__ ## NAME
 
 #define atomic_inc(NAME, SUCCESS, FAILURE, SCOPE, SPACE)                                                                                    \
     uint FUNC(NAME)(SPACE uint* ptr, uint threshold) {                                                                                      \

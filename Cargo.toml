@@ -4,9 +4,9 @@ members = [
     "level_zero-sys",
     "level_zero",
     "spirv_tools-sys",
-    "notcuda",
-    #"notcuda_inject",
-    #"notcuda_redirect",
+    "zluda",
+    #"zluda_inject",
+    #"zluda_redirect",
     "ptx",
 ]
 

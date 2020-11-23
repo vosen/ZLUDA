@@ -170,9 +170,9 @@ fn test_ptx_assert<'a, T: From<u8> + ze::SafeRepr + Debug + Copy + PartialEq>(
     let mut errors = Vec::new();
     let ast = ptx::ModuleParser::new().parse(&mut errors, ptx_text)?;
     assert!(errors.len() == 0);
-    let notcuda_module = translate::to_spirv_module(ast)?;
+    let zluda_module = translate::to_spirv_module(ast)?;
     let name = CString::new(name)?;
-    let result = run_spirv(name.as_c_str(), notcuda_module, input, output)
+    let result = run_spirv(name.as_c_str(), zluda_module, input, output)
         .map_err(|err| DisplayError { err })?;
     assert_eq!(result.as_slice(), output);
     Ok(())
@@ -331,7 +331,7 @@ fn test_spvtxt_assert<'a>(
         } else {
             Cow::Owned(spirv_module.spirv.disassemble())
         };
-        if let Ok(dump_path) = env::var("NOTCUDA_TEST_SPIRV_DUMP_DIR") {
+        if let Ok(dump_path) = env::var("ZLUDA_TEST_SPIRV_DUMP_DIR") {
             let mut path = PathBuf::from(dump_path);
             if let Ok(()) = fs::create_dir_all(&path) {
                 path.push(spirv_file_name);

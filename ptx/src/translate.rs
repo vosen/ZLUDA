@@ -9,7 +9,7 @@ use std::{
 
 use rspirv::binary::Assemble;
 
-static NOTCUDA_PTX_IMPL: &'static [u8] = include_bytes!("../lib/notcuda_ptx_impl.spv");
+static ZLUDA_PTX_IMPL: &'static [u8] = include_bytes!("../lib/zluda_ptx_impl.spv");
 
 quick_error! {
     #[derive(Debug)]
@@ -506,7 +506,7 @@ pub fn to_spirv_module<'a>(ast: ast::Module<'a>) -> Result<Module, TranslateErro
         spirv,
         kernel_info,
         should_link_ptx_impl: if must_link_ptx_impl {
-            Some(NOTCUDA_PTX_IMPL)
+            Some(ZLUDA_PTX_IMPL)
         } else {
             None
         },
@@ -1226,7 +1226,7 @@ fn translate_function<'a>(
 ) -> Result<Option<Function<'a>>, TranslateError> {
     let import_as = match &f.func_directive {
         ast::MethodDecl::Func(_, "__assertfail", _) => {
-            Some("__notcuda_ptx_impl____assertfail".to_owned())
+            Some("__zluda_ptx_impl____assertfail".to_owned())
         }
         _ => None,
     };
@@ -1667,7 +1667,7 @@ fn to_ptx_impl_atomic_call(
     let scope = ptx_scope_name(details.scope);
     let space = ptx_space_name(details.space);
     let fn_name = format!(
-        "__notcuda_ptx_impl__atom_{}_{}_{}_{}",
+        "__zluda_ptx_impl__atom_{}_{}_{}_{}",
         semantics, scope, space, op
     );
     // TODO: extract to a function
@@ -1757,7 +1757,7 @@ fn to_ptx_impl_bfe_call(
     typ: ast::IntType,
     arg: ast::Arg4<ExpandedArgParams>,
 ) -> ExpandedStatement {
-    let prefix = "__notcuda_ptx_impl__";
+    let prefix = "__zluda_ptx_impl__";
     let suffix = match typ {
         ast::IntType::U32 => "bfe_u32",
         ast::IntType::U64 => "bfe_u64",

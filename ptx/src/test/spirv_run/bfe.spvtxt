@@ -10,7 +10,7 @@
          %40 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
                OpEntryPoint Kernel %1 "bfe"
-               OpDecorate %34 LinkageAttributes "__notcuda_ptx_impl__bfe_u32" Import
+               OpDecorate %34 LinkageAttributes "__zluda_ptx_impl__bfe_u32" Import
        %void = OpTypeVoid
        %uint = OpTypeInt 32 0
          %43 = OpTypeFunction %uint %uint %uint %uint

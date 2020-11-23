@@ -8,7 +8,7 @@ use std::{
     sync::atomic::{AtomicU32, Ordering},
 };
 
-const PROJECT_URL_SUFFIX: &'static str = " [github.com/vosen/notCUDA]";
+const PROJECT_URL_SUFFIX: &'static str = " [github.com/vosen/ZLUDA]";
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]

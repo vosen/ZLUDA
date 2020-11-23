@@ -10,7 +10,7 @@
          %34 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
                OpEntryPoint Kernel %1 "shl_link_hack"
-               OpDecorate %29 LinkageAttributes "__notcuda_ptx_impl__atom_relaxed_gpu_generic_inc" Import
+               OpDecorate %29 LinkageAttributes "__zluda_ptx_impl__atom_relaxed_gpu_generic_inc" Import
        %void = OpTypeVoid
        %uint = OpTypeInt 32 0
 %_ptr_Generic_uint = OpTypePointer Generic %uint

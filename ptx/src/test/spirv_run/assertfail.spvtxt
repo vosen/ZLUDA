@@ -10,7 +10,7 @@
          %67 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
                OpEntryPoint Kernel %12 "assertfail"
-               OpDecorate %1 LinkageAttributes "__notcuda_ptx_impl____assertfail" Import
+               OpDecorate %1 LinkageAttributes "__zluda_ptx_impl____assertfail" Import
        %void = OpTypeVoid
       %ulong = OpTypeInt 64 0
 %_ptr_Function_ulong = OpTypePointer Function %ulong

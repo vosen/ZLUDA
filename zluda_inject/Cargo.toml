@@ -1,15 +1,15 @@
 [package]
-name = "notcuda_inject"
+name = "zluda_inject"
 version = "0.0.0"
 authors = ["Andrzej Janik <vosen@vosen.pl>"]
 edition = "2018"
 
 [[bin]]
-name = "notcuda"
+name = "zluda"
 path = "src/main.rs"
 
 [target.'cfg(windows)'.dependencies]
-notcuda_redirect = { path = "../notcuda_redirect" }
+zluda_redirect = { path = "../zluda_redirect" }
 winapi = { version = "0.3", features = ["processthreadsapi", "std", "synchapi"] }
 detours-sys = "0.1"
 clap = "2.33"
