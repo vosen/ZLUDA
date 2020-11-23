@@ -7,8 +7,11 @@ ZLUDA is a drop-in replacament for CUDA that allows to run unmodified CUDA appli
 ZLUDA performance has been measured with GeekBench 5.2.3 on Intel UHD 630.\
 One measurement has been done using OpenCL and another measurement has been done using CUDA with Intel GPU masquerading as a (relatively slow) NVIDIA GPU with the help of ZLUDA. Both measurements use the same GPU.
 
-Performance below is in percent normalized to OpenCL performance. 110% means that ZLUDA-implemented CUDA is 10% faster on Intel UHD 630.
+Performance below is normalized to OpenCL performance. 110% means that ZLUDA-implemented CUDA is 10% faster on Intel UHD 630.
 
+![](GeekBench_5_2_3.svg)
+
+Overall in this suite of benchmarks ZLUDA is roughly 4% faster.
 
 ### Explanation of the results
  * Why is ZLUDA faster in Stereo Matching, Gaussian Blur and Depth of Field?\
@@ -20,7 +23,7 @@ Performance below is in percent normalized to OpenCL performance. 110% means tha
    Authors of CUDA benchmarks used CUDA functions `atomicInc` and `atomicDec` which have direct hardware support on NVIDIA cards, but no hardware support on Intel cards. They have to be emulated in software, which limits performance
  * Why are some benchmarks failing?\
    ZLUDA itself supports all the operations used in the failing benchmarks. From the limited debugging that has been done yet, the problem is most likely somewhere else. Intel GPU compiler stack is very capable when it comes to compiling OpenCL, C for Metal and DPC++. It's not yet very good at compiling ZLUDA. ZLUDA emits code patterns never seen before by the Intel GPU compiler stack and hits some rarely used (or not used before) code paths in the compiler.\
-   Current status of failing GeekBench tests is tracked [here](#12)
+   Current status of failing GeekBench tests is tracked [here](https://github.com/vosen/ZLUDA/pull/12)
    
 
 ## Details
