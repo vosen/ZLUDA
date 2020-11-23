@@ -110,6 +110,20 @@ pub fn get_function(
         return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
     }
     let name = unsafe { CStr::from_ptr(name) }.to_owned();
+    let name_string = name.to_string_lossy();
+    let visa_options = std::env::var("IGC_VISAOptions");
+    let should_not_run_in_presence_of_hacks = match (
+        visa_options.as_ref().map(|s| s.as_str()),
+        name_string.as_ref(),
+    ) {
+        (Ok("-nolocalra"), "square_image") // Face Detection
+        | (Ok("-nolocalra"), "sum_horizontal") // Face Detection
+        | (Ok("-nolocalra"), "sum_vertical") // Face Detection
+        | (Ok("-nolocalra"), "detect") // Face Detection
+        | (Ok("-nolocalra"), "particle") // Particle Physics
+        => true,
+        _ => false,
+    };
     let function: *mut Function = GlobalState::lock_current_context(|ctx| {
         let module = unsafe { &mut *hmod }.as_result_mut()?;
         let device = unsafe { &mut *ctx.device };
@@ -145,6 +159,7 @@ pub fn get_function(
                     arg_size: kernel_info.arguments_sizes.clone(),
                     use_shared_mem: kernel_info.uses_shared_mem,
                     properties: None,
+                    do_nothing_hack: should_not_run_in_presence_of_hacks,
                 })))
             }
         };

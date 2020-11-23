@@ -26,6 +26,7 @@ pub struct FunctionData {
     pub arg_size: Vec<usize>,
     pub use_shared_mem: bool,
     pub properties: Option<Box<l0::sys::ze_kernel_properties_t>>,
+    pub do_nothing_hack: bool,
 }
 
 impl FunctionData {
@@ -61,6 +62,9 @@ pub fn launch_kernel(
     }
     GlobalState::lock_stream(hstream, |stream| {
         let func: &mut FunctionData = unsafe { &mut *f }.as_result_mut()?;
+        if func.do_nothing_hack {
+            return Ok(());
+        }
         for (i, arg_size) in func.arg_size.iter().enumerate() {
             unsafe {
                 func.base
