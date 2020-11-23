@@ -8,7 +8,8 @@ use std::{
     sync::atomic::{AtomicU32, Ordering},
 };
 
-const PROJECT_URL_SUFFIX: &'static str = " [github.com/vosen/ZLUDA]";
+const PROJECT_URL_SUFFIX_SHORT: &'static str = " [ZLUDA]";
+const PROJECT_URL_SUFFIX_LONG: &'static str = " [github.com/vosen/ZLUDA]";
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
@@ -152,15 +153,24 @@ pub fn get_name(name: *mut c_char, len: i32, dev_idx: Index) -> Result<(), CUres
         .unwrap_or(256);
     let mut dst_null_pos = cmp::min((len - 1) as usize, name_len);
     unsafe { std::ptr::copy_nonoverlapping(name_ptr, name, dst_null_pos) };
-    if name_len + PROJECT_URL_SUFFIX.len() < (len as usize) {
+    if name_len + PROJECT_URL_SUFFIX_LONG.len() < (len as usize) {
         unsafe {
             std::ptr::copy_nonoverlapping(
-                PROJECT_URL_SUFFIX.as_ptr(),
+                PROJECT_URL_SUFFIX_LONG.as_ptr(),
                 name.add(name_len) as *mut _,
-                PROJECT_URL_SUFFIX.len(),
+                PROJECT_URL_SUFFIX_LONG.len(),
             )
         };
-        dst_null_pos += PROJECT_URL_SUFFIX.len();
+        dst_null_pos += PROJECT_URL_SUFFIX_LONG.len();
+    } else if name_len + PROJECT_URL_SUFFIX_SHORT.len() < (len as usize) {
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                PROJECT_URL_SUFFIX_SHORT.as_ptr(),
+                name.add(name_len) as *mut _,
+                PROJECT_URL_SUFFIX_SHORT.len(),
+            )
+        };
+        dst_null_pos += PROJECT_URL_SUFFIX_SHORT.len();
     }
     unsafe { *(name.add(dst_null_pos)) = 0 };
     Ok(())
