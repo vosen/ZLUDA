@@ -9,9 +9,13 @@ One measurement has been done using OpenCL and another measurement has been done
 
 Performance below is normalized to OpenCL performance. 110% means that ZLUDA-implemented CUDA is 10% faster on Intel UHD 630.
 
-![](GeekBench_5_2_3.svg)
+![Performance graph](GeekBench_5_2_3.svg)
 
-Overall in this suite of benchmarks ZLUDA is roughly 4% faster.
+[ZLUDA detailed log on Geekbench.com](https://browser.geekbench.com/v5/compute/1918048)
+
+[OpenCL detailed log on Geekbench.com](https://browser.geekbench.com/v5/compute/1918080)
+
+Overall in this suite of benchmarks faster by approximately 4% on ZLUDA.
 
 ### Explanation of the results
  * Why is ZLUDA faster in Stereo Matching, Gaussian Blur and Depth of Field?\
