@@ -26,7 +26,7 @@ Overall in this suite of benchmarks faster by approximately 4% on ZLUDA.
  * Why is OpenCL faster in Canny and Horizon Detection?\
    Authors of CUDA benchmarks used CUDA functions `atomicInc` and `atomicDec` which have direct hardware support on NVIDIA cards, but no hardware support on Intel cards. They have to be emulated in software, which limits performance
  * Why are some benchmarks failing?\
-   ZLUDA itself supports all the operations used in the failing benchmarks. From the limited debugging that has been done yet, the problem is most likely somewhere else. Intel GPU compiler stack is very capable when it comes to compiling OpenCL, C for Metal and DPC++. It's not yet very good at compiling ZLUDA. ZLUDA emits code patterns never seen before by the Intel GPU compiler stack and hits some rarely used (or not used before) code paths in the compiler.\
+   ZLUDA itself supports all the operations used in the failing benchmarks. From the limited debugging that has been done so far, the problem is most likely somewhere else. Intel GPU compiler stack is very capable when it comes to compiling OpenCL, C for Metal and DPC++. It's not yet very good at compiling ZLUDA. ZLUDA emits code patterns never seen before by the Intel GPU compiler stack and hits some rarely used (or not used before) code paths in the compiler.\
    Current status of failing GeekBench tests is tracked [here](https://github.com/vosen/ZLUDA/pull/12)
    
 
@@ -49,23 +49,27 @@ Overall in this suite of benchmarks faster by approximately 4% on ZLUDA.
 
 
 ## Usage
-**Warning**: this is a very incomplete Proof of Concept. It's probably not going to work with your application. ZLUDA currently works only with applications which use CUDA Driver API. Linux builds also work with application which use statically-linked CUDA Runtime API
+**Warning**: this is a very incomplete Proof of Concept. It's probably not going to work with your application. ZLUDA currently works only with applications which use CUDA Driver API. Linux builds also work with applications which use statically-linked CUDA Runtime API
 
 ### Windows
-You should have very recent GPU drivers installed.\
+You should have the most recent GPU drivers installed.\
 Copy `nvcuda.dll` to the application directory (the directory where .exe file is) and launch it normally
 
 ### Linux
-Very recent version of [compute-runtime](https://github.com/intel/compute-runtime) is required. At the time of the writing 20.45.18403 is the recommended version.
+A very recent version of [compute-runtime](https://github.com/intel/compute-runtime) is required. At the time of the writing 20.45.18403 is the recommended version.
 Unpack the archive somewhere and run your application like this:
 ```
 LD_LIBRARY_PATH=<PATH_TO_THE_DIRECTORY_WITH_ZLUDA_PROVIDED_LIBCUDA> <YOUR_APPLICATION>
 ```
 
 ## Building
-You should have relatively recent version of Rust installed, then you just do:
+You should have a relatively recent version of Rust installed, then you just do:
 
 ```
 cargo build
 ```
 in the main directory of the project
+
+## License
+
+This software is dual-licensed under either the Apache 2.0 license or the MIT license. See [LICENSE-APACHE](LICENSE-APACHE) or [LICENSE-MIT](LICENSE-MIT) for details
