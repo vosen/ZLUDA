@@ -20,7 +20,7 @@ Overall in this suite of benchmarks faster by approximately 4% on ZLUDA.
 ### Explanation of the results
  * Why is ZLUDA faster in Stereo Matching, Gaussian Blur and Depth of Field?\
    This has not been precisely pinpointed to one thing or another but it's likely a combination of things:
-   * ZLUDA uses Level 0, which in general is a more level, highr performance API
+   * ZLUDA uses Level 0, which in general is a more level, higher performance API
    * Tying to the previous point, currently ZLUDA does not support asynchronous execution. This gives us an unfair advantage in a benchmark like GeekBench. GeekBench exclusively uses CUDA synchronous APIs
    * There is a set of GPU instructions which are available on both NVIDIA hardware and Intel hardware, but are not exposed through OpenCL. We are comparing NVIDIA GPU optimized code with the more general OpenCL code. It's a lucky coincidence (and a credit to the underlying Intel Graphics Compiler) that this code also works well on an Intel GPU
  * Why is OpenCL faster in Canny and Horizon Detection?\
