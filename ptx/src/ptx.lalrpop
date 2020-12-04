@@ -921,7 +921,7 @@ InstAdd: ast::Instruction<ast::ParsedArgParams<'input>> = {
 // TODO: support f16 setp
 InstSetp: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "setp" <d:SetpMode> <a:Arg4Setp> => ast::Instruction::Setp(d, a),
-    "setp" <d:SetpBoolMode> <a:Arg5> => ast::Instruction::SetpBool(d, a),
+    "setp" <d:SetpBoolMode> <a:Arg5Setp> => ast::Instruction::SetpBool(d, a),
 };
 
 SetpMode: ast::SetpData = {
@@ -1775,9 +1775,9 @@ Operand: ast::Operand<&'input str> = {
     <x:ImmediateValue> => ast::Operand::Imm(x)
 };
 
-CallOperand: ast::CallOperand<&'input str> = {
-    <r:ExtendedID> => ast::CallOperand::Reg(r),
-    <x:ImmediateValue> => ast::CallOperand::Imm(x)
+CallOperand: ast::SrcOperand<&'input str> = {
+    <r:ExtendedID> => ast::SrcOperand::Reg(r),
+    <x:ImmediateValue> => ast::SrcOperand::Imm(x)
 };
 
 // TODO: start parsing whole constants sub-language:
@@ -1875,8 +1875,8 @@ Arg4Setp: ast::Arg4Setp<ast::ParsedArgParams<'input>> = {
 };
 
 // TODO: pass src3 negation somewhere
-Arg5: ast::Arg5<ast::ParsedArgParams<'input>> = {
-    <dst1:ExtendedID> <dst2:OptionalDst?> "," <src1:Operand> "," <src2:Operand> "," "!"? <src3:Operand> => ast::Arg5{<>}
+Arg5Setp: ast::Arg5Setp<ast::ParsedArgParams<'input>> = {
+    <dst1:ExtendedID> <dst2:OptionalDst?> "," <src1:Operand> "," <src2:Operand> "," "!"? <src3:Operand> => ast::Arg5Setp{<>}
 };
 
 ArgCall: (Vec<&'input str>, &'input str, Vec<ast::CallOperand<&'input str>>) = {

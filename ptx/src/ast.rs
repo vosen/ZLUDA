@@ -557,7 +557,7 @@ pub enum Instruction<P: ArgParams> {
     Mul(MulDetails, Arg3<P>),
     Add(ArithDetails, Arg3<P>),
     Setp(SetpData, Arg4Setp<P>),
-    SetpBool(SetpBoolData, Arg5<P>),
+    SetpBool(SetpBoolData, Arg5Setp<P>),
     Not(BooleanType, Arg2<P>),
     Bra(BraData, Arg1<P>),
     Cvt(CvtDetails, Arg2<P>),
@@ -614,16 +614,15 @@ pub struct CallInst<P: ArgParams> {
     pub uniform: bool,
     pub ret_params: Vec<P::Id>,
     pub func: P::Id,
-    pub param_list: Vec<P::CallOperand>,
+    pub param_list: Vec<P::SrcOperand>,
 }
 
 pub trait ArgParams {
     type Id;
-    type Operand;
-    type IdOrVector;
-    type OperandOrVector;
-    type CallOperand;
-    type SrcMemberOperand;
+    type DstOperand;
+    type SrcOperand;
+    type DstOperandVec;
+    type SrcOperandVec;
 }
 
 pub struct ParsedArgParams<'a> {
@@ -632,11 +631,10 @@ pub struct ParsedArgParams<'a> {
 
 impl<'a> ArgParams for ParsedArgParams<'a> {
     type Id = &'a str;
-    type Operand = Operand<&'a str>;
-    type CallOperand = CallOperand<&'a str>;
-    type IdOrVector = IdOrVector<&'a str>;
-    type OperandOrVector = OperandOrVector<&'a str>;
-    type SrcMemberOperand = (&'a str, u8);
+    type DstOperand = DstOperand<&'a str>;
+    type SrcOperand = SrcOperand<&'a str>;
+    type DstOperandVec = DstOperandVec<&'a str>;
+    type SrcOperandVec = SrcOperandVec<&'a str>;
 }
 
 pub struct Arg1<P: ArgParams> {
@@ -644,67 +642,54 @@ pub struct Arg1<P: ArgParams> {
 }
 
 pub struct Arg1Bar<P: ArgParams> {
-    pub src: P::Operand,
+    pub src: P::SrcOperand,
 }
 
 pub struct Arg2<P: ArgParams> {
-    pub dst: P::Id,
-    pub src: P::Operand,
+    pub dst: P::DstOperand,
+    pub src: P::SrcOperand,
 }
 pub struct Arg2Ld<P: ArgParams> {
-    pub dst: P::IdOrVector,
-    pub src: P::Operand,
+    pub dst: P::DstOperandVec,
+    pub src: P::SrcOperand,
 }
 
 pub struct Arg2St<P: ArgParams> {
-    pub src1: P::Operand,
-    pub src2: P::OperandOrVector,
+    pub src1: P::SrcOperand,
+    pub src2: P::SrcOperandVec,
 }
 
-pub enum Arg2Mov<P: ArgParams> {
-    Normal(Arg2MovNormal<P>),
-    Member(Arg2MovMember<P>),
-}
-
-pub struct Arg2MovNormal<P: ArgParams> {
-    pub dst: P::IdOrVector,
-    pub src: P::OperandOrVector,
-}
-
-// We duplicate dst here because during further compilation
-// composite dst and composite src will receive different ids
-pub enum Arg2MovMember<P: ArgParams> {
-    Dst((P::Id, u8), P::Id, P::Id),
-    Src(P::Id, P::SrcMemberOperand),
-    Both((P::Id, u8), P::Id, P::SrcMemberOperand),
+pub struct Arg2Mov<P: ArgParams> {
+    pub dst: P::DstOperandVec,
+    pub src: P::SrcOperandVec,
 }
 
 pub struct Arg3<P: ArgParams> {
-    pub dst: P::Id,
-    pub src1: P::Operand,
-    pub src2: P::Operand,
+    pub dst: P::DstOperand,
+    pub src1: P::SrcOperand,
+    pub src2: P::SrcOperand,
 }
 
 pub struct Arg4<P: ArgParams> {
-    pub dst: P::Id,
-    pub src1: P::Operand,
-    pub src2: P::Operand,
-    pub src3: P::Operand,
+    pub dst: P::DstOperand,
+    pub src1: P::SrcOperand,
+    pub src2: P::SrcOperand,
+    pub src3: P::SrcOperand,
 }
 
 pub struct Arg4Setp<P: ArgParams> {
     pub dst1: P::Id,
     pub dst2: Option<P::Id>,
-    pub src1: P::Operand,
-    pub src2: P::Operand,
+    pub src1: P::SrcOperand,
+    pub src2: P::SrcOperand,
 }
 
-pub struct Arg5<P: ArgParams> {
+pub struct Arg5Setp<P: ArgParams> {
     pub dst1: P::Id,
     pub dst2: Option<P::Id>,
-    pub src1: P::Operand,
-    pub src2: P::Operand,
-    pub src3: P::Operand,
+    pub src1: P::SrcOperand,
+    pub src2: P::SrcOperand,
+    pub src3: P::SrcOperand,
 }
 
 #[derive(Copy, Clone)]
@@ -716,38 +701,29 @@ pub enum ImmediateValue {
 }
 
 #[derive(Copy, Clone)]
-pub enum Operand<ID> {
+pub enum DstOperand<ID> {
     Reg(ID),
-    RegOffset(ID, i32),
-    Imm(ImmediateValue),
+    VecMember(ID, u8),
+}
+
+#[derive(Clone)]
+pub enum DstOperandVec<Id> {
+    Normal(DstOperand<Id>),
+    Vector(Vec<Id>),
 }
 
 #[derive(Copy, Clone)]
-pub enum CallOperand<ID> {
-    Reg(ID),
+pub enum SrcOperand<Id> {
+    Reg(Id),
+    RegOffset(Id, i32),
     Imm(ImmediateValue),
+    VecIndex(Id, u8),
 }
 
-pub enum IdOrVector<ID> {
-    Reg(ID),
-    Vec(Vec<ID>),
-}
-
-pub enum OperandOrVector<ID> {
-    Reg(ID),
-    RegOffset(ID, i32),
-    Imm(ImmediateValue),
-    Vec(Vec<ID>),
-}
-
-impl<T> From<Operand<T>> for OperandOrVector<T> {
-    fn from(this: Operand<T>) -> Self {
-        match this {
-            Operand::Reg(r) => OperandOrVector::Reg(r),
-            Operand::RegOffset(r, imm) => OperandOrVector::RegOffset(r, imm),
-            Operand::Imm(imm) => OperandOrVector::Imm(imm),
-        }
-    }
+#[derive(Clone)]
+pub enum SrcOperandVec<Id> {
+    Normal(SrcOperand<Id>),
+    Vector(Vec<Id>),
 }
 
 pub enum VectorPrefix {
