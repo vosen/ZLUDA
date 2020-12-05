@@ -1478,7 +1478,7 @@ fn convert_to_typed_statements(
                         d.src_is_address = take_address;
                     }
                     let mut visitor = VectorPackingVisitor::new(&mut result, id_defs);
-                    result.push(Statement::Instruction(
+                    let instruction = Statement::Instruction(
                         ast::Instruction::Mov(
                             d,
                             ast::Arg2Mov {
@@ -1487,11 +1487,13 @@ fn convert_to_typed_statements(
                             },
                         )
                         .map(&mut visitor)?,
-                    ));
+                    );
+                    result.push(instruction);
                 }
                 inst => {
                     let mut visitor = VectorPackingVisitor::new(&mut result, id_defs);
-                    result.push(Statement::Instruction(inst.map(&mut visitor)?));
+                    let instruction = Statement::Instruction(inst.map(&mut visitor)?);
+                    result.push(instruction);
                 }
             },
             Statement::Label(i) => result.push(Statement::Label(i)),
@@ -2285,72 +2287,6 @@ impl<'a, 'b> FlattenArguments<'a, 'b> {
         }));
         Ok(id)
     }
-
-    fn member_src(
-        &mut self,
-        desc: ArgumentDescriptor<(spirv::Word, u8)>,
-        typ: (ast::ScalarType, u8),
-    ) -> Result<spirv::Word, TranslateError> {
-        if desc.is_dst {
-            return Err(TranslateError::Unreachable);
-        }
-        let new_id = Self::insert_composite_read(
-            self.func,
-            self.id_def,
-            typ,
-            None,
-            Some(desc.sema),
-            desc.op,
-        );
-        Ok(new_id)
-    }
-
-    fn vector(
-        &mut self,
-        desc: ArgumentDescriptor<&Vec<spirv::Word>>,
-        typ: &ast::Type,
-    ) -> Result<spirv::Word, TranslateError> {
-        let (scalar_type, vec_len) = typ.get_vector()?;
-        if !desc.is_dst {
-            let mut new_id = self.id_def.new_non_variable(typ.clone());
-            self.func.push(Statement::Undef(typ.clone(), new_id));
-            for (idx, id) in desc.op.iter().enumerate() {
-                let newer_id = self.id_def.new_non_variable(typ.clone());
-                todo!();
-                /*
-                self.func.push(Statement::Instruction(ast::Instruction::Mov(
-                    ast::MovDetails {
-                        typ: ast::Type::Scalar(scalar_type),
-                        src_is_address: false,
-                        dst_width: vec_len,
-                        src_width: 0,
-                        relaxed_src2_conv: desc.sema == ArgumentSemantics::DefaultRelaxed,
-                    },
-                    ast::Arg2Mov::Member(ast::Arg2MovMember::Dst(
-                        (newer_id, idx as u8),
-                        new_id,
-                        *id,
-                    )),
-                )));
-                */
-                new_id = newer_id;
-            }
-            Ok(new_id)
-        } else {
-            let new_id = self.id_def.new_non_variable(typ.clone());
-            for (idx, id) in desc.op.iter().enumerate() {
-                Self::insert_composite_read(
-                    &mut self.post_stmts,
-                    self.id_def,
-                    (scalar_type, vec_len),
-                    Some(*id),
-                    Some(desc.sema),
-                    (new_id, idx as u8),
-                );
-            }
-            Ok(new_id)
-        }
-    }
 }
 
 impl<'a, 'b> ArgumentMapVisitor<TypedArgParams, ExpandedArgParams> for FlattenArguments<'a, 'b> {
@@ -2367,7 +2303,10 @@ impl<'a, 'b> ArgumentMapVisitor<TypedArgParams, ExpandedArgParams> for FlattenAr
         desc: ArgumentDescriptor<ast::DstOperand<spirv::Word>>,
         typ: &ast::Type,
     ) -> Result<spirv::Word, TranslateError> {
-        todo!()
+        match desc.op {
+            ast::DstOperand::Reg(reg) => self.reg(desc.new_op(reg), Some(typ)),
+            ast::DstOperand::VecMember(..) => Err(TranslateError::Unreachable),
+        }
     }
 
     fn src_operand(
@@ -2375,7 +2314,14 @@ impl<'a, 'b> ArgumentMapVisitor<TypedArgParams, ExpandedArgParams> for FlattenAr
         desc: ArgumentDescriptor<ast::SrcOperand<spirv::Word>>,
         typ: &ast::Type,
     ) -> Result<spirv::Word, TranslateError> {
-        todo!()
+        match desc.op {
+            ast::SrcOperand::Reg(r) => self.reg(desc.new_op(r), Some(typ)),
+            ast::SrcOperand::Imm(x) => self.immediate(desc.new_op(x), typ),
+            ast::SrcOperand::RegOffset(reg, offset) => {
+                self.reg_offset(desc.new_op((reg, offset)), typ)
+            }
+            ast::SrcOperand::VecIndex(..) => Err(TranslateError::Unreachable),
+        }
     }
 
     fn dst_operand_vec(
@@ -2383,7 +2329,10 @@ impl<'a, 'b> ArgumentMapVisitor<TypedArgParams, ExpandedArgParams> for FlattenAr
         desc: ArgumentDescriptor<ast::DstOperand<spirv::Word>>,
         typ: &ast::Type,
     ) -> Result<spirv::Word, TranslateError> {
-        todo!()
+        match desc.op {
+            ast::DstOperand::Reg(reg) => self.reg(desc.new_op(reg), Some(typ)),
+            ast::DstOperand::VecMember(..) => Err(TranslateError::Unreachable),
+        }
     }
 
     fn src_operand_vec(
@@ -2391,7 +2340,14 @@ impl<'a, 'b> ArgumentMapVisitor<TypedArgParams, ExpandedArgParams> for FlattenAr
         desc: ArgumentDescriptor<ast::SrcOperand<spirv::Word>>,
         typ: &ast::Type,
     ) -> Result<spirv::Word, TranslateError> {
-        todo!()
+        match desc.op {
+            ast::SrcOperand::Reg(r) => self.reg(desc.new_op(r), Some(typ)),
+            ast::SrcOperand::Imm(x) => self.immediate(desc.new_op(x), typ),
+            ast::SrcOperand::RegOffset(reg, offset) => {
+                self.reg_offset(desc.new_op((reg, offset)), typ)
+            }
+            ast::SrcOperand::VecIndex(..) => Err(TranslateError::Unreachable),
+        }
     }
 }
 
@@ -2498,6 +2454,8 @@ fn insert_implicit_conversions(
             | s @ Statement::StoreVar(_, _)
             | s @ Statement::Undef(_, _)
             | s @ Statement::RetValue(_, _) => result.push(s),
+            Statement::PackVector(_) => todo!(),
+            Statement::UnpackVector(_) => todo!(),
         }
     }
     Ok(result)
@@ -5351,9 +5309,9 @@ where
         desc: ArgumentDescriptor<ast::DstOperandVec<&str>>,
         typ: &ast::Type,
     ) -> Result<ast::DstOperandVec<spirv::Word>, TranslateError> {
-        Ok(match desc.op {
+        Ok(match &desc.op {
             ast::DstOperandVec::Normal(inner_op) => {
-                ast::DstOperandVec::Normal(self.dst_operand(desc.new_op(inner_op), typ)?)
+                ast::DstOperandVec::Normal(self.dst_operand(desc.new_op(inner_op.clone()), typ)?)
             }
             ast::DstOperandVec::Vector(ids) => ast::DstOperandVec::Vector(
                 ids.into_iter()
@@ -5368,9 +5326,9 @@ where
         desc: ArgumentDescriptor<ast::SrcOperandVec<&str>>,
         typ: &ast::Type,
     ) -> Result<ast::SrcOperandVec<spirv::Word>, TranslateError> {
-        Ok(match desc.op {
+        Ok(match &desc.op {
             ast::SrcOperandVec::Normal(inner_op) => {
-                ast::SrcOperandVec::Normal(self.src_operand(desc.new_op(inner_op), typ)?)
+                ast::SrcOperandVec::Normal(self.src_operand(desc.new_op(inner_op.clone()), typ)?)
             }
             ast::SrcOperandVec::Vector(ids) => ast::SrcOperandVec::Vector(
                 ids.into_iter()
