@@ -1856,7 +1856,7 @@ SrcOperand: ast::SrcOperand<&'input str> = {
     <x:ImmediateValue> => ast::SrcOperand::Imm(x),
     <mem_op:MemberOperand> => {
         let (reg, idx) = mem_op;
-        ast::SrcOperand::VecIndex(reg, idx)
+        ast::SrcOperand::VecMember(reg, idx)
     }
 }
 

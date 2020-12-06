@@ -717,7 +717,7 @@ pub enum SrcOperand<Id> {
     Reg(Id),
     RegOffset(Id, i32),
     Imm(ImmediateValue),
-    VecIndex(Id, u8),
+    VecMember(Id, u8),
 }
 
 #[derive(Clone)]
