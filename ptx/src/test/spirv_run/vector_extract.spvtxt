@@ -7,12 +7,12 @@
                OpCapability Int64
                OpCapability Float16
                OpCapability Float64
-         %73 = OpExtInstImport "OpenCL.std"
+         %61 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
                OpEntryPoint Kernel %1 "vector_extract"
        %void = OpTypeVoid
       %ulong = OpTypeInt 64 0
-         %76 = OpTypeFunction %void %ulong %ulong
+         %64 = OpTypeFunction %void %ulong %ulong
 %_ptr_Function_ulong = OpTypePointer Function %ulong
      %ushort = OpTypeInt 16 0
 %_ptr_Function_ushort = OpTypePointer Function %ushort
@@ -21,10 +21,10 @@
       %uchar = OpTypeInt 8 0
     %v4uchar = OpTypeVector %uchar 4
 %_ptr_CrossWorkgroup_v4uchar = OpTypePointer CrossWorkgroup %v4uchar
-          %1 = OpFunction %void None %76
-         %11 = OpFunctionParameter %ulong
-         %12 = OpFunctionParameter %ulong
-         %71 = OpLabel
+          %1 = OpFunction %void None %64
+         %17 = OpFunctionParameter %ulong
+         %18 = OpFunctionParameter %ulong
+         %59 = OpLabel
           %2 = OpVariable %_ptr_Function_ulong Function
           %3 = OpVariable %_ptr_Function_ulong Function
           %4 = OpVariable %_ptr_Function_ulong Function
@@ -34,89 +34,92 @@
           %8 = OpVariable %_ptr_Function_ushort Function
           %9 = OpVariable %_ptr_Function_ushort Function
          %10 = OpVariable %_ptr_Function_v4ushort Function
-               OpStore %2 %11
-               OpStore %3 %12
-         %13 = OpLoad %ulong %2
-               OpStore %4 %13
-         %14 = OpLoad %ulong %3
-               OpStore %5 %14
-         %19 = OpLoad %ulong %4
-         %61 = OpConvertUToPtr %_ptr_CrossWorkgroup_v4uchar %19
-         %43 = OpLoad %v4uchar %61
-         %62 = OpCompositeExtract %uchar %43 0
-         %85 = OpBitcast %uchar %62
-         %15 = OpUConvert %ushort %85
-         %63 = OpCompositeExtract %uchar %43 1
-         %86 = OpBitcast %uchar %63
-         %16 = OpUConvert %ushort %86
-         %64 = OpCompositeExtract %uchar %43 2
-         %87 = OpBitcast %uchar %64
-         %17 = OpUConvert %ushort %87
-         %65 = OpCompositeExtract %uchar %43 3
-         %88 = OpBitcast %uchar %65
-         %18 = OpUConvert %ushort %88
-               OpStore %6 %15
-               OpStore %7 %16
-               OpStore %8 %17
-               OpStore %9 %18
-         %21 = OpLoad %ushort %7
-         %22 = OpLoad %ushort %8
-         %23 = OpLoad %ushort %9
-         %24 = OpLoad %ushort %6
-         %44 = OpUndef %v4ushort
-         %45 = OpCompositeInsert %v4ushort %21 %44 0
-         %46 = OpCompositeInsert %v4ushort %22 %45 1
-         %47 = OpCompositeInsert %v4ushort %23 %46 2
-         %48 = OpCompositeInsert %v4ushort %24 %47 3
-         %20 = OpCopyObject %v4ushort %48
-               OpStore %10 %20
-         %29 = OpLoad %v4ushort %10
-         %49 = OpCopyObject %v4ushort %29
-         %25 = OpCompositeExtract %ushort %49 0
-         %26 = OpCompositeExtract %ushort %49 1
-         %27 = OpCompositeExtract %ushort %49 2
-         %28 = OpCompositeExtract %ushort %49 3
-               OpStore %8 %25
-               OpStore %9 %26
-               OpStore %6 %27
-               OpStore %7 %28
-         %34 = OpLoad %ushort %8
-         %35 = OpLoad %ushort %9
-         %36 = OpLoad %ushort %6
-         %37 = OpLoad %ushort %7
-         %51 = OpUndef %v4ushort
-         %52 = OpCompositeInsert %v4ushort %34 %51 0
-         %53 = OpCompositeInsert %v4ushort %35 %52 1
-         %54 = OpCompositeInsert %v4ushort %36 %53 2
-         %55 = OpCompositeInsert %v4ushort %37 %54 3
-         %50 = OpCopyObject %v4ushort %55
-         %30 = OpCompositeExtract %ushort %50 0
-         %31 = OpCompositeExtract %ushort %50 1
-         %32 = OpCompositeExtract %ushort %50 2
-         %33 = OpCompositeExtract %ushort %50 3
-               OpStore %9 %30
-               OpStore %6 %31
-               OpStore %7 %32
-               OpStore %8 %33
-         %38 = OpLoad %ulong %5
-         %39 = OpLoad %ushort %6
-         %40 = OpLoad %ushort %7
-         %41 = OpLoad %ushort %8
-         %42 = OpLoad %ushort %9
-         %56 = OpUndef %v4uchar
-         %89 = OpBitcast %ushort %39
-         %66 = OpUConvert %uchar %89
-         %57 = OpCompositeInsert %v4uchar %66 %56 0
-         %90 = OpBitcast %ushort %40
-         %67 = OpUConvert %uchar %90
-         %58 = OpCompositeInsert %v4uchar %67 %57 1
-         %91 = OpBitcast %ushort %41
-         %68 = OpUConvert %uchar %91
-         %59 = OpCompositeInsert %v4uchar %68 %58 2
-         %92 = OpBitcast %ushort %42
-         %69 = OpUConvert %uchar %92
-         %60 = OpCompositeInsert %v4uchar %69 %59 3
-         %70 = OpConvertUToPtr %_ptr_CrossWorkgroup_v4uchar %38
-               OpStore %70 %60
+               OpStore %2 %17
+               OpStore %3 %18
+         %19 = OpLoad %ulong %2
+               OpStore %4 %19
+         %20 = OpLoad %ulong %3
+               OpStore %5 %20
+         %21 = OpLoad %ulong %4
+         %49 = OpConvertUToPtr %_ptr_CrossWorkgroup_v4uchar %21
+         %11 = OpLoad %v4uchar %49
+         %50 = OpCompositeExtract %uchar %11 0
+         %51 = OpCompositeExtract %uchar %11 1
+         %52 = OpCompositeExtract %uchar %11 2
+         %53 = OpCompositeExtract %uchar %11 3
+         %73 = OpBitcast %uchar %50
+         %22 = OpUConvert %ushort %73
+         %74 = OpBitcast %uchar %51
+         %23 = OpUConvert %ushort %74
+         %75 = OpBitcast %uchar %52
+         %24 = OpUConvert %ushort %75
+         %76 = OpBitcast %uchar %53
+         %25 = OpUConvert %ushort %76
+               OpStore %6 %22
+               OpStore %7 %23
+               OpStore %8 %24
+               OpStore %9 %25
+         %26 = OpLoad %ushort %7
+         %27 = OpLoad %ushort %8
+         %28 = OpLoad %ushort %9
+         %29 = OpLoad %ushort %6
+         %77 = OpUndef %v4ushort
+         %78 = OpCompositeInsert %v4ushort %26 %77 0
+         %79 = OpCompositeInsert %v4ushort %27 %78 1
+         %80 = OpCompositeInsert %v4ushort %28 %79 2
+         %81 = OpCompositeInsert %v4ushort %29 %80 3
+         %12 = OpCopyObject %v4ushort %81
+         %30 = OpCopyObject %v4ushort %12
+               OpStore %10 %30
+         %31 = OpLoad %v4ushort %10
+         %13 = OpCopyObject %v4ushort %31
+         %32 = OpCompositeExtract %ushort %13 0
+         %33 = OpCompositeExtract %ushort %13 1
+         %34 = OpCompositeExtract %ushort %13 2
+         %35 = OpCompositeExtract %ushort %13 3
+               OpStore %8 %32
+               OpStore %9 %33
+               OpStore %6 %34
+               OpStore %7 %35
+         %36 = OpLoad %ushort %8
+         %37 = OpLoad %ushort %9
+         %38 = OpLoad %ushort %6
+         %39 = OpLoad %ushort %7
+         %82 = OpUndef %v4ushort
+         %83 = OpCompositeInsert %v4ushort %36 %82 0
+         %84 = OpCompositeInsert %v4ushort %37 %83 1
+         %85 = OpCompositeInsert %v4ushort %38 %84 2
+         %86 = OpCompositeInsert %v4ushort %39 %85 3
+         %15 = OpCopyObject %v4ushort %86
+         %14 = OpCopyObject %v4ushort %15
+         %40 = OpCompositeExtract %ushort %14 0
+         %41 = OpCompositeExtract %ushort %14 1
+         %42 = OpCompositeExtract %ushort %14 2
+         %43 = OpCompositeExtract %ushort %14 3
+               OpStore %9 %40
+               OpStore %6 %41
+               OpStore %7 %42
+               OpStore %8 %43
+         %44 = OpLoad %ushort %6
+         %45 = OpLoad %ushort %7
+         %46 = OpLoad %ushort %8
+         %47 = OpLoad %ushort %9
+         %87 = OpBitcast %ushort %44
+         %54 = OpUConvert %uchar %87
+         %88 = OpBitcast %ushort %45
+         %55 = OpUConvert %uchar %88
+         %89 = OpBitcast %ushort %46
+         %56 = OpUConvert %uchar %89
+         %90 = OpBitcast %ushort %47
+         %57 = OpUConvert %uchar %90
+         %91 = OpUndef %v4uchar
+         %92 = OpCompositeInsert %v4uchar %54 %91 0
+         %93 = OpCompositeInsert %v4uchar %55 %92 1
+         %94 = OpCompositeInsert %v4uchar %56 %93 2
+         %95 = OpCompositeInsert %v4uchar %57 %94 3
+         %16 = OpCopyObject %v4uchar %95
+         %48 = OpLoad %ulong %5
+         %58 = OpConvertUToPtr %_ptr_CrossWorkgroup_v4uchar %48
+               OpStore %58 %16
                OpReturn
                OpFunctionEnd

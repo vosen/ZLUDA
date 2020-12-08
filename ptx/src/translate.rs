@@ -2091,13 +2091,21 @@ impl<'a, 'input> InsertMemSSAVisitor<'a, 'input> {
         };
         let member_index = match desc.op.1 {
             Some(idx) => {
-                match var_type {
-                    ast::Type::Vector(scalar_t, _) => {
+                let vector_width = match var_type {
+                    ast::Type::Vector(scalar_t, width) => {
                         var_type = ast::Type::Scalar(scalar_t);
+                        width
                     }
                     _ => return Err(TranslateError::MismatchedType),
-                }
-                Some((idx, self.id_def.special_registers.contains_key(&symbol)))
+                };
+                Some((
+                    idx,
+                    if self.id_def.special_registers.contains_key(&symbol) {
+                        Some(vector_width)
+                    } else {
+                        None
+                    },
+                ))
             }
             None => None,
         };
@@ -2119,7 +2127,7 @@ impl<'a, 'input> InsertMemSSAVisitor<'a, 'input> {
                         src2: generated_id,
                     },
                     typ: var_type,
-                    member_index,
+                    member_index: member_index.map(|(idx, _)| idx),
                 }));
         }
         Ok(generated_id)
@@ -3159,45 +3167,17 @@ fn emit_function_body_ops(
                 }
             },
             Statement::LoadVar(details) => {
-                let result_type = map.get_or_add(builder, SpirvType::from(details.typ.clone()));
-                let src = match details.member_index {
-                    Some((index, is_sreg)) => {
-                        let storage_class = if is_sreg {
-                            spirv::StorageClass::Input
-                        } else {
-                            spirv::StorageClass::Function
-                        };
-                        let result_ptr_type = map.get_or_add(
-                            builder,
-                            SpirvType::new_pointer(details.typ.clone(), storage_class),
-                        );
-                        let index_spirv = map.get_or_add_constant(
-                            builder,
-                            &ast::Type::Scalar(ast::ScalarType::U32),
-                            &vec_repr(index as u32),
-                        )?;
-                        builder.in_bounds_access_chain(
-                            result_ptr_type,
-                            None,
-                            details.arg.src,
-                            &[index_spirv],
-                        )?
-                    }
-                    None => details.arg.src,
-                };
-                builder.load(result_type, Some(details.arg.dst), src, None, [])?;
+                emit_load_var(builder, map, details)?;
             }
             Statement::StoreVar(details) => {
                 let dst_ptr = match details.member_index {
-                    Some((index, is_sreg)) => {
-                        let storage_class = if is_sreg {
-                            spirv::StorageClass::Input
-                        } else {
-                            spirv::StorageClass::Function
-                        };
+                    Some(index) => {
                         let result_ptr_type = map.get_or_add(
                             builder,
-                            SpirvType::new_pointer(details.typ.clone(), storage_class),
+                            SpirvType::new_pointer(
+                                details.typ.clone(),
+                                spirv::StorageClass::Function,
+                            ),
                         );
                         let index_spirv = map.get_or_add_constant(
                             builder,
@@ -4189,6 +4169,58 @@ fn emit_implicit_conversion(
     Ok(())
 }
 
+fn emit_load_var(
+    builder: &mut dr::Builder,
+    map: &mut TypeWordMap,
+    details: &LoadVarDetails,
+) -> Result<(), TranslateError> {
+    let result_type = map.get_or_add(builder, SpirvType::from(details.typ.clone()));
+    match details.member_index {
+        Some((index, Some(width))) => {
+            let vector_type = match details.typ {
+                ast::Type::Scalar(scalar_t) => ast::Type::Vector(scalar_t, width),
+                _ => return Err(TranslateError::MismatchedType),
+            };
+            let vector_type_spirv = map.get_or_add(builder, SpirvType::from(vector_type));
+            let vector_temp = builder.load(vector_type_spirv, None, details.arg.src, None, [])?;
+            builder.composite_extract(
+                result_type,
+                Some(details.arg.dst),
+                vector_temp,
+                &[index as u32],
+            )?;
+        }
+        Some((index, None)) => {
+            let result_ptr_type = map.get_or_add(
+                builder,
+                SpirvType::new_pointer(details.typ.clone(), spirv::StorageClass::Function),
+            );
+            let index_spirv = map.get_or_add_constant(
+                builder,
+                &ast::Type::Scalar(ast::ScalarType::U32),
+                &vec_repr(index as u32),
+            )?;
+            let src = builder.in_bounds_access_chain(
+                result_ptr_type,
+                None,
+                details.arg.src,
+                &[index_spirv],
+            )?;
+            builder.load(result_type, Some(details.arg.dst), src, None, [])?;
+        }
+        None => {
+            builder.load(
+                result_type,
+                Some(details.arg.dst),
+                details.arg.src,
+                None,
+                [],
+            )?;
+        }
+    };
+    Ok(())
+}
+
 fn normalize_identifiers<'a, 'b>(
     id_defs: &mut FnStringIdResolver<'a, 'b>,
     fn_defs: &GlobalFnDeclResolver<'a, 'b>,
@@ -5106,15 +5138,18 @@ impl ExpandedStatement {
 struct LoadVarDetails {
     arg: ast::Arg2<ExpandedArgParams>,
     typ: ast::Type,
-    // (index, is_sreg)
-    member_index: Option<(u8, bool)>,
+    // (index, vector_width)
+    // HACK ALERT
+    // For some reason IGC explodes when you try to load from builtin vectors
+    // using OpInBoundsAccessChain, the one true way to do it is to
+    // OpLoad+OpCompositeExtract
+    member_index: Option<(u8, Option<u8>)>,
 }
 
 struct StoreVarDetails {
     arg: ast::Arg2St<ExpandedArgParams>,
     typ: ast::Type,
-    // (index, is_sreg)
-    member_index: Option<(u8, bool)>,
+    member_index: Option<u8>,
 }
 
 struct RepackVectorDetails {
