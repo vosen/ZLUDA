@@ -1177,7 +1177,7 @@ InstSt: ast::Instruction<ast::ParsedArgParams<'input>> = {
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#using-addresses-arrays-and-vectors
-MemoryOperand: ast::SrcOperand<&'input str> = {
+MemoryOperand: ast::Operand<&'input str> = {
     "[" <o:Operand> "]" => o
 }
 
@@ -1734,15 +1734,15 @@ ArithFloatMustRound: ast::ArithFloat = {
     },
 }
 
-Operand: ast::SrcOperand<&'input str> = {
-    <r:ExtendedID> => ast::SrcOperand::Reg(r),
-    <r:ExtendedID> "+" <offset:S32Num> => ast::SrcOperand::RegOffset(r, offset),
-    <x:ImmediateValue> => ast::SrcOperand::Imm(x)
+Operand: ast::Operand<&'input str> = {
+    <r:ExtendedID> => ast::Operand::Reg(r),
+    <r:ExtendedID> "+" <offset:S32Num> => ast::Operand::RegOffset(r, offset),
+    <x:ImmediateValue> => ast::Operand::Imm(x)
 };
 
-CallOperand: ast::SrcOperand<&'input str> = {
-    <r:ExtendedID> => ast::SrcOperand::Reg(r),
-    <x:ImmediateValue> => ast::SrcOperand::Imm(x)
+CallOperand: ast::Operand<&'input str> = {
+    <r:ExtendedID> => ast::Operand::Reg(r),
+    <x:ImmediateValue> => ast::Operand::Imm(x)
 };
 
 // TODO: start parsing whole constants sub-language:
@@ -1838,44 +1838,44 @@ Arg5Setp: ast::Arg5Setp<ast::ParsedArgParams<'input>> = {
     <dst1:ExtendedID> <dst2:OptionalDst?> "," <src1:Operand> "," <src2:Operand> "," "!"? <src3:Operand> => ast::Arg5Setp{<>}
 };
 
-ArgCall: (Vec<&'input str>, &'input str, Vec<ast::SrcOperand<&'input str>>) = {
+ArgCall: (Vec<&'input str>, &'input str, Vec<ast::Operand<&'input str>>) = {
     "(" <ret_params:Comma<ExtendedID>> ")" "," <func:ExtendedID> "," "(" <param_list:Comma<CallOperand>> ")" => {
         (ret_params, func, param_list)
     },
     <func:ExtendedID> "," "(" <param_list:Comma<CallOperand>> ")" => (Vec::new(), func, param_list),
-    <func:ExtendedID> => (Vec::new(), func, Vec::<ast::SrcOperand<_>>::new()),
+    <func:ExtendedID> => (Vec::new(), func, Vec::<ast::Operand<_>>::new()),
 };
 
 OptionalDst: &'input str = {
     "|" <dst2:ExtendedID> => dst2
 }
 
-SrcOperand: ast::SrcOperand<&'input str> = {
-    <r:ExtendedID> => ast::SrcOperand::Reg(r),
-    <r:ExtendedID> "+" <offset:S32Num> => ast::SrcOperand::RegOffset(r, offset),
-    <x:ImmediateValue> => ast::SrcOperand::Imm(x),
+SrcOperand: ast::Operand<&'input str> = {
+    <r:ExtendedID> => ast::Operand::Reg(r),
+    <r:ExtendedID> "+" <offset:S32Num> => ast::Operand::RegOffset(r, offset),
+    <x:ImmediateValue> => ast::Operand::Imm(x),
     <mem_op:MemberOperand> => {
         let (reg, idx) = mem_op;
-        ast::SrcOperand::VecMember(reg, idx)
+        ast::Operand::VecMember(reg, idx)
     }
 }
 
-SrcOperandVec: ast::SrcOperandVec<&'input str> = {
-    <normal:SrcOperand> => ast::SrcOperandVec::Normal(normal),
-    <vec:VectorExtract> => ast::SrcOperandVec::Vector(vec),
+SrcOperandVec: ast::Operand<&'input str> = {
+    <normal:SrcOperand> => normal,
+    <vec:VectorExtract> => ast::Operand::VecPack(vec),
 }
 
-DstOperand: ast::DstOperand<&'input str> = {
-    <r:ExtendedID> => ast::DstOperand::Reg(r),
+DstOperand: ast::Operand<&'input str> = {
+    <r:ExtendedID> => ast::Operand::Reg(r),
     <mem_op:MemberOperand> => {
         let (reg, idx) = mem_op;
-        ast::DstOperand::VecMember(reg, idx)
+        ast::Operand::VecMember(reg, idx)
     }
 }
 
-DstOperandVec: ast::DstOperandVec<&'input str> = {
-    <normal:DstOperand> => ast::DstOperandVec::Normal(normal),
-    <vec:VectorExtract> => ast::DstOperandVec::Vector(vec),
+DstOperandVec: ast::Operand<&'input str> = {
+    <normal:DstOperand> => normal,
+    <vec:VectorExtract> => ast::Operand::VecPack(vec),
 }
 
 VectorPrefix: u8 = {

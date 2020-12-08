@@ -1457,7 +1457,7 @@ fn convert_to_typed_statements(
                         .partition(|(_, arg_type)| arg_type.is_param());
                     let normalized_input_args = out_params
                         .into_iter()
-                        .map(|(id, typ)| (ast::SrcOperand::Reg(id), typ))
+                        .map(|(id, typ)| (ast::Operand::Reg(id), typ))
                         .chain(in_args.into_iter())
                         .collect();
                     let resolved_call = ResolvedCall {
@@ -1466,15 +1466,12 @@ fn convert_to_typed_statements(
                         func: call.func,
                         param_list: normalized_input_args,
                     };
-                    result.push(Statement::Call(resolved_call));
+                    let mut visitor = VectorRepackVisitor::new(&mut result, id_defs);
+                    let reresolved_call = resolved_call.visit(&mut visitor)?;
+                    visitor.func.push(reresolved_call);
+                    visitor.func.extend(visitor.post_stmts);
                 }
-                ast::Instruction::Mov(
-                    mut d,
-                    ast::Arg2Mov {
-                        dst,
-                        src: ast::SrcOperandVec::Normal(src),
-                    },
-                ) => {
+                ast::Instruction::Mov(mut d, ast::Arg2Mov { dst, src }) => {
                     if let Some(src_id) = src.underlying() {
                         let (typ, _) = id_defs.get_typed(*src_id)?;
                         let take_address = match typ {
@@ -1487,14 +1484,7 @@ fn convert_to_typed_statements(
                     }
                     let mut visitor = VectorRepackVisitor::new(&mut result, id_defs);
                     let instruction = Statement::Instruction(
-                        ast::Instruction::Mov(
-                            d,
-                            ast::Arg2Mov {
-                                dst,
-                                src: ast::SrcOperandVec::Normal(src),
-                            },
-                        )
-                        .map(&mut visitor)?,
+                        ast::Instruction::Mov(d, ast::Arg2Mov { dst, src }).map(&mut visitor)?,
                     );
                     visitor.func.push(instruction);
                     visitor.func.extend(visitor.post_stmts);
@@ -1570,52 +1560,20 @@ impl<'a, 'b> ArgumentMapVisitor<NormalizedArgParams, TypedArgParams>
         Ok(desc.op)
     }
 
-    fn dst_operand(
+    fn operand(
         &mut self,
-        desc: ArgumentDescriptor<ast::DstOperand<spirv::Word>>,
-        _: &ast::Type,
-    ) -> Result<ast::DstOperand<spirv::Word>, TranslateError> {
-        Ok(desc.op)
-    }
-
-    fn src_operand(
-        &mut self,
-        desc: ArgumentDescriptor<ast::SrcOperand<spirv::Word>>,
-        _: &ast::Type,
-    ) -> Result<ast::SrcOperand<spirv::Word>, TranslateError> {
-        Ok(desc.op)
-    }
-
-    fn dst_operand_vec(
-        &mut self,
-        desc: ArgumentDescriptor<ast::DstOperandVec<spirv::Word>>,
+        desc: ArgumentDescriptor<ast::Operand<spirv::Word>>,
         typ: &ast::Type,
-    ) -> Result<ast::DstOperand<spirv::Word>, TranslateError> {
-        match desc.op {
-            ast::DstOperandVec::Normal(op) => self.dst_operand(desc.new_op(op), typ),
-            ast::DstOperandVec::Vector(vec) => Ok(ast::DstOperand::Reg(self.convert_vector(
-                desc.is_dst,
-                desc.sema,
-                typ,
-                vec,
-            )?)),
-        }
-    }
-
-    fn src_operand_vec(
-        &mut self,
-        desc: ArgumentDescriptor<ast::SrcOperandVec<spirv::Word>>,
-        typ: &ast::Type,
-    ) -> Result<ast::SrcOperand<spirv::Word>, TranslateError> {
-        match desc.op {
-            ast::SrcOperandVec::Normal(op) => self.src_operand(desc.new_op(op), typ),
-            ast::SrcOperandVec::Vector(vec) => Ok(ast::SrcOperand::Reg(self.convert_vector(
-                desc.is_dst,
-                desc.sema,
-                typ,
-                vec,
-            )?)),
-        }
+    ) -> Result<TypedOperand, TranslateError> {
+        Ok(match desc.op {
+            ast::Operand::Reg(reg) => TypedOperand::Reg(reg),
+            ast::Operand::RegOffset(reg, offset) => TypedOperand::RegOffset(reg, offset),
+            ast::Operand::Imm(x) => TypedOperand::Imm(x),
+            ast::Operand::VecMember(vec, idx) => TypedOperand::VecMember(vec, idx),
+            ast::Operand::VecPack(vec) => {
+                TypedOperand::Reg(self.convert_vector(desc.is_dst, desc.sema, typ, vec)?)
+            }
+        })
     }
 }
 
@@ -2145,72 +2103,21 @@ impl<'a, 'input> ArgumentMapVisitor<TypedArgParams, TypedArgParams>
         self.symbol(desc.new_op((desc.op, None)), typ)
     }
 
-    fn dst_operand(
+    fn operand(
         &mut self,
-        desc: ArgumentDescriptor<ast::DstOperand<spirv::Word>>,
+        desc: ArgumentDescriptor<TypedOperand>,
         typ: &ast::Type,
-    ) -> Result<ast::DstOperand<spirv::Word>, TranslateError> {
+    ) -> Result<TypedOperand, TranslateError> {
         Ok(match desc.op {
-            ast::DstOperand::Reg(reg) => {
-                ast::DstOperand::Reg(self.symbol(desc.new_op((reg, None)), Some(typ))?)
+            TypedOperand::Reg(reg) => {
+                TypedOperand::Reg(self.symbol(desc.new_op((reg, None)), Some(typ))?)
             }
-            ast::DstOperand::VecMember(symbol, index) => {
-                ast::DstOperand::Reg(self.symbol(desc.new_op((symbol, Some(index))), Some(typ))?)
+            TypedOperand::RegOffset(reg, offset) => {
+                TypedOperand::RegOffset(self.symbol(desc.new_op((reg, None)), Some(typ))?, offset)
             }
-        })
-    }
-
-    fn src_operand(
-        &mut self,
-        desc: ArgumentDescriptor<ast::SrcOperand<spirv::Word>>,
-        typ: &ast::Type,
-    ) -> Result<ast::SrcOperand<spirv::Word>, TranslateError> {
-        Ok(match desc.op {
-            ast::SrcOperand::Reg(reg) => {
-                ast::SrcOperand::Reg(self.symbol(desc.new_op((reg, None)), Some(typ))?)
-            }
-            ast::SrcOperand::RegOffset(reg, offset) => ast::SrcOperand::RegOffset(
-                self.symbol(desc.new_op((reg, None)), Some(typ))?,
-                offset,
-            ),
-            op @ ast::SrcOperand::Imm(..) => op,
-            ast::SrcOperand::VecMember(symbol, index) => {
-                ast::SrcOperand::Reg(self.symbol(desc.new_op((symbol, Some(index))), Some(typ))?)
-            }
-        })
-    }
-
-    fn dst_operand_vec(
-        &mut self,
-        desc: ArgumentDescriptor<ast::DstOperand<spirv::Word>>,
-        typ: &ast::Type,
-    ) -> Result<ast::DstOperand<spirv::Word>, TranslateError> {
-        Ok(match desc.op {
-            ast::DstOperand::Reg(reg) => {
-                ast::DstOperand::Reg(self.symbol(desc.new_op((reg, None)), Some(typ))?)
-            }
-            ast::DstOperand::VecMember(symbol, index) => {
-                ast::DstOperand::Reg(self.symbol(desc.new_op((symbol, Some(index))), Some(typ))?)
-            }
-        })
-    }
-
-    fn src_operand_vec(
-        &mut self,
-        desc: ArgumentDescriptor<ast::SrcOperand<spirv::Word>>,
-        typ: &ast::Type,
-    ) -> Result<ast::SrcOperand<spirv::Word>, TranslateError> {
-        Ok(match desc.op {
-            ast::SrcOperand::Reg(reg) => {
-                ast::SrcOperand::Reg(self.symbol(desc.new_op((reg, None)), Some(typ))?)
-            }
-            ast::SrcOperand::RegOffset(reg, offset) => ast::SrcOperand::RegOffset(
-                self.symbol(desc.new_op((reg, None)), Some(typ))?,
-                offset,
-            ),
-            op @ ast::SrcOperand::Imm(..) => op,
-            ast::SrcOperand::VecMember(symbol, index) => {
-                ast::SrcOperand::Reg(self.symbol(desc.new_op((symbol, Some(index))), Some(typ))?)
+            op @ TypedOperand::Imm(..) => op,
+            TypedOperand::VecMember(symbol, index) => {
+                TypedOperand::Reg(self.symbol(desc.new_op((symbol, Some(index))), Some(typ))?)
             }
         })
     }
@@ -2436,55 +2343,18 @@ impl<'a, 'b> ArgumentMapVisitor<TypedArgParams, ExpandedArgParams> for FlattenAr
         self.reg(desc, t)
     }
 
-    fn dst_operand(
+    fn operand(
         &mut self,
-        desc: ArgumentDescriptor<ast::DstOperand<spirv::Word>>,
+        desc: ArgumentDescriptor<TypedOperand>,
         typ: &ast::Type,
     ) -> Result<spirv::Word, TranslateError> {
         match desc.op {
-            ast::DstOperand::Reg(reg) => self.reg(desc.new_op(reg), Some(typ)),
-            ast::DstOperand::VecMember(..) => Err(error_unreachable()),
-        }
-    }
-
-    fn src_operand(
-        &mut self,
-        desc: ArgumentDescriptor<ast::SrcOperand<spirv::Word>>,
-        typ: &ast::Type,
-    ) -> Result<spirv::Word, TranslateError> {
-        match desc.op {
-            ast::SrcOperand::Reg(r) => self.reg(desc.new_op(r), Some(typ)),
-            ast::SrcOperand::Imm(x) => self.immediate(desc.new_op(x), typ),
-            ast::SrcOperand::RegOffset(reg, offset) => {
+            TypedOperand::Reg(r) => self.reg(desc.new_op(r), Some(typ)),
+            TypedOperand::Imm(x) => self.immediate(desc.new_op(x), typ),
+            TypedOperand::RegOffset(reg, offset) => {
                 self.reg_offset(desc.new_op((reg, offset)), typ)
             }
-            ast::SrcOperand::VecMember(..) => Err(error_unreachable()),
-        }
-    }
-
-    fn dst_operand_vec(
-        &mut self,
-        desc: ArgumentDescriptor<ast::DstOperand<spirv::Word>>,
-        typ: &ast::Type,
-    ) -> Result<spirv::Word, TranslateError> {
-        match desc.op {
-            ast::DstOperand::Reg(reg) => self.reg(desc.new_op(reg), Some(typ)),
-            ast::DstOperand::VecMember(..) => Err(error_unreachable()),
-        }
-    }
-
-    fn src_operand_vec(
-        &mut self,
-        desc: ArgumentDescriptor<ast::SrcOperand<spirv::Word>>,
-        typ: &ast::Type,
-    ) -> Result<spirv::Word, TranslateError> {
-        match desc.op {
-            ast::SrcOperand::Reg(r) => self.reg(desc.new_op(r), Some(typ)),
-            ast::SrcOperand::Imm(x) => self.immediate(desc.new_op(x), typ),
-            ast::SrcOperand::RegOffset(reg, offset) => {
-                self.reg_offset(desc.new_op((reg, offset)), typ)
-            }
-            ast::SrcOperand::VecMember(..) => Err(error_unreachable()),
+            TypedOperand::VecMember(..) => Err(error_unreachable()),
         }
     }
 }
@@ -4346,7 +4216,9 @@ fn convert_to_stateful_memory_access<'a>(
                 },
                 arg,
             )) => {
-                if let (ast::DstOperand::Reg(dst), Some(src)) = (arg.dst, arg.src.underlying()) {
+                if let (TypedOperand::Reg(dst), Some(src)) =
+                    (arg.dst, arg.src.upcast().underlying())
+                {
                     if is_64_bit_integer(id_defs, *src) && is_64_bit_integer(id_defs, dst) {
                         stateful_markers.push((dst, *src));
                     }
@@ -4376,7 +4248,9 @@ fn convert_to_stateful_memory_access<'a>(
                 },
                 arg,
             )) => {
-                if let (ast::DstOperand::Reg(dst), Some(src)) = (&arg.dst, arg.src.underlying()) {
+                if let (TypedOperand::Reg(dst), Some(src)) =
+                    (&arg.dst, arg.src.upcast().underlying())
+                {
                     if func_args_64bit.contains(src) {
                         multi_hash_map_append(&mut stateful_init_reg, *dst, *src);
                     }
@@ -4425,14 +4299,14 @@ fn convert_to_stateful_memory_access<'a>(
                     }),
                     arg,
                 )) => {
-                    if let (ast::DstOperand::Reg(dst), Some(src1)) =
-                        (arg.dst, arg.src1.underlying())
+                    if let (TypedOperand::Reg(dst), Some(src1)) =
+                        (arg.dst, arg.src1.upcast().underlying())
                     {
                         if regs_ptr_current.contains(src1) && !regs_ptr_seen.contains(src1) {
                             regs_ptr_new.insert(dst);
                         }
-                    } else if let (ast::DstOperand::Reg(dst), Some(src2)) =
-                        (arg.dst, arg.src2.underlying())
+                    } else if let (TypedOperand::Reg(dst), Some(src2)) =
+                        (arg.dst, arg.src2.upcast().underlying())
                     {
                         if regs_ptr_current.contains(src2) && !regs_ptr_seen.contains(src2) {
                             regs_ptr_new.insert(dst);
@@ -4486,7 +4360,7 @@ fn convert_to_stateful_memory_access<'a>(
                 }),
                 arg,
             )) if is_add_ptr_direct(&remapped_ids, &arg) => {
-                let (ptr, offset) = match arg.src1.underlying() {
+                let (ptr, offset) = match arg.src1.upcast().underlying() {
                     Some(src1) if remapped_ids.contains_key(src1) => {
                         (remapped_ids.get(src1).unwrap(), arg.src2)
                     }
@@ -4495,7 +4369,7 @@ fn convert_to_stateful_memory_access<'a>(
                     }
                     _ => return Err(error_unreachable()),
                 };
-                let dst = arg.dst.unwrap_reg()?;
+                let dst = arg.dst.upcast().unwrap_reg()?;
                 result.push(Statement::PtrAccess(PtrAccess {
                     underlying_type: ast::PointerType::Scalar(ast::ScalarType::U8),
                     state_space: ast::LdStateSpace::Global,
@@ -4515,7 +4389,7 @@ fn convert_to_stateful_memory_access<'a>(
                 }),
                 arg,
             )) if is_add_ptr_direct(&remapped_ids, &arg) => {
-                let (ptr, offset) = match arg.src1.underlying() {
+                let (ptr, offset) = match arg.src1.upcast().underlying() {
                     Some(src1) if remapped_ids.contains_key(src1) => {
                         (remapped_ids.get(src1).unwrap(), arg.src2)
                     }
@@ -4533,16 +4407,16 @@ fn convert_to_stateful_memory_access<'a>(
                     },
                     ast::Arg2 {
                         src: offset,
-                        dst: ast::DstOperand::Reg(offset_neg),
+                        dst: TypedOperand::Reg(offset_neg),
                     },
                 )));
-                let dst = arg.dst.unwrap_reg()?;
+                let dst = arg.dst.upcast().unwrap_reg()?;
                 result.push(Statement::PtrAccess(PtrAccess {
                     underlying_type: ast::PointerType::Scalar(ast::ScalarType::U8),
                     state_space: ast::LdStateSpace::Global,
                     dst: *remapped_ids.get(&dst).unwrap(),
                     ptr_src: *ptr,
-                    offset_src: ast::SrcOperand::Reg(offset_neg),
+                    offset_src: TypedOperand::Reg(offset_neg),
                 }))
             }
             Statement::Instruction(inst) => {
@@ -4697,12 +4571,14 @@ fn convert_to_stateful_memory_access_postprocess(
 
 fn is_add_ptr_direct(remapped_ids: &HashMap<u32, u32>, arg: &ast::Arg3<TypedArgParams>) -> bool {
     match arg.dst {
-        ast::DstOperand::VecMember(..) => return false,
-        ast::DstOperand::Reg(dst) => {
+        TypedOperand::Imm(..) | TypedOperand::RegOffset(..) | TypedOperand::VecMember(..) => {
+            return false
+        }
+        TypedOperand::Reg(dst) => {
             if !remapped_ids.contains_key(&dst) {
                 return false;
             }
-            match arg.src1.underlying() {
+            match arg.src1.upcast().underlying() {
                 Some(src1) if remapped_ids.contains_key(src1) => true,
                 Some(src2) if remapped_ids.contains_key(src2) => true,
                 _ => false,
@@ -5219,11 +5095,11 @@ struct ResolvedCall<P: ast::ArgParams> {
     pub uniform: bool,
     pub ret_params: Vec<(P::Id, ast::FnArgumentType)>,
     pub func: P::Id,
-    pub param_list: Vec<(P::SrcOperand, ast::FnArgumentType)>,
+    pub param_list: Vec<(P::Operand, ast::FnArgumentType)>,
 }
 
 impl<T: ast::ArgParams> ResolvedCall<T> {
-    fn cast<U: ast::ArgParams<Id = T::Id, SrcOperand = T::SrcOperand>>(self) -> ResolvedCall<U> {
+    fn cast<U: ast::ArgParams<Id = T::Id, Operand = T::Operand>>(self) -> ResolvedCall<U> {
         ResolvedCall {
             uniform: self.uniform,
             ret_params: self.ret_params,
@@ -5265,7 +5141,7 @@ impl<From: ArgParamsEx<Id = spirv::Word>> ResolvedCall<From> {
             .param_list
             .into_iter()
             .map::<Result<_, TranslateError>, _>(|(id, typ)| {
-                let new_id = visitor.src_operand(
+                let new_id = visitor.operand(
                     ArgumentDescriptor {
                         op: id,
                         is_dst: false,
@@ -5327,7 +5203,7 @@ impl<P: ArgParamsEx<Id = spirv::Word>> PtrAccess<P> {
             },
             Some(&ptr_type),
         )?;
-        let new_constant_src = visitor.src_operand(
+        let new_constant_src = visitor.operand(
             ArgumentDescriptor {
                 op: self.offset_src,
                 is_dst: false,
@@ -5376,10 +5252,7 @@ enum NormalizedArgParams {}
 
 impl ast::ArgParams for NormalizedArgParams {
     type Id = spirv::Word;
-    type DstOperand = ast::DstOperand<spirv::Word>;
-    type SrcOperand = ast::SrcOperand<spirv::Word>;
-    type DstOperandVec = ast::DstOperandVec<spirv::Word>;
-    type SrcOperandVec = ast::SrcOperandVec<spirv::Word>;
+    type Operand = ast::Operand<spirv::Word>;
 }
 
 impl ArgParamsEx for NormalizedArgParams {
@@ -5405,10 +5278,7 @@ enum TypedArgParams {}
 
 impl ast::ArgParams for TypedArgParams {
     type Id = spirv::Word;
-    type DstOperand = ast::DstOperand<spirv::Word>;
-    type SrcOperand = ast::SrcOperand<spirv::Word>;
-    type DstOperandVec = ast::DstOperand<spirv::Word>;
-    type SrcOperandVec = ast::SrcOperand<spirv::Word>;
+    type Operand = TypedOperand;
 }
 
 impl ArgParamsEx for TypedArgParams {
@@ -5420,6 +5290,25 @@ impl ArgParamsEx for TypedArgParams {
     }
 }
 
+#[derive(Copy, Clone)]
+enum TypedOperand {
+    Reg(spirv::Word),
+    RegOffset(spirv::Word, i32),
+    Imm(ast::ImmediateValue),
+    VecMember(spirv::Word, u8),
+}
+
+impl TypedOperand {
+    fn upcast(self) -> ast::Operand<spirv::Word> {
+        match self {
+            TypedOperand::Reg(reg) => ast::Operand::Reg(reg),
+            TypedOperand::RegOffset(reg, idx) => ast::Operand::RegOffset(reg, idx),
+            TypedOperand::Imm(x) => ast::Operand::Imm(x),
+            TypedOperand::VecMember(vec, idx) => ast::Operand::VecMember(vec, idx),
+        }
+    }
+}
+
 type TypedStatement = Statement<ast::Instruction<TypedArgParams>, TypedArgParams>;
 
 enum ExpandedArgParams {}
@@ -5427,10 +5316,7 @@ type ExpandedStatement = Statement<ast::Instruction<ExpandedArgParams>, Expanded
 
 impl ast::ArgParams for ExpandedArgParams {
     type Id = spirv::Word;
-    type DstOperand = spirv::Word;
-    type SrcOperand = spirv::Word;
-    type DstOperandVec = spirv::Word;
-    type SrcOperandVec = spirv::Word;
+    type Operand = spirv::Word;
 }
 
 impl ArgParamsEx for ExpandedArgParams {
@@ -5461,26 +5347,11 @@ pub trait ArgumentMapVisitor<T: ArgParamsEx, U: ArgParamsEx> {
         desc: ArgumentDescriptor<T::Id>,
         typ: Option<&ast::Type>,
     ) -> Result<U::Id, TranslateError>;
-    fn dst_operand(
+    fn operand(
         &mut self,
-        desc: ArgumentDescriptor<T::DstOperand>,
+        desc: ArgumentDescriptor<T::Operand>,
         typ: &ast::Type,
-    ) -> Result<U::DstOperand, TranslateError>;
-    fn src_operand(
-        &mut self,
-        desc: ArgumentDescriptor<T::SrcOperand>,
-        typ: &ast::Type,
-    ) -> Result<U::SrcOperand, TranslateError>;
-    fn dst_operand_vec(
-        &mut self,
-        desc: ArgumentDescriptor<T::DstOperandVec>,
-        typ: &ast::Type,
-    ) -> Result<U::DstOperandVec, TranslateError>;
-    fn src_operand_vec(
-        &mut self,
-        desc: ArgumentDescriptor<T::SrcOperandVec>,
-        typ: &ast::Type,
-    ) -> Result<U::SrcOperandVec, TranslateError>;
+    ) -> Result<U::Operand, TranslateError>;
 }
 
 impl<T> ArgumentMapVisitor<ExpandedArgParams, ExpandedArgParams> for T
@@ -5498,31 +5369,7 @@ where
         self(desc, t)
     }
 
-    fn dst_operand(
-        &mut self,
-        desc: ArgumentDescriptor<spirv::Word>,
-        typ: &ast::Type,
-    ) -> Result<spirv::Word, TranslateError> {
-        self(desc, Some(typ))
-    }
-
-    fn src_operand(
-        &mut self,
-        desc: ArgumentDescriptor<spirv::Word>,
-        typ: &ast::Type,
-    ) -> Result<spirv::Word, TranslateError> {
-        self(desc, Some(typ))
-    }
-
-    fn dst_operand_vec(
-        &mut self,
-        desc: ArgumentDescriptor<spirv::Word>,
-        typ: &ast::Type,
-    ) -> Result<spirv::Word, TranslateError> {
-        self(desc, Some(typ))
-    }
-
-    fn src_operand_vec(
+    fn operand(
         &mut self,
         desc: ArgumentDescriptor<spirv::Word>,
         typ: &ast::Type,
@@ -5543,57 +5390,17 @@ where
         self(desc.op)
     }
 
-    fn dst_operand(
+    fn operand(
         &mut self,
-        desc: ArgumentDescriptor<ast::DstOperand<&str>>,
-        _: &ast::Type,
-    ) -> Result<ast::DstOperand<spirv::Word>, TranslateError> {
-        Ok(match desc.op {
-            ast::DstOperand::Reg(id) => ast::DstOperand::Reg(self(id)?),
-            ast::DstOperand::VecMember(id, member) => ast::DstOperand::VecMember(self(id)?, member),
-        })
-    }
-
-    fn src_operand(
-        &mut self,
-        desc: ArgumentDescriptor<ast::SrcOperand<&str>>,
-        _: &ast::Type,
-    ) -> Result<ast::SrcOperand<spirv::Word>, TranslateError> {
-        Ok(match desc.op {
-            ast::SrcOperand::Reg(id) => ast::SrcOperand::Reg(self(id)?),
-            ast::SrcOperand::RegOffset(id, imm) => ast::SrcOperand::RegOffset(self(id)?, imm),
-            ast::SrcOperand::Imm(imm) => ast::SrcOperand::Imm(imm),
-            ast::SrcOperand::VecMember(id, member) => ast::SrcOperand::VecMember(self(id)?, member),
-        })
-    }
-
-    fn dst_operand_vec(
-        &mut self,
-        desc: ArgumentDescriptor<ast::DstOperandVec<&str>>,
+        desc: ArgumentDescriptor<ast::Operand<&str>>,
         typ: &ast::Type,
-    ) -> Result<ast::DstOperandVec<spirv::Word>, TranslateError> {
-        Ok(match &desc.op {
-            ast::DstOperandVec::Normal(inner_op) => {
-                ast::DstOperandVec::Normal(self.dst_operand(desc.new_op(inner_op.clone()), typ)?)
-            }
-            ast::DstOperandVec::Vector(ids) => ast::DstOperandVec::Vector(
-                ids.into_iter()
-                    .map(|id| self.id(desc.new_op(id), Some(typ)))
-                    .collect::<Result<Vec<_>, _>>()?,
-            ),
-        })
-    }
-
-    fn src_operand_vec(
-        &mut self,
-        desc: ArgumentDescriptor<ast::SrcOperandVec<&str>>,
-        typ: &ast::Type,
-    ) -> Result<ast::SrcOperandVec<spirv::Word>, TranslateError> {
-        Ok(match &desc.op {
-            ast::SrcOperandVec::Normal(inner_op) => {
-                ast::SrcOperandVec::Normal(self.src_operand(desc.new_op(inner_op.clone()), typ)?)
-            }
-            ast::SrcOperandVec::Vector(ids) => ast::SrcOperandVec::Vector(
+    ) -> Result<ast::Operand<spirv::Word>, TranslateError> {
+        Ok(match desc.op {
+            ast::Operand::Reg(id) => ast::Operand::Reg(self(id)?),
+            ast::Operand::RegOffset(id, imm) => ast::Operand::RegOffset(self(id)?, imm),
+            ast::Operand::Imm(imm) => ast::Operand::Imm(imm),
+            ast::Operand::VecMember(id, member) => ast::Operand::VecMember(self(id)?, member),
+            ast::Operand::VecPack(ref ids) => ast::Operand::VecPack(
                 ids.into_iter()
                     .map(|id| self.id(desc.new_op(id), Some(typ)))
                     .collect::<Result<Vec<_>, _>>()?,
@@ -5613,7 +5420,7 @@ pub struct PtrAccess<P: ast::ArgParams> {
     state_space: ast::LdStateSpace,
     dst: spirv::Word,
     ptr_src: spirv::Word,
-    offset_src: P::SrcOperand,
+    offset_src: P::Operand,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -5913,82 +5720,24 @@ where
         self(desc, t)
     }
 
-    fn dst_operand(
+    fn operand(
         &mut self,
-        desc: ArgumentDescriptor<ast::DstOperand<spirv::Word>>,
+        desc: ArgumentDescriptor<TypedOperand>,
         typ: &ast::Type,
-    ) -> Result<ast::DstOperand<spirv::Word>, TranslateError> {
+    ) -> Result<TypedOperand, TranslateError> {
         Ok(match desc.op {
-            ast::DstOperand::Reg(id) => ast::DstOperand::Reg(self(desc.new_op(id), Some(typ))?),
-            ast::DstOperand::VecMember(reg, index) => {
+            TypedOperand::Reg(id) => TypedOperand::Reg(self(desc.new_op(id), Some(typ))?),
+            TypedOperand::Imm(imm) => TypedOperand::Imm(imm),
+            TypedOperand::RegOffset(id, imm) => {
+                TypedOperand::RegOffset(self(desc.new_op(id), Some(typ))?, imm)
+            }
+            TypedOperand::VecMember(reg, index) => {
                 let scalar_type = match typ {
                     ast::Type::Scalar(scalar_t) => *scalar_t,
                     _ => return Err(error_unreachable()),
                 };
                 let vec_type = ast::Type::Vector(scalar_type, index + 1);
-                ast::DstOperand::VecMember(self(desc.new_op(reg), Some(&vec_type))?, index)
-            }
-        })
-    }
-
-    fn src_operand(
-        &mut self,
-        desc: ArgumentDescriptor<ast::SrcOperand<spirv::Word>>,
-        typ: &ast::Type,
-    ) -> Result<ast::SrcOperand<spirv::Word>, TranslateError> {
-        Ok(match desc.op {
-            ast::SrcOperand::Reg(id) => ast::SrcOperand::Reg(self(desc.new_op(id), Some(typ))?),
-            ast::SrcOperand::Imm(imm) => ast::SrcOperand::Imm(imm),
-            ast::SrcOperand::RegOffset(id, imm) => {
-                ast::SrcOperand::RegOffset(self(desc.new_op(id), Some(typ))?, imm)
-            }
-            ast::SrcOperand::VecMember(reg, index) => {
-                let scalar_type = match typ {
-                    ast::Type::Scalar(scalar_t) => *scalar_t,
-                    _ => return Err(error_unreachable()),
-                };
-                let vec_type = ast::Type::Vector(scalar_type, index + 1);
-                ast::SrcOperand::VecMember(self(desc.new_op(reg), Some(&vec_type))?, index)
-            }
-        })
-    }
-
-    fn dst_operand_vec(
-        &mut self,
-        desc: ArgumentDescriptor<ast::DstOperand<spirv::Word>>,
-        typ: &ast::Type,
-    ) -> Result<ast::DstOperand<spirv::Word>, TranslateError> {
-        Ok(match desc.op {
-            ast::DstOperand::Reg(id) => ast::DstOperand::Reg(self(desc.new_op(id), Some(typ))?),
-            ast::DstOperand::VecMember(reg, index) => {
-                let scalar_type = match typ {
-                    ast::Type::Scalar(scalar_t) => *scalar_t,
-                    _ => return Err(error_unreachable()),
-                };
-                let vec_type = ast::Type::Vector(scalar_type, index + 1);
-                ast::DstOperand::VecMember(self(desc.new_op(reg), Some(&vec_type))?, index)
-            }
-        })
-    }
-
-    fn src_operand_vec(
-        &mut self,
-        desc: ArgumentDescriptor<ast::SrcOperand<spirv::Word>>,
-        typ: &ast::Type,
-    ) -> Result<ast::SrcOperand<spirv::Word>, TranslateError> {
-        Ok(match desc.op {
-            ast::SrcOperand::Reg(id) => ast::SrcOperand::Reg(self(desc.new_op(id), Some(typ))?),
-            ast::SrcOperand::Imm(imm) => ast::SrcOperand::Imm(imm),
-            ast::SrcOperand::RegOffset(id, imm) => {
-                ast::SrcOperand::RegOffset(self(desc.new_op(id), Some(typ))?, imm)
-            }
-            ast::SrcOperand::VecMember(reg, index) => {
-                let scalar_type = match typ {
-                    ast::Type::Scalar(scalar_t) => *scalar_t,
-                    _ => return Err(error_unreachable()),
-                };
-                let vec_type = ast::Type::Vector(scalar_type, index + 1);
-                ast::SrcOperand::VecMember(self(desc.new_op(reg), Some(&vec_type))?, index)
+                TypedOperand::VecMember(self(desc.new_op(reg), Some(&vec_type))?, index)
             }
         })
     }
@@ -6364,7 +6113,7 @@ impl<T: ArgParamsEx> ast::Arg1Bar<T> {
         self,
         visitor: &mut V,
     ) -> Result<ast::Arg1Bar<U>, TranslateError> {
-        let new_src = visitor.src_operand(
+        let new_src = visitor.operand(
             ArgumentDescriptor {
                 op: self.src,
                 is_dst: false,
@@ -6382,7 +6131,7 @@ impl<T: ArgParamsEx> ast::Arg2<T> {
         visitor: &mut V,
         t: &ast::Type,
     ) -> Result<ast::Arg2<U>, TranslateError> {
-        let new_dst = visitor.dst_operand(
+        let new_dst = visitor.operand(
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
@@ -6390,7 +6139,7 @@ impl<T: ArgParamsEx> ast::Arg2<T> {
             },
             t,
         )?;
-        let new_src = visitor.src_operand(
+        let new_src = visitor.operand(
             ArgumentDescriptor {
                 op: self.src,
                 is_dst: false,
@@ -6410,7 +6159,7 @@ impl<T: ArgParamsEx> ast::Arg2<T> {
         dst_t: &ast::Type,
         src_t: &ast::Type,
     ) -> Result<ast::Arg2<U>, TranslateError> {
-        let dst = visitor.dst_operand(
+        let dst = visitor.operand(
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
@@ -6418,7 +6167,7 @@ impl<T: ArgParamsEx> ast::Arg2<T> {
             },
             dst_t,
         )?;
-        let src = visitor.src_operand(
+        let src = visitor.operand(
             ArgumentDescriptor {
                 op: self.src,
                 is_dst: false,
@@ -6436,7 +6185,7 @@ impl<T: ArgParamsEx> ast::Arg2Ld<T> {
         visitor: &mut V,
         details: &ast::LdDetails,
     ) -> Result<ast::Arg2Ld<U>, TranslateError> {
-        let dst = visitor.dst_operand_vec(
+        let dst = visitor.operand(
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
@@ -6446,7 +6195,7 @@ impl<T: ArgParamsEx> ast::Arg2Ld<T> {
         )?;
         let is_logical_ptr = details.state_space == ast::LdStateSpace::Param
             || details.state_space == ast::LdStateSpace::Local;
-        let src = visitor.src_operand(
+        let src = visitor.operand(
             ArgumentDescriptor {
                 op: self.src,
                 is_dst: false,
@@ -6473,7 +6222,7 @@ impl<T: ArgParamsEx> ast::Arg2St<T> {
     ) -> Result<ast::Arg2St<U>, TranslateError> {
         let is_logical_ptr = details.state_space == ast::StStateSpace::Param
             || details.state_space == ast::StStateSpace::Local;
-        let src1 = visitor.src_operand(
+        let src1 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src1,
                 is_dst: false,
@@ -6488,7 +6237,7 @@ impl<T: ArgParamsEx> ast::Arg2St<T> {
                 details.state_space.to_ld_ss(),
             ),
         )?;
-        let src2 = visitor.src_operand_vec(
+        let src2 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src2,
                 is_dst: false,
@@ -6506,7 +6255,7 @@ impl<T: ArgParamsEx> ast::Arg2Mov<T> {
         visitor: &mut V,
         details: &ast::MovDetails,
     ) -> Result<ast::Arg2Mov<U>, TranslateError> {
-        let dst = visitor.dst_operand_vec(
+        let dst = visitor.operand(
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
@@ -6514,7 +6263,7 @@ impl<T: ArgParamsEx> ast::Arg2Mov<T> {
             },
             &details.typ.clone().into(),
         )?;
-        let src = visitor.src_operand_vec(
+        let src = visitor.operand(
             ArgumentDescriptor {
                 op: self.src,
                 is_dst: false,
@@ -6542,7 +6291,7 @@ impl<T: ArgParamsEx> ast::Arg3<T> {
         } else {
             None
         };
-        let dst = visitor.dst_operand(
+        let dst = visitor.operand(
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
@@ -6550,7 +6299,7 @@ impl<T: ArgParamsEx> ast::Arg3<T> {
             },
             wide_type.as_ref().unwrap_or(typ),
         )?;
-        let src1 = visitor.src_operand(
+        let src1 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src1,
                 is_dst: false,
@@ -6558,7 +6307,7 @@ impl<T: ArgParamsEx> ast::Arg3<T> {
             },
             typ,
         )?;
-        let src2 = visitor.src_operand(
+        let src2 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src2,
                 is_dst: false,
@@ -6574,7 +6323,7 @@ impl<T: ArgParamsEx> ast::Arg3<T> {
         visitor: &mut V,
         t: &ast::Type,
     ) -> Result<ast::Arg3<U>, TranslateError> {
-        let dst = visitor.dst_operand(
+        let dst = visitor.operand(
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
@@ -6582,7 +6331,7 @@ impl<T: ArgParamsEx> ast::Arg3<T> {
             },
             t,
         )?;
-        let src1 = visitor.src_operand(
+        let src1 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src1,
                 is_dst: false,
@@ -6590,7 +6339,7 @@ impl<T: ArgParamsEx> ast::Arg3<T> {
             },
             t,
         )?;
-        let src2 = visitor.src_operand(
+        let src2 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src2,
                 is_dst: false,
@@ -6608,7 +6357,7 @@ impl<T: ArgParamsEx> ast::Arg3<T> {
         state_space: ast::AtomSpace,
     ) -> Result<ast::Arg3<U>, TranslateError> {
         let scalar_type = ast::ScalarType::from(t);
-        let dst = visitor.dst_operand(
+        let dst = visitor.operand(
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
@@ -6616,7 +6365,7 @@ impl<T: ArgParamsEx> ast::Arg3<T> {
             },
             &ast::Type::Scalar(scalar_type),
         )?;
-        let src1 = visitor.src_operand(
+        let src1 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src1,
                 is_dst: false,
@@ -6627,7 +6376,7 @@ impl<T: ArgParamsEx> ast::Arg3<T> {
                 state_space.to_ld_ss(),
             ),
         )?;
-        let src2 = visitor.src_operand(
+        let src2 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src2,
                 is_dst: false,
@@ -6651,7 +6400,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
         } else {
             None
         };
-        let dst = visitor.dst_operand(
+        let dst = visitor.operand(
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
@@ -6659,7 +6408,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             },
             wide_type.as_ref().unwrap_or(t),
         )?;
-        let src1 = visitor.src_operand(
+        let src1 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src1,
                 is_dst: false,
@@ -6667,7 +6416,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             },
             t,
         )?;
-        let src2 = visitor.src_operand(
+        let src2 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src2,
                 is_dst: false,
@@ -6675,7 +6424,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             },
             t,
         )?;
-        let src3 = visitor.src_operand(
+        let src3 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src3,
                 is_dst: false,
@@ -6696,7 +6445,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
         visitor: &mut V,
         t: ast::SelpType,
     ) -> Result<ast::Arg4<U>, TranslateError> {
-        let dst = visitor.dst_operand(
+        let dst = visitor.operand(
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
@@ -6704,7 +6453,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             },
             &ast::Type::Scalar(t.into()),
         )?;
-        let src1 = visitor.src_operand(
+        let src1 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src1,
                 is_dst: false,
@@ -6712,7 +6461,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             },
             &ast::Type::Scalar(t.into()),
         )?;
-        let src2 = visitor.src_operand(
+        let src2 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src2,
                 is_dst: false,
@@ -6720,7 +6469,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             },
             &ast::Type::Scalar(t.into()),
         )?;
-        let src3 = visitor.src_operand(
+        let src3 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src3,
                 is_dst: false,
@@ -6743,7 +6492,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
         state_space: ast::AtomSpace,
     ) -> Result<ast::Arg4<U>, TranslateError> {
         let scalar_type = ast::ScalarType::from(t);
-        let dst = visitor.dst_operand(
+        let dst = visitor.operand(
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
@@ -6751,7 +6500,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             },
             &ast::Type::Scalar(scalar_type),
         )?;
-        let src1 = visitor.src_operand(
+        let src1 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src1,
                 is_dst: false,
@@ -6762,7 +6511,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
                 state_space.to_ld_ss(),
             ),
         )?;
-        let src2 = visitor.src_operand(
+        let src2 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src2,
                 is_dst: false,
@@ -6770,7 +6519,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             },
             &ast::Type::Scalar(scalar_type),
         )?;
-        let src3 = visitor.src_operand(
+        let src3 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src3,
                 is_dst: false,
@@ -6791,7 +6540,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
         visitor: &mut V,
         typ: &ast::Type,
     ) -> Result<ast::Arg4<U>, TranslateError> {
-        let dst = visitor.dst_operand(
+        let dst = visitor.operand(
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
@@ -6799,7 +6548,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             },
             typ,
         )?;
-        let src1 = visitor.src_operand(
+        let src1 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src1,
                 is_dst: false,
@@ -6808,7 +6557,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             typ,
         )?;
         let u32_type = ast::Type::Scalar(ast::ScalarType::U32);
-        let src2 = visitor.src_operand(
+        let src2 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src2,
                 is_dst: false,
@@ -6816,7 +6565,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             },
             &u32_type,
         )?;
-        let src3 = visitor.src_operand(
+        let src3 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src3,
                 is_dst: false,
@@ -6860,7 +6609,7 @@ impl<T: ArgParamsEx> ast::Arg4Setp<T> {
                 )
             })
             .transpose()?;
-        let src1 = visitor.src_operand(
+        let src1 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src1,
                 is_dst: false,
@@ -6868,7 +6617,7 @@ impl<T: ArgParamsEx> ast::Arg4Setp<T> {
             },
             t,
         )?;
-        let src2 = visitor.src_operand(
+        let src2 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src2,
                 is_dst: false,
@@ -6912,7 +6661,7 @@ impl<T: ArgParamsEx> ast::Arg5Setp<T> {
                 )
             })
             .transpose()?;
-        let src1 = visitor.src_operand(
+        let src1 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src1,
                 is_dst: false,
@@ -6920,7 +6669,7 @@ impl<T: ArgParamsEx> ast::Arg5Setp<T> {
             },
             t,
         )?;
-        let src2 = visitor.src_operand(
+        let src2 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src2,
                 is_dst: false,
@@ -6928,7 +6677,7 @@ impl<T: ArgParamsEx> ast::Arg5Setp<T> {
             },
             t,
         )?;
-        let src3 = visitor.src_operand(
+        let src3 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src3,
                 is_dst: false,
@@ -6946,34 +6695,28 @@ impl<T: ArgParamsEx> ast::Arg5Setp<T> {
     }
 }
 
-impl<T> ast::SrcOperand<T> {
+impl<T> ast::Operand<T> {
     fn map_variable<U, F: FnMut(T) -> Result<U, TranslateError>>(
         self,
         f: &mut F,
-    ) -> Result<ast::SrcOperand<U>, TranslateError> {
+    ) -> Result<ast::Operand<U>, TranslateError> {
         Ok(match self {
-            ast::SrcOperand::Reg(reg) => ast::SrcOperand::Reg(f(reg)?),
-            ast::SrcOperand::RegOffset(reg, offset) => ast::SrcOperand::RegOffset(f(reg)?, offset),
-            ast::SrcOperand::Imm(x) => ast::SrcOperand::Imm(x),
-            ast::SrcOperand::VecMember(reg, idx) => ast::SrcOperand::VecMember(f(reg)?, idx),
+            ast::Operand::Reg(reg) => ast::Operand::Reg(f(reg)?),
+            ast::Operand::RegOffset(reg, offset) => ast::Operand::RegOffset(f(reg)?, offset),
+            ast::Operand::Imm(x) => ast::Operand::Imm(x),
+            ast::Operand::VecMember(reg, idx) => ast::Operand::VecMember(f(reg)?, idx),
+            ast::Operand::VecPack(vec) => {
+                ast::Operand::VecPack(vec.into_iter().map(f).collect::<Result<_, _>>()?)
+            }
         })
     }
 }
 
-impl<T> ast::DstOperand<T> {
-    fn to_src_operand(self) -> ast::SrcOperand<T> {
-        match self {
-            ast::DstOperand::Reg(reg) => ast::SrcOperand::Reg(reg),
-            ast::DstOperand::VecMember(reg, idx) => ast::SrcOperand::VecMember(reg, idx),
-        }
-    }
-}
-
-impl ast::DstOperand<spirv::Word> {
+impl ast::Operand<spirv::Word> {
     fn unwrap_reg(&self) -> Result<spirv::Word, TranslateError> {
         match self {
-            ast::DstOperand::Reg(reg) => Ok(*reg),
-            ast::DstOperand::VecMember(..) => Err(error_unreachable()),
+            ast::Operand::Reg(reg) => Ok(*reg),
+            _ => Err(error_unreachable()),
         }
     }
 }
@@ -7189,12 +6932,13 @@ impl From<ast::FnArgumentType> for ast::VariableType {
     }
 }
 
-impl<T> ast::SrcOperand<T> {
+impl<T> ast::Operand<T> {
     fn underlying(&self) -> Option<&T> {
         match self {
-            ast::SrcOperand::Reg(r) | ast::SrcOperand::RegOffset(r, _) => Some(r),
-            ast::SrcOperand::Imm(_) => None,
-            ast::SrcOperand::VecMember(reg, _) => Some(reg),
+            ast::Operand::Reg(r) | ast::Operand::RegOffset(r, _) => Some(r),
+            ast::Operand::Imm(_) => None,
+            ast::Operand::VecMember(reg, _) => Some(reg),
+            ast::Operand::VecPack(..) => None,
         }
     }
 }

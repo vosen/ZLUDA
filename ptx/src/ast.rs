@@ -614,15 +614,12 @@ pub struct CallInst<P: ArgParams> {
     pub uniform: bool,
     pub ret_params: Vec<P::Id>,
     pub func: P::Id,
-    pub param_list: Vec<P::SrcOperand>,
+    pub param_list: Vec<P::Operand>,
 }
 
 pub trait ArgParams {
     type Id;
-    type DstOperand;
-    type SrcOperand;
-    type DstOperandVec;
-    type SrcOperandVec;
+    type Operand;
 }
 
 pub struct ParsedArgParams<'a> {
@@ -631,10 +628,7 @@ pub struct ParsedArgParams<'a> {
 
 impl<'a> ArgParams for ParsedArgParams<'a> {
     type Id = &'a str;
-    type DstOperand = DstOperand<&'a str>;
-    type SrcOperand = SrcOperand<&'a str>;
-    type DstOperandVec = DstOperandVec<&'a str>;
-    type SrcOperandVec = SrcOperandVec<&'a str>;
+    type Operand = Operand<&'a str>;
 }
 
 pub struct Arg1<P: ArgParams> {
@@ -642,54 +636,54 @@ pub struct Arg1<P: ArgParams> {
 }
 
 pub struct Arg1Bar<P: ArgParams> {
-    pub src: P::SrcOperand,
+    pub src: P::Operand,
 }
 
 pub struct Arg2<P: ArgParams> {
-    pub dst: P::DstOperand,
-    pub src: P::SrcOperand,
+    pub dst: P::Operand,
+    pub src: P::Operand,
 }
 pub struct Arg2Ld<P: ArgParams> {
-    pub dst: P::DstOperandVec,
-    pub src: P::SrcOperand,
+    pub dst: P::Operand,
+    pub src: P::Operand,
 }
 
 pub struct Arg2St<P: ArgParams> {
-    pub src1: P::SrcOperand,
-    pub src2: P::SrcOperandVec,
+    pub src1: P::Operand,
+    pub src2: P::Operand,
 }
 
 pub struct Arg2Mov<P: ArgParams> {
-    pub dst: P::DstOperandVec,
-    pub src: P::SrcOperandVec,
+    pub dst: P::Operand,
+    pub src: P::Operand,
 }
 
 pub struct Arg3<P: ArgParams> {
-    pub dst: P::DstOperand,
-    pub src1: P::SrcOperand,
-    pub src2: P::SrcOperand,
+    pub dst: P::Operand,
+    pub src1: P::Operand,
+    pub src2: P::Operand,
 }
 
 pub struct Arg4<P: ArgParams> {
-    pub dst: P::DstOperand,
-    pub src1: P::SrcOperand,
-    pub src2: P::SrcOperand,
-    pub src3: P::SrcOperand,
+    pub dst: P::Operand,
+    pub src1: P::Operand,
+    pub src2: P::Operand,
+    pub src3: P::Operand,
 }
 
 pub struct Arg4Setp<P: ArgParams> {
     pub dst1: P::Id,
     pub dst2: Option<P::Id>,
-    pub src1: P::SrcOperand,
-    pub src2: P::SrcOperand,
+    pub src1: P::Operand,
+    pub src2: P::Operand,
 }
 
 pub struct Arg5Setp<P: ArgParams> {
     pub dst1: P::Id,
     pub dst2: Option<P::Id>,
-    pub src1: P::SrcOperand,
-    pub src2: P::SrcOperand,
-    pub src3: P::SrcOperand,
+    pub src1: P::Operand,
+    pub src2: P::Operand,
+    pub src3: P::Operand,
 }
 
 #[derive(Copy, Clone)]
@@ -700,30 +694,13 @@ pub enum ImmediateValue {
     F64(f64),
 }
 
-#[derive(Copy, Clone)]
-pub enum DstOperand<ID> {
-    Reg(ID),
-    VecMember(ID, u8),
-}
-
 #[derive(Clone)]
-pub enum DstOperandVec<Id> {
-    Normal(DstOperand<Id>),
-    Vector(Vec<Id>),
-}
-
-#[derive(Copy, Clone)]
-pub enum SrcOperand<Id> {
+pub enum Operand<Id> {
     Reg(Id),
     RegOffset(Id, i32),
     Imm(ImmediateValue),
     VecMember(Id, u8),
-}
-
-#[derive(Clone)]
-pub enum SrcOperandVec<Id> {
-    Normal(SrcOperand<Id>),
-    Vector(Vec<Id>),
+    VecPack(Vec<Id>),
 }
 
 pub enum VectorPrefix {
