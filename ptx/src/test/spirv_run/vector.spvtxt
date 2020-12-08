@@ -7,91 +7,93 @@
                OpCapability Int64
                OpCapability Float16
                OpCapability Float64
-         %57 = OpExtInstImport "OpenCL.std"
+         %51 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
-               OpEntryPoint Kernel %31 "vector"
+               OpEntryPoint Kernel %25 "vector"
        %void = OpTypeVoid
        %uint = OpTypeInt 32 0
      %v2uint = OpTypeVector %uint 2
-         %61 = OpTypeFunction %v2uint %v2uint
+         %55 = OpTypeFunction %v2uint %v2uint
 %_ptr_Function_v2uint = OpTypePointer Function %v2uint
 %_ptr_Function_uint = OpTypePointer Function %uint
+     %uint_0 = OpConstant %uint 0
+     %uint_1 = OpConstant %uint 1
       %ulong = OpTypeInt 64 0
-         %65 = OpTypeFunction %void %ulong %ulong
+         %67 = OpTypeFunction %void %ulong %ulong
 %_ptr_Function_ulong = OpTypePointer Function %ulong
 %_ptr_Generic_v2uint = OpTypePointer Generic %v2uint
-          %1 = OpFunction %v2uint None %61
+          %1 = OpFunction %v2uint None %55
           %7 = OpFunctionParameter %v2uint
-         %30 = OpLabel
+         %24 = OpLabel
           %2 = OpVariable %_ptr_Function_v2uint Function
           %3 = OpVariable %_ptr_Function_v2uint Function
           %4 = OpVariable %_ptr_Function_v2uint Function
           %5 = OpVariable %_ptr_Function_uint Function
           %6 = OpVariable %_ptr_Function_uint Function
                OpStore %3 %7
-          %9 = OpLoad %v2uint %3
-         %27 = OpCompositeExtract %uint %9 0
-          %8 = OpCopyObject %uint %27
+         %59 = OpInBoundsAccessChain %_ptr_Function_uint %3 %uint_0
+          %9 = OpLoad %uint %59
+          %8 = OpCopyObject %uint %9
                OpStore %5 %8
-         %11 = OpLoad %v2uint %3
-         %28 = OpCompositeExtract %uint %11 1
-         %10 = OpCopyObject %uint %28
+         %61 = OpInBoundsAccessChain %_ptr_Function_uint %3 %uint_1
+         %11 = OpLoad %uint %61
+         %10 = OpCopyObject %uint %11
                OpStore %6 %10
          %13 = OpLoad %uint %5
          %14 = OpLoad %uint %6
          %12 = OpIAdd %uint %13 %14
                OpStore %6 %12
-         %16 = OpLoad %v2uint %4
-         %17 = OpLoad %uint %6
-         %15 = OpCompositeInsert %v2uint %17 %16 0
-               OpStore %4 %15
-         %19 = OpLoad %v2uint %4
-         %20 = OpLoad %uint %6
-         %18 = OpCompositeInsert %v2uint %20 %19 1
-               OpStore %4 %18
+         %16 = OpLoad %uint %6
+         %15 = OpCopyObject %uint %16
+         %62 = OpInBoundsAccessChain %_ptr_Function_uint %4 %uint_0
+               OpStore %62 %15
+         %18 = OpLoad %uint %6
+         %17 = OpCopyObject %uint %18
+         %63 = OpInBoundsAccessChain %_ptr_Function_uint %4 %uint_1
+               OpStore %63 %17
+         %64 = OpInBoundsAccessChain %_ptr_Function_uint %4 %uint_1
+         %20 = OpLoad %uint %64
+         %19 = OpCopyObject %uint %20
+         %65 = OpInBoundsAccessChain %_ptr_Function_uint %4 %uint_0
+               OpStore %65 %19
          %22 = OpLoad %v2uint %4
-         %23 = OpLoad %v2uint %4
-         %29 = OpCompositeExtract %uint %23 1
-         %21 = OpCompositeInsert %v2uint %29 %22 0
-               OpStore %4 %21
-         %25 = OpLoad %v2uint %4
-         %24 = OpCopyObject %v2uint %25
-               OpStore %2 %24
-         %26 = OpLoad %v2uint %2
-               OpReturnValue %26
+         %21 = OpCopyObject %v2uint %22
+               OpStore %2 %21
+         %23 = OpLoad %v2uint %2
+               OpReturnValue %23
                OpFunctionEnd
-         %31 = OpFunction %void None %65
-         %40 = OpFunctionParameter %ulong
-         %41 = OpFunctionParameter %ulong
-         %55 = OpLabel
-         %32 = OpVariable %_ptr_Function_ulong Function
+         %25 = OpFunction %void None %67
+         %34 = OpFunctionParameter %ulong
+         %35 = OpFunctionParameter %ulong
+         %49 = OpLabel
+         %26 = OpVariable %_ptr_Function_ulong Function
+         %27 = OpVariable %_ptr_Function_ulong Function
+         %28 = OpVariable %_ptr_Function_ulong Function
+         %29 = OpVariable %_ptr_Function_ulong Function
+         %30 = OpVariable %_ptr_Function_v2uint Function
+         %31 = OpVariable %_ptr_Function_uint Function
+         %32 = OpVariable %_ptr_Function_uint Function
          %33 = OpVariable %_ptr_Function_ulong Function
-         %34 = OpVariable %_ptr_Function_ulong Function
-         %35 = OpVariable %_ptr_Function_ulong Function
-         %36 = OpVariable %_ptr_Function_v2uint Function
-         %37 = OpVariable %_ptr_Function_uint Function
-         %38 = OpVariable %_ptr_Function_uint Function
-         %39 = OpVariable %_ptr_Function_ulong Function
-               OpStore %32 %40
-               OpStore %33 %41
-         %42 = OpLoad %ulong %32
-               OpStore %34 %42
-         %43 = OpLoad %ulong %33
-               OpStore %35 %43
-         %45 = OpLoad %ulong %34
-         %52 = OpConvertUToPtr %_ptr_Generic_v2uint %45
-         %44 = OpLoad %v2uint %52
-               OpStore %36 %44
-         %47 = OpLoad %v2uint %36
-         %46 = OpFunctionCall %v2uint %1 %47
-               OpStore %36 %46
-         %49 = OpLoad %v2uint %36
-         %53 = OpBitcast %ulong %49
-         %48 = OpCopyObject %ulong %53
-               OpStore %39 %48
-         %50 = OpLoad %ulong %35
-         %51 = OpLoad %v2uint %36
-         %54 = OpConvertUToPtr %_ptr_Generic_v2uint %50
-               OpStore %54 %51
+               OpStore %26 %34
+               OpStore %27 %35
+         %36 = OpLoad %ulong %26
+               OpStore %28 %36
+         %37 = OpLoad %ulong %27
+               OpStore %29 %37
+         %39 = OpLoad %ulong %28
+         %46 = OpConvertUToPtr %_ptr_Generic_v2uint %39
+         %38 = OpLoad %v2uint %46
+               OpStore %30 %38
+         %41 = OpLoad %v2uint %30
+         %40 = OpFunctionCall %v2uint %1 %41
+               OpStore %30 %40
+         %43 = OpLoad %v2uint %30
+         %47 = OpBitcast %ulong %43
+         %42 = OpCopyObject %ulong %47
+               OpStore %33 %42
+         %44 = OpLoad %ulong %29
+         %45 = OpLoad %v2uint %30
+         %48 = OpConvertUToPtr %_ptr_Generic_v2uint %44
+               OpStore %48 %45
                OpReturn
                OpFunctionEnd

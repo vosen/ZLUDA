@@ -721,7 +721,7 @@ Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
 InstLd: ast::Instruction<ast::ParsedArgParams<'input>> = {
-    "ld" <q:LdStQualifier?> <ss:LdStateSpace?> <cop:LdCacheOperator?> <t:LdStType> <dst:IdOrVector> "," <src:MemoryOperand> => {
+    "ld" <q:LdStQualifier?> <ss:LdStateSpace?> <cop:LdCacheOperator?> <t:LdStType> <dst:DstOperandVec> "," <src:MemoryOperand> => {
         ast::Instruction::Ld(
             ast::LdDetails {
                 qualifier: q.unwrap_or(ast::LdStQualifier::Weak),
@@ -733,16 +733,6 @@ InstLd: ast::Instruction<ast::ParsedArgParams<'input>> = {
         )
     }
 };
-
-IdOrVector: ast::IdOrVector<&'input str> = {
-    <dst:ExtendedID> => ast::IdOrVector::Reg(dst),
-    <dst:VectorExtract> => ast::IdOrVector::Vec(dst)
-}
-
-OperandOrVector: ast::OperandOrVector<&'input str> = {
-    <op:Operand> => ast::OperandOrVector::from(op),
-    <dst:VectorExtract> => ast::OperandOrVector::Vec(dst)
-}
 
 LdStType: ast::LdStType = {
     <v:VectorPrefix> <t:LdStScalarType> => ast::LdStType::Vector(t, v),
@@ -780,27 +770,17 @@ LdCacheOperator: ast::LdCacheOperator = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
 InstMov: ast::Instruction<ast::ParsedArgParams<'input>> = {
-    <m:MovNormal> => ast::Instruction::Mov(m.0, m.1),
-    <m:MovVector> => ast::Instruction::Mov(m.0, m.1),
-};
-
-
-MovNormal: (ast::MovDetails, ast::Arg2Mov<ast::ParsedArgParams<'input>>) = {
-    "mov" <t:MovScalarType> <dst:ExtendedID> "," <src:Operand> => {(
-        ast::MovDetails::new(ast::Type::Scalar(t)),
-        ast::Arg2Mov::Normal(ast::Arg2MovNormal{ dst: ast::IdOrVector::Reg(dst), src: src.into() })
-    )},
-    "mov" <pref:VectorPrefix> <t:MovVectorType> <dst:IdOrVector> "," <src:OperandOrVector> => {(
-        ast::MovDetails::new(ast::Type::Vector(t, pref)),
-        ast::Arg2Mov::Normal(ast::Arg2MovNormal{ dst: dst, src: src })
-    )}
-}
-
-MovVector: (ast::MovDetails, ast::Arg2Mov<ast::ParsedArgParams<'input>>) = {
-    "mov" <t:MovVectorType> <a:Arg2MovMember> => {(
-        ast::MovDetails::new(ast::Type::Scalar(t.into())),
-        ast::Arg2Mov::Member(a)
-    )},
+    "mov" <pref:VectorPrefix?> <t:MovScalarType> <dst:DstOperandVec> "," <src:SrcOperandVec> => {
+        let mov_type = match pref {
+            Some(vec_width) => ast::Type::Vector(t, vec_width),
+            None => ast::Type::Scalar(t)
+        };
+        let details = ast::MovDetails::new(mov_type);
+        ast::Instruction::Mov(
+            details,
+            ast::Arg2Mov { dst, src }
+        )
+    }
 }
 
 #[inline]
@@ -817,21 +797,6 @@ MovScalarType: ast::ScalarType = {
     ".f32" => ast::ScalarType::F32,
     ".f64" => ast::ScalarType::F64,
     ".pred" => ast::ScalarType::Pred
-};
-
-#[inline]
-MovVectorType: ast::ScalarType = {
-    ".b16" => ast::ScalarType::B16,
-    ".b32" => ast::ScalarType::B32,
-    ".b64" => ast::ScalarType::B64,
-    ".u16" => ast::ScalarType::U16,
-    ".u32" => ast::ScalarType::U32,
-    ".u64" => ast::ScalarType::U64,
-    ".s16" => ast::ScalarType::S16,
-    ".s32" => ast::ScalarType::S32,
-    ".s64" => ast::ScalarType::S64,
-    ".f32" => ast::ScalarType::F32,
-    ".f64" => ast::ScalarType::F64,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-mul
@@ -921,7 +886,7 @@ InstAdd: ast::Instruction<ast::ParsedArgParams<'input>> = {
 // TODO: support f16 setp
 InstSetp: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "setp" <d:SetpMode> <a:Arg4Setp> => ast::Instruction::Setp(d, a),
-    "setp" <d:SetpBoolMode> <a:Arg5> => ast::Instruction::SetpBool(d, a),
+    "setp" <d:SetpBoolMode> <a:Arg5Setp> => ast::Instruction::SetpBool(d, a),
 };
 
 SetpMode: ast::SetpData = {
@@ -1198,7 +1163,7 @@ ShrType: ast::ShrType = {
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-st
 // Warning: NVIDIA documentation is incorrect, you can specify scope only once
 InstSt: ast::Instruction<ast::ParsedArgParams<'input>> = {
-    "st" <q:LdStQualifier?> <ss:StStateSpace?> <cop:StCacheOperator?> <t:LdStType> <src1:MemoryOperand> "," <src2:OperandOrVector> => {
+    "st" <q:LdStQualifier?> <ss:StStateSpace?> <cop:StCacheOperator?> <t:LdStType> <src1:MemoryOperand> "," <src2:SrcOperandVec> => {
         ast::Instruction::St(
             ast::StData {
                 qualifier: q.unwrap_or(ast::LdStQualifier::Weak),
@@ -1775,9 +1740,9 @@ Operand: ast::Operand<&'input str> = {
     <x:ImmediateValue> => ast::Operand::Imm(x)
 };
 
-CallOperand: ast::CallOperand<&'input str> = {
-    <r:ExtendedID> => ast::CallOperand::Reg(r),
-    <x:ImmediateValue> => ast::CallOperand::Imm(x)
+CallOperand: ast::Operand<&'input str> = {
+    <r:ExtendedID> => ast::Operand::Reg(r),
+    <x:ImmediateValue> => ast::Operand::Imm(x)
 };
 
 // TODO: start parsing whole constants sub-language:
@@ -1825,13 +1790,7 @@ Arg1Bar: ast::Arg1Bar<ast::ParsedArgParams<'input>> = {
 };
 
 Arg2: ast::Arg2<ast::ParsedArgParams<'input>> = {
-    <dst:ExtendedID> "," <src:Operand> => ast::Arg2{<>}
-};
-
-Arg2MovMember: ast::Arg2MovMember<ast::ParsedArgParams<'input>> = {
-    <dst:MemberOperand> "," <src:ExtendedID> => ast::Arg2MovMember::Dst(dst, dst.0, src),
-    <dst:ExtendedID> "," <src:MemberOperand> => ast::Arg2MovMember::Src(dst, src),
-    <dst:MemberOperand> "," <src:MemberOperand> => ast::Arg2MovMember::Both(dst, dst.0, src),
+    <dst:DstOperand> "," <src:Operand> => ast::Arg2{<>}
 };
 
 MemberOperand: (&'input str, u8) = {
@@ -1855,19 +1814,19 @@ VectorExtract: Vec<&'input str> = {
 };
 
 Arg3: ast::Arg3<ast::ParsedArgParams<'input>> = {
-    <dst:ExtendedID> "," <src1:Operand> "," <src2:Operand> => ast::Arg3{<>}
+    <dst:DstOperand> "," <src1:Operand> "," <src2:Operand> => ast::Arg3{<>}
 };
 
 Arg3Atom: ast::Arg3<ast::ParsedArgParams<'input>> = {
-    <dst:ExtendedID> "," "[" <src1:Operand> "]" "," <src2:Operand> => ast::Arg3{<>}
+    <dst:DstOperand> "," "[" <src1:Operand> "]" "," <src2:Operand> => ast::Arg3{<>}
 };
 
 Arg4: ast::Arg4<ast::ParsedArgParams<'input>> = {
-    <dst:ExtendedID> "," <src1:Operand> "," <src2:Operand> ","  <src3:Operand> => ast::Arg4{<>}
+    <dst:DstOperand> "," <src1:Operand> "," <src2:Operand> ","  <src3:Operand> => ast::Arg4{<>}
 };
 
 Arg4Atom: ast::Arg4<ast::ParsedArgParams<'input>> = {
-    <dst:ExtendedID> "," "[" <src1:Operand> "]" "," <src2:Operand> ","  <src3:Operand> => ast::Arg4{<>}
+    <dst:DstOperand> "," "[" <src1:Operand> "]" "," <src2:Operand> ","  <src3:Operand> => ast::Arg4{<>}
 };
 
 Arg4Setp: ast::Arg4Setp<ast::ParsedArgParams<'input>> = {
@@ -1875,20 +1834,48 @@ Arg4Setp: ast::Arg4Setp<ast::ParsedArgParams<'input>> = {
 };
 
 // TODO: pass src3 negation somewhere
-Arg5: ast::Arg5<ast::ParsedArgParams<'input>> = {
-    <dst1:ExtendedID> <dst2:OptionalDst?> "," <src1:Operand> "," <src2:Operand> "," "!"? <src3:Operand> => ast::Arg5{<>}
+Arg5Setp: ast::Arg5Setp<ast::ParsedArgParams<'input>> = {
+    <dst1:ExtendedID> <dst2:OptionalDst?> "," <src1:Operand> "," <src2:Operand> "," "!"? <src3:Operand> => ast::Arg5Setp{<>}
 };
 
-ArgCall: (Vec<&'input str>, &'input str, Vec<ast::CallOperand<&'input str>>) = {
+ArgCall: (Vec<&'input str>, &'input str, Vec<ast::Operand<&'input str>>) = {
     "(" <ret_params:Comma<ExtendedID>> ")" "," <func:ExtendedID> "," "(" <param_list:Comma<CallOperand>> ")" => {
         (ret_params, func, param_list)
     },
     <func:ExtendedID> "," "(" <param_list:Comma<CallOperand>> ")" => (Vec::new(), func, param_list),
-    <func:ExtendedID> => (Vec::new(), func, Vec::<ast::CallOperand<_>>::new()),
+    <func:ExtendedID> => (Vec::new(), func, Vec::<ast::Operand<_>>::new()),
 };
 
 OptionalDst: &'input str = {
     "|" <dst2:ExtendedID> => dst2
+}
+
+SrcOperand: ast::Operand<&'input str> = {
+    <r:ExtendedID> => ast::Operand::Reg(r),
+    <r:ExtendedID> "+" <offset:S32Num> => ast::Operand::RegOffset(r, offset),
+    <x:ImmediateValue> => ast::Operand::Imm(x),
+    <mem_op:MemberOperand> => {
+        let (reg, idx) = mem_op;
+        ast::Operand::VecMember(reg, idx)
+    }
+}
+
+SrcOperandVec: ast::Operand<&'input str> = {
+    <normal:SrcOperand> => normal,
+    <vec:VectorExtract> => ast::Operand::VecPack(vec),
+}
+
+DstOperand: ast::Operand<&'input str> = {
+    <r:ExtendedID> => ast::Operand::Reg(r),
+    <mem_op:MemberOperand> => {
+        let (reg, idx) = mem_op;
+        ast::Operand::VecMember(reg, idx)
+    }
+}
+
+DstOperandVec: ast::Operand<&'input str> = {
+    <normal:DstOperand> => normal,
+    <vec:VectorExtract> => ast::Operand::VecPack(vec),
 }
 
 VectorPrefix: u8 = {
