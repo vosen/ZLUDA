@@ -1316,13 +1316,13 @@ fn to_ssa<'input, 'b>(
         convert_to_typed_statements(unadorned_statements, &fn_defs, &mut numeric_id_defs)?;
     let typed_statements =
         convert_to_stateful_memory_access(&mut spirv_decl, typed_statements, &mut numeric_id_defs)?;
-    let typed_statements = fix_builtins(typed_statements, &mut numeric_id_defs)?;
     let ssa_statements = insert_mem_ssa_statements(
         typed_statements,
         &mut numeric_id_defs,
         &f_args,
         &mut spirv_decl,
     )?;
+    let ssa_statements = fix_builtins(ssa_statements, &mut numeric_id_defs)?;
     let mut numeric_id_defs = numeric_id_defs.finish();
     let expanded_statements = expand_arguments(ssa_statements, &mut numeric_id_defs)?;
     let expanded_statements =
@@ -1345,11 +1345,57 @@ fn fix_builtins(
     numeric_id_defs: &mut NumericIdResolver,
 ) -> Result<Vec<TypedStatement>, TranslateError> {
     let mut result = Vec::with_capacity(typed_statements.len());
-    let mut visitor = FixBuiltinsVisitor {};
     for s in typed_statements {
         match s {
-            Statement::Instruction(inst) => {
-                result.push(Statement::Instruction(inst.map(&mut visitor)?))
+            Statement::LoadVar(
+                mut
+                details
+                @
+                LoadVarDetails {
+                    member_index: Some((_, Some(_))),
+                    ..
+                },
+            ) => {
+                let index = details.member_index.unwrap().0;
+                if index == 3 {
+                    result.push(Statement::Constant(ConstantDefinition {
+                        dst: details.arg.dst,
+                        typ: ast::ScalarType::U32,
+                        value: ast::ImmediateValue::U64(0),
+                    }));
+                } else {
+                    let src_type = match numeric_id_defs.special_registers.get(details.arg.src) {
+                        Some(reg) => get_sreg_id_scalar_type(numeric_id_defs, reg),
+                        None => None,
+                    };
+                    let (sreg_src, scalar_typ, vector_width) = match src_type {
+                        Some(x) => x,
+                        None => {
+                            result.push(Statement::LoadVar(details));
+                            continue;
+                        }
+                    };
+                    let temp_id = numeric_id_defs.new_non_variable(Some(details.typ.clone()));
+                    let real_dst = details.arg.dst;
+                    details.arg.dst = temp_id;
+                    result.push(Statement::LoadVar(LoadVarDetails {
+                        arg: Arg2 {
+                            src: sreg_src,
+                            dst: temp_id,
+                        },
+                        typ: ast::Type::Scalar(scalar_typ),
+                        member_index: Some((index, Some(vector_width))),
+                    }));
+                    result.push(Statement::Conversion(ImplicitConversion {
+                        src: temp_id,
+                        dst: real_dst,
+                        from: ast::Type::Scalar(scalar_typ),
+                        to: ast::Type::Scalar(ast::ScalarType::U32),
+                        kind: ConversionKind::Default,
+                        src_sema: ArgumentSemantics::Default,
+                        dst_sema: ArgumentSemantics::Default,
+                    }));
+                }
             }
             s => result.push(s),
         }
@@ -1357,55 +1403,21 @@ fn fix_builtins(
     Ok(result)
 }
 
-struct FixBuiltinsVisitor {}
-
-impl ArgumentMapVisitor<TypedArgParams, TypedArgParams> for FixBuiltinsVisitor {
-    fn id(
-        &mut self,
-        desc: ArgumentDescriptor<spirv::Word>,
-        typ: Option<&ast::Type>,
-    ) -> Result<spirv::Word, TranslateError> {
-        todo!()
-    }
-
-    fn operand(
-        &mut self,
-        desc: ArgumentDescriptor<ast::Operand<spirv::Word>>,
-        typ: &ast::Type,
-    ) -> Result<ast::Operand<spirv::Word>, TranslateError> {
-        todo!()
-    }
-
-    fn id_or_vector(
-        &mut self,
-        desc: ArgumentDescriptor<ast::IdOrVector<spirv::Word>>,
-        typ: &ast::Type,
-    ) -> Result<ast::IdOrVector<spirv::Word>, TranslateError> {
-        todo!()
-    }
-
-    fn operand_or_vector(
-        &mut self,
-        desc: ArgumentDescriptor<ast::OperandOrVector<spirv::Word>>,
-        typ: &ast::Type,
-    ) -> Result<ast::OperandOrVector<spirv::Word>, TranslateError> {
-        todo!()
-    }
-
-    fn src_call_operand(
-        &mut self,
-        desc: ArgumentDescriptor<ast::CallOperand<spirv::Word>>,
-        typ: &ast::Type,
-    ) -> Result<ast::CallOperand<spirv::Word>, TranslateError> {
-        todo!()
-    }
-
-    fn src_member_operand(
-        &mut self,
-        desc: ArgumentDescriptor<(spirv::Word, u8)>,
-        typ: (ast::ScalarType, u8),
-    ) -> Result<(spirv::Word, u8), TranslateError> {
-        todo!()
+fn get_sreg_id_scalar_type(
+    numeric_id_defs: &mut NumericIdResolver,
+    sreg: PtxSpecialRegister,
+) -> Option<(spirv::Word, ast::ScalarType, u8)> {
+    match sreg.normalized_sreg_and_type() {
+        Some((normalized_sreg, typ, vec_width)) => Some((
+            numeric_id_defs.special_registers.replace(
+                numeric_id_defs.current_id,
+                sreg,
+                normalized_sreg,
+            ),
+            typ,
+            vec_width,
+        )),
+        None => None,
     }
 }
 
@@ -2124,7 +2136,7 @@ impl<'a, 'input> InsertMemSSAVisitor<'a, 'input> {
                 };
                 Some((
                     idx,
-                    if self.id_def.special_registers.contains_key(&symbol) {
+                    if self.id_def.special_registers.get(symbol).is_some() {
                         Some(vector_width)
                     } else {
                         None
@@ -4711,44 +4723,21 @@ impl PtxSpecialRegister {
         }
     }
 
-    fn push_conversion(
-        self,
-        id_def: &mut NumericIdResolver,
-        func: &mut Vec<TypedStatement>,
-        mut composite_read: CompositeRead,
-    ) {
-        todo!()
-        /*
+    fn normalized_sreg_and_type(self) -> Option<(PtxSpecialRegister, ast::ScalarType, u8)> {
         match self {
-            PtxSpecialRegister::Tid
-            | PtxSpecialRegister::Ntid
-            | PtxSpecialRegister::Ctaid
-            | PtxSpecialRegister::Nctaid => {
-                if composite_read.src_index == 3 {
-                    func.push(Statement::Constant(ConstantDefinition {
-                        dst: composite_read.dst,
-                        typ: ast::ScalarType::U32,
-                        value: ast::ImmediateValue::U64(0),
-                    }));
-                } else {
-                    let dst = composite_read.dst;
-                    let temp_dst =
-                        id_def.new_non_variable(Some(ast::Type::Scalar(ast::ScalarType::U64)));
-                    composite_read.dst = temp_dst;
-                    func.push(Statement::Composite(composite_read));
-                    func.push(Statement::Conversion(ImplicitConversion {
-                        src: temp_dst,
-                        dst: dst,
-                        from: ast::Type::Scalar(ast::ScalarType::U64),
-                        to: ast::Type::Scalar(ast::ScalarType::U32),
-                        kind: ConversionKind::Default,
-                        src_sema: ArgumentSemantics::Default,
-                        dst_sema: ArgumentSemantics::Default,
-                    }));
-                }
+            PtxSpecialRegister::Tid => Some((PtxSpecialRegister::Tid64, ast::ScalarType::U64, 3)),
+            PtxSpecialRegister::Ntid => Some((PtxSpecialRegister::Ntid64, ast::ScalarType::U64, 3)),
+            PtxSpecialRegister::Ctaid => {
+                Some((PtxSpecialRegister::Ctaid64, ast::ScalarType::U64, 3))
             }
+            PtxSpecialRegister::Nctaid => {
+                Some((PtxSpecialRegister::Nctaid64, ast::ScalarType::U64, 3))
+            }
+            PtxSpecialRegister::Tid64
+            | PtxSpecialRegister::Ntid64
+            | PtxSpecialRegister::Ctaid64
+            | PtxSpecialRegister::Nctaid64 => None,
         }
-        */
     }
 }
 
@@ -4790,7 +4779,27 @@ impl SpecialRegistersMap {
         }
     }
 
-    fn replace(&mut self) {}
+    fn replace(
+        &mut self,
+        current_id: &mut spirv::Word,
+        old: PtxSpecialRegister,
+        new: PtxSpecialRegister,
+    ) -> spirv::Word {
+        match self.reg_to_id.entry(old) {
+            hash_map::Entry::Occupied(e) => {
+                let id = e.remove();
+                self.reg_to_id.insert(new, id);
+                id
+            }
+            hash_map::Entry::Vacant(e) => {
+                let numeric_id = *current_id;
+                *current_id += 1;
+                e.insert(numeric_id);
+                self.id_to_reg.insert(numeric_id, new);
+                numeric_id
+            }
+        }
+    }
 }
 
 struct GlobalStringIdResolver<'input> {
