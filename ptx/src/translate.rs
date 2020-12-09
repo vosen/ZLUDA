@@ -4792,11 +4792,17 @@ impl SpecialRegistersMap {
                 id
             }
             hash_map::Entry::Vacant(e) => {
-                let numeric_id = *current_id;
-                *current_id += 1;
-                e.insert(numeric_id);
-                self.id_to_reg.insert(numeric_id, new);
-                numeric_id
+                drop(e);
+                match self.reg_to_id.entry(new) {
+                    hash_map::Entry::Occupied(e) => *e.get(),
+                    hash_map::Entry::Vacant(e) => {
+                        let numeric_id = *current_id;
+                        *current_id += 1;
+                        e.insert(numeric_id);
+                        self.id_to_reg.insert(numeric_id, new);
+                        numeric_id
+                    }
+                }
             }
         }
     }
@@ -5162,7 +5168,19 @@ impl ExpandedStatement {
                     offset_src: constant_src,
                 })
             }
-            Statement::RepackVector(_) => todo!(),
+            Statement::RepackVector(repack) => {
+                let packed = f(repack.packed, !repack.is_extract);
+                let unpacked = repack
+                    .unpacked
+                    .iter()
+                    .map(|id| f(*id, repack.is_extract))
+                    .collect();
+                Statement::RepackVector(RepackVectorDetails {
+                    packed,
+                    unpacked,
+                    ..repack
+                })
+            }
         }
     }
 }
