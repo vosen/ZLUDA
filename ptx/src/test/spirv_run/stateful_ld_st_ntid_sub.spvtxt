@@ -12,16 +12,16 @@
                OpEntryPoint Kernel %1 "stateful_ld_st_ntid_sub" %gl_LocalInvocationID
                OpDecorate %gl_LocalInvocationID BuiltIn LocalInvocationId
        %void = OpTypeVoid
-       %uint = OpTypeInt 32 0
-     %v4uint = OpTypeVector %uint 4
-%_ptr_Input_v4uint = OpTypePointer Input %v4uint
-%gl_LocalInvocationID = OpVariable %_ptr_Input_v4uint Input
+      %ulong = OpTypeInt 64 0
+    %v3ulong = OpTypeVector %ulong 3
+%_ptr_Input_v3ulong = OpTypePointer Input %v3ulong
+%gl_LocalInvocationID = OpVariable %_ptr_Input_v3ulong Input
       %uchar = OpTypeInt 8 0
 %_ptr_CrossWorkgroup_uchar = OpTypePointer CrossWorkgroup %uchar
          %72 = OpTypeFunction %void %_ptr_CrossWorkgroup_uchar %_ptr_CrossWorkgroup_uchar
 %_ptr_Function__ptr_CrossWorkgroup_uchar = OpTypePointer Function %_ptr_CrossWorkgroup_uchar
+       %uint = OpTypeInt 32 0
 %_ptr_Function_uint = OpTypePointer Function %uint
-      %ulong = OpTypeInt 64 0
 %_ptr_Function_ulong = OpTypePointer Function %ulong
     %ulong_0 = OpConstant %ulong 0
 %_ptr_CrossWorkgroup_ulong = OpTypePointer CrossWorkgroup %ulong
@@ -63,43 +63,45 @@
          %26 = OpCopyObject %ulong %27
          %37 = OpConvertUToPtr %_ptr_CrossWorkgroup_uchar %26
                OpStore %18 %37
-         %39 = OpLoad %v4uint %gl_LocalInvocationID
-         %52 = OpCompositeExtract %uint %39 0
-         %38 = OpCopyObject %uint %52
+         %77 = OpLoad %v3ulong %gl_LocalInvocationID
+         %52 = OpCompositeExtract %ulong %77 0
+         %78 = OpBitcast %ulong %52
+         %39 = OpUConvert %uint %78
+         %38 = OpCopyObject %uint %39
                OpStore %10 %38
          %41 = OpLoad %uint %10
-         %77 = OpBitcast %uint %41
-         %40 = OpUConvert %ulong %77
+         %79 = OpBitcast %uint %41
+         %40 = OpUConvert %ulong %79
                OpStore %11 %40
          %42 = OpLoad %ulong %11
          %59 = OpCopyObject %ulong %42
          %28 = OpSNegate %ulong %59
          %44 = OpLoad %_ptr_CrossWorkgroup_uchar %15
-         %78 = OpBitcast %_ptr_CrossWorkgroup_uchar %44
-         %79 = OpInBoundsPtrAccessChain %_ptr_CrossWorkgroup_uchar %78 %28
-         %43 = OpBitcast %_ptr_CrossWorkgroup_uchar %79
+         %80 = OpBitcast %_ptr_CrossWorkgroup_uchar %44
+         %81 = OpInBoundsPtrAccessChain %_ptr_CrossWorkgroup_uchar %80 %28
+         %43 = OpBitcast %_ptr_CrossWorkgroup_uchar %81
                OpStore %16 %43
          %45 = OpLoad %ulong %11
          %60 = OpCopyObject %ulong %45
          %29 = OpSNegate %ulong %60
          %47 = OpLoad %_ptr_CrossWorkgroup_uchar %18
-         %80 = OpBitcast %_ptr_CrossWorkgroup_uchar %47
-         %81 = OpInBoundsPtrAccessChain %_ptr_CrossWorkgroup_uchar %80 %29
-         %46 = OpBitcast %_ptr_CrossWorkgroup_uchar %81
+         %82 = OpBitcast %_ptr_CrossWorkgroup_uchar %47
+         %83 = OpInBoundsPtrAccessChain %_ptr_CrossWorkgroup_uchar %82 %29
+         %46 = OpBitcast %_ptr_CrossWorkgroup_uchar %83
                OpStore %19 %46
          %49 = OpLoad %_ptr_CrossWorkgroup_uchar %16
          %61 = OpBitcast %_ptr_CrossWorkgroup_ulong %49
-         %83 = OpBitcast %_ptr_CrossWorkgroup_uchar %61
-         %84 = OpInBoundsPtrAccessChain %_ptr_CrossWorkgroup_uchar %83 %ulong_0
-         %54 = OpBitcast %_ptr_CrossWorkgroup_ulong %84
+         %85 = OpBitcast %_ptr_CrossWorkgroup_uchar %61
+         %86 = OpInBoundsPtrAccessChain %_ptr_CrossWorkgroup_uchar %85 %ulong_0
+         %54 = OpBitcast %_ptr_CrossWorkgroup_ulong %86
          %48 = OpLoad %ulong %54
                OpStore %12 %48
          %50 = OpLoad %_ptr_CrossWorkgroup_uchar %19
          %51 = OpLoad %ulong %12
          %62 = OpBitcast %_ptr_CrossWorkgroup_ulong %50
-         %85 = OpBitcast %_ptr_CrossWorkgroup_uchar %62
-         %86 = OpInBoundsPtrAccessChain %_ptr_CrossWorkgroup_uchar %85 %ulong_0_0
-         %56 = OpBitcast %_ptr_CrossWorkgroup_ulong %86
+         %87 = OpBitcast %_ptr_CrossWorkgroup_uchar %62
+         %88 = OpInBoundsPtrAccessChain %_ptr_CrossWorkgroup_uchar %87 %ulong_0_0
+         %56 = OpBitcast %_ptr_CrossWorkgroup_ulong %88
                OpStore %56 %51
                OpReturn
                OpFunctionEnd

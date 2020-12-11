@@ -12,16 +12,16 @@
                OpEntryPoint Kernel %1 "ntid" %gl_WorkGroupSize
                OpDecorate %gl_WorkGroupSize BuiltIn WorkgroupSize
        %void = OpTypeVoid
-       %uint = OpTypeInt 32 0
-     %v4uint = OpTypeVector %uint 4
-%_ptr_UniformConstant_v4uint = OpTypePointer UniformConstant %v4uint
-%gl_WorkGroupSize = OpVariable %_ptr_UniformConstant_v4uint UniformConstant
       %ulong = OpTypeInt 64 0
-         %33 = OpTypeFunction %void %ulong %ulong
+    %v3ulong = OpTypeVector %ulong 3
+%_ptr_Input_v3ulong = OpTypePointer Input %v3ulong
+%gl_WorkGroupSize = OpVariable %_ptr_Input_v3ulong Input
+         %32 = OpTypeFunction %void %ulong %ulong
 %_ptr_Function_ulong = OpTypePointer Function %ulong
+       %uint = OpTypeInt 32 0
 %_ptr_Function_uint = OpTypePointer Function %uint
 %_ptr_Generic_uint = OpTypePointer Generic %uint
-          %1 = OpFunction %void None %33
+          %1 = OpFunction %void None %32
           %9 = OpFunctionParameter %ulong
          %10 = OpFunctionParameter %ulong
          %25 = OpLabel
@@ -41,9 +41,11 @@
          %23 = OpConvertUToPtr %_ptr_Generic_uint %14
          %13 = OpLoad %uint %23
                OpStore %6 %13
-         %16 = OpLoad %v4uint %gl_WorkGroupSize
-         %22 = OpCompositeExtract %uint %16 0
-         %15 = OpCopyObject %uint %22
+         %37 = OpLoad %v3ulong %gl_WorkGroupSize
+         %22 = OpCompositeExtract %ulong %37 0
+         %38 = OpBitcast %ulong %22
+         %16 = OpUConvert %uint %38
+         %15 = OpCopyObject %uint %16
                OpStore %7 %15
          %18 = OpLoad %uint %6
          %19 = OpLoad %uint %7
