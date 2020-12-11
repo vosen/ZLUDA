@@ -1030,7 +1030,7 @@ fn emit_builtins(
     map: &mut TypeWordMap,
     id_defs: &GlobalStringIdResolver,
 ) {
-    for (reg, id) in id_defs.special_registers.iter() {
+    for (reg, id) in id_defs.special_registers.builtins() {
         let result_type = map.get_or_add(
             builder,
             SpirvType::Pointer(
@@ -1038,9 +1038,9 @@ fn emit_builtins(
                 spirv::StorageClass::Input,
             ),
         );
-        builder.variable(result_type, Some(*id), spirv::StorageClass::Input, None);
+        builder.variable(result_type, Some(id), spirv::StorageClass::Input, None);
         builder.decorate(
-            *id,
+            id,
             spirv::Decoration::BuiltIn,
             &[dr::Operand::BuiltIn(reg.get_builtin())],
         );
@@ -1086,11 +1086,7 @@ fn emit_function_header<'a>(
                 .iter()
                 .filter_map(|(k, t)| t.as_ref().map(|_| *k))
                 .collect::<Vec<_>>();
-            let mut interface = defined_globals
-                .special_registers
-                .iter()
-                .map(|(_, id)| *id)
-                .collect::<Vec<_>>();
+            let mut interface = defined_globals.special_registers.interface();
             for ast::Variable { name, .. } in synthetic_globals {
                 interface.push(*name);
             }
@@ -1326,6 +1322,7 @@ fn to_ssa<'input, 'b>(
         &f_args,
         &mut spirv_decl,
     )?;
+    let ssa_statements = fix_builtins(ssa_statements, &mut numeric_id_defs)?;
     let mut numeric_id_defs = numeric_id_defs.finish();
     let expanded_statements = expand_arguments(ssa_statements, &mut numeric_id_defs)?;
     let expanded_statements =
@@ -1341,6 +1338,87 @@ fn to_ssa<'input, 'b>(
         import_as: None,
         spirv_decl,
     })
+}
+
+fn fix_builtins(
+    typed_statements: Vec<TypedStatement>,
+    numeric_id_defs: &mut NumericIdResolver,
+) -> Result<Vec<TypedStatement>, TranslateError> {
+    let mut result = Vec::with_capacity(typed_statements.len());
+    for s in typed_statements {
+        match s {
+            Statement::LoadVar(
+                mut
+                details
+                @
+                LoadVarDetails {
+                    member_index: Some((_, Some(_))),
+                    ..
+                },
+            ) => {
+                let index = details.member_index.unwrap().0;
+                if index == 3 {
+                    result.push(Statement::Constant(ConstantDefinition {
+                        dst: details.arg.dst,
+                        typ: ast::ScalarType::U32,
+                        value: ast::ImmediateValue::U64(0),
+                    }));
+                } else {
+                    let src_type = match numeric_id_defs.special_registers.get(details.arg.src) {
+                        Some(reg) => get_sreg_id_scalar_type(numeric_id_defs, reg),
+                        None => None,
+                    };
+                    let (sreg_src, scalar_typ, vector_width) = match src_type {
+                        Some(x) => x,
+                        None => {
+                            result.push(Statement::LoadVar(details));
+                            continue;
+                        }
+                    };
+                    let temp_id = numeric_id_defs.new_non_variable(Some(details.typ.clone()));
+                    let real_dst = details.arg.dst;
+                    details.arg.dst = temp_id;
+                    result.push(Statement::LoadVar(LoadVarDetails {
+                        arg: Arg2 {
+                            src: sreg_src,
+                            dst: temp_id,
+                        },
+                        typ: ast::Type::Scalar(scalar_typ),
+                        member_index: Some((index, Some(vector_width))),
+                    }));
+                    result.push(Statement::Conversion(ImplicitConversion {
+                        src: temp_id,
+                        dst: real_dst,
+                        from: ast::Type::Scalar(scalar_typ),
+                        to: ast::Type::Scalar(ast::ScalarType::U32),
+                        kind: ConversionKind::Default,
+                        src_sema: ArgumentSemantics::Default,
+                        dst_sema: ArgumentSemantics::Default,
+                    }));
+                }
+            }
+            s => result.push(s),
+        }
+    }
+    Ok(result)
+}
+
+fn get_sreg_id_scalar_type(
+    numeric_id_defs: &mut NumericIdResolver,
+    sreg: PtxSpecialRegister,
+) -> Option<(spirv::Word, ast::ScalarType, u8)> {
+    match sreg.normalized_sreg_and_type() {
+        Some((normalized_sreg, typ, vec_width)) => Some((
+            numeric_id_defs.special_registers.replace(
+                numeric_id_defs.current_id,
+                sreg,
+                normalized_sreg,
+            ),
+            typ,
+            vec_width,
+        )),
+        None => None,
+    }
 }
 
 fn extract_globals<'input, 'b>(
@@ -2058,7 +2136,7 @@ impl<'a, 'input> InsertMemSSAVisitor<'a, 'input> {
                 };
                 Some((
                     idx,
-                    if self.id_def.special_registers.contains_key(&symbol) {
+                    if self.id_def.special_registers.get(symbol).is_some() {
                         Some(vector_width)
                     } else {
                         None
@@ -4599,9 +4677,13 @@ fn is_64_bit_integer(id_defs: &NumericIdResolver, id: spirv::Word) -> bool {
 #[derive(Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 enum PtxSpecialRegister {
     Tid,
+    Tid64,
     Ntid,
+    Ntid64,
     Ctaid,
+    Ctaid64,
     Nctaid,
+    Nctaid64,
 }
 
 impl PtxSpecialRegister {
@@ -4618,18 +4700,110 @@ impl PtxSpecialRegister {
     fn get_type(self) -> ast::Type {
         match self {
             PtxSpecialRegister::Tid => ast::Type::Vector(ast::ScalarType::U32, 4),
+            PtxSpecialRegister::Tid64 => ast::Type::Vector(ast::ScalarType::U64, 3),
             PtxSpecialRegister::Ntid => ast::Type::Vector(ast::ScalarType::U32, 4),
+            PtxSpecialRegister::Ntid64 => ast::Type::Vector(ast::ScalarType::U64, 3),
             PtxSpecialRegister::Ctaid => ast::Type::Vector(ast::ScalarType::U32, 4),
+            PtxSpecialRegister::Ctaid64 => ast::Type::Vector(ast::ScalarType::U64, 3),
             PtxSpecialRegister::Nctaid => ast::Type::Vector(ast::ScalarType::U32, 4),
+            PtxSpecialRegister::Nctaid64 => ast::Type::Vector(ast::ScalarType::U64, 3),
         }
     }
 
     fn get_builtin(self) -> spirv::BuiltIn {
         match self {
-            PtxSpecialRegister::Tid => spirv::BuiltIn::LocalInvocationId,
-            PtxSpecialRegister::Ntid => spirv::BuiltIn::WorkgroupSize,
-            PtxSpecialRegister::Ctaid => spirv::BuiltIn::WorkgroupId,
-            PtxSpecialRegister::Nctaid => spirv::BuiltIn::NumWorkgroups,
+            PtxSpecialRegister::Tid | PtxSpecialRegister::Tid64 => {
+                spirv::BuiltIn::LocalInvocationId
+            }
+            PtxSpecialRegister::Ntid | PtxSpecialRegister::Ntid64 => spirv::BuiltIn::WorkgroupSize,
+            PtxSpecialRegister::Ctaid | PtxSpecialRegister::Ctaid64 => spirv::BuiltIn::WorkgroupId,
+            PtxSpecialRegister::Nctaid | PtxSpecialRegister::Nctaid64 => {
+                spirv::BuiltIn::NumWorkgroups
+            }
+        }
+    }
+
+    fn normalized_sreg_and_type(self) -> Option<(PtxSpecialRegister, ast::ScalarType, u8)> {
+        match self {
+            PtxSpecialRegister::Tid => Some((PtxSpecialRegister::Tid64, ast::ScalarType::U64, 3)),
+            PtxSpecialRegister::Ntid => Some((PtxSpecialRegister::Ntid64, ast::ScalarType::U64, 3)),
+            PtxSpecialRegister::Ctaid => {
+                Some((PtxSpecialRegister::Ctaid64, ast::ScalarType::U64, 3))
+            }
+            PtxSpecialRegister::Nctaid => {
+                Some((PtxSpecialRegister::Nctaid64, ast::ScalarType::U64, 3))
+            }
+            PtxSpecialRegister::Tid64
+            | PtxSpecialRegister::Ntid64
+            | PtxSpecialRegister::Ctaid64
+            | PtxSpecialRegister::Nctaid64 => None,
+        }
+    }
+}
+
+struct SpecialRegistersMap {
+    reg_to_id: HashMap<PtxSpecialRegister, spirv::Word>,
+    id_to_reg: HashMap<spirv::Word, PtxSpecialRegister>,
+}
+
+impl SpecialRegistersMap {
+    fn new() -> Self {
+        SpecialRegistersMap {
+            reg_to_id: HashMap::new(),
+            id_to_reg: HashMap::new(),
+        }
+    }
+
+    fn builtins<'a>(&'a self) -> impl Iterator<Item = (PtxSpecialRegister, spirv::Word)> + 'a {
+        self.reg_to_id.iter().map(|(reg, id)| (*reg, *id))
+    }
+
+    fn interface(&self) -> Vec<spirv::Word> {
+        self.id_to_reg.iter().map(|(id, _)| *id).collect::<Vec<_>>()
+    }
+
+    fn get(&self, id: spirv::Word) -> Option<PtxSpecialRegister> {
+        self.id_to_reg.get(&id).copied()
+    }
+
+    fn get_or_add(&mut self, current_id: &mut spirv::Word, reg: PtxSpecialRegister) -> spirv::Word {
+        match self.reg_to_id.entry(reg) {
+            hash_map::Entry::Occupied(e) => *e.get(),
+            hash_map::Entry::Vacant(e) => {
+                let numeric_id = *current_id;
+                *current_id += 1;
+                e.insert(numeric_id);
+                self.id_to_reg.insert(numeric_id, reg);
+                numeric_id
+            }
+        }
+    }
+
+    fn replace(
+        &mut self,
+        current_id: &mut spirv::Word,
+        old: PtxSpecialRegister,
+        new: PtxSpecialRegister,
+    ) -> spirv::Word {
+        match self.reg_to_id.entry(old) {
+            hash_map::Entry::Occupied(e) => {
+                let id = e.remove();
+                self.reg_to_id.insert(new, id);
+                id
+            }
+            hash_map::Entry::Vacant(e) => {
+                drop(e);
+                match self.reg_to_id.entry(new) {
+                    hash_map::Entry::Occupied(e) => *e.get(),
+                    hash_map::Entry::Vacant(e) => {
+                        let numeric_id = *current_id;
+                        *current_id += 1;
+                        e.insert(numeric_id);
+                        self.id_to_reg.insert(numeric_id, new);
+                        numeric_id
+                    }
+                }
+            }
         }
     }
 }
@@ -4638,7 +4812,7 @@ struct GlobalStringIdResolver<'input> {
     current_id: spirv::Word,
     variables: HashMap<Cow<'input, str>, spirv::Word>,
     variables_type_check: HashMap<u32, Option<(ast::Type, bool)>>,
-    special_registers: HashMap<PtxSpecialRegister, spirv::Word>,
+    special_registers: SpecialRegistersMap,
     fns: HashMap<spirv::Word, FnDecl>,
 }
 
@@ -4653,7 +4827,7 @@ impl<'a> GlobalStringIdResolver<'a> {
             current_id: start_id,
             variables: HashMap::new(),
             variables_type_check: HashMap::new(),
-            special_registers: HashMap::new(),
+            special_registers: SpecialRegistersMap::new(),
             fns: HashMap::new(),
         }
     }
@@ -4768,7 +4942,7 @@ struct FnStringIdResolver<'input, 'b> {
     current_id: &'b mut spirv::Word,
     global_variables: &'b HashMap<Cow<'input, str>, spirv::Word>,
     global_type_check: &'b HashMap<u32, Option<(ast::Type, bool)>>,
-    special_registers: &'b mut HashMap<PtxSpecialRegister, spirv::Word>,
+    special_registers: &'b mut SpecialRegistersMap,
     variables: Vec<HashMap<Cow<'input, str>, spirv::Word>>,
     type_check: HashMap<u32, Option<(ast::Type, bool)>>,
 }
@@ -4779,11 +4953,7 @@ impl<'a, 'b> FnStringIdResolver<'a, 'b> {
             current_id: self.current_id,
             global_type_check: self.global_type_check,
             type_check: self.type_check,
-            special_registers: self
-                .special_registers
-                .iter()
-                .map(|(reg, id)| (*id, *reg))
-                .collect(),
+            special_registers: self.special_registers,
         }
     }
 
@@ -4807,15 +4977,7 @@ impl<'a, 'b> FnStringIdResolver<'a, 'b> {
             None => {
                 let sreg =
                     PtxSpecialRegister::try_parse(id).ok_or(TranslateError::UnknownSymbol)?;
-                match self.special_registers.entry(sreg) {
-                    hash_map::Entry::Occupied(e) => Ok(*e.get()),
-                    hash_map::Entry::Vacant(e) => {
-                        let numeric_id = *self.current_id;
-                        *self.current_id += 1;
-                        e.insert(numeric_id);
-                        Ok(numeric_id)
-                    }
-                }
+                Ok(self.special_registers.get_or_add(self.current_id, sreg))
             }
         }
     }
@@ -4858,7 +5020,7 @@ struct NumericIdResolver<'b> {
     current_id: &'b mut spirv::Word,
     global_type_check: &'b HashMap<u32, Option<(ast::Type, bool)>>,
     type_check: HashMap<u32, Option<(ast::Type, bool)>>,
-    special_registers: HashMap<spirv::Word, PtxSpecialRegister>,
+    special_registers: &'b mut SpecialRegistersMap,
 }
 
 impl<'b> NumericIdResolver<'b> {
@@ -4870,7 +5032,7 @@ impl<'b> NumericIdResolver<'b> {
         match self.type_check.get(&id) {
             Some(Some(x)) => Ok(x.clone()),
             Some(None) => Err(TranslateError::UntypedSymbol),
-            None => match self.special_registers.get(&id) {
+            None => match self.special_registers.get(id) {
                 Some(x) => Ok((x.get_type(), true)),
                 None => match self.global_type_check.get(&id) {
                     Some(Some(result)) => Ok(result.clone()),
@@ -5006,7 +5168,19 @@ impl ExpandedStatement {
                     offset_src: constant_src,
                 })
             }
-            Statement::RepackVector(_) => todo!(),
+            Statement::RepackVector(repack) => {
+                let packed = f(repack.packed, !repack.is_extract);
+                let unpacked = repack
+                    .unpacked
+                    .iter()
+                    .map(|id| f(*id, repack.is_extract))
+                    .collect();
+                Statement::RepackVector(RepackVectorDetails {
+                    packed,
+                    unpacked,
+                    ..repack
+                })
+            }
         }
     }
 }
