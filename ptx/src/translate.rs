@@ -2789,13 +2789,28 @@ fn emit_function_body_ops(
                     }
                     let result_type =
                         map.get_or_add(builder, SpirvType::from(ast::Type::from(data.typ.clone())));
-                    builder.load(result_type, Some(arg.dst), arg.src, None, [])?;
+                    builder.load(
+                        result_type,
+                        Some(arg.dst),
+                        arg.src,
+                        Some(spirv::MemoryAccess::ALIGNED),
+                        [dr::Operand::LiteralInt32(
+                            ast::Type::from(data.typ.clone()).size_of() as u32,
+                        )],
+                    )?;
                 }
                 ast::Instruction::St(data, arg) => {
                     if data.qualifier != ast::LdStQualifier::Weak {
                         todo!()
                     }
-                    builder.store(arg.src1, arg.src2, None, &[])?;
+                    builder.store(
+                        arg.src1,
+                        arg.src2,
+                        Some(spirv::MemoryAccess::ALIGNED),
+                        [dr::Operand::LiteralInt32(
+                            ast::Type::from(data.typ.clone()).size_of() as u32,
+                        )],
+                    )?;
                 }
                 // SPIR-V does not support ret as guaranteed-converged
                 ast::Instruction::Ret(_) => builder.ret()?,
