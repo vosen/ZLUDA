@@ -1,0 +1,13 @@
+[package]
+name = "zluda_dump"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2018"
+
+[lib]
+name = "zluda_dump"
+crate-type = ["cdylib"]
+
+[dependencies]
+ptx = { path = "../ptx" }
+libc = "0.2"
