@@ -70,8 +70,8 @@ cargo build
 ```
 in the main directory of the project
 ### Known build issues and workarounds:
-+ * cmake not installed on Windows: * Install windows binaries from https://cmake.org/download/
-+ * CMake Error: The source directory ".../ZLUDA/ext/spirv-tools" does not appear to contain CMakeLists.txt.*: update linked git submodules 
++ **cmake not installed on Windows:** Install windows binaries from https://cmake.org/download/
++ **CMake Error: The source directory ".../ZLUDA/ext/spirv-tools" does not appear to contain CMakeLists.txt.:** update linked git submodules 
 ```
 git submodule init
 git submodule update
