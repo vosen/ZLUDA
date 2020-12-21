@@ -76,6 +76,12 @@ in the main directory of the project
 git submodule init
 git submodule update
 ```
++ **OpenCL.lib not found** \
+install intel sdk intel_sdk_for_opencl_applications_{YYYY}.V.XYZ.zip (e.g. intel_sdk_for_opencl_applications_2020.3.494.zip)
+Set environment variable for Linker to pick up OpenCL.lib. Below example is for MS Build linker
+```
+set LIB=%LIB%;%INTELOCLSDKROOT%\lib\x64;%INTELOCLSDKROOT%\lib\x86;
+```
 
 ## License
 
