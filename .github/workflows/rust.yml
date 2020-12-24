@@ -30,6 +30,19 @@ jobs:
         sudo add-apt-repository ppa:intel-opencl/intel-opencl
         sudo apt update
         sudo apt install libze-loader libze-intel-gpu intel-opencl-icd ocl-icd-opencl-dev libze-loader-dev
+
+        mkdir neo
+        cd neo
+        wget https://github.com/intel/compute-runtime/releases/download/20.51.18762/intel-gmmlib_20.3.2_amd64.deb
+        wget https://github.com/intel/intel-graphics-compiler/releases/download/igc-1.0.5884/intel-igc-core_1.0.5884_amd64.deb
+        wget https://github.com/intel/intel-graphics-compiler/releases/download/igc-1.0.5884/intel-igc-opencl_1.0.5884_amd64.deb
+        wget https://github.com/intel/compute-runtime/releases/download/20.51.18762/intel-opencl_20.51.18762_amd64.deb
+        wget https://github.com/intel/compute-runtime/releases/download/20.51.18762/intel-ocloc_20.51.18762_amd64.deb
+        wget https://github.com/intel/compute-runtime/releases/download/20.51.18762/intel-level-zero-gpu_1.0.18762_amd64.deb
+
+        wget https://github.com/intel/compute-runtime/releases/download/20.51.18762/ww51.sum
+        sha256sum -c ww51.sum
+        sudo dpkg -i *.deb
     - name: Build
       run: cargo build --verbose
     - name: Run tests
