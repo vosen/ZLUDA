@@ -44,6 +44,9 @@ jobs:
         wget https://github.com/intel/intel-graphics-compiler/releases/download/igc-1.0.5884/intel-igc-opencl-devel_1.0.5884_amd64.deb
 
         sudo dpkg -i *.deb
+
+        sudo apt update
+        sudo apt install ocl-icd-opencl-dev
     - name: Build
       run: cargo build --verbose
     - name: Run tests
