@@ -16,6 +16,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: true 
     - name: Install intel compute runtime
       run: |
         sudo add-apt-repository ppa:intel-opencl/intel-opencl
