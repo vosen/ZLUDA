@@ -1,0 +1,27 @@
+name: Rust
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install intel compute runtime
+      run: |
+        sudo add-apt-repository ppa:intel-opencl/intel-opencl
+        sudo apt update
+        sudo apt install libze-loader libze-intel-gpu
+    - name: Build
+      run: cargo build --verbose
+    - name: Run tests
+      run: cargo test --verbose
