@@ -27,10 +27,6 @@ jobs:
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     - name: Install intel compute runtime
       run: |
-        sudo add-apt-repository ppa:intel-opencl/intel-opencl
-        sudo apt update
-        sudo apt install libze-loader libze-intel-gpu intel-opencl-icd ocl-icd-opencl-dev libze-loader-dev
-
         mkdir neo
         cd neo
         wget https://github.com/intel/compute-runtime/releases/download/20.51.18762/intel-gmmlib_20.3.2_amd64.deb
