@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    "detours-sys",
     "level_zero-sys",
     "level_zero",
     "spirv_tools-sys",
