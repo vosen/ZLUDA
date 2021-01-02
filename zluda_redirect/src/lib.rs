@@ -1,8 +1,6 @@
 #![cfg(target_os = "windows")]
 
 extern crate detours_sys;
-#[macro_use]
-extern crate guid;
 extern crate winapi;
 
 use std::mem;
@@ -17,6 +15,8 @@ use winapi::um::libloaderapi::LoadLibraryExW;
 use winapi::um::processthreadsapi::GetCurrentThread;
 use winapi::um::winbase::lstrcmpiW;
 use winapi::um::winnt::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH, HANDLE, LPCWSTR};
+
+include!("payload_guid.rs");
 
 const NVCUDA_PATH: &[u16] = wch_c!(r"C:\WINDOWS\system32\nvcuda.dll");
 const ZLUDA_DLL: &[u16] = wch!(r"nvcuda.dll");
@@ -72,7 +72,6 @@ unsafe extern "system" fn DllMain(_: *const u8, dwReason: u32, _: *const u8) -> 
 }
 
 fn get_zluda_dll_path() -> Option<(*const u16, usize)> {
-    let guid = guid! {"C225FC0C-00D7-40B8-935A-7E342A9344C1"};
     let mut module = std::ptr::null_mut();
     loop {
         module = unsafe { detours_sys::DetourEnumerateModules(module) };
@@ -81,7 +80,7 @@ fn get_zluda_dll_path() -> Option<(*const u16, usize)> {
         }
         let mut size = 0;
         let payload = unsafe {
-            detours_sys::DetourFindPayload(module, std::mem::transmute(&guid), &mut size)
+            detours_sys::DetourFindPayload(module, &PAYLOAD_GUID, &mut size)
         };
         if payload != std::ptr::null_mut() {
             return Some((payload as *const _, (size as usize) / mem::size_of::<u16>()));

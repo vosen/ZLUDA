@@ -1,6 +1,4 @@
 extern crate clap;
-#[macro_use]
-extern crate guid;
 extern crate detours_sys;
 extern crate winapi;
 

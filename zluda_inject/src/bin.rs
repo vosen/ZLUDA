@@ -10,6 +10,9 @@ use winapi::um::winbase::{INFINITE, WAIT_FAILED};
 
 use clap::{App, AppSettings, Arg};
 
+
+include!("../../zluda_redirect/src/payload_guid.rs");
+
 pub fn main_impl() -> Result<(), Box<dyn Error>> {
     let matches = App::new("ZLUDA injector")
         .setting(AppSettings::TrailingVarArg)
@@ -67,11 +70,10 @@ pub fn main_impl() -> Result<(), Box<dyn Error>> {
         .as_os_str()
         .encode_wide()
         .collect::<Vec<_>>();
-    let guid = guid! {"C225FC0C-00D7-40B8-935A-7E342A9344C1"};
     os_call!(
         detours_sys::DetourCopyPayloadToProcess(
             proc_info.hProcess,
-            mem::transmute(&guid),
+            &PAYLOAD_GUID,
             exe_path.as_mut_ptr() as *mut _,
             (exe_path.len() * mem::size_of::<u16>()) as u32
         ),
