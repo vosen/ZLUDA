@@ -5,9 +5,16 @@ use std::path::Path;
 use std::ptr;
 use std::{error::Error, process};
 
+use mem::size_of_val;
 use winapi::um::{
+    jobapi2::{AssignProcessToJobObject, SetInformationJobObject},
     processthreadsapi::{GetExitCodeProcess, ResumeThread},
     synchapi::WaitForSingleObject,
+    winbase::CreateJobObjectA,
+    winnt::{
+        JobObjectExtendedLimitInformation, HANDLE, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    },
 };
 
 use winapi::um::winbase::{INFINITE, WAIT_FAILED};
@@ -46,6 +53,7 @@ pub fn main_impl() -> Result<(), Box<dyn Error>> {
         ),
         |x| x != 0
     );
+    kill_child_on_process_exit(proc_info.hProcess)?;
     let mut zluda_path = create_zluda_path(injector_dir);
     os_call!(
         detours_sys::DetourCopyPayloadToProcess(
@@ -57,7 +65,6 @@ pub fn main_impl() -> Result<(), Box<dyn Error>> {
         |x| x != 0
     );
     os_call!(ResumeThread(proc_info.hThread), |x| x as i32 != -1);
-    // TODO: kill the child process if we were killed
     os_call!(WaitForSingleObject(proc_info.hProcess, INFINITE), |x| x
         != WAIT_FAILED);
     let mut child_exit_code: u32 = 0;
@@ -66,6 +73,24 @@ pub fn main_impl() -> Result<(), Box<dyn Error>> {
         |x| x != 0
     );
     process::exit(child_exit_code as i32)
+}
+
+fn kill_child_on_process_exit(child: HANDLE) -> Result<(), Box<dyn Error>> {
+    let job_handle = os_call!(CreateJobObjectA(ptr::null_mut(), ptr::null()), |x| x
+        != ptr::null_mut());
+    let mut info = unsafe { mem::zeroed::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() };
+    info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    os_call!(
+        SetInformationJobObject(
+            job_handle,
+            JobObjectExtendedLimitInformation,
+            &mut info as *mut _ as *mut _,
+            size_of_val(&info) as u32
+        ),
+        |x| x != 0
+    );
+    os_call!(AssignProcessToJobObject(job_handle, child), |x| x != 0);
+    Ok(())
 }
 
 fn print_help() {
