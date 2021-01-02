@@ -7,7 +7,7 @@ members = [
     "spirv_tools-sys",
     "zluda",
     #"zluda_inject",
-    #"zluda_redirect",
+    "zluda_redirect",
     "ptx",
 ]
 

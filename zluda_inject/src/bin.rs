@@ -1,3 +1,5 @@
+#![cfg(target_os = "windows")]
+
 extern crate clap;
 #[macro_use]
 extern crate guid;

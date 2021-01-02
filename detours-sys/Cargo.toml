@@ -27,8 +27,6 @@ exclude = [
 [badges]
 maintenance = { status = "as-is" }
 
-[dependencies]
-
 [dev-dependencies.winapi]
 version = "0.3"
 features = [

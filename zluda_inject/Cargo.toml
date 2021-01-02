@@ -11,6 +11,6 @@ path = "src/main.rs"
 [target.'cfg(windows)'.dependencies]
 zluda_redirect = { path = "../zluda_redirect" }
 winapi = { version = "0.3", features = ["processthreadsapi", "std", "synchapi"] }
-detours-sys = "0.1"
+detours-sys = { path = "../detours-sys" }
 clap = "2.33"
 guid = "0.1"

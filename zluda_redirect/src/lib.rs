@@ -1,4 +1,4 @@
-#![cfg(windows)]
+#![cfg(target_os = "windows")]
 
 extern crate detours_sys;
 #[macro_use]
