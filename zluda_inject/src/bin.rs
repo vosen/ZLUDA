@@ -31,7 +31,6 @@ pub fn main_impl() -> Result<(), Box<dyn Error>> {
         process::exit(1);
     }
     let mut cmd_line = construct_command_line(args);
-    dbg!(String::from_utf16_lossy(&cmd_line));
     let injector_path = env::current_exe()?;
     let injector_dir = injector_path.parent().unwrap();
     let redirect_path = create_redirect_path(injector_dir);
