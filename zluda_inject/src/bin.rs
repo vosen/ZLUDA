@@ -1,15 +1,25 @@
-use std::error::Error;
 use std::ffi::OsStr;
-use std::mem;
 use std::os::windows::ffi::OsStrExt;
+use std::os::windows::ffi::OsStringExt;
 use std::ptr;
+use std::{error::Error, process};
+use std::{ffi::OsString, mem};
 
-use winapi::um::processthreadsapi::{GetExitCodeProcess, ResumeThread};
-use winapi::um::synchapi::WaitForSingleObject;
-use winapi::um::winbase::{INFINITE, WAIT_FAILED};
+use winapi::um::{
+    libloaderapi::GetModuleFileNameW,
+    processthreadsapi::{GetExitCodeProcess, ResumeThread},
+    synchapi::WaitForSingleObject,
+};
+use winapi::{shared::minwindef, um::errhandlingapi::GetLastError};
+use winapi::{
+    shared::winerror::ERROR_INSUFFICIENT_BUFFER,
+    um::winbase::{INFINITE, WAIT_FAILED},
+};
 
 use clap::{App, AppSettings, Arg};
 
+static REDIRECT_DLL: &'static str = "zluda_redirect.dll";
+static ZLUDA_DLL: &'static [u16] = wstr!("nvcuda.dll");
 
 include!("../../zluda_redirect/src/payload_guid.rs");
 
@@ -47,6 +57,9 @@ pub fn main_impl() -> Result<(), Box<dyn Error>> {
     });
 
     cmd_line.push(0);
+    let mut injector_path = get_injector_path()?;
+    trim_to_parent(&mut injector_path);
+    let redirect_path = create_redirect_path(&injector_path);
     let mut startup_info = unsafe { mem::zeroed::<detours_sys::_STARTUPINFOW>() };
     let mut proc_info = unsafe { mem::zeroed::<detours_sys::_PROCESS_INFORMATION>() };
     os_call!(
@@ -61,21 +74,18 @@ pub fn main_impl() -> Result<(), Box<dyn Error>> {
             ptr::null(),
             &mut startup_info as *mut _,
             &mut proc_info as *mut _,
-            "zluda_redirect.dll\0".as_ptr() as *const i8,
+            redirect_path.as_ptr() as *const i8,
             Option::None
         ),
         |x| x != 0
     );
-    let mut exe_path = std::env::current_dir()?
-        .as_os_str()
-        .encode_wide()
-        .collect::<Vec<_>>();
+    let mut zluda_path = create_zluda_path(injector_path);
     os_call!(
         detours_sys::DetourCopyPayloadToProcess(
             proc_info.hProcess,
             &PAYLOAD_GUID,
-            exe_path.as_mut_ptr() as *mut _,
-            (exe_path.len() * mem::size_of::<u16>()) as u32
+            zluda_path.as_mut_ptr() as *mut _,
+            (zluda_path.len() * mem::size_of::<u16>()) as u32
         ),
         |x| x != 0
     );
@@ -87,7 +97,37 @@ pub fn main_impl() -> Result<(), Box<dyn Error>> {
         GetExitCodeProcess(proc_info.hProcess, &mut child_exit_code as *mut _),
         |x| x != 0
     );
-    std::process::exit(child_exit_code as i32)
+    process::exit(child_exit_code as i32)
+}
+
+fn trim_to_parent(injector_path: &mut Vec<u16>) {
+    let slash_idx = injector_path
+        .iter()
+        .enumerate()
+        .rev()
+        .find_map(|(idx, char)| {
+            if *char == '/' as u16 || *char == '\\' as u16 {
+                Some(idx)
+            } else {
+                None
+            }
+        });
+    if let Some(idx) = slash_idx {
+        injector_path.truncate(idx + 1);
+    }
+}
+
+fn create_redirect_path(injector_dir: &[u16]) -> Vec<u8> {
+    let os_string: OsString = OsString::from_wide(injector_dir);
+    let mut utf8_string = os_string.to_string_lossy().as_bytes().to_vec();
+    utf8_string.extend(REDIRECT_DLL.as_bytes());
+    utf8_string.push(0);
+    utf8_string
+}
+
+fn create_zluda_path(mut injector_dir: Vec<u16>) -> Vec<u16> {
+    injector_dir.extend(ZLUDA_DLL);
+    injector_dir
 }
 
 fn copy_to(from: &OsStr, to: &mut Vec<u16>) {
@@ -96,4 +136,20 @@ fn copy_to(from: &OsStr, to: &mut Vec<u16>) {
     }
 }
 
-//
+fn get_injector_path() -> Result<Vec<u16>, Box<dyn Error>> {
+    let mut result = vec![0u16; minwindef::MAX_PATH];
+    let mut copied;
+    loop {
+        copied = os_call!(
+            GetModuleFileNameW(ptr::null_mut(), result.as_mut_ptr(), result.len() as u32),
+            |x| x != 0
+        );
+        if copied != result.len() as u32 {
+            break;
+        }
+        os_call!(GetLastError(), |x| x != ERROR_INSUFFICIENT_BUFFER);
+        result.resize(result.len() * 2, 0);
+    }
+    result.truncate(copied as usize);
+    Ok(result)
+}

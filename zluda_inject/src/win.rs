@@ -48,15 +48,18 @@ macro_rules! last_ident {
 
 macro_rules! os_call {
     ($($path:ident)::+ ($($args:expr),*), $success:expr) => {
-        let result = unsafe{ $($path)::+ ($($args),+) };
-        if !($success)(result) {
-            let name = last_ident!($($path),+);
-            let err_code = $crate::win::errno();
-            Err($crate::win::OsError{
-                function: name,
-                error_code: err_code as u32,
-                message: $crate::win::error_string(err_code)
-            })?;
+        {
+            let result = unsafe{ $($path)::+ ($($args),*) };
+            if !($success)(result) {
+                let name = last_ident!($($path),+);
+                let err_code = $crate::win::errno();
+                Err($crate::win::OsError{
+                    function: name,
+                    error_code: err_code as u32,
+                    message: $crate::win::error_string(err_code)
+                })?;
+            }
+            result
         }
     };
 }

@@ -3,7 +3,7 @@
 extern crate detours_sys;
 extern crate winapi;
 
-use std::mem;
+use std::{mem, ptr};
 
 use detours_sys::{
     DetourAttach, DetourDetach, DetourRestoreAfterWith, DetourTransactionBegin,
@@ -55,7 +55,7 @@ unsafe extern "system" fn DllMain(_: *const u8, dwReason: u32, _: *const u8) -> 
         DetourTransactionBegin();
         DetourUpdateThread(GetCurrentThread());
         DetourAttach(
-            std::mem::transmute(&mut LOAD_LIBRARY_EX),
+            mem::transmute(&mut LOAD_LIBRARY_EX),
             ZludaLoadLibraryExW as *mut _,
         );
         DetourTransactionCommit();
@@ -63,7 +63,7 @@ unsafe extern "system" fn DllMain(_: *const u8, dwReason: u32, _: *const u8) -> 
         DetourTransactionBegin();
         DetourUpdateThread(GetCurrentThread());
         DetourDetach(
-            std::mem::transmute(&mut LOAD_LIBRARY_EX),
+            mem::transmute(&mut LOAD_LIBRARY_EX),
             ZludaLoadLibraryExW as *mut _,
         );
         DetourTransactionCommit();
@@ -72,17 +72,17 @@ unsafe extern "system" fn DllMain(_: *const u8, dwReason: u32, _: *const u8) -> 
 }
 
 fn get_zluda_dll_path() -> Option<(*const u16, usize)> {
-    let mut module = std::ptr::null_mut();
+    let mut module = ptr::null_mut();
     loop {
         module = unsafe { detours_sys::DetourEnumerateModules(module) };
-        if module == std::ptr::null_mut() {
+        if module == ptr::null_mut() {
             break;
         }
         let mut size = 0;
         let payload = unsafe {
             detours_sys::DetourFindPayload(module, &PAYLOAD_GUID, &mut size)
         };
-        if payload != std::ptr::null_mut() {
+        if payload != ptr::null_mut() {
             return Some((payload as *const _, (size as usize) / mem::size_of::<u16>()));
         }
     }

@@ -1,6 +1,8 @@
 extern crate clap;
 extern crate detours_sys;
 extern crate winapi;
+#[macro_use]
+extern crate wstr;
 
 #[macro_use]
 #[cfg(target_os = "windows")]

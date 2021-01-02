@@ -12,3 +12,4 @@ path = "src/main.rs"
 winapi = { version = "0.3", features = ["processthreadsapi", "std", "synchapi"] }
 detours-sys = { path = "../detours-sys" }
 clap = "2.33"
+wstr = "0.2"
