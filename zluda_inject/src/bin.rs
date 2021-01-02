@@ -1,11 +1,3 @@
-#![cfg(target_os = "windows")]
-
-extern crate clap;
-#[macro_use]
-extern crate guid;
-extern crate detours_sys;
-extern crate winapi;
-
 use std::error::Error;
 use std::ffi::OsStr;
 use std::mem;
@@ -18,10 +10,7 @@ use winapi::um::winbase::{INFINITE, WAIT_FAILED};
 
 use clap::{App, AppSettings, Arg};
 
-#[macro_use]
-mod win;
-
-fn main() -> Result<(), Box<dyn Error>> {
+pub fn main_impl() -> Result<(), Box<dyn Error>> {
     let matches = App::new("ZLUDA injector")
         .setting(AppSettings::TrailingVarArg)
         .arg(
