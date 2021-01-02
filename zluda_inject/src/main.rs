@@ -1,6 +1,3 @@
-extern crate detours_sys;
-extern crate winapi;
-
 #[macro_use]
 #[cfg(target_os = "windows")]
 mod win;
