@@ -1,4 +1,3 @@
-extern crate clap;
 extern crate detours_sys;
 extern crate winapi;
 
