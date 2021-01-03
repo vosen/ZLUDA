@@ -12,6 +12,8 @@
 // #define DETOUR_DEBUG 1
 #define DETOURS_INTERNAL
 #include "detours.h"
+#include <strsafe.h>
+#include <libloaderapi.h>
 
 #if DETOURS_VERSION != 0x4c0c1   // 0xMAJORcMINORcPATCH
 #error detours.h version mismatch
@@ -340,7 +342,7 @@ PVOID WINAPI DetourGetEntryPoint(_In_opt_ HMODULE hModule)
             }
 
             SetLastError(NO_ERROR);
-            return GetProcAddress(hClr, "_CorExeMain");
+            return (PVOID)GetProcAddress(hClr, "_CorExeMain");
         }
 
         SetLastError(NO_ERROR);
