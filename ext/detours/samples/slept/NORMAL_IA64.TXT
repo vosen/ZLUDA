@@ -1,0 +1,202 @@
+-------- Reseting test binaries to initial state. -----------------------
+    ..\..\bin.IA64\setdll.exe -r ..\..\bin.IA64\sleepold.exe
+Removing extra DLLs from binary files.
+  ..\..\bin.IA64\sleepold.exe:
+    KERNEL32.dll -> KERNEL32.dll
+
+-------- Should load detour self ----------------------------------------
+    ..\..\bin.IA64\sleepbed.exe
+sleepbed.exe: Starting.
+sleepbed.exe: ExeEntry=000000013F702DD0, DllEntry=0000000000000000
+  SleepEx = 0000000077898980 [0000000077845300]
+    0000000077898980: 08181d0a 80054002 04004240 0400c400
+    0000000077898990: 11300142 00215002 80004200 00000020
+    00000000778989A0: 13000000 01000000 00001000 80a50050
+
+sleepbed.exe: Detoured SleepEx().
+sleepbed.exe: After detour.
+  SleepEx = 0000000077898980 [0000000077845300]
+    0000000077898980: 05000000 0100bfff ffff7f00 b879ffc8  [0000000037890330]
+    0000000077898990: 11300142 00215002 80004200 00000020
+    00000000778989A0: 13000000 01000000 00001000 80a50050
+
+sleepbed.exe: Calling Sleep for 1 second.
+sleepbed.exe: Calling SleepEx for 1 second.
+sleepbed.exe: Calling Sleep again for 1 second.
+sleepbed.exe: Calling TimedSleepEx for 1 second.
+sleepbed.exe: Calling UntimedSleepEx for 1 second.
+sleepbed.exe: Done sleeping.
+
+sleepbed.exe: Removed SleepEx() detour (0), slept 2000 ticks.
+sleepbed.exe: GetSleptTicks() = 2000
+
+
+-------- Should load slept64.dll statically -------------------------------
+    ..\..\bin.IA64\sleepnew.exe
+slept64.dll:  Starting.
+slept64.dll:  ExeEntry=000000013F18CA50, DllEntry=000006FAEE9F6D80
+  SleepEx = 0000000077898980 [0000000077845300]
+    0000000077898980: 08181d0a 80054002 04004240 0400c400
+    0000000077898990: 11300142 00215002 80004200 00000020
+    00000000778989A0: 13000000 01000000 00001000 80a50050
+
+sleepnew.exe: Starting.
+  SleepEx = 0000000077898980 [0000000077845300]
+    0000000077898980: 05000000 0100bfff ffff7f00 b879ffc8  [0000000037890330]
+    0000000077898990: 11300142 00215002 80004200 00000020
+    00000000778989A0: 13000000 01000000 00001000 80a50050
+
+sleepnew.exe: Calling Sleep for 1 second.
+sleepnew.exe: Calling SleepEx for 1 second.
+sleepnew.exe: Calling Sleep again for 1 second.
+sleepnew.exe: Calling TimedSleep for 1 second.
+sleepnew.exe: Calling UntimedSleep for 1 second.
+sleepnew.exe: Done sleeping.
+
+sleepnew.exe: GetSleptTicks() = 2000
+
+slept64.dll:  Detoured SleepEx().
+slept64.dll:  Removed SleepEx() detour (0), slept 2000 ticks.
+
+-------- Should not load slept64.dll --------------------------------------
+    ..\..\bin.IA64\sleepold.exe
+sleepold.exe: Starting (at 000000013F80C288).
+  SleepEx = 0000000077898980 [0000000077845300]
+    0000000077898980: 08181d0a 80054002 04004240 0400c400
+    0000000077898990: 11300142 00215002 80004200 00000020
+    00000000778989A0: 13000000 01000000 00001000 80a50050
+
+sleepold.exe: Calling Sleep for 1 second.
+sleepold.exe: Calling SleepEx for 1 second.
+sleepold.exe: Calling Sleep again for 1 second.
+sleepold.exe: Done sleeping.
+
+
+-------- Adding slept64.dll to sleepold.exe -------------------------------
+    ..\..\bin.IA64\setdll.exe -d:..\..\bin.IA64\slept64.dll ..\..\bin.IA64\sleepold.exe
+Adding c:\Code\Detours\bin.IA64\slept64.dll to binary files.
+  ..\..\bin.IA64\sleepold.exe:
+    c:\Code\Detours\bin.IA64\slept64.dll
+    KERNEL32.dll -> KERNEL32.dll
+
+-------- Should load slept64.dll statically -------------------------------
+    ..\..\bin.IA64\sleepold.exe
+slept64.dll:  Starting.
+slept64.dll:  ExeEntry=000000013F4FCAB0, DllEntry=000006FAEE9F6D80
+  SleepEx = 0000000077898980 [0000000077845300]
+    0000000077898980: 08181d0a 80054002 04004240 0400c400
+    0000000077898990: 11300142 00215002 80004200 00000020
+    00000000778989A0: 13000000 01000000 00001000 80a50050
+
+sleepold.exe: Starting (at 000000013F4FC288).
+  SleepEx = 0000000077898980 [0000000077845300]
+    0000000077898980: 05000000 0100bfff ffff7f00 b879ffc8  [0000000037890330]
+    0000000077898990: 11300142 00215002 80004200 00000020
+    00000000778989A0: 13000000 01000000 00001000 80a50050
+
+sleepold.exe: Calling Sleep for 1 second.
+sleepold.exe: Calling SleepEx for 1 second.
+sleepold.exe: Calling Sleep again for 1 second.
+sleepold.exe: Done sleeping.
+
+slept64.dll:  Detoured SleepEx().
+slept64.dll:  Removed SleepEx() detour (0), slept 1000 ticks.
+
+-------- Replacing slept64.dll with dslept64.dll in sleepold.exe ------------
+    ..\..\bin.IA64\setdll.exe -r ..\..\bin.IA64\sleepold.exe
+Removing extra DLLs from binary files.
+  ..\..\bin.IA64\sleepold.exe:
+    KERNEL32.dll -> KERNEL32.dll
+    ..\..\bin.IA64\setdll.exe -d:..\..\bin.IA64\dslept64.dll ..\..\bin.IA64\sleepold.exe
+Adding c:\Code\Detours\bin.IA64\dslept64.dll to binary files.
+  ..\..\bin.IA64\sleepold.exe:
+    c:\Code\Detours\bin.IA64\dslept64.dll
+    KERNEL32.dll -> KERNEL32.dll
+
+-------- Should load dslept64.dll instead of slept64.dll --------------------
+    ..\..\bin.IA64\sleepold.exe
+dslept64.dll:  Starting.
+  SleepEx = 0000000077898980 [0000000077845300]
+    0000000077898980: 08181d0a 80054002 04004240 0400c400
+    0000000077898990: 11300142 00215002 80004200 00000020
+    00000000778989A0: 13000000 01000000 00001000 80a50050
+
+  EntryPoint = 000000013F12D580 [000000013F16CAB0]
+    000000013F12D580: 01080d06 80050002 00620040 04080084
+    000000013F12D590: 13000000 01000000 00001000 90eb0050
+    000000013F12D5A0: 13080044 00210000 00001000 c0fcff58
+  EntryPoint after attach = 000000013F12D580 [000000013F16CAB0]
+    000000013F12D580: 05000000 0100bfff ffff7f00 b82dffc8  [00000000FF120330]
+    000000013F12D590: 13000000 01000000 00001000 90eb0050
+    000000013F12D5A0: 13080044 00210000 00001000 c0fcff58
+  EntryPoint trampoline = 00000000FF120300 [00000000FF1203B0]
+    00000000FF120300: 05000000 01003f01 00000020 00f00267
+    00000000FF120310: 01080d06 80050002 00620040 04080084
+    00000000FF120320: 05000000 01004000 00000000 78d200c0  [000000013F12D590]
+dslept64.dll:  Detoured EntryPoint().
+dslept64.dll:  Detoured SleepEx().
+  SleepEx = 0000000077898980 [0000000077845300]
+    0000000077898980: 05000000 0100bfff ffff7f00 b879ffc8  [0000000037890330]
+    0000000077898990: 11300142 00215002 80004200 00000020
+    00000000778989A0: 13000000 01000000 00001000 80a50050
+
+dslept64.dll:  Calling EntryPoint
+sleepold.exe: Starting (at 000000013F16C288).
+  SleepEx = 0000000077898980 [0000000077845300]
+    0000000077898980: 05000000 0100bfff ffff7f00 b879ffc8  [0000000037890330]
+    0000000077898990: 11300142 00215002 80004200 00000020
+    00000000778989A0: 13000000 01000000 00001000 80a50050
+
+sleepold.exe: Calling Sleep for 1 second.
+sleepold.exe: Calling SleepEx for 1 second.
+sleepold.exe: Calling Sleep again for 1 second.
+sleepold.exe: Done sleeping.
+
+dslept64.dll:  Removed Sleep() detours (0), slept 1000 ticks.
+
+-------- Removing dslept64.dll from sleepold.exe --------------------------
+    ..\..\bin.IA64\setdll.exe -r ..\..\bin.IA64\sleepold.exe
+Removing extra DLLs from binary files.
+  ..\..\bin.IA64\sleepold.exe:
+    KERNEL32.dll -> KERNEL32.dll
+
+-------- Should not load dslept64.dll or slept64.dll ------------------------
+    ..\..\bin.IA64\sleepold.exe
+sleepold.exe: Starting (at 000000013FCEC288).
+  SleepEx = 0000000077898980 [0000000077845300]
+    0000000077898980: 08181d0a 80054002 04004240 0400c400
+    0000000077898990: 11300142 00215002 80004200 00000020
+    00000000778989A0: 13000000 01000000 00001000 80a50050
+
+sleepold.exe: Calling Sleep for 1 second.
+sleepold.exe: Calling SleepEx for 1 second.
+sleepold.exe: Calling Sleep again for 1 second.
+sleepold.exe: Done sleeping.
+
+
+-------- Should load slept64.dll dynamically using withdll.exe ------------
+    ..\..\bin.IA64\withdll.exe -d:..\..\bin.IA64\slept64.dll ..\..\bin.IA64\sleepold.exe
+withdll.exe: Starting: `..\..\bin.IA64\sleepold.exe'
+withdll.exe:   with `c:\Code\Detours\bin.IA64\slept64.dll'
+slept64.dll:  Starting.
+slept64.dll:  ExeEntry=000000013FBFCAB0, DllEntry=000006FAEE9F6D80
+  SleepEx = 0000000077898980 [0000000077845300]
+    0000000077898980: 08181d0a 80054002 04004240 0400c400
+    0000000077898990: 11300142 00215002 80004200 00000020
+    00000000778989A0: 13000000 01000000 00001000 80a50050
+
+sleepold.exe: Starting (at 000000013FBFC288).
+  SleepEx = 0000000077898980 [0000000077845300]
+    0000000077898980: 05000000 0100bfff ffff7f00 b879ffc8  [0000000037890330]
+    0000000077898990: 11300142 00215002 80004200 00000020
+    00000000778989A0: 13000000 01000000 00001000 80a50050
+
+sleepold.exe: Calling Sleep for 1 second.
+sleepold.exe: Calling SleepEx for 1 second.
+sleepold.exe: Calling Sleep again for 1 second.
+sleepold.exe: Done sleeping.
+
+slept64.dll:  Detoured SleepEx().
+slept64.dll:  Removed SleepEx() detour (0), slept 1030 ticks.
+
+-------- Test completed. ------------------------------------------------

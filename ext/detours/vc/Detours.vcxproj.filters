@@ -1,0 +1,590 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="samples">
+      <UniqueIdentifier>{4DE3849F-647A-48FF-8873-256D44DFF3CA}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\comeasy">
+      <UniqueIdentifier>{6215A674-4251-4F64-AA56-6F80297E5F8B}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\commem">
+      <UniqueIdentifier>{B581B77F-AE4D-43BC-8C4F-EDE0E61EFFD3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\cping">
+      <UniqueIdentifier>{BF2ACC0E-890D-4BD0-B532-6228AF011E3E}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\disas">
+      <UniqueIdentifier>{32F50667-320C-4799-B7DA-D1878C358D64}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\dtest">
+      <UniqueIdentifier>{314C251E-4D8E-4837-9C36-4741399ED2A1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\dumpe">
+      <UniqueIdentifier>{53C9A890-D5AB-4FD1-B898-6107C0E676E7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\dumpi">
+      <UniqueIdentifier>{17467834-9161-4FB2-BBEF-E3233CBBC818}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\dynamic_alloc">
+      <UniqueIdentifier>{5A3371DC-E827-47CC-901A-F3D91162EFB2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\echo">
+      <UniqueIdentifier>{A2B9B912-8C03-400F-B271-51EEB4CE6843}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\einst">
+      <UniqueIdentifier>{571B99A3-B6D5-4838-B189-4A038B104B2A}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\excep">
+      <UniqueIdentifier>{F1740406-C1BB-49C7-A602-9DDACBD4ABCA}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\findfunc">
+      <UniqueIdentifier>{58CCECE5-A38B-4C56-8E3F-3E0722393F56}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\impmunge">
+      <UniqueIdentifier>{B3E06AC8-3F78-43C8-B7AC-84546475F960}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\member">
+      <UniqueIdentifier>{CD32F55E-60C5-4ED6-ACCC-4B43E6AC195D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\opengl">
+      <UniqueIdentifier>{1ABFBA92-4E60-481A-9007-8150D95E072F}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\region">
+      <UniqueIdentifier>{0929821A-9C85-4D74-B969-865D6DA40D2A}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\setdll">
+      <UniqueIdentifier>{9017F1FA-4DCB-44D1-854D-2F14358791F5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\simple">
+      <UniqueIdentifier>{D9D7E0B0-4E14-473F-AE28-B4A5AF4EB427}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\slept">
+      <UniqueIdentifier>{88EFC740-5E28-484E-97FC-E7BBA6D36454}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\syelog">
+      <UniqueIdentifier>{EA900A65-64CA-417B-8DE7-4174C9CB1E5A}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\talloc">
+      <UniqueIdentifier>{7A1582F0-0A25-4A0E-B7E5-14F6E332BDFA}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\traceapi">
+      <UniqueIdentifier>{B99E03FF-320A-4D13-BFB8-674E102E306D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\tracebld">
+      <UniqueIdentifier>{6169E241-5297-4B63-8D32-407D592EF103}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\tracelnk">
+      <UniqueIdentifier>{EFD841EC-A8B1-4CD6-AC2D-0D286669BA3B}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\tracemem">
+      <UniqueIdentifier>{14F0CAFF-0470-4D28-9083-3FD5656E7B27}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\tracereg">
+      <UniqueIdentifier>{A3CE1454-F707-4A29-B389-2E762651CDD7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\traceser">
+      <UniqueIdentifier>{D3299D5A-9CE3-45E6-9784-4166606BA70B}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\tracessl">
+      <UniqueIdentifier>{6E1471A7-7B40-4528-8210-64CFC4663258}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\tracetcp">
+      <UniqueIdentifier>{62236214-1B41-4765-9D9D-1E313B4E5AB7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\tryman">
+      <UniqueIdentifier>{24AC6634-A8C9-430B-8D95-45DEB57070C9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\withdll">
+      <UniqueIdentifier>{077E7134-5AA3-4151-8313-88106FCBDAB3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src">
+      <UniqueIdentifier>{E980771B-0BA5-4B01-947A-B99D33E31E89}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\src\uimports.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\creatwth.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\detours.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\disasm.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\disolarm.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\disolarm64.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\disolia64.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\disolx64.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\disolx86.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\image.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\modules.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\tryman\size.cpp">
+      <Filter>samples\tryman</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\tracebld\tracebld.cpp">
+      <Filter>samples\tracebld</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\tracebld\trcbld.cpp">
+      <Filter>samples\tracebld</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\tracelnk\trclnk.cpp">
+      <Filter>samples\tracelnk</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\tracemem\trcmem.cpp">
+      <Filter>samples\tracemem</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\tracereg\trcreg.cpp">
+      <Filter>samples\tracereg</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\traceser\trcser.cpp">
+      <Filter>samples\traceser</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\tracessl\trcssl.cpp">
+      <Filter>samples\tracessl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\tracetcp\trctcp.cpp">
+      <Filter>samples\tracetcp</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\tryman\tryman.cpp">
+      <Filter>samples\tryman</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\tryman\tstman.cpp">
+      <Filter>samples\tryman</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\withdll\withdll.cpp">
+      <Filter>samples\withdll</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\traceapi\_win32.cpp">
+      <Filter>samples\traceapi</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\slept\dslept.cpp">
+      <Filter>samples\slept</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\simple\simple.cpp">
+      <Filter>samples\simple</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\simple\sleep5.cpp">
+      <Filter>samples\simple</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\slept\sleepbed.cpp">
+      <Filter>samples\slept</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\slept\sleepnew.cpp">
+      <Filter>samples\slept</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\slept\sleepold.cpp">
+      <Filter>samples\slept</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\slept\slept.cpp">
+      <Filter>samples\slept</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\syelog\sltest.cpp">
+      <Filter>samples\syelog</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\syelog\sltestp.cpp">
+      <Filter>samples\syelog</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\syelog\syelog.cpp">
+      <Filter>samples\syelog</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\syelog\syelogd.cpp">
+      <Filter>samples\syelog</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\talloc\talloc.cpp">
+      <Filter>samples\talloc</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\talloc\tdll1x.cpp">
+      <Filter>samples\talloc</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\talloc\tdll2x.cpp">
+      <Filter>samples\talloc</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\talloc\tdll3x.cpp">
+      <Filter>samples\talloc</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\talloc\tdll4x.cpp">
+      <Filter>samples\talloc</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\talloc\tdll5x.cpp">
+      <Filter>samples\talloc</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\talloc\tdll6x.cpp">
+      <Filter>samples\talloc</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\talloc\tdll7x.cpp">
+      <Filter>samples\talloc</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\talloc\tdll8x.cpp">
+      <Filter>samples\talloc</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\talloc\tdll9x.cpp">
+      <Filter>samples\talloc</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\traceapi\testapi.cpp">
+      <Filter>samples\traceapi</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\traceapi\trcapi.cpp">
+      <Filter>samples\traceapi</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\slept\verify.cpp">
+      <Filter>samples\slept</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\dtest\dtarge.cpp">
+      <Filter>samples\dtest</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\dtest\dtest.cpp">
+      <Filter>samples\dtest</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\dumpe\dumpe.cpp">
+      <Filter>samples\dumpe</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\dumpi\dumpi.cpp">
+      <Filter>samples\dumpi</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\echo\echofx.cpp">
+      <Filter>samples\echo</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\echo\echonul.cpp">
+      <Filter>samples\echo</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\einst\edll1x.cpp">
+      <Filter>samples\einst</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\einst\edll2x.cpp">
+      <Filter>samples\einst</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\einst\edll3x.cpp">
+      <Filter>samples\einst</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\einst\einst.cpp">
+      <Filter>samples\einst</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\excep\excep.cpp">
+      <Filter>samples\excep</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\findfunc\extend.cpp">
+      <Filter>samples\findfunc</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\findfunc\findfunc.cpp">
+      <Filter>samples\findfunc</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\excep\firstexc.cpp">
+      <Filter>samples\excep</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\impmunge\impmunge.cpp">
+      <Filter>samples\impmunge</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\dynamic_alloc\main.cpp">
+      <Filter>samples\dynamic_alloc</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\echo\main.cpp">
+      <Filter>samples\echo</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\member\member.cpp">
+      <Filter>samples\member</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\opengl\ogldet.cpp">
+      <Filter>samples\opengl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\region\region.cpp">
+      <Filter>samples\region</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\setdll\setdll.cpp">
+      <Filter>samples\setdll</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\findfunc\symtest.cpp">
+      <Filter>samples\findfunc</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\findfunc\target.cpp">
+      <Filter>samples\findfunc</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\opengl\testogl.cpp">
+      <Filter>samples\opengl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\comeasy\comeasy.cpp">
+      <Filter>samples\comeasy</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\commem\commem.cpp">
+      <Filter>samples\commem</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\cping\cping.cpp">
+      <Filter>samples\cping</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\disas\disas.cpp">
+      <Filter>samples\disas</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\disas\unk.cpp">
+      <Filter>samples\disas</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\comeasy\wrotei.cpp">
+      <Filter>samples\comeasy</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samples\disas\x86.cpp">
+      <Filter>samples\disas</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\src\detours.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\detver.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\samples\tracebld\tracebld.h">
+      <Filter>samples\tracebld</Filter>
+    </ClInclude>
+    <ClInclude Include="..\samples\slept\slept.h">
+      <Filter>samples\slept</Filter>
+    </ClInclude>
+    <ClInclude Include="..\samples\syelog\syelog.h">
+      <Filter>samples\syelog</Filter>
+    </ClInclude>
+    <ClInclude Include="..\samples\dtest\dtarge.h">
+      <Filter>samples\dtest</Filter>
+    </ClInclude>
+    <ClInclude Include="..\samples\excep\firstexc.h">
+      <Filter>samples\excep</Filter>
+    </ClInclude>
+    <ClInclude Include="..\samples\findfunc\target.h">
+      <Filter>samples\findfunc</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\samples\tracebld\Makefile">
+      <Filter>samples\tracebld</Filter>
+    </None>
+    <None Include="..\samples\tracelnk\Makefile">
+      <Filter>samples\tracelnk</Filter>
+    </None>
+    <None Include="..\samples\tracemem\Makefile">
+      <Filter>samples\tracemem</Filter>
+    </None>
+    <None Include="..\samples\tracereg\Makefile">
+      <Filter>samples\tracereg</Filter>
+    </None>
+    <None Include="..\samples\traceser\Makefile">
+      <Filter>samples\traceser</Filter>
+    </None>
+    <None Include="..\samples\tracessl\Makefile">
+      <Filter>samples\tracessl</Filter>
+    </None>
+    <None Include="..\samples\tracetcp\Makefile">
+      <Filter>samples\tracetcp</Filter>
+    </None>
+    <None Include="..\samples\tryman\Makefile">
+      <Filter>samples\tryman</Filter>
+    </None>
+    <None Include="..\samples\withdll\Makefile">
+      <Filter>samples\withdll</Filter>
+    </None>
+    <None Include="..\samples\tryman\managed.cs">
+      <Filter>samples\tryman</Filter>
+    </None>
+    <None Include="..\samples\simple\Makefile">
+      <Filter>samples\simple</Filter>
+    </None>
+    <None Include="..\samples\slept\Makefile">
+      <Filter>samples\slept</Filter>
+    </None>
+    <None Include="..\samples\syelog\Makefile">
+      <Filter>samples\syelog</Filter>
+    </None>
+    <None Include="..\samples\talloc\Makefile">
+      <Filter>samples\talloc</Filter>
+    </None>
+    <None Include="..\samples\traceapi\Makefile">
+      <Filter>samples\traceapi</Filter>
+    </None>
+    <None Include="..\samples\dumpe\Makefile">
+      <Filter>samples\dumpe</Filter>
+    </None>
+    <None Include="..\samples\dumpi\Makefile">
+      <Filter>samples\dumpi</Filter>
+    </None>
+    <None Include="..\samples\dynamic_alloc\Makefile">
+      <Filter>samples\dynamic_alloc</Filter>
+    </None>
+    <None Include="..\samples\echo\Makefile">
+      <Filter>samples\echo</Filter>
+    </None>
+    <None Include="..\samples\einst\Makefile">
+      <Filter>samples\einst</Filter>
+    </None>
+    <None Include="..\samples\excep\Makefile">
+      <Filter>samples\excep</Filter>
+    </None>
+    <None Include="..\samples\findfunc\Makefile">
+      <Filter>samples\findfunc</Filter>
+    </None>
+    <None Include="..\samples\impmunge\Makefile">
+      <Filter>samples\impmunge</Filter>
+    </None>
+    <None Include="..\samples\member\Makefile">
+      <Filter>samples\member</Filter>
+    </None>
+    <None Include="..\samples\opengl\Makefile">
+      <Filter>samples\opengl</Filter>
+    </None>
+    <None Include="..\samples\region\Makefile">
+      <Filter>samples\region</Filter>
+    </None>
+    <None Include="..\samples\setdll\Makefile">
+      <Filter>samples\setdll</Filter>
+    </None>
+    <None Include="..\samples\dynamic_alloc\x64.asm">
+      <Filter>samples\dynamic_alloc</Filter>
+    </None>
+    <None Include="..\samples\dynamic_alloc\x86.asm">
+      <Filter>samples\dynamic_alloc</Filter>
+    </None>
+    <None Include="..\samples\disas\arm.asm">
+      <Filter>samples\disas</Filter>
+    </None>
+    <None Include="..\samples\common.mak">
+      <Filter>samples</Filter>
+    </None>
+    <None Include="..\samples\cping\cping.dat">
+      <Filter>samples\cping</Filter>
+    </None>
+    <None Include="..\samples\disas\ia64.asm">
+      <Filter>samples\disas</Filter>
+    </None>
+    <None Include="..\samples\comeasy\Makefile">
+      <Filter>samples\comeasy</Filter>
+    </None>
+    <None Include="..\samples\commem\Makefile">
+      <Filter>samples\commem</Filter>
+    </None>
+    <None Include="..\samples\cping\Makefile">
+      <Filter>samples\cping</Filter>
+    </None>
+    <None Include="..\samples\disas\Makefile">
+      <Filter>samples\disas</Filter>
+    </None>
+    <None Include="..\samples\dtest\Makefile">
+      <Filter>samples\dtest</Filter>
+    </None>
+    <None Include="..\samples\Makefile">
+      <Filter>samples</Filter>
+    </None>
+    <None Include="..\samples\disas\x64.asm">
+      <Filter>samples\disas</Filter>
+    </None>
+    <None Include="..\.gitignore" />
+    <None Include="..\LICENSE.md" />
+    <None Include="..\Makefile" />
+    <None Include="..\README.md" />
+    <None Include="..\system.mak" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\samples\slept\NORMAL_IA64.TXT">
+      <Filter>samples\slept</Filter>
+    </Text>
+    <Text Include="..\samples\talloc\NORMAL_IA64.TXT">
+      <Filter>samples\talloc</Filter>
+    </Text>
+    <Text Include="..\samples\slept\NORMAL_X64.TXT">
+      <Filter>samples\slept</Filter>
+    </Text>
+    <Text Include="..\samples\talloc\NORMAL_X64.TXT">
+      <Filter>samples\talloc</Filter>
+    </Text>
+    <Text Include="..\samples\slept\NORMAL_X86.TXT">
+      <Filter>samples\slept</Filter>
+    </Text>
+    <Text Include="..\samples\dtest\NORMAL_IA64.TXT">
+      <Filter>samples\dtest</Filter>
+    </Text>
+    <Text Include="..\samples\dtest\NORMAL_X64.TXT">
+      <Filter>samples\dtest</Filter>
+    </Text>
+    <Text Include="..\samples\dtest\NORMAL_X86.TXT">
+      <Filter>samples\dtest</Filter>
+    </Text>
+    <Text Include="..\samples\cping\ReadMe.Txt">
+      <Filter>samples\cping</Filter>
+    </Text>
+    <Text Include="..\samples\README.TXT">
+      <Filter>samples</Filter>
+    </Text>
+    <Text Include="..\CREDITS.TXT" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="..\samples\traceapi\trcapi.rc">
+      <Filter>samples\traceapi</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="..\samples\tracebld\trcbld.rc">
+      <Filter>samples\tracebld</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="..\samples\tracelnk\trclnk.rc">
+      <Filter>samples\tracelnk</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="..\samples\tracemem\trcmem.rc">
+      <Filter>samples\tracemem</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="..\samples\tracereg\trcreg.rc">
+      <Filter>samples\tracereg</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="..\samples\traceser\trcser.rc">
+      <Filter>samples\traceser</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="..\samples\tracessl\trcssl.rc">
+      <Filter>samples\tracessl</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="..\samples\tracetcp\trctcp.rc">
+      <Filter>samples\tracetcp</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="..\samples\tryman\tstman.rc">
+      <Filter>samples\tryman</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="..\samples\slept\dslept.rc">
+      <Filter>samples\slept</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="..\samples\simple\simple.rc">
+      <Filter>samples\simple</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="..\samples\slept\slept.rc">
+      <Filter>samples\slept</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="..\samples\dtest\dtarge.rc">
+      <Filter>samples\dtest</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="..\samples\echo\echofx.rc">
+      <Filter>samples\echo</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="..\samples\findfunc\extend.rc">
+      <Filter>samples\findfunc</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="..\samples\opengl\ogldet.rc">
+      <Filter>samples\opengl</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="..\samples\findfunc\target.rc">
+      <Filter>samples\findfunc</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="..\samples\comeasy\wrotei.rc">
+      <Filter>samples\comeasy</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Midl Include="..\samples\cping\iping.idl">
+      <Filter>samples\cping</Filter>
+    </Midl>
+  </ItemGroup>
+</Project>

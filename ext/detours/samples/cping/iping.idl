@@ -1,0 +1,23 @@
+//////////////////////////////////////////////////////////////////////////////
+//
+//  Module: iping.idl (cping.exe - COM Ping)
+//
+//  Microsoft Research Detours Package
+//
+//  Copyright (c) Microsoft Corporation.  All rights reserved.
+//
+import "objidl.idl";
+import "oaidl.idl";
+import "oleidl.idl";
+
+
+[object, uuid(decdbeef-d1ac-11d1-96bc-00aa00573fb0), pointer_default(unique)]
+interface IPing : IUnknown
+{
+    HRESULT     Ping(void);
+    HRESULT     PingToServer([in] LPSTR pszString);
+    HRESULT     PingToClient([out] LPSTR *ppszString);
+    HRESULT     PingToClientSize([in] ULONG cbOut);
+};
+//
+///////////////////////////////////////////////////////////////// End of File.
