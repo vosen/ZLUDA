@@ -1,0 +1,202 @@
+-------- Reseting test binaries to initial state. -----------------------
+    ..\..\bin.X86\setdll.exe -r ..\..\bin.X86\sleepold.exe
+Removing extra DLLs from binary files.
+  ..\..\bin.X86\sleepold.exe:
+    KERNEL32.dll -> KERNEL32.dll
+
+-------- Should load detour self ----------------------------------------
+    ..\..\bin.X86\sleepbed.exe
+sleepbed.exe: Starting.
+sleepbed.exe: ExeEntry=00B1572E, DllEntry=00000000
+  SleepEx = 74F51215
+    74F51215: 8bff
+    74F51217: 55
+    74F51218: 8bec
+
+sleepbed.exe: Detoured SleepEx().
+sleepbed.exe: After detour.
+  SleepEx = 74F51215
+    74F51215: e95600bc 8b                          [00B11270]
+    74F5121A: 5d
+    74F5121B: ebed                                 [74F5120A]
+
+sleepbed.exe: Calling Sleep for 1 second.
+sleepbed.exe: Calling SleepEx for 1 second.
+sleepbed.exe: Calling Sleep again for 1 second.
+sleepbed.exe: Calling TimedSleepEx for 1 second.
+sleepbed.exe: Calling UntimedSleepEx for 1 second.
+sleepbed.exe: Done sleeping.
+
+sleepbed.exe: Removed SleepEx() detour (0), slept 2028 ticks.
+sleepbed.exe: GetSleptTicks() = 2028
+
+
+-------- Should load slept32.dll statically -------------------------------
+    ..\..\bin.X86\sleepnew.exe
+slept32.dll:  Starting.
+slept32.dll:  ExeEntry=012D3B1A, DllEntry=7248702E
+  SleepEx = 74F51215
+    74F51215: 8bff
+    74F51217: 55
+    74F51218: 8bec
+
+sleepnew.exe: Starting.
+  SleepEx = 74F51215
+    74F51215: e9560053 fd                          [72481270]
+    74F5121A: 5d
+    74F5121B: ebed                                 [74F5120A]
+
+sleepnew.exe: Calling Sleep for 1 second.
+sleepnew.exe: Calling SleepEx for 1 second.
+sleepnew.exe: Calling Sleep again for 1 second.
+sleepnew.exe: Calling TimedSleep for 1 second.
+sleepnew.exe: Calling UntimedSleep for 1 second.
+sleepnew.exe: Done sleeping.
+
+sleepnew.exe: GetSleptTicks() = 2028
+
+slept32.dll:  Detoured SleepEx().
+slept32.dll:  Removed SleepEx() detour (0), slept 2028 ticks.
+
+-------- Should not load slept32.dll --------------------------------------
+    ..\..\bin.X86\sleepold.exe
+sleepold.exe: Starting (at 00971260).
+  SleepEx = 74F51215
+    74F51215: 8bff
+    74F51217: 55
+    74F51218: 8bec
+
+sleepold.exe: Calling Sleep for 1 second.
+sleepold.exe: Calling SleepEx for 1 second.
+sleepold.exe: Calling Sleep again for 1 second.
+sleepold.exe: Done sleeping.
+
+
+-------- Adding slept32.dll to sleepold.exe -------------------------------
+    ..\..\bin.X86\setdll.exe -d:..\..\bin.X86\slept32.dll ..\..\bin.X86\sleepold.exe
+Adding c:\Code\detours\bin.X86\slept32.dll to binary files.
+  ..\..\bin.X86\sleepold.exe:
+    c:\Code\detours\bin.X86\slept32.dll
+    KERNEL32.dll -> KERNEL32.dll
+
+-------- Should load slept32.dll statically -------------------------------
+    ..\..\bin.X86\sleepold.exe
+slept32.dll:  Starting.
+slept32.dll:  ExeEntry=00AF3D4C, DllEntry=7248702E
+  SleepEx = 74F51215
+    74F51215: 8bff
+    74F51217: 55
+    74F51218: 8bec
+
+sleepold.exe: Starting (at 00AF1260).
+  SleepEx = 74F51215
+    74F51215: e9560053 fd                          [72481270]
+    74F5121A: 5d
+    74F5121B: ebed                                 [74F5120A]
+
+sleepold.exe: Calling Sleep for 1 second.
+sleepold.exe: Calling SleepEx for 1 second.
+sleepold.exe: Calling Sleep again for 1 second.
+sleepold.exe: Done sleeping.
+
+slept32.dll:  Detoured SleepEx().
+slept32.dll:  Removed SleepEx() detour (0), slept 1014 ticks.
+
+-------- Replacing slept32.dll with dslept32.dll in sleepold.exe ------------
+    ..\..\bin.X86\setdll.exe -r ..\..\bin.X86\sleepold.exe
+Removing extra DLLs from binary files.
+  ..\..\bin.X86\sleepold.exe:
+    KERNEL32.dll -> KERNEL32.dll
+    ..\..\bin.X86\setdll.exe -d:..\..\bin.X86\dslept32.dll ..\..\bin.X86\sleepold.exe
+Adding c:\Code\detours\bin.X86\dslept32.dll to binary files.
+  ..\..\bin.X86\sleepold.exe:
+    c:\Code\detours\bin.X86\dslept32.dll
+    KERNEL32.dll -> KERNEL32.dll
+
+-------- Should load dslept32.dll instead of slept32.dll --------------------
+    ..\..\bin.X86\sleepold.exe
+dslept32.dll:  Starting.
+  SleepEx = 74F51215
+    74F51215: 8bff
+    74F51217: 55
+    74F51218: 8bec
+
+  EntryPoint = 00263D4C
+    00263D4C: e8d75400 00                          [00269228]
+    00263D51: e995feff ff                          [00263BEB]
+    00263D56: 3b0d8412 2800
+  EntryPoint after attach = 00263D4C
+    00263D4C: e96fd502 72                          [722912C0]
+    00263D51: e995feff ff                          [00263BEB]
+    00263D56: 3b0d8412 2800
+  EntryPoint trampoline = 402500D8
+    402500D8: e84b9101 c0                          [00269228]
+    402500DD: e96f3c01 c0                          [00263D51]
+    402500E2: cc                                   [FFFFFFFF]
+dslept32.dll:  Detoured EntryPoint().
+dslept32.dll:  Detoured SleepEx().
+  SleepEx = 74F51215
+    74F51215: e9560034 fd                          [72291270]
+    74F5121A: 5d
+    74F5121B: ebed                                 [74F5120A]
+
+dslept32.dll:  Calling EntryPoint
+sleepold.exe: Starting (at 00261260).
+  SleepEx = 74F51215
+    74F51215: e9560034 fd                          [72291270]
+    74F5121A: 5d
+    74F5121B: ebed                                 [74F5120A]
+
+sleepold.exe: Calling Sleep for 1 second.
+sleepold.exe: Calling SleepEx for 1 second.
+sleepold.exe: Calling Sleep again for 1 second.
+sleepold.exe: Done sleeping.
+
+dslept32.dll:  Removed Sleep() detours (0), slept 1014 ticks.
+
+-------- Removing dslept32.dll from sleepold.exe --------------------------
+    ..\..\bin.X86\setdll.exe -r ..\..\bin.X86\sleepold.exe
+Removing extra DLLs from binary files.
+  ..\..\bin.X86\sleepold.exe:
+    KERNEL32.dll -> KERNEL32.dll
+
+-------- Should not load dslept32.dll or slept32.dll ------------------------
+    ..\..\bin.X86\sleepold.exe
+sleepold.exe: Starting (at 00E01260).
+  SleepEx = 74F51215
+    74F51215: 8bff
+    74F51217: 55
+    74F51218: 8bec
+
+sleepold.exe: Calling Sleep for 1 second.
+sleepold.exe: Calling SleepEx for 1 second.
+sleepold.exe: Calling Sleep again for 1 second.
+sleepold.exe: Done sleeping.
+
+
+-------- Should load slept32.dll dynamically using withdll.exe ------------
+    ..\..\bin.X86\withdll.exe -d:..\..\bin.X86\slept32.dll ..\..\bin.X86\sleepold.exe
+withdll.exe: Starting: `..\..\bin.X86\sleepold.exe'
+withdll.exe:   with `c:\Code\detours\bin.X86\slept32.dll'
+slept32.dll:  Starting.
+slept32.dll:  ExeEntry=011A3D4C, DllEntry=7248702E
+  SleepEx = 74F51215
+    74F51215: 8bff
+    74F51217: 55
+    74F51218: 8bec
+
+sleepold.exe: Starting (at 011A1260).
+  SleepEx = 74F51215
+    74F51215: e9560053 fd                          [72481270]
+    74F5121A: 5d
+    74F5121B: ebed                                 [74F5120A]
+
+sleepold.exe: Calling Sleep for 1 second.
+sleepold.exe: Calling SleepEx for 1 second.
+sleepold.exe: Calling Sleep again for 1 second.
+sleepold.exe: Done sleeping.
+
+slept32.dll:  Detoured SleepEx().
+slept32.dll:  Removed SleepEx() detour (0), slept 1014 ticks.
+
+-------- Test completed. ------------------------------------------------

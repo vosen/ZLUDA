@@ -1,0 +1,17 @@
+//////////////////////////////////////////////////////////////////////////////
+//
+//  Version information for wrotei.rc.
+//
+//  Microsoft Research Detours Package
+//
+//  Copyright (c) Microsoft Corporation.  All rights reserved.
+//
+
+#include "detver.h"
+
+#define VER_INTERNALNAME_STR        "wrotei" DETOURS_STRINGIFY(DETOURS_BITS)
+#define VER_ORIGINALFILENAME_STR    "wrotei" DETOURS_STRINGIFY(DETOURS_BITS) ".dll"
+#define VER_FILEDESCRIPTION_STR     "Detours COM Easy Sample"
+#define VER_COMPANYNAME_STR         "Microsoft Corporation"
+
+#include "common.ver"

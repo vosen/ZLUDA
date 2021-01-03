@@ -1,0 +1,600 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="DebugMDd|ARM">
+      <Configuration>DebugMDd</Configuration>
+      <Platform>ARM</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DebugMDd|ARM64">
+      <Configuration>DebugMDd</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DebugMDd|Win32">
+      <Configuration>DebugMDd</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ReleaseMD|ARM">
+      <Configuration>ReleaseMD</Configuration>
+      <Platform>ARM</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ReleaseMD|ARM64">
+      <Configuration>ReleaseMD</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ReleaseMD|Win32">
+      <Configuration>ReleaseMD</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DebugMDd|x64">
+      <Configuration>DebugMDd</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ReleaseMD|x64">
+      <Configuration>ReleaseMD</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>15.0</VCProjectVersion>
+    <ProjectGuid>{37489709-8054-4903-9C49-A79846049FC9}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>Detours</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugMDd|Win32'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseMD|Win32'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugMDd|x64'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugMDd|ARM'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugMDd|ARM64'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseMD|x64'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseMD|ARM'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseMD|ARM64'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='DebugMDd|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='ReleaseMD|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='DebugMDd|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='DebugMDd|ARM'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='DebugMDd|ARM64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='ReleaseMD|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseMD|ARM'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseMD|ARM64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugMDd|x64'">
+    <NMakeBuildCommandLine>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake clean
+nmake</NMakeReBuildCommandLine>
+    <NMakeCleanCommandLine>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake clean</NMakeCleanCommandLine>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugMDd|ARM'">
+    <NMakeBuildCommandLine>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake clean
+nmake</NMakeReBuildCommandLine>
+    <NMakeCleanCommandLine>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake clean</NMakeCleanCommandLine>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugMDd|ARM64'">
+    <NMakeBuildCommandLine>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake clean
+nmake</NMakeReBuildCommandLine>
+    <NMakeCleanCommandLine>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake clean</NMakeCleanCommandLine>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseMD|x64'">
+    <NMakeBuildCommandLine>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake clean
+nmake</NMakeReBuildCommandLine>
+    <NMakeCleanCommandLine>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake clean</NMakeCleanCommandLine>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseMD|ARM'">
+    <NMakeBuildCommandLine>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake clean
+nmake</NMakeReBuildCommandLine>
+    <NMakeCleanCommandLine>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake clean</NMakeCleanCommandLine>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugMDd|Win32'">
+    <NMakeBuildCommandLine>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake clean
+nmake</NMakeReBuildCommandLine>
+    <NMakeCleanCommandLine>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake clean</NMakeCleanCommandLine>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseMD|Win32'">
+    <NMakeBuildCommandLine>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake clean
+nmake</NMakeReBuildCommandLine>
+    <NMakeCleanCommandLine>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake clean</NMakeCleanCommandLine>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseMD|ARM64'">
+    <NMakeBuildCommandLine>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake clean
+nmake</NMakeReBuildCommandLine>
+    <NMakeCleanCommandLine>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake clean</NMakeCleanCommandLine>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugMDd|Win32'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <ConformanceMode>true</ConformanceMode>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <ProgramDataBaseFileName>$(OutputPath)$(TargetName).pdb</ProgramDataBaseFileName>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <PostBuildEvent />
+    <PreBuildEvent>
+      <Command>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugMDd|x64'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <ConformanceMode>true</ConformanceMode>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <PrecompiledHeaderFile />
+      <PrecompiledHeaderOutputFile />
+      <ProgramDataBaseFileName>$(OutputPath)$(TargetName).pdb</ProgramDataBaseFileName>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <PostBuildEvent />
+    <PreBuildEvent>
+      <Command>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugMDd|ARM'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <ConformanceMode>true</ConformanceMode>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <PrecompiledHeaderFile>
+      </PrecompiledHeaderFile>
+      <PrecompiledHeaderOutputFile>
+      </PrecompiledHeaderOutputFile>
+      <ProgramDataBaseFileName>$(OutputPath)$(TargetName).pdb</ProgramDataBaseFileName>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <PostBuildEvent />
+    <PreBuildEvent>
+      <Command>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugMDd|ARM64'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <ConformanceMode>true</ConformanceMode>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <PrecompiledHeaderFile>
+      </PrecompiledHeaderFile>
+      <PrecompiledHeaderOutputFile>
+      </PrecompiledHeaderOutputFile>
+      <ProgramDataBaseFileName>$(OutputPath)$(TargetName).pdb</ProgramDataBaseFileName>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <PostBuildEvent />
+    <PreBuildEvent>
+      <Command>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseMD|Win32'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <ConformanceMode>true</ConformanceMode>
+      <ProgramDataBaseFileName>$(OutputPath)$(TargetName).pdb</ProgramDataBaseFileName>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <PostBuildEvent />
+    <PreBuildEvent>
+      <Command>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseMD|x64'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeaderFile />
+      <PrecompiledHeaderOutputFile />
+      <ProgramDataBaseFileName>$(OutputPath)$(TargetName).pdb</ProgramDataBaseFileName>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <PostBuildEvent />
+    <PreBuildEvent>
+      <Command>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseMD|ARM'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeaderFile>
+      </PrecompiledHeaderFile>
+      <PrecompiledHeaderOutputFile>
+      </PrecompiledHeaderOutputFile>
+      <ProgramDataBaseFileName>$(OutputPath)$(TargetName).pdb</ProgramDataBaseFileName>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <PostBuildEvent />
+    <PreBuildEvent>
+      <Command>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseMD|ARM64'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeaderFile>
+      </PrecompiledHeaderFile>
+      <PrecompiledHeaderOutputFile>
+      </PrecompiledHeaderOutputFile>
+      <ProgramDataBaseFileName>$(OutputPath)$(TargetName).pdb</ProgramDataBaseFileName>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <PostBuildEvent />
+    <PreBuildEvent>
+      <Command>SET DETOURS_TARGET_PROCESSOR=$(PlatformTarget)
+cd ..
+nmake</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\samples\comeasy\comeasy.cpp" />
+    <ClCompile Include="..\samples\comeasy\wrotei.cpp" />
+    <ClCompile Include="..\samples\commem\commem.cpp" />
+    <ClCompile Include="..\samples\cping\cping.cpp" />
+    <ClCompile Include="..\samples\disas\disas.cpp" />
+    <ClCompile Include="..\samples\disas\unk.cpp" />
+    <ClCompile Include="..\samples\disas\x86.cpp" />
+    <ClCompile Include="..\samples\dtest\dtarge.cpp" />
+    <ClCompile Include="..\samples\dtest\dtest.cpp" />
+    <ClCompile Include="..\samples\dumpe\dumpe.cpp" />
+    <ClCompile Include="..\samples\dumpi\dumpi.cpp" />
+    <ClCompile Include="..\samples\dynamic_alloc\main.cpp" />
+    <ClCompile Include="..\samples\echo\echofx.cpp" />
+    <ClCompile Include="..\samples\echo\echonul.cpp" />
+    <ClCompile Include="..\samples\echo\main.cpp" />
+    <ClCompile Include="..\samples\einst\edll1x.cpp" />
+    <ClCompile Include="..\samples\einst\edll2x.cpp" />
+    <ClCompile Include="..\samples\einst\edll3x.cpp" />
+    <ClCompile Include="..\samples\einst\einst.cpp" />
+    <ClCompile Include="..\samples\excep\excep.cpp" />
+    <ClCompile Include="..\samples\excep\firstexc.cpp" />
+    <ClCompile Include="..\samples\findfunc\extend.cpp" />
+    <ClCompile Include="..\samples\findfunc\findfunc.cpp" />
+    <ClCompile Include="..\samples\findfunc\symtest.cpp" />
+    <ClCompile Include="..\samples\findfunc\target.cpp" />
+    <ClCompile Include="..\samples\impmunge\impmunge.cpp" />
+    <ClCompile Include="..\samples\member\member.cpp" />
+    <ClCompile Include="..\samples\opengl\ogldet.cpp" />
+    <ClCompile Include="..\samples\opengl\testogl.cpp" />
+    <ClCompile Include="..\samples\region\region.cpp" />
+    <ClCompile Include="..\samples\setdll\setdll.cpp" />
+    <ClCompile Include="..\samples\simple\simple.cpp" />
+    <ClCompile Include="..\samples\simple\sleep5.cpp" />
+    <ClCompile Include="..\samples\slept\dslept.cpp" />
+    <ClCompile Include="..\samples\slept\sleepbed.cpp" />
+    <ClCompile Include="..\samples\slept\sleepnew.cpp" />
+    <ClCompile Include="..\samples\slept\sleepold.cpp" />
+    <ClCompile Include="..\samples\slept\slept.cpp" />
+    <ClCompile Include="..\samples\slept\verify.cpp" />
+    <ClCompile Include="..\samples\syelog\sltest.cpp" />
+    <ClCompile Include="..\samples\syelog\sltestp.cpp" />
+    <ClCompile Include="..\samples\syelog\syelog.cpp" />
+    <ClCompile Include="..\samples\syelog\syelogd.cpp" />
+    <ClCompile Include="..\samples\talloc\talloc.cpp" />
+    <ClCompile Include="..\samples\talloc\tdll1x.cpp" />
+    <ClCompile Include="..\samples\talloc\tdll2x.cpp" />
+    <ClCompile Include="..\samples\talloc\tdll3x.cpp" />
+    <ClCompile Include="..\samples\talloc\tdll4x.cpp" />
+    <ClCompile Include="..\samples\talloc\tdll5x.cpp" />
+    <ClCompile Include="..\samples\talloc\tdll6x.cpp" />
+    <ClCompile Include="..\samples\talloc\tdll7x.cpp" />
+    <ClCompile Include="..\samples\talloc\tdll8x.cpp" />
+    <ClCompile Include="..\samples\talloc\tdll9x.cpp" />
+    <ClCompile Include="..\samples\traceapi\testapi.cpp" />
+    <ClCompile Include="..\samples\traceapi\trcapi.cpp" />
+    <ClCompile Include="..\samples\traceapi\_win32.cpp" />
+    <ClCompile Include="..\samples\tracebld\tracebld.cpp" />
+    <ClCompile Include="..\samples\tracebld\trcbld.cpp" />
+    <ClCompile Include="..\samples\tracelnk\trclnk.cpp" />
+    <ClCompile Include="..\samples\tracemem\trcmem.cpp" />
+    <ClCompile Include="..\samples\tracereg\trcreg.cpp" />
+    <ClCompile Include="..\samples\traceser\trcser.cpp" />
+    <ClCompile Include="..\samples\tracessl\trcssl.cpp" />
+    <ClCompile Include="..\samples\tracetcp\trctcp.cpp" />
+    <ClCompile Include="..\samples\tryman\size.cpp" />
+    <ClCompile Include="..\samples\tryman\tryman.cpp" />
+    <ClCompile Include="..\samples\tryman\tstman.cpp" />
+    <ClCompile Include="..\samples\withdll\withdll.cpp" />
+    <ClCompile Include="..\src\creatwth.cpp" />
+    <ClCompile Include="..\src\detours.cpp" />
+    <ClCompile Include="..\src\disasm.cpp" />
+    <ClCompile Include="..\src\disolarm.cpp" />
+    <ClCompile Include="..\src\disolarm64.cpp" />
+    <ClCompile Include="..\src\disolia64.cpp" />
+    <ClCompile Include="..\src\disolx64.cpp" />
+    <ClCompile Include="..\src\disolx86.cpp" />
+    <ClCompile Include="..\src\image.cpp" />
+    <ClCompile Include="..\src\modules.cpp" />
+    <ClCompile Include="..\src\uimports.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\samples\dtest\dtarge.h" />
+    <ClInclude Include="..\samples\excep\firstexc.h" />
+    <ClInclude Include="..\samples\findfunc\target.h" />
+    <ClInclude Include="..\samples\slept\slept.h" />
+    <ClInclude Include="..\samples\syelog\syelog.h" />
+    <ClInclude Include="..\samples\tracebld\tracebld.h" />
+    <ClInclude Include="..\src\detours.h" />
+    <ClInclude Include="..\src\detver.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\.gitignore" />
+    <None Include="..\LICENSE.md" />
+    <None Include="..\Makefile" />
+    <None Include="..\README.md" />
+    <None Include="..\samples\comeasy\Makefile" />
+    <None Include="..\samples\commem\Makefile" />
+    <None Include="..\samples\common.mak" />
+    <None Include="..\samples\cping\cping.dat" />
+    <None Include="..\samples\cping\Makefile" />
+    <None Include="..\samples\disas\arm.asm" />
+    <None Include="..\samples\disas\ia64.asm" />
+    <None Include="..\samples\disas\Makefile" />
+    <None Include="..\samples\disas\x64.asm" />
+    <None Include="..\samples\dtest\Makefile" />
+    <None Include="..\samples\dumpe\Makefile" />
+    <None Include="..\samples\dumpi\Makefile" />
+    <None Include="..\samples\dynamic_alloc\Makefile" />
+    <None Include="..\samples\dynamic_alloc\x64.asm" />
+    <None Include="..\samples\dynamic_alloc\x86.asm" />
+    <None Include="..\samples\echo\Makefile" />
+    <None Include="..\samples\einst\Makefile" />
+    <None Include="..\samples\excep\Makefile" />
+    <None Include="..\samples\findfunc\Makefile" />
+    <None Include="..\samples\impmunge\Makefile" />
+    <None Include="..\samples\Makefile" />
+    <None Include="..\samples\member\Makefile" />
+    <None Include="..\samples\opengl\Makefile" />
+    <None Include="..\samples\region\Makefile" />
+    <None Include="..\samples\setdll\Makefile" />
+    <None Include="..\samples\simple\Makefile" />
+    <None Include="..\samples\slept\Makefile" />
+    <None Include="..\samples\syelog\Makefile" />
+    <None Include="..\samples\talloc\Makefile" />
+    <None Include="..\samples\traceapi\Makefile" />
+    <None Include="..\samples\tracebld\Makefile" />
+    <None Include="..\samples\tracelnk\Makefile" />
+    <None Include="..\samples\tracemem\Makefile" />
+    <None Include="..\samples\tracereg\Makefile" />
+    <None Include="..\samples\traceser\Makefile" />
+    <None Include="..\samples\tracessl\Makefile" />
+    <None Include="..\samples\tracetcp\Makefile" />
+    <None Include="..\samples\tryman\Makefile" />
+    <None Include="..\samples\tryman\managed.cs" />
+    <None Include="..\samples\withdll\Makefile" />
+    <None Include="..\system.mak" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\CREDITS.TXT" />
+    <Text Include="..\samples\cping\ReadMe.Txt" />
+    <Text Include="..\samples\dtest\NORMAL_IA64.TXT" />
+    <Text Include="..\samples\dtest\NORMAL_X64.TXT" />
+    <Text Include="..\samples\dtest\NORMAL_X86.TXT" />
+    <Text Include="..\samples\README.TXT" />
+    <Text Include="..\samples\slept\NORMAL_IA64.TXT" />
+    <Text Include="..\samples\slept\NORMAL_X64.TXT" />
+    <Text Include="..\samples\slept\NORMAL_X86.TXT" />
+    <Text Include="..\samples\talloc\NORMAL_IA64.TXT" />
+    <Text Include="..\samples\talloc\NORMAL_X64.TXT" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="..\samples\comeasy\wrotei.rc" />
+    <ResourceCompile Include="..\samples\dtest\dtarge.rc" />
+    <ResourceCompile Include="..\samples\echo\echofx.rc" />
+    <ResourceCompile Include="..\samples\findfunc\extend.rc" />
+    <ResourceCompile Include="..\samples\findfunc\target.rc" />
+    <ResourceCompile Include="..\samples\opengl\ogldet.rc" />
+    <ResourceCompile Include="..\samples\simple\simple.rc" />
+    <ResourceCompile Include="..\samples\slept\dslept.rc" />
+    <ResourceCompile Include="..\samples\slept\slept.rc" />
+    <ResourceCompile Include="..\samples\traceapi\trcapi.rc" />
+    <ResourceCompile Include="..\samples\tracebld\trcbld.rc" />
+    <ResourceCompile Include="..\samples\tracelnk\trclnk.rc" />
+    <ResourceCompile Include="..\samples\tracemem\trcmem.rc" />
+    <ResourceCompile Include="..\samples\tracereg\trcreg.rc" />
+    <ResourceCompile Include="..\samples\traceser\trcser.rc" />
+    <ResourceCompile Include="..\samples\tracessl\trcssl.rc" />
+    <ResourceCompile Include="..\samples\tracetcp\trctcp.rc" />
+    <ResourceCompile Include="..\samples\tryman\tstman.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Midl Include="..\samples\cping\iping.idl" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

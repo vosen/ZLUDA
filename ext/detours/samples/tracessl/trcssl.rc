@@ -1,0 +1,17 @@
+//////////////////////////////////////////////////////////////////////////////
+//
+//  Version information for trcssl.rc.
+//
+//  Microsoft Research Detours Package
+//
+//  Copyright (c) Microsoft Corporation.  All rights reserved.
+//
+
+#include "detver.h"
+
+#define VER_INTERNALNAME_STR        "trcssl" DETOURS_STRINGIFY(DETOURS_BITS)
+#define VER_ORIGINALFILENAME_STR    "trcsll" DETOURS_STRINGIFY(DETOURS_BITS) ".dll"
+#define VER_FILEDESCRIPTION_STR     "Detours SSL Trace Module"
+#define VER_COMPANYNAME_STR         "Microsoft Corporation"
+
+#include "common.ver"

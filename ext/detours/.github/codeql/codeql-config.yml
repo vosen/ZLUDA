@@ -1,0 +1,6 @@
+---
+name: "Detours CodeQL Config"
+
+queries:
+ - uses: security-and-quality
+ - uses: security-extended 

@@ -1,0 +1,17 @@
+//////////////////////////////////////////////////////////////////////////////
+//
+//  Version information for simple.rc.
+//
+//  Microsoft Research Detours Package
+//
+//  Copyright (c) Microsoft Corporation.  All rights reserved.
+//
+
+#include "detver.h"
+
+#define VER_INTERNALNAME_STR        "simple" DETOURS_STRINGIFY(DETOURS_BITS)
+#define VER_ORIGINALFILENAME_STR    "simple" DETOURS_STRINGIFY(DETOURS_BITS) ".dll"
+#define VER_FILEDESCRIPTION_STR     "Detours Test Module"
+#define VER_COMPANYNAME_STR         "Microsoft Corporation"
+
+#include "common.ver"
