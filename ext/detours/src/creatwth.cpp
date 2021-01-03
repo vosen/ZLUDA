@@ -11,6 +11,7 @@
 #define DETOURS_INTERNAL
 #include "detours.h"
 #include <stddef.h>
+#include <strsafe.h>
 
 #if DETOURS_VERSION != 0x4c0c1   // 0xMAJORcMINORcPATCH
 #error detours.h version mismatch

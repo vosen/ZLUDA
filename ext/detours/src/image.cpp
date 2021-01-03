@@ -146,6 +146,8 @@ protected:
     DWORD                   m_cbAlloc;
 };
 
+class CImageImportName;
+
 class CImageImportFile
 {
     friend class CImage;
