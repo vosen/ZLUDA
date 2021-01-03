@@ -1,0 +1,70 @@
+talloc.exe: Detoured functions.
+
+       Address         Size: Typ Sta Prot Ini : Contents
+  ------------ ------------: --- --- ---- --- : -----------------
+Exe:                                                    13f660000
+     100000000     3f660000:     fre  ---     : 
+     13f660000         2000: img com  r-- rcx : TALLOC.EXE
+     13f6ce000    100802000:     fre  ---     : 
+Dll1:                                                   280000000
+     200000000     3fed0000:     fre  ---     : 
+     23fed0000        10000: pri com  r-x rwx : 
+     23fee0000         2000: pri res      --- : 
+     23fee2000         e000:     fre  ---     : 
+     23fef0000        10000: pri res      --- : 
+     23ff00000       100000: pri res      --- : 
+     240000000     40000000: pri res      --- : 
+     280000000         2000: img com  r-- rcx : TDLL1X64.DLL
+     280028000         8000:     fre  ---     : 
+     280030000     7ffd0000: pri res      --- : 
+Dll2:                                                   380000000
+     300000000     80000000: pri res      --- : 
+     380000000         2000: img com  r-- rcx : TDLL2X64.DLL
+     380028000         8000:     fre  ---     : 
+     380030000     40000000: pri res      --- : 
+     3c0030000       100000: pri res      --- : 
+     3c0130000        10000: pri res      --- : 
+     3c0140000         2000: pri res      --- : 
+     3c0142000         e000:     fre  ---     : 
+     3c0150000        10000: pri com  r-x rwx : 
+     3c0160000     3fea0000:     fre  ---     : 
+Dll3:                                                   480000000
+     400000000     40000000: pri res      --- : 
+     440000000       100000: pri res      --- : 
+     440100000        10000: pri res      --- : 
+     440110000         2000: pri res      --- : 
+     440112000         e000:     fre  ---     : 
+     440120000        10000: pri com  r-x rwx : 
+     440130000     3fed0000:     fre  ---     : 
+     480000000         2000: img com  r-- rcx : TDLL3X64.DLL
+     480028000         8000:     fre  ---     : 
+     480030000     7ffd0000: pri res      --- : 
+Dll4:                                                   580000000
+     500000000     80000000: pri res      --- : 
+     580000000         2000: img com  r-- rcx : TDLL4X64.DLL
+     580028000     3fea8000:     fre  ---     : 
+     5bfed0000        10000: pri com  r-x rwx : 
+     5bfee0000         2000: pri res      --- : 
+     5bfee2000         e000:     fre  ---     : 
+     5bfef0000        10000: pri res      --- : 
+     5bff00000       100000: pri res      --- : 
+     5c0000000     40000000: pri res      --- : 
+Dll5:                                                   680000000
+     600000000        f0000:     fre  ---     : 
+     6000f0000        10000: pri com  r-x rwx : 
+     600100000     7ff00000: pri res      --- : 
+     680000000         2000: img com  r-- rcx : TDLL5X64.DLL
+     680028000        18000:     fre  ---     : 
+     680040000         2000: img com  r-- rcx : TDLL6X64.DLL
+     680068000        18000:     fre  ---     : 
+     680080000         2000: img com  r-- rcx : TDLL7X64.DLL
+     6800a8000        18000:     fre  ---     : 
+     6800c0000         2000: img com  r-- rcx : TDLL8X64.DLL
+     6800e8000        18000:     fre  ---     : 
+     680100000         2000: img com  r-- rcx : TDLL9X64.DLL
+     680128000         8000:     fre  ---     : 
+     680130000     7fe00000: pri res      --- : 
+     6fff30000        10000: pri com  r-x rwx : 
+     6fff40000  6f3fbdd0000:     fre  ---     : 
+
+talloc.exe: 1 calls to Dll1Function

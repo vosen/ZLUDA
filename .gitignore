@@ -1,0 +1,41 @@
+# C extensions
+*.so
+
+# Unit test / coverage reports
+.coverage
+.tox
+nosetests.xml
+
+# Translations
+*.mo
+
+# Mr Developer
+.mr.developer.cfg
+.project
+.pydevproject
+
+# vim
+*~
+*.swp
+
+# Visual Studio build
+*.ipch
+.vs/
+output/
+include/
+*.exp
+*.pdb
+*.lib
+*.dll
+*.exe
+obj.*
+*.ipdb
+*.iobj
+*.tlog
+*.log
+*.obj
+*.user
+*.recipe
+/bin.*
+*.vcxproj.FileListAbsolute.txt
+*.vcxprojAssemblyReference.cache
