@@ -1,12 +1,13 @@
 [workspace]
 
 members = [
+    "detours-sys",
     "level_zero-sys",
     "level_zero",
     "spirv_tools-sys",
     "zluda",
-    #"zluda_inject",
-    #"zluda_redirect",
+    "zluda_inject",
+    "zluda_redirect",
     "ptx",
 ]
 
