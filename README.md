@@ -66,7 +66,7 @@ LD_LIBRARY_PATH=<PATH_TO_THE_DIRECTORY_WITH_ZLUDA_PROVIDED_LIBCUDA> <YOUR_APPLIC
 You should have a relatively recent version of Rust installed, then you just do:
 
 ```
-cargo build
+cargo build --release
 ```
 in the main directory of the project
 
