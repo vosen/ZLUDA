@@ -5,7 +5,7 @@ authors = ["Andrzej Janik <vosen@vosen.pl>"]
 edition = "2018"
 
 [[bin]]
-name = "zluda"
+name = "zluda_with"
 path = "src/main.rs"
 
 [target.'cfg(windows)'.dependencies]
