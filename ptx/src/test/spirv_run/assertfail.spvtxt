@@ -53,9 +53,9 @@
          %24 = OpVariable %_ptr_Function_ulong Function
                OpStore %13 %25
                OpStore %14 %26
-         %27 = OpLoad %ulong %13
+         %27 = OpLoad %ulong %13 Aligned 8
                OpStore %15 %27
-         %28 = OpLoad %ulong %14
+         %28 = OpLoad %ulong %14 Aligned 8
                OpStore %16 %28
          %53 = OpCopyObject %uint %uint_0
          %29 = OpCopyObject %uint %53
@@ -65,34 +65,34 @@
          %78 = OpInBoundsPtrAccessChain %_ptr_Function_uchar %77 %ulong_0
          %43 = OpBitcast %_ptr_Function_ulong %78
          %54 = OpCopyObject %ulong %30
-               OpStore %43 %54
+               OpStore %43 %54 Aligned 8
          %31 = OpLoad %ulong %15
          %79 = OpBitcast %_ptr_Function_uchar %21
          %80 = OpInBoundsPtrAccessChain %_ptr_Function_uchar %79 %ulong_0_0
          %45 = OpBitcast %_ptr_Function_ulong %80
          %55 = OpCopyObject %ulong %31
-               OpStore %45 %55
+               OpStore %45 %55 Aligned 8
          %32 = OpLoad %uint %19
          %81 = OpBitcast %_ptr_Function_uchar %22
          %82 = OpInBoundsPtrAccessChain %_ptr_Function_uchar %81 %ulong_0_1
          %47 = OpBitcast %_ptr_Function_uint %82
-               OpStore %47 %32
+               OpStore %47 %32 Aligned 4
          %33 = OpLoad %ulong %15
          %83 = OpBitcast %_ptr_Function_uchar %23
          %84 = OpInBoundsPtrAccessChain %_ptr_Function_uchar %83 %ulong_0_2
          %49 = OpBitcast %_ptr_Function_ulong %84
          %56 = OpCopyObject %ulong %33
-               OpStore %49 %56
+               OpStore %49 %56 Aligned 8
          %34 = OpLoad %ulong %15
          %85 = OpBitcast %_ptr_Function_uchar %24
          %86 = OpInBoundsPtrAccessChain %_ptr_Function_uchar %85 %ulong_0_3
          %51 = OpBitcast %_ptr_Function_ulong %86
          %57 = OpCopyObject %ulong %34
-               OpStore %51 %57
+               OpStore %51 %57 Aligned 8
          %87 = OpFunctionCall %void %1 %20 %21 %22 %23 %24
          %36 = OpLoad %ulong %15
          %58 = OpConvertUToPtr %_ptr_Generic_ulong %36
-         %35 = OpLoad %ulong %58
+         %35 = OpLoad %ulong %58 Aligned 8
                OpStore %17 %35
          %38 = OpLoad %ulong %17
          %37 = OpIAdd %ulong %38 %ulong_1
@@ -100,6 +100,6 @@
          %39 = OpLoad %ulong %16
          %40 = OpLoad %ulong %18
          %59 = OpConvertUToPtr %_ptr_Generic_ulong %39
-               OpStore %59 %40
+               OpStore %59 %40 Aligned 8
                OpReturn
                OpFunctionEnd

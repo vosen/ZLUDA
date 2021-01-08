@@ -36,13 +36,13 @@
          %10 = OpVariable %_ptr_Function_v4ushort Function
                OpStore %2 %17
                OpStore %3 %18
-         %19 = OpLoad %ulong %2
+         %19 = OpLoad %ulong %2 Aligned 8
                OpStore %4 %19
-         %20 = OpLoad %ulong %3
+         %20 = OpLoad %ulong %3 Aligned 8
                OpStore %5 %20
          %21 = OpLoad %ulong %4
          %49 = OpConvertUToPtr %_ptr_CrossWorkgroup_v4uchar %21
-         %11 = OpLoad %v4uchar %49
+         %11 = OpLoad %v4uchar %49 Aligned 4
          %50 = OpCompositeExtract %uchar %11 0
          %51 = OpCompositeExtract %uchar %11 1
          %52 = OpCompositeExtract %uchar %11 2
@@ -120,6 +120,6 @@
          %16 = OpCopyObject %v4uchar %95
          %48 = OpLoad %ulong %5
          %58 = OpConvertUToPtr %_ptr_CrossWorkgroup_v4uchar %48
-               OpStore %58 %16
+               OpStore %58 %16 Aligned 4
                OpReturn
                OpFunctionEnd

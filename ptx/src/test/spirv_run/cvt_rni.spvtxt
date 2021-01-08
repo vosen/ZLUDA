@@ -31,18 +31,18 @@
           %7 = OpVariable %_ptr_Function_float Function
                OpStore %2 %8
                OpStore %3 %9
-         %10 = OpLoad %ulong %2
+         %10 = OpLoad %ulong %2 Aligned 8
                OpStore %4 %10
-         %11 = OpLoad %ulong %3
+         %11 = OpLoad %ulong %3 Aligned 8
                OpStore %5 %11
          %13 = OpLoad %ulong %4
          %28 = OpConvertUToPtr %_ptr_Generic_float %13
-         %12 = OpLoad %float %28
+         %12 = OpLoad %float %28 Aligned 4
                OpStore %6 %12
          %15 = OpLoad %ulong %4
          %25 = OpIAdd %ulong %15 %ulong_4
          %29 = OpConvertUToPtr %_ptr_Generic_float %25
-         %14 = OpLoad %float %29
+         %14 = OpLoad %float %29 Aligned 4
                OpStore %7 %14
          %17 = OpLoad %float %6
          %16 = OpExtInst %float %34 rint %17
@@ -53,11 +53,11 @@
          %20 = OpLoad %ulong %5
          %21 = OpLoad %float %6
          %30 = OpConvertUToPtr %_ptr_Generic_float %20
-               OpStore %30 %21
+               OpStore %30 %21 Aligned 4
          %22 = OpLoad %ulong %5
          %23 = OpLoad %float %7
          %27 = OpIAdd %ulong %22 %ulong_4_0
          %31 = OpConvertUToPtr %_ptr_Generic_float %27
-               OpStore %31 %23
+               OpStore %31 %23 Aligned 4
                OpReturn
                OpFunctionEnd
