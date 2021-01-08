@@ -33,13 +33,13 @@ Overall in this suite of benchmarks faster by approximately 4% on ZLUDA.
 ## Details
 
  * Is ZLUDA a drop-in replacement for CUDA?\
-   Yes, but certain applications use CUDA in ways which make it incompatible with  ZLUDA.
- * What is the status of the project\
+   Yes, but certain applications use CUDA in ways which make it incompatible with  ZLUDA
+ * What is the status of the project?\
    This project is a Proof of Concept. About the only thing that works currently is  Geekbench (and not even completely). It's amazingly buggy and incomplete. You  should not rely on it for anything serious
  * Is it an Intel project? Is it an NVIDIA project?\
    No, it's a private project
  * What is the performance?\
-   Performance can be clode to the performance of similarly written OpenCL code (see  GeekBench results in the previous section).  NVIDIA GPUs and Intel GPUs have  different architecture and feature set. Consequently, certain NVIDIA features have  to be emulated in ZLUDA with performance penalty. Additionally, performance of  ZLUDA will be always lower than the performance of code specifically optimized for  Intel GPUs
+   Performance can be close to the performance of similarly written OpenCL code (see  GeekBench results in the previous section).  NVIDIA GPUs and Intel GPUs have  different architecture and feature set. Consequently, certain NVIDIA features have  to be emulated in ZLUDA with performance penalty. Additionally, performance of  ZLUDA will be always lower than the performance of code specifically optimized for Intel GPUs
  * How it's different from AMD HIP or Intel DPC++ Compatibility toolkit?\
    Both are porting toolkits which require programmer's effort to port applications  to the API in question. With ZLUDA existing applications "just work" on an Intel  GPU (if you are lucky and ZLUDA supports the particular subset of CUDA)
  * Which Intel GPU are supported?\
@@ -52,11 +52,11 @@ Overall in this suite of benchmarks faster by approximately 4% on ZLUDA.
 **Warning**: this is a very incomplete Proof of Concept. It's probably not going to work with your application. ZLUDA currently works only with applications which use CUDA Driver API. Linux builds also work with applications which use statically-linked CUDA Runtime API
 
 ### Windows
-You should have the most recent GPU drivers installed.\
+You should have the most recent Intel GPU drivers installed.\
 Copy `nvcuda.dll` to the application directory (the directory where .exe file is) and launch it normally
 
 ### Linux
-A very recent version of [compute-runtime](https://github.com/intel/compute-runtime) is required. At the time of the writing 20.45.18403 is the recommended version.
+A very recent version of [compute-runtime](https://github.com/intel/compute-runtime) and [Level Zero loader](https://github.com/oneapi-src/level-zero/releases) is required. At the time of the writing 20.45.18403 is the losest recommended version.
 Unpack the archive somewhere and run your application like this:
 ```
 LD_LIBRARY_PATH=<PATH_TO_THE_DIRECTORY_WITH_ZLUDA_PROVIDED_LIBCUDA> <YOUR_APPLICATION>
@@ -68,7 +68,18 @@ You should have a relatively recent version of Rust installed, then you just do:
 ```
 cargo build --release
 ```
-in the main directory of the project
+in the main directory of the project.  
+### Linux
+If you are building on Linux you must also symlink (or rename) the ZLUDA output library:
+```
+ln -s libnvcuda.so target/release/libcuda.so
+ln -s libcuda.so target/release/libcuda.so.1
+```
+
+## Contributing
+
+If you want to develop ZLUDA itself, read [CONTRIBUTING.md](CONTRIBUTING.md), it contains instructions how to set up dependencies and run tests
+
 
 ## License
 

@@ -4,10 +4,8 @@ mod win;
 #[cfg(target_os = "windows")]
 mod bin;
 
-use std::error::Error;
-
 #[cfg(target_os = "windows")]
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     bin::main_impl()
 }
 

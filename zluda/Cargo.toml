@@ -6,7 +6,6 @@ edition = "2018"
 
 [lib]
 name = "zluda"
-crate-type = ["cdylib"]
 
 [dependencies]
 ptx = { path = "../ptx" }
