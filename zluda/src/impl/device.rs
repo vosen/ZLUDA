@@ -3,7 +3,7 @@ use crate::cuda;
 use cuda::{CUdevice_attribute, CUuuid_st};
 use std::{
     cmp, mem,
-    os::raw::{c_char, c_int},
+    os::raw::{c_char, c_int, c_uint},
     ptr,
     sync::atomic::{AtomicU32, Ordering},
 };
@@ -347,6 +347,13 @@ pub fn get_uuid(uuid: *mut CUuuid_st, dev_idx: Index) -> Result<(), CUresult> {
             bytes: mem::transmute(ze_uuid.id),
         }
     };
+    Ok(())
+}
+
+// TODO: add support if Level 0 exposes it
+pub fn get_luid(luid: *mut c_char, dev_node_mask: *mut c_uint, _dev_idx: Index) -> Result<(), CUresult> {
+    unsafe { ptr::write_bytes(luid, 0u8, 8) };
+    unsafe { *dev_node_mask = 0 };
     Ok(())
 }
 
