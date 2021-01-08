@@ -32,11 +32,11 @@
                OpStore %2 %17
                OpStore %3 %18
          %10 = OpBitcast %_ptr_Function_ulong %2
-          %9 = OpLoad %ulong %10
+          %9 = OpLoad %ulong %10 Aligned 8
          %19 = OpConvertUToPtr %_ptr_CrossWorkgroup_uchar %9
                OpStore %7 %19
          %12 = OpBitcast %_ptr_Function_ulong %3
-         %11 = OpLoad %ulong %12
+         %11 = OpLoad %ulong %12 Aligned 8
          %20 = OpConvertUToPtr %_ptr_CrossWorkgroup_uchar %11
                OpStore %8 %20
          %21 = OpLoad %_ptr_CrossWorkgroup_uchar %7
@@ -55,11 +55,11 @@
                OpStore %8 %24
          %26 = OpLoad %_ptr_CrossWorkgroup_uchar %7
          %33 = OpBitcast %_ptr_CrossWorkgroup_float %26
-         %25 = OpLoad %float %33
+         %25 = OpLoad %float %33 Aligned 4
                OpStore %6 %25
          %27 = OpLoad %_ptr_CrossWorkgroup_uchar %8
          %28 = OpLoad %float %6
          %34 = OpBitcast %_ptr_CrossWorkgroup_float %27
-               OpStore %34 %28
+               OpStore %34 %28 Aligned 4
                OpReturn
                OpFunctionEnd

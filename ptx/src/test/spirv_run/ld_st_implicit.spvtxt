@@ -28,13 +28,13 @@
           %6 = OpVariable %_ptr_Function_ulong Function
                OpStore %2 %7
                OpStore %3 %8
-          %9 = OpLoad %ulong %2
+          %9 = OpLoad %ulong %2 Aligned 8
                OpStore %4 %9
-         %10 = OpLoad %ulong %3
+         %10 = OpLoad %ulong %3 Aligned 8
                OpStore %5 %10
          %12 = OpLoad %ulong %4
          %16 = OpConvertUToPtr %_ptr_CrossWorkgroup_float %12
-         %15 = OpLoad %float %16
+         %15 = OpLoad %float %16 Aligned 4
          %29 = OpBitcast %uint %15
          %11 = OpUConvert %ulong %29
                OpStore %6 %11
@@ -44,6 +44,6 @@
          %30 = OpBitcast %ulong %14
          %31 = OpUConvert %uint %30
          %18 = OpBitcast %float %31
-               OpStore %17 %18
+               OpStore %17 %18 Aligned 4
                OpReturn
                OpFunctionEnd
