@@ -1,0 +1,12 @@
+[package]
+name = "zluda_lib"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2018"
+
+[lib]
+name = "nvcuda"
+crate-type = ["cdylib"]
+
+[dependencies]
+zluda = { path = "../zluda" }
