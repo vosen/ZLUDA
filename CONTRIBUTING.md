@@ -12,7 +12,7 @@ git submodule update --init --recursive
 
 ## Tests
 
-tests should be executed with `--workspace` option to test non-default targets:
+Tests should be executed with `--workspace` option to test non-default targets:
 ```
 cargo test --workspace
 ```
