@@ -2233,6 +2233,15 @@ pub extern "C" fn cuDeviceGetUuid(uuid: *mut CUuuid, dev: CUdevice) -> CUresult 
 }
 
 #[cfg_attr(not(test), no_mangle)]
+pub extern "C" fn cuDeviceGetLuid(
+    luid: *mut ::std::os::raw::c_char,
+    deviceNodeMask: *mut ::std::os::raw::c_uint,
+    dev: CUdevice,
+) -> CUresult {
+    r#impl::device::get_luid(luid, deviceNodeMask, dev.decuda()).encuda()
+}
+
+#[cfg_attr(not(test), no_mangle)]
 pub extern "C" fn cuDeviceTotalMem_v2(bytes: *mut usize, dev: CUdevice) -> CUresult {
     r#impl::device::total_mem_v2(bytes, dev.decuda()).encuda()
 }
