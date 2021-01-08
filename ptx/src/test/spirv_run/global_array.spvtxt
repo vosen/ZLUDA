@@ -39,15 +39,15 @@
          %16 = OpConvertPtrToU %ulong %1
          %10 = OpCopyObject %ulong %16
                OpStore %5 %10
-         %11 = OpLoad %ulong %4
+         %11 = OpLoad %ulong %4 Aligned 8
                OpStore %6 %11
          %13 = OpLoad %ulong %5
          %17 = OpConvertUToPtr %_ptr_CrossWorkgroup_uint %13
-         %12 = OpLoad %uint %17
+         %12 = OpLoad %uint %17 Aligned 4
                OpStore %7 %12
          %14 = OpLoad %ulong %6
          %15 = OpLoad %uint %7
          %18 = OpConvertUToPtr %_ptr_CrossWorkgroup_uint %14
-               OpStore %18 %15
+               OpStore %18 %15 Aligned 4
                OpReturn
                OpFunctionEnd

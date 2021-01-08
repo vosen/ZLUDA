@@ -10,14 +10,14 @@
          %47 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
                OpEntryPoint Kernel %1 "atom_inc"
-               OpDecorate %38 LinkageAttributes "__zluda_ptx_impl__atom_relaxed_gpu_generic_inc" Import
                OpDecorate %42 LinkageAttributes "__zluda_ptx_impl__atom_relaxed_gpu_global_inc" Import
+               OpDecorate %38 LinkageAttributes "__zluda_ptx_impl__atom_relaxed_gpu_generic_inc" Import
        %void = OpTypeVoid
        %uint = OpTypeInt 32 0
-%_ptr_Generic_uint = OpTypePointer Generic %uint
-         %51 = OpTypeFunction %uint %_ptr_Generic_uint %uint
 %_ptr_CrossWorkgroup_uint = OpTypePointer CrossWorkgroup %uint
-         %53 = OpTypeFunction %uint %_ptr_CrossWorkgroup_uint %uint
+         %51 = OpTypeFunction %uint %_ptr_CrossWorkgroup_uint %uint
+%_ptr_Generic_uint = OpTypePointer Generic %uint
+         %53 = OpTypeFunction %uint %_ptr_Generic_uint %uint
       %ulong = OpTypeInt 64 0
          %55 = OpTypeFunction %void %ulong %ulong
 %_ptr_Function_ulong = OpTypePointer Function %ulong
@@ -26,13 +26,13 @@
  %uint_101_0 = OpConstant %uint 101
     %ulong_4 = OpConstant %ulong 4
     %ulong_8 = OpConstant %ulong 8
-         %38 = OpFunction %uint None %51
-         %40 = OpFunctionParameter %_ptr_Generic_uint
-         %41 = OpFunctionParameter %uint
-               OpFunctionEnd
-         %42 = OpFunction %uint None %53
+         %42 = OpFunction %uint None %51
          %44 = OpFunctionParameter %_ptr_CrossWorkgroup_uint
          %45 = OpFunctionParameter %uint
+               OpFunctionEnd
+         %38 = OpFunction %uint None %53
+         %40 = OpFunctionParameter %_ptr_Generic_uint
+         %41 = OpFunctionParameter %uint
                OpFunctionEnd
           %1 = OpFunction %void None %55
           %9 = OpFunctionParameter %ulong
@@ -47,9 +47,9 @@
           %8 = OpVariable %_ptr_Function_uint Function
                OpStore %2 %9
                OpStore %3 %10
-         %11 = OpLoad %ulong %2
+         %11 = OpLoad %ulong %2 Aligned 8
                OpStore %4 %11
-         %12 = OpLoad %ulong %3
+         %12 = OpLoad %ulong %3 Aligned 8
                OpStore %5 %12
          %14 = OpLoad %ulong %4
          %31 = OpConvertUToPtr %_ptr_Generic_uint %14
@@ -61,21 +61,21 @@
                OpStore %7 %15
          %18 = OpLoad %ulong %4
          %33 = OpConvertUToPtr %_ptr_Generic_uint %18
-         %17 = OpLoad %uint %33
+         %17 = OpLoad %uint %33 Aligned 4
                OpStore %8 %17
          %19 = OpLoad %ulong %5
          %20 = OpLoad %uint %6
          %34 = OpConvertUToPtr %_ptr_Generic_uint %19
-               OpStore %34 %20
+               OpStore %34 %20 Aligned 4
          %21 = OpLoad %ulong %5
          %22 = OpLoad %uint %7
          %28 = OpIAdd %ulong %21 %ulong_4
          %35 = OpConvertUToPtr %_ptr_Generic_uint %28
-               OpStore %35 %22
+               OpStore %35 %22 Aligned 4
          %23 = OpLoad %ulong %5
          %24 = OpLoad %uint %8
          %30 = OpIAdd %ulong %23 %ulong_8
          %36 = OpConvertUToPtr %_ptr_Generic_uint %30
-               OpStore %36 %24
+               OpStore %36 %24 Aligned 4
                OpReturn
                OpFunctionEnd

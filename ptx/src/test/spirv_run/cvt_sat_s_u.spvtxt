@@ -30,13 +30,13 @@
           %8 = OpVariable %_ptr_Function_uint Function
                OpStore %2 %9
                OpStore %3 %10
-         %11 = OpLoad %ulong %2
+         %11 = OpLoad %ulong %2 Aligned 8
                OpStore %4 %11
-         %12 = OpLoad %ulong %3
+         %12 = OpLoad %ulong %3 Aligned 8
                OpStore %5 %12
          %14 = OpLoad %ulong %4
          %21 = OpConvertUToPtr %_ptr_Generic_uint %14
-         %13 = OpLoad %uint %21
+         %13 = OpLoad %uint %21 Aligned 4
                OpStore %6 %13
          %16 = OpLoad %uint %6
          %15 = OpSatConvertSToU %uint %16
@@ -47,6 +47,6 @@
          %19 = OpLoad %ulong %5
          %20 = OpLoad %uint %8
          %22 = OpConvertUToPtr %_ptr_Generic_uint %19
-               OpStore %22 %20
+               OpStore %22 %20 Aligned 4
                OpReturn
                OpFunctionEnd

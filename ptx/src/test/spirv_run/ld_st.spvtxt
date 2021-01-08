@@ -26,17 +26,17 @@
           %6 = OpVariable %_ptr_Function_ulong Function
                OpStore %2 %7
                OpStore %3 %8
-          %9 = OpLoad %ulong %2
+          %9 = OpLoad %ulong %2 Aligned 8
                OpStore %4 %9
-         %10 = OpLoad %ulong %3
+         %10 = OpLoad %ulong %3 Aligned 8
                OpStore %5 %10
          %12 = OpLoad %ulong %4
          %15 = OpConvertUToPtr %_ptr_Generic_ulong %12
-         %11 = OpLoad %ulong %15
+         %11 = OpLoad %ulong %15 Aligned 8
                OpStore %6 %11
          %13 = OpLoad %ulong %5
          %14 = OpLoad %ulong %6
          %16 = OpConvertUToPtr %_ptr_Generic_ulong %13
-               OpStore %16 %14
+               OpStore %16 %14 Aligned 8
                OpReturn
                OpFunctionEnd
