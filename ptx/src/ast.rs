@@ -294,6 +294,17 @@ pub enum KernelArgumentType {
     Shared,
 }
 
+impl From<KernelArgumentType> for Type {
+    fn from(this: KernelArgumentType) -> Self {
+        match this {
+            KernelArgumentType::Normal(typ) => typ.into(),
+            KernelArgumentType::Shared => {
+                Type::Pointer(PointerType::Scalar(ScalarType::B8), LdStateSpace::Shared)
+            }
+        }
+    }
+}
+
 impl FnArgumentType {
     pub fn to_type(&self, is_kernel: bool) -> Type {
         if is_kernel {

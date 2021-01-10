@@ -6,7 +6,7 @@ pub type cuuint32_t = u32;
 pub type cuuint64_t = u64;
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct CUdeviceptr(pub ::std::os::raw::c_ulonglong);
+pub struct CUdeviceptr(pub usize);
 #[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct CUdevice(pub ::std::os::raw::c_int);
@@ -2474,13 +2474,14 @@ extern_redirect! {
 extern_redirect! {
     pub fn cuModuleLoad(module: *mut CUmodule, fname: *const ::std::os::raw::c_char) -> CUresult;
 }
-extern_redirect! {
+extern_redirect_with! {
     pub fn cuModuleLoadData(
         module: *mut CUmodule,
         image: *const ::std::os::raw::c_void,
     ) -> CUresult;
+    super::cuModuleLoadData;
 }
-extern_redirect! {
+extern_redirect_with! {
     pub fn cuModuleLoadDataEx(
         module: *mut CUmodule,
         image: *const ::std::os::raw::c_void,
@@ -2488,6 +2489,7 @@ extern_redirect! {
         options: *mut CUjit_option,
         optionValues: *mut *mut ::std::os::raw::c_void,
     ) -> CUresult;
+    super::cuModuleLoadDataEx;
 }
 extern_redirect! {
     pub fn cuModuleLoadFatBinary(
@@ -2498,12 +2500,13 @@ extern_redirect! {
 extern_redirect! {
     pub fn cuModuleUnload(hmod: CUmodule) -> CUresult;
 }
-extern_redirect! {
+extern_redirect_with! {
     pub fn cuModuleGetFunction(
         hfunc: *mut CUfunction,
         hmod: CUmodule,
         name: *const ::std::os::raw::c_char,
     ) -> CUresult;
+    super::cuModuleGetFunction;
 }
 extern_redirect! {
     pub fn cuModuleGetGlobal_v2(

@@ -10,4 +10,10 @@ crate-type = ["cdylib"]
 
 [dependencies]
 ptx = { path = "../ptx" }
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["libloaderapi"] }
+wchar = "0.6"
+
+[target.'cfg(not(windows))'.dependencies]
 libc = "0.2"
