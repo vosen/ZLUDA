@@ -12,8 +12,9 @@ crate-type = ["cdylib"]
 ptx = { path = "../ptx" }
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["libloaderapi"] }
+winapi = { version = "0.3", features = ["libloaderapi", "debugapi"] }
 wchar = "0.6"
+detours-sys = { path = "../detours-sys" }
 
 [target.'cfg(not(windows))'.dependencies]
 libc = "0.2"

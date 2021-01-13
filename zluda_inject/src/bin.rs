@@ -1,8 +1,7 @@
-use std::env;
-use std::env::Args;
 use std::mem;
 use std::path::Path;
 use std::ptr;
+use std::{env, ops::Deref};
 use std::{error::Error, process};
 
 use mem::size_of_val;
@@ -25,15 +24,15 @@ static ZLUDA_DLL: &'static str = "nvcuda.dll";
 include!("../../zluda_redirect/src/payload_guid.rs");
 
 pub fn main_impl() -> Result<(), Box<dyn Error>> {
-    let args = env::args();
-    if args.len() == 0 {
-        print_help();
-        process::exit(1);
+    let args = env::args().collect::<Vec<_>>();
+    if args.len() <= 1 {
+        print_help_and_exit();
     }
-    let mut cmd_line = construct_command_line(args);
     let injector_path = env::current_exe()?;
     let injector_dir = injector_path.parent().unwrap();
     let redirect_path = create_redirect_path(injector_dir);
+    let (mut inject_path, cmd) = create_inject_path(&args[1..], injector_dir);
+    let mut cmd_line = construct_command_line(cmd);
     let mut startup_info = unsafe { mem::zeroed::<detours_sys::_STARTUPINFOW>() };
     let mut proc_info = unsafe { mem::zeroed::<detours_sys::_PROCESS_INFORMATION>() };
     os_call!(
@@ -54,13 +53,12 @@ pub fn main_impl() -> Result<(), Box<dyn Error>> {
         |x| x != 0
     );
     kill_child_on_process_exit(proc_info.hProcess)?;
-    let mut zluda_path = create_zluda_path(injector_dir);
     os_call!(
         detours_sys::DetourCopyPayloadToProcess(
             proc_info.hProcess,
             &PAYLOAD_GUID,
-            zluda_path.as_mut_ptr() as *mut _,
-            (zluda_path.len() * mem::size_of::<u16>()) as u32
+            inject_path.as_mut_ptr() as *mut _,
+            (inject_path.len() * mem::size_of::<u16>()) as u32
         ),
         |x| x != 0
     );
@@ -93,22 +91,29 @@ fn kill_child_on_process_exit(child: HANDLE) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn print_help() {
+fn print_help_and_exit() -> ! {
+    let current_exe = env::current_exe().unwrap();
+    let exe_name = current_exe.file_name().unwrap().to_string_lossy();
     println!(
         "USAGE:
-    zluda <EXE> [ARGS]...
+    {0} -- <EXE> [ARGS]...
+    {0} <DLL> -- <EXE> [ARGS]...
 ARGS:
-    <EXE>        Path to the executable to be injected with ZLUDA
+    <DLL>        DLL to ne injected instead of system nvcuda.dll, if not provided
+                 will use nvcuda.dll from the directory where {0} is located
+    <EXE>        Path to the executable to be injected with <DLL>
     <ARGS>...    Arguments that will be passed to <EXE>
-"
+",
+        exe_name
     );
+    process::exit(1)
 }
 
 // Adapted from https://docs.microsoft.com/en-us/archive/blogs/twistylittlepassagesallalike/everyone-quotes-command-line-arguments-the-wrong-way
-fn construct_command_line(args: Args) -> Vec<u16> {
+fn construct_command_line(args: &[String]) -> Vec<u16> {
     let mut cmd_line = Vec::new();
     let args_len = args.len();
-    for (idx, arg) in args.enumerate().skip(1) {
+    for (idx, arg) in args.iter().enumerate() {
         if !arg.contains(&[' ', '\t', '\n', '\u{2B7F}', '\"'][..]) {
             cmd_line.extend(arg.encode_utf16());
         } else {
@@ -168,14 +173,22 @@ fn create_redirect_path(injector_dir: &Path) -> Vec<u8> {
     result
 }
 
-fn create_zluda_path(injector_dir: &Path) -> Vec<u16> {
-    let mut injector_dir = injector_dir.to_path_buf();
-    injector_dir.push(ZLUDA_DLL);
-    let mut result = injector_dir
-        .to_string_lossy()
-        .as_ref()
-        .encode_utf16()
-        .collect::<Vec<_>>();
-    result.push(0);
-    result
+fn create_inject_path<'a>(args: &'a [String], injector_dir: &Path) -> (Vec<u16>, &'a [String]) {
+    if args.get(0).map(Deref::deref) == Some("--") {
+        let mut injector_dir = injector_dir.to_path_buf();
+        injector_dir.push(ZLUDA_DLL);
+        let mut result = injector_dir
+            .to_string_lossy()
+            .as_ref()
+            .encode_utf16()
+            .collect::<Vec<_>>();
+        result.push(0);
+        (result, &args[1..])
+    } else if args.get(1).map(Deref::deref) == Some("--") {
+        let mut dll_path = args[0].encode_utf16().collect::<Vec<_>>();
+        dll_path.push(0);
+        (dll_path, &args[2..])
+    } else {
+        print_help_and_exit()
+    }
 }

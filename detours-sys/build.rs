@@ -37,18 +37,15 @@ mod windows {
         .try_compile("detours")?;
         Ok(())
     }
-
-    #[cfg(target_env = "msvc")]
     fn add_target_options(build: &mut cc::Build) -> &mut cc::Build {
-        build
-    }
-
-    #[cfg(not(target_env = "msvc"))]
-    fn add_target_options(build: &mut cc::Build) -> &mut cc::Build {
-        build
-            .compiler("clang")
-            .cpp(true)
-            .flag("-fms-extensions")
-            .flag("-Wno-everything")
+        if std::env::var("CARGO_CFG_TARGET_ENV").unwrap() != "msvc" {
+            build
+                .compiler("clang")
+                .cpp(true)
+                .flag("-fms-extensions")
+                .flag("-Wno-everything")
+        } else {
+            build
+        }
     }
 }
