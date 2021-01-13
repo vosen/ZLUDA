@@ -57,34 +57,11 @@ unsafe fn get_non_detoured_load_library(
             LOAD_LIBRARY_NO_REDIRECT.as_ptr() as *mut _,
         );
         if result != ptr::null_mut() {
-            eprintln!("!!!!hit");
             return Some(mem::transmute(result));
         }
-        eprintln!("!!!!mis");
     }
     None
 }
-
-/*
-unsafe extern "C" fn get_non_detoured_load_library_callback(
-    context: *mut ::std::os::raw::c_void,
-    _: ::std::os::raw::c_ulong,
-    name: *const ::std::os::raw::c_char,
-    code: *mut ::std::os::raw::c_void,
-) -> ::std::os::raw::c_int {
-    let mut i = 0;
-    loop {
-        if i == LOAD_LIBRARY_NO_REDIRECT.len() {
-            *(context as *mut *mut c_void) = code;
-            return 0;
-        }
-        if *name.add(i) as u8 != LOAD_LIBRARY_NO_REDIRECT[i] {
-            return 1;
-        }
-        i += 1;
-    }
-}
- */
 
 pub unsafe fn get_proc_address(handle: *mut c_void, func: &CStr) -> *mut c_void {
     GetProcAddress(handle as *mut _, func.as_ptr()) as *mut _

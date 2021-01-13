@@ -85,11 +85,11 @@ pub unsafe fn cuModuleLoadData(
 unsafe fn record_module_image(module: *mut CUmodule, raw_image: *const ::std::os::raw::c_void) {
     let image = to_str(raw_image);
     match image {
-        None => eprintln!("[ZLUDA_DUMP] Unrecognized module image at {:?}", raw_image),
+        None => eprintln!("[ZLUDA_DUMP] Malformed module image: {:?}", raw_image),
         Some(image) => {
             if !image.contains(&".address_size") {
                 eprintln!(
-                    "[ZLUDA_DUMP] Unrecognized module image at {:?}:\n{}",
+                    "[ZLUDA_DUMP] Malformed module image: {:?}:\n{}",
                     raw_image, image
                 )
             } else {
@@ -196,16 +196,16 @@ unsafe fn cuModuleGetFunction(
                     let kernel_args = KERNEL_ARGS.get_or_insert_with(|| HashMap::new());
                     kernel_args.insert(*hfunc, (kernel.to_string(), args.clone()));
                 } else {
-                    eprintln!("[ZLUDA_DUMP] Could not find kernel {}", kernel);
+                    eprintln!("[ZLUDA_DUMP] Unknown kernel: {}", kernel);
                 }
             } else {
-                eprintln!("[ZLUDA_DUMP] Unrecognized kernel name at {:?}", hfunc);
+                eprintln!("[ZLUDA_DUMP] Unknown kernel name at: {:?}", hfunc);
             }
         } else {
-            eprintln!("[ZLUDA_DUMP] No module recorded: {:?}", hmod);
+            eprintln!("[ZLUDA_DUMP] Unknown module: {:?}", hmod);
         }
     } else {
-        eprintln!("[ZLUDA_DUMP] No module recorded: {:?}", hmod);
+        eprintln!("[ZLUDA_DUMP] Unknown module: {:?}", hmod);
     }
     CUresult::CUDA_SUCCESS
 }
@@ -261,7 +261,7 @@ pub unsafe fn cuLaunchKernel(
             kernel_args,
         )
         .unwrap_or_else(|err| eprintln!("[ZLUDA_DUMP] {:#?}", err)),
-        None => eprintln!("[ZLUDA_DUMP] Unknown kernel {:?}", f),
+        None => eprintln!("[ZLUDA_DUMP] Unknown kernel: {:?}", f),
     }
     error = cont(
         f,
