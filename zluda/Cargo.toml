@@ -13,7 +13,7 @@ level_zero = { path = "../level_zero" }
 level_zero-sys = { path = "../level_zero-sys" }
 lazy_static = "1.4"
 num_enum = "0.4"
-lz4 = "1.23"
+lz4-sys = "1.9"
 
 [dev-dependencies]
 cuda-driver-sys = "0.3.0"

@@ -5,12 +5,12 @@ use crate::{
 };
 
 use super::{context, context::ContextData, device, module, Decuda, Encuda, GlobalState};
-use std::mem;
 use std::os::raw::{c_uint, c_ulong, c_ushort};
 use std::{
     ffi::{c_void, CStr},
-    ptr, slice,
+    ptr,
 };
+use std::{mem, os::raw::c_int};
 
 pub fn get(table: *mut *const std::os::raw::c_void, id: *const CUuuid) -> CUresult {
     if table == ptr::null_mut() || id == ptr::null_mut() {
@@ -177,6 +177,7 @@ const FATBIN_FILE_HEADER_VERSION_CURRENT: c_ushort = 0x101;
 
 // assembly file header is a bit different, but we don't care
 #[repr(C)]
+#[derive(Debug)]
 struct FatbinFileHeader {
     kind: c_ushort,
     version: c_ushort,
@@ -221,12 +222,10 @@ unsafe extern "C" fn get_module_from_cubin(
     let mut ptx_files = get_ptx_files(file, end);
     ptx_files.sort_unstable_by_key(|f| c_uint::max_value() - (**f).sm_version);
     for file in ptx_files {
-        let slice = slice::from_raw_parts(
-            (file as *const u8).add((*file).header_size as usize),
-            (*file).payload_size as usize,
-        );
-        let kernel_text =
-            lz4::block::decompress(slice, Some((*file).uncompressed_payload as i32)).unwrap();
+        let kernel_text = match decompress_kernel_module(file) {
+            None => continue,
+            Some(vec) => vec,
+        };
         let kernel_text_string = match CStr::from_bytes_with_nul(&kernel_text) {
             Ok(c_str) => match c_str.to_str() {
                 Ok(s) => s,
@@ -262,6 +261,33 @@ unsafe fn get_ptx_files(file: *const u8, end: *const u8) -> Vec<*const FatbinFil
         index = index.add((*file).header_size as usize + (*file).padded_payload_size as usize);
     }
     result
+}
+
+const MAX_PTX_MODULE_DECOMPRESSION_BOUND: usize = 16 * 1024 * 1024;
+
+unsafe fn decompress_kernel_module(file: *const FatbinFileHeader) -> Option<Vec<u8>> {
+    let decompressed_size = usize::max(1024, (*file).uncompressed_payload as usize);
+    let mut decompressed_vec = vec![0u8; decompressed_size];
+    loop {
+        match lz4_sys::LZ4_decompress_safe(
+            (file as *const u8).add((*file).header_size as usize) as *const _,
+            decompressed_vec.as_mut_ptr() as *mut _,
+            (*file).payload_size as c_int,
+            decompressed_vec.len() as c_int,
+        ) {
+            error if error < 0 => {
+                let new_size = decompressed_vec.len() * 2;
+                if new_size > MAX_PTX_MODULE_DECOMPRESSION_BOUND {
+                    return None;
+                }
+                decompressed_vec.resize(decompressed_vec.len() * 2, 0);
+            }
+            real_decompressed_size => {
+                decompressed_vec.truncate(real_decompressed_size as usize);
+                return Some(decompressed_vec);
+            }
+        }
+    }
 }
 
 unsafe extern "C" fn cudart_interface_fn6(_: u64) {}

@@ -103,9 +103,9 @@ pub struct CUgraphExec_st {
 }
 pub type CUgraphExec = *mut CUgraphExec_st;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub struct CUuuid_st {
-    pub bytes: [::std::os::raw::c_char; 16usize],
+    pub bytes: [::std::os::raw::c_uchar; 16usize],
 }
 pub type CUuuid = CUuuid_st;
 #[repr(C)]
@@ -4060,11 +4060,12 @@ extern_redirect! {
         hStream: CUstream,
     ) -> CUresult;
 }
-extern_redirect! {
+extern_redirect_with! {
     pub fn cuGetExportTable(
         ppExportTable: *mut *const ::std::os::raw::c_void,
         pExportTableId: *const CUuuid,
     ) -> CUresult;
+    super::cuGetExportTable;
 }
 extern_redirect! {
     pub fn cuFuncGetModule(hmod: *mut CUmodule, hfunc: CUfunction) -> CUresult;

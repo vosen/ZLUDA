@@ -10,6 +10,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 ptx = { path = "../ptx" }
+lz4-sys = "1.9"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["libloaderapi", "debugapi"] }
