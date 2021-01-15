@@ -11,6 +11,6 @@ extern crate paste;
 extern crate ptx;
 
 #[allow(warnings)]
-mod cuda;
+pub mod cuda;
 mod cuda_impl;
 pub(crate) mod r#impl;
