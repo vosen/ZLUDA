@@ -11,5 +11,5 @@ pub unsafe fn load_cuda_library() -> *mut c_void {
 }
 
 pub unsafe fn get_proc_address(handle: *mut c_void, func: &CStr) -> *mut c_void {
-    libc::dlsym(handle, name.as_ptr() as *const _)
+    libc::dlsym(handle, func.as_ptr() as *const _)
 }
