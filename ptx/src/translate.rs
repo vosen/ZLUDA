@@ -6039,7 +6039,7 @@ impl ast::Type {
         }
     }
 
-    fn size_of(&self) -> usize {
+    pub fn size_of(&self) -> usize {
         match self {
             ast::Type::Scalar(typ) => typ.size_of() as usize,
             ast::Type::Vector(typ, len) => (typ.size_of() as usize) * (*len as usize),
@@ -6249,18 +6249,6 @@ impl<'a> ast::Instruction<ast::ParsedArgParams<'a>> {
                 Ok(ast::Instruction::Call(call_inst))
             }
             i => i.map(f),
-        }
-    }
-}
-
-impl From<ast::KernelArgumentType> for ast::Type {
-    fn from(this: ast::KernelArgumentType) -> Self {
-        match this {
-            ast::KernelArgumentType::Normal(typ) => typ.into(),
-            ast::KernelArgumentType::Shared => ast::Type::Pointer(
-                ast::PointerType::Scalar(ast::ScalarType::B8),
-                ast::LdStateSpace::Shared,
-            ),
         }
     }
 }

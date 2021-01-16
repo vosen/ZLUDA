@@ -9,5 +9,5 @@ name = "zluda_with"
 path = "src/main.rs"
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["jobapi2", "processthreadsapi", "std", "synchapi"] }
+winapi = { version = "0.3", features = ["jobapi2", "processthreadsapi", "std", "synchapi", "winbase"] }
 detours-sys = { path = "../detours-sys" }

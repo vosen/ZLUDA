@@ -46,6 +46,12 @@ static mut LOAD_LIBRARY_EX_W: unsafe extern "system" fn(
     dwFlags: DWORD,
 ) -> HMODULE = LoadLibraryExW;
 
+#[no_mangle]
+#[allow(non_snake_case)]
+unsafe extern "system" fn ZludaLoadLibraryW_NoRedirect(lpLibFileName: LPCWSTR) -> HMODULE {
+    (LOAD_LIBRARY_W)(lpLibFileName)
+}
+
 #[allow(non_snake_case)]
 unsafe extern "system" fn ZludaLoadLibraryA(lpLibFileName: LPCSTR) -> HMODULE {
     let nvcuda_file_name = if is_nvcuda_dll_utf8(lpLibFileName as *const _) {

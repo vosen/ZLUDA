@@ -1,0 +1,22 @@
+[package]
+name = "zluda_dump"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2018"
+
+[lib]
+name = "zluda_dump"
+crate-type = ["cdylib"]
+
+[dependencies]
+ptx = { path = "../ptx" }
+lz4-sys = "1.9"
+regex = "1.4"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["libloaderapi", "debugapi"] }
+wchar = "0.6"
+detours-sys = { path = "../detours-sys" }
+
+[target.'cfg(not(windows))'.dependencies]
+libc = "0.2"
