@@ -1,10 +1,9 @@
-use libc::{dlopen, dlsym};
 use std::ffi::{c_void, CStr};
 
 const NVCUDA_DEFAULT_PATH: &'static [u8] = b"/usr/lib/x86_64-linux-gnu/libcuda.so.1\0";
 
 pub unsafe fn load_cuda_library() -> *mut c_void {
-    dlopen(
+    libc::dlopen(
         NVCUDA_DEFAULT_PATH.as_ptr() as *const _,
         libc::RTLD_LOCAL | libc::RTLD_NOW,
     )

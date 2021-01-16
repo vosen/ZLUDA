@@ -1,10 +1,8 @@
-use std::error::Error;
-
 #[cfg(not(target_os = "windows"))]
 fn main() {}
 
 #[cfg(target_os = "windows")]
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     windows::main_impl()
 }
 
