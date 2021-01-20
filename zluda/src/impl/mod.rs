@@ -138,10 +138,10 @@ impl From<l0::sys::ze_result_t> for CUresult {
             l0_sys::ze_result_t::ZE_RESULT_ERROR_UNINITIALIZED => {
                 CUresult::CUDA_ERROR_NOT_INITIALIZED
             }
-            l0_sys::ze_result_t::ZE_RESULT_ERROR_INVALID_ENUMERATION => {
-                CUresult::CUDA_ERROR_INVALID_VALUE
-            }
-            l0_sys::ze_result_t::ZE_RESULT_ERROR_INVALID_ARGUMENT => {
+            l0_sys::ze_result_t::ZE_RESULT_ERROR_INVALID_ENUMERATION
+            | l0_sys::ze_result_t::ZE_RESULT_ERROR_INVALID_ARGUMENT
+            | l0_sys::ze_result_t::ZE_RESULT_ERROR_INVALID_GROUP_SIZE_DIMENSION
+            | l0_sys::ze_result_t::ZE_RESULT_ERROR_INVALID_GLOBAL_WIDTH_DIMENSION => {
                 CUresult::CUDA_ERROR_INVALID_VALUE
             }
             l0_sys::ze_result_t::ZE_RESULT_ERROR_OUT_OF_HOST_MEMORY => {
@@ -304,6 +304,110 @@ pub fn init() -> Result<(), CUresult> {
     *global_state = Some(GlobalState { devices });
     drop(global_state);
     Ok(())
+}
+
+macro_rules! stringify_curesult {
+    ($x:ident => [ $($variant:ident),+ ]) => {
+        match $x {
+            $(
+                CUresult::$variant => Some(concat!(stringify!($variant), "\0")),
+            )+
+            _ => None
+        }
+    }
+}
+
+pub(crate) fn get_error_string(error: CUresult, str: *mut *const i8) -> CUresult {
+    if str == ptr::null_mut() {
+        return CUresult::CUDA_ERROR_INVALID_VALUE;
+    }
+    let text = stringify_curesult!(
+        error => [
+            CUDA_SUCCESS,
+            CUDA_ERROR_INVALID_VALUE,
+            CUDA_ERROR_OUT_OF_MEMORY,
+            CUDA_ERROR_NOT_INITIALIZED,
+            CUDA_ERROR_DEINITIALIZED,
+            CUDA_ERROR_PROFILER_DISABLED,
+            CUDA_ERROR_PROFILER_NOT_INITIALIZED,
+            CUDA_ERROR_PROFILER_ALREADY_STARTED,
+            CUDA_ERROR_PROFILER_ALREADY_STOPPED,
+            CUDA_ERROR_NO_DEVICE,
+            CUDA_ERROR_INVALID_DEVICE,
+            CUDA_ERROR_INVALID_IMAGE,
+            CUDA_ERROR_INVALID_CONTEXT,
+            CUDA_ERROR_CONTEXT_ALREADY_CURRENT,
+            CUDA_ERROR_MAP_FAILED,
+            CUDA_ERROR_UNMAP_FAILED,
+            CUDA_ERROR_ARRAY_IS_MAPPED,
+            CUDA_ERROR_ALREADY_MAPPED,
+            CUDA_ERROR_NO_BINARY_FOR_GPU,
+            CUDA_ERROR_ALREADY_ACQUIRED,
+            CUDA_ERROR_NOT_MAPPED,
+            CUDA_ERROR_NOT_MAPPED_AS_ARRAY,
+            CUDA_ERROR_NOT_MAPPED_AS_POINTER,
+            CUDA_ERROR_ECC_UNCORRECTABLE,
+            CUDA_ERROR_UNSUPPORTED_LIMIT,
+            CUDA_ERROR_CONTEXT_ALREADY_IN_USE,
+            CUDA_ERROR_PEER_ACCESS_UNSUPPORTED,
+            CUDA_ERROR_INVALID_PTX,
+            CUDA_ERROR_INVALID_GRAPHICS_CONTEXT,
+            CUDA_ERROR_NVLINK_UNCORRECTABLE,
+            CUDA_ERROR_JIT_COMPILER_NOT_FOUND,
+            CUDA_ERROR_INVALID_SOURCE,
+            CUDA_ERROR_FILE_NOT_FOUND,
+            CUDA_ERROR_SHARED_OBJECT_SYMBOL_NOT_FOUND,
+            CUDA_ERROR_SHARED_OBJECT_INIT_FAILED,
+            CUDA_ERROR_OPERATING_SYSTEM,
+            CUDA_ERROR_INVALID_HANDLE,
+            CUDA_ERROR_ILLEGAL_STATE,
+            CUDA_ERROR_NOT_FOUND,
+            CUDA_ERROR_NOT_READY,
+            CUDA_ERROR_ILLEGAL_ADDRESS,
+            CUDA_ERROR_LAUNCH_OUT_OF_RESOURCES,
+            CUDA_ERROR_LAUNCH_TIMEOUT,
+            CUDA_ERROR_LAUNCH_INCOMPATIBLE_TEXTURING,
+            CUDA_ERROR_PEER_ACCESS_ALREADY_ENABLED,
+            CUDA_ERROR_PEER_ACCESS_NOT_ENABLED,
+            CUDA_ERROR_PRIMARY_CONTEXT_ACTIVE,
+            CUDA_ERROR_CONTEXT_IS_DESTROYED,
+            CUDA_ERROR_ASSERT,
+            CUDA_ERROR_TOO_MANY_PEERS,
+            CUDA_ERROR_HOST_MEMORY_ALREADY_REGISTERED,
+            CUDA_ERROR_HOST_MEMORY_NOT_REGISTERED,
+            CUDA_ERROR_HARDWARE_STACK_ERROR,
+            CUDA_ERROR_ILLEGAL_INSTRUCTION,
+            CUDA_ERROR_MISALIGNED_ADDRESS,
+            CUDA_ERROR_INVALID_ADDRESS_SPACE,
+            CUDA_ERROR_INVALID_PC,
+            CUDA_ERROR_LAUNCH_FAILED,
+            CUDA_ERROR_COOPERATIVE_LAUNCH_TOO_LARGE,
+            CUDA_ERROR_NOT_PERMITTED,
+            CUDA_ERROR_NOT_SUPPORTED,
+            CUDA_ERROR_SYSTEM_NOT_READY,
+            CUDA_ERROR_SYSTEM_DRIVER_MISMATCH,
+            CUDA_ERROR_COMPAT_NOT_SUPPORTED_ON_DEVICE,
+            CUDA_ERROR_STREAM_CAPTURE_UNSUPPORTED,
+            CUDA_ERROR_STREAM_CAPTURE_INVALIDATED,
+            CUDA_ERROR_STREAM_CAPTURE_MERGE,
+            CUDA_ERROR_STREAM_CAPTURE_UNMATCHED,
+            CUDA_ERROR_STREAM_CAPTURE_UNJOINED,
+            CUDA_ERROR_STREAM_CAPTURE_ISOLATION,
+            CUDA_ERROR_STREAM_CAPTURE_IMPLICIT,
+            CUDA_ERROR_CAPTURED_EVENT,
+            CUDA_ERROR_STREAM_CAPTURE_WRONG_THREAD,
+            CUDA_ERROR_TIMEOUT,
+            CUDA_ERROR_GRAPH_EXEC_UPDATE_FAILURE,
+            CUDA_ERROR_UNKNOWN
+        ]
+    );
+    match text {
+        Some(text) => {
+            unsafe { *str = text.as_ptr() as *const _ };
+            CUresult::CUDA_SUCCESS
+        }
+        None => CUresult::CUDA_ERROR_INVALID_VALUE,
+    }
 }
 
 unsafe fn transmute_lifetime_mut<'a, 'b, T: ?Sized>(t: &'a mut T) -> &'b mut T {
