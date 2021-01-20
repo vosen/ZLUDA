@@ -169,6 +169,14 @@ pub fn destroy_v2(ctx: *mut Context) -> Result<(), CUresult> {
     GlobalState::lock(|_| Context::destroy_impl(ctx))?
 }
 
+pub(crate) fn push_current_v2(pctx: *mut Context) -> CUresult {
+    if pctx == ptr::null_mut() {
+        return CUresult::CUDA_ERROR_INVALID_VALUE;
+    }
+    CONTEXT_STACK.with(|stack| stack.borrow_mut().push(pctx));
+    CUresult::CUDA_SUCCESS
+}
+
 pub fn pop_current_v2(pctx: *mut *mut Context) -> CUresult {
     if pctx == ptr::null_mut() {
         return CUresult::CUDA_ERROR_INVALID_VALUE;

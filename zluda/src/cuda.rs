@@ -2186,7 +2186,7 @@ pub extern "C" fn cuGetErrorString(
     error: CUresult,
     pStr: *mut *const ::std::os::raw::c_char,
 ) -> CUresult {
-    r#impl::unimplemented()
+    r#impl::get_error_string(error,  pStr).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2344,7 +2344,7 @@ pub extern "C" fn cuCtxDestroy_v2(ctx: CUcontext) -> CUresult {
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "C" fn cuCtxPushCurrent_v2(ctx: CUcontext) -> CUresult {
-    r#impl::unimplemented()
+    r#impl::context::push_current_v2(ctx.decuda())
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2443,7 +2443,7 @@ pub extern "C" fn cuModuleLoad(
     module: *mut CUmodule,
     fname: *const ::std::os::raw::c_char,
 ) -> CUresult {
-    r#impl::unimplemented()
+    r#impl::module::load(module.decuda(), fname).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -3671,7 +3671,7 @@ pub extern "C" fn cuFuncSetBlockShape(
     y: ::std::os::raw::c_int,
     z: ::std::os::raw::c_int,
 ) -> CUresult {
-    r#impl::unimplemented()
+    r#impl::function::set_block_shape(hfunc.decuda(), x, y, z).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]

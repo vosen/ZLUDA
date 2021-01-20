@@ -1,9 +1,11 @@
+use super::{stream::Stream, CUresult, GlobalState, HasLivenessCookie, LiveCheck};
+use crate::cuda::CUfunction_attribute;
 use ::std::os::raw::{c_uint, c_void};
 use std::{hint, ptr};
 
-use crate::cuda::CUfunction_attribute;
-
-use super::{stream::Stream, CUresult, GlobalState, HasLivenessCookie, LiveCheck};
+const CU_LAUNCH_PARAM_END: *mut c_void = 0 as *mut _;
+const CU_LAUNCH_PARAM_BUFFER_POINTER: *mut c_void = 1 as *mut _;
+const CU_LAUNCH_PARAM_BUFFER_SIZE: *mut c_void = 2 as *mut _;
 
 pub type Function = LiveCheck<FunctionData>;
 
@@ -26,6 +28,25 @@ pub struct FunctionData {
     pub arg_size: Vec<usize>,
     pub use_shared_mem: bool,
     pub properties: Option<Box<l0::sys::ze_kernel_properties_t>>,
+    pub legacy_args: LegacyArguments,
+}
+
+pub struct LegacyArguments {
+    block_shape: Option<(i32, i32, i32)>,
+}
+
+impl LegacyArguments {
+    pub fn new() -> Self {
+        LegacyArguments { block_shape: None }
+    }
+
+    pub fn is_initialized(&self) -> bool {
+        self.block_shape.is_some()
+    }
+
+    pub fn reset(&mut self) {
+        self.block_shape = None;
+    }
 }
 
 impl FunctionData {
@@ -53,19 +74,58 @@ pub fn launch_kernel(
     kernel_params: *mut *mut c_void,
     extra: *mut *mut c_void,
 ) -> Result<(), CUresult> {
-    if f == ptr::null_mut() {
+    if f == ptr::null_mut()
+        || (kernel_params == ptr::null_mut() && extra == ptr::null_mut())
+        || (kernel_params != ptr::null_mut() && extra != ptr::null_mut())
+    {
         return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
-    }
-    if extra != ptr::null_mut() {
-        return Err(CUresult::CUDA_ERROR_NOT_SUPPORTED);
     }
     GlobalState::lock_stream(hstream, |stream| {
         let func: &mut FunctionData = unsafe { &mut *f }.as_result_mut()?;
-        for (i, arg_size) in func.arg_size.iter().enumerate() {
-            unsafe {
-                func.base
-                    .set_arg_raw(i as u32, *arg_size, *kernel_params.add(i))?
-            };
+        if kernel_params != ptr::null_mut() {
+            for (i, arg_size) in func.arg_size.iter().enumerate() {
+                unsafe {
+                    func.base
+                        .set_arg_raw(i as u32, *arg_size, *kernel_params.add(i))?
+                };
+            }
+        } else {
+            let mut offset = 0;
+            let mut buffer_ptr = None;
+            let mut buffer_size = None;
+            loop {
+                match unsafe { *extra.add(offset) } {
+                    CU_LAUNCH_PARAM_END => break,
+                    CU_LAUNCH_PARAM_BUFFER_POINTER => {
+                        buffer_ptr = Some(unsafe { *extra.add(offset + 1) as *mut u8 });
+                    }
+                    CU_LAUNCH_PARAM_BUFFER_SIZE => {
+                        buffer_size = Some(unsafe { *(*extra.add(offset + 1) as *mut usize) });
+                    }
+                    _ => return Err(CUresult::CUDA_ERROR_INVALID_VALUE),
+                }
+                offset += 2;
+            }
+            match (buffer_size, buffer_ptr) {
+                (Some(buffer_size), Some(buffer_ptr)) => {
+                    let sum_of_kernel_argument_sizes = func.arg_size.iter().sum();
+                    if buffer_size != sum_of_kernel_argument_sizes {
+                        return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
+                    }
+                    let mut offset = 0;
+                    for (i, arg_size) in func.arg_size.iter().enumerate() {
+                        unsafe {
+                            func.base.set_arg_raw(
+                                i as u32,
+                                *arg_size,
+                                buffer_ptr.add(offset) as *const _,
+                            )?
+                        };
+                        offset += arg_size;
+                    }
+                }
+                _ => return Err(CUresult::CUDA_ERROR_INVALID_VALUE),
+            }
         }
         if func.use_shared_mem {
             unsafe {
@@ -78,6 +138,7 @@ pub fn launch_kernel(
         }
         func.base
             .set_group_size(block_dim_x, block_dim_y, block_dim_z)?;
+        func.legacy_args.reset();
         let mut cmd_list = stream.command_list()?;
         cmd_list.append_launch_kernel(
             &mut func.base,
@@ -109,4 +170,13 @@ pub(crate) fn get_attribute(
         }
         _ => Err(CUresult::CUDA_ERROR_NOT_SUPPORTED),
     }
+}
+
+pub(crate) fn set_block_shape(func: *mut Function, x: i32, y: i32, z: i32) -> Result<(), CUresult> {
+    if func == ptr::null_mut() || x < 0 || y < 0 || z < 0 {
+        return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
+    }
+    GlobalState::lock_function(func, |func| {
+        func.legacy_args.block_shape = Some((x, y, z));
+    })
 }
