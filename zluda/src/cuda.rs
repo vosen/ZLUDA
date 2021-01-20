@@ -2186,7 +2186,7 @@ pub extern "C" fn cuGetErrorString(
     error: CUresult,
     pStr: *mut *const ::std::os::raw::c_char,
 ) -> CUresult {
-    r#impl::unimplemented()
+    r#impl::get_error_string(error,  pStr).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2344,7 +2344,7 @@ pub extern "C" fn cuCtxDestroy_v2(ctx: CUcontext) -> CUresult {
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "C" fn cuCtxPushCurrent_v2(ctx: CUcontext) -> CUresult {
-    r#impl::unimplemented()
+    r#impl::context::push_current_v2(ctx.decuda())
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2443,7 +2443,7 @@ pub extern "C" fn cuModuleLoad(
     module: *mut CUmodule,
     fname: *const ::std::os::raw::c_char,
 ) -> CUresult {
-    r#impl::unimplemented()
+    r#impl::module::load(module.decuda(), fname).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -3671,7 +3671,7 @@ pub extern "C" fn cuFuncSetBlockShape(
     y: ::std::os::raw::c_int,
     z: ::std::os::raw::c_int,
 ) -> CUresult {
-    r#impl::unimplemented()
+    r#impl::function::set_block_shape(hfunc.decuda(), x, y, z).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -4501,5 +4501,35 @@ pub extern "C" fn cuGetExportTable(
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "C" fn cuFuncGetModule(hmod: *mut CUmodule, hfunc: CUfunction) -> CUresult {
+    r#impl::unimplemented()
+}
+
+impl CUoutput_mode_enum {
+    pub const CU_OUT_KEY_VALUE_PAIR: CUoutput_mode_enum = CUoutput_mode_enum(0);
+}
+impl CUoutput_mode_enum {
+    pub const CU_OUT_CSV: CUoutput_mode_enum = CUoutput_mode_enum(1);
+}
+#[repr(transparent)]
+#[derive(Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUoutput_mode_enum(pub ::std::os::raw::c_uint);
+pub use self::CUoutput_mode_enum as CUoutput_mode;
+
+#[cfg_attr(not(test), no_mangle)]
+pub extern "C" fn cuProfilerInitialize(
+    configFile: *const ::std::os::raw::c_char,
+    outputFile: *const ::std::os::raw::c_char,
+    outputMode: CUoutput_mode,
+) -> CUresult {
+    r#impl::unimplemented()
+}
+
+#[cfg_attr(not(test), no_mangle)]
+pub extern "C" fn cuProfilerStart() -> CUresult {
+    r#impl::unimplemented()
+}
+
+#[cfg_attr(not(test), no_mangle)]
+pub extern "C" fn cuProfilerStop() -> CUresult {
     r#impl::unimplemented()
 }
