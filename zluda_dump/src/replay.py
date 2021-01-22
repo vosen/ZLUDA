@@ -55,7 +55,7 @@ def verify_single_dump(input_path):
     kernel = module.get_function(kernel_name)
     pre_args = parse_arguments(input_path, "pre")
     kernel_pre_args, host_pre_args = zip(*pre_args)
-    kernel(*list(kernel_pre_args), block=tuple(launch_lines[:3]), grid=tuple(launch_lines[3:6]))
+    kernel(*list(kernel_pre_args), grid=tuple(launch_lines[:3]), block=tuple(launch_lines[3:6]))
     post_args = parse_arguments(input_path, "post")
     _, host_post_args_args = zip(*post_args)
     for idx, (pre_arg, post_arg) in enumerate(zip(host_pre_args, host_post_args_args)):

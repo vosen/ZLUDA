@@ -109,20 +109,24 @@ pub fn launch_kernel(
             }
             match (buffer_size, buffer_ptr) {
                 (Some(buffer_size), Some(buffer_ptr)) => {
-                    let sum_of_kernel_argument_sizes = func.arg_size.iter().sum();
+                    let sum_of_kernel_argument_sizes =
+                        func.arg_size.iter().fold(0, |offset, size_of_arg| {
+                            size_of_arg + round_up_to_multiple(offset, *size_of_arg)
+                        });
                     if buffer_size != sum_of_kernel_argument_sizes {
                         return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
                     }
                     let mut offset = 0;
                     for (i, arg_size) in func.arg_size.iter().enumerate() {
+                        let buffer_offset = round_up_to_multiple(offset, *arg_size);
                         unsafe {
                             func.base.set_arg_raw(
                                 i as u32,
                                 *arg_size,
-                                buffer_ptr.add(offset) as *const _,
+                                buffer_ptr.add(buffer_offset) as *const _,
                             )?
                         };
-                        offset += arg_size;
+                        offset = buffer_offset + *arg_size;
                     }
                 }
                 _ => return Err(CUresult::CUDA_ERROR_INVALID_VALUE),
@@ -150,6 +154,10 @@ pub fn launch_kernel(
         stream.queue.execute(cmd_list)?;
         Ok(())
     })?
+}
+
+fn round_up_to_multiple(x: usize, multiple: usize) -> usize {
+    ((x + multiple - 1) / multiple) * multiple
 }
 
 pub(crate) fn get_attribute(
