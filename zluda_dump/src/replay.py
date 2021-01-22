@@ -6,6 +6,17 @@ import numpy as np
 from os import path
 import os
 import itertools
+import sys
+
+
+# It's impossible to discern what is the type of a buffer, here you can override equality checks
+def assert_array_equal_override(kname, idx, arr1, arr2):
+    if kname == 'knn_match' and idx == 6:
+        arr1_view = np.frombuffer(arr1, dtype=np.dtype([('f1', np.uint32), ('f2', np.uint32), ('f3', np.uint32)]))
+        np.ndarray.sort(arr1_view)
+        arr2_view = np.frombuffer(arr2, dtype=np.dtype([('f1', np.uint32), ('f2', np.uint32), ('f3', np.uint32)]))
+        np.ndarray.sort(arr2_view)
+    return np.testing.assert_array_equal(arr1, arr2)
 
 
 def load_arguments(arg_path):
@@ -34,26 +45,37 @@ def parse_arguments(dump_path, prefix):
     arg_files = os.listdir(dir)
     return [load_arguments(path.join(dir, f)) for f in sorted(arg_files)]
 
+def verify_single_dump(input_path):
+    print(input_path)
+    kernel_name = path.basename(input_path).split("_", 1)[1]
+    with open(path.join(input_path, "launch.txt"), "r") as launch_f:
+        launch_lines = list(map(int, launch_f.readlines()))
+    assert launch_lines[6] == 0  # we don't support dynamic shared memory in replay yet
+    module = drv.module_from_file(path.join(input_path, "module.ptx"))
+    kernel = module.get_function(kernel_name)
+    pre_args = parse_arguments(input_path, "pre")
+    kernel_pre_args, host_pre_args = zip(*pre_args)
+    kernel(*list(kernel_pre_args), block=tuple(launch_lines[:3]), grid=tuple(launch_lines[3:6]))
+    post_args = parse_arguments(input_path, "post")
+    _, host_post_args_args = zip(*post_args)
+    for idx, (pre_arg, post_arg) in enumerate(zip(host_pre_args, host_post_args_args)):
+        if pre_arg is None:
+            continue
+        try:
+            assert_array_equal_override(kernel_name, idx, pre_arg, post_arg)
+        except Exception as e:
+            print(f"{idx}: {e}")
 
-PATH = r"D:\temp\zluda_dump\geekbench_x86_64.exe\4440_knn_match"
-kernel_name = path.basename(PATH).split("_", 1)[1]
-with open(path.join(PATH, "launch.txt"), "r") as launch_f:
-    launch_lines = list(map(int, launch_f.readlines()))
-assert launch_lines[6] == 0  # we don't support dynamic shared memory in replay yet
-device = drv.Device(0)
-print(device.name())
-module = drv.module_from_file(path.join(PATH, "module.ptx"))
-kernel = module.get_function(kernel_name)
-pre_args = parse_arguments(PATH, "pre")
-post_args = parse_arguments(PATH, "pre")
-kernel_pre_args, host_pre_args = zip(*pre_args)
-kernel(*list(kernel_pre_args), block=tuple(launch_lines[:3]), grid=tuple(launch_lines[3:6]))
-_, host_post_args_args = zip(*post_args)
-for idx, (pre_arg, post_arg) in enumerate(zip(host_pre_args, host_post_args_args)):
-    if pre_arg is None:
-        continue
-    try:
-        np.testing.assert_array_equal(pre_arg, post_arg)
-    except Exception as e:
-        print(f"{idx}: {e}")
+def main(argv):
+    device = drv.Device(0)
+    print(device.name())
+    input_path = argv[1]
+    if os.path.exists(path.join(input_path, "launch.txt")):
+        verify_single_dump(input_path)
+    else:
+        for input_subdir in [path.join(input_path, dir) for dir in os.listdir(input_path)]:
+            verify_single_dump(input_subdir)
 
+
+if __name__ == "__main__":
+    main(sys.argv)

@@ -40,6 +40,7 @@ impl LegacyArguments {
         LegacyArguments { block_shape: None }
     }
 
+    #[allow(dead_code)]
     pub fn is_initialized(&self) -> bool {
         self.block_shape.is_some()
     }
