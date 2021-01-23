@@ -25,8 +25,8 @@ When running an application with ZLUDA quite often you will run into subtle bugs
 
 Library `zluda_dump` can be injected into a CUDA application and produce a trace which, for every launched GPU function contains:
 * PTX source
-* Launch arguments (block size, grid size, shared memory)
-* Memory dump of global meory used by the function. Both after and before
+* Launch arguments (block size, grid size, shared memory size)
+* Dump of function arguments. Both after and before
 
 Example use with GeekBench:
 ```
@@ -41,7 +41,7 @@ This dump can be replayed with `replay.py` script from `zluda_dump` source direc
 ```
 python replay.py "C:\temp\zluda_dump\geekbench_x86_64.exe"
 ```
-You must copy (or symlink) ZLUDA nvcuda.dll into pyCUDA directory, so it will run using ZLUDA. This will print similar information to stdout:
+You must copy (or symlink) ZLUDA `nvcuda.dll` into PyCUDA directory, so it will run using ZLUDA. Example output:
 ```
 Intel(R) Graphics [0x3e92] [github.com/vosen/ZLUDA]
 C:\temp\zluda_dump\geekbench_x86_64.exe\4140_scale_pyramid
@@ -57,5 +57,5 @@ Max relative difference: 255.
  x: array([  7,   6,   8, ..., 193, 195, 193], dtype=uint8)
  y: array([  7,   6,   8, ..., 193, 195, 193], dtype=uint8)
 ```
-From this output one can observe that in kernel launch 4480, 6th argument to function `scale_pyramid` differs between what was executed on an NVIDIA GPU and Intel GPU using CUDA.  
+From this output one can observe that in kernel launch 4480, 6th argument to function `scale_pyramid` differs between what was executed on an NVIDIA GPU using CUDA and Intel GPU using ZLUDA.  
 __Important__: It's impossible to infer what was the type (and semantics) of argument passed to a GPU function. At our level it's a buffer of bytes and by default `replay.py` simply checks if two buffers are byte-equal. That means you will have a ton of false negatives when running  `replay.py`. You should override them for your particular case in `replay.py` - it already contains some overrides for GeekBench kernels
