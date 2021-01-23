@@ -138,10 +138,10 @@ impl From<l0::sys::ze_result_t> for CUresult {
             l0_sys::ze_result_t::ZE_RESULT_ERROR_UNINITIALIZED => {
                 CUresult::CUDA_ERROR_NOT_INITIALIZED
             }
-            l0_sys::ze_result_t::ZE_RESULT_ERROR_INVALID_ENUMERATION => {
-                CUresult::CUDA_ERROR_INVALID_VALUE
-            }
-            l0_sys::ze_result_t::ZE_RESULT_ERROR_INVALID_ARGUMENT => {
+            l0_sys::ze_result_t::ZE_RESULT_ERROR_INVALID_ENUMERATION
+            | l0_sys::ze_result_t::ZE_RESULT_ERROR_INVALID_ARGUMENT
+            | l0_sys::ze_result_t::ZE_RESULT_ERROR_INVALID_GROUP_SIZE_DIMENSION
+            | l0_sys::ze_result_t::ZE_RESULT_ERROR_INVALID_GLOBAL_WIDTH_DIMENSION => {
                 CUresult::CUDA_ERROR_INVALID_VALUE
             }
             l0_sys::ze_result_t::ZE_RESULT_ERROR_OUT_OF_HOST_MEMORY => {
