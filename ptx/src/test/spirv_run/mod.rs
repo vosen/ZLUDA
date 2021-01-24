@@ -49,6 +49,8 @@ test_ptx!(mul_lo, [1u64], [2u64]);
 test_ptx!(mul_hi, [u64::max_value()], [1u64]);
 test_ptx!(add, [1u64], [2u64]);
 test_ptx!(setp, [10u64, 11u64], [1u64, 0u64]);
+test_ptx!(setp_gt, [f32::NAN, 1f32], [1f32]);
+test_ptx!(setp_leu, [1f32, f32::NAN], [1f32]);
 test_ptx!(bra, [10u64], [11u64]);
 test_ptx!(not, [0u64], [u64::max_value()]);
 test_ptx!(shl, [11u64], [44u64]);
@@ -114,6 +116,7 @@ test_ptx!(cos, [std::f32::consts::PI], [-1f32]);
 test_ptx!(lg2, [512f32], [9f32]);
 test_ptx!(ex2, [10f32], [1024f32]);
 test_ptx!(cvt_rni, [9.5f32, 10.5f32], [10f32, 10f32]);
+test_ptx!(cvt_rzi, [-13.8f32, 12.9f32], [-13f32, 12f32]);
 test_ptx!(clz, [0b00000101_00101101_00010011_10101011u32], [5u32]);
 test_ptx!(popc, [0b10111100_10010010_01001001_10001010u32], [14u32]);
 test_ptx!(

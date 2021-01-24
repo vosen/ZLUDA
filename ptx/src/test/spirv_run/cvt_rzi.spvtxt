@@ -1,0 +1,63 @@
+               OpCapability GenericPointer
+               OpCapability Linkage
+               OpCapability Addresses
+               OpCapability Kernel
+               OpCapability Int8
+               OpCapability Int16
+               OpCapability Int64
+               OpCapability Float16
+               OpCapability Float64
+         %34 = OpExtInstImport "OpenCL.std"
+               OpMemoryModel Physical64 OpenCL
+               OpEntryPoint Kernel %1 "cvt_rzi"
+       %void = OpTypeVoid
+      %ulong = OpTypeInt 64 0
+         %37 = OpTypeFunction %void %ulong %ulong
+%_ptr_Function_ulong = OpTypePointer Function %ulong
+      %float = OpTypeFloat 32
+%_ptr_Function_float = OpTypePointer Function %float
+%_ptr_Generic_float = OpTypePointer Generic %float
+    %ulong_4 = OpConstant %ulong 4
+  %ulong_4_0 = OpConstant %ulong 4
+          %1 = OpFunction %void None %37
+          %8 = OpFunctionParameter %ulong
+          %9 = OpFunctionParameter %ulong
+         %32 = OpLabel
+          %2 = OpVariable %_ptr_Function_ulong Function
+          %3 = OpVariable %_ptr_Function_ulong Function
+          %4 = OpVariable %_ptr_Function_ulong Function
+          %5 = OpVariable %_ptr_Function_ulong Function
+          %6 = OpVariable %_ptr_Function_float Function
+          %7 = OpVariable %_ptr_Function_float Function
+               OpStore %2 %8
+               OpStore %3 %9
+         %10 = OpLoad %ulong %2 Aligned 8
+               OpStore %4 %10
+         %11 = OpLoad %ulong %3 Aligned 8
+               OpStore %5 %11
+         %13 = OpLoad %ulong %4
+         %28 = OpConvertUToPtr %_ptr_Generic_float %13
+         %12 = OpLoad %float %28 Aligned 4
+               OpStore %6 %12
+         %15 = OpLoad %ulong %4
+         %25 = OpIAdd %ulong %15 %ulong_4
+         %29 = OpConvertUToPtr %_ptr_Generic_float %25
+         %14 = OpLoad %float %29 Aligned 4
+               OpStore %7 %14
+         %17 = OpLoad %float %6
+         %16 = OpExtInst %float %34 trunc %17
+               OpStore %6 %16
+         %19 = OpLoad %float %7
+         %18 = OpExtInst %float %34 trunc %19
+               OpStore %7 %18
+         %20 = OpLoad %ulong %5
+         %21 = OpLoad %float %6
+         %30 = OpConvertUToPtr %_ptr_Generic_float %20
+               OpStore %30 %21 Aligned 4
+         %22 = OpLoad %ulong %5
+         %23 = OpLoad %float %7
+         %27 = OpIAdd %ulong %22 %ulong_4_0
+         %31 = OpConvertUToPtr %_ptr_Generic_float %27
+               OpStore %31 %23 Aligned 4
+               OpReturn
+               OpFunctionEnd
