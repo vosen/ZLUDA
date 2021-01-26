@@ -50,6 +50,14 @@ def parse_arguments(dump_path, prefix):
     arg_files = os.listdir(dir)
     return [load_arguments(path.join(dir, f)) for f in sorted(arg_files)]
 
+
+def append_debug_buffer(args):
+    args = list(args)
+    debug_buff = np.zeros(1024 * 1024, np.single)
+    args.append((drv.InOut(debug_buff), debug_buff))
+    return args
+
+
 def verify_single_dump(input_path, max_block_threads):
     print(input_path)
     kernel_name = path.basename(input_path).split("_", 1)[1]
@@ -58,11 +66,12 @@ def verify_single_dump(input_path, max_block_threads):
     block = tuple(launch_lines[3:6])
     launch_block_size = block[0] * block[1] * block[2]
     if launch_block_size > max_block_threads:
-        print(f"    Skipping, launch block size ({launch_block_size}) bigger than maximum block size ({max_block_threads})")
+        print(
+            f"    Skipping, launch block size ({launch_block_size}) bigger than maximum block size ({max_block_threads})")
         return
     module = drv.module_from_file(path.join(input_path, "module.ptx"))
     kernel = module.get_function(kernel_name)
-    pre_args = parse_arguments(input_path, "pre")
+    pre_args = append_debug_buffer(parse_arguments(input_path, "pre"))
     kernel_pre_args, host_pre_args = zip(*pre_args)
     kernel(*list(kernel_pre_args), grid=tuple(launch_lines[:3]), block=block, shared=launch_lines[6])
     post_args = parse_arguments(input_path, "post")
@@ -74,6 +83,7 @@ def verify_single_dump(input_path, max_block_threads):
             assert_array_equal_override(kernel_name, idx, pre_arg, post_arg)
         except Exception as e:
             print(f"{idx}: {e}")
+
 
 def main(argv):
     device = drv.Device(0)

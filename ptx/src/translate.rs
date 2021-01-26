@@ -4087,8 +4087,15 @@ fn emit_implicit_conversion(
                 {
                     builder.u_convert(wide_bit_type_spirv, Some(cv.dst), same_width_bit_value)?;
                 } else {
+                    let conversion_fn = if from_parts.scalar_kind == ScalarKind::Signed
+                        && to_parts.scalar_kind == ScalarKind::Signed
+                    {
+                        dr::Builder::s_convert
+                    } else {
+                        dr::Builder::u_convert
+                    };
                     let wide_bit_value =
-                        builder.u_convert(wide_bit_type_spirv, None, same_width_bit_value)?;
+                        conversion_fn(builder, wide_bit_type_spirv, None, same_width_bit_value)?;
                     emit_implicit_conversion(
                         builder,
                         map,
