@@ -20,13 +20,13 @@ Overall, ZLUDA is slower in GeekBench by roughly 2%.
 ### Explanation of the results
  * Why is ZLUDA faster in some benchmarks?\
    This has not been precisely pinpointed to one thing or another but it's likely a combination of things:
-   * ZLUDA uses Level 0, which in general is a more low level, high performance API than OpenCL
+   * ZLUDA uses [Level 0](https://spec.oneapi.com/level-zero/latest/index.html), which in general is a more low level, high performance API than OpenCL
    * Tying to the previous point, currently ZLUDA does not support asynchronous execution. This gives us an unfair advantage in a benchmark like GeekBench. GeekBench exclusively uses CUDA synchronous APIs
    * There is a set of GPU instructions which are available on both NVIDIA hardware and Intel hardware, but are not exposed through OpenCL. We are comparing NVIDIA GPU optimized code with the more general OpenCL code. It's a lucky coincidence (and a credit to the underlying Intel Graphics Compiler) that this code also works well on an Intel GPU
  * Why is OpenCL faster in Canny and Horizon Detection?\
    Authors of CUDA benchmarks used CUDA functions `atomicInc` and `atomicDec` which have direct hardware support on NVIDIA cards, but no hardware support on Intel cards. They have to be emulated in software, which limits performance
  * Why is ZLUDA slower in the remaining benchmarks?\
-   The reason is unknown. Most likely, in some tests we compile from suboptimal NVIDIA GPU code and in other tests ZLUDA itself is emitting suboptimal Intel GPU code. For example, SFFT used to be even slower before PR [#22](https://github.com/vosen/ZLUDA/pull/22). You should not expect ZLUDA to always reach performance parity with OpenCL code
+   The reason is unknown. Most likely, in some tests we compile from suboptimal NVIDIA GPU code and in other tests ZLUDA itself is emitting suboptimal Intel GPU code. For example, SFFT used to be even slower before PR [#22](https://github.com/vosen/ZLUDA/pull/22)
    
 
 ## Details
