@@ -1,0 +1,25 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry cvt_s32_f32(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	            in_addr;
+    .reg .u64 	            out_addr;
+    .reg .b32 	            temp1;
+    .reg .b32 	            temp2;
+
+	ld.param.u64 	        in_addr, [input];
+    ld.param.u64 	        out_addr, [output];
+
+    ld.f32                  temp1, [in_addr];
+    ld.f32                  temp2, [in_addr+4];
+    cvt.rpi.ftz.s32.f32     temp1, temp1;
+    cvt.rpi.ftz.s32.f32     temp2, temp2;
+    st.global.s32           [out_addr], temp1;
+    st.global.s32           [out_addr+4], temp2;
+    ret;
+}

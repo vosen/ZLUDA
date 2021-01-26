@@ -116,7 +116,8 @@ test_ptx!(cos, [std::f32::consts::PI], [-1f32]);
 test_ptx!(lg2, [512f32], [9f32]);
 test_ptx!(ex2, [10f32], [1024f32]);
 test_ptx!(cvt_rni, [9.5f32, 10.5f32], [10f32, 10f32]);
-test_ptx!(cvt_rzi, [-13.8f32, 12.9f32], [-13f32, 12f32]);
+test_ptx!(cvt_rzi, [-13.8f32, 12.9f32], [-13f32, 13f32]);
+test_ptx!(cvt_s32_f32, [-13.8f32, 12.9f32], [-13i32, 13i32]);
 test_ptx!(clz, [0b00000101_00101101_00010011_10101011u32], [5u32]);
 test_ptx!(popc, [0b10111100_10010010_01001001_10001010u32], [14u32]);
 test_ptx!(
@@ -143,8 +144,9 @@ test_ptx!(stateful_ld_st_ntid, [123u64], [123u64]);
 test_ptx!(stateful_ld_st_ntid_chain, [12651u64], [12651u64]);
 test_ptx!(stateful_ld_st_ntid_sub, [96311u64], [96311u64]);
 test_ptx!(shared_ptr_take_address, [97815231u64], [97815231u64]);
-// For now, we just that it builds and links
+// For now, we just make sure that it builds and links
 test_ptx!(assertfail, [716523871u64], [716523872u64]);
+test_ptx!(cvt_s64_s32, [-1i32], [-1i64]);
 
 struct DisplayError<T: Debug> {
     err: T,
@@ -164,11 +166,15 @@ impl<T: Debug> Debug for DisplayError<T> {
 
 impl<T: Debug> error::Error for DisplayError<T> {}
 
-fn test_ptx_assert<'a, T: From<u8> + ze::SafeRepr + Debug + Copy + PartialEq>(
+fn test_ptx_assert<
+    'a,
+    Input: From<u8> + ze::SafeRepr + Debug + Copy + PartialEq,
+    Output: From<u8> + ze::SafeRepr + Debug + Copy + PartialEq,
+>(
     name: &str,
     ptx_text: &'a str,
-    input: &[T],
-    output: &mut [T],
+    input: &[Input],
+    output: &mut [Output],
 ) -> Result<(), Box<dyn error::Error + 'a>> {
     let mut errors = Vec::new();
     let ast = ptx::ModuleParser::new().parse(&mut errors, ptx_text)?;
@@ -181,12 +187,15 @@ fn test_ptx_assert<'a, T: From<u8> + ze::SafeRepr + Debug + Copy + PartialEq>(
     Ok(())
 }
 
-fn run_spirv<T: From<u8> + ze::SafeRepr + Copy + Debug>(
+fn run_spirv<
+    Input: From<u8> + ze::SafeRepr + Copy + Debug,
+    Output: From<u8> + ze::SafeRepr + Copy + Debug,
+>(
     name: &CStr,
     module: translate::Module,
-    input: &[T],
-    output: &mut [T],
-) -> ze::Result<Vec<T>> {
+    input: &[Input],
+    output: &mut [Output],
+) -> ze::Result<Vec<Output>> {
     ze::init()?;
     let spirv = module.spirv.assemble();
     let byte_il = unsafe {
@@ -240,15 +249,15 @@ fn run_spirv<T: From<u8> + ze::SafeRepr + Copy + Debug>(
         kernel.set_indirect_access(
             ze::sys::ze_kernel_indirect_access_flags_t::ZE_KERNEL_INDIRECT_ACCESS_FLAG_DEVICE,
         )?;
-        let mut inp_b = ze::DeviceBuffer::<T>::new(&mut ctx, &dev, cmp::max(input.len(), 1))?;
-        let mut out_b = ze::DeviceBuffer::<T>::new(&mut ctx, &dev, cmp::max(output.len(), 1))?;
-        let inp_b_ptr_mut: ze::BufferPtrMut<T> = (&mut inp_b).into();
+        let mut inp_b = ze::DeviceBuffer::<Input>::new(&mut ctx, &dev, cmp::max(input.len(), 1))?;
+        let mut out_b = ze::DeviceBuffer::<Output>::new(&mut ctx, &dev, cmp::max(output.len(), 1))?;
+        let inp_b_ptr_mut: ze::BufferPtrMut<Input> = (&mut inp_b).into();
         let event_pool = ze::EventPool::new(&mut ctx, 3, Some(&[&dev]))?;
         let ev0 = ze::Event::new(&event_pool, 0)?;
         let ev1 = ze::Event::new(&event_pool, 1)?;
         let mut ev2 = ze::Event::new(&event_pool, 2)?;
         let mut cmd_list = ze::CommandList::new(&mut ctx, &dev)?;
-        let out_b_ptr_mut: ze::BufferPtrMut<T> = (&mut out_b).into();
+        let out_b_ptr_mut: ze::BufferPtrMut<Output> = (&mut out_b).into();
         let mut init_evs = [ev0, ev1];
         cmd_list.append_memory_copy(inp_b_ptr_mut, input, Some(&mut init_evs[0]), &mut [])?;
         cmd_list.append_memory_fill(out_b_ptr_mut, 0, Some(&mut init_evs[1]), &mut [])?;
