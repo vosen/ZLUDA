@@ -11,23 +11,22 @@ Performance below is normalized to OpenCL performance. 110% means that ZLUDA-imp
 
 ![Performance graph](GeekBench_5_2_3.svg)
 
-[ZLUDA detailed log on Geekbench.com](https://browser.geekbench.com/v5/compute/1918048)
+[ZLUDA - detailed results on Geekbench.com](https://browser.geekbench.com/v5/compute/2305009)
 
-[OpenCL detailed log on Geekbench.com](https://browser.geekbench.com/v5/compute/1918080)
+[OpenCL - detailed results on Geekbench.com](https://browser.geekbench.com/v5/compute/2304997)
 
-Overall in this suite of benchmarks faster by approximately 4% on ZLUDA.
+Overall, ZLUDA is slower in GeekBench by roughly 2%.
 
 ### Explanation of the results
- * Why is ZLUDA faster in Stereo Matching, Gaussian Blur and Depth of Field?\
+ * Why is ZLUDA faster in some benchmarks?\
    This has not been precisely pinpointed to one thing or another but it's likely a combination of things:
-   * ZLUDA uses Level 0, which in general is a more level, higher performance API
+   * ZLUDA uses [Level 0](https://spec.oneapi.com/level-zero/latest/index.html), which in general is a more low level, high performance API than OpenCL
    * Tying to the previous point, currently ZLUDA does not support asynchronous execution. This gives us an unfair advantage in a benchmark like GeekBench. GeekBench exclusively uses CUDA synchronous APIs
    * There is a set of GPU instructions which are available on both NVIDIA hardware and Intel hardware, but are not exposed through OpenCL. We are comparing NVIDIA GPU optimized code with the more general OpenCL code. It's a lucky coincidence (and a credit to the underlying Intel Graphics Compiler) that this code also works well on an Intel GPU
  * Why is OpenCL faster in Canny and Horizon Detection?\
    Authors of CUDA benchmarks used CUDA functions `atomicInc` and `atomicDec` which have direct hardware support on NVIDIA cards, but no hardware support on Intel cards. They have to be emulated in software, which limits performance
- * Why are some benchmarks failing?\
-   ZLUDA itself supports all the operations used in the failing benchmarks. From the limited debugging that has been done so far, the problem is most likely somewhere else. Intel GPU compiler stack is very capable when it comes to compiling OpenCL, C for Metal and DPC++. It's not yet very good at compiling ZLUDA. ZLUDA emits code patterns never seen before by the Intel GPU compiler stack and hits some rarely used (or not used before) code paths in the compiler.\
-   Current status of failing GeekBench tests is tracked [here](https://github.com/vosen/ZLUDA/pull/12)
+ * Why is ZLUDA slower in the remaining benchmarks?\
+   The reason is unknown. Most likely, in some tests we compile from suboptimal NVIDIA GPU code and in other tests ZLUDA itself is emitting suboptimal Intel GPU code. For example, SFFT used to be even slower before PR [#22](https://github.com/vosen/ZLUDA/pull/22)
    
 
 ## Details
@@ -35,7 +34,7 @@ Overall in this suite of benchmarks faster by approximately 4% on ZLUDA.
  * Is ZLUDA a drop-in replacement for CUDA?\
    Yes, but certain applications use CUDA in ways which make it incompatible with  ZLUDA
  * What is the status of the project?\
-   This project is a Proof of Concept. About the only thing that works currently is  Geekbench (and not even completely). It's amazingly buggy and incomplete. You  should not rely on it for anything serious
+   This project is a Proof of Concept. About the only thing that works currently is  Geekbench. It's amazingly buggy and incomplete. You  should not rely on it for anything serious
  * Is it an Intel project? Is it an NVIDIA project?\
    No, it's a private project
  * What is the performance?\
@@ -56,8 +55,8 @@ You should have the most recent Intel GPU drivers installed.\
 Copy `nvcuda.dll` to the application directory (the directory where .exe file is) and launch it normally
 
 ### Linux
-A very recent version of [compute-runtime](https://github.com/intel/compute-runtime) and [Level Zero loader](https://github.com/oneapi-src/level-zero/releases) is required. At the time of the writing 20.45.18403 is the losest recommended version.
-Unpack the archive somewhere and run your application like this:
+A very recent version of [compute-runtime](https://github.com/intel/compute-runtime) and [Level Zero loader](https://github.com/oneapi-src/level-zero/releases) is required. At the time of the writing 20.45.18403 is the oldest recommended version.
+Run your application like this:
 ```
 LD_LIBRARY_PATH=<PATH_TO_THE_DIRECTORY_WITH_ZLUDA_PROVIDED_LIBCUDA> <YOUR_APPLICATION>
 ```

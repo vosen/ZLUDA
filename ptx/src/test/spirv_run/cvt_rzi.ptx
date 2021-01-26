@@ -1,0 +1,25 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry cvt_rzi(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .f32 	    temp1;
+    .reg .f32 	    temp2;
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.f32          temp1, [in_addr];
+    ld.f32          temp2, [in_addr+4];
+    cvt.rzi.f32.f32 temp1, temp1;
+    cvt.rzi.f32.f32 temp2, temp2;
+    st.f32          [out_addr], temp1;
+    st.f32          [out_addr+4], temp2;
+	ret;
+}

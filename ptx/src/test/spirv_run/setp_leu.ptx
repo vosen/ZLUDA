@@ -1,0 +1,27 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry setp_leu(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .f32 	    r1;
+    .reg .f32 	    r2;
+    .reg .f32 	    r3;
+    .reg .pred 	    pred;
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.f32              r1, [in_addr];
+    ld.f32              r2, [in_addr + 4];
+	setp.leu.ftz.f32    pred, r1, r2;
+    @pred mov.f32       r3, r1;
+    @!pred mov.f32      r3, r2;
+    st.f32              [out_addr], r3;
+	ret;
+}

@@ -1,0 +1,53 @@
+               OpCapability GenericPointer
+               OpCapability Linkage
+               OpCapability Addresses
+               OpCapability Kernel
+               OpCapability Int8
+               OpCapability Int16
+               OpCapability Int64
+               OpCapability Float16
+               OpCapability Float64
+         %24 = OpExtInstImport "OpenCL.std"
+               OpMemoryModel Physical64 OpenCL
+               OpEntryPoint Kernel %1 "cvt_s64_s32"
+       %void = OpTypeVoid
+      %ulong = OpTypeInt 64 0
+         %27 = OpTypeFunction %void %ulong %ulong
+%_ptr_Function_ulong = OpTypePointer Function %ulong
+       %uint = OpTypeInt 32 0
+%_ptr_Function_uint = OpTypePointer Function %uint
+%_ptr_Generic_uint = OpTypePointer Generic %uint
+%_ptr_Generic_ulong = OpTypePointer Generic %ulong
+          %1 = OpFunction %void None %27
+          %8 = OpFunctionParameter %ulong
+          %9 = OpFunctionParameter %ulong
+         %22 = OpLabel
+          %2 = OpVariable %_ptr_Function_ulong Function
+          %3 = OpVariable %_ptr_Function_ulong Function
+          %4 = OpVariable %_ptr_Function_ulong Function
+          %5 = OpVariable %_ptr_Function_ulong Function
+          %6 = OpVariable %_ptr_Function_uint Function
+          %7 = OpVariable %_ptr_Function_ulong Function
+               OpStore %2 %8
+               OpStore %3 %9
+         %10 = OpLoad %ulong %2 Aligned 8
+               OpStore %4 %10
+         %11 = OpLoad %ulong %3 Aligned 8
+               OpStore %5 %11
+         %13 = OpLoad %ulong %4
+         %19 = OpConvertUToPtr %_ptr_Generic_uint %13
+         %18 = OpLoad %uint %19 Aligned 4
+         %12 = OpCopyObject %uint %18
+               OpStore %6 %12
+         %15 = OpLoad %uint %6
+         %32 = OpBitcast %uint %15
+         %33 = OpSConvert %ulong %32
+         %14 = OpCopyObject %ulong %33
+               OpStore %7 %14
+         %16 = OpLoad %ulong %5
+         %17 = OpLoad %ulong %7
+         %20 = OpConvertUToPtr %_ptr_Generic_ulong %16
+         %21 = OpCopyObject %ulong %17
+               OpStore %20 %21 Aligned 8
+               OpReturn
+               OpFunctionEnd
