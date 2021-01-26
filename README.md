@@ -26,7 +26,7 @@ Overall, ZLUDA is slower in GeekBench by roughly 2%.
  * Why is OpenCL faster in Canny and Horizon Detection?\
    Authors of CUDA benchmarks used CUDA functions `atomicInc` and `atomicDec` which have direct hardware support on NVIDIA cards, but no hardware support on Intel cards. They have to be emulated in software, which limits performance
  * Why is ZLUDA slower in the remaining benchmarks?\
-   The reason is unknown. Most likely, in some tests we compile from suboptimal NVIDIA GPU code and in other tests ZLUDA itself is emitting suboptimal Intel GPU code. For example, SFFT used to be even slower before PR #22. You should not expect ZLUDA to always reach performance parity with OpenCL code
+   The reason is unknown. Most likely, in some tests we compile from suboptimal NVIDIA GPU code and in other tests ZLUDA itself is emitting suboptimal Intel GPU code. For example, SFFT used to be even slower before PR [#22](https://github.com/vosen/ZLUDA/pull/22). You should not expect ZLUDA to always reach performance parity with OpenCL code
    
 
 ## Details
