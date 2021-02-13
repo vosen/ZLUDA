@@ -3,15 +3,27 @@
 extern crate detours_sys;
 extern crate winapi;
 
-use std::{mem, ptr, slice};
+use std::{
+    ffi::c_void,
+    mem,
+    os::raw::{c_int, c_uint, c_ulong},
+    ptr, slice,
+};
 
 use detours_sys::{
     DetourAttach, DetourDetach, DetourRestoreAfterWith, DetourTransactionBegin,
     DetourTransactionCommit, DetourUpdateThread,
 };
+use ptr::{null, null_mut};
 use wchar::wch;
-use winapi::um::processthreadsapi::GetCurrentThread;
-use winapi::um::winnt::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH, HANDLE, LPCWSTR};
+use winapi::um::{libloaderapi::GetModuleFileNameW, processthreadsapi::GetCurrentThread};
+use winapi::{
+    shared::minwindef::FARPROC,
+    um::{
+        libloaderapi::GetProcAddress,
+        winnt::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH, HANDLE, LPCWSTR},
+    },
+};
 use winapi::{
     shared::minwindef::{DWORD, FALSE, HMODULE, TRUE},
     um::{libloaderapi::LoadLibraryExA, winnt::LPCSTR},
@@ -27,6 +39,11 @@ const NVCUDA_UTF8: &'static str = "NVCUDA.DLL";
 const NVCUDA_UTF16: &[u16] = wch!("NVCUDA.DLL");
 static mut ZLUDA_PATH_UTF8: Vec<u8> = Vec::new();
 static mut ZLUDA_PATH_UTF16: Option<&'static [u16]> = None;
+static mut DETACH_LOAD_LIBRARY: bool = false;
+static mut NVCUDA_ORIGINAL_MODULE: HMODULE = ptr::null_mut();
+static mut CUINIT_ORIGINAL_FN: FARPROC = ptr::null_mut();
+const CUDA_ERROR_NOT_SUPPORTED: c_uint = 801;
+const CUDA_ERROR_UNKNOWN: c_uint = 999;
 
 static mut LOAD_LIBRARY_A: unsafe extern "system" fn(lpLibFileName: LPCSTR) -> HMODULE =
     LoadLibraryA;
@@ -100,6 +117,53 @@ unsafe extern "system" fn ZludaLoadLibraryExW(
     (LOAD_LIBRARY_EX_W)(nvcuda_file_name, hFile, dwFlags)
 }
 
+#[allow(non_snake_case)]
+unsafe extern "C" fn ZludacuInitDetour(flags: ::std::os::raw::c_uint) -> ::std::os::raw::c_uint {
+    let zluda_module = LoadLibraryW(ZLUDA_PATH_UTF16.unwrap().as_ptr());
+    if zluda_module == ptr::null_mut() {
+        return CUDA_ERROR_UNKNOWN;
+    }
+    if DetourTransactionBegin() != NO_ERROR as i32 {
+        return CUDA_ERROR_UNKNOWN;
+    }
+    if detours_sys::DetourEnumerateExports(
+        NVCUDA_ORIGINAL_MODULE as *mut _,
+        &zluda_module as *const _ as *mut _,
+        Some(override_nvcuda_export),
+    ) == FALSE
+    {
+        return CUDA_ERROR_UNKNOWN;
+    }
+    if DetourTransactionCommit() != NO_ERROR as i32 {
+        return CUDA_ERROR_UNKNOWN;
+    }
+    let mut zluda_cuinit = GetProcAddress(zluda_module, b"cuInit\0".as_ptr() as *const _);
+    (mem::transmute::<_, unsafe extern "C" fn(c_uint) -> c_uint>(zluda_cuinit))(flags)
+}
+
+unsafe extern "C" fn override_nvcuda_export(
+    context_ptr: *mut c_void,
+    _: c_ulong,
+    name: LPCSTR,
+    mut address: *mut c_void,
+) -> c_int {
+    let zluda_module: HMODULE = *(context_ptr as *mut HMODULE);
+    let mut zluda_fn = GetProcAddress(zluda_module, name);
+    if zluda_fn == ptr::null_mut() {
+        // We only support 64 bits and in all relevant calling convantions stack
+        // is caller-cleaned, so probably we will not crash
+        zluda_fn = unsupported_cuda_fn as *mut _;
+    }
+    if DetourAttach((&mut address) as *mut _, zluda_fn as *mut _) != NO_ERROR as i32 {
+        return FALSE;
+    }
+    TRUE
+}
+
+unsafe extern "C" fn unsupported_cuda_fn() -> ::std::os::raw::c_uint {
+    CUDA_ERROR_NOT_SUPPORTED
+}
+
 fn is_nvcuda_dll_utf8(lib: *const u8) -> bool {
     is_nvcuda_dll(lib, 0, NVCUDA_UTF8.as_bytes(), |c| {
         if c >= 'a' as u8 && c <= 'z' as u8 {
@@ -159,81 +223,157 @@ unsafe extern "system" fn DllMain(_: *const u8, dwReason: u32, _: *const u8) -> 
             }
             None => return FALSE,
         }
-        if DetourTransactionBegin() != NO_ERROR as i32 {
-            return FALSE;
-        }
-        if DetourUpdateThread(GetCurrentThread()) != NO_ERROR as i32 {
-            return FALSE;
-        }
-        if DetourAttach(
-            mem::transmute(&mut LOAD_LIBRARY_A),
-            ZludaLoadLibraryA as *mut _,
-        ) != NO_ERROR as i32
-        {
-            return FALSE;
-        }
-        if DetourAttach(
-            mem::transmute(&mut LOAD_LIBRARY_W),
-            ZludaLoadLibraryW as *mut _,
-        ) != NO_ERROR as i32
-        {
-            return FALSE;
-        }
-        if DetourAttach(
-            mem::transmute(&mut LOAD_LIBRARY_EX_A),
-            ZludaLoadLibraryExA as *mut _,
-        ) != NO_ERROR as i32
-        {
-            return FALSE;
-        }
-        if DetourAttach(
-            mem::transmute(&mut LOAD_LIBRARY_EX_W),
-            ZludaLoadLibraryExW as *mut _,
-        ) != NO_ERROR as i32
-        {
-            return FALSE;
-        }
-        if DetourTransactionCommit() != NO_ERROR as i32 {
-            return FALSE;
+        // If the application (directly or not) links to nvcuda.dll, nvcuda.dll
+        // will get loaded before we can act. In this case, instead of
+        // redirecting LoadLibrary* to load ZLUDA, we redirect cuInit to
+        // a cuInit implementation that will load ZLUDA and set up detouts.
+        // We can't do it here because LoadLibrary* inside DllMain is illegal.
+        // We greatly prefer wholesale redirecting inside LoadLibrary*.
+        // Hooking inside cuInit is brittle in the face of multiple
+        // threads (DetourUpdateThread)
+        match get_cuinit() {
+            Some((nvcuda_mod, cuinit_fn)) => attach_cuinit(nvcuda_mod, cuinit_fn),
+            None => attach_load_libary(),
         }
     } else if dwReason == DLL_PROCESS_DETACH {
-        if DetourTransactionBegin() != NO_ERROR as i32 {
-            return FALSE;
+        if DETACH_LOAD_LIBRARY {
+            detach_load_library()
+        } else {
+            detach_cuinit()
         }
-        if DetourUpdateThread(GetCurrentThread()) != NO_ERROR as i32 {
-            return FALSE;
+    } else {
+        TRUE
+    }
+}
+
+unsafe fn get_cuinit() -> Option<(HMODULE, FARPROC)> {
+    let mut module = ptr::null_mut();
+    loop {
+        module = detours_sys::DetourEnumerateModules(module);
+        if module == ptr::null_mut() {
+            return None;
         }
-        if DetourDetach(
-            mem::transmute(&mut LOAD_LIBRARY_A),
-            ZludaLoadLibraryA as *mut _,
-        ) != NO_ERROR as i32
-        {
-            return FALSE;
+        let cuinit_addr = GetProcAddress(module as *mut _, b"cuInit\0".as_ptr() as *const _);
+        if cuinit_addr != ptr::null_mut() {
+            return Some((module as *mut _, cuinit_addr));
         }
-        if DetourDetach(
-            mem::transmute(&mut LOAD_LIBRARY_W),
-            ZludaLoadLibraryW as *mut _,
-        ) != NO_ERROR as i32
-        {
-            return FALSE;
-        }
-        if DetourDetach(
-            mem::transmute(&mut LOAD_LIBRARY_EX_A),
-            ZludaLoadLibraryExA as *mut _,
-        ) != NO_ERROR as i32
-        {
-            return FALSE;
-        }
-        if DetourDetach(
-            mem::transmute(&mut LOAD_LIBRARY_EX_W),
-            ZludaLoadLibraryExW as *mut _,
-        ) != NO_ERROR as i32
-        {
-            return FALSE;
-        }
-        if DetourTransactionCommit() != NO_ERROR as i32 {
-            return FALSE;
-        }
+    }
+}
+
+#[must_use]
+unsafe fn attach_cuinit(nvcuda_mod: HMODULE, mut cuinit: FARPROC) -> i32 {
+    if DetourTransactionBegin() != NO_ERROR as i32 {
+        return FALSE;
+    }
+    NVCUDA_ORIGINAL_MODULE = nvcuda_mod;
+    CUINIT_ORIGINAL_FN = cuinit;
+    if DetourAttach(mem::transmute(&mut cuinit), ZludacuInitDetour as *mut _) != NO_ERROR as i32 {
+        return FALSE;
+    }
+    if DetourTransactionCommit() != NO_ERROR as i32 {
+        return FALSE;
+    }
+    TRUE
+}
+
+#[must_use]
+unsafe fn detach_cuinit() -> i32 {
+    if DetourTransactionBegin() != NO_ERROR as i32 {
+        return FALSE;
+    }
+    if DetourUpdateThread(GetCurrentThread()) != NO_ERROR as i32 {
+        return FALSE;
+    }
+    if DetourDetach(
+        mem::transmute(&mut CUINIT_ORIGINAL_FN),
+        ZludacuInitDetour as *mut _,
+    ) != NO_ERROR as i32
+    {
+        return FALSE;
+    }
+    if DetourTransactionCommit() != NO_ERROR as i32 {
+        return FALSE;
+    }
+    TRUE
+}
+
+#[must_use]
+unsafe fn attach_load_libary() -> i32 {
+    if DetourTransactionBegin() != NO_ERROR as i32 {
+        return FALSE;
+    }
+    if DetourAttach(
+        mem::transmute(&mut LOAD_LIBRARY_A),
+        ZludaLoadLibraryA as *mut _,
+    ) != NO_ERROR as i32
+    {
+        return FALSE;
+    }
+    if DetourAttach(
+        mem::transmute(&mut LOAD_LIBRARY_W),
+        ZludaLoadLibraryW as *mut _,
+    ) != NO_ERROR as i32
+    {
+        return FALSE;
+    }
+    if DetourAttach(
+        mem::transmute(&mut LOAD_LIBRARY_EX_A),
+        ZludaLoadLibraryExA as *mut _,
+    ) != NO_ERROR as i32
+    {
+        return FALSE;
+    }
+    if DetourAttach(
+        mem::transmute(&mut LOAD_LIBRARY_EX_W),
+        ZludaLoadLibraryExW as *mut _,
+    ) != NO_ERROR as i32
+    {
+        return FALSE;
+    }
+    if DetourTransactionCommit() != NO_ERROR as i32 {
+        return FALSE;
+    }
+    TRUE
+}
+
+#[must_use]
+unsafe fn detach_load_library() -> i32 {
+    if DetourTransactionBegin() != NO_ERROR as i32 {
+        return FALSE;
+    }
+    if DetourUpdateThread(GetCurrentThread()) != NO_ERROR as i32 {
+        return FALSE;
+    }
+    if DetourDetach(
+        mem::transmute(&mut LOAD_LIBRARY_A),
+        ZludaLoadLibraryA as *mut _,
+    ) != NO_ERROR as i32
+    {
+        return FALSE;
+    }
+    if DetourDetach(
+        mem::transmute(&mut LOAD_LIBRARY_W),
+        ZludaLoadLibraryW as *mut _,
+    ) != NO_ERROR as i32
+    {
+        return FALSE;
+    }
+    if DetourDetach(
+        mem::transmute(&mut LOAD_LIBRARY_EX_A),
+        ZludaLoadLibraryExA as *mut _,
+    ) != NO_ERROR as i32
+    {
+        return FALSE;
+    }
+    if DetourDetach(
+        mem::transmute(&mut LOAD_LIBRARY_EX_W),
+        ZludaLoadLibraryExW as *mut _,
+    ) != NO_ERROR as i32
+    {
+        return FALSE;
+    }
+    if DetourTransactionCommit() != NO_ERROR as i32 {
+        return FALSE;
     }
     TRUE
 }
