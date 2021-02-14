@@ -14,7 +14,7 @@ lz4-sys = "1.9"
 regex = "1.4"
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["libloaderapi", "debugapi"] }
+winapi = { version = "0.3", features = ["libloaderapi", "debugapi", "std"] }
 wchar = "0.6"
 detours-sys = { path = "../detours-sys" }
 
