@@ -10,13 +10,19 @@ use std::{
     ptr, slice,
 };
 
-use detours_sys::{
-    DetourAttach, DetourDetach, DetourRestoreAfterWith, DetourTransactionBegin,
-    DetourTransactionCommit, DetourUpdateThread,
-};
-use ptr::{null, null_mut};
+use detours_sys::{DetourAttach, DetourDetach, DetourRestoreAfterWith, DetourTransactionAbort, DetourTransactionBegin, DetourTransactionCommit, DetourUpdateThread};
 use wchar::wch;
-use winapi::um::{libloaderapi::GetModuleFileNameW, processthreadsapi::GetCurrentThread};
+use winapi::um::{
+    handleapi::{CloseHandle, INVALID_HANDLE_VALUE},
+    processthreadsapi::{
+        GetCurrentProcessId, GetCurrentThread, GetCurrentThreadId, OpenThread, ResumeThread,
+        SuspendThread,
+    },
+    tlhelp32::{
+        CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32,
+    },
+    winnt::THREAD_SUSPEND_RESUME,
+};
 use winapi::{
     shared::minwindef::FARPROC,
     um::{
@@ -117,14 +123,26 @@ unsafe extern "system" fn ZludaLoadLibraryExW(
     (LOAD_LIBRARY_EX_W)(nvcuda_file_name, hFile, dwFlags)
 }
 
-#[allow(non_snake_case)]
-unsafe extern "C" fn ZludacuInitDetour(flags: ::std::os::raw::c_uint) -> ::std::os::raw::c_uint {
+unsafe extern "C" fn cuinit_detour(flags: c_uint) -> c_uint {
     let zluda_module = LoadLibraryW(ZLUDA_PATH_UTF16.unwrap().as_ptr());
     if zluda_module == ptr::null_mut() {
         return CUDA_ERROR_UNKNOWN;
     }
+    let suspended_threads = suspend_all_threads_except_current();
+    let suspended_threads = match suspended_threads {
+        Some(t) => t,
+        None => return CUDA_ERROR_UNKNOWN,
+    };
     if DetourTransactionBegin() != NO_ERROR as i32 {
+        resume_threads(&suspended_threads);
         return CUDA_ERROR_UNKNOWN;
+    }
+    for t in suspended_threads.iter() {
+        if DetourUpdateThread(*t) != NO_ERROR as i32 {
+            DetourTransactionAbort();
+            resume_threads(&suspended_threads);
+            return CUDA_ERROR_UNKNOWN;
+        }
     }
     if detours_sys::DetourEnumerateExports(
         NVCUDA_ORIGINAL_MODULE as *mut _,
@@ -132,13 +150,62 @@ unsafe extern "C" fn ZludacuInitDetour(flags: ::std::os::raw::c_uint) -> ::std::
         Some(override_nvcuda_export),
     ) == FALSE
     {
+        DetourTransactionAbort();
+        resume_threads(&suspended_threads);
         return CUDA_ERROR_UNKNOWN;
     }
     if DetourTransactionCommit() != NO_ERROR as i32 {
+        DetourTransactionAbort();
+        resume_threads(&suspended_threads);
         return CUDA_ERROR_UNKNOWN;
     }
-    let mut zluda_cuinit = GetProcAddress(zluda_module, b"cuInit\0".as_ptr() as *const _);
+    resume_threads(&suspended_threads);
+    let zluda_cuinit = GetProcAddress(zluda_module, b"cuInit\0".as_ptr() as *const _);
     (mem::transmute::<_, unsafe extern "C" fn(c_uint) -> c_uint>(zluda_cuinit))(flags)
+}
+
+unsafe fn suspend_all_threads_except_current() -> Option<Vec<*mut c_void>> {
+    let thread_snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+    if thread_snap == INVALID_HANDLE_VALUE {
+        return None;
+    }
+    let current_thread = GetCurrentThreadId();
+    let current_process = GetCurrentProcessId();
+    let mut threads = Vec::new();
+    let mut thread = mem::zeroed::<THREADENTRY32>();
+    thread.dwSize = mem::size_of::<THREADENTRY32>() as u32;
+    if Thread32First(thread_snap, &mut thread) == 0 {
+        CloseHandle(thread_snap);
+        return None;
+    }
+    loop {
+        if thread.th32OwnerProcessID == current_process && thread.th32ThreadID != current_thread {
+            let thread_handle = OpenThread(THREAD_SUSPEND_RESUME, 0, thread.th32ThreadID);
+            if thread_handle == ptr::null_mut() {
+                CloseHandle(thread_snap);
+                resume_threads(&threads);
+                return None;
+            }
+            if SuspendThread(thread_handle) == (-1i32 as u32) {
+                CloseHandle(thread_snap);
+                resume_threads(&threads);
+                return None;
+            }
+            threads.push(thread_handle);
+        }
+        if Thread32Next(thread_snap, &mut thread) == 0 {
+            break;
+        }
+    }
+    CloseHandle(thread_snap);
+    Some(threads)
+}
+
+unsafe fn resume_threads(threads: &[*mut c_void]) {
+    for t in threads {
+        ResumeThread(*t);
+        CloseHandle(*t);
+    }
 }
 
 unsafe extern "C" fn override_nvcuda_export(
@@ -150,7 +217,7 @@ unsafe extern "C" fn override_nvcuda_export(
     let zluda_module: HMODULE = *(context_ptr as *mut HMODULE);
     let mut zluda_fn = GetProcAddress(zluda_module, name);
     if zluda_fn == ptr::null_mut() {
-        // We only support 64 bits and in all relevant calling convantions stack
+        // We only support 64 bits and in all relevant calling conventions stack
         // is caller-cleaned, so probably we will not crash
         zluda_fn = unsupported_cuda_fn as *mut _;
     }
@@ -160,7 +227,7 @@ unsafe extern "C" fn override_nvcuda_export(
     TRUE
 }
 
-unsafe extern "C" fn unsupported_cuda_fn() -> ::std::os::raw::c_uint {
+unsafe extern "C" fn unsupported_cuda_fn() -> c_uint {
     CUDA_ERROR_NOT_SUPPORTED
 }
 
@@ -267,7 +334,7 @@ unsafe fn attach_cuinit(nvcuda_mod: HMODULE, mut cuinit: FARPROC) -> i32 {
     }
     NVCUDA_ORIGINAL_MODULE = nvcuda_mod;
     CUINIT_ORIGINAL_FN = cuinit;
-    if DetourAttach(mem::transmute(&mut cuinit), ZludacuInitDetour as *mut _) != NO_ERROR as i32 {
+    if DetourAttach(mem::transmute(&mut cuinit), cuinit_detour as *mut _) != NO_ERROR as i32 {
         return FALSE;
     }
     if DetourTransactionCommit() != NO_ERROR as i32 {
@@ -286,7 +353,7 @@ unsafe fn detach_cuinit() -> i32 {
     }
     if DetourDetach(
         mem::transmute(&mut CUINIT_ORIGINAL_FN),
-        ZludacuInitDetour as *mut _,
+        cuinit_detour as *mut _,
     ) != NO_ERROR as i32
     {
         return FALSE;
