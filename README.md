@@ -52,13 +52,16 @@ Overall, ZLUDA is slower in GeekBench by roughly 2%.
 
 ### Windows
 You should have the most recent Intel GPU drivers installed.\
-Copy `nvcuda.dll` to the application directory (the directory where .exe file is) and launch it normally
+Run your application like this:
+```
+<ZLUDA_DIRECTORY>\zluda_with.exe -- <APPLICATION> <APPLICATIONS_ARGUMENTS>
+```
 
 ### Linux
 A very recent version of [compute-runtime](https://github.com/intel/compute-runtime) and [Level Zero loader](https://github.com/oneapi-src/level-zero/releases) is required. At the time of the writing 20.45.18403 is the oldest recommended version.
 Run your application like this:
 ```
-LD_LIBRARY_PATH=<PATH_TO_THE_DIRECTORY_WITH_ZLUDA_PROVIDED_LIBCUDA> <YOUR_APPLICATION>
+LD_LIBRARY_PATH=<ZLUDA_DIRECTORY> <APPLICATION> <APPLICATIONS_ARGUMENTS>
 ```
 
 ## Building
