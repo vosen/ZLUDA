@@ -31,7 +31,7 @@ jobs:
         wget -qO - https://repositories.intel.com/graphics/intel-graphics.key | sudo apt-key add -
         sudo apt-add-repository 'deb [arch=amd64] https://repositories.intel.com/graphics/ubuntu focal main'
         sudo apt-get update
-        sudo apt-get install intel-opencl-icd intel-level-zero-gpu level-zero intel-media-va-driver-non-free libmfx1 libigc-dev intel-igc-cm libigdfcl-dev libigfxcmrt-dev level-zero-dev
+        sudo apt-get install intel-opencl-icd intel-level-zero-gpu level-zero intel-media-va-driver-non-free libmfx1 libigc-dev intel-igc-cm libigdfcl-dev libigfxcmrt-dev level-zero-dev ocl-icd-opencl-dev
     - name: Build
       run: cargo build --workspace --verbose
     # TODO(take-cheeze): Support testing
