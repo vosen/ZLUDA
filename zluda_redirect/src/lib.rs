@@ -7,32 +7,44 @@ use std::{
     ffi::c_void,
     mem,
     os::raw::{c_int, c_uint, c_ulong},
-    ptr, slice,
+    ptr, slice, usize,
 };
 
-use detours_sys::{DetourAttach, DetourDetach, DetourRestoreAfterWith, DetourTransactionAbort, DetourTransactionBegin, DetourTransactionCommit, DetourUpdateThread};
-use wchar::wch;
-use winapi::um::{
-    handleapi::{CloseHandle, INVALID_HANDLE_VALUE},
-    processthreadsapi::{
-        GetCurrentProcessId, GetCurrentThread, GetCurrentThreadId, OpenThread, ResumeThread,
-        SuspendThread,
-    },
-    tlhelp32::{
-        CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32,
-    },
-    winnt::THREAD_SUSPEND_RESUME,
+use detours_sys::{
+    DetourAttach, DetourDetach, DetourRestoreAfterWith, DetourTransactionAbort,
+    DetourTransactionBegin, DetourTransactionCommit, DetourUpdateProcessWithDll,
+    DetourUpdateThread,
 };
+use wchar::wch;
 use winapi::{
-    shared::minwindef::FARPROC,
+    shared::minwindef::{BOOL, LPVOID},
     um::{
-        libloaderapi::GetProcAddress,
-        winnt::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH, HANDLE, LPCWSTR},
+        handleapi::{CloseHandle, INVALID_HANDLE_VALUE},
+        minwinbase::LPSECURITY_ATTRIBUTES,
+        processthreadsapi::{
+            CreateProcessA, GetCurrentProcessId, GetCurrentThread, GetCurrentThreadId, OpenThread,
+            ResumeThread, SuspendThread, TerminateProcess, LPPROCESS_INFORMATION, LPSTARTUPINFOA,
+            LPSTARTUPINFOW,
+        },
+        tlhelp32::{
+            CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32,
+        },
+        winbase::CREATE_SUSPENDED,
+        winnt::{LPSTR, LPWSTR, THREAD_SUSPEND_RESUME},
     },
 };
 use winapi::{
     shared::minwindef::{DWORD, FALSE, HMODULE, TRUE},
     um::{libloaderapi::LoadLibraryExA, winnt::LPCSTR},
+};
+use winapi::{
+    shared::minwindef::{FARPROC, HINSTANCE},
+    um::{
+        libloaderapi::{GetModuleFileNameA, GetProcAddress},
+        processthreadsapi::{CreateProcessAsUserW, CreateProcessW},
+        winbase::{CreateProcessWithLogonW, CreateProcessWithTokenW},
+        winnt::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH, HANDLE, LPCWSTR},
+    },
 };
 use winapi::{
     shared::winerror::NO_ERROR,
@@ -48,6 +60,7 @@ static mut ZLUDA_PATH_UTF16: Option<&'static [u16]> = None;
 static mut DETACH_LOAD_LIBRARY: bool = false;
 static mut NVCUDA_ORIGINAL_MODULE: HMODULE = ptr::null_mut();
 static mut CUINIT_ORIGINAL_FN: FARPROC = ptr::null_mut();
+static mut CURRENT_MODULE_FILENAME: Vec<u8> = Vec::new();
 const CUDA_ERROR_NOT_SUPPORTED: c_uint = 801;
 const CUDA_ERROR_UNKNOWN: c_uint = 999;
 
@@ -62,6 +75,72 @@ static mut LOAD_LIBRARY_EX_A: unsafe extern "system" fn(
     hFile: HANDLE,
     dwFlags: DWORD,
 ) -> HMODULE = LoadLibraryExA;
+
+static mut CREATE_PROCESS_A: unsafe extern "system" fn(
+    lpApplicationName: LPCSTR,
+    lpCommandLine: LPSTR,
+    lpProcessAttributes: LPSECURITY_ATTRIBUTES,
+    lpThreadAttributes: LPSECURITY_ATTRIBUTES,
+    bInheritHandles: BOOL,
+    dwCreationFlags: DWORD,
+    lpEnvironment: LPVOID,
+    lpCurrentDirectory: LPCSTR,
+    lpStartupInfo: LPSTARTUPINFOA,
+    lpProcessInformation: LPPROCESS_INFORMATION,
+) -> BOOL = CreateProcessA;
+
+static mut CREATE_PROCESS_W: unsafe extern "system" fn(
+    lpApplicationName: LPCWSTR,
+    lpCommandLine: LPWSTR,
+    lpProcessAttributes: LPSECURITY_ATTRIBUTES,
+    lpThreadAttributes: LPSECURITY_ATTRIBUTES,
+    bInheritHandles: BOOL,
+    dwCreationFlags: DWORD,
+    lpEnvironment: LPVOID,
+    lpCurrentDirectory: LPCWSTR,
+    lpStartupInfo: LPSTARTUPINFOW,
+    lpProcessInformation: LPPROCESS_INFORMATION,
+) -> BOOL = CreateProcessW;
+
+static mut CREATE_PROCESS_AS_USER_W: unsafe extern "system" fn(
+    hToken: HANDLE,
+    lpApplicationName: LPCWSTR,
+    lpCommandLine: LPWSTR,
+    lpProcessAttributes: LPSECURITY_ATTRIBUTES,
+    lpThreadAttributes: LPSECURITY_ATTRIBUTES,
+    bInheritHandles: BOOL,
+    dwCreationFlags: DWORD,
+    lpEnvironment: LPVOID,
+    lpCurrentDirectory: LPCWSTR,
+    lpStartupInfo: LPSTARTUPINFOW,
+    lpProcessInformation: LPPROCESS_INFORMATION,
+) -> BOOL = CreateProcessAsUserW;
+
+static mut CREATE_PROCESS_WITH_TOKEN_W: unsafe extern "system" fn(
+    hToken: HANDLE,
+    dwLogonFlags: DWORD,
+    lpApplicationName: LPCWSTR,
+    lpCommandLine: LPWSTR,
+    dwCreationFlags: DWORD,
+    lpEnvironment: LPVOID,
+    lpCurrentDirectory: LPCWSTR,
+    lpStartupInfo: LPSTARTUPINFOW,
+    lpProcessInformation: LPPROCESS_INFORMATION,
+) -> BOOL = CreateProcessWithTokenW;
+
+static mut CREATE_PROCESS_WITH_LOGON_W: unsafe extern "system" fn(
+    lpUsername: LPCWSTR,
+    lpDomain: LPCWSTR,
+    lpPassword: LPCWSTR,
+    dwLogonFlags: DWORD,
+    lpApplicationName: LPCWSTR,
+    lpCommandLine: LPWSTR,
+    dwCreationFlags: DWORD,
+    lpEnvironment: LPVOID,
+    lpCurrentDirectory: LPCWSTR,
+    lpStartupInfo: LPSTARTUPINFOW,
+    lpProcessInformation: LPPROCESS_INFORMATION,
+) -> BOOL = CreateProcessWithLogonW;
 
 static mut LOAD_LIBRARY_EX_W: unsafe extern "system" fn(
     lpLibFileName: LPCWSTR,
@@ -121,6 +200,185 @@ unsafe extern "system" fn ZludaLoadLibraryExW(
         lpLibFileName
     };
     (LOAD_LIBRARY_EX_W)(nvcuda_file_name, hFile, dwFlags)
+}
+
+#[allow(non_snake_case)]
+unsafe extern "system" fn ZludaCreateProcessA(
+    lpApplicationName: LPCSTR,
+    lpCommandLine: LPSTR,
+    lpProcessAttributes: LPSECURITY_ATTRIBUTES,
+    lpThreadAttributes: LPSECURITY_ATTRIBUTES,
+    bInheritHandles: BOOL,
+    dwCreationFlags: DWORD,
+    lpEnvironment: LPVOID,
+    lpCurrentDirectory: LPCSTR,
+    lpStartupInfo: LPSTARTUPINFOA,
+    lpProcessInformation: LPPROCESS_INFORMATION,
+) -> BOOL {
+    let create_proc_result = CREATE_PROCESS_A(
+        lpApplicationName,
+        lpCommandLine,
+        lpProcessAttributes,
+        lpThreadAttributes,
+        bInheritHandles,
+        dwCreationFlags | CREATE_SUSPENDED,
+        lpEnvironment,
+        lpCurrentDirectory,
+        lpStartupInfo,
+        lpProcessInformation,
+    );
+    continue_create_process_hook(create_proc_result, dwCreationFlags, lpProcessInformation)
+}
+
+#[allow(non_snake_case)]
+unsafe extern "system" fn ZludaCreateProcessW(
+    lpApplicationName: LPCWSTR,
+    lpCommandLine: LPWSTR,
+    lpProcessAttributes: LPSECURITY_ATTRIBUTES,
+    lpThreadAttributes: LPSECURITY_ATTRIBUTES,
+    bInheritHandles: BOOL,
+    dwCreationFlags: DWORD,
+    lpEnvironment: LPVOID,
+    lpCurrentDirectory: LPCWSTR,
+    lpStartupInfo: LPSTARTUPINFOW,
+    lpProcessInformation: LPPROCESS_INFORMATION,
+) -> BOOL {
+    let create_proc_result = CREATE_PROCESS_W(
+        lpApplicationName,
+        lpCommandLine,
+        lpProcessAttributes,
+        lpThreadAttributes,
+        bInheritHandles,
+        dwCreationFlags | CREATE_SUSPENDED,
+        lpEnvironment,
+        lpCurrentDirectory,
+        lpStartupInfo,
+        lpProcessInformation,
+    );
+    continue_create_process_hook(create_proc_result, dwCreationFlags, lpProcessInformation)
+}
+
+#[allow(non_snake_case)]
+unsafe extern "system" fn ZludaCreateProcessAsUserW(
+    hToken: HANDLE,
+    lpApplicationName: LPCWSTR,
+    lpCommandLine: LPWSTR,
+    lpProcessAttributes: LPSECURITY_ATTRIBUTES,
+    lpThreadAttributes: LPSECURITY_ATTRIBUTES,
+    bInheritHandles: BOOL,
+    dwCreationFlags: DWORD,
+    lpEnvironment: LPVOID,
+    lpCurrentDirectory: LPCWSTR,
+    lpStartupInfo: LPSTARTUPINFOW,
+    lpProcessInformation: LPPROCESS_INFORMATION,
+) -> BOOL {
+    let create_proc_result = CREATE_PROCESS_AS_USER_W(
+        hToken,
+        lpApplicationName,
+        lpCommandLine,
+        lpProcessAttributes,
+        lpThreadAttributes,
+        bInheritHandles,
+        dwCreationFlags | CREATE_SUSPENDED,
+        lpEnvironment,
+        lpCurrentDirectory,
+        lpStartupInfo,
+        lpProcessInformation,
+    );
+    continue_create_process_hook(create_proc_result, dwCreationFlags, lpProcessInformation)
+}
+
+#[allow(non_snake_case)]
+unsafe extern "system" fn ZludaCreateProcessWithLogonW(
+    lpUsername: LPCWSTR,
+    lpDomain: LPCWSTR,
+    lpPassword: LPCWSTR,
+    dwLogonFlags: DWORD,
+    lpApplicationName: LPCWSTR,
+    lpCommandLine: LPWSTR,
+    dwCreationFlags: DWORD,
+    lpEnvironment: LPVOID,
+    lpCurrentDirectory: LPCWSTR,
+    lpStartupInfo: LPSTARTUPINFOW,
+    lpProcessInformation: LPPROCESS_INFORMATION,
+) -> BOOL {
+    let create_proc_result = CREATE_PROCESS_WITH_LOGON_W(
+        lpUsername,
+        lpDomain,
+        lpPassword,
+        dwLogonFlags,
+        lpApplicationName,
+        lpCommandLine,
+        dwCreationFlags | CREATE_SUSPENDED,
+        lpEnvironment,
+        lpCurrentDirectory,
+        lpStartupInfo,
+        lpProcessInformation,
+    );
+    continue_create_process_hook(create_proc_result, dwCreationFlags, lpProcessInformation)
+}
+
+#[allow(non_snake_case)]
+unsafe extern "system" fn ZludaCreateProcessWithTokenW(
+    hToken: HANDLE,
+    dwLogonFlags: DWORD,
+    lpApplicationName: LPCWSTR,
+    lpCommandLine: LPWSTR,
+    dwCreationFlags: DWORD,
+    lpEnvironment: LPVOID,
+    lpCurrentDirectory: LPCWSTR,
+    lpStartupInfo: LPSTARTUPINFOW,
+    lpProcessInformation: LPPROCESS_INFORMATION,
+) -> BOOL {
+    let create_proc_result = CREATE_PROCESS_WITH_TOKEN_W(
+        hToken,
+        dwLogonFlags,
+        lpApplicationName,
+        lpCommandLine,
+        dwCreationFlags,
+        lpEnvironment,
+        lpCurrentDirectory,
+        lpStartupInfo,
+        lpProcessInformation,
+    );
+    continue_create_process_hook(create_proc_result, dwCreationFlags, lpProcessInformation)
+}
+
+unsafe fn continue_create_process_hook(
+    create_proc_result: BOOL,
+    creation_flags: DWORD,
+    process_information: LPPROCESS_INFORMATION,
+) -> BOOL {
+    if create_proc_result == 0 {
+        return 0;
+    }
+    if DetourUpdateProcessWithDll(
+        (*process_information).hProcess,
+        &mut CURRENT_MODULE_FILENAME.as_ptr() as *mut _ as *mut _,
+        1,
+    ) == 0
+    {
+        TerminateProcess((*process_information).hProcess, 1);
+        return 0;
+    }
+    if detours_sys::DetourCopyPayloadToProcess(
+        (*process_information).hProcess,
+        &PAYLOAD_GUID,
+        ZLUDA_PATH_UTF16.unwrap().as_ptr() as *mut _,
+        (ZLUDA_PATH_UTF16.unwrap().len() * mem::size_of::<u16>()) as u32,
+    ) == FALSE
+    {
+        TerminateProcess((*process_information).hProcess, 1);
+        return 0;
+    }
+
+    if creation_flags & CREATE_SUSPENDED == 0 {
+        if ResumeThread((*process_information).hThread) == -1i32 as u32 {
+            TerminateProcess((*process_information).hProcess, 1);
+            return 0;
+        }
+    }
+    create_proc_result
 }
 
 unsafe extern "C" fn cuinit_detour(flags: c_uint) -> c_uint {
@@ -278,14 +536,18 @@ fn is_nvcuda_dll<T: Copy + PartialEq>(
 
 #[allow(non_snake_case)]
 #[no_mangle]
-unsafe extern "system" fn DllMain(_: *const u8, dwReason: u32, _: *const u8) -> i32 {
+unsafe extern "system" fn DllMain(instDLL: HINSTANCE, dwReason: u32, _: *const u8) -> i32 {
     if dwReason == DLL_PROCESS_ATTACH {
         if DetourRestoreAfterWith() == FALSE {
+            return FALSE;
+        }
+        if !initialize_current_module_name(instDLL) {
             return FALSE;
         }
         match get_zluda_dll_path() {
             Some(path) => {
                 ZLUDA_PATH_UTF16 = Some(path);
+                // from_utf16_lossy(...) handles terminating NULL correctly
                 ZLUDA_PATH_UTF8 = String::from_utf16_lossy(path).into_bytes();
             }
             None => return FALSE,
@@ -313,6 +575,27 @@ unsafe extern "system" fn DllMain(_: *const u8, dwReason: u32, _: *const u8) -> 
     }
 }
 
+#[must_use]
+unsafe fn initialize_current_module_name(current_module: HINSTANCE) -> bool {
+    let mut name = vec![0; 128 as usize];
+    loop {
+        let size = GetModuleFileNameA(
+            current_module,
+            name.as_mut_ptr() as *mut _,
+            name.len() as u32,
+        );
+        if size == 0 {
+            return false;
+        }
+        if size < name.len() as u32 {
+            name.truncate(size as usize);
+            CURRENT_MODULE_FILENAME = name;
+            return true;
+        }
+        name.resize(name.len() * 2, 0);
+    }
+}
+
 unsafe fn get_cuinit() -> Option<(HMODULE, FARPROC)> {
     let mut module = ptr::null_mut();
     loop {
@@ -332,6 +615,9 @@ unsafe fn attach_cuinit(nvcuda_mod: HMODULE, mut cuinit: FARPROC) -> i32 {
     if DetourTransactionBegin() != NO_ERROR as i32 {
         return FALSE;
     }
+    if !attach_create_process() {
+        return FALSE;
+    }
     NVCUDA_ORIGINAL_MODULE = nvcuda_mod;
     CUINIT_ORIGINAL_FN = cuinit;
     if DetourAttach(mem::transmute(&mut cuinit), cuinit_detour as *mut _) != NO_ERROR as i32 {
@@ -346,6 +632,9 @@ unsafe fn attach_cuinit(nvcuda_mod: HMODULE, mut cuinit: FARPROC) -> i32 {
 #[must_use]
 unsafe fn detach_cuinit() -> i32 {
     if DetourTransactionBegin() != NO_ERROR as i32 {
+        return FALSE;
+    }
+    if !detach_create_process() {
         return FALSE;
     }
     if DetourUpdateThread(GetCurrentThread()) != NO_ERROR as i32 {
@@ -367,6 +656,9 @@ unsafe fn detach_cuinit() -> i32 {
 #[must_use]
 unsafe fn attach_load_libary() -> i32 {
     if DetourTransactionBegin() != NO_ERROR as i32 {
+        return FALSE;
+    }
+    if !attach_create_process() {
         return FALSE;
     }
     if DetourAttach(
@@ -406,6 +698,9 @@ unsafe fn attach_load_libary() -> i32 {
 #[must_use]
 unsafe fn detach_load_library() -> i32 {
     if DetourTransactionBegin() != NO_ERROR as i32 {
+        return FALSE;
+    }
+    if !detach_create_process() {
         return FALSE;
     }
     if DetourUpdateThread(GetCurrentThread()) != NO_ERROR as i32 {
@@ -464,4 +759,84 @@ fn get_zluda_dll_path() -> Option<&'static [u16]> {
         }
     }
     None
+}
+
+#[must_use]
+unsafe fn attach_create_process() -> bool {
+    if DetourAttach(
+        mem::transmute(&mut CREATE_PROCESS_A),
+        ZludaCreateProcessA as *mut _,
+    ) != NO_ERROR as i32
+    {
+        return false;
+    }
+    if DetourAttach(
+        mem::transmute(&mut CREATE_PROCESS_W),
+        ZludaCreateProcessW as *mut _,
+    ) != NO_ERROR as i32
+    {
+        return false;
+    }
+    if DetourAttach(
+        mem::transmute(&mut CREATE_PROCESS_AS_USER_W),
+        ZludaCreateProcessAsUserW as *mut _,
+    ) != NO_ERROR as i32
+    {
+        return false;
+    }
+    if DetourAttach(
+        mem::transmute(&mut CREATE_PROCESS_WITH_LOGON_W),
+        ZludaCreateProcessWithLogonW as *mut _,
+    ) != NO_ERROR as i32
+    {
+        return false;
+    }
+    if DetourAttach(
+        mem::transmute(&mut CREATE_PROCESS_WITH_TOKEN_W),
+        ZludaCreateProcessWithTokenW as *mut _,
+    ) != NO_ERROR as i32
+    {
+        return false;
+    }
+    true
+}
+
+#[must_use]
+unsafe fn detach_create_process() -> bool {
+    if DetourDetach(
+        mem::transmute(&mut CREATE_PROCESS_A),
+        ZludaCreateProcessA as *mut _,
+    ) != NO_ERROR as i32
+    {
+        return false;
+    }
+    if DetourDetach(
+        mem::transmute(&mut CREATE_PROCESS_W),
+        ZludaCreateProcessW as *mut _,
+    ) != NO_ERROR as i32
+    {
+        return false;
+    }
+    if DetourDetach(
+        mem::transmute(&mut CREATE_PROCESS_AS_USER_W),
+        ZludaCreateProcessAsUserW as *mut _,
+    ) != NO_ERROR as i32
+    {
+        return false;
+    }
+    if DetourDetach(
+        mem::transmute(&mut CREATE_PROCESS_WITH_LOGON_W),
+        ZludaCreateProcessWithLogonW as *mut _,
+    ) != NO_ERROR as i32
+    {
+        return false;
+    }
+    if DetourDetach(
+        mem::transmute(&mut CREATE_PROCESS_WITH_TOKEN_W),
+        ZludaCreateProcessWithTokenW as *mut _,
+    ) != NO_ERROR as i32
+    {
+        return false;
+    }
+    true
 }
