@@ -58,7 +58,7 @@ Run your application like this:
 ```
 
 ### Linux
-A very recent version of [compute-runtime](https://github.com/intel/compute-runtime) and [Level Zero loader](https://github.com/oneapi-src/level-zero/releases) is required. At the time of the writing 20.45.18403 is the oldest recommended version.
+You should install most recent run-time driver packages as outlined here: https://dgpu-docs.intel.com/installation-guides/index.html.  
 Run your application like this:
 ```
 LD_LIBRARY_PATH=<ZLUDA_DIRECTORY> <APPLICATION> <APPLICATIONS_ARGUMENTS>
@@ -72,7 +72,8 @@ cargo build --release
 ```
 in the main directory of the project.  
 ### Linux
-If you are building on Linux you must also symlink (or rename) the ZLUDA output library:
+You should install most recent run-time an developer driver packages as outlined here: https://dgpu-docs.intel.com/installation-guides/index.html. Additionally, you should have `ocl-icd-opencl-dev` (or equivalent) installed.  
+If you are building on Linux you must also symlink (or rename) the ZLUDA output binaries after ZLUDA build finishes:
 ```
 ln -s libnvcuda.so target/release/libcuda.so
 ln -s libcuda.so target/release/libcuda.so.1
