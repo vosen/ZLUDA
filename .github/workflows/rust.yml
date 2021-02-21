@@ -32,6 +32,7 @@ jobs:
         ln -s libcuda.so target/release/libcuda.so.1
     - uses: actions/upload-artifact@v2
       with:
+        name: Linux
         path: |
           target/release/libcuda.so
           target/release/libcuda.so.1
@@ -46,6 +47,7 @@ jobs:
       run: cargo build --workspace --verbose --release
     - uses: actions/upload-artifact@v2
       with:
+        name: Windows
         path: |
           target/release/nvcuda.dll
           target/release/zluda_with.exe
