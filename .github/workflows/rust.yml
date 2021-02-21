@@ -10,7 +10,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  build_lin:
     name: Build (Linux)
     runs-on: ubuntu-20.04
     steps:
@@ -33,7 +33,7 @@ jobs:
         sudo apt-get install intel-opencl-icd intel-level-zero-gpu level-zero intel-media-va-driver-non-free libmfx1 libigc-dev intel-igc-cm libigdfcl-dev libigfxcmrt-dev level-zero-dev ocl-icd-opencl-dev
     - name: Build
       run: cargo build --workspace --verbose
-  build:
+  build_win:
     name: Build (Windows)
     runs-on: 	windows-latest
     steps:
