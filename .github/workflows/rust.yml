@@ -11,7 +11,7 @@ env:
 
 jobs:
   build_lin:
-    name: Build (Linux)
+    name: Build and publish (Linux)
     runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v2
@@ -37,7 +37,7 @@ jobs:
           target/release/libcuda.so
           target/release/libcuda.so.1
   build_win:
-    name: Build (Windows)
+    name: Build and publish (Windows)
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v2
