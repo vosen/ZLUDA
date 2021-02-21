@@ -11,9 +11,8 @@ env:
 
 jobs:
   build:
-
+    name: Build (Linux)
     runs-on: ubuntu-20.04
-
     steps:
     - uses: actions/checkout@v2
       with:
@@ -32,6 +31,15 @@ jobs:
         sudo apt-add-repository 'deb [arch=amd64] https://repositories.intel.com/graphics/ubuntu focal main'
         sudo apt-get update
         sudo apt-get install intel-opencl-icd intel-level-zero-gpu level-zero intel-media-va-driver-non-free libmfx1 libigc-dev intel-igc-cm libigdfcl-dev libigfxcmrt-dev level-zero-dev ocl-icd-opencl-dev
+    - name: Build
+      run: cargo build --workspace --verbose
+  build:
+    name: Build (Windows)
+    runs-on: 	windows-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
     - name: Build
       run: cargo build --workspace --verbose
     # TODO(take-cheeze): Support testing
