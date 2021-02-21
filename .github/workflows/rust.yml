@@ -17,13 +17,6 @@ jobs:
     - uses: actions/checkout@v2
       with:
         submodules: true
-    - uses: actions/cache@v2
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     - name: Install GPU drivers
       run: |
         sudo apt-get install -y gpg-agent wget
@@ -32,7 +25,16 @@ jobs:
         sudo apt-get update
         sudo apt-get install intel-opencl-icd intel-level-zero-gpu level-zero intel-media-va-driver-non-free libmfx1 libigc-dev intel-igc-cm libigdfcl-dev libigfxcmrt-dev level-zero-dev ocl-icd-opencl-dev
     - name: Build
-      run: cargo build --workspace --verbose
+      run: cargo build --workspace --verbose --release
+    - name: Rename to libnvcuda
+      run: |
+        mv target/release/libcuda.so target/release/libnvcuda.so
+        ln -s libcuda.so target/release/libcuda.so.1
+    - uses: actions/upload-artifact@v2
+      with:
+        path: |
+          target/release/libcuda.so
+          target/release/libcuda.so.1
   build_win:
     name: Build (Windows)
     runs-on: windows-latest
@@ -40,15 +42,14 @@ jobs:
     - uses: actions/checkout@v2
       with:
         submodules: true
-    - uses: actions/cache@v2
+    - name: Build
+      run: cargo build --workspace --verbose --release
+    - uses: actions/upload-artifact@v2
       with:
         path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-    - name: Build
-      run: cargo build --workspace --verbose
+          target/release/nvcuda.dll
+          target/release/zluda_with.exe
+          target/release/zluda_dump.dll
     # TODO(take-cheeze): Support testing
     # - name: Run tests
     #   run: cargo test --verbose
