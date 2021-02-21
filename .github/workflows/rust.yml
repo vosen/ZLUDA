@@ -10,45 +10,48 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
-    runs-on: ubuntu-latest
-
+  build_lin:
+    name: Build and publish (Linux)
+    runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v2
       with:
         submodules: true
-    - uses: actions/cache@v2
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-    - name: Install intel compute runtime
+    - name: Install GPU drivers
       run: |
-        mkdir neo
-        cd neo
-        wget https://github.com/intel/compute-runtime/releases/download/20.51.18762/intel-gmmlib_20.3.2_amd64.deb
-        wget https://github.com/intel/intel-graphics-compiler/releases/download/igc-1.0.5884/intel-igc-core_1.0.5884_amd64.deb
-        wget https://github.com/intel/intel-graphics-compiler/releases/download/igc-1.0.5884/intel-igc-opencl_1.0.5884_amd64.deb
-        wget https://github.com/intel/compute-runtime/releases/download/20.51.18762/intel-opencl_20.51.18762_amd64.deb
-        wget https://github.com/intel/compute-runtime/releases/download/20.51.18762/intel-ocloc_20.51.18762_amd64.deb
-        wget https://github.com/intel/compute-runtime/releases/download/20.51.18762/intel-level-zero-gpu_1.0.18762_amd64.deb
-
-        wget https://github.com/intel/compute-runtime/releases/download/20.51.18762/ww51.sum
-        sha256sum -c ww51.sum
-        
-        wget https://github.com/oneapi-src/level-zero/releases/download/v1.0.22/level-zero-devel_1.0.22+u18.04_amd64.deb
-        wget https://github.com/oneapi-src/level-zero/releases/download/v1.0.22/level-zero_1.0.22+u18.04_amd64.deb
-        wget https://github.com/intel/intel-graphics-compiler/releases/download/igc-1.0.5884/intel-igc-opencl-devel_1.0.5884_amd64.deb
-
-        sudo dpkg -i *.deb
-
-        sudo apt update
-        sudo apt install ocl-icd-opencl-dev
+        sudo apt-get install -y gpg-agent wget
+        wget -qO - https://repositories.intel.com/graphics/intel-graphics.key | sudo apt-key add -
+        sudo apt-add-repository 'deb [arch=amd64] https://repositories.intel.com/graphics/ubuntu focal main'
+        sudo apt-get update
+        sudo apt-get install intel-opencl-icd intel-level-zero-gpu level-zero intel-media-va-driver-non-free libmfx1 libigc-dev intel-igc-cm libigdfcl-dev libigfxcmrt-dev level-zero-dev ocl-icd-opencl-dev
     - name: Build
-      run: cargo build --workspace --verbose
+      run: cargo build --workspace --verbose --release
+    - name: Rename to libcuda.so
+      run: |
+        mv target/release/libnvcuda.so target/release/libcuda.so
+        ln -s libcuda.so target/release/libcuda.so.1
+    - uses: actions/upload-artifact@v2
+      with:
+        name: Linux
+        path: |
+          target/release/libcuda.so
+          target/release/libcuda.so.1
+  build_win:
+    name: Build and publish (Windows)
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - name: Build
+      run: cargo build --workspace --verbose --release
+    - uses: actions/upload-artifact@v2
+      with:
+        name: Windows
+        path: |
+          target/release/nvcuda.dll
+          target/release/zluda_with.exe
+          target/release/zluda_dump.dll
     # TODO(take-cheeze): Support testing
     # - name: Run tests
     #   run: cargo test --verbose
