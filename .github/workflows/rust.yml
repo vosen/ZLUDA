@@ -50,6 +50,7 @@ jobs:
         name: Windows
         path: |
           target/release/nvcuda.dll
+          target/release/zluda_redirect.dll
           target/release/zluda_with.exe
           target/release/zluda_dump.dll
     # TODO(take-cheeze): Support testing
