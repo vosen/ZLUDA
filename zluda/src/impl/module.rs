@@ -87,7 +87,7 @@ impl SpirvModule {
         };
         let l0_module = match self.should_link_ptx_impl {
             None => {
-                l0::Module::build_spirv(ctx, dev, byte_il, Some(self.build_options.as_c_str())).0
+                l0::Module::build_spirv(ctx, dev, byte_il, Some(self.build_options.as_c_str()))
             }
             Some(ptx_impl) => {
                 l0::Module::build_link_spirv(

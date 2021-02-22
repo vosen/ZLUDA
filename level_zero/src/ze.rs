@@ -270,7 +270,7 @@ impl Module {
         };
         match ocl_core::get_program_info(&ocl_program, ocl_core::ProgramInfo::Binaries) {
             Ok(ocl_core::ProgramInfoResult::Binaries(binaries)) => {
-                let (module, build_log) = Self::build_native(ctx, d, &binaries[0]);
+                let (module, build_log) = Self::build_native_logged(ctx, d, &binaries[0]);
                 (module, Some(build_log))
             }
             _ => return (Err(sys::ze_result_t::ZE_RESULT_ERROR_UNKNOWN), None),
@@ -346,15 +346,53 @@ impl Module {
         d: &Device,
         bin: &[u8],
         opts: Option<&CStr>,
-    ) -> (Result<Self>, BuildLog) {
+    ) -> Result<Self> {
         Module::new(ctx, true, d, bin, opts)
     }
 
-    pub fn build_native(ctx: &mut Context, d: &Device, bin: &[u8]) -> (Result<Self>, BuildLog) {
-        Module::new(ctx, false, d, bin, None)
+    pub fn build_spirv_logged(
+        ctx: &mut Context,
+        d: &Device,
+        bin: &[u8],
+        opts: Option<&CStr>,
+    ) -> (Result<Self>, BuildLog) {
+        Module::new_logged(ctx, true, d, bin, opts)
+    }
+
+    pub fn build_native_logged(ctx: &mut Context, d: &Device, bin: &[u8]) -> (Result<Self>, BuildLog) {
+        Module::new_logged(ctx, false, d, bin, None)
     }
 
     fn new(
+        ctx: &mut Context,
+        spirv: bool,
+        d: &Device,
+        bin: &[u8],
+        opts: Option<&CStr>,
+    ) -> Result<Self> {
+        let desc = sys::ze_module_desc_t {
+            stype: sys::ze_structure_type_t::ZE_STRUCTURE_TYPE_MODULE_DESC,
+            pNext: ptr::null(),
+            format: if spirv {
+                sys::ze_module_format_t::ZE_MODULE_FORMAT_IL_SPIRV
+            } else {
+                sys::ze_module_format_t::ZE_MODULE_FORMAT_NATIVE
+            },
+            inputSize: bin.len(),
+            pInputModule: bin.as_ptr(),
+            pBuildFlags: opts.map(|s| s.as_ptr() as *const _).unwrap_or(ptr::null()),
+            pConstants: ptr::null(),
+        };
+        let mut result: sys::ze_module_handle_t = ptr::null_mut();
+        let err = unsafe { sys::zeModuleCreate(ctx.0, d.0, &desc, &mut result, ptr::null_mut()) };
+        if err != crate::sys::ze_result_t::ZE_RESULT_SUCCESS {
+            Result::Err(err)
+        } else {
+            Ok(Module(result))
+        }
+    }
+
+    fn new_logged(
         ctx: &mut Context,
         spirv: bool,
         d: &Device,
