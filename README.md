@@ -48,7 +48,7 @@ Overall, ZLUDA is slower in GeekBench by roughly 2%.
 
 
 ## Usage
-**Warning**: this is a very incomplete Proof of Concept. It's probably not going to work with your application. ZLUDA currently works only with applications which use CUDA Driver API. Linux builds also work with applications which use statically-linked CUDA Runtime API
+**Warning**: this is a very incomplete proof of concept. It's probably not going to work with your application. ZLUDA currently works only with applications which use CUDA Driver API or statically-linked CUDA Runtime API - dynamically-linked CUDA Runtime API is not supported at all
 
 ### Windows
 You should have the most recent Intel GPU drivers installed.\
