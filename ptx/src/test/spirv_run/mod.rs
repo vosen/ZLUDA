@@ -116,7 +116,7 @@ test_ptx!(cos, [std::f32::consts::PI], [-1f32]);
 test_ptx!(lg2, [512f32], [9f32]);
 test_ptx!(ex2, [10f32], [1024f32]);
 test_ptx!(cvt_rni, [9.5f32, 10.5f32], [10f32, 10f32]);
-test_ptx!(cvt_rzi, [-13.8f32, 12.9f32], [-13f32, 13f32]);
+test_ptx!(cvt_rzi, [-13.8f32, 12.9f32], [-13f32, 12f32]);
 test_ptx!(cvt_s32_f32, [-13.8f32, 12.9f32], [-13i32, 13i32]);
 test_ptx!(clz, [0b00000101_00101101_00010011_10101011u32], [5u32]);
 test_ptx!(popc, [0b10111100_10010010_01001001_10001010u32], [14u32]);
@@ -225,7 +225,7 @@ fn run_spirv<
                 Some(module.build_options.as_c_str()),
             ),
             None => {
-                let (module, log) = ze::Module::build_spirv(
+                let (module, log) = ze::Module::build_spirv_logged(
                     &mut ctx,
                     &dev,
                     byte_il,

@@ -2454,6 +2454,7 @@ pub extern "C" fn cuModuleLoadData(
     r#impl::module::load_data(module.decuda(), image).encuda()
 }
 
+// TODO: parse jit options
 #[cfg_attr(not(test), no_mangle)]
 pub extern "C" fn cuModuleLoadDataEx(
     module: *mut CUmodule,
@@ -2462,7 +2463,7 @@ pub extern "C" fn cuModuleLoadDataEx(
     options: *mut CUjit_option,
     optionValues: *mut *mut ::std::os::raw::c_void,
 ) -> CUresult {
-    r#impl::unimplemented()
+    r#impl::module::load_data(module.decuda(), image).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2736,8 +2737,28 @@ pub extern "C" fn cuMemcpyHtoD_v2(
     r#impl::memory::copy_v2(dstDevice.decuda(), srcHost, ByteCount).encuda()
 }
 
+// TODO: implement default stream semantics
+#[cfg_attr(not(test), no_mangle)]
+pub extern "C" fn cuMemcpyHtoD_v2_ptds(
+    dstDevice: CUdeviceptr,
+    srcHost: *const ::std::os::raw::c_void,
+    ByteCount: usize,
+) -> CUresult {
+    r#impl::memory::copy_v2(dstDevice.decuda(), srcHost, ByteCount).encuda()
+}
+
 #[cfg_attr(not(test), no_mangle)]
 pub extern "C" fn cuMemcpyDtoH_v2(
+    dstHost: *mut ::std::os::raw::c_void,
+    srcDevice: CUdeviceptr,
+    ByteCount: usize,
+) -> CUresult {
+    r#impl::memory::copy_v2(dstHost, srcDevice.decuda(), ByteCount).encuda()
+}
+
+// TODO: implement default stream semantics
+#[cfg_attr(not(test), no_mangle)]
+pub extern "C" fn cuMemcpyDtoH_v2_ptds(
     dstHost: *mut ::std::os::raw::c_void,
     srcDevice: CUdeviceptr,
     ByteCount: usize,
@@ -2926,6 +2947,16 @@ pub extern "C" fn cuMemsetD8_v2(
     r#impl::memory::set_d8_v2(dstDevice.decuda(), uc, N).encuda()
 }
 
+// TODO: implement default stream semantics
+#[cfg_attr(not(test), no_mangle)]
+pub extern "C" fn cuMemsetD8_v2_ptds(
+    dstDevice: CUdeviceptr,
+    uc: ::std::os::raw::c_uchar,
+    N: usize,
+) -> CUresult {
+    r#impl::memory::set_d8_v2(dstDevice.decuda(), uc, N).encuda()
+}
+
 #[cfg_attr(not(test), no_mangle)]
 pub extern "C" fn cuMemsetD16_v2(
     dstDevice: CUdeviceptr,
@@ -2937,6 +2968,16 @@ pub extern "C" fn cuMemsetD16_v2(
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "C" fn cuMemsetD32_v2(
+    dstDevice: CUdeviceptr,
+    ui: ::std::os::raw::c_uint,
+    N: usize,
+) -> CUresult {
+    r#impl::memory::set_d32_v2(dstDevice.decuda(), ui, N).encuda()
+}
+
+// TODO: implement default stream semantics
+#[cfg_attr(not(test), no_mangle)]
+pub extern "C" fn cuMemsetD32_v2_ptds(
     dstDevice: CUdeviceptr,
     ui: ::std::os::raw::c_uint,
     N: usize,
@@ -3322,6 +3363,12 @@ pub extern "C" fn cuStreamGetCtx(hStream: CUstream, pctx: *mut CUcontext) -> CUr
     r#impl::stream::get_ctx(hStream.decuda(), pctx.decuda()).encuda()
 }
 
+// TODO: implement default stream semantics
+#[cfg_attr(not(test), no_mangle)]
+pub extern "C" fn cuStreamGetCtx_ptsz(hStream: CUstream, pctx: *mut CUcontext) -> CUresult {
+    r#impl::stream::get_ctx(hStream.decuda(), pctx.decuda()).encuda()
+}
+
 #[cfg_attr(not(test), no_mangle)]
 pub extern "C" fn cuStreamWaitEvent(
     hStream: CUstream,
@@ -3602,6 +3649,37 @@ pub extern "C" fn cuFuncSetSharedMemConfig(hfunc: CUfunction, config: CUsharedco
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "C" fn cuLaunchKernel(
+    f: CUfunction,
+    gridDimX: ::std::os::raw::c_uint,
+    gridDimY: ::std::os::raw::c_uint,
+    gridDimZ: ::std::os::raw::c_uint,
+    blockDimX: ::std::os::raw::c_uint,
+    blockDimY: ::std::os::raw::c_uint,
+    blockDimZ: ::std::os::raw::c_uint,
+    sharedMemBytes: ::std::os::raw::c_uint,
+    hStream: CUstream,
+    kernelParams: *mut *mut ::std::os::raw::c_void,
+    extra: *mut *mut ::std::os::raw::c_void,
+) -> CUresult {
+    r#impl::function::launch_kernel(
+        f.decuda(),
+        gridDimX,
+        gridDimY,
+        gridDimZ,
+        blockDimX,
+        blockDimY,
+        blockDimZ,
+        sharedMemBytes,
+        hStream.decuda(),
+        kernelParams,
+        extra,
+    )
+    .encuda()
+}
+
+// TODO: implement default stream semantics
+#[cfg_attr(not(test), no_mangle)]
+pub extern "C" fn cuLaunchKernel_ptsz(
     f: CUfunction,
     gridDimX: ::std::os::raw::c_uint,
     gridDimY: ::std::os::raw::c_uint,
