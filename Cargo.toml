@@ -10,10 +10,11 @@ members = [
     "zluda_lib",
     "zluda_inject",
     "zluda_redirect",
+    "zluda_ml",
     "ptx",
 ]
 
-default-members = ["zluda_lib", "zluda_inject", "zluda_redirect"]
+default-members = ["zluda_lib", "zluda_ml", "zluda_inject", "zluda_redirect"]
 
 [patch.crates-io]
 rspirv = { git = 'https://github.com/vosen/rspirv', rev = '40f5aa4dedb0d9f1ec24bdd8b6019e01996d1d74' }
