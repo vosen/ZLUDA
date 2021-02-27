@@ -1,20 +1,61 @@
 [workspace]
 
+# Remember to also update the project's Cargo.toml
+# if it's a top-level project
 members = [
+    "atiadlxx-sys",
+    "comgr",
+    "cuda_base",
+    "cuda_types",
     "detours-sys",
-    "level_zero-sys",
-    "level_zero",
-    "spirv_tools-sys",
-    "zluda",
-    "zluda_dump",
-    "zluda_lib",
-    "zluda_inject",
-    "zluda_redirect",
+    "ext/llvm-sys.rs",
+    "hip_common",
+    "hip_runtime-sys",
+    "hipblaslt-sys",
+    "hipfft-sys",
+    "hiprt-sys",
+    "miopen-sys",
+    "offline_compiler",
+    "optix_base",
+    "optix_dump",
+    "process_address_table",
     "ptx",
+    "rocblas-sys",
+    "rocm_smi-sys",
+    "rocsparse-sys",
+    "xtask",
+    "zluda",
+    "zluda_api",
+    "zluda_blas",
+    "zluda_blaslt",
+    "zluda_ccl",
+    "zluda_dark_api",
+    "zluda_dnn",
+    "zluda_dump",
+    "zluda_fft",
+    "zluda_inject",
+    "zluda_lib",
+    "zluda_llvm",
+    "zluda_ml",
+    "zluda_redirect",
+    "zluda_rt",
+    "zluda_sparse",
 ]
 
-default-members = ["zluda_lib", "zluda_inject", "zluda_redirect"]
+# Cargo does not support OS-specific or profile-specific
+# targets. We keep list here to bare minimum and rely on xtask
+default-members = [
+    "zluda_lib",
+    "zluda_ml",
+    "zluda_inject",
+    "zluda_redirect"
+]
 
-[patch.crates-io]
-rspirv = { git = 'https://github.com/vosen/rspirv', rev = '40f5aa4dedb0d9f1ec24bdd8b6019e01996d1d74' }
-spirv_headers = { git = 'https://github.com/vosen/rspirv', rev = '40f5aa4dedb0d9f1ec24bdd8b6019e01996d1d74' }
+[profile.dev.package.blake3]
+opt-level = 3
+
+[profile.dev.package.lz4-sys]
+opt-level = 3
+
+[profile.dev.package.xtask]
+opt-level = 3

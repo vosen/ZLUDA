@@ -1,0 +1,32 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry carry_mixed(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .b32 	    unused;
+
+    .reg .b32 	    carry_out_1;
+    .reg .b32 	    carry_out_2;
+
+    ld.param.u64    out_addr, [output];
+
+    // set carry with sub
+    sub.cc.s32      unused, 0, 1;
+    // write carry with sub
+    subc.s32        carry_out_1, 2, 0;
+
+    // set carry with sub
+    sub.cc.s32      unused, 0, 1;
+    // fail writing carry with add
+    addc.s32        carry_out_2, 1, 0;
+
+    st.s32          [out_addr], carry_out_1;
+    st.s32          [out_addr+4], carry_out_2;
+	ret;
+}

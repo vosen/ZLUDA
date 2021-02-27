@@ -1,0 +1,1 @@
+bindgen /opt/rocm/include/rocsolver/rocsolver.h -o src/rocsolver.rs --no-layout-tests --default-enum-style=newtype --no-derive-debug --allowlist-function "rocsolver_.*" --allowlist-var "ROCSOLVER_*" --must-use-type rocblas_status -- -I/opt/rocm/include

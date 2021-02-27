@@ -1,0 +1,1 @@
+bindgen "src\nvapi_wrapper.h" --allowlist-var="[nN][vV].*" --allowlist-type="[nN][vV].*" --blocklist-type="[dD].*" --allowlist-function="$^" --no-derive-debug --default-enum-style=newtype --no-layout-tests --no-doc-comments -o src/nvapi.rs -- -I"C:\dev\nvapi\R530-developer-2" -x c++

@@ -1,0 +1,3 @@
+.version 1.0
+.target sm_10
+.address_size 64

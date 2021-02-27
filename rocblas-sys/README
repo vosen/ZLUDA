@@ -1,0 +1,1 @@
+bindgen /opt/rocm/include/rocblas/rocblas.h -o src/rocblas.rs --no-layout-tests --size_t-is-usize --default-enum-style=newtype --no-derive-debug --allowlist-function "rocblas_.*" --allowlist-var "ROCBLAS_*" --must-use-type rocblas_status -- -I/opt/rocm/include

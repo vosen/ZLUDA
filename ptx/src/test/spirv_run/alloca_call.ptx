@@ -1,0 +1,43 @@
+.version 7.8
+.target sm_50
+.address_size 64
+
+.visible .entry _Z13callback_onlyIdEvPvS0_10callback_tx(
+.param .u64 _Z13callback_onlyIdEvPvS0_10callback_tx_param_0,
+.param .u64 _Z13callback_onlyIdEvPvS0_10callback_tx_param_1,
+.param .u64 _Z13callback_onlyIdEvPvS0_10callback_tx_param_2,
+.param .u64 _Z13callback_onlyIdEvPvS0_10callback_tx_param_3
+)
+{
+.reg .pred early_exit;
+.reg .f64 %fd<2>;
+
+
+.reg .b64 result_ptr;
+.reg .b64 func_ptr;
+.reg .b64 x;
+.reg .b64 y;
+
+
+ld.param.u64 result_ptr,	[_Z13callback_onlyIdEvPvS0_10callback_tx_param_0];
+ld.param.u64 func_ptr, 		[_Z13callback_onlyIdEvPvS0_10callback_tx_param_1];
+ld.param.u64 x, 			[_Z13callback_onlyIdEvPvS0_10callback_tx_param_2];
+ld.param.u64 y, 			[_Z13callback_onlyIdEvPvS0_10callback_tx_param_3];
+setp.ge.s64 early_exit, x, y;
+@early_exit bra $L__BB1_2;
+
+{
+	.param .b64 param0;
+	st.param.b64 [param0+0], func_ptr;
+	.param .align 16 .b8 retval0[16];
+	prototype_1 : .callprototype (.param .align 16 .b8 _[16]) _ ();
+	call (retval0), func_ptr, () , prototype_1;
+	ld.param.v2.f64 {%fd0, %fd1}, [retval0+0];
+} 
+st.global.v2.f64 [result_ptr], {%fd0, %fd1};
+
+$L__BB1_2:
+ret;
+
+}
+

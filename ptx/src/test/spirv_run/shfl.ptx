@@ -1,0 +1,22 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry shfl(
+	.param .u64 output
+)
+{
+    .reg .u64 	    out_addr;
+    .reg .u32 	    tid;
+    .reg .u64 	    tid_64;
+    .reg .u32 	    result;
+
+    ld.param.u64 	out_addr, [output];
+
+    mov.b32             tid, %tid.x;
+    cvt.u64.u32         tid_64, tid;
+    shfl.sync.down.b32  result, tid, 1, 31, -1;
+    mad.lo.u64          out_addr, tid_64, 4, out_addr;
+    st.u32              [out_addr], result;
+	ret;
+}

@@ -1,0 +1,1 @@
+bindgen /opt/rocm/include/miopen/miopen.h -o src/miopen.rs --no-layout-tests --size_t-is-usize --default-enum-style=newtype --no-derive-debug --allowlist-function "miopen.*" --allowlist-var "MIOPEN_*" --must-use-type miopenStatus_t -- -D__HIP_PLATFORM_AMD__ -DMIOPEN_BACKEND_HIP=1 -I/opt/rocm/include -x c++

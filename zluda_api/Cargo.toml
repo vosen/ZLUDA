@@ -1,0 +1,28 @@
+[package]
+name = "zluda_api"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2018"
+
+[lib]
+name = "nvapi64"
+crate-type = ["cdylib"]
+
+[dependencies]
+# winapi = { version = "0.3", features = ["d3d12", "std"] }
+libloading = "0.8"
+once_cell = "1.18.0"
+cuda_types = { path = "../cuda_types" }
+
+[dependencies.windows]
+version = "0.48"
+features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Direct3D12",
+    "Win32_Graphics_Dxgi_Common",
+]
+
+[package.metadata.zluda]
+debug_only = true
+windows_only = true

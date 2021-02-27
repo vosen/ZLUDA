@@ -1,0 +1,8 @@
+[package]
+name = "rocm_smi-sys"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2018"
+links = "rocm_smi64"
+
+[lib]

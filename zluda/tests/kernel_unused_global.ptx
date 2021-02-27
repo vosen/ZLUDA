@@ -1,0 +1,12 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.global .align 4 .b8 global_buffer[4] = {202, 29, 180, 50};
+
+.visible .entry kernel(
+    .param .u64 input
+)
+{
+    ret;
+}

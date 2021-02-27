@@ -1,0 +1,1 @@
+bindgen include/hip_runtime_api.h -o src/hip_runtime_api.rs --no-layout-tests --size_t-is-usize --default-enum-style=newtype --whitelist-function "hip.*" --whitelist-type "hip.*" --no-derive-debug --must-use-type hipError_t --new-type-alias "^hipDeviceptr_t$" --whitelist-var "^hip.*$" -- -I/opt/rocm/include -D__HIP_PLATFORM_AMD__

@@ -1,242 +1,195 @@
-use super::{
-    context::{Context, ContextData},
-    CUresult, GlobalState,
-};
-use std::{mem, ptr};
+use super::{context, LiveCheck, ZludaObject};
+use crate::{hip_call_cuda, r#impl::hipfix};
+use cuda_types::{CUhostFn, CUresult};
+use hip_runtime_sys::*;
+use std::{ffi::c_void, ptr};
 
-use super::{HasLivenessCookie, LiveCheck};
+pub(crate) const CU_STREAM_NULL: *mut Stream = 0 as *mut _;
+pub(crate) const CU_STREAM_LEGACY: *mut Stream = 1 as *mut _;
+pub(crate) const CU_STREAM_PER_THREAD: *mut Stream = 2 as *mut _;
 
-pub type Stream = LiveCheck<StreamData>;
+pub(crate) type Stream = LiveCheck<StreamData>;
 
-pub const CU_STREAM_LEGACY: *mut Stream = 1 as *mut _;
-pub const CU_STREAM_PER_THREAD: *mut Stream = 2 as *mut _;
-
-impl HasLivenessCookie for StreamData {
+impl ZludaObject for StreamData {
     #[cfg(target_pointer_width = "64")]
-    const COOKIE: usize = 0x512097354de18d35;
-
+    const LIVENESS_COOKIE: usize = 0x512097354de18d35;
     #[cfg(target_pointer_width = "32")]
-    const COOKIE: usize = 0x77d5cc0b;
-
+    const LIVENESS_COOKIE: usize = 0x77d5cc0b;
     const LIVENESS_FAIL: CUresult = CUresult::CUDA_ERROR_INVALID_HANDLE;
 
-    fn try_drop(&mut self) -> Result<(), CUresult> {
-        if self.context != ptr::null_mut() {
-            let context = unsafe { &mut *self.context };
-            if !context.streams.remove(&(self as *mut _)) {
-                return Err(CUresult::CUDA_ERROR_UNKNOWN);
+    fn drop_with_result(&mut self, by_owner: bool) -> Result<(), CUresult> {
+        if !by_owner {
+            let ctx = unsafe { LiveCheck::as_result(self.ctx)? };
+            {
+                let mut ctx_mutable = ctx
+                    .mutable
+                    .lock()
+                    .map_err(|_| CUresult::CUDA_ERROR_UNKNOWN)?;
+                ctx_mutable
+                    .streams
+                    .remove(&unsafe { LiveCheck::from_raw(&mut *self) });
             }
         }
+        hip_call_cuda!(hipStreamDestroy(self.base));
         Ok(())
     }
 }
 
-pub struct StreamData {
-    pub context: *mut ContextData,
-    pub queue: l0::CommandQueue,
+pub(crate) struct StreamData {
+    pub(crate) base: hipStream_t,
+    pub(crate) ctx: *mut context::Context,
 }
 
-impl StreamData {
-    pub fn new_unitialized(ctx: &mut l0::Context, dev: &l0::Device) -> Result<Self, CUresult> {
-        Ok(StreamData {
-            context: ptr::null_mut(),
-            queue: l0::CommandQueue::new(ctx, dev)?,
-        })
-    }
-    pub fn new(ctx: &mut ContextData) -> Result<Self, CUresult> {
-        let l0_ctx = &mut unsafe { &mut *ctx.device }.l0_context;
-        let l0_dev = &unsafe { &*ctx.device }.base;
-        Ok(StreamData {
-            context: ctx as *mut _,
-            queue: l0::CommandQueue::new(l0_ctx, l0_dev)?,
-        })
-    }
-
-    pub fn command_list(&self) -> Result<l0::CommandList, l0::sys::_ze_result_t> {
-        let ctx = unsafe { &mut *self.context };
-        let dev = unsafe { &mut *ctx.device };
-        l0::CommandList::new(&mut dev.l0_context, &dev.base)
-    }
-}
-
-impl Drop for StreamData {
-    fn drop(&mut self) {
-        if self.context == ptr::null_mut() {
-            return;
-        }
-        unsafe { (&mut *self.context).streams.remove(&(&mut *self as *mut _)) };
-    }
-}
-
-pub(crate) fn get_ctx(hstream: *mut Stream, pctx: *mut *mut Context) -> Result<(), CUresult> {
-    if pctx == ptr::null_mut() {
+pub(crate) unsafe fn create_with_priority(
+    p_stream: *mut *mut Stream,
+    flags: ::std::os::raw::c_uint,
+    priority: ::std::os::raw::c_int,
+) -> Result<(), CUresult> {
+    if p_stream == ptr::null_mut() {
         return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
     }
-    let ctx_ptr = GlobalState::lock_stream(hstream, |stream| stream.context)?;
-    if ctx_ptr == ptr::null_mut() {
-        return Err(CUresult::CUDA_ERROR_CONTEXT_IS_DESTROYED);
-    }
-    unsafe { *pctx = Context::ptr_from_inner(ctx_ptr) };
-    Ok(())
-}
-
-pub(crate) fn create(phstream: *mut *mut Stream, _flags: u32) -> Result<(), CUresult> {
-    let stream_ptr = GlobalState::lock_current_context(|ctx| {
-        let mut stream_box = Box::new(Stream::new(StreamData::new(ctx)?));
-        let stream_ptr = stream_box.as_mut().as_option_mut().unwrap() as *mut _;
-        if !ctx.streams.insert(stream_ptr) {
-            return Err(CUresult::CUDA_ERROR_UNKNOWN);
-        }
-        mem::forget(stream_box);
-        Ok::<_, CUresult>(stream_ptr)
+    let mut hip_stream = ptr::null_mut();
+    hip_call_cuda!(hipStreamCreateWithPriority(
+        &mut hip_stream,
+        flags,
+        priority
+    ));
+    let stream = Box::into_raw(Box::new(LiveCheck::new(StreamData {
+        base: hip_stream,
+        ctx: ptr::null_mut(),
+    })));
+    let ctx = context::with_current(|ctx| {
+        let mut ctx_mutable = ctx
+            .mutable
+            .lock()
+            .map_err(|_| CUresult::CUDA_ERROR_UNKNOWN)?;
+        ctx_mutable.streams.insert(stream);
+        Ok(LiveCheck::from_raw(ctx as *const _ as _))
     })??;
-    unsafe { *phstream = Stream::ptr_from_inner(stream_ptr) };
+    (*stream).as_mut_unchecked().ctx = ctx;
+    *p_stream = stream;
     Ok(())
 }
 
-pub(crate) fn destroy_v2(pstream: *mut Stream) -> Result<(), CUresult> {
-    if pstream == ptr::null_mut() || pstream == CU_STREAM_LEGACY || pstream == CU_STREAM_PER_THREAD
-    {
-        return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
-    }
-    GlobalState::lock(|_| Stream::destroy_impl(pstream))?
+pub(crate) unsafe fn get_ctx(
+    stream: *mut Stream,
+    pctx: *mut *mut context::Context,
+) -> Result<(), CUresult> {
+    let ctx = if as_default_stream(stream).is_some() {
+        context::with_current(|ctx| LiveCheck::from_raw(ctx as *const _ as _))?
+    } else {
+        let stream = LiveCheck::as_result(stream)?;
+        stream.ctx
+    };
+    *pctx = ctx;
+    Ok(())
 }
 
-#[cfg(test)]
-mod test {
-    use crate::cuda::CUstream;
+pub(crate) unsafe fn synchronize(
+    stream: *mut Stream,
+    default_stream_per_thread: bool,
+) -> Result<(), CUresult> {
+    let hip_stream = hipfix::as_hip_stream_per_thread(stream, default_stream_per_thread)?;
+    hip_call_cuda!(hipStreamSynchronize(hip_stream));
+    Ok(())
+}
 
-    use super::super::test::CudaDriverFns;
-    use super::super::CUresult;
-    use std::{ptr, thread};
-
-    const CU_STREAM_LEGACY: CUstream = 1 as *mut _;
-    const CU_STREAM_PER_THREAD: CUstream = 2 as *mut _;
-
-    cuda_driver_test!(default_stream_uses_current_ctx_legacy);
-    cuda_driver_test!(default_stream_uses_current_ctx_ptsd);
-
-    fn default_stream_uses_current_ctx_legacy<T: CudaDriverFns>() {
-        default_stream_uses_current_ctx_impl::<T>(CU_STREAM_LEGACY);
+pub(crate) unsafe fn destroy(stream: *mut Stream) -> Result<(), CUresult> {
+    if as_default_stream(stream).is_some() {
+        return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
     }
+    LiveCheck::drop_box_with_result(stream, false)
+}
 
-    fn default_stream_uses_current_ctx_ptsd<T: CudaDriverFns>() {
-        default_stream_uses_current_ctx_impl::<T>(CU_STREAM_PER_THREAD);
+pub(crate) fn as_default_stream(stream: *mut Stream) -> Option<hipStream_t> {
+    match stream {
+        CU_STREAM_NULL | CU_STREAM_LEGACY => Some(hipStreamNull),
+        CU_STREAM_PER_THREAD => Some(hipStreamPerThread),
+        _ => None,
     }
+}
 
-    fn default_stream_uses_current_ctx_impl<T: CudaDriverFns>(stream: CUstream) {
-        assert_eq!(T::cuInit(0), CUresult::CUDA_SUCCESS);
-        let mut ctx1 = ptr::null_mut();
-        assert_eq!(T::cuCtxCreate_v2(&mut ctx1, 0, 0), CUresult::CUDA_SUCCESS);
-        let mut stream_ctx1 = ptr::null_mut();
-        assert_eq!(
-            T::cuStreamGetCtx(stream, &mut stream_ctx1),
-            CUresult::CUDA_SUCCESS
-        );
-        assert_eq!(ctx1, stream_ctx1);
-        let mut ctx2 = ptr::null_mut();
-        assert_eq!(T::cuCtxCreate_v2(&mut ctx2, 0, 0), CUresult::CUDA_SUCCESS);
-        assert_ne!(ctx1, ctx2);
-        let mut stream_ctx2 = ptr::null_mut();
-        assert_eq!(
-            T::cuStreamGetCtx(stream, &mut stream_ctx2),
-            CUresult::CUDA_SUCCESS
-        );
-        assert_eq!(ctx2, stream_ctx2);
-        //  Cleanup
-        assert_eq!(T::cuCtxDestroy_v2(ctx1), CUresult::CUDA_SUCCESS);
-        assert_eq!(T::cuCtxDestroy_v2(ctx2), CUresult::CUDA_SUCCESS);
+pub(crate) unsafe fn as_hip_stream(stream: *mut Stream) -> Result<hipStream_t, CUresult> {
+    Ok(match as_default_stream(stream) {
+        Some(s) => s,
+        None => LiveCheck::as_result(stream)?.base,
+    })
+}
+
+pub(crate) unsafe fn launch_host_func(
+    stream: *mut Stream,
+    fn_: CUhostFn,
+    user_data: *mut ::std::os::raw::c_void,
+) -> Result<(), CUresult> {
+    let fn_ = *fn_.as_ref().ok_or(CUresult::CUDA_ERROR_INVALID_VALUE)?;
+    let hip_stream = as_hip_stream(stream)?;
+    // TODO: use hipLaunchHostFunc when it comes to Windows
+    //hip_call_cuda!(hipLaunchHostFunc(hip_stream, fn_, user_data));
+    let callback = Box::new(HostCallback { fn_, user_data });
+    hip_call_cuda!(hipStreamAddCallback(
+        hip_stream,
+        Some(steam_callback_to_host_func),
+        Box::into_raw(callback) as _,
+        0
+    ));
+    Ok(())
+}
+
+pub(crate) unsafe fn wait_event(
+    stream: *mut Stream,
+    h_event: hipEvent_t,
+    flags: ::std::os::raw::c_uint,
+    default_stream_per_thread: bool,
+) -> Result<(), CUresult> {
+    let hip_stream = hipfix::as_hip_stream_per_thread(stream, default_stream_per_thread)?;
+    hip_call_cuda! { hipStreamWaitEvent(hip_stream, h_event, flags) };
+    Ok(())
+}
+
+unsafe extern "C" fn steam_callback_to_host_func(
+    _stream: hipStream_t,
+    result: hipError_t,
+    callback_ptr: *mut c_void,
+) {
+    if result != hipError_t::hipSuccess {
+        return;
     }
+    let callback_ptr = &*(callback_ptr as *const HostCallback);
+    (callback_ptr.fn_)(callback_ptr.user_data);
+}
 
-    cuda_driver_test!(stream_context_destroyed);
+struct HostCallback {
+    fn_: unsafe extern "system" fn(userData: *mut ::std::os::raw::c_void),
+    user_data: *mut ::std::os::raw::c_void,
+}
 
-    fn stream_context_destroyed<T: CudaDriverFns>() {
-        assert_eq!(T::cuInit(0), CUresult::CUDA_SUCCESS);
-        let mut ctx = ptr::null_mut();
-        assert_eq!(T::cuCtxCreate_v2(&mut ctx, 0, 0), CUresult::CUDA_SUCCESS);
-        let mut stream = ptr::null_mut();
-        assert_eq!(T::cuStreamCreate(&mut stream, 0), CUresult::CUDA_SUCCESS);
-        let mut stream_ctx1 = ptr::null_mut();
-        assert_eq!(
-            T::cuStreamGetCtx(stream, &mut stream_ctx1),
-            CUresult::CUDA_SUCCESS
-        );
-        assert_eq!(stream_ctx1, ctx);
-        assert_eq!(T::cuCtxDestroy_v2(ctx), CUresult::CUDA_SUCCESS);
-        let mut stream_ctx2 = ptr::null_mut();
-        // When a context gets destroyed, its streams are also destroyed
-        let cuda_result = T::cuStreamGetCtx(stream, &mut stream_ctx2);
-        assert!(
-            cuda_result == CUresult::CUDA_ERROR_INVALID_HANDLE
-                || cuda_result == CUresult::CUDA_ERROR_INVALID_CONTEXT
-                || cuda_result == CUresult::CUDA_ERROR_CONTEXT_IS_DESTROYED
-        );
-        assert_eq!(
-            T::cuStreamDestroy_v2(stream),
-            CUresult::CUDA_ERROR_INVALID_HANDLE
-        );
-        // Check if creating another context is possible
-        let mut ctx2 = ptr::null_mut();
-        assert_eq!(T::cuCtxCreate_v2(&mut ctx2, 0, 0), CUresult::CUDA_SUCCESS);
-        //  Cleanup
-        assert_eq!(T::cuCtxDestroy_v2(ctx2), CUresult::CUDA_SUCCESS);
-    }
+pub(crate) unsafe fn query(stream: *mut Stream) -> Result<(), CUresult> {
+    let hip_stream = as_hip_stream(stream)?;
+    hip_call_cuda! { hipStreamQuery(hip_stream) };
+    Ok(())
+}
 
-    cuda_driver_test!(stream_moves_context_to_another_thread);
+pub(crate) unsafe fn get_capture_info(
+    stream: *mut Stream,
+    capture_status_out: *mut hipStreamCaptureStatus,
+    id_out: *mut u64,
+) -> Result<(), CUresult> {
+    let hip_stream = as_hip_stream(stream)?;
+    hip_call_cuda! { hipStreamGetCaptureInfo(hip_stream, capture_status_out, id_out) };
+    Ok(())
+}
 
-    fn stream_moves_context_to_another_thread<T: CudaDriverFns>() {
-        assert_eq!(T::cuInit(0), CUresult::CUDA_SUCCESS);
-        let mut ctx = ptr::null_mut();
-        assert_eq!(T::cuCtxCreate_v2(&mut ctx, 0, 0), CUresult::CUDA_SUCCESS);
-        let mut stream = ptr::null_mut();
-        assert_eq!(T::cuStreamCreate(&mut stream, 0), CUresult::CUDA_SUCCESS);
-        let mut stream_ctx1 = ptr::null_mut();
-        assert_eq!(
-            T::cuStreamGetCtx(stream, &mut stream_ctx1),
-            CUresult::CUDA_SUCCESS
-        );
-        assert_eq!(stream_ctx1, ctx);
-        let stream_ptr = stream as usize;
-        let stream_ctx_on_thread = thread::spawn(move || {
-            let mut stream_ctx2 = ptr::null_mut();
-            assert_eq!(
-                T::cuStreamGetCtx(stream_ptr as *mut _, &mut stream_ctx2),
-                CUresult::CUDA_SUCCESS
-            );
-            stream_ctx2 as usize
-        })
-        .join()
-        .unwrap();
-        assert_eq!(stream_ctx1, stream_ctx_on_thread as *mut _);
-        //  Cleanup
-        assert_eq!(T::cuStreamDestroy_v2(stream), CUresult::CUDA_SUCCESS);
-        assert_eq!(T::cuCtxDestroy_v2(ctx), CUresult::CUDA_SUCCESS);
-    }
+pub(crate) unsafe fn get_flags(stream: *mut Stream, flags: *mut u32) -> Result<(), CUresult> {
+    let hip_stream = as_hip_stream(stream)?;
+    hip_call_cuda! { hipStreamGetFlags(hip_stream, flags) };
+    Ok(())
+}
 
-    cuda_driver_test!(can_destroy_stream);
-
-    fn can_destroy_stream<T: CudaDriverFns>() {
-        assert_eq!(T::cuInit(0), CUresult::CUDA_SUCCESS);
-        let mut ctx = ptr::null_mut();
-        assert_eq!(T::cuCtxCreate_v2(&mut ctx, 0, 0), CUresult::CUDA_SUCCESS);
-        let mut stream = ptr::null_mut();
-        assert_eq!(T::cuStreamCreate(&mut stream, 0), CUresult::CUDA_SUCCESS);
-        assert_eq!(T::cuStreamDestroy_v2(stream), CUresult::CUDA_SUCCESS);
-        // Cleanup
-        assert_eq!(T::cuCtxDestroy_v2(ctx), CUresult::CUDA_SUCCESS);
-    }
-
-    cuda_driver_test!(cant_destroy_default_stream);
-
-    fn cant_destroy_default_stream<T: CudaDriverFns>() {
-        assert_eq!(T::cuInit(0), CUresult::CUDA_SUCCESS);
-        let mut ctx = ptr::null_mut();
-        assert_eq!(T::cuCtxCreate_v2(&mut ctx, 0, 0), CUresult::CUDA_SUCCESS);
-        assert_ne!(
-            T::cuStreamDestroy_v2(super::CU_STREAM_LEGACY as *mut _),
-            CUresult::CUDA_SUCCESS
-        );
-        // Cleanup
-        assert_eq!(T::cuCtxDestroy_v2(ctx), CUresult::CUDA_SUCCESS);
-    }
+pub(crate) unsafe fn is_capturing(
+    stream: *mut Stream,
+    capture_status: *mut hipStreamCaptureStatus,
+) -> Result<(), CUresult> {
+    let hip_stream = as_hip_stream(stream)?;
+    hip_call_cuda! { hipStreamIsCapturing(hip_stream, capture_status) };
+    Ok(())
 }

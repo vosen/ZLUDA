@@ -1,0 +1,2 @@
+bindgen /usr/local/cuda-11/targets/x86_64-linux/include/cusparse_v2.h -o src/cusparse11.rs --allowlist-function="^cusparse.*" --default-enum-style=newtype --no-layout-tests --no-derive-debug -- -I/usr/local/cuda-11/targets/x86_64-linux/include
+sed -i -e 's/extern "C" {//g' -e 's/-> cusparseStatus_t;/-> cusparseStatus_t { crate::unsupported()/g' -e 's/pub fn /#[no_mangle] pub extern "system" fn /g' src/cusparse.rs

@@ -1,276 +1,648 @@
-use std::{
-    collections::HashMap,
-    env,
-    error::Error,
-    ffi::{c_void, CStr},
-    fs,
-    io::prelude::*,
-    mem,
-    os::raw::{c_int, c_uint, c_ulong, c_ushort},
-    path::PathBuf,
-    rc::Rc,
-    slice,
-};
-use std::{fs::File, ptr};
+use cuda_types::*;
+use log::LogEntry;
+use paste::paste;
+use std::ffi::{c_void, CStr};
+use std::fmt::Display;
+use std::marker::PhantomData;
+use std::ptr::NonNull;
+use std::str::FromStr;
+use std::{env, error::Error, fs, path::PathBuf, sync::Mutex};
+use std::{io, mem, ptr};
+use trace::TexrefAddress;
+use zluda_dark_api::CUmoduleContent;
 
-use cuda::{CUdeviceptr, CUfunction, CUjit_option, CUmodule, CUresult, CUstream, CUuuid};
-use ptx::ast;
-use regex::Regex;
+#[macro_use]
+extern crate lazy_static;
+extern crate cuda_types;
 
+macro_rules! extern_redirect {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:path);*) => {
+        $(
+            #[no_mangle]
+            pub extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
+                let original_fn = |dynamic_fns: &mut crate::CudaDynamicFns| {
+                    dynamic_fns.$fn_name($( $arg_id ),*)
+                };
+                let get_formatted_args = Box::new(move |writer: &mut dyn std::io::Write| {
+                    (paste! { format :: [<write_ $fn_name>] }) (
+                        writer
+                        $(,$arg_id)*
+                    )
+                });
+                crate::handle_cuda_function_call(stringify!($fn_name), original_fn, get_formatted_args)
+            }
+        )*
+    };
+}
+
+macro_rules! extern_redirect_with_post {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:path);*) => {
+        $(
+            #[no_mangle]
+            pub extern "system" fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
+                let original_fn = |dynamic_fns: &mut crate::CudaDynamicFns| {
+                    dynamic_fns.$fn_name($( $arg_id ),*)
+                };
+                let get_formatted_args = Box::new(move |writer: &mut dyn std::io::Write| {
+                    (paste! { format :: [<write_ $fn_name>] }) (
+                        writer
+                        $(,$arg_id)*
+                    )
+                });
+                crate::handle_cuda_function_call_with_probes(
+                    stringify!($fn_name),
+                    move |logger, state| paste! { [<$fn_name _Pre>] } ( $( $arg_id ),* , logger, state ),
+                    original_fn,
+                    get_formatted_args,
+                    move |logger, state, pre_result, cuda_result| paste! { [<$fn_name _Post>] } ( $( $arg_id ),* , logger, state, pre_result, cuda_result )
+                )
+            }
+        )*
+    };
+}
+
+use cuda_base::cuda_function_declarations;
+cuda_function_declarations!(
+    cuda_types,
+    extern_redirect,
+    extern_redirect_with_post,
+    [
+        cuModuleGetTexRef,
+        cuModuleLoad,
+        cuModuleLoadData,
+        cuModuleLoadDataEx,
+        cuGetExportTable,
+        cuModuleGetFunction,
+        cuDeviceGetAttribute,
+        cuDeviceComputeCapability,
+        cuModuleLoadFatBinary,
+        cuLaunchKernel,
+        cuTexRefSetAddress_v2,
+        cuTexRefSetAddress2D_v2,
+        cuTexRefSetAddress2D_v3,
+        cuTexRefSetArray,
+        cuModuleGetGlobal_v2,
+        cuGetProcAddress,
+        cuGetProcAddress_v2,
+        cuLinkAddData_v2,
+        cuLibraryLoadData,
+        cuLibraryGetModule
+    ]
+);
+
+mod dark_api;
+mod format;
+mod log;
 #[cfg_attr(windows, path = "os_win.rs")]
 #[cfg_attr(not(windows), path = "os_unix.rs")]
 mod os;
+mod profiler;
+mod side_by_side;
+mod trace;
 
-macro_rules! extern_redirect {
-    (pub fn $fn_name:ident ( $($arg_id:ident: $arg_type:ty),* $(,)? ) -> $ret_type:ty ;) => {
-        #[no_mangle]
-        pub fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
-            unsafe { $crate::init_libcuda_handle() };
-            let name = std::ffi::CString::new(stringify!($fn_name)).unwrap();
-            let fn_ptr = unsafe { crate::os::get_proc_address($crate::LIBCUDA_HANDLE, &name) };
-            if fn_ptr == std::ptr::null_mut() {
-                return CUresult::CUDA_ERROR_UNKNOWN;
-            }
-            let typed_fn = unsafe { std::mem::transmute::<_, fn( $( $arg_id : $arg_type),* ) -> $ret_type>(fn_ptr) };
-            typed_fn($( $arg_id ),*)
-        }
-    };
+lazy_static! {
+    static ref GLOBAL_STATE: Mutex<GlobalState> = Mutex::new(GlobalState::new());
 }
 
-macro_rules! extern_redirect_with {
-    (
-        pub fn $fn_name:ident ( $($arg_id:ident: $arg_type:ty),* $(,)? ) -> $ret_type:ty ;
-        $receiver:path ;
-    ) => {
-        #[no_mangle]
-        pub fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
-            unsafe { $crate::init_libcuda_handle() };
-            let continuation = |$( $arg_id : $arg_type),* | {
-                let name = std::ffi::CString::new(stringify!($fn_name)).unwrap();
-                let fn_ptr = unsafe { crate::os::get_proc_address($crate::LIBCUDA_HANDLE, &name) };
-                if fn_ptr == std::ptr::null_mut() {
-                    return CUresult::CUDA_ERROR_UNKNOWN;
+struct GlobalState {
+    log_factory: log::Factory,
+    // We split off fields that require a mutable reference to log factory to be
+    // created, additionally creation of some fields in this struct can fail
+    // initalization (e.g. we passed path a non-existant path to libcuda)
+    delayed_state: LateInit<GlobalDelayedState>,
+}
+
+unsafe impl Send for GlobalState {}
+
+impl GlobalState {
+    fn new() -> Self {
+        GlobalState {
+            log_factory: log::Factory::new(),
+            delayed_state: LateInit::Unitialized,
+        }
+    }
+}
+
+enum LateInit<T> {
+    Success(T),
+    Unitialized,
+    Error,
+}
+
+impl<T> LateInit<T> {
+    fn as_mut(&mut self) -> Option<&mut T> {
+        match self {
+            Self::Success(t) => Some(t),
+            Self::Unitialized => None,
+            Self::Error => None,
+        }
+    }
+
+    pub(crate) fn unwrap_mut(&mut self) -> &mut T {
+        match self {
+            Self::Success(t) => t,
+            Self::Unitialized | Self::Error => panic!(),
+        }
+    }
+}
+
+struct GlobalDelayedState {
+    _settings: Settings,
+    libcuda: CudaDynamicFns,
+    cuda_state: trace::StateTracker,
+    pub(crate) side_by_side: Option<side_by_side::SideBySide>,
+    pub(crate) profiler: Option<profiler::Profiler>,
+}
+
+impl GlobalDelayedState {
+    fn new<'a>(
+        func: &'static str,
+        arguments_writer: Box<dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>>,
+        factory: &'a mut log::Factory,
+    ) -> (LateInit<Self>, log::FunctionLogger<'a>) {
+        let (mut fn_logger, settings) =
+            factory.get_first_logger_and_init_settings(func, arguments_writer);
+        let mut libcuda = match unsafe { CudaDynamicFns::load_library(&settings.libcuda_path) } {
+            Some(libcuda) => libcuda,
+            None => {
+                fn_logger.log(log::LogEntry::ErrorBox(
+                    format!("Invalid CUDA library at path {}", &settings.libcuda_path).into(),
+                ));
+                return (LateInit::Error, fn_logger);
+            }
+        };
+        let side_by_side_lib = settings
+            .side_by_side_path
+            .as_ref()
+            .and_then(|side_by_side_path| {
+                match unsafe { CudaDynamicFns::load_library(&*side_by_side_path) } {
+                    Some(fns) => Some(fns),
+                    None => {
+                        fn_logger.log(log::LogEntry::ErrorBox(
+                            format!(
+                                "Invalid side-by-side CUDA library at path {}",
+                                &side_by_side_path
+                            )
+                            .into(),
+                        ));
+                        None
+                    }
                 }
-                let typed_fn = unsafe { std::mem::transmute::<_, fn( $( $arg_id : $arg_type),* ) -> $ret_type>(fn_ptr) };
-                typed_fn($( $arg_id ),*)
-            };
-            unsafe { $receiver($( $arg_id ),* , continuation) }
-        }
-    };
-}
-
-#[allow(warnings)]
-mod cuda;
-
-pub static mut LIBCUDA_HANDLE: *mut c_void = ptr::null_mut();
-pub static mut MODULES: Option<HashMap<CUmodule, ModuleDump>> = None;
-pub static mut KERNELS: Option<HashMap<CUfunction, KernelDump>> = None;
-pub static mut BUFFERS: Vec<(usize, usize)> = Vec::new();
-pub static mut LAUNCH_COUNTER: usize = 0;
-pub static mut KERNEL_PATTERN: Option<Regex> = None;
-
-pub struct ModuleDump {
-    content: Rc<String>,
-    kernels_args: HashMap<String, Vec<usize>>,
-}
-
-pub struct KernelDump {
-    module_content: Rc<String>,
-    name: String,
-    arguments: Vec<usize>,
-}
-
-// We are doing dlopen here instead of just using LD_PRELOAD,
-// it's because CUDA Runtime API does dlopen to open libcuda.so, which ignores LD_PRELOAD
-pub unsafe fn init_libcuda_handle() {
-    if LIBCUDA_HANDLE == ptr::null_mut() {
-        let libcuda_handle = os::load_cuda_library();
-        assert_ne!(libcuda_handle, ptr::null_mut());
-        LIBCUDA_HANDLE = libcuda_handle;
-        match env::var("ZLUDA_DUMP_KERNEL") {
-            Ok(kernel_filter) => match Regex::new(&kernel_filter) {
-                Ok(r) => KERNEL_PATTERN = Some(r),
-                Err(err) => {
-                    eprintln!(
-                        "[ZLUDA_DUMP] Env variable ZLUDA_DUMP_KERNEL is not a regex: {}",
-                        err
-                    );
-                }
-            },
-            Err(_) => (),
-        }
-        eprintln!("[ZLUDA_DUMP] Initialized");
+            });
+        let cuda_state = trace::StateTracker::new(&settings);
+        let side_by_side = side_by_side_lib
+            .map(|lib| {
+                side_by_side::SideBySide::new(
+                    lib,
+                    &mut fn_logger,
+                    settings.side_by_side_skip_kernel.as_ref(),
+                    settings.side_by_side_dump_threshold,
+                )
+            })
+            .flatten();
+        let profiler = profiler::Profiler::new(&settings, &mut libcuda, &mut fn_logger);
+        let delayed_state = GlobalDelayedState {
+            _settings: settings,
+            libcuda,
+            cuda_state,
+            side_by_side,
+            profiler,
+        };
+        (LateInit::Success(delayed_state), fn_logger)
     }
 }
 
-#[allow(non_snake_case)]
-pub unsafe fn cuModuleLoadData(
-    module: *mut CUmodule,
-    raw_image: *const ::std::os::raw::c_void,
-    cont: impl FnOnce(*mut CUmodule, *const c_void) -> CUresult,
-) -> CUresult {
-    let result = cont(module, raw_image);
-    if result == CUresult::CUDA_SUCCESS {
-        record_module_image_raw(*module, raw_image);
-    }
-    result
+struct Settings {
+    dump_dir: Option<PathBuf>,
+    libcuda_path: String,
+    log_enabled: bool,
+    override_cc_major: Option<u32>,
+    side_by_side_path: Option<String>,
+    side_by_side_skip_kernel: Option<String>,
+    side_by_side_dump_threshold: Option<f32>,
+    profiler_output: Option<String>,
 }
 
-unsafe fn record_module_image_raw(module: CUmodule, raw_image: *const ::std::os::raw::c_void) {
-    let image = to_str(raw_image);
-    match image {
-        None => eprintln!("[ZLUDA_DUMP] Malformed module image: {:?}", raw_image),
-        Some(image) => record_module_image(module, image),
-    };
-}
-
-unsafe fn record_module_image(module: CUmodule, image: &str) {
-    if !image.contains(&".address_size") {
-        eprintln!("[ZLUDA_DUMP] Malformed module image: {:?}", module)
-    } else {
-        let mut errors = Vec::new();
-        let ast = ptx::ModuleParser::new().parse(&mut errors, image);
-        match (&*errors, ast) {
-            (&[], Ok(ast)) => {
-                let kernels_args = ast
-                    .directives
-                    .iter()
-                    .filter_map(directive_to_kernel)
-                    .collect::<HashMap<_, _>>();
-                let modules = MODULES.get_or_insert_with(|| HashMap::new());
-                modules.insert(
-                    module,
-                    ModuleDump {
-                        content: Rc::new(image.to_string()),
-                        kernels_args,
-                    },
-                );
+impl Settings {
+    fn read_and_init(log_enabled: bool, logger: &mut log::FunctionLogger) -> Self {
+        let maybe_dump_dir = Self::read_and_init_dump_dir();
+        let dump_dir = match maybe_dump_dir {
+            Ok(Some(dir)) => {
+                logger.log(log::LogEntry::CreatedDumpDirectory(dir.clone()));
+                Some(dir)
             }
-            (errs, ast) => {
-                let err_string = errs
-                    .iter()
-                    .map(|e| format!("{:?}", e))
-                    .chain(ast.err().iter().map(|e| format!("{:?}", e)))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                eprintln!(
-                    "[ZLUDA_DUMP] Errors when parsing module:\n---ERRORS---\n{}\n---MODULE---\n{}",
-                    err_string, image
-                );
+            Ok(None) => None,
+            Err(err) => {
+                logger.log(log::LogEntry::ErrorBox(err));
+                None
             }
+        };
+        let mut report_err = |e| logger.log(e);
+        let libcuda_path: String = parse_env_var("ZLUDA_CUDA_LIB", &mut report_err)
+            .unwrap_or_else(|| os::LIBCUDA_DEFAULT_PATH.to_owned());
+        let override_cc_major =
+            parse_env_var::<u32, _>("ZLUDA_OVERRIDE_COMPUTE_CAPABILITY_MAJOR", &mut report_err);
+        let side_by_side_path =
+            parse_env_var::<String, _>("ZLUDA_SIDE_BY_SIDE_LIB", &mut report_err);
+        let side_by_side_skip_kernel =
+            parse_env_var::<String, _>("ZLUDA_SIDE_BY_SIDE_SKIP_KERNEL", &mut report_err);
+        let side_by_side_dump_threshold =
+            parse_env_var::<f32, _>("ZLUDA_SIDE_BY_DUMP_THRESHOLD", &mut report_err);
+        let profiler_output = parse_env_var::<String, _>("ZLUDA_PROFILER_OUTPUT", &mut report_err);
+        Settings {
+            dump_dir,
+            log_enabled,
+            libcuda_path,
+            override_cc_major,
+            side_by_side_path,
+            side_by_side_skip_kernel,
+            side_by_side_dump_threshold,
+            profiler_output,
         }
+    }
+
+    fn read_and_init_dump_dir() -> Result<Option<PathBuf>, Box<dyn Error>> {
+        let dir = match env::var("ZLUDA_DUMP_DIR") {
+            Ok(dir) => dir,
+            Err(env::VarError::NotPresent) => return Ok(None),
+            Err(err) => return Err(Box::new(err) as Box<_>),
+        };
+        Ok(Some(Self::create_dump_directory(dir)?))
+    }
+
+    fn create_dump_directory(dir: String) -> io::Result<PathBuf> {
+        let mut main_dir = PathBuf::from(dir);
+        let current_exe = env::current_exe()?;
+        let file_name_base = current_exe.file_name().unwrap().to_string_lossy();
+        main_dir.push(&*file_name_base);
+        let mut suffix = 1;
+        // This can get into infinite loop. Unfortunately try_exists is unstable:
+        // https://doc.rust-lang.org/std/path/struct.Path.html#method.try_exists
+        while main_dir.exists() {
+            main_dir.set_file_name(format!("{}_{}", file_name_base, suffix));
+            suffix += 1;
+        }
+        fs::create_dir_all(&*main_dir)?;
+        Ok(main_dir)
     }
 }
 
-unsafe fn to_str<T>(image: *const T) -> Option<&'static str> {
-    let ptr = image as *const u8;
-    let mut offset = 0;
-    loop {
-        let c = *ptr.add(offset);
-        if !c.is_ascii() {
+fn parse_env_var<T: FromStr, FnErr>(key: &'static str, report_err: &mut FnErr) -> Option<T>
+where
+    T::Err: Display + 'static,
+    FnErr: FnMut(log::LogEntry),
+{
+    let value = match env::var(key) {
+        Ok(env_var) => env_var,
+        Err(env::VarError::NotPresent) => return None,
+        Err(err) => {
+            report_err(LogEntry::EnvVarError(err));
             return None;
         }
-        if c == 0 {
-            return Some(std::str::from_utf8_unchecked(slice::from_raw_parts(
-                ptr, offset,
-            )));
+    };
+    match value.parse::<T>() {
+        Ok(value) => Some(value),
+        Err(err) => {
+            let err = Box::new(err);
+            report_err(LogEntry::MalformedEnvVar { key, value, err });
+            return None;
         }
-        offset += 1;
     }
 }
 
-fn directive_to_kernel(dir: &ast::Directive<ast::ParsedArgParams>) -> Option<(String, Vec<usize>)> {
-    match dir {
-        ast::Directive::Method(ast::Function {
-            func_directive: ast::MethodDecl::Kernel { name, in_args },
-            ..
-        }) => {
-            let arg_sizes = in_args
-                .iter()
-                .map(|arg| ast::Type::from(arg.v_type.clone()).size_of())
-                .collect();
-            Some((name.to_string(), arg_sizes))
-        }
-        _ => None,
-    }
-}
-
-#[allow(non_snake_case)]
-pub unsafe fn cuModuleLoadDataEx(
-    module: *mut CUmodule,
-    image: *const c_void,
-    numOptions: c_uint,
-    options: *mut CUjit_option,
-    optionValues: *mut *mut c_void,
-    cont: impl FnOnce(
-        *mut CUmodule,
-        *const c_void,
-        c_uint,
-        *mut CUjit_option,
-        *mut *mut c_void,
-    ) -> CUresult,
+fn handle_cuda_function_call(
+    func: &'static str,
+    original_cuda_fn: impl FnOnce(&mut CudaDynamicFns) -> Option<CUresult>,
+    arguments_writer: Box<dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>>,
 ) -> CUresult {
-    let result = cont(module, image, numOptions, options, optionValues);
-    if result == CUresult::CUDA_SUCCESS {
-        record_module_image_raw(*module, image);
-    }
-    result
+    handle_cuda_function_call_with_probes(
+        func,
+        |_, _| (),
+        original_cuda_fn,
+        arguments_writer,
+        |_, _, _, _| (),
+    )
+}
+
+fn handle_cuda_function_call_with_probes<T, PreFn, PostFn>(
+    func: &'static str,
+    pre_probe: PreFn,
+    original_cuda_fn: impl FnOnce(&mut CudaDynamicFns) -> Option<CUresult>,
+    arguments_writer: Box<dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>>,
+    post_probe: PostFn,
+) -> CUresult
+where
+    for<'a> PreFn: FnOnce(&'a mut log::FunctionLogger, &'a mut GlobalDelayedState) -> T,
+    for<'a> PostFn: FnOnce(&'a mut log::FunctionLogger, &'a mut GlobalDelayedState, T, CUresult),
+{
+    let global_state_mutex = &*GLOBAL_STATE;
+    // We unwrap because there's really no sensible thing we could do,
+    // alternatively we could return a CUDA error, but I think it's fine to
+    // crash. This is a diagnostic utility, if the lock was poisoned we can't
+    // extract any useful trace or logging anyway
+    let global_state = &mut *global_state_mutex.lock().unwrap();
+    let (mut logger, delayed_state) = match global_state.delayed_state {
+        LateInit::Success(ref mut delayed_state) => (
+            global_state.log_factory.get_logger(func, arguments_writer),
+            delayed_state,
+        ),
+        // There's no libcuda to load, so we might as well panic
+        LateInit::Error => panic!(),
+        LateInit::Unitialized => {
+            let (new_delayed_state, logger) =
+                GlobalDelayedState::new(func, arguments_writer, &mut global_state.log_factory);
+            global_state.delayed_state = new_delayed_state;
+            (logger, global_state.delayed_state.as_mut().unwrap())
+        }
+    };
+    let pre_result = pre_probe(&mut logger, delayed_state);
+    let maybe_cu_result = {
+        let task = delayed_state.profiler.as_ref().map(|p| p.record_task(func));
+        if task.is_some() && func == "cuDevicePrimaryCtxReset" {
+            Some(CUresult::CUDA_SUCCESS)
+        } else {
+            original_cuda_fn(&mut delayed_state.libcuda)
+        }
+    };
+    let cu_result = match maybe_cu_result {
+        Some(result) => result,
+        None => {
+            logger.log(log::LogEntry::ErrorBox(
+                format!("No function {} in the underlying CUDA library", func).into(),
+            ));
+            CUresult::CUDA_ERROR_UNKNOWN
+        }
+    };
+    logger.result = maybe_cu_result;
+    post_probe(&mut logger, delayed_state, pre_result, cu_result);
+    cu_result
 }
 
 #[allow(non_snake_case)]
-unsafe fn cuModuleGetFunction(
+pub(crate) fn cuModuleLoad_Pre(
+    _module: *mut CUmodule,
+    _fname: *const ::std::os::raw::c_char,
+    _fn_logger: &mut log::FunctionLogger,
+    _state: &mut GlobalDelayedState,
+) {
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuModuleLoad_Post(
+    module: *mut CUmodule,
+    fname: *const ::std::os::raw::c_char,
+    fn_logger: &mut log::FunctionLogger,
+    state: &mut GlobalDelayedState,
+    _pre_result: (),
+    result: CUresult,
+) {
+    if result != CUresult::CUDA_SUCCESS {
+        return;
+    }
+    state.cuda_state.record_module(
+        fn_logger,
+        Some(unsafe { *module }),
+        CUmoduleContent::File(fname),
+    );
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuModuleLoadData_Pre(
+    _module: *mut CUmodule,
+    _raw_image: *const ::std::os::raw::c_void,
+    _fn_logger: &mut log::FunctionLogger,
+    _state: &mut GlobalDelayedState,
+) {
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuModuleLoadData_Post(
+    module: *mut CUmodule,
+    raw_image: *const ::std::os::raw::c_void,
+    fn_logger: &mut log::FunctionLogger,
+    state: &mut GlobalDelayedState,
+    _pre_result: (),
+    result: CUresult,
+) {
+    if result != CUresult::CUDA_SUCCESS {
+        return;
+    }
+    if let Some(module_content) =
+        fn_logger.log_unwrap(unsafe { CUmoduleContent::from_ptr(raw_image.cast()) }.map_err(LogEntry::from))
+    {
+        state
+            .cuda_state
+            .record_module(fn_logger, Some(unsafe { *module }), module_content);
+    }
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuModuleLoadDataEx_Pre(
+    _module: *mut CUmodule,
+    _raw_image: *const ::std::os::raw::c_void,
+    _numOptions: ::std::os::raw::c_uint,
+    _options: *mut CUjit_option,
+    _optionValues: *mut *mut ::std::os::raw::c_void,
+    _fn_logger: &mut log::FunctionLogger,
+    _state: &mut GlobalDelayedState,
+) {
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuModuleLoadDataEx_Post(
+    module: *mut CUmodule,
+    raw_image: *const ::std::os::raw::c_void,
+    _numOptions: ::std::os::raw::c_uint,
+    _options: *mut CUjit_option,
+    _optionValues: *mut *mut ::std::os::raw::c_void,
+    fn_logger: &mut log::FunctionLogger,
+    state: &mut GlobalDelayedState,
+    pre_result: (),
+    result: CUresult,
+) {
+    cuModuleLoadData_Post(module, raw_image, fn_logger, state, pre_result, result)
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuGetExportTable_Pre(
+    _ppExportTable: *mut *const ::std::os::raw::c_void,
+    _pExportTableId: *const CUuuid,
+    _fn_logger: &mut log::FunctionLogger,
+    _state: &mut GlobalDelayedState,
+) {
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuGetExportTable_Post(
+    ppExportTable: *mut *const ::std::os::raw::c_void,
+    pExportTableId: *const CUuuid,
+    fn_logger: &mut log::FunctionLogger,
+    state: &mut GlobalDelayedState,
+    _pre_result: (),
+    result: CUresult,
+) {
+    if result != CUresult::CUDA_SUCCESS {
+        return;
+    }
+    dark_api::override_export_table(
+        fn_logger,
+        ppExportTable,
+        pExportTableId,
+        &mut state.cuda_state,
+    )
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuModuleGetFunction_Pre(
+    _hfunc: *mut CUfunction,
+    _hmod: CUmodule,
+    _name: *const ::std::os::raw::c_char,
+    _fn_logger: &mut log::FunctionLogger,
+    _state: &mut GlobalDelayedState,
+) {
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuModuleGetFunction_Post(
     hfunc: *mut CUfunction,
     hmod: CUmodule,
     name: *const ::std::os::raw::c_char,
-    cont: impl FnOnce(*mut CUfunction, CUmodule, *const ::std::os::raw::c_char) -> CUresult,
-) -> CUresult {
-    let result = cont(hfunc, hmod, name);
+    fn_logger: &mut log::FunctionLogger,
+    state: &mut GlobalDelayedState,
+    _pre_result: (),
+    result: CUresult,
+) {
     if result != CUresult::CUDA_SUCCESS {
-        return result;
+        return;
     }
-    if let Some(modules) = &MODULES {
-        if let Some(module_dump) = modules.get(&hmod) {
-            if let Some(kernel) = to_str(name) {
-                if let Some(args) = module_dump.kernels_args.get(kernel) {
-                    let kernel_args = KERNELS.get_or_insert_with(|| HashMap::new());
-                    kernel_args.insert(
-                        *hfunc,
-                        KernelDump {
-                            module_content: module_dump.content.clone(),
-                            name: kernel.to_string(),
-                            arguments: args.clone(),
-                        },
-                    );
-                } else {
-                    eprintln!("[ZLUDA_DUMP] Unknown kernel: {}", kernel);
-                }
-            } else {
-                eprintln!("[ZLUDA_DUMP] Unknown kernel name at: {:?}", hfunc);
-            }
-        } else {
-            eprintln!("[ZLUDA_DUMP] Unknown module: {:?}", hmod);
+    unsafe {
+        state
+            .cuda_state
+            .record_function(*hfunc, hmod, name, fn_logger)
+    }
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuDeviceGetAttribute_Pre(
+    _pi: *mut ::std::os::raw::c_int,
+    _attrib: CUdevice_attribute,
+    _dev: CUdevice,
+    _fn_logger: &mut log::FunctionLogger,
+    _state: &mut GlobalDelayedState,
+) {
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuDeviceGetAttribute_Post(
+    pi: *mut ::std::os::raw::c_int,
+    attrib: CUdevice_attribute,
+    _dev: CUdevice,
+    _fn_logger: &mut log::FunctionLogger,
+    state: &mut GlobalDelayedState,
+    _pre_result: (),
+    _result: CUresult,
+) {
+    if attrib == CUdevice_attribute::CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR {
+        if let Some(major_ver_override) = state.cuda_state.override_cc_major {
+            unsafe { *pi = major_ver_override as i32 };
         }
-    } else {
-        eprintln!("[ZLUDA_DUMP] Unknown module: {:?}", hmod);
     }
-    CUresult::CUDA_SUCCESS
 }
 
 #[allow(non_snake_case)]
-pub unsafe fn cuMemAlloc_v2(
-    dptr: *mut CUdeviceptr,
-    bytesize: usize,
-    cont: impl FnOnce(*mut CUdeviceptr, usize) -> CUresult,
-) -> CUresult {
-    let result = cont(dptr, bytesize);
-    assert_eq!(result, CUresult::CUDA_SUCCESS);
-    let start = (*dptr).0 as usize;
-    BUFFERS.push((start, bytesize));
-    CUresult::CUDA_SUCCESS
+pub(crate) fn cuDeviceComputeCapability_Pre(
+    _major: *mut ::std::os::raw::c_int,
+    _minor: *mut ::std::os::raw::c_int,
+    _dev: CUdevice,
+    _fn_logger: &mut log::FunctionLogger,
+    _state: &mut GlobalDelayedState,
+) {
 }
 
 #[allow(non_snake_case)]
-pub unsafe fn cuLaunchKernel(
+pub(crate) fn cuDeviceComputeCapability_Post(
+    major: *mut ::std::os::raw::c_int,
+    _minor: *mut ::std::os::raw::c_int,
+    _dev: CUdevice,
+    _fn_logger: &mut log::FunctionLogger,
+    state: &mut GlobalDelayedState,
+    _pre_result: (),
+    _result: CUresult,
+) {
+    if let Some(major_ver_override) = state.cuda_state.override_cc_major {
+        unsafe { *major = major_ver_override as i32 };
+    }
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuModuleLoadFatBinary_Pre(
+    _module: *mut CUmodule,
+    _fatCubin: *const ::std::os::raw::c_void,
+    _fn_logger: &mut log::FunctionLogger,
+    _state: &mut GlobalDelayedState,
+) {
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuModuleLoadFatBinary_Post(
+    _module: *mut CUmodule,
+    _fatCubin: *const ::std::os::raw::c_void,
+    _fn_logger: &mut log::FunctionLogger,
+    _state: &mut GlobalDelayedState,
+    _pre_result: (),
+    result: CUresult,
+) {
+    if result == CUresult::CUDA_SUCCESS {
+        panic!()
+    }
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuLaunchKernel_Pre(
+    f: CUfunction,
+    _gridDimX: ::std::os::raw::c_uint,
+    _gridDimY: ::std::os::raw::c_uint,
+    _gridDimZ: ::std::os::raw::c_uint,
+    _blockDimX: ::std::os::raw::c_uint,
+    _blockDimY: ::std::os::raw::c_uint,
+    _blockDimZ: ::std::os::raw::c_uint,
+    _sharedMemBytes: ::std::os::raw::c_uint,
+    stream: CUstream,
+    kernelParams: *mut *mut ::std::os::raw::c_void,
+    extra: *mut *mut ::std::os::raw::c_void,
+    fn_logger: &mut log::FunctionLogger,
+    state: &mut GlobalDelayedState,
+) -> (Option<side_by_side::HostArguments>, Option<CUevent>) {
+    let side_by_side_args = unsafe {
+        side_by_side::pre_kernel_launch(
+            &mut state.libcuda,
+            &mut state.cuda_state,
+            &mut state.side_by_side,
+            fn_logger,
+            f,
+            stream,
+            kernelParams,
+            extra,
+        )
+    };
+    let start_event = if state.profiler.is_some() {
+        fn_logger.log_unwrap(record_event(stream, &mut state.libcuda))
+    } else {
+        None
+    };
+    (side_by_side_args, start_event)
+}
+
+// TODO: stop leaking CUevent on failure
+fn record_event(stream: CUstream, libcuda: &mut CudaDynamicFns) -> Result<CUevent, LogEntry> {
+    let mut event = ptr::null_mut();
+    cuda_call!(libcuda.cuEventCreate(&mut event, 0));
+    cuda_call!(libcuda.cuEventRecord(event, stream));
+    Ok(event)
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuLaunchKernel_Post(
     f: CUfunction,
     gridDimX: ::std::os::raw::c_uint,
     gridDimY: ::std::os::raw::c_uint,
@@ -279,33 +651,40 @@ pub unsafe fn cuLaunchKernel(
     blockDimY: ::std::os::raw::c_uint,
     blockDimZ: ::std::os::raw::c_uint,
     sharedMemBytes: ::std::os::raw::c_uint,
-    hStream: CUstream,
+    stream: CUstream,
     kernelParams: *mut *mut ::std::os::raw::c_void,
     extra: *mut *mut ::std::os::raw::c_void,
-    cont: impl FnOnce(
-        CUfunction,
-        ::std::os::raw::c_uint,
-        ::std::os::raw::c_uint,
-        ::std::os::raw::c_uint,
-        ::std::os::raw::c_uint,
-        ::std::os::raw::c_uint,
-        ::std::os::raw::c_uint,
-        ::std::os::raw::c_uint,
-        CUstream,
-        *mut *mut ::std::os::raw::c_void,
-        *mut *mut ::std::os::raw::c_void,
-    ) -> CUresult,
-) -> CUresult {
-    let mut error;
-    let dump_env = match create_dump_dir(f, LAUNCH_COUNTER) {
-        Ok(dump_env) => dump_env,
-        Err(err) => {
-            eprintln!("[ZLUDA_DUMP] {:#?}", err);
-            None
+    fn_logger: &mut log::FunctionLogger,
+    state: &mut GlobalDelayedState,
+    pre_result: (Option<side_by_side::HostArguments>, Option<CUevent>),
+    result: CUresult,
+) {
+    if result != CUresult::CUDA_SUCCESS {
+        return;
+    }
+    let (side_by_side_args, start_event) = pre_result;
+    if let Some(start_event) = start_event {
+        if let Some(end_event) = fn_logger.log_unwrap(record_event(stream, &mut state.libcuda)) {
+            let func_name = match state.cuda_state.functions.get(&f) {
+                Some(recorded_func) => profiler::FunctionName::Resolved(recorded_func.name.clone()),
+                None => profiler::FunctionName::Unresolved(f),
+            };
+            state.profiler.as_ref().unwrap().record_kernel(
+                stream,
+                func_name,
+                start_event,
+                end_event,
+            );
         }
-    };
-    if let Some(dump_env) = &dump_env {
-        dump_pre_data(
+    }
+    unsafe {
+        side_by_side::post_kernel_launch(
+            &mut state.libcuda,
+            &mut state.cuda_state,
+            &mut state.side_by_side,
+            fn_logger,
+            side_by_side_args,
+            f,
             gridDimX,
             gridDimY,
             gridDimZ,
@@ -313,358 +692,507 @@ pub unsafe fn cuLaunchKernel(
             blockDimY,
             blockDimZ,
             sharedMemBytes,
+            stream,
             kernelParams,
-            dump_env,
+            extra,
         )
-        .unwrap_or_else(|err| eprintln!("[ZLUDA_DUMP] {:#?}", err));
-    };
-    error = cont(
-        f,
-        gridDimX,
-        gridDimY,
-        gridDimZ,
-        blockDimX,
-        blockDimY,
-        blockDimZ,
-        sharedMemBytes,
-        hStream,
-        kernelParams,
-        extra,
-    );
-    assert_eq!(error, CUresult::CUDA_SUCCESS);
-    error = cuda::cuStreamSynchronize(hStream);
-    assert_eq!(error, CUresult::CUDA_SUCCESS);
-    if let Some((_, kernel_dump)) = &dump_env {
-        dump_arguments(
-            kernelParams,
-            "post",
-            &kernel_dump.name,
-            LAUNCH_COUNTER,
-            &kernel_dump.arguments,
-        )
-        .unwrap_or_else(|err| eprintln!("[ZLUDA_DUMP] {:#?}", err));
     }
-    LAUNCH_COUNTER += 1;
-    CUresult::CUDA_SUCCESS
+    .unwrap_or_default()
 }
 
 #[allow(non_snake_case)]
-fn dump_launch_arguments(
-    gridDimX: u32,
-    gridDimY: u32,
-    gridDimZ: u32,
-    blockDimX: u32,
-    blockDimY: u32,
-    blockDimZ: u32,
-    sharedMemBytes: u32,
-    dump_dir: &PathBuf,
-) -> Result<(), Box<dyn Error>> {
-    let mut module_file_path = dump_dir.clone();
-    module_file_path.push("launch.txt");
-    let mut module_file = File::create(module_file_path)?;
-    write!(&mut module_file, "{}\n", gridDimX)?;
-    write!(&mut module_file, "{}\n", gridDimY)?;
-    write!(&mut module_file, "{}\n", gridDimZ)?;
-    write!(&mut module_file, "{}\n", blockDimX)?;
-    write!(&mut module_file, "{}\n", blockDimY)?;
-    write!(&mut module_file, "{}\n", blockDimZ)?;
-    write!(&mut module_file, "{}\n", sharedMemBytes)?;
-    Ok(())
-}
-
-unsafe fn should_dump_kernel(name: &str) -> bool {
-    match &KERNEL_PATTERN {
-        Some(pattern) => pattern.is_match(name),
-        None => true,
-    }
-}
-
-unsafe fn create_dump_dir(
-    f: CUfunction,
-    counter: usize,
-) -> Result<Option<(PathBuf, &'static KernelDump)>, Box<dyn Error>> {
-    match KERNELS.as_ref().and_then(|kernels| kernels.get(&f)) {
-        Some(kernel_dump) => {
-            if !should_dump_kernel(&kernel_dump.name) {
-                return Ok(None);
-            }
-            let mut dump_dir = get_dump_dir()?;
-            dump_dir.push(format!("{:04}_{}", counter, kernel_dump.name));
-            fs::create_dir_all(&dump_dir)?;
-            Ok(Some((dump_dir, kernel_dump)))
-        }
-        None => Err("Unknown kernel: {:?}")?,
-    }
+pub(crate) fn cuTexRefSetAddress_v2_Pre(
+    _ByteOffset: *mut usize,
+    _hTexRef: CUtexref,
+    _dptr: CUdeviceptr,
+    _bytes: usize,
+    _fn_logger: &mut log::FunctionLogger,
+    _state: &mut GlobalDelayedState,
+) -> () {
 }
 
 #[allow(non_snake_case)]
-unsafe fn dump_pre_data(
-    gridDimX: ::std::os::raw::c_uint,
-    gridDimY: ::std::os::raw::c_uint,
-    gridDimZ: ::std::os::raw::c_uint,
-    blockDimX: ::std::os::raw::c_uint,
-    blockDimY: ::std::os::raw::c_uint,
-    blockDimZ: ::std::os::raw::c_uint,
-    sharedMemBytes: ::std::os::raw::c_uint,
-    kernelParams: *mut *mut ::std::os::raw::c_void,
-    (dump_dir, kernel_dump): &(PathBuf, &'static KernelDump),
-) -> Result<(), Box<dyn Error>> {
-    dump_launch_arguments(
-        gridDimX,
-        gridDimY,
-        gridDimZ,
-        blockDimX,
-        blockDimY,
-        blockDimZ,
-        sharedMemBytes,
-        dump_dir,
-    )?;
-    let mut module_file_path = dump_dir.clone();
-    module_file_path.push("module.ptx");
-    let mut module_file = File::create(module_file_path)?;
-    module_file.write_all(kernel_dump.module_content.as_bytes())?;
-    dump_arguments(
-        kernelParams,
-        "pre",
-        &kernel_dump.name,
-        LAUNCH_COUNTER,
-        &kernel_dump.arguments,
-    )?;
-    Ok(())
-}
-
-unsafe fn dump_arguments(
-    kernel_params: *mut *mut ::std::os::raw::c_void,
-    prefix: &str,
-    kernel_name: &str,
-    counter: usize,
-    args: &[usize],
-) -> Result<(), Box<dyn Error>> {
-    let mut dump_dir = get_dump_dir()?;
-    dump_dir.push(format!("{:04}_{}", counter, kernel_name));
-    dump_dir.push(prefix);
-    if dump_dir.exists() {
-        fs::remove_dir_all(&dump_dir)?;
-    }
-    fs::create_dir_all(&dump_dir)?;
-    for (i, arg_len) in args.iter().enumerate() {
-        let dev_ptr = *(*kernel_params.add(i) as *mut usize);
-        match BUFFERS.iter().find(|(start, _)| *start == dev_ptr as usize) {
-            Some((start, len)) => {
-                let mut output = vec![0u8; *len];
-                let error =
-                    cuda::cuMemcpyDtoH_v2(output.as_mut_ptr() as *mut _, CUdeviceptr(*start), *len);
-                assert_eq!(error, CUresult::CUDA_SUCCESS);
-                let mut path = dump_dir.clone();
-                path.push(format!("arg_{:03}.buffer", i));
-                let mut file = File::create(path)?;
-                file.write_all(&mut output)?;
-            }
-            None => {
-                let mut path = dump_dir.clone();
-                path.push(format!("arg_{:03}", i));
-                let mut file = File::create(path)?;
-                file.write_all(slice::from_raw_parts(
-                    *kernel_params.add(i) as *mut u8,
-                    *arg_len,
-                ))?;
-            }
-        }
-    }
-    Ok(())
-}
-
-fn get_dump_dir() -> Result<PathBuf, Box<dyn Error>> {
-    let dir = env::var("ZLUDA_DUMP_DIR")?;
-    let mut main_dir = PathBuf::from(dir);
-    let current_exe = env::current_exe()?;
-    main_dir.push(current_exe.file_name().unwrap());
-    fs::create_dir_all(&main_dir)?;
-    Ok(main_dir)
-}
-
-// TODO make this more common with ZLUDA implementation
-const CUDART_INTERFACE_GUID: CUuuid = CUuuid {
-    bytes: [
-        0x6b, 0xd5, 0xfb, 0x6c, 0x5b, 0xf4, 0xe7, 0x4a, 0x89, 0x87, 0xd9, 0x39, 0x12, 0xfd, 0x9d,
-        0xf9,
-    ],
-};
-
-const GET_MODULE_OFFSET: usize = 6;
-static mut CUDART_INTERFACE_VTABLE: Vec<*const c_void> = Vec::new();
-static mut ORIGINAL_GET_MODULE_FROM_CUBIN: Option<
-    unsafe extern "C" fn(
-        result: *mut CUmodule,
-        fatbinc_wrapper: *const FatbincWrapper,
-        ptr1: *mut c_void,
-        ptr2: *mut c_void,
-    ) -> CUresult,
-> = None;
-
-#[allow(non_snake_case)]
-pub unsafe fn cuGetExportTable(
-    ppExportTable: *mut *const ::std::os::raw::c_void,
-    pExportTableId: *const CUuuid,
-    cont: impl FnOnce(*mut *const ::std::os::raw::c_void, *const CUuuid) -> CUresult,
-) -> CUresult {
-    if *pExportTableId == CUDART_INTERFACE_GUID {
-        if CUDART_INTERFACE_VTABLE.len() == 0 {
-            let mut base_table = ptr::null();
-            let base_result = cont(&mut base_table, pExportTableId);
-            if base_result != CUresult::CUDA_SUCCESS {
-                return base_result;
-            }
-            let len = *(base_table as *const usize);
-            CUDART_INTERFACE_VTABLE = vec![ptr::null(); len];
-            ptr::copy_nonoverlapping(
-                base_table as *const _,
-                CUDART_INTERFACE_VTABLE.as_mut_ptr(),
-                len,
-            );
-            if GET_MODULE_OFFSET >= len {
-                return CUresult::CUDA_ERROR_UNKNOWN;
-            }
-            ORIGINAL_GET_MODULE_FROM_CUBIN =
-                mem::transmute(CUDART_INTERFACE_VTABLE[GET_MODULE_OFFSET]);
-            CUDART_INTERFACE_VTABLE[GET_MODULE_OFFSET] = get_module_from_cubin as *const _;
-        }
-        *ppExportTable = CUDART_INTERFACE_VTABLE.as_ptr() as *const _;
-        return CUresult::CUDA_SUCCESS;
-    } else {
-        cont(ppExportTable, pExportTableId)
-    }
-}
-
-const FATBINC_MAGIC: c_uint = 0x466243B1;
-const FATBINC_VERSION: c_uint = 0x1;
-
-#[repr(C)]
-struct FatbincWrapper {
-    magic: c_uint,
-    version: c_uint,
-    data: *const FatbinHeader,
-    filename_or_fatbins: *const c_void,
-}
-
-const FATBIN_MAGIC: c_uint = 0xBA55ED50;
-const FATBIN_VERSION: c_ushort = 0x01;
-
-#[repr(C, align(8))]
-struct FatbinHeader {
-    magic: c_uint,
-    version: c_ushort,
-    header_size: c_ushort,
-    files_size: c_ulong, // excluding frame header, size of all blocks framed by this frame
-}
-
-const FATBIN_FILE_HEADER_KIND_PTX: c_ushort = 0x01;
-const FATBIN_FILE_HEADER_VERSION_CURRENT: c_ushort = 0x101;
-
-// assembly file header is a bit different, but we don't care
-#[repr(C)]
-#[derive(Debug)]
-struct FatbinFileHeader {
-    kind: c_ushort,
-    version: c_ushort,
-    header_size: c_uint,
-    padded_payload_size: c_uint,
-    unknown0: c_uint, // check if it's written into separately
-    payload_size: c_uint,
-    unknown1: c_uint,
-    unknown2: c_uint,
-    sm_version: c_uint,
-    bit_width: c_uint,
-    unknown3: c_uint,
-    unknown4: c_ulong,
-    unknown5: c_ulong,
-    uncompressed_payload: c_ulong,
-}
-
-unsafe extern "C" fn get_module_from_cubin(
-    module: *mut CUmodule,
-    fatbinc_wrapper: *const FatbincWrapper,
-    ptr1: *mut c_void,
-    ptr2: *mut c_void,
-) -> CUresult {
-    if module == ptr::null_mut()
-        || (*fatbinc_wrapper).magic != FATBINC_MAGIC
-        || (*fatbinc_wrapper).version != FATBINC_VERSION
-    {
-        return CUresult::CUDA_ERROR_INVALID_VALUE;
-    }
-    let fatbin_header = (*fatbinc_wrapper).data;
-    if (*fatbin_header).magic != FATBIN_MAGIC || (*fatbin_header).version != FATBIN_VERSION {
-        return CUresult::CUDA_ERROR_INVALID_VALUE;
-    }
-    let file = (fatbin_header as *const u8).add((*fatbin_header).header_size as usize);
-    let end = file.add((*fatbin_header).files_size as usize);
-    let mut ptx_files = get_ptx_files(file, end);
-    ptx_files.sort_unstable_by_key(|f| c_uint::max_value() - (**f).sm_version);
-    let mut maybe_kernel_text = None;
-    for file in ptx_files {
-        match decompress_kernel_module(file) {
-            None => continue,
-            Some(vec) => {
-                maybe_kernel_text = Some(vec);
-                break;
-            }
-        };
-    }
-    let result = ORIGINAL_GET_MODULE_FROM_CUBIN.unwrap()(module, fatbinc_wrapper, ptr1, ptr2);
+pub(crate) fn cuTexRefSetAddress_v2_Post(
+    _ByteOffset: *mut usize,
+    hTexRef: CUtexref,
+    pointer: CUdeviceptr,
+    bytes: usize,
+    fn_logger: &mut log::FunctionLogger,
+    state: &mut GlobalDelayedState,
+    _pre_result: (),
+    result: CUresult,
+) -> () {
     if result != CUresult::CUDA_SUCCESS {
-        return result;
+        return;
     }
-    if let Some(text) = maybe_kernel_text {
-        match CStr::from_bytes_with_nul(&text) {
-            Ok(cstr) => match cstr.to_str() {
-                Ok(utf8_str) => record_module_image(*module, utf8_str),
-                Err(_) => {}
-            },
-            Err(_) => {}
-        }
+    if pointer.0 == ptr::null_mut() {
+        state.cuda_state.remove_texref_address(fn_logger, hTexRef);
+    } else {
+        state.cuda_state.record_texref_address(
+            fn_logger,
+            hTexRef,
+            Some(TexrefAddress::OneD { pointer, bytes }),
+        )
     }
-    result
 }
 
-unsafe fn get_ptx_files(file: *const u8, end: *const u8) -> Vec<*const FatbinFileHeader> {
-    let mut index = file;
-    let mut result = Vec::new();
-    while index < end {
-        let file = index as *const FatbinFileHeader;
-        if (*file).kind == FATBIN_FILE_HEADER_KIND_PTX
-            && (*file).version == FATBIN_FILE_HEADER_VERSION_CURRENT
-        {
-            result.push(file)
-        }
-        index = index.add((*file).header_size as usize + (*file).padded_payload_size as usize);
-    }
-    result
+#[allow(non_snake_case)]
+pub(crate) fn cuTexRefSetAddress2D_v2_Pre(
+    _hTexRef: CUtexref,
+    _desc: *const CUDA_ARRAY_DESCRIPTOR,
+    _dptr: CUdeviceptr,
+    _Pitch: usize,
+    _fn_logger: &mut log::FunctionLogger,
+    _state: &mut GlobalDelayedState,
+) -> () {
 }
 
-const MAX_PTX_MODULE_DECOMPRESSION_BOUND: usize = 16 * 1024 * 1024;
+#[allow(non_snake_case)]
+pub(crate) fn cuTexRefSetAddress2D_v3_Pre(
+    _hTexRef: CUtexref,
+    _desc: *const CUDA_ARRAY_DESCRIPTOR,
+    _dptr: CUdeviceptr,
+    _Pitch: usize,
+    _fn_logger: &mut log::FunctionLogger,
+    _state: &mut GlobalDelayedState,
+) {
+}
 
-unsafe fn decompress_kernel_module(file: *const FatbinFileHeader) -> Option<Vec<u8>> {
-    let decompressed_size = usize::max(1024, (*file).uncompressed_payload as usize);
-    let mut decompressed_vec = vec![0u8; decompressed_size];
-    loop {
-        match lz4_sys::LZ4_decompress_safe(
-            (file as *const u8).add((*file).header_size as usize) as *const _,
-            decompressed_vec.as_mut_ptr() as *mut _,
-            (*file).payload_size as c_int,
-            decompressed_vec.len() as c_int,
-        ) {
-            error if error < 0 => {
-                let new_size = decompressed_vec.len() * 2;
-                if new_size > MAX_PTX_MODULE_DECOMPRESSION_BOUND {
+#[allow(non_snake_case)]
+pub(crate) fn cuTexRefSetAddress2D_v2_Post(
+    hTexRef: CUtexref,
+    desc: *const CUDA_ARRAY_DESCRIPTOR,
+    dptr: CUdeviceptr,
+    pitch: usize,
+    fn_logger: &mut log::FunctionLogger,
+    state: &mut GlobalDelayedState,
+    _pre_result: (),
+    result: CUresult,
+) -> () {
+    if result != CUresult::CUDA_SUCCESS {
+        return;
+    }
+    let desc = unsafe { *desc };
+    state.cuda_state.record_texref_address(
+        fn_logger,
+        hTexRef,
+        Some(TexrefAddress::new_2d(desc, dptr, pitch)),
+    )
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuTexRefSetAddress2D_v3_Post(
+    hTexRef: CUtexref,
+    desc: *const CUDA_ARRAY_DESCRIPTOR,
+    dptr: CUdeviceptr,
+    Pitch: usize,
+    fn_logger: &mut log::FunctionLogger,
+    state: &mut GlobalDelayedState,
+    pre_result: (),
+    result: CUresult,
+) {
+    cuTexRefSetAddress2D_v2_Post(
+        hTexRef, desc, dptr, Pitch, fn_logger, state, pre_result, result,
+    )
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuModuleGetTexRef_Pre(
+    _pTexRef: *mut CUtexref,
+    _hmod: CUmodule,
+    _name: *const ::std::os::raw::c_char,
+    _fn_logger: &mut log::FunctionLogger,
+    _state: &mut GlobalDelayedState,
+) {
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuModuleGetTexRef_Post(
+    pTexRef: *mut CUtexref,
+    hmod: CUmodule,
+    name: *const ::std::os::raw::c_char,
+    fn_logger: &mut log::FunctionLogger,
+    state: &mut GlobalDelayedState,
+    _pre_result: (),
+    result: CUresult,
+) {
+    if result != CUresult::CUDA_SUCCESS {
+        return;
+    }
+    state
+        .cuda_state
+        .record_texref(fn_logger, name, unsafe { *pTexRef }, hmod)
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuTexRefSetArray_Pre(
+    _hTexRef: CUtexref,
+    _hArray: CUarray,
+    _Flags: ::std::os::raw::c_uint,
+    _fn_logger: &mut log::FunctionLogger,
+    _state: &mut GlobalDelayedState,
+) {
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuTexRefSetArray_Post(
+    texref: CUtexref,
+    array: CUarray,
+    flags: ::std::os::raw::c_uint,
+    fn_logger: &mut log::FunctionLogger,
+    state: &mut GlobalDelayedState,
+    _pre_result: (),
+    result: CUresult,
+) {
+    if result != CUresult::CUDA_SUCCESS {
+        return;
+    }
+    state.cuda_state.record_texref_address(
+        fn_logger,
+        texref,
+        Some(TexrefAddress::Array { array, flags }),
+    )
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuModuleGetGlobal_v2_Pre(
+    _dptr: *mut CUdeviceptr,
+    _bytes: *mut usize,
+    _hmod: CUmodule,
+    _name: *const ::std::os::raw::c_char,
+    _fn_logger: &mut log::FunctionLogger,
+    _state: &mut GlobalDelayedState,
+) {
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuModuleGetGlobal_v2_Post(
+    dptr: *mut CUdeviceptr,
+    _bytes: *mut usize,
+    hmod: CUmodule,
+    name: *const ::std::os::raw::c_char,
+    fn_logger: &mut log::FunctionLogger,
+    state: &mut GlobalDelayedState,
+    _pre_result: (),
+    result: CUresult,
+) {
+    if result != CUresult::CUDA_SUCCESS {
+        return;
+    }
+    if dptr == ptr::null_mut() {
+        return;
+    }
+    // We don't collect byte size, because some applications call this function
+    // exclusively with `bytes` == NULL
+    state
+        .cuda_state
+        .record_global(fn_logger, hmod, name, unsafe { *dptr })
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuGetProcAddress_Pre(
+    _symbol: *const ::std::os::raw::c_char,
+    _pfn: *mut *mut ::std::os::raw::c_void,
+    _cudaVersion: ::std::os::raw::c_int,
+    _flags: cuuint64_t,
+    _fn_logger: &mut log::FunctionLogger,
+    _state: &mut GlobalDelayedState,
+) {
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuGetProcAddress_Post(
+    symbol: *const ::std::os::raw::c_char,
+    result_value: *mut *mut ::std::os::raw::c_void,
+    cudaVersion: ::std::os::raw::c_int,
+    flags: cuuint64_t,
+    fn_logger: &mut log::FunctionLogger,
+    _state: &mut GlobalDelayedState,
+    _pre_result: (),
+    result_code: CUresult,
+) {
+    if result_code != CUresult::CUDA_SUCCESS {
+        return;
+    }
+    let symbol = unsafe { CStr::from_ptr(symbol) };
+    let name = symbol.to_bytes();
+    let version = cudaVersion as u32;
+    let fn_ptr = get_proc_address(name, flags, version);
+    if fn_ptr == ptr::null_mut() || fn_ptr == usize::MAX as _ {
+        fn_logger.log(LogEntry::NoCudaFunction(
+            symbol.to_string_lossy().to_owned(),
+        ));
+    } else {
+        unsafe { *result_value = fn_ptr };
+    }
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuGetProcAddress_v2_Pre(
+    _symbol: *const ::std::os::raw::c_char,
+    _pfn: *mut *mut ::std::os::raw::c_void,
+    _cudaVersion: ::std::os::raw::c_int,
+    _flags: cuuint64_t,
+    _symbolStatus: *mut CUdriverProcAddressQueryResult,
+    _fn_logger: &mut log::FunctionLogger,
+    _state: &mut GlobalDelayedState,
+) {
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuGetProcAddress_v2_Post(
+    symbol: *const ::std::os::raw::c_char,
+    result_value: *mut *mut ::std::os::raw::c_void,
+    cudaVersion: ::std::os::raw::c_int,
+    flags: cuuint64_t,
+    _symbolStatus: *mut CUdriverProcAddressQueryResult,
+    fn_logger: &mut log::FunctionLogger,
+    _state: &mut GlobalDelayedState,
+    _pre_result: (),
+    result_code: CUresult,
+) {
+    if result_code != CUresult::CUDA_SUCCESS {
+        return;
+    }
+    let symbol = unsafe { CStr::from_ptr(symbol) };
+    let name = symbol.to_bytes();
+    let version = cudaVersion as u32;
+    let fn_ptr = get_proc_address(name, flags, version);
+    if fn_ptr == ptr::null_mut() || fn_ptr == usize::MAX as _ {
+        fn_logger.log(LogEntry::NoCudaFunction(
+            symbol.to_string_lossy().to_owned(),
+        ));
+    } else {
+        unsafe { *result_value = fn_ptr };
+    }
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuLinkAddData_v2_Pre(
+    _link_state: CUlinkState,
+    _type_: CUjitInputType,
+    _data: *mut ::std::os::raw::c_void,
+    _size: usize,
+    _name: *const ::std::os::raw::c_char,
+    _numOptions: ::std::os::raw::c_uint,
+    _options: *mut CUjit_option,
+    _optionValues: *mut *mut ::std::os::raw::c_void,
+    _fn_logger: &mut log::FunctionLogger,
+    _state: &mut GlobalDelayedState,
+) {
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuLinkAddData_v2_Post(
+    _link_state: CUlinkState,
+    type_: CUjitInputType,
+    data: *mut ::std::os::raw::c_void,
+    size: usize,
+    _name: *const ::std::os::raw::c_char,
+    _numOptions: ::std::os::raw::c_uint,
+    _options: *mut CUjit_option,
+    _optionValues: *mut *mut ::std::os::raw::c_void,
+    fn_logger: &mut log::FunctionLogger,
+    state: &mut GlobalDelayedState,
+    _pre_result: (),
+    result: CUresult,
+) {
+    if result != CUresult::CUDA_SUCCESS {
+        return;
+    }
+    let module = match type_ {
+        CUjitInputType::CU_JIT_INPUT_CUBIN => CUmoduleContent::Elf(data.cast()),
+        CUjitInputType::CU_JIT_INPUT_PTX => CUmoduleContent::RawText(data.cast()),
+        CUjitInputType::CU_JIT_INPUT_LIBRARY => {
+            let data_slice = unsafe { std::slice::from_raw_parts(data.cast::<u8>(), size) };
+            CUmoduleContent::Archive(data_slice)
+        }
+        _ => return,
+    };
+    state.cuda_state.record_module(fn_logger, None, module);
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuLibraryGetModule_Pre(
+    _pMod: *mut CUmodule,
+    _library: CUlibrary,
+    _fn_logger: &mut log::FunctionLogger,
+    _state: &mut GlobalDelayedState,
+) {
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuLibraryGetModule_Post(
+    _pMod: *mut CUmodule,
+    _library: CUlibrary,
+    _fn_logger: &mut log::FunctionLogger,
+    _state: &mut GlobalDelayedState,
+    _pre_result: (),
+    _result: CUresult,
+) {
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuLibraryLoadData_Pre(
+    _library: *mut CUlibrary,
+    _code: *const ::std::os::raw::c_void,
+    _jitOptions: *mut CUjit_option,
+    _jitOptionsValues: *mut *mut ::std::os::raw::c_void,
+    _numJitOptions: ::std::os::raw::c_uint,
+    _libraryOptions: *mut CUlibraryOption,
+    _libraryOptionValues: *mut *mut ::std::os::raw::c_void,
+    _numLibraryOptions: ::std::os::raw::c_uint,
+    _fn_logger: &mut log::FunctionLogger,
+    _state: &mut GlobalDelayedState,
+) {
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuLibraryLoadData_Post(
+    _library: *mut CUlibrary,
+    code: *const ::std::os::raw::c_void,
+    _jitOptions: *mut CUjit_option,
+    _jitOptionsValues: *mut *mut ::std::os::raw::c_void,
+    _numJitOptions: ::std::os::raw::c_uint,
+    _libraryOptions: *mut CUlibraryOption,
+    _libraryOptionValues: *mut *mut ::std::os::raw::c_void,
+    _numLibraryOptions: ::std::os::raw::c_uint,
+    fn_logger: &mut log::FunctionLogger,
+    state: &mut GlobalDelayedState,
+    _pre_result: (),
+    result: CUresult,
+) {
+    if !matches!(
+        result,
+        CUresult::CUDA_SUCCESS
+            | CUresult::CUDA_ERROR_INVALID_PTX
+            | CUresult::CUDA_ERROR_NOT_SUPPORTED
+    ) {
+        return;
+    }
+    if let Some(module_content) =
+        fn_logger.log_unwrap(unsafe { CUmoduleContent::from_ptr(code.cast()) }.map_err(LogEntry::from))
+    {
+        state
+            .cuda_state
+            .record_module(fn_logger, None, module_content);
+    }
+}
+
+fn get_proc_address(name: &[u8], flag: u64, version: u32) -> *mut ::std::os::raw::c_void {
+    include!("../../process_address_table/table.rs")
+}
+
+pub(crate) struct DynamicFn<T> {
+    pointer: usize,
+    _marker: PhantomData<T>,
+}
+
+impl<T> Default for DynamicFn<T> {
+    fn default() -> Self {
+        DynamicFn {
+            pointer: 0,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<T> DynamicFn<T> {
+    pub(crate) unsafe fn get(&mut self, lib: *mut c_void, name: &[u8]) -> Option<T> {
+        match self.pointer {
+            0 => {
+                let addr = os::get_proc_address(lib, CStr::from_bytes_with_nul_unchecked(name));
+                if addr == ptr::null_mut() {
+                    self.pointer = 1;
                     return None;
+                } else {
+                    self.pointer = addr as _;
                 }
-                decompressed_vec.resize(decompressed_vec.len() * 2, 0);
             }
-            real_decompressed_size => {
-                decompressed_vec.truncate(real_decompressed_size as usize);
-                return Some(decompressed_vec);
+            1 => return None,
+            _ => {}
+        }
+        Some(mem::transmute_copy(&self.pointer))
+    }
+}
+
+pub(crate) struct CudaDynamicFns {
+    pub(crate) lib_handle: NonNull<::std::ffi::c_void>,
+    pub(crate) fn_table: CudaFnTable,
+}
+
+#[macro_export]
+macro_rules! try_get_cuda_function {
+    ($libcuda:expr, $name:ident) => {
+        unsafe {
+            let libcuda: &mut _ = $libcuda;
+            libcuda
+                .fn_table
+                .$name
+                .get(
+                    libcuda.lib_handle.as_ptr(),
+                    concat!(stringify!($name), "\0").as_bytes(),
+                )
+                .ok_or(LogEntry::NoCudaFunction(std::borrow::Cow::Borrowed(
+                    stringify!($name),
+                )))
+        }
+    };
+}
+
+impl CudaDynamicFns {
+    pub(crate) unsafe fn load_library(path: &str) -> Option<Self> {
+        let lib_handle = NonNull::new(os::load_library(path));
+        lib_handle.map(|lib_handle| CudaDynamicFns {
+            lib_handle,
+            fn_table: CudaFnTable::default(),
+        })
+    }
+}
+
+macro_rules! emit_cuda_fn_table {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:path);*) => {
+        #[derive(Default)]
+        pub(crate) struct CudaFnTable {
+            pub(crate) $($fn_name: DynamicFn<extern $abi fn ( $($arg_id : $arg_type),* ) -> $ret_type>),*
+        }
+
+        impl CudaDynamicFns {
+            $(
+                #[allow(dead_code)]
+                pub(crate) fn $fn_name(&mut self, $($arg_id : $arg_type),*) -> Option<$ret_type> {
+                    let func = unsafe { self.fn_table.$fn_name.get(self.lib_handle.as_ptr(), concat!(stringify!($fn_name), "\0").as_bytes()) };
+                    func.map(|f| f($($arg_id),*) )
+                }
+            )*
+        }
+    };
+}
+
+cuda_function_declarations!(cuda_types, emit_cuda_fn_table, emit_cuda_fn_table, []);
+
+#[macro_export]
+macro_rules! cuda_call {
+    ($fn_table:ident . $fn_:ident ( $($arg:expr),* ) ) => {
+        {
+            {
+                match $fn_table . $fn_ ( $($arg),* ) {
+                    None => return Err(LogEntry::NoCudaFunction(std::borrow::Cow::Borrowed(stringify!($fn_)))),
+                    Some(cuda_types::CUresult::CUDA_SUCCESS) => (),
+                    Some(err) => return Err(LogEntry::CudaError(err))
+                }
             }
         }
-    }
+    };
+
+    ($fn_:ident ( $($arg:expr),* ) ) => {
+        {
+            {
+                match $fn_ ( $($arg),* ) {
+                    cuda_types::CUresult::CUDA_SUCCESS => (),
+                    err => return Err(LogEntry::CudaError(err))
+                }
+            }
+        }
+    };
 }

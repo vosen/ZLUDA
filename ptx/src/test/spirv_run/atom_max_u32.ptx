@@ -1,0 +1,23 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry atom_max_u32(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	        in_addr;
+    .reg .u64 	        out_addr;
+    .reg .b32 	        temp1;
+    .reg .b32 	        temp2;
+
+	ld.param.u64 	    in_addr, [input];
+    ld.param.u64 	    out_addr, [output];
+
+    ld.b32              temp1, [in_addr];
+    st.b32              [out_addr], temp1;
+    ld.b32              temp2, [in_addr+4];
+    atom.max.u32        temp1, [out_addr], temp2;
+	ret;
+}

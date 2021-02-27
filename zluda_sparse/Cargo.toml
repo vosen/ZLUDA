@@ -1,0 +1,21 @@
+[package]
+name = "zluda_sparse"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2018"
+
+[lib]
+name = "cusparse"
+crate-type = ["cdylib"]
+
+[dependencies]
+rocsparse-sys = { path = "../rocsparse-sys" }
+hip_common = { path = "../hip_common" }
+hip_runtime-sys = { path = "../hip_runtime-sys" }
+zluda_dark_api = { path = "../zluda_dark_api" }
+cuda_types = { path = "../cuda_types" }
+
+[package.metadata.zluda]
+linux_only = true
+linux_names = ["libcusparse.so.11"]
+dump_names = ["libcusparse.so"]

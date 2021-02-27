@@ -1,0 +1,34 @@
+.version 6.5
+.target sm_60
+.address_size 64
+
+.global .texref image;
+
+.visible .entry tex(
+    .param .b64 output,
+    .param .#COORDINATE_TYPE# input_x,
+    .param .#COORDINATE_TYPE# input_y,
+    .param .#COORDINATE_TYPE# input_z,
+    .param .u32 input_depth
+)
+{
+    .reg .u64 	        out_addr;
+    .reg .#COORDINATE_TYPE#  coord_x;
+    .reg .#COORDINATE_TYPE#  coord_y;
+    .reg .#COORDINATE_TYPE#  coord_z;
+    .reg .u32           coord_depth;
+
+    ld.param.u64 	    out_addr, [output];
+    ld.param.#COORDINATE_TYPE#        coord_x, [input_x];
+    ld.param.#COORDINATE_TYPE#        coord_y, [input_y];
+    ld.param.#COORDINATE_TYPE#        coord_z, [input_z];
+    ld.param.b32        coord_depth, [input_depth];
+
+    #REG_VALUES#
+
+    tex.#GEOMETRY#.v4.#VALUE_TYPE#.#COORDINATE_TYPE# #VALUES#, [image, #COORDINATES#];
+
+    st.global.v4.#VALUE_STORAGE_TYPE#          [out_addr], #VALUES#;
+
+    ret;
+}

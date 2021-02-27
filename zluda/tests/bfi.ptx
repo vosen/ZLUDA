@@ -1,0 +1,34 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry kernel_bfi(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .#TYPE# 	a;
+    .reg .#TYPE# 	b;
+    .reg .b32 	c;
+    .reg .b32 	d;
+    .reg .#TYPE# 	f;
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.#TYPE#       a, [in_addr];
+    add.u64         in_addr, in_addr, #WIDTH#;
+    ld.#TYPE#       b, [in_addr];
+    add.u64         in_addr, in_addr, #WIDTH#;
+    ld.b32          c, [in_addr];
+    add.u64         in_addr, in_addr, #WIDTH#;
+    ld.b32          d, [in_addr];
+    
+    bfi.#TYPE#      f,a,b,c,d;
+
+    st.#TYPE#       [out_addr], f;
+    
+	ret;
+}

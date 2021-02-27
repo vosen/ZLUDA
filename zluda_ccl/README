@@ -1,0 +1,2 @@
+bindgen /usr/include/nccl.h -o src/nccl.rs --allowlist-function="^p?nccl.*" --must-use-type "ncclResult_t" --default-enum-style=newtype --no-layout-tests --no-derive-debug -- -I/usr/local/cuda/targets/x86_64-linux/include
+sed -i -e 's/extern "C" {//g' -e 's/-> ncclResult_t;/-> ncclResult_t { crate::unsupported()/g' -e 's/pub fn /#[no_mangle] pub extern "C" fn /g' src/nccl.rs

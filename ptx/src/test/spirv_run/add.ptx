@@ -2,7 +2,7 @@
 .target sm_30
 .address_size 64
 
-.visible .entry add(
+.entry add(
 	.param .u64 input,
 	.param .u64 output
 )

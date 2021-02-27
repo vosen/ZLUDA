@@ -9,9 +9,25 @@ name = "zluda_dump"
 crate-type = ["cdylib"]
 
 [dependencies]
+hip_common = { path = "../hip_common" }
 ptx = { path = "../ptx" }
+cuda_base = { path = "../cuda_base" }
+cuda_types = { path = "../cuda_types" }
+zluda_dark_api = { path = "../zluda_dark_api" }
+crossbeam-channel = "0.5.4"
 lz4-sys = "1.9"
-regex = "1.4"
+regex = "1.5"
+dynasm = "1.2"
+dynasmrt = "1.2"
+lazy_static = "1.4"
+# we don't need elf32, but goblin has a bug where elf64 does not build without elf32
+goblin = { version = "0.5.1", default-features = false, features = ["elf64", "elf32", "archive"] }
+paste = "1.0"
+serde = { version = "1.0.137", features = ["derive"] }
+serde_derive = "1.0.137"
+serde_json = "1.0.81"
+rustc-hash = "1.1"
+thread-id = "4.0.0"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["libloaderapi", "debugapi", "std"] }
@@ -20,3 +36,11 @@ detours-sys = { path = "../detours-sys" }
 
 [target.'cfg(not(windows))'.dependencies]
 libc = "0.2"
+
+[dev-dependencies]
+rand_chacha = "0.3.1"
+rand = "0.8.5"
+
+# Nominally debug_only, but useful for power users
+[package.metadata.zluda]
+dump_names = ["libcuda.so", "libcuda.so.1"]

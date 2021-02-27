@@ -8,13 +8,45 @@ edition = "2018"
 name = "zluda"
 
 [dependencies]
+comgr = { path = "../comgr" }
+cuda_base = { path = "../cuda_base" }
+cuda_types = { path = "../cuda_types" }
+hip_common = { path = "../hip_common" }
+hip_runtime-sys = { path = "../hip_runtime-sys" }
 ptx = { path = "../ptx" }
-level_zero = { path = "../level_zero" }
-level_zero-sys = { path = "../level_zero-sys" }
+zluda_dark_api = { path = "../zluda_dark_api" }
 lazy_static = "1.4"
 num_enum = "0.4"
 lz4-sys = "1.9"
+tempfile = "3"
+paste = "1.0"
+rustc-hash = "1.1"
+rusqlite = { version = "0.28.0", features = ["bundled"] }
+# blake3 1.4 requires rust 1.66
+blake3 = "=1.3.3"
+dirs = "4.0.0"
+# we don't need elf32, but goblin has a bug where elf64 does not build without elf32
+goblin = { version = "0.5.1", default-features = false, features = ["elf64", "elf32", "endian_fd"] }
+memchr = "2.5.0"
+memoffset = "0.8"
+static_assertions = "1.1.0"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["heapapi", "std"] }
 
 [dev-dependencies]
-cuda-driver-sys = "0.3.0"
 paste = "1.0"
+rand_chacha = "0.3.1"
+rand = "0.8.5"
+num-traits = "0.2.14"
+half = { version ="1.8.2", features = ["num-traits"] }
+gag = "1.0.0"
+
+[target.'cfg(not(windows))'.dev-dependencies]
+libc = "0.2"
+
+[build-dependencies]
+vergen = { version = "7.5.1", default-features = false, features = ["git"] }
+# We don't use time crate, but this coerces vergen to not use newer version that requires 
+# higher minimum rust version
+time = "=0.3.23"

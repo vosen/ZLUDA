@@ -1,0 +1,25 @@
+[package]
+name = "optix_dump"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2018"
+
+[lib]
+name = "optix_dump"
+crate-type = ["cdylib"]
+
+[dependencies]
+cuda_types = { path = "../cuda_types" }
+optix_base = { path = "../optix_base" }
+wmi = "0.9"
+winapi = { version = "0.3", features = ["libloaderapi", "std"] }
+lazy_static = "1.4.0"
+paste = "1.0.7"
+sha2 = "0.10.2"
+generic-array = "0.14.5"
+typenum = "1.15.0"
+
+[package.metadata.zluda]
+debug_only = true
+windows_only = true
+broken = true

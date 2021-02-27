@@ -1,0 +1,22 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry cvt_u32_s16(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .b16 	    temp_16;
+    .reg .b32 	    temp_32;
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.global.b16   temp_16, [in_addr];
+	cvt.u32.s16     temp_32, temp_16;
+    st.b32          [out_addr], temp_32;
+	ret;
+}

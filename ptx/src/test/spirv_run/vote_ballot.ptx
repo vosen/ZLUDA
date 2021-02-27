@@ -1,0 +1,29 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry vote_ballot(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .u32 	    temp1;
+    .reg .u32 	    temp2;
+    .reg .u32 	    temp3;
+    .reg .u32 	    temp4;
+
+    ld.param.u64 	out_addr, [output];
+
+    vote.sync.ballot.b32 temp1, 1, 1;
+    vote.sync.ballot.b32 temp2, 0, 0xffffff;
+    vote.sync.ballot.b32 temp3, 1, 2;
+    vote.sync.ballot.b32 temp4, 1, 3;
+
+    st.u32          [out_addr+0], temp1;
+    st.u32          [out_addr+4], temp2;
+    st.u32          [out_addr+8], temp3;
+    st.u32          [out_addr+12], temp4;
+	ret;
+}

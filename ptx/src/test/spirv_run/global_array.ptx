@@ -2,7 +2,8 @@
 .target sm_30
 .address_size 64
 
-.global .s32 foobar[4] = {1};
+.global .u32 asdas[4][2] = {{-1,2}, {3}};
+.global .u64 foobar[4][2] = {{-1,2}, {3}, {asdas}};
 
 .visible .entry global_array(
 	.param .u64 input,

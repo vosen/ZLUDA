@@ -1,0 +1,17 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry s64_min(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+    .reg .u64 	    out_addr;
+    .reg .s64 	    min;
+
+    ld.param.u64 	out_addr, [output];
+	mov.s64			min, -9223372036854775808;
+    st.s64          [out_addr], min;
+	ret;
+}

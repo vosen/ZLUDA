@@ -7,21 +7,32 @@ edition = "2018"
 [lib]
 
 [dependencies]
-lalrpop-util = "0.19"
+hip_common = { path = "../hip_common" }
+zluda_llvm = { path = "../zluda_llvm" }
+lalrpop-util = "0.20"
 regex = "1"
-rspirv = "0.6"
-spirv_headers = "~1.4.2"
-quick-error = "1.2"
-bit-vec = "0.6"
-half ="1.6"
-bitflags = "1.2"
+thiserror = "1.0"
+num-traits = "0.2"
+rustc-hash = "1.1"
+cpp_demangle = "0.3.5"
+paste = "1.0"
+bit-vec = "0.6.3"
+either = "1.9"
 
-[build-dependencies.lalrpop]
-version = "0.19"
-features = ["lexer"]
+[dependencies.half]
+version = "1.8"
+features = ["num-traits"]
 
 [dev-dependencies]
-level_zero-sys = { path = "../level_zero-sys" }
-level_zero = { path = "../level_zero" }
-spirv_tools-sys = { path = "../spirv_tools-sys" }
-paste = "1.0"
+cuda_base = { path = "../cuda_base" }
+cuda_types = { path = "../cuda_types" }
+hip_runtime-sys = { path = "../hip_runtime-sys" }
+hiprt-sys = { path = "../hiprt-sys" }
+comgr = { path = "../comgr" }
+tempfile = "3"
+libloading = "0.8"
+lazy_static = "1.4.0"
+
+[build-dependencies.lalrpop]
+version = "0.20"
+features = ["lexer"]

@@ -1,0 +1,33 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry addc_cc2(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .b32 	    unused;
+
+    .reg .b32 	    carry_out_1;
+    .reg .b32 	    carry_out_2;
+
+    ld.param.u64    out_addr, [output];
+
+    // set CC.CF
+    add.cc.s32      unused, 4294967295, 4294967295;
+    // overflow when doing a + b, but not CC.CF
+    addc.cc.s32     unused, 4294967292, 4294967292;
+    // write carry
+    addc.s32        carry_out_1, 0, 0;
+    // overflow when doing b + CC.CF, but not a
+    addc.cc.s32     unused, 0, 4294967295;
+    // write carry
+    addc.s32        carry_out_2, 0, 0;
+
+    st.s32          [out_addr], carry_out_1;
+    st.s32          [out_addr+4], carry_out_2;
+	ret;
+}

@@ -1,0 +1,33 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.global .texref image;
+
+.visible .entry texref(
+    .param .f32 input_x,
+    .param .f32 input_y,
+    .param .u64 output
+)
+{
+    .reg .u64 	    out_addr;
+    .reg .u64 	    temp;
+    .reg .u64 	    temp2;
+    .reg .f32       x;
+    .reg .f32       y;
+    .reg .s32       r;
+    .reg .s32       g;
+    .reg .s32       b;
+    .reg .s32       a;
+
+    ld.param.f32    x, [input_x];
+    ld.param.f32    y, [input_y];
+    ld.param.u64    out_addr, [output];
+
+    tex.2d.v4.s32.f32   {r, g, b, a}, [image, {x, y}];
+    st.b32              [out_addr], a;
+    st.b32              [out_addr+4], b;
+    st.b32              [out_addr+8], g;
+    st.b32              [out_addr+12], r;
+    ret;
+}

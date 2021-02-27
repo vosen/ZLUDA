@@ -1,0 +1,40 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.global .u32 foo[4] = { 2,3,5,7 };
+.global .u64 bar[4] = { generic(foo), generic(foo)+4, generic(foo)+8, generic(foo)+12 };
+
+.visible .entry generic(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .u32 	    temp32_1;
+    .reg .u32 	    temp32_2;
+
+    ld.param.u64 	out_addr, [output];
+
+    mov.u32         temp32_1, 1;
+
+    ld.global.u64   in_addr, [bar];
+    ld.u32          temp32_2, [in_addr];
+    mul.lo.u32      temp32_1, temp32_1, temp32_2;
+    
+    ld.global.u64   in_addr, [bar+8];
+    ld.u32          temp32_2, [in_addr];
+    mul.lo.u32      temp32_1, temp32_1, temp32_2;
+    
+    ld.global.u64   in_addr, [bar+16];
+    ld.u32          temp32_2, [in_addr];
+    mul.lo.u32      temp32_1, temp32_1, temp32_2;
+    
+    ld.global.u64   in_addr, [bar+24];
+    ld.u32          temp32_2, [in_addr];
+    mul.lo.u32      temp32_1, temp32_1, temp32_2;
+
+    st.u32          [out_addr], temp32_1;
+	ret;
+}

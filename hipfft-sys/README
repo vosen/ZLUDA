@@ -1,0 +1,1 @@
+bindgen /opt/rocm/include/hipfft/hipfft.h -o src/hipfft.rs --no-layout-tests --default-enum-style=newtype --no-derive-debug --allowlist-function "hipfft.*" --must-use-type hipfftResult_t -- -I/opt/rocm/include -D__HIP_PLATFORM_AMD__

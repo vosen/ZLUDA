@@ -1,0 +1,25 @@
+.version 6.5
+.target sm_61
+.address_size 64
+
+.entry dp4a(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .b32 	    temp0;
+    .reg .b32 	    temp1;
+    .reg .b32 	    temp2;
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.b32          temp0, [in_addr];
+    ld.b32          temp1, [in_addr+4];
+    ld.b32          temp2, [in_addr+8];
+	dp4a.s32.s32	temp0, temp0, temp1, temp2;
+    st.b32          [out_addr], temp0;
+	ret;
+}

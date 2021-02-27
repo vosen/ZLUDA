@@ -1,0 +1,11 @@
+[package]
+name = "hip_runtime-sys"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2018"
+links = "amdhip"
+
+[lib]
+
+[dependencies]
+rustc-hash = "1.1"

@@ -1,0 +1,3 @@
+bindgen /usr/local/cuda-12/include/nvml.h --no-derive-debug --allowlist-var="^NVML.*" --allowlist-function="^nvml.*" --default-enum-style=newtype --no-layout-tests --no-doc-comments -o src/nvml.rs -- -DNVML_NO_UNVERSIONED_FUNC_DEFS
+sed -i -e 's/extern "C" {//g' -e 's/-> nvmlReturn_t;/-> nvmlReturn_t { crate::r#impl::unimplemented()/g' -e 's/pub fn /#[no_mangle] pub extern "C" fn /g' src/nvml.rs
+rustfmt src/nvml.rs

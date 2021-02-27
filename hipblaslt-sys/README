@@ -1,0 +1,1 @@
+bindgen /opt/rocm/include/hipblaslt/hipblaslt.h -o src/hipblaslt.rs --no-layout-tests --default-enum-style=newtype --allowlist-function "^hipblasLt.*" --allowlist-type "^hipblasLt.*" --no-derive-debug --must-use-type hiprtError -- -I /opt/rocm/include -D__HIP_PLATFORM_AMD__ -D__HIP_PLATFORM_HCC__ -x c++

@@ -1,0 +1,19 @@
+.version 6.5
+.target sm_70
+.address_size 64
+
+.visible .entry atom_ld_st(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	        in_addr;
+    .reg .u64 	        out_addr;
+    .reg .u32 	        temp;
+
+	ld.param.u64 	    in_addr, [input];
+    ld.param.u64 	    out_addr, [output];
+    ld.acquire.gpu.u32  temp, [in_addr];
+    st.release.gpu.u32  [out_addr], temp;
+	ret;
+}

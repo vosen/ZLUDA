@@ -17,5 +17,15 @@
     ld.f32          temp, [in_addr];
 	ex2.approx.f32  temp, temp;
     st.f32          [out_addr], temp;
+    ld.f32          temp, [in_addr+4];
+	ex2.approx.f32  temp, temp;
+    st.f32          [out_addr+4], temp;
+    ld.f32          temp, [in_addr+8];
+	ex2.approx.f32  temp, temp;
+    st.f32          [out_addr+8], temp;
+    ld.f32          temp, [in_addr+12];
+	ex2.approx.f32  temp, temp;
+    st.f32          [out_addr+12], temp;
+
 	ret;
 }

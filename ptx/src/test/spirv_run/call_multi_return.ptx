@@ -1,0 +1,46 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.func (.reg.u64 add, .reg.u32 mult) add_mult (.reg.u32 x, .reg.u32 y);
+
+.visible .entry call_multi_return(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+
+
+    .reg .u32       x;
+    .reg .u32       y;
+
+    .reg .u64       add;
+    .reg .u64       mul;
+    .reg .u32       mul_32;
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.global.u32   x, [in_addr];
+    ld.global.u32   y, [in_addr+4];
+    call            (add, mul_32), add_mult, (x, y);
+    cvt.u64.u32     mul, mul_32;
+    st.global.u64   [out_addr], add;
+    st.global.u64   [out_addr+8], mul;
+    ret;
+}
+
+.func (.reg.u64 add, .reg.u32 mul) add_mult (
+    .reg.u32 x,
+    .reg.u32 y
+)
+{
+    .reg .u32 	    add_32;
+
+    add.u32         add_32, x, y;
+    cvt.u64.u32     add, add_32;
+    mul.lo.u32      mul, x, y;
+    ret;
+}

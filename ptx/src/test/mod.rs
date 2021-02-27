@@ -1,6 +1,9 @@
+use hip_common::CompilationMode;
+
 use super::ptx;
 use super::TranslateError;
 
+mod raytracing;
 mod spirv_run;
 
 fn parse_and_assert(s: &str) {
@@ -9,10 +12,10 @@ fn parse_and_assert(s: &str) {
     assert!(errors.len() == 0);
 }
 
-fn compile_and_assert(s: &str) -> Result<(), TranslateError> {
+fn compile_and_assert(compilation_mode: CompilationMode, s: &str) -> Result<(), TranslateError> {
     let mut errors = Vec::new();
     let ast = ptx::ModuleParser::new().parse(&mut errors, s).unwrap();
-    crate::to_spirv_module(ast)?;
+    crate::to_llvm_module(compilation_mode, vec![ast])?;
     Ok(())
 }
 
@@ -31,19 +34,19 @@ fn operands_ptx() {
 #[allow(non_snake_case)]
 fn vectorAdd_kernel64_ptx() -> Result<(), TranslateError> {
     let vector_add = include_str!("vectorAdd_kernel64.ptx");
-    compile_and_assert(vector_add)
+    compile_and_assert(CompilationMode::Wave32, vector_add)
 }
 
 #[test]
 #[allow(non_snake_case)]
 fn _Z9vectorAddPKfS0_Pfi_ptx() -> Result<(), TranslateError> {
     let vector_add = include_str!("_Z9vectorAddPKfS0_Pfi.ptx");
-    compile_and_assert(vector_add)
+    compile_and_assert(CompilationMode::Wave32, vector_add)
 }
 
 #[test]
 #[allow(non_snake_case)]
 fn vectorAdd_11_ptx() -> Result<(), TranslateError> {
     let vector_add = include_str!("vectorAdd_11.ptx");
-    compile_and_assert(vector_add)
+    compile_and_assert(CompilationMode::Wave32, vector_add)
 }

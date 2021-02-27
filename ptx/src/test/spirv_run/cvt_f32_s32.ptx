@@ -1,0 +1,33 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry cvt_f32_s32(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	            in_addr;
+    .reg .u64 	            out_addr;
+    .reg .b32 	            temp1;
+    .reg .b32 	            temp2;
+    .reg .b32 	            temp3;
+    .reg .b32 	            temp4;
+
+	ld.param.u64 	        in_addr, [input];
+    ld.param.u64 	        out_addr, [output];
+
+    ld.s32                  temp1, [in_addr];
+    ld.s32                  temp2, [in_addr+4];
+    ld.s32                  temp3, [in_addr+8];
+    ld.s32                  temp4, [in_addr+12];
+    cvt.rn.ftz.f32.s32      temp1, temp1;
+    cvt.rz.ftz.f32.s32      temp2, temp2;
+    cvt.rm.ftz.f32.s32      temp3, temp3;
+    cvt.rp.ftz.f32.s32      temp4, temp4;
+    st.global.f32           [out_addr], temp1;
+    st.global.f32           [out_addr+4], temp2;
+    st.global.f32           [out_addr+8], temp3;
+    st.global.f32           [out_addr+12], temp4;
+    ret;
+}

@@ -1,0 +1,30 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry mov_vector_cast(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .u64 	    temp_wide;
+    .reg .f32 	    temp1;
+    .reg .f32       temp2;
+    .reg .f16       temp3;
+    .reg .f16       temp4;
+    .reg .f16       temp5;
+    .reg .f16       temp6;
+    
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.u64          temp_wide, [in_addr];
+	mov.b64			{temp1, temp2}, temp_wide;
+	mov.b64			{temp3, temp4, temp5, temp6}, temp_wide;
+    st.f32          [out_addr], temp2;
+    st.f32          [out_addr+4], temp1;
+
+	ret;
+}

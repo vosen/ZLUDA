@@ -1,0 +1,22 @@
+[package]
+name = "zluda_fft"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2018"
+
+[lib]
+name = "cufft"
+crate-type = ["cdylib"]
+
+[dependencies]
+hipfft-sys = { path = "../hipfft-sys" }
+hip_common = { path = "../hip_common" }
+cuda_types = { path = "../cuda_types" }
+zluda_dark_api = { path = "../zluda_dark_api" }
+slab = "0.4"
+lazy_static = "1.4.0"
+
+[package.metadata.zluda]
+linux_only = true
+linux_names = ["libcufft.so.10"]
+dump_names = ["libcufft.so"]

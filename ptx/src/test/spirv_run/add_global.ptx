@@ -1,0 +1,26 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+
+.global .align 4 .f32 PI = 0f40490FDB;
+
+.visible .entry add_global(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .f32 	    temp;
+    .reg .f32	    pi;
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.f32          temp, [in_addr];
+    ld.global.f32   pi, [PI];
+	add.f32		    temp, temp, pi;
+    st.f32          [out_addr], temp;
+	ret;
+}

@@ -1,0 +1,23 @@
+[package]
+name = "hip_common"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2018"
+
+[lib]
+
+[dependencies]
+const_format = "0.2.30"
+hip_runtime-sys = { path = "../hip_runtime-sys" }
+cuda_types = { path = "../cuda_types" }
+rusqlite = { version = "0.28.0", features = ["bundled", "serde_json"] }
+sha2 = "0.10.2"
+itertools = "0.10.5"
+capnp  = "0.17.2"
+rustc-hash = "1.1"
+goblin = { version = "0.5.1", default-features = false, features = ["elf64", "elf32", "endian_fd"] }
+memchr = "2.5.0"
+libloading = "0.8"
+
+[build-dependencies]
+capnpc = "0.17.2"

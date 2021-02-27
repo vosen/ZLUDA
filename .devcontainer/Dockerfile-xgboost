@@ -1,0 +1,16 @@
+# syntax = devthefuture/dockerfile-x
+FROM ubuntu:22.04
+INCLUDE ./Dockerfile-common
+
+ARG XGBOOST_VERSION=2.0.3
+RUN git clone --branch "v${XGBOOST_VERSION}" --recurse-submodules https://github.com/dmlc/xgboost.git && \
+    cd xgboost && \
+    # Broken test, segfaults on normal CUDA
+    sed -i 's/TEST(Allocator, OOM) {/TEST(Allocator, OOM) { GTEST_SKIP();/g' tests/cpp/common/test_device_helpers.cu && \
+    mkdir build && \
+    cd build && \
+    cmake .. -DGOOGLE_TEST=ON -DUSE_DMLC_GTEST=ON -DUSE_CUDA=ON -GNinja && \
+    ninja
+
+#
+

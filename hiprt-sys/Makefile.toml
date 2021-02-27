@@ -1,0 +1,16 @@
+[tasks.bindgen]
+command = "bindgen"
+args = [
+    "include/hiprt.h",
+    "-o", "src/hiprt.rs",
+    "--rust-target", "1.64",
+    "--no-layout-tests",
+    "--no-derive-debug",
+    "--default-enum-style=newtype",
+    "--dynamic-loading", "HipRt",
+    "--must-use-type", "hiprtError",
+    "--allowlist-function", "hiprt.*",
+    "--allowlist-type", "hiprt.*",
+    "--allowlist-var", "^HIPRT.*$",
+    "--", "-I", "include", "-x", "c++",
+]

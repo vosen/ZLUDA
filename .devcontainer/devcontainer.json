@@ -1,0 +1,39 @@
+// For format details, see https://aka.ms/devcontainer.json
+{
+	"name": "ZLUDA",
+	"build": {
+		"dockerfile": "Dockerfile"
+	},
+	"securityOpt": [
+		"seccomp=unconfined"
+	],
+	// Make NVIDIA and AMD GPUs available
+	"runArgs": [
+		// Uncomment on newer docker/podman
+		//"--runtime=nvidia",
+		"--device=/dev/kfd",
+		"--device=/dev/dri",
+		"--group-add=video"
+	],
+	// Cache cargo packages and compiled ZLUDA kernels
+	"initializeCommand": "mkdir -p ${localEnv:HOME}/.cargo/git ${localEnv:HOME}/.cargo/registry ${localEnv:HOME}/.cache/ZLUDA",
+	"mounts": [
+		{
+			"source": "${localEnv:HOME}/.cargo/git",
+			"target": "/root/.cargo/git",
+			"type": "bind"
+		},
+		{
+			"source": "${localEnv:HOME}/.cargo/registry",
+			"target": "/root/.cargo/registry",
+			"type": "bind"
+		},
+		{
+			"source": "${localEnv:HOME}/.cache/ZLUDA",
+			"target": "/root/.cache/ZLUDA",
+			"type": "bind"
+		}
+	],
+	// Rootless docker requires logging as root: https://aka.ms/dev-containers-non-root.
+	"remoteUser": "root"
+}

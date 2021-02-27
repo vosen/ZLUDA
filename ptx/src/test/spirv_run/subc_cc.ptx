@@ -1,0 +1,34 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry subc_cc(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .s32 	    dst1;
+    .reg .s32 	    dst2;
+    .reg .s32 	    dst3;
+    .reg .b32 	    src1;
+    .reg .b32 	    src2;
+    .reg .b32 	    src3;
+    .reg .b32 	    src4;
+
+	ld.param.u64    in_addr, [input];
+    ld.param.u64    out_addr, [output];
+
+    ld.s32          src1, [in_addr];
+    ld.s32          src2, [in_addr+4];
+    ld.b32          src3, [in_addr+8];
+    ld.b32          src4, [in_addr+12];
+    sub.cc.s32      dst1, src1, src2;
+    subc.cc.s32     dst2, dst1, src3;
+    subc.s32        dst3, dst2, src4;
+    st.s32          [out_addr], dst1;
+    st.s32          [out_addr+4], dst2;
+    st.s32          [out_addr+8], dst3;
+	ret;
+}

@@ -1,0 +1,51 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry setp_num(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .f32 	    pair1_1;
+    .reg .f32 	    pair1_2;
+    .reg .f32 	    pair2_1;
+    .reg .f32 	    pair2_2;
+    .reg .f32 	    pair3_1;
+    .reg .f32 	    pair3_2;
+    .reg .f32 	    pair4_1;
+    .reg .f32 	    pair4_2;
+    .reg .u32 	    temp;
+    .reg .pred 	    pred;
+
+    ld.param.u64        in_addr, [input];
+    ld.param.u64        out_addr, [output];
+
+    ld.f32              pair1_1, [in_addr];
+    ld.f32              pair1_2, [in_addr + 4];
+    ld.f32              pair2_1, [in_addr + 8];
+    ld.f32              pair2_2, [in_addr + 12];
+    ld.f32              pair3_1, [in_addr + 16];
+    ld.f32              pair3_2, [in_addr + 20];
+    ld.f32              pair4_1, [in_addr + 24];
+    ld.f32              pair4_2, [in_addr + 28];
+    setp.num.f32        pred, pair1_1, pair1_2;
+    @pred mov.u32       temp, 2;
+    @!pred mov.u32      temp, 0;
+    st.u32              [out_addr], temp;
+    setp.num.f32        pred, pair2_1, pair2_2;
+    @pred mov.u32       temp, 2;
+    @!pred mov.u32      temp, 0;
+    st.u32              [out_addr + 4], temp;
+    setp.num.f32        pred, pair3_1, pair3_2;
+    @pred mov.u32       temp, 2;
+    @!pred mov.u32      temp, 0;
+    st.u32              [out_addr + 8], temp;
+    setp.num.f32        pred, pair4_1, pair4_2;
+    @pred mov.u32       temp, 2;
+    @!pred mov.u32      temp, 0;
+    st.u32              [out_addr + 12], temp;
+    ret;
+}

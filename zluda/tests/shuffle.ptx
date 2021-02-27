@@ -1,0 +1,34 @@
+.version 6.5
+.target sm_50
+.address_size 64
+
+.visible .entry shuffle(
+    .param .b64 input,
+    .param .b64 output,
+    .param .b32 param_b,
+    .param .b32 param_c
+)
+{
+    .reg .u64 	        in_addr;
+    .reg .u64 	        out_addr;
+    .reg .b32 	        a;
+    .reg .b32 	        b;
+    .reg .b32 	        c;
+    .reg .b64 	        offset;
+
+    ld.param.u64 	    in_addr, [input];
+    ld.param.u64 	    out_addr, [output];
+    ld.param.b32 	    b, [param_b];
+    ld.param.b32 	    c, [param_c];
+    
+    cvt.u64.u32         offset, %tid.x;
+    mul.lo.u64          offset, offset, 4;
+    add.u64             in_addr, in_addr, offset;
+    ld.global.u32       a, [in_addr];
+    shfl.#SHUFFLE#.b32  a, a, b, c;
+
+    add.u64             out_addr, out_addr, offset;
+    st.global.u32       [out_addr], a;
+
+    ret;
+}

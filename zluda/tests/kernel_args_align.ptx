@@ -1,0 +1,25 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry add(
+	.param .u32 value_arg,
+	.param .align 8 .b8 input[8],
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .u32 	    value;
+    .reg .u32 	    temp;
+    .reg .u32 	    temp2;
+
+	ld.param.u32 	value, [value_arg];
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.u32          temp, [in_addr];
+	add.u32		    temp2, temp, value;
+    st.u32          [out_addr], temp2;
+	ret;
+}

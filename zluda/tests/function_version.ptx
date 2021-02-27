@@ -1,0 +1,5 @@
+.version 6.5
+.target sm_35
+.address_size 64
+
+.entry foobar() { ret; }

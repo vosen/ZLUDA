@@ -1,0 +1,16 @@
+[package]
+name = "zluda_ccl"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2018"
+
+[lib]
+name = "nccl"
+crate-type = ["cdylib"]
+
+[dependencies]
+
+[package.metadata.zluda]
+linux_only = true
+linux_names = ["libnccl.so.2"]
+dump_names = ["libnccl.so"]

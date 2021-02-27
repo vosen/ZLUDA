@@ -1,0 +1,30 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry cvt_clamp(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .f32 	    temp;
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.global.f32           temp, [in_addr];
+    cvt.ftz.sat.f32.f32     temp, temp;
+    st.global.f32           [out_addr], temp;
+    ld.global.f32           temp, [in_addr+4];
+    cvt.ftz.sat.f32.f32     temp, temp;
+    st.global.f32           [out_addr+4], temp;
+    ld.global.f32           temp, [in_addr+8];
+    cvt.ftz.sat.f32.f32     temp, temp;
+    st.global.f32           [out_addr+8], temp;
+    ld.global.f32           temp, [in_addr+12];
+    cvt.ftz.sat.f32.f32     temp, temp;
+    st.global.f32           [out_addr+12], temp;
+	ret;
+}

@@ -1,0 +1,8 @@
+[package]
+name = "cuda_types"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2018"
+
+[dependencies]
+cuda_base = { path = "../cuda_base" }

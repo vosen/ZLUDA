@@ -1,0 +1,36 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.global .surfref image;
+
+.visible .entry suld(
+    .param .b64 output,
+    .param .b32 input_x,
+    .param .b32 input_y,
+    .param .b32 input_z,
+    .param .b64 image_bindless_param
+)
+{
+    .reg .b32           coord_x;
+    .reg .b32           coord_y;
+    .reg .b32           coord_z;
+    .reg .b32           coord_depth;
+    .reg .u64 	        out_addr;
+    .reg .u64 	        image_bindless;
+
+    ld.param.b32        coord_x, [input_x];
+    ld.param.b32        coord_y, [input_y];
+    ld.param.b32        coord_z, [input_z];
+    ld.param.u64 	    out_addr, [output];
+    ld.param.u64 	    image_bindless, [image_bindless_param];
+    mov.b32             coord_depth, coord_z;
+
+    #REG_VALUES#
+
+    suld.b.#GEOMETRY##FORMAT#.trap #VALUES#, [#IMAGE_SRC#, #COORDINATES#];
+
+    st#FORMAT#          [out_addr], #VALUES#;
+
+    ret;
+}

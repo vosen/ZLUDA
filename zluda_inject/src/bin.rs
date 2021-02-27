@@ -1,10 +1,14 @@
-use std::mem;
-use std::path::Path;
-use std::ptr;
-use std::{env, ops::Deref};
+use std::env;
+use std::os::windows;
+use std::os::windows::ffi::OsStrExt;
 use std::{error::Error, process};
+use std::{fs, io, ptr};
+use std::{mem, path::PathBuf};
 
+use argh::FromArgs;
 use mem::size_of_val;
+use tempfile::TempDir;
+use winapi::um::processenv::SearchPathW;
 use winapi::um::{
     jobapi2::{AssignProcessToJobObject, SetInformationJobObject},
     processthreadsapi::{GetExitCodeProcess, ResumeThread},
@@ -19,26 +23,62 @@ use winapi::um::{
 use winapi::um::winbase::{INFINITE, WAIT_FAILED};
 
 static REDIRECT_DLL: &'static str = "zluda_redirect.dll";
-static ZLUDA_DLL: &'static str = "nvcuda.dll";
+static NVCUDA_DLL: &'static str = "nvcuda.dll";
+static NVML_DLL: &'static str = "nvml.dll";
+static NVAPI_DLL: &'static str = "nvapi64.dll";
+static NVOPTIX_DLL: &'static str = "optix.6.6.0.dll";
 
 include!("../../zluda_redirect/src/payload_guid.rs");
 
+#[derive(FromArgs)]
+/// Launch application with custom CUDA libraries
+struct ProgramArguments {
+    /// DLL to be injected instead of system nvcuda.dll. If not provided {0}, will use nvcuda.dll from its own directory
+    #[argh(option)]
+    nvcuda: Option<PathBuf>,
+
+    /// DLL to be injected instead of system nvml.dll. If not provided {0}, will use nvml.dll from its own directory
+    #[argh(option)]
+    nvml: Option<PathBuf>,
+
+    /// DLL to be injected instead of system nvapi64.dll. If not provided, no injection will take place
+    #[argh(option)]
+    nvapi: Option<PathBuf>,
+
+    /// DLL to be injected instead of system nvoptix.dll. If not provided, no injection will take place
+    #[argh(option)]
+    nvoptix: Option<PathBuf>,
+
+    /// executable to be injected with custom CUDA libraries
+    #[argh(positional)]
+    exe: String,
+
+    /// arguments to the executable
+    #[argh(positional)]
+    args: Vec<String>,
+}
+
 pub fn main_impl() -> Result<(), Box<dyn Error>> {
-    let args = env::args().collect::<Vec<_>>();
-    if args.len() <= 1 {
-        print_help_and_exit();
-    }
-    let injector_path = env::current_exe()?;
-    let injector_dir = injector_path.parent().unwrap();
-    let redirect_path = create_redirect_path(injector_dir);
-    let (mut inject_path, cmd) = create_inject_path(&args[1..], injector_dir);
-    let mut cmd_line = construct_command_line(cmd);
+    let raw_args = argh::from_env::<ProgramArguments>();
+    let normalized_args = NormalizedArguments::new(raw_args)?;
+    let mut environment = Environment::setup(normalized_args)?;
     let mut startup_info = unsafe { mem::zeroed::<detours_sys::_STARTUPINFOW>() };
     let mut proc_info = unsafe { mem::zeroed::<detours_sys::_PROCESS_INFORMATION>() };
+    let mut dlls_to_inject = vec![
+        environment.nvcuda_path_zero_terminated.as_ptr() as _,
+        environment.nvml_path_zero_terminated.as_ptr() as *const i8,
+        environment.redirect_path_zero_terminated.as_ptr() as _,
+    ];
+    if let Some(ref nvapi) = environment.nvapi_path_zero_terminated {
+        dlls_to_inject.push(nvapi.as_ptr() as _);
+    }
+    if let Some(ref nvoptix) = environment.nvoptix_path_zero_terminated {
+        dlls_to_inject.push(nvoptix.as_ptr() as _);
+    }
     os_call!(
-        detours_sys::DetourCreateProcessWithDllExW(
+        detours_sys::DetourCreateProcessWithDllsW(
             ptr::null(),
-            cmd_line.as_mut_ptr(),
+            environment.winapi_command_line_zero_terminated.as_mut_ptr(),
             ptr::null_mut(),
             ptr::null_mut(),
             0,
@@ -47,7 +87,8 @@ pub fn main_impl() -> Result<(), Box<dyn Error>> {
             ptr::null(),
             &mut startup_info as *mut _,
             &mut proc_info as *mut _,
-            redirect_path.as_ptr() as *const i8,
+            dlls_to_inject.len() as u32,
+            dlls_to_inject.as_mut_ptr(),
             Option::None
         ),
         |x| x != 0
@@ -56,12 +97,43 @@ pub fn main_impl() -> Result<(), Box<dyn Error>> {
     os_call!(
         detours_sys::DetourCopyPayloadToProcess(
             proc_info.hProcess,
-            &PAYLOAD_GUID,
-            inject_path.as_mut_ptr() as *mut _,
-            (inject_path.len() * mem::size_of::<u16>()) as u32
+            &PAYLOAD_NVCUDA_GUID,
+            environment.nvcuda_path_zero_terminated.as_ptr() as *mut _,
+            environment.nvcuda_path_zero_terminated.len() as u32
         ),
         |x| x != 0
     );
+    os_call!(
+        detours_sys::DetourCopyPayloadToProcess(
+            proc_info.hProcess,
+            &PAYLOAD_NVML_GUID,
+            environment.nvml_path_zero_terminated.as_ptr() as *mut _,
+            environment.nvml_path_zero_terminated.len() as u32
+        ),
+        |x| x != 0
+    );
+    if let Some(nvapi) = environment.nvapi_path_zero_terminated {
+        os_call!(
+            detours_sys::DetourCopyPayloadToProcess(
+                proc_info.hProcess,
+                &PAYLOAD_NVAPI_GUID,
+                nvapi.as_ptr() as *mut _,
+                nvapi.len() as u32
+            ),
+            |x| x != 0
+        );
+    }
+    if let Some(nvoptix) = environment.nvoptix_path_zero_terminated {
+        os_call!(
+            detours_sys::DetourCopyPayloadToProcess(
+                proc_info.hProcess,
+                &PAYLOAD_NVOPTIX_GUID,
+                nvoptix.as_ptr() as *mut _,
+                nvoptix.len() as u32
+            ),
+            |x| x != 0
+        );
+    }
     os_call!(ResumeThread(proc_info.hThread), |x| x as i32 != -1);
     os_call!(WaitForSingleObject(proc_info.hProcess, INFINITE), |x| x
         != WAIT_FAILED);
@@ -71,6 +143,168 @@ pub fn main_impl() -> Result<(), Box<dyn Error>> {
         |x| x != 0
     );
     process::exit(child_exit_code as i32)
+}
+
+struct NormalizedArguments {
+    nvcuda_path: PathBuf,
+    nvml_path: PathBuf,
+    nvapi_path: Option<PathBuf>,
+    nvoptix_path: Option<PathBuf>,
+    redirect_path: PathBuf,
+    winapi_command_line_zero_terminated: Vec<u16>,
+}
+
+impl NormalizedArguments {
+    fn new(prog_args: ProgramArguments) -> Result<Self, Box<dyn Error>> {
+        let current_exe = env::current_exe()?;
+        let nvcuda_path =
+            Self::get_absolute_path_or_default(&current_exe, prog_args.nvcuda, NVCUDA_DLL)?;
+        let nvml_path = Self::get_absolute_path_or_default(&current_exe, prog_args.nvml, NVML_DLL)?;
+        let nvapi_path = prog_args.nvapi.map(Self::get_absolute_path).transpose()?;
+        let nvoptix_path = prog_args.nvoptix.map(Self::get_absolute_path).transpose()?;
+        let winapi_command_line_zero_terminated =
+            construct_command_line(std::iter::once(prog_args.exe).chain(prog_args.args));
+        let mut redirect_path = current_exe.parent().unwrap().to_path_buf();
+        redirect_path.push(REDIRECT_DLL);
+        Ok(Self {
+            nvcuda_path,
+            nvml_path,
+            nvapi_path,
+            nvoptix_path,
+            redirect_path,
+            winapi_command_line_zero_terminated,
+        })
+    }
+
+    const WIN_MAX_PATH: usize = 260;
+
+    fn get_absolute_path_or_default(
+        current_exe: &PathBuf,
+        dll: Option<PathBuf>,
+        default: &str,
+    ) -> Result<PathBuf, Box<dyn Error>> {
+        if let Some(dll) = dll {
+            Self::get_absolute_path(dll)
+        } else {
+            let mut dll_path = current_exe.parent().unwrap().to_path_buf();
+            dll_path.push(default);
+            Ok(dll_path)
+        }
+    }
+
+    fn get_absolute_path(dll: PathBuf) -> Result<PathBuf, Box<dyn Error>> {
+        Ok(if dll.is_absolute() {
+            dll
+        } else {
+            let mut full_dll_path = vec![0; Self::WIN_MAX_PATH];
+            let mut dll_utf16 = dll.as_os_str().encode_wide().collect::<Vec<_>>();
+            dll_utf16.push(0);
+            loop {
+                let copied_len = os_call!(
+                    SearchPathW(
+                        ptr::null_mut(),
+                        dll_utf16.as_ptr(),
+                        ptr::null(),
+                        full_dll_path.len() as u32,
+                        full_dll_path.as_mut_ptr(),
+                        ptr::null_mut()
+                    ),
+                    |x| x != 0
+                ) as usize;
+                if copied_len > full_dll_path.len() {
+                    full_dll_path.resize(copied_len + 1, 0);
+                } else {
+                    full_dll_path.truncate(copied_len);
+                    break;
+                }
+            }
+            PathBuf::from(String::from_utf16_lossy(&full_dll_path))
+        })
+    }
+}
+
+struct Environment {
+    nvcuda_path_zero_terminated: String,
+    nvml_path_zero_terminated: String,
+    nvapi_path_zero_terminated: Option<String>,
+    nvoptix_path_zero_terminated: Option<String>,
+    redirect_path_zero_terminated: String,
+    winapi_command_line_zero_terminated: Vec<u16>,
+    _temp_dir: TempDir,
+}
+
+// This structs represents "environment". By environment we mean all paths
+// (nvcuda.dll, nvml.dll, etc.) and all related resources like the temporary
+// directory which contains nvcuda.dll
+impl Environment {
+    fn setup(args: NormalizedArguments) -> io::Result<Self> {
+        let _temp_dir = TempDir::new()?;
+        let nvcuda_path_zero_terminated = Self::zero_terminate(Self::copy_to_correct_name(
+            args.nvcuda_path,
+            &_temp_dir,
+            NVCUDA_DLL,
+        )?);
+        let nvml_path_zero_terminated = Self::zero_terminate(Self::copy_to_correct_name(
+            args.nvml_path,
+            &_temp_dir,
+            NVML_DLL,
+        )?);
+        let nvapi_path_zero_terminated = args
+            .nvapi_path
+            .map(|nvapi| {
+                Ok::<_, io::Error>(Self::zero_terminate(Self::copy_to_correct_name(
+                    nvapi, &_temp_dir, NVAPI_DLL,
+                )?))
+            })
+            .transpose()?;
+        let nvoptix_path_zero_terminated = args
+            .nvoptix_path
+            .map(|nvoptix| {
+                Ok::<_, io::Error>(Self::zero_terminate(Self::copy_to_correct_name(
+                    nvoptix,
+                    &_temp_dir,
+                    NVOPTIX_DLL,
+                )?))
+            })
+            .transpose()?;
+        let redirect_path_zero_terminated = Self::zero_terminate(args.redirect_path);
+        Ok(Self {
+            nvcuda_path_zero_terminated,
+            nvml_path_zero_terminated,
+            nvapi_path_zero_terminated,
+            nvoptix_path_zero_terminated,
+            redirect_path_zero_terminated,
+            winapi_command_line_zero_terminated: args.winapi_command_line_zero_terminated,
+            _temp_dir,
+        })
+    }
+
+    fn copy_to_correct_name(
+        path_buf: PathBuf,
+        temp_dir: &TempDir,
+        correct_name: &str,
+    ) -> io::Result<PathBuf> {
+        let file_name = path_buf.file_name().unwrap();
+        if file_name == correct_name {
+            Ok(path_buf)
+        } else {
+            let mut temp_file_path = temp_dir.path().to_path_buf();
+            temp_file_path.push(correct_name);
+            match windows::fs::symlink_file(&path_buf, &temp_file_path) {
+                Ok(()) => {}
+                Err(_) => {
+                    fs::copy(&path_buf, &temp_file_path)?;
+                }
+            }
+            Ok(temp_file_path)
+        }
+    }
+
+    fn zero_terminate(p: PathBuf) -> String {
+        let mut s = p.to_string_lossy().to_string();
+        s.push('\0');
+        s
+    }
 }
 
 fn kill_child_on_process_exit(child: HANDLE) -> Result<(), Box<dyn Error>> {
@@ -91,29 +325,11 @@ fn kill_child_on_process_exit(child: HANDLE) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn print_help_and_exit() -> ! {
-    let current_exe = env::current_exe().unwrap();
-    let exe_name = current_exe.file_name().unwrap().to_string_lossy();
-    println!(
-        "USAGE:
-    {0} -- <EXE> [ARGS]...
-    {0} <DLL> -- <EXE> [ARGS]...
-ARGS:
-    <DLL>        DLL to ne injected instead of system nvcuda.dll, if not provided
-                 will use nvcuda.dll from the directory where {0} is located
-    <EXE>        Path to the executable to be injected with <DLL>
-    <ARGS>...    Arguments that will be passed to <EXE>
-",
-        exe_name
-    );
-    process::exit(1)
-}
-
 // Adapted from https://docs.microsoft.com/en-us/archive/blogs/twistylittlepassagesallalike/everyone-quotes-command-line-arguments-the-wrong-way
-fn construct_command_line(args: &[String]) -> Vec<u16> {
+fn construct_command_line(args: impl Iterator<Item = String>) -> Vec<u16> {
     let mut cmd_line = Vec::new();
-    let args_len = args.len();
-    for (idx, arg) in args.iter().enumerate() {
+    let args_len = args.size_hint().0;
+    for (idx, arg) in args.enumerate() {
         if !arg.contains(&[' ', '\t', '\n', '\u{2B7F}', '\"'][..]) {
             cmd_line.extend(arg.encode_utf16());
         } else {
@@ -163,32 +379,4 @@ fn construct_command_line(args: &[String]) -> Vec<u16> {
     }
     cmd_line.push(0);
     cmd_line
-}
-
-fn create_redirect_path(injector_dir: &Path) -> Vec<u8> {
-    let mut injector_dir = injector_dir.to_path_buf();
-    injector_dir.push(REDIRECT_DLL);
-    let mut result = injector_dir.to_string_lossy().into_owned().into_bytes();
-    result.push(0);
-    result
-}
-
-fn create_inject_path<'a>(args: &'a [String], injector_dir: &Path) -> (Vec<u16>, &'a [String]) {
-    if args.get(0).map(Deref::deref) == Some("--") {
-        let mut injector_dir = injector_dir.to_path_buf();
-        injector_dir.push(ZLUDA_DLL);
-        let mut result = injector_dir
-            .to_string_lossy()
-            .as_ref()
-            .encode_utf16()
-            .collect::<Vec<_>>();
-        result.push(0);
-        (result, &args[1..])
-    } else if args.get(1).map(Deref::deref) == Some("--") {
-        let mut dll_path = args[0].encode_utf16().collect::<Vec<_>>();
-        dll_path.push(0);
-        (dll_path, &args[2..])
-    } else {
-        print_help_and_exit()
-    }
 }

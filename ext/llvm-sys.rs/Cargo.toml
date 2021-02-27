@@ -1,0 +1,21 @@
+[package]
+description = "Bindings to LLVM's C API"
+repository = "https://gitlab.com/taricorp/llvm-sys.rs"
+readme = "README.md"
+license = "MIT"
+keywords = ["bindings", "llvm"]
+categories = ["external-ffi-bindings"]
+links = "llvm-15"
+name = "llvm-sys"
+version = "150.1.2"
+authors = [
+  "Peter Marheine <peter@taricorp.net>",
+]
+build = "build.rs"
+
+[dependencies]
+libc = "0.2"
+
+[build-dependencies]
+cmake = "0.1"
+convert_case = "0.5"

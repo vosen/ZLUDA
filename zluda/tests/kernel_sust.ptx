@@ -1,0 +1,31 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.global .surfref image;
+
+.visible .entry sust(
+    .param .b32 input_x,
+    .param .b32 input_y,
+    .param .b32 input_z,
+    .param .b64 image_bindless_param,
+    #PARAM_VALUES#
+)
+{
+    .reg .b32           coord_x;
+    .reg .b32           coord_y;
+    .reg .b32           coord_z;
+    .reg .b32           coord_depth;
+    .reg .u64 	        image_bindless;
+
+    ld.param.b32        coord_x, [input_x];
+    ld.param.b32        coord_y, [input_y];
+    ld.param.b32        coord_z, [input_z];
+    ld.param.u64 	    image_bindless, [image_bindless_param];
+    mov.b32             coord_depth, coord_z;
+
+    #REG_VALUES#
+
+    sust.b.#GEOMETRY##FORMAT#.trap [#IMAGE_SRC#, #COORDINATES#], #VALUES#;
+    ret;
+}

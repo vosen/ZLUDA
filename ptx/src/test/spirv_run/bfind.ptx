@@ -1,0 +1,27 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry bfind(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .u32       temp<6>;
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.u32      temp0, [in_addr];
+	ld.u32      temp1, [in_addr+4];
+	ld.u32      temp2, [in_addr+8];
+	bfind.u32  	temp3, temp0;
+	bfind.u32  	temp4, temp1;
+	bfind.u32  	temp5, temp2;
+    st.u32      [out_addr], temp3;
+	st.u32      [out_addr+4], temp4;
+	st.u32      [out_addr+8], temp5;
+	ret;
+}

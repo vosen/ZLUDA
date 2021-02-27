@@ -1,0 +1,17 @@
+[tasks.bindgen]
+command = "bindgen"
+args = [
+    "include/hip_runtime_api.h",
+    "-o", "src/hip_runtime_api.rs",
+    "--rust-target", "1.64",
+    "--no-layout-tests",
+    "--no-derive-debug",
+    "--default-enum-style=newtype",
+    "--must-use-type", "hipError_t",
+    "--allowlist-function", "hip.*",
+    "--allowlist-type", "hip.*",
+    "--allowlist-var", "^hip.*$",
+    "--new-type-alias", "hipDeviceptr_t",
+    "--", "-I/opt/rocm/include", "-D__HIP_PLATFORM_AMD__",
+    "-IZ:/opt/rocm-5.7.2/include"
+]

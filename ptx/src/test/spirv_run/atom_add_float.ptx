@@ -1,0 +1,28 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry atom_add_float(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.shared .align 4 .b8 shared_mem[1024];
+
+	.reg .u64 	        in_addr;
+    .reg .u64 	        out_addr;
+    .reg .f32 	        temp1;
+    .reg .f32 	        temp2;
+
+	ld.param.u64 	    in_addr, [input];
+    ld.param.u64 	    out_addr, [output];
+
+    ld.f32              temp1, [in_addr];
+    ld.f32              temp2, [in_addr+4];
+    st.shared.f32       [shared_mem], temp1;
+    atom.shared.add.f32 temp1, [shared_mem], temp2;
+    ld.shared.f32       temp2, [shared_mem];
+    st.f32              [out_addr], temp1;
+    st.f32              [out_addr+4], temp2;
+	ret;
+}

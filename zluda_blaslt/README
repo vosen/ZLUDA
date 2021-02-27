@@ -1,0 +1,2 @@
+bindgen /usr/local/cuda/targets/x86_64-linux/include/cublasLt.h -o src/cublaslt.rs --allowlist-function="^cublasLt.*" --blocklist-function="^cublasLtLoggerSetFile$" --allowlist-type="cu.*"  --default-enum-style=newtype --no-layout-tests --no-derive-debug -- -I/usr/local/cuda/targets/x86_64-linux/include
+sed -i -e 's/extern "C" {//g' -e 's/-> cublasStatus_t;/-> cublasStatus_t { crate::unsupported()/g' -e 's/pub fn /#[no_mangle] pub extern "system" fn /g' src/cublaslt.rs

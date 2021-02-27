@@ -1,0 +1,19 @@
+image: rust:buster
+
+variables:
+  LLVM_SYS_150_FFI_WORKAROUND: "YES"
+
+before_script:
+  - apt-get update -qq && apt-get install -qq -y lsb-release software-properties-common
+  - wget https://apt.llvm.org/llvm.sh
+  - chmod +x llvm.sh
+  - ./llvm.sh 15
+  - apt-get install libpolly-15-dev
+
+test:
+  script:
+    - cargo build
+    - cargo test
+    - cargo run --example nop-function
+    - cargo run --example jit-function
+    - echo "Hello, world!" | cargo run --example disassembler

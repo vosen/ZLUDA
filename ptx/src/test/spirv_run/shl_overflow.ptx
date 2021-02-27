@@ -1,0 +1,32 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry shl_overflow(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .u32 	    input_value;
+    .reg .u32 	    value;
+    .reg .u32 	    shift1;
+    .reg .u32 	    shift2;
+    .reg .u32 	    shift3;
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.u32          input_value, [in_addr];
+    ld.u32          shift1, [in_addr+4];
+    ld.u32          shift2, [in_addr+8];
+    ld.u32          shift3, [in_addr+12];
+	shl.b32		    value, input_value, shift1;
+    st.u32          [out_addr], value;
+	shl.b32		    value, input_value, shift2;
+    st.u32          [out_addr+4], value;
+	shl.b32		    value, input_value, shift3;
+    st.u32          [out_addr+8], value;
+	ret;
+}

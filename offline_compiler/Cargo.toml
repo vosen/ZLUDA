@@ -1,0 +1,21 @@
+[package]
+name = "offline_compiler"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2018"
+
+[[bin]]
+name = "zoc"
+path = "src/main.rs"
+
+[dependencies]
+comgr = { path = "../comgr" }
+hip_common = { path = "../hip_common" }
+hiprt-sys = { path = "../hiprt-sys" }
+hip_runtime-sys = { path = "../hip_runtime-sys" }
+ptx = { path = "../ptx" }
+argh = "0.1"
+libloading = "0.8"
+
+[package.metadata.zluda]
+debug_only = true

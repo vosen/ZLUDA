@@ -1,0 +1,72 @@
+FROM rockylinux:8.8
+
+WORKDIR /root
+
+RUN dnf -y --setopt=install_weak_deps=False install \
+    nano \
+    wget \
+    curl \
+    ltrace \
+    file \
+    python3 \
+    git \
+    gcc \
+    gcc-c++ \
+    cmake
+
+RUN wget https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
+    rpm -ivh epel-release-latest-8.noarch.rpm && \
+    dnf -y --setopt=install_weak_deps=False install 'dnf-command(config-manager)' && \
+    crb enable && \
+    dnf -y --setopt=install_weak_deps=False install \
+    ripgrep \
+    ninja-build
+
+ARG CUDA_VERSION=11-8
+ENV NVIDIA_VISIBLE_DEVICES all
+ENV NVIDIA_DRIVER_CAPABILITIES compute,utility
+RUN dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo && \
+    dnf -y --setopt=install_weak_deps=False module install \
+    nvidia-driver:515 && \
+    dnf -y --setopt=install_weak_deps=False install \
+    cuda-cudart-${CUDA_VERSION} \
+    cuda-compiler-${CUDA_VERSION} \
+    libcufft-devel-${CUDA_VERSION} \
+    libcusparse-devel-${CUDA_VERSION} \
+    libcublas-devel-${CUDA_VERSION} \
+    cuda-nvml-devel-${CUDA_VERSION} \
+    libcudnn8-devel
+
+ARG RUST_VERSION=1.66.1
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain=${RUST_VERSION}
+RUN . $HOME/.cargo/env && cargo install bindgen-cli --locked
+
+ARG ROCM_VERSION=5.7.1
+RUN sh -c 'echo -e "[ROCm-${ROCM_VERSION}]\n\
+name=ROCm${ROCM_VERSION}\n\
+baseurl=https://repo.radeon.com/rocm/rhel8/${ROCM_VERSION}/main\n\
+enabled=1\n\
+priority=50\n\
+gpgcheck=1\n\
+gpgkey=https://repo.radeon.com/rocm/rocm.gpg.key"' \
+    > /etc/yum.repos.d/rocm.repo && \
+    dnf -y --setopt=install_weak_deps=False install \
+    rocminfo \
+    rocm-gdb \
+    rocprofiler \
+    rocm-smi-lib \
+    hip-runtime-amd \
+    comgr \
+    hipblaslt-devel \
+    hipfft-devel \
+    rocblas-devel \
+    rocsolver-devel \
+    rocsparse-devel \
+    miopen-hip-devel \
+    rocm-device-libs && \
+    echo 'export PATH="$PATH:/opt/rocm/bin"' > /etc/profile.d/rocm.sh && \
+    echo '/opt/rocm/lib' > /etc/ld.so.conf.d/rocm.conf && \
+    ldconfig
+
+# Default to a login shell
+CMD ["bash", "-l"]

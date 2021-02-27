@@ -1,0 +1,47 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.extern .shared .b32 shared_ex[];
+.shared .b32 shared_mod[4];
+
+.func (.reg .b64 out) add();
+.func (.reg .b64 out) set_shared_temp1(.reg .b64 temp1_3);
+
+.func (.reg .b64 out) add()
+{
+    .reg .u64 	    temp1_2;
+    .reg .u64 	    temp2;
+    ld.shared.u64   temp1_2, [shared_mod];
+    ld.shared.u64   temp2, [shared_ex];
+	add.u64		    out, temp2, temp1_2;
+    ret;
+}
+
+.func (.reg .b64 out) set_shared_temp1(.reg .b64 temp1_1)
+{
+    st.shared.u64   [shared_ex], temp1_1;
+    call            (out), add;
+    ret;
+}
+
+.visible .entry shared_unify_decl(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .u64 	    temp1;
+    .reg .u64 	    temp2;
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.global.u64   temp1, [in_addr];
+    ld.global.u64   temp2, [in_addr+8];
+    st.shared.u64   [shared_mod], temp2;
+    call            (temp2), set_shared_temp1, (temp1);
+    st.u64          [out_addr], temp2;
+	ret;
+}

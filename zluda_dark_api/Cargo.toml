@@ -1,0 +1,19 @@
+[package]
+name = "zluda_dark_api"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2018"
+
+[lib]
+
+[dependencies]
+cuda_types = { path = "../cuda_types" }
+hip_common = { path = "../hip_common" }
+bitflags = "2.4"
+either = "1.9"
+bit-vec = "0.6.3"
+paste = "1.0"
+lz4-sys = "1.9"
+thread-id = "4.1.0"
+# we don't need elf32, but goblin has a bug where elf64 does not build without elf32
+goblin = { version = "0.5.1", default-features = false, features = ["elf64", "elf32"] }

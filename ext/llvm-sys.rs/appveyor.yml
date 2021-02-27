@@ -1,0 +1,20 @@
+version: 1.0.{build}
+
+image: macos
+install:
+  - sh: >-
+      brew install llvm
+  - sh: >-
+      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o rustup.sh && sh rustup.sh -y
+build: off
+test_script:
+  - sh: |
+      export PATH=/usr/local/bin:$PATH
+      source ~/.cargo/env
+      export LLVM_SYS_110_PREFIX=/usr/local/opt/llvm
+      export LLVM_CONFIG_PATH=${LLVM_SYS_110_PREFIX}/bin/llvm-config
+
+      cargo test
+      cargo run --example nop-function
+      cargo run --example jit-function
+      echo "Hello, world!" | cargo run --example disassembler

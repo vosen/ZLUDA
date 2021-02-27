@@ -1,0 +1,39 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.shared .b32 shmem[64];
+
+.visible .entry red_shared(
+	.param .u64 output
+)
+{
+    .reg .u64 	    out_addr;
+    .reg .u32 	    tid;
+    .reg .u32 	    tid_1;
+    .reg .u64 	    tid_64;
+    .reg .u32 	    result;
+    .reg .u32 	    shmem_tid_addr;
+    .reg .u32       temp1;
+    .reg .u32       shmem_copy;
+
+    ld.param.u64 	    out_addr, [output];
+    mov.b32             tid, %tid.x;
+    cvt.u64.u32         tid_64, tid;
+
+    mov.b32             shmem_tid_addr, shmem;
+    mad.lo.u32          shmem_tid_addr, tid, 4, shmem_tid_addr;
+    add.u32             tid_1, tid, 1;
+    st.shared.u32       [shmem_tid_addr], tid_1;
+    bar.sync 0;
+    rem.u32             temp1, tid, 2;
+    mov.u32             shmem_copy, shmem;
+    mad.lo.u32          shmem_copy, 4, temp1, shmem_copy;
+    red.shared.add.u32  [shmem_copy], tid_1;
+    bar.sync 0;
+    ld.shared.u32       result, [shmem_tid_addr];
+
+    mad.lo.u64          out_addr, tid_64, 4, out_addr;
+    st.u32              [out_addr], result;
+	ret;
+}

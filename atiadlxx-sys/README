@@ -1,0 +1,1 @@
+bindgen include/wrapper.hpp -o src/adl.rs --no-layout-tests --default-enum-style=newtype --no-derive-debug --allowlist-function "ADL2_.*" --allowlist-var "ADL.*" --allowlist-type "ADL.*"

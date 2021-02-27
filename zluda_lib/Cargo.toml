@@ -10,3 +10,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 zluda = { path = "../zluda" }
+
+[package.metadata.zluda]
+linux_names = ["libcuda.so", "libcuda.so.1"]
+skip_dump_link = true

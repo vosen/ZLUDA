@@ -1,0 +1,22 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry non_scalar_ptr_offset(
+    .param .u64 input_p,
+    .param .u64 output_p
+)
+{
+    .reg .u64           in_addr;
+    .reg .u64           out_addr;
+    .reg .u32           x;
+    .reg .u32           y;
+
+	ld.param.u64        in_addr, [input_p];
+    ld.param.u64        out_addr, [output_p];
+
+    ld.global.v2.u32    {x,y}, [in_addr+8];
+    add.u32             x, x, y;
+    st.global.u32       [out_addr], x;
+    ret;
+}

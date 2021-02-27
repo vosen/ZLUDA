@@ -1,0 +1,11 @@
+[package]
+name = "optix_types"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2018"
+
+[lib]
+
+[dependencies]
+cuda_types = { path = "../cuda_types" }
+optix_base = { path = "../optix_base" }

@@ -1,0 +1,1 @@
+bindgen /opt/rocm/include/rocm_smi/rocm_smi.h -o src/rocm_smi.rs --no-layout-tests --size_t-is-usize --default-enum-style=newtype --no-derive-debug --allowlist-function "rsmi_.*" --allowlist-var "RSMI.*" --must-use-type rsmi_status_t -- -I/opt/rocm/include

@@ -1,0 +1,57 @@
+// For some reason presence of __unnamed_1 in emitted bitcode makes comgr fail inside LLVM
+.version 6.5
+.target sm_30
+.address_size 64
+
+.extern .func __assertfail
+(
+	.param .b64 __assertfail_param_0,
+	.param .b64 __assertfail_param_1,
+	.param .b32 __assertfail_param_2,
+	.param .b64 __assertfail_param_3,
+	.param .b64 __assertfail_param_4
+);
+
+.global .align 1 .b8 __unnamed_1[2] = {118, 0};
+.global .align 1 .b8 $str[2] = {42,  0};
+.global .align 1 .b8 $str1[2] = {115, 0};
+
+.visible .entry amdgpu_unnamed(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .u64 	    temp;
+    .reg .u64 	    temp2;
+    .reg .pred      always_true;
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.u64          temp, [in_addr];
+    setp.ge.u64     always_true, temp, 1;
+    @always_true    bra NOFAIL;
+
+    .reg .b64   b64_temp;
+    .reg .b32   b32_temp;
+	.param .b64 param0;
+	mov.u64 	b64_temp, __unnamed_1;
+	st.param.b64	[param0], b64_temp;
+	.param .b64 param1;
+	mov.u64 	b64_temp, $str;
+	st.param.b64	[param1], b64_temp;
+	.param .b32 param2;
+	st.param.b32	[param2], 1;
+	.param .b64 param3;
+	mov.u64 	b64_temp, $str1;
+	st.param.b64	[param3], b64_temp;
+	.param .b64 param4;
+	st.param.b64	[param4+0], 1;
+    call.uni __assertfail, (param0, param1, param2, param3, param4);
+NOFAIL:
+	add.u64		    temp2, temp, 1;
+    st.u64          [out_addr], temp2;
+	ret;
+}

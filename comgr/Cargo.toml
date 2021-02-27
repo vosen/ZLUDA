@@ -1,0 +1,12 @@
+[package]
+name = "comgr"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2018"
+
+[lib]
+
+[dependencies]
+libloading = "0.8"
+hip_common = { path = "../hip_common" }
+itertools = "0.10.5"

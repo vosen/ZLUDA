@@ -1,191 +1,214 @@
-use super::{stream::Stream, CUresult, GlobalState, HasLivenessCookie, LiveCheck};
-use crate::cuda::CUfunction_attribute;
-use ::std::os::raw::{c_uint, c_void};
-use std::{hint, ptr};
+use super::{stream, LiveCheck, ZludaObject};
+use crate::{hip_call_cuda, r#impl::hipfix};
+use cuda_types::*;
+use hip_common::CompilationMode;
+use hip_runtime_sys::*;
+use std::{ffi::c_void, ptr};
 
-const CU_LAUNCH_PARAM_END: *mut c_void = 0 as *mut _;
 const CU_LAUNCH_PARAM_BUFFER_POINTER: *mut c_void = 1 as *mut _;
 const CU_LAUNCH_PARAM_BUFFER_SIZE: *mut c_void = 2 as *mut _;
+const CU_LAUNCH_PARAM_END: *mut c_void = 0 as *mut _;
+const HIP_LAUNCH_PARAM_END: *mut c_void = 3 as *mut _;
 
-pub type Function = LiveCheck<FunctionData>;
+pub(crate) type Function = LiveCheck<FunctionData>;
 
-impl HasLivenessCookie for FunctionData {
+impl ZludaObject for FunctionData {
     #[cfg(target_pointer_width = "64")]
-    const COOKIE: usize = 0x5e2ab14d5840678e;
-
+    const LIVENESS_COOKIE: usize = 0x86b7301e5869d145;
     #[cfg(target_pointer_width = "32")]
-    const COOKIE: usize = 0x33e6a1e6;
-
+    const LIVENESS_COOKIE: usize = 0x5cebb802;
     const LIVENESS_FAIL: CUresult = CUresult::CUDA_ERROR_INVALID_HANDLE;
 
-    fn try_drop(&mut self) -> Result<(), CUresult> {
+    fn drop_with_result(&mut self, _by_owner: bool) -> Result<(), CUresult> {
         Ok(())
     }
 }
 
-pub struct FunctionData {
-    pub base: l0::Kernel<'static>,
-    pub arg_size: Vec<usize>,
-    pub use_shared_mem: bool,
-    pub properties: Option<Box<l0::sys::ze_kernel_properties_t>>,
-    pub legacy_args: LegacyArguments,
+pub(crate) struct FunctionData {
+    pub(crate) base: hipFunction_t,
+    pub(crate) ptx_version: u32,
+    pub(crate) binary_version: u32,
+    pub(crate) group_size: Option<(u32, u32)>,
+    pub(crate) compilation_mode: CompilationMode,
 }
 
-pub struct LegacyArguments {
-    block_shape: Option<(i32, i32, i32)>,
-}
-
-impl LegacyArguments {
-    pub fn new() -> Self {
-        LegacyArguments { block_shape: None }
-    }
-
-    #[allow(dead_code)]
-    pub fn is_initialized(&self) -> bool {
-        self.block_shape.is_some()
-    }
-
-    pub fn reset(&mut self) {
-        self.block_shape = None;
-    }
-}
-
-impl FunctionData {
-    fn get_properties(&mut self) -> Result<&l0::sys::ze_kernel_properties_t, l0::sys::ze_result_t> {
-        if let None = self.properties {
-            self.properties = Some(self.base.get_properties()?)
-        }
-        match self.properties {
-            Some(ref props) => Ok(props.as_ref()),
-            None => unsafe { hint::unreachable_unchecked() },
-        }
-    }
-}
-
-pub fn launch_kernel(
+pub(crate) unsafe fn launch_kernel(
     f: *mut Function,
-    grid_dim_x: c_uint,
-    grid_dim_y: c_uint,
-    grid_dim_z: c_uint,
-    block_dim_x: c_uint,
-    block_dim_y: c_uint,
-    block_dim_z: c_uint,
-    shared_mem_bytes: c_uint,
-    hstream: *mut Stream,
-    kernel_params: *mut *mut c_void,
-    extra: *mut *mut c_void,
+    grid_dim_x: ::std::os::raw::c_uint,
+    grid_dim_y: ::std::os::raw::c_uint,
+    grid_dim_z: ::std::os::raw::c_uint,
+    block_dim_x: ::std::os::raw::c_uint,
+    block_dim_y: ::std::os::raw::c_uint,
+    mut block_dim_z: ::std::os::raw::c_uint,
+    shared_mem_bytes: ::std::os::raw::c_uint,
+    stream: *mut stream::Stream,
+    kernel_params: *mut *mut ::std::os::raw::c_void,
+    extra: *mut *mut ::std::os::raw::c_void,
+    default_stream_per_thread: bool,
 ) -> Result<(), CUresult> {
-    if f == ptr::null_mut()
-        || (kernel_params == ptr::null_mut() && extra == ptr::null_mut())
-        || (kernel_params != ptr::null_mut() && extra != ptr::null_mut())
-    {
-        return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
+    let hip_stream = hipfix::as_hip_stream_per_thread(stream, default_stream_per_thread)?;
+    let function = LiveCheck::as_result(f)?;
+    hipfix::validate_block_size(function, block_dim_x, block_dim_y, block_dim_z)?;
+    if function.compilation_mode == CompilationMode::Wave32OnWave64 {
+        block_dim_z *= 2;
     }
-    GlobalState::lock_stream(hstream, |stream| {
-        let func: &mut FunctionData = unsafe { &mut *f }.as_result_mut()?;
+    if extra != ptr::null_mut() {
         if kernel_params != ptr::null_mut() {
-            for (i, arg_size) in func.arg_size.iter().enumerate() {
-                unsafe {
-                    func.base
-                        .set_arg_raw(i as u32, *arg_size, *kernel_params.add(i))?
-                };
-            }
-        } else {
-            let mut offset = 0;
-            let mut buffer_ptr = None;
-            let mut buffer_size = None;
-            loop {
-                match unsafe { *extra.add(offset) } {
-                    CU_LAUNCH_PARAM_END => break,
-                    CU_LAUNCH_PARAM_BUFFER_POINTER => {
-                        buffer_ptr = Some(unsafe { *extra.add(offset + 1) as *mut u8 });
-                    }
-                    CU_LAUNCH_PARAM_BUFFER_SIZE => {
-                        buffer_size = Some(unsafe { *(*extra.add(offset + 1) as *mut usize) });
-                    }
-                    _ => return Err(CUresult::CUDA_ERROR_INVALID_VALUE),
-                }
-                offset += 2;
-            }
-            match (buffer_size, buffer_ptr) {
-                (Some(buffer_size), Some(buffer_ptr)) => {
-                    let sum_of_kernel_argument_sizes =
-                        func.arg_size.iter().fold(0, |offset, size_of_arg| {
-                            size_of_arg + round_up_to_multiple(offset, *size_of_arg)
-                        });
-                    if buffer_size != sum_of_kernel_argument_sizes {
-                        return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
-                    }
-                    let mut offset = 0;
-                    for (i, arg_size) in func.arg_size.iter().enumerate() {
-                        let buffer_offset = round_up_to_multiple(offset, *arg_size);
-                        unsafe {
-                            func.base.set_arg_raw(
-                                i as u32,
-                                *arg_size,
-                                buffer_ptr.add(buffer_offset) as *const _,
-                            )?
-                        };
-                        offset = buffer_offset + *arg_size;
-                    }
-                }
-                _ => return Err(CUresult::CUDA_ERROR_INVALID_VALUE),
-            }
+            return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
         }
-        if func.use_shared_mem {
-            unsafe {
-                func.base.set_arg_raw(
-                    func.arg_size.len() as u32,
-                    shared_mem_bytes as usize,
-                    ptr::null(),
-                )?
-            };
+        let mut extra_params = *(extra as *mut [*mut c_void; 5]);
+        if extra_params[0] != CU_LAUNCH_PARAM_BUFFER_POINTER
+            || extra_params[2] != CU_LAUNCH_PARAM_BUFFER_SIZE
+            || extra_params[4] != CU_LAUNCH_PARAM_END
+        {
+            return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
         }
-        func.base
-            .set_group_size(block_dim_x, block_dim_y, block_dim_z)?;
-        func.legacy_args.reset();
-        let mut cmd_list = stream.command_list()?;
-        cmd_list.append_launch_kernel(
-            &mut func.base,
-            &[grid_dim_x, grid_dim_y, grid_dim_z],
-            None,
-            &mut [],
-        )?;
-        stream.queue.execute(cmd_list)?;
-        Ok(())
-    })?
+        // CU_LAUNCH_PARAM_END is 0, while HIP_LAUNCH_PARAM_END is 3
+        extra_params[4] = HIP_LAUNCH_PARAM_END;
+        hip_call_cuda!(hipModuleLaunchKernel(
+            function.base,
+            grid_dim_x,
+            grid_dim_y,
+            grid_dim_z,
+            block_dim_x,
+            block_dim_y,
+            block_dim_z,
+            shared_mem_bytes,
+            hip_stream,
+            ptr::null_mut(),
+            extra_params.as_mut_ptr(),
+        ));
+    } else {
+        hip_call_cuda!(hipModuleLaunchKernel(
+            function.base,
+            grid_dim_x,
+            grid_dim_y,
+            grid_dim_z,
+            block_dim_x,
+            block_dim_y,
+            block_dim_z,
+            shared_mem_bytes,
+            hip_stream,
+            kernel_params,
+            extra,
+        ));
+    }
+
+    Ok(())
 }
 
-fn round_up_to_multiple(x: usize, multiple: usize) -> usize {
-    ((x + multiple - 1) / multiple) * multiple
-}
-
-pub(crate) fn get_attribute(
-    pi: *mut i32,
-    attrib: CUfunction_attribute,
+pub(crate) unsafe fn occupancy_max_potential_block_size(
+    min_grid_size: *mut i32,
+    block_size: *mut i32,
     func: *mut Function,
+    _block_size_to_dynamic_smem_size: CUoccupancyB2DSize,
+    dynamic_smem_size: usize,
+    block_size_limit: i32,
 ) -> Result<(), CUresult> {
-    if pi == ptr::null_mut() || func == ptr::null_mut() {
+    if min_grid_size == ptr::null_mut() || block_size == ptr::null_mut() {
         return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
     }
-    match attrib {
-        CUfunction_attribute::CU_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK => {
-            let max_threads = GlobalState::lock_function(func, |func| {
-                let props = func.get_properties()?;
-                Ok::<_, CUresult>(props.maxSubgroupSize * props.maxNumSubgroups)
-            })??;
-            unsafe { *pi = max_threads as i32 };
-            Ok(())
+    let function = LiveCheck::as_result(func)?;
+    hip_call_cuda!(hipModuleOccupancyMaxPotentialBlockSize(
+        min_grid_size,
+        block_size,
+        function.base,
+        dynamic_smem_size,
+        block_size_limit
+    ));
+    hipfix::override_occupancy(function, min_grid_size, block_size);
+    if function.compilation_mode == CompilationMode::Wave32OnWave64 {
+        *block_size /= 2;
+    }
+    Ok(())
+}
+
+pub(crate) unsafe fn occupancy_max_potential_blocks_per_multiprocessor(
+    num_blocks: *mut i32,
+    func: *mut LiveCheck<FunctionData>,
+    mut block_size: i32,
+    dynamic_smem_size: usize,
+    flags: u32,
+) -> Result<(), CUresult> {
+    let function = LiveCheck::as_result(func)?;
+    if function.compilation_mode == CompilationMode::Wave32OnWave64 {
+        block_size *= 2;
+    }
+    hip_call_cuda!(hipModuleOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
+        num_blocks,
+        function.base,
+        block_size,
+        dynamic_smem_size,
+        flags,
+    ));
+    hipfix::occupancy_max_potential_blocks_per_multiprocessor(num_blocks);
+    Ok(())
+}
+
+pub(crate) unsafe fn get_attribute(
+    pi: *mut i32,
+    attrib: hipFunction_attribute,
+    func: *mut LiveCheck<FunctionData>,
+) -> Result<(), CUresult> {
+    let function = LiveCheck::as_result(func)?;
+
+    match CUfunction_attribute(attrib.0) {
+        CUfunction_attribute::CU_FUNC_ATTRIBUTE_PTX_VERSION => {
+            *pi = function.ptx_version as i32;
+            return Ok(());
         }
+        CUfunction_attribute::CU_FUNC_ATTRIBUTE_BINARY_VERSION => {
+            *pi = function.binary_version as i32;
+            return Ok(());
+        }
+        CUfunction_attribute::CU_FUNC_ATTRIBUTE_PREFERRED_SHARED_MEMORY_CARVEOUT => {
+            *pi = -1;
+            return Ok(());
+        }
+        CUfunction_attribute::CU_FUNC_ATTRIBUTE_CLUSTER_SIZE_MUST_BE_SET
+        | CUfunction_attribute::CU_FUNC_ATTRIBUTE_REQUIRED_CLUSTER_WIDTH
+        | CUfunction_attribute::CU_FUNC_ATTRIBUTE_REQUIRED_CLUSTER_HEIGHT
+        | CUfunction_attribute::CU_FUNC_ATTRIBUTE_REQUIRED_CLUSTER_DEPTH
+        | CUfunction_attribute::CU_FUNC_ATTRIBUTE_NON_PORTABLE_CLUSTER_SIZE_ALLOWED
+        | CUfunction_attribute::CU_FUNC_ATTRIBUTE_CLUSTER_SCHEDULING_POLICY_PREFERENCE => {
+            *pi = 0;
+            return Ok(());
+        }
+        _ => {}
+    }
+    hip_call_cuda!(hipFuncGetAttribute(pi, attrib, function.base));
+    if attrib == hipFunction_attribute::HIP_FUNC_ATTRIBUTE_NUM_REGS {
+        // For a completely empty kernel CUDA 11.8 returns 2 regs
+        // HIP returns zero
+        // Kokkos relies on this property being non-zero
+        *pi = i32::max(*pi, 1);
+    }
+    if attrib == hipFunction_attribute::HIP_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK {
+        if function.compilation_mode == CompilationMode::Wave32OnWave64 {
+            *pi /= 2;
+        }
+    }
+    Ok(())
+}
+
+pub(crate) unsafe fn set_attribute(
+    func: *mut LiveCheck<FunctionData>,
+    attrib: hipFunction_attribute,
+    requested_value: i32,
+) -> Result<(), CUresult> {
+    let function = LiveCheck::as_result(func)?;
+    match attrib {
+        // Required by xgboost
+        hipFunction_attribute::HIP_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES => {
+            let mut current_value = 0;
+            hip_call_cuda! { hipFuncGetAttribute(&mut current_value, hipFunction_attribute::HIP_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES, function.base) };
+            if requested_value > current_value {
+                Err(CUresult::CUDA_ERROR_NOT_SUPPORTED)
+            } else {
+                Ok(())
+            }
+        }
+        // Can't set attributes in HIP
         _ => Err(CUresult::CUDA_ERROR_NOT_SUPPORTED),
     }
-}
-
-pub(crate) fn set_block_shape(func: *mut Function, x: i32, y: i32, z: i32) -> Result<(), CUresult> {
-    if func == ptr::null_mut() || x < 0 || y < 0 || z < 0 {
-        return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
-    }
-    GlobalState::lock_function(func, |func| {
-        func.legacy_args.block_shape = Some((x, y, z));
-    })
 }

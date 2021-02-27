@@ -1,0 +1,32 @@
+.version 6.5
+.target sm_70
+.address_size 64
+
+.global .u32 values[64] = { 3, 1, 2, 1, 3, 3, 2, 1, 3, 1, 3, 3, 1, 2, 2, 1, 1, 3, 2, 3, 3, 2, 1, 2, 1, 3, 3, 3, 3, 1, 1, 2, 3, 2, 3, 1, 3, 3, 2, 2, 1, 3, 1, 2, 3, 2, 2, 2, 1, 1, 3, 2, 3, 1, 2, 2, 1, 1, 2, 1, 2, 1, 1, 1 };
+
+.visible .entry match_any_32(
+	.param .u64 output
+)
+{
+    .reg .u64 	        out_addr;
+    .reg .u32 	        tid;
+    .reg .u64 	        tid_64;
+    .reg .u64           values_addr;
+    .reg .u32 	        result;
+
+    ld.param.u64 	    out_addr, [output];
+
+    mov.b32             tid, %tid.x;
+    cvt.u64.u32         tid_64, tid;
+
+    mov.b64             values_addr, values;
+    mad.lo.u64          values_addr, tid_64, 4, values_addr;
+    ld.global.b32       result, [values_addr];
+
+    match.any.sync.b32  result, result, 0xd6e2d0b4;
+    
+
+    mad.lo.u64          out_addr, tid_64, 4, out_addr;
+    st.u32              [out_addr], result;
+	ret;
+}

@@ -9,20 +9,26 @@
 {
 	.reg .u64 	    in_addr;
     .reg .u64 	    out_addr;
-    .reg .s32 	    dst;
-    .reg .s32 	    src1;
-    .reg .s32 	    src2;
-    .reg .s32 	    src3;
+    .reg .s32 	    dst1;
+    .reg .s32 	    dst2;
+    .reg .u64 	    dst3;
+    .reg .b32 	    src1;
+    .reg .b32 	    src2;
+    .reg .b32 	    src3;
+    .reg .b64 	    src4;
 
 	ld.param.u64    in_addr, [input];
     ld.param.u64    out_addr, [output];
 
     ld.s32          src1, [in_addr];
     ld.s32          src2, [in_addr+4];
-    ld.s32          src3, [in_addr+8];
-	mad.lo.s32      dst, src1, src2, src3;
-    st.s32          [out_addr], dst;
-    st.s32          [out_addr+4], dst;
-    st.s32          [out_addr+8], dst;
+    ld.b64          src4, [in_addr+8];
+    ld.s32          src3, [in_addr+16];
+	mad.lo.s32      dst1, src1, src2, src3;
+	mad.hi.s32      dst2, src1, src2, src3;
+	mad.wide.s32    dst3, src1, src2, src4;
+    st.s32          [out_addr], dst1;
+    st.s32          [out_addr+8], dst2;
+    st.s64          [out_addr+16], dst3;
 	ret;
 }

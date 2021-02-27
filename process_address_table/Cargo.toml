@@ -1,0 +1,20 @@
+[package]
+name = "process_address_table"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2018"
+
+[dependencies]
+detours-sys = { path = "../detours-sys" }
+libloading = "0.8"
+
+[dependencies.windows]
+version = "0.48"
+features = [
+    "Win32_Foundation",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_LibraryLoader",
+]
+
+[package.metadata.zluda]
+debug_only = true

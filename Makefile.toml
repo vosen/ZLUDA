@@ -1,0 +1,57 @@
+[config]
+default_to_workspace = false
+skip_core_tasks = true
+
+[tasks.build]
+run_task = [
+    { name = "build-windows", condition = { platforms = ["windows"] } },
+    { name = "build-linux", condition = { platforms = ["linux"] } },
+]
+
+[tasks.build-windows]
+command = "cargo"
+args = [
+    "build",
+    "-p", "offline_compiler",
+    "-p", "zluda_dump",
+    "-p", "zluda_inject",
+    "-p", "zluda_lib",
+    "-p", "zluda_ml",
+    "-p", "zluda_redirect",
+]
+
+[tasks.build-linux]
+command = "cargo"
+args = [
+    "build",
+    "-p", "offline_compiler",
+    "-p", "zluda_blas",
+    "-p", "zluda_blaslt",
+    "-p", "zluda_ccl",
+    "-p", "zluda_dnn",
+    "-p", "zluda_dump",
+    "-p", "zluda_fft",
+    "-p", "zluda_lib",
+    "-p", "zluda_ml",
+    "-p", "zluda_sparse",
+]
+
+[tasks.build-release]
+command = "cargo"
+args = [
+    "build", 
+    "--release",
+    "-p", "offline_compiler",
+    "-p", "zluda_blas",
+    "-p", "zluda_blaslt",
+    "-p", "zluda_ccl",
+    "-p", "zluda_dnn",
+    "-p", "zluda_dump",
+    "-p", "zluda_fft",
+    "-p", "zluda_lib",
+    "-p", "zluda_ml",
+    "-p", "zluda_sparse",
+]
+
+[tasks.default]
+alias = "build"

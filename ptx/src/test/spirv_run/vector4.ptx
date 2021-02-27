@@ -1,0 +1,22 @@
+.version 6.5
+.target sm_60
+.address_size 64
+
+.visible .entry vector4(
+    .param .u64 input_p,
+    .param .u64 output_p
+)
+{
+    .reg .u64       in_addr;
+    .reg .u64       out_addr;
+    .reg .v4 .u32   temp;
+    .reg .u32       temp_scalar;
+
+    ld.param.u64    in_addr, [input_p];
+    ld.param.u64    out_addr, [output_p];
+
+    ld.v4.u32     temp, [in_addr];
+    mov.b32       temp_scalar, temp.w;
+    st.u32     [out_addr], temp_scalar;
+    ret;
+}

@@ -1,0 +1,20 @@
+[package]
+name = "zluda_blaslt"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2018"
+
+[lib]
+name = "cublasLt"
+crate-type = ["cdylib"]
+
+[dependencies]
+hipblaslt-sys = { path = "../hipblaslt-sys" }
+cuda_types = { path = "../cuda_types" }
+hip_common = { path = "../hip_common" }
+zluda_dark_api = { path = "../zluda_dark_api" }
+
+[package.metadata.zluda]
+linux_only = true
+linux_names = ["libcublasLt.so.11"]
+dump_names = ["libcublasLt.so"]

@@ -1,0 +1,47 @@
+[package]
+name = "zluda_rt"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2018"
+
+[lib]
+name = "nvoptix"
+crate-type = ["cdylib"]
+
+[dependencies]
+comgr = { path = "../comgr" }
+hip_common = { path = "../hip_common" }
+hip_runtime-sys = { path = "../hip_runtime-sys" }
+hiprt-sys = { path = "../hiprt-sys" }
+optix_base = { path = "../optix_base" }
+optix_types = { path = "../optix_types" }
+ptx = { path = "../ptx" }
+rustc-hash = "1.1"
+paste = "1.0"
+winapi = { version = "0.3", features = ["libloaderapi", "std"] }
+libloading = "0.8"
+nougat = "0.2.4"
+glam = "0.22"
+dirs = "4.0.0"
+sha2 = "0.10.2"
+generic-array = "0.14.5"
+typenum = "1.15.0"
+data-encoding = "2.3.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_with = "2.1.0"
+static_assertions = "1.1.0"
+rusqlite = { version = "0.28.0", features = ["bundled", "serde_json"] }
+
+[dev-dependencies]
+float-cmp = "0.9.0"
+
+[build-dependencies]
+vergen = { version = "7.5.1", default-features = false, features = ["git"] }
+# We don't use time crate, but this coerces vergen to not use newer version that requires 
+# higher minimum rust version
+time = "=0.3.23"
+
+[package.metadata.zluda]
+broken = true
+linux_names = ["liboptix.so.6.5.0", "liboptix.so.6.6.0"]

@@ -1,0 +1,19 @@
+[package]
+name = "zluda_ml"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2018"
+
+[lib]
+name = "nvml"
+crate-type = ["cdylib"]
+
+[target.'cfg(windows)'.dependencies]
+atiadlxx-sys = { path = "../atiadlxx-sys" }
+
+[target.'cfg(unix)'.dependencies]
+rocm_smi-sys = { path = "../rocm_smi-sys" }
+
+[package.metadata.zluda]
+top_level = true
+linux_names = ["libnvidia-ml.so", "libnvidia-ml.so.1"]

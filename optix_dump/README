@@ -1,0 +1,1 @@
+bindgen include/wrapper.hpp -o src/optix.rs --no-layout-tests --size_t-is-usize --default-enum-style=newtype --no-derive-debug --whitelist-type="Optix.*" --whitelist-function "optix.*" --whitelist-var "OPTIX.*"  -- -I"F:\dev\OptiX SDK 7.4.0\include" -I"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.5\include

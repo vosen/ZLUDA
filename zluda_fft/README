@@ -1,0 +1,4 @@
+bindgen /usr/local/cuda/targets/x86_64-linux/include/cufft.h -o src/cufft.rs --allowlist-function="^cufft.*" --default-enum-style=newtype --no-layout-tests --no-derive-debug -- -I/usr/local/cuda/targets/x86_64-linux/include
+bindgen /usr/local/cuda/targets/x86_64-linux/include/cufftXt.h --allowlist-function="^cufftXt.*" --blocklist-type="^cufft[^XB].*" --default-enum-style=newtype --no-layout-tests --no-derive-debug -o src/cufftxt.rs -- -I/usr/local/cuda/targets/x86_64-linux/include
+sed -i -e 's/extern "C" {//g' -e 's/-> cufftResult;/-> cufftResult { crate::unsupported()/g' -e 's/pub fn /#[no_mangle] pub extern "system" fn /g' src/cufft.rs
+sed -i -e 's/extern "C" {//g' -e 's/-> cufftResult;/-> cufftResult { crate::unsupported()/g' -e 's/pub fn /#[no_mangle] pub extern "system" fn /g' src/cufftxt.rs

@@ -7,5 +7,5 @@ pub use zluda::cuda::*;
 // the function below stops it from doing so
 #[no_mangle]
 fn _zluda_very_bad_linker_hack() {
-    cuInit(0);
+    let _ = unsafe { cuInit(0) };
 }
