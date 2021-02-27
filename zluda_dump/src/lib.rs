@@ -13,7 +13,10 @@ use std::{
 };
 use std::{fs::File, ptr};
 
-use cuda::{CUdeviceptr, CUfunction, CUjit_option, CUmodule, CUresult, CUstream, CUuuid};
+use cuda::{
+    CUdevice, CUdevice_attribute, CUdeviceptr, CUfunction, CUjit_option, CUmodule, CUresult,
+    CUstream, CUuuid,
+};
 use ptx::ast;
 use regex::Regex;
 
@@ -68,6 +71,7 @@ pub static mut KERNELS: Option<HashMap<CUfunction, KernelDump>> = None;
 pub static mut BUFFERS: Vec<(usize, usize)> = Vec::new();
 pub static mut LAUNCH_COUNTER: usize = 0;
 pub static mut KERNEL_PATTERN: Option<Regex> = None;
+pub static mut OVERRIDE_COMPUTE_CAPABILITY_MAJOR: Option<i32> = None;
 
 pub struct ModuleDump {
     content: Rc<String>,
@@ -91,8 +95,17 @@ pub unsafe fn init_libcuda_handle() {
             Ok(kernel_filter) => match Regex::new(&kernel_filter) {
                 Ok(r) => KERNEL_PATTERN = Some(r),
                 Err(err) => {
+                    eprintln!("[ZLUDA_DUMP] Error parsing ZLUDA_DUMP_KERNEL: {}", err);
+                }
+            },
+            Err(_) => (),
+        }
+        match env::var("ZLUDA_OVERRIDE_COMPUTE_CAPABILITY_MAJOR") {
+            Ok(cc_override) => match str::parse::<i32>(&cc_override) {
+                Ok(ver) => OVERRIDE_COMPUTE_CAPABILITY_MAJOR = Some(ver),
+                Err(err) => {
                     eprintln!(
-                        "[ZLUDA_DUMP] Env variable ZLUDA_DUMP_KERNEL is not a regex: {}",
+                        "[ZLUDA_DUMP] Error parsing ZLUDA_OVERRIDE_COMPUTE_CAPABILITY_MAJOR: {}",
                         err
                     );
                 }
@@ -393,7 +406,7 @@ unsafe fn create_dump_dir(
             fs::create_dir_all(&dump_dir)?;
             Ok(Some((dump_dir, kernel_dump)))
         }
-        None => Err("Unknown kernel: {:?}")?,
+        None => Err(format!("Unknown kernel: {:?}", f))?,
     }
 }
 
@@ -667,4 +680,20 @@ unsafe fn decompress_kernel_module(file: *const FatbinFileHeader) -> Option<Vec<
             }
         }
     }
+}
+
+#[allow(non_snake_case)]
+pub unsafe fn cuDeviceGetAttribute(
+    pi: *mut ::std::os::raw::c_int,
+    attrib: CUdevice_attribute,
+    dev: CUdevice,
+    cont: impl FnOnce(*mut ::std::os::raw::c_int, CUdevice_attribute, CUdevice) -> CUresult,
+) -> CUresult {
+    if attrib == CUdevice_attribute::CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR {
+        if let Some(ver) = OVERRIDE_COMPUTE_CAPABILITY_MAJOR {
+            *pi = ver;
+            return CUresult::CUDA_SUCCESS;
+        }
+    }
+    cont(pi, attrib, dev)
 }
