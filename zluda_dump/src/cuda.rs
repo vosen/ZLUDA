@@ -2352,12 +2352,13 @@ extern_redirect! {
         dev: CUdevice,
     ) -> CUresult;
 }
-extern_redirect! {
+extern_redirect_with! {
     pub fn cuDeviceGetAttribute(
         pi: *mut ::std::os::raw::c_int,
         attrib: CUdevice_attribute,
         dev: CUdevice,
     ) -> CUresult;
+    super::cuDeviceGetAttribute;
 }
 extern_redirect! {
     pub fn cuDeviceGetNvSciSyncAttributes(
