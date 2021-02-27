@@ -81,6 +81,12 @@ impl Driver {
         }
         Ok(result)
     }
+
+    pub fn get_properties(&self) -> Result<sys::ze_driver_properties_t> {
+        let mut result = unsafe { mem::zeroed::<sys::ze_driver_properties_t>() };
+        check!(sys::zeDriverGetProperties(self.0, &mut result));
+        Ok(result)
+    }
 }
 
 #[repr(transparent)]
@@ -359,7 +365,11 @@ impl Module {
         Module::new_logged(ctx, true, d, bin, opts)
     }
 
-    pub fn build_native_logged(ctx: &mut Context, d: &Device, bin: &[u8]) -> (Result<Self>, BuildLog) {
+    pub fn build_native_logged(
+        ctx: &mut Context,
+        d: &Device,
+        bin: &[u8],
+    ) -> (Result<Self>, BuildLog) {
         Module::new_logged(ctx, false, d, bin, None)
     }
 

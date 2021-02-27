@@ -1,0 +1,12 @@
+[package]
+name = "zluda_ml"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2018"
+
+[lib]
+name = "nvml"
+crate-type = ["cdylib"]
+
+[dependencies]
+level_zero = { path = "../level_zero" }

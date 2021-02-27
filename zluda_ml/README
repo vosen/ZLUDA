@@ -1,0 +1,3 @@
+bindgen "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.0\include\nvml.h" --whitelist-function="^nvml.*" --size_t-is-usize --default-enum-style=newtype --no-layout-tests --no-doc-comments --no-derive-debug -o src/nvml.rs
+sed -i -e 's/extern "C" {//g' -e 's/-> nvmlReturn_t;/-> nvmlReturn_t { impl_::unsupported()/g' -e 's/pub fn /#[no_mangle] pub extern "C" fn /g' src/nvml.rs
+rustfmt src/nvml.rs
