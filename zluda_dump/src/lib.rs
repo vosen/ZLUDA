@@ -130,6 +130,10 @@ pub unsafe fn cuModuleLoadData(
 }
 
 unsafe fn record_module_image_raw(module: CUmodule, raw_image: *const ::std::os::raw::c_void) {
+    if *(raw_image as *const u32) == 0x464c457f {
+        eprintln!("[ZLUDA_DUMP] Unsupported ELF module: {:?}", raw_image);
+        return;
+    }
     let image = to_str(raw_image);
     match image {
         None => eprintln!("[ZLUDA_DUMP] Malformed module image: {:?}", raw_image),
