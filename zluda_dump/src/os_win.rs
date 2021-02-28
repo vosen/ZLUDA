@@ -36,7 +36,7 @@ unsafe fn is_detoured() -> bool {
             break;
         }
         let mut size = 0;
-        let payload = detours_sys::DetourFindPayload(module, &PAYLOAD_GUID, &mut size);
+        let payload = detours_sys::DetourFindPayload(module, &PAYLOAD_NVCUDA_GUID, &mut size);
         if payload != ptr::null_mut() {
             return true;
         }

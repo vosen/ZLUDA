@@ -1,5 +1,5 @@
 use level_zero as l0;
-use std::{io::Write, ops::Add};
+use std::io::Write;
 use std::{
     os::raw::{c_char, c_uint},
     ptr,
