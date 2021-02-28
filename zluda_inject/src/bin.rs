@@ -1,8 +1,8 @@
-use std::mem;
 use std::path::Path;
 use std::ptr;
 use std::{env, ops::Deref};
 use std::{error::Error, process};
+use std::{mem, path::PathBuf};
 
 use mem::size_of_val;
 use winapi::um::{
@@ -20,6 +20,7 @@ use winapi::um::winbase::{INFINITE, WAIT_FAILED};
 
 static REDIRECT_DLL: &'static str = "zluda_redirect.dll";
 static ZLUDA_DLL: &'static str = "nvcuda.dll";
+static ZLUDA_ML_DLL: &'static str = "nvml.dll";
 
 include!("../../zluda_redirect/src/payload_guid.rs");
 
@@ -31,7 +32,8 @@ pub fn main_impl() -> Result<(), Box<dyn Error>> {
     let injector_path = env::current_exe()?;
     let injector_dir = injector_path.parent().unwrap();
     let redirect_path = create_redirect_path(injector_dir);
-    let (mut inject_path, cmd) = create_inject_path(&args[1..], injector_dir);
+    let (mut inject_nvcuda_path, mut inject_nvml_path, cmd) =
+        create_inject_path(&args[1..], injector_dir);
     let mut cmd_line = construct_command_line(cmd);
     let mut startup_info = unsafe { mem::zeroed::<detours_sys::_STARTUPINFOW>() };
     let mut proc_info = unsafe { mem::zeroed::<detours_sys::_PROCESS_INFORMATION>() };
@@ -56,9 +58,18 @@ pub fn main_impl() -> Result<(), Box<dyn Error>> {
     os_call!(
         detours_sys::DetourCopyPayloadToProcess(
             proc_info.hProcess,
-            &PAYLOAD_GUID,
-            inject_path.as_mut_ptr() as *mut _,
-            (inject_path.len() * mem::size_of::<u16>()) as u32
+            &PAYLOAD_NVCUDA_GUID,
+            inject_nvcuda_path.as_mut_ptr() as *mut _,
+            (inject_nvcuda_path.len() * mem::size_of::<u16>()) as u32
+        ),
+        |x| x != 0
+    );
+    os_call!(
+        detours_sys::DetourCopyPayloadToProcess(
+            proc_info.hProcess,
+            &PAYLOAD_NVML_GUID,
+            inject_nvml_path.as_mut_ptr() as *mut _,
+            (inject_nvml_path.len() * mem::size_of::<u16>()) as u32
         ),
         |x| x != 0
     );
@@ -173,22 +184,34 @@ fn create_redirect_path(injector_dir: &Path) -> Vec<u8> {
     result
 }
 
-fn create_inject_path<'a>(args: &'a [String], injector_dir: &Path) -> (Vec<u16>, &'a [String]) {
-    if args.get(0).map(Deref::deref) == Some("--") {
-        let mut injector_dir = injector_dir.to_path_buf();
-        injector_dir.push(ZLUDA_DLL);
-        let mut result = injector_dir
-            .to_string_lossy()
-            .as_ref()
-            .encode_utf16()
-            .collect::<Vec<_>>();
-        result.push(0);
-        (result, &args[1..])
+fn create_inject_path<'a>(
+    args: &'a [String],
+    injector_dir: &Path,
+) -> (Vec<u16>, Vec<u16>, &'a [String]) {
+    let injector_dir = injector_dir.to_path_buf();
+    let (nvcuda_path, unparsed_args) = if args.get(0).map(Deref::deref) == Some("--") {
+        (
+            encode_file_in_directory_raw(injector_dir.clone(), ZLUDA_DLL),
+            &args[1..],
+        )
     } else if args.get(1).map(Deref::deref) == Some("--") {
         let mut dll_path = args[0].encode_utf16().collect::<Vec<_>>();
         dll_path.push(0);
         (dll_path, &args[2..])
     } else {
         print_help_and_exit()
-    }
+    };
+    let nvml_path = encode_file_in_directory_raw(injector_dir, ZLUDA_ML_DLL);
+    (nvcuda_path, nvml_path, unparsed_args)
+}
+
+fn encode_file_in_directory_raw(mut dir: PathBuf, file: &'static str) -> Vec<u16> {
+    dir.push(file);
+    let mut result = dir
+        .to_string_lossy()
+        .as_ref()
+        .encode_utf16()
+        .collect::<Vec<_>>();
+    result.push(0);
+    result
 }
