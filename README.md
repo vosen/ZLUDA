@@ -1,3 +1,6 @@
+__Notice__: Due to private reasons I am currently unable to continue developing this project. If you
+want to take it over, fork it and contact me at vosen@vosen.pl
+
 # ZLUDA
 
 ZLUDA is a drop-in replacement for CUDA on Intel GPU. ZLUDA allows to run unmodified CUDA applications using Intel GPUs with near-native performance (more below). It works with current integrated Intel UHD GPUs and will work with future Intel Xe GPUs
