@@ -1,31 +1,37 @@
+use half::f16;
+use lalrpop_util::{lexer::Token, ParseError};
 use std::convert::TryInto;
 use std::{convert::From, convert::TryFrom, mem, num::ParseFloatError, str::FromStr};
 use std::{marker::PhantomData, num::ParseIntError};
 
-use half::f16;
-
-quick_error! {
-    #[derive(Debug)]
-    pub enum PtxError {
-        ParseInt (err: ParseIntError) {
-            from()
-            display("{}", err)
-            cause(err)
-        }
-        ParseFloat (err: ParseFloatError) {
-            from()
-            display("{}", err)
-            cause(err)
-        }
-        SyntaxError {}
-        NonF32Ftz {}
-        WrongArrayType {}
-        WrongVectorElement {}
-        MultiArrayVariable {}
-        ZeroDimensionArray {}
-        ArrayInitalizer {}
-        NonExternPointer {}
-    }
+#[derive(Debug, thiserror::Error)]
+pub enum PtxError {
+    #[error("{source}")]
+    ParseInt {
+        #[from]
+        source: ParseIntError,
+    },
+    #[error("{source}")]
+    ParseFloat {
+        #[from]
+        source: ParseFloatError,
+    },
+    #[error("")]
+    SyntaxError,
+    #[error("")]
+    NonF32Ftz,
+    #[error("")]
+    WrongArrayType,
+    #[error("")]
+    WrongVectorElement,
+    #[error("")]
+    MultiArrayVariable,
+    #[error("")]
+    ZeroDimensionArray,
+    #[error("")]
+    ArrayInitalizer,
+    #[error("")]
+    NonExternPointer,
 }
 
 macro_rules! sub_enum {
@@ -895,36 +901,36 @@ pub struct CvtDesc<Dst, Src> {
 }
 
 impl CvtDetails {
-    pub fn new_int_from_int_checked(
+    pub fn new_int_from_int_checked<'err, 'input>(
         saturate: bool,
         dst: IntType,
         src: IntType,
-        err: &mut Vec<PtxError>,
+        err: &'err mut Vec<ParseError<usize, Token<'input>, PtxError>>,
     ) -> Self {
         if saturate {
             if src.is_signed() {
                 if dst.is_signed() && dst.width() >= src.width() {
-                    err.push(PtxError::SyntaxError);
+                    err.push(ParseError::from(PtxError::SyntaxError));
                 }
             } else {
                 if dst == src || dst.width() >= src.width() {
-                    err.push(PtxError::SyntaxError);
+                    err.push(ParseError::from(PtxError::SyntaxError));
                 }
             }
         }
         CvtDetails::IntFromInt(CvtIntToIntDesc { dst, src, saturate })
     }
 
-    pub fn new_float_from_int_checked(
+    pub fn new_float_from_int_checked<'err, 'input>(
         rounding: RoundingMode,
         flush_to_zero: bool,
         saturate: bool,
         dst: FloatType,
         src: IntType,
-        err: &mut Vec<PtxError>,
+        err: &'err mut Vec<ParseError<usize, Token<'input>, PtxError>>,
     ) -> Self {
         if flush_to_zero && dst != FloatType::F32 {
-            err.push(PtxError::NonF32Ftz);
+            err.push(ParseError::from(PtxError::NonF32Ftz));
         }
         CvtDetails::FloatFromInt(CvtDesc {
             dst,
@@ -935,16 +941,16 @@ impl CvtDetails {
         })
     }
 
-    pub fn new_int_from_float_checked(
+    pub fn new_int_from_float_checked<'err, 'input>(
         rounding: RoundingMode,
         flush_to_zero: bool,
         saturate: bool,
         dst: IntType,
         src: FloatType,
-        err: &mut Vec<PtxError>,
+        err: &'err mut Vec<ParseError<usize, Token<'input>, PtxError>>,
     ) -> Self {
         if flush_to_zero && src != FloatType::F32 {
-            err.push(PtxError::NonF32Ftz);
+            err.push(ParseError::from(PtxError::NonF32Ftz));
         }
         CvtDetails::IntFromFloat(CvtDesc {
             dst,
