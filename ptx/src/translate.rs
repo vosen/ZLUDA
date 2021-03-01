@@ -1451,6 +1451,9 @@ fn extract_globals<'input, 'b>(
             Statement::Instruction(ast::Instruction::Bfe { typ, arg }) => {
                 local.push(to_ptx_impl_bfe_call(id_def, ptx_impl_imports, typ, arg));
             }
+            Statement::Instruction(ast::Instruction::Bfi { typ, arg }) => {
+                local.push(to_ptx_impl_bfi_call(id_def, ptx_impl_imports, typ, arg));
+            }
             Statement::Instruction(ast::Instruction::Atom(
                 d
                 @
@@ -1838,6 +1841,109 @@ fn to_ptx_impl_bfe_call(
             ),
             (
                 arg.src3,
+                ast::FnArgumentType::Reg(ast::VariableRegType::Scalar(ast::ScalarType::U32)),
+            ),
+        ],
+    })
+}
+
+fn to_ptx_impl_bfi_call(
+    id_defs: &mut NumericIdResolver,
+    ptx_impl_imports: &mut HashMap<String, Directive>,
+    typ: ast::BitType,
+    arg: ast::Arg5<ExpandedArgParams>,
+) -> ExpandedStatement {
+    let prefix = "__zluda_ptx_impl__";
+    let suffix = match typ {
+        ast::BitType::B32 => "bfi_b32",
+        ast::BitType::B64 => "bfi_b64",
+        ast::BitType::B8 | ast::BitType::B16 => unreachable!(),
+    };
+    let fn_name = format!("{}{}", prefix, suffix);
+    let fn_id = match ptx_impl_imports.entry(fn_name) {
+        hash_map::Entry::Vacant(entry) => {
+            let fn_id = id_defs.new_non_variable(None);
+            let func_decl = ast::MethodDecl::Func::<spirv::Word>(
+                vec![ast::FnArgument {
+                    align: None,
+                    v_type: ast::FnArgumentType::Reg(ast::VariableRegType::Scalar(typ.into())),
+                    name: id_defs.new_non_variable(None),
+                    array_init: Vec::new(),
+                }],
+                fn_id,
+                vec![
+                    ast::FnArgument {
+                        align: None,
+                        v_type: ast::FnArgumentType::Reg(ast::VariableRegType::Scalar(typ.into())),
+                        name: id_defs.new_non_variable(None),
+                        array_init: Vec::new(),
+                    },
+                    ast::FnArgument {
+                        align: None,
+                        v_type: ast::FnArgumentType::Reg(ast::VariableRegType::Scalar(typ.into())),
+                        name: id_defs.new_non_variable(None),
+                        array_init: Vec::new(),
+                    },
+                    ast::FnArgument {
+                        align: None,
+                        v_type: ast::FnArgumentType::Reg(ast::VariableRegType::Scalar(
+                            ast::ScalarType::U32,
+                        )),
+                        name: id_defs.new_non_variable(None),
+                        array_init: Vec::new(),
+                    },
+                    ast::FnArgument {
+                        align: None,
+                        v_type: ast::FnArgumentType::Reg(ast::VariableRegType::Scalar(
+                            ast::ScalarType::U32,
+                        )),
+                        name: id_defs.new_non_variable(None),
+                        array_init: Vec::new(),
+                    },
+                ],
+            );
+            let spirv_decl = SpirvMethodDecl::new(&func_decl);
+            let func = Function {
+                func_decl,
+                globals: Vec::new(),
+                body: None,
+                import_as: Some(entry.key().clone()),
+                spirv_decl,
+            };
+            entry.insert(Directive::Method(func));
+            fn_id
+        }
+        hash_map::Entry::Occupied(entry) => match entry.get() {
+            Directive::Method(Function {
+                func_decl: ast::MethodDecl::Func(_, name, _),
+                ..
+            }) => *name,
+            _ => unreachable!(),
+        },
+    };
+    Statement::Call(ResolvedCall {
+        uniform: false,
+        func: fn_id,
+        ret_params: vec![(
+            arg.dst,
+            ast::FnArgumentType::Reg(ast::VariableRegType::Scalar(typ.into())),
+        )],
+        // Note, for some reason PTX and SPIR-V order base&insert arguments differently
+        param_list: vec![
+            (
+                arg.src2,
+                ast::FnArgumentType::Reg(ast::VariableRegType::Scalar(typ.into())),
+            ),
+            (
+                arg.src1,
+                ast::FnArgumentType::Reg(ast::VariableRegType::Scalar(typ.into())),
+            ),
+            (
+                arg.src3,
+                ast::FnArgumentType::Reg(ast::VariableRegType::Scalar(ast::ScalarType::U32)),
+            ),
+            (
+                arg.src4,
                 ast::FnArgumentType::Reg(ast::VariableRegType::Scalar(ast::ScalarType::U32)),
             ),
         ],
@@ -3102,21 +3208,13 @@ fn emit_function_body_ops(
                     let result_type = map.get_or_add_scalar(builder, (*typ).into());
                     builder_fn(builder, result_type, Some(arg.dst), arg.src1, arg.src2)?;
                 }
-                ast::Instruction::Bfe { typ, arg } => {
-                    let builder_fn = if typ.is_signed() {
-                        dr::Builder::bit_field_s_extract
-                    } else {
-                        dr::Builder::bit_field_u_extract
-                    };
-                    let result_type = map.get_or_add_scalar(builder, (*typ).into());
-                    builder_fn(
-                        builder,
-                        result_type,
-                        Some(arg.dst),
-                        arg.src1,
-                        arg.src2,
-                        arg.src3,
-                    )?;
+                ast::Instruction::Bfe { .. } => {
+                    // Should have beeen replaced with a funciton call earlier
+                    return Err(error_unreachable());
+                }
+                ast::Instruction::Bfi { .. } => {
+                    // Should have beeen replaced with a funciton call earlier
+                    return Err(error_unreachable());
                 }
                 ast::Instruction::Rem { typ, arg } => {
                     let builder_fn = if typ.is_signed() {
@@ -5821,6 +5919,13 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
                     arg: arg.map_bfe(visitor, &full_type)?,
                 }
             }
+            ast::Instruction::Bfi { typ, arg } => {
+                let full_type = ast::Type::Scalar(typ.into());
+                ast::Instruction::Bfi {
+                    typ,
+                    arg: arg.map_bfi(visitor, &full_type)?,
+                }
+            }
             ast::Instruction::Rem { typ, arg } => {
                 let full_type = ast::Type::Scalar(typ.into());
                 ast::Instruction::Rem {
@@ -6127,6 +6232,7 @@ impl ast::Instruction<ExpandedArgParams> {
             ast::Instruction::Popc { .. } => None,
             ast::Instruction::Xor { .. } => None,
             ast::Instruction::Bfe { .. } => None,
+            ast::Instruction::Bfi { .. } => None,
             ast::Instruction::Rem { .. } => None,
             ast::Instruction::Sub(ast::ArithDetails::Float(float_control), _)
             | ast::Instruction::Add(ast::ArithDetails::Float(float_control), _)
@@ -6800,6 +6906,62 @@ impl<T: ArgParamsEx> ast::Arg4Setp<T> {
             dst2,
             src1,
             src2,
+        })
+    }
+}
+
+impl<T: ArgParamsEx> ast::Arg5<T> {
+    fn map_bfi<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
+        self,
+        visitor: &mut V,
+        base_type: &ast::Type,
+    ) -> Result<ast::Arg5<U>, TranslateError> {
+        let dst = visitor.operand(
+            ArgumentDescriptor {
+                op: self.dst,
+                is_dst: true,
+                sema: ArgumentSemantics::Default,
+            },
+            base_type,
+        )?;
+        let src1 = visitor.operand(
+            ArgumentDescriptor {
+                op: self.src1,
+                is_dst: false,
+                sema: ArgumentSemantics::Default,
+            },
+            base_type,
+        )?;
+        let src2 = visitor.operand(
+            ArgumentDescriptor {
+                op: self.src2,
+                is_dst: false,
+                sema: ArgumentSemantics::Default,
+            },
+            base_type,
+        )?;
+        let src3 = visitor.operand(
+            ArgumentDescriptor {
+                op: self.src3,
+                is_dst: false,
+                sema: ArgumentSemantics::Default,
+            },
+            &ast::Type::Scalar(ast::ScalarType::U32),
+        )?;
+        let src4 = visitor.operand(
+            ArgumentDescriptor {
+                op: self.src4,
+                is_dst: false,
+                sema: ArgumentSemantics::Default,
+            },
+            &ast::Type::Scalar(ast::ScalarType::U32),
+        )?;
+        Ok(ast::Arg5 {
+            dst,
+            src1,
+            src2,
+            src3,
+            src4,
         })
     }
 }

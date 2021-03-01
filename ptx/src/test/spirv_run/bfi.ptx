@@ -1,0 +1,24 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry bfi(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .u32       temp<4>;
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.u32          temp0, [in_addr];
+	ld.u32          temp1, [in_addr+4];
+	ld.u32          temp2, [in_addr+8];
+	ld.u32          temp3, [in_addr+12];
+	bfi.b32  		temp0, temp0, temp1, temp2, temp3;
+    st.u32          [out_addr], temp0;
+	ret;
+}

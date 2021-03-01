@@ -609,6 +609,7 @@ pub enum Instruction<P: ArgParams> {
     Popc { typ: BitType, arg: Arg2<P> },
     Xor { typ: BooleanType, arg: Arg3<P> },
     Bfe { typ: IntType, arg: Arg4<P> },
+    Bfi { typ: BitType, arg: Arg5<P> },
     Rem { typ: IntType, arg: Arg3<P> },
 }
 
@@ -693,6 +694,14 @@ pub struct Arg4Setp<P: ArgParams> {
     pub dst2: Option<P::Id>,
     pub src1: P::Operand,
     pub src2: P::Operand,
+}
+
+pub struct Arg5<P: ArgParams> {
+    pub dst: P::Operand,
+    pub src1: P::Operand,
+    pub src2: P::Operand,
+    pub src3: P::Operand,
+    pub src4: P::Operand,
 }
 
 pub struct Arg5Setp<P: ArgParams> {

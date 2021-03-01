@@ -139,6 +139,11 @@ test_ptx!(
     [0b11111000_11000001_00100010_10100000u32, 16u32, 8u32],
     [0b11000001u32]
 );
+test_ptx!(
+    bfi,
+    [0b10u32, 0b101u32, 0u32, 2u32],
+    [0b110u32]
+);
 test_ptx!(stateful_ld_st_simple, [121u64], [121u64]);
 test_ptx!(stateful_ld_st_ntid, [123u64], [123u64]);
 test_ptx!(stateful_ld_st_ntid_chain, [12651u64], [12651u64]);
