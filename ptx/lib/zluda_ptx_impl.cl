@@ -136,6 +136,14 @@ long FUNC(bfe_s64)(long base, uint pos, uint len) {
     return intel_sbfe(base, pos, len);
 }
 
+uint FUNC(bfi_b32)(uint base, uint insert, uint offset, uint count) {
+    return intel_bfi(base, insert, offset, count);
+}
+
+ulong FUNC(bfi_b64)(ulong base, ulong insert, uint offset, uint count) {
+    return intel_bfi(base, insert, offset, count);
+}
+
 void FUNC(__assertfail)(
     __private ulong* message,
     __private ulong* file,

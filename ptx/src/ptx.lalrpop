@@ -143,6 +143,7 @@ match {
     "bar",
     "barrier",
     "bfe",
+    "bfi",
     "bra",
     "brev",
     "call",
@@ -196,6 +197,7 @@ ExtendedID : &'input str = {
     "bar",
     "barrier",
     "bfe",
+    "bfi",
     "bra",
     "brev",
     "call",
@@ -727,6 +729,7 @@ Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
     InstXor,
     InstRem,
     InstBfe,
+    InstBfi,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
@@ -1658,6 +1661,11 @@ InstBfe: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "bfe" <typ:IntType3264> <arg:Arg4> => ast::Instruction::Bfe{ <> }
 }
 
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-bfi
+InstBfi: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "bfi" <typ:BitType> <arg:Arg5> => ast::Instruction::Bfi{ <> }
+}
+
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-rem
 InstRem: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "rem" <typ:IntType> <arg:Arg3> => ast::Instruction::Rem{ <> }
@@ -1841,6 +1849,10 @@ Arg4Atom: ast::Arg4<ast::ParsedArgParams<'input>> = {
 
 Arg4Setp: ast::Arg4Setp<ast::ParsedArgParams<'input>> = {
     <dst1:ExtendedID> <dst2:OptionalDst?> "," <src1:Operand> "," <src2:Operand> => ast::Arg4Setp{<>}
+};
+
+Arg5: ast::Arg5<ast::ParsedArgParams<'input>> = {
+    <dst:DstOperand> "," <src1:Operand> "," <src2:Operand> ","  <src3:Operand> ","  <src4:Operand> => ast::Arg5{<>}
 };
 
 // TODO: pass src3 negation somewhere
