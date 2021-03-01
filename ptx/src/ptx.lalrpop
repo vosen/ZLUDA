@@ -5,7 +5,7 @@ use crate::{without_none, vector_index};
 use lalrpop_util::ParseError;
 use std::convert::TryInto;
 
-grammar<'a>(errors: &mut Vec<ast::PtxError>);
+grammar<'err>(errors: &'err mut Vec<ParseError<usize, Token<'input>, ast::PtxError>>);
 
 extern {
     type Error = ast::PtxError;
@@ -313,11 +313,11 @@ pub Module: ast::Module<'input> = {
 };
 
 Version: (u8, u8) = {
-    ".version" <v:VersionNumber> => {
+    ".version" <v:VersionNumber> =>? {
         let dot = v.find('.').unwrap();
-        let major = v[..dot].parse::<u8>();
-        let minor = v[dot+1..].parse::<u8>();
-        (major,minor).unwrap_with(errors)
+        let major = v[..dot].parse::<u8>().map_err(|e| ParseError::from(ast::PtxError::from(e)))?;
+        let minor = v[dot+1..].parse::<u8>().map_err(|e| ParseError::from(ast::PtxError::from(e)))?;
+        Ok((major,minor))
     }
 }
 
@@ -340,6 +340,11 @@ Directive: Option<ast::Directive<'input, ast::ParsedArgParams<'input>>> = {
     File => None,
     Section => None,
     <v:ModuleVariable> ";" => Some(ast::Directive::Variable(v)),
+    ! => {
+        let err = <>;
+        errors.push(err.error);
+        None
+    }
 };
 
 AddressSize = {
@@ -446,7 +451,12 @@ Statement: Option<ast::Statement<ast::ParsedArgParams<'input>>> = {
     <v:MultiVariable> ";" => Some(ast::Statement::Variable(v)),
     <p:PredAt?> <i:Instruction> ";" => Some(ast::Statement::Instruction(p, i)),
     PragmaStatement => None,
-    "{" <s:Statement*> "}" => Some(ast::Statement::Block(without_none(s)))
+    "{" <s:Statement*> "}" => Some(ast::Statement::Block(without_none(s))),
+    ! ";" => {
+        let (err, _) = (<>);
+        errors.push(err.error);
+        None
+    }
 };
 
 PragmaStatement: () = {
@@ -1754,12 +1764,12 @@ ImmediateValue: ast::ImmediateValue = {
         if neg.is_some() {
             match i64::from_str_radix(num, radix) {
                 Ok(x) => Ok(ast::ImmediateValue::S64(-x)),
-                Err(err) => Err(ParseError::User { error: ast::PtxError::ParseInt(err) })
+                Err(err) => Err(ParseError::User { error: ast::PtxError::from(err) })
             }
         } else if is_unsigned {
             match u64::from_str_radix(num, radix) {
                 Ok(x) => Ok(ast::ImmediateValue::U64(x)),
-                Err(err) => Err(ParseError::User { error: ast::PtxError::ParseInt(err) })
+                Err(err) => Err(ParseError::User { error: ast::PtxError::from(err) })
             }
         } else {
             match i64::from_str_radix(num, radix) {
@@ -1767,7 +1777,7 @@ ImmediateValue: ast::ImmediateValue = {
                 Err(_) => {
                     match u64::from_str_radix(num, radix) {
                         Ok(x) => Ok(ast::ImmediateValue::U64(x)),
-                        Err(err) => Err(ParseError::User { error: ast::PtxError::ParseInt(err) })
+                        Err(err) => Err(ParseError::User { error: ast::PtxError::from(err) })
                     }
                 }
             }
