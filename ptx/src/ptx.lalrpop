@@ -87,6 +87,9 @@ match {
     ".ltu",
     ".lu",
     ".max",
+    ".maxnreg",
+    ".maxntid",
+    ".minnctapersm",
     ".min",
     ".nan",
     ".NaN",
@@ -100,6 +103,7 @@ match {
     ".reg",
     ".relaxed",
     ".release",
+    ".reqntid",
     ".rm",
     ".rmi",
     ".rn",
@@ -356,13 +360,25 @@ AddressSize = {
 Function: ast::Function<'input, &'input str, ast::Statement<ast::ParsedArgParams<'input>>>  = {
     LinkingDirectives
     <func_directive:MethodDecl>
+    <tuning:TuningDirective*>
     <body:FunctionBody> =>  ast::Function{<>}
 };
-
+ 
 LinkingDirective: ast::LinkingDirective = {
     ".extern" => ast::LinkingDirective::EXTERN,
     ".visible" => ast::LinkingDirective::VISIBLE,
     ".weak" => ast::LinkingDirective::WEAK,
+};
+
+TuningDirective: ast::TuningDirective = {
+    ".maxnreg" <ncta:U32Num> => ast::TuningDirective::MaxNReg(ncta),
+    ".maxntid" <nx:U32Num> => ast::TuningDirective::MaxNtid(nx, 1, 1),
+    ".maxntid" <nx:U32Num> "," <ny:U32Num> => ast::TuningDirective::MaxNtid(nx, ny, 1),
+    ".maxntid" <nx:U32Num> "," <ny:U32Num> "," <nz:U32Num> => ast::TuningDirective::MaxNtid(nx, ny, nz),
+    ".reqntid" <nx:U32Num> => ast::TuningDirective::ReqNtid(nx, 1, 1),
+    ".reqntid" <nx:U32Num> "," <ny:U32Num> => ast::TuningDirective::ReqNtid(nx, ny, 1),
+    ".reqntid" <nx:U32Num> "," <ny:U32Num> "," <nz:U32Num> => ast::TuningDirective::ReqNtid(nx, ny, nz),
+    ".minnctapersm" <ncta:U32Num> => ast::TuningDirective::MinNCtaPerSm(ncta),
 };
 
 LinkingDirectives: ast::LinkingDirective = {

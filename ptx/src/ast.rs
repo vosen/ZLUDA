@@ -283,6 +283,7 @@ pub type KernelArgument<ID> = Variable<KernelArgumentType, ID>;
 
 pub struct Function<'a, ID, S> {
     pub func_directive: MethodDecl<'a, ID>,
+    pub tuning: Vec<TuningDirective>,
     pub body: Option<Vec<S>>,
 }
 
@@ -1367,6 +1368,14 @@ bitflags! {
         const VISIBLE = 0b10;
         const WEAK = 0b100;
     }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum TuningDirective {
+    MaxNReg(u32),
+    MaxNtid(u32, u32, u32),
+    ReqNtid(u32, u32, u32),
+    MinNCtaPerSm(u32),
 }
 
 #[cfg(test)]

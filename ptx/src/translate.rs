@@ -589,7 +589,7 @@ fn emit_directives<'input>(
                 for var in f.globals.iter() {
                     emit_variable(builder, map, var)?;
                 }
-                emit_function_header(
+                let fn_id = emit_function_header(
                     builder,
                     map,
                     &id_defs,
@@ -600,6 +600,27 @@ fn emit_directives<'input>(
                     &directives,
                     kernel_info,
                 )?;
+                for t in f.tuning.iter() {
+                    match *t {
+                        ast::TuningDirective::MaxNtid(nx, ny, nz) => {
+                            builder.execution_mode(
+                                fn_id,
+                                spirv_headers::ExecutionMode::MaxWorkgroupSizeINTEL,
+                                [nx, ny, nz],
+                            );
+                        }
+                        ast::TuningDirective::ReqNtid(nx, ny, nz) => {
+                            builder.execution_mode(
+                                fn_id,
+                                spirv_headers::ExecutionMode::LocalSize,
+                                [nx, ny, nz],
+                            );
+                        }
+                        // Too architecture specific
+                        ast::TuningDirective::MaxNReg(..)
+                        | ast::TuningDirective::MinNCtaPerSm(..) => {}
+                    }
+                }
                 emit_function_body_ops(builder, map, opencl_id, &f_body)?;
                 builder.end_function()?;
                 if let (ast::MethodDecl::Func(_, fn_id, _), Some(name)) =
@@ -729,6 +750,7 @@ fn convert_dynamic_shared_memory_usage<'input>(
                 body: Some(statements),
                 import_as,
                 spirv_decl,
+                tuning,
             }) => {
                 let call_key = MethodName::new(&func_decl);
                 let statements = statements
@@ -752,6 +774,7 @@ fn convert_dynamic_shared_memory_usage<'input>(
                     body: Some(statements),
                     import_as,
                     spirv_decl,
+                    tuning,
                 })
             }
             directive => directive,
@@ -770,6 +793,7 @@ fn convert_dynamic_shared_memory_usage<'input>(
                 body: Some(statements),
                 import_as,
                 mut spirv_decl,
+                tuning,
             }) => {
                 if !methods_using_extern_shared.contains(&spirv_decl.name) {
                     return Directive::Method(Function {
@@ -778,6 +802,7 @@ fn convert_dynamic_shared_memory_usage<'input>(
                         body: Some(statements),
                         import_as,
                         spirv_decl,
+                        tuning,
                     });
                 }
                 let shared_id_param = new_id();
@@ -827,6 +852,7 @@ fn convert_dynamic_shared_memory_usage<'input>(
                     body: Some(new_statements),
                     import_as,
                     spirv_decl,
+                    tuning,
                 })
             }
             directive => directive,
@@ -1044,9 +1070,7 @@ fn emit_builtins(
         builder.decorate(
             id,
             spirv::Decoration::BuiltIn,
-            [dr::Operand::BuiltIn(reg.get_builtin())]
-                .iter()
-                .cloned(),
+            [dr::Operand::BuiltIn(reg.get_builtin())].iter().cloned(),
         );
     }
 }
@@ -1061,7 +1085,7 @@ fn emit_function_header<'a>(
     call_map: &HashMap<&'a str, HashSet<spirv::Word>>,
     direcitves: &[Directive],
     kernel_info: &mut HashMap<String, KernelInfo>,
-) -> Result<(), TranslateError> {
+) -> Result<spirv::Word, TranslateError> {
     if let MethodName::Kernel(name) = func_decl.name {
         let input_args = if !func_decl.uses_shared_mem {
             func_decl.input.as_slice()
@@ -1143,7 +1167,7 @@ fn emit_function_header<'a>(
         let result_type = map.get_or_add(builder, SpirvType::from(input.v_type.clone()));
         builder.function_parameter(Some(input.name), result_type)?;
     }
-    Ok(())
+    Ok(fn_id)
 }
 
 fn emit_capabilities(builder: &mut dr::Builder) {
@@ -1235,7 +1259,14 @@ fn translate_function<'a>(
         _ => None,
     };
     let (str_resolver, fn_resolver, fn_decl) = id_defs.start_fn(&f.func_directive)?;
-    let mut func = to_ssa(ptx_impl_imports, str_resolver, fn_resolver, fn_decl, f.body)?;
+    let mut func = to_ssa(
+        ptx_impl_imports,
+        str_resolver,
+        fn_resolver,
+        fn_decl,
+        f.body,
+        f.tuning,
+    )?;
     func.import_as = import_as;
     if func.import_as.is_some() {
         ptx_impl_imports.insert(
@@ -1293,6 +1324,7 @@ fn to_ssa<'input, 'b>(
     fn_defs: GlobalFnDeclResolver<'input, 'b>,
     f_args: ast::MethodDecl<'input, spirv::Word>,
     f_body: Option<Vec<ast::Statement<ast::ParsedArgParams<'input>>>>,
+    tuning: Vec<ast::TuningDirective>,
 ) -> Result<Function<'input>, TranslateError> {
     let mut spirv_decl = SpirvMethodDecl::new(&f_args);
     let f_body = match f_body {
@@ -1304,6 +1336,7 @@ fn to_ssa<'input, 'b>(
                 globals: Vec::new(),
                 import_as: None,
                 spirv_decl,
+                tuning,
             })
         }
     };
@@ -1335,6 +1368,7 @@ fn to_ssa<'input, 'b>(
         body: Some(f_body),
         import_as: None,
         spirv_decl,
+        tuning,
     })
 }
 
@@ -1716,6 +1750,7 @@ fn to_ptx_impl_atomic_call(
                 body: None,
                 import_as: Some(entry.key().clone()),
                 spirv_decl,
+                tuning: Vec::new(),
             };
             entry.insert(Directive::Method(func));
             fn_id
@@ -1809,6 +1844,7 @@ fn to_ptx_impl_bfe_call(
                 body: None,
                 import_as: Some(entry.key().clone()),
                 spirv_decl,
+                tuning: Vec::new(),
             };
             entry.insert(Directive::Method(func));
             fn_id
@@ -1907,6 +1943,7 @@ fn to_ptx_impl_bfi_call(
                 body: None,
                 import_as: Some(entry.key().clone()),
                 spirv_decl,
+                tuning: Vec::new(),
             };
             entry.insert(Directive::Method(func));
             fn_id
@@ -4112,16 +4149,11 @@ fn struct2_bitcast_to_wide(
     dst_type_id: spirv::Word,
     src: spirv::Word,
 ) -> Result<(), dr::Error> {
-    let low_bits =
-        builder.composite_extract(instruction_type, None, src, [0].iter().copied())?;
-    let high_bits =
-        builder.composite_extract(instruction_type, None, src, [1].iter().copied())?;
+    let low_bits = builder.composite_extract(instruction_type, None, src, [0].iter().copied())?;
+    let high_bits = builder.composite_extract(instruction_type, None, src, [1].iter().copied())?;
     let vector_type = map.get_or_add(builder, SpirvType::Vector(base_type_key, 2));
-    let vector = builder.composite_construct(
-        vector_type,
-        None,
-        [low_bits, high_bits].iter().copied(),
-    )?;
+    let vector =
+        builder.composite_construct(vector_type, None, [low_bits, high_bits].iter().copied())?;
     builder.bitcast(dst_type_id, Some(dst), vector)?;
     Ok(())
 }
@@ -5668,6 +5700,7 @@ struct Function<'input> {
     pub globals: Vec<ast::Variable<ast::VariableType, spirv::Word>>,
     pub body: Option<Vec<ExpandedStatement>>,
     import_as: Option<String>,
+    tuning: Vec<ast::TuningDirective>,
 }
 
 pub trait ArgumentMapVisitor<T: ArgParamsEx, U: ArgParamsEx> {
