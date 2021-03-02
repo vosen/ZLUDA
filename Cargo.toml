@@ -17,5 +17,5 @@ members = [
 default-members = ["zluda_lib", "zluda_ml", "zluda_inject", "zluda_redirect"]
 
 [patch.crates-io]
-rspirv = { git = 'https://github.com/vosen/rspirv', rev = '40f5aa4dedb0d9f1ec24bdd8b6019e01996d1d74' }
-spirv_headers = { git = 'https://github.com/vosen/rspirv', rev = '40f5aa4dedb0d9f1ec24bdd8b6019e01996d1d74' }
+rspirv = { git = 'https://github.com/vosen/rspirv', rev = '9826e59a232c4a426482cda12f88d11bfda3ff9c' }
+spirv_headers = { git = 'https://github.com/vosen/rspirv', rev = '9826e59a232c4a426482cda12f88d11bfda3ff9c' }
