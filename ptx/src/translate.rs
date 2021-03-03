@@ -4285,7 +4285,10 @@ fn emit_implicit_conversion(
                 }
             }
         }
-        (TypeKind::Scalar, TypeKind::Scalar, ConversionKind::SignExtend) => todo!(),
+        (TypeKind::Scalar, TypeKind::Scalar, ConversionKind::SignExtend) => {
+            let result_type = map.get_or_add(builder, SpirvType::from(cv.to.clone()));
+            builder.s_convert(result_type , Some(cv.dst), cv.src)?;
+        },
         (TypeKind::Vector, TypeKind::Scalar, ConversionKind::Default)
         | (TypeKind::Scalar, TypeKind::Array, ConversionKind::Default)
         | (TypeKind::Array, TypeKind::Scalar, ConversionKind::Default) => {

@@ -740,6 +740,7 @@ pub struct LdDetails {
     pub state_space: LdStateSpace,
     pub caching: LdCacheOperator,
     pub typ: LdStType,
+    pub non_coherent: bool,
 }
 
 sub_type! {
