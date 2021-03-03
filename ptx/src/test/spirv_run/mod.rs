@@ -153,6 +153,8 @@ test_ptx!(shared_ptr_take_address, [97815231u64], [97815231u64]);
 test_ptx!(assertfail, [716523871u64], [716523872u64]);
 test_ptx!(cvt_s64_s32, [-1i32], [-1i64]);
 test_ptx!(add_tuning, [2u64], [3u64]);
+test_ptx!(add_non_coherent, [3u64], [4u64]);
+test_ptx!(sign_extend, [-1i16], [-1i32]);
 
 struct DisplayError<T: Debug> {
     err: T,

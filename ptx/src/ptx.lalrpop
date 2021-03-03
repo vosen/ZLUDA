@@ -93,6 +93,7 @@ match {
     ".min",
     ".nan",
     ".NaN",
+    ".nc",
     ".ne",
     ".neu",
     ".num",
@@ -750,13 +751,38 @@ Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
 InstLd: ast::Instruction<ast::ParsedArgParams<'input>> = {
-    "ld" <q:LdStQualifier?> <ss:LdStateSpace?> <cop:LdCacheOperator?> <t:LdStType> <dst:DstOperandVec> "," <src:MemoryOperand> => {
+    "ld" <q:LdStQualifier?> <ss:LdNonGlobalStateSpace?> <cop:LdCacheOperator?> <t:LdStType> <dst:DstOperandVec> "," <src:MemoryOperand> => {
         ast::Instruction::Ld(
             ast::LdDetails {
                 qualifier: q.unwrap_or(ast::LdStQualifier::Weak),
                 state_space: ss.unwrap_or(ast::LdStateSpace::Generic),
                 caching: cop.unwrap_or(ast::LdCacheOperator::Cached),
-                typ: t
+                typ: t,
+                non_coherent: false
+            },
+            ast::Arg2Ld { dst:dst, src:src }
+        )
+    },
+    "ld" <q:LdStQualifier?> ".global" <cop:LdCacheOperator?> <t:LdStType> <dst:DstOperandVec> "," <src:MemoryOperand> => {
+        ast::Instruction::Ld(
+            ast::LdDetails {
+                qualifier: q.unwrap_or(ast::LdStQualifier::Weak),
+                state_space: ast::LdStateSpace::Global,
+                caching: cop.unwrap_or(ast::LdCacheOperator::Cached),
+                typ: t,
+                non_coherent: false
+            },
+            ast::Arg2Ld { dst:dst, src:src }
+        )
+    },
+    "ld" ".global" <cop:LdNcCacheOperator?> ".nc" <t:LdStType> <dst:DstOperandVec> "," <src:MemoryOperand> => {
+        ast::Instruction::Ld(
+            ast::LdDetails {
+                qualifier: ast::LdStQualifier::Weak,
+                state_space: ast::LdStateSpace::Global,
+                caching: cop.unwrap_or(ast::LdCacheOperator::Cached),
+                typ: t,
+                non_coherent: true
             },
             ast::Arg2Ld { dst:dst, src:src }
         )
@@ -781,9 +807,8 @@ MemScope: ast::MemScope = {
     ".sys" => ast::MemScope::Sys
 };
 
-LdStateSpace: ast::LdStateSpace = {
+LdNonGlobalStateSpace: ast::LdStateSpace = {
     ".const" => ast::LdStateSpace::Const,
-    ".global" => ast::LdStateSpace::Global,
     ".local" => ast::LdStateSpace::Local,
     ".param" => ast::LdStateSpace::Param,
     ".shared" => ast::LdStateSpace::Shared,
@@ -795,6 +820,12 @@ LdCacheOperator: ast::LdCacheOperator = {
     ".cs" => ast::LdCacheOperator::Streaming,
     ".lu" => ast::LdCacheOperator::LastUse,
     ".cv" => ast::LdCacheOperator::Uncached,
+};
+
+LdNcCacheOperator: ast::LdCacheOperator = {
+    ".ca" => ast::LdCacheOperator::Cached,
+    ".cg" => ast::LdCacheOperator::L2Only,
+    ".cs" => ast::LdCacheOperator::Streaming,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
