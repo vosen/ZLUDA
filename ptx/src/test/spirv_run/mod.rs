@@ -155,6 +155,7 @@ test_ptx!(cvt_s64_s32, [-1i32], [-1i64]);
 test_ptx!(add_tuning, [2u64], [3u64]);
 test_ptx!(add_non_coherent, [3u64], [4u64]);
 test_ptx!(sign_extend, [-1i16], [-1i32]);
+test_ptx!(atom_add_float, [1.25f32, 0.5f32], [1.25f32, 1.75f32]);
 
 struct DisplayError<T: Debug> {
     err: T,

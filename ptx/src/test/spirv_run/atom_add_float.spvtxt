@@ -1,0 +1,81 @@
+               OpCapability GenericPointer
+               OpCapability Linkage
+               OpCapability Addresses
+               OpCapability Kernel
+               OpCapability Int8
+               OpCapability Int16
+               OpCapability Int64
+               OpCapability Float16
+               OpCapability Float64
+         %42 = OpExtInstImport "OpenCL.std"
+               OpMemoryModel Physical64 OpenCL
+               OpEntryPoint Kernel %1 "atom_add_float" %4
+               OpDecorate %37 LinkageAttributes "__zluda_ptx_impl__atom_relaxed_gpu_shared_add_f32" Import
+               OpDecorate %4 Alignment 4
+       %void = OpTypeVoid
+      %float = OpTypeFloat 32
+%_ptr_Workgroup_float = OpTypePointer Workgroup %float
+         %46 = OpTypeFunction %float %_ptr_Workgroup_float %float
+       %uint = OpTypeInt 32 0
+      %uchar = OpTypeInt 8 0
+  %uint_1024 = OpConstant %uint 1024
+%_arr_uchar_uint_1024 = OpTypeArray %uchar %uint_1024
+%_ptr_Workgroup__arr_uchar_uint_1024 = OpTypePointer Workgroup %_arr_uchar_uint_1024
+          %4 = OpVariable %_ptr_Workgroup__arr_uchar_uint_1024 Workgroup
+      %ulong = OpTypeInt 64 0
+         %53 = OpTypeFunction %void %ulong %ulong
+%_ptr_Function_ulong = OpTypePointer Function %ulong
+%_ptr_Function_float = OpTypePointer Function %float
+%_ptr_Generic_float = OpTypePointer Generic %float
+    %ulong_4 = OpConstant %ulong 4
+  %ulong_4_0 = OpConstant %ulong 4
+         %37 = OpFunction %float None %46
+         %39 = OpFunctionParameter %_ptr_Workgroup_float
+         %40 = OpFunctionParameter %float
+               OpFunctionEnd
+          %1 = OpFunction %void None %53
+          %9 = OpFunctionParameter %ulong
+         %10 = OpFunctionParameter %ulong
+         %36 = OpLabel
+          %2 = OpVariable %_ptr_Function_ulong Function
+          %3 = OpVariable %_ptr_Function_ulong Function
+          %5 = OpVariable %_ptr_Function_ulong Function
+          %6 = OpVariable %_ptr_Function_ulong Function
+          %7 = OpVariable %_ptr_Function_float Function
+          %8 = OpVariable %_ptr_Function_float Function
+               OpStore %2 %9
+               OpStore %3 %10
+         %11 = OpLoad %ulong %2 Aligned 8
+               OpStore %5 %11
+         %12 = OpLoad %ulong %3 Aligned 8
+               OpStore %6 %12
+         %14 = OpLoad %ulong %5
+         %29 = OpConvertUToPtr %_ptr_Generic_float %14
+         %13 = OpLoad %float %29 Aligned 4
+               OpStore %7 %13
+         %16 = OpLoad %ulong %5
+         %26 = OpIAdd %ulong %16 %ulong_4
+         %30 = OpConvertUToPtr %_ptr_Generic_float %26
+         %15 = OpLoad %float %30 Aligned 4
+               OpStore %8 %15
+         %17 = OpLoad %float %7
+         %31 = OpBitcast %_ptr_Workgroup_float %4
+               OpStore %31 %17 Aligned 4
+         %19 = OpLoad %float %8
+         %32 = OpBitcast %_ptr_Workgroup_float %4
+         %18 = OpFunctionCall %float %37 %32 %19
+               OpStore %7 %18
+         %33 = OpBitcast %_ptr_Workgroup_float %4
+         %20 = OpLoad %float %33 Aligned 4
+               OpStore %8 %20
+         %21 = OpLoad %ulong %6
+         %22 = OpLoad %float %7
+         %34 = OpConvertUToPtr %_ptr_Generic_float %21
+               OpStore %34 %22 Aligned 4
+         %23 = OpLoad %ulong %6
+         %24 = OpLoad %float %8
+         %28 = OpIAdd %ulong %23 %ulong_4_0
+         %35 = OpConvertUToPtr %_ptr_Generic_float %28
+               OpStore %35 %24 Aligned 4
+               OpReturn
+               OpFunctionEnd
