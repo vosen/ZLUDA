@@ -996,7 +996,7 @@ SetpCompareOp: ast::SetpCompareOp = {
     ".gtu" => ast::SetpCompareOp::NanGreater,
     ".geu" => ast::SetpCompareOp::NanGreaterOrEq,
     ".num" => ast::SetpCompareOp::IsNotNan,
-    ".nan" => ast::SetpCompareOp::IsNan,
+    ".nan" => ast::SetpCompareOp::IsAnyNan,
 };
 
 SetpBoolPostOp: ast::SetpBoolPostOp = {

@@ -870,7 +870,7 @@ pub enum SetpCompareOp {
     NanGreater,
     NanGreaterOrEq,
     IsNotNan,
-    IsNan,
+    IsAnyNan,
 }
 
 pub enum SetpBoolPostOp {

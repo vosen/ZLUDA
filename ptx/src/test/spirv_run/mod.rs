@@ -139,11 +139,7 @@ test_ptx!(
     [0b11111000_11000001_00100010_10100000u32, 16u32, 8u32],
     [0b11000001u32]
 );
-test_ptx!(
-    bfi,
-    [0b10u32, 0b101u32, 0u32, 2u32],
-    [0b110u32]
-);
+test_ptx!(bfi, [0b10u32, 0b101u32, 0u32, 2u32], [0b110u32]);
 test_ptx!(stateful_ld_st_simple, [121u64], [121u64]);
 test_ptx!(stateful_ld_st_ntid, [123u64], [123u64]);
 test_ptx!(stateful_ld_st_ntid_chain, [12651u64], [12651u64]);
@@ -156,6 +152,34 @@ test_ptx!(add_tuning, [2u64], [3u64]);
 test_ptx!(add_non_coherent, [3u64], [4u64]);
 test_ptx!(sign_extend, [-1i16], [-1i32]);
 test_ptx!(atom_add_float, [1.25f32, 0.5f32], [1.25f32, 1.75f32]);
+test_ptx!(
+    setp_nan,
+    [
+        0.5f32,
+        f32::NAN,
+        f32::NAN,
+        0.5f32,
+        f32::NAN,
+        f32::NAN,
+        0.5f32,
+        0.5f32
+    ],
+    [1u32, 1u32, 1u32, 0u32]
+);
+test_ptx!(
+    setp_num,
+    [
+        0.5f32,
+        f32::NAN,
+        f32::NAN,
+        0.5f32,
+        f32::NAN,
+        f32::NAN,
+        0.5f32,
+        0.5f32
+    ],
+    [0u32, 0u32, 0u32, 2u32]
+);
 
 struct DisplayError<T: Debug> {
     err: T,

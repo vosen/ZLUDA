@@ -3031,16 +3031,7 @@ fn emit_function_body_ops(
                     let operand = a.src;
                     match t {
                         ast::BooleanType::Pred => {
-                            // HACK ALERT
-                            // Temporary workaround until IGC gets its shit together
-                            // Currently IGC carries two copies of SPIRV-LLVM translator
-                            // a new one in /llvm-spirv/ and old one in /IGC/AdaptorOCL/SPIRV/.
-                            // Obviously, old and buggy one is used for compiling L0 SPIRV
-                            // https://github.com/intel/intel-graphics-compiler/issues/148
-                            let type_pred = map.get_or_add_scalar(builder, ast::ScalarType::Pred);
-                            let const_true = builder.constant_true(type_pred, None);
-                            let const_false = builder.constant_false(type_pred, None);
-                            builder.select(result_type, result_id, operand, const_false, const_true)
+                            logical_not(builder, result_type, result_id, operand)
                         }
                         _ => builder.not(result_type, result_id, operand),
                     }?;
@@ -3426,7 +3417,7 @@ fn emit_logical_xor_spirv(
 ) -> Result<spirv::Word, dr::Error> {
     let temp_or = builder.logical_or(result_type, None, op1, op2)?;
     let temp_and = builder.logical_and(result_type, None, op1, op2)?;
-    let temp_neg = builder.logical_not(result_type, None, temp_and)?;
+    let temp_neg = logical_not(builder, result_type, None, temp_and)?;
     builder.logical_and(result_type, result_id, temp_or, temp_neg)
 }
 
@@ -4072,9 +4063,37 @@ fn emit_setp(
         (ast::SetpCompareOp::NanGreaterOrEq, _) => {
             builder.f_unord_greater_than_equal(result_type, result_id, operand_1, operand_2)
         }
+        (ast::SetpCompareOp::IsAnyNan, _) => {
+            let temp1 = builder.is_nan(result_type, None, operand_1)?;
+            let temp2 = builder.is_nan(result_type, None, operand_2)?;
+            builder.logical_or(result_type, result_id, temp1, temp2)
+        }
+        (ast::SetpCompareOp::IsNotNan, _) => {
+            let temp1 = builder.is_nan(result_type, None, operand_1)?;
+            let temp2 = builder.is_nan(result_type, None, operand_2)?;
+            let any_nan = builder.logical_or(result_type, None, temp1, temp2)?;
+            logical_not(builder, result_type, result_id, any_nan)
+        }
         _ => todo!(),
     }?;
     Ok(())
+}
+
+// HACK ALERT
+// Temporary workaround until IGC gets its shit together
+// Currently IGC carries two copies of SPIRV-LLVM translator
+// a new one in /llvm-spirv/ and old one in /IGC/AdaptorOCL/SPIRV/.
+// Obviously, old and buggy one is used for compiling L0 SPIRV
+// https://github.com/intel/intel-graphics-compiler/issues/148
+fn logical_not(
+    builder: &mut dr::Builder,
+    result_type: spirv::Word,
+    result_id: Option<spirv::Word>,
+    operand: spirv::Word,
+) -> Result<spirv::Word, dr::Error> {
+    let const_true = builder.constant_true(result_type, None);
+    let const_false = builder.constant_false(result_type, None);
+    builder.select(result_type, result_id, operand, const_false, const_true)
 }
 
 fn emit_mul_sint(
