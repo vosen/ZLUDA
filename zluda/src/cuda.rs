@@ -9,7 +9,7 @@ pub type cuuint32_t = u32;
 pub type cuuint64_t = u64;
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct CUdeviceptr(pub ::std::os::raw::c_ulonglong);
+pub struct CUdeviceptr(pub usize);
 #[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct CUdevice(pub ::std::os::raw::c_int);
