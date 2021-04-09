@@ -68,14 +68,14 @@ static TOOLS_RUNTIME_CALLBACK_HOOKS_VTABLE: [VTableEntry; TOOLS_RUNTIME_CALLBACK
 ];
 static mut TOOLS_RUNTIME_CALLBACK_HOOKS_FN1_SPACE: [usize; 512] = [0; 512];
 
-unsafe extern "C" fn runtime_callback_hooks_fn1(ptr: *mut *mut usize, size: *mut usize) {
+unsafe extern "system" fn runtime_callback_hooks_fn1(ptr: *mut *mut usize, size: *mut usize) {
     *ptr = TOOLS_RUNTIME_CALLBACK_HOOKS_FN1_SPACE.as_mut_ptr();
     *size = TOOLS_RUNTIME_CALLBACK_HOOKS_FN1_SPACE.len();
 }
 
 static mut TOOLS_RUNTIME_CALLBACK_HOOKS_FN5_SPACE: [u8; 2] = [0; 2];
 
-unsafe extern "C" fn runtime_callback_hooks_fn5(ptr: *mut *mut u8, size: *mut usize) -> *mut u8 {
+unsafe extern "system" fn runtime_callback_hooks_fn5(ptr: *mut *mut u8, size: *mut usize) -> *mut u8 {
     *ptr = TOOLS_RUNTIME_CALLBACK_HOOKS_FN5_SPACE.as_mut_ptr();
     *size = TOOLS_RUNTIME_CALLBACK_HOOKS_FN5_SPACE.len();
     return TOOLS_RUNTIME_CALLBACK_HOOKS_FN5_SPACE.as_mut_ptr();
@@ -110,7 +110,7 @@ static CUDART_INTERFACE_VTABLE: [VTableEntry; CUDART_INTERFACE_LENGTH] = [
     VTableEntry { ptr: ptr::null() },
 ];
 
-unsafe extern "C" fn cudart_interface_fn1(pctx: *mut CUcontext, dev: CUdevice) -> CUresult {
+unsafe extern "system" fn cudart_interface_fn1(pctx: *mut CUcontext, dev: CUdevice) -> CUresult {
     cudart_interface_fn1_impl(pctx.decuda(), dev.decuda()).encuda()
 }
 
@@ -195,7 +195,7 @@ struct FatbinFileHeader {
     uncompressed_payload: c_ulong,
 }
 
-unsafe extern "C" fn get_module_from_cubin(
+unsafe extern "system" fn get_module_from_cubin(
     result: *mut CUmodule,
     fatbinc_wrapper: *const FatbincWrapper,
     ptr1: *mut c_void,
@@ -290,7 +290,7 @@ unsafe fn decompress_kernel_module(file: *const FatbinFileHeader) -> Option<Vec<
     }
 }
 
-unsafe extern "C" fn cudart_interface_fn6(_: u64) {}
+unsafe extern "system" fn cudart_interface_fn6(_: u64) {}
 
 const TOOLS_TLS_GUID: CUuuid = CUuuid {
     bytes: [
@@ -321,13 +321,13 @@ static CONTEXT_LOCAL_STORAGE_INTERFACE_V0301_VTABLE: [VTableEntry; 4] = [
 ];
 
 // some kind of ctor
-unsafe extern "C" fn context_local_storage_ctor(
+unsafe extern "system" fn context_local_storage_ctor(
     cu_ctx: CUcontext, // always zero
     mgr: *mut cuda_impl::rt::ContextStateManager,
     ctx_state: *mut cuda_impl::rt::ContextState,
     // clsContextDestroyCallback,  have to be called on cuDevicePrimaryCtxReset
     dtor_cb: Option<
-        extern "C" fn(
+        extern "system" fn(
             CUcontext,
             *mut cuda_impl::rt::ContextStateManager,
             *mut cuda_impl::rt::ContextState,
@@ -342,7 +342,7 @@ fn context_local_storage_ctor_impl(
     mgr: *mut cuda_impl::rt::ContextStateManager,
     ctx_state: *mut cuda_impl::rt::ContextState,
     dtor_cb: Option<
-        extern "C" fn(
+        extern "system" fn(
             CUcontext,
             *mut cuda_impl::rt::ContextStateManager,
             *mut cuda_impl::rt::ContextState,
@@ -357,11 +357,11 @@ fn context_local_storage_ctor_impl(
 }
 
 // some kind of dtor
-unsafe extern "C" fn context_local_storage_dtor(_: *mut usize, _: *mut ()) -> u32 {
+unsafe extern "system" fn context_local_storage_dtor(_: *mut usize, _: *mut ()) -> u32 {
     0
 }
 
-unsafe extern "C" fn context_local_storage_get_state(
+unsafe extern "system" fn context_local_storage_get_state(
     ctx_state: *mut *mut cuda_impl::rt::ContextState,
     cu_ctx: CUcontext,
     state_mgr: *mut cuda_impl::rt::ContextStateManager,

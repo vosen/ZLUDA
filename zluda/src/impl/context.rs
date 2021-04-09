@@ -88,7 +88,7 @@ pub struct ContextData {
     pub cuda_manager: *mut cuda_impl::rt::ContextStateManager,
     pub cuda_state: *mut cuda_impl::rt::ContextState,
     pub cuda_dtor_cb: Option<
-        extern "C" fn(
+        extern "system" fn(
             CUcontext,
             *mut cuda_impl::rt::ContextStateManager,
             *mut cuda_impl::rt::ContextState,

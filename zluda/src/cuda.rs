@@ -1069,7 +1069,7 @@ impl CUresourcetype_enum {
 pub struct CUresourcetype_enum(pub ::std::os::raw::c_uint);
 pub use self::CUresourcetype_enum as CUresourcetype;
 pub type CUhostFn =
-    ::std::option::Option<unsafe extern "C" fn(userData: *mut ::std::os::raw::c_void)>;
+    ::std::option::Option<unsafe extern "system" fn(userData: *mut ::std::os::raw::c_void)>;
 impl CUaccessProperty_enum {
     pub const CU_ACCESS_PROPERTY_NORMAL: CUaccessProperty_enum = CUaccessProperty_enum(0);
 }
@@ -1493,14 +1493,14 @@ impl CUdevice_P2PAttribute_enum {
 pub struct CUdevice_P2PAttribute_enum(pub ::std::os::raw::c_uint);
 pub use self::CUdevice_P2PAttribute_enum as CUdevice_P2PAttribute;
 pub type CUstreamCallback = ::std::option::Option<
-    unsafe extern "C" fn(
+    unsafe extern "system" fn(
         hStream: CUstream,
         status: CUresult,
         userData: *mut ::std::os::raw::c_void,
     ),
 >;
 pub type CUoccupancyB2DSize =
-    ::std::option::Option<unsafe extern "C" fn(blockSize: ::std::os::raw::c_int) -> usize>;
+    ::std::option::Option<unsafe extern "system" fn(blockSize: ::std::os::raw::c_int) -> usize>;
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct CUDA_MEMCPY2D_st {
@@ -2182,7 +2182,7 @@ pub struct CUgraphExecUpdateResult_enum(pub ::std::os::raw::c_uint);
 pub use self::CUgraphExecUpdateResult_enum as CUgraphExecUpdateResult;
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGetErrorString(
+pub extern "system" fn cuGetErrorString(
     error: CUresult,
     pStr: *mut *const ::std::os::raw::c_char,
 ) -> CUresult {
@@ -2190,7 +2190,7 @@ pub extern "C" fn cuGetErrorString(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGetErrorName(
+pub extern "system" fn cuGetErrorName(
     error: CUresult,
     pStr: *mut *const ::std::os::raw::c_char,
 ) -> CUresult {
@@ -2198,28 +2198,28 @@ pub extern "C" fn cuGetErrorName(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuInit(Flags: ::std::os::raw::c_uint) -> CUresult {
+pub extern "system" fn cuInit(Flags: ::std::os::raw::c_uint) -> CUresult {
     r#impl::init().encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuDriverGetVersion(driverVersion: *mut ::std::os::raw::c_int) -> CUresult {
+pub extern "system" fn cuDriverGetVersion(driverVersion: *mut ::std::os::raw::c_int) -> CUresult {
     unsafe { *driverVersion = r#impl::driver_get_version() };
     CUresult::CUDA_SUCCESS
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuDeviceGet(device: *mut CUdevice, ordinal: ::std::os::raw::c_int) -> CUresult {
+pub extern "system" fn cuDeviceGet(device: *mut CUdevice, ordinal: ::std::os::raw::c_int) -> CUresult {
     r#impl::device::get(device.decuda(), ordinal).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuDeviceGetCount(count: *mut ::std::os::raw::c_int) -> CUresult {
+pub extern "system" fn cuDeviceGetCount(count: *mut ::std::os::raw::c_int) -> CUresult {
     r#impl::device::get_count(count).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuDeviceGetName(
+pub extern "system" fn cuDeviceGetName(
     name: *mut ::std::os::raw::c_char,
     len: ::std::os::raw::c_int,
     dev: CUdevice,
@@ -2228,12 +2228,12 @@ pub extern "C" fn cuDeviceGetName(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuDeviceGetUuid(uuid: *mut CUuuid, dev: CUdevice) -> CUresult {
+pub extern "system" fn cuDeviceGetUuid(uuid: *mut CUuuid, dev: CUdevice) -> CUresult {
     r#impl::device::get_uuid(uuid, dev.decuda()).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuDeviceGetLuid(
+pub extern "system" fn cuDeviceGetLuid(
     luid: *mut ::std::os::raw::c_char,
     deviceNodeMask: *mut ::std::os::raw::c_uint,
     dev: CUdevice,
@@ -2242,12 +2242,12 @@ pub extern "C" fn cuDeviceGetLuid(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuDeviceTotalMem_v2(bytes: *mut usize, dev: CUdevice) -> CUresult {
+pub extern "system" fn cuDeviceTotalMem_v2(bytes: *mut usize, dev: CUdevice) -> CUresult {
     r#impl::device::total_mem_v2(bytes, dev.decuda()).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuDeviceGetAttribute(
+pub extern "system" fn cuDeviceGetAttribute(
     pi: *mut ::std::os::raw::c_int,
     attrib: CUdevice_attribute,
     dev: CUdevice,
@@ -2256,7 +2256,7 @@ pub extern "C" fn cuDeviceGetAttribute(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuDeviceGetNvSciSyncAttributes(
+pub extern "system" fn cuDeviceGetNvSciSyncAttributes(
     nvSciSyncAttrList: *mut ::std::os::raw::c_void,
     dev: CUdevice,
     flags: ::std::os::raw::c_int,
@@ -2265,12 +2265,12 @@ pub extern "C" fn cuDeviceGetNvSciSyncAttributes(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuDeviceGetProperties(prop: *mut CUdevprop, dev: CUdevice) -> CUresult {
+pub extern "system" fn cuDeviceGetProperties(prop: *mut CUdevprop, dev: CUdevice) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuDeviceComputeCapability(
+pub extern "system" fn cuDeviceComputeCapability(
     major: *mut ::std::os::raw::c_int,
     minor: *mut ::std::os::raw::c_int,
     dev: CUdevice,
@@ -2279,22 +2279,22 @@ pub extern "C" fn cuDeviceComputeCapability(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuDevicePrimaryCtxRetain(pctx: *mut CUcontext, dev: CUdevice) -> CUresult {
+pub extern "system" fn cuDevicePrimaryCtxRetain(pctx: *mut CUcontext, dev: CUdevice) -> CUresult {
     r#impl::device::primary_ctx_retain(pctx.decuda(), dev.decuda()).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuDevicePrimaryCtxRelease(dev: CUdevice) -> CUresult {
+pub extern "system" fn cuDevicePrimaryCtxRelease(dev: CUdevice) -> CUresult {
     cuDevicePrimaryCtxRelease_v2(dev)
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuDevicePrimaryCtxRelease_v2(dev: CUdevice) -> CUresult {
+pub extern "system" fn cuDevicePrimaryCtxRelease_v2(dev: CUdevice) -> CUresult {
     r#impl::device::primary_ctx_release_v2(dev.decuda())
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuDevicePrimaryCtxSetFlags(
+pub extern "system" fn cuDevicePrimaryCtxSetFlags(
     dev: CUdevice,
     flags: ::std::os::raw::c_uint,
 ) -> CUresult {
@@ -2302,7 +2302,7 @@ pub extern "C" fn cuDevicePrimaryCtxSetFlags(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuDevicePrimaryCtxSetFlags_v2(
+pub extern "system" fn cuDevicePrimaryCtxSetFlags_v2(
     dev: CUdevice,
     flags: ::std::os::raw::c_uint,
 ) -> CUresult {
@@ -2310,7 +2310,7 @@ pub extern "C" fn cuDevicePrimaryCtxSetFlags_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuDevicePrimaryCtxGetState(
+pub extern "system" fn cuDevicePrimaryCtxGetState(
     dev: CUdevice,
     flags: *mut ::std::os::raw::c_uint,
     active: *mut ::std::os::raw::c_int,
@@ -2319,17 +2319,17 @@ pub extern "C" fn cuDevicePrimaryCtxGetState(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuDevicePrimaryCtxReset(dev: CUdevice) -> CUresult {
+pub extern "system" fn cuDevicePrimaryCtxReset(dev: CUdevice) -> CUresult {
     cuDevicePrimaryCtxReset_v2(dev)
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuDevicePrimaryCtxReset_v2(dev: CUdevice) -> CUresult {
+pub extern "system" fn cuDevicePrimaryCtxReset_v2(dev: CUdevice) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuCtxCreate_v2(
+pub extern "system" fn cuCtxCreate_v2(
     pctx: *mut CUcontext,
     flags: ::std::os::raw::c_uint,
     dev: CUdevice,
@@ -2338,77 +2338,77 @@ pub extern "C" fn cuCtxCreate_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuCtxDestroy_v2(ctx: CUcontext) -> CUresult {
+pub extern "system" fn cuCtxDestroy_v2(ctx: CUcontext) -> CUresult {
     r#impl::context::destroy_v2(ctx.decuda()).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuCtxPushCurrent_v2(ctx: CUcontext) -> CUresult {
+pub extern "system" fn cuCtxPushCurrent_v2(ctx: CUcontext) -> CUresult {
     r#impl::context::push_current_v2(ctx.decuda())
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuCtxPopCurrent_v2(pctx: *mut CUcontext) -> CUresult {
+pub extern "system" fn cuCtxPopCurrent_v2(pctx: *mut CUcontext) -> CUresult {
     r#impl::context::pop_current_v2(pctx.decuda())
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuCtxSetCurrent(ctx: CUcontext) -> CUresult {
+pub extern "system" fn cuCtxSetCurrent(ctx: CUcontext) -> CUresult {
     r#impl::context::set_current(ctx.decuda())
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuCtxGetCurrent(pctx: *mut CUcontext) -> CUresult {
+pub extern "system" fn cuCtxGetCurrent(pctx: *mut CUcontext) -> CUresult {
     r#impl::context::get_current(pctx.decuda()).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuCtxGetDevice(device: *mut CUdevice) -> CUresult {
+pub extern "system" fn cuCtxGetDevice(device: *mut CUdevice) -> CUresult {
     r#impl::context::get_device(device.decuda()).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuCtxGetFlags(flags: *mut ::std::os::raw::c_uint) -> CUresult {
+pub extern "system" fn cuCtxGetFlags(flags: *mut ::std::os::raw::c_uint) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuCtxSynchronize() -> CUresult {
+pub extern "system" fn cuCtxSynchronize() -> CUresult {
     r#impl::context::synchronize()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuCtxSetLimit(limit: CUlimit, value: usize) -> CUresult {
+pub extern "system" fn cuCtxSetLimit(limit: CUlimit, value: usize) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuCtxGetLimit(pvalue: *mut usize, limit: CUlimit) -> CUresult {
+pub extern "system" fn cuCtxGetLimit(pvalue: *mut usize, limit: CUlimit) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuCtxGetCacheConfig(pconfig: *mut CUfunc_cache) -> CUresult {
+pub extern "system" fn cuCtxGetCacheConfig(pconfig: *mut CUfunc_cache) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuCtxSetCacheConfig(config: CUfunc_cache) -> CUresult {
+pub extern "system" fn cuCtxSetCacheConfig(config: CUfunc_cache) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuCtxGetSharedMemConfig(pConfig: *mut CUsharedconfig) -> CUresult {
+pub extern "system" fn cuCtxGetSharedMemConfig(pConfig: *mut CUsharedconfig) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuCtxSetSharedMemConfig(config: CUsharedconfig) -> CUresult {
+pub extern "system" fn cuCtxSetSharedMemConfig(config: CUsharedconfig) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuCtxGetApiVersion(
+pub extern "system" fn cuCtxGetApiVersion(
     ctx: CUcontext,
     version: *mut ::std::os::raw::c_uint,
 ) -> CUresult {
@@ -2416,7 +2416,7 @@ pub extern "C" fn cuCtxGetApiVersion(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuCtxGetStreamPriorityRange(
+pub extern "system" fn cuCtxGetStreamPriorityRange(
     leastPriority: *mut ::std::os::raw::c_int,
     greatestPriority: *mut ::std::os::raw::c_int,
 ) -> CUresult {
@@ -2424,22 +2424,22 @@ pub extern "C" fn cuCtxGetStreamPriorityRange(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuCtxResetPersistingL2Cache() -> CUresult {
+pub extern "system" fn cuCtxResetPersistingL2Cache() -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuCtxAttach(pctx: *mut CUcontext, flags: ::std::os::raw::c_uint) -> CUresult {
+pub extern "system" fn cuCtxAttach(pctx: *mut CUcontext, flags: ::std::os::raw::c_uint) -> CUresult {
     r#impl::context::attach(pctx.decuda(), flags).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuCtxDetach(ctx: CUcontext) -> CUresult {
+pub extern "system" fn cuCtxDetach(ctx: CUcontext) -> CUresult {
     r#impl::context::detach(ctx.decuda()).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuModuleLoad(
+pub extern "system" fn cuModuleLoad(
     module: *mut CUmodule,
     fname: *const ::std::os::raw::c_char,
 ) -> CUresult {
@@ -2447,7 +2447,7 @@ pub extern "C" fn cuModuleLoad(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuModuleLoadData(
+pub extern "system" fn cuModuleLoadData(
     module: *mut CUmodule,
     image: *const ::std::os::raw::c_void,
 ) -> CUresult {
@@ -2456,7 +2456,7 @@ pub extern "C" fn cuModuleLoadData(
 
 // TODO: parse jit options
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuModuleLoadDataEx(
+pub extern "system" fn cuModuleLoadDataEx(
     module: *mut CUmodule,
     image: *const ::std::os::raw::c_void,
     numOptions: ::std::os::raw::c_uint,
@@ -2467,7 +2467,7 @@ pub extern "C" fn cuModuleLoadDataEx(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuModuleLoadFatBinary(
+pub extern "system" fn cuModuleLoadFatBinary(
     module: *mut CUmodule,
     fatCubin: *const ::std::os::raw::c_void,
 ) -> CUresult {
@@ -2475,12 +2475,12 @@ pub extern "C" fn cuModuleLoadFatBinary(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuModuleUnload(hmod: CUmodule) -> CUresult {
+pub extern "system" fn cuModuleUnload(hmod: CUmodule) -> CUresult {
     r#impl::module::unload(hmod.decuda()).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuModuleGetFunction(
+pub extern "system" fn cuModuleGetFunction(
     hfunc: *mut CUfunction,
     hmod: CUmodule,
     name: *const ::std::os::raw::c_char,
@@ -2489,7 +2489,7 @@ pub extern "C" fn cuModuleGetFunction(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuModuleGetGlobal_v2(
+pub extern "system" fn cuModuleGetGlobal_v2(
     dptr: *mut CUdeviceptr,
     bytes: *mut usize,
     hmod: CUmodule,
@@ -2499,7 +2499,7 @@ pub extern "C" fn cuModuleGetGlobal_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuModuleGetTexRef(
+pub extern "system" fn cuModuleGetTexRef(
     pTexRef: *mut CUtexref,
     hmod: CUmodule,
     name: *const ::std::os::raw::c_char,
@@ -2508,7 +2508,7 @@ pub extern "C" fn cuModuleGetTexRef(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuModuleGetSurfRef(
+pub extern "system" fn cuModuleGetSurfRef(
     pSurfRef: *mut CUsurfref,
     hmod: CUmodule,
     name: *const ::std::os::raw::c_char,
@@ -2517,7 +2517,7 @@ pub extern "C" fn cuModuleGetSurfRef(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuLinkCreate_v2(
+pub extern "system" fn cuLinkCreate_v2(
     numOptions: ::std::os::raw::c_uint,
     options: *mut CUjit_option,
     optionValues: *mut *mut ::std::os::raw::c_void,
@@ -2527,7 +2527,7 @@ pub extern "C" fn cuLinkCreate_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuLinkAddData_v2(
+pub extern "system" fn cuLinkAddData_v2(
     state: CUlinkState,
     type_: CUjitInputType,
     data: *mut ::std::os::raw::c_void,
@@ -2541,7 +2541,7 @@ pub extern "C" fn cuLinkAddData_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuLinkAddFile_v2(
+pub extern "system" fn cuLinkAddFile_v2(
     state: CUlinkState,
     type_: CUjitInputType,
     path: *const ::std::os::raw::c_char,
@@ -2553,7 +2553,7 @@ pub extern "C" fn cuLinkAddFile_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuLinkComplete(
+pub extern "system" fn cuLinkComplete(
     state: CUlinkState,
     cubinOut: *mut *mut ::std::os::raw::c_void,
     sizeOut: *mut usize,
@@ -2562,22 +2562,22 @@ pub extern "C" fn cuLinkComplete(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuLinkDestroy(state: CUlinkState) -> CUresult {
+pub extern "system" fn cuLinkDestroy(state: CUlinkState) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemGetInfo_v2(free: *mut usize, total: *mut usize) -> CUresult {
+pub extern "system" fn cuMemGetInfo_v2(free: *mut usize, total: *mut usize) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemAlloc_v2(dptr: *mut CUdeviceptr, bytesize: usize) -> CUresult {
+pub extern "system" fn cuMemAlloc_v2(dptr: *mut CUdeviceptr, bytesize: usize) -> CUresult {
     r#impl::memory::alloc_v2(dptr.decuda(), bytesize).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemAllocPitch_v2(
+pub extern "system" fn cuMemAllocPitch_v2(
     dptr: *mut CUdeviceptr,
     pPitch: *mut usize,
     WidthInBytes: usize,
@@ -2588,12 +2588,12 @@ pub extern "C" fn cuMemAllocPitch_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemFree_v2(dptr: CUdeviceptr) -> CUresult {
+pub extern "system" fn cuMemFree_v2(dptr: CUdeviceptr) -> CUresult {
     r#impl::memory::free_v2(dptr.decuda()).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemGetAddressRange_v2(
+pub extern "system" fn cuMemGetAddressRange_v2(
     pbase: *mut CUdeviceptr,
     psize: *mut usize,
     dptr: CUdeviceptr,
@@ -2602,7 +2602,7 @@ pub extern "C" fn cuMemGetAddressRange_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemAllocHost_v2(
+pub extern "system" fn cuMemAllocHost_v2(
     pp: *mut *mut ::std::os::raw::c_void,
     bytesize: usize,
 ) -> CUresult {
@@ -2610,12 +2610,12 @@ pub extern "C" fn cuMemAllocHost_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemFreeHost(p: *mut ::std::os::raw::c_void) -> CUresult {
+pub extern "system" fn cuMemFreeHost(p: *mut ::std::os::raw::c_void) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemHostAlloc(
+pub extern "system" fn cuMemHostAlloc(
     pp: *mut *mut ::std::os::raw::c_void,
     bytesize: usize,
     Flags: ::std::os::raw::c_uint,
@@ -2624,7 +2624,7 @@ pub extern "C" fn cuMemHostAlloc(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemHostGetDevicePointer_v2(
+pub extern "system" fn cuMemHostGetDevicePointer_v2(
     pdptr: *mut CUdeviceptr,
     p: *mut ::std::os::raw::c_void,
     Flags: ::std::os::raw::c_uint,
@@ -2633,7 +2633,7 @@ pub extern "C" fn cuMemHostGetDevicePointer_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemHostGetFlags(
+pub extern "system" fn cuMemHostGetFlags(
     pFlags: *mut ::std::os::raw::c_uint,
     p: *mut ::std::os::raw::c_void,
 ) -> CUresult {
@@ -2641,7 +2641,7 @@ pub extern "C" fn cuMemHostGetFlags(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemAllocManaged(
+pub extern "system" fn cuMemAllocManaged(
     dptr: *mut CUdeviceptr,
     bytesize: usize,
     flags: ::std::os::raw::c_uint,
@@ -2650,7 +2650,7 @@ pub extern "C" fn cuMemAllocManaged(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuDeviceGetByPCIBusId(
+pub extern "system" fn cuDeviceGetByPCIBusId(
     dev: *mut CUdevice,
     pciBusId: *const ::std::os::raw::c_char,
 ) -> CUresult {
@@ -2658,7 +2658,7 @@ pub extern "C" fn cuDeviceGetByPCIBusId(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuDeviceGetPCIBusId(
+pub extern "system" fn cuDeviceGetPCIBusId(
     pciBusId: *mut ::std::os::raw::c_char,
     len: ::std::os::raw::c_int,
     dev: CUdevice,
@@ -2667,12 +2667,12 @@ pub extern "C" fn cuDeviceGetPCIBusId(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuIpcGetEventHandle(pHandle: *mut CUipcEventHandle, event: CUevent) -> CUresult {
+pub extern "system" fn cuIpcGetEventHandle(pHandle: *mut CUipcEventHandle, event: CUevent) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuIpcOpenEventHandle(
+pub extern "system" fn cuIpcOpenEventHandle(
     phEvent: *mut CUevent,
     handle: CUipcEventHandle,
 ) -> CUresult {
@@ -2680,12 +2680,12 @@ pub extern "C" fn cuIpcOpenEventHandle(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuIpcGetMemHandle(pHandle: *mut CUipcMemHandle, dptr: CUdeviceptr) -> CUresult {
+pub extern "system" fn cuIpcGetMemHandle(pHandle: *mut CUipcMemHandle, dptr: CUdeviceptr) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuIpcOpenMemHandle(
+pub extern "system" fn cuIpcOpenMemHandle(
     pdptr: *mut CUdeviceptr,
     handle: CUipcMemHandle,
     Flags: ::std::os::raw::c_uint,
@@ -2694,12 +2694,12 @@ pub extern "C" fn cuIpcOpenMemHandle(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuIpcCloseMemHandle(dptr: CUdeviceptr) -> CUresult {
+pub extern "system" fn cuIpcCloseMemHandle(dptr: CUdeviceptr) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemHostRegister_v2(
+pub extern "system" fn cuMemHostRegister_v2(
     p: *mut ::std::os::raw::c_void,
     bytesize: usize,
     Flags: ::std::os::raw::c_uint,
@@ -2708,17 +2708,17 @@ pub extern "C" fn cuMemHostRegister_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemHostUnregister(p: *mut ::std::os::raw::c_void) -> CUresult {
+pub extern "system" fn cuMemHostUnregister(p: *mut ::std::os::raw::c_void) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpy(dst: CUdeviceptr, src: CUdeviceptr, ByteCount: usize) -> CUresult {
+pub extern "system" fn cuMemcpy(dst: CUdeviceptr, src: CUdeviceptr, ByteCount: usize) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpyPeer(
+pub extern "system" fn cuMemcpyPeer(
     dstDevice: CUdeviceptr,
     dstContext: CUcontext,
     srcDevice: CUdeviceptr,
@@ -2729,7 +2729,7 @@ pub extern "C" fn cuMemcpyPeer(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpyHtoD_v2(
+pub extern "system" fn cuMemcpyHtoD_v2(
     dstDevice: CUdeviceptr,
     srcHost: *const ::std::os::raw::c_void,
     ByteCount: usize,
@@ -2739,7 +2739,7 @@ pub extern "C" fn cuMemcpyHtoD_v2(
 
 // TODO: implement default stream semantics
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpyHtoD_v2_ptds(
+pub extern "system" fn cuMemcpyHtoD_v2_ptds(
     dstDevice: CUdeviceptr,
     srcHost: *const ::std::os::raw::c_void,
     ByteCount: usize,
@@ -2748,7 +2748,7 @@ pub extern "C" fn cuMemcpyHtoD_v2_ptds(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpyDtoH_v2(
+pub extern "system" fn cuMemcpyDtoH_v2(
     dstHost: *mut ::std::os::raw::c_void,
     srcDevice: CUdeviceptr,
     ByteCount: usize,
@@ -2758,7 +2758,7 @@ pub extern "C" fn cuMemcpyDtoH_v2(
 
 // TODO: implement default stream semantics
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpyDtoH_v2_ptds(
+pub extern "system" fn cuMemcpyDtoH_v2_ptds(
     dstHost: *mut ::std::os::raw::c_void,
     srcDevice: CUdeviceptr,
     ByteCount: usize,
@@ -2767,7 +2767,7 @@ pub extern "C" fn cuMemcpyDtoH_v2_ptds(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpyDtoD_v2(
+pub extern "system" fn cuMemcpyDtoD_v2(
     dstDevice: CUdeviceptr,
     srcDevice: CUdeviceptr,
     ByteCount: usize,
@@ -2776,7 +2776,7 @@ pub extern "C" fn cuMemcpyDtoD_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpyDtoA_v2(
+pub extern "system" fn cuMemcpyDtoA_v2(
     dstArray: CUarray,
     dstOffset: usize,
     srcDevice: CUdeviceptr,
@@ -2786,7 +2786,7 @@ pub extern "C" fn cuMemcpyDtoA_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpyAtoD_v2(
+pub extern "system" fn cuMemcpyAtoD_v2(
     dstDevice: CUdeviceptr,
     srcArray: CUarray,
     srcOffset: usize,
@@ -2796,7 +2796,7 @@ pub extern "C" fn cuMemcpyAtoD_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpyHtoA_v2(
+pub extern "system" fn cuMemcpyHtoA_v2(
     dstArray: CUarray,
     dstOffset: usize,
     srcHost: *const ::std::os::raw::c_void,
@@ -2806,7 +2806,7 @@ pub extern "C" fn cuMemcpyHtoA_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpyAtoH_v2(
+pub extern "system" fn cuMemcpyAtoH_v2(
     dstHost: *mut ::std::os::raw::c_void,
     srcArray: CUarray,
     srcOffset: usize,
@@ -2816,7 +2816,7 @@ pub extern "C" fn cuMemcpyAtoH_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpyAtoA_v2(
+pub extern "system" fn cuMemcpyAtoA_v2(
     dstArray: CUarray,
     dstOffset: usize,
     srcArray: CUarray,
@@ -2827,27 +2827,27 @@ pub extern "C" fn cuMemcpyAtoA_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpy2D_v2(pCopy: *const CUDA_MEMCPY2D) -> CUresult {
+pub extern "system" fn cuMemcpy2D_v2(pCopy: *const CUDA_MEMCPY2D) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpy2DUnaligned_v2(pCopy: *const CUDA_MEMCPY2D) -> CUresult {
+pub extern "system" fn cuMemcpy2DUnaligned_v2(pCopy: *const CUDA_MEMCPY2D) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpy3D_v2(pCopy: *const CUDA_MEMCPY3D) -> CUresult {
+pub extern "system" fn cuMemcpy3D_v2(pCopy: *const CUDA_MEMCPY3D) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpy3DPeer(pCopy: *const CUDA_MEMCPY3D_PEER) -> CUresult {
+pub extern "system" fn cuMemcpy3DPeer(pCopy: *const CUDA_MEMCPY3D_PEER) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpyAsync(
+pub extern "system" fn cuMemcpyAsync(
     dst: CUdeviceptr,
     src: CUdeviceptr,
     ByteCount: usize,
@@ -2857,7 +2857,7 @@ pub extern "C" fn cuMemcpyAsync(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpyPeerAsync(
+pub extern "system" fn cuMemcpyPeerAsync(
     dstDevice: CUdeviceptr,
     dstContext: CUcontext,
     srcDevice: CUdeviceptr,
@@ -2869,7 +2869,7 @@ pub extern "C" fn cuMemcpyPeerAsync(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpyHtoDAsync_v2(
+pub extern "system" fn cuMemcpyHtoDAsync_v2(
     dstDevice: CUdeviceptr,
     srcHost: *const ::std::os::raw::c_void,
     ByteCount: usize,
@@ -2879,7 +2879,7 @@ pub extern "C" fn cuMemcpyHtoDAsync_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpyDtoHAsync_v2(
+pub extern "system" fn cuMemcpyDtoHAsync_v2(
     dstHost: *mut ::std::os::raw::c_void,
     srcDevice: CUdeviceptr,
     ByteCount: usize,
@@ -2889,7 +2889,7 @@ pub extern "C" fn cuMemcpyDtoHAsync_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpyDtoDAsync_v2(
+pub extern "system" fn cuMemcpyDtoDAsync_v2(
     dstDevice: CUdeviceptr,
     srcDevice: CUdeviceptr,
     ByteCount: usize,
@@ -2899,7 +2899,7 @@ pub extern "C" fn cuMemcpyDtoDAsync_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpyHtoAAsync_v2(
+pub extern "system" fn cuMemcpyHtoAAsync_v2(
     dstArray: CUarray,
     dstOffset: usize,
     srcHost: *const ::std::os::raw::c_void,
@@ -2910,7 +2910,7 @@ pub extern "C" fn cuMemcpyHtoAAsync_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpyAtoHAsync_v2(
+pub extern "system" fn cuMemcpyAtoHAsync_v2(
     dstHost: *mut ::std::os::raw::c_void,
     srcArray: CUarray,
     srcOffset: usize,
@@ -2921,17 +2921,17 @@ pub extern "C" fn cuMemcpyAtoHAsync_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpy2DAsync_v2(pCopy: *const CUDA_MEMCPY2D, hStream: CUstream) -> CUresult {
+pub extern "system" fn cuMemcpy2DAsync_v2(pCopy: *const CUDA_MEMCPY2D, hStream: CUstream) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpy3DAsync_v2(pCopy: *const CUDA_MEMCPY3D, hStream: CUstream) -> CUresult {
+pub extern "system" fn cuMemcpy3DAsync_v2(pCopy: *const CUDA_MEMCPY3D, hStream: CUstream) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemcpy3DPeerAsync(
+pub extern "system" fn cuMemcpy3DPeerAsync(
     pCopy: *const CUDA_MEMCPY3D_PEER,
     hStream: CUstream,
 ) -> CUresult {
@@ -2939,7 +2939,7 @@ pub extern "C" fn cuMemcpy3DPeerAsync(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemsetD8_v2(
+pub extern "system" fn cuMemsetD8_v2(
     dstDevice: CUdeviceptr,
     uc: ::std::os::raw::c_uchar,
     N: usize,
@@ -2949,7 +2949,7 @@ pub extern "C" fn cuMemsetD8_v2(
 
 // TODO: implement default stream semantics
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemsetD8_v2_ptds(
+pub extern "system" fn cuMemsetD8_v2_ptds(
     dstDevice: CUdeviceptr,
     uc: ::std::os::raw::c_uchar,
     N: usize,
@@ -2958,7 +2958,7 @@ pub extern "C" fn cuMemsetD8_v2_ptds(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemsetD16_v2(
+pub extern "system" fn cuMemsetD16_v2(
     dstDevice: CUdeviceptr,
     us: ::std::os::raw::c_ushort,
     N: usize,
@@ -2967,7 +2967,7 @@ pub extern "C" fn cuMemsetD16_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemsetD32_v2(
+pub extern "system" fn cuMemsetD32_v2(
     dstDevice: CUdeviceptr,
     ui: ::std::os::raw::c_uint,
     N: usize,
@@ -2977,7 +2977,7 @@ pub extern "C" fn cuMemsetD32_v2(
 
 // TODO: implement default stream semantics
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemsetD32_v2_ptds(
+pub extern "system" fn cuMemsetD32_v2_ptds(
     dstDevice: CUdeviceptr,
     ui: ::std::os::raw::c_uint,
     N: usize,
@@ -2986,7 +2986,7 @@ pub extern "C" fn cuMemsetD32_v2_ptds(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemsetD2D8_v2(
+pub extern "system" fn cuMemsetD2D8_v2(
     dstDevice: CUdeviceptr,
     dstPitch: usize,
     uc: ::std::os::raw::c_uchar,
@@ -2997,7 +2997,7 @@ pub extern "C" fn cuMemsetD2D8_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemsetD2D16_v2(
+pub extern "system" fn cuMemsetD2D16_v2(
     dstDevice: CUdeviceptr,
     dstPitch: usize,
     us: ::std::os::raw::c_ushort,
@@ -3008,7 +3008,7 @@ pub extern "C" fn cuMemsetD2D16_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemsetD2D32_v2(
+pub extern "system" fn cuMemsetD2D32_v2(
     dstDevice: CUdeviceptr,
     dstPitch: usize,
     ui: ::std::os::raw::c_uint,
@@ -3019,7 +3019,7 @@ pub extern "C" fn cuMemsetD2D32_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemsetD8Async(
+pub extern "system" fn cuMemsetD8Async(
     dstDevice: CUdeviceptr,
     uc: ::std::os::raw::c_uchar,
     N: usize,
@@ -3029,7 +3029,7 @@ pub extern "C" fn cuMemsetD8Async(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemsetD16Async(
+pub extern "system" fn cuMemsetD16Async(
     dstDevice: CUdeviceptr,
     us: ::std::os::raw::c_ushort,
     N: usize,
@@ -3039,7 +3039,7 @@ pub extern "C" fn cuMemsetD16Async(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemsetD32Async(
+pub extern "system" fn cuMemsetD32Async(
     dstDevice: CUdeviceptr,
     ui: ::std::os::raw::c_uint,
     N: usize,
@@ -3049,7 +3049,7 @@ pub extern "C" fn cuMemsetD32Async(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemsetD2D8Async(
+pub extern "system" fn cuMemsetD2D8Async(
     dstDevice: CUdeviceptr,
     dstPitch: usize,
     uc: ::std::os::raw::c_uchar,
@@ -3061,7 +3061,7 @@ pub extern "C" fn cuMemsetD2D8Async(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemsetD2D16Async(
+pub extern "system" fn cuMemsetD2D16Async(
     dstDevice: CUdeviceptr,
     dstPitch: usize,
     us: ::std::os::raw::c_ushort,
@@ -3073,7 +3073,7 @@ pub extern "C" fn cuMemsetD2D16Async(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemsetD2D32Async(
+pub extern "system" fn cuMemsetD2D32Async(
     dstDevice: CUdeviceptr,
     dstPitch: usize,
     ui: ::std::os::raw::c_uint,
@@ -3085,7 +3085,7 @@ pub extern "C" fn cuMemsetD2D32Async(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuArrayCreate_v2(
+pub extern "system" fn cuArrayCreate_v2(
     pHandle: *mut CUarray,
     pAllocateArray: *const CUDA_ARRAY_DESCRIPTOR,
 ) -> CUresult {
@@ -3093,7 +3093,7 @@ pub extern "C" fn cuArrayCreate_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuArrayGetDescriptor_v2(
+pub extern "system" fn cuArrayGetDescriptor_v2(
     pArrayDescriptor: *mut CUDA_ARRAY_DESCRIPTOR,
     hArray: CUarray,
 ) -> CUresult {
@@ -3101,12 +3101,12 @@ pub extern "C" fn cuArrayGetDescriptor_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuArrayDestroy(hArray: CUarray) -> CUresult {
+pub extern "system" fn cuArrayDestroy(hArray: CUarray) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuArray3DCreate_v2(
+pub extern "system" fn cuArray3DCreate_v2(
     pHandle: *mut CUarray,
     pAllocateArray: *const CUDA_ARRAY3D_DESCRIPTOR,
 ) -> CUresult {
@@ -3114,7 +3114,7 @@ pub extern "C" fn cuArray3DCreate_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuArray3DGetDescriptor_v2(
+pub extern "system" fn cuArray3DGetDescriptor_v2(
     pArrayDescriptor: *mut CUDA_ARRAY3D_DESCRIPTOR,
     hArray: CUarray,
 ) -> CUresult {
@@ -3122,7 +3122,7 @@ pub extern "C" fn cuArray3DGetDescriptor_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMipmappedArrayCreate(
+pub extern "system" fn cuMipmappedArrayCreate(
     pHandle: *mut CUmipmappedArray,
     pMipmappedArrayDesc: *const CUDA_ARRAY3D_DESCRIPTOR,
     numMipmapLevels: ::std::os::raw::c_uint,
@@ -3131,7 +3131,7 @@ pub extern "C" fn cuMipmappedArrayCreate(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMipmappedArrayGetLevel(
+pub extern "system" fn cuMipmappedArrayGetLevel(
     pLevelArray: *mut CUarray,
     hMipmappedArray: CUmipmappedArray,
     level: ::std::os::raw::c_uint,
@@ -3140,12 +3140,12 @@ pub extern "C" fn cuMipmappedArrayGetLevel(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMipmappedArrayDestroy(hMipmappedArray: CUmipmappedArray) -> CUresult {
+pub extern "system" fn cuMipmappedArrayDestroy(hMipmappedArray: CUmipmappedArray) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemAddressReserve(
+pub extern "system" fn cuMemAddressReserve(
     ptr: *mut CUdeviceptr,
     size: usize,
     alignment: usize,
@@ -3156,12 +3156,12 @@ pub extern "C" fn cuMemAddressReserve(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemAddressFree(ptr: CUdeviceptr, size: usize) -> CUresult {
+pub extern "system" fn cuMemAddressFree(ptr: CUdeviceptr, size: usize) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemCreate(
+pub extern "system" fn cuMemCreate(
     handle: *mut CUmemGenericAllocationHandle,
     size: usize,
     prop: *const CUmemAllocationProp,
@@ -3171,12 +3171,12 @@ pub extern "C" fn cuMemCreate(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemRelease(handle: CUmemGenericAllocationHandle) -> CUresult {
+pub extern "system" fn cuMemRelease(handle: CUmemGenericAllocationHandle) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemMap(
+pub extern "system" fn cuMemMap(
     ptr: CUdeviceptr,
     size: usize,
     offset: usize,
@@ -3187,12 +3187,12 @@ pub extern "C" fn cuMemMap(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemUnmap(ptr: CUdeviceptr, size: usize) -> CUresult {
+pub extern "system" fn cuMemUnmap(ptr: CUdeviceptr, size: usize) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemSetAccess(
+pub extern "system" fn cuMemSetAccess(
     ptr: CUdeviceptr,
     size: usize,
     desc: *const CUmemAccessDesc,
@@ -3202,7 +3202,7 @@ pub extern "C" fn cuMemSetAccess(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemGetAccess(
+pub extern "system" fn cuMemGetAccess(
     flags: *mut ::std::os::raw::c_ulonglong,
     location: *const CUmemLocation,
     ptr: CUdeviceptr,
@@ -3211,7 +3211,7 @@ pub extern "C" fn cuMemGetAccess(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemExportToShareableHandle(
+pub extern "system" fn cuMemExportToShareableHandle(
     shareableHandle: *mut ::std::os::raw::c_void,
     handle: CUmemGenericAllocationHandle,
     handleType: CUmemAllocationHandleType,
@@ -3221,7 +3221,7 @@ pub extern "C" fn cuMemExportToShareableHandle(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemImportFromShareableHandle(
+pub extern "system" fn cuMemImportFromShareableHandle(
     handle: *mut CUmemGenericAllocationHandle,
     osHandle: *mut ::std::os::raw::c_void,
     shHandleType: CUmemAllocationHandleType,
@@ -3230,7 +3230,7 @@ pub extern "C" fn cuMemImportFromShareableHandle(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemGetAllocationGranularity(
+pub extern "system" fn cuMemGetAllocationGranularity(
     granularity: *mut usize,
     prop: *const CUmemAllocationProp,
     option: CUmemAllocationGranularity_flags,
@@ -3239,7 +3239,7 @@ pub extern "C" fn cuMemGetAllocationGranularity(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemGetAllocationPropertiesFromHandle(
+pub extern "system" fn cuMemGetAllocationPropertiesFromHandle(
     prop: *mut CUmemAllocationProp,
     handle: CUmemGenericAllocationHandle,
 ) -> CUresult {
@@ -3247,7 +3247,7 @@ pub extern "C" fn cuMemGetAllocationPropertiesFromHandle(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemRetainAllocationHandle(
+pub extern "system" fn cuMemRetainAllocationHandle(
     handle: *mut CUmemGenericAllocationHandle,
     addr: *mut ::std::os::raw::c_void,
 ) -> CUresult {
@@ -3255,7 +3255,7 @@ pub extern "C" fn cuMemRetainAllocationHandle(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuPointerGetAttribute(
+pub extern "system" fn cuPointerGetAttribute(
     data: *mut ::std::os::raw::c_void,
     attribute: CUpointer_attribute,
     ptr: CUdeviceptr,
@@ -3264,7 +3264,7 @@ pub extern "C" fn cuPointerGetAttribute(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemPrefetchAsync(
+pub extern "system" fn cuMemPrefetchAsync(
     devPtr: CUdeviceptr,
     count: usize,
     dstDevice: CUdevice,
@@ -3274,7 +3274,7 @@ pub extern "C" fn cuMemPrefetchAsync(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemAdvise(
+pub extern "system" fn cuMemAdvise(
     devPtr: CUdeviceptr,
     count: usize,
     advice: CUmem_advise,
@@ -3284,7 +3284,7 @@ pub extern "C" fn cuMemAdvise(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemRangeGetAttribute(
+pub extern "system" fn cuMemRangeGetAttribute(
     data: *mut ::std::os::raw::c_void,
     dataSize: usize,
     attribute: CUmem_range_attribute,
@@ -3295,7 +3295,7 @@ pub extern "C" fn cuMemRangeGetAttribute(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuMemRangeGetAttributes(
+pub extern "system" fn cuMemRangeGetAttributes(
     data: *mut *mut ::std::os::raw::c_void,
     dataSizes: *mut usize,
     attributes: *mut CUmem_range_attribute,
@@ -3307,7 +3307,7 @@ pub extern "C" fn cuMemRangeGetAttributes(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuPointerSetAttribute(
+pub extern "system" fn cuPointerSetAttribute(
     value: *const ::std::os::raw::c_void,
     attribute: CUpointer_attribute,
     ptr: CUdeviceptr,
@@ -3316,7 +3316,7 @@ pub extern "C" fn cuPointerSetAttribute(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuPointerGetAttributes(
+pub extern "system" fn cuPointerGetAttributes(
     numAttributes: ::std::os::raw::c_uint,
     attributes: *mut CUpointer_attribute,
     data: *mut *mut ::std::os::raw::c_void,
@@ -3326,7 +3326,7 @@ pub extern "C" fn cuPointerGetAttributes(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuStreamCreate(
+pub extern "system" fn cuStreamCreate(
     phStream: *mut CUstream,
     Flags: ::std::os::raw::c_uint,
 ) -> CUresult {
@@ -3334,7 +3334,7 @@ pub extern "C" fn cuStreamCreate(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuStreamCreateWithPriority(
+pub extern "system" fn cuStreamCreateWithPriority(
     phStream: *mut CUstream,
     flags: ::std::os::raw::c_uint,
     priority: ::std::os::raw::c_int,
@@ -3343,7 +3343,7 @@ pub extern "C" fn cuStreamCreateWithPriority(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuStreamGetPriority(
+pub extern "system" fn cuStreamGetPriority(
     hStream: CUstream,
     priority: *mut ::std::os::raw::c_int,
 ) -> CUresult {
@@ -3351,7 +3351,7 @@ pub extern "C" fn cuStreamGetPriority(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuStreamGetFlags(
+pub extern "system" fn cuStreamGetFlags(
     hStream: CUstream,
     flags: *mut ::std::os::raw::c_uint,
 ) -> CUresult {
@@ -3359,18 +3359,18 @@ pub extern "C" fn cuStreamGetFlags(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuStreamGetCtx(hStream: CUstream, pctx: *mut CUcontext) -> CUresult {
+pub extern "system" fn cuStreamGetCtx(hStream: CUstream, pctx: *mut CUcontext) -> CUresult {
     r#impl::stream::get_ctx(hStream.decuda(), pctx.decuda()).encuda()
 }
 
 // TODO: implement default stream semantics
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuStreamGetCtx_ptsz(hStream: CUstream, pctx: *mut CUcontext) -> CUresult {
+pub extern "system" fn cuStreamGetCtx_ptsz(hStream: CUstream, pctx: *mut CUcontext) -> CUresult {
     r#impl::stream::get_ctx(hStream.decuda(), pctx.decuda()).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuStreamWaitEvent(
+pub extern "system" fn cuStreamWaitEvent(
     hStream: CUstream,
     hEvent: CUevent,
     Flags: ::std::os::raw::c_uint,
@@ -3379,7 +3379,7 @@ pub extern "C" fn cuStreamWaitEvent(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuStreamAddCallback(
+pub extern "system" fn cuStreamAddCallback(
     hStream: CUstream,
     callback: CUstreamCallback,
     userData: *mut ::std::os::raw::c_void,
@@ -3389,7 +3389,7 @@ pub extern "C" fn cuStreamAddCallback(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuStreamBeginCapture_v2(
+pub extern "system" fn cuStreamBeginCapture_v2(
     hStream: CUstream,
     mode: CUstreamCaptureMode,
 ) -> CUresult {
@@ -3397,17 +3397,17 @@ pub extern "C" fn cuStreamBeginCapture_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuThreadExchangeStreamCaptureMode(mode: *mut CUstreamCaptureMode) -> CUresult {
+pub extern "system" fn cuThreadExchangeStreamCaptureMode(mode: *mut CUstreamCaptureMode) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuStreamEndCapture(hStream: CUstream, phGraph: *mut CUgraph) -> CUresult {
+pub extern "system" fn cuStreamEndCapture(hStream: CUstream, phGraph: *mut CUgraph) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuStreamIsCapturing(
+pub extern "system" fn cuStreamIsCapturing(
     hStream: CUstream,
     captureStatus: *mut CUstreamCaptureStatus,
 ) -> CUresult {
@@ -3415,7 +3415,7 @@ pub extern "C" fn cuStreamIsCapturing(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuStreamGetCaptureInfo(
+pub extern "system" fn cuStreamGetCaptureInfo(
     hStream: CUstream,
     captureStatus: *mut CUstreamCaptureStatus,
     id: *mut cuuint64_t,
@@ -3424,7 +3424,7 @@ pub extern "C" fn cuStreamGetCaptureInfo(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuStreamAttachMemAsync(
+pub extern "system" fn cuStreamAttachMemAsync(
     hStream: CUstream,
     dptr: CUdeviceptr,
     length: usize,
@@ -3434,27 +3434,27 @@ pub extern "C" fn cuStreamAttachMemAsync(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuStreamQuery(hStream: CUstream) -> CUresult {
+pub extern "system" fn cuStreamQuery(hStream: CUstream) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuStreamSynchronize(hStream: CUstream) -> CUresult {
+pub extern "system" fn cuStreamSynchronize(hStream: CUstream) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuStreamDestroy_v2(hStream: CUstream) -> CUresult {
+pub extern "system" fn cuStreamDestroy_v2(hStream: CUstream) -> CUresult {
     r#impl::stream::destroy_v2(hStream.decuda()).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuStreamCopyAttributes(dst: CUstream, src: CUstream) -> CUresult {
+pub extern "system" fn cuStreamCopyAttributes(dst: CUstream, src: CUstream) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuStreamGetAttribute(
+pub extern "system" fn cuStreamGetAttribute(
     hStream: CUstream,
     attr: CUstreamAttrID,
     value_out: *mut CUstreamAttrValue,
@@ -3463,7 +3463,7 @@ pub extern "C" fn cuStreamGetAttribute(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuStreamSetAttribute(
+pub extern "system" fn cuStreamSetAttribute(
     hStream: CUstream,
     attr: CUstreamAttrID,
     value: *const CUstreamAttrValue,
@@ -3472,32 +3472,32 @@ pub extern "C" fn cuStreamSetAttribute(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuEventCreate(phEvent: *mut CUevent, Flags: ::std::os::raw::c_uint) -> CUresult {
+pub extern "system" fn cuEventCreate(phEvent: *mut CUevent, Flags: ::std::os::raw::c_uint) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuEventRecord(hEvent: CUevent, hStream: CUstream) -> CUresult {
+pub extern "system" fn cuEventRecord(hEvent: CUevent, hStream: CUstream) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuEventQuery(hEvent: CUevent) -> CUresult {
+pub extern "system" fn cuEventQuery(hEvent: CUevent) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuEventSynchronize(hEvent: CUevent) -> CUresult {
+pub extern "system" fn cuEventSynchronize(hEvent: CUevent) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuEventDestroy_v2(hEvent: CUevent) -> CUresult {
+pub extern "system" fn cuEventDestroy_v2(hEvent: CUevent) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuEventElapsedTime(
+pub extern "system" fn cuEventElapsedTime(
     pMilliseconds: *mut f32,
     hStart: CUevent,
     hEnd: CUevent,
@@ -3506,7 +3506,7 @@ pub extern "C" fn cuEventElapsedTime(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuImportExternalMemory(
+pub extern "system" fn cuImportExternalMemory(
     extMem_out: *mut CUexternalMemory,
     memHandleDesc: *const CUDA_EXTERNAL_MEMORY_HANDLE_DESC,
 ) -> CUresult {
@@ -3514,7 +3514,7 @@ pub extern "C" fn cuImportExternalMemory(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuExternalMemoryGetMappedBuffer(
+pub extern "system" fn cuExternalMemoryGetMappedBuffer(
     devPtr: *mut CUdeviceptr,
     extMem: CUexternalMemory,
     bufferDesc: *const CUDA_EXTERNAL_MEMORY_BUFFER_DESC,
@@ -3523,7 +3523,7 @@ pub extern "C" fn cuExternalMemoryGetMappedBuffer(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuExternalMemoryGetMappedMipmappedArray(
+pub extern "system" fn cuExternalMemoryGetMappedMipmappedArray(
     mipmap: *mut CUmipmappedArray,
     extMem: CUexternalMemory,
     mipmapDesc: *const CUDA_EXTERNAL_MEMORY_MIPMAPPED_ARRAY_DESC,
@@ -3532,12 +3532,12 @@ pub extern "C" fn cuExternalMemoryGetMappedMipmappedArray(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuDestroyExternalMemory(extMem: CUexternalMemory) -> CUresult {
+pub extern "system" fn cuDestroyExternalMemory(extMem: CUexternalMemory) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuImportExternalSemaphore(
+pub extern "system" fn cuImportExternalSemaphore(
     extSem_out: *mut CUexternalSemaphore,
     semHandleDesc: *const CUDA_EXTERNAL_SEMAPHORE_HANDLE_DESC,
 ) -> CUresult {
@@ -3545,7 +3545,7 @@ pub extern "C" fn cuImportExternalSemaphore(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuSignalExternalSemaphoresAsync(
+pub extern "system" fn cuSignalExternalSemaphoresAsync(
     extSemArray: *const CUexternalSemaphore,
     paramsArray: *const CUDA_EXTERNAL_SEMAPHORE_SIGNAL_PARAMS,
     numExtSems: ::std::os::raw::c_uint,
@@ -3555,7 +3555,7 @@ pub extern "C" fn cuSignalExternalSemaphoresAsync(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuWaitExternalSemaphoresAsync(
+pub extern "system" fn cuWaitExternalSemaphoresAsync(
     extSemArray: *const CUexternalSemaphore,
     paramsArray: *const CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS,
     numExtSems: ::std::os::raw::c_uint,
@@ -3565,12 +3565,12 @@ pub extern "C" fn cuWaitExternalSemaphoresAsync(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuDestroyExternalSemaphore(extSem: CUexternalSemaphore) -> CUresult {
+pub extern "system" fn cuDestroyExternalSemaphore(extSem: CUexternalSemaphore) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuStreamWaitValue32(
+pub extern "system" fn cuStreamWaitValue32(
     stream: CUstream,
     addr: CUdeviceptr,
     value: cuuint32_t,
@@ -3580,7 +3580,7 @@ pub extern "C" fn cuStreamWaitValue32(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuStreamWaitValue64(
+pub extern "system" fn cuStreamWaitValue64(
     stream: CUstream,
     addr: CUdeviceptr,
     value: cuuint64_t,
@@ -3590,7 +3590,7 @@ pub extern "C" fn cuStreamWaitValue64(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuStreamWriteValue32(
+pub extern "system" fn cuStreamWriteValue32(
     stream: CUstream,
     addr: CUdeviceptr,
     value: cuuint32_t,
@@ -3600,7 +3600,7 @@ pub extern "C" fn cuStreamWriteValue32(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuStreamWriteValue64(
+pub extern "system" fn cuStreamWriteValue64(
     stream: CUstream,
     addr: CUdeviceptr,
     value: cuuint64_t,
@@ -3610,7 +3610,7 @@ pub extern "C" fn cuStreamWriteValue64(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuStreamBatchMemOp(
+pub extern "system" fn cuStreamBatchMemOp(
     stream: CUstream,
     count: ::std::os::raw::c_uint,
     paramArray: *mut CUstreamBatchMemOpParams,
@@ -3620,7 +3620,7 @@ pub extern "C" fn cuStreamBatchMemOp(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuFuncGetAttribute(
+pub extern "system" fn cuFuncGetAttribute(
     pi: *mut ::std::os::raw::c_int,
     attrib: CUfunction_attribute,
     hfunc: CUfunction,
@@ -3629,7 +3629,7 @@ pub extern "C" fn cuFuncGetAttribute(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuFuncSetAttribute(
+pub extern "system" fn cuFuncSetAttribute(
     hfunc: CUfunction,
     attrib: CUfunction_attribute,
     value: ::std::os::raw::c_int,
@@ -3638,17 +3638,17 @@ pub extern "C" fn cuFuncSetAttribute(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuFuncSetCacheConfig(hfunc: CUfunction, config: CUfunc_cache) -> CUresult {
+pub extern "system" fn cuFuncSetCacheConfig(hfunc: CUfunction, config: CUfunc_cache) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuFuncSetSharedMemConfig(hfunc: CUfunction, config: CUsharedconfig) -> CUresult {
+pub extern "system" fn cuFuncSetSharedMemConfig(hfunc: CUfunction, config: CUsharedconfig) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuLaunchKernel(
+pub extern "system" fn cuLaunchKernel(
     f: CUfunction,
     gridDimX: ::std::os::raw::c_uint,
     gridDimY: ::std::os::raw::c_uint,
@@ -3679,7 +3679,7 @@ pub extern "C" fn cuLaunchKernel(
 
 // TODO: implement default stream semantics
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuLaunchKernel_ptsz(
+pub extern "system" fn cuLaunchKernel_ptsz(
     f: CUfunction,
     gridDimX: ::std::os::raw::c_uint,
     gridDimY: ::std::os::raw::c_uint,
@@ -3709,7 +3709,7 @@ pub extern "C" fn cuLaunchKernel_ptsz(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuLaunchCooperativeKernel(
+pub extern "system" fn cuLaunchCooperativeKernel(
     f: CUfunction,
     gridDimX: ::std::os::raw::c_uint,
     gridDimY: ::std::os::raw::c_uint,
@@ -3725,7 +3725,7 @@ pub extern "C" fn cuLaunchCooperativeKernel(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuLaunchCooperativeKernelMultiDevice(
+pub extern "system" fn cuLaunchCooperativeKernelMultiDevice(
     launchParamsList: *mut CUDA_LAUNCH_PARAMS,
     numDevices: ::std::os::raw::c_uint,
     flags: ::std::os::raw::c_uint,
@@ -3734,7 +3734,7 @@ pub extern "C" fn cuLaunchCooperativeKernelMultiDevice(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuLaunchHostFunc(
+pub extern "system" fn cuLaunchHostFunc(
     hStream: CUstream,
     fn_: CUhostFn,
     userData: *mut ::std::os::raw::c_void,
@@ -3743,7 +3743,7 @@ pub extern "C" fn cuLaunchHostFunc(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuFuncSetBlockShape(
+pub extern "system" fn cuFuncSetBlockShape(
     hfunc: CUfunction,
     x: ::std::os::raw::c_int,
     y: ::std::os::raw::c_int,
@@ -3753,7 +3753,7 @@ pub extern "C" fn cuFuncSetBlockShape(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuFuncSetSharedSize(
+pub extern "system" fn cuFuncSetSharedSize(
     hfunc: CUfunction,
     bytes: ::std::os::raw::c_uint,
 ) -> CUresult {
@@ -3761,12 +3761,12 @@ pub extern "C" fn cuFuncSetSharedSize(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuParamSetSize(hfunc: CUfunction, numbytes: ::std::os::raw::c_uint) -> CUresult {
+pub extern "system" fn cuParamSetSize(hfunc: CUfunction, numbytes: ::std::os::raw::c_uint) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuParamSeti(
+pub extern "system" fn cuParamSeti(
     hfunc: CUfunction,
     offset: ::std::os::raw::c_int,
     value: ::std::os::raw::c_uint,
@@ -3775,7 +3775,7 @@ pub extern "C" fn cuParamSeti(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuParamSetf(
+pub extern "system" fn cuParamSetf(
     hfunc: CUfunction,
     offset: ::std::os::raw::c_int,
     value: f32,
@@ -3784,7 +3784,7 @@ pub extern "C" fn cuParamSetf(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuParamSetv(
+pub extern "system" fn cuParamSetv(
     hfunc: CUfunction,
     offset: ::std::os::raw::c_int,
     ptr: *mut ::std::os::raw::c_void,
@@ -3794,12 +3794,12 @@ pub extern "C" fn cuParamSetv(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuLaunch(f: CUfunction) -> CUresult {
+pub extern "system" fn cuLaunch(f: CUfunction) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuLaunchGrid(
+pub extern "system" fn cuLaunchGrid(
     f: CUfunction,
     grid_width: ::std::os::raw::c_int,
     grid_height: ::std::os::raw::c_int,
@@ -3808,7 +3808,7 @@ pub extern "C" fn cuLaunchGrid(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuLaunchGridAsync(
+pub extern "system" fn cuLaunchGridAsync(
     f: CUfunction,
     grid_width: ::std::os::raw::c_int,
     grid_height: ::std::os::raw::c_int,
@@ -3818,7 +3818,7 @@ pub extern "C" fn cuLaunchGridAsync(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuParamSetTexRef(
+pub extern "system" fn cuParamSetTexRef(
     hfunc: CUfunction,
     texunit: ::std::os::raw::c_int,
     hTexRef: CUtexref,
@@ -3827,12 +3827,12 @@ pub extern "C" fn cuParamSetTexRef(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphCreate(phGraph: *mut CUgraph, flags: ::std::os::raw::c_uint) -> CUresult {
+pub extern "system" fn cuGraphCreate(phGraph: *mut CUgraph, flags: ::std::os::raw::c_uint) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphAddKernelNode(
+pub extern "system" fn cuGraphAddKernelNode(
     phGraphNode: *mut CUgraphNode,
     hGraph: CUgraph,
     dependencies: *const CUgraphNode,
@@ -3843,7 +3843,7 @@ pub extern "C" fn cuGraphAddKernelNode(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphKernelNodeGetParams(
+pub extern "system" fn cuGraphKernelNodeGetParams(
     hNode: CUgraphNode,
     nodeParams: *mut CUDA_KERNEL_NODE_PARAMS,
 ) -> CUresult {
@@ -3851,7 +3851,7 @@ pub extern "C" fn cuGraphKernelNodeGetParams(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphKernelNodeSetParams(
+pub extern "system" fn cuGraphKernelNodeSetParams(
     hNode: CUgraphNode,
     nodeParams: *const CUDA_KERNEL_NODE_PARAMS,
 ) -> CUresult {
@@ -3859,7 +3859,7 @@ pub extern "C" fn cuGraphKernelNodeSetParams(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphAddMemcpyNode(
+pub extern "system" fn cuGraphAddMemcpyNode(
     phGraphNode: *mut CUgraphNode,
     hGraph: CUgraph,
     dependencies: *const CUgraphNode,
@@ -3871,7 +3871,7 @@ pub extern "C" fn cuGraphAddMemcpyNode(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphMemcpyNodeGetParams(
+pub extern "system" fn cuGraphMemcpyNodeGetParams(
     hNode: CUgraphNode,
     nodeParams: *mut CUDA_MEMCPY3D,
 ) -> CUresult {
@@ -3879,7 +3879,7 @@ pub extern "C" fn cuGraphMemcpyNodeGetParams(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphMemcpyNodeSetParams(
+pub extern "system" fn cuGraphMemcpyNodeSetParams(
     hNode: CUgraphNode,
     nodeParams: *const CUDA_MEMCPY3D,
 ) -> CUresult {
@@ -3887,7 +3887,7 @@ pub extern "C" fn cuGraphMemcpyNodeSetParams(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphAddMemsetNode(
+pub extern "system" fn cuGraphAddMemsetNode(
     phGraphNode: *mut CUgraphNode,
     hGraph: CUgraph,
     dependencies: *const CUgraphNode,
@@ -3899,7 +3899,7 @@ pub extern "C" fn cuGraphAddMemsetNode(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphMemsetNodeGetParams(
+pub extern "system" fn cuGraphMemsetNodeGetParams(
     hNode: CUgraphNode,
     nodeParams: *mut CUDA_MEMSET_NODE_PARAMS,
 ) -> CUresult {
@@ -3907,7 +3907,7 @@ pub extern "C" fn cuGraphMemsetNodeGetParams(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphMemsetNodeSetParams(
+pub extern "system" fn cuGraphMemsetNodeSetParams(
     hNode: CUgraphNode,
     nodeParams: *const CUDA_MEMSET_NODE_PARAMS,
 ) -> CUresult {
@@ -3915,7 +3915,7 @@ pub extern "C" fn cuGraphMemsetNodeSetParams(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphAddHostNode(
+pub extern "system" fn cuGraphAddHostNode(
     phGraphNode: *mut CUgraphNode,
     hGraph: CUgraph,
     dependencies: *const CUgraphNode,
@@ -3926,7 +3926,7 @@ pub extern "C" fn cuGraphAddHostNode(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphHostNodeGetParams(
+pub extern "system" fn cuGraphHostNodeGetParams(
     hNode: CUgraphNode,
     nodeParams: *mut CUDA_HOST_NODE_PARAMS,
 ) -> CUresult {
@@ -3934,7 +3934,7 @@ pub extern "C" fn cuGraphHostNodeGetParams(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphHostNodeSetParams(
+pub extern "system" fn cuGraphHostNodeSetParams(
     hNode: CUgraphNode,
     nodeParams: *const CUDA_HOST_NODE_PARAMS,
 ) -> CUresult {
@@ -3942,7 +3942,7 @@ pub extern "C" fn cuGraphHostNodeSetParams(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphAddChildGraphNode(
+pub extern "system" fn cuGraphAddChildGraphNode(
     phGraphNode: *mut CUgraphNode,
     hGraph: CUgraph,
     dependencies: *const CUgraphNode,
@@ -3953,7 +3953,7 @@ pub extern "C" fn cuGraphAddChildGraphNode(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphChildGraphNodeGetGraph(
+pub extern "system" fn cuGraphChildGraphNodeGetGraph(
     hNode: CUgraphNode,
     phGraph: *mut CUgraph,
 ) -> CUresult {
@@ -3961,7 +3961,7 @@ pub extern "C" fn cuGraphChildGraphNodeGetGraph(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphAddEmptyNode(
+pub extern "system" fn cuGraphAddEmptyNode(
     phGraphNode: *mut CUgraphNode,
     hGraph: CUgraph,
     dependencies: *const CUgraphNode,
@@ -3971,12 +3971,12 @@ pub extern "C" fn cuGraphAddEmptyNode(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphClone(phGraphClone: *mut CUgraph, originalGraph: CUgraph) -> CUresult {
+pub extern "system" fn cuGraphClone(phGraphClone: *mut CUgraph, originalGraph: CUgraph) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphNodeFindInClone(
+pub extern "system" fn cuGraphNodeFindInClone(
     phNode: *mut CUgraphNode,
     hOriginalNode: CUgraphNode,
     hClonedGraph: CUgraph,
@@ -3985,12 +3985,12 @@ pub extern "C" fn cuGraphNodeFindInClone(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphNodeGetType(hNode: CUgraphNode, type_: *mut CUgraphNodeType) -> CUresult {
+pub extern "system" fn cuGraphNodeGetType(hNode: CUgraphNode, type_: *mut CUgraphNodeType) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphGetNodes(
+pub extern "system" fn cuGraphGetNodes(
     hGraph: CUgraph,
     nodes: *mut CUgraphNode,
     numNodes: *mut usize,
@@ -3999,7 +3999,7 @@ pub extern "C" fn cuGraphGetNodes(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphGetRootNodes(
+pub extern "system" fn cuGraphGetRootNodes(
     hGraph: CUgraph,
     rootNodes: *mut CUgraphNode,
     numRootNodes: *mut usize,
@@ -4008,7 +4008,7 @@ pub extern "C" fn cuGraphGetRootNodes(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphGetEdges(
+pub extern "system" fn cuGraphGetEdges(
     hGraph: CUgraph,
     from: *mut CUgraphNode,
     to: *mut CUgraphNode,
@@ -4018,7 +4018,7 @@ pub extern "C" fn cuGraphGetEdges(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphNodeGetDependencies(
+pub extern "system" fn cuGraphNodeGetDependencies(
     hNode: CUgraphNode,
     dependencies: *mut CUgraphNode,
     numDependencies: *mut usize,
@@ -4027,7 +4027,7 @@ pub extern "C" fn cuGraphNodeGetDependencies(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphNodeGetDependentNodes(
+pub extern "system" fn cuGraphNodeGetDependentNodes(
     hNode: CUgraphNode,
     dependentNodes: *mut CUgraphNode,
     numDependentNodes: *mut usize,
@@ -4036,7 +4036,7 @@ pub extern "C" fn cuGraphNodeGetDependentNodes(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphAddDependencies(
+pub extern "system" fn cuGraphAddDependencies(
     hGraph: CUgraph,
     from: *const CUgraphNode,
     to: *const CUgraphNode,
@@ -4046,7 +4046,7 @@ pub extern "C" fn cuGraphAddDependencies(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphRemoveDependencies(
+pub extern "system" fn cuGraphRemoveDependencies(
     hGraph: CUgraph,
     from: *const CUgraphNode,
     to: *const CUgraphNode,
@@ -4056,12 +4056,12 @@ pub extern "C" fn cuGraphRemoveDependencies(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphDestroyNode(hNode: CUgraphNode) -> CUresult {
+pub extern "system" fn cuGraphDestroyNode(hNode: CUgraphNode) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphInstantiate_v2(
+pub extern "system" fn cuGraphInstantiate_v2(
     phGraphExec: *mut CUgraphExec,
     hGraph: CUgraph,
     phErrorNode: *mut CUgraphNode,
@@ -4072,7 +4072,7 @@ pub extern "C" fn cuGraphInstantiate_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphExecKernelNodeSetParams(
+pub extern "system" fn cuGraphExecKernelNodeSetParams(
     hGraphExec: CUgraphExec,
     hNode: CUgraphNode,
     nodeParams: *const CUDA_KERNEL_NODE_PARAMS,
@@ -4081,7 +4081,7 @@ pub extern "C" fn cuGraphExecKernelNodeSetParams(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphExecMemcpyNodeSetParams(
+pub extern "system" fn cuGraphExecMemcpyNodeSetParams(
     hGraphExec: CUgraphExec,
     hNode: CUgraphNode,
     copyParams: *const CUDA_MEMCPY3D,
@@ -4091,7 +4091,7 @@ pub extern "C" fn cuGraphExecMemcpyNodeSetParams(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphExecMemsetNodeSetParams(
+pub extern "system" fn cuGraphExecMemsetNodeSetParams(
     hGraphExec: CUgraphExec,
     hNode: CUgraphNode,
     memsetParams: *const CUDA_MEMSET_NODE_PARAMS,
@@ -4101,7 +4101,7 @@ pub extern "C" fn cuGraphExecMemsetNodeSetParams(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphExecHostNodeSetParams(
+pub extern "system" fn cuGraphExecHostNodeSetParams(
     hGraphExec: CUgraphExec,
     hNode: CUgraphNode,
     nodeParams: *const CUDA_HOST_NODE_PARAMS,
@@ -4110,22 +4110,22 @@ pub extern "C" fn cuGraphExecHostNodeSetParams(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphLaunch(hGraphExec: CUgraphExec, hStream: CUstream) -> CUresult {
+pub extern "system" fn cuGraphLaunch(hGraphExec: CUgraphExec, hStream: CUstream) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphExecDestroy(hGraphExec: CUgraphExec) -> CUresult {
+pub extern "system" fn cuGraphExecDestroy(hGraphExec: CUgraphExec) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphDestroy(hGraph: CUgraph) -> CUresult {
+pub extern "system" fn cuGraphDestroy(hGraph: CUgraph) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphExecUpdate(
+pub extern "system" fn cuGraphExecUpdate(
     hGraphExec: CUgraphExec,
     hGraph: CUgraph,
     hErrorNode_out: *mut CUgraphNode,
@@ -4135,12 +4135,12 @@ pub extern "C" fn cuGraphExecUpdate(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphKernelNodeCopyAttributes(dst: CUgraphNode, src: CUgraphNode) -> CUresult {
+pub extern "system" fn cuGraphKernelNodeCopyAttributes(dst: CUgraphNode, src: CUgraphNode) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphKernelNodeGetAttribute(
+pub extern "system" fn cuGraphKernelNodeGetAttribute(
     hNode: CUgraphNode,
     attr: CUkernelNodeAttrID,
     value_out: *mut CUkernelNodeAttrValue,
@@ -4149,7 +4149,7 @@ pub extern "C" fn cuGraphKernelNodeGetAttribute(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphKernelNodeSetAttribute(
+pub extern "system" fn cuGraphKernelNodeSetAttribute(
     hNode: CUgraphNode,
     attr: CUkernelNodeAttrID,
     value: *const CUkernelNodeAttrValue,
@@ -4158,7 +4158,7 @@ pub extern "C" fn cuGraphKernelNodeSetAttribute(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuOccupancyMaxActiveBlocksPerMultiprocessor(
+pub extern "system" fn cuOccupancyMaxActiveBlocksPerMultiprocessor(
     numBlocks: *mut ::std::os::raw::c_int,
     func: CUfunction,
     blockSize: ::std::os::raw::c_int,
@@ -4168,7 +4168,7 @@ pub extern "C" fn cuOccupancyMaxActiveBlocksPerMultiprocessor(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
+pub extern "system" fn cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
     numBlocks: *mut ::std::os::raw::c_int,
     func: CUfunction,
     blockSize: ::std::os::raw::c_int,
@@ -4179,7 +4179,7 @@ pub extern "C" fn cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuOccupancyMaxPotentialBlockSize(
+pub extern "system" fn cuOccupancyMaxPotentialBlockSize(
     minGridSize: *mut ::std::os::raw::c_int,
     blockSize: *mut ::std::os::raw::c_int,
     func: CUfunction,
@@ -4191,7 +4191,7 @@ pub extern "C" fn cuOccupancyMaxPotentialBlockSize(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuOccupancyMaxPotentialBlockSizeWithFlags(
+pub extern "system" fn cuOccupancyMaxPotentialBlockSizeWithFlags(
     minGridSize: *mut ::std::os::raw::c_int,
     blockSize: *mut ::std::os::raw::c_int,
     func: CUfunction,
@@ -4204,7 +4204,7 @@ pub extern "C" fn cuOccupancyMaxPotentialBlockSizeWithFlags(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuOccupancyAvailableDynamicSMemPerBlock(
+pub extern "system" fn cuOccupancyAvailableDynamicSMemPerBlock(
     dynamicSmemSize: *mut usize,
     func: CUfunction,
     numBlocks: ::std::os::raw::c_int,
@@ -4214,7 +4214,7 @@ pub extern "C" fn cuOccupancyAvailableDynamicSMemPerBlock(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefSetArray(
+pub extern "system" fn cuTexRefSetArray(
     hTexRef: CUtexref,
     hArray: CUarray,
     Flags: ::std::os::raw::c_uint,
@@ -4223,7 +4223,7 @@ pub extern "C" fn cuTexRefSetArray(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefSetMipmappedArray(
+pub extern "system" fn cuTexRefSetMipmappedArray(
     hTexRef: CUtexref,
     hMipmappedArray: CUmipmappedArray,
     Flags: ::std::os::raw::c_uint,
@@ -4232,7 +4232,7 @@ pub extern "C" fn cuTexRefSetMipmappedArray(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefSetAddress_v2(
+pub extern "system" fn cuTexRefSetAddress_v2(
     ByteOffset: *mut usize,
     hTexRef: CUtexref,
     dptr: CUdeviceptr,
@@ -4242,7 +4242,7 @@ pub extern "C" fn cuTexRefSetAddress_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefSetAddress2D_v3(
+pub extern "system" fn cuTexRefSetAddress2D_v3(
     hTexRef: CUtexref,
     desc: *const CUDA_ARRAY_DESCRIPTOR,
     dptr: CUdeviceptr,
@@ -4252,7 +4252,7 @@ pub extern "C" fn cuTexRefSetAddress2D_v3(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefSetFormat(
+pub extern "system" fn cuTexRefSetFormat(
     hTexRef: CUtexref,
     fmt: CUarray_format,
     NumPackedComponents: ::std::os::raw::c_int,
@@ -4261,7 +4261,7 @@ pub extern "C" fn cuTexRefSetFormat(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefSetAddressMode(
+pub extern "system" fn cuTexRefSetAddressMode(
     hTexRef: CUtexref,
     dim: ::std::os::raw::c_int,
     am: CUaddress_mode,
@@ -4270,22 +4270,22 @@ pub extern "C" fn cuTexRefSetAddressMode(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefSetFilterMode(hTexRef: CUtexref, fm: CUfilter_mode) -> CUresult {
+pub extern "system" fn cuTexRefSetFilterMode(hTexRef: CUtexref, fm: CUfilter_mode) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefSetMipmapFilterMode(hTexRef: CUtexref, fm: CUfilter_mode) -> CUresult {
+pub extern "system" fn cuTexRefSetMipmapFilterMode(hTexRef: CUtexref, fm: CUfilter_mode) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefSetMipmapLevelBias(hTexRef: CUtexref, bias: f32) -> CUresult {
+pub extern "system" fn cuTexRefSetMipmapLevelBias(hTexRef: CUtexref, bias: f32) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefSetMipmapLevelClamp(
+pub extern "system" fn cuTexRefSetMipmapLevelClamp(
     hTexRef: CUtexref,
     minMipmapLevelClamp: f32,
     maxMipmapLevelClamp: f32,
@@ -4294,7 +4294,7 @@ pub extern "C" fn cuTexRefSetMipmapLevelClamp(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefSetMaxAnisotropy(
+pub extern "system" fn cuTexRefSetMaxAnisotropy(
     hTexRef: CUtexref,
     maxAniso: ::std::os::raw::c_uint,
 ) -> CUresult {
@@ -4302,27 +4302,27 @@ pub extern "C" fn cuTexRefSetMaxAnisotropy(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefSetBorderColor(hTexRef: CUtexref, pBorderColor: *mut f32) -> CUresult {
+pub extern "system" fn cuTexRefSetBorderColor(hTexRef: CUtexref, pBorderColor: *mut f32) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefSetFlags(hTexRef: CUtexref, Flags: ::std::os::raw::c_uint) -> CUresult {
+pub extern "system" fn cuTexRefSetFlags(hTexRef: CUtexref, Flags: ::std::os::raw::c_uint) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefGetAddress_v2(pdptr: *mut CUdeviceptr, hTexRef: CUtexref) -> CUresult {
+pub extern "system" fn cuTexRefGetAddress_v2(pdptr: *mut CUdeviceptr, hTexRef: CUtexref) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefGetArray(phArray: *mut CUarray, hTexRef: CUtexref) -> CUresult {
+pub extern "system" fn cuTexRefGetArray(phArray: *mut CUarray, hTexRef: CUtexref) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefGetMipmappedArray(
+pub extern "system" fn cuTexRefGetMipmappedArray(
     phMipmappedArray: *mut CUmipmappedArray,
     hTexRef: CUtexref,
 ) -> CUresult {
@@ -4330,7 +4330,7 @@ pub extern "C" fn cuTexRefGetMipmappedArray(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefGetAddressMode(
+pub extern "system" fn cuTexRefGetAddressMode(
     pam: *mut CUaddress_mode,
     hTexRef: CUtexref,
     dim: ::std::os::raw::c_int,
@@ -4339,12 +4339,12 @@ pub extern "C" fn cuTexRefGetAddressMode(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefGetFilterMode(pfm: *mut CUfilter_mode, hTexRef: CUtexref) -> CUresult {
+pub extern "system" fn cuTexRefGetFilterMode(pfm: *mut CUfilter_mode, hTexRef: CUtexref) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefGetFormat(
+pub extern "system" fn cuTexRefGetFormat(
     pFormat: *mut CUarray_format,
     pNumChannels: *mut ::std::os::raw::c_int,
     hTexRef: CUtexref,
@@ -4353,7 +4353,7 @@ pub extern "C" fn cuTexRefGetFormat(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefGetMipmapFilterMode(
+pub extern "system" fn cuTexRefGetMipmapFilterMode(
     pfm: *mut CUfilter_mode,
     hTexRef: CUtexref,
 ) -> CUresult {
@@ -4361,12 +4361,12 @@ pub extern "C" fn cuTexRefGetMipmapFilterMode(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefGetMipmapLevelBias(pbias: *mut f32, hTexRef: CUtexref) -> CUresult {
+pub extern "system" fn cuTexRefGetMipmapLevelBias(pbias: *mut f32, hTexRef: CUtexref) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefGetMipmapLevelClamp(
+pub extern "system" fn cuTexRefGetMipmapLevelClamp(
     pminMipmapLevelClamp: *mut f32,
     pmaxMipmapLevelClamp: *mut f32,
     hTexRef: CUtexref,
@@ -4375,7 +4375,7 @@ pub extern "C" fn cuTexRefGetMipmapLevelClamp(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefGetMaxAnisotropy(
+pub extern "system" fn cuTexRefGetMaxAnisotropy(
     pmaxAniso: *mut ::std::os::raw::c_int,
     hTexRef: CUtexref,
 ) -> CUresult {
@@ -4383,12 +4383,12 @@ pub extern "C" fn cuTexRefGetMaxAnisotropy(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefGetBorderColor(pBorderColor: *mut f32, hTexRef: CUtexref) -> CUresult {
+pub extern "system" fn cuTexRefGetBorderColor(pBorderColor: *mut f32, hTexRef: CUtexref) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefGetFlags(
+pub extern "system" fn cuTexRefGetFlags(
     pFlags: *mut ::std::os::raw::c_uint,
     hTexRef: CUtexref,
 ) -> CUresult {
@@ -4396,17 +4396,17 @@ pub extern "C" fn cuTexRefGetFlags(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefCreate(pTexRef: *mut CUtexref) -> CUresult {
+pub extern "system" fn cuTexRefCreate(pTexRef: *mut CUtexref) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexRefDestroy(hTexRef: CUtexref) -> CUresult {
+pub extern "system" fn cuTexRefDestroy(hTexRef: CUtexref) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuSurfRefSetArray(
+pub extern "system" fn cuSurfRefSetArray(
     hSurfRef: CUsurfref,
     hArray: CUarray,
     Flags: ::std::os::raw::c_uint,
@@ -4415,12 +4415,12 @@ pub extern "C" fn cuSurfRefSetArray(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuSurfRefGetArray(phArray: *mut CUarray, hSurfRef: CUsurfref) -> CUresult {
+pub extern "system" fn cuSurfRefGetArray(phArray: *mut CUarray, hSurfRef: CUsurfref) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexObjectCreate(
+pub extern "system" fn cuTexObjectCreate(
     pTexObject: *mut CUtexObject,
     pResDesc: *const CUDA_RESOURCE_DESC,
     pTexDesc: *const CUDA_TEXTURE_DESC,
@@ -4430,12 +4430,12 @@ pub extern "C" fn cuTexObjectCreate(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexObjectDestroy(texObject: CUtexObject) -> CUresult {
+pub extern "system" fn cuTexObjectDestroy(texObject: CUtexObject) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexObjectGetResourceDesc(
+pub extern "system" fn cuTexObjectGetResourceDesc(
     pResDesc: *mut CUDA_RESOURCE_DESC,
     texObject: CUtexObject,
 ) -> CUresult {
@@ -4443,7 +4443,7 @@ pub extern "C" fn cuTexObjectGetResourceDesc(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexObjectGetTextureDesc(
+pub extern "system" fn cuTexObjectGetTextureDesc(
     pTexDesc: *mut CUDA_TEXTURE_DESC,
     texObject: CUtexObject,
 ) -> CUresult {
@@ -4451,7 +4451,7 @@ pub extern "C" fn cuTexObjectGetTextureDesc(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuTexObjectGetResourceViewDesc(
+pub extern "system" fn cuTexObjectGetResourceViewDesc(
     pResViewDesc: *mut CUDA_RESOURCE_VIEW_DESC,
     texObject: CUtexObject,
 ) -> CUresult {
@@ -4459,7 +4459,7 @@ pub extern "C" fn cuTexObjectGetResourceViewDesc(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuSurfObjectCreate(
+pub extern "system" fn cuSurfObjectCreate(
     pSurfObject: *mut CUsurfObject,
     pResDesc: *const CUDA_RESOURCE_DESC,
 ) -> CUresult {
@@ -4467,12 +4467,12 @@ pub extern "C" fn cuSurfObjectCreate(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuSurfObjectDestroy(surfObject: CUsurfObject) -> CUresult {
+pub extern "system" fn cuSurfObjectDestroy(surfObject: CUsurfObject) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuSurfObjectGetResourceDesc(
+pub extern "system" fn cuSurfObjectGetResourceDesc(
     pResDesc: *mut CUDA_RESOURCE_DESC,
     surfObject: CUsurfObject,
 ) -> CUresult {
@@ -4480,7 +4480,7 @@ pub extern "C" fn cuSurfObjectGetResourceDesc(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuDeviceCanAccessPeer(
+pub extern "system" fn cuDeviceCanAccessPeer(
     canAccessPeer: *mut ::std::os::raw::c_int,
     dev: CUdevice,
     peerDev: CUdevice,
@@ -4489,7 +4489,7 @@ pub extern "C" fn cuDeviceCanAccessPeer(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuCtxEnablePeerAccess(
+pub extern "system" fn cuCtxEnablePeerAccess(
     peerContext: CUcontext,
     Flags: ::std::os::raw::c_uint,
 ) -> CUresult {
@@ -4497,12 +4497,12 @@ pub extern "C" fn cuCtxEnablePeerAccess(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuCtxDisablePeerAccess(peerContext: CUcontext) -> CUresult {
+pub extern "system" fn cuCtxDisablePeerAccess(peerContext: CUcontext) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuDeviceGetP2PAttribute(
+pub extern "system" fn cuDeviceGetP2PAttribute(
     value: *mut ::std::os::raw::c_int,
     attrib: CUdevice_P2PAttribute,
     srcDevice: CUdevice,
@@ -4512,12 +4512,12 @@ pub extern "C" fn cuDeviceGetP2PAttribute(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphicsUnregisterResource(resource: CUgraphicsResource) -> CUresult {
+pub extern "system" fn cuGraphicsUnregisterResource(resource: CUgraphicsResource) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphicsSubResourceGetMappedArray(
+pub extern "system" fn cuGraphicsSubResourceGetMappedArray(
     pArray: *mut CUarray,
     resource: CUgraphicsResource,
     arrayIndex: ::std::os::raw::c_uint,
@@ -4527,7 +4527,7 @@ pub extern "C" fn cuGraphicsSubResourceGetMappedArray(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphicsResourceGetMappedMipmappedArray(
+pub extern "system" fn cuGraphicsResourceGetMappedMipmappedArray(
     pMipmappedArray: *mut CUmipmappedArray,
     resource: CUgraphicsResource,
 ) -> CUresult {
@@ -4535,7 +4535,7 @@ pub extern "C" fn cuGraphicsResourceGetMappedMipmappedArray(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphicsResourceGetMappedPointer_v2(
+pub extern "system" fn cuGraphicsResourceGetMappedPointer_v2(
     pDevPtr: *mut CUdeviceptr,
     pSize: *mut usize,
     resource: CUgraphicsResource,
@@ -4544,7 +4544,7 @@ pub extern "C" fn cuGraphicsResourceGetMappedPointer_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphicsResourceSetMapFlags_v2(
+pub extern "system" fn cuGraphicsResourceSetMapFlags_v2(
     resource: CUgraphicsResource,
     flags: ::std::os::raw::c_uint,
 ) -> CUresult {
@@ -4552,7 +4552,7 @@ pub extern "C" fn cuGraphicsResourceSetMapFlags_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphicsMapResources(
+pub extern "system" fn cuGraphicsMapResources(
     count: ::std::os::raw::c_uint,
     resources: *mut CUgraphicsResource,
     hStream: CUstream,
@@ -4561,7 +4561,7 @@ pub extern "C" fn cuGraphicsMapResources(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGraphicsUnmapResources(
+pub extern "system" fn cuGraphicsUnmapResources(
     count: ::std::os::raw::c_uint,
     resources: *mut CUgraphicsResource,
     hStream: CUstream,
@@ -4570,7 +4570,7 @@ pub extern "C" fn cuGraphicsUnmapResources(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuGetExportTable(
+pub extern "system" fn cuGetExportTable(
     ppExportTable: *mut *const ::std::os::raw::c_void,
     pExportTableId: *const CUuuid,
 ) -> CUresult {
@@ -4578,7 +4578,7 @@ pub extern "C" fn cuGetExportTable(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuFuncGetModule(hmod: *mut CUmodule, hfunc: CUfunction) -> CUresult {
+pub extern "system" fn cuFuncGetModule(hmod: *mut CUmodule, hfunc: CUfunction) -> CUresult {
     r#impl::unimplemented()
 }
 
@@ -4594,7 +4594,7 @@ pub struct CUoutput_mode_enum(pub ::std::os::raw::c_uint);
 pub use self::CUoutput_mode_enum as CUoutput_mode;
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuProfilerInitialize(
+pub extern "system" fn cuProfilerInitialize(
     configFile: *const ::std::os::raw::c_char,
     outputFile: *const ::std::os::raw::c_char,
     outputMode: CUoutput_mode,
@@ -4603,11 +4603,11 @@ pub extern "C" fn cuProfilerInitialize(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuProfilerStart() -> CUresult {
+pub extern "system" fn cuProfilerStart() -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "C" fn cuProfilerStop() -> CUresult {
+pub extern "system" fn cuProfilerStop() -> CUresult {
     r#impl::unimplemented()
 }

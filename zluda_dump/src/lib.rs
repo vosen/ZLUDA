@@ -27,14 +27,14 @@ mod os;
 macro_rules! extern_redirect {
     (pub fn $fn_name:ident ( $($arg_id:ident: $arg_type:ty),* $(,)? ) -> $ret_type:ty ;) => {
         #[no_mangle]
-        pub extern "stdcall" fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
+        pub extern "system" fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
             unsafe { $crate::init_libcuda_handle() };
             let name = std::ffi::CString::new(stringify!($fn_name)).unwrap();
             let fn_ptr = unsafe { crate::os::get_proc_address($crate::LIBCUDA_HANDLE, &name) };
             if fn_ptr == std::ptr::null_mut() {
                 return CUresult::CUDA_ERROR_UNKNOWN;
             }
-            let typed_fn = unsafe { std::mem::transmute::<_, fn( $( $arg_id : $arg_type),* ) -> $ret_type>(fn_ptr) };
+            let typed_fn = unsafe { std::mem::transmute::<_, extern "system" fn( $( $arg_id : $arg_type),* ) -> $ret_type>(fn_ptr) };
             typed_fn($( $arg_id ),*)
         }
     };
@@ -46,7 +46,7 @@ macro_rules! extern_redirect_with {
         $receiver:path ;
     ) => {
         #[no_mangle]
-        pub extern "stdcall" fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
+        pub extern "system" fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
             unsafe { $crate::init_libcuda_handle() };
             let continuation = |$( $arg_id : $arg_type),* | {
                 let name = std::ffi::CString::new(stringify!($fn_name)).unwrap();
@@ -54,7 +54,7 @@ macro_rules! extern_redirect_with {
                 if fn_ptr == std::ptr::null_mut() {
                     return CUresult::CUDA_ERROR_UNKNOWN;
                 }
-                let typed_fn = unsafe { std::mem::transmute::<_, fn( $( $arg_id : $arg_type),* ) -> $ret_type>(fn_ptr) };
+                let typed_fn = unsafe { std::mem::transmute::<_, extern "system" fn( $( $arg_id : $arg_type),* ) -> $ret_type>(fn_ptr) };
                 typed_fn($( $arg_id ),*)
             };
             unsafe { $receiver($( $arg_id ),* , continuation) }
@@ -511,7 +511,7 @@ const CUDART_INTERFACE_GUID: CUuuid = CUuuid {
 const GET_MODULE_OFFSET: usize = 6;
 static mut CUDART_INTERFACE_VTABLE: Vec<*const c_void> = Vec::new();
 static mut ORIGINAL_GET_MODULE_FROM_CUBIN: Option<
-    unsafe extern "C" fn(
+    unsafe extern "system" fn(
         result: *mut CUmodule,
         fatbinc_wrapper: *const FatbincWrapper,
         ptr1: *mut c_void,
@@ -598,7 +598,7 @@ struct FatbinFileHeader {
     uncompressed_payload: c_ulong,
 }
 
-unsafe extern "C" fn get_module_from_cubin(
+unsafe extern "system" fn get_module_from_cubin(
     module: *mut CUmodule,
     fatbinc_wrapper: *const FatbincWrapper,
     ptr1: *mut c_void,
