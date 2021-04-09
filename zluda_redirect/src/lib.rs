@@ -488,7 +488,7 @@ unsafe fn resume_threads(threads: &[*mut c_void]) {
     }
 }
 
-unsafe extern "C" fn override_nvcuda_export(
+unsafe extern "stdcall" fn override_nvcuda_export(
     context_ptr: *mut c_void,
     _: c_ulong,
     name: LPCSTR,

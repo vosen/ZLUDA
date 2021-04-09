@@ -701,10 +701,10 @@ pub struct _DETOUR_TRAMPOLINE {
 pub type PDETOUR_TRAMPOLINE = *mut _DETOUR_TRAMPOLINE;
 #[doc = " Binary Typedefs."]
 pub type PF_DETOUR_BINARY_BYWAY_CALLBACK = ::std::option::Option<
-    unsafe extern "C" fn(pContext: PVOID, pszFile: LPCSTR, ppszOutFile: *mut LPCSTR) -> BOOL,
+    unsafe extern "stdcall" fn(pContext: PVOID, pszFile: LPCSTR, ppszOutFile: *mut LPCSTR) -> BOOL,
 >;
 pub type PF_DETOUR_BINARY_FILE_CALLBACK = ::std::option::Option<
-    unsafe extern "C" fn(
+    unsafe extern "stdcall" fn(
         pContext: PVOID,
         pszOrigFile: LPCSTR,
         pszFile: LPCSTR,
@@ -712,7 +712,7 @@ pub type PF_DETOUR_BINARY_FILE_CALLBACK = ::std::option::Option<
     ) -> BOOL,
 >;
 pub type PF_DETOUR_BINARY_SYMBOL_CALLBACK = ::std::option::Option<
-    unsafe extern "C" fn(
+    unsafe extern "stdcall" fn(
         pContext: PVOID,
         nOrigOrdinal: ULONG,
         nOrdinal: ULONG,
@@ -723,18 +723,18 @@ pub type PF_DETOUR_BINARY_SYMBOL_CALLBACK = ::std::option::Option<
     ) -> BOOL,
 >;
 pub type PF_DETOUR_BINARY_COMMIT_CALLBACK =
-    ::std::option::Option<unsafe extern "C" fn(pContext: PVOID) -> BOOL>;
+    ::std::option::Option<unsafe extern "stdcall" fn(pContext: PVOID) -> BOOL>;
 pub type PF_DETOUR_ENUMERATE_EXPORT_CALLBACK = ::std::option::Option<
-    unsafe extern "C" fn(pContext: PVOID, nOrdinal: ULONG, pszName: LPCSTR, pCode: PVOID) -> BOOL,
+    unsafe extern "stdcall" fn(pContext: PVOID, nOrdinal: ULONG, pszName: LPCSTR, pCode: PVOID) -> BOOL,
 >;
 pub type PF_DETOUR_IMPORT_FILE_CALLBACK = ::std::option::Option<
-    unsafe extern "C" fn(pContext: PVOID, hModule: HMODULE, pszFile: LPCSTR) -> BOOL,
+    unsafe extern "stdcall" fn(pContext: PVOID, hModule: HMODULE, pszFile: LPCSTR) -> BOOL,
 >;
 pub type PF_DETOUR_IMPORT_FUNC_CALLBACK = ::std::option::Option<
-    unsafe extern "C" fn(pContext: PVOID, nOrdinal: DWORD, pszFunc: LPCSTR, pvFunc: PVOID) -> BOOL,
+    unsafe extern "stdcall" fn(pContext: PVOID, nOrdinal: DWORD, pszFunc: LPCSTR, pvFunc: PVOID) -> BOOL,
 >;
 pub type PF_DETOUR_IMPORT_FUNC_CALLBACK_EX = ::std::option::Option<
-    unsafe extern "C" fn(
+    unsafe extern "stdcall" fn(
         pContext: PVOID,
         nOrdinal: DWORD,
         pszFunc: LPCSTR,
@@ -742,26 +742,26 @@ pub type PF_DETOUR_IMPORT_FUNC_CALLBACK_EX = ::std::option::Option<
     ) -> BOOL,
 >;
 pub type PDETOUR_BINARY = *mut ::std::os::raw::c_void;
-extern "C" {
+extern "stdcall" {
     #[doc = " Transaction APIs."]
     pub fn DetourTransactionBegin() -> LONG;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourTransactionAbort() -> LONG;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourTransactionCommit() -> LONG;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourTransactionCommitEx(pppFailedPointer: *mut *mut PVOID) -> LONG;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourUpdateThread(hThread: HANDLE) -> LONG;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourAttach(ppPointer: *mut PVOID, pDetour: PVOID) -> LONG;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourAttachEx(
         ppPointer: *mut PVOID,
         pDetour: PVOID,
@@ -770,29 +770,29 @@ extern "C" {
         ppRealDetour: *mut PVOID,
     ) -> LONG;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourDetach(ppPointer: *mut PVOID, pDetour: PVOID) -> LONG;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourSetIgnoreTooSmall(fIgnore: BOOL) -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourSetRetainRegions(fRetain: BOOL) -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourSetSystemRegionLowerBound(pSystemRegionLowerBound: PVOID) -> PVOID;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourSetSystemRegionUpperBound(pSystemRegionUpperBound: PVOID) -> PVOID;
 }
-extern "C" {
+extern "stdcall" {
     #[doc = " Code Functions."]
     pub fn DetourFindFunction(pszModule: LPCSTR, pszFunction: LPCSTR) -> PVOID;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourCodeFromPointer(pPointer: PVOID, ppGlobals: *mut PVOID) -> PVOID;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourCopyInstruction(
         pDst: PVOID,
         ppDstPool: *mut PVOID,
@@ -801,36 +801,36 @@ extern "C" {
         plExtra: *mut LONG,
     ) -> PVOID;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourSetCodeModule(hModule: HMODULE, fLimitReferencesToModule: BOOL) -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourAllocateRegionWithinJumpBounds(
         pbTarget: LPCVOID,
         pcbAllocatedSize: PDWORD,
     ) -> PVOID;
 }
-extern "C" {
+extern "stdcall" {
     #[doc = " Loaded Binary Functions."]
     pub fn DetourGetContainingModule(pvAddr: PVOID) -> HMODULE;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourEnumerateModules(hModuleLast: HMODULE) -> HMODULE;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourGetEntryPoint(hModule: HMODULE) -> PVOID;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourGetModuleSize(hModule: HMODULE) -> ULONG;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourEnumerateExports(
         hModule: HMODULE,
         pContext: PVOID,
         pfExport: PF_DETOUR_ENUMERATE_EXPORT_CALLBACK,
     ) -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourEnumerateImports(
         hModule: HMODULE,
         pContext: PVOID,
@@ -838,7 +838,7 @@ extern "C" {
         pfImportFunc: PF_DETOUR_IMPORT_FUNC_CALLBACK,
     ) -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourEnumerateImportsEx(
         hModule: HMODULE,
         pContext: PVOID,
@@ -846,20 +846,20 @@ extern "C" {
         pfImportFuncEx: PF_DETOUR_IMPORT_FUNC_CALLBACK_EX,
     ) -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourFindPayload(hModule: HMODULE, rguid: *const GUID, pcbData: *mut DWORD) -> PVOID;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourFindPayloadEx(rguid: *const GUID, pcbData: *mut DWORD) -> PVOID;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourGetSizeOfPayloads(hModule: HMODULE) -> DWORD;
 }
-extern "C" {
+extern "stdcall" {
     #[doc = " Persistent Binary Functions."]
     pub fn DetourBinaryOpen(hFile: HANDLE) -> PDETOUR_BINARY;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourBinaryEnumeratePayloads(
         pBinary: PDETOUR_BINARY,
         pGuid: *mut GUID,
@@ -867,14 +867,14 @@ extern "C" {
         pnIterator: *mut DWORD,
     ) -> PVOID;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourBinaryFindPayload(
         pBinary: PDETOUR_BINARY,
         rguid: *const GUID,
         pcbData: *mut DWORD,
     ) -> PVOID;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourBinarySetPayload(
         pBinary: PDETOUR_BINARY,
         rguid: *const GUID,
@@ -882,16 +882,16 @@ extern "C" {
         cbData: DWORD,
     ) -> PVOID;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourBinaryDeletePayload(pBinary: PDETOUR_BINARY, rguid: *const GUID) -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourBinaryPurgePayloads(pBinary: PDETOUR_BINARY) -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourBinaryResetImports(pBinary: PDETOUR_BINARY) -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourBinaryEditImports(
         pBinary: PDETOUR_BINARY,
         pContext: PVOID,
@@ -901,15 +901,15 @@ extern "C" {
         pfCommit: PF_DETOUR_BINARY_COMMIT_CALLBACK,
     ) -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourBinaryWrite(pBinary: PDETOUR_BINARY, hFile: HANDLE) -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourBinaryClose(pBinary: PDETOUR_BINARY) -> BOOL;
 }
 #[doc = " Create Process & Load Dll."]
 pub type PDETOUR_CREATE_PROCESS_ROUTINEA = ::std::option::Option<
-    unsafe extern "C" fn(
+    unsafe extern "stdcall" fn(
         lpApplicationName: LPCSTR,
         lpCommandLine: LPSTR,
         lpProcessAttributes: LPSECURITY_ATTRIBUTES,
@@ -923,7 +923,7 @@ pub type PDETOUR_CREATE_PROCESS_ROUTINEA = ::std::option::Option<
     ) -> BOOL,
 >;
 pub type PDETOUR_CREATE_PROCESS_ROUTINEW = ::std::option::Option<
-    unsafe extern "C" fn(
+    unsafe extern "stdcall" fn(
         lpApplicationName: LPCWSTR,
         lpCommandLine: LPWSTR,
         lpProcessAttributes: LPSECURITY_ATTRIBUTES,
@@ -936,7 +936,7 @@ pub type PDETOUR_CREATE_PROCESS_ROUTINEW = ::std::option::Option<
         lpProcessInformation: LPPROCESS_INFORMATION,
     ) -> BOOL,
 >;
-extern "C" {
+extern "stdcall" {
     pub fn DetourCreateProcessWithDllA(
         lpApplicationName: LPCSTR,
         lpCommandLine: LPSTR,
@@ -952,7 +952,7 @@ extern "C" {
         pfCreateProcessA: PDETOUR_CREATE_PROCESS_ROUTINEA,
     ) -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourCreateProcessWithDllW(
         lpApplicationName: LPCWSTR,
         lpCommandLine: LPWSTR,
@@ -968,7 +968,7 @@ extern "C" {
         pfCreateProcessW: PDETOUR_CREATE_PROCESS_ROUTINEW,
     ) -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourCreateProcessWithDllExA(
         lpApplicationName: LPCSTR,
         lpCommandLine: LPSTR,
@@ -984,7 +984,7 @@ extern "C" {
         pfCreateProcessA: PDETOUR_CREATE_PROCESS_ROUTINEA,
     ) -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourCreateProcessWithDllExW(
         lpApplicationName: LPCWSTR,
         lpCommandLine: LPWSTR,
@@ -1000,7 +1000,7 @@ extern "C" {
         pfCreateProcessW: PDETOUR_CREATE_PROCESS_ROUTINEW,
     ) -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourCreateProcessWithDllsA(
         lpApplicationName: LPCSTR,
         lpCommandLine: LPSTR,
@@ -1017,7 +1017,7 @@ extern "C" {
         pfCreateProcessA: PDETOUR_CREATE_PROCESS_ROUTINEA,
     ) -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourCreateProcessWithDllsW(
         lpApplicationName: LPCWSTR,
         lpCommandLine: LPWSTR,
@@ -1034,21 +1034,21 @@ extern "C" {
         pfCreateProcessW: PDETOUR_CREATE_PROCESS_ROUTINEW,
     ) -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourProcessViaHelperA(
         dwTargetPid: DWORD,
         lpDllName: LPCSTR,
         pfCreateProcessA: PDETOUR_CREATE_PROCESS_ROUTINEA,
     ) -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourProcessViaHelperW(
         dwTargetPid: DWORD,
         lpDllName: LPCSTR,
         pfCreateProcessW: PDETOUR_CREATE_PROCESS_ROUTINEW,
     ) -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourProcessViaHelperDllsA(
         dwTargetPid: DWORD,
         nDlls: DWORD,
@@ -1056,7 +1056,7 @@ extern "C" {
         pfCreateProcessA: PDETOUR_CREATE_PROCESS_ROUTINEA,
     ) -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourProcessViaHelperDllsW(
         dwTargetPid: DWORD,
         nDlls: DWORD,
@@ -1064,11 +1064,11 @@ extern "C" {
         pfCreateProcessW: PDETOUR_CREATE_PROCESS_ROUTINEW,
     ) -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourUpdateProcessWithDll(hProcess: HANDLE, rlpDlls: *mut LPCSTR, nDlls: DWORD)
         -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourUpdateProcessWithDllEx(
         hProcess: HANDLE,
         hImage: HMODULE,
@@ -1077,7 +1077,7 @@ extern "C" {
         nDlls: DWORD,
     ) -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourCopyPayloadToProcess(
         hProcess: HANDLE,
         rguid: *const GUID,
@@ -1085,15 +1085,15 @@ extern "C" {
         cbData: DWORD,
     ) -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourRestoreAfterWith() -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourRestoreAfterWithEx(pvData: PVOID, cbData: DWORD) -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourIsHelperProcess() -> BOOL;
 }
-extern "C" {
+extern "stdcall" {
     pub fn DetourFinishHelperProcess(arg1: HWND, arg2: HINSTANCE, arg3: LPSTR, arg4: INT);
 }
