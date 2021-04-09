@@ -27,7 +27,7 @@ mod os;
 macro_rules! extern_redirect {
     (pub fn $fn_name:ident ( $($arg_id:ident: $arg_type:ty),* $(,)? ) -> $ret_type:ty ;) => {
         #[no_mangle]
-        pub fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
+        pub extern "stdcall" fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
             unsafe { $crate::init_libcuda_handle() };
             let name = std::ffi::CString::new(stringify!($fn_name)).unwrap();
             let fn_ptr = unsafe { crate::os::get_proc_address($crate::LIBCUDA_HANDLE, &name) };
@@ -46,7 +46,7 @@ macro_rules! extern_redirect_with {
         $receiver:path ;
     ) => {
         #[no_mangle]
-        pub fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
+        pub extern "stdcall" fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
             unsafe { $crate::init_libcuda_handle() };
             let continuation = |$( $arg_id : $arg_type),* | {
                 let name = std::ffi::CString::new(stringify!($fn_name)).unwrap();
