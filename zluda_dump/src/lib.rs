@@ -75,13 +75,13 @@ pub static mut OVERRIDE_COMPUTE_CAPABILITY_MAJOR: Option<i32> = None;
 
 pub struct ModuleDump {
     content: Rc<String>,
-    kernels_args: HashMap<String, Vec<usize>>,
+    kernels_args: Option<HashMap<String, Vec<usize>>>,
 }
 
 pub struct KernelDump {
     module_content: Rc<String>,
     name: String,
-    arguments: Vec<usize>,
+    arguments: Option<Vec<usize>>,
 }
 
 // We are doing dlopen here instead of just using LD_PRELOAD,
@@ -95,7 +95,7 @@ pub unsafe fn init_libcuda_handle() {
             Ok(kernel_filter) => match Regex::new(&kernel_filter) {
                 Ok(r) => KERNEL_PATTERN = Some(r),
                 Err(err) => {
-                    eprintln!("[ZLUDA_DUMP] Error parsing ZLUDA_DUMP_KERNEL: {}", err);
+                    os_log!("Error parsing ZLUDA_DUMP_KERNEL: {}", err);
                 }
             },
             Err(_) => (),
@@ -104,15 +104,15 @@ pub unsafe fn init_libcuda_handle() {
             Ok(cc_override) => match str::parse::<i32>(&cc_override) {
                 Ok(ver) => OVERRIDE_COMPUTE_CAPABILITY_MAJOR = Some(ver),
                 Err(err) => {
-                    eprintln!(
-                        "[ZLUDA_DUMP] Error parsing ZLUDA_OVERRIDE_COMPUTE_CAPABILITY_MAJOR: {}",
+                    os_log!(
+                        "Error parsing ZLUDA_OVERRIDE_COMPUTE_CAPABILITY_MAJOR: {}",
                         err
                     );
                 }
             },
             Err(_) => (),
         }
-        eprintln!("[ZLUDA_DUMP] Initialized");
+        os_log!("Initialized");
     }
 }
 
@@ -131,51 +131,45 @@ pub unsafe fn cuModuleLoadData(
 
 unsafe fn record_module_image_raw(module: CUmodule, raw_image: *const ::std::os::raw::c_void) {
     if *(raw_image as *const u32) == 0x464c457f {
-        eprintln!("[ZLUDA_DUMP] Unsupported ELF module: {:?}", raw_image);
+        os_log!("Unsupported ELF module: {:?}", raw_image);
         return;
     }
     let image = to_str(raw_image);
     match image {
-        None => eprintln!("[ZLUDA_DUMP] Malformed module image: {:?}", raw_image),
+        None => os_log!("Malformed module image: {:?}", raw_image),
         Some(image) => record_module_image(module, image),
     };
 }
 
 unsafe fn record_module_image(module: CUmodule, image: &str) {
     if !image.contains(&".address_size") {
-        eprintln!("[ZLUDA_DUMP] Malformed module image: {:?}", module)
+        os_log!("Malformed module image: {:?}", module)
     } else {
         let mut errors = Vec::new();
         let ast = ptx::ModuleParser::new().parse(&mut errors, image);
-        match (&*errors, ast) {
+        let kernels_args = match (&*errors, ast) {
             (&[], Ok(ast)) => {
                 let kernels_args = ast
                     .directives
                     .iter()
                     .filter_map(directive_to_kernel)
                     .collect::<HashMap<_, _>>();
-                let modules = MODULES.get_or_insert_with(|| HashMap::new());
-                modules.insert(
-                    module,
-                    ModuleDump {
-                        content: Rc::new(image.to_string()),
-                        kernels_args,
-                    },
-                );
+                Some(kernels_args)
             }
-            (errs, ast) => {
-                let err_string = errs
-                    .iter()
-                    .map(|e| format!("{:?}", e))
-                    .chain(ast.err().iter().map(|e| format!("{:?}", e)))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                eprintln!(
-                    "[ZLUDA_DUMP] Errors when parsing module:\n---ERRORS---\n{}\n---MODULE---\n{}",
-                    err_string, image
-                );
+            (_, _) => {
+                // Don't print errors - it's usually too verbose to be useful
+                os_log!("Errors when parsing module: {:?}", module);
+                None
             }
-        }
+        };
+        let modules = MODULES.get_or_insert_with(|| HashMap::new());
+        modules.insert(
+            module,
+            ModuleDump {
+                content: Rc::new(image.to_string()),
+                kernels_args,
+            },
+        );
     }
 }
 
@@ -248,27 +242,32 @@ unsafe fn cuModuleGetFunction(
     if let Some(modules) = &MODULES {
         if let Some(module_dump) = modules.get(&hmod) {
             if let Some(kernel) = to_str(name) {
-                if let Some(args) = module_dump.kernels_args.get(kernel) {
-                    let kernel_args = KERNELS.get_or_insert_with(|| HashMap::new());
-                    kernel_args.insert(
-                        *hfunc,
-                        KernelDump {
-                            module_content: module_dump.content.clone(),
-                            name: kernel.to_string(),
-                            arguments: args.clone(),
-                        },
-                    );
+                let kernel_args = if let Some(kernels) = &module_dump.kernels_args {
+                    if let Some(args) = kernels.get(kernel) {
+                        Some(args.clone())
+                    } else {
+                        None
+                    }
                 } else {
-                    eprintln!("[ZLUDA_DUMP] Unknown kernel: {}", kernel);
-                }
+                    None
+                };
+                let kernel_args_map = KERNELS.get_or_insert_with(|| HashMap::new());
+                kernel_args_map.insert(
+                    *hfunc,
+                    KernelDump {
+                        module_content: module_dump.content.clone(),
+                        name: kernel.to_string(),
+                        arguments: kernel_args,
+                    },
+                );
             } else {
-                eprintln!("[ZLUDA_DUMP] Unknown kernel name at: {:?}", hfunc);
+                os_log!("Malformed name at: {:?}", hfunc);
             }
         } else {
-            eprintln!("[ZLUDA_DUMP] Unknown module: {:?}", hmod);
+            os_log!("Unknown module: {:?}", hmod);
         }
     } else {
-        eprintln!("[ZLUDA_DUMP] Unknown module: {:?}", hmod);
+        os_log!("Unknown module: {:?}", hmod);
     }
     CUresult::CUDA_SUCCESS
 }
@@ -317,7 +316,7 @@ pub unsafe fn cuLaunchKernel(
     let dump_env = match create_dump_dir(f, LAUNCH_COUNTER) {
         Ok(dump_env) => dump_env,
         Err(err) => {
-            eprintln!("[ZLUDA_DUMP] {:#?}", err);
+            os_log!("Error when creating the dump directory: {}", err);
             None
         }
     };
@@ -333,7 +332,7 @@ pub unsafe fn cuLaunchKernel(
             kernelParams,
             dump_env,
         )
-        .unwrap_or_else(|err| eprintln!("[ZLUDA_DUMP] {:#?}", err));
+        .unwrap_or_else(|err| os_log!("{}", err));
     };
     error = cont(
         f,
@@ -357,9 +356,9 @@ pub unsafe fn cuLaunchKernel(
             "post",
             &kernel_dump.name,
             LAUNCH_COUNTER,
-            &kernel_dump.arguments,
+            kernel_dump.arguments.as_ref().map(|vec| &vec[..]),
         )
-        .unwrap_or_else(|err| eprintln!("[ZLUDA_DUMP] {:#?}", err));
+        .unwrap_or_else(|err| os_log!("{}", err));
     }
     LAUNCH_COUNTER += 1;
     CUresult::CUDA_SUCCESS
@@ -445,7 +444,7 @@ unsafe fn dump_pre_data(
         "pre",
         &kernel_dump.name,
         LAUNCH_COUNTER,
-        &kernel_dump.arguments,
+        kernel_dump.arguments.as_ref().map(|vec| &vec[..]),
     )?;
     Ok(())
 }
@@ -455,8 +454,12 @@ unsafe fn dump_arguments(
     prefix: &str,
     kernel_name: &str,
     counter: usize,
-    args: &[usize],
+    args: Option<&[usize]>,
 ) -> Result<(), Box<dyn Error>> {
+    let args = match args {
+        None => return Ok(()),
+        Some(a) => a,
+    };
     let mut dump_dir = get_dump_dir()?;
     dump_dir.push(format!("{:04}_{}", counter, kernel_name));
     dump_dir.push(prefix);
@@ -508,9 +511,16 @@ const CUDART_INTERFACE_GUID: CUuuid = CUuuid {
     ],
 };
 
-const GET_MODULE_OFFSET: usize = 6;
 static mut CUDART_INTERFACE_VTABLE: Vec<*const c_void> = Vec::new();
+const GET_MODULE_FROM_CUBIN_OFFSET: usize = 1;
+const GET_MODULE_FROM_CUBIN_EXT_OFFSET: usize = 6;
 static mut ORIGINAL_GET_MODULE_FROM_CUBIN: Option<
+    unsafe extern "system" fn(
+        result: *mut CUmodule,
+        fatbinc_wrapper: *const FatbincWrapper,
+    ) -> CUresult,
+> = None;
+static mut ORIGINAL_GET_MODULE_FROM_CUBIN_EXT: Option<
     unsafe extern "system" fn(
         result: *mut CUmodule,
         fatbinc_wrapper: *const FatbincWrapper,
@@ -539,16 +549,23 @@ pub unsafe fn cuGetExportTable(
                 CUDART_INTERFACE_VTABLE.as_mut_ptr(),
                 len,
             );
-            if GET_MODULE_OFFSET >= len {
+            if GET_MODULE_FROM_CUBIN_EXT_OFFSET >= len {
                 return CUresult::CUDA_ERROR_UNKNOWN;
             }
             ORIGINAL_GET_MODULE_FROM_CUBIN =
-                mem::transmute(CUDART_INTERFACE_VTABLE[GET_MODULE_OFFSET]);
-            CUDART_INTERFACE_VTABLE[GET_MODULE_OFFSET] = get_module_from_cubin as *const _;
+                mem::transmute(CUDART_INTERFACE_VTABLE[GET_MODULE_FROM_CUBIN_OFFSET]);
+            CUDART_INTERFACE_VTABLE[GET_MODULE_FROM_CUBIN_OFFSET] =
+                get_module_from_cubin as *const _;
+            ORIGINAL_GET_MODULE_FROM_CUBIN_EXT =
+                mem::transmute(CUDART_INTERFACE_VTABLE[GET_MODULE_FROM_CUBIN_EXT_OFFSET]);
+            CUDART_INTERFACE_VTABLE[GET_MODULE_FROM_CUBIN_EXT_OFFSET] =
+                get_module_from_cubin_ext as *const _;
         }
         *ppExportTable = CUDART_INTERFACE_VTABLE.as_ptr() as *const _;
         return CUresult::CUDA_SUCCESS;
     } else {
+        let guid = (*pExportTableId).bytes;
+        os_log!("Unsupported export table id: {{{:02X}{:02X}{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}}}", guid[0], guid[1], guid[2], guid[3], guid[4], guid[5], guid[6], guid[7], guid[8], guid[9], guid[10], guid[11], guid[12], guid[13], guid[14], guid[15]);
         cont(ppExportTable, pExportTableId)
     }
 }
@@ -598,11 +615,10 @@ struct FatbinFileHeader {
     uncompressed_payload: c_ulong,
 }
 
-unsafe extern "system" fn get_module_from_cubin(
+unsafe fn get_module_from_cubin_impl(
     module: *mut CUmodule,
     fatbinc_wrapper: *const FatbincWrapper,
-    ptr1: *mut c_void,
-    ptr2: *mut c_void,
+    get_module_base: impl FnOnce() -> CUresult,
 ) -> CUresult {
     if module == ptr::null_mut()
         || (*fatbinc_wrapper).magic != FATBINC_MAGIC
@@ -628,7 +644,7 @@ unsafe extern "system" fn get_module_from_cubin(
             }
         };
     }
-    let result = ORIGINAL_GET_MODULE_FROM_CUBIN.unwrap()(module, fatbinc_wrapper, ptr1, ptr2);
+    let result = get_module_base();
     if result != CUresult::CUDA_SUCCESS {
         return result;
     }
@@ -642,6 +658,26 @@ unsafe extern "system" fn get_module_from_cubin(
         }
     }
     result
+}
+
+unsafe extern "system" fn get_module_from_cubin(
+    module: *mut CUmodule,
+    fatbinc_wrapper: *const FatbincWrapper,
+) -> CUresult {
+    get_module_from_cubin_impl(module, fatbinc_wrapper, || {
+        ORIGINAL_GET_MODULE_FROM_CUBIN.unwrap()(module, fatbinc_wrapper)
+    })
+}
+
+unsafe extern "system" fn get_module_from_cubin_ext(
+    module: *mut CUmodule,
+    fatbinc_wrapper: *const FatbincWrapper,
+    ptr1: *mut c_void,
+    ptr2: *mut c_void,
+) -> CUresult {
+    get_module_from_cubin_impl(module, fatbinc_wrapper, || {
+        ORIGINAL_GET_MODULE_FROM_CUBIN_EXT.unwrap()(module, fatbinc_wrapper, ptr1, ptr2)
+    })
 }
 
 unsafe fn get_ptx_files(file: *const u8, end: *const u8) -> Vec<*const FatbinFileHeader> {
@@ -680,6 +716,9 @@ unsafe fn decompress_kernel_module(file: *const FatbinFileHeader) -> Option<Vec<
             }
             real_decompressed_size => {
                 decompressed_vec.truncate(real_decompressed_size as usize);
+                if decompressed_vec.last().copied().unwrap_or(1) != 0 {
+                    decompressed_vec.push(0);
+                }
                 return Some(decompressed_vec);
             }
         }
