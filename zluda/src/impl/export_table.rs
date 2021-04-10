@@ -75,7 +75,10 @@ unsafe extern "system" fn runtime_callback_hooks_fn1(ptr: *mut *mut usize, size:
 
 static mut TOOLS_RUNTIME_CALLBACK_HOOKS_FN5_SPACE: [u8; 2] = [0; 2];
 
-unsafe extern "system" fn runtime_callback_hooks_fn5(ptr: *mut *mut u8, size: *mut usize) -> *mut u8 {
+unsafe extern "system" fn runtime_callback_hooks_fn5(
+    ptr: *mut *mut u8,
+    size: *mut usize,
+) -> *mut u8 {
     *ptr = TOOLS_RUNTIME_CALLBACK_HOOKS_FN5_SPACE.as_mut_ptr();
     *size = TOOLS_RUNTIME_CALLBACK_HOOKS_FN5_SPACE.len();
     return TOOLS_RUNTIME_CALLBACK_HOOKS_FN5_SPACE.as_mut_ptr();
@@ -93,7 +96,9 @@ static CUDART_INTERFACE_VTABLE: [VTableEntry; CUDART_INTERFACE_LENGTH] = [
     VTableEntry {
         length: mem::size_of::<[VTableEntry; CUDART_INTERFACE_LENGTH]>(),
     },
-    VTableEntry { ptr: ptr::null() },
+    VTableEntry {
+        ptr: get_module_from_cubin as *const (),
+    },
     VTableEntry {
         ptr: cudart_interface_fn1 as *const (),
     },
@@ -101,7 +106,7 @@ static CUDART_INTERFACE_VTABLE: [VTableEntry; CUDART_INTERFACE_LENGTH] = [
     VTableEntry { ptr: ptr::null() },
     VTableEntry { ptr: ptr::null() },
     VTableEntry {
-        ptr: get_module_from_cubin as *const (),
+        ptr: get_module_from_cubin_ext as *const (),
     },
     VTableEntry {
         ptr: cudart_interface_fn6 as *const (),
@@ -198,14 +203,7 @@ struct FatbinFileHeader {
 unsafe extern "system" fn get_module_from_cubin(
     result: *mut CUmodule,
     fatbinc_wrapper: *const FatbincWrapper,
-    ptr1: *mut c_void,
-    ptr2: *mut c_void,
 ) -> CUresult {
-    // Not sure what those two parameters are actually used for,
-    // they are somehow involved in __cudaRegisterHostVar
-    if ptr1 != ptr::null_mut() || ptr2 != ptr::null_mut() {
-        return CUresult::CUDA_ERROR_NOT_SUPPORTED;
-    }
     if result == ptr::null_mut()
         || (*fatbinc_wrapper).magic != FATBINC_MAGIC
         || (*fatbinc_wrapper).version != FATBINC_VERSION
@@ -248,6 +246,21 @@ unsafe extern "system" fn get_module_from_cubin(
     CUresult::CUDA_ERROR_COMPAT_NOT_SUPPORTED_ON_DEVICE
 }
 
+unsafe extern "system" fn get_module_from_cubin_ext(
+    result: *mut CUmodule,
+    fatbinc_wrapper: *const FatbincWrapper,
+    ptr1: *mut c_void,
+    ptr2: *mut c_void,
+) -> CUresult {
+    // Not sure what those two parameters are actually used for,
+    // they are somehow involved in __cudaRegisterHostVar
+    if ptr1 != ptr::null_mut() || ptr2 != ptr::null_mut() {
+        CUresult::CUDA_ERROR_NOT_SUPPORTED
+    } else {
+        get_module_from_cubin(result, fatbinc_wrapper)
+    }
+}
+
 unsafe fn get_ptx_files(file: *const u8, end: *const u8) -> Vec<*const FatbinFileHeader> {
     let mut index = file;
     let mut result = Vec::new();
@@ -284,6 +297,9 @@ unsafe fn decompress_kernel_module(file: *const FatbinFileHeader) -> Option<Vec<
             }
             real_decompressed_size => {
                 decompressed_vec.truncate(real_decompressed_size as usize);
+                if decompressed_vec.last().copied().unwrap_or(1) != 0 {
+                    decompressed_vec.push(0);
+                }
                 return Some(decompressed_vec);
             }
         }
