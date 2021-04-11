@@ -184,6 +184,17 @@ unsafe fn record_module_image(module: CUmodule, image: &str) {
             },
         );
     }
+    if let Err(e) = try_dump_module_image(image) {
+        os_log!("Errors when saving module: {:?}, {}", module, e);
+    }
+}
+
+unsafe fn try_dump_module_image(image: &str) -> Result<(), Box<dyn Error>> {
+    let mut dump_path = get_dump_dir()?;
+    dump_path.push(format!("module_{:04}.ptx", MODULES.as_ref().unwrap().len()));
+    let mut file = File::create(dump_path)?;
+    file.write_all(image.as_bytes())?;
+    Ok(())
 }
 
 unsafe fn to_str<T>(image: *const T) -> Option<&'static str> {
