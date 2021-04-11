@@ -2342,6 +2342,9 @@ extern_redirect! {
     ) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuDeviceTotalMem(bytes: *mut usize, dev: CUdevice) -> CUresult;
+}
+extern_redirect! {
     pub fn cuDeviceTotalMem_v2(bytes: *mut usize, dev: CUdevice) -> CUresult;
 }
 extern_redirect! {
@@ -2406,6 +2409,13 @@ extern_redirect! {
     pub fn cuDevicePrimaryCtxReset_v2(dev: CUdevice) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuCtxCreate(
+        pctx: *mut CUcontext,
+        flags: ::std::os::raw::c_uint,
+        dev: CUdevice,
+    ) -> CUresult;
+}
+extern_redirect! {
     pub fn cuCtxCreate_v2(
         pctx: *mut CUcontext,
         flags: ::std::os::raw::c_uint,
@@ -2413,10 +2423,19 @@ extern_redirect! {
     ) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuCtxDestroy(ctx: CUcontext) -> CUresult;
+}
+extern_redirect! {
     pub fn cuCtxDestroy_v2(ctx: CUcontext) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuCtxPushCurrent(ctx: CUcontext) -> CUresult;
+}
+extern_redirect! {
     pub fn cuCtxPushCurrent_v2(ctx: CUcontext) -> CUresult;
+}
+extern_redirect! {
+    pub fn cuCtxPopCurrent(pctx: *mut CUcontext) -> CUresult;
 }
 extern_redirect! {
     pub fn cuCtxPopCurrent_v2(pctx: *mut CUcontext) -> CUresult;
@@ -2510,6 +2529,14 @@ extern_redirect_with! {
     super::cuModuleGetFunction;
 }
 extern_redirect! {
+    pub fn cuModuleGetGlobal(
+        dptr: *mut CUdeviceptr,
+        bytes: *mut usize,
+        hmod: CUmodule,
+        name: *const ::std::os::raw::c_char,
+    ) -> CUresult;
+}
+extern_redirect! {
     pub fn cuModuleGetGlobal_v2(
         dptr: *mut CUdeviceptr,
         bytes: *mut usize,
@@ -2532,11 +2559,31 @@ extern_redirect! {
     ) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuLinkCreate(
+        numOptions: ::std::os::raw::c_uint,
+        options: *mut CUjit_option,
+        optionValues: *mut *mut ::std::os::raw::c_void,
+        stateOut: *mut CUlinkState,
+    ) -> CUresult;
+}
+extern_redirect! {
     pub fn cuLinkCreate_v2(
         numOptions: ::std::os::raw::c_uint,
         options: *mut CUjit_option,
         optionValues: *mut *mut ::std::os::raw::c_void,
         stateOut: *mut CUlinkState,
+    ) -> CUresult;
+}
+extern_redirect! {
+    pub fn cuLinkAddData(
+        state: CUlinkState,
+        type_: CUjitInputType,
+        data: *mut ::std::os::raw::c_void,
+        size: usize,
+        name: *const ::std::os::raw::c_char,
+        numOptions: ::std::os::raw::c_uint,
+        options: *mut CUjit_option,
+        optionValues: *mut *mut ::std::os::raw::c_void,
     ) -> CUresult;
 }
 extern_redirect! {
@@ -2546,6 +2593,16 @@ extern_redirect! {
         data: *mut ::std::os::raw::c_void,
         size: usize,
         name: *const ::std::os::raw::c_char,
+        numOptions: ::std::os::raw::c_uint,
+        options: *mut CUjit_option,
+        optionValues: *mut *mut ::std::os::raw::c_void,
+    ) -> CUresult;
+}
+extern_redirect! {
+    pub fn cuLinkAddFile(
+        state: CUlinkState,
+        type_: CUjitInputType,
+        path: *const ::std::os::raw::c_char,
         numOptions: ::std::os::raw::c_uint,
         options: *mut CUjit_option,
         optionValues: *mut *mut ::std::os::raw::c_void,
@@ -2572,11 +2629,27 @@ extern_redirect! {
     pub fn cuLinkDestroy(state: CUlinkState) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuMemGetInfo(free: *mut usize, total: *mut usize) -> CUresult;
+}
+extern_redirect! {
     pub fn cuMemGetInfo_v2(free: *mut usize, total: *mut usize) -> CUresult;
+}
+extern_redirect_with! {
+    pub fn cuMemAlloc(dptr: *mut CUdeviceptr, bytesize: usize) -> CUresult;
+    super::cuMemAlloc;
 }
 extern_redirect_with! {
     pub fn cuMemAlloc_v2(dptr: *mut CUdeviceptr, bytesize: usize) -> CUresult;
     super::cuMemAlloc_v2;
+}
+extern_redirect! {
+    pub fn cuMemAllocPitch(
+        dptr: *mut CUdeviceptr,
+        pPitch: *mut usize,
+        WidthInBytes: usize,
+        Height: usize,
+        ElementSizeBytes: ::std::os::raw::c_uint,
+    ) -> CUresult;
 }
 extern_redirect! {
     pub fn cuMemAllocPitch_v2(
@@ -2588,7 +2661,17 @@ extern_redirect! {
     ) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuMemFree(dptr: CUdeviceptr) -> CUresult;
+}
+extern_redirect! {
     pub fn cuMemFree_v2(dptr: CUdeviceptr) -> CUresult;
+}
+extern_redirect! {
+    pub fn cuMemGetAddressRange(
+        pbase: *mut CUdeviceptr,
+        psize: *mut usize,
+        dptr: CUdeviceptr,
+    ) -> CUresult;
 }
 extern_redirect! {
     pub fn cuMemGetAddressRange_v2(
@@ -2598,15 +2681,26 @@ extern_redirect! {
     ) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuMemAllocHost(pp: *mut *mut ::std::os::raw::c_void, bytesize: usize) -> CUresult;
+}
+extern_redirect! {
     pub fn cuMemAllocHost_v2(pp: *mut *mut ::std::os::raw::c_void, bytesize: usize) -> CUresult;
 }
 extern_redirect! {
     pub fn cuMemFreeHost(p: *mut ::std::os::raw::c_void) -> CUresult;
 }
-extern_redirect! {
+extern_redirect_with! {
     pub fn cuMemHostAlloc(
         pp: *mut *mut ::std::os::raw::c_void,
         bytesize: usize,
+        Flags: ::std::os::raw::c_uint,
+    ) -> CUresult;
+    super::cuMemHostAlloc;
+}
+extern_redirect! {
+    pub fn cuMemHostGetDevicePointer(
+        pdptr: *mut CUdeviceptr,
+        p: *mut ::std::os::raw::c_void,
         Flags: ::std::os::raw::c_uint,
     ) -> CUresult;
 }
@@ -2670,6 +2764,13 @@ extern_redirect! {
     pub fn cuIpcCloseMemHandle(dptr: CUdeviceptr) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuMemHostRegister(
+        p: *mut ::std::os::raw::c_void,
+        bytesize: usize,
+        Flags: ::std::os::raw::c_uint,
+    ) -> CUresult;
+}
+extern_redirect! {
     pub fn cuMemHostRegister_v2(
         p: *mut ::std::os::raw::c_void,
         bytesize: usize,
@@ -2692,9 +2793,23 @@ extern_redirect! {
     ) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuMemcpyHtoD(
+        dstDevice: CUdeviceptr,
+        srcHost: *const ::std::os::raw::c_void,
+        ByteCount: usize,
+    ) -> CUresult;
+}
+extern_redirect! {
     pub fn cuMemcpyHtoD_v2(
         dstDevice: CUdeviceptr,
         srcHost: *const ::std::os::raw::c_void,
+        ByteCount: usize,
+    ) -> CUresult;
+}
+extern_redirect! {
+    pub fn cuMemcpyDtoH(
+        dstHost: *mut ::std::os::raw::c_void,
+        srcDevice: CUdeviceptr,
         ByteCount: usize,
     ) -> CUresult;
 }
@@ -2706,8 +2821,23 @@ extern_redirect! {
     ) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuMemcpyDtoD(
+        dstDevice: CUdeviceptr,
+        srcDevice: CUdeviceptr,
+        ByteCount: usize,
+    ) -> CUresult;
+}
+extern_redirect! {
     pub fn cuMemcpyDtoD_v2(
         dstDevice: CUdeviceptr,
+        srcDevice: CUdeviceptr,
+        ByteCount: usize,
+    ) -> CUresult;
+}
+extern_redirect! {
+    pub fn cuMemcpyDtoA(
+        dstArray: CUarray,
+        dstOffset: usize,
         srcDevice: CUdeviceptr,
         ByteCount: usize,
     ) -> CUresult;
@@ -2721,10 +2851,26 @@ extern_redirect! {
     ) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuMemcpyAtoD(
+        dstDevice: CUdeviceptr,
+        srcArray: CUarray,
+        srcOffset: usize,
+        ByteCount: usize,
+    ) -> CUresult;
+}
+extern_redirect! {
     pub fn cuMemcpyAtoD_v2(
         dstDevice: CUdeviceptr,
         srcArray: CUarray,
         srcOffset: usize,
+        ByteCount: usize,
+    ) -> CUresult;
+}
+extern_redirect! {
+    pub fn cuMemcpyHtoA(
+        dstArray: CUarray,
+        dstOffset: usize,
+        srcHost: *const ::std::os::raw::c_void,
         ByteCount: usize,
     ) -> CUresult;
 }
@@ -2737,8 +2883,25 @@ extern_redirect! {
     ) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuMemcpyAtoH(
+        dstHost: *mut ::std::os::raw::c_void,
+        srcArray: CUarray,
+        srcOffset: usize,
+        ByteCount: usize,
+    ) -> CUresult;
+}
+extern_redirect! {
     pub fn cuMemcpyAtoH_v2(
         dstHost: *mut ::std::os::raw::c_void,
+        srcArray: CUarray,
+        srcOffset: usize,
+        ByteCount: usize,
+    ) -> CUresult;
+}
+extern_redirect! {
+    pub fn cuMemcpyAtoA(
+        dstArray: CUarray,
+        dstOffset: usize,
         srcArray: CUarray,
         srcOffset: usize,
         ByteCount: usize,
@@ -2754,10 +2917,19 @@ extern_redirect! {
     ) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuMemcpy2D(pCopy: *const CUDA_MEMCPY2D) -> CUresult;
+}
+extern_redirect! {
     pub fn cuMemcpy2D_v2(pCopy: *const CUDA_MEMCPY2D) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuMemcpy2DUnaligned(pCopy: *const CUDA_MEMCPY2D) -> CUresult;
+}
+extern_redirect! {
     pub fn cuMemcpy2DUnaligned_v2(pCopy: *const CUDA_MEMCPY2D) -> CUresult;
+}
+extern_redirect! {
+    pub fn cuMemcpy3D(pCopy: *const CUDA_MEMCPY3D) -> CUresult;
 }
 extern_redirect! {
     pub fn cuMemcpy3D_v2(pCopy: *const CUDA_MEMCPY3D) -> CUresult;
@@ -2784,6 +2956,14 @@ extern_redirect! {
     ) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuMemcpyHtoDAsync(
+        dstDevice: CUdeviceptr,
+        srcHost: *const ::std::os::raw::c_void,
+        ByteCount: usize,
+        hStream: CUstream,
+    ) -> CUresult;
+}
+extern_redirect! {
     pub fn cuMemcpyHtoDAsync_v2(
         dstDevice: CUdeviceptr,
         srcHost: *const ::std::os::raw::c_void,
@@ -2792,8 +2972,24 @@ extern_redirect! {
     ) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuMemcpyDtoHAsync(
+        dstHost: *mut ::std::os::raw::c_void,
+        srcDevice: CUdeviceptr,
+        ByteCount: usize,
+        hStream: CUstream,
+    ) -> CUresult;
+}
+extern_redirect! {
     pub fn cuMemcpyDtoHAsync_v2(
         dstHost: *mut ::std::os::raw::c_void,
+        srcDevice: CUdeviceptr,
+        ByteCount: usize,
+        hStream: CUstream,
+    ) -> CUresult;
+}
+extern_redirect! {
+    pub fn cuMemcpyDtoDAsync(
+        dstDevice: CUdeviceptr,
         srcDevice: CUdeviceptr,
         ByteCount: usize,
         hStream: CUstream,
@@ -2808,10 +3004,28 @@ extern_redirect! {
     ) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuMemcpyHtoAAsync(
+        dstArray: CUarray,
+        dstOffset: usize,
+        srcHost: *const ::std::os::raw::c_void,
+        ByteCount: usize,
+        hStream: CUstream,
+    ) -> CUresult;
+}
+extern_redirect! {
     pub fn cuMemcpyHtoAAsync_v2(
         dstArray: CUarray,
         dstOffset: usize,
         srcHost: *const ::std::os::raw::c_void,
+        ByteCount: usize,
+        hStream: CUstream,
+    ) -> CUresult;
+}
+extern_redirect! {
+    pub fn cuMemcpyAtoHAsync(
+        dstHost: *mut ::std::os::raw::c_void,
+        srcArray: CUarray,
+        srcOffset: usize,
         ByteCount: usize,
         hStream: CUstream,
     ) -> CUresult;
@@ -2826,7 +3040,13 @@ extern_redirect! {
     ) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuMemcpy2DAsync(pCopy: *const CUDA_MEMCPY2D, hStream: CUstream) -> CUresult;
+}
+extern_redirect! {
     pub fn cuMemcpy2DAsync_v2(pCopy: *const CUDA_MEMCPY2D, hStream: CUstream) -> CUresult;
+}
+extern_redirect! {
+    pub fn cuMemcpy3DAsync(pCopy: *const CUDA_MEMCPY3D, hStream: CUstream) -> CUresult;
 }
 extern_redirect! {
     pub fn cuMemcpy3DAsync_v2(pCopy: *const CUDA_MEMCPY3D, hStream: CUstream) -> CUresult;
@@ -2835,8 +3055,19 @@ extern_redirect! {
     pub fn cuMemcpy3DPeerAsync(pCopy: *const CUDA_MEMCPY3D_PEER, hStream: CUstream) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuMemsetD8(dstDevice: CUdeviceptr, uc: ::std::os::raw::c_uchar, N: usize)
+        -> CUresult;
+}
+extern_redirect! {
     pub fn cuMemsetD8_v2(dstDevice: CUdeviceptr, uc: ::std::os::raw::c_uchar, N: usize)
         -> CUresult;
+}
+extern_redirect! {
+    pub fn cuMemsetD16(
+        dstDevice: CUdeviceptr,
+        us: ::std::os::raw::c_ushort,
+        N: usize,
+    ) -> CUresult;
 }
 extern_redirect! {
     pub fn cuMemsetD16_v2(
@@ -2846,8 +3077,21 @@ extern_redirect! {
     ) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuMemsetD32(dstDevice: CUdeviceptr, ui: ::std::os::raw::c_uint, N: usize)
+        -> CUresult;
+}
+extern_redirect! {
     pub fn cuMemsetD32_v2(dstDevice: CUdeviceptr, ui: ::std::os::raw::c_uint, N: usize)
         -> CUresult;
+}
+extern_redirect! {
+    pub fn cuMemsetD2D8(
+        dstDevice: CUdeviceptr,
+        dstPitch: usize,
+        uc: ::std::os::raw::c_uchar,
+        Width: usize,
+        Height: usize,
+    ) -> CUresult;
 }
 extern_redirect! {
     pub fn cuMemsetD2D8_v2(
@@ -2859,10 +3103,28 @@ extern_redirect! {
     ) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuMemsetD2D16(
+        dstDevice: CUdeviceptr,
+        dstPitch: usize,
+        us: ::std::os::raw::c_ushort,
+        Width: usize,
+        Height: usize,
+    ) -> CUresult;
+}
+extern_redirect! {
     pub fn cuMemsetD2D16_v2(
         dstDevice: CUdeviceptr,
         dstPitch: usize,
         us: ::std::os::raw::c_ushort,
+        Width: usize,
+        Height: usize,
+    ) -> CUresult;
+}
+extern_redirect! {
+    pub fn cuMemsetD2D32(
+        dstDevice: CUdeviceptr,
+        dstPitch: usize,
+        ui: ::std::os::raw::c_uint,
         Width: usize,
         Height: usize,
     ) -> CUresult;
@@ -2931,9 +3193,21 @@ extern_redirect! {
     ) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuArrayCreate(
+        pHandle: *mut CUarray,
+        pAllocateArray: *const CUDA_ARRAY_DESCRIPTOR,
+    ) -> CUresult;
+}
+extern_redirect! {
     pub fn cuArrayCreate_v2(
         pHandle: *mut CUarray,
         pAllocateArray: *const CUDA_ARRAY_DESCRIPTOR,
+    ) -> CUresult;
+}
+extern_redirect! {
+    pub fn cuArrayGetDescriptor(
+        pArrayDescriptor: *mut CUDA_ARRAY_DESCRIPTOR,
+        hArray: CUarray,
     ) -> CUresult;
 }
 extern_redirect! {
@@ -2958,9 +3232,21 @@ extern_redirect! {
     pub fn cuArrayDestroy(hArray: CUarray) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuArray3DCreate(
+        pHandle: *mut CUarray,
+        pAllocateArray: *const CUDA_ARRAY3D_DESCRIPTOR,
+    ) -> CUresult;
+}
+extern_redirect! {
     pub fn cuArray3DCreate_v2(
         pHandle: *mut CUarray,
         pAllocateArray: *const CUDA_ARRAY3D_DESCRIPTOR,
+    ) -> CUresult;
+}
+extern_redirect! {
+    pub fn cuArray3DGetDescriptor(
+        pArrayDescriptor: *mut CUDA_ARRAY3D_DESCRIPTOR,
+        hArray: CUarray,
     ) -> CUresult;
 }
 extern_redirect! {
@@ -3170,6 +3456,9 @@ extern_redirect! {
     ) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuStreamBeginCapture(hStream: CUstream, mode: CUstreamCaptureMode) -> CUresult;
+}
+extern_redirect! {
     pub fn cuStreamBeginCapture_v2(hStream: CUstream, mode: CUstreamCaptureMode) -> CUresult;
 }
 extern_redirect! {
@@ -3204,6 +3493,9 @@ extern_redirect! {
 }
 extern_redirect! {
     pub fn cuStreamSynchronize(hStream: CUstream) -> CUresult;
+}
+extern_redirect! {
+    pub fn cuStreamDestroy(hStream: CUstream) -> CUresult;
 }
 extern_redirect! {
     pub fn cuStreamDestroy_v2(hStream: CUstream) -> CUresult;
@@ -3243,6 +3535,9 @@ extern_redirect! {
 }
 extern_redirect! {
     pub fn cuEventSynchronize(hEvent: CUevent) -> CUresult;
+}
+extern_redirect! {
+    pub fn cuEventDestroy(hEvent: CUevent) -> CUresult;
 }
 extern_redirect! {
     pub fn cuEventDestroy_v2(hEvent: CUevent) -> CUresult;
@@ -3667,6 +3962,15 @@ extern_redirect! {
     pub fn cuGraphDestroyNode(hNode: CUgraphNode) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuGraphInstantiate(
+        phGraphExec: *mut CUgraphExec,
+        hGraph: CUgraph,
+        phErrorNode: *mut CUgraphNode,
+        logBuffer: *mut ::std::os::raw::c_char,
+        bufferSize: usize,
+    ) -> CUresult;
+}
+extern_redirect! {
     pub fn cuGraphInstantiate_v2(
         phGraphExec: *mut CUgraphExec,
         hGraph: CUgraph,
@@ -3824,6 +4128,14 @@ extern_redirect! {
     ) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuTexRefSetAddress(
+        ByteOffset: *mut usize,
+        hTexRef: CUtexref,
+        dptr: CUdeviceptr,
+        bytes: usize,
+    ) -> CUresult;
+}
+extern_redirect! {
     pub fn cuTexRefSetAddress_v2(
         ByteOffset: *mut usize,
         hTexRef: CUtexref,
@@ -3880,6 +4192,9 @@ extern_redirect! {
 }
 extern_redirect! {
     pub fn cuTexRefSetFlags(hTexRef: CUtexref, Flags: ::std::os::raw::c_uint) -> CUresult;
+}
+extern_redirect! {
+    pub fn cuTexRefGetAddress(pdptr: *mut CUdeviceptr, hTexRef: CUtexref) -> CUresult;
 }
 extern_redirect! {
     pub fn cuTexRefGetAddress_v2(pdptr: *mut CUdeviceptr, hTexRef: CUtexref) -> CUresult;
@@ -4035,10 +4350,23 @@ extern_redirect! {
     ) -> CUresult;
 }
 extern_redirect! {
+    pub fn cuGraphicsResourceGetMappedPointer(
+        pDevPtr: *mut CUdeviceptr,
+        pSize: *mut usize,
+        resource: CUgraphicsResource,
+    ) -> CUresult;
+}
+extern_redirect! {
     pub fn cuGraphicsResourceGetMappedPointer_v2(
         pDevPtr: *mut CUdeviceptr,
         pSize: *mut usize,
         resource: CUgraphicsResource,
+    ) -> CUresult;
+}
+extern_redirect! {
+    pub fn cuGraphicsResourceSetMapFlags(
+        resource: CUgraphicsResource,
+        flags: ::std::os::raw::c_uint,
     ) -> CUresult;
 }
 extern_redirect! {

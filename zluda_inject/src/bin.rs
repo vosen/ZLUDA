@@ -1,3 +1,4 @@
+use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 use std::ptr;
 use std::{env, ops::Deref};
@@ -33,7 +34,7 @@ pub fn main_impl() -> Result<(), Box<dyn Error>> {
     let injector_dir = injector_path.parent().unwrap();
     let redirect_path = create_redirect_path(injector_dir);
     let (mut inject_nvcuda_path, mut inject_nvml_path, cmd) =
-        create_inject_path(&args[1..], injector_dir);
+        create_inject_path(&args[1..], injector_dir)?;
     let mut cmd_line = construct_command_line(cmd);
     let mut startup_info = unsafe { mem::zeroed::<detours_sys::_STARTUPINFOW>() };
     let mut proc_info = unsafe { mem::zeroed::<detours_sys::_PROCESS_INFORMATION>() };
@@ -110,7 +111,7 @@ fn print_help_and_exit() -> ! {
     {0} -- <EXE> [ARGS]...
     {0} <DLL> -- <EXE> [ARGS]...
 ARGS:
-    <DLL>        DLL to ne injected instead of system nvcuda.dll, if not provided
+    <DLL>        DLL to be injected instead of system nvcuda.dll, if not provided
                  will use nvcuda.dll from the directory where {0} is located
     <EXE>        Path to the executable to be injected with <DLL>
     <ARGS>...    Arguments that will be passed to <EXE>
@@ -187,7 +188,7 @@ fn create_redirect_path(injector_dir: &Path) -> Vec<u8> {
 fn create_inject_path<'a>(
     args: &'a [String],
     injector_dir: &Path,
-) -> (Vec<u16>, Vec<u16>, &'a [String]) {
+) -> std::io::Result<(Vec<u16>, Vec<u16>, &'a [String])> {
     let injector_dir = injector_dir.to_path_buf();
     let (nvcuda_path, unparsed_args) = if args.get(0).map(Deref::deref) == Some("--") {
         (
@@ -195,14 +196,13 @@ fn create_inject_path<'a>(
             &args[1..],
         )
     } else if args.get(1).map(Deref::deref) == Some("--") {
-        let mut dll_path = args[0].encode_utf16().collect::<Vec<_>>();
-        dll_path.push(0);
+        let dll_path = make_absolute_and_encode(&args[0])?;
         (dll_path, &args[2..])
     } else {
         print_help_and_exit()
     };
     let nvml_path = encode_file_in_directory_raw(injector_dir, ZLUDA_ML_DLL);
-    (nvcuda_path, nvml_path, unparsed_args)
+    Ok((nvcuda_path, nvml_path, unparsed_args))
 }
 
 fn encode_file_in_directory_raw(mut dir: PathBuf, file: &'static str) -> Vec<u16> {
@@ -214,4 +214,17 @@ fn encode_file_in_directory_raw(mut dir: PathBuf, file: &'static str) -> Vec<u16
         .collect::<Vec<_>>();
     result.push(0);
     result
+}
+
+fn make_absolute_and_encode(maybe_path: &str) -> std::io::Result<Vec<u16>> {
+    let path = Path::new(maybe_path);
+    let mut encoded_path = if path.is_relative() {
+        let mut current_dir = env::current_dir()?;
+        current_dir.push(path);
+        current_dir.as_os_str().encode_wide().collect::<Vec<_>>()
+    } else {
+        maybe_path.encode_utf16().collect::<Vec<_>>()
+    };
+    encoded_path.push(0);
+    Ok(encoded_path)
 }
