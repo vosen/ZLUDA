@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     env,
     error::Error,
     ffi::{c_void, CStr},
@@ -23,6 +23,10 @@ use regex::Regex;
 #[cfg_attr(windows, path = "os_win.rs")]
 #[cfg_attr(not(windows), path = "os_unix.rs")]
 mod os;
+
+const CU_LAUNCH_PARAM_END: *mut c_void = 0 as *mut _;
+const CU_LAUNCH_PARAM_BUFFER_POINTER: *mut c_void = 1 as *mut _;
+const CU_LAUNCH_PARAM_BUFFER_SIZE: *mut c_void = 2 as *mut _;
 
 macro_rules! extern_redirect {
     (pub fn $fn_name:ident ( $($arg_id:ident: $arg_type:ty),* $(,)? ) -> $ret_type:ty ;) => {
@@ -68,10 +72,17 @@ mod cuda;
 pub static mut LIBCUDA_HANDLE: *mut c_void = ptr::null_mut();
 pub static mut MODULES: Option<HashMap<CUmodule, ModuleDump>> = None;
 pub static mut KERNELS: Option<HashMap<CUfunction, KernelDump>> = None;
-pub static mut BUFFERS: Vec<(usize, usize)> = Vec::new();
+static mut BUFFERS: Option<BTreeMap<usize, (usize, AllocLocation)>> = None;
 pub static mut LAUNCH_COUNTER: usize = 0;
 pub static mut KERNEL_PATTERN: Option<Regex> = None;
 pub static mut OVERRIDE_COMPUTE_CAPABILITY_MAJOR: Option<i32> = None;
+
+#[derive(Clone, Copy)]
+enum AllocLocation {
+    Device,
+    DeviceV2,
+    Host,
+}
 
 pub struct ModuleDump {
     content: Rc<String>,
@@ -88,6 +99,9 @@ pub struct KernelDump {
 // it's because CUDA Runtime API does dlopen to open libcuda.so, which ignores LD_PRELOAD
 pub unsafe fn init_libcuda_handle() {
     if LIBCUDA_HANDLE == ptr::null_mut() {
+        MODULES = Some(HashMap::new());
+        KERNELS = Some(HashMap::new());
+        BUFFERS = Some(BTreeMap::new());
         let libcuda_handle = os::load_cuda_library();
         assert_ne!(libcuda_handle, ptr::null_mut());
         LIBCUDA_HANDLE = libcuda_handle;
@@ -162,8 +176,7 @@ unsafe fn record_module_image(module: CUmodule, image: &str) {
                 None
             }
         };
-        let modules = MODULES.get_or_insert_with(|| HashMap::new());
-        modules.insert(
+        MODULES.as_mut().unwrap().insert(
             module,
             ModuleDump {
                 content: Rc::new(image.to_string()),
@@ -251,8 +264,7 @@ unsafe fn cuModuleGetFunction(
                 } else {
                     None
                 };
-                let kernel_args_map = KERNELS.get_or_insert_with(|| HashMap::new());
-                kernel_args_map.insert(
+                KERNELS.as_mut().unwrap().insert(
                     *hfunc,
                     KernelDump {
                         module_content: module_dump.content.clone(),
@@ -273,7 +285,26 @@ unsafe fn cuModuleGetFunction(
 }
 
 #[allow(non_snake_case)]
+pub unsafe fn cuMemAlloc(
+    dptr: *mut CUdeviceptr,
+    bytesize: usize,
+    cont: impl FnOnce(*mut CUdeviceptr, usize) -> CUresult,
+) -> CUresult {
+    cuMemAlloc_impl(false, dptr, bytesize, cont)
+}
+
+#[allow(non_snake_case)]
 pub unsafe fn cuMemAlloc_v2(
+    dptr: *mut CUdeviceptr,
+    bytesize: usize,
+    cont: impl FnOnce(*mut CUdeviceptr, usize) -> CUresult,
+) -> CUresult {
+    cuMemAlloc_impl(true, dptr, bytesize, cont)
+}
+
+#[allow(non_snake_case)]
+pub unsafe fn cuMemAlloc_impl(
+    is_v2: bool,
     dptr: *mut CUdeviceptr,
     bytesize: usize,
     cont: impl FnOnce(*mut CUdeviceptr, usize) -> CUresult,
@@ -281,7 +312,32 @@ pub unsafe fn cuMemAlloc_v2(
     let result = cont(dptr, bytesize);
     assert_eq!(result, CUresult::CUDA_SUCCESS);
     let start = (*dptr).0 as usize;
-    BUFFERS.push((start, bytesize));
+    let location = if is_v2 {
+        AllocLocation::DeviceV2
+    } else {
+        AllocLocation::Device
+    };
+    BUFFERS
+        .as_mut()
+        .unwrap()
+        .insert(start, (bytesize, location));
+    CUresult::CUDA_SUCCESS
+}
+
+#[allow(non_snake_case)]
+pub unsafe fn cuMemHostAlloc(
+    pp: *mut *mut c_void,
+    bytesize: usize,
+    flags: c_uint,
+    cont: impl FnOnce(*mut *mut c_void, usize, c_uint) -> CUresult,
+) -> CUresult {
+    let result = cont(pp, bytesize, flags);
+    assert_eq!(result, CUresult::CUDA_SUCCESS);
+    let start = (*pp) as usize;
+    BUFFERS
+        .as_mut()
+        .unwrap()
+        .insert(start, (bytesize, AllocLocation::Host));
     CUresult::CUDA_SUCCESS
 }
 
@@ -330,6 +386,7 @@ pub unsafe fn cuLaunchKernel(
             blockDimZ,
             sharedMemBytes,
             kernelParams,
+            extra,
             dump_env,
         )
         .unwrap_or_else(|err| os_log!("{}", err));
@@ -353,6 +410,7 @@ pub unsafe fn cuLaunchKernel(
     if let Some((_, kernel_dump)) = &dump_env {
         dump_arguments(
             kernelParams,
+            extra,
             "post",
             &kernel_dump.name,
             LAUNCH_COUNTER,
@@ -423,6 +481,7 @@ unsafe fn dump_pre_data(
     blockDimZ: ::std::os::raw::c_uint,
     sharedMemBytes: ::std::os::raw::c_uint,
     kernelParams: *mut *mut ::std::os::raw::c_void,
+    extra: *mut *mut ::std::os::raw::c_void,
     (dump_dir, kernel_dump): &(PathBuf, &'static KernelDump),
 ) -> Result<(), Box<dyn Error>> {
     dump_launch_arguments(
@@ -441,6 +500,7 @@ unsafe fn dump_pre_data(
     module_file.write_all(kernel_dump.module_content.as_bytes())?;
     dump_arguments(
         kernelParams,
+        extra,
         "pre",
         &kernel_dump.name,
         LAUNCH_COUNTER,
@@ -449,8 +509,9 @@ unsafe fn dump_pre_data(
     Ok(())
 }
 
-unsafe fn dump_arguments(
+fn dump_arguments(
     kernel_params: *mut *mut ::std::os::raw::c_void,
+    extra: *mut *mut ::std::os::raw::c_void,
     prefix: &str,
     kernel_name: &str,
     counter: usize,
@@ -467,31 +528,113 @@ unsafe fn dump_arguments(
         fs::remove_dir_all(&dump_dir)?;
     }
     fs::create_dir_all(&dump_dir)?;
-    for (i, arg_len) in args.iter().enumerate() {
-        let dev_ptr = *(*kernel_params.add(i) as *mut usize);
-        match BUFFERS.iter().find(|(start, _)| *start == dev_ptr as usize) {
-            Some((start, len)) => {
-                let mut output = vec![0u8; *len];
-                let error =
-                    cuda::cuMemcpyDtoH_v2(output.as_mut_ptr() as *mut _, CUdeviceptr(*start), *len);
-                assert_eq!(error, CUresult::CUDA_SUCCESS);
-                let mut path = dump_dir.clone();
-                path.push(format!("arg_{:03}.buffer", i));
-                let mut file = File::create(path)?;
-                file.write_all(&mut output)?;
+    if kernel_params != ptr::null_mut() {
+        for (i, arg_len) in args.iter().enumerate() {
+            unsafe { dump_argument_to_file(&dump_dir, i, *arg_len, *kernel_params.add(i))? };
+        }
+    } else {
+        let mut offset = 0;
+        let mut buffer_ptr = None;
+        let mut buffer_size = None;
+        loop {
+            match unsafe { *extra.add(offset) } {
+                CU_LAUNCH_PARAM_END => break,
+                CU_LAUNCH_PARAM_BUFFER_POINTER => {
+                    buffer_ptr = Some(unsafe { *extra.add(offset + 1) as *mut u8 });
+                }
+                CU_LAUNCH_PARAM_BUFFER_SIZE => {
+                    buffer_size = Some(unsafe { *(*extra.add(offset + 1) as *mut usize) });
+                }
+                _ => return Err("Malformed `extra` parameter to kernel launch")?,
             }
-            None => {
-                let mut path = dump_dir.clone();
-                path.push(format!("arg_{:03}", i));
-                let mut file = File::create(path)?;
-                file.write_all(slice::from_raw_parts(
-                    *kernel_params.add(i) as *mut u8,
-                    *arg_len,
-                ))?;
+            offset += 2;
+        }
+        match (buffer_size, buffer_ptr) {
+            (Some(buffer_size), Some(buffer_ptr)) => {
+                let sum_of_kernel_argument_sizes = args.iter().fold(0, |offset, size_of_arg| {
+                    size_of_arg + round_up_to_multiple(offset, *size_of_arg)
+                });
+                if buffer_size != sum_of_kernel_argument_sizes {
+                    return Err("Malformed `extra` parameter to kernel launch")?;
+                }
+                let mut offset = 0;
+                for (i, arg_size) in args.iter().enumerate() {
+                    let buffer_offset = round_up_to_multiple(offset, *arg_size);
+                    unsafe {
+                        dump_argument_to_file(
+                            &dump_dir,
+                            i,
+                            *arg_size,
+                            buffer_ptr.add(buffer_offset) as *const _,
+                        )?
+                    };
+                    offset = buffer_offset + *arg_size;
+                }
             }
+            _ => return Err("Malformed `extra` parameter to kernel launch")?,
         }
     }
     Ok(())
+}
+
+fn round_up_to_multiple(x: usize, multiple: usize) -> usize {
+    ((x + multiple - 1) / multiple) * multiple
+}
+
+unsafe fn dump_argument_to_file(
+    dump_dir: &PathBuf,
+    i: usize,
+    arg_len: usize,
+    ptr: *const c_void,
+) -> Result<(), Box<dyn Error>> {
+    // Don't check if arg_len == sizeof(void*), there are libraries
+    // which for some reason pass 32 pointers (4 bytes) in 8 byte arguments
+    match get_buffer_length(*(ptr as *mut usize)) {
+        Some((start, len, location)) => {
+            let mut output = vec![0u8; len];
+            let memcpy_fn = match location {
+                AllocLocation::Device => |src, dst: usize, len| {
+                    let error = cuda::cuMemcpyDtoH(dst as *mut _, CUdeviceptr(src), len);
+                    assert_eq!(error, CUresult::CUDA_SUCCESS);
+                },
+                AllocLocation::DeviceV2 => |src, dst: usize, len| {
+                    let error = cuda::cuMemcpyDtoH_v2(dst as *mut _, CUdeviceptr(src), len);
+                    assert_eq!(error, CUresult::CUDA_SUCCESS);
+                },
+                AllocLocation::Host => |src, dst: usize, len| {
+                    ptr::copy_nonoverlapping(src as *mut u8, dst as *mut u8, len);
+                },
+            };
+            memcpy_fn(start, output.as_mut_ptr() as usize, len);
+            let mut path = dump_dir.clone();
+            path.push(format!("arg_{:03}.buffer", i));
+            let mut file = File::create(path)?;
+            file.write_all(&mut output)?;
+        }
+        None => {
+            let mut path = dump_dir.clone();
+            path.push(format!("arg_{:03}", i));
+            let mut file = File::create(path)?;
+            file.write_all(slice::from_raw_parts(ptr as *mut u8, arg_len))?;
+        }
+    }
+    Ok(())
+}
+
+unsafe fn get_buffer_length(ptr: usize) -> Option<(usize, usize, AllocLocation)> {
+    BUFFERS
+        .as_mut()
+        .unwrap()
+        .range(..=ptr)
+        .next_back()
+        .and_then(|(start, (len, loc))| {
+            let end = *start + *len;
+            if ptr < end {
+                Some((ptr, end - ptr, *loc))
+            } else {
+                None
+            }
+        })
 }
 
 fn get_dump_dir() -> Result<PathBuf, Box<dyn Error>> {
