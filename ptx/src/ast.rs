@@ -595,30 +595,8 @@ pub struct LdDetails {
     pub qualifier: LdStQualifier,
     pub state_space: LdStateSpace,
     pub caching: LdCacheOperator,
-    pub typ: LdStType,
+    pub typ: PointerType,
     pub non_coherent: bool,
-}
-
-sub_type! {
-    LdStType {
-        Scalar(ScalarType),
-        Vector(ScalarType, u8),
-        // Used in generated code
-        Pointer(PointerType, LdStateSpace),
-    }
-}
-
-impl From<LdStType> for PointerType {
-    fn from(t: LdStType) -> Self {
-        match t {
-            LdStType::Scalar(t) => PointerType::Scalar(t.into()),
-            LdStType::Vector(t, len) => PointerType::Vector(t.into(), len),
-            LdStType::Pointer(PointerType::Scalar(scalar_type), space) => {
-                PointerType::Pointer(scalar_type, space)
-            }
-            LdStType::Pointer(..) => unreachable!(),
-        }
-    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -853,7 +831,7 @@ pub struct StData {
     pub qualifier: LdStQualifier,
     pub state_space: StStateSpace,
     pub caching: StCacheOperator,
-    pub typ: LdStType,
+    pub typ: PointerType,
 }
 
 #[derive(PartialEq, Eq, Copy, Clone)]

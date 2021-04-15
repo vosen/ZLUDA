@@ -4553,7 +4553,7 @@ fn convert_to_stateful_memory_access<'a>(
             Statement::Instruction(ast::Instruction::Ld(
                 ast::LdDetails {
                     state_space: ast::LdStateSpace::Param,
-                    typ: ast::LdStType::Scalar(ast::ScalarType::U64),
+                    typ: ast::PointerType::Scalar(ast::ScalarType::U64),
                     ..
                 },
                 arg,
@@ -4561,7 +4561,7 @@ fn convert_to_stateful_memory_access<'a>(
             | Statement::Instruction(ast::Instruction::Ld(
                 ast::LdDetails {
                     state_space: ast::LdStateSpace::Param,
-                    typ: ast::LdStType::Scalar(ast::ScalarType::S64),
+                    typ: ast::PointerType::Scalar(ast::ScalarType::S64),
                     ..
                 },
                 arg,
@@ -4569,7 +4569,7 @@ fn convert_to_stateful_memory_access<'a>(
             | Statement::Instruction(ast::Instruction::Ld(
                 ast::LdDetails {
                     state_space: ast::LdStateSpace::Param,
-                    typ: ast::LdStType::Scalar(ast::ScalarType::B64),
+                    typ: ast::PointerType::Scalar(ast::ScalarType::B64),
                     ..
                 },
                 arg,

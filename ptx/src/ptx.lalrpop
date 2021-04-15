@@ -789,9 +789,9 @@ InstLd: ast::Instruction<ast::ParsedArgParams<'input>> = {
     }
 };
 
-LdStType: ast::LdStType = {
-    <v:VectorPrefix> <t:LdStScalarType> => ast::LdStType::Vector(t, v),
-    <t:LdStScalarType> => ast::LdStType::Scalar(t),
+LdStType: ast::PointerType = {
+    <v:VectorPrefix> <t:LdStScalarType> => ast::PointerType::Vector(t, v),
+    <t:LdStScalarType> => ast::PointerType::Scalar(t),
 }
 
 LdStQualifier: ast::LdStQualifier = {
