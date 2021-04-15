@@ -210,20 +210,6 @@ sub_enum!(LdStScalarType {
     F64,
 });
 
-sub_enum!(SelpType {
-    B16,
-    B32,
-    B64,
-    U16,
-    U32,
-    U64,
-    S16,
-    S32,
-    S64,
-    F32,
-    F64,
-});
-
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum BarDetails {
     SyncAligned,
@@ -425,52 +411,6 @@ pub enum ScalarType {
     Pred,
 }
 
-sub_enum!(IntType {
-    U8,
-    U16,
-    U32,
-    U64,
-    S8,
-    S16,
-    S32,
-    S64
-});
-
-sub_enum!(BitType { B8, B16, B32, B64 });
-
-sub_enum!(UIntType { U8, U16, U32, U64 });
-
-sub_enum!(SIntType { S8, S16, S32, S64 });
-
-impl IntType {
-    pub fn is_signed(self) -> bool {
-        match self {
-            IntType::U8 | IntType::U16 | IntType::U32 | IntType::U64 => false,
-            IntType::S8 | IntType::S16 | IntType::S32 | IntType::S64 => true,
-        }
-    }
-
-    pub fn width(self) -> u8 {
-        match self {
-            IntType::U8 => 1,
-            IntType::U16 => 2,
-            IntType::U32 => 4,
-            IntType::U64 => 8,
-            IntType::S8 => 1,
-            IntType::S16 => 2,
-            IntType::S32 => 4,
-            IntType::S64 => 8,
-        }
-    }
-}
-
-sub_enum!(FloatType {
-    F16,
-    F16x2,
-    F32,
-    F64
-});
-
 impl ScalarType {
     pub fn size_of(self) -> u8 {
         match self {
@@ -576,24 +516,24 @@ pub enum Instruction<P: ArgParams> {
     Add(ArithDetails, Arg3<P>),
     Setp(SetpData, Arg4Setp<P>),
     SetpBool(SetpBoolData, Arg5Setp<P>),
-    Not(BooleanType, Arg2<P>),
+    Not(ScalarType, Arg2<P>),
     Bra(BraData, Arg1<P>),
     Cvt(CvtDetails, Arg2<P>),
     Cvta(CvtaDetails, Arg2<P>),
-    Shl(ShlType, Arg3<P>),
-    Shr(ShrType, Arg3<P>),
+    Shl(ScalarType, Arg3<P>),
+    Shr(ScalarType, Arg3<P>),
     St(StData, Arg2St<P>),
     Ret(RetData),
     Call(CallInst<P>),
     Abs(AbsDetails, Arg2<P>),
     Mad(MulDetails, Arg4<P>),
-    Or(BooleanType, Arg3<P>),
+    Or(ScalarType, Arg3<P>),
     Sub(ArithDetails, Arg3<P>),
     Min(MinMaxDetails, Arg3<P>),
     Max(MinMaxDetails, Arg3<P>),
     Rcp(RcpDetails, Arg2<P>),
-    And(BooleanType, Arg3<P>),
-    Selp(SelpType, Arg4<P>),
+    And(ScalarType, Arg3<P>),
+    Selp(ScalarType, Arg4<P>),
     Bar(BarDetails, Arg1Bar<P>),
     Atom(AtomDetails, Arg3<P>),
     AtomCas(AtomCasDetails, Arg4<P>),
@@ -605,13 +545,13 @@ pub enum Instruction<P: ArgParams> {
     Cos { flush_to_zero: bool, arg: Arg2<P> },
     Lg2 { flush_to_zero: bool, arg: Arg2<P> },
     Ex2 { flush_to_zero: bool, arg: Arg2<P> },
-    Clz { typ: BitType, arg: Arg2<P> },
-    Brev { typ: BitType, arg: Arg2<P> },
-    Popc { typ: BitType, arg: Arg2<P> },
-    Xor { typ: BooleanType, arg: Arg3<P> },
-    Bfe { typ: IntType, arg: Arg4<P> },
-    Bfi { typ: BitType, arg: Arg5<P> },
-    Rem { typ: IntType, arg: Arg3<P> },
+    Clz { typ: ScalarType, arg: Arg2<P> },
+    Brev { typ: ScalarType, arg: Arg2<P> },
+    Popc { typ: ScalarType, arg: Arg2<P> },
+    Xor { typ: ScalarType, arg: Arg3<P> },
+    Bfe { typ: ScalarType, arg: Arg4<P> },
+    Bfi { typ: ScalarType, arg: Arg5<P> },
+    Rem { typ: ScalarType, arg: Arg3<P> },
 }
 
 #[derive(Copy, Clone)]
@@ -825,7 +765,7 @@ impl MovDetails {
 
 #[derive(Copy, Clone)]
 pub struct MulIntDesc {
-    pub typ: IntType,
+    pub typ: ScalarType,
     pub control: MulIntControl,
 }
 
@@ -845,7 +785,7 @@ pub enum RoundingMode {
 }
 
 pub struct AddIntDesc {
-    pub typ: IntType,
+    pub typ: ScalarType,
     pub saturate: bool,
 }
 
@@ -892,39 +832,39 @@ pub struct BraData {
 
 pub enum CvtDetails {
     IntFromInt(CvtIntToIntDesc),
-    FloatFromFloat(CvtDesc<FloatType, FloatType>),
-    IntFromFloat(CvtDesc<IntType, FloatType>),
-    FloatFromInt(CvtDesc<FloatType, IntType>),
+    FloatFromFloat(CvtDesc),
+    IntFromFloat(CvtDesc),
+    FloatFromInt(CvtDesc),
 }
 
 pub struct CvtIntToIntDesc {
-    pub dst: IntType,
-    pub src: IntType,
+    pub dst: ScalarType,
+    pub src: ScalarType,
     pub saturate: bool,
 }
 
-pub struct CvtDesc<Dst, Src> {
+pub struct CvtDesc {
     pub rounding: Option<RoundingMode>,
     pub flush_to_zero: Option<bool>,
     pub saturate: bool,
-    pub dst: Dst,
-    pub src: Src,
+    pub dst: ScalarType,
+    pub src: ScalarType,
 }
 
 impl CvtDetails {
     pub fn new_int_from_int_checked<'err, 'input>(
         saturate: bool,
-        dst: IntType,
-        src: IntType,
+        dst: ScalarType,
+        src: ScalarType,
         err: &'err mut Vec<ParseError<usize, Token<'input>, PtxError>>,
     ) -> Self {
         if saturate {
-            if src.is_signed() {
-                if dst.is_signed() && dst.width() >= src.width() {
+            if src.kind() == ScalarKind::Signed {
+                if dst.kind() == ScalarKind::Signed && dst.size_of() >= src.size_of() {
                     err.push(ParseError::from(PtxError::SyntaxError));
                 }
             } else {
-                if dst == src || dst.width() >= src.width() {
+                if dst == src || dst.size_of() >= src.size_of() {
                     err.push(ParseError::from(PtxError::SyntaxError));
                 }
             }
@@ -936,11 +876,11 @@ impl CvtDetails {
         rounding: RoundingMode,
         flush_to_zero: bool,
         saturate: bool,
-        dst: FloatType,
-        src: IntType,
+        dst: ScalarType,
+        src: ScalarType,
         err: &'err mut Vec<ParseError<usize, Token<'input>, PtxError>>,
     ) -> Self {
-        if flush_to_zero && dst != FloatType::F32 {
+        if flush_to_zero && dst != ScalarType::F32 {
             err.push(ParseError::from(PtxError::NonF32Ftz));
         }
         CvtDetails::FloatFromInt(CvtDesc {
@@ -956,11 +896,11 @@ impl CvtDetails {
         rounding: RoundingMode,
         flush_to_zero: bool,
         saturate: bool,
-        dst: IntType,
-        src: FloatType,
+        dst: ScalarType,
+        src: ScalarType,
         err: &'err mut Vec<ParseError<usize, Token<'input>, PtxError>>,
     ) -> Self {
-        if flush_to_zero && src != FloatType::F32 {
+        if flush_to_zero && src != ScalarType::F32 {
             err.push(ParseError::from(PtxError::NonF32Ftz));
         }
         CvtDetails::IntFromFloat(CvtDesc {
@@ -993,25 +933,6 @@ pub enum CvtaSize {
     U64,
 }
 
-#[derive(PartialEq, Eq, Copy, Clone)]
-pub enum ShlType {
-    B16,
-    B32,
-    B64,
-}
-
-sub_enum!(ShrType {
-    B16,
-    B32,
-    B64,
-    U16,
-    U32,
-    U64,
-    S16,
-    S32,
-    S64,
-});
-
 pub struct StData {
     pub qualifier: LdStQualifier,
     pub state_space: StStateSpace,
@@ -1040,13 +961,6 @@ pub struct RetData {
     pub uniform: bool,
 }
 
-sub_enum!(BooleanType {
-    Pred,
-    B16,
-    B32,
-    B64,
-});
-
 #[derive(Copy, Clone)]
 pub enum MulDetails {
     Unsigned(MulUInt),
@@ -1056,32 +970,32 @@ pub enum MulDetails {
 
 #[derive(Copy, Clone)]
 pub struct MulUInt {
-    pub typ: UIntType,
+    pub typ: ScalarType,
     pub control: MulIntControl,
 }
 
 #[derive(Copy, Clone)]
 pub struct MulSInt {
-    pub typ: SIntType,
+    pub typ: ScalarType,
     pub control: MulIntControl,
 }
 
 #[derive(Copy, Clone)]
 pub enum ArithDetails {
-    Unsigned(UIntType),
+    Unsigned(ScalarType),
     Signed(ArithSInt),
     Float(ArithFloat),
 }
 
 #[derive(Copy, Clone)]
 pub struct ArithSInt {
-    pub typ: SIntType,
+    pub typ: ScalarType,
     pub saturate: bool,
 }
 
 #[derive(Copy, Clone)]
 pub struct ArithFloat {
-    pub typ: FloatType,
+    pub typ: ScalarType,
     pub rounding: Option<RoundingMode>,
     pub flush_to_zero: Option<bool>,
     pub saturate: bool,
@@ -1089,8 +1003,8 @@ pub struct ArithFloat {
 
 #[derive(Copy, Clone)]
 pub enum MinMaxDetails {
-    Signed(SIntType),
-    Unsigned(UIntType),
+    Signed(ScalarType),
+    Unsigned(ScalarType),
     Float(MinMaxFloat),
 }
 
@@ -1098,7 +1012,7 @@ pub enum MinMaxDetails {
 pub struct MinMaxFloat {
     pub flush_to_zero: Option<bool>,
     pub nan: bool,
-    pub typ: FloatType,
+    pub typ: ScalarType,
 }
 
 #[derive(Copy, Clone)]
@@ -1126,10 +1040,10 @@ pub enum AtomSpace {
 
 #[derive(Copy, Clone)]
 pub enum AtomInnerDetails {
-    Bit { op: AtomBitOp, typ: BitType },
-    Unsigned { op: AtomUIntOp, typ: UIntType },
-    Signed { op: AtomSIntOp, typ: SIntType },
-    Float { op: AtomFloatOp, typ: FloatType },
+    Bit { op: AtomBitOp, typ: ScalarType },
+    Unsigned { op: AtomUIntOp, typ: ScalarType },
+    Signed { op: AtomSIntOp, typ: ScalarType },
+    Float { op: AtomFloatOp, typ: ScalarType },
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -1166,19 +1080,19 @@ pub struct AtomCasDetails {
     pub semantics: AtomSemantics,
     pub scope: MemScope,
     pub space: AtomSpace,
-    pub typ: BitType,
+    pub typ: ScalarType,
 }
 
 #[derive(Copy, Clone)]
 pub enum DivDetails {
-    Unsigned(UIntType),
-    Signed(SIntType),
+    Unsigned(ScalarType),
+    Signed(ScalarType),
     Float(DivFloatDetails),
 }
 
 #[derive(Copy, Clone)]
 pub struct DivFloatDetails {
-    pub typ: FloatType,
+    pub typ: ScalarType,
     pub flush_to_zero: Option<bool>,
     pub kind: DivFloatKind,
 }
@@ -1197,7 +1111,7 @@ pub enum NumsOrArrays<'a> {
 
 #[derive(Copy, Clone)]
 pub struct SqrtDetails {
-    pub typ: FloatType,
+    pub typ: ScalarType,
     pub flush_to_zero: Option<bool>,
     pub kind: SqrtKind,
 }
@@ -1210,7 +1124,7 @@ pub enum SqrtKind {
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub struct RsqrtDetails {
-    pub typ: FloatType,
+    pub typ: ScalarType,
     pub flush_to_zero: bool,
 }
 
@@ -1377,6 +1291,40 @@ pub enum TuningDirective {
     MaxNtid(u32, u32, u32),
     ReqNtid(u32, u32, u32),
     MinNCtaPerSm(u32),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ScalarKind {
+    Bit,
+    Unsigned,
+    Signed,
+    Float,
+    Float2,
+    Pred,
+}
+
+impl ScalarType {
+    pub fn kind(self) -> ScalarKind {
+        match self {
+            ScalarType::U8 => ScalarKind::Unsigned,
+            ScalarType::U16 => ScalarKind::Unsigned,
+            ScalarType::U32 => ScalarKind::Unsigned,
+            ScalarType::U64 => ScalarKind::Unsigned,
+            ScalarType::S8 => ScalarKind::Signed,
+            ScalarType::S16 => ScalarKind::Signed,
+            ScalarType::S32 => ScalarKind::Signed,
+            ScalarType::S64 => ScalarKind::Signed,
+            ScalarType::B8 => ScalarKind::Bit,
+            ScalarType::B16 => ScalarKind::Bit,
+            ScalarType::B32 => ScalarKind::Bit,
+            ScalarType::B64 => ScalarKind::Bit,
+            ScalarType::F16 => ScalarKind::Float,
+            ScalarType::F32 => ScalarKind::Float,
+            ScalarType::F64 => ScalarKind::Float,
+            ScalarType::F16x2 => ScalarKind::Float2,
+            ScalarType::Pred => ScalarKind::Pred,
+        }
+    }
 }
 
 #[cfg(test)]

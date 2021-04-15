@@ -71,7 +71,7 @@
          %26 = OpLoad %uint %9
          %40 = OpCopyObject %uint %23
          %41 = OpCopyObject %uint %24
-         %39 = OpFunctionCall %uint %44 %41 %40 %25 %26
+         %39 = OpFunctionCall %uint %44 %40 %41 %25 %26
          %22 = OpCopyObject %uint %39
                OpStore %6 %22
          %27 = OpLoad %ulong %5
