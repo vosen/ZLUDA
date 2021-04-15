@@ -97,18 +97,6 @@ impl ast::Type {
     }
 }
 
-impl Into<spirv::StorageClass> for ast::PointerStateSpace {
-    fn into(self) -> spirv::StorageClass {
-        match self {
-            ast::PointerStateSpace::Const => spirv::StorageClass::UniformConstant,
-            ast::PointerStateSpace::Global => spirv::StorageClass::CrossWorkgroup,
-            ast::PointerStateSpace::Shared => spirv::StorageClass::Workgroup,
-            ast::PointerStateSpace::Param => spirv::StorageClass::Function,
-            ast::PointerStateSpace::Generic => spirv::StorageClass::Generic,
-        }
-    }
-}
-
 impl From<ast::ScalarType> for SpirvType {
     fn from(t: ast::ScalarType) -> Self {
         SpirvType::Base(t.into())
@@ -824,8 +812,8 @@ fn convert_dynamic_shared_memory_usage<'input>(
                     name: shared_var_id,
                     array_init: Vec::new(),
                     v_type: ast::VariableType::Reg(ast::VariableRegType::Pointer(
-                        ast::SizedScalarType::B8,
-                        ast::PointerStateSpace::Shared,
+                        ast::ScalarType::B8,
+                        ast::LdStateSpace::Shared,
                     )),
                 });
                 let shared_var_st = ExpandedStatement::StoreVar(StoreVarDetails {
@@ -863,7 +851,7 @@ fn convert_dynamic_shared_memory_usage<'input>(
 fn replace_uses_of_shared_memory<'a>(
     result: &mut Vec<ExpandedStatement>,
     new_id: &mut impl FnMut() -> spirv::Word,
-    extern_shared_decls: &HashMap<spirv::Word, ast::SizedScalarType>,
+    extern_shared_decls: &HashMap<spirv::Word, ast::ScalarType>,
     methods_using_extern_shared: &mut HashSet<MethodName<'a>>,
     shared_id_param: spirv::Word,
     shared_var_id: spirv::Word,
@@ -884,7 +872,7 @@ fn replace_uses_of_shared_memory<'a>(
             statement => {
                 let new_statement = statement.map_id(&mut |id, _| {
                     if let Some(typ) = extern_shared_decls.get(&id) {
-                        if *typ == ast::SizedScalarType::B8 {
+                        if *typ == ast::ScalarType::B8 {
                             return shared_var_id;
                         }
                         let replacement_id = new_id();
@@ -1505,7 +1493,7 @@ fn extract_globals<'input, 'b>(
                     d,
                     a,
                     "inc",
-                    ast::SizedScalarType::U32,
+                    ast::ScalarType::U32,
                 ));
             }
             Statement::Instruction(ast::Instruction::Atom(
@@ -1527,7 +1515,7 @@ fn extract_globals<'input, 'b>(
                     d,
                     a,
                     "dec",
-                    ast::SizedScalarType::U32,
+                    ast::ScalarType::U32,
                 ));
             }
             Statement::Instruction(ast::Instruction::Atom(
@@ -1553,8 +1541,8 @@ fn extract_globals<'input, 'b>(
                     space,
                 };
                 let (op, typ) = match typ {
-                    ast::ScalarType::F32 => ("add_f32", ast::SizedScalarType::F32),
-                    ast::ScalarType::F64 => ("add_f64", ast::SizedScalarType::F64),
+                    ast::ScalarType::F32 => ("add_f32", ast::ScalarType::F32),
+                    ast::ScalarType::F64 => ("add_f64", ast::ScalarType::F64),
                     _ => unreachable!(),
                 };
                 local.push(to_ptx_impl_atomic_call(
@@ -1734,7 +1722,7 @@ fn to_ptx_impl_atomic_call(
     details: ast::AtomDetails,
     arg: ast::Arg3<ExpandedArgParams>,
     op: &'static str,
-    typ: ast::SizedScalarType,
+    typ: ast::ScalarType,
 ) -> ExpandedStatement {
     let semantics = ptx_semantics_name(details.semantics);
     let scope = ptx_scope_name(details.scope);
@@ -1745,9 +1733,9 @@ fn to_ptx_impl_atomic_call(
     );
     // TODO: extract to a function
     let ptr_space = match details.space {
-        ast::AtomSpace::Generic => ast::PointerStateSpace::Generic,
-        ast::AtomSpace::Global => ast::PointerStateSpace::Global,
-        ast::AtomSpace::Shared => ast::PointerStateSpace::Shared,
+        ast::AtomSpace::Generic => ast::LdStateSpace::Generic,
+        ast::AtomSpace::Global => ast::LdStateSpace::Global,
+        ast::AtomSpace::Shared => ast::LdStateSpace::Shared,
     };
     let scalar_typ = ast::ScalarType::from(typ);
     let fn_id = match ptx_impl_imports.entry(fn_name) {
@@ -4565,7 +4553,7 @@ fn convert_to_stateful_memory_access<'a>(
             Statement::Instruction(ast::Instruction::Ld(
                 ast::LdDetails {
                     state_space: ast::LdStateSpace::Param,
-                    typ: ast::LdStType::Scalar(ast::LdStScalarType::U64),
+                    typ: ast::LdStType::Scalar(ast::ScalarType::U64),
                     ..
                 },
                 arg,
@@ -4573,7 +4561,7 @@ fn convert_to_stateful_memory_access<'a>(
             | Statement::Instruction(ast::Instruction::Ld(
                 ast::LdDetails {
                     state_space: ast::LdStateSpace::Param,
-                    typ: ast::LdStType::Scalar(ast::LdStScalarType::S64),
+                    typ: ast::LdStType::Scalar(ast::ScalarType::S64),
                     ..
                 },
                 arg,
@@ -4581,7 +4569,7 @@ fn convert_to_stateful_memory_access<'a>(
             | Statement::Instruction(ast::Instruction::Ld(
                 ast::LdDetails {
                     state_space: ast::LdStateSpace::Param,
-                    typ: ast::LdStType::Scalar(ast::LdStScalarType::B64),
+                    typ: ast::LdStType::Scalar(ast::ScalarType::B64),
                     ..
                 },
                 arg,
@@ -4672,8 +4660,8 @@ fn convert_to_stateful_memory_access<'a>(
             name: new_id,
             array_init: Vec::new(),
             v_type: ast::VariableType::Reg(ast::VariableRegType::Pointer(
-                ast::SizedScalarType::U8,
-                ast::PointerStateSpace::Global,
+                ast::ScalarType::U8,
+                ast::LdStateSpace::Global,
             )),
         }));
         remapped_ids.insert(reg, new_id);
