@@ -611,9 +611,9 @@ ModuleVariable: ast::Variable<ast::VariableType, &'input str> = {
                     return Err(ParseError::User { error: ast::PtxError::NonExternPointer });
                 }
                 if space == ".global" {
-                    (ast::VariableType::Global(ast::VariableGlobalType::Pointer(t, ast::PointerStateSpace::Global)), Vec::new())
+                    (ast::VariableType::Global(ast::VariableGlobalType::Pointer(t, ast::LdStateSpace::Global)), Vec::new())
                 } else {
-                    (ast::VariableType::Shared(ast::VariableGlobalType::Pointer(t, ast::PointerStateSpace::Shared)), Vec::new())
+                    (ast::VariableType::Shared(ast::VariableGlobalType::Pointer(t, ast::LdStateSpace::Shared)), Vec::new())
                 }
             }
         };
@@ -635,7 +635,7 @@ ParamVariable: (Option<u32>, Vec<u8>, ast::VariableParamType, &'input str) = {
                 (ast::VariableParamType::Array(t, dimensions), init)
             }
             ast::ArrayOrPointer::Pointer => {
-                (ast::VariableParamType::Pointer(t, ast::PointerStateSpace::Param), Vec::new())
+                (ast::VariableParamType::Pointer(t, ast::LdStateSpace::Param), Vec::new())
             }
         };
         (align, array_init, v_type, name)
@@ -667,42 +667,42 @@ GlobalVariableDefinitionNoArray: (Option<u32>, ast::VariableGlobalType, &'input 
 }
 
 #[inline]
-SizedScalarType: ast::SizedScalarType = {
-    ".b8" => ast::SizedScalarType::B8,
-    ".b16" => ast::SizedScalarType::B16,
-    ".b32" => ast::SizedScalarType::B32,
-    ".b64" => ast::SizedScalarType::B64,
-    ".u8" => ast::SizedScalarType::U8,
-    ".u16" => ast::SizedScalarType::U16,
-    ".u32" => ast::SizedScalarType::U32,
-    ".u64" => ast::SizedScalarType::U64,
-    ".s8" => ast::SizedScalarType::S8,
-    ".s16" => ast::SizedScalarType::S16,
-    ".s32" => ast::SizedScalarType::S32,
-    ".s64" => ast::SizedScalarType::S64,
-    ".f16" => ast::SizedScalarType::F16,
-    ".f16x2" => ast::SizedScalarType::F16x2,
-    ".f32" => ast::SizedScalarType::F32,
-    ".f64" => ast::SizedScalarType::F64,
+SizedScalarType: ast::ScalarType = {
+    ".b8" => ast::ScalarType::B8,
+    ".b16" => ast::ScalarType::B16,
+    ".b32" => ast::ScalarType::B32,
+    ".b64" => ast::ScalarType::B64,
+    ".u8" => ast::ScalarType::U8,
+    ".u16" => ast::ScalarType::U16,
+    ".u32" => ast::ScalarType::U32,
+    ".u64" => ast::ScalarType::U64,
+    ".s8" => ast::ScalarType::S8,
+    ".s16" => ast::ScalarType::S16,
+    ".s32" => ast::ScalarType::S32,
+    ".s64" => ast::ScalarType::S64,
+    ".f16" => ast::ScalarType::F16,
+    ".f16x2" => ast::ScalarType::F16x2,
+    ".f32" => ast::ScalarType::F32,
+    ".f64" => ast::ScalarType::F64,
 }
 
 #[inline]
-LdStScalarType: ast::LdStScalarType = {
-    ".b8" => ast::LdStScalarType::B8,
-    ".b16" => ast::LdStScalarType::B16,
-    ".b32" => ast::LdStScalarType::B32,
-    ".b64" => ast::LdStScalarType::B64,
-    ".u8" => ast::LdStScalarType::U8,
-    ".u16" => ast::LdStScalarType::U16,
-    ".u32" => ast::LdStScalarType::U32,
-    ".u64" => ast::LdStScalarType::U64,
-    ".s8" => ast::LdStScalarType::S8,
-    ".s16" => ast::LdStScalarType::S16,
-    ".s32" => ast::LdStScalarType::S32,
-    ".s64" => ast::LdStScalarType::S64,
-    ".f16" => ast::LdStScalarType::F16,
-    ".f32" => ast::LdStScalarType::F32,
-    ".f64" => ast::LdStScalarType::F64,
+LdStScalarType: ast::ScalarType = {
+    ".b8" => ast::ScalarType::B8,
+    ".b16" => ast::ScalarType::B16,
+    ".b32" => ast::ScalarType::B32,
+    ".b64" => ast::ScalarType::B64,
+    ".u8" => ast::ScalarType::U8,
+    ".u16" => ast::ScalarType::U16,
+    ".u32" => ast::ScalarType::U32,
+    ".u64" => ast::ScalarType::U64,
+    ".s8" => ast::ScalarType::S8,
+    ".s16" => ast::ScalarType::S16,
+    ".s32" => ast::ScalarType::S32,
+    ".s64" => ast::ScalarType::S64,
+    ".f16" => ast::ScalarType::F16,
+    ".f32" => ast::ScalarType::F32,
+    ".f64" => ast::ScalarType::F64,
 }
 
 Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
