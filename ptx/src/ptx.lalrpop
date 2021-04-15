@@ -899,39 +899,39 @@ RoundingModeInt : ast::RoundingMode = {
     ".rpi" => ast::RoundingMode::PositiveInf,
 };
 
-IntType : ast::IntType = {
-    ".u16" => ast::IntType::U16,
-    ".u32" => ast::IntType::U32,
-    ".u64" => ast::IntType::U64,
-    ".s16" => ast::IntType::S16,
-    ".s32" => ast::IntType::S32,
-    ".s64" => ast::IntType::S64,
+IntType : ast::ScalarType = {
+    ".u16" => ast::ScalarType::U16,
+    ".u32" => ast::ScalarType::U32,
+    ".u64" => ast::ScalarType::U64,
+    ".s16" => ast::ScalarType::S16,
+    ".s32" => ast::ScalarType::S32,
+    ".s64" => ast::ScalarType::S64,
 };
 
-IntType3264: ast::IntType = {
-    ".u32" => ast::IntType::U32,
-    ".u64" => ast::IntType::U64,
-    ".s32" => ast::IntType::S32,
-    ".s64" => ast::IntType::S64,
+IntType3264: ast::ScalarType = {
+    ".u32" => ast::ScalarType::U32,
+    ".u64" => ast::ScalarType::U64,
+    ".s32" => ast::ScalarType::S32,
+    ".s64" => ast::ScalarType::S64,
 }
 
-UIntType: ast::UIntType = {
-    ".u16" => ast::UIntType::U16,
-    ".u32" => ast::UIntType::U32,
-    ".u64" => ast::UIntType::U64,
+UIntType: ast::ScalarType = {
+    ".u16" => ast::ScalarType::U16,
+    ".u32" => ast::ScalarType::U32,
+    ".u64" => ast::ScalarType::U64,
 };
 
-SIntType: ast::SIntType = {
-    ".s16" => ast::SIntType::S16,
-    ".s32" => ast::SIntType::S32,
-    ".s64" => ast::SIntType::S64,
+SIntType: ast::ScalarType = {
+    ".s16" => ast::ScalarType::S16,
+    ".s32" => ast::ScalarType::S32,
+    ".s64" => ast::ScalarType::S64,
 };
 
-FloatType: ast::FloatType = {
-    ".f16" => ast::FloatType::F16,
-    ".f16x2" => ast::FloatType::F16x2,
-    ".f32" => ast::FloatType::F32,
-    ".f64" => ast::FloatType::F64,
+FloatType: ast::ScalarType = {
+    ".f16" => ast::ScalarType::F16,
+    ".f16x2" => ast::ScalarType::F16x2,
+    ".f32" => ast::ScalarType::F32,
+    ".f64" => ast::ScalarType::F64,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-add
@@ -1023,11 +1023,11 @@ InstNot: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "not" <t:BooleanType> <a:Arg2> => ast::Instruction::Not(t, a)
 };
 
-BooleanType: ast::BooleanType = {
-    ".pred" => ast::BooleanType::Pred,
-    ".b16" => ast::BooleanType::B16,
-    ".b32" => ast::BooleanType::B32,
-    ".b64" => ast::BooleanType::B64,
+BooleanType: ast::ScalarType = {
+    ".pred" => ast::ScalarType::Pred,
+    ".b16" => ast::ScalarType::B16,
+    ".b32" => ast::ScalarType::B32,
+    ".b64" => ast::ScalarType::B64,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-at
@@ -1080,8 +1080,8 @@ InstCvt: ast::Instruction<ast::ParsedArgParams<'input>> = {
                 rounding: r,
                 flush_to_zero: None,
                 saturate: s.is_some(),
-                dst: ast::FloatType::F16,
-                src: ast::FloatType::F16
+                dst: ast::ScalarType::F16,
+                src: ast::ScalarType::F16
             }
         ), a)
     },
@@ -1091,8 +1091,8 @@ InstCvt: ast::Instruction<ast::ParsedArgParams<'input>> = {
                 rounding: None,
                 flush_to_zero: Some(f.is_some()),
                 saturate: s.is_some(),
-                dst: ast::FloatType::F32,
-                src: ast::FloatType::F16
+                dst: ast::ScalarType::F32,
+                src: ast::ScalarType::F16
             }
         ), a)
     },
@@ -1102,8 +1102,8 @@ InstCvt: ast::Instruction<ast::ParsedArgParams<'input>> = {
                 rounding: None,
                 flush_to_zero: None,
                 saturate: s.is_some(),
-                dst: ast::FloatType::F64,
-                src: ast::FloatType::F16
+                dst: ast::ScalarType::F64,
+                src: ast::ScalarType::F16
             }
         ), a)
     },
@@ -1113,8 +1113,8 @@ InstCvt: ast::Instruction<ast::ParsedArgParams<'input>> = {
                 rounding: Some(r),
                 flush_to_zero: Some(f.is_some()),
                 saturate: s.is_some(),
-                dst: ast::FloatType::F16,
-                src: ast::FloatType::F32
+                dst: ast::ScalarType::F16,
+                src: ast::ScalarType::F32
             }
         ), a)
     },
@@ -1124,8 +1124,8 @@ InstCvt: ast::Instruction<ast::ParsedArgParams<'input>> = {
                 rounding: r,
                 flush_to_zero: Some(f.is_some()),
                 saturate: s.is_some(),
-                dst: ast::FloatType::F32,
-                src: ast::FloatType::F32
+                dst: ast::ScalarType::F32,
+                src: ast::ScalarType::F32
             }
         ), a)
     },
@@ -1135,8 +1135,8 @@ InstCvt: ast::Instruction<ast::ParsedArgParams<'input>> = {
                 rounding: None,
                 flush_to_zero: None,
                 saturate: s.is_some(),
-                dst: ast::FloatType::F64,
-                src: ast::FloatType::F32
+                dst: ast::ScalarType::F64,
+                src: ast::ScalarType::F32
             }
         ), a)
     },
@@ -1146,8 +1146,8 @@ InstCvt: ast::Instruction<ast::ParsedArgParams<'input>> = {
                 rounding: Some(r),
                 flush_to_zero: None,
                 saturate: s.is_some(),
-                dst: ast::FloatType::F16,
-                src: ast::FloatType::F64
+                dst: ast::ScalarType::F16,
+                src: ast::ScalarType::F64
             }
         ), a)
     },
@@ -1157,8 +1157,8 @@ InstCvt: ast::Instruction<ast::ParsedArgParams<'input>> = {
                 rounding: Some(r),
                 flush_to_zero: Some(s.is_some()),
                 saturate: s.is_some(),
-                dst: ast::FloatType::F32,
-                src: ast::FloatType::F64
+                dst: ast::ScalarType::F32,
+                src: ast::ScalarType::F64
             }
         ), a)
     },
@@ -1168,28 +1168,28 @@ InstCvt: ast::Instruction<ast::ParsedArgParams<'input>> = {
                 rounding: r,
                 flush_to_zero: None,
                 saturate: s.is_some(),
-                dst: ast::FloatType::F64,
-                src: ast::FloatType::F64
+                dst: ast::ScalarType::F64,
+                src: ast::ScalarType::F64
             }
         ), a)
     },
 };
 
-CvtTypeInt: ast::IntType = {
-    ".u8" => ast::IntType::U8,
-    ".u16" => ast::IntType::U16,
-    ".u32" => ast::IntType::U32,
-    ".u64" => ast::IntType::U64,
-    ".s8" => ast::IntType::S8,
-    ".s16" => ast::IntType::S16,
-    ".s32" => ast::IntType::S32,
-    ".s64" => ast::IntType::S64,
+CvtTypeInt: ast::ScalarType = {
+    ".u8" => ast::ScalarType::U8,
+    ".u16" => ast::ScalarType::U16,
+    ".u32" => ast::ScalarType::U32,
+    ".u64" => ast::ScalarType::U64,
+    ".s8" => ast::ScalarType::S8,
+    ".s16" => ast::ScalarType::S16,
+    ".s32" => ast::ScalarType::S32,
+    ".s64" => ast::ScalarType::S64,
 };
 
-CvtTypeFloat: ast::FloatType = {
-    ".f16" => ast::FloatType::F16,
-    ".f32" => ast::FloatType::F32,
-    ".f64" => ast::FloatType::F64,
+CvtTypeFloat: ast::ScalarType = {
+    ".f16" => ast::ScalarType::F16,
+    ".f32" => ast::ScalarType::F32,
+    ".f64" => ast::ScalarType::F64,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-shl
@@ -1197,10 +1197,10 @@ InstShl: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "shl" <t:ShlType> <a:Arg3> => ast::Instruction::Shl(t, a)
 };
 
-ShlType: ast::ShlType = {
-    ".b16" => ast::ShlType::B16,
-    ".b32" => ast::ShlType::B32,
-    ".b64" => ast::ShlType::B64,
+ShlType: ast::ScalarType = {
+    ".b16" => ast::ScalarType::B16,
+    ".b32" => ast::ScalarType::B32,
+    ".b64" => ast::ScalarType::B64,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-shr
@@ -1208,16 +1208,16 @@ InstShr: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "shr" <t:ShrType> <a:Arg3> => ast::Instruction::Shr(t, a)
 };
 
-ShrType: ast::ShrType = {
-    ".b16" => ast::ShrType::B16,
-    ".b32" => ast::ShrType::B32,
-    ".b64" => ast::ShrType::B64,
-    ".u16" => ast::ShrType::U16,
-    ".u32" => ast::ShrType::U32,
-    ".u64" => ast::ShrType::U64,
-    ".s16" => ast::ShrType::S16,
-    ".s32" => ast::ShrType::S32,
-    ".s64" => ast::ShrType::S64,
+ShrType: ast::ScalarType = {
+    ".b16" => ast::ScalarType::B16,
+    ".b32" => ast::ScalarType::B32,
+    ".b64" => ast::ScalarType::B64,
+    ".u16" => ast::ScalarType::U16,
+    ".u32" => ast::ScalarType::U32,
+    ".u64" => ast::ScalarType::U64,
+    ".s16" => ast::ScalarType::S16,
+    ".s32" => ast::ScalarType::S32,
+    ".s64" => ast::ScalarType::S64,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-st
@@ -1393,16 +1393,16 @@ MinMaxDetails: ast::MinMaxDetails = {
     <t:UIntType> => ast::MinMaxDetails::Unsigned(t),
     <t:SIntType> => ast::MinMaxDetails::Signed(t),
     <ftz:".ftz"?> <nan:".NaN"?> ".f32" => ast::MinMaxDetails::Float(
-        ast::MinMaxFloat{ flush_to_zero: Some(ftz.is_some()), nan: nan.is_some(), typ: ast::FloatType::F32 }
+        ast::MinMaxFloat{ flush_to_zero: Some(ftz.is_some()), nan: nan.is_some(), typ: ast::ScalarType::F32 }
     ),
     ".f64" => ast::MinMaxDetails::Float(
-        ast::MinMaxFloat{ flush_to_zero: None, nan: false, typ: ast::FloatType::F64 }
+        ast::MinMaxFloat{ flush_to_zero: None, nan: false, typ: ast::ScalarType::F64 }
     ),
     <ftz:".ftz"?> <nan:".NaN"?> ".f16" => ast::MinMaxDetails::Float(
-        ast::MinMaxFloat{ flush_to_zero: Some(ftz.is_some()), nan: nan.is_some(), typ: ast::FloatType::F16 }
+        ast::MinMaxFloat{ flush_to_zero: Some(ftz.is_some()), nan: nan.is_some(), typ: ast::ScalarType::F16 }
     ),
     <ftz:".ftz"?> <nan:".NaN"?> ".f16x2" => ast::MinMaxDetails::Float(
-        ast::MinMaxFloat{ flush_to_zero: Some(ftz.is_some()), nan: nan.is_some(), typ: ast::FloatType::F16x2 }
+        ast::MinMaxFloat{ flush_to_zero: Some(ftz.is_some()), nan: nan.is_some(), typ: ast::ScalarType::F16x2 }
     )
 }
 
@@ -1411,18 +1411,18 @@ InstSelp: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "selp" <t:SelpType> <a:Arg4> => ast::Instruction::Selp(t, a),
 };
 
-SelpType: ast::SelpType = {
-    ".b16" => ast::SelpType::B16,
-    ".b32" => ast::SelpType::B32,
-    ".b64" => ast::SelpType::B64,
-    ".u16" => ast::SelpType::U16,
-    ".u32" => ast::SelpType::U32,
-    ".u64" => ast::SelpType::U64,
-    ".s16" => ast::SelpType::S16,
-    ".s32" => ast::SelpType::S32,
-    ".s64" => ast::SelpType::S64,
-    ".f32" => ast::SelpType::F32,
-    ".f64" => ast::SelpType::F64,
+SelpType: ast::ScalarType = {
+    ".b16" => ast::ScalarType::B16,
+    ".b32" => ast::ScalarType::B32,
+    ".b64" => ast::ScalarType::B64,
+    ".u16" => ast::ScalarType::U16,
+    ".u32" => ast::ScalarType::U32,
+    ".u64" => ast::ScalarType::U64,
+    ".s16" => ast::ScalarType::S16,
+    ".s32" => ast::ScalarType::S32,
+    ".s64" => ast::ScalarType::S64,
+    ".f32" => ast::ScalarType::F32,
+    ".f64" => ast::ScalarType::F64,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-bar
@@ -1454,7 +1454,7 @@ InstAtom: ast::Instruction<ast::ParsedArgParams<'input>> = {
             space: space.unwrap_or(ast::AtomSpace::Generic),
             inner: ast::AtomInnerDetails::Unsigned {
                 op: ast::AtomUIntOp::Inc,
-                typ: ast::UIntType::U32
+                typ: ast::ScalarType::U32
             }
         };
         ast::Instruction::Atom(details,a)
@@ -1466,7 +1466,7 @@ InstAtom: ast::Instruction<ast::ParsedArgParams<'input>> = {
             space: space.unwrap_or(ast::AtomSpace::Generic),
             inner: ast::AtomInnerDetails::Unsigned {
                 op: ast::AtomUIntOp::Dec,
-                typ: ast::UIntType::U32
+                typ: ast::ScalarType::U32
             }
         };
         ast::Instruction::Atom(details,a)
@@ -1544,19 +1544,19 @@ AtomSIntOp: ast::AtomSIntOp = {
     ".max" => ast::AtomSIntOp::Max,
 }
 
-BitType: ast::BitType = {
-    ".b32" => ast::BitType::B32,
-    ".b64" => ast::BitType::B64,
+BitType: ast::ScalarType = {
+    ".b32" => ast::ScalarType::B32,
+    ".b64" => ast::ScalarType::B64,
 }
 
-UIntType3264: ast::UIntType = {
-    ".u32" => ast::UIntType::U32,
-    ".u64" => ast::UIntType::U64,
+UIntType3264: ast::ScalarType = {
+    ".u32" => ast::ScalarType::U32,
+    ".u64" => ast::ScalarType::U64,
 }
 
-SIntType3264: ast::SIntType = {
-    ".s32" => ast::SIntType::S32,
-    ".s64" => ast::SIntType::S64,
+SIntType3264: ast::ScalarType = {
+    ".s32" => ast::ScalarType::S32,
+    ".s64" => ast::ScalarType::S64,
 }
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-div
@@ -1566,7 +1566,7 @@ InstDiv: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "div" <t:SIntType> <a:Arg3> => ast::Instruction::Div(ast::DivDetails::Signed(t), a),
     "div" <kind:DivFloatKind> <ftz:".ftz"?> ".f32" <a:Arg3> => {
         let inner = ast::DivFloatDetails {
-            typ: ast::FloatType::F32,
+            typ: ast::ScalarType::F32,
             flush_to_zero: Some(ftz.is_some()),
             kind
         };
@@ -1574,7 +1574,7 @@ InstDiv: ast::Instruction<ast::ParsedArgParams<'input>> = {
     },
     "div" <rnd:RoundingModeFloat> ".f64" <a:Arg3> => {
         let inner = ast::DivFloatDetails {
-            typ: ast::FloatType::F64,
+            typ: ast::ScalarType::F64,
             flush_to_zero: None,
             kind: ast::DivFloatKind::Rounding(rnd)
         };
@@ -1592,7 +1592,7 @@ DivFloatKind: ast::DivFloatKind = {
 InstSqrt: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "sqrt" ".approx" <ftz:".ftz"?> ".f32" <a:Arg2> => {
         let details = ast::SqrtDetails {
-            typ: ast::FloatType::F32,
+            typ: ast::ScalarType::F32,
             flush_to_zero: Some(ftz.is_some()),
             kind: ast::SqrtKind::Approx,
         };
@@ -1600,7 +1600,7 @@ InstSqrt: ast::Instruction<ast::ParsedArgParams<'input>> = {
     },
     "sqrt" <rnd:RoundingModeFloat> <ftz:".ftz"?> ".f32" <a:Arg2> => {
         let details = ast::SqrtDetails {
-            typ: ast::FloatType::F32,
+            typ: ast::ScalarType::F32,
             flush_to_zero: Some(ftz.is_some()),
             kind: ast::SqrtKind::Rounding(rnd),
         };
@@ -1608,7 +1608,7 @@ InstSqrt: ast::Instruction<ast::ParsedArgParams<'input>> = {
     },
     "sqrt" <rnd:RoundingModeFloat> ".f64" <a:Arg2> => {
         let details = ast::SqrtDetails {
-            typ: ast::FloatType::F64,
+            typ: ast::ScalarType::F64,
             flush_to_zero: None,
             kind: ast::SqrtKind::Rounding(rnd),
         };
@@ -1621,14 +1621,14 @@ InstSqrt: ast::Instruction<ast::ParsedArgParams<'input>> = {
 InstRsqrt: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "rsqrt" ".approx" <ftz:".ftz"?> ".f32" <a:Arg2> => {
         let details = ast::RsqrtDetails {
-            typ: ast::FloatType::F32,
+            typ: ast::ScalarType::F32,
             flush_to_zero: ftz.is_some(),
         };
         ast::Instruction::Rsqrt(details, a)
     },
     "rsqrt" ".approx" <ftz:".ftz"?> ".f64" <a:Arg2> => {
         let details = ast::RsqrtDetails {
-            typ: ast::FloatType::F64,
+            typ: ast::ScalarType::F64,
             flush_to_zero: ftz.is_some(),
         };
         ast::Instruction::Rsqrt(details, a)
@@ -1739,7 +1739,7 @@ ArithDetails: ast::ArithDetails = {
         saturate: false,
     }),
     ".sat" ".s32" => ast::ArithDetails::Signed(ast::ArithSInt {
-        typ: ast::SIntType::S32,
+        typ: ast::ScalarType::S32,
         saturate: true,
     }),
     <f:ArithFloat> => ast::ArithDetails::Float(f)
@@ -1747,25 +1747,25 @@ ArithDetails: ast::ArithDetails = {
 
 ArithFloat: ast::ArithFloat = {
     <rn:RoundingModeFloat?> <ftz:".ftz"?> <sat:".sat"?> ".f32" => ast::ArithFloat {
-        typ: ast::FloatType::F32,
+        typ: ast::ScalarType::F32,
         rounding: rn,
         flush_to_zero: Some(ftz.is_some()),
         saturate: sat.is_some(),
     },
     <rn:RoundingModeFloat?> ".f64" => ast::ArithFloat {
-        typ: ast::FloatType::F64,
+        typ: ast::ScalarType::F64,
         rounding: rn,
         flush_to_zero: None,
         saturate: false,
     },
     <rn:".rn"?> <ftz:".ftz"?> <sat:".sat"?> ".f16" => ast::ArithFloat {
-        typ: ast::FloatType::F16,
+        typ: ast::ScalarType::F16,
         rounding: rn.map(|_| ast::RoundingMode::NearestEven),
         flush_to_zero: Some(ftz.is_some()),
         saturate: sat.is_some(),
     },
     <rn:".rn"?> <ftz:".ftz"?> <sat:".sat"?> ".f16x2" => ast::ArithFloat {
-        typ: ast::FloatType::F16x2,
+        typ: ast::ScalarType::F16x2,
         rounding: rn.map(|_| ast::RoundingMode::NearestEven),
         flush_to_zero: Some(ftz.is_some()),
         saturate: sat.is_some(),
@@ -1774,25 +1774,25 @@ ArithFloat: ast::ArithFloat = {
 
 ArithFloatMustRound: ast::ArithFloat = {
     <rn:RoundingModeFloat> <ftz:".ftz"?> <sat:".sat"?> ".f32" => ast::ArithFloat {
-        typ: ast::FloatType::F32,
+        typ: ast::ScalarType::F32,
         rounding: Some(rn),
         flush_to_zero: Some(ftz.is_some()),
         saturate: sat.is_some(),
     },
     <rn:RoundingModeFloat> ".f64" => ast::ArithFloat {
-        typ: ast::FloatType::F64,
+        typ: ast::ScalarType::F64,
         rounding: Some(rn),
         flush_to_zero: None,
         saturate: false,
     },
     ".rn" <ftz:".ftz"?> <sat:".sat"?> ".f16" => ast::ArithFloat {
-        typ: ast::FloatType::F16,
+        typ: ast::ScalarType::F16,
         rounding: Some(ast::RoundingMode::NearestEven),
         flush_to_zero: Some(ftz.is_some()),
         saturate: sat.is_some(),
     },
     ".rn" <ftz:".ftz"?> <sat:".sat"?> ".f16x2" => ast::ArithFloat {
-        typ: ast::FloatType::F16x2,
+        typ: ast::ScalarType::F16x2,
         rounding: Some(ast::RoundingMode::NearestEven),
         flush_to_zero: Some(ftz.is_some()),
         saturate: sat.is_some(),
