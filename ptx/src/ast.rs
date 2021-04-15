@@ -284,6 +284,7 @@ pub enum PointerType {
     Scalar(ScalarType),
     Vector(ScalarType, u8),
     Array(ScalarType, VecU32),
+    // Instances of this variant are generated during stateful conversion
     Pointer(ScalarType, LdStateSpace),
 }
 
@@ -1141,7 +1142,7 @@ impl<'a> NumsOrArrays<'a> {
             ScalarType::F64 => {
                 Self::parse_and_copy_single_t::<f64>(idx, str_val, radix, output)?;
             }
-            ScalarType::Pred => todo!()
+            ScalarType::Pred => todo!(),
         }
         Ok(())
     }
