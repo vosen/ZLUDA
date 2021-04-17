@@ -1,6 +1,5 @@
 use half::f16;
 use lalrpop_util::{lexer::Token, ParseError};
-use std::convert::TryInto;
 use std::{convert::From, convert::TryFrom, mem, num::ParseFloatError, str::FromStr};
 use std::{marker::PhantomData, num::ParseIntError};
 
@@ -34,107 +33,12 @@ pub enum PtxError {
     NonExternPointer,
 }
 
-macro_rules! sub_type {
-    ($type_name:ident { $($variant:ident ( $($field_type:ident),+ ) ),+ $(,)? } ) => {
-        sub_type! { $type_name : Type {
-            $(
-                $variant ($($field_type),+),
-            )+
-         }}
-    };
-    ($type_name:ident : $base_type:ident { $($variant:ident ( $($field_type:ident),+ ) ),+ $(,)? } ) => {
-        #[derive(PartialEq, Eq, Clone)]
-        pub enum $type_name {
-            $(
-                $variant ($($field_type),+),
-            )+
-        }
-
-        impl From<$type_name> for $base_type {
-            #[allow(non_snake_case)]
-            fn from(t: $type_name) -> $base_type {
-                match t {
-                    $(
-                        $type_name::$variant ( $($field_type),+ ) => <$base_type>::$variant ( $($field_type.into()),+),
-                    )+
-                }
-            }
-        }
-
-        impl std::convert::TryFrom<$base_type> for $type_name {
-            type Error = ();
-
-            #[allow(non_snake_case)]
-            #[allow(unreachable_patterns)]
-            fn try_from(t: $base_type) -> Result<Self, Self::Error> {
-                match t {
-                    $(
-                        $base_type::$variant ( $($field_type),+ )  => Ok($type_name::$variant ( $($field_type.try_into().map_err(|_| ())? ),+ )),
-                    )+
-                        _ => Err(()),
-                }
-            }
-        }
-    };
-}
-
-sub_type! {
-    VariableRegType {
-        Scalar(ScalarType),
-        Vector(ScalarType, u8),
-        // Array type is used when emiting SSA statements at the start of a method
-        Array(ScalarType, VecU32),
-        // Pointer variant is used when passing around SLM pointer between
-        // function calls for dynamic SLM
-        Pointer(ScalarType, LdStateSpace)
-    }
-}
-
-type VecU32 = Vec<u32>;
-
-sub_type! {
-    VariableLocalType {
-        Scalar(ScalarType),
-        Vector(ScalarType, u8),
-        Array(ScalarType, VecU32),
-    }
-}
-
-impl TryFrom<VariableGlobalType> for VariableLocalType {
-    type Error = PtxError;
-
-    fn try_from(value: VariableGlobalType) -> Result<Self, Self::Error> {
-        match value {
-            VariableGlobalType::Scalar(t) => Ok(VariableLocalType::Scalar(t)),
-            VariableGlobalType::Vector(t, len) => Ok(VariableLocalType::Vector(t, len)),
-            VariableGlobalType::Array(t, len) => Ok(VariableLocalType::Array(t, len)),
-            VariableGlobalType::Pointer(_, _) => Err(PtxError::ZeroDimensionArray),
-        }
-    }
-}
-
-sub_type! {
-    VariableGlobalType {
-        Scalar(ScalarType),
-        Vector(ScalarType, u8),
-        Array(ScalarType, VecU32),
-        Pointer(ScalarType, LdStateSpace),
-    }
-}
-
 // For some weird reson this is illegal:
 //   .param .f16x2 foobar;
 // but this is legal:
 //   .param .f16x2 foobar[1];
 // even more interestingly this is legal, but only in .func (not in .entry):
 //   .param .b32 foobar[]
-sub_type! {
-    VariableParamType {
-        Scalar(ScalarType),
-        Array(ScalarType, VecU32),
-        Pointer(ScalarType, LdStateSpace),
-    }
-}
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum BarDetails {
@@ -178,7 +82,7 @@ pub struct Module<'a> {
 }
 
 pub enum Directive<'a, P: ArgParams> {
-    Variable(Variable<VariableType, P::Id>),
+    Variable(Variable<P::Id>),
     Method(Function<'a, &'a str, Statement<P>>),
 }
 
@@ -190,8 +94,8 @@ pub enum MethodDecl<'a, ID> {
     },
 }
 
-pub type FnArgument<ID> = Variable<FnArgumentType, ID>;
-pub type KernelArgument<ID> = Variable<KernelArgumentType, ID>;
+pub type FnArgument<ID> = Variable<ID>;
+pub type KernelArgument<ID> = Variable<ID>;
 
 pub struct Function<'a, ID, S> {
     pub func_directive: MethodDecl<'a, ID>,
@@ -200,76 +104,6 @@ pub struct Function<'a, ID, S> {
 }
 
 pub type ParsedFunction<'a> = Function<'a, &'a str, Statement<ParsedArgParams<'a>>>;
-
-#[derive(PartialEq, Eq, Clone)]
-pub enum FnArgumentType {
-    Reg(VariableRegType),
-    Param(VariableParamType),
-    Shared,
-}
-#[derive(PartialEq, Eq, Clone)]
-pub enum KernelArgumentType {
-    Normal(VariableParamType),
-    Shared,
-}
-
-impl From<KernelArgumentType> for Type {
-    fn from(this: KernelArgumentType) -> Self {
-        match this {
-            KernelArgumentType::Normal(typ) => typ.into(),
-            KernelArgumentType::Shared => {
-                Type::Pointer(PointerType::Scalar(ScalarType::B8), LdStateSpace::Shared)
-            }
-        }
-    }
-}
-
-impl FnArgumentType {
-    pub fn to_type(&self, is_kernel: bool) -> Type {
-        if is_kernel {
-            self.to_kernel_type()
-        } else {
-            self.to_func_type()
-        }
-    }
-
-    pub fn to_kernel_type(&self) -> Type {
-        match self {
-            FnArgumentType::Reg(x) => x.clone().into(),
-            FnArgumentType::Param(x) => x.clone().into(),
-            FnArgumentType::Shared => {
-                Type::Pointer(PointerType::Scalar(ScalarType::B8), LdStateSpace::Shared)
-            }
-        }
-    }
-
-    pub fn to_func_type(&self) -> Type {
-        match self {
-            FnArgumentType::Reg(x) => x.clone().into(),
-            FnArgumentType::Param(VariableParamType::Scalar(t)) => {
-                Type::Pointer(PointerType::Scalar((*t).into()), LdStateSpace::Param)
-            }
-            FnArgumentType::Param(VariableParamType::Array(t, dims)) => Type::Pointer(
-                PointerType::Array((*t).into(), dims.clone()),
-                LdStateSpace::Param,
-            ),
-            FnArgumentType::Param(VariableParamType::Pointer(t, space)) => Type::Pointer(
-                PointerType::Pointer((*t).into(), (*space).into()),
-                LdStateSpace::Param,
-            ),
-            FnArgumentType::Shared => {
-                Type::Pointer(PointerType::Scalar(ScalarType::B8), LdStateSpace::Shared)
-            }
-        }
-    }
-
-    pub fn is_param(&self) -> bool {
-        match self {
-            FnArgumentType::Param(_) => true,
-            _ => false,
-        }
-    }
-}
 
 #[derive(PartialEq, Eq, Clone)]
 pub enum Type {
@@ -283,7 +117,7 @@ pub enum Type {
 pub enum PointerType {
     Scalar(ScalarType),
     Vector(ScalarType, u8),
-    Array(ScalarType, VecU32),
+    Array(ScalarType, Vec<u32>),
     // Instances of this variant are generated during stateful conversion
     Pointer(ScalarType, LdStateSpace),
 }
@@ -366,49 +200,17 @@ pub enum Statement<P: ArgParams> {
 }
 
 pub struct MultiVariable<ID> {
-    pub var: Variable<VariableType, ID>,
+    pub var: Variable<ID>,
     pub count: Option<u32>,
 }
 
 #[derive(Clone)]
-pub struct Variable<T, ID> {
+pub struct Variable<ID> {
     pub align: Option<u32>,
-    pub v_type: T,
+    pub v_type: Type,
+    pub state_space: StateSpace,
     pub name: ID,
     pub array_init: Vec<u8>,
-}
-
-#[derive(Eq, PartialEq, Clone)]
-pub enum VariableType {
-    Reg(VariableRegType),
-    Local(VariableLocalType),
-    Param(VariableParamType),
-    Global(VariableGlobalType),
-    Shared(VariableGlobalType),
-}
-
-impl VariableType {
-    pub fn to_type(&self) -> (StateSpace, Type) {
-        match self {
-            VariableType::Reg(t) => (StateSpace::Reg, t.clone().into()),
-            VariableType::Local(t) => (StateSpace::Local, t.clone().into()),
-            VariableType::Param(t) => (StateSpace::Param, t.clone().into()),
-            VariableType::Global(t) => (StateSpace::Global, t.clone().into()),
-            VariableType::Shared(t) => (StateSpace::Shared, t.clone().into()),
-        }
-    }
-}
-
-impl From<VariableType> for Type {
-    fn from(t: VariableType) -> Self {
-        match t {
-            VariableType::Reg(t) => t.into(),
-            VariableType::Local(t) => t.into(),
-            VariableType::Param(t) => t.into(),
-            VariableType::Global(t) => t.into(),
-            VariableType::Shared(t) => t.into(),
-        }
-    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -419,6 +221,7 @@ pub enum StateSpace {
     Local,
     Shared,
     Param,
+    Generic,
 }
 
 pub struct PredAt<ID> {

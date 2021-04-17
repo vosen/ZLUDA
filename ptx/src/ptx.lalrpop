@@ -404,28 +404,29 @@ FnArguments: Vec<ast::FnArgument<&'input str>> = {
     "(" <args:Comma<FnInput>> ")" => args
 };
 
-KernelInput: ast::Variable<ast::KernelArgumentType, &'input str> = {
+KernelInput: ast::Variable<&'input str> = {
     <v:ParamDeclaration> => {
         let (align, v_type, name) = v;
         ast::Variable {
             align,
-            v_type: ast::KernelArgumentType::Normal(v_type),
+            v_type,
+            state_space: ast::StateSpace::Param,
             name,
             array_init: Vec::new()
         }
     }
 }
 
-FnInput: ast::Variable<ast::FnArgumentType, &'input str> = {
+FnInput: ast::Variable<&'input str> = {
     <v:RegVariable> => {
         let (align, v_type, name) = v;
-        let v_type = ast::FnArgumentType::Reg(v_type);
-        ast::Variable{ align, v_type, name, array_init: Vec::new() }
+        let state_space = ast::StateSpace::Reg;
+        ast::Variable{ align, v_type, state_space, name, array_init: Vec::new() }
     },
     <v:ParamDeclaration> => {
         let (align, v_type, name) = v;
-        let v_type = ast::FnArgumentType::Param(v_type);
-        ast::Variable{ align, v_type, name, array_init: Vec::new() }
+        let state_space = ast::StateSpace::Param;
+        ast::Variable{ align, v_type, state_space, name, array_init: Vec::new() }
     }
 }
 
@@ -508,102 +509,109 @@ VariableParam: u32 = {
     "<" <n:U32Num> ">" => n
 }
 
-Variable: ast::Variable<ast::VariableType, &'input str> = {
+Variable: ast::Variable<&'input str> = {
     <v:RegVariable> => {
         let (align, v_type, name) = v;
-        let v_type = ast::VariableType::Reg(v_type);
-        ast::Variable {align, v_type, name, array_init: Vec::new()}
+        let state_space = ast::StateSpace::Reg;
+        ast::Variable {align, v_type, state_space, name, array_init: Vec::new()}
     },
     LocalVariable,
     <v:ParamVariable> => {
         let (align, array_init, v_type, name) = v;
-        let v_type = ast::VariableType::Param(v_type);
-        ast::Variable {align, v_type, name, array_init}
+        let state_space = ast::StateSpace::Param;
+        ast::Variable {align, v_type, state_space, name, array_init}
     },
     SharedVariable,
 };
 
-RegVariable: (Option<u32>, ast::VariableRegType, &'input str) = {
+RegVariable: (Option<u32>, ast::Type, &'input str) = {
     ".reg" <var:VariableScalar<ScalarType>> => {
         let (align, t, name) = var;
-        let v_type = ast::VariableRegType::Scalar(t);
+        let v_type = ast::Type::Scalar(t);
         (align, v_type, name)
     },
     ".reg" <var:VariableVector<SizedScalarType>> => {
         let (align, v_len, t, name) = var;
-        let v_type = ast::VariableRegType::Vector(t, v_len);
+        let v_type = ast::Type::Vector(t, v_len);
         (align, v_type, name)
     }
 }
 
-LocalVariable: ast::Variable<ast::VariableType, &'input str> = {
+LocalVariable: ast::Variable<&'input str> = {
     ".local" <var:VariableScalar<SizedScalarType>> => {
         let (align, t, name) = var;
-        let v_type = ast::VariableType::Local(ast::VariableLocalType::Scalar(t));
-        ast::Variable { align, v_type, name, array_init: Vec::new() }
+        let v_type = ast::Type::Scalar(t);
+        let state_space = ast::StateSpace::Local;
+        ast::Variable { align, v_type, state_space, name, array_init: Vec::new() }
     },
     ".local" <var:VariableVector<SizedScalarType>> => {
         let (align, v_len, t, name) = var;
-        let v_type = ast::VariableType::Local(ast::VariableLocalType::Vector(t, v_len));
-        ast::Variable { align, v_type, name, array_init: Vec::new() }
+        let v_type = ast::Type::Vector(t, v_len);
+        let state_space = ast::StateSpace::Local;
+        ast::Variable { align, v_type, state_space, name, array_init: Vec::new() }
     },
     ".local" <var:VariableArrayOrPointer<SizedScalarType>> =>? {
         let (align, t, name, arr_or_ptr) = var;
+        let state_space = ast::StateSpace::Local;
         let (v_type, array_init) = match arr_or_ptr {
             ast::ArrayOrPointer::Array { dimensions, init } => {
-                (ast::VariableLocalType::Array(t, dimensions), init)
+                (ast::Type::Array(t, dimensions), init)
             }
             ast::ArrayOrPointer::Pointer => {
                 return Err(ParseError::User { error: ast::PtxError::ZeroDimensionArray });
             }
         };
-        Ok(ast::Variable { align, v_type: ast::VariableType::Local(v_type), name, array_init })
+        Ok(ast::Variable { align, v_type, state_space, name, array_init })
     }
 }
 
-SharedVariable: ast::Variable<ast::VariableType, &'input str> = {
+SharedVariable: ast::Variable<&'input str> = {
     ".shared" <var:VariableScalar<SizedScalarType>> => {
         let (align, t, name) = var;
-        let v_type = ast::VariableGlobalType::Scalar(t);
-        ast::Variable { align, v_type: ast::VariableType::Shared(v_type), name, array_init: Vec::new() }
+        let state_space = ast::StateSpace::Shared;
+        let v_type = ast::Type::Scalar(t);
+        ast::Variable { align, v_type, state_space, name, array_init: Vec::new() }
     },
     ".shared" <var:VariableVector<SizedScalarType>> => {
         let (align, v_len, t, name) = var;
-        let v_type = ast::VariableGlobalType::Vector(t, v_len);
-        ast::Variable { align, v_type: ast::VariableType::Shared(v_type), name, array_init: Vec::new() }
+        let state_space = ast::StateSpace::Shared;
+        let v_type = ast::Type::Vector(t, v_len);
+        ast::Variable { align, v_type, state_space, name, array_init: Vec::new() }
     },
     ".shared" <var:VariableArrayOrPointer<SizedScalarType>> =>? {
         let (align, t, name, arr_or_ptr) = var;
+        let state_space = ast::StateSpace::Shared;
         let (v_type, array_init) = match arr_or_ptr {
             ast::ArrayOrPointer::Array { dimensions, init } => {
-                (ast::VariableGlobalType::Array(t, dimensions), init)
+                (ast::Type::Array(t, dimensions), init)
             }
             ast::ArrayOrPointer::Pointer => {
                 return Err(ParseError::User { error: ast::PtxError::ZeroDimensionArray });
             }
         };
-        Ok(ast::Variable { align, v_type: ast::VariableType::Shared(v_type), name, array_init })
+        Ok(ast::Variable { align, v_type, state_space, name, array_init })
     }
 }
 
-
-ModuleVariable: ast::Variable<ast::VariableType, &'input str> = {
+ModuleVariable: ast::Variable<&'input str> = {
     LinkingDirectives ".global" <def:GlobalVariableDefinitionNoArray> => {
         let (align, v_type, name, array_init) = def;
-        ast::Variable { align, v_type: ast::VariableType::Global(v_type), name, array_init }
+        let state_space = ast::StateSpace::Global;
+        ast::Variable { align, v_type, state_space, name, array_init }
     },
     LinkingDirectives ".shared" <def:GlobalVariableDefinitionNoArray> => {
         let (align, v_type, name, array_init) = def;
-        ast::Variable { align, v_type: ast::VariableType::Shared(v_type), name, array_init: Vec::new() }
+        let state_space = ast::StateSpace::Shared;
+        ast::Variable { align, v_type, state_space, name, array_init: Vec::new() }
     },
     <ldirs:LinkingDirectives> <space:Or<".global", ".shared">> <var:VariableArrayOrPointer<SizedScalarType>> =>? {
         let (align, t, name, arr_or_ptr) = var;
-        let (v_type, array_init) = match arr_or_ptr {
+        let (v_type, state_space, array_init) = match arr_or_ptr {
             ast::ArrayOrPointer::Array { dimensions, init } => {
                 if space == ".global" {
-                    (ast::VariableType::Global(ast::VariableGlobalType::Array(t, dimensions)), init)
+                    (ast::Type::Array(t, dimensions), ast::StateSpace::Global, init)
                 } else {
-                    (ast::VariableType::Shared(ast::VariableGlobalType::Array(t, dimensions)), init)
+                    (ast::Type::Array(t, dimensions), ast::StateSpace::Shared, init)
                 }
             }
             ast::ArrayOrPointer::Pointer => {
@@ -611,38 +619,38 @@ ModuleVariable: ast::Variable<ast::VariableType, &'input str> = {
                     return Err(ParseError::User { error: ast::PtxError::NonExternPointer });
                 }
                 if space == ".global" {
-                    (ast::VariableType::Global(ast::VariableGlobalType::Pointer(t, ast::LdStateSpace::Global)), Vec::new())
+                    (ast::Type::Pointer(ast::PointerType::Scalar(t), ast::LdStateSpace::Global), ast::StateSpace::Global, Vec::new())
                 } else {
-                    (ast::VariableType::Shared(ast::VariableGlobalType::Pointer(t, ast::LdStateSpace::Shared)), Vec::new())
+                    (ast::Type::Pointer(ast::PointerType::Scalar(t), ast::LdStateSpace::Shared), ast::StateSpace::Shared, Vec::new())
                 }
             }
         };
-        Ok(ast::Variable{ align, array_init, v_type, name })
+        Ok(ast::Variable{ align, v_type, state_space, name, array_init })
     }
 }
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parameter-state-space
-ParamVariable: (Option<u32>, Vec<u8>, ast::VariableParamType, &'input str) = {
+ParamVariable: (Option<u32>, Vec<u8>, ast::Type, &'input str) = {
     ".param" <var:VariableScalar<LdStScalarType>> => {
         let (align, t, name) = var;
-        let v_type = ast::VariableParamType::Scalar(t);
+        let v_type = ast::Type::Scalar(t);
         (align, Vec::new(), v_type, name)
     },
     ".param" <var:VariableArrayOrPointer<SizedScalarType>> => {
         let (align, t, name, arr_or_ptr) = var;
         let (v_type, array_init) = match arr_or_ptr {
             ast::ArrayOrPointer::Array { dimensions, init } => {
-                (ast::VariableParamType::Array(t, dimensions), init)
+                (ast::Type::Array(t, dimensions), init)
             }
             ast::ArrayOrPointer::Pointer => {
-                (ast::VariableParamType::Pointer(t, ast::LdStateSpace::Param), Vec::new())
+                (ast::Type::Pointer(ast::PointerType::Scalar(t), ast::LdStateSpace::Param), Vec::new())
             }
         };
         (align, array_init, v_type, name)
     }
 }
 
-ParamDeclaration: (Option<u32>, ast::VariableParamType, &'input str) = {
+ParamDeclaration: (Option<u32>, ast::Type, &'input str) = {
     <var:ParamVariable> =>? {
         let (align, array_init, v_type, name) = var;
         if array_init.len() > 0 {
@@ -653,15 +661,15 @@ ParamDeclaration: (Option<u32>, ast::VariableParamType, &'input str) = {
     }
 }
 
-GlobalVariableDefinitionNoArray: (Option<u32>, ast::VariableGlobalType, &'input str, Vec<u8>) = {
+GlobalVariableDefinitionNoArray: (Option<u32>, ast::Type, &'input str, Vec<u8>) = {
     <scalar:VariableScalar<SizedScalarType>> => {
         let (align, t, name) = scalar;
-        let v_type = ast::VariableGlobalType::Scalar(t);
+        let v_type = ast::Type::Scalar(t);
         (align, v_type, name, Vec::new())
     },
     <var:VariableVector<SizedScalarType>> => {
         let (align, v_len, t, name) = var;
-        let v_type = ast::VariableGlobalType::Vector(t, v_len);
+        let v_type = ast::Type::Vector(t, v_len);
         (align, v_type, name, Vec::new())
     },
 }
