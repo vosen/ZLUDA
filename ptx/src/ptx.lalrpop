@@ -619,9 +619,9 @@ ModuleVariable: ast::Variable<&'input str> = {
                     return Err(ParseError::User { error: ast::PtxError::NonExternPointer });
                 }
                 if space == ".global" {
-                    (ast::Type::Pointer(ast::PointerType::Scalar(t), ast::LdStateSpace::Global), ast::StateSpace::Global, Vec::new())
+                    (ast::Type::Pointer(t), ast::StateSpace::Global, Vec::new())
                 } else {
-                    (ast::Type::Pointer(ast::PointerType::Scalar(t), ast::LdStateSpace::Shared), ast::StateSpace::Shared, Vec::new())
+                    (ast::Type::Pointer(t), ast::StateSpace::Shared, Vec::new())
                 }
             }
         };
@@ -643,7 +643,7 @@ ParamVariable: (Option<u32>, Vec<u8>, ast::Type, &'input str) = {
                 (ast::Type::Array(t, dimensions), init)
             }
             ast::ArrayOrPointer::Pointer => {
-                (ast::Type::Pointer(ast::PointerType::Scalar(t), ast::LdStateSpace::Param), Vec::new())
+                (ast::Type::Pointer(t), Vec::new())
             }
         };
         (align, array_init, v_type, name)
@@ -763,7 +763,7 @@ InstLd: ast::Instruction<ast::ParsedArgParams<'input>> = {
         ast::Instruction::Ld(
             ast::LdDetails {
                 qualifier: q.unwrap_or(ast::LdStQualifier::Weak),
-                state_space: ss.unwrap_or(ast::LdStateSpace::Generic),
+                state_space: ss.unwrap_or(ast::StateSpace::Generic),
                 caching: cop.unwrap_or(ast::LdCacheOperator::Cached),
                 typ: t,
                 non_coherent: false
@@ -775,7 +775,7 @@ InstLd: ast::Instruction<ast::ParsedArgParams<'input>> = {
         ast::Instruction::Ld(
             ast::LdDetails {
                 qualifier: q.unwrap_or(ast::LdStQualifier::Weak),
-                state_space: ast::LdStateSpace::Global,
+                state_space: ast::StateSpace::Global,
                 caching: cop.unwrap_or(ast::LdCacheOperator::Cached),
                 typ: t,
                 non_coherent: false
@@ -787,7 +787,7 @@ InstLd: ast::Instruction<ast::ParsedArgParams<'input>> = {
         ast::Instruction::Ld(
             ast::LdDetails {
                 qualifier: ast::LdStQualifier::Weak,
-                state_space: ast::LdStateSpace::Global,
+                state_space: ast::StateSpace::Global,
                 caching: cop.unwrap_or(ast::LdCacheOperator::Cached),
                 typ: t,
                 non_coherent: true
@@ -797,9 +797,9 @@ InstLd: ast::Instruction<ast::ParsedArgParams<'input>> = {
     }
 };
 
-LdStType: ast::PointerType = {
-    <v:VectorPrefix> <t:LdStScalarType> => ast::PointerType::Vector(t, v),
-    <t:LdStScalarType> => ast::PointerType::Scalar(t),
+LdStType: ast::Type = {
+    <v:VectorPrefix> <t:LdStScalarType> => ast::Type::Vector(t, v),
+    <t:LdStScalarType> => ast::Type::Scalar(t),
 }
 
 LdStQualifier: ast::LdStQualifier = {
@@ -815,11 +815,11 @@ MemScope: ast::MemScope = {
     ".sys" => ast::MemScope::Sys
 };
 
-LdNonGlobalStateSpace: ast::LdStateSpace = {
-    ".const" => ast::LdStateSpace::Const,
-    ".local" => ast::LdStateSpace::Local,
-    ".param" => ast::LdStateSpace::Param,
-    ".shared" => ast::LdStateSpace::Shared,
+LdNonGlobalStateSpace: ast::StateSpace = {
+    ".const" => ast::StateSpace::Const,
+    ".local" => ast::StateSpace::Local,
+    ".param" => ast::StateSpace::Param,
+    ".shared" => ast::StateSpace::Shared,
 };
 
 LdCacheOperator: ast::LdCacheOperator = {
@@ -1235,7 +1235,7 @@ InstSt: ast::Instruction<ast::ParsedArgParams<'input>> = {
         ast::Instruction::St(
             ast::StData {
                 qualifier: q.unwrap_or(ast::LdStQualifier::Weak),
-                state_space: ss.unwrap_or(ast::StStateSpace::Generic),
+                state_space: ss.unwrap_or(ast::StateSpace::Generic),
                 caching: cop.unwrap_or(ast::StCacheOperator::Writeback),
                 typ: t
             },
@@ -1249,11 +1249,11 @@ MemoryOperand: ast::Operand<&'input str> = {
     "[" <o:Operand> "]" => o
 }
 
-StStateSpace: ast::StStateSpace = {
-    ".global" => ast::StStateSpace::Global,
-    ".local" => ast::StStateSpace::Local,
-    ".param" => ast::StStateSpace::Param,
-    ".shared" => ast::StStateSpace::Shared,
+StStateSpace: ast::StateSpace = {
+    ".global" => ast::StateSpace::Global,
+    ".local" => ast::StateSpace::Local,
+    ".param" => ast::StateSpace::Param,
+    ".shared" => ast::StateSpace::Shared,
 };
 
 StCacheOperator: ast::StCacheOperator = {
@@ -1272,7 +1272,7 @@ InstRet: ast::Instruction<ast::ParsedArgParams<'input>> = {
 InstCvta: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "cvta" <from:CvtaStateSpace> <s:CvtaSize> <a:Arg2> => {
         ast::Instruction::Cvta(ast::CvtaDetails {
-            to: ast::CvtaStateSpace::Generic,
+            to: ast::StateSpace::Generic,
             from,
             size: s
         },
@@ -1281,18 +1281,18 @@ InstCvta: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "cvta" ".to" <to:CvtaStateSpace> <s:CvtaSize> <a:Arg2> => {
         ast::Instruction::Cvta(ast::CvtaDetails {
             to,
-            from: ast::CvtaStateSpace::Generic,
+            from: ast::StateSpace::Generic,
             size: s
         },
         a)
     }
 }
 
-CvtaStateSpace: ast::CvtaStateSpace = {
-    ".const" => ast::CvtaStateSpace::Const,
-    ".global" => ast::CvtaStateSpace::Global,
-    ".local" => ast::CvtaStateSpace::Local,
-    ".shared" => ast::CvtaStateSpace::Shared,
+CvtaStateSpace: ast::StateSpace = {
+    ".const" => ast::StateSpace::Const,
+    ".global" => ast::StateSpace::Global,
+    ".local" => ast::StateSpace::Local,
+    ".shared" => ast::StateSpace::Shared,
 }
 
 CvtaSize: ast::CvtaSize = {
@@ -1450,7 +1450,7 @@ InstAtom: ast::Instruction<ast::ParsedArgParams<'input>> = {
         let details = ast::AtomDetails {
             semantics: sema.unwrap_or(ast::AtomSemantics::Relaxed),
             scope: scope.unwrap_or(ast::MemScope::Gpu),
-            space: space.unwrap_or(ast::AtomSpace::Generic),
+            space: space.unwrap_or(ast::StateSpace::Generic),
             inner: ast::AtomInnerDetails::Bit { op, typ }
         };
         ast::Instruction::Atom(details,a)
@@ -1459,7 +1459,7 @@ InstAtom: ast::Instruction<ast::ParsedArgParams<'input>> = {
         let details = ast::AtomDetails {
             semantics: sema.unwrap_or(ast::AtomSemantics::Relaxed),
             scope: scope.unwrap_or(ast::MemScope::Gpu),
-            space: space.unwrap_or(ast::AtomSpace::Generic),
+            space: space.unwrap_or(ast::StateSpace::Generic),
             inner: ast::AtomInnerDetails::Unsigned {
                 op: ast::AtomUIntOp::Inc,
                 typ: ast::ScalarType::U32
@@ -1471,7 +1471,7 @@ InstAtom: ast::Instruction<ast::ParsedArgParams<'input>> = {
         let details = ast::AtomDetails {
             semantics: sema.unwrap_or(ast::AtomSemantics::Relaxed),
             scope: scope.unwrap_or(ast::MemScope::Gpu),
-            space: space.unwrap_or(ast::AtomSpace::Generic),
+            space: space.unwrap_or(ast::StateSpace::Generic),
             inner: ast::AtomInnerDetails::Unsigned {
                 op: ast::AtomUIntOp::Dec,
                 typ: ast::ScalarType::U32
@@ -1484,7 +1484,7 @@ InstAtom: ast::Instruction<ast::ParsedArgParams<'input>> = {
         let details = ast::AtomDetails {
             semantics: sema.unwrap_or(ast::AtomSemantics::Relaxed),
             scope: scope.unwrap_or(ast::MemScope::Gpu),
-            space: space.unwrap_or(ast::AtomSpace::Generic),
+            space: space.unwrap_or(ast::StateSpace::Generic),
             inner: ast::AtomInnerDetails::Float { op, typ }
         };
         ast::Instruction::Atom(details,a)
@@ -1493,7 +1493,7 @@ InstAtom: ast::Instruction<ast::ParsedArgParams<'input>> = {
         let details = ast::AtomDetails {
             semantics: sema.unwrap_or(ast::AtomSemantics::Relaxed),
             scope: scope.unwrap_or(ast::MemScope::Gpu),
-            space: space.unwrap_or(ast::AtomSpace::Generic),
+            space: space.unwrap_or(ast::StateSpace::Generic),
             inner: ast::AtomInnerDetails::Unsigned { op, typ }
         };
         ast::Instruction::Atom(details,a)
@@ -1502,7 +1502,7 @@ InstAtom: ast::Instruction<ast::ParsedArgParams<'input>> = {
         let details = ast::AtomDetails {
             semantics: sema.unwrap_or(ast::AtomSemantics::Relaxed),
             scope: scope.unwrap_or(ast::MemScope::Gpu),
-            space: space.unwrap_or(ast::AtomSpace::Generic),
+            space: space.unwrap_or(ast::StateSpace::Generic),
             inner: ast::AtomInnerDetails::Signed { op, typ }
         };
         ast::Instruction::Atom(details,a)
@@ -1514,7 +1514,7 @@ InstAtomCas: ast::Instruction<ast::ParsedArgParams<'input>> = {
         let details = ast::AtomCasDetails {
             semantics: sema.unwrap_or(ast::AtomSemantics::Relaxed),
             scope: scope.unwrap_or(ast::MemScope::Gpu),
-            space: space.unwrap_or(ast::AtomSpace::Generic),
+            space: space.unwrap_or(ast::StateSpace::Generic),
             typ,
         };
         ast::Instruction::AtomCas(details,a)
@@ -1528,9 +1528,9 @@ AtomSemantics: ast::AtomSemantics = {
     ".acq_rel" => ast::AtomSemantics::AcquireRelease
 }
 
-AtomSpace: ast::AtomSpace = {
-    ".global" => ast::AtomSpace::Global,
-    ".shared" => ast::AtomSpace::Shared
+AtomSpace: ast::StateSpace = {
+    ".global" => ast::StateSpace::Global,
+    ".shared" => ast::StateSpace::Shared
 }
 
 AtomBitOp: ast::AtomBitOp = {

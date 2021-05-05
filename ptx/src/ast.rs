@@ -1,6 +1,6 @@
 use half::f16;
 use lalrpop_util::{lexer::Token, ParseError};
-use std::{convert::From, convert::TryFrom, mem, num::ParseFloatError, str::FromStr};
+use std::{convert::From, mem, num::ParseFloatError, str::FromStr};
 use std::{marker::PhantomData, num::ParseIntError};
 
 #[derive(Debug, thiserror::Error)]
@@ -110,35 +110,7 @@ pub enum Type {
     Scalar(ScalarType),
     Vector(ScalarType, u8),
     Array(ScalarType, Vec<u32>),
-    Pointer(PointerType, LdStateSpace),
-}
-
-#[derive(PartialEq, Eq, Clone)]
-pub enum PointerType {
-    Scalar(ScalarType),
-    Vector(ScalarType, u8),
-    Array(ScalarType, Vec<u32>),
-    // Instances of this variant are generated during stateful conversion
-    Pointer(ScalarType, LdStateSpace),
-}
-
-impl From<ScalarType> for PointerType {
-    fn from(t: ScalarType) -> Self {
-        PointerType::Scalar(t.into())
-    }
-}
-
-impl TryFrom<PointerType> for ScalarType {
-    type Error = ();
-
-    fn try_from(value: PointerType) -> Result<Self, Self::Error> {
-        match value {
-            PointerType::Scalar(t) => Ok(t),
-            PointerType::Vector(_, _) => Err(()),
-            PointerType::Array(_, _) => Err(()),
-            PointerType::Pointer(_, _) => Err(()),
-        }
-    }
+    Pointer(ScalarType),
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
@@ -222,6 +194,7 @@ pub enum StateSpace {
     Shared,
     Param,
     Generic,
+    Sreg,
 }
 
 pub struct PredAt<ID> {
@@ -397,9 +370,9 @@ pub enum VectorPrefix {
 
 pub struct LdDetails {
     pub qualifier: LdStQualifier,
-    pub state_space: LdStateSpace,
+    pub state_space: StateSpace,
     pub caching: LdCacheOperator,
-    pub typ: PointerType,
+    pub typ: Type,
     pub non_coherent: bool,
 }
 
@@ -416,17 +389,6 @@ pub enum MemScope {
     Cta,
     Gpu,
     Sys,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-#[repr(u8)]
-pub enum LdStateSpace {
-    Generic,
-    Const,
-    Global,
-    Local,
-    Param,
-    Shared,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -612,18 +574,9 @@ impl CvtDetails {
 }
 
 pub struct CvtaDetails {
-    pub to: CvtaStateSpace,
-    pub from: CvtaStateSpace,
+    pub to: StateSpace,
+    pub from: StateSpace,
     pub size: CvtaSize,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub enum CvtaStateSpace {
-    Generic,
-    Const,
-    Global,
-    Local,
-    Shared,
 }
 
 pub enum CvtaSize {
@@ -633,18 +586,9 @@ pub enum CvtaSize {
 
 pub struct StData {
     pub qualifier: LdStQualifier,
-    pub state_space: StStateSpace,
+    pub state_space: StateSpace,
     pub caching: StCacheOperator,
-    pub typ: PointerType,
-}
-
-#[derive(PartialEq, Eq, Copy, Clone)]
-pub enum StStateSpace {
-    Generic,
-    Global,
-    Local,
-    Param,
-    Shared,
+    pub typ: Type,
 }
 
 #[derive(PartialEq, Eq)]
@@ -717,7 +661,7 @@ pub struct MinMaxFloat {
 pub struct AtomDetails {
     pub semantics: AtomSemantics,
     pub scope: MemScope,
-    pub space: AtomSpace,
+    pub space: StateSpace,
     pub inner: AtomInnerDetails,
 }
 
@@ -727,13 +671,6 @@ pub enum AtomSemantics {
     Acquire,
     Release,
     AcquireRelease,
-}
-
-#[derive(Copy, Clone)]
-pub enum AtomSpace {
-    Generic,
-    Global,
-    Shared,
 }
 
 #[derive(Copy, Clone)]
@@ -777,7 +714,7 @@ pub enum AtomFloatOp {
 pub struct AtomCasDetails {
     pub semantics: AtomSemantics,
     pub scope: MemScope,
-    pub space: AtomSpace,
+    pub space: StateSpace,
     pub typ: ScalarType,
 }
 
