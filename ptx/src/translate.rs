@@ -2424,7 +2424,7 @@ impl<'a, 'b> FlattenArguments<'a, 'b> {
         let (reg, offset) = desc.op;
         let add_type;
         match typ {
-            ast::Type::Pointer(underlying_type) => {
+            ast::Type::Scalar(underlying_type) => {
                 let (reg_typ, space) = self.id_def.get_typed(reg)?;
                 if let ast::Type::Pointer(..) = reg_typ {
                     let id_constant_stmt = self.id_def.register_intermediate(typ.clone(), space);
@@ -2443,12 +2443,10 @@ impl<'a, 'b> FlattenArguments<'a, 'b> {
                     }));
                     return Ok(dst);
                 } else {
-                    add_type = self.id_def.get_typed(reg)?.0;
+                    add_type = reg_typ;
                 }
             }
-            _ => {
-                add_type = typ.clone();
-            }
+            _ => return Err(error_unreachable()),
         };
         let (width, kind) = match add_type {
             ast::Type::Scalar(scalar_t) => {
