@@ -360,7 +360,7 @@ AddressSize = {
 
 Function: ast::Function<'input, &'input str, ast::Statement<ast::ParsedArgParams<'input>>>  = {
     LinkingDirectives
-    <func_directive:MethodDecl>
+    <func_directive:MethodDeclaration>
     <tuning:TuningDirective*>
     <body:FunctionBody> =>  ast::Function{<>}
 };
@@ -388,19 +388,24 @@ LinkingDirectives: ast::LinkingDirective = {
     }
 }
 
-MethodDecl: ast::MethodDecl<'input, &'input str> = {
-    ".entry" <name:ExtendedID> <in_args:KernelArguments> =>
-        ast::MethodDecl::Kernel{ name, in_args },
-    ".func" <ret_vals:FnArguments?> <name:ExtendedID> <params:FnArguments> => {
-        ast::MethodDecl::Func(ret_vals.unwrap_or_else(|| Vec::new()), name, params)
+MethodDeclaration: ast::MethodDeclaration<'input, &'input str> = {
+    ".entry" <name:ExtendedID> <input_arguments:KernelArguments> => {
+        let return_arguments = Vec::new();
+        let name = ast::MethodName::Kernel(name);
+        ast::MethodDeclaration{ return_arguments, name, input_arguments }
+    },
+    ".func" <return_arguments:FnArguments?> <name:ExtendedID> <input_arguments:FnArguments> => {
+        let return_arguments = return_arguments.unwrap_or_else(|| Vec::new());
+        let name = ast::MethodName::Func(name);
+        ast::MethodDeclaration{ return_arguments, name, input_arguments }
     }
 };
 
-KernelArguments: Vec<ast::KernelArgument<&'input str>> = {
+KernelArguments: Vec<ast::Variable<&'input str>> = {
     "(" <args:Comma<KernelInput>> ")" => args
 };
 
-FnArguments: Vec<ast::FnArgument<&'input str>> = {
+FnArguments: Vec<ast::Variable<&'input str>> = {
     "(" <args:Comma<FnInput>> ")" => args
 };
 

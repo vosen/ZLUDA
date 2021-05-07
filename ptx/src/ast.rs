@@ -1,6 +1,6 @@
 use half::f16;
 use lalrpop_util::{lexer::Token, ParseError};
-use std::{convert::From, mem, num::ParseFloatError, str::FromStr};
+use std::{convert::From, mem, num::ParseFloatError, rc::Rc, str::FromStr};
 use std::{marker::PhantomData, num::ParseIntError};
 
 #[derive(Debug, thiserror::Error)]
@@ -86,19 +86,20 @@ pub enum Directive<'a, P: ArgParams> {
     Method(Function<'a, &'a str, Statement<P>>),
 }
 
-pub enum MethodDecl<'a, ID> {
-    Func(Vec<FnArgument<ID>>, ID, Vec<FnArgument<ID>>),
-    Kernel {
-        name: &'a str,
-        in_args: Vec<KernelArgument<ID>>,
-    },
+#[derive(Hash, PartialEq, Eq, Copy, Clone)]
+pub enum MethodName<'input, ID> {
+    Kernel(&'input str),
+    Func(ID),
 }
 
-pub type FnArgument<ID> = Variable<ID>;
-pub type KernelArgument<ID> = Variable<ID>;
+pub struct MethodDeclaration<'input, ID> {
+    pub return_arguments: Vec<Variable<ID>>,
+    pub name: MethodName<'input, ID>,
+    pub input_arguments: Vec<Variable<ID>>,
+}
 
 pub struct Function<'a, ID, S> {
-    pub func_directive: MethodDecl<'a, ID>,
+    pub func_directive: MethodDeclaration<'a, ID>,
     pub tuning: Vec<TuningDirective>,
     pub body: Option<Vec<S>>,
 }
