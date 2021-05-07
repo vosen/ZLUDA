@@ -191,7 +191,10 @@ unsafe fn record_module_image(module: CUmodule, image: &str) {
 
 unsafe fn try_dump_module_image(image: &str) -> Result<(), Box<dyn Error>> {
     let mut dump_path = get_dump_dir()?;
-    dump_path.push(format!("module_{:04}.ptx", MODULES.as_ref().unwrap().len() - 1));
+    dump_path.push(format!(
+        "module_{:04}.ptx",
+        MODULES.as_ref().unwrap().len() - 1
+    ));
     let mut file = File::create(dump_path)?;
     file.write_all(image.as_bytes())?;
     Ok(())
@@ -217,10 +220,15 @@ unsafe fn to_str<T>(image: *const T) -> Option<&'static str> {
 fn directive_to_kernel(dir: &ast::Directive<ast::ParsedArgParams>) -> Option<(String, Vec<usize>)> {
     match dir {
         ast::Directive::Method(ast::Function {
-            func_directive: ast::MethodDecl::Kernel { name, in_args },
+            func_directive:
+                ast::MethodDeclaration {
+                    name: ast::MethodName::Kernel(name),
+                    input_arguments,
+                    ..
+                },
             ..
         }) => {
-            let arg_sizes = in_args
+            let arg_sizes = input_arguments
                 .iter()
                 .map(|arg| ast::Type::from(arg.v_type.clone()).size_of())
                 .collect();
