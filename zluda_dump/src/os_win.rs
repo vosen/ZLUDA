@@ -13,6 +13,8 @@ use winapi::{
     um::libloaderapi::{GetProcAddress, LoadLibraryW},
 };
 
+use crate::cuda::CUuuid;
+
 const NVCUDA_DEFAULT_PATH: &[u16] = wch_c!(r"C:\Windows\System32\nvcuda.dll");
 const LOAD_LIBRARY_NO_REDIRECT: &'static [u8] = b"ZludaLoadLibraryW_NoRedirect\0";
 
@@ -96,4 +98,61 @@ pub fn __log_impl(s: String) {
         win_str.push_str("\n\0");
         unsafe { OutputDebugStringA(win_str.as_ptr() as *const _) };
     }
+}
+
+#[cfg(target_arch = "x86")]
+pub fn get_thunk(
+    original_fn: *const c_void,
+    report_fn: unsafe extern "stdcall" fn(*const CUuuid, usize),
+    guid: *const CUuuid,
+    idx: usize,
+) -> *const c_void {
+    use dynasmrt::{dynasm, DynasmApi};
+    let mut ops = dynasmrt::x86::Assembler::new().unwrap();
+    let start = ops.offset();
+    dynasm!(ops
+        ; .arch x86
+        ; push idx as i32
+        ; push guid as i32
+        ; mov eax, report_fn as i32
+        ; call eax
+        ; mov eax, original_fn as i32
+        ; jmp eax
+        ; int 3
+    );
+    let exe_buf = ops.finalize().unwrap();
+    let result_fn = exe_buf.ptr(start);
+    mem::forget(exe_buf);
+    result_fn as *const _
+}
+
+//RCX, RDX, R8, R9
+#[cfg(target_arch = "x86_64")]
+pub fn get_thunk(
+    original_fn: *const c_void,
+    report_fn: unsafe extern "stdcall" fn(*const CUuuid, usize),
+    guid: *const CUuuid,
+    idx: usize,
+) -> *const c_void {
+    use dynasmrt::{dynasm, DynasmApi};
+    let mut ops = dynasmrt::x86::Assembler::new().unwrap();
+    let start = ops.offset();
+    dynasm!(ops
+        ; .arch x64
+        ; push rcx
+        ; push rdx
+        ; mov rcx, QWORD guid as i64
+        ; mov rdx, QWORD idx as i64
+        ; mov rax, QWORD report_fn as i64
+        ; call rax
+        ; pop rdx
+        ; pop rcx
+        ; mov rax, QWORD original_fn as i64
+        ; jmp rax
+        ; int 3
+    );
+    let exe_buf = ops.finalize().unwrap();
+    let result_fn = exe_buf.ptr(start);
+    mem::forget(exe_buf);
+    result_fn as *const _
 }

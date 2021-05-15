@@ -28,3 +28,34 @@ macro_rules! os_log {
         }
     };
 }
+
+//RDI, RSI, RDX, RCX, R8, R9
+#[cfg(target_arch = "x86_64")]
+pub fn get_thunk(
+    original_fn: *const c_void,
+    report_fn: unsafe extern "stdcall" fn(*const CUuuid, usize),
+    guid: *const CUuuid,
+    idx: usize,
+) -> *const c_void {
+    use dynasmrt::{dynasm, DynasmApi};
+    let mut ops = dynasmrt::x86::Assembler::new().unwrap();
+    let start = ops.offset();
+    dynasm!(ops
+        ; .arch x64
+        ; push rdi
+        ; push rsi
+        ; mov rdi, QWORD guid as i64
+        ; mov rsi, QWORD idx as i64
+        ; mov rax, QWORD report_fn as i64
+        ; call rax
+        ; pop rsi
+        ; pop rdi
+        ; mov rax, QWORD original_fn as i64
+        ; jmp rax
+        ; int 3
+    );
+    let exe_buf = ops.finalize().unwrap();
+    let result_fn = exe_buf.ptr(start);
+    mem::forget(exe_buf);
+    result_fn as *const _
+}

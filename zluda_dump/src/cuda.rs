@@ -103,7 +103,7 @@ pub struct CUgraphExec_st {
 }
 pub type CUgraphExec = *mut CUgraphExec_st;
 #[repr(C)]
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct CUuuid_st {
     pub bytes: [::std::os::raw::c_uchar; 16usize],
 }
