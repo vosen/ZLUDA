@@ -624,9 +624,9 @@ ModuleVariable: ast::Variable<&'input str> = {
                     return Err(ParseError::User { error: ast::PtxError::NonExternPointer });
                 }
                 if space == ".global" {
-                    (ast::Type::Pointer(t), ast::StateSpace::Global, Vec::new())
+                    (ast::Type::Scalar(t), ast::StateSpace::Global, Vec::new())
                 } else {
-                    (ast::Type::Pointer(t), ast::StateSpace::Shared, Vec::new())
+                    (ast::Type::Scalar(t), ast::StateSpace::Shared, Vec::new())
                 }
             }
         };
@@ -648,7 +648,7 @@ ParamVariable: (Option<u32>, Vec<u8>, ast::Type, &'input str) = {
                 (ast::Type::Array(t, dimensions), init)
             }
             ast::ArrayOrPointer::Pointer => {
-                (ast::Type::Pointer(t), Vec::new())
+                (ast::Type::Scalar(t), Vec::new())
             }
         };
         (align, array_init, v_type, name)

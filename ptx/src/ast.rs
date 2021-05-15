@@ -108,10 +108,49 @@ pub type ParsedFunction<'a> = Function<'a, &'a str, Statement<ParsedArgParams<'a
 
 #[derive(PartialEq, Eq, Clone)]
 pub enum Type {
+    // .param.b32 foo;
+    // -> OpTypeInt
     Scalar(ScalarType),
+    // .param.v2.b32 foo;
+    // -> OpTypeVector
     Vector(ScalarType, u8),
+    // .param.b32 foo[4];
+    // -> OpTypeArray
     Array(ScalarType, Vec<u32>),
-    Pointer(ScalarType),
+    /*
+        Variables of this type almost never exist in the original .ptx and are
+        usually artificially created. Some examples below:
+        - extern pointers to the .shared memory in the form:
+            .extern .shared .b32 shared_mem[];
+          which we first parse as
+            .extern .shared .b32 shared_mem;
+          and then convert to an additional function parameter:
+            .param .ptr<.b32.shared> shared_mem;
+          and do a load at the start of the function (and renames inside fn):
+            .reg .ptr<.b32.shared> temp;
+            ld.param.ptr<.b32.shared> temp, [shared_mem];
+          note, we don't support non-.shared extern pointers, because there's
+          zero use for them in the ptxas
+        - artifical pointers created by stateful conversion, which work
+          similiarly to the above
+        - function parameters:
+            foobar(.param .align 4 .b8 numbers[])
+          which get parsed to
+            foobar(.param .align 4 .b8 numbers)
+          and then converted to
+            foobar(.reg .align 4 .ptr<.b8.param> numbers)
+        - ld/st with offset:
+            .reg.b32 x;
+            .param.b64 arg0;
+            st.param.b32 [arg0+4], x;
+          Yes, this code is legal and actually emitted by the NV compiler!
+          We convert the st to:
+            .reg ptr<.b64.param> temp = ptr_offset(arg0, 4);
+            st.param.b32 [temp], x;
+    */
+    // .reg ptr<.b64.param>
+    // -> OpTypePointer Function
+    Pointer(ScalarType, StateSpace),
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
