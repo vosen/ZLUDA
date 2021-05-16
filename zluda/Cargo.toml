@@ -15,6 +15,9 @@ lazy_static = "1.4"
 num_enum = "0.4"
 lz4-sys = "1.9"
 
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["heapapi", "std"] }
+
 [dev-dependencies]
 cuda-driver-sys = "0.3.0"
 paste = "1.0"

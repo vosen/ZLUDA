@@ -1,3 +1,5 @@
+use winapi::um::{heapapi::HeapCreate, winnt::HEAP_NO_SERIALIZE};
+
 use crate::{
     cuda::{CUctx_st, CUdevice, CUdeviceptr, CUfunc_st, CUmod_st, CUresult, CUstream_st},
     r#impl::device::Device,
@@ -203,6 +205,7 @@ lazy_static! {
 
 struct GlobalState {
     devices: Vec<Device>,
+    global_heap: *mut c_void,
 }
 
 unsafe impl Send for GlobalState {}
@@ -301,7 +304,14 @@ pub fn init() -> Result<(), CUresult> {
         None => return Err(CUresult::CUDA_ERROR_UNKNOWN),
         Some(driver) => device::init(&driver)?,
     };
-    *global_state = Some(GlobalState { devices });
+    let global_heap = unsafe { HeapCreate(HEAP_NO_SERIALIZE, 0, 0) };
+    if global_heap == ptr::null_mut() {
+        return Err(CUresult::CUDA_ERROR_OUT_OF_MEMORY);
+    }
+    *global_state = Some(GlobalState {
+        devices,
+        global_heap,
+    });
     drop(global_state);
     Ok(())
 }
