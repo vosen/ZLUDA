@@ -1,3 +1,5 @@
+use winapi::um::heapapi::{HeapAlloc, HeapFree};
+
 use crate::cuda::CUresult;
 use crate::{
     cuda::{CUcontext, CUdevice, CUmodule, CUuuid},
@@ -32,6 +34,14 @@ pub fn get(table: *mut *const std::os::raw::c_void, id: *const CUuuid) -> CUresu
         }
         CONTEXT_LOCAL_STORAGE_INTERFACE_V0301_GUID => {
             unsafe { *table = CONTEXT_LOCAL_STORAGE_INTERFACE_V0301_VTABLE.as_ptr() as *const _ };
+            CUresult::CUDA_SUCCESS
+        }
+        CTX_CREATE_BYPASS_GUID => {
+            unsafe { *table = CTX_CREATE_BYPASS_VTABLE.as_ptr() as *const _ };
+            CUresult::CUDA_SUCCESS
+        }
+        HEAP_ACCESS_GUID => {
+            unsafe { *table = HEAP_ACCESS_VTABLE.as_ptr() as *const _ };
             CUresult::CUDA_SUCCESS
         }
         _ => CUresult::CUDA_ERROR_NOT_SUPPORTED,
@@ -411,4 +421,107 @@ fn lock_context<T>(
             Ok(fn_impl(ctx))
         })?
     }
+}
+
+const CTX_CREATE_BYPASS_GUID: CUuuid = CUuuid {
+    bytes: [
+        0x0C, 0xA5, 0x0B, 0x8C, 0x10, 0x04, 0x92, 0x9A, 0x89, 0xA7, 0xD0, 0xDF, 0x10, 0xE7, 0x72,
+        0x86,
+    ],
+};
+
+const CTX_CREATE_BYPASS_LENGTH: usize = 2;
+static CTX_CREATE_BYPASS_VTABLE: [VTableEntry; CTX_CREATE_BYPASS_LENGTH] = [
+    VTableEntry {
+        length: mem::size_of::<[VTableEntry; CTX_CREATE_BYPASS_LENGTH]>(),
+    },
+    VTableEntry {
+        ptr: ctx_create_v2_bypass as *const (),
+    },
+];
+
+// I have no idea what is the difference between this function and
+// cuCtxCreate_v2, but PhysX uses both interchangeably
+extern "system" fn ctx_create_v2_bypass(
+    pctx: *mut CUcontext,
+    flags: ::std::os::raw::c_uint,
+    dev: CUdevice,
+) -> CUresult {
+    context::create_v2(pctx.decuda(), flags, dev.decuda()).encuda()
+}
+
+const HEAP_ACCESS_GUID: CUuuid = CUuuid {
+    bytes: [
+        0x19, 0x5B, 0xCB, 0xF4, 0xD6, 0x7D, 0x02, 0x4A, 0xAC, 0xC5, 0x1D, 0x29, 0xCE, 0xA6, 0x31,
+        0xAE,
+    ],
+};
+
+#[repr(C)]
+struct HeapAllocRecord {
+    arg1: usize,
+    arg2: usize,
+    _unknown: usize,
+    global_heap: *mut c_void,
+}
+
+const HEAP_ACCESS_LENGTH: usize = 3;
+static HEAP_ACCESS_VTABLE: [VTableEntry; HEAP_ACCESS_LENGTH] = [
+    VTableEntry {
+        length: mem::size_of::<[VTableEntry; HEAP_ACCESS_LENGTH]>(),
+    },
+    VTableEntry {
+        ptr: heap_alloc as *const (),
+    },
+    VTableEntry {
+        ptr: heap_free as *const (),
+    },
+];
+
+// TODO: reverse and implement for Linux
+unsafe extern "system" fn heap_alloc(
+    halloc_ptr: *mut *const HeapAllocRecord,
+    arg1: usize,
+    arg2: usize,
+) -> CUresult {
+    if halloc_ptr == ptr::null_mut() {
+        return CUresult::CUDA_ERROR_INVALID_VALUE;
+    }
+    let halloc = GlobalState::lock(|global_state| {
+        let halloc = HeapAlloc(
+            global_state.global_heap,
+            0,
+            mem::size_of::<HeapAllocRecord>(),
+        ) as *mut HeapAllocRecord;
+        if halloc == ptr::null_mut() {
+            return Err(CUresult::CUDA_ERROR_OUT_OF_MEMORY);
+        }
+        (*halloc).arg1 = arg1;
+        (*halloc).arg2 = arg2;
+        (*halloc)._unknown = 0;
+        (*halloc).global_heap = global_state.global_heap;
+        Ok(halloc)
+    });
+    match halloc {
+        Ok(Ok(halloc)) => {
+            *halloc_ptr = halloc;
+            CUresult::CUDA_SUCCESS
+        }
+        Err(err) | Ok(Err(err)) => err,
+    }
+}
+
+// TODO: reverse and implement for Linux
+unsafe extern "system" fn heap_free(halloc: *mut HeapAllocRecord, arg1: *mut usize) -> CUresult {
+    if halloc == ptr::null_mut() {
+        return CUresult::CUDA_ERROR_INVALID_VALUE;
+    }
+    if arg1 != ptr::null_mut() {
+        *arg1 = (*halloc).arg2;
+    }
+    GlobalState::lock(|global_state| {
+        HeapFree(global_state.global_heap, 0, halloc as *mut _);
+        ()
+    })
+    .encuda()
 }

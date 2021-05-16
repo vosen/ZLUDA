@@ -33,7 +33,7 @@ macro_rules! os_log {
 #[cfg(target_arch = "x86_64")]
 pub fn get_thunk(
     original_fn: *const c_void,
-    report_fn: unsafe extern "stdcall" fn(*const CUuuid, usize),
+    report_fn: unsafe extern "system" fn(*const CUuuid, usize),
     guid: *const CUuuid,
     idx: usize,
 ) -> *const c_void {
