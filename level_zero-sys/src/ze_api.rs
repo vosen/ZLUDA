@@ -629,6 +629,11 @@ fn bindgen_test_layout__ze_base_properties_t() {
         )
     );
 }
+impl Default for _ze_base_properties_t {
+    fn default() -> Self {
+        unsafe { ::std::mem::zeroed() }
+    }
+}
 #[doc = ""]
 #[doc = " @brief Base for all properties types"]
 pub type ze_base_properties_t = _ze_base_properties_t;
@@ -974,7 +979,7 @@ extern "C" {
 #[doc = ""]
 #[doc = " @brief Driver universal unique id (UUID)"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_driver_uuid_t {
     #[doc = "< [out] opaque data representing a driver UUID"]
     pub id: [u8; 16usize],
@@ -1072,6 +1077,11 @@ fn bindgen_test_layout__ze_driver_properties_t() {
             stringify!(driverVersion)
         )
     );
+}
+impl Default for _ze_driver_properties_t {
+    fn default() -> Self {
+        unsafe { ::std::mem::zeroed() }
+    }
 }
 extern "C" {
     #[doc = ""]
@@ -1208,6 +1218,11 @@ fn bindgen_test_layout__ze_driver_ipc_properties_t() {
         )
     );
 }
+impl Default for _ze_driver_ipc_properties_t {
+    fn default() -> Self {
+        unsafe { ::std::mem::zeroed() }
+    }
+}
 extern "C" {
     #[doc = ""]
     #[doc = " @brief Retrieves IPC attributes of the driver"]
@@ -1279,6 +1294,11 @@ fn bindgen_test_layout__ze_driver_extension_properties_t() {
             stringify!(version)
         )
     );
+}
+impl Default for _ze_driver_extension_properties_t {
+    fn default() -> Self {
+        unsafe { ::std::mem::zeroed() }
+    }
 }
 extern "C" {
     #[doc = ""]
@@ -1417,7 +1437,7 @@ pub use self::_ze_device_type_t as ze_device_type_t;
 #[doc = ""]
 #[doc = " @brief Device universal unique id (UUID)"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_device_uuid_t {
     #[doc = "< [out] opaque data representing a device UUID"]
     pub id: [u8; 16usize],
@@ -1815,10 +1835,15 @@ fn bindgen_test_layout__ze_device_properties_t() {
         )
     );
 }
+impl Default for _ze_device_properties_t {
+    fn default() -> Self {
+        unsafe { ::std::mem::zeroed() }
+    }
+}
 #[doc = ""]
 #[doc = " @brief Device thread identifier."]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_device_thread_t {
     #[doc = "< [in,out] the slice number."]
     #[doc = "< Must be UINT32_MAX (all) or less than ::ze_device_properties_t.numSlices."]
@@ -2110,6 +2135,11 @@ fn bindgen_test_layout__ze_device_compute_properties_t() {
         )
     );
 }
+impl Default for _ze_device_compute_properties_t {
+    fn default() -> Self {
+        unsafe { ::std::mem::zeroed() }
+    }
+}
 extern "C" {
     #[doc = ""]
     #[doc = " @brief Retrieves compute properties of the device."]
@@ -2138,7 +2168,7 @@ extern "C" {
 #[doc = ""]
 #[doc = " @brief Native kernel universal unique id (UUID)"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_native_kernel_uuid_t {
     #[doc = "< [out] opaque data representing a native kernel UUID"]
     pub id: [u8; 16usize],
@@ -2472,6 +2502,11 @@ fn bindgen_test_layout__ze_device_module_properties_t() {
         )
     );
 }
+impl Default for _ze_device_module_properties_t {
+    fn default() -> Self {
+        unsafe { ::std::mem::zeroed() }
+    }
+}
 extern "C" {
     #[doc = ""]
     #[doc = " @brief Retrieves module properties of the device"]
@@ -2659,6 +2694,11 @@ fn bindgen_test_layout__ze_command_queue_group_properties_t() {
             stringify!(numQueues)
         )
     );
+}
+impl Default for _ze_command_queue_group_properties_t {
+    fn default() -> Self {
+        unsafe { ::std::mem::zeroed() }
+    }
 }
 extern "C" {
     #[doc = ""]
@@ -2856,6 +2896,11 @@ fn bindgen_test_layout__ze_device_memory_properties_t() {
             stringify!(name)
         )
     );
+}
+impl Default for _ze_device_memory_properties_t {
+    fn default() -> Self {
+        unsafe { ::std::mem::zeroed() }
+    }
 }
 extern "C" {
     #[doc = ""]
@@ -3091,6 +3136,11 @@ fn bindgen_test_layout__ze_device_memory_access_properties_t() {
         )
     );
 }
+impl Default for _ze_device_memory_access_properties_t {
+    fn default() -> Self {
+        unsafe { ::std::mem::zeroed() }
+    }
+}
 extern "C" {
     #[doc = ""]
     #[doc = " @brief Retrieves memory access properties of the device."]
@@ -3234,6 +3284,11 @@ fn bindgen_test_layout__ze_device_cache_properties_t() {
             stringify!(cacheSize)
         )
     );
+}
+impl Default for _ze_device_cache_properties_t {
+    fn default() -> Self {
+        unsafe { ::std::mem::zeroed() }
+    }
 }
 extern "C" {
     #[doc = ""]
@@ -3438,6 +3493,11 @@ fn bindgen_test_layout__ze_device_image_properties_t() {
         )
     );
 }
+impl Default for _ze_device_image_properties_t {
+    fn default() -> Self {
+        unsafe { ::std::mem::zeroed() }
+    }
+}
 extern "C" {
     #[doc = ""]
     #[doc = " @brief Retrieves image properties of the device"]
@@ -3575,6 +3635,11 @@ fn bindgen_test_layout__ze_device_external_memory_properties_t() {
         )
     );
 }
+impl Default for _ze_device_external_memory_properties_t {
+    fn default() -> Self {
+        unsafe { ::std::mem::zeroed() }
+    }
+}
 extern "C" {
     #[doc = ""]
     #[doc = " @brief Retrieves external memory import and export of the device"]
@@ -3706,6 +3771,11 @@ fn bindgen_test_layout__ze_device_p2p_properties_t() {
             stringify!(flags)
         )
     );
+}
+impl Default for _ze_device_p2p_properties_t {
+    fn default() -> Self {
+        unsafe { ::std::mem::zeroed() }
+    }
 }
 extern "C" {
     #[doc = ""]
@@ -4874,7 +4944,7 @@ extern "C" {
 #[doc = ""]
 #[doc = " @brief Copy region descriptor"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_copy_region_t {
     #[doc = "< [in] The origin x offset for region in bytes"]
     pub originX: u32,
@@ -5100,7 +5170,7 @@ extern "C" {
 #[doc = ""]
 #[doc = " @brief Region descriptor"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_image_region_t {
     #[doc = "< [in] The origin x offset for region in pixels"]
     pub originX: u32,
@@ -6103,7 +6173,7 @@ extern "C" {
 #[doc = "     - The number of valid bits in the timestamp value can be queried from"]
 #[doc = "       ::ze_device_properties_t.kernelTimestampValidBits."]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_kernel_timestamp_data_t {
     #[doc = "< [out] device clock at start of kernel execution"]
     pub kernelStart: u64,
@@ -6150,7 +6220,7 @@ fn bindgen_test_layout__ze_kernel_timestamp_data_t() {
 #[doc = ""]
 #[doc = " @brief Kernel timestamp result"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_kernel_timestamp_result_t {
     #[doc = "< [out] wall-clock data"]
     pub global: ze_kernel_timestamp_data_t,
@@ -7213,6 +7283,11 @@ fn bindgen_test_layout__ze_image_properties_t() {
         )
     );
 }
+impl Default for _ze_image_properties_t {
+    fn default() -> Self {
+        unsafe { ::std::mem::zeroed() }
+    }
+}
 extern "C" {
     #[doc = ""]
     #[doc = " @brief Retrieves supported properties of an image."]
@@ -7818,6 +7893,11 @@ fn bindgen_test_layout__ze_memory_allocation_properties_t() {
             stringify!(pageSize)
         )
     );
+}
+impl Default for _ze_memory_allocation_properties_t {
+    fn default() -> Self {
+        unsafe { ::std::mem::zeroed() }
+    }
 }
 extern "C" {
     #[doc = ""]
@@ -8776,6 +8856,11 @@ fn bindgen_test_layout__ze_module_properties_t() {
         )
     );
 }
+impl Default for _ze_module_properties_t {
+    fn default() -> Self {
+        unsafe { ::std::mem::zeroed() }
+    }
+}
 extern "C" {
     #[doc = ""]
     #[doc = " @brief Retrieve module properties."]
@@ -9297,7 +9382,7 @@ extern "C" {
 #[doc = ""]
 #[doc = " @brief Kernel universal unique id (UUID)"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_kernel_uuid_t {
     #[doc = "< [out] opaque data representing a kernel UUID"]
     pub kid: [u8; 16usize],
@@ -9556,6 +9641,11 @@ fn bindgen_test_layout__ze_kernel_properties_t() {
         )
     );
 }
+impl Default for _ze_kernel_properties_t {
+    fn default() -> Self {
+        unsafe { ::std::mem::zeroed() }
+    }
+}
 extern "C" {
     #[doc = ""]
     #[doc = " @brief Retrieve kernel properties."]
@@ -9605,7 +9695,7 @@ extern "C" {
 #[doc = ""]
 #[doc = " @brief Kernel dispatch group count."]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_group_count_t {
     #[doc = "< [in] number of thread groups in X dimension"]
     pub groupCountX: u32,
@@ -10127,6 +10217,11 @@ fn bindgen_test_layout__ze_device_raytracing_ext_properties_t() {
             stringify!(maxBVHLevels)
         )
     );
+}
+impl Default for _ze_device_raytracing_ext_properties_t {
+    fn default() -> Self {
+        unsafe { ::std::mem::zeroed() }
+    }
 }
 impl _ze_raytracing_mem_alloc_ext_flags_t {
     #[doc = "< reserved for future use"]
@@ -11171,6 +11266,11 @@ fn bindgen_test_layout__ze_float_atomic_ext_properties_t() {
         )
     );
 }
+impl Default for _ze_float_atomic_ext_properties_t {
+    fn default() -> Self {
+        unsafe { ::std::mem::zeroed() }
+    }
+}
 impl _ze_global_offset_exp_version_t {
     #[doc = "< version 1.0"]
     pub const ZE_GLOBAL_OFFSET_EXP_VERSION_1_0: _ze_global_offset_exp_version_t =
@@ -11422,7 +11522,7 @@ pub type ze_pfnInitCb_t = ::std::option::Option<
 #[doc = ""]
 #[doc = " @brief Table of Global callback functions pointers"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_global_callbacks_t {
     pub pfnInitCb: ze_pfnInitCb_t,
 }
@@ -11825,7 +11925,7 @@ pub type ze_pfnDriverGetExtensionPropertiesCb_t = ::std::option::Option<
 #[doc = ""]
 #[doc = " @brief Table of Driver callback functions pointers"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_driver_callbacks_t {
     pub pfnGetCb: ze_pfnDriverGetCb_t,
     pub pfnGetApiVersionCb: ze_pfnDriverGetApiVersionCb_t,
@@ -13010,7 +13110,7 @@ pub type ze_pfnDeviceGetStatusCb_t = ::std::option::Option<
 #[doc = ""]
 #[doc = " @brief Table of Device callback functions pointers"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_device_callbacks_t {
     pub pfnGetCb: ze_pfnDeviceGetCb_t,
     pub pfnGetSubDevicesCb: ze_pfnDeviceGetSubDevicesCb_t,
@@ -13853,7 +13953,7 @@ pub type ze_pfnContextEvictImageCb_t = ::std::option::Option<
 #[doc = ""]
 #[doc = " @brief Table of Context callback functions pointers"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_context_callbacks_t {
     pub pfnCreateCb: ze_pfnContextCreateCb_t,
     pub pfnDestroyCb: ze_pfnContextDestroyCb_t,
@@ -14315,7 +14415,7 @@ pub type ze_pfnCommandQueueSynchronizeCb_t = ::std::option::Option<
 #[doc = ""]
 #[doc = " @brief Table of CommandQueue callback functions pointers"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_command_queue_callbacks_t {
     pub pfnCreateCb: ze_pfnCommandQueueCreateCb_t,
     pub pfnDestroyCb: ze_pfnCommandQueueDestroyCb_t,
@@ -17547,7 +17647,7 @@ pub type ze_pfnCommandListAppendLaunchMultipleKernelsIndirectCb_t = ::std::optio
 #[doc = ""]
 #[doc = " @brief Table of CommandList callback functions pointers"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_command_list_callbacks_t {
     pub pfnCreateCb: ze_pfnCommandListCreateCb_t,
     pub pfnCreateImmediateCb: ze_pfnCommandListCreateImmediateCb_t,
@@ -18240,7 +18340,7 @@ pub type ze_pfnFenceResetCb_t = ::std::option::Option<
 #[doc = ""]
 #[doc = " @brief Table of Fence callback functions pointers"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_fence_callbacks_t {
     pub pfnCreateCb: ze_pfnFenceCreateCb_t,
     pub pfnDestroyCb: ze_pfnFenceDestroyCb_t,
@@ -18713,7 +18813,7 @@ pub type ze_pfnEventPoolCloseIpcHandleCb_t = ::std::option::Option<
 #[doc = ""]
 #[doc = " @brief Table of EventPool callback functions pointers"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_event_pool_callbacks_t {
     pub pfnCreateCb: ze_pfnEventPoolCreateCb_t,
     pub pfnDestroyCb: ze_pfnEventPoolDestroyCb_t,
@@ -19237,7 +19337,7 @@ pub type ze_pfnEventQueryKernelTimestampCb_t = ::std::option::Option<
 #[doc = ""]
 #[doc = " @brief Table of Event callback functions pointers"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_event_callbacks_t {
     pub pfnCreateCb: ze_pfnEventCreateCb_t,
     pub pfnDestroyCb: ze_pfnEventDestroyCb_t,
@@ -19579,7 +19679,7 @@ pub type ze_pfnImageDestroyCb_t = ::std::option::Option<
 #[doc = ""]
 #[doc = " @brief Table of Image callback functions pointers"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_image_callbacks_t {
     pub pfnGetPropertiesCb: ze_pfnImageGetPropertiesCb_t,
     pub pfnCreateCb: ze_pfnImageCreateCb_t,
@@ -20321,7 +20421,7 @@ pub type ze_pfnModuleGetFunctionPointerCb_t = ::std::option::Option<
 #[doc = ""]
 #[doc = " @brief Table of Module callback functions pointers"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_module_callbacks_t {
     pub pfnCreateCb: ze_pfnModuleCreateCb_t,
     pub pfnDestroyCb: ze_pfnModuleDestroyCb_t,
@@ -20600,7 +20700,7 @@ pub type ze_pfnModuleBuildLogGetStringCb_t = ::std::option::Option<
 #[doc = ""]
 #[doc = " @brief Table of ModuleBuildLog callback functions pointers"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_module_build_log_callbacks_t {
     pub pfnDestroyCb: ze_pfnModuleBuildLogDestroyCb_t,
     pub pfnGetStringCb: ze_pfnModuleBuildLogGetStringCb_t,
@@ -21665,7 +21765,7 @@ pub type ze_pfnKernelGetNameCb_t = ::std::option::Option<
 #[doc = ""]
 #[doc = " @brief Table of Kernel callback functions pointers"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_kernel_callbacks_t {
     pub pfnCreateCb: ze_pfnKernelCreateCb_t,
     pub pfnDestroyCb: ze_pfnKernelDestroyCb_t,
@@ -21997,7 +22097,7 @@ pub type ze_pfnSamplerDestroyCb_t = ::std::option::Option<
 #[doc = ""]
 #[doc = " @brief Table of Sampler callback functions pointers"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_sampler_callbacks_t {
     pub pfnCreateCb: ze_pfnSamplerCreateCb_t,
     pub pfnDestroyCb: ze_pfnSamplerDestroyCb_t,
@@ -22214,7 +22314,7 @@ pub type ze_pfnPhysicalMemDestroyCb_t = ::std::option::Option<
 #[doc = ""]
 #[doc = " @brief Table of PhysicalMem callback functions pointers"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_physical_mem_callbacks_t {
     pub pfnCreateCb: ze_pfnPhysicalMemCreateCb_t,
     pub pfnDestroyCb: ze_pfnPhysicalMemDestroyCb_t,
@@ -23147,7 +23247,7 @@ pub type ze_pfnMemCloseIpcHandleCb_t = ::std::option::Option<
 #[doc = ""]
 #[doc = " @brief Table of Mem callback functions pointers"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_mem_callbacks_t {
     pub pfnAllocSharedCb: ze_pfnMemAllocSharedCb_t,
     pub pfnAllocDeviceCb: ze_pfnMemAllocDeviceCb_t,
@@ -23983,7 +24083,7 @@ pub type ze_pfnVirtualMemGetAccessAttributeCb_t = ::std::option::Option<
 #[doc = ""]
 #[doc = " @brief Table of VirtualMem callback functions pointers"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_virtual_mem_callbacks_t {
     pub pfnReserveCb: ze_pfnVirtualMemReserveCb_t,
     pub pfnFreeCb: ze_pfnVirtualMemFreeCb_t,
@@ -24100,7 +24200,7 @@ pub type ze_virtual_mem_callbacks_t = _ze_virtual_mem_callbacks_t;
 #[doc = ""]
 #[doc = " @brief Container for all callbacks"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct _ze_callbacks_t {
     pub Global: ze_global_callbacks_t,
     pub Driver: ze_driver_callbacks_t,
