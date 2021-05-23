@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: MIT
  *
  * @file ze_api.h
- * @version v1.0-r1.0.4.8
+ * @version v1.1-r1.1.10
  *
  */
 #ifndef _ZE_API_H
@@ -259,7 +259,11 @@ typedef enum _ze_structure_type_t
     ZE_STRUCTURE_TYPE_KERNEL_PROPERTIES = 0x1e,     ///< ::ze_kernel_properties_t
     ZE_STRUCTURE_TYPE_SAMPLER_DESC = 0x1f,          ///< ::ze_sampler_desc_t
     ZE_STRUCTURE_TYPE_PHYSICAL_MEM_DESC = 0x20,     ///< ::ze_physical_mem_desc_t
-    ZE_STRUCTURE_TYPE_RAYTRACING_MEM_ALLOC_EXT_DESC = 0x00010001,   ///< ::ze_raytracing_mem_alloc_ext_desc_t
+    ZE_STRUCTURE_TYPE_DEVICE_RAYTRACING_EXT_PROPERTIES = 0x00010001,///< ::ze_device_raytracing_ext_properties_t
+    ZE_STRUCTURE_TYPE_RAYTRACING_MEM_ALLOC_EXT_DESC = 0x10002,  ///< ::ze_raytracing_mem_alloc_ext_desc_t
+    ZE_STRUCTURE_TYPE_FLOAT_ATOMIC_EXT_PROPERTIES = 0x10003,///< ::ze_float_atomic_ext_properties_t
+    ZE_STRUCTURE_TYPE_RELAXED_ALLOCATION_LIMITS_EXP_DESC = 0x00020001,  ///< ::ze_relaxed_allocation_limits_exp_desc_t
+    ZE_STRUCTURE_TYPE_MODULE_PROGRAM_EXP_DESC = 0x00020002, ///< ::ze_module_program_exp_desc_t
     ZE_STRUCTURE_TYPE_FORCE_UINT32 = 0x7fffffff
 
 } ze_structure_type_t;
@@ -492,6 +496,14 @@ typedef struct _ze_kernel_properties_t ze_kernel_properties_t;
 typedef struct _ze_group_count_t ze_group_count_t;
 
 ///////////////////////////////////////////////////////////////////////////////
+/// @brief Forward-declare ze_module_program_exp_desc_t
+typedef struct _ze_module_program_exp_desc_t ze_module_program_exp_desc_t;
+
+///////////////////////////////////////////////////////////////////////////////
+/// @brief Forward-declare ze_device_raytracing_ext_properties_t
+typedef struct _ze_device_raytracing_ext_properties_t ze_device_raytracing_ext_properties_t;
+
+///////////////////////////////////////////////////////////////////////////////
 /// @brief Forward-declare ze_raytracing_mem_alloc_ext_desc_t
 typedef struct _ze_raytracing_mem_alloc_ext_desc_t ze_raytracing_mem_alloc_ext_desc_t;
 
@@ -502,6 +514,14 @@ typedef struct _ze_sampler_desc_t ze_sampler_desc_t;
 ///////////////////////////////////////////////////////////////////////////////
 /// @brief Forward-declare ze_physical_mem_desc_t
 typedef struct _ze_physical_mem_desc_t ze_physical_mem_desc_t;
+
+///////////////////////////////////////////////////////////////////////////////
+/// @brief Forward-declare ze_float_atomic_ext_properties_t
+typedef struct _ze_float_atomic_ext_properties_t ze_float_atomic_ext_properties_t;
+
+///////////////////////////////////////////////////////////////////////////////
+/// @brief Forward-declare ze_relaxed_allocation_limits_exp_desc_t
+typedef struct _ze_relaxed_allocation_limits_exp_desc_t ze_relaxed_allocation_limits_exp_desc_t;
 
 
 #if !defined(__GNUC__)
@@ -525,12 +545,16 @@ typedef enum _ze_init_flag_t
 /// @brief Initialize the 'oneAPI' driver(s)
 /// 
 /// @details
-///     - This function must be called before any other API function.
+///     - The application must call this function before calling any other
+///       function.
 ///     - If this function is not called then all other functions will return
 ///       ::ZE_RESULT_ERROR_UNINITIALIZED.
 ///     - Only one instance of each driver will be initialized per process.
-///     - This function is thread-safe for scenarios where multiple libraries
-///       may initialize the driver(s) simultaneously.
+///     - The application may call this function multiple times with different
+///       flags or environment variables enabled.
+///     - The application may call this function from simultaneous threads.
+///     - The implementation of this function must be thread-safe for scenarios
+///       where multiple libraries may initialize the driver(s) simultaneously.
 /// 
 /// @returns
 ///     - ::ZE_RESULT_SUCCESS
@@ -570,13 +594,13 @@ zeInit(
 ZE_APIEXPORT ze_result_t ZE_APICALL
 zeDriverGet(
     uint32_t* pCount,                               ///< [in,out] pointer to the number of driver instances.
-                                                    ///< if count is zero, then the loader will update the value with the total
-                                                    ///< number of drivers available.
-                                                    ///< if count is non-zero, then the loader will only retrieve that number
-                                                    ///< of drivers.
-                                                    ///< if count is larger than the number of drivers available, then the
-                                                    ///< loader will update the value with the correct number of drivers available.
-    ze_driver_handle_t* phDrivers                   ///< [in,out][optional][range(0, *pCount)] array of driver instance handles
+                                                    ///< if count is zero, then the loader shall update the value with the
+                                                    ///< total number of drivers available.
+                                                    ///< if count is greater than the number of drivers available, then the
+                                                    ///< loader shall update the value with the correct number of drivers available.
+    ze_driver_handle_t* phDrivers                   ///< [in,out][optional][range(0, *pCount)] array of driver instance handles.
+                                                    ///< if count is less than the number of drivers available, then the loader
+                                                    ///< shall only retrieve that number of drivers.
     );
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -588,7 +612,8 @@ zeDriverGet(
 typedef enum _ze_api_version_t
 {
     ZE_API_VERSION_1_0 = ZE_MAKE_VERSION( 1, 0 ),   ///< version 1.0
-    ZE_API_VERSION_CURRENT = ZE_MAKE_VERSION( 1, 0 ),   ///< latest known version
+    ZE_API_VERSION_1_1 = ZE_MAKE_VERSION( 1, 1 ),   ///< version 1.1
+    ZE_API_VERSION_CURRENT = ZE_MAKE_VERSION( 1, 1 ),   ///< latest known version
     ZE_API_VERSION_FORCE_UINT32 = 0x7fffffff
 
 } ze_api_version_t;
@@ -707,7 +732,7 @@ typedef struct _ze_driver_ipc_properties_t
 ZE_APIEXPORT ze_result_t ZE_APICALL
 zeDriverGetIpcProperties(
     ze_driver_handle_t hDriver,                     ///< [in] handle of the driver instance
-    ze_driver_ipc_properties_t* pIpcProperties      ///< [out] query result for IPC properties
+    ze_driver_ipc_properties_t* pIpcProperties      ///< [in,out] query result for IPC properties
     );
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -748,15 +773,39 @@ ZE_APIEXPORT ze_result_t ZE_APICALL
 zeDriverGetExtensionProperties(
     ze_driver_handle_t hDriver,                     ///< [in] handle of the driver instance
     uint32_t* pCount,                               ///< [in,out] pointer to the number of extension properties.
-                                                    ///< if count is zero, then the driver will update the value with the total
-                                                    ///< number of extension properties available.
-                                                    ///< if count is non-zero, then driver will only retrieve that number of
-                                                    ///< extension properties.
-                                                    ///< if count is larger than the number of extension properties available,
-                                                    ///< then the driver will update the value with the correct number of
+                                                    ///< if count is zero, then the driver shall update the value with the
+                                                    ///< total number of extension properties available.
+                                                    ///< if count is greater than the number of extension properties available,
+                                                    ///< then the driver shall update the value with the correct number of
                                                     ///< extension properties available.
     ze_driver_extension_properties_t* pExtensionProperties  ///< [in,out][optional][range(0, *pCount)] array of query results for
-                                                    ///< extension properties
+                                                    ///< extension properties.
+                                                    ///< if count is less than the number of extension properties available,
+                                                    ///< then driver shall only retrieve that number of extension properties.
+    );
+
+///////////////////////////////////////////////////////////////////////////////
+/// @brief Retrieves function pointer for vendor-specific or experimental
+///        extensions
+/// 
+/// @details
+///     - The application may call this function from simultaneous threads.
+///     - The implementation of this function should be lock-free.
+/// 
+/// @returns
+///     - ::ZE_RESULT_SUCCESS
+///     - ::ZE_RESULT_ERROR_UNINITIALIZED
+///     - ::ZE_RESULT_ERROR_DEVICE_LOST
+///     - ::ZE_RESULT_ERROR_INVALID_NULL_HANDLE
+///         + `nullptr == hDriver`
+///     - ::ZE_RESULT_ERROR_INVALID_NULL_POINTER
+///         + `nullptr == name`
+///         + `nullptr == ppFunctionAddress`
+ZE_APIEXPORT ze_result_t ZE_APICALL
+zeDriverGetExtensionFunctionAddress(
+    ze_driver_handle_t hDriver,                     ///< [in] handle of the driver instance
+    const char* name,                               ///< [in] extension name
+    void** ppFunctionAddress                        ///< [out] pointer to function pointer
     );
 
 #if !defined(__GNUC__)
@@ -790,12 +839,13 @@ ZE_APIEXPORT ze_result_t ZE_APICALL
 zeDeviceGet(
     ze_driver_handle_t hDriver,                     ///< [in] handle of the driver instance
     uint32_t* pCount,                               ///< [in,out] pointer to the number of devices.
-                                                    ///< if count is zero, then the driver will update the value with the total
-                                                    ///< number of devices available.
-                                                    ///< if count is non-zero, then driver will only retrieve that number of devices.
-                                                    ///< if count is larger than the number of devices available, then the
-                                                    ///< driver will update the value with the correct number of devices available.
-    ze_device_handle_t* phDevices                   ///< [in,out][optional][range(0, *pCount)] array of handle of devices
+                                                    ///< if count is zero, then the driver shall update the value with the
+                                                    ///< total number of devices available.
+                                                    ///< if count is greater than the number of devices available, then the
+                                                    ///< driver shall update the value with the correct number of devices available.
+    ze_device_handle_t* phDevices                   ///< [in,out][optional][range(0, *pCount)] array of handle of devices.
+                                                    ///< if count is less than the number of devices available, then driver
+                                                    ///< shall only retrieve that number of devices.
     );
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -825,12 +875,13 @@ ZE_APIEXPORT ze_result_t ZE_APICALL
 zeDeviceGetSubDevices(
     ze_device_handle_t hDevice,                     ///< [in] handle of the device object
     uint32_t* pCount,                               ///< [in,out] pointer to the number of sub-devices.
-                                                    ///< if count is zero, then the driver will update the value with the total
-                                                    ///< number of sub-devices available.
-                                                    ///< if count is non-zero, then driver will only retrieve that number of sub-devices.
-                                                    ///< if count is larger than the number of sub-devices available, then the
-                                                    ///< driver will update the value with the correct number of sub-devices available.
-    ze_device_handle_t* phSubdevices                ///< [in,out][optional][range(0, *pCount)] array of handle of sub-devices
+                                                    ///< if count is zero, then the driver shall update the value with the
+                                                    ///< total number of sub-devices available.
+                                                    ///< if count is greater than the number of sub-devices available, then the
+                                                    ///< driver shall update the value with the correct number of sub-devices available.
+    ze_device_handle_t* phSubdevices                ///< [in,out][optional][range(0, *pCount)] array of handle of sub-devices.
+                                                    ///< if count is less than the number of sub-devices available, then driver
+                                                    ///< shall only retrieve that number of sub-devices.
     );
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -900,8 +951,8 @@ typedef struct _ze_device_properties_t
     uint32_t numEUsPerSubslice;                     ///< [out] Number of EUs per sub-slice.
     uint32_t numSubslicesPerSlice;                  ///< [out] Number of sub-slices per slice.
     uint32_t numSlices;                             ///< [out] Number of slices.
-    uint64_t timerResolution;                       ///< [out] Returns the resolution of device timer in nanoseconds used for
-                                                    ///< profiling, timestamps, etc.
+    uint64_t timerResolution;                       ///< [out] Returns the resolution of device timer in cycles per second used
+                                                    ///< for profiling, timestamps, etc.
     uint32_t timestampValidBits;                    ///< [out] Returns the number of valid bits in the timestamp value.
     uint32_t kernelTimestampValidBits;              ///< [out] Returns the number of valid bits in the kernel timestamp values
     ze_device_uuid_t uuid;                          ///< [out] universal unique identifier. Note: Subdevices will have their
@@ -1107,7 +1158,7 @@ typedef enum _ze_command_queue_group_property_flag_t
     ZE_COMMAND_QUEUE_GROUP_PROPERTY_FLAG_COPY = ZE_BIT(1),  ///< Command queue group supports enqueing copy commands.
     ZE_COMMAND_QUEUE_GROUP_PROPERTY_FLAG_COOPERATIVE_KERNELS = ZE_BIT(2),   ///< Command queue group supports cooperative kernels.
                                                     ///< See ::zeCommandListAppendLaunchCooperativeKernel for more details.
-    ZE_COMMAND_QUEUE_GROUP_PROPERTY_FLAG_METRICS = ZE_BIT(3),   ///< Command queue groups supports metric streamers and queries.
+    ZE_COMMAND_QUEUE_GROUP_PROPERTY_FLAG_METRICS = ZE_BIT(3),   ///< Command queue groups supports metric queries.
     ZE_COMMAND_QUEUE_GROUP_PROPERTY_FLAG_FORCE_UINT32 = 0x7fffffff
 
 } ze_command_queue_group_property_flag_t;
@@ -1123,7 +1174,7 @@ typedef struct _ze_command_queue_group_properties_t
                                                     ///< ::ze_command_queue_group_property_flag_t
     size_t maxMemoryFillPatternSize;                ///< [out] maximum `pattern_size` supported by command queue group.
                                                     ///< See ::zeCommandListAppendMemoryFill for more details.
-    uint32_t numQueues;                             ///< [out] the number of physical command queues within the group.
+    uint32_t numQueues;                             ///< [out] the number of physical engines within the group.
 
 } ze_command_queue_group_properties_t;
 
@@ -1156,15 +1207,16 @@ ZE_APIEXPORT ze_result_t ZE_APICALL
 zeDeviceGetCommandQueueGroupProperties(
     ze_device_handle_t hDevice,                     ///< [in] handle of the device
     uint32_t* pCount,                               ///< [in,out] pointer to the number of command queue group properties.
-                                                    ///< if count is zero, then the driver will update the value with the total
-                                                    ///< number of command queue group properties available.
-                                                    ///< if count is non-zero, then driver will only retrieve that number of
-                                                    ///< command queue group properties.
-                                                    ///< if count is larger than the number of command queue group properties
-                                                    ///< available, then the driver will update the value with the correct
+                                                    ///< if count is zero, then the driver shall update the value with the
+                                                    ///< total number of command queue group properties available.
+                                                    ///< if count is greater than the number of command queue group properties
+                                                    ///< available, then the driver shall update the value with the correct
                                                     ///< number of command queue group properties available.
     ze_command_queue_group_properties_t* pCommandQueueGroupProperties   ///< [in,out][optional][range(0, *pCount)] array of query results for
-                                                    ///< command queue group properties
+                                                    ///< command queue group properties.
+                                                    ///< if count is less than the number of command queue group properties
+                                                    ///< available, then driver shall only retrieve that number of command
+                                                    ///< queue group properties.
     );
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1222,15 +1274,15 @@ ZE_APIEXPORT ze_result_t ZE_APICALL
 zeDeviceGetMemoryProperties(
     ze_device_handle_t hDevice,                     ///< [in] handle of the device
     uint32_t* pCount,                               ///< [in,out] pointer to the number of memory properties.
-                                                    ///< if count is zero, then the driver will update the value with the total
-                                                    ///< number of memory properties available.
-                                                    ///< if count is non-zero, then driver will only retrieve that number of
-                                                    ///< memory properties.
-                                                    ///< if count is larger than the number of memory properties available,
-                                                    ///< then the driver will update the value with the correct number of
+                                                    ///< if count is zero, then the driver shall update the value with the
+                                                    ///< total number of memory properties available.
+                                                    ///< if count is greater than the number of memory properties available,
+                                                    ///< then the driver shall update the value with the correct number of
                                                     ///< memory properties available.
     ze_device_memory_properties_t* pMemProperties   ///< [in,out][optional][range(0, *pCount)] array of query results for
-                                                    ///< memory properties
+                                                    ///< memory properties.
+                                                    ///< if count is less than the number of memory properties available, then
+                                                    ///< driver shall only retrieve that number of memory properties.
     );
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1340,15 +1392,14 @@ ZE_APIEXPORT ze_result_t ZE_APICALL
 zeDeviceGetCacheProperties(
     ze_device_handle_t hDevice,                     ///< [in] handle of the device
     uint32_t* pCount,                               ///< [in,out] pointer to the number of cache properties.
-                                                    ///< if count is zero, then the driver will update the value with the total
-                                                    ///< number of cache properties available.
-                                                    ///< if count is non-zero, then driver will only retrieve that number of
-                                                    ///< cache properties.
-                                                    ///< if count is larger than the number of cache properties available, then
-                                                    ///< the driver will update the value with the correct number of cache
-                                                    ///< properties available.
-    ze_device_cache_properties_t* pCacheProperties  ///< [in,out][optional][range(0, *pCount)] array of query results for cache
-                                                    ///< properties
+                                                    ///< if count is zero, then the driver shall update the value with the
+                                                    ///< total number of cache properties available.
+                                                    ///< if count is greater than the number of cache properties available,
+                                                    ///< then the driver shall update the value with the correct number of
+                                                    ///< cache properties available.
+    ze_device_cache_properties_t* pCacheProperties  ///< [in,out][optional][range(0, *pCount)] array of query results for cache properties.
+                                                    ///< if count is less than the number of cache properties available, then
+                                                    ///< driver shall only retrieve that number of cache properties.
     );
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1543,6 +1594,32 @@ zeDeviceGetStatus(
     ze_device_handle_t hDevice                      ///< [in] handle of the device
     );
 
+///////////////////////////////////////////////////////////////////////////////
+/// @brief Returns synchronized Host and device global timestamps.
+/// 
+/// @details
+///     - The application may call this function from simultaneous threads with
+///       the same device handle.
+///     - The implementation of this function must be thread-safe.
+/// 
+/// @returns
+///     - ::ZE_RESULT_SUCCESS
+///     - ::ZE_RESULT_ERROR_UNINITIALIZED
+///     - ::ZE_RESULT_ERROR_DEVICE_LOST
+///     - ::ZE_RESULT_ERROR_INVALID_NULL_HANDLE
+///         + `nullptr == hDevice`
+///     - ::ZE_RESULT_ERROR_INVALID_NULL_POINTER
+///         + `nullptr == hostTimestamp`
+///         + `nullptr == deviceTimestamp`
+ZE_APIEXPORT ze_result_t ZE_APICALL
+zeDeviceGetGlobalTimestamps(
+    ze_device_handle_t hDevice,                     ///< [in] handle of the device
+    uint64_t* hostTimestamp,                        ///< [out] value of the Host's global timestamp that correlates with the
+                                                    ///< Device's global timestamp value
+    uint64_t* deviceTimestamp                       ///< [out] value of the Device's global timestamp that correlates with the
+                                                    ///< Host's global timestamp value
+    );
+
 #if !defined(__GNUC__)
 #pragma endregion
 #endif
@@ -1598,6 +1675,44 @@ ZE_APIEXPORT ze_result_t ZE_APICALL
 zeContextCreate(
     ze_driver_handle_t hDriver,                     ///< [in] handle of the driver object
     const ze_context_desc_t* desc,                  ///< [in] pointer to context descriptor
+    ze_context_handle_t* phContext                  ///< [out] pointer to handle of context object created
+    );
+
+///////////////////////////////////////////////////////////////////////////////
+/// @brief Creates a context for the driver.
+/// 
+/// @details
+///     - The application must only use the context for the driver which was
+///       provided during creation.
+///     - The application may call this function from simultaneous threads.
+///     - The implementation of this function must be thread-safe.
+/// 
+/// @returns
+///     - ::ZE_RESULT_SUCCESS
+///     - ::ZE_RESULT_ERROR_UNINITIALIZED
+///     - ::ZE_RESULT_ERROR_DEVICE_LOST
+///     - ::ZE_RESULT_ERROR_INVALID_NULL_HANDLE
+///         + `nullptr == hDriver`
+///     - ::ZE_RESULT_ERROR_INVALID_NULL_POINTER
+///         + `nullptr == desc`
+///         + `nullptr == phContext`
+///     - ::ZE_RESULT_ERROR_INVALID_ENUMERATION
+///         + `0x1 < desc->flags`
+///     - ::ZE_RESULT_ERROR_OUT_OF_HOST_MEMORY
+///     - ::ZE_RESULT_ERROR_OUT_OF_DEVICE_MEMORY
+///     - ::ZE_RESULT_ERROR_INVALID_SIZE
+///         + `(nullptr == phDevices) && (0 < numDevices)`
+ZE_APIEXPORT ze_result_t ZE_APICALL
+zeContextCreateEx(
+    ze_driver_handle_t hDriver,                     ///< [in] handle of the driver object
+    const ze_context_desc_t* desc,                  ///< [in] pointer to context descriptor
+    uint32_t numDevices,                            ///< [in][optional] number of device handles; must be 0 if `nullptr ==
+                                                    ///< phDevices`
+    ze_device_handle_t* phDevices,                  ///< [in][optional][range(0, numDevices)] array of device handles which
+                                                    ///< context has visibility.
+                                                    ///< if nullptr, then all devices supported by the driver instance are
+                                                    ///< visible to the context.
+                                                    ///< otherwise, context only has visibility to devices in this array.
     ze_context_handle_t* phContext                  ///< [out] pointer to handle of context object created
     );
 
@@ -1784,8 +1899,14 @@ zeCommandQueueDestroy(
 /// @brief Executes a command list in a command queue.
 /// 
 /// @details
+///     - The command lists are submitted to the device in the order they are
+///       received, whether from multiple calls (on the same or different
+///       threads) or a single call with multiple command lists.
 ///     - The application must ensure the command lists are accessible by the
 ///       device on which the command queue was created.
+///     - The application must ensure the command lists are not currently
+///       referencing the command list since the implementation is allowed to
+///       modify the contents of the command list for submission.
 ///     - The application must only execute command lists created with an
 ///       identical command queue group ordinal to the command queue.
 ///     - The application must use a fence created using the same command queue.
@@ -2764,7 +2885,7 @@ typedef struct _ze_event_pool_desc_t
 ///     - ::ZE_RESULT_ERROR_OUT_OF_HOST_MEMORY
 ///     - ::ZE_RESULT_ERROR_OUT_OF_DEVICE_MEMORY
 ///     - ::ZE_RESULT_ERROR_INVALID_SIZE
-///         + `0 < desc->count`
+///         + `0 == desc->count`
 ///         + `(nullptr == phDevices) && (0 < numDevices)`
 ZE_APIEXPORT ze_result_t ZE_APICALL
 zeEventPoolCreate(
@@ -2831,13 +2952,13 @@ typedef struct _ze_event_desc_t
     ze_event_scope_flags_t signal;                  ///< [in] defines the scope of relevant cache hierarchies to flush on a
                                                     ///< signal action before the event is triggered.
                                                     ///< must be 0 (default) or a valid combination of ::ze_event_scope_flag_t;
-                                                    ///< default behavior is execution synchronization only, no cache
-                                                    ///< hierarchies are flushed.
+                                                    ///< default behavior is synchronization within the command list only, no
+                                                    ///< additional cache hierarchies are flushed.
     ze_event_scope_flags_t wait;                    ///< [in] defines the scope of relevant cache hierarchies to invalidate on
                                                     ///< a wait action after the event is complete.
                                                     ///< must be 0 (default) or a valid combination of ::ze_event_scope_flag_t;
-                                                    ///< default behavior is execution synchronization only, no cache
-                                                    ///< hierarchies are invalidated.
+                                                    ///< default behavior is synchronization within the command list only, no
+                                                    ///< additional cache hierarchies are invalidated.
 
 } ze_event_desc_t;
 
@@ -3517,6 +3638,19 @@ typedef enum _ze_image_format_layout_t
     ZE_IMAGE_FORMAT_LAYOUT_P016 = 25,               ///< Media Format: P016. Format type and swizzle is ignored for this.
     ZE_IMAGE_FORMAT_LAYOUT_Y216 = 26,               ///< Media Format: Y216. Format type and swizzle is ignored for this.
     ZE_IMAGE_FORMAT_LAYOUT_P216 = 27,               ///< Media Format: P216. Format type and swizzle is ignored for this.
+    ZE_IMAGE_FORMAT_LAYOUT_P8 = 28,                 ///< Media Format: P8. Format type and swizzle is ignored for this.
+    ZE_IMAGE_FORMAT_LAYOUT_YUY2 = 29,               ///< Media Format: YUY2. Format type and swizzle is ignored for this.
+    ZE_IMAGE_FORMAT_LAYOUT_A8P8 = 30,               ///< Media Format: A8P8. Format type and swizzle is ignored for this.
+    ZE_IMAGE_FORMAT_LAYOUT_IA44 = 31,               ///< Media Format: IA44. Format type and swizzle is ignored for this.
+    ZE_IMAGE_FORMAT_LAYOUT_AI44 = 32,               ///< Media Format: AI44. Format type and swizzle is ignored for this.
+    ZE_IMAGE_FORMAT_LAYOUT_Y416 = 33,               ///< Media Format: Y416. Format type and swizzle is ignored for this.
+    ZE_IMAGE_FORMAT_LAYOUT_Y210 = 34,               ///< Media Format: Y210. Format type and swizzle is ignored for this.
+    ZE_IMAGE_FORMAT_LAYOUT_I420 = 35,               ///< Media Format: I420. Format type and swizzle is ignored for this.
+    ZE_IMAGE_FORMAT_LAYOUT_YV12 = 36,               ///< Media Format: YV12. Format type and swizzle is ignored for this.
+    ZE_IMAGE_FORMAT_LAYOUT_400P = 37,               ///< Media Format: 400P. Format type and swizzle is ignored for this.
+    ZE_IMAGE_FORMAT_LAYOUT_422H = 38,               ///< Media Format: 422H. Format type and swizzle is ignored for this.
+    ZE_IMAGE_FORMAT_LAYOUT_422V = 39,               ///< Media Format: 422V. Format type and swizzle is ignored for this.
+    ZE_IMAGE_FORMAT_LAYOUT_444P = 40,               ///< Media Format: 444P. Format type and swizzle is ignored for this.
     ZE_IMAGE_FORMAT_LAYOUT_FORCE_UINT32 = 0x7fffffff
 
 } ze_image_format_layout_t;
@@ -4317,6 +4451,8 @@ zeModuleDestroy(
 ///     - A link log can optionally be returned to the caller. The caller is
 ///       responsible for destroying build log using ::zeModuleBuildLogDestroy.
 ///     - See SPIR-V specification for linkage details.
+///     - The application must ensure the modules being linked were created on
+///       the same context.
 ///     - The application may call this function from simultaneous threads as
 ///       long as the import modules being linked are not the same.
 ///     - The implementation of this function should be lock-free.
@@ -4461,12 +4597,13 @@ ZE_APIEXPORT ze_result_t ZE_APICALL
 zeModuleGetKernelNames(
     ze_module_handle_t hModule,                     ///< [in] handle of the module
     uint32_t* pCount,                               ///< [in,out] pointer to the number of names.
-                                                    ///< if count is zero, then the driver will update the value with the total
-                                                    ///< number of names available.
-                                                    ///< if count is non-zero, then driver will only retrieve that number of names.
-                                                    ///< if count is larger than the number of names available, then the driver
-                                                    ///< will update the value with the correct number of names available.
-    const char** pNames                             ///< [in,out][optional][range(0, *pCount)] array of names of functions
+                                                    ///< if count is zero, then the driver shall update the value with the
+                                                    ///< total number of names available.
+                                                    ///< if count is greater than the number of names available, then the
+                                                    ///< driver shall update the value with the correct number of names available.
+    const char** pNames                             ///< [in,out][optional][range(0, *pCount)] array of names of functions.
+                                                    ///< if count is less than the number of names available, then driver shall
+                                                    ///< only retrieve that number of names.
     );
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -4621,12 +4758,10 @@ zeModuleGetFunctionPointer(
 /// @brief Set group size for a kernel on the current Host thread.
 /// 
 /// @details
-///     - The implementation will maintain the group size in thread-local
-///       storage.
 ///     - The group size will be used when a ::zeCommandListAppendLaunchKernel
-///       variant is called on the same Host thread.
-///     - The application may call this function from simultaneous threads with
-///       the same kernel handle.
+///       variant is called.
+///     - The application must **not** call this function from simultaneous
+///       threads with the same kernel handle.
 ///     - The implementation of this function should be lock-free.
 /// 
 /// @returns
@@ -4701,13 +4836,10 @@ zeKernelSuggestMaxCooperativeGroupCount(
 /// @brief Set kernel argument for a kernel on the current Host thread.
 /// 
 /// @details
-///     - The implementation will maintain the argument values in thread-local
-///       storage.
 ///     - The argument values will be used when a
-///       ::zeCommandListAppendLaunchKernel variant is called on the same Host
-///       thread.
-///     - The application may call this function from simultaneous threads with
-///       the same kernel handle.
+///       ::zeCommandListAppendLaunchKernel variant is called.
+///     - The application must **not** call this function from simultaneous
+///       threads with the same kernel handle.
 ///     - The implementation of this function should be lock-free.
 /// 
 /// @returns
@@ -4803,16 +4935,14 @@ zeKernelGetIndirectAccess(
 ///         + `nullptr == hKernel`
 ///     - ::ZE_RESULT_ERROR_INVALID_NULL_POINTER
 ///         + `nullptr == pSize`
+///         + `nullptr == pString`
 ZE_APIEXPORT ze_result_t ZE_APICALL
 zeKernelGetSourceAttributes(
     ze_kernel_handle_t hKernel,                     ///< [in] handle of the kernel object
     uint32_t* pSize,                                ///< [in,out] pointer to size of string in bytes.
-                                                    ///< if size is zero, then the driver will update string argument.
-                                                    ///< if size is non-zero, then driver will only retrieve string size in bytes.
-                                                    ///< if size is larger than source attributes string, then the driver will
-                                                    ///< update the string.
-    char** pString                                  ///< [in,out][optional] pointer to null-terminated string where kernel
-                                                    ///< source attributes are separated by space.
+    char** pString                                  ///< [in,out] pointer to null-terminated string, whose lifetime is tied to
+                                                    ///< the kernel object, where kernel source attributes are separated by
+                                                    ///< space.
     );
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -4831,13 +4961,10 @@ typedef enum _ze_cache_config_flag_t
 ///        Host thread.
 /// 
 /// @details
-///     - The implementation will maintain the cache configuration in
-///       thread-local storage.
 ///     - The cache configuration will be used when a
-///       ::zeCommandListAppendLaunchKernel variant is called on the same Host
-///       thread.
-///     - The application may call this function from simultaneous threads with
-///       the same kernel handle.
+///       ::zeCommandListAppendLaunchKernel variant is called.
+///     - The application must **not** call this function from simultaneous
+///       threads with the same kernel handle.
 ///     - The implementation of this function should be lock-free.
 /// 
 /// @returns
@@ -5138,6 +5265,54 @@ zeCommandListAppendLaunchMultipleKernelsIndirect(
 #if !defined(__GNUC__)
 #pragma endregion
 #endif
+// Intel 'oneAPI' Level-Zero Extension for supporting module programs.
+#if !defined(__GNUC__)
+#pragma region program
+#endif
+///////////////////////////////////////////////////////////////////////////////
+#ifndef ZE_MODULE_PROGRAM_EXP_NAME
+/// @brief Module Program Extension Name
+#define ZE_MODULE_PROGRAM_EXP_NAME  "ZE_experimental_module_program"
+#endif // ZE_MODULE_PROGRAM_EXP_NAME
+
+///////////////////////////////////////////////////////////////////////////////
+/// @brief Module Program Extension Version(s)
+typedef enum _ze_module_program_exp_version_t
+{
+    ZE_MODULE_PROGRAM_EXP_VERSION_1_0 = ZE_MAKE_VERSION( 1, 0 ),///< version 1.0
+    ZE_MODULE_PROGRAM_EXP_VERSION_CURRENT = ZE_MAKE_VERSION( 1, 0 ),///< latest known version
+    ZE_MODULE_PROGRAM_EXP_VERSION_FORCE_UINT32 = 0x7fffffff
+
+} ze_module_program_exp_version_t;
+
+///////////////////////////////////////////////////////////////////////////////
+/// @brief Module extended descriptor to support multiple input modules.
+/// 
+/// @details
+///     - Implementation must support ::ZE_experimental_module_program extension
+///     - pInputModules, pBuildFlags, and pConstants from ::ze_module_desc_t is
+///       ignored.
+///     - Format in ::ze_module_desc_t needs to be set to
+///       ::ZE_MODULE_FORMAT_IL_SPIRV.
+typedef struct _ze_module_program_exp_desc_t
+{
+    ze_structure_type_t stype;                      ///< [in] type of this structure
+    const void* pNext;                              ///< [in][optional] pointer to extension-specific structure
+    uint32_t count;                                 ///< [in] Count of input modules
+    const size_t* inputSizes;                       ///< [in][range(0, count)] sizes of each input IL module in pInputModules.
+    const uint8_t** pInputModules;                  ///< [in][range(0, count)] pointer to an array of IL (e.g. SPIR-V modules).
+                                                    ///< Valid only for SPIR-V input.
+    const char** pBuildFlags;                       ///< [in][optional][range(0, count)] array of strings containing build
+                                                    ///< flags. See pBuildFlags in ::ze_module_desc_t.
+    const ze_module_constants_t** pConstants;       ///< [in][optional][range(0, count)] pointer to array of specialization
+                                                    ///< constant strings. Valid only for SPIR-V input. This must be set to
+                                                    ///< nullptr if no specialization constants are provided.
+
+} ze_module_program_exp_desc_t;
+
+#if !defined(__GNUC__)
+#pragma endregion
+#endif
 // Intel 'oneAPI' Level-Zero Extension APIs for Raytracing
 #if !defined(__GNUC__)
 #pragma region raytracing
@@ -5157,6 +5332,31 @@ typedef enum _ze_raytracing_ext_version_t
     ZE_RAYTRACING_EXT_VERSION_FORCE_UINT32 = 0x7fffffff
 
 } ze_raytracing_ext_version_t;
+
+///////////////////////////////////////////////////////////////////////////////
+/// @brief Supported raytracing capability flags
+typedef uint32_t ze_device_raytracing_ext_flags_t;
+typedef enum _ze_device_raytracing_ext_flag_t
+{
+    ZE_DEVICE_RAYTRACING_EXT_FLAG_RAYQUERY = ZE_BIT(0), ///< Supports rayquery
+    ZE_DEVICE_RAYTRACING_EXT_FLAG_FORCE_UINT32 = 0x7fffffff
+
+} ze_device_raytracing_ext_flag_t;
+
+///////////////////////////////////////////////////////////////////////////////
+/// @brief Raytracing properties queried using ::zeDeviceGetModuleProperties
+/// 
+/// @details
+///     - This structure may be returned from ::zeDeviceGetModuleProperties, via
+///       `pNext` member of ::ze_device_module_properties_t.
+typedef struct _ze_device_raytracing_ext_properties_t
+{
+    ze_structure_type_t stype;                      ///< [in] type of this structure
+    void* pNext;                                    ///< [in,out][optional] pointer to extension-specific structure
+    ze_device_raytracing_ext_flags_t flags;         ///< [out] 0 or a valid combination of ::ze_device_raytracing_ext_flags_t
+    uint32_t maxBVHLevels;                          ///< [out] Maximum number of BVH levels supported
+
+} ze_device_raytracing_ext_properties_t;
 
 ///////////////////////////////////////////////////////////////////////////////
 /// @brief Supported raytracing memory allocation flags
@@ -5737,6 +5937,161 @@ zeVirtualMemGetAccessAttribute(
     size_t* outSize                                 ///< [out] query result for size of virtual address range, starting at ptr,
                                                     ///< that shares same access attribute.
     );
+
+#if !defined(__GNUC__)
+#pragma endregion
+#endif
+// Intel 'oneAPI' Level-Zero Extension APIs for Floating-Point Atomics
+#if !defined(__GNUC__)
+#pragma region floatAtomics
+#endif
+///////////////////////////////////////////////////////////////////////////////
+#ifndef ZE_FLOAT_ATOMICS_EXT_NAME
+/// @brief Floating-Point Atomics Extension Name
+#define ZE_FLOAT_ATOMICS_EXT_NAME  "ZE_extension_float_atomics"
+#endif // ZE_FLOAT_ATOMICS_EXT_NAME
+
+///////////////////////////////////////////////////////////////////////////////
+/// @brief Floating-Point Atomics Extension Version(s)
+typedef enum _ze_float_atomics_ext_version_t
+{
+    ZE_FLOAT_ATOMICS_EXT_VERSION_1_0 = ZE_MAKE_VERSION( 1, 0 ), ///< version 1.0
+    ZE_FLOAT_ATOMICS_EXT_VERSION_CURRENT = ZE_MAKE_VERSION( 1, 0 ), ///< latest known version
+    ZE_FLOAT_ATOMICS_EXT_VERSION_FORCE_UINT32 = 0x7fffffff
+
+} ze_float_atomics_ext_version_t;
+
+///////////////////////////////////////////////////////////////////////////////
+/// @brief Supported floating-point atomic capability flags
+typedef uint32_t ze_device_fp_atomic_ext_flags_t;
+typedef enum _ze_device_fp_atomic_ext_flag_t
+{
+    ZE_DEVICE_FP_ATOMIC_EXT_FLAG_GLOBAL_LOAD_STORE = ZE_BIT(0), ///< Supports atomic load, store, and exchange
+    ZE_DEVICE_FP_ATOMIC_EXT_FLAG_GLOBAL_ADD = ZE_BIT(1),///< Supports atomic add and subtract
+    ZE_DEVICE_FP_ATOMIC_EXT_FLAG_GLOBAL_MIN_MAX = ZE_BIT(2),///< Supports atomic min and max
+    ZE_DEVICE_FP_ATOMIC_EXT_FLAG_LOCAL_LOAD_STORE = ZE_BIT(16), ///< Supports atomic load, store, and exchange
+    ZE_DEVICE_FP_ATOMIC_EXT_FLAG_LOCAL_ADD = ZE_BIT(17),///< Supports atomic add and subtract
+    ZE_DEVICE_FP_ATOMIC_EXT_FLAG_LOCAL_MIN_MAX = ZE_BIT(18),///< Supports atomic min and max
+    ZE_DEVICE_FP_ATOMIC_EXT_FLAG_FORCE_UINT32 = 0x7fffffff
+
+} ze_device_fp_atomic_ext_flag_t;
+
+///////////////////////////////////////////////////////////////////////////////
+/// @brief Device floating-point atomic properties queried using
+///        ::zeDeviceGetModuleProperties
+/// 
+/// @details
+///     - This structure may be returned from ::zeDeviceGetModuleProperties, via
+///       `pNext` member of ::ze_device_module_properties_t.
+typedef struct _ze_float_atomic_ext_properties_t
+{
+    ze_structure_type_t stype;                      ///< [in] type of this structure
+    void* pNext;                                    ///< [in,out][optional] pointer to extension-specific structure
+    ze_device_fp_atomic_ext_flags_t fp16Flags;      ///< [out] Capabilities for half-precision floating-point atomic operations
+    ze_device_fp_atomic_ext_flags_t fp32Flags;      ///< [out] Capabilities for single-precision floating-point atomic
+                                                    ///< operations
+    ze_device_fp_atomic_ext_flags_t fp64Flags;      ///< [out] Capabilities for double-precision floating-point atomic
+                                                    ///< operations
+
+} ze_float_atomic_ext_properties_t;
+
+#if !defined(__GNUC__)
+#pragma endregion
+#endif
+// Intel 'oneAPI' Level-Zero Extension for supporting kernel global work offset.
+#if !defined(__GNUC__)
+#pragma region globaloffset
+#endif
+///////////////////////////////////////////////////////////////////////////////
+#ifndef ZE_GLOBAL_OFFSET_EXP_NAME
+/// @brief Global Offset Extension Name
+#define ZE_GLOBAL_OFFSET_EXP_NAME  "ZE_experimental_global_offset"
+#endif // ZE_GLOBAL_OFFSET_EXP_NAME
+
+///////////////////////////////////////////////////////////////////////////////
+/// @brief Global Offset Extension Version(s)
+typedef enum _ze_global_offset_exp_version_t
+{
+    ZE_GLOBAL_OFFSET_EXP_VERSION_1_0 = ZE_MAKE_VERSION( 1, 0 ), ///< version 1.0
+    ZE_GLOBAL_OFFSET_EXP_VERSION_CURRENT = ZE_MAKE_VERSION( 1, 0 ), ///< latest known version
+    ZE_GLOBAL_OFFSET_EXP_VERSION_FORCE_UINT32 = 0x7fffffff
+
+} ze_global_offset_exp_version_t;
+
+///////////////////////////////////////////////////////////////////////////////
+/// @brief Set global work offset for a kernel on the current Host thread.
+/// 
+/// @details
+///     - The global work offset will be used when
+///       a ::zeCommandListAppendLaunchKernel() variant is called.
+///     - The application must **not** call this function from simultaneous
+///       threads with the same kernel handle.
+///     - The implementation of this function should be lock-free.
+/// 
+/// @returns
+///     - ::ZE_RESULT_SUCCESS
+///     - ::ZE_RESULT_ERROR_UNINITIALIZED
+///     - ::ZE_RESULT_ERROR_DEVICE_LOST
+///     - ::ZE_RESULT_ERROR_INVALID_NULL_HANDLE
+///         + `nullptr == hKernel`
+ZE_APIEXPORT ze_result_t ZE_APICALL
+zeKernelSetGlobalOffsetExp(
+    ze_kernel_handle_t hKernel,                     ///< [in] handle of the kernel object
+    uint32_t offsetX,                               ///< [in] global offset for X dimension to use for this kernel
+    uint32_t offsetY,                               ///< [in] global offset for Y dimension to use for this kernel
+    uint32_t offsetZ                                ///< [in] global offset for Z dimension to use for this kernel
+    );
+
+#if !defined(__GNUC__)
+#pragma endregion
+#endif
+// Intel 'oneAPI' Level-Zero Extension for supporting relaxed allocation limits.
+#if !defined(__GNUC__)
+#pragma region relaxedAllocLimits
+#endif
+///////////////////////////////////////////////////////////////////////////////
+#ifndef ZE_RELAXED_ALLOCATION_LIMITS_EXP_NAME
+/// @brief Relaxed Allocation Limits Extension Name
+#define ZE_RELAXED_ALLOCATION_LIMITS_EXP_NAME  "ZE_experimental_relaxed_allocation_limits"
+#endif // ZE_RELAXED_ALLOCATION_LIMITS_EXP_NAME
+
+///////////////////////////////////////////////////////////////////////////////
+/// @brief Relaxed Allocation Limits Extension Version(s)
+typedef enum _ze_relaxed_allocation_limits_exp_version_t
+{
+    ZE_RELAXED_ALLOCATION_LIMITS_EXP_VERSION_1_0 = ZE_MAKE_VERSION( 1, 0 ), ///< version 1.0
+    ZE_RELAXED_ALLOCATION_LIMITS_EXP_VERSION_CURRENT = ZE_MAKE_VERSION( 1, 0 ), ///< latest known version
+    ZE_RELAXED_ALLOCATION_LIMITS_EXP_VERSION_FORCE_UINT32 = 0x7fffffff
+
+} ze_relaxed_allocation_limits_exp_version_t;
+
+///////////////////////////////////////////////////////////////////////////////
+/// @brief Supported relaxed memory allocation flags
+typedef uint32_t ze_relaxed_allocation_limits_exp_flags_t;
+typedef enum _ze_relaxed_allocation_limits_exp_flag_t
+{
+    ZE_RELAXED_ALLOCATION_LIMITS_EXP_FLAG_MAX_SIZE = ZE_BIT(0), ///< Allocation size may exceed ::ze_device_properties_t.maxMemAllocSize
+    ZE_RELAXED_ALLOCATION_LIMITS_EXP_FLAG_FORCE_UINT32 = 0x7fffffff
+
+} ze_relaxed_allocation_limits_exp_flag_t;
+
+///////////////////////////////////////////////////////////////////////////////
+/// @brief Relaxed limits memory allocation descriptor
+/// 
+/// @details
+///     - This structure may be passed to ::zeMemAllocShared or
+///       ::zeMemAllocDevice, via `pNext` member of
+///       ::ze_device_mem_alloc_desc_t.
+///     - This structure may also be passed to ::zeMemAllocHost, via `pNext`
+///       member of ::ze_host_mem_alloc_desc_t.
+typedef struct _ze_relaxed_allocation_limits_exp_desc_t
+{
+    ze_structure_type_t stype;                      ///< [in] type of this structure
+    const void* pNext;                              ///< [in][optional] pointer to extension-specific structure
+    ze_relaxed_allocation_limits_exp_flags_t flags; ///< [in] flags specifying allocation limits to relax.
+                                                    ///< must be 0 (default) or a valid combination of ::ze_relaxed_allocation_limits_exp_flag_t;
+
+} ze_relaxed_allocation_limits_exp_desc_t;
 
 #if !defined(__GNUC__)
 #pragma endregion
