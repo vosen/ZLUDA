@@ -1,4 +1,4 @@
 sed 's/^typedef uint32_t ze_.*flags_t;$//g' include/ze_api.h > include/level_zero/ze_api.h
 sed -i -r 's/ze_(.*)_flag_t/ze_\1_flags_t/g' include/level_zero/ze_api.h
-bindgen --size_t-is-usize --default-enum-style=newtype --bitfield-enum ".*flags_t"  --whitelist-function "ze.*" --whitelist-type "ze.*" include/ze_exp_ext.h  -o src/ze_api.rs -- -Iinclude
+bindgen --size_t-is-usize --default-enum-style=newtype --bitfield-enum ".*flags_t"  --whitelist-function "ze.*" --whitelist-type "ze.*" include/level_zero/ze_api.h -o src/ze_api.rs -- -Iinclude
 sed -i 's/pub struct _ze_result_t/#[must_use]\npub struct _ze_result_t/g' src/ze_api.rs
