@@ -4,7 +4,7 @@ use std::{ffi::c_void, mem};
 pub fn alloc_v2(dptr: *mut *mut c_void, bytesize: usize) -> Result<(), CUresult> {
     let ptr = GlobalState::lock_current_context(|ctx| {
         let dev = unsafe { &mut *ctx.device };
-        Ok::<_, CUresult>(unsafe { dev.base.mem_alloc_device(&mut dev.l0_context, bytesize, 0) }?)
+        Ok::<_, CUresult>(dev.l0_context.mem_alloc_device(bytesize, 0, dev.base)?)
     })??;
     unsafe { *dptr = ptr };
     Ok(())
@@ -12,9 +12,9 @@ pub fn alloc_v2(dptr: *mut *mut c_void, bytesize: usize) -> Result<(), CUresult>
 
 pub fn copy_v2(dst: *mut c_void, src: *const c_void, bytesize: usize) -> Result<(), CUresult> {
     GlobalState::lock_stream(stream::CU_STREAM_LEGACY, |stream| {
-        let mut cmd_list = stream.command_list()?;
-        unsafe { cmd_list.append_memory_copy_unsafe(dst, src, bytesize, None, &mut []) }?;
-        stream.queue.execute(cmd_list)?;
+        let cmd_list = stream.command_list()?;
+        unsafe { cmd_list.append_memory_copy_unsafe(dst, src, bytesize, None, &mut [])? };
+        stream.queue.execute_and_synchronize(cmd_list)?;
         Ok::<_, CUresult>(())
     })?
 }
@@ -22,29 +22,29 @@ pub fn copy_v2(dst: *mut c_void, src: *const c_void, bytesize: usize) -> Result<
 pub fn free_v2(ptr: *mut c_void) -> Result<(), CUresult> {
     GlobalState::lock_current_context(|ctx| {
         let dev = unsafe { &mut *ctx.device };
-        Ok::<_, CUresult>(unsafe { dev.l0_context.mem_free(ptr) }?)
+        Ok::<_, CUresult>(dev.l0_context.mem_free(ptr)?)
     })
     .map_err(|_| CUresult::CUDA_ERROR_INVALID_VALUE)?
 }
 
 pub(crate) fn set_d32_v2(dst: *mut c_void, ui: u32, n: usize) -> Result<(), CUresult> {
     GlobalState::lock_stream(stream::CU_STREAM_LEGACY, |stream| {
-        let mut cmd_list = stream.command_list()?;
+        let cmd_list = stream.command_list()?;
         unsafe {
             cmd_list.append_memory_fill_unsafe(dst, &ui, mem::size_of::<u32>() * n, None, &mut [])
         }?;
-        stream.queue.execute(cmd_list)?;
+        stream.queue.execute_and_synchronize(cmd_list)?;
         Ok::<_, CUresult>(())
     })?
 }
 
 pub(crate) fn set_d8_v2(dst: *mut c_void, uc: u8, n: usize) -> Result<(), CUresult> {
     GlobalState::lock_stream(stream::CU_STREAM_LEGACY, |stream| {
-        let mut cmd_list = stream.command_list()?;
+        let cmd_list = stream.command_list()?;
         unsafe {
             cmd_list.append_memory_fill_unsafe(dst, &uc, mem::size_of::<u8>() * n, None, &mut [])
         }?;
-        stream.queue.execute(cmd_list)?;
+        stream.queue.execute_and_synchronize(cmd_list)?;
         Ok::<_, CUresult>(())
     })?
 }

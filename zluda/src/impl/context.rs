@@ -98,8 +98,8 @@ pub struct ContextData {
 
 impl ContextData {
     pub fn new(
-        l0_ctx: &mut l0::Context,
-        l0_dev: &l0::Device,
+        l0_ctx: &'static l0::Context,
+        l0_dev: l0::Device,
         flags: c_uint,
         is_primary: bool,
         dev: *mut device::Device,
@@ -137,7 +137,7 @@ pub fn create_v2(
         let dev_ptr = dev as *mut _;
         let mut ctx_box = Box::new(LiveCheck::new(ContextData::new(
             &mut dev.l0_context,
-            &dev.base,
+            dev.base,
             flags,
             false,
             dev_ptr as *mut _,

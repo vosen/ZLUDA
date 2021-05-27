@@ -18,7 +18,7 @@ pub struct Index(pub c_int);
 pub struct Device {
     pub index: Index,
     pub base: l0::Device,
-    pub default_queue: l0::CommandQueue,
+    pub default_queue: l0::CommandQueue<'static>,
     pub l0_context: l0::Context,
     pub primary_context: context::Context,
     properties: Option<Box<l0::sys::ze_device_properties_t>>,
@@ -31,12 +31,13 @@ unsafe impl Send for Device {}
 
 impl Device {
     // Unsafe because it does not fully initalize primary_context
+    // and we transmute lifetimes left and right
     unsafe fn new(drv: &l0::Driver, l0_dev: l0::Device, idx: usize) -> Result<Self, CUresult> {
-        let mut ctx = l0::Context::new(drv)?;
-        let queue = l0::CommandQueue::new(&mut ctx, &l0_dev)?;
+        let ctx = l0::Context::new(*drv, Some(&[l0_dev]))?;
+        let queue = l0::CommandQueue::new(mem::transmute(&ctx), l0_dev)?;
         let primary_context = context::Context::new(context::ContextData::new(
-            &mut ctx,
-            &l0_dev,
+            mem::transmute(&ctx),
+            l0_dev,
             0,
             true,
             ptr::null_mut(),
@@ -58,20 +59,18 @@ impl Device {
         if let Some(ref prop) = self.properties {
             return Ok(prop);
         }
-        match self.base.get_properties() {
-            Ok(prop) => Ok(self.properties.get_or_insert(prop)),
-            Err(e) => Err(e),
-        }
+        let mut props = Default::default();
+        self.base.get_properties(&mut props)?;
+        Ok(self.properties.get_or_insert(Box::new(props)))
     }
 
     fn get_image_properties(&mut self) -> l0::Result<&l0::sys::ze_device_image_properties_t> {
         if let Some(ref prop) = self.image_properties {
             return Ok(prop);
         }
-        match self.base.get_image_properties() {
-            Ok(prop) => Ok(self.image_properties.get_or_insert(prop)),
-            Err(e) => Err(e),
-        }
+        let mut props = Default::default();
+        self.base.get_image_properties(&mut props)?;
+        Ok(self.image_properties.get_or_insert(Box::new(props)))
     }
 
     fn get_memory_properties(&mut self) -> l0::Result<&[l0::sys::ze_device_memory_properties_t]> {
@@ -88,10 +87,9 @@ impl Device {
         if let Some(ref prop) = self.compute_properties {
             return Ok(prop);
         }
-        match self.base.get_compute_properties() {
-            Ok(prop) => Ok(self.compute_properties.get_or_insert(prop)),
-            Err(e) => Err(e),
-        }
+        let mut props = Default::default();
+        self.base.get_compute_properties(&mut props)?;
+        Ok(self.compute_properties.get_or_insert(Box::new(props)))
     }
 
     pub fn late_init(&mut self) {
@@ -351,7 +349,11 @@ pub fn get_uuid(uuid: *mut CUuuid_st, dev_idx: Index) -> Result<(), CUresult> {
 }
 
 // TODO: add support if Level 0 exposes it
-pub fn get_luid(luid: *mut c_char, dev_node_mask: *mut c_uint, _dev_idx: Index) -> Result<(), CUresult> {
+pub fn get_luid(
+    luid: *mut c_char,
+    dev_node_mask: *mut c_uint,
+    _dev_idx: Index,
+) -> Result<(), CUresult> {
     unsafe { ptr::write_bytes(luid, 0u8, 8) };
     unsafe { *dev_node_mask = 0 };
     Ok(())

@@ -127,7 +127,8 @@ pub(crate) fn system_get_driver_version(
         len: 0,
     };
     for d in drivers {
-        let props = d.get_properties()?;
+        let mut props = Default::default();
+        d.get_properties(&mut props)?;
         let driver_version = props.driverVersion;
         write!(&mut output_write, "{}", driver_version)
             .map_err(|_| nvmlReturn_t::NVML_ERROR_UNKNOWN)?;
