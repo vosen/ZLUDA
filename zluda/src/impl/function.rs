@@ -145,12 +145,14 @@ pub fn launch_kernel(
             .set_group_size(block_dim_x, block_dim_y, block_dim_z)?;
         func.legacy_args.reset();
         let cmd_list = stream.command_list()?;
-        cmd_list.append_launch_kernel(
-            &mut func.base,
-            &[grid_dim_x, grid_dim_y, grid_dim_z],
-            None,
-            &mut [],
-        )?;
+        unsafe {
+            cmd_list.append_launch_kernel(
+                &mut func.base,
+                &[grid_dim_x, grid_dim_y, grid_dim_z],
+                None,
+                &mut [],
+            )?;
+        }
         stream.queue.execute_and_synchronize(cmd_list)?;
         Ok(())
     })?

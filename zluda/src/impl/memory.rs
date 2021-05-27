@@ -13,7 +13,7 @@ pub fn alloc_v2(dptr: *mut *mut c_void, bytesize: usize) -> Result<(), CUresult>
 pub fn copy_v2(dst: *mut c_void, src: *const c_void, bytesize: usize) -> Result<(), CUresult> {
     GlobalState::lock_stream(stream::CU_STREAM_LEGACY, |stream| {
         let cmd_list = stream.command_list()?;
-        unsafe { cmd_list.append_memory_copy_unsafe(dst, src, bytesize, None, &mut [])? };
+        unsafe { cmd_list.append_memory_copy_raw(dst, src, bytesize, None, &mut [])? };
         stream.queue.execute_and_synchronize(cmd_list)?;
         Ok::<_, CUresult>(())
     })?
@@ -27,22 +27,36 @@ pub fn free_v2(ptr: *mut c_void) -> Result<(), CUresult> {
     .map_err(|_| CUresult::CUDA_ERROR_INVALID_VALUE)?
 }
 
-pub(crate) fn set_d32_v2(dst: *mut c_void, ui: u32, n: usize) -> Result<(), CUresult> {
+pub(crate) fn set_d32_v2(dst: *mut c_void, mut ui: u32, n: usize) -> Result<(), CUresult> {
     GlobalState::lock_stream(stream::CU_STREAM_LEGACY, |stream| {
         let cmd_list = stream.command_list()?;
         unsafe {
-            cmd_list.append_memory_fill_unsafe(dst, &ui, mem::size_of::<u32>() * n, None, &mut [])
+            cmd_list.append_memory_fill_raw(
+                dst,
+                &mut ui as *mut _ as *mut _,
+                mem::size_of::<u32>(),
+                mem::size_of::<u32>() * n,
+                None,
+                &mut [],
+            )
         }?;
         stream.queue.execute_and_synchronize(cmd_list)?;
         Ok::<_, CUresult>(())
     })?
 }
 
-pub(crate) fn set_d8_v2(dst: *mut c_void, uc: u8, n: usize) -> Result<(), CUresult> {
+pub(crate) fn set_d8_v2(dst: *mut c_void, mut uc: u8, n: usize) -> Result<(), CUresult> {
     GlobalState::lock_stream(stream::CU_STREAM_LEGACY, |stream| {
         let cmd_list = stream.command_list()?;
         unsafe {
-            cmd_list.append_memory_fill_unsafe(dst, &uc, mem::size_of::<u8>() * n, None, &mut [])
+            cmd_list.append_memory_fill_raw(
+                dst,
+                &mut uc as *mut _ as *mut _,
+                mem::size_of::<u8>(),
+                mem::size_of::<u8>() * n,
+                None,
+                &mut [],
+            )
         }?;
         stream.queue.execute_and_synchronize(cmd_list)?;
         Ok::<_, CUresult>(())
