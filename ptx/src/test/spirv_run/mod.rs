@@ -202,7 +202,7 @@ impl<T: Debug> error::Error for DisplayError<T> {}
 fn test_ptx_assert<
     'a,
     Input: From<u8> + Debug + Copy + PartialEq,
-    Output: From<u8> + Debug + Copy + PartialEq,
+    Output: From<u8> + Debug + Copy + PartialEq + Default,
 >(
     name: &str,
     ptx_text: &'a str,
@@ -220,7 +220,7 @@ fn test_ptx_assert<
     Ok(())
 }
 
-fn run_spirv<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug>(
+fn run_spirv<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Default>(
     name: &CStr,
     module: translate::Module,
     input: &[Input],
@@ -286,19 +286,19 @@ fn run_spirv<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug>(
         let ev1 = ze::Event::new(&event_pool, 1)?;
         let ev2 = ze::Event::new(&event_pool, 2)?;
         {
-            let cmd_list = ze::CommandList::new(&ctx, dev)?;
-            let init_evs = [ev0, ev1];
-            cmd_list.append_memory_copy(&inp_b, input, Some(&init_evs[0]), &[])?;
-            cmd_list.append_memory_fill(&out_b, 0, Some(&init_evs[1]), &[])?;
+            let init_evs = [&ev0, &ev1];
             kernel.set_group_size(1, 1, 1)?;
             kernel.set_arg_buffer(0, &inp_b)?;
             kernel.set_arg_buffer(1, &out_b)?;
             if use_shared_mem {
                 unsafe { kernel.set_arg_raw(2, 128, ptr::null())? };
             }
-            cmd_list.append_launch_kernel(&kernel, &[1, 1, 1], Some(&ev2), &init_evs)?;
-            cmd_list.append_memory_copy(&*result, &out_b, None, &[ev2])?;
-            queue.execute_and_synchronize(cmd_list)?;
+            ze::CommandListBuilder::new(&ctx, dev)?
+                .append_memory_copy(&inp_b, input, Some(&init_evs[0]), &[])?
+                .append_memory_fill(&out_b, &Output::default(), Some(&init_evs[1]), &[])?
+                .append_launch_kernel(&kernel, &[1, 1, 1], Some(&ev2), &init_evs)?
+                .append_memory_copy(&*result, &out_b, None, &[&ev2])?
+                .execute(&queue)?;
         }
     }
     Ok(result)
