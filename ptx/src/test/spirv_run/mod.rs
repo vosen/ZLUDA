@@ -201,8 +201,8 @@ impl<T: Debug> error::Error for DisplayError<T> {}
 
 fn test_ptx_assert<
     'a,
-    Input: From<u8> + ze::SafeRepr + Debug + Copy + PartialEq,
-    Output: From<u8> + ze::SafeRepr + Debug + Copy + PartialEq,
+    Input: From<u8> + Debug + Copy + PartialEq,
+    Output: From<u8> + Debug + Copy + PartialEq,
 >(
     name: &str,
     ptx_text: &'a str,
@@ -220,10 +220,7 @@ fn test_ptx_assert<
     Ok(())
 }
 
-fn run_spirv<
-    Input: From<u8> + ze::SafeRepr + Copy + Debug,
-    Output: From<u8> + ze::SafeRepr + Copy + Debug,
->(
+fn run_spirv<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug>(
     name: &CStr,
     module: translate::Module,
     input: &[Input],
@@ -242,25 +239,25 @@ fn run_spirv<
         .get(name.to_str().unwrap())
         .map(|info| info.uses_shared_mem)
         .unwrap_or(false);
-    let mut result = vec![0u8.into(); output.len()];
+    let result = vec![0u8.into(); output.len()];
     {
         let mut drivers = ze::Driver::get()?;
         let drv = drivers.drain(0..1).next().unwrap();
-        let mut ctx = ze::Context::new(&drv)?;
         let mut devices = drv.devices()?;
         let dev = devices.drain(0..1).next().unwrap();
-        let queue = ze::CommandQueue::new(&mut ctx, &dev)?;
+        let ctx = ze::Context::new(drv, None)?;
+        let queue = ze::CommandQueue::new(&ctx, dev)?;
         let (module, maybe_log) = match module.should_link_ptx_impl {
             Some(ptx_impl) => ze::Module::build_link_spirv(
-                &mut ctx,
-                &dev,
+                &ctx,
+                dev,
                 &[ptx_impl, byte_il],
                 Some(module.build_options.as_c_str()),
             ),
             None => {
                 let (module, log) = ze::Module::build_spirv_logged(
-                    &mut ctx,
-                    &dev,
+                    &ctx,
+                    dev,
                     byte_il,
                     Some(module.build_options.as_c_str()),
                 );
@@ -271,38 +268,38 @@ fn run_spirv<
             Ok(m) => m,
             Err(err) => {
                 let raw_err_string = maybe_log
-                    .map(|log| log.get_cstring())
+                    .map(|log| log.to_cstring())
                     .transpose()?
                     .unwrap_or(CString::default());
                 let err_string = raw_err_string.to_string_lossy();
                 panic!("{:?}\n{}", err, err_string);
             }
         };
-        let mut kernel = ze::Kernel::new_resident(&module, name)?;
+        let kernel = ze::Kernel::new_resident(&module, name)?;
         kernel.set_indirect_access(
             ze::sys::ze_kernel_indirect_access_flags_t::ZE_KERNEL_INDIRECT_ACCESS_FLAG_DEVICE,
         )?;
-        let mut inp_b = ze::DeviceBuffer::<Input>::new(&mut ctx, &dev, cmp::max(input.len(), 1))?;
-        let mut out_b = ze::DeviceBuffer::<Output>::new(&mut ctx, &dev, cmp::max(output.len(), 1))?;
-        let inp_b_ptr_mut: ze::BufferPtrMut<Input> = (&mut inp_b).into();
-        let event_pool = ze::EventPool::new(&mut ctx, 3, Some(&[&dev]))?;
+        let inp_b = ze::DeviceBuffer::<Input>::new(&ctx, dev, cmp::max(input.len(), 1))?;
+        let out_b = ze::DeviceBuffer::<Output>::new(&ctx, dev, cmp::max(output.len(), 1))?;
+        let event_pool = ze::EventPool::new(&ctx, 3, Some(&[dev]))?;
         let ev0 = ze::Event::new(&event_pool, 0)?;
         let ev1 = ze::Event::new(&event_pool, 1)?;
-        let mut ev2 = ze::Event::new(&event_pool, 2)?;
-        let mut cmd_list = ze::CommandList::new(&mut ctx, &dev)?;
-        let out_b_ptr_mut: ze::BufferPtrMut<Output> = (&mut out_b).into();
-        let mut init_evs = [ev0, ev1];
-        cmd_list.append_memory_copy(inp_b_ptr_mut, input, Some(&mut init_evs[0]), &mut [])?;
-        cmd_list.append_memory_fill(out_b_ptr_mut, 0, Some(&mut init_evs[1]), &mut [])?;
-        kernel.set_group_size(1, 1, 1)?;
-        kernel.set_arg_buffer(0, inp_b_ptr_mut)?;
-        kernel.set_arg_buffer(1, out_b_ptr_mut)?;
-        if use_shared_mem {
-            unsafe { kernel.set_arg_raw(2, 128, ptr::null())? };
+        let ev2 = ze::Event::new(&event_pool, 2)?;
+        {
+            let cmd_list = ze::CommandList::new(&ctx, dev)?;
+            let init_evs = [ev0, ev1];
+            cmd_list.append_memory_copy(&inp_b, input, Some(&init_evs[0]), &[])?;
+            cmd_list.append_memory_fill(&out_b, 0, Some(&init_evs[1]), &[])?;
+            kernel.set_group_size(1, 1, 1)?;
+            kernel.set_arg_buffer(0, &inp_b)?;
+            kernel.set_arg_buffer(1, &out_b)?;
+            if use_shared_mem {
+                unsafe { kernel.set_arg_raw(2, 128, ptr::null())? };
+            }
+            cmd_list.append_launch_kernel(&kernel, &[1, 1, 1], Some(&ev2), &init_evs)?;
+            cmd_list.append_memory_copy(&*result, &out_b, None, &[ev2])?;
+            queue.execute_and_synchronize(cmd_list)?;
         }
-        cmd_list.append_launch_kernel(&kernel, &[1, 1, 1], Some(&mut ev2), &mut init_evs)?;
-        cmd_list.append_memory_copy(result.as_mut_slice(), out_b_ptr_mut, None, &mut [ev2])?;
-        queue.execute(cmd_list)?;
     }
     Ok(result)
 }

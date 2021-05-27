@@ -33,11 +33,11 @@ impl HasLivenessCookie for StreamData {
 
 pub struct StreamData {
     pub context: *mut ContextData,
-    pub queue: l0::CommandQueue,
+    pub queue: l0::CommandQueue<'static>,
 }
 
 impl StreamData {
-    pub fn new_unitialized(ctx: &mut l0::Context, dev: &l0::Device) -> Result<Self, CUresult> {
+    pub fn new_unitialized(ctx: &'static l0::Context, dev: l0::Device) -> Result<Self, CUresult> {
         Ok(StreamData {
             context: ptr::null_mut(),
             queue: l0::CommandQueue::new(ctx, dev)?,
@@ -45,7 +45,7 @@ impl StreamData {
     }
     pub fn new(ctx: &mut ContextData) -> Result<Self, CUresult> {
         let l0_ctx = &mut unsafe { &mut *ctx.device }.l0_context;
-        let l0_dev = &unsafe { &*ctx.device }.base;
+        let l0_dev = unsafe { &*ctx.device }.base;
         Ok(StreamData {
             context: ctx as *mut _,
             queue: l0::CommandQueue::new(l0_ctx, l0_dev)?,
@@ -55,7 +55,7 @@ impl StreamData {
     pub fn command_list(&self) -> Result<l0::CommandList, l0::sys::_ze_result_t> {
         let ctx = unsafe { &mut *self.context };
         let dev = unsafe { &mut *ctx.device };
-        l0::CommandList::new(&mut dev.l0_context, &dev.base)
+        l0::CommandList::new(&mut dev.l0_context, dev.base)
     }
 }
 

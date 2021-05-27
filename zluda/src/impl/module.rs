@@ -41,7 +41,7 @@ pub struct SpirvModule {
 }
 
 pub struct CompiledModule {
-    pub base: l0::Module,
+    pub base: l0::Module<'static>,
     pub kernels: HashMap<CString, Box<Function>>,
 }
 
@@ -78,7 +78,11 @@ impl SpirvModule {
         })
     }
 
-    pub fn compile(&self, ctx: &mut l0::Context, dev: &l0::Device) -> Result<l0::Module, CUresult> {
+    pub fn compile<'a>(
+        &self,
+        ctx: &'a l0::Context,
+        dev: l0::Device,
+    ) -> Result<l0::Module<'a>, CUresult> {
         let byte_il = unsafe {
             slice::from_raw_parts(
                 self.binaries.as_ptr() as *const u8,
@@ -86,13 +90,11 @@ impl SpirvModule {
             )
         };
         let l0_module = match self.should_link_ptx_impl {
-            None => {
-                l0::Module::build_spirv(ctx, dev, byte_il, Some(self.build_options.as_c_str()))
-            }
+            None => l0::Module::build_spirv(ctx, dev, byte_il, Some(self.build_options.as_c_str())),
             Some(ptx_impl) => {
                 l0::Module::build_link_spirv(
                     ctx,
-                    &dev,
+                    dev,
                     &[ptx_impl, byte_il],
                     Some(self.build_options.as_c_str()),
                 )
@@ -119,7 +121,7 @@ pub fn get_function(
             hash_map::Entry::Occupied(entry) => entry.into_mut(),
             hash_map::Entry::Vacant(entry) => {
                 let new_module = CompiledModule {
-                    base: module.spirv.compile(&mut device.l0_context, &device.base)?,
+                    base: module.spirv.compile(&mut device.l0_context, device.base)?,
                     kernels: HashMap::new(),
                 };
                 entry.insert(new_module)
@@ -135,7 +137,7 @@ pub fn get_function(
                         std::str::from_utf8_unchecked(entry.key().as_c_str().to_bytes())
                     })
                     .ok_or(CUresult::CUDA_ERROR_NOT_FOUND)?;
-                let mut kernel =
+                let kernel =
                     l0::Kernel::new_resident(&compiled_module.base, entry.key().as_c_str())?;
                 kernel.set_indirect_access(
                     l0::sys::ze_kernel_indirect_access_flags_t::ZE_KERNEL_INDIRECT_ACCESS_FLAG_DEVICE
@@ -165,7 +167,7 @@ pub(crate) fn load_data(pmod: *mut *mut Module, image: *const c_void) -> Result<
 pub fn load_data_impl(pmod: *mut *mut Module, spirv_data: SpirvModule) -> Result<(), CUresult> {
     let module = GlobalState::lock_current_context(|ctx| {
         let device = unsafe { &mut *ctx.device };
-        let l0_module = spirv_data.compile(&mut device.l0_context, &device.base)?;
+        let l0_module = spirv_data.compile(&device.l0_context, device.base)?;
         let mut device_binaries = HashMap::new();
         let compiled_module = CompiledModule {
             base: l0_module,
