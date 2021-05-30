@@ -1,6 +1,6 @@
 use half::f16;
 use lalrpop_util::{lexer::Token, ParseError};
-use std::{convert::From, mem, num::ParseFloatError, rc::Rc, str::FromStr};
+use std::{convert::From, mem, num::ParseFloatError, str::FromStr};
 use std::{marker::PhantomData, num::ParseIntError};
 
 #[derive(Debug, thiserror::Error)]
