@@ -6312,13 +6312,11 @@ impl<T: ArgParamsEx> ast::Arg2Ld<T> {
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
-                non_default_implicit_conversion: None,
+                non_default_implicit_conversion: Some(should_convert_relaxed_dst_wrapper),
             },
             &ast::Type::from(details.typ.clone()),
             ast::StateSpace::Reg,
         )?;
-        let is_logical_ptr = details.state_space == ast::StateSpace::Param
-            || details.state_space == ast::StateSpace::Local;
         let src = visitor.operand(
             ArgumentDescriptor {
                 op: self.src,
@@ -6338,8 +6336,6 @@ impl<T: ArgParamsEx> ast::Arg2St<T> {
         visitor: &mut V,
         details: &ast::StData,
     ) -> Result<ast::Arg2St<U>, TranslateError> {
-        let is_logical_ptr = details.state_space == ast::StateSpace::Param
-            || details.state_space == ast::StateSpace::Local;
         let src1 = visitor.operand(
             ArgumentDescriptor {
                 op: self.src1,
@@ -6353,7 +6349,7 @@ impl<T: ArgParamsEx> ast::Arg2St<T> {
             ArgumentDescriptor {
                 op: self.src2,
                 is_dst: false,
-                non_default_implicit_conversion: None,
+                non_default_implicit_conversion: Some(should_convert_relaxed_src_wrapper),
             },
             &details.typ.clone().into(),
             ast::StateSpace::Reg,
@@ -6427,7 +6423,6 @@ impl<T: ArgParamsEx> ast::Arg3<T> {
             ArgumentDescriptor {
                 op: self.src2,
                 is_dst: false,
-
                 non_default_implicit_conversion: None,
             },
             typ,
@@ -6646,7 +6641,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
                 non_default_implicit_conversion: None,
             },
             &ast::Type::Scalar(scalar_type),
-            ast::StateSpace::Reg,
+            state_space,
         )?;
         let src2 = visitor.operand(
             ArgumentDescriptor {
@@ -7279,15 +7274,16 @@ fn should_bitcast_wrapper(
 }
 
 fn should_convert_relaxed_src_wrapper(
-    src_type: &ast::Type,
-    _: ast::StateSpace,
-    instr_type: &ast::Type,
-    _: ast::StateSpace,
+    (operand_space, operand_type): (ast::StateSpace, &ast::Type),
+    (instruction_space, instruction_type): (ast::StateSpace, &ast::Type),
 ) -> Result<Option<ConversionKind>, TranslateError> {
-    if src_type == instr_type {
+    if !operand_space.is_compatible(instruction_space) {
+        return Err(TranslateError::MismatchedType);
+    }
+    if operand_type == instruction_type {
         return Ok(None);
     }
-    match should_convert_relaxed_src(src_type, instr_type) {
+    match should_convert_relaxed_src(operand_type, instruction_type) {
         conv @ Some(_) => Ok(conv),
         None => Err(TranslateError::MismatchedType),
     }
@@ -7343,15 +7339,16 @@ fn should_convert_relaxed_src(
 }
 
 fn should_convert_relaxed_dst_wrapper(
-    dst_type: &ast::Type,
-    _: ast::StateSpace,
-    instr_type: &ast::Type,
-    _: ast::StateSpace,
+    (operand_space, operand_type): (ast::StateSpace, &ast::Type),
+    (instruction_space, instruction_type): (ast::StateSpace, &ast::Type),
 ) -> Result<Option<ConversionKind>, TranslateError> {
-    if dst_type == instr_type {
+    if !operand_space.is_compatible(instruction_space) {
+        return Err(TranslateError::MismatchedType);
+    }
+    if operand_type == instruction_type {
         return Ok(None);
     }
-    match should_convert_relaxed_dst(dst_type, instr_type) {
+    match should_convert_relaxed_dst(operand_type, instruction_type) {
         conv @ Some(_) => Ok(conv),
         None => Err(TranslateError::MismatchedType),
     }
