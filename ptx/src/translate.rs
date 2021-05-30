@@ -4011,10 +4011,6 @@ fn emit_implicit_conversion(
     let from_parts = cv.from_type.to_parts();
     let to_parts = cv.to_type.to_parts();
     match (from_parts.kind, to_parts.kind, &cv.kind) {
-        (_, _, &ConversionKind::PtrToBit(typ)) => {
-            let dst_type = map.get_or_add_scalar(builder, typ.into());
-            builder.convert_ptr_to_u(dst_type, Some(cv.dst), cv.src)?;
-        }
         (_, _, &ConversionKind::BitToPtr) => {
             let dst_type = map.get_or_add(
                 builder,
@@ -4098,6 +4094,10 @@ fn emit_implicit_conversion(
                 ),
             );
             builder.bitcast(result_type, Some(cv.dst), cv.src)?;
+        }
+        (_, _, &ConversionKind::AddressOf) => {
+            let dst_type = map.get_or_add(builder, SpirvType::new(cv.to_type.clone()));
+            builder.convert_ptr_to_u(dst_type, Some(cv.dst), cv.src)?;
         }
         _ => unreachable!(),
     }
@@ -6157,8 +6157,8 @@ enum ConversionKind {
     // zero-extend/chop/bitcast depending on types
     SignExtend,
     BitToPtr,
-    PtrToBit(ast::ScalarType),
     PtrToPtr,
+    AddressOf,
 }
 
 impl<T> ast::PredAt<T> {
@@ -6378,7 +6378,7 @@ impl<T: ArgParamsEx> ast::Arg2Mov<T> {
             ArgumentDescriptor {
                 op: self.src,
                 is_dst: false,
-                non_default_implicit_conversion: None,
+                non_default_implicit_conversion: Some(implicit_conversion_mov),
             },
             &details.typ.clone().into(),
             ast::StateSpace::Reg,
@@ -7066,6 +7066,17 @@ impl ast::StateSpace {
             || self == ast::StateSpace::Reg && other == ast::StateSpace::Sreg
             || self == ast::StateSpace::Sreg && other == ast::StateSpace::Reg
     }
+
+    fn is_addressable(self) -> bool {
+        match self {
+            ast::StateSpace::Const
+            | ast::StateSpace::Generic
+            | ast::StateSpace::Global
+            | ast::StateSpace::Local
+            | ast::StateSpace::Shared => true,
+            ast::StateSpace::Param | ast::StateSpace::Reg | ast::StateSpace::Sreg => false,
+        }
+    }
 }
 
 impl<T> ast::Operand<T> {
@@ -7174,16 +7185,6 @@ fn default_implicit_conversion_space(
             },
             _ => Err(TranslateError::MismatchedType),
         }
-    } else if instruction_space.is_compatible(ast::StateSpace::Reg) {
-        if let ast::Type::Pointer(instr_ptr_type, instr_ptr_space) = instruction_type {
-            if operand_space != *instr_ptr_space {
-                Ok(Some(ConversionKind::PtrToPtr))
-            } else {
-                Ok(None)
-            }
-        } else {
-            Err(TranslateError::MismatchedType)
-        }
     } else {
         Err(TranslateError::MismatchedType)
     }
@@ -7250,6 +7251,12 @@ fn implicit_conversion_mov(
                 return Ok(Some(ConversionKind::Default));
             }
         }
+    // TODO: verify .params addressability:
+    // * kernel arg
+    // * func arg
+    // * variable
+    } else if operand_space.is_addressable() {
+        return Ok(Some(ConversionKind::AddressOf));
     }
     default_implicit_conversion(
         (operand_space, operand_type),
