@@ -392,12 +392,12 @@ MethodDeclaration: ast::MethodDeclaration<'input, &'input str> = {
     ".entry" <name:ExtendedID> <input_arguments:KernelArguments> => {
         let return_arguments = Vec::new();
         let name = ast::MethodName::Kernel(name);
-        ast::MethodDeclaration{ return_arguments, name, input_arguments }
+        ast::MethodDeclaration{ return_arguments, name, input_arguments, shared_mem: None }
     },
     ".func" <return_arguments:FnArguments?> <name:ExtendedID> <input_arguments:FnArguments> => {
         let return_arguments = return_arguments.unwrap_or_else(|| Vec::new());
         let name = ast::MethodName::Func(name);
-        ast::MethodDeclaration{ return_arguments, name, input_arguments }
+        ast::MethodDeclaration{ return_arguments, name, input_arguments, shared_mem: None }
     }
 };
 

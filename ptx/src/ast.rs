@@ -96,6 +96,7 @@ pub struct MethodDeclaration<'input, ID> {
     pub return_arguments: Vec<Variable<ID>>,
     pub name: MethodName<'input, ID>,
     pub input_arguments: Vec<Variable<ID>>,
+    pub shared_mem: Option<Variable<ID>>,
 }
 
 pub struct Function<'a, ID, S> {
