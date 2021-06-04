@@ -39,12 +39,6 @@ fn error_unreachable() -> TranslateError {
     TranslateError::Unreachable
 }
 
-macro_rules! new_todo {
-    () => {
-        todo!()
-    };
-}
-
 #[derive(PartialEq, Eq, Hash, Clone)]
 enum SpirvType {
     Base(SpirvScalarKey),
@@ -4104,9 +4098,9 @@ fn emit_implicit_conversion(
                             src: wide_bit_value,
                             dst: cv.dst,
                             from_type: wide_bit_type,
-                            from_space: new_todo!(),
+                            from_space: cv.from_space,
                             to_type: cv.to_type.clone(),
-                            to_space: new_todo!(),
+                            to_space: cv.to_space,
                             kind: ConversionKind::Default,
                         },
                     )?;
@@ -7558,7 +7552,7 @@ impl<'a> ast::MethodDeclaration<'a, spirv::Word> {
     ) -> impl ExactSizeIterator<Item = (spirv::Word, SpirvType)> + '_ {
         let is_kernel = self.name.is_kernel();
         self.input_arguments.iter().map(move |arg| {
-            if !is_kernel {
+            if !is_kernel && arg.state_space != ast::StateSpace::Reg {
                 let spirv_type =
                     SpirvType::pointer_to(arg.v_type.clone(), arg.state_space.to_spirv());
                 (arg.name, spirv_type)
