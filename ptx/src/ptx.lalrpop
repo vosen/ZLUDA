@@ -343,10 +343,16 @@ TargetSpecifier = {
 
 Directive: Option<ast::Directive<'input, ast::ParsedArgParams<'input>>> = {
     AddressSize => None,
-    <f:Function> => Some(ast::Directive::Method(f)),
+    <f:Function> => {
+        let (linking, func) = f;
+        Some(ast::Directive::Method(linking, func))
+    },
     File => None,
     Section => None,
-    <v:ModuleVariable> ";" => Some(ast::Directive::Variable(v)),
+    <v:ModuleVariable> ";" => {
+        let (linking, var) = v;
+        Some(ast::Directive::Variable(linking, var))
+    },
     ! => {
         let err = <>;
         errors.push(err.error);
@@ -358,11 +364,13 @@ AddressSize = {
     ".address_size" U8Num
 };
 
-Function: ast::Function<'input, &'input str, ast::Statement<ast::ParsedArgParams<'input>>>  = {
-    LinkingDirectives
+Function: (ast::LinkingDirective, ast::Function<'input, &'input str, ast::Statement<ast::ParsedArgParams<'input>>>) = {
+    <linking:LinkingDirectives>
     <func_directive:MethodDeclaration>
     <tuning:TuningDirective*>
-    <body:FunctionBody> =>  ast::Function{<>}
+    <body:FunctionBody> => {
+        (linking, ast::Function{func_directive, tuning, body})
+    }
 };
  
 LinkingDirective: ast::LinkingDirective = {
@@ -598,18 +606,18 @@ SharedVariable: ast::Variable<&'input str> = {
     }
 }
 
-ModuleVariable: ast::Variable<&'input str> = {
-    LinkingDirectives ".global" <def:GlobalVariableDefinitionNoArray> => {
+ModuleVariable: (ast::LinkingDirective, ast::Variable<&'input str>) = {
+    <linking:LinkingDirectives> ".global" <def:GlobalVariableDefinitionNoArray> => {
         let (align, v_type, name, array_init) = def;
         let state_space = ast::StateSpace::Global;
-        ast::Variable { align, v_type, state_space, name, array_init }
+        (linking, ast::Variable { align, v_type, state_space, name, array_init })
     },
-    LinkingDirectives ".shared" <def:GlobalVariableDefinitionNoArray> => {
+    <linking:LinkingDirectives> ".shared" <def:GlobalVariableDefinitionNoArray> => {
         let (align, v_type, name, array_init) = def;
         let state_space = ast::StateSpace::Shared;
-        ast::Variable { align, v_type, state_space, name, array_init: Vec::new() }
+        (linking, ast::Variable { align, v_type, state_space, name, array_init: Vec::new() })
     },
-    <ldirs:LinkingDirectives> <space:Or<".global", ".shared">> <var:VariableArrayOrPointer<SizedScalarType>> =>? {
+    <linking:LinkingDirectives> <space:Or<".global", ".shared">> <var:VariableArrayOrPointer<SizedScalarType>> =>? {
         let (align, t, name, arr_or_ptr) = var;
         let (v_type, state_space, array_init) = match arr_or_ptr {
             ast::ArrayOrPointer::Array { dimensions, init } => {
@@ -620,17 +628,17 @@ ModuleVariable: ast::Variable<&'input str> = {
                 }
             }
             ast::ArrayOrPointer::Pointer => {
-                if !ldirs.contains(ast::LinkingDirective::EXTERN) {
+                if !linking.contains(ast::LinkingDirective::EXTERN) {
                     return Err(ParseError::User { error: ast::PtxError::NonExternPointer });
                 }
                 if space == ".global" {
-                    (ast::Type::Scalar(t), ast::StateSpace::Global, Vec::new())
+                    (ast::Type::Array(t, Vec::new()), ast::StateSpace::Global, Vec::new())
                 } else {
-                    (ast::Type::Scalar(t), ast::StateSpace::Shared, Vec::new())
+                    (ast::Type::Array(t, Vec::new()), ast::StateSpace::Shared, Vec::new())
                 }
             }
         };
-        Ok(ast::Variable{ align, v_type, state_space, name, array_init })
+        Ok((linking, ast::Variable{ align, v_type, state_space, name, array_init }))
     }
 }
 
