@@ -4136,10 +4136,13 @@ fn emit_implicit_conversion(
             let dst_type = map.get_or_add(builder, SpirvType::new(cv.to_type.clone()));
             builder.convert_ptr_to_u(dst_type, Some(cv.dst), cv.src)?;
         }
-        (TypeKind::Pointer, TypeKind::Scalar, &ConversionKind::Default)
-        | (TypeKind::Scalar, TypeKind::Pointer, &ConversionKind::Default) => {
-            let dst_type = map.get_or_add(builder, SpirvType::new(cv.to_type.clone()));
-            builder.bitcast(dst_type, Some(cv.dst), cv.src)?;
+        (TypeKind::Pointer, TypeKind::Scalar, &ConversionKind::Default) => {
+            let result_type = map.get_or_add(builder, SpirvType::new(cv.to_type.clone()));
+            builder.convert_ptr_to_u(result_type, Some(cv.dst), cv.src)?;
+        }
+        (TypeKind::Scalar, TypeKind::Pointer, &ConversionKind::Default) => {
+            let result_type = map.get_or_add(builder, SpirvType::new(cv.to_type.clone()));
+            builder.convert_u_to_ptr(result_type, Some(cv.dst), cv.src)?;
         }
         _ => unreachable!(),
     }
@@ -4478,7 +4481,7 @@ fn convert_to_stateful_memory_access<'a, 'input>(
     for arg in (*method_decl).input_arguments.iter_mut() {
         let new_id = id_defs.register_variable(
             ast::Type::Pointer(ast::ScalarType::U8, ast::StateSpace::Global),
-            ast::StateSpace::Reg,
+            ast::StateSpace::Param,
         );
         let old_name = arg.name;
         if func_args_ptr.contains(&arg.name) {
