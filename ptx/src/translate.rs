@@ -2388,28 +2388,66 @@ impl<'a, 'b> FlattenArguments<'a, 'b> {
         state_space: ast::StateSpace,
     ) -> Result<spirv::Word, TranslateError> {
         let (reg, offset) = desc.op;
-        match typ {
-            ast::Type::Scalar(underlying_type) => {
-                let id_constant_stmt = self.id_def.register_intermediate(
-                    ast::Type::Scalar(ast::ScalarType::S64),
-                    ast::StateSpace::Reg,
-                );
-                self.func.push(Statement::Constant(ConstantDefinition {
-                    dst: id_constant_stmt,
-                    typ: ast::ScalarType::S64,
-                    value: ast::ImmediateValue::S64(offset as i64),
-                }));
-                let dst = self.id_def.register_intermediate(typ.clone(), state_space);
-                self.func.push(Statement::PtrAccess(PtrAccess {
-                    underlying_type: *underlying_type,
-                    state_space: state_space,
-                    dst,
-                    ptr_src: reg,
-                    offset_src: id_constant_stmt,
-                }));
-                Ok(dst)
+        if !desc.is_memory_access {
+            let (reg_type, reg_space) = self.id_def.get_typed(reg)?;
+            if !reg_space.is_compatible(ast::StateSpace::Reg) {
+                return Err(TranslateError::MismatchedType);
             }
-            _ => Err(error_unreachable()),
+            let reg_scalar_type = match reg_type {
+                ast::Type::Scalar(underlying_type) => underlying_type,
+                _ => return Err(TranslateError::MismatchedType),
+            };
+            let id_constant_stmt = self
+                .id_def
+                .register_intermediate(reg_type.clone(), ast::StateSpace::Reg);
+            self.func.push(Statement::Constant(ConstantDefinition {
+                dst: id_constant_stmt,
+                typ: reg_scalar_type,
+                value: ast::ImmediateValue::S64(offset as i64),
+            }));
+            let arith_details = match reg_scalar_type.kind() {
+                ast::ScalarKind::Signed => ast::ArithDetails::Signed(ast::ArithSInt {
+                    typ: reg_scalar_type,
+                    saturate: false,
+                }),
+                ast::ScalarKind::Unsigned | ast::ScalarKind::Bit => {
+                    ast::ArithDetails::Unsigned(reg_scalar_type)
+                }
+                _ => return Err(error_unreachable()),
+            };
+            let id_add_result = self.id_def.register_intermediate(reg_type, state_space);
+            self.func.push(Statement::Instruction(ast::Instruction::Add(
+                arith_details,
+                ast::Arg3 {
+                    dst: id_add_result,
+                    src1: reg,
+                    src2: id_constant_stmt,
+                },
+            )));
+            Ok(id_add_result)
+        } else {
+            let scalar_type = match typ {
+                ast::Type::Scalar(underlying_type) => *underlying_type,
+                _ => return Err(error_unreachable()),
+            };
+            let id_constant_stmt = self.id_def.register_intermediate(
+                ast::Type::Scalar(ast::ScalarType::S64),
+                ast::StateSpace::Reg,
+            );
+            self.func.push(Statement::Constant(ConstantDefinition {
+                dst: id_constant_stmt,
+                typ: ast::ScalarType::S64,
+                value: ast::ImmediateValue::S64(offset as i64),
+            }));
+            let dst = self.id_def.register_intermediate(typ.clone(), state_space);
+            self.func.push(Statement::PtrAccess(PtrAccess {
+                underlying_type: scalar_type,
+                state_space: state_space,
+                dst,
+                ptr_src: reg,
+                offset_src: id_constant_stmt,
+            }));
+            Ok(dst)
         }
     }
 
@@ -4399,6 +4437,10 @@ fn convert_to_stateful_memory_access<'a, 'input>(
             _ => {}
         }
     }
+    if stateful_markers.len() == 0 {
+        drop(method_decl);
+        return Ok((func_args, func_body));
+    }
     let mut func_args_ptr = HashSet::new();
     let mut regs_ptr_current = HashSet::new();
     for (dst, src) in stateful_markers {
@@ -4479,15 +4521,16 @@ fn convert_to_stateful_memory_access<'a, 'input>(
         remapped_ids.insert(reg, new_id);
     }
     for arg in (*method_decl).input_arguments.iter_mut() {
+        if !func_args_ptr.contains(&arg.name) {
+            continue;
+        }
         let new_id = id_defs.register_variable(
             ast::Type::Pointer(ast::ScalarType::U8, ast::StateSpace::Global),
             ast::StateSpace::Param,
         );
         let old_name = arg.name;
-        if func_args_ptr.contains(&arg.name) {
-            arg.v_type = ast::Type::Pointer(ast::ScalarType::U8, ast::StateSpace::Global);
-            arg.name = new_id;
-        }
+        arg.v_type = ast::Type::Pointer(ast::ScalarType::U8, ast::StateSpace::Global);
+        arg.name = new_id;
         remapped_ids.insert(old_name, new_id);
     }
     for statement in func_body {
@@ -5348,6 +5391,7 @@ impl RepackVectorDetails {
             ArgumentDescriptor {
                 op: self.packed,
                 is_dst: !self.is_extract,
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             Some((
@@ -5366,6 +5410,7 @@ impl RepackVectorDetails {
                     ArgumentDescriptor {
                         op: id,
                         is_dst: is_extract,
+                        is_memory_access: false,
                         non_default_implicit_conversion,
                     },
                     Some((&ast::Type::Scalar(scalar_type), ast::StateSpace::Reg)),
@@ -5424,6 +5469,7 @@ impl<From: ArgParamsEx<Id = spirv::Word>> ResolvedCall<From> {
                     ArgumentDescriptor {
                         op: id,
                         is_dst: space != ast::StateSpace::Param,
+                        is_memory_access: false,
                         non_default_implicit_conversion: None,
                     },
                     Some((&typ, space)),
@@ -5435,7 +5481,7 @@ impl<From: ArgParamsEx<Id = spirv::Word>> ResolvedCall<From> {
             ArgumentDescriptor {
                 op: self.name,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             None,
@@ -5448,6 +5494,7 @@ impl<From: ArgParamsEx<Id = spirv::Word>> ResolvedCall<From> {
                     ArgumentDescriptor {
                         op: id,
                         is_dst: false,
+                        is_memory_access: false,
                         non_default_implicit_conversion: None,
                     },
                     &typ,
@@ -5486,6 +5533,7 @@ impl<P: ArgParamsEx<Id = spirv::Word>> PtrAccess<P> {
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             Some((&ptr_type, self.state_space)),
@@ -5494,6 +5542,7 @@ impl<P: ArgParamsEx<Id = spirv::Word>> PtrAccess<P> {
             ArgumentDescriptor {
                 op: self.ptr_src,
                 is_dst: false,
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             Some((&ptr_type, self.state_space)),
@@ -5502,7 +5551,7 @@ impl<P: ArgParamsEx<Id = spirv::Word>> PtrAccess<P> {
             ArgumentDescriptor {
                 op: self.offset_src,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             &ast::Type::Scalar(ast::ScalarType::S64),
@@ -5679,6 +5728,7 @@ where
 pub struct ArgumentDescriptor<Op> {
     op: Op,
     is_dst: bool,
+    is_memory_access: bool,
     non_default_implicit_conversion: Option<
         fn(
             (ast::StateSpace, &ast::Type),
@@ -5714,7 +5764,8 @@ impl<T> ArgumentDescriptor<T> {
         ArgumentDescriptor {
             op: u,
             is_dst: self.is_dst,
-            non_default_implicit_conversion: None,
+            is_memory_access: self.is_memory_access,
+            non_default_implicit_conversion: self.non_default_implicit_conversion,
         }
     }
 }
@@ -5953,6 +6004,7 @@ impl ImplicitConversion {
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             Some((&self.to_type, self.to_space)),
@@ -5961,6 +6013,7 @@ impl ImplicitConversion {
             ArgumentDescriptor {
                 op: self.src,
                 is_dst: false,
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             Some((&self.from_type, self.from_space)),
@@ -6327,7 +6380,7 @@ impl<T: ArgParamsEx> ast::Arg1<T> {
             ArgumentDescriptor {
                 op: self.src,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             t,
@@ -6345,7 +6398,7 @@ impl<T: ArgParamsEx> ast::Arg1Bar<T> {
             ArgumentDescriptor {
                 op: self.src,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             &ast::Type::Scalar(ast::ScalarType::U32),
@@ -6365,7 +6418,7 @@ impl<T: ArgParamsEx> ast::Arg2<T> {
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             t,
@@ -6375,7 +6428,7 @@ impl<T: ArgParamsEx> ast::Arg2<T> {
             ArgumentDescriptor {
                 op: self.src,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             t,
@@ -6397,7 +6450,7 @@ impl<T: ArgParamsEx> ast::Arg2<T> {
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             dst_t,
@@ -6407,7 +6460,7 @@ impl<T: ArgParamsEx> ast::Arg2<T> {
             ArgumentDescriptor {
                 op: self.src,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             src_t,
@@ -6427,6 +6480,7 @@ impl<T: ArgParamsEx> ast::Arg2Ld<T> {
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
+                is_memory_access: false,
                 non_default_implicit_conversion: Some(should_convert_relaxed_dst_wrapper),
             },
             &ast::Type::from(details.typ.clone()),
@@ -6436,6 +6490,7 @@ impl<T: ArgParamsEx> ast::Arg2Ld<T> {
             ArgumentDescriptor {
                 op: self.src,
                 is_dst: false,
+                is_memory_access: true,
                 non_default_implicit_conversion: None,
             },
             &details.typ,
@@ -6455,6 +6510,7 @@ impl<T: ArgParamsEx> ast::Arg2St<T> {
             ArgumentDescriptor {
                 op: self.src1,
                 is_dst: false,
+                is_memory_access: true,
                 non_default_implicit_conversion: None,
             },
             &details.typ,
@@ -6464,6 +6520,7 @@ impl<T: ArgParamsEx> ast::Arg2St<T> {
             ArgumentDescriptor {
                 op: self.src2,
                 is_dst: false,
+                is_memory_access: false,
                 non_default_implicit_conversion: Some(should_convert_relaxed_src_wrapper),
             },
             &details.typ.clone().into(),
@@ -6483,7 +6540,7 @@ impl<T: ArgParamsEx> ast::Arg2Mov<T> {
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             &details.typ.clone().into(),
@@ -6493,6 +6550,7 @@ impl<T: ArgParamsEx> ast::Arg2Mov<T> {
             ArgumentDescriptor {
                 op: self.src,
                 is_dst: false,
+                is_memory_access: false,
                 non_default_implicit_conversion: Some(implicit_conversion_mov),
             },
             &details.typ.clone().into(),
@@ -6518,7 +6576,7 @@ impl<T: ArgParamsEx> ast::Arg3<T> {
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             wide_type.as_ref().unwrap_or(typ),
@@ -6528,7 +6586,7 @@ impl<T: ArgParamsEx> ast::Arg3<T> {
             ArgumentDescriptor {
                 op: self.src1,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             typ,
@@ -6538,6 +6596,7 @@ impl<T: ArgParamsEx> ast::Arg3<T> {
             ArgumentDescriptor {
                 op: self.src2,
                 is_dst: false,
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             typ,
@@ -6555,7 +6614,7 @@ impl<T: ArgParamsEx> ast::Arg3<T> {
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             t,
@@ -6565,7 +6624,7 @@ impl<T: ArgParamsEx> ast::Arg3<T> {
             ArgumentDescriptor {
                 op: self.src1,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             t,
@@ -6575,7 +6634,7 @@ impl<T: ArgParamsEx> ast::Arg3<T> {
             ArgumentDescriptor {
                 op: self.src2,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             &ast::Type::Scalar(ast::ScalarType::U32),
@@ -6595,7 +6654,7 @@ impl<T: ArgParamsEx> ast::Arg3<T> {
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             &ast::Type::Scalar(scalar_type),
@@ -6605,6 +6664,7 @@ impl<T: ArgParamsEx> ast::Arg3<T> {
             ArgumentDescriptor {
                 op: self.src1,
                 is_dst: false,
+                is_memory_access: true,
                 non_default_implicit_conversion: None,
             },
             &ast::Type::Scalar(scalar_type),
@@ -6614,7 +6674,7 @@ impl<T: ArgParamsEx> ast::Arg3<T> {
             ArgumentDescriptor {
                 op: self.src2,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             &ast::Type::Scalar(scalar_type),
@@ -6640,7 +6700,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             wide_type.as_ref().unwrap_or(t),
@@ -6650,7 +6710,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             ArgumentDescriptor {
                 op: self.src1,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             t,
@@ -6660,7 +6720,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             ArgumentDescriptor {
                 op: self.src2,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             t,
@@ -6670,6 +6730,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             ArgumentDescriptor {
                 op: self.src3,
                 is_dst: false,
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             t,
@@ -6692,6 +6753,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             &ast::Type::Scalar(t.into()),
@@ -6701,6 +6763,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             ArgumentDescriptor {
                 op: self.src1,
                 is_dst: false,
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             &ast::Type::Scalar(t.into()),
@@ -6710,6 +6773,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             ArgumentDescriptor {
                 op: self.src2,
                 is_dst: false,
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             &ast::Type::Scalar(t.into()),
@@ -6719,6 +6783,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             ArgumentDescriptor {
                 op: self.src3,
                 is_dst: false,
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             &ast::Type::Scalar(ast::ScalarType::Pred),
@@ -6743,7 +6808,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             &ast::Type::Scalar(scalar_type),
@@ -6753,6 +6818,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             ArgumentDescriptor {
                 op: self.src1,
                 is_dst: false,
+                is_memory_access: true,
                 non_default_implicit_conversion: None,
             },
             &ast::Type::Scalar(scalar_type),
@@ -6762,7 +6828,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             ArgumentDescriptor {
                 op: self.src2,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             &ast::Type::Scalar(scalar_type),
@@ -6772,7 +6838,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             ArgumentDescriptor {
                 op: self.src3,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             &ast::Type::Scalar(scalar_type),
@@ -6795,7 +6861,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             typ,
@@ -6805,7 +6871,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             ArgumentDescriptor {
                 op: self.src1,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             typ,
@@ -6816,7 +6882,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             ArgumentDescriptor {
                 op: self.src2,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             &u32_type,
@@ -6826,7 +6892,7 @@ impl<T: ArgParamsEx> ast::Arg4<T> {
             ArgumentDescriptor {
                 op: self.src3,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             &u32_type,
@@ -6851,7 +6917,7 @@ impl<T: ArgParamsEx> ast::Arg4Setp<T> {
             ArgumentDescriptor {
                 op: self.dst1,
                 is_dst: true,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             Some((
@@ -6866,7 +6932,7 @@ impl<T: ArgParamsEx> ast::Arg4Setp<T> {
                     ArgumentDescriptor {
                         op: dst2,
                         is_dst: true,
-
+                        is_memory_access: false,
                         non_default_implicit_conversion: None,
                     },
                     Some((
@@ -6880,7 +6946,7 @@ impl<T: ArgParamsEx> ast::Arg4Setp<T> {
             ArgumentDescriptor {
                 op: self.src1,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             t,
@@ -6890,7 +6956,7 @@ impl<T: ArgParamsEx> ast::Arg4Setp<T> {
             ArgumentDescriptor {
                 op: self.src2,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             t,
@@ -6915,7 +6981,7 @@ impl<T: ArgParamsEx> ast::Arg5<T> {
             ArgumentDescriptor {
                 op: self.dst,
                 is_dst: true,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             base_type,
@@ -6925,7 +6991,7 @@ impl<T: ArgParamsEx> ast::Arg5<T> {
             ArgumentDescriptor {
                 op: self.src1,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             base_type,
@@ -6935,7 +7001,7 @@ impl<T: ArgParamsEx> ast::Arg5<T> {
             ArgumentDescriptor {
                 op: self.src2,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             base_type,
@@ -6945,7 +7011,7 @@ impl<T: ArgParamsEx> ast::Arg5<T> {
             ArgumentDescriptor {
                 op: self.src3,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             &ast::Type::Scalar(ast::ScalarType::U32),
@@ -6955,7 +7021,7 @@ impl<T: ArgParamsEx> ast::Arg5<T> {
             ArgumentDescriptor {
                 op: self.src4,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             &ast::Type::Scalar(ast::ScalarType::U32),
@@ -6981,7 +7047,7 @@ impl<T: ArgParamsEx> ast::Arg5Setp<T> {
             ArgumentDescriptor {
                 op: self.dst1,
                 is_dst: true,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             Some((
@@ -6996,7 +7062,7 @@ impl<T: ArgParamsEx> ast::Arg5Setp<T> {
                     ArgumentDescriptor {
                         op: dst2,
                         is_dst: true,
-
+                        is_memory_access: false,
                         non_default_implicit_conversion: None,
                     },
                     Some((
@@ -7010,7 +7076,7 @@ impl<T: ArgParamsEx> ast::Arg5Setp<T> {
             ArgumentDescriptor {
                 op: self.src1,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             t,
@@ -7020,7 +7086,7 @@ impl<T: ArgParamsEx> ast::Arg5Setp<T> {
             ArgumentDescriptor {
                 op: self.src2,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             t,
@@ -7030,7 +7096,7 @@ impl<T: ArgParamsEx> ast::Arg5Setp<T> {
             ArgumentDescriptor {
                 op: self.src3,
                 is_dst: false,
-
+                is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
             &ast::Type::Scalar(ast::ScalarType::Pred),
