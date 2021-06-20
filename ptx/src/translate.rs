@@ -553,9 +553,9 @@ fn emit_denorm_build_string(
         }
     }
     if flush_over_preserve > 0 {
-        CString::new("-cl-denorms-are-zero").unwrap()
+        CString::new("-ze-take-global-address -ze-denorms-are-zero").unwrap()
     } else {
-        CString::default()
+        CString::new("-ze-take-global-address").unwrap()
     }
 }
 
@@ -4973,7 +4973,9 @@ impl PtxSpecialRegister {
             PtxSpecialRegister::Tid | PtxSpecialRegister::Tid64 => {
                 spirv::BuiltIn::LocalInvocationId
             }
-            PtxSpecialRegister::Ntid | PtxSpecialRegister::Ntid64 => spirv::BuiltIn::WorkgroupSize,
+            PtxSpecialRegister::Ntid | PtxSpecialRegister::Ntid64 => {
+                spirv::BuiltIn::EnqueuedWorkgroupSize
+            }
             PtxSpecialRegister::Ctaid | PtxSpecialRegister::Ctaid64 => spirv::BuiltIn::WorkgroupId,
             PtxSpecialRegister::Nctaid | PtxSpecialRegister::Nctaid64 => {
                 spirv::BuiltIn::NumWorkgroups
