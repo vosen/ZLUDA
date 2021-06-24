@@ -1,13 +1,9 @@
 use crate::ast;
-use core::borrow;
 use half::f16;
 use rspirv::dr;
-use std::{borrow::Borrow, cell::RefCell};
+use std::cell::RefCell;
+use std::collections::{hash_map, HashMap, HashSet};
 use std::{borrow::Cow, collections::BTreeSet, ffi::CString, hash::Hash, iter, mem, rc::Rc};
-use std::{
-    collections::{hash_map, HashMap, HashSet},
-    convert::TryInto,
-};
 
 use rspirv::binary::Assemble;
 
@@ -433,7 +429,7 @@ pub fn to_spirv_module<'a>(ast: ast::Module<'a>) -> Result<Module, TranslateErro
         })
         .collect::<Result<Vec<_>, _>>()?;
     let must_link_ptx_impl = ptx_impl_imports.len() > 0;
-    let mut directives = ptx_impl_imports
+    let directives = ptx_impl_imports
         .into_iter()
         .map(|(_, v)| v)
         .chain(directives.into_iter())
@@ -1068,8 +1064,10 @@ fn emit_function_header<'a>(
                     }) => {
                         match (**func_decl).borrow().name {
                             ast::MethodName::Func(name) => {
-                                for var in globals {
-                                    interface.push(var.name);
+                                if child_fns.contains(&name) {
+                                    for var in globals {
+                                        interface.push(var.name);
+                                    }
                                 }
                             }
                             ast::MethodName::Kernel(_) => {}
@@ -1262,30 +1260,6 @@ fn to_ssa<'input, 'b>(
         import_as: None,
         tuning,
     })
-}
-
-fn deparamize_function_decl(
-    func_decl_rc: &Rc<RefCell<ast::MethodDeclaration<u32>>>,
-) -> Result<(), TranslateError> {
-    let mut func_decl = func_decl_rc.borrow_mut();
-    match func_decl.name {
-        ast::MethodName::Func(..) => {
-            for decl in func_decl.input_arguments.iter_mut() {
-                if decl.state_space == ast::StateSpace::Param {
-                    decl.state_space = ast::StateSpace::Reg;
-                    let baseline_type = match decl.v_type {
-                        ast::Type::Scalar(t) => t,
-                        ast::Type::Vector(t, _) => t, // TODO: write a test for this
-                        ast::Type::Array(t, _) => t,  // TODO: write a test for this
-                        ast::Type::Pointer(_, _) => return Err(error_unreachable()),
-                    };
-                    decl.v_type = ast::Type::Pointer(baseline_type, ast::StateSpace::Param);
-                }
-            }
-        }
-        ast::MethodName::Kernel(..) => {}
-    };
-    Ok(())
 }
 
 fn fix_special_registers(
@@ -1903,17 +1877,6 @@ fn to_ptx_impl_bfi_call(
             ),
         ],
     })
-}
-
-fn to_resolved_fn_args<T>(
-    params: Vec<T>,
-    params_decl: &[ast::Variable<spirv::Word>],
-) -> Vec<(T, ast::Type, ast::StateSpace)> {
-    params
-        .into_iter()
-        .zip(params_decl.iter())
-        .map(|(id, var)| (id, var.v_type.clone(), var.state_space))
-        .collect::<Vec<_>>()
 }
 
 fn normalize_labels(
@@ -2644,10 +2607,15 @@ fn emit_function_body_ops(
             Statement::Label(_) => (),
             Statement::Call(call) => {
                 let (result_type, result_id) = match &*call.return_arguments {
-                    [(id, typ, space)] => (
-                        map.get_or_add(builder, SpirvType::new(typ.clone())),
-                        Some(*id),
-                    ),
+                    [(id, typ, space)] => {
+                        if *space != ast::StateSpace::Reg {
+                            return Err(error_unreachable());
+                        }
+                        (
+                            map.get_or_add(builder, SpirvType::new(typ.clone())),
+                            Some(*id),
+                        )
+                    }
                     [] => (map.void(), None),
                     _ => todo!(),
                 };
@@ -4679,7 +4647,7 @@ fn convert_to_stateful_memory_access_postprocess(
 ) -> Result<spirv::Word, TranslateError> {
     Ok(match remapped_ids.get(&arg_desc.op) {
         Some(new_id) => {
-            let (new_operand_type, new_operand_space, is_variable) = id_defs.get_typed(*new_id)?;
+            let (new_operand_type, new_operand_space, _) = id_defs.get_typed(*new_id)?;
             if let Some((expected_type, expected_space)) = expected_type {
                 let implicit_conversion = arg_desc
                     .non_default_implicit_conversion
@@ -4694,7 +4662,6 @@ fn convert_to_stateful_memory_access_postprocess(
                 }
             }
             let (old_operand_type, old_operand_space, _) = id_defs.get_typed(arg_desc.op)?;
-            let new_operand_type_clone = new_operand_type.clone();
             let converting_id =
                 id_defs.register_intermediate(Some((old_operand_type.clone(), old_operand_space)));
             let kind = if new_operand_space.is_compatible(ast::StateSpace::Reg) {
@@ -5743,20 +5710,6 @@ pub struct PtrAccess<P: ast::ArgParams> {
     dst: spirv::Word,
     ptr_src: spirv::Word,
     offset_src: P::Operand,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub enum ArgumentSemantics {
-    // normal register access
-    Default,
-    // normal register access with relaxed conversion rules (ld/st)
-    DefaultRelaxed,
-    // st/ld global
-    PhysicalPointer,
-    // st/ld .param, .local
-    RegisterPointer,
-    // mov of .local/.global variables
-    Address,
 }
 
 impl<T> ArgumentDescriptor<T> {
@@ -7315,17 +7268,6 @@ impl ast::AtomSemantics {
     }
 }
 
-impl ast::StateSpace {
-    fn semantics(self) -> ArgumentSemantics {
-        match self {
-            ast::StateSpace::Reg => ArgumentSemantics::Default,
-            ast::StateSpace::Param => ArgumentSemantics::RegisterPointer,
-            ast::StateSpace::Shared => ArgumentSemantics::PhysicalPointer,
-            _ => todo!(),
-        }
-    }
-}
-
 fn default_implicit_conversion(
     (operand_space, operand_type): (ast::StateSpace, &ast::Type),
     (instruction_space, instruction_type): (ast::StateSpace, &ast::Type),
@@ -7473,22 +7415,6 @@ fn implicit_conversion_mov(
         (operand_space, operand_type),
         (instruction_space, instruction_type),
     )
-}
-
-fn should_bitcast_wrapper(
-    operand: &ast::Type,
-    _: ast::StateSpace,
-    instr: &ast::Type,
-    _: ast::StateSpace,
-) -> Result<Option<ConversionKind>, TranslateError> {
-    if instr == operand {
-        return Ok(None);
-    }
-    if should_bitcast(instr, operand) {
-        Ok(Some(ConversionKind::Default))
-    } else {
-        Err(TranslateError::MismatchedType)
-    }
 }
 
 fn should_convert_relaxed_src_wrapper(
