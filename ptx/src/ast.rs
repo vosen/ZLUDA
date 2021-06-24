@@ -1,7 +1,6 @@
 use half::f16;
 use lalrpop_util::{lexer::Token, ParseError};
-use std::convert::TryInto;
-use std::{convert::From, convert::TryFrom, mem, num::ParseFloatError, str::FromStr};
+use std::{convert::From, mem, num::ParseFloatError, str::FromStr};
 use std::{marker::PhantomData, num::ParseIntError};
 
 #[derive(Debug, thiserror::Error)]
@@ -34,195 +33,12 @@ pub enum PtxError {
     NonExternPointer,
 }
 
-macro_rules! sub_enum {
-    ($name:ident { $($variant:ident),+ $(,)? }) => {
-        sub_enum!{ $name : ScalarType { $($variant),+ } }
-    };
-    ($name:ident : $base_type:ident { $($variant:ident),+ $(,)? }) => {
-        #[derive(PartialEq, Eq, Clone, Copy)]
-        pub enum $name {
-            $(
-                $variant,
-            )+
-        }
-
-        impl From<$name> for $base_type {
-            fn from(t: $name) -> $base_type {
-                match t {
-                    $(
-                        $name::$variant => $base_type::$variant,
-                    )+
-                }
-            }
-        }
-
-        impl std::convert::TryFrom<$base_type> for $name {
-            type Error = ();
-
-            fn try_from(t: $base_type) -> Result<Self, Self::Error> {
-                match t {
-                    $(
-                        $base_type::$variant => Ok($name::$variant),
-                    )+
-                        _ => Err(()),
-                }
-            }
-        }
-    };
-}
-
-macro_rules! sub_type {
-    ($type_name:ident { $($variant:ident ( $($field_type:ident),+ ) ),+ $(,)? } ) => {
-        sub_type! { $type_name : Type {
-            $(
-                $variant ($($field_type),+),
-            )+
-         }}
-    };
-    ($type_name:ident : $base_type:ident { $($variant:ident ( $($field_type:ident),+ ) ),+ $(,)? } ) => {
-        #[derive(PartialEq, Eq, Clone)]
-        pub enum $type_name {
-            $(
-                $variant ($($field_type),+),
-            )+
-        }
-
-        impl From<$type_name> for $base_type {
-            #[allow(non_snake_case)]
-            fn from(t: $type_name) -> $base_type {
-                match t {
-                    $(
-                        $type_name::$variant ( $($field_type),+ ) => <$base_type>::$variant ( $($field_type.into()),+),
-                    )+
-                }
-            }
-        }
-
-        impl std::convert::TryFrom<$base_type> for $type_name {
-            type Error = ();
-
-            #[allow(non_snake_case)]
-            #[allow(unreachable_patterns)]
-            fn try_from(t: $base_type) -> Result<Self, Self::Error> {
-                match t {
-                    $(
-                        $base_type::$variant ( $($field_type),+ )  => Ok($type_name::$variant ( $($field_type.try_into().map_err(|_| ())? ),+ )),
-                    )+
-                        _ => Err(()),
-                }
-            }
-        }
-    };
-}
-
-sub_type! {
-    VariableRegType {
-        Scalar(ScalarType),
-        Vector(SizedScalarType, u8),
-        // Array type is used when emiting SSA statements at the start of a method
-        Array(ScalarType, VecU32),
-        // Pointer variant is used when passing around SLM pointer between
-        // function calls for dynamic SLM
-        Pointer(SizedScalarType, PointerStateSpace)
-    }
-}
-
-type VecU32 = Vec<u32>;
-
-sub_type! {
-    VariableLocalType {
-        Scalar(SizedScalarType),
-        Vector(SizedScalarType, u8),
-        Array(SizedScalarType, VecU32),
-    }
-}
-
-impl TryFrom<VariableGlobalType> for VariableLocalType {
-    type Error = PtxError;
-
-    fn try_from(value: VariableGlobalType) -> Result<Self, Self::Error> {
-        match value {
-            VariableGlobalType::Scalar(t) => Ok(VariableLocalType::Scalar(t)),
-            VariableGlobalType::Vector(t, len) => Ok(VariableLocalType::Vector(t, len)),
-            VariableGlobalType::Array(t, len) => Ok(VariableLocalType::Array(t, len)),
-            VariableGlobalType::Pointer(_, _) => Err(PtxError::ZeroDimensionArray),
-        }
-    }
-}
-
-sub_type! {
-    VariableGlobalType {
-        Scalar(SizedScalarType),
-        Vector(SizedScalarType, u8),
-        Array(SizedScalarType, VecU32),
-        Pointer(SizedScalarType, PointerStateSpace),
-    }
-}
-
 // For some weird reson this is illegal:
 //   .param .f16x2 foobar;
 // but this is legal:
 //   .param .f16x2 foobar[1];
 // even more interestingly this is legal, but only in .func (not in .entry):
 //   .param .b32 foobar[]
-sub_type! {
-    VariableParamType {
-        Scalar(LdStScalarType),
-        Array(SizedScalarType, VecU32),
-        Pointer(SizedScalarType, PointerStateSpace),
-    }
-}
-
-sub_enum!(SizedScalarType {
-    B8,
-    B16,
-    B32,
-    B64,
-    U8,
-    U16,
-    U32,
-    U64,
-    S8,
-    S16,
-    S32,
-    S64,
-    F16,
-    F16x2,
-    F32,
-    F64,
-});
-
-sub_enum!(LdStScalarType {
-    B8,
-    B16,
-    B32,
-    B64,
-    U8,
-    U16,
-    U32,
-    U64,
-    S8,
-    S16,
-    S32,
-    S64,
-    F16,
-    F32,
-    F64,
-});
-
-sub_enum!(SelpType {
-    B16,
-    B32,
-    B64,
-    U16,
-    U32,
-    U64,
-    S16,
-    S32,
-    S64,
-    F32,
-    F64,
-});
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum BarDetails {
@@ -266,23 +82,25 @@ pub struct Module<'a> {
 }
 
 pub enum Directive<'a, P: ArgParams> {
-    Variable(Variable<VariableType, P::Id>),
-    Method(Function<'a, &'a str, Statement<P>>),
+    Variable(LinkingDirective, Variable<P::Id>),
+    Method(LinkingDirective, Function<'a, &'a str, Statement<P>>),
 }
 
-pub enum MethodDecl<'a, ID> {
-    Func(Vec<FnArgument<ID>>, ID, Vec<FnArgument<ID>>),
-    Kernel {
-        name: &'a str,
-        in_args: Vec<KernelArgument<ID>>,
-    },
+#[derive(Hash, PartialEq, Eq, Copy, Clone)]
+pub enum MethodName<'input, ID> {
+    Kernel(&'input str),
+    Func(ID),
 }
 
-pub type FnArgument<ID> = Variable<FnArgumentType, ID>;
-pub type KernelArgument<ID> = Variable<KernelArgumentType, ID>;
+pub struct MethodDeclaration<'input, ID> {
+    pub return_arguments: Vec<Variable<ID>>,
+    pub name: MethodName<'input, ID>,
+    pub input_arguments: Vec<Variable<ID>>,
+    pub shared_mem: Option<ID>,
+}
 
 pub struct Function<'a, ID, S> {
-    pub func_directive: MethodDecl<'a, ID>,
+    pub func_directive: MethodDeclaration<'a, ID>,
     pub tuning: Vec<TuningDirective>,
     pub body: Option<Vec<S>>,
 }
@@ -290,118 +108,50 @@ pub struct Function<'a, ID, S> {
 pub type ParsedFunction<'a> = Function<'a, &'a str, Statement<ParsedArgParams<'a>>>;
 
 #[derive(PartialEq, Eq, Clone)]
-pub enum FnArgumentType {
-    Reg(VariableRegType),
-    Param(VariableParamType),
-    Shared,
-}
-#[derive(PartialEq, Eq, Clone)]
-pub enum KernelArgumentType {
-    Normal(VariableParamType),
-    Shared,
-}
-
-impl From<KernelArgumentType> for Type {
-    fn from(this: KernelArgumentType) -> Self {
-        match this {
-            KernelArgumentType::Normal(typ) => typ.into(),
-            KernelArgumentType::Shared => {
-                Type::Pointer(PointerType::Scalar(ScalarType::B8), LdStateSpace::Shared)
-            }
-        }
-    }
-}
-
-impl FnArgumentType {
-    pub fn to_type(&self, is_kernel: bool) -> Type {
-        if is_kernel {
-            self.to_kernel_type()
-        } else {
-            self.to_func_type()
-        }
-    }
-
-    pub fn to_kernel_type(&self) -> Type {
-        match self {
-            FnArgumentType::Reg(x) => x.clone().into(),
-            FnArgumentType::Param(x) => x.clone().into(),
-            FnArgumentType::Shared => {
-                Type::Pointer(PointerType::Scalar(ScalarType::B8), LdStateSpace::Shared)
-            }
-        }
-    }
-
-    pub fn to_func_type(&self) -> Type {
-        match self {
-            FnArgumentType::Reg(x) => x.clone().into(),
-            FnArgumentType::Param(VariableParamType::Scalar(t)) => {
-                Type::Pointer(PointerType::Scalar((*t).into()), LdStateSpace::Param)
-            }
-            FnArgumentType::Param(VariableParamType::Array(t, dims)) => Type::Pointer(
-                PointerType::Array((*t).into(), dims.clone()),
-                LdStateSpace::Param,
-            ),
-            FnArgumentType::Param(VariableParamType::Pointer(t, space)) => Type::Pointer(
-                PointerType::Pointer((*t).into(), (*space).into()),
-                LdStateSpace::Param,
-            ),
-            FnArgumentType::Shared => {
-                Type::Pointer(PointerType::Scalar(ScalarType::B8), LdStateSpace::Shared)
-            }
-        }
-    }
-
-    pub fn is_param(&self) -> bool {
-        match self {
-            FnArgumentType::Param(_) => true,
-            _ => false,
-        }
-    }
-}
-
-sub_enum!(
-    PointerStateSpace : LdStateSpace {
-        Generic,
-        Global,
-        Const,
-        Shared,
-        Param,
-    }
-);
-
-#[derive(PartialEq, Eq, Clone)]
 pub enum Type {
+    // .param.b32 foo;
+    // -> OpTypeInt
     Scalar(ScalarType),
+    // .param.v2.b32 foo;
+    // -> OpTypeVector
     Vector(ScalarType, u8),
+    // .param.b32 foo[4];
+    // -> OpTypeArray
     Array(ScalarType, Vec<u32>),
-    Pointer(PointerType, LdStateSpace),
-}
-
-#[derive(PartialEq, Eq, Clone)]
-pub enum PointerType {
-    Scalar(ScalarType),
-    Vector(ScalarType, u8),
-    Array(ScalarType, VecU32),
-    Pointer(ScalarType, LdStateSpace),
-}
-
-impl From<SizedScalarType> for PointerType {
-    fn from(t: SizedScalarType) -> Self {
-        PointerType::Scalar(t.into())
-    }
-}
-
-impl TryFrom<PointerType> for SizedScalarType {
-    type Error = ();
-
-    fn try_from(value: PointerType) -> Result<Self, Self::Error> {
-        match value {
-            PointerType::Scalar(t) => Ok(t.try_into()?),
-            PointerType::Vector(_, _) => Err(()),
-            PointerType::Array(_, _) => Err(()),
-            PointerType::Pointer(_, _) => Err(()),
-        }
-    }
+    /*
+        Variables of this type almost never exist in the original .ptx and are
+        usually artificially created. Some examples below:
+        - extern pointers to the .shared memory in the form:
+            .extern .shared .b32 shared_mem[];
+          which we first parse as
+            .extern .shared .b32 shared_mem;
+          and then convert to an additional function parameter:
+            .param .ptr<.b32.shared> shared_mem;
+          and do a load at the start of the function (and renames inside fn):
+            .reg .ptr<.b32.shared> temp;
+            ld.param.ptr<.b32.shared> temp, [shared_mem];
+          note, we don't support non-.shared extern pointers, because there's
+          zero use for them in the ptxas
+        - artifical pointers created by stateful conversion, which work
+          similiarly to the above
+        - function parameters:
+            foobar(.param .align 4 .b8 numbers[])
+          which get parsed to
+            foobar(.param .align 4 .b8 numbers)
+          and then converted to
+            foobar(.reg .align 4 .ptr<.b8.param> numbers)
+        - ld/st with offset:
+            .reg.b32 x;
+            .param.b64 arg0;
+            st.param.b32 [arg0+4], x;
+          Yes, this code is legal and actually emitted by the NV compiler!
+          We convert the st to:
+            .reg ptr<.b64.param> temp = ptr_offset(arg0, 4);
+            st.param.b32 [temp], x;
+    */
+    // .reg ptr<.b64.param>
+    // -> OpTypePointer Function
+    Pointer(ScalarType, StateSpace),
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
@@ -424,52 +174,6 @@ pub enum ScalarType {
     F16x2,
     Pred,
 }
-
-sub_enum!(IntType {
-    U8,
-    U16,
-    U32,
-    U64,
-    S8,
-    S16,
-    S32,
-    S64
-});
-
-sub_enum!(BitType { B8, B16, B32, B64 });
-
-sub_enum!(UIntType { U8, U16, U32, U64 });
-
-sub_enum!(SIntType { S8, S16, S32, S64 });
-
-impl IntType {
-    pub fn is_signed(self) -> bool {
-        match self {
-            IntType::U8 | IntType::U16 | IntType::U32 | IntType::U64 => false,
-            IntType::S8 | IntType::S16 | IntType::S32 | IntType::S64 => true,
-        }
-    }
-
-    pub fn width(self) -> u8 {
-        match self {
-            IntType::U8 => 1,
-            IntType::U16 => 2,
-            IntType::U32 => 4,
-            IntType::U64 => 8,
-            IntType::S8 => 1,
-            IntType::S16 => 2,
-            IntType::S32 => 4,
-            IntType::S64 => 8,
-        }
-    }
-}
-
-sub_enum!(FloatType {
-    F16,
-    F16x2,
-    F32,
-    F64
-});
 
 impl ScalarType {
     pub fn size_of(self) -> u8 {
@@ -509,49 +213,17 @@ pub enum Statement<P: ArgParams> {
 }
 
 pub struct MultiVariable<ID> {
-    pub var: Variable<VariableType, ID>,
+    pub var: Variable<ID>,
     pub count: Option<u32>,
 }
 
 #[derive(Clone)]
-pub struct Variable<T, ID> {
+pub struct Variable<ID> {
     pub align: Option<u32>,
-    pub v_type: T,
+    pub v_type: Type,
+    pub state_space: StateSpace,
     pub name: ID,
     pub array_init: Vec<u8>,
-}
-
-#[derive(Eq, PartialEq, Clone)]
-pub enum VariableType {
-    Reg(VariableRegType),
-    Local(VariableLocalType),
-    Param(VariableParamType),
-    Global(VariableGlobalType),
-    Shared(VariableGlobalType),
-}
-
-impl VariableType {
-    pub fn to_type(&self) -> (StateSpace, Type) {
-        match self {
-            VariableType::Reg(t) => (StateSpace::Reg, t.clone().into()),
-            VariableType::Local(t) => (StateSpace::Local, t.clone().into()),
-            VariableType::Param(t) => (StateSpace::Param, t.clone().into()),
-            VariableType::Global(t) => (StateSpace::Global, t.clone().into()),
-            VariableType::Shared(t) => (StateSpace::Shared, t.clone().into()),
-        }
-    }
-}
-
-impl From<VariableType> for Type {
-    fn from(t: VariableType) -> Self {
-        match t {
-            VariableType::Reg(t) => t.into(),
-            VariableType::Local(t) => t.into(),
-            VariableType::Param(t) => t.into(),
-            VariableType::Global(t) => t.into(),
-            VariableType::Shared(t) => t.into(),
-        }
-    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -562,6 +234,8 @@ pub enum StateSpace {
     Local,
     Shared,
     Param,
+    Generic,
+    Sreg,
 }
 
 pub struct PredAt<ID> {
@@ -576,24 +250,24 @@ pub enum Instruction<P: ArgParams> {
     Add(ArithDetails, Arg3<P>),
     Setp(SetpData, Arg4Setp<P>),
     SetpBool(SetpBoolData, Arg5Setp<P>),
-    Not(BooleanType, Arg2<P>),
+    Not(ScalarType, Arg2<P>),
     Bra(BraData, Arg1<P>),
     Cvt(CvtDetails, Arg2<P>),
     Cvta(CvtaDetails, Arg2<P>),
-    Shl(ShlType, Arg3<P>),
-    Shr(ShrType, Arg3<P>),
+    Shl(ScalarType, Arg3<P>),
+    Shr(ScalarType, Arg3<P>),
     St(StData, Arg2St<P>),
     Ret(RetData),
     Call(CallInst<P>),
     Abs(AbsDetails, Arg2<P>),
     Mad(MulDetails, Arg4<P>),
-    Or(BooleanType, Arg3<P>),
+    Or(ScalarType, Arg3<P>),
     Sub(ArithDetails, Arg3<P>),
     Min(MinMaxDetails, Arg3<P>),
     Max(MinMaxDetails, Arg3<P>),
     Rcp(RcpDetails, Arg2<P>),
-    And(BooleanType, Arg3<P>),
-    Selp(SelpType, Arg4<P>),
+    And(ScalarType, Arg3<P>),
+    Selp(ScalarType, Arg4<P>),
     Bar(BarDetails, Arg1Bar<P>),
     Atom(AtomDetails, Arg3<P>),
     AtomCas(AtomCasDetails, Arg4<P>),
@@ -605,13 +279,13 @@ pub enum Instruction<P: ArgParams> {
     Cos { flush_to_zero: bool, arg: Arg2<P> },
     Lg2 { flush_to_zero: bool, arg: Arg2<P> },
     Ex2 { flush_to_zero: bool, arg: Arg2<P> },
-    Clz { typ: BitType, arg: Arg2<P> },
-    Brev { typ: BitType, arg: Arg2<P> },
-    Popc { typ: BitType, arg: Arg2<P> },
-    Xor { typ: BooleanType, arg: Arg3<P> },
-    Bfe { typ: IntType, arg: Arg4<P> },
-    Bfi { typ: BitType, arg: Arg5<P> },
-    Rem { typ: IntType, arg: Arg3<P> },
+    Clz { typ: ScalarType, arg: Arg2<P> },
+    Brev { typ: ScalarType, arg: Arg2<P> },
+    Popc { typ: ScalarType, arg: Arg2<P> },
+    Xor { typ: ScalarType, arg: Arg3<P> },
+    Bfe { typ: ScalarType, arg: Arg4<P> },
+    Bfi { typ: ScalarType, arg: Arg5<P> },
+    Rem { typ: ScalarType, arg: Arg3<P> },
 }
 
 #[derive(Copy, Clone)]
@@ -737,32 +411,10 @@ pub enum VectorPrefix {
 
 pub struct LdDetails {
     pub qualifier: LdStQualifier,
-    pub state_space: LdStateSpace,
+    pub state_space: StateSpace,
     pub caching: LdCacheOperator,
-    pub typ: LdStType,
+    pub typ: Type,
     pub non_coherent: bool,
-}
-
-sub_type! {
-    LdStType {
-        Scalar(LdStScalarType),
-        Vector(LdStScalarType, u8),
-        // Used in generated code
-        Pointer(PointerType, LdStateSpace),
-    }
-}
-
-impl From<LdStType> for PointerType {
-    fn from(t: LdStType) -> Self {
-        match t {
-            LdStType::Scalar(t) => PointerType::Scalar(t.into()),
-            LdStType::Vector(t, len) => PointerType::Vector(t.into(), len),
-            LdStType::Pointer(PointerType::Scalar(scalar_type), space) => {
-                PointerType::Pointer(scalar_type, space)
-            }
-            LdStType::Pointer(..) => unreachable!(),
-        }
-    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -778,17 +430,6 @@ pub enum MemScope {
     Cta,
     Gpu,
     Sys,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-#[repr(u8)]
-pub enum LdStateSpace {
-    Generic,
-    Const,
-    Global,
-    Local,
-    Param,
-    Shared,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -825,7 +466,7 @@ impl MovDetails {
 
 #[derive(Copy, Clone)]
 pub struct MulIntDesc {
-    pub typ: IntType,
+    pub typ: ScalarType,
     pub control: MulIntControl,
 }
 
@@ -845,7 +486,7 @@ pub enum RoundingMode {
 }
 
 pub struct AddIntDesc {
-    pub typ: IntType,
+    pub typ: ScalarType,
     pub saturate: bool,
 }
 
@@ -892,39 +533,39 @@ pub struct BraData {
 
 pub enum CvtDetails {
     IntFromInt(CvtIntToIntDesc),
-    FloatFromFloat(CvtDesc<FloatType, FloatType>),
-    IntFromFloat(CvtDesc<IntType, FloatType>),
-    FloatFromInt(CvtDesc<FloatType, IntType>),
+    FloatFromFloat(CvtDesc),
+    IntFromFloat(CvtDesc),
+    FloatFromInt(CvtDesc),
 }
 
 pub struct CvtIntToIntDesc {
-    pub dst: IntType,
-    pub src: IntType,
+    pub dst: ScalarType,
+    pub src: ScalarType,
     pub saturate: bool,
 }
 
-pub struct CvtDesc<Dst, Src> {
+pub struct CvtDesc {
     pub rounding: Option<RoundingMode>,
     pub flush_to_zero: Option<bool>,
     pub saturate: bool,
-    pub dst: Dst,
-    pub src: Src,
+    pub dst: ScalarType,
+    pub src: ScalarType,
 }
 
 impl CvtDetails {
     pub fn new_int_from_int_checked<'err, 'input>(
         saturate: bool,
-        dst: IntType,
-        src: IntType,
+        dst: ScalarType,
+        src: ScalarType,
         err: &'err mut Vec<ParseError<usize, Token<'input>, PtxError>>,
     ) -> Self {
         if saturate {
-            if src.is_signed() {
-                if dst.is_signed() && dst.width() >= src.width() {
+            if src.kind() == ScalarKind::Signed {
+                if dst.kind() == ScalarKind::Signed && dst.size_of() >= src.size_of() {
                     err.push(ParseError::from(PtxError::SyntaxError));
                 }
             } else {
-                if dst == src || dst.width() >= src.width() {
+                if dst == src || dst.size_of() >= src.size_of() {
                     err.push(ParseError::from(PtxError::SyntaxError));
                 }
             }
@@ -936,11 +577,11 @@ impl CvtDetails {
         rounding: RoundingMode,
         flush_to_zero: bool,
         saturate: bool,
-        dst: FloatType,
-        src: IntType,
+        dst: ScalarType,
+        src: ScalarType,
         err: &'err mut Vec<ParseError<usize, Token<'input>, PtxError>>,
     ) -> Self {
-        if flush_to_zero && dst != FloatType::F32 {
+        if flush_to_zero && dst != ScalarType::F32 {
             err.push(ParseError::from(PtxError::NonF32Ftz));
         }
         CvtDetails::FloatFromInt(CvtDesc {
@@ -956,11 +597,11 @@ impl CvtDetails {
         rounding: RoundingMode,
         flush_to_zero: bool,
         saturate: bool,
-        dst: IntType,
-        src: FloatType,
+        dst: ScalarType,
+        src: ScalarType,
         err: &'err mut Vec<ParseError<usize, Token<'input>, PtxError>>,
     ) -> Self {
-        if flush_to_zero && src != FloatType::F32 {
+        if flush_to_zero && src != ScalarType::F32 {
             err.push(ParseError::from(PtxError::NonF32Ftz));
         }
         CvtDetails::IntFromFloat(CvtDesc {
@@ -974,18 +615,9 @@ impl CvtDetails {
 }
 
 pub struct CvtaDetails {
-    pub to: CvtaStateSpace,
-    pub from: CvtaStateSpace,
+    pub to: StateSpace,
+    pub from: StateSpace,
     pub size: CvtaSize,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub enum CvtaStateSpace {
-    Generic,
-    Const,
-    Global,
-    Local,
-    Shared,
 }
 
 pub enum CvtaSize {
@@ -993,39 +625,11 @@ pub enum CvtaSize {
     U64,
 }
 
-#[derive(PartialEq, Eq, Copy, Clone)]
-pub enum ShlType {
-    B16,
-    B32,
-    B64,
-}
-
-sub_enum!(ShrType {
-    B16,
-    B32,
-    B64,
-    U16,
-    U32,
-    U64,
-    S16,
-    S32,
-    S64,
-});
-
 pub struct StData {
     pub qualifier: LdStQualifier,
-    pub state_space: StStateSpace,
+    pub state_space: StateSpace,
     pub caching: StCacheOperator,
-    pub typ: LdStType,
-}
-
-#[derive(PartialEq, Eq, Copy, Clone)]
-pub enum StStateSpace {
-    Generic,
-    Global,
-    Local,
-    Param,
-    Shared,
+    pub typ: Type,
 }
 
 #[derive(PartialEq, Eq)]
@@ -1040,13 +644,6 @@ pub struct RetData {
     pub uniform: bool,
 }
 
-sub_enum!(BooleanType {
-    Pred,
-    B16,
-    B32,
-    B64,
-});
-
 #[derive(Copy, Clone)]
 pub enum MulDetails {
     Unsigned(MulUInt),
@@ -1056,32 +653,32 @@ pub enum MulDetails {
 
 #[derive(Copy, Clone)]
 pub struct MulUInt {
-    pub typ: UIntType,
+    pub typ: ScalarType,
     pub control: MulIntControl,
 }
 
 #[derive(Copy, Clone)]
 pub struct MulSInt {
-    pub typ: SIntType,
+    pub typ: ScalarType,
     pub control: MulIntControl,
 }
 
 #[derive(Copy, Clone)]
 pub enum ArithDetails {
-    Unsigned(UIntType),
+    Unsigned(ScalarType),
     Signed(ArithSInt),
     Float(ArithFloat),
 }
 
 #[derive(Copy, Clone)]
 pub struct ArithSInt {
-    pub typ: SIntType,
+    pub typ: ScalarType,
     pub saturate: bool,
 }
 
 #[derive(Copy, Clone)]
 pub struct ArithFloat {
-    pub typ: FloatType,
+    pub typ: ScalarType,
     pub rounding: Option<RoundingMode>,
     pub flush_to_zero: Option<bool>,
     pub saturate: bool,
@@ -1089,8 +686,8 @@ pub struct ArithFloat {
 
 #[derive(Copy, Clone)]
 pub enum MinMaxDetails {
-    Signed(SIntType),
-    Unsigned(UIntType),
+    Signed(ScalarType),
+    Unsigned(ScalarType),
     Float(MinMaxFloat),
 }
 
@@ -1098,14 +695,14 @@ pub enum MinMaxDetails {
 pub struct MinMaxFloat {
     pub flush_to_zero: Option<bool>,
     pub nan: bool,
-    pub typ: FloatType,
+    pub typ: ScalarType,
 }
 
 #[derive(Copy, Clone)]
 pub struct AtomDetails {
     pub semantics: AtomSemantics,
     pub scope: MemScope,
-    pub space: AtomSpace,
+    pub space: StateSpace,
     pub inner: AtomInnerDetails,
 }
 
@@ -1118,18 +715,11 @@ pub enum AtomSemantics {
 }
 
 #[derive(Copy, Clone)]
-pub enum AtomSpace {
-    Generic,
-    Global,
-    Shared,
-}
-
-#[derive(Copy, Clone)]
 pub enum AtomInnerDetails {
-    Bit { op: AtomBitOp, typ: BitType },
-    Unsigned { op: AtomUIntOp, typ: UIntType },
-    Signed { op: AtomSIntOp, typ: SIntType },
-    Float { op: AtomFloatOp, typ: FloatType },
+    Bit { op: AtomBitOp, typ: ScalarType },
+    Unsigned { op: AtomUIntOp, typ: ScalarType },
+    Signed { op: AtomSIntOp, typ: ScalarType },
+    Float { op: AtomFloatOp, typ: ScalarType },
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -1165,20 +755,20 @@ pub enum AtomFloatOp {
 pub struct AtomCasDetails {
     pub semantics: AtomSemantics,
     pub scope: MemScope,
-    pub space: AtomSpace,
-    pub typ: BitType,
+    pub space: StateSpace,
+    pub typ: ScalarType,
 }
 
 #[derive(Copy, Clone)]
 pub enum DivDetails {
-    Unsigned(UIntType),
-    Signed(SIntType),
+    Unsigned(ScalarType),
+    Signed(ScalarType),
     Float(DivFloatDetails),
 }
 
 #[derive(Copy, Clone)]
 pub struct DivFloatDetails {
-    pub typ: FloatType,
+    pub typ: ScalarType,
     pub flush_to_zero: Option<bool>,
     pub kind: DivFloatKind,
 }
@@ -1197,7 +787,7 @@ pub enum NumsOrArrays<'a> {
 
 #[derive(Copy, Clone)]
 pub struct SqrtDetails {
-    pub typ: FloatType,
+    pub typ: ScalarType,
     pub flush_to_zero: Option<bool>,
     pub kind: SqrtKind,
 }
@@ -1210,7 +800,7 @@ pub enum SqrtKind {
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub struct RsqrtDetails {
-    pub typ: FloatType,
+    pub typ: ScalarType,
     pub flush_to_zero: bool,
 }
 
@@ -1221,7 +811,7 @@ pub struct NegDetails {
 }
 
 impl<'a> NumsOrArrays<'a> {
-    pub fn to_vec(self, typ: SizedScalarType, dimensions: &mut [u32]) -> Result<Vec<u8>, PtxError> {
+    pub fn to_vec(self, typ: ScalarType, dimensions: &mut [u32]) -> Result<Vec<u8>, PtxError> {
         self.normalize_dimensions(dimensions)?;
         let sizeof_t = ScalarType::from(typ).size_of() as usize;
         let result_size = dimensions.iter().fold(sizeof_t, |x, y| x * (*y as usize));
@@ -1252,7 +842,7 @@ impl<'a> NumsOrArrays<'a> {
 
     fn parse_and_copy(
         &self,
-        t: SizedScalarType,
+        t: ScalarType,
         size_of_t: usize,
         dimensions: &[u32],
         result: &mut [u8],
@@ -1292,47 +882,48 @@ impl<'a> NumsOrArrays<'a> {
     }
 
     fn parse_and_copy_single(
-        t: SizedScalarType,
+        t: ScalarType,
         idx: usize,
         str_val: &str,
         radix: u32,
         output: &mut [u8],
     ) -> Result<(), PtxError> {
         match t {
-            SizedScalarType::B8 | SizedScalarType::U8 => {
+            ScalarType::B8 | ScalarType::U8 => {
                 Self::parse_and_copy_single_t::<u8>(idx, str_val, radix, output)?;
             }
-            SizedScalarType::B16 | SizedScalarType::U16 => {
+            ScalarType::B16 | ScalarType::U16 => {
                 Self::parse_and_copy_single_t::<u16>(idx, str_val, radix, output)?;
             }
-            SizedScalarType::B32 | SizedScalarType::U32 => {
+            ScalarType::B32 | ScalarType::U32 => {
                 Self::parse_and_copy_single_t::<u32>(idx, str_val, radix, output)?;
             }
-            SizedScalarType::B64 | SizedScalarType::U64 => {
+            ScalarType::B64 | ScalarType::U64 => {
                 Self::parse_and_copy_single_t::<u64>(idx, str_val, radix, output)?;
             }
-            SizedScalarType::S8 => {
+            ScalarType::S8 => {
                 Self::parse_and_copy_single_t::<i8>(idx, str_val, radix, output)?;
             }
-            SizedScalarType::S16 => {
+            ScalarType::S16 => {
                 Self::parse_and_copy_single_t::<i16>(idx, str_val, radix, output)?;
             }
-            SizedScalarType::S32 => {
+            ScalarType::S32 => {
                 Self::parse_and_copy_single_t::<i32>(idx, str_val, radix, output)?;
             }
-            SizedScalarType::S64 => {
+            ScalarType::S64 => {
                 Self::parse_and_copy_single_t::<i64>(idx, str_val, radix, output)?;
             }
-            SizedScalarType::F16 => {
+            ScalarType::F16 => {
                 Self::parse_and_copy_single_t::<f16>(idx, str_val, radix, output)?;
             }
-            SizedScalarType::F16x2 => todo!(),
-            SizedScalarType::F32 => {
+            ScalarType::F16x2 => todo!(),
+            ScalarType::F32 => {
                 Self::parse_and_copy_single_t::<f32>(idx, str_val, radix, output)?;
             }
-            SizedScalarType::F64 => {
+            ScalarType::F64 => {
                 Self::parse_and_copy_single_t::<f64>(idx, str_val, radix, output)?;
             }
+            ScalarType::Pred => todo!(),
         }
         Ok(())
     }
@@ -1379,6 +970,40 @@ pub enum TuningDirective {
     MinNCtaPerSm(u32),
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ScalarKind {
+    Bit,
+    Unsigned,
+    Signed,
+    Float,
+    Float2,
+    Pred,
+}
+
+impl ScalarType {
+    pub fn kind(self) -> ScalarKind {
+        match self {
+            ScalarType::U8 => ScalarKind::Unsigned,
+            ScalarType::U16 => ScalarKind::Unsigned,
+            ScalarType::U32 => ScalarKind::Unsigned,
+            ScalarType::U64 => ScalarKind::Unsigned,
+            ScalarType::S8 => ScalarKind::Signed,
+            ScalarType::S16 => ScalarKind::Signed,
+            ScalarType::S32 => ScalarKind::Signed,
+            ScalarType::S64 => ScalarKind::Signed,
+            ScalarType::B8 => ScalarKind::Bit,
+            ScalarType::B16 => ScalarKind::Bit,
+            ScalarType::B32 => ScalarKind::Bit,
+            ScalarType::B64 => ScalarKind::Bit,
+            ScalarType::F16 => ScalarKind::Float,
+            ScalarType::F32 => ScalarKind::Float,
+            ScalarType::F64 => ScalarKind::Float,
+            ScalarType::F16x2 => ScalarKind::Float2,
+            ScalarType::Pred => ScalarKind::Pred,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1386,13 +1011,13 @@ mod tests {
     #[test]
     fn array_fails_multiple_0_dmiensions() {
         let inp = NumsOrArrays::Nums(Vec::new());
-        assert!(inp.to_vec(SizedScalarType::B8, &mut vec![0, 0]).is_err());
+        assert!(inp.to_vec(ScalarType::B8, &mut vec![0, 0]).is_err());
     }
 
     #[test]
     fn array_fails_on_empty() {
         let inp = NumsOrArrays::Nums(Vec::new());
-        assert!(inp.to_vec(SizedScalarType::B8, &mut vec![0]).is_err());
+        assert!(inp.to_vec(ScalarType::B8, &mut vec![0]).is_err());
     }
 
     #[test]
@@ -1404,7 +1029,7 @@ mod tests {
         let mut dimensions = vec![0u32, 2];
         assert_eq!(
             vec![1u8, 2, 3, 4],
-            inp.to_vec(SizedScalarType::B8, &mut dimensions).unwrap()
+            inp.to_vec(ScalarType::B8, &mut dimensions).unwrap()
         );
         assert_eq!(dimensions, vec![2u32, 2]);
     }
@@ -1416,7 +1041,7 @@ mod tests {
             NumsOrArrays::Arrays(vec![NumsOrArrays::Nums(vec![("1", 10)])]),
         ]);
         let mut dimensions = vec![0u32, 2];
-        assert!(inp.to_vec(SizedScalarType::B8, &mut dimensions).is_err());
+        assert!(inp.to_vec(ScalarType::B8, &mut dimensions).is_err());
     }
 
     #[test]
@@ -1426,6 +1051,6 @@ mod tests {
             NumsOrArrays::Nums(vec![("4", 10), ("5", 10)]),
         ]);
         let mut dimensions = vec![0u32, 2];
-        assert!(inp.to_vec(SizedScalarType::B8, &mut dimensions).is_err());
+        assert!(inp.to_vec(ScalarType::B8, &mut dimensions).is_err());
     }
 }

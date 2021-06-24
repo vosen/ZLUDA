@@ -18,6 +18,8 @@
 %_ptr_Function_bool = OpTypePointer Function %bool
 %_ptr_Generic_ulong = OpTypePointer Generic %ulong
     %ulong_8 = OpConstant %ulong 8
+      %uchar = OpTypeInt 8 0
+%_ptr_Generic_uchar = OpTypePointer Generic %uchar
        %true = OpConstantTrue %bool
       %false = OpConstantFalse %bool
     %ulong_1 = OpConstant %ulong 1
@@ -45,9 +47,11 @@
          %18 = OpLoad %ulong %37 Aligned 8
                OpStore %6 %18
          %21 = OpLoad %ulong %4
-         %34 = OpIAdd %ulong %21 %ulong_8
-         %38 = OpConvertUToPtr %_ptr_Generic_ulong %34
-         %20 = OpLoad %ulong %38 Aligned 8
+         %38 = OpConvertUToPtr %_ptr_Generic_ulong %21
+         %52 = OpBitcast %_ptr_Generic_uchar %38
+         %53 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %52 %ulong_8
+         %34 = OpBitcast %_ptr_Generic_ulong %53
+         %20 = OpLoad %ulong %34 Aligned 8
                OpStore %7 %20
          %23 = OpLoad %ulong %6
          %24 = OpLoad %ulong %7

@@ -18,7 +18,9 @@
 %_ptr_Function_uint = OpTypePointer Function %uint
 %_ptr_CrossWorkgroup_uint = OpTypePointer CrossWorkgroup %uint
     %ulong_4 = OpConstant %ulong 4
- %_struct_38 = OpTypeStruct %uint %uint
+      %uchar = OpTypeInt 8 0
+%_ptr_CrossWorkgroup_uchar = OpTypePointer CrossWorkgroup %uchar
+ %_struct_42 = OpTypeStruct %uint %uint
      %v2uint = OpTypeVector %uint 2
 %_ptr_Generic_ulong = OpTypePointer Generic %ulong
           %1 = OpFunction %void None %33
@@ -43,17 +45,19 @@
          %13 = OpLoad %uint %24 Aligned 4
                OpStore %6 %13
          %16 = OpLoad %ulong %4
-         %23 = OpIAdd %ulong %16 %ulong_4
-         %25 = OpConvertUToPtr %_ptr_CrossWorkgroup_uint %23
-         %15 = OpLoad %uint %25 Aligned 4
+         %25 = OpConvertUToPtr %_ptr_CrossWorkgroup_uint %16
+         %40 = OpBitcast %_ptr_CrossWorkgroup_uchar %25
+         %41 = OpInBoundsPtrAccessChain %_ptr_CrossWorkgroup_uchar %40 %ulong_4
+         %23 = OpBitcast %_ptr_CrossWorkgroup_uint %41
+         %15 = OpLoad %uint %23 Aligned 4
                OpStore %7 %15
          %18 = OpLoad %uint %6
          %19 = OpLoad %uint %7
-         %39 = OpSMulExtended %_struct_38 %18 %19
-         %40 = OpCompositeExtract %uint %39 0
-         %41 = OpCompositeExtract %uint %39 1
-         %43 = OpCompositeConstruct %v2uint %40 %41
-         %17 = OpBitcast %ulong %43
+         %43 = OpSMulExtended %_struct_42 %18 %19
+         %44 = OpCompositeExtract %uint %43 0
+         %45 = OpCompositeExtract %uint %43 1
+         %47 = OpCompositeConstruct %v2uint %44 %45
+         %17 = OpBitcast %ulong %47
                OpStore %8 %17
          %20 = OpLoad %ulong %5
          %21 = OpLoad %ulong %8

@@ -42,7 +42,7 @@
          %23 = OpBitcast %_ptr_Function_ulong %10
          %24 = OpCopyObject %ulong %18
                OpStore %23 %24 Aligned 8
-         %43 = OpFunctionCall %void %1 %11 %10
+         %43 = OpFunctionCall %void %1 %10 %11
          %19 = OpLoad %ulong %11 Aligned 8
                OpStore %9 %19
          %20 = OpLoad %ulong %8
@@ -52,8 +52,8 @@
                OpReturn
                OpFunctionEnd
           %1 = OpFunction %void None %44
-         %27 = OpFunctionParameter %_ptr_Function_ulong
          %28 = OpFunctionParameter %_ptr_Function_ulong
+         %27 = OpFunctionParameter %_ptr_Function_ulong
          %35 = OpLabel
          %29 = OpVariable %_ptr_Function_ulong Function
          %30 = OpLoad %ulong %28 Aligned 8

@@ -22,6 +22,8 @@
 %_ptr_Function_bool = OpTypePointer Function %bool
 %_ptr_Generic_float = OpTypePointer Generic %float
     %ulong_4 = OpConstant %ulong 4
+      %uchar = OpTypeInt 8 0
+%_ptr_Generic_uchar = OpTypePointer Generic %uchar
     %ulong_8 = OpConstant %ulong 8
    %ulong_12 = OpConstant %ulong 12
    %ulong_16 = OpConstant %ulong 16
@@ -69,45 +71,59 @@
          %36 = OpLoad %float %116 Aligned 4
                OpStore %6 %36
          %39 = OpLoad %ulong %4
-         %89 = OpIAdd %ulong %39 %ulong_4
-        %117 = OpConvertUToPtr %_ptr_Generic_float %89
-         %38 = OpLoad %float %117 Aligned 4
+        %117 = OpConvertUToPtr %_ptr_Generic_float %39
+        %144 = OpBitcast %_ptr_Generic_uchar %117
+        %145 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %144 %ulong_4
+         %89 = OpBitcast %_ptr_Generic_float %145
+         %38 = OpLoad %float %89 Aligned 4
                OpStore %7 %38
          %41 = OpLoad %ulong %4
-         %91 = OpIAdd %ulong %41 %ulong_8
-        %118 = OpConvertUToPtr %_ptr_Generic_float %91
-         %40 = OpLoad %float %118 Aligned 4
+        %118 = OpConvertUToPtr %_ptr_Generic_float %41
+        %146 = OpBitcast %_ptr_Generic_uchar %118
+        %147 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %146 %ulong_8
+         %91 = OpBitcast %_ptr_Generic_float %147
+         %40 = OpLoad %float %91 Aligned 4
                OpStore %8 %40
          %43 = OpLoad %ulong %4
-         %93 = OpIAdd %ulong %43 %ulong_12
-        %119 = OpConvertUToPtr %_ptr_Generic_float %93
-         %42 = OpLoad %float %119 Aligned 4
+        %119 = OpConvertUToPtr %_ptr_Generic_float %43
+        %148 = OpBitcast %_ptr_Generic_uchar %119
+        %149 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %148 %ulong_12
+         %93 = OpBitcast %_ptr_Generic_float %149
+         %42 = OpLoad %float %93 Aligned 4
                OpStore %9 %42
          %45 = OpLoad %ulong %4
-         %95 = OpIAdd %ulong %45 %ulong_16
-        %120 = OpConvertUToPtr %_ptr_Generic_float %95
-         %44 = OpLoad %float %120 Aligned 4
+        %120 = OpConvertUToPtr %_ptr_Generic_float %45
+        %150 = OpBitcast %_ptr_Generic_uchar %120
+        %151 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %150 %ulong_16
+         %95 = OpBitcast %_ptr_Generic_float %151
+         %44 = OpLoad %float %95 Aligned 4
                OpStore %10 %44
          %47 = OpLoad %ulong %4
-         %97 = OpIAdd %ulong %47 %ulong_20
-        %121 = OpConvertUToPtr %_ptr_Generic_float %97
-         %46 = OpLoad %float %121 Aligned 4
+        %121 = OpConvertUToPtr %_ptr_Generic_float %47
+        %152 = OpBitcast %_ptr_Generic_uchar %121
+        %153 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %152 %ulong_20
+         %97 = OpBitcast %_ptr_Generic_float %153
+         %46 = OpLoad %float %97 Aligned 4
                OpStore %11 %46
          %49 = OpLoad %ulong %4
-         %99 = OpIAdd %ulong %49 %ulong_24
-        %122 = OpConvertUToPtr %_ptr_Generic_float %99
-         %48 = OpLoad %float %122 Aligned 4
+        %122 = OpConvertUToPtr %_ptr_Generic_float %49
+        %154 = OpBitcast %_ptr_Generic_uchar %122
+        %155 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %154 %ulong_24
+         %99 = OpBitcast %_ptr_Generic_float %155
+         %48 = OpLoad %float %99 Aligned 4
                OpStore %12 %48
          %51 = OpLoad %ulong %4
-        %101 = OpIAdd %ulong %51 %ulong_28
-        %123 = OpConvertUToPtr %_ptr_Generic_float %101
-         %50 = OpLoad %float %123 Aligned 4
+        %123 = OpConvertUToPtr %_ptr_Generic_float %51
+        %156 = OpBitcast %_ptr_Generic_uchar %123
+        %157 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %156 %ulong_28
+        %101 = OpBitcast %_ptr_Generic_float %157
+         %50 = OpLoad %float %101 Aligned 4
                OpStore %13 %50
          %53 = OpLoad %float %6
          %54 = OpLoad %float %7
-        %142 = OpIsNan %bool %53
-        %143 = OpIsNan %bool %54
-         %52 = OpLogicalOr %bool %142 %143
+        %158 = OpIsNan %bool %53
+        %159 = OpIsNan %bool %54
+         %52 = OpLogicalOr %bool %158 %159
                OpStore %15 %52
          %55 = OpLoad %bool %15
                OpBranchConditional %55 %16 %17
@@ -129,9 +145,9 @@
                OpStore %124 %60 Aligned 4
          %62 = OpLoad %float %8
          %63 = OpLoad %float %9
-        %145 = OpIsNan %bool %62
-        %146 = OpIsNan %bool %63
-         %61 = OpLogicalOr %bool %145 %146
+        %161 = OpIsNan %bool %62
+        %162 = OpIsNan %bool %63
+         %61 = OpLogicalOr %bool %161 %162
                OpStore %15 %61
          %64 = OpLoad %bool %15
                OpBranchConditional %64 %20 %21
@@ -149,14 +165,16 @@
          %23 = OpLabel
          %68 = OpLoad %ulong %5
          %69 = OpLoad %uint %14
-        %107 = OpIAdd %ulong %68 %ulong_4_0
-        %125 = OpConvertUToPtr %_ptr_Generic_uint %107
-               OpStore %125 %69 Aligned 4
+        %125 = OpConvertUToPtr %_ptr_Generic_uint %68
+        %163 = OpBitcast %_ptr_Generic_uchar %125
+        %164 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %163 %ulong_4_0
+        %107 = OpBitcast %_ptr_Generic_uint %164
+               OpStore %107 %69 Aligned 4
          %71 = OpLoad %float %10
          %72 = OpLoad %float %11
-        %147 = OpIsNan %bool %71
-        %148 = OpIsNan %bool %72
-         %70 = OpLogicalOr %bool %147 %148
+        %165 = OpIsNan %bool %71
+        %166 = OpIsNan %bool %72
+         %70 = OpLogicalOr %bool %165 %166
                OpStore %15 %70
          %73 = OpLoad %bool %15
                OpBranchConditional %73 %24 %25
@@ -174,14 +192,16 @@
          %27 = OpLabel
          %77 = OpLoad %ulong %5
          %78 = OpLoad %uint %14
-        %111 = OpIAdd %ulong %77 %ulong_8_0
-        %126 = OpConvertUToPtr %_ptr_Generic_uint %111
-               OpStore %126 %78 Aligned 4
+        %126 = OpConvertUToPtr %_ptr_Generic_uint %77
+        %167 = OpBitcast %_ptr_Generic_uchar %126
+        %168 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %167 %ulong_8_0
+        %111 = OpBitcast %_ptr_Generic_uint %168
+               OpStore %111 %78 Aligned 4
          %80 = OpLoad %float %12
          %81 = OpLoad %float %13
-        %149 = OpIsNan %bool %80
-        %150 = OpIsNan %bool %81
-         %79 = OpLogicalOr %bool %149 %150
+        %169 = OpIsNan %bool %80
+        %170 = OpIsNan %bool %81
+         %79 = OpLogicalOr %bool %169 %170
                OpStore %15 %79
          %82 = OpLoad %bool %15
                OpBranchConditional %82 %28 %29
@@ -199,8 +219,10 @@
          %31 = OpLabel
          %86 = OpLoad %ulong %5
          %87 = OpLoad %uint %14
-        %115 = OpIAdd %ulong %86 %ulong_12_0
-        %127 = OpConvertUToPtr %_ptr_Generic_uint %115
-               OpStore %127 %87 Aligned 4
+        %127 = OpConvertUToPtr %_ptr_Generic_uint %86
+        %171 = OpBitcast %_ptr_Generic_uchar %127
+        %172 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %171 %ulong_12_0
+        %115 = OpBitcast %_ptr_Generic_uint %172
+               OpStore %115 %87 Aligned 4
                OpReturn
                OpFunctionEnd
