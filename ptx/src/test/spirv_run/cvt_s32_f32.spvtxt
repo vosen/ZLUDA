@@ -21,8 +21,11 @@
       %float = OpTypeFloat 32
 %_ptr_Generic_float = OpTypePointer Generic %float
     %ulong_4 = OpConstant %ulong 4
+      %uchar = OpTypeInt 8 0
+%_ptr_Generic_uchar = OpTypePointer Generic %uchar
 %_ptr_CrossWorkgroup_uint = OpTypePointer CrossWorkgroup %uint
   %ulong_4_0 = OpConstant %ulong 4
+%_ptr_CrossWorkgroup_uchar = OpTypePointer CrossWorkgroup %uchar
           %1 = OpFunction %void None %45
           %8 = OpFunctionParameter %ulong
           %9 = OpFunctionParameter %ulong
@@ -45,10 +48,12 @@
          %12 = OpBitcast %uint %28
                OpStore %6 %12
          %15 = OpLoad %ulong %4
-         %25 = OpIAdd %ulong %15 %ulong_4
-         %31 = OpConvertUToPtr %_ptr_Generic_float %25
-         %30 = OpLoad %float %31 Aligned 4
-         %14 = OpBitcast %uint %30
+         %30 = OpConvertUToPtr %_ptr_Generic_float %15
+         %53 = OpBitcast %_ptr_Generic_uchar %30
+         %54 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %53 %ulong_4
+         %25 = OpBitcast %_ptr_Generic_float %54
+         %31 = OpLoad %float %25 Aligned 4
+         %14 = OpBitcast %uint %31
                OpStore %7 %14
          %17 = OpLoad %uint %6
          %33 = OpBitcast %float %17
@@ -67,9 +72,11 @@
                OpStore %36 %37 Aligned 4
          %22 = OpLoad %ulong %5
          %23 = OpLoad %uint %7
-         %27 = OpIAdd %ulong %22 %ulong_4_0
-         %38 = OpConvertUToPtr %_ptr_CrossWorkgroup_uint %27
+         %38 = OpConvertUToPtr %_ptr_CrossWorkgroup_uint %22
+         %57 = OpBitcast %_ptr_CrossWorkgroup_uchar %38
+         %58 = OpInBoundsPtrAccessChain %_ptr_CrossWorkgroup_uchar %57 %ulong_4_0
+         %27 = OpBitcast %_ptr_CrossWorkgroup_uint %58
          %39 = OpCopyObject %uint %23
-               OpStore %38 %39 Aligned 4
+               OpStore %27 %39 Aligned 4
                OpReturn
                OpFunctionEnd

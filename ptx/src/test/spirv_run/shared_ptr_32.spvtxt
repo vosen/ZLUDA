@@ -24,7 +24,8 @@
 %_ptr_Function_uint = OpTypePointer Function %uint
 %_ptr_CrossWorkgroup_ulong = OpTypePointer CrossWorkgroup %ulong
 %_ptr_Workgroup_ulong = OpTypePointer Workgroup %ulong
-     %uint_0 = OpConstant %uint 0
+    %ulong_0 = OpConstant %ulong 0
+%_ptr_Workgroup_uchar = OpTypePointer Workgroup %uchar
           %1 = OpFunction %void None %40
          %10 = OpFunctionParameter %ulong
          %11 = OpFunctionParameter %ulong
@@ -54,9 +55,11 @@
          %27 = OpConvertUToPtr %_ptr_Workgroup_ulong %17
                OpStore %27 %18 Aligned 8
          %20 = OpLoad %uint %7
-         %24 = OpIAdd %uint %20 %uint_0
-         %28 = OpConvertUToPtr %_ptr_Workgroup_ulong %24
-         %19 = OpLoad %ulong %28 Aligned 8
+         %28 = OpConvertUToPtr %_ptr_Workgroup_ulong %20
+         %46 = OpBitcast %_ptr_Workgroup_uchar %28
+         %47 = OpInBoundsPtrAccessChain %_ptr_Workgroup_uchar %46 %ulong_0
+         %24 = OpBitcast %_ptr_Workgroup_ulong %47
+         %19 = OpLoad %ulong %24 Aligned 8
                OpStore %9 %19
          %21 = OpLoad %ulong %6
          %22 = OpLoad %ulong %9
