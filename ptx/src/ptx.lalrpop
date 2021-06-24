@@ -343,10 +343,16 @@ TargetSpecifier = {
 
 Directive: Option<ast::Directive<'input, ast::ParsedArgParams<'input>>> = {
     AddressSize => None,
-    <f:Function> => Some(ast::Directive::Method(f)),
+    <f:Function> => {
+        let (linking, func) = f;
+        Some(ast::Directive::Method(linking, func))
+    },
     File => None,
     Section => None,
-    <v:ModuleVariable> ";" => Some(ast::Directive::Variable(v)),
+    <v:ModuleVariable> ";" => {
+        let (linking, var) = v;
+        Some(ast::Directive::Variable(linking, var))
+    },
     ! => {
         let err = <>;
         errors.push(err.error);
@@ -358,11 +364,13 @@ AddressSize = {
     ".address_size" U8Num
 };
 
-Function: ast::Function<'input, &'input str, ast::Statement<ast::ParsedArgParams<'input>>>  = {
-    LinkingDirectives
-    <func_directive:MethodDecl>
+Function: (ast::LinkingDirective, ast::Function<'input, &'input str, ast::Statement<ast::ParsedArgParams<'input>>>) = {
+    <linking:LinkingDirectives>
+    <func_directive:MethodDeclaration>
     <tuning:TuningDirective*>
-    <body:FunctionBody> =>  ast::Function{<>}
+    <body:FunctionBody> => {
+        (linking, ast::Function{func_directive, tuning, body})
+    }
 };
  
 LinkingDirective: ast::LinkingDirective = {
@@ -388,44 +396,50 @@ LinkingDirectives: ast::LinkingDirective = {
     }
 }
 
-MethodDecl: ast::MethodDecl<'input, &'input str> = {
-    ".entry" <name:ExtendedID> <in_args:KernelArguments> =>
-        ast::MethodDecl::Kernel{ name, in_args },
-    ".func" <ret_vals:FnArguments?> <name:ExtendedID> <params:FnArguments> => {
-        ast::MethodDecl::Func(ret_vals.unwrap_or_else(|| Vec::new()), name, params)
+MethodDeclaration: ast::MethodDeclaration<'input, &'input str> = {
+    ".entry" <name:ExtendedID> <input_arguments:KernelArguments> => {
+        let return_arguments = Vec::new();
+        let name = ast::MethodName::Kernel(name);
+        ast::MethodDeclaration{ return_arguments, name, input_arguments, shared_mem: None }
+    },
+    ".func" <return_arguments:FnArguments?> <name:ExtendedID> <input_arguments:FnArguments> => {
+        let return_arguments = return_arguments.unwrap_or_else(|| Vec::new());
+        let name = ast::MethodName::Func(name);
+        ast::MethodDeclaration{ return_arguments, name, input_arguments, shared_mem: None }
     }
 };
 
-KernelArguments: Vec<ast::KernelArgument<&'input str>> = {
+KernelArguments: Vec<ast::Variable<&'input str>> = {
     "(" <args:Comma<KernelInput>> ")" => args
 };
 
-FnArguments: Vec<ast::FnArgument<&'input str>> = {
+FnArguments: Vec<ast::Variable<&'input str>> = {
     "(" <args:Comma<FnInput>> ")" => args
 };
 
-KernelInput: ast::Variable<ast::KernelArgumentType, &'input str> = {
+KernelInput: ast::Variable<&'input str> = {
     <v:ParamDeclaration> => {
         let (align, v_type, name) = v;
         ast::Variable {
             align,
-            v_type: ast::KernelArgumentType::Normal(v_type),
+            v_type,
+            state_space: ast::StateSpace::Param,
             name,
             array_init: Vec::new()
         }
     }
 }
 
-FnInput: ast::Variable<ast::FnArgumentType, &'input str> = {
+FnInput: ast::Variable<&'input str> = {
     <v:RegVariable> => {
         let (align, v_type, name) = v;
-        let v_type = ast::FnArgumentType::Reg(v_type);
-        ast::Variable{ align, v_type, name, array_init: Vec::new() }
+        let state_space = ast::StateSpace::Reg;
+        ast::Variable{ align, v_type, state_space, name, array_init: Vec::new() }
     },
     <v:ParamDeclaration> => {
         let (align, v_type, name) = v;
-        let v_type = ast::FnArgumentType::Param(v_type);
-        ast::Variable{ align, v_type, name, array_init: Vec::new() }
+        let state_space = ast::StateSpace::Param;
+        ast::Variable{ align, v_type, state_space, name, array_init: Vec::new() }
     }
 }
 
@@ -508,141 +522,148 @@ VariableParam: u32 = {
     "<" <n:U32Num> ">" => n
 }
 
-Variable: ast::Variable<ast::VariableType, &'input str> = {
+Variable: ast::Variable<&'input str> = {
     <v:RegVariable> => {
         let (align, v_type, name) = v;
-        let v_type = ast::VariableType::Reg(v_type);
-        ast::Variable {align, v_type, name, array_init: Vec::new()}
+        let state_space = ast::StateSpace::Reg;
+        ast::Variable {align, v_type, state_space, name, array_init: Vec::new()}
     },
     LocalVariable,
     <v:ParamVariable> => {
         let (align, array_init, v_type, name) = v;
-        let v_type = ast::VariableType::Param(v_type);
-        ast::Variable {align, v_type, name, array_init}
+        let state_space = ast::StateSpace::Param;
+        ast::Variable {align, v_type, state_space, name, array_init}
     },
     SharedVariable,
 };
 
-RegVariable: (Option<u32>, ast::VariableRegType, &'input str) = {
+RegVariable: (Option<u32>, ast::Type, &'input str) = {
     ".reg" <var:VariableScalar<ScalarType>> => {
         let (align, t, name) = var;
-        let v_type = ast::VariableRegType::Scalar(t);
+        let v_type = ast::Type::Scalar(t);
         (align, v_type, name)
     },
     ".reg" <var:VariableVector<SizedScalarType>> => {
         let (align, v_len, t, name) = var;
-        let v_type = ast::VariableRegType::Vector(t, v_len);
+        let v_type = ast::Type::Vector(t, v_len);
         (align, v_type, name)
     }
 }
 
-LocalVariable: ast::Variable<ast::VariableType, &'input str> = {
+LocalVariable: ast::Variable<&'input str> = {
     ".local" <var:VariableScalar<SizedScalarType>> => {
         let (align, t, name) = var;
-        let v_type = ast::VariableType::Local(ast::VariableLocalType::Scalar(t));
-        ast::Variable { align, v_type, name, array_init: Vec::new() }
+        let v_type = ast::Type::Scalar(t);
+        let state_space = ast::StateSpace::Local;
+        ast::Variable { align, v_type, state_space, name, array_init: Vec::new() }
     },
     ".local" <var:VariableVector<SizedScalarType>> => {
         let (align, v_len, t, name) = var;
-        let v_type = ast::VariableType::Local(ast::VariableLocalType::Vector(t, v_len));
-        ast::Variable { align, v_type, name, array_init: Vec::new() }
+        let v_type = ast::Type::Vector(t, v_len);
+        let state_space = ast::StateSpace::Local;
+        ast::Variable { align, v_type, state_space, name, array_init: Vec::new() }
     },
     ".local" <var:VariableArrayOrPointer<SizedScalarType>> =>? {
         let (align, t, name, arr_or_ptr) = var;
+        let state_space = ast::StateSpace::Local;
         let (v_type, array_init) = match arr_or_ptr {
             ast::ArrayOrPointer::Array { dimensions, init } => {
-                (ast::VariableLocalType::Array(t, dimensions), init)
+                (ast::Type::Array(t, dimensions), init)
             }
             ast::ArrayOrPointer::Pointer => {
                 return Err(ParseError::User { error: ast::PtxError::ZeroDimensionArray });
             }
         };
-        Ok(ast::Variable { align, v_type: ast::VariableType::Local(v_type), name, array_init })
+        Ok(ast::Variable { align, v_type, state_space, name, array_init })
     }
 }
 
-SharedVariable: ast::Variable<ast::VariableType, &'input str> = {
+SharedVariable: ast::Variable<&'input str> = {
     ".shared" <var:VariableScalar<SizedScalarType>> => {
         let (align, t, name) = var;
-        let v_type = ast::VariableGlobalType::Scalar(t);
-        ast::Variable { align, v_type: ast::VariableType::Shared(v_type), name, array_init: Vec::new() }
+        let state_space = ast::StateSpace::Shared;
+        let v_type = ast::Type::Scalar(t);
+        ast::Variable { align, v_type, state_space, name, array_init: Vec::new() }
     },
     ".shared" <var:VariableVector<SizedScalarType>> => {
         let (align, v_len, t, name) = var;
-        let v_type = ast::VariableGlobalType::Vector(t, v_len);
-        ast::Variable { align, v_type: ast::VariableType::Shared(v_type), name, array_init: Vec::new() }
+        let state_space = ast::StateSpace::Shared;
+        let v_type = ast::Type::Vector(t, v_len);
+        ast::Variable { align, v_type, state_space, name, array_init: Vec::new() }
     },
     ".shared" <var:VariableArrayOrPointer<SizedScalarType>> =>? {
         let (align, t, name, arr_or_ptr) = var;
+        let state_space = ast::StateSpace::Shared;
         let (v_type, array_init) = match arr_or_ptr {
             ast::ArrayOrPointer::Array { dimensions, init } => {
-                (ast::VariableGlobalType::Array(t, dimensions), init)
+                (ast::Type::Array(t, dimensions), init)
             }
             ast::ArrayOrPointer::Pointer => {
                 return Err(ParseError::User { error: ast::PtxError::ZeroDimensionArray });
             }
         };
-        Ok(ast::Variable { align, v_type: ast::VariableType::Shared(v_type), name, array_init })
+        Ok(ast::Variable { align, v_type, state_space, name, array_init })
     }
 }
 
-
-ModuleVariable: ast::Variable<ast::VariableType, &'input str> = {
-    LinkingDirectives ".global" <def:GlobalVariableDefinitionNoArray> => {
+ModuleVariable: (ast::LinkingDirective, ast::Variable<&'input str>) = {
+    <linking:LinkingDirectives> ".global" <def:GlobalVariableDefinitionNoArray> => {
         let (align, v_type, name, array_init) = def;
-        ast::Variable { align, v_type: ast::VariableType::Global(v_type), name, array_init }
+        let state_space = ast::StateSpace::Global;
+        (linking, ast::Variable { align, v_type, state_space, name, array_init })
     },
-    LinkingDirectives ".shared" <def:GlobalVariableDefinitionNoArray> => {
+    <linking:LinkingDirectives> ".shared" <def:GlobalVariableDefinitionNoArray> => {
         let (align, v_type, name, array_init) = def;
-        ast::Variable { align, v_type: ast::VariableType::Shared(v_type), name, array_init: Vec::new() }
+        let state_space = ast::StateSpace::Shared;
+        (linking, ast::Variable { align, v_type, state_space, name, array_init: Vec::new() })
     },
-    <ldirs:LinkingDirectives> <space:Or<".global", ".shared">> <var:VariableArrayOrPointer<SizedScalarType>> =>? {
+    <linking:LinkingDirectives> <space:Or<".global", ".shared">> <var:VariableArrayOrPointer<SizedScalarType>> =>? {
         let (align, t, name, arr_or_ptr) = var;
-        let (v_type, array_init) = match arr_or_ptr {
+        let (v_type, state_space, array_init) = match arr_or_ptr {
             ast::ArrayOrPointer::Array { dimensions, init } => {
                 if space == ".global" {
-                    (ast::VariableType::Global(ast::VariableGlobalType::Array(t, dimensions)), init)
+                    (ast::Type::Array(t, dimensions), ast::StateSpace::Global, init)
                 } else {
-                    (ast::VariableType::Shared(ast::VariableGlobalType::Array(t, dimensions)), init)
+                    (ast::Type::Array(t, dimensions), ast::StateSpace::Shared, init)
                 }
             }
             ast::ArrayOrPointer::Pointer => {
-                if !ldirs.contains(ast::LinkingDirective::EXTERN) {
+                if !linking.contains(ast::LinkingDirective::EXTERN) {
                     return Err(ParseError::User { error: ast::PtxError::NonExternPointer });
                 }
                 if space == ".global" {
-                    (ast::VariableType::Global(ast::VariableGlobalType::Pointer(t, ast::PointerStateSpace::Global)), Vec::new())
+                    (ast::Type::Array(t, Vec::new()), ast::StateSpace::Global, Vec::new())
                 } else {
-                    (ast::VariableType::Shared(ast::VariableGlobalType::Pointer(t, ast::PointerStateSpace::Shared)), Vec::new())
+                    (ast::Type::Array(t, Vec::new()), ast::StateSpace::Shared, Vec::new())
                 }
             }
         };
-        Ok(ast::Variable{ align, array_init, v_type, name })
+        Ok((linking, ast::Variable{ align, v_type, state_space, name, array_init }))
     }
 }
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parameter-state-space
-ParamVariable: (Option<u32>, Vec<u8>, ast::VariableParamType, &'input str) = {
+ParamVariable: (Option<u32>, Vec<u8>, ast::Type, &'input str) = {
     ".param" <var:VariableScalar<LdStScalarType>> => {
         let (align, t, name) = var;
-        let v_type = ast::VariableParamType::Scalar(t);
+        let v_type = ast::Type::Scalar(t);
         (align, Vec::new(), v_type, name)
     },
     ".param" <var:VariableArrayOrPointer<SizedScalarType>> => {
         let (align, t, name, arr_or_ptr) = var;
         let (v_type, array_init) = match arr_or_ptr {
             ast::ArrayOrPointer::Array { dimensions, init } => {
-                (ast::VariableParamType::Array(t, dimensions), init)
+                (ast::Type::Array(t, dimensions), init)
             }
             ast::ArrayOrPointer::Pointer => {
-                (ast::VariableParamType::Pointer(t, ast::PointerStateSpace::Param), Vec::new())
+                (ast::Type::Scalar(t), Vec::new())
             }
         };
         (align, array_init, v_type, name)
     }
 }
 
-ParamDeclaration: (Option<u32>, ast::VariableParamType, &'input str) = {
+ParamDeclaration: (Option<u32>, ast::Type, &'input str) = {
     <var:ParamVariable> =>? {
         let (align, array_init, v_type, name) = var;
         if array_init.len() > 0 {
@@ -653,56 +674,56 @@ ParamDeclaration: (Option<u32>, ast::VariableParamType, &'input str) = {
     }
 }
 
-GlobalVariableDefinitionNoArray: (Option<u32>, ast::VariableGlobalType, &'input str, Vec<u8>) = {
+GlobalVariableDefinitionNoArray: (Option<u32>, ast::Type, &'input str, Vec<u8>) = {
     <scalar:VariableScalar<SizedScalarType>> => {
         let (align, t, name) = scalar;
-        let v_type = ast::VariableGlobalType::Scalar(t);
+        let v_type = ast::Type::Scalar(t);
         (align, v_type, name, Vec::new())
     },
     <var:VariableVector<SizedScalarType>> => {
         let (align, v_len, t, name) = var;
-        let v_type = ast::VariableGlobalType::Vector(t, v_len);
+        let v_type = ast::Type::Vector(t, v_len);
         (align, v_type, name, Vec::new())
     },
 }
 
 #[inline]
-SizedScalarType: ast::SizedScalarType = {
-    ".b8" => ast::SizedScalarType::B8,
-    ".b16" => ast::SizedScalarType::B16,
-    ".b32" => ast::SizedScalarType::B32,
-    ".b64" => ast::SizedScalarType::B64,
-    ".u8" => ast::SizedScalarType::U8,
-    ".u16" => ast::SizedScalarType::U16,
-    ".u32" => ast::SizedScalarType::U32,
-    ".u64" => ast::SizedScalarType::U64,
-    ".s8" => ast::SizedScalarType::S8,
-    ".s16" => ast::SizedScalarType::S16,
-    ".s32" => ast::SizedScalarType::S32,
-    ".s64" => ast::SizedScalarType::S64,
-    ".f16" => ast::SizedScalarType::F16,
-    ".f16x2" => ast::SizedScalarType::F16x2,
-    ".f32" => ast::SizedScalarType::F32,
-    ".f64" => ast::SizedScalarType::F64,
+SizedScalarType: ast::ScalarType = {
+    ".b8" => ast::ScalarType::B8,
+    ".b16" => ast::ScalarType::B16,
+    ".b32" => ast::ScalarType::B32,
+    ".b64" => ast::ScalarType::B64,
+    ".u8" => ast::ScalarType::U8,
+    ".u16" => ast::ScalarType::U16,
+    ".u32" => ast::ScalarType::U32,
+    ".u64" => ast::ScalarType::U64,
+    ".s8" => ast::ScalarType::S8,
+    ".s16" => ast::ScalarType::S16,
+    ".s32" => ast::ScalarType::S32,
+    ".s64" => ast::ScalarType::S64,
+    ".f16" => ast::ScalarType::F16,
+    ".f16x2" => ast::ScalarType::F16x2,
+    ".f32" => ast::ScalarType::F32,
+    ".f64" => ast::ScalarType::F64,
 }
 
 #[inline]
-LdStScalarType: ast::LdStScalarType = {
-    ".b8" => ast::LdStScalarType::B8,
-    ".b16" => ast::LdStScalarType::B16,
-    ".b32" => ast::LdStScalarType::B32,
-    ".b64" => ast::LdStScalarType::B64,
-    ".u8" => ast::LdStScalarType::U8,
-    ".u16" => ast::LdStScalarType::U16,
-    ".u32" => ast::LdStScalarType::U32,
-    ".u64" => ast::LdStScalarType::U64,
-    ".s8" => ast::LdStScalarType::S8,
-    ".s16" => ast::LdStScalarType::S16,
-    ".s32" => ast::LdStScalarType::S32,
-    ".s64" => ast::LdStScalarType::S64,
-    ".f16" => ast::LdStScalarType::F16,
-    ".f32" => ast::LdStScalarType::F32,
-    ".f64" => ast::LdStScalarType::F64,
+LdStScalarType: ast::ScalarType = {
+    ".b8" => ast::ScalarType::B8,
+    ".b16" => ast::ScalarType::B16,
+    ".b32" => ast::ScalarType::B32,
+    ".b64" => ast::ScalarType::B64,
+    ".u8" => ast::ScalarType::U8,
+    ".u16" => ast::ScalarType::U16,
+    ".u32" => ast::ScalarType::U32,
+    ".u64" => ast::ScalarType::U64,
+    ".s8" => ast::ScalarType::S8,
+    ".s16" => ast::ScalarType::S16,
+    ".s32" => ast::ScalarType::S32,
+    ".s64" => ast::ScalarType::S64,
+    ".f16" => ast::ScalarType::F16,
+    ".f32" => ast::ScalarType::F32,
+    ".f64" => ast::ScalarType::F64,
 }
 
 Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
@@ -755,7 +776,7 @@ InstLd: ast::Instruction<ast::ParsedArgParams<'input>> = {
         ast::Instruction::Ld(
             ast::LdDetails {
                 qualifier: q.unwrap_or(ast::LdStQualifier::Weak),
-                state_space: ss.unwrap_or(ast::LdStateSpace::Generic),
+                state_space: ss.unwrap_or(ast::StateSpace::Generic),
                 caching: cop.unwrap_or(ast::LdCacheOperator::Cached),
                 typ: t,
                 non_coherent: false
@@ -767,7 +788,7 @@ InstLd: ast::Instruction<ast::ParsedArgParams<'input>> = {
         ast::Instruction::Ld(
             ast::LdDetails {
                 qualifier: q.unwrap_or(ast::LdStQualifier::Weak),
-                state_space: ast::LdStateSpace::Global,
+                state_space: ast::StateSpace::Global,
                 caching: cop.unwrap_or(ast::LdCacheOperator::Cached),
                 typ: t,
                 non_coherent: false
@@ -779,7 +800,7 @@ InstLd: ast::Instruction<ast::ParsedArgParams<'input>> = {
         ast::Instruction::Ld(
             ast::LdDetails {
                 qualifier: ast::LdStQualifier::Weak,
-                state_space: ast::LdStateSpace::Global,
+                state_space: ast::StateSpace::Global,
                 caching: cop.unwrap_or(ast::LdCacheOperator::Cached),
                 typ: t,
                 non_coherent: true
@@ -789,9 +810,9 @@ InstLd: ast::Instruction<ast::ParsedArgParams<'input>> = {
     }
 };
 
-LdStType: ast::LdStType = {
-    <v:VectorPrefix> <t:LdStScalarType> => ast::LdStType::Vector(t, v),
-    <t:LdStScalarType> => ast::LdStType::Scalar(t),
+LdStType: ast::Type = {
+    <v:VectorPrefix> <t:LdStScalarType> => ast::Type::Vector(t, v),
+    <t:LdStScalarType> => ast::Type::Scalar(t),
 }
 
 LdStQualifier: ast::LdStQualifier = {
@@ -807,11 +828,11 @@ MemScope: ast::MemScope = {
     ".sys" => ast::MemScope::Sys
 };
 
-LdNonGlobalStateSpace: ast::LdStateSpace = {
-    ".const" => ast::LdStateSpace::Const,
-    ".local" => ast::LdStateSpace::Local,
-    ".param" => ast::LdStateSpace::Param,
-    ".shared" => ast::LdStateSpace::Shared,
+LdNonGlobalStateSpace: ast::StateSpace = {
+    ".const" => ast::StateSpace::Const,
+    ".local" => ast::StateSpace::Local,
+    ".param" => ast::StateSpace::Param,
+    ".shared" => ast::StateSpace::Shared,
 };
 
 LdCacheOperator: ast::LdCacheOperator = {
@@ -899,39 +920,39 @@ RoundingModeInt : ast::RoundingMode = {
     ".rpi" => ast::RoundingMode::PositiveInf,
 };
 
-IntType : ast::IntType = {
-    ".u16" => ast::IntType::U16,
-    ".u32" => ast::IntType::U32,
-    ".u64" => ast::IntType::U64,
-    ".s16" => ast::IntType::S16,
-    ".s32" => ast::IntType::S32,
-    ".s64" => ast::IntType::S64,
+IntType : ast::ScalarType = {
+    ".u16" => ast::ScalarType::U16,
+    ".u32" => ast::ScalarType::U32,
+    ".u64" => ast::ScalarType::U64,
+    ".s16" => ast::ScalarType::S16,
+    ".s32" => ast::ScalarType::S32,
+    ".s64" => ast::ScalarType::S64,
 };
 
-IntType3264: ast::IntType = {
-    ".u32" => ast::IntType::U32,
-    ".u64" => ast::IntType::U64,
-    ".s32" => ast::IntType::S32,
-    ".s64" => ast::IntType::S64,
+IntType3264: ast::ScalarType = {
+    ".u32" => ast::ScalarType::U32,
+    ".u64" => ast::ScalarType::U64,
+    ".s32" => ast::ScalarType::S32,
+    ".s64" => ast::ScalarType::S64,
 }
 
-UIntType: ast::UIntType = {
-    ".u16" => ast::UIntType::U16,
-    ".u32" => ast::UIntType::U32,
-    ".u64" => ast::UIntType::U64,
+UIntType: ast::ScalarType = {
+    ".u16" => ast::ScalarType::U16,
+    ".u32" => ast::ScalarType::U32,
+    ".u64" => ast::ScalarType::U64,
 };
 
-SIntType: ast::SIntType = {
-    ".s16" => ast::SIntType::S16,
-    ".s32" => ast::SIntType::S32,
-    ".s64" => ast::SIntType::S64,
+SIntType: ast::ScalarType = {
+    ".s16" => ast::ScalarType::S16,
+    ".s32" => ast::ScalarType::S32,
+    ".s64" => ast::ScalarType::S64,
 };
 
-FloatType: ast::FloatType = {
-    ".f16" => ast::FloatType::F16,
-    ".f16x2" => ast::FloatType::F16x2,
-    ".f32" => ast::FloatType::F32,
-    ".f64" => ast::FloatType::F64,
+FloatType: ast::ScalarType = {
+    ".f16" => ast::ScalarType::F16,
+    ".f16x2" => ast::ScalarType::F16x2,
+    ".f32" => ast::ScalarType::F32,
+    ".f64" => ast::ScalarType::F64,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-add
@@ -1023,11 +1044,11 @@ InstNot: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "not" <t:BooleanType> <a:Arg2> => ast::Instruction::Not(t, a)
 };
 
-BooleanType: ast::BooleanType = {
-    ".pred" => ast::BooleanType::Pred,
-    ".b16" => ast::BooleanType::B16,
-    ".b32" => ast::BooleanType::B32,
-    ".b64" => ast::BooleanType::B64,
+BooleanType: ast::ScalarType = {
+    ".pred" => ast::ScalarType::Pred,
+    ".b16" => ast::ScalarType::B16,
+    ".b32" => ast::ScalarType::B32,
+    ".b64" => ast::ScalarType::B64,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-at
@@ -1080,8 +1101,8 @@ InstCvt: ast::Instruction<ast::ParsedArgParams<'input>> = {
                 rounding: r,
                 flush_to_zero: None,
                 saturate: s.is_some(),
-                dst: ast::FloatType::F16,
-                src: ast::FloatType::F16
+                dst: ast::ScalarType::F16,
+                src: ast::ScalarType::F16
             }
         ), a)
     },
@@ -1091,8 +1112,8 @@ InstCvt: ast::Instruction<ast::ParsedArgParams<'input>> = {
                 rounding: None,
                 flush_to_zero: Some(f.is_some()),
                 saturate: s.is_some(),
-                dst: ast::FloatType::F32,
-                src: ast::FloatType::F16
+                dst: ast::ScalarType::F32,
+                src: ast::ScalarType::F16
             }
         ), a)
     },
@@ -1102,8 +1123,8 @@ InstCvt: ast::Instruction<ast::ParsedArgParams<'input>> = {
                 rounding: None,
                 flush_to_zero: None,
                 saturate: s.is_some(),
-                dst: ast::FloatType::F64,
-                src: ast::FloatType::F16
+                dst: ast::ScalarType::F64,
+                src: ast::ScalarType::F16
             }
         ), a)
     },
@@ -1113,8 +1134,8 @@ InstCvt: ast::Instruction<ast::ParsedArgParams<'input>> = {
                 rounding: Some(r),
                 flush_to_zero: Some(f.is_some()),
                 saturate: s.is_some(),
-                dst: ast::FloatType::F16,
-                src: ast::FloatType::F32
+                dst: ast::ScalarType::F16,
+                src: ast::ScalarType::F32
             }
         ), a)
     },
@@ -1124,8 +1145,8 @@ InstCvt: ast::Instruction<ast::ParsedArgParams<'input>> = {
                 rounding: r,
                 flush_to_zero: Some(f.is_some()),
                 saturate: s.is_some(),
-                dst: ast::FloatType::F32,
-                src: ast::FloatType::F32
+                dst: ast::ScalarType::F32,
+                src: ast::ScalarType::F32
             }
         ), a)
     },
@@ -1135,8 +1156,8 @@ InstCvt: ast::Instruction<ast::ParsedArgParams<'input>> = {
                 rounding: None,
                 flush_to_zero: None,
                 saturate: s.is_some(),
-                dst: ast::FloatType::F64,
-                src: ast::FloatType::F32
+                dst: ast::ScalarType::F64,
+                src: ast::ScalarType::F32
             }
         ), a)
     },
@@ -1146,8 +1167,8 @@ InstCvt: ast::Instruction<ast::ParsedArgParams<'input>> = {
                 rounding: Some(r),
                 flush_to_zero: None,
                 saturate: s.is_some(),
-                dst: ast::FloatType::F16,
-                src: ast::FloatType::F64
+                dst: ast::ScalarType::F16,
+                src: ast::ScalarType::F64
             }
         ), a)
     },
@@ -1157,8 +1178,8 @@ InstCvt: ast::Instruction<ast::ParsedArgParams<'input>> = {
                 rounding: Some(r),
                 flush_to_zero: Some(s.is_some()),
                 saturate: s.is_some(),
-                dst: ast::FloatType::F32,
-                src: ast::FloatType::F64
+                dst: ast::ScalarType::F32,
+                src: ast::ScalarType::F64
             }
         ), a)
     },
@@ -1168,28 +1189,28 @@ InstCvt: ast::Instruction<ast::ParsedArgParams<'input>> = {
                 rounding: r,
                 flush_to_zero: None,
                 saturate: s.is_some(),
-                dst: ast::FloatType::F64,
-                src: ast::FloatType::F64
+                dst: ast::ScalarType::F64,
+                src: ast::ScalarType::F64
             }
         ), a)
     },
 };
 
-CvtTypeInt: ast::IntType = {
-    ".u8" => ast::IntType::U8,
-    ".u16" => ast::IntType::U16,
-    ".u32" => ast::IntType::U32,
-    ".u64" => ast::IntType::U64,
-    ".s8" => ast::IntType::S8,
-    ".s16" => ast::IntType::S16,
-    ".s32" => ast::IntType::S32,
-    ".s64" => ast::IntType::S64,
+CvtTypeInt: ast::ScalarType = {
+    ".u8" => ast::ScalarType::U8,
+    ".u16" => ast::ScalarType::U16,
+    ".u32" => ast::ScalarType::U32,
+    ".u64" => ast::ScalarType::U64,
+    ".s8" => ast::ScalarType::S8,
+    ".s16" => ast::ScalarType::S16,
+    ".s32" => ast::ScalarType::S32,
+    ".s64" => ast::ScalarType::S64,
 };
 
-CvtTypeFloat: ast::FloatType = {
-    ".f16" => ast::FloatType::F16,
-    ".f32" => ast::FloatType::F32,
-    ".f64" => ast::FloatType::F64,
+CvtTypeFloat: ast::ScalarType = {
+    ".f16" => ast::ScalarType::F16,
+    ".f32" => ast::ScalarType::F32,
+    ".f64" => ast::ScalarType::F64,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-shl
@@ -1197,10 +1218,10 @@ InstShl: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "shl" <t:ShlType> <a:Arg3> => ast::Instruction::Shl(t, a)
 };
 
-ShlType: ast::ShlType = {
-    ".b16" => ast::ShlType::B16,
-    ".b32" => ast::ShlType::B32,
-    ".b64" => ast::ShlType::B64,
+ShlType: ast::ScalarType = {
+    ".b16" => ast::ScalarType::B16,
+    ".b32" => ast::ScalarType::B32,
+    ".b64" => ast::ScalarType::B64,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-shr
@@ -1208,16 +1229,16 @@ InstShr: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "shr" <t:ShrType> <a:Arg3> => ast::Instruction::Shr(t, a)
 };
 
-ShrType: ast::ShrType = {
-    ".b16" => ast::ShrType::B16,
-    ".b32" => ast::ShrType::B32,
-    ".b64" => ast::ShrType::B64,
-    ".u16" => ast::ShrType::U16,
-    ".u32" => ast::ShrType::U32,
-    ".u64" => ast::ShrType::U64,
-    ".s16" => ast::ShrType::S16,
-    ".s32" => ast::ShrType::S32,
-    ".s64" => ast::ShrType::S64,
+ShrType: ast::ScalarType = {
+    ".b16" => ast::ScalarType::B16,
+    ".b32" => ast::ScalarType::B32,
+    ".b64" => ast::ScalarType::B64,
+    ".u16" => ast::ScalarType::U16,
+    ".u32" => ast::ScalarType::U32,
+    ".u64" => ast::ScalarType::U64,
+    ".s16" => ast::ScalarType::S16,
+    ".s32" => ast::ScalarType::S32,
+    ".s64" => ast::ScalarType::S64,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-st
@@ -1227,7 +1248,7 @@ InstSt: ast::Instruction<ast::ParsedArgParams<'input>> = {
         ast::Instruction::St(
             ast::StData {
                 qualifier: q.unwrap_or(ast::LdStQualifier::Weak),
-                state_space: ss.unwrap_or(ast::StStateSpace::Generic),
+                state_space: ss.unwrap_or(ast::StateSpace::Generic),
                 caching: cop.unwrap_or(ast::StCacheOperator::Writeback),
                 typ: t
             },
@@ -1241,11 +1262,11 @@ MemoryOperand: ast::Operand<&'input str> = {
     "[" <o:Operand> "]" => o
 }
 
-StStateSpace: ast::StStateSpace = {
-    ".global" => ast::StStateSpace::Global,
-    ".local" => ast::StStateSpace::Local,
-    ".param" => ast::StStateSpace::Param,
-    ".shared" => ast::StStateSpace::Shared,
+StStateSpace: ast::StateSpace = {
+    ".global" => ast::StateSpace::Global,
+    ".local" => ast::StateSpace::Local,
+    ".param" => ast::StateSpace::Param,
+    ".shared" => ast::StateSpace::Shared,
 };
 
 StCacheOperator: ast::StCacheOperator = {
@@ -1264,7 +1285,7 @@ InstRet: ast::Instruction<ast::ParsedArgParams<'input>> = {
 InstCvta: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "cvta" <from:CvtaStateSpace> <s:CvtaSize> <a:Arg2> => {
         ast::Instruction::Cvta(ast::CvtaDetails {
-            to: ast::CvtaStateSpace::Generic,
+            to: ast::StateSpace::Generic,
             from,
             size: s
         },
@@ -1273,18 +1294,18 @@ InstCvta: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "cvta" ".to" <to:CvtaStateSpace> <s:CvtaSize> <a:Arg2> => {
         ast::Instruction::Cvta(ast::CvtaDetails {
             to,
-            from: ast::CvtaStateSpace::Generic,
+            from: ast::StateSpace::Generic,
             size: s
         },
         a)
     }
 }
 
-CvtaStateSpace: ast::CvtaStateSpace = {
-    ".const" => ast::CvtaStateSpace::Const,
-    ".global" => ast::CvtaStateSpace::Global,
-    ".local" => ast::CvtaStateSpace::Local,
-    ".shared" => ast::CvtaStateSpace::Shared,
+CvtaStateSpace: ast::StateSpace = {
+    ".const" => ast::StateSpace::Const,
+    ".global" => ast::StateSpace::Global,
+    ".local" => ast::StateSpace::Local,
+    ".shared" => ast::StateSpace::Shared,
 }
 
 CvtaSize: ast::CvtaSize = {
@@ -1393,16 +1414,16 @@ MinMaxDetails: ast::MinMaxDetails = {
     <t:UIntType> => ast::MinMaxDetails::Unsigned(t),
     <t:SIntType> => ast::MinMaxDetails::Signed(t),
     <ftz:".ftz"?> <nan:".NaN"?> ".f32" => ast::MinMaxDetails::Float(
-        ast::MinMaxFloat{ flush_to_zero: Some(ftz.is_some()), nan: nan.is_some(), typ: ast::FloatType::F32 }
+        ast::MinMaxFloat{ flush_to_zero: Some(ftz.is_some()), nan: nan.is_some(), typ: ast::ScalarType::F32 }
     ),
     ".f64" => ast::MinMaxDetails::Float(
-        ast::MinMaxFloat{ flush_to_zero: None, nan: false, typ: ast::FloatType::F64 }
+        ast::MinMaxFloat{ flush_to_zero: None, nan: false, typ: ast::ScalarType::F64 }
     ),
     <ftz:".ftz"?> <nan:".NaN"?> ".f16" => ast::MinMaxDetails::Float(
-        ast::MinMaxFloat{ flush_to_zero: Some(ftz.is_some()), nan: nan.is_some(), typ: ast::FloatType::F16 }
+        ast::MinMaxFloat{ flush_to_zero: Some(ftz.is_some()), nan: nan.is_some(), typ: ast::ScalarType::F16 }
     ),
     <ftz:".ftz"?> <nan:".NaN"?> ".f16x2" => ast::MinMaxDetails::Float(
-        ast::MinMaxFloat{ flush_to_zero: Some(ftz.is_some()), nan: nan.is_some(), typ: ast::FloatType::F16x2 }
+        ast::MinMaxFloat{ flush_to_zero: Some(ftz.is_some()), nan: nan.is_some(), typ: ast::ScalarType::F16x2 }
     )
 }
 
@@ -1411,18 +1432,18 @@ InstSelp: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "selp" <t:SelpType> <a:Arg4> => ast::Instruction::Selp(t, a),
 };
 
-SelpType: ast::SelpType = {
-    ".b16" => ast::SelpType::B16,
-    ".b32" => ast::SelpType::B32,
-    ".b64" => ast::SelpType::B64,
-    ".u16" => ast::SelpType::U16,
-    ".u32" => ast::SelpType::U32,
-    ".u64" => ast::SelpType::U64,
-    ".s16" => ast::SelpType::S16,
-    ".s32" => ast::SelpType::S32,
-    ".s64" => ast::SelpType::S64,
-    ".f32" => ast::SelpType::F32,
-    ".f64" => ast::SelpType::F64,
+SelpType: ast::ScalarType = {
+    ".b16" => ast::ScalarType::B16,
+    ".b32" => ast::ScalarType::B32,
+    ".b64" => ast::ScalarType::B64,
+    ".u16" => ast::ScalarType::U16,
+    ".u32" => ast::ScalarType::U32,
+    ".u64" => ast::ScalarType::U64,
+    ".s16" => ast::ScalarType::S16,
+    ".s32" => ast::ScalarType::S32,
+    ".s64" => ast::ScalarType::S64,
+    ".f32" => ast::ScalarType::F32,
+    ".f64" => ast::ScalarType::F64,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-bar
@@ -1442,7 +1463,7 @@ InstAtom: ast::Instruction<ast::ParsedArgParams<'input>> = {
         let details = ast::AtomDetails {
             semantics: sema.unwrap_or(ast::AtomSemantics::Relaxed),
             scope: scope.unwrap_or(ast::MemScope::Gpu),
-            space: space.unwrap_or(ast::AtomSpace::Generic),
+            space: space.unwrap_or(ast::StateSpace::Generic),
             inner: ast::AtomInnerDetails::Bit { op, typ }
         };
         ast::Instruction::Atom(details,a)
@@ -1451,10 +1472,10 @@ InstAtom: ast::Instruction<ast::ParsedArgParams<'input>> = {
         let details = ast::AtomDetails {
             semantics: sema.unwrap_or(ast::AtomSemantics::Relaxed),
             scope: scope.unwrap_or(ast::MemScope::Gpu),
-            space: space.unwrap_or(ast::AtomSpace::Generic),
+            space: space.unwrap_or(ast::StateSpace::Generic),
             inner: ast::AtomInnerDetails::Unsigned {
                 op: ast::AtomUIntOp::Inc,
-                typ: ast::UIntType::U32
+                typ: ast::ScalarType::U32
             }
         };
         ast::Instruction::Atom(details,a)
@@ -1463,10 +1484,10 @@ InstAtom: ast::Instruction<ast::ParsedArgParams<'input>> = {
         let details = ast::AtomDetails {
             semantics: sema.unwrap_or(ast::AtomSemantics::Relaxed),
             scope: scope.unwrap_or(ast::MemScope::Gpu),
-            space: space.unwrap_or(ast::AtomSpace::Generic),
+            space: space.unwrap_or(ast::StateSpace::Generic),
             inner: ast::AtomInnerDetails::Unsigned {
                 op: ast::AtomUIntOp::Dec,
-                typ: ast::UIntType::U32
+                typ: ast::ScalarType::U32
             }
         };
         ast::Instruction::Atom(details,a)
@@ -1476,7 +1497,7 @@ InstAtom: ast::Instruction<ast::ParsedArgParams<'input>> = {
         let details = ast::AtomDetails {
             semantics: sema.unwrap_or(ast::AtomSemantics::Relaxed),
             scope: scope.unwrap_or(ast::MemScope::Gpu),
-            space: space.unwrap_or(ast::AtomSpace::Generic),
+            space: space.unwrap_or(ast::StateSpace::Generic),
             inner: ast::AtomInnerDetails::Float { op, typ }
         };
         ast::Instruction::Atom(details,a)
@@ -1485,7 +1506,7 @@ InstAtom: ast::Instruction<ast::ParsedArgParams<'input>> = {
         let details = ast::AtomDetails {
             semantics: sema.unwrap_or(ast::AtomSemantics::Relaxed),
             scope: scope.unwrap_or(ast::MemScope::Gpu),
-            space: space.unwrap_or(ast::AtomSpace::Generic),
+            space: space.unwrap_or(ast::StateSpace::Generic),
             inner: ast::AtomInnerDetails::Unsigned { op, typ }
         };
         ast::Instruction::Atom(details,a)
@@ -1494,7 +1515,7 @@ InstAtom: ast::Instruction<ast::ParsedArgParams<'input>> = {
         let details = ast::AtomDetails {
             semantics: sema.unwrap_or(ast::AtomSemantics::Relaxed),
             scope: scope.unwrap_or(ast::MemScope::Gpu),
-            space: space.unwrap_or(ast::AtomSpace::Generic),
+            space: space.unwrap_or(ast::StateSpace::Generic),
             inner: ast::AtomInnerDetails::Signed { op, typ }
         };
         ast::Instruction::Atom(details,a)
@@ -1506,7 +1527,7 @@ InstAtomCas: ast::Instruction<ast::ParsedArgParams<'input>> = {
         let details = ast::AtomCasDetails {
             semantics: sema.unwrap_or(ast::AtomSemantics::Relaxed),
             scope: scope.unwrap_or(ast::MemScope::Gpu),
-            space: space.unwrap_or(ast::AtomSpace::Generic),
+            space: space.unwrap_or(ast::StateSpace::Generic),
             typ,
         };
         ast::Instruction::AtomCas(details,a)
@@ -1520,9 +1541,9 @@ AtomSemantics: ast::AtomSemantics = {
     ".acq_rel" => ast::AtomSemantics::AcquireRelease
 }
 
-AtomSpace: ast::AtomSpace = {
-    ".global" => ast::AtomSpace::Global,
-    ".shared" => ast::AtomSpace::Shared
+AtomSpace: ast::StateSpace = {
+    ".global" => ast::StateSpace::Global,
+    ".shared" => ast::StateSpace::Shared
 }
 
 AtomBitOp: ast::AtomBitOp = {
@@ -1544,19 +1565,19 @@ AtomSIntOp: ast::AtomSIntOp = {
     ".max" => ast::AtomSIntOp::Max,
 }
 
-BitType: ast::BitType = {
-    ".b32" => ast::BitType::B32,
-    ".b64" => ast::BitType::B64,
+BitType: ast::ScalarType = {
+    ".b32" => ast::ScalarType::B32,
+    ".b64" => ast::ScalarType::B64,
 }
 
-UIntType3264: ast::UIntType = {
-    ".u32" => ast::UIntType::U32,
-    ".u64" => ast::UIntType::U64,
+UIntType3264: ast::ScalarType = {
+    ".u32" => ast::ScalarType::U32,
+    ".u64" => ast::ScalarType::U64,
 }
 
-SIntType3264: ast::SIntType = {
-    ".s32" => ast::SIntType::S32,
-    ".s64" => ast::SIntType::S64,
+SIntType3264: ast::ScalarType = {
+    ".s32" => ast::ScalarType::S32,
+    ".s64" => ast::ScalarType::S64,
 }
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-div
@@ -1566,7 +1587,7 @@ InstDiv: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "div" <t:SIntType> <a:Arg3> => ast::Instruction::Div(ast::DivDetails::Signed(t), a),
     "div" <kind:DivFloatKind> <ftz:".ftz"?> ".f32" <a:Arg3> => {
         let inner = ast::DivFloatDetails {
-            typ: ast::FloatType::F32,
+            typ: ast::ScalarType::F32,
             flush_to_zero: Some(ftz.is_some()),
             kind
         };
@@ -1574,7 +1595,7 @@ InstDiv: ast::Instruction<ast::ParsedArgParams<'input>> = {
     },
     "div" <rnd:RoundingModeFloat> ".f64" <a:Arg3> => {
         let inner = ast::DivFloatDetails {
-            typ: ast::FloatType::F64,
+            typ: ast::ScalarType::F64,
             flush_to_zero: None,
             kind: ast::DivFloatKind::Rounding(rnd)
         };
@@ -1592,7 +1613,7 @@ DivFloatKind: ast::DivFloatKind = {
 InstSqrt: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "sqrt" ".approx" <ftz:".ftz"?> ".f32" <a:Arg2> => {
         let details = ast::SqrtDetails {
-            typ: ast::FloatType::F32,
+            typ: ast::ScalarType::F32,
             flush_to_zero: Some(ftz.is_some()),
             kind: ast::SqrtKind::Approx,
         };
@@ -1600,7 +1621,7 @@ InstSqrt: ast::Instruction<ast::ParsedArgParams<'input>> = {
     },
     "sqrt" <rnd:RoundingModeFloat> <ftz:".ftz"?> ".f32" <a:Arg2> => {
         let details = ast::SqrtDetails {
-            typ: ast::FloatType::F32,
+            typ: ast::ScalarType::F32,
             flush_to_zero: Some(ftz.is_some()),
             kind: ast::SqrtKind::Rounding(rnd),
         };
@@ -1608,7 +1629,7 @@ InstSqrt: ast::Instruction<ast::ParsedArgParams<'input>> = {
     },
     "sqrt" <rnd:RoundingModeFloat> ".f64" <a:Arg2> => {
         let details = ast::SqrtDetails {
-            typ: ast::FloatType::F64,
+            typ: ast::ScalarType::F64,
             flush_to_zero: None,
             kind: ast::SqrtKind::Rounding(rnd),
         };
@@ -1621,14 +1642,14 @@ InstSqrt: ast::Instruction<ast::ParsedArgParams<'input>> = {
 InstRsqrt: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "rsqrt" ".approx" <ftz:".ftz"?> ".f32" <a:Arg2> => {
         let details = ast::RsqrtDetails {
-            typ: ast::FloatType::F32,
+            typ: ast::ScalarType::F32,
             flush_to_zero: ftz.is_some(),
         };
         ast::Instruction::Rsqrt(details, a)
     },
     "rsqrt" ".approx" <ftz:".ftz"?> ".f64" <a:Arg2> => {
         let details = ast::RsqrtDetails {
-            typ: ast::FloatType::F64,
+            typ: ast::ScalarType::F64,
             flush_to_zero: ftz.is_some(),
         };
         ast::Instruction::Rsqrt(details, a)
@@ -1739,7 +1760,7 @@ ArithDetails: ast::ArithDetails = {
         saturate: false,
     }),
     ".sat" ".s32" => ast::ArithDetails::Signed(ast::ArithSInt {
-        typ: ast::SIntType::S32,
+        typ: ast::ScalarType::S32,
         saturate: true,
     }),
     <f:ArithFloat> => ast::ArithDetails::Float(f)
@@ -1747,25 +1768,25 @@ ArithDetails: ast::ArithDetails = {
 
 ArithFloat: ast::ArithFloat = {
     <rn:RoundingModeFloat?> <ftz:".ftz"?> <sat:".sat"?> ".f32" => ast::ArithFloat {
-        typ: ast::FloatType::F32,
+        typ: ast::ScalarType::F32,
         rounding: rn,
         flush_to_zero: Some(ftz.is_some()),
         saturate: sat.is_some(),
     },
     <rn:RoundingModeFloat?> ".f64" => ast::ArithFloat {
-        typ: ast::FloatType::F64,
+        typ: ast::ScalarType::F64,
         rounding: rn,
         flush_to_zero: None,
         saturate: false,
     },
     <rn:".rn"?> <ftz:".ftz"?> <sat:".sat"?> ".f16" => ast::ArithFloat {
-        typ: ast::FloatType::F16,
+        typ: ast::ScalarType::F16,
         rounding: rn.map(|_| ast::RoundingMode::NearestEven),
         flush_to_zero: Some(ftz.is_some()),
         saturate: sat.is_some(),
     },
     <rn:".rn"?> <ftz:".ftz"?> <sat:".sat"?> ".f16x2" => ast::ArithFloat {
-        typ: ast::FloatType::F16x2,
+        typ: ast::ScalarType::F16x2,
         rounding: rn.map(|_| ast::RoundingMode::NearestEven),
         flush_to_zero: Some(ftz.is_some()),
         saturate: sat.is_some(),
@@ -1774,25 +1795,25 @@ ArithFloat: ast::ArithFloat = {
 
 ArithFloatMustRound: ast::ArithFloat = {
     <rn:RoundingModeFloat> <ftz:".ftz"?> <sat:".sat"?> ".f32" => ast::ArithFloat {
-        typ: ast::FloatType::F32,
+        typ: ast::ScalarType::F32,
         rounding: Some(rn),
         flush_to_zero: Some(ftz.is_some()),
         saturate: sat.is_some(),
     },
     <rn:RoundingModeFloat> ".f64" => ast::ArithFloat {
-        typ: ast::FloatType::F64,
+        typ: ast::ScalarType::F64,
         rounding: Some(rn),
         flush_to_zero: None,
         saturate: false,
     },
     ".rn" <ftz:".ftz"?> <sat:".sat"?> ".f16" => ast::ArithFloat {
-        typ: ast::FloatType::F16,
+        typ: ast::ScalarType::F16,
         rounding: Some(ast::RoundingMode::NearestEven),
         flush_to_zero: Some(ftz.is_some()),
         saturate: sat.is_some(),
     },
     ".rn" <ftz:".ftz"?> <sat:".sat"?> ".f16x2" => ast::ArithFloat {
-        typ: ast::FloatType::F16x2,
+        typ: ast::ScalarType::F16x2,
         rounding: Some(ast::RoundingMode::NearestEven),
         flush_to_zero: Some(ftz.is_some()),
         saturate: sat.is_some(),

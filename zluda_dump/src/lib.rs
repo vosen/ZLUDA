@@ -219,11 +219,19 @@ unsafe fn to_str<T>(image: *const T) -> Option<&'static str> {
 
 fn directive_to_kernel(dir: &ast::Directive<ast::ParsedArgParams>) -> Option<(String, Vec<usize>)> {
     match dir {
-        ast::Directive::Method(ast::Function {
-            func_directive: ast::MethodDecl::Kernel { name, in_args },
-            ..
-        }) => {
-            let arg_sizes = in_args
+        ast::Directive::Method(
+            _,
+            ast::Function {
+                func_directive:
+                    ast::MethodDeclaration {
+                        name: ast::MethodName::Kernel(name),
+                        input_arguments,
+                        ..
+                    },
+                ..
+            },
+        ) => {
+            let arg_sizes = input_arguments
                 .iter()
                 .map(|arg| ast::Type::from(arg.v_type.clone()).size_of())
                 .collect();
