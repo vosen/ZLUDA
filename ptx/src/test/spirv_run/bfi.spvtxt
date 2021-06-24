@@ -20,6 +20,8 @@
 %_ptr_Function_uint = OpTypePointer Function %uint
 %_ptr_Generic_uint = OpTypePointer Generic %uint
     %ulong_4 = OpConstant %ulong 4
+      %uchar = OpTypeInt 8 0
+%_ptr_Generic_uchar = OpTypePointer Generic %uchar
     %ulong_8 = OpConstant %ulong 8
    %ulong_12 = OpConstant %ulong 12
          %44 = OpFunction %uint None %54
@@ -51,19 +53,25 @@
          %14 = OpLoad %uint %35 Aligned 4
                OpStore %6 %14
          %17 = OpLoad %ulong %4
-         %30 = OpIAdd %ulong %17 %ulong_4
-         %36 = OpConvertUToPtr %_ptr_Generic_uint %30
-         %16 = OpLoad %uint %36 Aligned 4
+         %36 = OpConvertUToPtr %_ptr_Generic_uint %17
+         %62 = OpBitcast %_ptr_Generic_uchar %36
+         %63 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %62 %ulong_4
+         %30 = OpBitcast %_ptr_Generic_uint %63
+         %16 = OpLoad %uint %30 Aligned 4
                OpStore %7 %16
          %19 = OpLoad %ulong %4
-         %32 = OpIAdd %ulong %19 %ulong_8
-         %37 = OpConvertUToPtr %_ptr_Generic_uint %32
-         %18 = OpLoad %uint %37 Aligned 4
+         %37 = OpConvertUToPtr %_ptr_Generic_uint %19
+         %64 = OpBitcast %_ptr_Generic_uchar %37
+         %65 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %64 %ulong_8
+         %32 = OpBitcast %_ptr_Generic_uint %65
+         %18 = OpLoad %uint %32 Aligned 4
                OpStore %8 %18
          %21 = OpLoad %ulong %4
-         %34 = OpIAdd %ulong %21 %ulong_12
-         %38 = OpConvertUToPtr %_ptr_Generic_uint %34
-         %20 = OpLoad %uint %38 Aligned 4
+         %38 = OpConvertUToPtr %_ptr_Generic_uint %21
+         %66 = OpBitcast %_ptr_Generic_uchar %38
+         %67 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %66 %ulong_12
+         %34 = OpBitcast %_ptr_Generic_uint %67
+         %20 = OpLoad %uint %34 Aligned 4
                OpStore %9 %20
          %23 = OpLoad %uint %6
          %24 = OpLoad %uint %7

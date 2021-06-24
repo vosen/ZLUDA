@@ -18,6 +18,8 @@
 %_ptr_Function_float = OpTypePointer Function %float
 %_ptr_Generic_float = OpTypePointer Generic %float
     %ulong_4 = OpConstant %ulong 4
+      %uchar = OpTypeInt 8 0
+%_ptr_Generic_uchar = OpTypePointer Generic %uchar
           %1 = OpFunction %void None %31
           %8 = OpFunctionParameter %ulong
           %9 = OpFunctionParameter %ulong
@@ -39,9 +41,11 @@
          %12 = OpLoad %float %23 Aligned 4
                OpStore %6 %12
          %15 = OpLoad %ulong %4
-         %22 = OpIAdd %ulong %15 %ulong_4
-         %24 = OpConvertUToPtr %_ptr_Generic_float %22
-         %14 = OpLoad %float %24 Aligned 4
+         %24 = OpConvertUToPtr %_ptr_Generic_float %15
+         %38 = OpBitcast %_ptr_Generic_uchar %24
+         %39 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %38 %ulong_4
+         %22 = OpBitcast %_ptr_Generic_float %39
+         %14 = OpLoad %float %22 Aligned 4
                OpStore %7 %14
          %17 = OpLoad %float %6
          %18 = OpLoad %float %7

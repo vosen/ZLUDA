@@ -25,8 +25,8 @@
           %1 = OpFunction %v2uint None %55
           %7 = OpFunctionParameter %v2uint
          %24 = OpLabel
-          %2 = OpVariable %_ptr_Function_v2uint Function
           %3 = OpVariable %_ptr_Function_v2uint Function
+          %2 = OpVariable %_ptr_Function_v2uint Function
           %4 = OpVariable %_ptr_Function_v2uint Function
           %5 = OpVariable %_ptr_Function_uint Function
           %6 = OpVariable %_ptr_Function_uint Function
