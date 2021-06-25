@@ -2389,10 +2389,6 @@ impl<'a, 'b> FlattenArguments<'a, 'b> {
             )));
             Ok(id_add_result)
         } else {
-            let scalar_type = match typ {
-                ast::Type::Scalar(underlying_type) => *underlying_type,
-                _ => return Err(error_unreachable()),
-            };
             let id_constant_stmt = self.id_def.register_intermediate(
                 ast::Type::Scalar(ast::ScalarType::S64),
                 ast::StateSpace::Reg,
@@ -2404,7 +2400,7 @@ impl<'a, 'b> FlattenArguments<'a, 'b> {
             }));
             let dst = self.id_def.register_intermediate(typ.clone(), state_space);
             self.func.push(Statement::PtrAccess(PtrAccess {
-                underlying_type: scalar_type,
+                underlying_type: typ.clone(),
                 state_space: state_space,
                 dst,
                 ptr_src: reg,
@@ -3118,7 +3114,7 @@ fn emit_function_body_ops(
                 );
                 let result_type = map.get_or_add(
                     builder,
-                    SpirvType::new(ast::Type::Pointer(*underlying_type, *state_space)),
+                    SpirvType::pointer_to(underlying_type.clone(), state_space.to_spirv()),
                 );
                 let ptr_src_u8 = builder.bitcast(u8_pointer, None, *ptr_src)?;
                 let temp = builder.in_bounds_ptr_access_chain(
@@ -4532,7 +4528,7 @@ fn convert_to_stateful_memory_access<'a, 'input>(
                 };
                 let dst = arg.dst.upcast().unwrap_reg()?;
                 result.push(Statement::PtrAccess(PtrAccess {
-                    underlying_type: ast::ScalarType::U8,
+                    underlying_type: ast::Type::Scalar(ast::ScalarType::U8),
                     state_space: ast::StateSpace::Global,
                     dst: *remapped_ids.get(&dst).unwrap(),
                     ptr_src: *ptr,
@@ -4575,7 +4571,7 @@ fn convert_to_stateful_memory_access<'a, 'input>(
                 )));
                 let dst = arg.dst.upcast().unwrap_reg()?;
                 result.push(Statement::PtrAccess(PtrAccess {
-                    underlying_type: ast::ScalarType::U8,
+                    underlying_type: ast::Type::Scalar(ast::ScalarType::U8),
                     state_space: ast::StateSpace::Global,
                     dst: *remapped_ids.get(&dst).unwrap(),
                     ptr_src: *ptr,
@@ -5497,7 +5493,6 @@ impl<P: ArgParamsEx<Id = spirv::Word>> PtrAccess<P> {
         self,
         visitor: &mut V,
     ) -> Result<PtrAccess<To>, TranslateError> {
-        let ptr_type = ast::Type::Scalar(self.underlying_type.clone());
         let new_dst = visitor.id(
             ArgumentDescriptor {
                 op: self.dst,
@@ -5505,7 +5500,7 @@ impl<P: ArgParamsEx<Id = spirv::Word>> PtrAccess<P> {
                 is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
-            Some((&ptr_type, self.state_space)),
+            Some((&self.underlying_type, self.state_space)),
         )?;
         let new_ptr_src = visitor.id(
             ArgumentDescriptor {
@@ -5514,7 +5509,7 @@ impl<P: ArgParamsEx<Id = spirv::Word>> PtrAccess<P> {
                 is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
-            Some((&ptr_type, self.state_space)),
+            Some((&self.underlying_type, self.state_space)),
         )?;
         let new_constant_src = visitor.operand(
             ArgumentDescriptor {
@@ -5707,7 +5702,7 @@ pub struct ArgumentDescriptor<Op> {
 }
 
 pub struct PtrAccess<P: ast::ArgParams> {
-    underlying_type: ast::ScalarType,
+    underlying_type: ast::Type,
     state_space: ast::StateSpace,
     dst: spirv::Word,
     ptr_src: spirv::Word,
