@@ -156,8 +156,8 @@ unsafe fn record_module_image_raw(module: CUmodule, raw_image: *const ::std::os:
 }
 
 unsafe fn record_module_image(module: CUmodule, image: &str) {
-    if !image.contains(&".address_size") {
-        os_log!("Malformed module image: {:?}", module)
+    if !image.contains(&".version") {
+        os_log!("Malformed module image: {:?}", module);
     } else {
         let mut errors = Vec::new();
         let ast = ptx::ModuleParser::new().parse(&mut errors, image);
