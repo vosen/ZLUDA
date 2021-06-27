@@ -153,6 +153,7 @@ pub fn launch_kernel(
                 &mut [],
             )?;
         }
+        cmd_list.close()?;
         stream.queue.execute_and_synchronize(cmd_list)?;
         Ok(())
     })?

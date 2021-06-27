@@ -14,6 +14,7 @@ pub fn copy_v2(dst: *mut c_void, src: *const c_void, bytesize: usize) -> Result<
     GlobalState::lock_stream(stream::CU_STREAM_LEGACY, |stream| {
         let cmd_list = stream.command_list()?;
         unsafe { cmd_list.append_memory_copy_raw(dst, src, bytesize, None, &mut [])? };
+        cmd_list.close()?;
         stream.queue.execute_and_synchronize(cmd_list)?;
         Ok::<_, CUresult>(())
     })?
@@ -40,6 +41,7 @@ pub(crate) fn set_d32_v2(dst: *mut c_void, mut ui: u32, n: usize) -> Result<(), 
                 &mut [],
             )
         }?;
+        cmd_list.close()?;
         stream.queue.execute_and_synchronize(cmd_list)?;
         Ok::<_, CUresult>(())
     })?
@@ -58,6 +60,7 @@ pub(crate) fn set_d8_v2(dst: *mut c_void, mut uc: u8, n: usize) -> Result<(), CU
                 &mut [],
             )
         }?;
+        cmd_list.close()?;
         stream.queue.execute_and_synchronize(cmd_list)?;
         Ok::<_, CUresult>(())
     })?
