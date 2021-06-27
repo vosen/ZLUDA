@@ -573,24 +573,24 @@ fn dump_arguments(
         }
         match (buffer_size, buffer_ptr) {
             (Some(buffer_size), Some(buffer_ptr)) => {
-                let sum_of_kernel_argument_sizes = args.iter().fold(0, |offset, size_of_arg| {
-                    size_of_arg + round_up_to_multiple(offset, *size_of_arg)
-                });
+                let sum_of_kernel_argument_sizes =
+                    args.iter().fold(0, |sum_of_arg_sizes, size_of_arg| {
+                        sum_of_arg_sizes + align_to_usize(*size_of_arg)
+                    });
                 if buffer_size != sum_of_kernel_argument_sizes {
                     return Err("Malformed `extra` parameter to kernel launch")?;
                 }
                 let mut offset = 0;
                 for (i, arg_size) in args.iter().enumerate() {
-                    let buffer_offset = round_up_to_multiple(offset, *arg_size);
                     unsafe {
                         dump_argument_to_file(
                             &dump_dir,
                             i,
                             *arg_size,
-                            buffer_ptr.add(buffer_offset) as *const _,
+                            buffer_ptr.add(offset) as *const _,
                         )?
                     };
-                    offset = buffer_offset + *arg_size;
+                    offset += align_to_usize(*arg_size);
                 }
             }
             _ => return Err("Malformed `extra` parameter to kernel launch")?,
@@ -599,8 +599,9 @@ fn dump_arguments(
     Ok(())
 }
 
-fn round_up_to_multiple(x: usize, multiple: usize) -> usize {
-    ((x + multiple - 1) / multiple) * multiple
+fn align_to_usize(value: usize) -> usize {
+    let multiple = std::mem::size_of::<usize>();
+    ((value + multiple - 1) / multiple) * multiple
 }
 
 unsafe fn dump_argument_to_file(
