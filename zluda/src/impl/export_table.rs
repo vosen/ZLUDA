@@ -1,6 +1,5 @@
-use winapi::um::heapapi::{HeapAlloc, HeapFree};
-
 use crate::cuda::CUresult;
+use crate::r#impl::os;
 use crate::{
     cuda::{CUcontext, CUdevice, CUmodule, CUuuid},
     cuda_impl,
@@ -488,11 +487,8 @@ unsafe extern "system" fn heap_alloc(
         return CUresult::CUDA_ERROR_INVALID_VALUE;
     }
     let halloc = GlobalState::lock(|global_state| {
-        let halloc = HeapAlloc(
-            global_state.global_heap,
-            0,
-            mem::size_of::<HeapAllocRecord>(),
-        ) as *mut HeapAllocRecord;
+        let halloc = os::heap_alloc(global_state.global_heap, mem::size_of::<HeapAllocRecord>())
+            as *mut HeapAllocRecord;
         if halloc == ptr::null_mut() {
             return Err(CUresult::CUDA_ERROR_OUT_OF_MEMORY);
         }
@@ -520,7 +516,7 @@ unsafe extern "system" fn heap_free(halloc: *mut HeapAllocRecord, arg1: *mut usi
         *arg1 = (*halloc).arg2;
     }
     GlobalState::lock(|global_state| {
-        HeapFree(global_state.global_heap, 0, halloc as *mut _);
+        os::heap_free(global_state.global_heap, halloc as *mut _);
         ()
     })
     .encuda()
