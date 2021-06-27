@@ -2694,6 +2694,15 @@ pub extern "system" fn cuIpcOpenMemHandle(
 }
 
 #[cfg_attr(not(test), no_mangle)]
+pub extern "system" fn cuIpcOpenMemHandle_v2(
+    pdptr: *mut CUdeviceptr,
+    handle: CUipcMemHandle,
+    Flags: ::std::os::raw::c_uint,
+) -> CUresult {
+    r#impl::unimplemented()
+}
+
+#[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuIpcCloseMemHandle(dptr: CUdeviceptr) -> CUresult {
     r#impl::unimplemented()
 }

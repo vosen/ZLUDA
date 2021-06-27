@@ -443,7 +443,7 @@ FnInput: ast::Variable<&'input str> = {
     }
 }
 
-pub(crate) FunctionBody: Option<Vec<ast::Statement<ast::ParsedArgParams<'input>>>> = {
+FunctionBody: Option<Vec<ast::Statement<ast::ParsedArgParams<'input>>>> = {
     "{" <s:Statement*> "}" => { Some(without_none(s)) },
     ";" => { None }
 };

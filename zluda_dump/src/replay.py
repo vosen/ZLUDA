@@ -60,7 +60,7 @@ def append_debug_buffer(args):
 
 def verify_single_dump(input_path, max_block_threads):
     print(input_path)
-    kernel_name = path.basename(input_path).split("_", 1)[1]
+    kernel_name = path.basename(os.path.normpath(input_path)).split("_", 1)[1]
     with open(path.join(input_path, "launch.txt"), "r") as launch_f:
         launch_lines = list(map(int, launch_f.readlines()))
     block = tuple(launch_lines[3:6])

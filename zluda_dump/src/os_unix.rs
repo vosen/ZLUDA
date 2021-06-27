@@ -1,8 +1,7 @@
+use crate::cuda::CUuuid;
 use std::ffi::{c_void, CStr};
 
 const NVCUDA_DEFAULT_PATH: &'static [u8] = b"/usr/lib/x86_64-linux-gnu/libcuda.so.1\0";
-
-pub fn init() {}
 
 pub unsafe fn load_cuda_library() -> *mut c_void {
     libc::dlopen(
@@ -37,6 +36,8 @@ pub fn get_thunk(
     guid: *const CUuuid,
     idx: usize,
 ) -> *const c_void {
+    use std::mem;
+
     use dynasmrt::{dynasm, DynasmApi};
     let mut ops = dynasmrt::x86::Assembler::new().unwrap();
     let start = ops.offset();
