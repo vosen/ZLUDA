@@ -1,3 +1,4 @@
+use std::ffi::c_void;
 use std::ptr;
 
 pub unsafe fn heap_create() -> *mut c_void {
