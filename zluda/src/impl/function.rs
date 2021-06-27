@@ -113,7 +113,7 @@ pub fn launch_kernel(
                         func.arg_size.iter().fold(0, |offset, size_of_arg| {
                             size_of_arg + round_up_to_multiple(offset, *size_of_arg)
                         });
-                    if buffer_size != sum_of_kernel_argument_sizes {
+                    if buffer_size < sum_of_kernel_argument_sizes {
                         return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
                     }
                     let mut offset = 0;

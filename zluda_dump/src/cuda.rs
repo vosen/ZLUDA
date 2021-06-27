@@ -4399,3 +4399,20 @@ extern_redirect_with! {
 extern_redirect! {
     pub fn cuFuncGetModule(hmod: *mut CUmodule, hfunc: CUfunction) -> CUresult;
 }
+#[repr(transparent)]
+#[derive(Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUoutput_mode_enum(pub ::std::os::raw::c_uint);
+pub use self::CUoutput_mode_enum as CUoutput_mode;
+extern_redirect! {
+    pub fn cuProfilerInitialize(
+        configFile: *const ::std::os::raw::c_char,
+        outputFile: *const ::std::os::raw::c_char,
+        outputMode: CUoutput_mode,
+    ) -> CUresult;
+}
+extern_redirect! {
+    pub fn cuProfilerStart() -> CUresult;
+}
+extern_redirect! {
+    pub fn cuProfilerStop() -> CUresult;
+}

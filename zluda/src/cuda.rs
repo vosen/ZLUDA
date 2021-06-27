@@ -3449,7 +3449,7 @@ pub extern "system" fn cuStreamQuery(hStream: CUstream) -> CUresult {
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuStreamSynchronize(hStream: CUstream) -> CUresult {
-    r#impl::unimplemented()
+    CUresult::CUDA_SUCCESS
 }
 
 #[cfg_attr(not(test), no_mangle)]
