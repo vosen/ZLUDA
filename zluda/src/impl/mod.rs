@@ -1,5 +1,3 @@
-use winapi::um::{heapapi::HeapCreate, winnt::HEAP_NO_SERIALIZE};
-
 use crate::{
     cuda::{CUctx_st, CUdevice, CUdeviceptr, CUfunc_st, CUmod_st, CUresult, CUstream_st},
     r#impl::device::Device,
@@ -22,6 +20,9 @@ pub mod export_table;
 pub mod function;
 pub mod memory;
 pub mod module;
+#[cfg_attr(windows, path = "os_win.rs")]
+#[cfg_attr(not(windows), path = "os_unix.rs")]
+pub(crate) mod os;
 pub mod stream;
 
 #[cfg(debug_assertions)]
@@ -304,7 +305,7 @@ pub fn init() -> Result<(), CUresult> {
         None => return Err(CUresult::CUDA_ERROR_UNKNOWN),
         Some(driver) => device::init(&driver)?,
     };
-    let global_heap = unsafe { HeapCreate(HEAP_NO_SERIALIZE, 0, 0) };
+    let global_heap = unsafe { os::heap_create() };
     if global_heap == ptr::null_mut() {
         return Err(CUresult::CUDA_ERROR_OUT_OF_MEMORY);
     }
