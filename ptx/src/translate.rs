@@ -1020,12 +1020,8 @@ fn emit_function_header<'a>(
     kernel_info: &mut HashMap<String, KernelInfo>,
 ) -> Result<spirv::Word, TranslateError> {
     if let ast::MethodName::Kernel(name) = func_decl.name {
-        let input_args = if func_decl.shared_mem.is_none() {
-            func_decl.input_arguments.as_slice()
-        } else {
-            &func_decl.input_arguments[0..func_decl.input_arguments.len() - 1]
-        };
-        let args_lens = input_args
+        let args_lens = func_decl
+            .input_arguments
             .iter()
             .map(|param| param.v_type.size_of())
             .collect();

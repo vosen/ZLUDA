@@ -51,9 +51,10 @@ def parse_arguments(dump_path, prefix):
     return [load_arguments(path.join(dir, f)) for f in sorted(arg_files)]
 
 
-def append_debug_buffer(args):
+def append_debug_buffer(args, grid, block):
     args = list(args)
-    debug_buff = np.zeros(1024 * 1024, np.single)
+    items = block[0] * block[1] * block[2] * block[0] * block[1] * block[2]
+    debug_buff = np.zeros(items, dtype=np.uint32)
     args.append((drv.InOut(debug_buff), debug_buff))
     return args
 
@@ -71,7 +72,7 @@ def verify_single_dump(input_path, max_block_threads):
         return
     module = drv.module_from_file(path.join(input_path, "module.ptx"))
     kernel = module.get_function(kernel_name)
-    pre_args = append_debug_buffer(parse_arguments(input_path, "pre"))
+    pre_args = append_debug_buffer(parse_arguments(input_path, "pre"), tuple(launch_lines[:3]), block)
     kernel_pre_args, host_pre_args = zip(*pre_args)
     kernel(*list(kernel_pre_args), grid=tuple(launch_lines[:3]), block=block, shared=launch_lines[6])
     post_args = parse_arguments(input_path, "post")
@@ -94,7 +95,8 @@ def main(argv):
         verify_single_dump(input_path, max_threads)
     else:
         for input_subdir in sorted([path.join(input_path, dir_name) for dir_name in os.listdir(input_path)]):
-            verify_single_dump(input_subdir, max_threads)
+            if os.path.isdir(input_subdir):
+                verify_single_dump(input_subdir, max_threads)
 
 
 if __name__ == "__main__":
