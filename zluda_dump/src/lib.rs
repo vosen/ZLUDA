@@ -76,6 +76,8 @@ static mut BUFFERS: Option<BTreeMap<usize, (usize, AllocLocation)>> = None;
 pub static mut LAUNCH_COUNTER: usize = 0;
 pub static mut KERNEL_PATTERN: Option<Regex> = None;
 pub static mut OVERRIDE_COMPUTE_CAPABILITY_MAJOR: Option<i32> = None;
+pub static mut KERNEL_INDEX_MINIMUM: usize = 0;
+pub static mut KERNEL_INDEX_MAXIMUM: usize = usize::MAX;
 
 #[derive(Clone, Copy)]
 enum AllocLocation {
@@ -113,6 +115,22 @@ pub unsafe fn init_libcuda_handle() {
                 }
             },
             Err(_) => (),
+        }
+        if let Ok(kernel_min_str) = env::var("ZLUDA_DUMP_MIN_INDEX") {
+            match kernel_min_str.parse::<usize>() {
+                Ok(kernel_min_value) => KERNEL_INDEX_MINIMUM = kernel_min_value,
+                Err(err) => {
+                    os_log!("Error parsing ZLUDA_DUMP_MIN_INDEX: {}", err);
+                }
+            }
+        }
+        if let Ok(kernel_max_str) = env::var("ZLUDA_DUMP_MAX_INDEX") {
+            match kernel_max_str.parse::<usize>() {
+                Ok(kernel_max_value) => KERNEL_INDEX_MINIMUM = kernel_max_value,
+                Err(err) => {
+                    os_log!("Error parsing ZLUDA_DUMP_MAX_INDEX: {}", err);
+                }
+            }
         }
         match env::var("ZLUDA_OVERRIDE_COMPUTE_CAPABILITY_MAJOR") {
             Ok(cc_override) => match str::parse::<i32>(&cc_override) {
@@ -468,7 +486,13 @@ fn dump_launch_arguments(
     Ok(())
 }
 
-unsafe fn should_dump_kernel(name: &str) -> bool {
+unsafe fn should_dump_kernel(counter: usize, name: &str) -> bool {
+    if counter < KERNEL_INDEX_MINIMUM {
+        return false;
+    }
+    if counter > KERNEL_INDEX_MAXIMUM {
+        return false;
+    }
     match &KERNEL_PATTERN {
         Some(pattern) => pattern.is_match(name),
         None => true,
@@ -481,7 +505,7 @@ unsafe fn create_dump_dir(
 ) -> Result<Option<(PathBuf, &'static KernelDump)>, Box<dyn Error>> {
     match KERNELS.as_ref().and_then(|kernels| kernels.get(&f)) {
         Some(kernel_dump) => {
-            if !should_dump_kernel(&kernel_dump.name) {
+            if !should_dump_kernel(counter, &kernel_dump.name) {
                 return Ok(None);
             }
             let mut dump_dir = get_dump_dir()?;
