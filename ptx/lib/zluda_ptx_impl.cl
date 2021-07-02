@@ -253,6 +253,14 @@ ulong FUNC(bfi_b64)(ulong insert, ulong base, uint offset, uint count) {
     return intel_bfi(base, insert, offset, count);
 }
 
+uint FUNC(brev_b32)(uint base) {
+    return intel_bfrev(base);
+}
+
+ulong FUNC(brev_b64)(ulong base) {
+    return intel_bfrev(base);
+}
+
 void FUNC(__assertfail)(
     __private ulong* message,
     __private ulong* file,
