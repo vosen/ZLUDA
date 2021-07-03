@@ -4234,7 +4234,7 @@ fn convert_to_stateful_memory_access<'a, 'input>(
                 arg,
             )) => {
                 if let (TypedOperand::Reg(dst), Some(src)) =
-                    (arg.dst, arg.src.upcast().underlying())
+                    (arg.dst, arg.src.upcast().underlying_register())
                 {
                     if is_64_bit_integer(id_defs, *src) && is_64_bit_integer(id_defs, dst) {
                         stateful_markers.push((dst, *src));
@@ -4266,7 +4266,7 @@ fn convert_to_stateful_memory_access<'a, 'input>(
                 arg,
             )) => {
                 if let (TypedOperand::Reg(dst), Some(src)) =
-                    (&arg.dst, arg.src.upcast().underlying())
+                    (&arg.dst, arg.src.upcast().underlying_register())
                 {
                     if func_args_64bit.contains(src) {
                         multi_hash_map_append(&mut stateful_init_reg, *dst, *src);
@@ -4320,14 +4320,16 @@ fn convert_to_stateful_memory_access<'a, 'input>(
                     }),
                     arg,
                 )) => {
+                    // TODO: don't mark result of double pointer sub or double
+                    // pointer add as ptr result
                     if let (TypedOperand::Reg(dst), Some(src1)) =
-                        (arg.dst, arg.src1.upcast().underlying())
+                        (arg.dst, arg.src1.upcast().underlying_register())
                     {
                         if regs_ptr_current.contains(src1) && !regs_ptr_seen.contains(src1) {
                             regs_ptr_new.insert(dst);
                         }
                     } else if let (TypedOperand::Reg(dst), Some(src2)) =
-                        (arg.dst, arg.src2.upcast().underlying())
+                        (arg.dst, arg.src2.upcast().underlying_register())
                     {
                         if regs_ptr_current.contains(src2) && !regs_ptr_seen.contains(src2) {
                             regs_ptr_new.insert(dst);
@@ -4392,7 +4394,7 @@ fn convert_to_stateful_memory_access<'a, 'input>(
                 }),
                 arg,
             )) if is_add_ptr_direct(&remapped_ids, &arg) => {
-                let (ptr, offset) = match arg.src1.upcast().underlying() {
+                let (ptr, offset) = match arg.src1.upcast().underlying_register() {
                     Some(src1) if remapped_ids.contains_key(src1) => {
                         (remapped_ids.get(src1).unwrap(), arg.src2)
                     }
@@ -4420,14 +4422,9 @@ fn convert_to_stateful_memory_access<'a, 'input>(
                     saturate: false,
                 }),
                 arg,
-            )) if is_add_ptr_direct(&remapped_ids, &arg) => {
-                let (ptr, offset) = match arg.src1.upcast().underlying() {
-                    Some(src1) if remapped_ids.contains_key(src1) => {
-                        (remapped_ids.get(src1).unwrap(), arg.src2)
-                    }
-                    Some(src2) if remapped_ids.contains_key(src2) => {
-                        (remapped_ids.get(src2).unwrap(), arg.src1)
-                    }
+            )) if is_sub_ptr_direct(&remapped_ids, &arg) => {
+                let (ptr, offset) = match arg.src1.upcast().underlying_register() {
+                    Some(src1) => (remapped_ids.get(src1).unwrap(), arg.src2),
                     _ => return Err(error_unreachable()),
                 };
                 let offset_neg = id_defs.register_intermediate(Some((
@@ -4577,10 +4574,45 @@ fn is_add_ptr_direct(remapped_ids: &HashMap<u32, u32>, arg: &ast::Arg3<TypedArgP
             if !remapped_ids.contains_key(&dst) {
                 return false;
             }
-            match arg.src1.upcast().underlying() {
-                Some(src1) if remapped_ids.contains_key(src1) => true,
-                Some(src2) if remapped_ids.contains_key(src2) => true,
-                _ => false,
+            if let Some(src1_reg) = arg.src1.upcast().underlying_register() {
+                if remapped_ids.contains_key(src1_reg) {
+                    // don't trigger optimization when adding two pointers
+                    if let Some(src2_reg) = arg.src2.upcast().underlying_register() {
+                        return !remapped_ids.contains_key(src2_reg);
+                    }
+                }
+            }
+            if let Some(src2_reg) = arg.src2.upcast().underlying_register() {
+                remapped_ids.contains_key(src2_reg)
+            } else {
+                false
+            }
+        }
+    }
+}
+
+fn is_sub_ptr_direct(remapped_ids: &HashMap<u32, u32>, arg: &ast::Arg3<TypedArgParams>) -> bool {
+    match arg.dst {
+        TypedOperand::Imm(..) | TypedOperand::RegOffset(..) | TypedOperand::VecMember(..) => {
+            return false
+        }
+        TypedOperand::Reg(dst) => {
+            if !remapped_ids.contains_key(&dst) {
+                return false;
+            }
+            match arg.src1.upcast().underlying_register() {
+                Some(src1_reg) => {
+                    if remapped_ids.contains_key(src1_reg) {
+                        // don't trigger optimization when subtracting two pointers
+                        arg.src2
+                            .upcast()
+                            .underlying_register()
+                            .map_or(true, |src2_reg| !remapped_ids.contains_key(src2_reg))
+                    } else {
+                        false
+                    }
+                }
+                None => false,
             }
         }
     }
@@ -7099,12 +7131,12 @@ impl ast::StateSpace {
 }
 
 impl<T> ast::Operand<T> {
-    fn underlying(&self) -> Option<&T> {
+    fn underlying_register(&self) -> Option<&T> {
         match self {
-            ast::Operand::Reg(r) | ast::Operand::RegOffset(r, _) => Some(r),
-            ast::Operand::Imm(_) => None,
-            ast::Operand::VecMember(reg, _) => Some(reg),
-            ast::Operand::VecPack(..) => None,
+            ast::Operand::Reg(r)
+            | ast::Operand::RegOffset(r, _)
+            | ast::Operand::VecMember(r, _) => Some(r),
+            ast::Operand::Imm(_) | ast::Operand::VecPack(..) => None,
         }
     }
 }

@@ -1,0 +1,29 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry stateful_neg_offset(
+    .param .u64 input,
+    .param .u64 output
+)
+{
+    .reg .u64           in_addr;
+    .reg .u64           out_addr;
+    .reg .u64           in_addr2;
+    .reg .u64           out_addr2;
+    .reg .u64           offset;
+    .reg .u64           temp;
+
+    ld.param.u64        in_addr, [input];
+    ld.param.u64        out_addr, [output];
+
+    cvta.to.global.u64  in_addr2, in_addr;
+    cvta.to.global.u64  out_addr2, out_addr;
+    
+    add.u64             offset, in_addr2, out_addr2;
+    sub.u64             offset, in_addr2, out_addr2;
+
+    ld.global.u64       temp, [in_addr2];
+    st.global.u64       [out_addr2], temp;
+    ret;
+}
