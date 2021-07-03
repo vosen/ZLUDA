@@ -181,6 +181,7 @@ test_ptx!(
     [0u32, 0u32, 0u32, 2u32]
 );
 test_ptx!(non_scalar_ptr_offset, [1u32, 2u32, 3u32, 4u32], [7u32]);
+test_ptx!(stateful_neg_offset, [1237518u64], [1237518u64]);
 
 struct DisplayError<T: Debug> {
     err: T,
