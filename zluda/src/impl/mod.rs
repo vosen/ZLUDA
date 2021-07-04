@@ -294,6 +294,8 @@ impl GlobalState {
             let prev_event_slice = prev_event_array.as_ref().map_or(&empty[..], |arr| &arr[..]);
             let (new_event, new_marker) = event_pool.get(l0_dev, l0_ctx)?;
             f(&mut cmd_list, &new_event, prev_event_slice)?;
+            cmd_list.close()?;
+            unsafe { stream_data.queue.execute(&cmd_list, None)? };
             stream_data.push_event((new_event, new_marker));
             Ok(())
         })?
