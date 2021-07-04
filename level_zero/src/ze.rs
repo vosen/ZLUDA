@@ -781,6 +781,26 @@ impl<'a> CommandList<'a> {
         Ok(unsafe { Self::from_ffi(result) })
     }
 
+    pub fn new_immediate(ctx: &'a Context, dev: Device) -> Result<Self> {
+        let queue_desc = sys::ze_command_queue_desc_t {
+            stype: sys::ze_structure_type_t::ZE_STRUCTURE_TYPE_COMMAND_QUEUE_DESC,
+            pNext: ptr::null(),
+            ordinal: 0,
+            index: 0,
+            flags: sys::ze_command_queue_flags_t(0),
+            mode: sys::ze_command_queue_mode_t::ZE_COMMAND_QUEUE_MODE_DEFAULT,
+            priority: sys::ze_command_queue_priority_t::ZE_COMMAND_QUEUE_PRIORITY_NORMAL,
+        };
+        let mut result: sys::ze_command_list_handle_t = ptr::null_mut();
+        check!(sys::zeCommandListCreateImmediate(
+            ctx.as_ffi(),
+            dev.as_ffi(),
+            &queue_desc,
+            &mut result
+        ));
+        Ok(unsafe { Self::from_ffi(result) })
+    }
+
     pub unsafe fn append_memory_copy<
         'dep,
         T: 'a + 'dep + Copy + Sized,
