@@ -1123,7 +1123,7 @@ impl<'a> Event<'a> {
     }
 
     pub fn host_synchronize(&self, timeout_ns: u64) -> Result<()> {
-        check!{ sys::zeEventHostSynchronize(self.as_ffi(), timeout_ns) };
+        check! { sys::zeEventHostSynchronize(self.as_ffi(), timeout_ns) };
         Ok(())
     }
 
@@ -1134,6 +1134,11 @@ impl<'a> Event<'a> {
             sys::ze_result_t::ZE_RESULT_NOT_READY => Ok(false),
             err => Err(err),
         }
+    }
+
+    pub fn host_reset(&self) -> Result<()> {
+        check! { sys::zeEventHostReset(self.as_ffi()) };
+        Ok(())
     }
 
     unsafe fn with_raw_slice<'x, T>(

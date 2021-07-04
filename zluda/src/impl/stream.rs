@@ -35,7 +35,9 @@ pub struct StreamData {
     pub context: *mut ContextData,
     // Immediate CommandList
     pub cmd_list: l0::CommandList<'static>,
-    pub prev_events: VecDeque<(l0::Event<'static>, u64)>,
+    pub busy_events: VecDeque<(l0::Event<'static>, u64)>,
+    // This could be a Vec, but I'd rather reuse earliest enqueued event not the one recently enqueued
+    pub free_events: VecDeque<(l0::Event<'static>, u64)>,
 }
 
 impl StreamData {
@@ -46,7 +48,8 @@ impl StreamData {
         Ok(StreamData {
             context: ptr::null_mut(),
             cmd_list: l0::CommandList::new_immediate(ctx, device)?,
-            prev_events: VecDeque::new(),
+            busy_events: VecDeque::new(),
+            free_events: VecDeque::new(),
         })
     }
     pub fn new(ctx: &mut ContextData) -> Result<Self, CUresult> {
@@ -55,20 +58,20 @@ impl StreamData {
         Ok(StreamData {
             context: ctx as *mut _,
             cmd_list: l0::CommandList::new_immediate(l0_ctx, device)?,
-            prev_events: VecDeque::new(),
+            busy_events: VecDeque::new(),
+            free_events: VecDeque::new(),
         })
     }
 
-    pub fn drop_finished_events(
-        &mut self,
-        f: &mut impl FnMut((l0::Event<'static>, u64)),
-    ) -> l0::Result<()> {
+    pub fn try_reuse_finished_events(&mut self) -> l0::Result<()> {
         loop {
-            match self.prev_events.get(0) {
+            match self.busy_events.get(0) {
                 None => return Ok(()),
                 Some((ev, _)) => {
                     if ev.is_ready()? {
-                        f(self.prev_events.pop_front().unwrap());
+                        let (ev, marker) = self.busy_events.pop_front().unwrap();
+                        ev.host_reset()?;
+                        self.free_events.push_back((ev, marker));
                     } else {
                         return Ok(());
                     }
@@ -77,27 +80,43 @@ impl StreamData {
         }
     }
 
-    pub fn drop_all_events(&mut self, f: &mut impl FnMut((l0::Event<'static>, u64))) {
-        for x in self.prev_events.drain(..) {
-            f(x);
+    pub fn reuse_all_finished_events(&mut self) -> l0::Result<()> {
+        self.free_events.reserve(self.busy_events.len());
+        for (ev, marker) in self.busy_events.drain(..) {
+            ev.host_reset()?;
+            self.free_events.push_back((ev, marker));
         }
+        Ok(())
     }
 
     pub fn get_last_event(&self) -> Option<&l0::Event<'static>> {
-        self.prev_events.iter().next_back().map(|(ev, _)| ev)
+        self.busy_events.iter().next_back().map(|(ev, _)| ev)
     }
 
     pub fn push_event(&mut self, ev: (l0::Event<'static>, u64)) {
-        self.prev_events.push_back(ev);
+        self.busy_events.push_back(ev);
     }
 
     pub fn synchronize(&mut self) -> l0::Result<()> {
-        if let Some((ev, _)) = self.prev_events.back() {
+        if let Some((ev, _)) = self.busy_events.back() {
             ev.host_synchronize(u64::MAX)?;
         }
-        let event_pool = unsafe { &mut (*(*self.context).device).event_pool };
-        self.drop_all_events(&mut |(_, marker)| event_pool.mark_as_free(marker));
+        self.reuse_all_finished_events()?;
         Ok(())
+    }
+
+    pub fn get_event(
+        &mut self,
+        l0_dev: l0::Device,
+        l0_ctx: &'static l0::Context,
+    ) -> l0::Result<(l0::Event<'static>, u64)> {
+        self.free_events
+            .pop_front()
+            .map(|x| Ok(x))
+            .unwrap_or_else(|| {
+                let event_pool = unsafe { &mut (*(*self.context).device).event_pool };
+                event_pool.get(l0_dev, l0_ctx)
+            })
     }
 }
 
@@ -105,6 +124,10 @@ impl Drop for StreamData {
     fn drop(&mut self) {
         if self.context == ptr::null_mut() {
             return;
+        }
+        for (_, marker) in self.busy_events.iter().chain(self.free_events.iter()) {
+            let event_pool = unsafe { &mut (*(*self.context).device).event_pool };
+            event_pool.mark_as_free(*marker);
         }
         unsafe { (&mut *self.context).streams.remove(&(&mut *self as *mut _)) };
     }
