@@ -275,17 +275,13 @@ impl GlobalState {
 
     fn lock_enqueue(
         stream: *mut stream::Stream,
-        f: impl FnOnce(
-            &mut l0::CommandList,
-            &l0::Event<'static>,
-            &[&l0::Event<'static>],
-        ) -> l0::Result<()>,
+        f: impl FnOnce(&l0::CommandList, &l0::Event<'static>, &[&l0::Event<'static>]) -> Result<(), CUresult>,
     ) -> Result<(), CUresult> {
         Self::lock_stream(stream, |stream_data| {
             let l0_dev = unsafe { (*(*stream_data.context).device).base };
             let l0_ctx = unsafe { &mut (*(*stream_data.context).device).l0_context };
             let event_pool = unsafe { &mut (*(*stream_data.context).device).event_pool };
-            let mut cmd_list = unsafe { mem::transmute(stream_data.command_list()?) };
+            let cmd_list = unsafe { mem::transmute(stream_data.command_list()?) };
             stream_data
                 .process_finished_events(&mut |(_, marker)| event_pool.mark_as_free(marker))?;
             let prev_event = stream_data.get_last_event();
@@ -293,7 +289,7 @@ impl GlobalState {
             let empty = [];
             let prev_event_slice = prev_event_array.as_ref().map_or(&empty[..], |arr| &arr[..]);
             let (new_event, new_marker) = event_pool.get(l0_dev, l0_ctx)?;
-            f(&mut cmd_list, &new_event, prev_event_slice)?;
+            f(&cmd_list, &new_event, prev_event_slice)?;
             cmd_list.close()?;
             unsafe { stream_data.queue.execute(&cmd_list, None)? };
             stream_data.push_event((new_event, new_marker));

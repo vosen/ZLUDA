@@ -13,7 +13,7 @@ pub fn alloc_v2(dptr: *mut *mut c_void, bytesize: usize) -> Result<(), CUresult>
 pub fn copy_v2(dst: *mut c_void, src: *const c_void, bytesize: usize) -> Result<(), CUresult> {
     GlobalState::lock_enqueue(stream::CU_STREAM_LEGACY, |cmd_list, signal, wait| {
         unsafe { cmd_list.append_memory_copy_raw(dst, src, bytesize, Some(signal), wait)? };
-        Ok::<_, l0::sys::ze_result_t>(())
+        Ok(())
     })
 }
 
@@ -26,41 +26,35 @@ pub fn free_v2(ptr: *mut c_void) -> Result<(), CUresult> {
 }
 
 pub(crate) fn set_d32_v2(dst: *mut c_void, mut ui: u32, n: usize) -> Result<(), CUresult> {
-    GlobalState::lock_stream(stream::CU_STREAM_LEGACY, |stream| {
-        let cmd_list = stream.command_list()?;
+    GlobalState::lock_enqueue(stream::CU_STREAM_LEGACY, |cmd_list, signal, wait| {
         unsafe {
             cmd_list.append_memory_fill_raw(
                 dst,
                 &mut ui as *mut _ as *mut _,
                 mem::size_of::<u32>(),
                 mem::size_of::<u32>() * n,
-                None,
-                &mut [],
+                Some(signal),
+                wait,
             )
         }?;
-        cmd_list.close()?;
-        stream.queue.execute_and_synchronize(cmd_list)?;
-        Ok::<_, CUresult>(())
-    })?
+        Ok(())
+    })
 }
 
 pub(crate) fn set_d8_v2(dst: *mut c_void, mut uc: u8, n: usize) -> Result<(), CUresult> {
-    GlobalState::lock_stream(stream::CU_STREAM_LEGACY, |stream| {
-        let cmd_list = stream.command_list()?;
+    GlobalState::lock_enqueue(stream::CU_STREAM_LEGACY, |cmd_list, signal, wait| {
         unsafe {
             cmd_list.append_memory_fill_raw(
                 dst,
                 &mut uc as *mut _ as *mut _,
                 mem::size_of::<u8>(),
                 mem::size_of::<u8>() * n,
-                None,
-                &mut [],
+                Some(signal),
+                wait,
             )
         }?;
-        cmd_list.close()?;
-        stream.queue.execute_and_synchronize(cmd_list)?;
-        Ok::<_, CUresult>(())
-    })?
+        Ok(())
+    })
 }
 
 #[cfg(test)]

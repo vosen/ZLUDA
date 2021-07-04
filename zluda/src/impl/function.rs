@@ -81,7 +81,7 @@ pub fn launch_kernel(
     {
         return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
     }
-    GlobalState::lock_stream(hstream, |stream| {
+    GlobalState::lock_enqueue(hstream, |cmd_list, signal, wait| {
         let func: &mut FunctionData = unsafe { &mut *f }.as_result_mut()?;
         if kernel_params != ptr::null_mut() {
             for (i, arg_size) in func.arg_size.iter().enumerate() {
@@ -144,19 +144,16 @@ pub fn launch_kernel(
         func.base
             .set_group_size(block_dim_x, block_dim_y, block_dim_z)?;
         func.legacy_args.reset();
-        let cmd_list = stream.command_list()?;
         unsafe {
             cmd_list.append_launch_kernel(
                 &mut func.base,
                 &[grid_dim_x, grid_dim_y, grid_dim_z],
-                None,
-                &mut [],
+                Some(signal),
+                wait,
             )?;
         }
-        cmd_list.close()?;
-        stream.queue.execute_and_synchronize(cmd_list)?;
-        Ok(())
-    })?
+        Ok::<_, CUresult>(())
+    })
 }
 
 fn round_up_to_multiple(x: usize, multiple: usize) -> usize {
