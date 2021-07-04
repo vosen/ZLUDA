@@ -284,15 +284,14 @@ impl GlobalState {
         Self::lock_stream(stream, |stream_data| {
             let l0_dev = unsafe { (*(*stream_data.context).device).base };
             let l0_ctx = unsafe { &mut (*(*stream_data.context).device).l0_context };
-            let event_pool = unsafe { &mut (*(*stream_data.context).device).event_pool };
             let cmd_list = unsafe { transmute_lifetime(&stream_data.cmd_list) };
-            stream_data
-                .drop_finished_events(&mut |(_, marker)| event_pool.mark_as_free(marker))?;
+            // TODO: make new_marker drop-safe
+            let (new_event, new_marker) = stream_data.get_event(l0_dev, l0_ctx)?;
+            stream_data.try_reuse_finished_events()?;
             let prev_event = stream_data.get_last_event();
             let prev_event_array = prev_event.map(|e| [e]);
             let empty = [];
             let prev_event_slice = prev_event_array.as_ref().map_or(&empty[..], |arr| &arr[..]);
-            let (new_event, new_marker) = event_pool.get(l0_dev, l0_ctx)?;
             f(cmd_list, &new_event, prev_event_slice)?;
             stream_data.push_event((new_event, new_marker));
             Ok(())
