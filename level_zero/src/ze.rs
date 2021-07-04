@@ -1122,6 +1122,11 @@ impl<'a> Event<'a> {
         Ok(unsafe { Self::from_ffi(result) })
     }
 
+    pub fn host_synchronize(&self, timeout_ns: u64) -> Result<()> {
+        check!{ sys::zeEventHostSynchronize(self.as_ffi(), timeout_ns) };
+        Ok(())
+    }
+
     pub fn is_ready(&self) -> Result<bool> {
         let status = unsafe { sys::zeEventQueryStatus(self.as_ffi()) };
         match status {
