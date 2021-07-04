@@ -168,9 +168,6 @@ pub(crate) fn destroy_v2(pstream: *mut Stream) -> Result<(), CUresult> {
 }
 
 pub(crate) fn synchronize(pstream: *mut Stream) -> Result<(), CUresult> {
-    if pstream == ptr::null_mut() {
-        return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
-    }
     GlobalState::lock_stream(pstream, |stream_data| Ok(stream_data.synchronize()?))?
 }
 
