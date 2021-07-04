@@ -257,9 +257,14 @@ pub fn detach(pctx: *mut Context) -> Result<(), CUresult> {
     })?
 }
 
-pub(crate) fn synchronize() -> CUresult {
-    // TODO: change the implementation once we do async stream operations
-    CUresult::CUDA_SUCCESS
+pub(crate) fn synchronize() -> Result<(), CUresult> {
+    GlobalState::lock_current_context(|ctx| {
+        ctx.default_stream.synchronize()?;
+        for stream in ctx.streams.iter().copied() {
+            unsafe { &mut *stream }.synchronize()?;
+        }
+        Ok(())
+    })?
 }
 
 #[cfg(test)]
