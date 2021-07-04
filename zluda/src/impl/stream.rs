@@ -2,7 +2,7 @@ use super::{
     context::{Context, ContextData},
     CUresult, GlobalState,
 };
-use std::{mem, ptr};
+use std::{collections::VecDeque, mem, ptr};
 
 use super::{HasLivenessCookie, LiveCheck};
 
@@ -34,21 +34,27 @@ impl HasLivenessCookie for StreamData {
 pub struct StreamData {
     pub context: *mut ContextData,
     pub queue: l0::CommandQueue<'static>,
+    pub prev_events: VecDeque<(l0::Event<'static>, u64)>,
 }
 
 impl StreamData {
-    pub fn new_unitialized(ctx: &'static l0::Context, dev: l0::Device) -> Result<Self, CUresult> {
+    pub fn new_unitialized(
+        ctx: &'static l0::Context,
+        device: l0::Device,
+    ) -> Result<Self, CUresult> {
         Ok(StreamData {
             context: ptr::null_mut(),
-            queue: l0::CommandQueue::new(ctx, dev)?,
+            queue: l0::CommandQueue::new(ctx, device)?,
+            prev_events: VecDeque::new(),
         })
     }
     pub fn new(ctx: &mut ContextData) -> Result<Self, CUresult> {
         let l0_ctx = &mut unsafe { &mut *ctx.device }.l0_context;
-        let l0_dev = unsafe { &*ctx.device }.base;
+        let device = unsafe { &*ctx.device }.base;
         Ok(StreamData {
             context: ctx as *mut _,
-            queue: l0::CommandQueue::new(l0_ctx, l0_dev)?,
+            queue: l0::CommandQueue::new(l0_ctx, device)?,
+            prev_events: VecDeque::new(),
         })
     }
 
@@ -56,6 +62,39 @@ impl StreamData {
         let ctx = unsafe { &mut *self.context };
         let dev = unsafe { &mut *ctx.device };
         l0::CommandList::new(&mut dev.l0_context, dev.base)
+    }
+
+    pub fn process_finished_events(
+        &mut self,
+        f: &mut impl FnMut((l0::Event<'static>, u64)),
+    ) -> l0::Result<()> {
+        loop {
+            match self.prev_events.get(0) {
+                None => return Ok(()),
+                Some((ev, _)) => {
+                    if ev.is_ready()? {
+                        f(self.prev_events.pop_front().unwrap());
+                    } else {
+                        return Ok(());
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn get_last_event(&self) -> Option<&l0::Event<'static>> {
+        self.prev_events.iter().next_back().map(|(ev, _)| ev)
+    }
+
+    pub fn push_event(&mut self, ev: (l0::Event<'static>, u64)) {
+        self.prev_events.push_back(ev);
+    }
+
+    pub fn synchronize(&mut self) -> l0::Result<()> {
+        self.queue.synchronize(u64::MAX)?;
+        let event_pool = unsafe { &mut (*(*self.context).device).event_pool };
+        self.process_finished_events(&mut |(_, marker)| event_pool.mark_as_free(marker))?;
+        Ok(())
     }
 }
 
@@ -100,6 +139,13 @@ pub(crate) fn destroy_v2(pstream: *mut Stream) -> Result<(), CUresult> {
         return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
     }
     GlobalState::lock(|_| Stream::destroy_impl(pstream))?
+}
+
+pub(crate) fn synchronize(pstream: *mut Stream) -> Result<(), CUresult> {
+    if pstream == ptr::null_mut() {
+        return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
+    }
+    GlobalState::lock_stream(pstream, |stream_data| Ok(stream_data.synchronize()?))?
 }
 
 #[cfg(test)]

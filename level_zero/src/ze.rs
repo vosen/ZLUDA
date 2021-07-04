@@ -325,6 +325,11 @@ impl<'a> CommandQueue<'a> {
         ));
         Ok(())
     }
+
+    pub fn synchronize(&self, timeout_ns: u64) -> Result<()> {
+        check!(sys::zeCommandQueueSynchronize(self.as_ffi(), timeout_ns));
+        Ok(())
+    }
 }
 
 impl<'a> Drop for CommandQueue<'a> {
@@ -1095,6 +1100,15 @@ impl<'a> Event<'a> {
         let mut result = ptr::null_mut();
         check!(sys::zeEventCreate(pool.as_ffi(), &desc, &mut result));
         Ok(unsafe { Self::from_ffi(result) })
+    }
+
+    pub fn is_ready(&self) -> Result<bool> {
+        let status = unsafe { sys::zeEventQueryStatus(self.as_ffi()) };
+        match status {
+            sys::ze_result_t::ZE_RESULT_SUCCESS => Ok(true),
+            sys::ze_result_t::ZE_RESULT_NOT_READY => Ok(false),
+            err => Err(err),
+        }
     }
 
     unsafe fn with_raw_slice<'x, T>(

@@ -2186,7 +2186,7 @@ pub extern "system" fn cuGetErrorString(
     error: CUresult,
     pStr: *mut *const ::std::os::raw::c_char,
 ) -> CUresult {
-    r#impl::get_error_string(error,  pStr).encuda()
+    r#impl::get_error_string(error, pStr).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2209,7 +2209,10 @@ pub extern "system" fn cuDriverGetVersion(driverVersion: *mut ::std::os::raw::c_
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuDeviceGet(device: *mut CUdevice, ordinal: ::std::os::raw::c_int) -> CUresult {
+pub extern "system" fn cuDeviceGet(
+    device: *mut CUdevice,
+    ordinal: ::std::os::raw::c_int,
+) -> CUresult {
     r#impl::device::get(device.decuda(), ordinal).encuda()
 }
 
@@ -2374,7 +2377,7 @@ pub extern "system" fn cuCtxGetFlags(flags: *mut ::std::os::raw::c_uint) -> CUre
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuCtxSynchronize() -> CUresult {
-    r#impl::context::synchronize()
+    r#impl::context::synchronize().encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2429,7 +2432,10 @@ pub extern "system" fn cuCtxResetPersistingL2Cache() -> CUresult {
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuCtxAttach(pctx: *mut CUcontext, flags: ::std::os::raw::c_uint) -> CUresult {
+pub extern "system" fn cuCtxAttach(
+    pctx: *mut CUcontext,
+    flags: ::std::os::raw::c_uint,
+) -> CUresult {
     r#impl::context::attach(pctx.decuda(), flags).encuda()
 }
 
@@ -2667,7 +2673,10 @@ pub extern "system" fn cuDeviceGetPCIBusId(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuIpcGetEventHandle(pHandle: *mut CUipcEventHandle, event: CUevent) -> CUresult {
+pub extern "system" fn cuIpcGetEventHandle(
+    pHandle: *mut CUipcEventHandle,
+    event: CUevent,
+) -> CUresult {
     r#impl::unimplemented()
 }
 
@@ -2680,7 +2689,10 @@ pub extern "system" fn cuIpcOpenEventHandle(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuIpcGetMemHandle(pHandle: *mut CUipcMemHandle, dptr: CUdeviceptr) -> CUresult {
+pub extern "system" fn cuIpcGetMemHandle(
+    pHandle: *mut CUipcMemHandle,
+    dptr: CUdeviceptr,
+) -> CUresult {
     r#impl::unimplemented()
 }
 
@@ -2930,12 +2942,18 @@ pub extern "system" fn cuMemcpyAtoHAsync_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuMemcpy2DAsync_v2(pCopy: *const CUDA_MEMCPY2D, hStream: CUstream) -> CUresult {
+pub extern "system" fn cuMemcpy2DAsync_v2(
+    pCopy: *const CUDA_MEMCPY2D,
+    hStream: CUstream,
+) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuMemcpy3DAsync_v2(pCopy: *const CUDA_MEMCPY3D, hStream: CUstream) -> CUresult {
+pub extern "system" fn cuMemcpy3DAsync_v2(
+    pCopy: *const CUDA_MEMCPY3D,
+    hStream: CUstream,
+) -> CUresult {
     r#impl::unimplemented()
 }
 
@@ -3406,7 +3424,9 @@ pub extern "system" fn cuStreamBeginCapture_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuThreadExchangeStreamCaptureMode(mode: *mut CUstreamCaptureMode) -> CUresult {
+pub extern "system" fn cuThreadExchangeStreamCaptureMode(
+    mode: *mut CUstreamCaptureMode,
+) -> CUresult {
     r#impl::unimplemented()
 }
 
@@ -3449,7 +3469,7 @@ pub extern "system" fn cuStreamQuery(hStream: CUstream) -> CUresult {
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuStreamSynchronize(hStream: CUstream) -> CUresult {
-    CUresult::CUDA_SUCCESS
+    r#impl::stream::synchronize(hStream.decuda()).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -3481,7 +3501,10 @@ pub extern "system" fn cuStreamSetAttribute(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuEventCreate(phEvent: *mut CUevent, Flags: ::std::os::raw::c_uint) -> CUresult {
+pub extern "system" fn cuEventCreate(
+    phEvent: *mut CUevent,
+    Flags: ::std::os::raw::c_uint,
+) -> CUresult {
     r#impl::unimplemented()
 }
 
@@ -3652,7 +3675,10 @@ pub extern "system" fn cuFuncSetCacheConfig(hfunc: CUfunction, config: CUfunc_ca
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuFuncSetSharedMemConfig(hfunc: CUfunction, config: CUsharedconfig) -> CUresult {
+pub extern "system" fn cuFuncSetSharedMemConfig(
+    hfunc: CUfunction,
+    config: CUsharedconfig,
+) -> CUresult {
     r#impl::unimplemented()
 }
 
@@ -3770,7 +3796,10 @@ pub extern "system" fn cuFuncSetSharedSize(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuParamSetSize(hfunc: CUfunction, numbytes: ::std::os::raw::c_uint) -> CUresult {
+pub extern "system" fn cuParamSetSize(
+    hfunc: CUfunction,
+    numbytes: ::std::os::raw::c_uint,
+) -> CUresult {
     r#impl::unimplemented()
 }
 
@@ -3836,7 +3865,10 @@ pub extern "system" fn cuParamSetTexRef(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuGraphCreate(phGraph: *mut CUgraph, flags: ::std::os::raw::c_uint) -> CUresult {
+pub extern "system" fn cuGraphCreate(
+    phGraph: *mut CUgraph,
+    flags: ::std::os::raw::c_uint,
+) -> CUresult {
     r#impl::unimplemented()
 }
 
@@ -3980,7 +4012,10 @@ pub extern "system" fn cuGraphAddEmptyNode(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuGraphClone(phGraphClone: *mut CUgraph, originalGraph: CUgraph) -> CUresult {
+pub extern "system" fn cuGraphClone(
+    phGraphClone: *mut CUgraph,
+    originalGraph: CUgraph,
+) -> CUresult {
     r#impl::unimplemented()
 }
 
@@ -3994,7 +4029,10 @@ pub extern "system" fn cuGraphNodeFindInClone(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuGraphNodeGetType(hNode: CUgraphNode, type_: *mut CUgraphNodeType) -> CUresult {
+pub extern "system" fn cuGraphNodeGetType(
+    hNode: CUgraphNode,
+    type_: *mut CUgraphNodeType,
+) -> CUresult {
     r#impl::unimplemented()
 }
 
@@ -4144,7 +4182,10 @@ pub extern "system" fn cuGraphExecUpdate(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuGraphKernelNodeCopyAttributes(dst: CUgraphNode, src: CUgraphNode) -> CUresult {
+pub extern "system" fn cuGraphKernelNodeCopyAttributes(
+    dst: CUgraphNode,
+    src: CUgraphNode,
+) -> CUresult {
     r#impl::unimplemented()
 }
 
@@ -4284,7 +4325,10 @@ pub extern "system" fn cuTexRefSetFilterMode(hTexRef: CUtexref, fm: CUfilter_mod
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuTexRefSetMipmapFilterMode(hTexRef: CUtexref, fm: CUfilter_mode) -> CUresult {
+pub extern "system" fn cuTexRefSetMipmapFilterMode(
+    hTexRef: CUtexref,
+    fm: CUfilter_mode,
+) -> CUresult {
     r#impl::unimplemented()
 }
 
@@ -4311,17 +4355,26 @@ pub extern "system" fn cuTexRefSetMaxAnisotropy(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuTexRefSetBorderColor(hTexRef: CUtexref, pBorderColor: *mut f32) -> CUresult {
+pub extern "system" fn cuTexRefSetBorderColor(
+    hTexRef: CUtexref,
+    pBorderColor: *mut f32,
+) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuTexRefSetFlags(hTexRef: CUtexref, Flags: ::std::os::raw::c_uint) -> CUresult {
+pub extern "system" fn cuTexRefSetFlags(
+    hTexRef: CUtexref,
+    Flags: ::std::os::raw::c_uint,
+) -> CUresult {
     r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuTexRefGetAddress_v2(pdptr: *mut CUdeviceptr, hTexRef: CUtexref) -> CUresult {
+pub extern "system" fn cuTexRefGetAddress_v2(
+    pdptr: *mut CUdeviceptr,
+    hTexRef: CUtexref,
+) -> CUresult {
     r#impl::unimplemented()
 }
 
@@ -4348,7 +4401,10 @@ pub extern "system" fn cuTexRefGetAddressMode(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuTexRefGetFilterMode(pfm: *mut CUfilter_mode, hTexRef: CUtexref) -> CUresult {
+pub extern "system" fn cuTexRefGetFilterMode(
+    pfm: *mut CUfilter_mode,
+    hTexRef: CUtexref,
+) -> CUresult {
     r#impl::unimplemented()
 }
 
@@ -4392,7 +4448,10 @@ pub extern "system" fn cuTexRefGetMaxAnisotropy(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuTexRefGetBorderColor(pBorderColor: *mut f32, hTexRef: CUtexref) -> CUresult {
+pub extern "system" fn cuTexRefGetBorderColor(
+    pBorderColor: *mut f32,
+    hTexRef: CUtexref,
+) -> CUresult {
     r#impl::unimplemented()
 }
 

@@ -1,4 +1,4 @@
-use super::{context, CUresult, GlobalState};
+use super::{context, transmute_lifetime, transmute_lifetime_mut, CUresult, GlobalState};
 use crate::cuda;
 use cuda::{CUdevice_attribute, CUuuid_st};
 use std::{
@@ -21,6 +21,7 @@ pub struct Device {
     pub default_queue: l0::CommandQueue<'static>,
     pub l0_context: l0::Context,
     pub primary_context: context::Context,
+    pub event_pool: DynamicEventPool,
     properties: Option<Box<l0::sys::ze_device_properties_t>>,
     image_properties: Option<Box<l0::sys::ze_device_image_properties_t>>,
     memory_properties: Option<Vec<l0::sys::ze_device_memory_properties_t>>,
@@ -42,12 +43,14 @@ impl Device {
             true,
             ptr::null_mut(),
         )?);
+        let event_pool = DynamicEventPool::new(l0_dev, transmute_lifetime(&ctx))?;
         Ok(Self {
             index: Index(idx as c_int),
             base: l0_dev,
             default_queue: queue,
             l0_context: ctx,
             primary_context: primary_context,
+            event_pool,
             properties: None,
             image_properties: None,
             memory_properties: None,
@@ -395,8 +398,103 @@ pub(crate) fn primary_ctx_release_v2(_dev_idx: Index) -> CUresult {
     CUresult::CUDA_SUCCESS
 }
 
+pub struct DynamicEventPool {
+    count: usize,
+    events: Vec<DynamicEventPoolEntry>,
+}
+
+impl DynamicEventPool {
+    fn new(dev: l0::Device, ctx: &'static l0::Context) -> l0::Result<Self> {
+        Ok(DynamicEventPool {
+            count: 0,
+            events: vec![DynamicEventPoolEntry::new(dev, ctx)?],
+        })
+    }
+
+    pub fn get(
+        &'static mut self,
+        dev: l0::Device,
+        ctx: &'static l0::Context,
+    ) -> l0::Result<(l0::Event<'static>, u64)> {
+        self.count += 1;
+        let events = unsafe { transmute_lifetime_mut(&mut self.events) };
+        let (global_idx, (ev, local_idx)) = {
+            for (idx, entry) in self.events.iter_mut().enumerate() {
+                if let Some((ev, local_idx)) = entry.get()? {
+                    let marker = (idx << 32) as u64 | local_idx as u64;
+                    return Ok((ev, marker));
+                }
+            }
+            events.push(DynamicEventPoolEntry::new(dev, ctx)?);
+            let global_idx = (events.len() - 1) as u64;
+            (global_idx, events.last_mut().unwrap().get()?.unwrap())
+        };
+        let marker = (global_idx << 32) | local_idx as u64;
+        Ok((ev, marker))
+    }
+
+    pub fn mark_as_free(&mut self, marker: u64) {
+        let global_idx = (marker >> 32) as u32;
+        self.events[global_idx as usize].mark_as_free(marker as u32);
+        self.count -= 1;
+        // TODO: clean up empty entries
+    }
+}
+
+const DYNAMIC_EVENT_POOL_ENTRY_SIZE: usize = 448;
+const DYNAMIC_EVENT_POOL_ENTRY_BITMAP_SIZE: usize =
+    DYNAMIC_EVENT_POOL_ENTRY_SIZE / (mem::size_of::<u64>() * 8);
+#[repr(C)]
+#[repr(align(64))]
+struct DynamicEventPoolEntry {
+    event_pool: l0::EventPool<'static>,
+    bit_map: [u64; DYNAMIC_EVENT_POOL_ENTRY_BITMAP_SIZE],
+}
+
+impl DynamicEventPoolEntry {
+    fn new(dev: l0::Device, ctx: &'static l0::Context) -> l0::Result<Self> {
+        Ok(DynamicEventPoolEntry {
+            event_pool: l0::EventPool::new(
+                ctx,
+                DYNAMIC_EVENT_POOL_ENTRY_SIZE as u32,
+                Some(&[dev]),
+            )?,
+            bit_map: [0; DYNAMIC_EVENT_POOL_ENTRY_BITMAP_SIZE],
+        })
+    }
+
+    fn get(&'static mut self) -> l0::Result<Option<(l0::Event<'static>, u32)>> {
+        for (idx, value) in self.bit_map.iter_mut().enumerate() {
+            let shift = first_index_of_zero_u64(*value);
+            if shift == 64 {
+                continue;
+            }
+            *value = *value | (1u64 << shift);
+            let entry_index = (idx as u32 * 64u32) + shift;
+            let event = l0::Event::new(&self.event_pool, entry_index)?;
+            return Ok(Some((event, entry_index)));
+        }
+        Ok(None)
+    }
+
+    fn mark_as_free(&mut self, idx: u32) {
+        let value = &mut self.bit_map[idx as usize / 64];
+        let shift = idx % 64;
+        *value = *value & !(1 << shift);
+    }
+}
+
+fn first_index_of_zero_u64(x: u64) -> u32 {
+    let x = !x;
+    (x & x.wrapping_neg()).trailing_zeros()
+}
+
 #[cfg(test)]
 mod test {
+    use std::mem;
+
+    use super::DynamicEventPoolEntry;
+
     use super::super::test::CudaDriverFns;
     use super::super::CUresult;
 
@@ -412,5 +510,11 @@ mod test {
         );
         assert_eq!(flags, 0);
         assert_eq!(active, 0);
+    }
+
+    #[test]
+    pub fn dynamic_event_pool_page_is_64b() {
+        assert_eq!(mem::size_of::<DynamicEventPoolEntry>(), 64);
+        assert_eq!(mem::align_of::<DynamicEventPoolEntry>(), 64);
     }
 }
