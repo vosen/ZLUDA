@@ -33,7 +33,8 @@ impl HasLivenessCookie for StreamData {
 
 pub struct StreamData {
     pub context: *mut ContextData,
-    pub queue: l0::CommandQueue<'static>,
+    // Immediate CommandList
+    pub cmd_list: l0::CommandList<'static>,
     pub prev_events: VecDeque<(l0::Event<'static>, u64)>,
 }
 
@@ -44,7 +45,7 @@ impl StreamData {
     ) -> Result<Self, CUresult> {
         Ok(StreamData {
             context: ptr::null_mut(),
-            queue: l0::CommandQueue::new(ctx, device)?,
+            cmd_list: l0::CommandList::new_immediate(ctx, device)?,
             prev_events: VecDeque::new(),
         })
     }
@@ -53,18 +54,12 @@ impl StreamData {
         let device = unsafe { &*ctx.device }.base;
         Ok(StreamData {
             context: ctx as *mut _,
-            queue: l0::CommandQueue::new(l0_ctx, device)?,
+            cmd_list: l0::CommandList::new_immediate(l0_ctx, device)?,
             prev_events: VecDeque::new(),
         })
     }
 
-    pub fn command_list(&self) -> Result<l0::CommandList, l0::sys::_ze_result_t> {
-        let ctx = unsafe { &mut *self.context };
-        let dev = unsafe { &mut *ctx.device };
-        l0::CommandList::new(&mut dev.l0_context, dev.base)
-    }
-
-    pub fn process_finished_events(
+    pub fn drop_finished_events(
         &mut self,
         f: &mut impl FnMut((l0::Event<'static>, u64)),
     ) -> l0::Result<()> {
@@ -82,6 +77,12 @@ impl StreamData {
         }
     }
 
+    pub fn drop_all_events(&mut self, f: &mut impl FnMut((l0::Event<'static>, u64))) {
+        for x in self.prev_events.drain(..) {
+            f(x);
+        }
+    }
+
     pub fn get_last_event(&self) -> Option<&l0::Event<'static>> {
         self.prev_events.iter().next_back().map(|(ev, _)| ev)
     }
@@ -91,9 +92,11 @@ impl StreamData {
     }
 
     pub fn synchronize(&mut self) -> l0::Result<()> {
-        self.queue.synchronize(u64::MAX)?;
+        if let Some((ev, _)) = self.prev_events.back() {
+            ev.host_synchronize(u64::MAX)?;
+        }
         let event_pool = unsafe { &mut (*(*self.context).device).event_pool };
-        self.process_finished_events(&mut |(_, marker)| event_pool.mark_as_free(marker))?;
+        self.drop_all_events(&mut |(_, marker)| event_pool.mark_as_free(marker));
         Ok(())
     }
 }
