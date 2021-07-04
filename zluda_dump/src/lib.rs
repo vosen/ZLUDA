@@ -126,7 +126,7 @@ pub unsafe fn init_libcuda_handle() {
         }
         if let Ok(kernel_max_str) = env::var("ZLUDA_DUMP_MAX_INDEX") {
             match kernel_max_str.parse::<usize>() {
-                Ok(kernel_max_value) => KERNEL_INDEX_MINIMUM = kernel_max_value,
+                Ok(kernel_max_value) => KERNEL_INDEX_MAXIMUM = kernel_max_value,
                 Err(err) => {
                     os_log!("Error parsing ZLUDA_DUMP_MAX_INDEX: {}", err);
                 }
