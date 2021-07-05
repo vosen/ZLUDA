@@ -102,9 +102,10 @@ impl ContextData {
         l0_dev: l0::Device,
         flags: c_uint,
         is_primary: bool,
+        host_event: (l0::Event<'static>, u64),
         dev: *mut device::Device,
     ) -> Result<Self, CUresult> {
-        let default_stream = StreamData::new_unitialized(l0_ctx, l0_dev)?;
+        let default_stream = StreamData::new_unitialized(l0_ctx, l0_dev, host_event)?;
         Ok(ContextData {
             flags: AtomicU32::new(flags),
             device: dev,
@@ -136,10 +137,11 @@ pub fn create_v2(
     let mut ctx_box = GlobalState::lock_device(dev_idx, |dev| {
         let dev_ptr = dev as *mut _;
         let mut ctx_box = Box::new(LiveCheck::new(ContextData::new(
-            &mut dev.l0_context,
+            &dev.l0_context,
             dev.base,
             flags,
             false,
+            dev.host_event_pool.get(dev.base, &dev.l0_context)?,
             dev_ptr as *mut _,
         )?));
         ctx_box.late_init();

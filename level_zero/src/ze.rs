@@ -919,6 +919,19 @@ impl<'a> CommandList<'a> {
         })
     }
 
+    pub unsafe fn append_barrier(&self, signal: Option<&Event>, wait: &[&Event]) -> Result<()> {
+        let signal_event = signal.map_or(ptr::null_mut(), |e| e.as_ffi());
+        Event::with_raw_slice(wait, |wait_len, wait_ptr| {
+            check!(sys::zeCommandListAppendBarrier(
+                self.as_ffi(),
+                signal_event,
+                wait_len,
+                wait_ptr
+            ));
+            Ok(())
+        })
+    }
+
     pub fn close(&self) -> Result<()> {
         check!(sys::zeCommandListClose(self.as_ffi()));
         Ok(())
@@ -1068,11 +1081,16 @@ impl<'a> EventPool<'a> {
         Self(NonNull::new_unchecked(x), PhantomData)
     }
 
-    pub fn new(ctx: &'a Context, count: u32, devs: Option<&[Device]>) -> Result<Self> {
+    pub fn new(
+        ctx: &'a Context,
+        flags: sys::ze_event_pool_flags_t,
+        count: u32,
+        devs: Option<&[Device]>,
+    ) -> Result<Self> {
         let desc = sys::ze_event_pool_desc_t {
             stype: sys::ze_structure_type_t::ZE_STRUCTURE_TYPE_EVENT_POOL_DESC,
             pNext: ptr::null(),
-            flags: sys::ze_event_pool_flags_t(0),
+            flags: flags,
             count: count,
         };
         let (dev_len, dev_ptr) = devs.map_or((0, ptr::null_mut()), |devs| {
@@ -1109,13 +1127,18 @@ impl<'a> Event<'a> {
         Self(NonNull::new_unchecked(x), PhantomData)
     }
 
-    pub fn new(pool: &'a EventPool<'a>, index: u32) -> Result<Self> {
+    pub fn new(
+        pool: &'a EventPool<'a>,
+        index: u32,
+        signal: sys::ze_event_scope_flags_t,
+        wait: sys::ze_event_scope_flags_t,
+    ) -> Result<Self> {
         let desc = sys::ze_event_desc_t {
             stype: sys::ze_structure_type_t::ZE_STRUCTURE_TYPE_EVENT_DESC,
             pNext: ptr::null(),
             index: index,
-            signal: sys::ze_event_scope_flags_t(0),
-            wait: sys::ze_event_scope_flags_t(0),
+            signal,
+            wait,
         };
         let mut result = ptr::null_mut();
         check!(sys::zeEventCreate(pool.as_ffi(), &desc, &mut result));
