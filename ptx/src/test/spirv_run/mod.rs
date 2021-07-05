@@ -283,10 +283,26 @@ fn run_spirv<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + D
         )?;
         let inp_b = ze::DeviceBuffer::<Input>::new(&ctx, dev, cmp::max(input.len(), 1))?;
         let out_b = ze::DeviceBuffer::<Output>::new(&ctx, dev, cmp::max(output.len(), 1))?;
-        let event_pool = ze::EventPool::new(&ctx, 3, Some(&[dev]))?;
-        let ev0 = ze::Event::new(&event_pool, 0)?;
-        let ev1 = ze::Event::new(&event_pool, 1)?;
-        let ev2 = ze::Event::new(&event_pool, 2)?;
+        let event_pool =
+            ze::EventPool::new(&ctx, ze::sys::ze_event_pool_flags_t(0), 3, Some(&[dev]))?;
+        let ev0 = ze::Event::new(
+            &event_pool,
+            0,
+            ze::sys::ze_event_scope_flags_t(0),
+            ze::sys::ze_event_scope_flags_t(0),
+        )?;
+        let ev1 = ze::Event::new(
+            &event_pool,
+            1,
+            ze::sys::ze_event_scope_flags_t(0),
+            ze::sys::ze_event_scope_flags_t(0),
+        )?;
+        let ev2 = ze::Event::new(
+            &event_pool,
+            2,
+            ze::sys::ze_event_scope_flags_t(0),
+            ze::sys::ze_event_scope_flags_t(0),
+        )?;
         {
             let init_evs = [&ev0, &ev1];
             kernel.set_group_size(1, 1, 1)?;

@@ -21,7 +21,8 @@ pub struct Device {
     pub default_queue: l0::CommandQueue<'static>,
     pub l0_context: l0::Context,
     pub primary_context: context::Context,
-    pub event_pool: DynamicEventPool,
+    pub device_event_pool: DynamicEventPool,
+    pub host_event_pool: DynamicEventPool,
     properties: Option<Box<l0::sys::ze_device_properties_t>>,
     image_properties: Option<Box<l0::sys::ze_device_image_properties_t>>,
     memory_properties: Option<Vec<l0::sys::ze_device_memory_properties_t>>,
@@ -36,21 +37,36 @@ impl Device {
     unsafe fn new(drv: &l0::Driver, l0_dev: l0::Device, idx: usize) -> Result<Self, CUresult> {
         let ctx = l0::Context::new(*drv, Some(&[l0_dev]))?;
         let queue = l0::CommandQueue::new(mem::transmute(&ctx), l0_dev)?;
+        let mut host_event_pool = DynamicEventPool::new(
+            l0_dev,
+            transmute_lifetime(&ctx),
+            l0::sys::ze_event_pool_flags_t::ZE_EVENT_POOL_FLAG_HOST_VISIBLE,
+            l0::sys::ze_event_scope_flags_t::ZE_EVENT_SCOPE_FLAG_HOST,
+        )?;
+        let host_event =
+            transmute_lifetime_mut(&mut host_event_pool).get(l0_dev, transmute_lifetime(&ctx))?;
         let primary_context = context::Context::new(context::ContextData::new(
-            mem::transmute(&ctx),
+            transmute_lifetime(&ctx),
             l0_dev,
             0,
             true,
+            host_event,
             ptr::null_mut(),
         )?);
-        let event_pool = DynamicEventPool::new(l0_dev, transmute_lifetime(&ctx))?;
+        let device_event_pool = DynamicEventPool::new(
+            l0_dev,
+            transmute_lifetime(&ctx),
+            l0::sys::ze_event_pool_flags_t(0),
+            l0::sys::ze_event_scope_flags_t(0),
+        )?;
         Ok(Self {
             index: Index(idx as c_int),
             base: l0_dev,
             default_queue: queue,
             l0_context: ctx,
             primary_context: primary_context,
-            event_pool,
+            device_event_pool,
+            host_event_pool,
             properties: None,
             image_properties: None,
             memory_properties: None,
@@ -400,14 +416,23 @@ pub(crate) fn primary_ctx_release_v2(_dev_idx: Index) -> CUresult {
 
 pub struct DynamicEventPool {
     count: usize,
+    pool_flags: l0::sys::ze_event_pool_flags_t,
+    signal_flags: l0::sys::ze_event_scope_flags_t,
     events: Vec<DynamicEventPoolEntry>,
 }
 
 impl DynamicEventPool {
-    fn new(dev: l0::Device, ctx: &'static l0::Context) -> l0::Result<Self> {
+    fn new(
+        dev: l0::Device,
+        ctx: &'static l0::Context,
+        pool_flags: l0::sys::ze_event_pool_flags_t,
+        signal_flags: l0::sys::ze_event_scope_flags_t,
+    ) -> l0::Result<Self> {
         Ok(DynamicEventPool {
             count: 0,
-            events: vec![DynamicEventPoolEntry::new(dev, ctx)?],
+            pool_flags,
+            signal_flags,
+            events: vec![DynamicEventPoolEntry::new(dev, ctx, pool_flags)?],
         })
     }
 
@@ -420,14 +445,17 @@ impl DynamicEventPool {
         let events = unsafe { transmute_lifetime_mut(&mut self.events) };
         let (global_idx, (ev, local_idx)) = {
             for (idx, entry) in self.events.iter_mut().enumerate() {
-                if let Some((ev, local_idx)) = entry.get()? {
+                if let Some((ev, local_idx)) = entry.get(self.signal_flags)? {
                     let marker = (idx << 32) as u64 | local_idx as u64;
                     return Ok((ev, marker));
                 }
             }
-            events.push(DynamicEventPoolEntry::new(dev, ctx)?);
+            events.push(DynamicEventPoolEntry::new(dev, ctx, self.pool_flags)?);
             let global_idx = (events.len() - 1) as u64;
-            (global_idx, events.last_mut().unwrap().get()?.unwrap())
+            (
+                global_idx,
+                events.last_mut().unwrap().get(self.signal_flags)?.unwrap(),
+            )
         };
         let marker = (global_idx << 32) | local_idx as u64;
         Ok((ev, marker))
@@ -452,10 +480,15 @@ struct DynamicEventPoolEntry {
 }
 
 impl DynamicEventPoolEntry {
-    fn new(dev: l0::Device, ctx: &'static l0::Context) -> l0::Result<Self> {
+    fn new(
+        dev: l0::Device,
+        ctx: &'static l0::Context,
+        flags: l0::sys::ze_event_pool_flags_t,
+    ) -> l0::Result<Self> {
         Ok(DynamicEventPoolEntry {
             event_pool: l0::EventPool::new(
                 ctx,
+                flags,
                 DYNAMIC_EVENT_POOL_ENTRY_SIZE as u32,
                 Some(&[dev]),
             )?,
@@ -463,7 +496,10 @@ impl DynamicEventPoolEntry {
         })
     }
 
-    fn get(&'static mut self) -> l0::Result<Option<(l0::Event<'static>, u32)>> {
+    fn get(
+        &'static mut self,
+        signal: l0::sys::ze_event_scope_flags_t,
+    ) -> l0::Result<Option<(l0::Event<'static>, u32)>> {
         for (idx, value) in self.bit_map.iter_mut().enumerate() {
             let shift = first_index_of_zero_u64(*value);
             if shift == 64 {
@@ -471,7 +507,12 @@ impl DynamicEventPoolEntry {
             }
             *value = *value | (1u64 << shift);
             let entry_index = (idx as u32 * 64u32) + shift;
-            let event = l0::Event::new(&self.event_pool, entry_index)?;
+            let event = l0::Event::new(
+                &self.event_pool,
+                entry_index,
+                signal,
+                l0::sys::ze_event_scope_flags_t(0),
+            )?;
             return Ok(Some((event, entry_index)));
         }
         Ok(None)

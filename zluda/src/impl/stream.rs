@@ -38,28 +38,35 @@ pub struct StreamData {
     pub busy_events: VecDeque<(l0::Event<'static>, u64)>,
     // This could be a Vec, but I'd rather reuse earliest enqueued event not the one recently enqueued
     pub free_events: VecDeque<(l0::Event<'static>, u64)>,
+    pub synchronization_event: (l0::Event<'static>, u64),
 }
 
 impl StreamData {
     pub fn new_unitialized(
         ctx: &'static l0::Context,
         device: l0::Device,
+        host_event: (l0::Event<'static>, u64),
     ) -> Result<Self, CUresult> {
         Ok(StreamData {
             context: ptr::null_mut(),
             cmd_list: l0::CommandList::new_immediate(ctx, device)?,
             busy_events: VecDeque::new(),
             free_events: VecDeque::new(),
+            synchronization_event: host_event,
         })
     }
     pub fn new(ctx: &mut ContextData) -> Result<Self, CUresult> {
         let l0_ctx = &mut unsafe { &mut *ctx.device }.l0_context;
         let device = unsafe { &*ctx.device }.base;
+        let synchronization_event = unsafe { &mut *ctx.device }
+            .host_event_pool
+            .get(device, l0_ctx)?;
         Ok(StreamData {
             context: ctx as *mut _,
             cmd_list: l0::CommandList::new_immediate(l0_ctx, device)?,
             busy_events: VecDeque::new(),
             free_events: VecDeque::new(),
+            synchronization_event,
         })
     }
 
@@ -98,9 +105,17 @@ impl StreamData {
     }
 
     pub fn synchronize(&mut self) -> l0::Result<()> {
-        if let Some((ev, _)) = self.busy_events.back() {
-            ev.host_synchronize(u64::MAX)?;
-        }
+        let empty = [];
+        let busy_event_arr = self.busy_events.back().map(|(ev, _)| [ev]);
+        let wait_events = busy_event_arr.as_ref().map_or(&empty[..], |arr| &arr[..]);
+        unsafe {
+            self.cmd_list
+                .append_barrier(Some(&self.synchronization_event.0), wait_events)?
+        };
+        self.synchronization_event
+            .0
+            .host_synchronize(u64::max_value())?;
+        self.synchronization_event.0.host_reset()?;
         self.reuse_all_finished_events()?;
         Ok(())
     }
@@ -114,7 +129,7 @@ impl StreamData {
             .pop_front()
             .map(|x| Ok(x))
             .unwrap_or_else(|| {
-                let event_pool = unsafe { &mut (*(*self.context).device).event_pool };
+                let event_pool = unsafe { &mut (*(*self.context).device).device_event_pool };
                 event_pool.get(l0_dev, l0_ctx)
             })
     }
@@ -126,8 +141,8 @@ impl Drop for StreamData {
             return;
         }
         for (_, marker) in self.busy_events.iter().chain(self.free_events.iter()) {
-            let event_pool = unsafe { &mut (*(*self.context).device).event_pool };
-            event_pool.mark_as_free(*marker);
+            let device_event_pool = unsafe { &mut (*(*self.context).device).device_event_pool };
+            device_event_pool.mark_as_free(*marker);
         }
         unsafe { (&mut *self.context).streams.remove(&(&mut *self as *mut _)) };
     }
