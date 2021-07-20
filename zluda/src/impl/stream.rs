@@ -56,7 +56,7 @@ impl StreamData {
         })
     }
     pub fn new(ctx: &mut ContextData) -> Result<Self, CUresult> {
-        let l0_ctx = &mut unsafe { &mut *ctx.device }.l0_context;
+        let l0_ctx = &mut unsafe { &mut *ctx.device }.ocl_context;
         let device = unsafe { &*ctx.device }.base;
         let synchronization_event = unsafe { &mut *ctx.device }
             .host_event_pool

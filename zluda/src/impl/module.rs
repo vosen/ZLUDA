@@ -1,7 +1,17 @@
 use std::{
-    collections::hash_map, collections::HashMap, ffi::c_void, ffi::CStr, ffi::CString, mem,
-    os::raw::c_char, ptr, slice,
+    collections::hash_map,
+    collections::HashMap,
+    ffi::c_void,
+    ffi::CStr,
+    ffi::CString,
+    mem,
+    os::raw::{c_char, c_int, c_uint},
+    ptr, slice,
 };
+
+const CL_KERNEL_EXEC_INFO_INDIRECT_HOST_ACCESS_INTEL: u32 = 0x4200;
+const CL_KERNEL_EXEC_INFO_INDIRECT_DEVICE_ACCESS_INTEL: u32 = 0x4201;
+const CL_KERNEL_EXEC_INFO_INDIRECT_SHARED_ACCESS_INTEL: u32 = 0x4202;
 
 use super::{
     device,
@@ -41,7 +51,7 @@ pub struct SpirvModule {
 }
 
 pub struct CompiledModule {
-    pub base: l0::Module<'static>,
+    pub base: ocl_core::Program,
     pub kernels: HashMap<CString, Box<Function>>,
 }
 
@@ -80,28 +90,57 @@ impl SpirvModule {
 
     pub fn compile<'a>(
         &self,
-        ctx: &'a l0::Context,
-        dev: l0::Device,
-    ) -> Result<l0::Module<'a>, CUresult> {
+        ctx: &ocl_core::Context,
+        dev: &ocl_core::DeviceId,
+    ) -> Result<ocl_core::Program, CUresult> {
         let byte_il = unsafe {
             slice::from_raw_parts(
                 self.binaries.as_ptr() as *const u8,
                 self.binaries.len() * mem::size_of::<u32>(),
             )
         };
-        let l0_module = match self.should_link_ptx_impl {
-            None => l0::Module::build_spirv(ctx, dev, byte_il, Some(self.build_options.as_c_str())),
+        let main_module = ocl_core::create_program_with_il(ctx, byte_il, None)?;
+        match self.should_link_ptx_impl {
+            None => {
+                ocl_core::compile_program(
+                    &main_module,
+                    Some(&[dev]),
+                    &self.build_options,
+                    &[],
+                    &[],
+                    None,
+                    None,
+                    None,
+                )?;
+            }
             Some(ptx_impl) => {
-                l0::Module::build_link_spirv(
+                let ptx_impl_prog = ocl_core::create_program_with_il(ctx, ptx_impl, None)?;
+                ocl_core::build_program(
+                    &main_module,
+                    Some(&[dev]),
+                    &self.build_options,
+                    None,
+                    None,
+                )?;
+                ocl_core::build_program(
+                    &ptx_impl_prog,
+                    Some(&[dev]),
+                    &self.build_options,
+                    None,
+                    None,
+                )?;
+                ocl_core::link_program(
                     ctx,
-                    dev,
-                    &[ptx_impl, byte_il],
-                    Some(self.build_options.as_c_str()),
-                )
-                .0
+                    Some(&[dev]),
+                    &self.build_options,
+                    &[&main_module, &ptx_impl_prog],
+                    None,
+                    None,
+                    None,
+                )?;
             }
         };
-        Ok(l0_module?)
+        Ok(main_module)
     }
 }
 
@@ -121,7 +160,9 @@ pub fn get_function(
             hash_map::Entry::Occupied(entry) => entry.into_mut(),
             hash_map::Entry::Vacant(entry) => {
                 let new_module = CompiledModule {
-                    base: module.spirv.compile(&mut device.l0_context, device.base)?,
+                    base: module
+                        .spirv
+                        .compile(&device.ocl_context, &device.ocl_base)?,
                     kernels: HashMap::new(),
                 };
                 entry.insert(new_module)
@@ -137,18 +178,42 @@ pub fn get_function(
                         std::str::from_utf8_unchecked(entry.key().as_c_str().to_bytes())
                     })
                     .ok_or(CUresult::CUDA_ERROR_NOT_FOUND)?;
-                let kernel =
-                    l0::Kernel::new_resident(&compiled_module.base, entry.key().as_c_str())?;
-                kernel.set_indirect_access(
-                    l0::sys::ze_kernel_indirect_access_flags_t::ZE_KERNEL_INDIRECT_ACCESS_FLAG_DEVICE
-                    | l0::sys::ze_kernel_indirect_access_flags_t::ZE_KERNEL_INDIRECT_ACCESS_FLAG_HOST
-                    | l0::sys::ze_kernel_indirect_access_flags_t::ZE_KERNEL_INDIRECT_ACCESS_FLAG_SHARED
+                let kernel = ocl_core::create_kernel(
+                    &compiled_module.base,
+                    &entry.key().as_c_str().to_string_lossy(),
                 )?;
+                let true_b: ocl_core::ffi::cl_bool = 1;
+                let err = unsafe {
+                    ocl_core::ffi::clSetKernelExecInfo(
+                        kernel.as_ptr(),
+                        CL_KERNEL_EXEC_INFO_INDIRECT_HOST_ACCESS_INTEL,
+                        mem::size_of::<ocl_core::ffi::cl_bool>(),
+                        &true_b as *const _ as *const _,
+                    )
+                };
+                assert_eq!(err, 0);
+                let err = unsafe {
+                    ocl_core::ffi::clSetKernelExecInfo(
+                        kernel.as_ptr(),
+                        CL_KERNEL_EXEC_INFO_INDIRECT_DEVICE_ACCESS_INTEL,
+                        mem::size_of::<ocl_core::ffi::cl_bool>(),
+                        &true_b as *const _ as *const _,
+                    )
+                };
+                assert_eq!(err, 0);
+                let err = unsafe {
+                    ocl_core::ffi::clSetKernelExecInfo(
+                        kernel.as_ptr(),
+                        CL_KERNEL_EXEC_INFO_INDIRECT_SHARED_ACCESS_INTEL,
+                        mem::size_of::<ocl_core::ffi::cl_bool>(),
+                        &true_b as *const _ as *const _,
+                    )
+                };
+                assert_eq!(err, 0);
                 entry.insert(Box::new(Function::new(FunctionData {
                     base: kernel,
                     arg_size: kernel_info.arguments_sizes.clone(),
                     use_shared_mem: kernel_info.uses_shared_mem,
-                    properties: None,
                     legacy_args: LegacyArguments::new(),
                 })))
             }
@@ -167,7 +232,7 @@ pub(crate) fn load_data(pmod: *mut *mut Module, image: *const c_void) -> Result<
 pub fn load_data_impl(pmod: *mut *mut Module, spirv_data: SpirvModule) -> Result<(), CUresult> {
     let module = GlobalState::lock_current_context(|ctx| {
         let device = unsafe { &mut *ctx.device };
-        let l0_module = spirv_data.compile(&device.l0_context, device.base)?;
+        let l0_module = spirv_data.compile(&device.ocl_context, &device.ocl_base)?;
         let mut device_binaries = HashMap::new();
         let compiled_module = CompiledModule {
             base: l0_module,

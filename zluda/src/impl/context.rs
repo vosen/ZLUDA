@@ -137,11 +137,11 @@ pub fn create_v2(
     let mut ctx_box = GlobalState::lock_device(dev_idx, |dev| {
         let dev_ptr = dev as *mut _;
         let mut ctx_box = Box::new(LiveCheck::new(ContextData::new(
-            &dev.l0_context,
+            &dev.ocl_context,
             dev.base,
             flags,
             false,
-            dev.host_event_pool.get(dev.base, &dev.l0_context)?,
+            dev.host_event_pool.get(dev.base, &dev.ocl_context)?,
             dev_ptr as *mut _,
         )?));
         ctx_box.late_init();

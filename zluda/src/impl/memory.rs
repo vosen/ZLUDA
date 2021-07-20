@@ -4,7 +4,7 @@ use std::{ffi::c_void, mem};
 pub fn alloc_v2(dptr: *mut *mut c_void, bytesize: usize) -> Result<(), CUresult> {
     let ptr = GlobalState::lock_current_context(|ctx| {
         let dev = unsafe { &mut *ctx.device };
-        Ok::<_, CUresult>(dev.l0_context.mem_alloc_device(bytesize, 0, dev.base)?)
+        Ok::<_, CUresult>(dev.ocl_context.mem_alloc_device(bytesize, 0, dev.base)?)
     })??;
     unsafe { *dptr = ptr };
     Ok(())
@@ -20,7 +20,7 @@ pub fn copy_v2(dst: *mut c_void, src: *const c_void, bytesize: usize) -> Result<
 pub fn free_v2(ptr: *mut c_void) -> Result<(), CUresult> {
     GlobalState::lock_current_context(|ctx| {
         let dev = unsafe { &mut *ctx.device };
-        Ok::<_, CUresult>(dev.l0_context.mem_free(ptr)?)
+        Ok::<_, CUresult>(dev.ocl_context.mem_free(ptr)?)
     })
     .map_err(|_| CUresult::CUDA_ERROR_INVALID_VALUE)?
 }

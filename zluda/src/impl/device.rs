@@ -1,6 +1,7 @@
 use super::{context, transmute_lifetime, transmute_lifetime_mut, CUresult, GlobalState};
 use crate::cuda;
 use cuda::{CUdevice_attribute, CUuuid_st};
+use ocl_core::DeviceType;
 use std::{
     cmp, mem,
     os::raw::{c_char, c_int, c_uint},
@@ -18,11 +19,10 @@ pub struct Index(pub c_int);
 pub struct Device {
     pub index: Index,
     pub base: l0::Device,
-    pub default_queue: l0::CommandQueue<'static>,
-    pub l0_context: l0::Context,
+    pub ocl_base: ocl_core::DeviceId,
+    pub default_queue: ocl_core::CommandQueue,
+    pub ocl_context: ocl_core::Context,
     pub primary_context: context::Context,
-    pub device_event_pool: DynamicEventPool,
-    pub host_event_pool: DynamicEventPool,
     properties: Option<Box<l0::sys::ze_device_properties_t>>,
     image_properties: Option<Box<l0::sys::ze_device_image_properties_t>>,
     memory_properties: Option<Vec<l0::sys::ze_device_memory_properties_t>>,
@@ -32,41 +32,22 @@ pub struct Device {
 unsafe impl Send for Device {}
 
 impl Device {
-    // Unsafe because it does not fully initalize primary_context
-    // and we transmute lifetimes left and right
-    unsafe fn new(drv: &l0::Driver, l0_dev: l0::Device, idx: usize) -> Result<Self, CUresult> {
-        let ctx = l0::Context::new(*drv, Some(&[l0_dev]))?;
-        let queue = l0::CommandQueue::new(mem::transmute(&ctx), l0_dev)?;
-        let mut host_event_pool = DynamicEventPool::new(
-            l0_dev,
-            transmute_lifetime(&ctx),
-            l0::sys::ze_event_pool_flags_t::ZE_EVENT_POOL_FLAG_HOST_VISIBLE,
-            l0::sys::ze_event_scope_flags_t::ZE_EVENT_SCOPE_FLAG_HOST,
-        )?;
-        let host_event =
-            transmute_lifetime_mut(&mut host_event_pool).get(l0_dev, transmute_lifetime(&ctx))?;
-        let primary_context = context::Context::new(context::ContextData::new(
-            transmute_lifetime(&ctx),
-            l0_dev,
-            0,
-            true,
-            host_event,
-            ptr::null_mut(),
-        )?);
-        let device_event_pool = DynamicEventPool::new(
-            l0_dev,
-            transmute_lifetime(&ctx),
-            l0::sys::ze_event_pool_flags_t(0),
-            l0::sys::ze_event_scope_flags_t(0),
-        )?;
+    pub fn new(
+        drv: &l0::Driver,
+        l0_dev: l0::Device,
+        ocl_dev: ocl_core::DeviceId,
+        idx: usize,
+    ) -> Result<Self, CUresult> {
+        let ctx = ocl_core::create_context(None, &[ocl_dev], None, None)?;
+        let queue = ocl_core::create_command_queue(&ctx, ocl_dev, None)?;
+        let primary_context = context::Context::new(context::ContextData::new());
         Ok(Self {
             index: Index(idx as c_int),
             base: l0_dev,
+            ocl_base: ocl_dev,
             default_queue: queue,
-            l0_context: ctx,
-            primary_context: primary_context,
-            device_event_pool,
-            host_event_pool,
+            ocl_context: ctx,
+            primary_context,
             properties: None,
             image_properties: None,
             memory_properties: None,
@@ -111,10 +92,6 @@ impl Device {
         Ok(self.compute_properties.get_or_insert(Box::new(props)))
     }
 
-    pub fn late_init(&mut self) {
-        self.primary_context.as_option_mut().unwrap().device = self as *mut _;
-    }
-
     fn get_max_simd(&mut self) -> l0::Result<u32> {
         let props = self.get_compute_properties()?;
         Ok(*props.subGroupSizes[0..props.numSubGroupSizes as usize]
@@ -122,20 +99,6 @@ impl Device {
             .max()
             .unwrap())
     }
-}
-
-pub fn init(driver: &l0::Driver) -> Result<Vec<Device>, CUresult> {
-    let ze_devices = driver.devices()?;
-    let mut devices = ze_devices
-        .into_iter()
-        .enumerate()
-        .map(|(idx, d)| unsafe { Device::new(driver, d, idx) })
-        .collect::<Result<Vec<_>, _>>()?;
-    for dev in devices.iter_mut() {
-        dev.late_init();
-        dev.primary_context.late_init();
-    }
-    Ok(devices)
 }
 
 pub fn get_count(count: *mut c_int) -> Result<(), CUresult> {
@@ -215,8 +178,6 @@ impl CUdevice_attribute {
         match self {
             CUdevice_attribute::CU_DEVICE_ATTRIBUTE_GPU_OVERLAP => Some(1),
             CUdevice_attribute::CU_DEVICE_ATTRIBUTE_KERNEL_EXEC_TIMEOUT => Some(1),
-            // TODO: fix this for DG1
-            CUdevice_attribute::CU_DEVICE_ATTRIBUTE_INTEGRATED => Some(1),
             // TODO: go back to this once we have more funcitonality implemented
             CUdevice_attribute::CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR => Some(8),
             CUdevice_attribute::CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR => Some(0),
@@ -239,6 +200,19 @@ pub fn get_attribute(
         return Ok(());
     }
     let value = match attrib {
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_INTEGRATED => {
+            GlobalState::lock_device(dev_idx, |dev| {
+                let props = dev.get_properties()?;
+                if (props.flags
+                    & l0::sys::ze_device_property_flags_t::ZE_DEVICE_PROPERTY_FLAG_INTEGRATED)
+                    == l0::sys::ze_device_property_flags_t::ZE_DEVICE_PROPERTY_FLAG_INTEGRATED
+                {
+                    Ok(1)
+                } else {
+                    Ok(0)
+                }
+            })??
+        }
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_ASYNC_ENGINE_COUNT => {
             GlobalState::lock_device(dev_idx, |dev| {
                 let props = dev.get_properties()?;
