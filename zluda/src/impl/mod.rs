@@ -164,6 +164,14 @@ impl<T> From<TryLockError<T>> for CUresult {
     }
 }
 
+impl From<ocl_core::Error> for CUresult {
+    fn from(result: ocl_core::Error) -> Self {
+        match result {
+            _ => CUresult::CUDA_ERROR_UNKNOWN,
+        }
+    }
+}
+
 pub trait Encuda {
     type To: Sized;
     fn encuda(self: Self) -> Self::To;
@@ -207,6 +215,7 @@ lazy_static! {
 struct GlobalState {
     devices: Vec<Device>,
     global_heap: *mut c_void,
+    platform: ocl_core::PlatformId,
 }
 
 unsafe impl Send for GlobalState {}
@@ -275,15 +284,11 @@ impl GlobalState {
 
     fn lock_enqueue(
         stream: *mut stream::Stream,
-        f: impl FnOnce(
-            &l0::CommandList,
-            &l0::Event<'static>,
-            &[&l0::Event<'static>],
-        ) -> Result<(), CUresult>,
+        f: impl FnOnce(&ocl_core::CommandQueue) -> Result<(), CUresult>,
     ) -> Result<(), CUresult> {
         Self::lock_stream(stream, |stream_data| {
             let l0_dev = unsafe { (*(*stream_data.context).device).base };
-            let l0_ctx = unsafe { &mut (*(*stream_data.context).device).l0_context };
+            let l0_ctx = unsafe { &mut (*(*stream_data.context).device).ocl_context };
             let cmd_list = unsafe { transmute_lifetime(&stream_data.cmd_list) };
             // TODO: make new_marker drop-safe
             let (new_event, new_marker) = stream_data.get_event(l0_dev, l0_ctx)?;
@@ -325,10 +330,34 @@ pub fn init() -> Result<(), CUresult> {
         return Ok(());
     }
     l0::init()?;
+    let platforms = ocl_core::get_platform_ids()?;
+    let (platform, device) = platforms
+        .iter()
+        .find_map(|plat| {
+            let devices =
+                ocl_core::get_device_ids(plat, Some(ocl_core::DeviceType::GPU), None).ok()?;
+            for dev in devices {
+                let vendor = ocl_core::get_device_info(dev, ocl_core::DeviceInfo::VendorId).ok()?;
+                if let ocl_core::DeviceInfoResult::VendorId(0x8086) = vendor {
+                    let dev_type =
+                        ocl_core::get_device_info(dev, ocl_core::DeviceInfo::Type).ok()?;
+                    if let ocl_core::DeviceInfoResult::Type(ocl_core::DeviceType::GPU) = dev_type {
+                        return Some((plat.clone(), dev));
+                    }
+                }
+            }
+            None
+        })
+        .ok_or(CUresult::CUDA_ERROR_UNKNOWN)?;
     let drivers = l0::Driver::get()?;
     let devices = match drivers.into_iter().find(is_intel_gpu_driver) {
         None => return Err(CUresult::CUDA_ERROR_UNKNOWN),
-        Some(driver) => device::init(&driver)?,
+        Some(driver) => driver
+            .devices()?
+            .into_iter()
+            .enumerate()
+            .map(|(idx, l0_dev)| device::Device::new(&driver, l0_dev, device, idx).unwrap())
+            .collect::<Vec<_>>(),
     };
     let global_heap = unsafe { os::heap_create() };
     if global_heap == ptr::null_mut() {
@@ -337,6 +366,7 @@ pub fn init() -> Result<(), CUresult> {
     *global_state = Some(GlobalState {
         devices,
         global_heap,
+        platform,
     });
     drop(global_state);
     Ok(())
