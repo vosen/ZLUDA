@@ -1,5 +1,5 @@
 use super::{device, stream::Stream, stream::StreamData, HasLivenessCookie, LiveCheck};
-use super::{CUresult, GlobalState};
+use super::{transmute_lifetime_mut, CUresult, GlobalState};
 use crate::{cuda::CUcontext, cuda_impl};
 use l0::sys::ze_result_t;
 use std::{cell::RefCell, num::NonZeroU32, os::raw::c_uint, ptr, sync::atomic::AtomicU32};
@@ -98,14 +98,11 @@ pub struct ContextData {
 
 impl ContextData {
     pub fn new(
-        l0_ctx: &'static l0::Context,
-        l0_dev: l0::Device,
         flags: c_uint,
         is_primary: bool,
-        host_event: (l0::Event<'static>, u64),
         dev: *mut device::Device,
     ) -> Result<Self, CUresult> {
-        let default_stream = StreamData::new_unitialized(l0_ctx, l0_dev, host_event)?;
+        let default_stream = StreamData::new_unitialized()?;
         Ok(ContextData {
             flags: AtomicU32::new(flags),
             device: dev,
@@ -121,8 +118,15 @@ impl ContextData {
 
 impl Context {
     pub fn late_init(&mut self) {
-        let ctx_data = self.as_option_mut().unwrap();
-        ctx_data.default_stream.context = ctx_data as *mut _;
+        let ctx_data: &'static mut _ = {
+            let this = self.as_option_mut().unwrap();
+            let result = { unsafe { transmute_lifetime_mut(this) } };
+            drop(this);
+            result
+        };
+        { self.as_option_mut().unwrap() }
+            .default_stream
+            .late_init(ctx_data);
     }
 }
 
@@ -137,11 +141,8 @@ pub fn create_v2(
     let mut ctx_box = GlobalState::lock_device(dev_idx, |dev| {
         let dev_ptr = dev as *mut _;
         let mut ctx_box = Box::new(LiveCheck::new(ContextData::new(
-            &dev.ocl_context,
-            dev.base,
             flags,
             false,
-            dev.host_event_pool.get(dev.base, &dev.ocl_context)?,
             dev_ptr as *mut _,
         )?));
         ctx_box.late_init();

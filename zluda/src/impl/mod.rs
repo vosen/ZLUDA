@@ -290,15 +290,7 @@ impl GlobalState {
             let l0_dev = unsafe { (*(*stream_data.context).device).base };
             let l0_ctx = unsafe { &mut (*(*stream_data.context).device).ocl_context };
             let cmd_list = unsafe { transmute_lifetime(&stream_data.cmd_list) };
-            // TODO: make new_marker drop-safe
-            let (new_event, new_marker) = stream_data.get_event(l0_dev, l0_ctx)?;
-            stream_data.try_reuse_finished_events()?;
-            let prev_event = stream_data.get_last_event();
-            let prev_event_array = prev_event.map(|e| [e]);
-            let empty = [];
-            let prev_event_slice = prev_event_array.as_ref().map_or(&empty[..], |arr| &arr[..]);
-            f(cmd_list, &new_event, prev_event_slice)?;
-            stream_data.push_event((new_event, new_marker));
+            f(&stream_data.cmd_list.as_ref().unwrap())?;
             Ok(())
         })?
     }
@@ -350,15 +342,19 @@ pub fn init() -> Result<(), CUresult> {
         })
         .ok_or(CUresult::CUDA_ERROR_UNKNOWN)?;
     let drivers = l0::Driver::get()?;
-    let devices = match drivers.into_iter().find(is_intel_gpu_driver) {
+    let mut devices = match drivers.into_iter().find(is_intel_gpu_driver) {
         None => return Err(CUresult::CUDA_ERROR_UNKNOWN),
         Some(driver) => driver
             .devices()?
             .into_iter()
             .enumerate()
-            .map(|(idx, l0_dev)| device::Device::new(&driver, l0_dev, device, idx).unwrap())
+            .map(|(idx, l0_dev)| device::Device::new(l0_dev, platform, device, idx).unwrap())
             .collect::<Vec<_>>(),
     };
+    for d in devices.iter_mut() {
+        d.late_init();
+        d.primary_context.late_init();
+    }
     let global_heap = unsafe { os::heap_create() };
     if global_heap == ptr::null_mut() {
         return Err(CUresult::CUDA_ERROR_OUT_OF_MEMORY);

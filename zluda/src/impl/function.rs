@@ -27,7 +27,7 @@ impl HasLivenessCookie for FunctionData {
 
 pub struct FunctionData {
     pub base: ocl_core::Kernel,
-    pub arg_size: Vec<usize>,
+    pub arg_size: Vec<(usize, bool)>,
     pub use_shared_mem: bool,
     pub legacy_args: LegacyArguments,
 }
@@ -73,14 +73,28 @@ pub fn launch_kernel(
     GlobalState::lock_enqueue(hstream, |queue| {
         let func: &mut FunctionData = unsafe { &mut *f }.as_result_mut()?;
         if kernel_params != ptr::null_mut() {
-            for (i, arg_size) in func.arg_size.iter().enumerate() {
-                unsafe {
-                    ocl_core::set_kernel_arg(
-                        &func.base,
-                        i as u32,
-                        ocl_core::ArgVal::from_raw(*arg_size, *kernel_params.add(i), false),
-                    )?;
-                };
+            for (i, &(arg_size, is_mem)) in func.arg_size.iter().enumerate() {
+                if is_mem {
+                    let error = 0;
+                    unsafe {
+                        ocl_core::ffi::clSetKernelArgSVMPointer(
+                            func.base.as_ptr(),
+                            i as u32,
+                            *(*kernel_params.add(i) as *const _),
+                        )
+                    };
+                    if error != 0 {
+                        panic!("clSetKernelArgSVMPointer");
+                    }
+                } else {
+                    unsafe {
+                        ocl_core::set_kernel_arg(
+                            &func.base,
+                            i as u32,
+                            ocl_core::ArgVal::from_raw(arg_size, *kernel_params.add(i), is_mem),
+                        )?;
+                    };
+                }
             }
         } else {
             let mut offset = 0;
@@ -102,27 +116,27 @@ pub fn launch_kernel(
             match (buffer_size, buffer_ptr) {
                 (Some(buffer_size), Some(buffer_ptr)) => {
                     let sum_of_kernel_argument_sizes =
-                        func.arg_size.iter().fold(0, |offset, size_of_arg| {
-                            size_of_arg + round_up_to_multiple(offset, *size_of_arg)
+                        func.arg_size.iter().fold(0, |offset, &(size_of_arg, _)| {
+                            size_of_arg + round_up_to_multiple(offset, size_of_arg)
                         });
                     if buffer_size < sum_of_kernel_argument_sizes {
                         return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
                     }
                     let mut offset = 0;
-                    for (i, arg_size) in func.arg_size.iter().enumerate() {
-                        let buffer_offset = round_up_to_multiple(offset, *arg_size);
+                    for (i, &(arg_size, is_mem)) in func.arg_size.iter().enumerate() {
+                        let buffer_offset = round_up_to_multiple(offset, arg_size);
                         unsafe {
                             ocl_core::set_kernel_arg(
                                 &func.base,
                                 i as u32,
                                 ocl_core::ArgVal::from_raw(
-                                    *arg_size,
+                                    arg_size,
                                     buffer_ptr.add(buffer_offset) as *const _,
-                                    false,
+                                    is_mem,
                                 ),
                             )?;
                         };
-                        offset = buffer_offset + *arg_size;
+                        offset = buffer_offset + arg_size;
                     }
                 }
                 _ => return Err(CUresult::CUDA_ERROR_INVALID_VALUE),

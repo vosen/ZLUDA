@@ -415,7 +415,7 @@ impl Module {
 }
 
 pub struct KernelInfo {
-    pub arguments_sizes: Vec<usize>,
+    pub arguments_sizes: Vec<(usize, bool)>,
     pub uses_shared_mem: bool,
 }
 
@@ -1024,7 +1024,12 @@ fn emit_function_header<'a>(
         let args_lens = func_decl
             .input_arguments
             .iter()
-            .map(|param| param.v_type.size_of())
+            .map(|param| {
+                (
+                    param.v_type.size_of(),
+                    matches!(param.v_type, ast::Type::Pointer(..)),
+                )
+            })
             .collect();
         kernel_info.insert(
             name.to_string(),
