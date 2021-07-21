@@ -1,60 +1,77 @@
 use super::{stream, CUresult, GlobalState};
-use std::{ffi::c_void, mem};
+use std::{
+    ffi::c_void,
+    mem::{self, size_of},
+};
 
 pub fn alloc_v2(dptr: *mut *mut c_void, bytesize: usize) -> Result<(), CUresult> {
     let ptr = GlobalState::lock_current_context(|ctx| {
         let dev = unsafe { &mut *ctx.device };
-        Ok::<_, CUresult>(dev.ocl_context.mem_alloc_device(bytesize, 0, dev.base)?)
+        Ok::<_, CUresult>(unsafe {
+            dev.ocl_ext
+                .device_mem_alloc(&dev.ocl_context, &dev.ocl_base, bytesize, 0)?
+        })
     })??;
     unsafe { *dptr = ptr };
     Ok(())
 }
 
 pub fn copy_v2(dst: *mut c_void, src: *const c_void, bytesize: usize) -> Result<(), CUresult> {
-    GlobalState::lock_enqueue(stream::CU_STREAM_LEGACY, |cmd_list, signal, wait| {
-        unsafe { cmd_list.append_memory_copy_raw(dst, src, bytesize, Some(signal), wait)? };
+    GlobalState::lock_stream(stream::CU_STREAM_LEGACY, |stream_data| {
+        let dev = unsafe { &*(*stream_data.context).device };
+        let queue = stream_data.cmd_list.as_ref().unwrap();
+        unsafe {
+            dev.ocl_ext
+                .enqueue_memcpy(queue, true, dst, src, bytesize)?
+        };
         Ok(())
-    })
+    })?
 }
 
 pub fn free_v2(ptr: *mut c_void) -> Result<(), CUresult> {
     GlobalState::lock_current_context(|ctx| {
         let dev = unsafe { &mut *ctx.device };
-        Ok::<_, CUresult>(dev.ocl_context.mem_free(ptr)?)
-    })
-    .map_err(|_| CUresult::CUDA_ERROR_INVALID_VALUE)?
+        unsafe { dev.ocl_ext.mem_blocking_free(&dev.ocl_context, ptr)? };
+        Ok(())
+    })?
 }
 
 pub(crate) fn set_d32_v2(dst: *mut c_void, mut ui: u32, n: usize) -> Result<(), CUresult> {
-    GlobalState::lock_enqueue(stream::CU_STREAM_LEGACY, |cmd_list, signal, wait| {
-        unsafe {
-            cmd_list.append_memory_fill_raw(
+    GlobalState::lock_stream(stream::CU_STREAM_LEGACY, move |stream_data| {
+        let dev = unsafe { &*(*stream_data.context).device };
+        let queue = stream_data.cmd_list.as_ref().unwrap();
+        let pattern_size = mem::size_of_val(&ui);
+        let event = unsafe {
+            dev.ocl_ext.enqueue_memfill(
+                queue,
                 dst,
-                &mut ui as *mut _ as *mut _,
-                mem::size_of::<u32>(),
-                mem::size_of::<u32>() * n,
-                Some(signal),
-                wait,
-            )
-        }?;
+                &ui as *const _ as *const _,
+                pattern_size,
+                pattern_size * n,
+            )?
+        };
+        ocl_core::wait_for_event(&event)?;
         Ok(())
-    })
+    })?
 }
 
 pub(crate) fn set_d8_v2(dst: *mut c_void, mut uc: u8, n: usize) -> Result<(), CUresult> {
-    GlobalState::lock_enqueue(stream::CU_STREAM_LEGACY, |cmd_list, signal, wait| {
-        unsafe {
-            cmd_list.append_memory_fill_raw(
+    GlobalState::lock_stream(stream::CU_STREAM_LEGACY, move |stream_data| {
+        let dev = unsafe { &*(*stream_data.context).device };
+        let queue = stream_data.cmd_list.as_ref().unwrap();
+        let pattern_size = mem::size_of_val(&uc);
+        let event = unsafe {
+            dev.ocl_ext.enqueue_memfill(
+                queue,
                 dst,
-                &mut uc as *mut _ as *mut _,
-                mem::size_of::<u8>(),
-                mem::size_of::<u8>() * n,
-                Some(signal),
-                wait,
-            )
-        }?;
+                &uc as *const _ as *const _,
+                pattern_size,
+                pattern_size * n,
+            )?
+        };
+        ocl_core::wait_for_event(&event)?;
         Ok(())
-    })
+    })?
 }
 
 #[cfg(test)]

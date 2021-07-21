@@ -34,117 +34,44 @@ impl HasLivenessCookie for StreamData {
 pub struct StreamData {
     pub context: *mut ContextData,
     // Immediate CommandList
-    pub cmd_list: l0::CommandList<'static>,
-    pub busy_events: VecDeque<(l0::Event<'static>, u64)>,
-    // This could be a Vec, but I'd rather reuse earliest enqueued event not the one recently enqueued
-    pub free_events: VecDeque<(l0::Event<'static>, u64)>,
-    pub synchronization_event: (l0::Event<'static>, u64),
+    pub cmd_list: Option<ocl_core::CommandQueue>,
 }
 
 impl StreamData {
-    pub fn new_unitialized(
-        ctx: &'static l0::Context,
-        device: l0::Device,
-        host_event: (l0::Event<'static>, u64),
-    ) -> Result<Self, CUresult> {
+    pub fn new_unitialized() -> Result<Self, CUresult> {
         Ok(StreamData {
             context: ptr::null_mut(),
-            cmd_list: l0::CommandList::new_immediate(ctx, device)?,
-            busy_events: VecDeque::new(),
-            free_events: VecDeque::new(),
-            synchronization_event: host_event,
+            cmd_list: None,
         })
     }
+
     pub fn new(ctx: &mut ContextData) -> Result<Self, CUresult> {
-        let l0_ctx = &mut unsafe { &mut *ctx.device }.ocl_context;
-        let device = unsafe { &*ctx.device }.base;
-        let synchronization_event = unsafe { &mut *ctx.device }
-            .host_event_pool
-            .get(device, l0_ctx)?;
+        let ocl_ctx = &unsafe { &*ctx.device }.ocl_context;
+        let device = unsafe { &*ctx.device }.ocl_base;
         Ok(StreamData {
             context: ctx as *mut _,
-            cmd_list: l0::CommandList::new_immediate(l0_ctx, device)?,
-            busy_events: VecDeque::new(),
-            free_events: VecDeque::new(),
-            synchronization_event,
+            cmd_list: Some(ocl_core::create_command_queue::<
+                &ocl_core::Context,
+                ocl_core::DeviceId,
+            >(ocl_ctx, device, None)?),
         })
     }
 
-    pub fn try_reuse_finished_events(&mut self) -> l0::Result<()> {
-        loop {
-            match self.busy_events.get(0) {
-                None => return Ok(()),
-                Some((ev, _)) => {
-                    if ev.is_ready()? {
-                        let (ev, marker) = self.busy_events.pop_front().unwrap();
-                        ev.host_reset()?;
-                        self.free_events.push_back((ev, marker));
-                    } else {
-                        return Ok(());
-                    }
-                }
-            }
-        }
+    pub fn late_init(&mut self, ctx: &mut ContextData) {
+        let ocl_ctx = &unsafe { &*ctx.device }.ocl_context;
+        let device = unsafe { &*ctx.device }.ocl_base;
+        self.context = ctx as *mut _;
+        self.cmd_list = Some(
+            ocl_core::create_command_queue::<&ocl_core::Context, ocl_core::DeviceId>(
+                ocl_ctx, device, None,
+            )
+            .unwrap(),
+        );
     }
 
-    pub fn reuse_all_finished_events(&mut self) -> l0::Result<()> {
-        self.free_events.reserve(self.busy_events.len());
-        for (ev, marker) in self.busy_events.drain(..) {
-            ev.host_reset()?;
-            self.free_events.push_back((ev, marker));
-        }
+    pub fn synchronize(&mut self) -> Result<(), CUresult> {
+        ocl_core::finish(self.cmd_list.as_ref().unwrap())?;
         Ok(())
-    }
-
-    pub fn get_last_event(&self) -> Option<&l0::Event<'static>> {
-        self.busy_events.iter().next_back().map(|(ev, _)| ev)
-    }
-
-    pub fn push_event(&mut self, ev: (l0::Event<'static>, u64)) {
-        self.busy_events.push_back(ev);
-    }
-
-    pub fn synchronize(&mut self) -> l0::Result<()> {
-        let empty = [];
-        let busy_event_arr = self.busy_events.back().map(|(ev, _)| [ev]);
-        let wait_events = busy_event_arr.as_ref().map_or(&empty[..], |arr| &arr[..]);
-        unsafe {
-            self.cmd_list
-                .append_barrier(Some(&self.synchronization_event.0), wait_events)?
-        };
-        self.synchronization_event
-            .0
-            .host_synchronize(u64::max_value())?;
-        self.synchronization_event.0.host_reset()?;
-        self.reuse_all_finished_events()?;
-        Ok(())
-    }
-
-    pub fn get_event(
-        &mut self,
-        l0_dev: l0::Device,
-        l0_ctx: &'static l0::Context,
-    ) -> l0::Result<(l0::Event<'static>, u64)> {
-        self.free_events
-            .pop_front()
-            .map(|x| Ok(x))
-            .unwrap_or_else(|| {
-                let event_pool = unsafe { &mut (*(*self.context).device).device_event_pool };
-                event_pool.get(l0_dev, l0_ctx)
-            })
-    }
-}
-
-impl Drop for StreamData {
-    fn drop(&mut self) {
-        if self.context == ptr::null_mut() {
-            return;
-        }
-        for (_, marker) in self.busy_events.iter().chain(self.free_events.iter()) {
-            let device_event_pool = unsafe { &mut (*(*self.context).device).device_event_pool };
-            device_event_pool.mark_as_free(*marker);
-        }
-        unsafe { (&mut *self.context).streams.remove(&(&mut *self as *mut _)) };
     }
 }
 

@@ -100,8 +100,19 @@ impl SpirvModule {
             )
         };
         let main_module = ocl_core::create_program_with_il(ctx, byte_il, None)?;
-        match self.should_link_ptx_impl {
+        let main_module = match self.should_link_ptx_impl {
             None => {
+                ocl_core::build_program(
+                    &main_module,
+                    Some(&[dev]),
+                    &self.build_options,
+                    None,
+                    None,
+                )?;
+                main_module
+            }
+            Some(ptx_impl) => {
+                let ptx_impl_prog = ocl_core::create_program_with_il(ctx, ptx_impl, None)?;
                 ocl_core::compile_program(
                     &main_module,
                     Some(&[dev]),
@@ -112,20 +123,13 @@ impl SpirvModule {
                     None,
                     None,
                 )?;
-            }
-            Some(ptx_impl) => {
-                let ptx_impl_prog = ocl_core::create_program_with_il(ctx, ptx_impl, None)?;
-                ocl_core::build_program(
-                    &main_module,
-                    Some(&[dev]),
-                    &self.build_options,
-                    None,
-                    None,
-                )?;
-                ocl_core::build_program(
+                ocl_core::compile_program(
                     &ptx_impl_prog,
                     Some(&[dev]),
                     &self.build_options,
+                    &[],
+                    &[],
+                    None,
                     None,
                     None,
                 )?;
@@ -137,7 +141,7 @@ impl SpirvModule {
                     None,
                     None,
                     None,
-                )?;
+                )?
             }
         };
         Ok(main_module)
