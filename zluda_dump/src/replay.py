@@ -53,7 +53,7 @@ def parse_arguments(dump_path, prefix):
 
 def append_debug_buffer(args, grid, block):
     args = list(args)
-    items = block[0] * block[1] * block[2] * block[0] * block[1] * block[2]
+    items = grid[0] * grid[1] * grid[2] * block[0] * block[1] * block[2]
     debug_buff = np.zeros(items, dtype=np.uint32)
     args.append((drv.InOut(debug_buff), debug_buff))
     return args

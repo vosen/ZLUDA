@@ -261,6 +261,7 @@ pub enum Instruction<P: ArgParams> {
     Call(CallInst<P>),
     Abs(AbsDetails, Arg2<P>),
     Mad(MulDetails, Arg4<P>),
+    Fma(ArithFloat, Arg4<P>),
     Or(ScalarType, Arg3<P>),
     Sub(ArithDetails, Arg3<P>),
     Min(MinMaxDetails, Arg3<P>),
