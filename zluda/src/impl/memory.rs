@@ -1,16 +1,32 @@
-use super::{stream, CUresult, GlobalState};
+use super::{
+    stream::{self, CU_STREAM_LEGACY},
+    CUresult, GlobalState,
+};
 use std::{
     ffi::c_void,
     mem::{self, size_of},
 };
 
 pub fn alloc_v2(dptr: *mut *mut c_void, bytesize: usize) -> Result<(), CUresult> {
-    let ptr = GlobalState::lock_current_context(|ctx| {
-        let dev = unsafe { &mut *ctx.device };
-        Ok::<_, CUresult>(unsafe {
+    let ptr = GlobalState::lock_stream(CU_STREAM_LEGACY, |stream_data| {
+        let dev = unsafe { &*(*stream_data.context).device };
+        let queue = stream_data.cmd_list.as_ref().unwrap();
+        let ptr = unsafe {
             dev.ocl_ext
                 .device_mem_alloc(&dev.ocl_context, &dev.ocl_base, bytesize, 0)?
-        })
+        };
+        // CUDA does the same thing and e.g. GeekBench relies on this behavior
+        let event = unsafe {
+            dev.ocl_ext.enqueue_memfill(
+                queue,
+                ptr,
+                &0u8 as *const u8 as *const c_void,
+                1,
+                bytesize,
+            )?
+        };
+        ocl_core::wait_for_event(&event)?;
+        Ok::<_, CUresult>(ptr)
     })??;
     unsafe { *dptr = ptr };
     Ok(())

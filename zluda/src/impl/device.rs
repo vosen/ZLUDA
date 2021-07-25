@@ -494,7 +494,7 @@ pub fn get_attribute(
                 l0::sys::ze_result_t::ZE_RESULT_ERROR_UNSUPPORTED_FEATURE,
             ))
             */
-            return Ok(());
+            0
         }
     };
     unsafe { *pi = value };

@@ -743,6 +743,7 @@ Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
     InstCall,
     InstAbs,
     InstMad,
+    InstFma,
     InstOr,
     InstAnd,
     InstSub,
@@ -1345,7 +1346,11 @@ InstAbs: ast::Instruction<ast::ParsedArgParams<'input>> = {
 InstMad: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "mad" <d:MulDetails> <a:Arg4> => ast::Instruction::Mad(d, a),
     "mad" ".hi" ".sat" ".s32" => todo!(),
-    "fma" <f:ArithFloatMustRound> <a:Arg4> => ast::Instruction::Mad(ast::MulDetails::Float(f), a),
+};
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-fma
+InstFma: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "fma" <f:ArithFloatMustRound> <a:Arg4> => ast::Instruction::Fma(f, a),
 };
 
 SignedIntType: ast::ScalarType = {

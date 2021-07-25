@@ -59,7 +59,7 @@
          %20 = OpLoad %float %6
          %21 = OpLoad %float %7
          %22 = OpLoad %float %8
-         %19 = OpExtInst %float %35 mad %20 %21 %22
+         %19 = OpExtInst %float %35 fma %20 %21 %22
                OpStore %6 %19
          %23 = OpLoad %ulong %5
          %24 = OpLoad %float %6
