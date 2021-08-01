@@ -10,6 +10,8 @@
          %30 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
                OpEntryPoint Kernel %1 "mul_wide"
+               OpExecutionMode %1 ContractionOff
+               OpDecorate %17 NoSignedWrap
        %void = OpTypeVoid
       %ulong = OpTypeInt 64 0
          %33 = OpTypeFunction %void %ulong %ulong
@@ -20,8 +22,6 @@
     %ulong_4 = OpConstant %ulong 4
       %uchar = OpTypeInt 8 0
 %_ptr_CrossWorkgroup_uchar = OpTypePointer CrossWorkgroup %uchar
- %_struct_42 = OpTypeStruct %uint %uint
-     %v2uint = OpTypeVector %uint 2
 %_ptr_Generic_ulong = OpTypePointer Generic %ulong
           %1 = OpFunction %void None %33
           %9 = OpFunctionParameter %ulong
@@ -53,11 +53,9 @@
                OpStore %7 %15
          %18 = OpLoad %uint %6
          %19 = OpLoad %uint %7
-         %43 = OpSMulExtended %_struct_42 %18 %19
-         %44 = OpCompositeExtract %uint %43 0
-         %45 = OpCompositeExtract %uint %43 1
-         %47 = OpCompositeConstruct %v2uint %44 %45
-         %17 = OpBitcast %ulong %47
+         %42 = OpSConvert %ulong %18
+         %43 = OpSConvert %ulong %19
+         %17 = OpIMul %ulong %42 %43
                OpStore %8 %17
          %20 = OpLoad %ulong %5
          %21 = OpLoad %ulong %8
