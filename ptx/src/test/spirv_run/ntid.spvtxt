@@ -7,24 +7,27 @@
                OpCapability Int64
                OpCapability Float16
                OpCapability Float64
-         %28 = OpExtInstImport "OpenCL.std"
+         %31 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
-               OpEntryPoint Kernel %1 "ntid" %gl_WorkGroupSize
-               OpDecorate %gl_WorkGroupSize BuiltIn WorkgroupSize
+               OpEntryPoint Kernel %1 "ntid"
+               OpExecutionMode %1 ContractionOff
+               OpDecorate %24 LinkageAttributes "get_local_size" Import
        %void = OpTypeVoid
       %ulong = OpTypeInt 64 0
-    %v3ulong = OpTypeVector %ulong 3
-%_ptr_Input_v3ulong = OpTypePointer Input %v3ulong
-%gl_WorkGroupSize = OpVariable %_ptr_Input_v3ulong Input
-         %33 = OpTypeFunction %void %ulong %ulong
-%_ptr_Function_ulong = OpTypePointer Function %ulong
        %uint = OpTypeInt 32 0
+         %35 = OpTypeFunction %ulong %uint
+         %36 = OpTypeFunction %void %ulong %ulong
+%_ptr_Function_ulong = OpTypePointer Function %ulong
 %_ptr_Function_uint = OpTypePointer Function %uint
 %_ptr_Generic_uint = OpTypePointer Generic %uint
-          %1 = OpFunction %void None %33
+     %uint_0 = OpConstant %uint 0
+         %24 = OpFunction %ulong None %35
+         %26 = OpFunctionParameter %uint
+               OpFunctionEnd
+          %1 = OpFunction %void None %36
           %9 = OpFunctionParameter %ulong
          %10 = OpFunctionParameter %ulong
-         %26 = OpLabel
+         %29 = OpLabel
           %2 = OpVariable %_ptr_Function_ulong Function
           %3 = OpVariable %_ptr_Function_ulong Function
           %4 = OpVariable %_ptr_Function_ulong Function
@@ -38,13 +41,12 @@
          %12 = OpLoad %ulong %3 Aligned 8
                OpStore %5 %12
          %14 = OpLoad %ulong %4
-         %24 = OpConvertUToPtr %_ptr_Generic_uint %14
-         %13 = OpLoad %uint %24 Aligned 4
+         %27 = OpConvertUToPtr %_ptr_Generic_uint %14
+         %13 = OpLoad %uint %27 Aligned 4
                OpStore %6 %13
-         %38 = OpLoad %v3ulong %gl_WorkGroupSize
-         %23 = OpCompositeExtract %ulong %38 0
-         %39 = OpBitcast %ulong %23
-         %16 = OpUConvert %uint %39
+         %23 = OpFunctionCall %ulong %24 %uint_0
+         %40 = OpBitcast %ulong %23
+         %16 = OpUConvert %uint %40
          %15 = OpCopyObject %uint %16
                OpStore %7 %15
          %18 = OpLoad %uint %6
@@ -53,7 +55,7 @@
                OpStore %6 %17
          %20 = OpLoad %ulong %5
          %21 = OpLoad %uint %6
-         %25 = OpConvertUToPtr %_ptr_Generic_uint %20
-               OpStore %25 %21 Aligned 4
+         %28 = OpConvertUToPtr %_ptr_Generic_uint %20
+               OpStore %28 %21 Aligned 4
                OpReturn
                OpFunctionEnd

@@ -4,8 +4,10 @@ use std::{
     ffi::c_void,
     ffi::CStr,
     ffi::CString,
+    io::{self, Write},
     mem,
     os::raw::{c_char, c_int, c_uint},
+    process::{Command, Stdio},
     ptr, slice,
 };
 
@@ -20,6 +22,7 @@ use super::{
     CUresult, GlobalState, HasLivenessCookie, LiveCheck,
 };
 use ptx;
+use tempfile::NamedTempFile;
 
 pub type Module = LiveCheck<ModuleData>;
 
@@ -88,6 +91,36 @@ impl SpirvModule {
         })
     }
 
+    const LLVM_SPIRV: &'static str = "/home/vosen/amd/llvm-project/build/bin/llvm-spirv";
+    const AMDGPU: &'static str = "/opt/amdgpu-pro/";
+    const AMDGPU_BITCODE: [&'static str; 8] = [
+        "opencl",
+        "ocml",
+        "ockl",
+        "oclc_correctly_rounded_sqrt_off",
+        "oclc_daz_opt_on",
+        "oclc_finite_only_off",
+        "oclc_unsafe_math_off",
+        "oclc_wavefrontsize64_off",
+    ];
+    const AMDGPU_BITCODE_DEVICE_PREFIX: &'static str = "oclc_isa_version_";
+    const AMDGPU_DEVICE: &'static str = "gfx1010";
+
+    fn compile_amd(spirv_il: &[u8]) -> io::Result<()> {
+        let dir = tempfile::tempdir()?;
+        let mut spirv = NamedTempFile::new_in(&dir)?;
+        let llvm = NamedTempFile::new_in(&dir)?;
+        spirv.write_all(spirv_il)?;
+        let mut cmd = Command::new(Self::LLVM_SPIRV)
+            .arg("-r")
+            .arg("-o")
+            .arg(llvm.path())
+            .arg(spirv.path())
+            .status()?;
+        assert!(cmd.success());
+        Ok(())
+    }
+
     pub fn compile<'a>(
         &self,
         ctx: &ocl_core::Context,
@@ -99,6 +132,7 @@ impl SpirvModule {
                 self.binaries.len() * mem::size_of::<u32>(),
             )
         };
+        Self::compile_amd(byte_il).unwrap();
         let main_module = ocl_core::create_program_with_il(ctx, byte_il, None)?;
         let main_module = match self.should_link_ptx_impl {
             None => {
