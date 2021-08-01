@@ -3798,8 +3798,8 @@ fn emit_mul_sint(
     desc: &ast::MulSInt,
     arg: &ast::Arg3<ExpandedArgParams>,
 ) -> Result<(), dr::Error> {
-    let instruction_type = ast::ScalarType::from(desc.typ);
-    let inst_type = map.get_or_add(builder, SpirvType::from(ast::ScalarType::from(desc.typ)));
+    let instruction_type = desc.typ;
+    let inst_type = map.get_or_add(builder, SpirvType::from(desc.typ));
     match desc.control {
         ast::MulIntControl::Low => {
             builder.i_mul(inst_type, Some(arg.dst), arg.src1, arg.src2)?;
@@ -3816,25 +3816,14 @@ fn emit_mul_sint(
             )?;
         }
         ast::MulIntControl::Wide => {
-            let mul_ext_type = SpirvType::Struct(vec![
-                SpirvScalarKey::from(instruction_type),
-                SpirvScalarKey::from(instruction_type),
-            ]);
-            let mul_ext_type_id = map.get_or_add(builder, mul_ext_type);
-            let mul = builder.s_mul_extended(mul_ext_type_id, None, arg.src1, arg.src2)?;
             let instr_width = instruction_type.size_of();
             let instr_kind = instruction_type.kind();
             let dst_type = ast::ScalarType::from_parts(instr_width * 2, instr_kind);
             let dst_type_id = map.get_or_add_scalar(builder, dst_type);
-            struct2_bitcast_to_wide(
-                builder,
-                map,
-                SpirvScalarKey::from(instruction_type),
-                inst_type,
-                arg.dst,
-                dst_type_id,
-                mul,
-            )?;
+            let src1 = builder.s_convert(dst_type_id, None, arg.src1)?;
+            let src2 = builder.s_convert(dst_type_id, None, arg.src2)?;
+            builder.i_mul(dst_type_id, Some(arg.dst), src1, src2)?;
+            builder.decorate(arg.dst, spirv::Decoration::NoSignedWrap, []);
         }
     }
     Ok(())
@@ -3865,25 +3854,14 @@ fn emit_mul_uint(
             )?;
         }
         ast::MulIntControl::Wide => {
-            let mul_ext_type = SpirvType::Struct(vec![
-                SpirvScalarKey::from(instruction_type),
-                SpirvScalarKey::from(instruction_type),
-            ]);
-            let mul_ext_type_id = map.get_or_add(builder, mul_ext_type);
-            let mul = builder.u_mul_extended(mul_ext_type_id, None, arg.src1, arg.src2)?;
             let instr_width = instruction_type.size_of();
             let instr_kind = instruction_type.kind();
             let dst_type = ast::ScalarType::from_parts(instr_width * 2, instr_kind);
             let dst_type_id = map.get_or_add_scalar(builder, dst_type);
-            struct2_bitcast_to_wide(
-                builder,
-                map,
-                SpirvScalarKey::from(instruction_type),
-                inst_type,
-                arg.dst,
-                dst_type_id,
-                mul,
-            )?;
+            let src1 = builder.u_convert(dst_type_id, None, arg.src1)?;
+            let src2 = builder.u_convert(dst_type_id, None, arg.src2)?;
+            builder.i_mul(dst_type_id, Some(arg.dst), src1, src2)?;
+            builder.decorate(arg.dst, spirv::Decoration::NoUnsignedWrap, []);
         }
     }
     Ok(())
