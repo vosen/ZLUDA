@@ -251,7 +251,7 @@ fn run_spirv<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + D
         let ctx = ze::Context::new(drv, None)?;
         let queue = ze::CommandQueue::new(&ctx, dev)?;
         let (module, maybe_log) = match module.should_link_ptx_impl {
-            Some(ptx_impl) => ze::Module::build_link_spirv(
+            Some((ptx_impl, _)) => ze::Module::build_link_spirv(
                 &ctx,
                 dev,
                 &[ptx_impl, byte_il],
