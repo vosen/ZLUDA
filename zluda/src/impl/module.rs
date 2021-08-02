@@ -7,6 +7,7 @@ use std::{
     io::{self, Write},
     mem,
     os::raw::{c_char, c_int, c_uint},
+    path::PathBuf,
     process::{Command, Stdio},
     ptr, slice,
 };
@@ -49,7 +50,7 @@ pub struct ModuleData {
 pub struct SpirvModule {
     pub binaries: Vec<u32>,
     pub kernel_info: HashMap<String, ptx::KernelInfo>,
-    pub should_link_ptx_impl: Option<&'static [u8]>,
+    pub should_link_ptx_impl: Option<(&'static [u8], &'static [u8])>,
     pub build_options: CString,
 }
 
@@ -93,31 +94,93 @@ impl SpirvModule {
 
     const LLVM_SPIRV: &'static str = "/home/vosen/amd/llvm-project/build/bin/llvm-spirv";
     const AMDGPU: &'static str = "/opt/amdgpu-pro/";
+    const AMDGPU_TARGET: &'static str = "amdgcn-amd-amdhsa";
     const AMDGPU_BITCODE: [&'static str; 8] = [
-        "opencl",
-        "ocml",
-        "ockl",
-        "oclc_correctly_rounded_sqrt_off",
-        "oclc_daz_opt_on",
-        "oclc_finite_only_off",
-        "oclc_unsafe_math_off",
-        "oclc_wavefrontsize64_off",
+        "opencl.bc",
+        "ocml.bc",
+        "ockl.bc",
+        "oclc_correctly_rounded_sqrt_off.bc",
+        "oclc_daz_opt_on.bc",
+        "oclc_finite_only_off.bc",
+        "oclc_unsafe_math_off.bc",
+        "oclc_wavefrontsize64_off.bc",
     ];
     const AMDGPU_BITCODE_DEVICE_PREFIX: &'static str = "oclc_isa_version_";
     const AMDGPU_DEVICE: &'static str = "gfx1010";
 
-    fn compile_amd(spirv_il: &[u8]) -> io::Result<()> {
+    fn get_bitcode_paths() -> impl Iterator<Item = PathBuf> {
+        let generic_paths = Self::AMDGPU_BITCODE.iter().map(|x| {
+            let mut path = PathBuf::from(Self::AMDGPU);
+            path.push("amdgcn");
+            path.push("bitcode");
+            path.push(x);
+            path
+        });
+        let mut additional_path = PathBuf::from(Self::AMDGPU);
+        additional_path.push("amdgcn");
+        additional_path.push("bitcode");
+        additional_path.push(format!(
+            "{}{}{}",
+            Self::AMDGPU_BITCODE_DEVICE_PREFIX,
+            &Self::AMDGPU_DEVICE[3..],
+            ".bc"
+        ));
+        generic_paths.chain(std::iter::once(additional_path))
+    }
+
+    fn compile_amd(spirv_il: &[u8], ptx_lib: Option<&'static [u8]>) -> io::Result<()> {
         let dir = tempfile::tempdir()?;
         let mut spirv = NamedTempFile::new_in(&dir)?;
         let llvm = NamedTempFile::new_in(&dir)?;
         spirv.write_all(spirv_il)?;
-        let mut cmd = Command::new(Self::LLVM_SPIRV)
+        let to_llvm_cmd = Command::new(Self::LLVM_SPIRV)
             .arg("-r")
             .arg("-o")
             .arg(llvm.path())
             .arg(spirv.path())
             .status()?;
-        assert!(cmd.success());
+        assert!(to_llvm_cmd.success());
+        let linked_binary = NamedTempFile::new_in(&dir)?;
+        let mut llvm_link = PathBuf::from(Self::AMDGPU);
+        llvm_link.push("bin");
+        llvm_link.push("llvm-link");
+        let mut linker_cmd = Command::new(&llvm_link);
+        linker_cmd
+            .arg("--only-needed")
+            .arg("-o")
+            .arg(linked_binary.path())
+            .arg(llvm.path())
+            .args(Self::get_bitcode_paths());
+        if cfg!(debug_assertions) {
+            linker_cmd.arg("-v");
+        }
+        let status = linker_cmd.status()?;
+        assert!(status.success());
+        let mut ptx_lib_bitcode = NamedTempFile::new_in(&dir)?;
+        let compiled_binary = NamedTempFile::new_in(&dir)?;
+        let mut cland_exe = PathBuf::from(Self::AMDGPU);
+        cland_exe.push("bin");
+        cland_exe.push("clang");
+        let mut compiler_cmd = Command::new(&cland_exe);
+        compiler_cmd
+            .arg(format!("-mcpu={}", Self::AMDGPU_DEVICE))
+            .arg("-O3")
+            .arg("-Xlinker")
+            .arg("--no-undefined")
+            .arg("-target")
+            .arg(Self::AMDGPU_TARGET)
+            .arg("-o")
+            .arg(compiled_binary.path())
+            .arg(linked_binary.path());
+        if let Some(bitcode) = ptx_lib {
+            ptx_lib_bitcode.write_all(bitcode)?;
+            compiler_cmd.arg(ptx_lib_bitcode.path());
+        };
+        if cfg!(debug_assertions) {
+            compiler_cmd.arg("-v");
+        }
+        let status = compiler_cmd.status()?;
+        assert!(status.success());
         Ok(())
     }
 
@@ -132,10 +195,10 @@ impl SpirvModule {
                 self.binaries.len() * mem::size_of::<u32>(),
             )
         };
-        Self::compile_amd(byte_il).unwrap();
         let main_module = ocl_core::create_program_with_il(ctx, byte_il, None)?;
         let main_module = match self.should_link_ptx_impl {
             None => {
+                Self::compile_amd(byte_il, None).unwrap();
                 ocl_core::build_program(
                     &main_module,
                     Some(&[dev]),
@@ -145,8 +208,9 @@ impl SpirvModule {
                 )?;
                 main_module
             }
-            Some(ptx_impl) => {
-                let ptx_impl_prog = ocl_core::create_program_with_il(ctx, ptx_impl, None)?;
+            Some((ptx_impl_intel, ptx_impl_amd)) => {
+                Self::compile_amd(byte_il, Some(ptx_impl_amd)).unwrap();
+                let ptx_impl_prog = ocl_core::create_program_with_il(ctx, ptx_impl_intel, None)?;
                 ocl_core::compile_program(
                     &main_module,
                     Some(&[dev]),

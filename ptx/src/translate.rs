@@ -7,7 +7,8 @@ use std::{borrow::Cow, collections::BTreeSet, ffi::CString, hash::Hash, iter, me
 
 use rspirv::binary::Assemble;
 
-static ZLUDA_PTX_IMPL: &'static [u8] = include_bytes!("../lib/zluda_ptx_impl.spv");
+static ZLUDA_PTX_IMPL_INTEL: &'static [u8] = include_bytes!("../lib/zluda_ptx_impl.spv");
+static ZLUDA_PTX_IMPL_AMD: &'static [u8] = include_bytes!("../lib/zluda_ptx_impl.bc");
 static ZLUDA_PTX_PREFIX: &'static str = "__zluda_ptx_impl__";
 
 quick_error! {
@@ -405,7 +406,7 @@ impl TypeWordMap {
 pub struct Module {
     pub spirv: dr::Module,
     pub kernel_info: HashMap<String, KernelInfo>,
-    pub should_link_ptx_impl: Option<&'static [u8]>,
+    pub should_link_ptx_impl: Option<(&'static [u8], &'static [u8])>,
     pub build_options: CString,
 }
 impl Module {
@@ -466,7 +467,7 @@ pub fn to_spirv_module<'a>(ast: ast::Module<'a>) -> Result<Module, TranslateErro
         spirv,
         kernel_info,
         should_link_ptx_impl: if must_link_ptx_impl {
-            Some(ZLUDA_PTX_IMPL)
+            Some((ZLUDA_PTX_IMPL_INTEL, ZLUDA_PTX_IMPL_AMD))
         } else {
             None
         },
