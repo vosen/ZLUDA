@@ -4,6 +4,7 @@ use cuda::{CUdevice_attribute, CUuuid_st};
 use ocl_core::{ClDeviceIdPtr, ContextProperties, DeviceType};
 use std::{
     cmp,
+    collections::HashSet,
     ffi::c_void,
     mem,
     os::raw::{c_char, c_int, c_uint},
@@ -24,173 +25,12 @@ pub struct Device {
     pub ocl_base: ocl_core::DeviceId,
     pub default_queue: ocl_core::CommandQueue,
     pub ocl_context: ocl_core::Context,
-    pub(crate) ocl_ext: OpenCLExtensions,
     pub primary_context: context::Context,
+    pub allocations: HashSet<*mut c_void>,
     properties: Option<Box<l0::sys::ze_device_properties_t>>,
     image_properties: Option<Box<l0::sys::ze_device_image_properties_t>>,
     memory_properties: Option<Vec<l0::sys::ze_device_memory_properties_t>>,
     compute_properties: Option<Box<l0::sys::ze_device_compute_properties_t>>,
-}
-
-type cl_mem_properties_intel = ocl_core::ffi::cl_bitfield;
-
-pub(crate) struct OpenCLExtensions {
-    pub clDeviceMemAllocINTEL: unsafe extern "system" fn(
-        ocl_core::ffi::cl_context,
-        ocl_core::ffi::cl_device_id,
-        *const cl_mem_properties_intel,
-        usize,
-        ocl_core::ffi::cl_uint,
-        *mut ocl_core::ffi::cl_int,
-    ) -> *mut c_void,
-    pub clEnqueueMemcpyINTEL: unsafe extern "system" fn(
-        ocl_core::ffi::cl_command_queue,
-        ocl_core::ffi::cl_bool,
-        *mut c_void,
-        *const c_void,
-        usize,
-        ocl_core::ffi::cl_uint,
-        *const ocl_core::ffi::cl_event,
-        *mut ocl_core::ffi::cl_event,
-    ) -> ocl_core::ffi::cl_int,
-    pub clMemBlockingFreeINTEL:
-        unsafe extern "system" fn(ocl_core::ffi::cl_context, *mut c_void) -> ocl_core::ffi::cl_int,
-    pub clEnqueueMemFillINTEL: unsafe extern "system" fn(
-        ocl_core::ffi::cl_command_queue,
-        *mut c_void,
-        *const c_void,
-        usize,
-        usize,
-        ocl_core::ffi::cl_uint,
-        *const ocl_core::ffi::cl_event,
-        *mut ocl_core::ffi::cl_event,
-    ) -> ocl_core::ffi::cl_int,
-}
-
-impl OpenCLExtensions {
-    fn new(plat: &ocl_core::PlatformId) -> Result<Self, CUresult> {
-        let clDeviceMemAllocINTEL = unsafe {
-            ocl_core::get_extension_function_address_for_platform(
-                plat,
-                "clDeviceMemAllocINTEL",
-                None,
-            )?
-        };
-        let clEnqueueMemcpyINTEL = unsafe {
-            ocl_core::get_extension_function_address_for_platform(
-                plat,
-                "clEnqueueMemcpyINTEL",
-                None,
-            )?
-        };
-        let clMemBlockingFreeINTEL = unsafe {
-            ocl_core::get_extension_function_address_for_platform(
-                plat,
-                "clMemBlockingFreeINTEL",
-                None,
-            )?
-        };
-        let clEnqueueMemFillINTEL = unsafe {
-            ocl_core::get_extension_function_address_for_platform(
-                plat,
-                "clEnqueueMemFillINTEL",
-                None,
-            )?
-        };
-        Ok(Self {
-            clDeviceMemAllocINTEL: unsafe { mem::transmute(clDeviceMemAllocINTEL) },
-            clEnqueueMemcpyINTEL: unsafe { mem::transmute(clEnqueueMemcpyINTEL) },
-            clMemBlockingFreeINTEL: unsafe { mem::transmute(clMemBlockingFreeINTEL) },
-            clEnqueueMemFillINTEL: unsafe { mem::transmute(clEnqueueMemFillINTEL) },
-        })
-    }
-
-    pub unsafe fn device_mem_alloc(
-        &self,
-        ctx: &ocl_core::Context,
-        device: &ocl_core::DeviceId,
-        size: usize,
-        alignment: ocl_core::ffi::cl_uint,
-    ) -> Result<*mut c_void, CUresult> {
-        let mut error = 0;
-        let result = (self.clDeviceMemAllocINTEL)(
-            ctx.as_ptr(),
-            device.as_ptr(),
-            ptr::null(),
-            size,
-            alignment,
-            &mut error,
-        );
-        if error == 0 {
-            Ok(result)
-        } else {
-            Err(CUresult::CUDA_ERROR_UNKNOWN)
-        }
-    }
-
-    pub unsafe fn enqueue_memcpy(
-        &self,
-        queue: &ocl_core::CommandQueue,
-        blocking: bool,
-        dst: *mut c_void,
-        src: *const c_void,
-        size: usize,
-    ) -> Result<(), CUresult> {
-        let error = (self.clEnqueueMemcpyINTEL)(
-            queue.as_ptr(),
-            if blocking { 1 } else { 0 },
-            dst,
-            src,
-            size,
-            0,
-            ptr::null(),
-            ptr::null_mut(),
-        );
-        if error == 0 {
-            Ok(())
-        } else {
-            Err(CUresult::CUDA_ERROR_UNKNOWN)
-        }
-    }
-
-    pub unsafe fn mem_blocking_free(
-        &self,
-        ctx: &ocl_core::Context,
-        mem_ptr: *mut c_void,
-    ) -> Result<(), CUresult> {
-        let error = (self.clMemBlockingFreeINTEL)(ctx.as_ptr(), mem_ptr);
-        if error == 0 {
-            Ok(())
-        } else {
-            Err(CUresult::CUDA_ERROR_UNKNOWN)
-        }
-    }
-
-    pub unsafe fn enqueue_memfill(
-        &self,
-        queue: &ocl_core::CommandQueue,
-        dst: *mut c_void,
-        pattern: *const c_void,
-        patternSize: usize,
-        size: usize,
-    ) -> Result<ocl_core::Event, CUresult> {
-        let mut signal: ocl_core::ffi::cl_event = ptr::null_mut();
-        let error = (self.clEnqueueMemFillINTEL)(
-            queue.as_ptr(),
-            dst,
-            pattern,
-            patternSize,
-            size,
-            0,
-            ptr::null(),
-            &mut signal,
-        );
-        if error == 0 {
-            Ok(ocl_core::Event::from_raw(signal))
-        } else {
-            Err(CUresult::CUDA_ERROR_UNKNOWN)
-        }
-    }
 }
 
 unsafe impl Send for Device {}
@@ -202,7 +42,6 @@ impl Device {
         ocl_dev: ocl_core::DeviceId,
         idx: usize,
     ) -> Result<Self, CUresult> {
-        let ocl_ext = OpenCLExtensions::new(&platform)?;
         let mut props = ocl_core::ContextProperties::new();
         props.set_platform(platform);
         let ctx = ocl_core::create_context(Some(&props), &[ocl_dev], None, None)?;
@@ -210,13 +49,13 @@ impl Device {
         let primary_context =
             context::Context::new(context::ContextData::new(0, true, ptr::null_mut())?);
         Ok(Self {
-            ocl_ext,
             index: Index(idx as c_int),
             base: l0_dev,
             ocl_base: ocl_dev,
             default_queue: queue,
             ocl_context: ctx,
             primary_context,
+            allocations: HashSet::new(),
             properties: None,
             image_properties: None,
             memory_properties: None,

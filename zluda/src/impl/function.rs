@@ -3,7 +3,7 @@ use ocl_core::DeviceId;
 use super::{stream::Stream, CUresult, GlobalState, HasLivenessCookie, LiveCheck};
 use crate::cuda::CUfunction_attribute;
 use ::std::os::raw::{c_uint, c_void};
-use std::{hint, ptr};
+use std::{hint, mem, ptr};
 
 const CU_LAUNCH_PARAM_END: *mut c_void = 0 as *mut _;
 const CU_LAUNCH_PARAM_BUFFER_POINTER: *mut c_void = 1 as *mut _;
@@ -101,7 +101,9 @@ pub fn launch_kernel(
     {
         return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
     }
-    GlobalState::lock_enqueue(hstream, |queue| {
+    GlobalState::lock_stream(hstream, |stream_data| {
+        let dev = unsafe { &mut *(*stream_data.context).device };
+        let queue = stream_data.cmd_list.as_ref().unwrap();
         let func: &mut FunctionData = unsafe { &mut *f }.as_result_mut()?;
         if kernel_params != ptr::null_mut() {
             for (i, &(arg_size, is_mem)) in func.arg_size.iter().enumerate() {
@@ -162,6 +164,16 @@ pub fn launch_kernel(
                 )?
             };
         }
+        let buffers = dev.allocations.iter().copied().collect::<Vec<_>>();
+        let err = unsafe {
+            ocl_core::ffi::clSetKernelExecInfo(
+                func.base.as_ptr(),
+                ocl_core::ffi::CL_KERNEL_EXEC_INFO_SVM_PTRS,
+                buffers.len() * mem::size_of::<*mut c_void>(),
+                buffers.as_ptr() as *const _,
+            )
+        };
+        assert_eq!(err, 0);
         let global_dims = [
             (block_dim_x * grid_dim_x) as usize,
             (block_dim_y * grid_dim_y) as usize,
@@ -184,7 +196,7 @@ pub fn launch_kernel(
             )?
         };
         Ok::<_, CUresult>(())
-    })
+    })?
 }
 
 fn round_up_to_multiple(x: usize, multiple: usize) -> usize {
