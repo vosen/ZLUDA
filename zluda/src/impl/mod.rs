@@ -134,30 +134,6 @@ impl<T: CudaRepr> Decuda<*mut T::Impl> for *mut T {
     }
 }
 
-impl From<l0::sys::ze_result_t> for CUresult {
-    fn from(result: l0::sys::ze_result_t) -> Self {
-        match result {
-            l0::sys::ze_result_t::ZE_RESULT_SUCCESS => CUresult::CUDA_SUCCESS,
-            l0_sys::ze_result_t::ZE_RESULT_ERROR_UNINITIALIZED => {
-                CUresult::CUDA_ERROR_NOT_INITIALIZED
-            }
-            l0_sys::ze_result_t::ZE_RESULT_ERROR_INVALID_ENUMERATION
-            | l0_sys::ze_result_t::ZE_RESULT_ERROR_INVALID_ARGUMENT
-            | l0_sys::ze_result_t::ZE_RESULT_ERROR_INVALID_GROUP_SIZE_DIMENSION
-            | l0_sys::ze_result_t::ZE_RESULT_ERROR_INVALID_GLOBAL_WIDTH_DIMENSION => {
-                CUresult::CUDA_ERROR_INVALID_VALUE
-            }
-            l0_sys::ze_result_t::ZE_RESULT_ERROR_OUT_OF_HOST_MEMORY => {
-                CUresult::CUDA_ERROR_OUT_OF_MEMORY
-            }
-            l0_sys::ze_result_t::ZE_RESULT_ERROR_UNSUPPORTED_FEATURE => {
-                CUresult::CUDA_ERROR_NOT_SUPPORTED
-            }
-            _ => CUresult::CUDA_ERROR_UNKNOWN,
-        }
-    }
-}
-
 impl<T> From<TryLockError<T>> for CUresult {
     fn from(_: TryLockError<T>) -> Self {
         CUresult::CUDA_ERROR_ILLEGAL_STATE
@@ -181,13 +157,6 @@ impl Encuda for CUresult {
     type To = CUresult;
     fn encuda(self: Self) -> Self::To {
         self
-    }
-}
-
-impl Encuda for l0::sys::ze_result_t {
-    type To = CUresult;
-    fn encuda(self: Self) -> Self::To {
-        self.into()
     }
 }
 
@@ -215,7 +184,6 @@ lazy_static! {
 struct GlobalState {
     devices: Vec<Device>,
     global_heap: *mut c_void,
-    platform: ocl_core::PlatformId,
 }
 
 unsafe impl Send for GlobalState {}
@@ -282,19 +250,6 @@ impl GlobalState {
         }
     }
 
-    fn lock_enqueue(
-        stream: *mut stream::Stream,
-        f: impl FnOnce(&ocl_core::CommandQueue) -> Result<(), CUresult>,
-    ) -> Result<(), CUresult> {
-        Self::lock_stream(stream, |stream_data| {
-            let l0_dev = unsafe { (*(*stream_data.context).device).base };
-            let l0_ctx = unsafe { &mut (*(*stream_data.context).device).ocl_context };
-            let cmd_list = unsafe { transmute_lifetime(&stream_data.cmd_list) };
-            f(&stream_data.cmd_list.as_ref().unwrap())?;
-            Ok(())
-        })?
-    }
-
     fn lock_function<T>(
         func: *mut function::Function,
         f: impl FnOnce(&mut function::FunctionData) -> T,
@@ -309,11 +264,6 @@ impl GlobalState {
     }
 }
 
-// TODO: implement
-fn is_intel_gpu_driver(_: &l0::Driver) -> bool {
-    true
-}
-
 pub fn init() -> Result<(), CUresult> {
     let mut global_state = GLOBAL_STATE
         .lock()
@@ -321,36 +271,29 @@ pub fn init() -> Result<(), CUresult> {
     if global_state.is_some() {
         return Ok(());
     }
-    l0::init()?;
     let platforms = ocl_core::get_platform_ids()?;
-    let (platform, device) = platforms
+    let mut devices = platforms
         .iter()
-        .find_map(|plat| {
+        .filter_map(|plat| {
             let devices =
                 ocl_core::get_device_ids(plat, Some(ocl_core::DeviceType::GPU), None).ok()?;
             for dev in devices {
                 let vendor = ocl_core::get_device_info(dev, ocl_core::DeviceInfo::VendorId).ok()?;
-                if let ocl_core::DeviceInfoResult::VendorId(0x8086) = vendor {
-                    let dev_type =
-                        ocl_core::get_device_info(dev, ocl_core::DeviceInfo::Type).ok()?;
-                    if let ocl_core::DeviceInfoResult::Type(ocl_core::DeviceType::GPU) = dev_type {
-                        return Some((plat.clone(), dev));
-                    }
+                let is_amd = match vendor {
+                    ocl_core::DeviceInfoResult::VendorId(0x8086) => false,
+                    ocl_core::DeviceInfoResult::VendorId(0x1002) => true,
+                    _ => continue,
+                };
+                let dev_type = ocl_core::get_device_info(dev, ocl_core::DeviceInfo::Type).ok()?;
+                if let ocl_core::DeviceInfoResult::Type(ocl_core::DeviceType::GPU) = dev_type {
+                    return Some((plat.clone(), dev, is_amd));
                 }
             }
             None
         })
-        .ok_or(CUresult::CUDA_ERROR_UNKNOWN)?;
-    let drivers = l0::Driver::get()?;
-    let mut devices = match drivers.into_iter().find(is_intel_gpu_driver) {
-        None => return Err(CUresult::CUDA_ERROR_UNKNOWN),
-        Some(driver) => driver
-            .devices()?
-            .into_iter()
-            .enumerate()
-            .map(|(idx, l0_dev)| device::Device::new(l0_dev, platform, device, idx).unwrap())
-            .collect::<Vec<_>>(),
-    };
+        .enumerate()
+        .map(|(idx, (platform, device, is_amd))| device::Device::new(platform, device, idx, is_amd))
+        .collect::<Result<Vec<_>, _>>()?;
     for d in devices.iter_mut() {
         d.late_init();
         d.primary_context.late_init();
@@ -362,7 +305,6 @@ pub fn init() -> Result<(), CUresult> {
     *global_state = Some(GlobalState {
         devices,
         global_heap,
-        platform,
     });
     drop(global_state);
     Ok(())
