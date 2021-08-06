@@ -9,8 +9,6 @@ name = "zluda"
 
 [dependencies]
 ptx = { path = "../ptx" }
-level_zero = { path = "../level_zero" }
-level_zero-sys = { path = "../level_zero-sys" }
 lazy_static = "1.4"
 num_enum = "0.4"
 lz4-sys = "1.9"

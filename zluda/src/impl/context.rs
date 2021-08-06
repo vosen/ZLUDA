@@ -1,7 +1,6 @@
 use super::{device, stream::Stream, stream::StreamData, HasLivenessCookie, LiveCheck};
 use super::{transmute_lifetime_mut, CUresult, GlobalState};
 use crate::{cuda::CUcontext, cuda_impl};
-use l0::sys::ze_result_t;
 use std::{cell::RefCell, num::NonZeroU32, os::raw::c_uint, ptr, sync::atomic::AtomicU32};
 use std::{
     collections::HashSet,
@@ -193,9 +192,9 @@ pub fn pop_current_v2(pctx: *mut *mut Context) -> CUresult {
     CUresult::CUDA_SUCCESS
 }
 
-pub fn get_current(pctx: *mut *mut Context) -> l0::Result<()> {
+pub fn get_current(pctx: *mut *mut Context) -> Result<(), CUresult> {
     if pctx == ptr::null_mut() {
-        return Err(ze_result_t::ZE_RESULT_ERROR_INVALID_ARGUMENT);
+        return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
     }
     let ctx = CONTEXT_STACK.with(|stack| match stack.borrow().last() {
         Some(ctx) => *ctx as *mut _,

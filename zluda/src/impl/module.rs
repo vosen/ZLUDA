@@ -128,6 +128,12 @@ impl SpirvModule {
         generic_paths.chain(std::iter::once(additional_path))
     }
 
+    #[cfg(not(target_os = "linux"))]
+    fn compile_amd(spirv_il: &[u8], ptx_lib: Option<&'static [u8]>) -> io::Result<()> {
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
     fn compile_amd(spirv_il: &[u8], ptx_lib: Option<&'static [u8]>) -> io::Result<()> {
         let dir = tempfile::tempdir()?;
         let mut spirv = NamedTempFile::new_in(&dir)?;

@@ -3829,7 +3829,7 @@ fn emit_mul_sint(
             let src1 = builder.s_convert(dst_type_id, None, arg.src1)?;
             let src2 = builder.s_convert(dst_type_id, None, arg.src2)?;
             builder.i_mul(dst_type_id, Some(arg.dst), src1, src2)?;
-            builder.decorate(arg.dst, spirv::Decoration::NoSignedWrap, []);
+            builder.decorate(arg.dst, spirv::Decoration::NoSignedWrap, iter::empty());
         }
     }
     Ok(())
@@ -3867,7 +3867,7 @@ fn emit_mul_uint(
             let src1 = builder.u_convert(dst_type_id, None, arg.src1)?;
             let src2 = builder.u_convert(dst_type_id, None, arg.src2)?;
             builder.i_mul(dst_type_id, Some(arg.dst), src1, src2)?;
-            builder.decorate(arg.dst, spirv::Decoration::NoUnsignedWrap, []);
+            builder.decorate(arg.dst, spirv::Decoration::NoUnsignedWrap, iter::empty());
         }
     }
     Ok(())
