@@ -27,6 +27,7 @@ pub struct Device {
     pub primary_context: context::Context,
     pub allocations: HashSet<*mut c_void>,
     pub is_amd: bool,
+    pub name: String,
 }
 
 unsafe impl Send for Device {}
@@ -44,6 +45,12 @@ impl Device {
         let queue = ocl_core::create_command_queue(&ctx, ocl_dev, None)?;
         let primary_context =
             context::Context::new(context::ContextData::new(0, true, ptr::null_mut())?);
+        let props = ocl_core::get_device_info(ocl_dev, ocl_core::DeviceInfo::Name)?;
+        let name = if let ocl_core::DeviceInfoResult::Name(name) = props {
+            Ok(name)
+        } else {
+            Err(CUresult::CUDA_ERROR_UNKNOWN)
+        }?;
         Ok(Self {
             index: Index(idx as c_int),
             ocl_base: ocl_dev,
@@ -52,6 +59,7 @@ impl Device {
             primary_context,
             allocations: HashSet::new(),
             is_amd,
+            name,
         })
     }
 
@@ -83,14 +91,7 @@ pub fn get_name(name: *mut c_char, len: i32, dev_idx: Index) -> Result<(), CUres
     if name == ptr::null_mut() || len < 0 {
         return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
     }
-    let name_string = GlobalState::lock_device(dev_idx, |dev| {
-        let props = ocl_core::get_device_info(dev.ocl_base, ocl_core::DeviceInfo::Name)?;
-        if let ocl_core::DeviceInfoResult::Name(name) = props {
-            Ok(name)
-        } else {
-            Err(CUresult::CUDA_ERROR_UNKNOWN)
-        }
-    })??;
+    let name_string = GlobalState::lock_device(dev_idx, |dev| dev.name.clone())?;
     let mut dst_null_pos = cmp::min((len - 1) as usize, name_string.len());
     unsafe { std::ptr::copy_nonoverlapping(name_string.as_ptr() as *const _, name, dst_null_pos) };
     if name_string.len() + PROJECT_URL_SUFFIX_LONG.len() < (len as usize) {
@@ -179,7 +180,7 @@ pub fn get_attribute(
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR => {
             GlobalState::lock_device(dev_idx, |dev| {
                 if !dev.is_amd {
-                    8i32 * 7 // correct for GEN9
+                    7 // correct for GEN9
                 } else {
                     4i32 * 32 // probably correct for RDNA
                 }
