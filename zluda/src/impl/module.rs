@@ -116,13 +116,18 @@ impl SpirvModule {
             path.push(x);
             path
         });
+        let suffix = if let Some(suffix_idx) = device_name.find(':') {
+            suffix_idx
+        } else {
+            device_name.len()
+        };
         let mut additional_path = PathBuf::from(Self::AMDGPU);
         additional_path.push("amdgcn");
         additional_path.push("bitcode");
         additional_path.push(format!(
             "{}{}{}",
             Self::AMDGPU_BITCODE_DEVICE_PREFIX,
-            &device_name[3..],
+            &device_name[3..suffix],
             ".bc"
         ));
         generic_paths.chain(std::iter::once(additional_path))
