@@ -8,5 +8,6 @@ edition = "2018"
 name = "nvml"
 crate-type = ["cdylib"]
 
-[dependencies]
-level_zero = { path = "../level_zero" }
+[dependencies.ocl-core]
+version = "0.11"
+features = ["opencl_version_1_2", "opencl_version_2_0", "opencl_version_2_1"]
