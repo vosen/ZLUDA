@@ -5,8 +5,6 @@ use std::{
     ptr,
 };
 
-use ocl_core::ClVersions;
-
 use crate::nvml::nvmlReturn_t;
 
 macro_rules! stringify_nmvlreturn_t {
@@ -74,7 +72,7 @@ static mut DEVICE: Option<ocl_core::DeviceId> = None;
 
 pub(crate) fn init_v2() -> Result<(), nvmlReturn_t> {
     let platforms = ocl_core::get_platform_ids()?;
-    let mut device = platforms.iter().find_map(|plat| {
+    let device = platforms.iter().find_map(|plat| {
         let devices = ocl_core::get_device_ids(plat, Some(ocl_core::DeviceType::GPU), None).ok()?;
         for dev in devices {
             let vendor = ocl_core::get_device_info(dev, ocl_core::DeviceInfo::VendorId).ok()?;
@@ -103,7 +101,7 @@ pub(crate) fn init_with_flags() -> Result<(), nvmlReturn_t> {
 }
 
 impl From<ocl_core::Error> for nvmlReturn_t {
-    fn from(err: ocl_core::Error) -> Self {
+    fn from(_: ocl_core::Error) -> Self {
         nvmlReturn_t::NVML_ERROR_UNKNOWN
     }
 }
