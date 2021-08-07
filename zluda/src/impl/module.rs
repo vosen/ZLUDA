@@ -182,7 +182,7 @@ impl SpirvModule {
         let status = linker_cmd.status()?;
         assert!(status.success());
         let mut ptx_lib_bitcode = NamedTempFile::new_in(&dir)?;
-        let mut compiled_binary = NamedTempFile::new_in(&dir)?;
+        let compiled_binary = NamedTempFile::new_in(&dir)?;
         let mut cland_exe = PathBuf::from(Self::AMDGPU);
         cland_exe.push("bin");
         cland_exe.push("clang");
@@ -207,8 +207,12 @@ impl SpirvModule {
         let status = compiler_cmd.status()?;
         assert!(status.success());
         let mut result = Vec::new();
-        let mut compiled_binary = File::open(compiled_binary.path())?;
+        let compiled_bin_path = compiled_binary.path();
+        let mut compiled_binary = File::open(compiled_bin_path)?;
         compiled_binary.read_to_end(&mut result)?;
+        let mut persistent = PathBuf::from("/tmp/zluda");
+        persistent.push(compiled_bin_path.file_name().unwrap());
+        std::fs::copy(compiled_bin_path, persistent)?;
         Ok(result)
     }
 
