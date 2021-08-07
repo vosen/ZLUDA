@@ -148,11 +148,16 @@ impl SpirvModule {
         spirv_il: &[u8],
         ptx_lib: Option<(&'static [u8], &'static [u8])>,
     ) -> io::Result<Vec<u8>> {
+        use std::env;
         let dir = tempfile::tempdir()?;
         let mut spirv = NamedTempFile::new_in(&dir)?;
         let llvm = NamedTempFile::new_in(&dir)?;
         spirv.write_all(spirv_il)?;
-        let to_llvm_cmd = Command::new(Self::LLVM_SPIRV)
+        let llvm_spirv_path = match env::var("LLVM_SPIRV") {
+            Ok(path) => Cow::Owned(path),
+            Err(_) => Cow::Borrowed(Self::LLVM_SPIRV),
+        };
+        let to_llvm_cmd = Command::new(&*llvm_spirv_path)
             .arg("-r")
             .arg("-o")
             .arg(llvm.path())
