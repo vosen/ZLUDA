@@ -5,6 +5,7 @@ use std::{
     ffi::c_void,
     ffi::CStr,
     ffi::CString,
+    fs::File,
     io::{self, Read, Seek, SeekFrom, Write},
     mem,
     os::raw::{c_char, c_int, c_uint},
@@ -134,7 +135,7 @@ impl SpirvModule {
     }
 
     #[cfg(not(target_os = "linux"))]
-    fn compile_amd(
+    fn compile_amd1(
         device_name: &str,
         spirv_il: &[u8],
         ptx_lib: Option<(&'static [u8], &'static [u8])>,
@@ -206,7 +207,7 @@ impl SpirvModule {
         let status = compiler_cmd.status()?;
         assert!(status.success());
         let mut result = Vec::new();
-        compiled_binary.seek(SeekFrom::Start(0))?;
+        let mut compiled_binary = File::open(compiled_binary.path())?;
         compiled_binary.read_to_end(&mut result)?;
         Ok(result)
     }
