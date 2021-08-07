@@ -5,7 +5,7 @@ use std::{
     ffi::c_void,
     ffi::CStr,
     ffi::CString,
-    io::{self, Read, Write},
+    io::{self, Read, Seek, SeekFrom, Write},
     mem,
     os::raw::{c_char, c_int, c_uint},
     path::PathBuf,
@@ -206,6 +206,7 @@ impl SpirvModule {
         let status = compiler_cmd.status()?;
         assert!(status.success());
         let mut result = Vec::new();
+        compiled_binary.seek(SeekFrom::Start(0))?;
         compiled_binary.read_to_end(&mut result)?;
         Ok(result)
     }
