@@ -135,7 +135,7 @@ impl SpirvModule {
     }
 
     #[cfg(not(target_os = "linux"))]
-    fn compile_amd1(
+    fn compile_amd(
         device_name: &str,
         spirv_il: &[u8],
         ptx_lib: Option<(&'static [u8], &'static [u8])>,
@@ -276,7 +276,25 @@ impl SpirvModule {
         let ocl_program = if is_amd {
             let binary_prog =
                 Self::compile_amd(device_name, byte_il, self.should_link_ptx_impl).unwrap();
-            ocl_core::create_program_with_binary(ctx, &[dev], &[&binary_prog[..]])?
+            let device = dev.as_raw();
+            let binary_len = binary_prog.len();
+            let binary = binary_prog.as_ptr();
+            let mut binary_status = 0;
+            let mut errcode_ret = 0;
+            let program = unsafe {
+                ocl_core::ffi::clCreateProgramWithBinary(
+                    ctx.as_ptr(),
+                    1,
+                    &device,
+                    &binary_len,
+                    &binary,
+                    &mut binary_status,
+                    &mut errcode_ret,
+                )
+            };
+            assert_eq!(binary_status, 0, "clCreateProgramWithBinary");
+            assert_eq!(errcode_ret, 0, "clCreateProgramWithBinary");
+            unsafe { ocl_core::Program::from_raw_create_ptr(program) }
         } else {
             Self::compile_intel(
                 ctx,
