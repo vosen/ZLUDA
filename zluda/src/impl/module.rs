@@ -189,6 +189,8 @@ impl SpirvModule {
         let mut compiler_cmd = Command::new(&cland_exe);
         compiler_cmd
             .arg(format!("-mcpu={}", device_name))
+            .arg("-nogpulib")
+            .arg("-mno-wavefrontsize64")
             .arg("-O3")
             .arg("-Xlinker")
             .arg("--no-undefined")
