@@ -196,6 +196,8 @@ impl SpirvModule {
             .arg(Self::AMDGPU_TARGET)
             .arg("-o")
             .arg(compiled_binary.path())
+            .arg("-x")
+            .arg("ir")
             .arg(linked_binary.path());
         if let Some((_, bitcode)) = ptx_lib {
             ptx_lib_bitcode.write_all(bitcode)?;
@@ -211,6 +213,7 @@ impl SpirvModule {
         let mut compiled_binary = File::open(compiled_bin_path)?;
         compiled_binary.read_to_end(&mut result)?;
         let mut persistent = PathBuf::from("/tmp/zluda");
+        std::fs::create_dir_all(&persistent)?;
         persistent.push(compiled_bin_path.file_name().unwrap());
         std::fs::copy(compiled_bin_path, persistent)?;
         Ok(result)
@@ -300,6 +303,7 @@ impl SpirvModule {
             assert_eq!(errcode_ret, 0, "clCreateProgramWithBinary");
             unsafe { ocl_core::Program::from_raw_create_ptr(program) }
         } else {
+            Self::compile_amd("gfx1011:xnack-", byte_il, self.should_link_ptx_impl).unwrap();
             Self::compile_intel(
                 ctx,
                 dev,
