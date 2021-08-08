@@ -27,6 +27,7 @@ impl HasLivenessCookie for FunctionData {
 
 pub struct FunctionData {
     pub base: ocl_core::Kernel,
+    pub device: ocl_core::DeviceId,
     pub arg_size: Vec<(usize, bool)>,
     pub use_shared_mem: bool,
     pub legacy_args: LegacyArguments,
@@ -215,9 +216,9 @@ pub(crate) fn get_attribute(
         CUfunction_attribute::CU_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK => {
             let max_threads = GlobalState::lock_function(func, |func| {
                 if let ocl_core::KernelWorkGroupInfoResult::WorkGroupSize(size) =
-                    ocl_core::get_kernel_work_group_info::<()>(
+                    ocl_core::get_kernel_work_group_info(
                         &func.base,
-                        (),
+                        &func.device,
                         ocl_core::KernelWorkGroupInfo::WorkGroupSize,
                     )?
                 {
