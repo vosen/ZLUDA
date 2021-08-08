@@ -48,7 +48,6 @@ pub fn copy_v2(dst: *mut c_void, src: *const c_void, bytesize: usize) -> Result<
     GlobalState::lock_stream(stream::CU_STREAM_LEGACY, |stream_data| {
         let dev = unsafe { &*(*stream_data.context).device };
         let queue = stream_data.cmd_list.as_ref().unwrap();
-        let mut event = ptr::null_mut();
         let err = unsafe {
             ocl_core::ffi::clEnqueueSVMMemcpy(
                 queue.as_ptr(),
@@ -58,11 +57,9 @@ pub fn copy_v2(dst: *mut c_void, src: *const c_void, bytesize: usize) -> Result<
                 bytesize,
                 0,
                 ptr::null(),
-                &mut event,
+                ptr::null_mut(),
             )
         };
-        assert_eq!(err, 0);
-        let err = unsafe { ocl_core::ffi::clWaitForEvents(1, &mut event) };
         assert_eq!(err, 0);
         Ok(())
     })?
