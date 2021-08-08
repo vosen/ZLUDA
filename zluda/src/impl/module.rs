@@ -290,7 +290,7 @@ impl SpirvModule {
             let binary = binary_prog.as_ptr();
             let mut binary_status = 0;
             let mut errcode_ret = 0;
-            let program = unsafe {
+            let raw_program = unsafe {
                 ocl_core::ffi::clCreateProgramWithBinary(
                     ctx.as_ptr(),
                     1,
@@ -303,7 +303,15 @@ impl SpirvModule {
             };
             assert_eq!(binary_status, 0, "clCreateProgramWithBinary");
             assert_eq!(errcode_ret, 0, "clCreateProgramWithBinary");
-            unsafe { ocl_core::Program::from_raw_create_ptr(program) }
+            let ocl_program = unsafe { ocl_core::Program::from_raw_create_ptr(raw_program) };
+            ocl_core::build_program(
+                &ocl_program,
+                Some(&[dev]),
+                &CString::new("").unwrap(),
+                None,
+                None,
+            )?;
+            ocl_program
         } else {
             Self::compile_amd("gfx1011:xnack-", byte_il, self.should_link_ptx_impl).unwrap();
             Self::compile_intel(
@@ -359,36 +367,9 @@ pub fn get_function(
                     &compiled_module.base,
                     &entry.key().as_c_str().to_string_lossy(),
                 )?;
-                let true_b: ocl_core::ffi::cl_bool = 1;
-                let err = unsafe {
-                    ocl_core::ffi::clSetKernelExecInfo(
-                        kernel.as_ptr(),
-                        CL_KERNEL_EXEC_INFO_INDIRECT_HOST_ACCESS_INTEL,
-                        mem::size_of::<ocl_core::ffi::cl_bool>(),
-                        &true_b as *const _ as *const _,
-                    )
-                };
-                assert_eq!(err, 0);
-                let err = unsafe {
-                    ocl_core::ffi::clSetKernelExecInfo(
-                        kernel.as_ptr(),
-                        CL_KERNEL_EXEC_INFO_INDIRECT_DEVICE_ACCESS_INTEL,
-                        mem::size_of::<ocl_core::ffi::cl_bool>(),
-                        &true_b as *const _ as *const _,
-                    )
-                };
-                assert_eq!(err, 0);
-                let err = unsafe {
-                    ocl_core::ffi::clSetKernelExecInfo(
-                        kernel.as_ptr(),
-                        CL_KERNEL_EXEC_INFO_INDIRECT_SHARED_ACCESS_INTEL,
-                        mem::size_of::<ocl_core::ffi::cl_bool>(),
-                        &true_b as *const _ as *const _,
-                    )
-                };
-                assert_eq!(err, 0);
                 entry.insert(Box::new(Function::new(FunctionData {
                     base: kernel,
+                    device: device.ocl_base.clone(),
                     arg_size: kernel_info.arguments_sizes.clone(),
                     use_shared_mem: kernel_info.uses_shared_mem,
                     legacy_args: LegacyArguments::new(),
