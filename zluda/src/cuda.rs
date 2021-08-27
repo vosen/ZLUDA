@@ -1,3 +1,5 @@
+use hip_runtime_sys::*;
+
 use super::r#impl;
 use super::r#impl::{Decuda, Encuda};
 
@@ -2183,10 +2185,11 @@ pub use self::CUgraphExecUpdateResult_enum as CUgraphExecUpdateResult;
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuGetErrorString(
-    error: CUresult,
+    CUresult(e): CUresult,
     pStr: *mut *const ::std::os::raw::c_char,
 ) -> CUresult {
-    r#impl::get_error_string(error, pStr).encuda()
+    unsafe { *pStr = hipGetErrorString(hipError_t(e)) };
+    CUresult::CUDA_SUCCESS
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2199,13 +2202,12 @@ pub extern "system" fn cuGetErrorName(
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuInit(Flags: ::std::os::raw::c_uint) -> CUresult {
-    r#impl::init().encuda()
+    unsafe { hipInit(Flags).into() }
 }
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuDriverGetVersion(driverVersion: *mut ::std::os::raw::c_int) -> CUresult {
-    unsafe { *driverVersion = r#impl::driver_get_version() };
-    CUresult::CUDA_SUCCESS
+    unsafe { hipDriverGetVersion(driverVersion).into() }
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2213,21 +2215,21 @@ pub extern "system" fn cuDeviceGet(
     device: *mut CUdevice,
     ordinal: ::std::os::raw::c_int,
 ) -> CUresult {
-    r#impl::device::get(device.decuda(), ordinal).encuda()
+    unsafe { hipDeviceGet(device as _, ordinal).into() }
 }
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuDeviceGetCount(count: *mut ::std::os::raw::c_int) -> CUresult {
-    r#impl::device::get_count(count).encuda()
+    unsafe { hipGetDeviceCount(count).into() }
 }
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuDeviceGetName(
     name: *mut ::std::os::raw::c_char,
     len: ::std::os::raw::c_int,
-    dev: CUdevice,
+    CUdevice(dev): CUdevice,
 ) -> CUresult {
-    r#impl::device::get_name(name, len, dev.decuda()).encuda()
+    unsafe { hipDeviceGetName(name, len, dev).into() }
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2245,17 +2247,17 @@ pub extern "system" fn cuDeviceGetLuid(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuDeviceTotalMem_v2(bytes: *mut usize, dev: CUdevice) -> CUresult {
-    r#impl::device::total_mem_v2(bytes, dev.decuda()).encuda()
+pub extern "system" fn cuDeviceTotalMem_v2(bytes: *mut usize, CUdevice(dev): CUdevice) -> CUresult {
+    unsafe { hipDeviceTotalMem(bytes, dev).into() }
 }
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuDeviceGetAttribute(
     pi: *mut ::std::os::raw::c_int,
     attrib: CUdevice_attribute,
-    dev: CUdevice,
+    CUdevice(dev): CUdevice,
 ) -> CUresult {
-    r#impl::device::get_attribute(pi, attrib, dev.decuda()).encuda()
+    r#impl::device::get_attribute(pi, attrib, dev).into()
 }
 
 #[cfg_attr(not(test), no_mangle)]

@@ -148,6 +148,16 @@ impl From<ocl_core::Error> for CUresult {
     }
 }
 
+impl From<hip_runtime_sys::hipError_t> for CUresult {
+    fn from(result: hip_runtime_sys::hipError_t) -> Self {
+        match result {
+            hip_runtime_sys::hipError_t::hipErrorRuntimeMemory
+            | hip_runtime_sys::hipError_t::hipErrorRuntimeOther => CUresult::CUDA_ERROR_UNKNOWN,
+            hip_runtime_sys::hipError_t(e) => CUresult(e),
+        }
+    }
+}
+
 pub trait Encuda {
     type To: Sized;
     fn encuda(self: Self) -> Self::To;
