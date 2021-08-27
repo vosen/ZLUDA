@@ -265,6 +265,7 @@ impl GlobalState {
 }
 
 pub fn init() -> Result<(), CUresult> {
+    eprintln!("{:?}", unsafe { hip_runtime_sys::hipInit(0) });
     let mut global_state = GLOBAL_STATE
         .lock()
         .map_err(|_| CUresult::CUDA_ERROR_UNKNOWN)?;
