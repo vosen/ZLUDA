@@ -77,6 +77,7 @@ If you are building on Linux you must also symlink (or rename) the ZLUDA output 
 ```
 ln -s libnvcuda.so target/release/libcuda.so
 ln -s libcuda.so target/release/libcuda.so.1
+ln -s libnvidia-ml.so target/release/libnvml.so
 ```
 
 ## Contributing

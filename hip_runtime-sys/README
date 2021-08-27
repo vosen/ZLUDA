@@ -1,0 +1,2 @@
+bindgen include/hip_runtime_api.h -o src/hip_runtime_api.rs --no-layout-tests --size_t-is-usize --default-enum-style=newtype --whitelist-function "hip.*" --whitelist-type "hip.*" -- -I/opt/rocm/include
+sed -i 's/pub struct hipError_t/#[must_use]\npub struct hipError_t/g' src/hip_runtime_api.rs

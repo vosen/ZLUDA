@@ -2,6 +2,7 @@
 
 members = [
     "detours-sys",
+    "hip_runtime-sys",
     "level_zero-sys",
     "level_zero",
     "spirv_tools-sys",
