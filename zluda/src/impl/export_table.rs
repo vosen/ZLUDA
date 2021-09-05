@@ -12,7 +12,7 @@ use crate::{
     cuda_impl,
 };
 
-use super::{device, Decuda, Encuda};
+use super::{device, module, Decuda, Encuda};
 use std::collections::HashMap;
 use std::os::raw::{c_uint, c_ulong, c_ushort};
 use std::{
@@ -253,20 +253,17 @@ unsafe extern "system" fn get_module_from_cubin(
             },
             Err(_) => continue,
         };
-        todo!()
-        /*
         let module = module::SpirvModule::new(kernel_text_string);
         match module {
             Ok(module) => {
                 match module::load_data_impl(result, module) {
                     Ok(()) => {}
-                    Err(err) => return err,
+                    Err(err) => return err.into(),
                 }
                 return CUresult::CUDA_SUCCESS;
             }
             Err(_) => continue,
         }
-         */
     }
     CUresult::CUDA_ERROR_COMPAT_NOT_SUPPORTED_ON_DEVICE
 }

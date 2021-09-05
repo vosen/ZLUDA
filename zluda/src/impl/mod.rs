@@ -1,3 +1,5 @@
+use hip_runtime_sys::hipError_t;
+
 use crate::cuda::{CUctx_st, CUdevice, CUdeviceptr, CUfunc_st, CUmod_st, CUresult, CUstream_st};
 use std::{
     ffi::c_void,
@@ -17,6 +19,7 @@ pub mod function;
 #[cfg_attr(windows, path = "os_win.rs")]
 #[cfg_attr(not(windows), path = "os_unix.rs")]
 pub(crate) mod os;
+pub(crate) mod module;
 
 #[cfg(debug_assertions)]
 pub fn unimplemented() -> CUresult {
@@ -177,6 +180,13 @@ impl<T1: Encuda<To = CUresult>, T2: Encuda<To = CUresult>> Encuda for Result<T1,
             Ok(e) => e.encuda(),
             Err(e) => e.encuda(),
         }
+    }
+}
+
+impl Encuda for hipError_t {
+    type To = CUresult;
+    fn encuda(self: Self) -> Self::To {
+        self.into()
     }
 }
 
