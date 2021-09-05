@@ -1,7 +1,7 @@
-use hip_runtime_sys::{hipError_t, hipFuncGetAttributes};
+use hip_runtime_sys::{hipError_t, hipFuncGetAttributes, hipLaunchKernel, hipModuleLaunchKernel};
 
 use super::{CUresult, HasLivenessCookie, LiveCheck};
-use crate::cuda::{CUfunction, CUfunction_attribute};
+use crate::cuda::{CUfunction, CUfunction_attribute, CUstream};
 use ::std::os::raw::{c_uint, c_void};
 use std::{mem, ptr};
 
@@ -19,8 +19,12 @@ pub(crate) fn get_attribute(
         return err;
     }
     let value = match cu_attrib {
-        CU_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK => hip_attrib.maxThreadsPerBlock,
-        CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES => hip_attrib.sharedSizeBytes as i32,
+        CUfunction_attribute::CU_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK => {
+            hip_attrib.maxThreadsPerBlock
+        }
+        CUfunction_attribute::CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES => {
+            hip_attrib.sharedSizeBytes as i32
+        }
         _ => return hipError_t::hipErrorInvalidValue,
     };
     unsafe { *pi = value };

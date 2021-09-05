@@ -2454,7 +2454,7 @@ pub extern "system" fn cuModuleLoad(
     module: *mut CUmodule,
     fname: *const ::std::os::raw::c_char,
 ) -> CUresult {
-    unsafe { hipModuleLoad(module as _, fname as _).into() }
+    r#impl::module::load(module, fname).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2462,7 +2462,7 @@ pub extern "system" fn cuModuleLoadData(
     module: *mut CUmodule,
     image: *const ::std::os::raw::c_void,
 ) -> CUresult {
-    unsafe { hipModuleLoadData(module as _, image as _).into() }
+    r#impl::module::load_data(module, image).encuda()
 }
 
 // TODO: parse jit options
@@ -2474,16 +2474,7 @@ pub extern "system" fn cuModuleLoadDataEx(
     options: *mut CUjit_option,
     optionValues: *mut *mut ::std::os::raw::c_void,
 ) -> CUresult {
-    unsafe {
-        hipModuleLoadDataEx(
-            module as _,
-            image as _,
-            numOptions,
-            options as _,
-            optionValues,
-        )
-        .into()
-    }
+    r#impl::module::load_data(module, image).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -3710,7 +3701,22 @@ pub extern "system" fn cuLaunchKernel(
     kernelParams: *mut *mut ::std::os::raw::c_void,
     extra: *mut *mut ::std::os::raw::c_void,
 ) -> CUresult {
-    todo!()
+    unsafe {
+        hipModuleLaunchKernel(
+            f as _,
+            gridDimX,
+            gridDimY,
+            gridDimZ,
+            blockDimX,
+            blockDimY,
+            blockDimZ,
+            sharedMemBytes,
+            hStream as _,
+            kernelParams,
+            extra,
+        )
+    }
+    .into()
 }
 
 // TODO: implement default stream semantics
@@ -3728,7 +3734,19 @@ pub extern "system" fn cuLaunchKernel_ptsz(
     kernelParams: *mut *mut ::std::os::raw::c_void,
     extra: *mut *mut ::std::os::raw::c_void,
 ) -> CUresult {
-    todo!()
+    cuLaunchKernel(
+        f,
+        gridDimX,
+        gridDimY,
+        gridDimZ,
+        blockDimX,
+        blockDimY,
+        blockDimZ,
+        sharedMemBytes,
+        hStream,
+        kernelParams,
+        extra,
+    )
 }
 
 #[cfg_attr(not(test), no_mangle)]
