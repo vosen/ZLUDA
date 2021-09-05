@@ -2234,7 +2234,7 @@ pub extern "system" fn cuDeviceGetName(
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuDeviceGetUuid(uuid: *mut CUuuid, dev: CUdevice) -> CUresult {
-    r#impl::device::get_uuid(uuid, dev.decuda()).encuda()
+    r#impl::device::get_uuid(uuid, dev.0).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2243,7 +2243,7 @@ pub extern "system" fn cuDeviceGetLuid(
     deviceNodeMask: *mut ::std::os::raw::c_uint,
     dev: CUdevice,
 ) -> CUresult {
-    r#impl::device::get_luid(luid, deviceNodeMask, dev.decuda()).encuda()
+    r#impl::device::get_luid(luid, deviceNodeMask, dev.0).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2284,8 +2284,11 @@ pub extern "system" fn cuDeviceComputeCapability(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuDevicePrimaryCtxRetain(pctx: *mut CUcontext, dev: CUdevice) -> CUresult {
-    r#impl::device::primary_ctx_retain(pctx.decuda(), dev.decuda()).encuda()
+pub extern "system" fn cuDevicePrimaryCtxRetain(
+    pctx: *mut CUcontext,
+    CUdevice(dev): CUdevice,
+) -> CUresult {
+    unsafe { hipDevicePrimaryCtxRetain(pctx as _, dev).into() }
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2294,8 +2297,8 @@ pub extern "system" fn cuDevicePrimaryCtxRelease(dev: CUdevice) -> CUresult {
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuDevicePrimaryCtxRelease_v2(dev: CUdevice) -> CUresult {
-    r#impl::device::primary_ctx_release_v2(dev.decuda())
+pub extern "system" fn cuDevicePrimaryCtxRelease_v2(CUdevice(dev): CUdevice) -> CUresult {
+    unsafe { hipDevicePrimaryCtxRelease(dev).into() }
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2316,11 +2319,11 @@ pub extern "system" fn cuDevicePrimaryCtxSetFlags_v2(
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuDevicePrimaryCtxGetState(
-    dev: CUdevice,
+    CUdevice(dev): CUdevice,
     flags: *mut ::std::os::raw::c_uint,
     active: *mut ::std::os::raw::c_int,
 ) -> CUresult {
-    r#impl::device::primary_ctx_get_state(dev.decuda(), flags, active).encuda()
+    unsafe { hipDevicePrimaryCtxGetState(dev, flags, active).into() }
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2337,39 +2340,39 @@ pub extern "system" fn cuDevicePrimaryCtxReset_v2(dev: CUdevice) -> CUresult {
 pub extern "system" fn cuCtxCreate_v2(
     pctx: *mut CUcontext,
     flags: ::std::os::raw::c_uint,
-    dev: CUdevice,
+    CUdevice(dev): CUdevice,
 ) -> CUresult {
-    r#impl::context::create_v2(pctx.decuda(), flags, dev.decuda()).encuda()
+    unsafe { hipCtxCreate(pctx as _, flags, dev).into() }
 }
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuCtxDestroy_v2(ctx: CUcontext) -> CUresult {
-    r#impl::context::destroy_v2(ctx.decuda()).encuda()
+    unsafe { hipCtxDestroy(ctx as _).into() }
 }
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuCtxPushCurrent_v2(ctx: CUcontext) -> CUresult {
-    r#impl::context::push_current_v2(ctx.decuda())
+    unsafe { hipCtxPushCurrent(ctx as _).into() }
 }
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuCtxPopCurrent_v2(pctx: *mut CUcontext) -> CUresult {
-    r#impl::context::pop_current_v2(pctx.decuda())
+    unsafe { hipCtxPopCurrent(pctx as _).into() }
 }
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuCtxSetCurrent(ctx: CUcontext) -> CUresult {
-    r#impl::context::set_current(ctx.decuda())
+    unsafe { hipCtxSetCurrent(ctx as _).into() }
 }
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuCtxGetCurrent(pctx: *mut CUcontext) -> CUresult {
-    r#impl::context::get_current(pctx.decuda()).encuda()
+    unsafe { hipCtxGetCurrent(pctx as _).into() }
 }
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuCtxGetDevice(device: *mut CUdevice) -> CUresult {
-    r#impl::context::get_device(device.decuda()).encuda()
+    unsafe { hipCtxGetDevice(device as _).into() }
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2379,7 +2382,7 @@ pub extern "system" fn cuCtxGetFlags(flags: *mut ::std::os::raw::c_uint) -> CUre
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuCtxSynchronize() -> CUresult {
-    r#impl::context::synchronize().encuda()
+    unsafe { hipCtxSynchronize().into() }
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2417,7 +2420,7 @@ pub extern "system" fn cuCtxGetApiVersion(
     ctx: CUcontext,
     version: *mut ::std::os::raw::c_uint,
 ) -> CUresult {
-    r#impl::context::get_api_version(ctx.decuda(), version).encuda()
+    unsafe { hipCtxGetApiVersion(ctx as _, version as _).into() }
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2438,12 +2441,12 @@ pub extern "system" fn cuCtxAttach(
     pctx: *mut CUcontext,
     flags: ::std::os::raw::c_uint,
 ) -> CUresult {
-    r#impl::context::attach(pctx.decuda(), flags).encuda()
+    r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuCtxDetach(ctx: CUcontext) -> CUresult {
-    r#impl::context::detach(ctx.decuda()).encuda()
+    r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2451,7 +2454,7 @@ pub extern "system" fn cuModuleLoad(
     module: *mut CUmodule,
     fname: *const ::std::os::raw::c_char,
 ) -> CUresult {
-    r#impl::module::load(module.decuda(), fname).encuda()
+    unsafe { hipModuleLoad(module as _, fname as _).into() }
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2459,7 +2462,7 @@ pub extern "system" fn cuModuleLoadData(
     module: *mut CUmodule,
     image: *const ::std::os::raw::c_void,
 ) -> CUresult {
-    r#impl::module::load_data(module.decuda(), image).encuda()
+    unsafe { hipModuleLoadData(module as _, image as _).into() }
 }
 
 // TODO: parse jit options
@@ -2471,7 +2474,16 @@ pub extern "system" fn cuModuleLoadDataEx(
     options: *mut CUjit_option,
     optionValues: *mut *mut ::std::os::raw::c_void,
 ) -> CUresult {
-    r#impl::module::load_data(module.decuda(), image).encuda()
+    unsafe {
+        hipModuleLoadDataEx(
+            module as _,
+            image as _,
+            numOptions,
+            options as _,
+            optionValues,
+        )
+        .into()
+    }
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2484,7 +2496,7 @@ pub extern "system" fn cuModuleLoadFatBinary(
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuModuleUnload(hmod: CUmodule) -> CUresult {
-    r#impl::module::unload(hmod.decuda()).encuda()
+    unsafe { hipModuleUnload(hmod as _).into() }
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2493,7 +2505,7 @@ pub extern "system" fn cuModuleGetFunction(
     hmod: CUmodule,
     name: *const ::std::os::raw::c_char,
 ) -> CUresult {
-    r#impl::module::get_function(hfunc.decuda(), hmod.decuda(), name).encuda()
+    unsafe { hipModuleGetFunction(hfunc as _, hmod as _, name).into() }
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2581,7 +2593,7 @@ pub extern "system" fn cuMemGetInfo_v2(free: *mut usize, total: *mut usize) -> C
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuMemAlloc_v2(dptr: *mut CUdeviceptr, bytesize: usize) -> CUresult {
-    r#impl::memory::alloc_v2(dptr.decuda(), bytesize).encuda()
+    unsafe { hipMalloc(dptr as _, bytesize).into() }
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2597,7 +2609,7 @@ pub extern "system" fn cuMemAllocPitch_v2(
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuMemFree_v2(dptr: CUdeviceptr) -> CUresult {
-    r#impl::memory::free_v2(dptr.decuda()).encuda()
+    unsafe { hipFree(dptr.0 as _).into() }
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2757,7 +2769,7 @@ pub extern "system" fn cuMemcpyHtoD_v2(
     srcHost: *const ::std::os::raw::c_void,
     ByteCount: usize,
 ) -> CUresult {
-    r#impl::memory::copy_v2(dstDevice.decuda(), srcHost, ByteCount).encuda()
+    unsafe { hipMemcpyHtoD(dstDevice.0 as _, srcHost as _, ByteCount).into() }
 }
 
 // TODO: implement default stream semantics
@@ -2767,7 +2779,7 @@ pub extern "system" fn cuMemcpyHtoD_v2_ptds(
     srcHost: *const ::std::os::raw::c_void,
     ByteCount: usize,
 ) -> CUresult {
-    r#impl::memory::copy_v2(dstDevice.decuda(), srcHost, ByteCount).encuda()
+    cuMemcpyHtoD_v2(dstDevice, srcHost, ByteCount)
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2776,7 +2788,7 @@ pub extern "system" fn cuMemcpyDtoH_v2(
     srcDevice: CUdeviceptr,
     ByteCount: usize,
 ) -> CUresult {
-    r#impl::memory::copy_v2(dstHost, srcDevice.decuda(), ByteCount).encuda()
+    unsafe { hipMemcpyDtoH(dstHost as _, srcDevice.0 as _, ByteCount).into() }
 }
 
 // TODO: implement default stream semantics
@@ -2786,7 +2798,7 @@ pub extern "system" fn cuMemcpyDtoH_v2_ptds(
     srcDevice: CUdeviceptr,
     ByteCount: usize,
 ) -> CUresult {
-    r#impl::memory::copy_v2(dstHost, srcDevice.decuda(), ByteCount).encuda()
+    cuMemcpyDtoH_v2(dstHost, srcDevice, ByteCount)
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2973,7 +2985,7 @@ pub extern "system" fn cuMemsetD8_v2(
     uc: ::std::os::raw::c_uchar,
     N: usize,
 ) -> CUresult {
-    r#impl::memory::set_d8_v2(dstDevice.decuda(), uc, N).encuda()
+    unsafe { hipMemsetD8(dstDevice.0 as _, uc, N).into() }
 }
 
 // TODO: implement default stream semantics
@@ -2983,7 +2995,7 @@ pub extern "system" fn cuMemsetD8_v2_ptds(
     uc: ::std::os::raw::c_uchar,
     N: usize,
 ) -> CUresult {
-    r#impl::memory::set_d8_v2(dstDevice.decuda(), uc, N).encuda()
+    cuMemsetD8_v2(dstDevice, uc, N)
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -3001,7 +3013,7 @@ pub extern "system" fn cuMemsetD32_v2(
     ui: ::std::os::raw::c_uint,
     N: usize,
 ) -> CUresult {
-    r#impl::memory::set_d32_v2(dstDevice.decuda(), ui, N).encuda()
+    unsafe { hipMemsetD32(dstDevice.0 as _, ui as _, N).into() }
 }
 
 // TODO: implement default stream semantics
@@ -3011,7 +3023,7 @@ pub extern "system" fn cuMemsetD32_v2_ptds(
     ui: ::std::os::raw::c_uint,
     N: usize,
 ) -> CUresult {
-    r#impl::memory::set_d32_v2(dstDevice.decuda(), ui, N).encuda()
+    cuMemsetD32_v2(dstDevice, ui, N)
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -3359,7 +3371,7 @@ pub extern "system" fn cuStreamCreate(
     phStream: *mut CUstream,
     Flags: ::std::os::raw::c_uint,
 ) -> CUresult {
-    r#impl::stream::create(phStream.decuda(), Flags).encuda()
+    unsafe { hipStreamCreateWithFlags(phStream as _, Flags) }.into()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -3389,13 +3401,13 @@ pub extern "system" fn cuStreamGetFlags(
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuStreamGetCtx(hStream: CUstream, pctx: *mut CUcontext) -> CUresult {
-    r#impl::stream::get_ctx(hStream.decuda(), pctx.decuda()).encuda()
+    unsafe { hipStreamGetCtx(hStream as _, pctx as _) }.into()
 }
 
 // TODO: implement default stream semantics
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuStreamGetCtx_ptsz(hStream: CUstream, pctx: *mut CUcontext) -> CUresult {
-    r#impl::stream::get_ctx(hStream.decuda(), pctx.decuda()).encuda()
+    cuStreamGetCtx(hStream, pctx)
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -3471,12 +3483,12 @@ pub extern "system" fn cuStreamQuery(hStream: CUstream) -> CUresult {
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuStreamSynchronize(hStream: CUstream) -> CUresult {
-    r#impl::stream::synchronize(hStream.decuda()).encuda()
+    unsafe { hipStreamSynchronize(hStream as _) }.into()
 }
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuStreamDestroy_v2(hStream: CUstream) -> CUresult {
-    r#impl::stream::destroy_v2(hStream.decuda()).encuda()
+    unsafe { hipStreamDestroy(hStream as _) }.into()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -3659,7 +3671,7 @@ pub extern "system" fn cuFuncGetAttribute(
     attrib: CUfunction_attribute,
     hfunc: CUfunction,
 ) -> CUresult {
-    r#impl::function::get_attribute(pi, attrib, hfunc.decuda()).encuda()
+    r#impl::function::get_attribute(pi, attrib, hfunc).into()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -3698,20 +3710,7 @@ pub extern "system" fn cuLaunchKernel(
     kernelParams: *mut *mut ::std::os::raw::c_void,
     extra: *mut *mut ::std::os::raw::c_void,
 ) -> CUresult {
-    r#impl::function::launch_kernel(
-        f.decuda(),
-        gridDimX,
-        gridDimY,
-        gridDimZ,
-        blockDimX,
-        blockDimY,
-        blockDimZ,
-        sharedMemBytes,
-        hStream.decuda(),
-        kernelParams,
-        extra,
-    )
-    .encuda()
+    todo!()
 }
 
 // TODO: implement default stream semantics
@@ -3729,20 +3728,7 @@ pub extern "system" fn cuLaunchKernel_ptsz(
     kernelParams: *mut *mut ::std::os::raw::c_void,
     extra: *mut *mut ::std::os::raw::c_void,
 ) -> CUresult {
-    r#impl::function::launch_kernel(
-        f.decuda(),
-        gridDimX,
-        gridDimY,
-        gridDimZ,
-        blockDimX,
-        blockDimY,
-        blockDimZ,
-        sharedMemBytes,
-        hStream.decuda(),
-        kernelParams,
-        extra,
-    )
-    .encuda()
+    todo!()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -3786,7 +3772,7 @@ pub extern "system" fn cuFuncSetBlockShape(
     y: ::std::os::raw::c_int,
     z: ::std::os::raw::c_int,
 ) -> CUresult {
-    r#impl::function::set_block_shape(hfunc.decuda(), x, y, z).encuda()
+    r#impl::unimplemented()
 }
 
 #[cfg_attr(not(test), no_mangle)]

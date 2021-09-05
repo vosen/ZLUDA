@@ -1,7 +1,4 @@
-use crate::{
-    cuda::{CUctx_st, CUdevice, CUdeviceptr, CUfunc_st, CUmod_st, CUresult, CUstream_st},
-    r#impl::device::Device,
-};
+use crate::cuda::{CUctx_st, CUdevice, CUdeviceptr, CUfunc_st, CUmod_st, CUresult, CUstream_st};
 use std::{
     ffi::c_void,
     mem::{self, ManuallyDrop},
@@ -14,16 +11,12 @@ use std::{
 #[cfg(test)]
 #[macro_use]
 pub mod test;
-pub mod context;
 pub mod device;
 pub mod export_table;
 pub mod function;
-pub mod memory;
-pub mod module;
 #[cfg_attr(windows, path = "os_win.rs")]
 #[cfg_attr(not(windows), path = "os_unix.rs")]
 pub(crate) mod os;
-pub mod stream;
 
 #[cfg(debug_assertions)]
 pub fn unimplemented() -> CUresult {
@@ -187,244 +180,6 @@ impl<T1: Encuda<To = CUresult>, T2: Encuda<To = CUresult>> Encuda for Result<T1,
     }
 }
 
-lazy_static! {
-    static ref GLOBAL_STATE: Mutex<Option<GlobalState>> = Mutex::new(None);
-}
-
-struct GlobalState {
-    devices: Vec<Device>,
-    global_heap: *mut c_void,
-}
-
-unsafe impl Send for GlobalState {}
-
-impl GlobalState {
-    fn lock<T>(f: impl FnOnce(&mut GlobalState) -> T) -> Result<T, CUresult> {
-        let mut mutex = GLOBAL_STATE
-            .lock()
-            .unwrap_or_else(|poison| poison.into_inner());
-        let global_state = mutex.as_mut().ok_or(CUresult::CUDA_ERROR_ILLEGAL_STATE)?;
-        Ok(f(global_state))
-    }
-
-    fn lock_device<T>(
-        device::Index(dev_idx): device::Index,
-        f: impl FnOnce(&'static mut device::Device) -> T,
-    ) -> Result<T, CUresult> {
-        if dev_idx < 0 {
-            return Err(CUresult::CUDA_ERROR_INVALID_DEVICE);
-        }
-        Self::lock(|global_state| {
-            if dev_idx >= global_state.devices.len() as c_int {
-                Err(CUresult::CUDA_ERROR_INVALID_DEVICE)
-            } else {
-                Ok(f(unsafe {
-                    transmute_lifetime_mut(&mut global_state.devices[dev_idx as usize])
-                }))
-            }
-        })?
-    }
-
-    fn lock_current_context<F: FnOnce(&mut context::ContextData) -> R, R>(
-        f: F,
-    ) -> Result<R, CUresult> {
-        Self::lock_current_context_unchecked(|ctx| Ok(f(ctx.as_result_mut()?)))?
-    }
-
-    fn lock_current_context_unchecked<F: FnOnce(&mut context::Context) -> R, R>(
-        f: F,
-    ) -> Result<R, CUresult> {
-        context::CONTEXT_STACK.with(|stack| {
-            stack
-                .borrow_mut()
-                .last_mut()
-                .ok_or(CUresult::CUDA_ERROR_INVALID_CONTEXT)
-                .map(|ctx| GlobalState::lock(|_| f(unsafe { &mut **ctx })))?
-        })
-    }
-
-    fn lock_stream<T>(
-        stream: *mut stream::Stream,
-        f: impl FnOnce(&mut stream::StreamData) -> T,
-    ) -> Result<T, CUresult> {
-        if stream == ptr::null_mut()
-            || stream == stream::CU_STREAM_LEGACY
-            || stream == stream::CU_STREAM_PER_THREAD
-        {
-            Self::lock_current_context(|ctx| Ok(f(&mut ctx.default_stream)))?
-        } else {
-            Self::lock(|_| {
-                let stream = unsafe { &mut *stream }.as_result_mut()?;
-                Ok(f(stream))
-            })?
-        }
-    }
-
-    fn lock_function<T>(
-        func: *mut function::Function,
-        f: impl FnOnce(&mut function::FunctionData) -> T,
-    ) -> Result<T, CUresult> {
-        if func == ptr::null_mut() {
-            return Err(CUresult::CUDA_ERROR_INVALID_HANDLE);
-        }
-        Self::lock(|_| {
-            let func = unsafe { &mut *func }.as_result_mut()?;
-            Ok(f(func))
-        })?
-    }
-}
-
-pub fn init() -> Result<(), CUresult> {
-    eprintln!("{:?}", unsafe { hip_runtime_sys::hipInit(0) });
-    let mut global_state = GLOBAL_STATE
-        .lock()
-        .map_err(|_| CUresult::CUDA_ERROR_UNKNOWN)?;
-    if global_state.is_some() {
-        return Ok(());
-    }
-    let platforms = ocl_core::get_platform_ids()?;
-    let mut devices = platforms
-        .iter()
-        .filter_map(|plat| {
-            let devices =
-                ocl_core::get_device_ids(plat, Some(ocl_core::DeviceType::GPU), None).ok()?;
-            for dev in devices {
-                let vendor = ocl_core::get_device_info(dev, ocl_core::DeviceInfo::VendorId).ok()?;
-                let is_amd = match vendor {
-                    ocl_core::DeviceInfoResult::VendorId(0x8086) => false,
-                    ocl_core::DeviceInfoResult::VendorId(0x1002) => true,
-                    _ => continue,
-                };
-                let dev_type = ocl_core::get_device_info(dev, ocl_core::DeviceInfo::Type).ok()?;
-                if let ocl_core::DeviceInfoResult::Type(ocl_core::DeviceType::GPU) = dev_type {
-                    return Some((plat.clone(), dev, is_amd));
-                }
-            }
-            None
-        })
-        .enumerate()
-        .map(|(idx, (platform, device, is_amd))| device::Device::new(platform, device, idx, is_amd))
-        .collect::<Result<Vec<_>, _>>()?;
-    for d in devices.iter_mut() {
-        d.late_init();
-        d.primary_context.late_init();
-    }
-    let global_heap = unsafe { os::heap_create() };
-    if global_heap == ptr::null_mut() {
-        return Err(CUresult::CUDA_ERROR_OUT_OF_MEMORY);
-    }
-    *global_state = Some(GlobalState {
-        devices,
-        global_heap,
-    });
-    drop(global_state);
-    Ok(())
-}
-
-macro_rules! stringify_curesult {
-    ($x:ident => [ $($variant:ident),+ ]) => {
-        match $x {
-            $(
-                CUresult::$variant => Some(concat!(stringify!($variant), "\0")),
-            )+
-            _ => None
-        }
-    }
-}
-
-pub(crate) fn get_error_string(error: CUresult, str: *mut *const i8) -> CUresult {
-    if str == ptr::null_mut() {
-        return CUresult::CUDA_ERROR_INVALID_VALUE;
-    }
-    let text = stringify_curesult!(
-        error => [
-            CUDA_SUCCESS,
-            CUDA_ERROR_INVALID_VALUE,
-            CUDA_ERROR_OUT_OF_MEMORY,
-            CUDA_ERROR_NOT_INITIALIZED,
-            CUDA_ERROR_DEINITIALIZED,
-            CUDA_ERROR_PROFILER_DISABLED,
-            CUDA_ERROR_PROFILER_NOT_INITIALIZED,
-            CUDA_ERROR_PROFILER_ALREADY_STARTED,
-            CUDA_ERROR_PROFILER_ALREADY_STOPPED,
-            CUDA_ERROR_NO_DEVICE,
-            CUDA_ERROR_INVALID_DEVICE,
-            CUDA_ERROR_INVALID_IMAGE,
-            CUDA_ERROR_INVALID_CONTEXT,
-            CUDA_ERROR_CONTEXT_ALREADY_CURRENT,
-            CUDA_ERROR_MAP_FAILED,
-            CUDA_ERROR_UNMAP_FAILED,
-            CUDA_ERROR_ARRAY_IS_MAPPED,
-            CUDA_ERROR_ALREADY_MAPPED,
-            CUDA_ERROR_NO_BINARY_FOR_GPU,
-            CUDA_ERROR_ALREADY_ACQUIRED,
-            CUDA_ERROR_NOT_MAPPED,
-            CUDA_ERROR_NOT_MAPPED_AS_ARRAY,
-            CUDA_ERROR_NOT_MAPPED_AS_POINTER,
-            CUDA_ERROR_ECC_UNCORRECTABLE,
-            CUDA_ERROR_UNSUPPORTED_LIMIT,
-            CUDA_ERROR_CONTEXT_ALREADY_IN_USE,
-            CUDA_ERROR_PEER_ACCESS_UNSUPPORTED,
-            CUDA_ERROR_INVALID_PTX,
-            CUDA_ERROR_INVALID_GRAPHICS_CONTEXT,
-            CUDA_ERROR_NVLINK_UNCORRECTABLE,
-            CUDA_ERROR_JIT_COMPILER_NOT_FOUND,
-            CUDA_ERROR_INVALID_SOURCE,
-            CUDA_ERROR_FILE_NOT_FOUND,
-            CUDA_ERROR_SHARED_OBJECT_SYMBOL_NOT_FOUND,
-            CUDA_ERROR_SHARED_OBJECT_INIT_FAILED,
-            CUDA_ERROR_OPERATING_SYSTEM,
-            CUDA_ERROR_INVALID_HANDLE,
-            CUDA_ERROR_ILLEGAL_STATE,
-            CUDA_ERROR_NOT_FOUND,
-            CUDA_ERROR_NOT_READY,
-            CUDA_ERROR_ILLEGAL_ADDRESS,
-            CUDA_ERROR_LAUNCH_OUT_OF_RESOURCES,
-            CUDA_ERROR_LAUNCH_TIMEOUT,
-            CUDA_ERROR_LAUNCH_INCOMPATIBLE_TEXTURING,
-            CUDA_ERROR_PEER_ACCESS_ALREADY_ENABLED,
-            CUDA_ERROR_PEER_ACCESS_NOT_ENABLED,
-            CUDA_ERROR_PRIMARY_CONTEXT_ACTIVE,
-            CUDA_ERROR_CONTEXT_IS_DESTROYED,
-            CUDA_ERROR_ASSERT,
-            CUDA_ERROR_TOO_MANY_PEERS,
-            CUDA_ERROR_HOST_MEMORY_ALREADY_REGISTERED,
-            CUDA_ERROR_HOST_MEMORY_NOT_REGISTERED,
-            CUDA_ERROR_HARDWARE_STACK_ERROR,
-            CUDA_ERROR_ILLEGAL_INSTRUCTION,
-            CUDA_ERROR_MISALIGNED_ADDRESS,
-            CUDA_ERROR_INVALID_ADDRESS_SPACE,
-            CUDA_ERROR_INVALID_PC,
-            CUDA_ERROR_LAUNCH_FAILED,
-            CUDA_ERROR_COOPERATIVE_LAUNCH_TOO_LARGE,
-            CUDA_ERROR_NOT_PERMITTED,
-            CUDA_ERROR_NOT_SUPPORTED,
-            CUDA_ERROR_SYSTEM_NOT_READY,
-            CUDA_ERROR_SYSTEM_DRIVER_MISMATCH,
-            CUDA_ERROR_COMPAT_NOT_SUPPORTED_ON_DEVICE,
-            CUDA_ERROR_STREAM_CAPTURE_UNSUPPORTED,
-            CUDA_ERROR_STREAM_CAPTURE_INVALIDATED,
-            CUDA_ERROR_STREAM_CAPTURE_MERGE,
-            CUDA_ERROR_STREAM_CAPTURE_UNMATCHED,
-            CUDA_ERROR_STREAM_CAPTURE_UNJOINED,
-            CUDA_ERROR_STREAM_CAPTURE_ISOLATION,
-            CUDA_ERROR_STREAM_CAPTURE_IMPLICIT,
-            CUDA_ERROR_CAPTURED_EVENT,
-            CUDA_ERROR_STREAM_CAPTURE_WRONG_THREAD,
-            CUDA_ERROR_TIMEOUT,
-            CUDA_ERROR_GRAPH_EXEC_UPDATE_FAILURE,
-            CUDA_ERROR_UNKNOWN
-        ]
-    );
-    match text {
-        Some(text) => {
-            unsafe { *str = text.as_ptr() as *const _ };
-            CUresult::CUDA_SUCCESS
-        }
-        None => CUresult::CUDA_ERROR_INVALID_VALUE,
-    }
-}
-
 unsafe fn transmute_lifetime<'a, 'b, T: ?Sized>(t: &'a T) -> &'b T {
     mem::transmute(t)
 }
@@ -437,20 +192,6 @@ pub fn driver_get_version() -> c_int {
     i32::max_value()
 }
 
-impl<'a> CudaRepr for CUctx_st {
-    type Impl = context::Context;
-}
-
-impl<'a> CudaRepr for CUdevice {
-    type Impl = device::Index;
-}
-
-impl Decuda<device::Index> for CUdevice {
-    fn decuda(self) -> device::Index {
-        device::Index(self.0)
-    }
-}
-
 impl<'a> CudaRepr for CUdeviceptr {
     type Impl = *mut c_void;
 }
@@ -459,16 +200,4 @@ impl Decuda<*mut c_void> for CUdeviceptr {
     fn decuda(self) -> *mut c_void {
         self.0 as *mut _
     }
-}
-
-impl<'a> CudaRepr for CUmod_st {
-    type Impl = module::Module;
-}
-
-impl<'a> CudaRepr for CUfunc_st {
-    type Impl = function::Function;
-}
-
-impl<'a> CudaRepr for CUstream_st {
-    type Impl = stream::Stream;
 }

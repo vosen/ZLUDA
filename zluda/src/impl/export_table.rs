@@ -1,3 +1,10 @@
+use hip_runtime_sys::{
+    hipCtxCreate, hipDevicePrimaryCtxGetState, hipDevicePrimaryCtxRelease,
+    hipDevicePrimaryCtxRetain, hipError_t,
+};
+
+use crate::r#impl;
+
 use crate::cuda::CUresult;
 use crate::r#impl::os;
 use crate::{
@@ -5,7 +12,8 @@ use crate::{
     cuda_impl,
 };
 
-use super::{context, context::ContextData, device, module, Decuda, Encuda, GlobalState};
+use super::{device, Decuda, Encuda};
+use std::collections::HashMap;
 use std::os::raw::{c_uint, c_ulong, c_ushort};
 use std::{
     ffi::{c_void, CStr},
@@ -125,16 +133,21 @@ static CUDART_INTERFACE_VTABLE: [VTableEntry; CUDART_INTERFACE_LENGTH] = [
 ];
 
 unsafe extern "system" fn cudart_interface_fn1(pctx: *mut CUcontext, dev: CUdevice) -> CUresult {
-    cudart_interface_fn1_impl(pctx.decuda(), dev.decuda()).encuda()
+    cudart_interface_fn1_impl(pctx, dev.0).into()
 }
 
-fn cudart_interface_fn1_impl(
-    pctx: *mut *mut context::Context,
-    dev: device::Index,
-) -> Result<(), CUresult> {
-    let ctx_ptr = GlobalState::lock_device(dev, |d| &mut d.primary_context as *mut _)?;
-    unsafe { *pctx = ctx_ptr };
-    Ok(())
+fn cudart_interface_fn1_impl(pctx: *mut CUcontext, dev: c_int) -> hipError_t {
+    let mut hip_ctx = ptr::null_mut();
+    let err = unsafe { hipDevicePrimaryCtxRetain(&mut hip_ctx, dev) };
+    if err != hipError_t::hipSuccess {
+        return err;
+    }
+    let err = unsafe { hipDevicePrimaryCtxRelease(dev) };
+    if err != hipError_t::hipSuccess {
+        return err;
+    }
+    unsafe { *pctx = hip_ctx as _ };
+    hipError_t::hipSuccess
 }
 
 /*
@@ -219,7 +232,7 @@ unsafe extern "system" fn get_module_from_cubin(
     {
         return CUresult::CUDA_ERROR_INVALID_VALUE;
     }
-    let result = result.decuda();
+    //let result = result.decuda();
     let fatbin_header = (*fatbinc_wrapper).data;
     if (*fatbin_header).magic != FATBIN_MAGIC || (*fatbin_header).version != FATBIN_VERSION {
         return CUresult::CUDA_ERROR_INVALID_VALUE;
@@ -240,6 +253,8 @@ unsafe extern "system" fn get_module_from_cubin(
             },
             Err(_) => continue,
         };
+        todo!()
+        /*
         let module = module::SpirvModule::new(kernel_text_string);
         match module {
             Ok(module) => {
@@ -251,6 +266,7 @@ unsafe extern "system" fn get_module_from_cubin(
             }
             Err(_) => continue,
         }
+         */
     }
     CUresult::CUDA_ERROR_COMPAT_NOT_SUPPORTED_ON_DEVICE
 }
@@ -359,12 +375,20 @@ unsafe extern "system" fn context_local_storage_ctor(
         ),
     >,
 ) -> CUresult {
-    context_local_storage_ctor_impl(cu_ctx.decuda(), mgr, ctx_state, dtor_cb).encuda()
+    context_local_storage_ctor_impl(cu_ctx, mgr, ctx_state, dtor_cb);
+    CUresult::CUDA_SUCCESS
 }
 
+struct ContextRuntimeData {
+    ctx_state: *mut cuda_impl::rt::ContextState,
+    state_mgr: *mut cuda_impl::rt::ContextStateManager,
+}
+
+static mut PRIVATE_CONTEXT_RUNTIME_DATA: Option<HashMap<CUcontext, ContextRuntimeData>> = None;
+
 fn context_local_storage_ctor_impl(
-    cu_ctx: *mut context::Context,
-    mgr: *mut cuda_impl::rt::ContextStateManager,
+    cu_ctx: CUcontext,
+    state_mgr: *mut cuda_impl::rt::ContextStateManager,
     ctx_state: *mut cuda_impl::rt::ContextState,
     dtor_cb: Option<
         extern "system" fn(
@@ -373,12 +397,15 @@ fn context_local_storage_ctor_impl(
             *mut cuda_impl::rt::ContextState,
         ),
     >,
-) -> Result<(), CUresult> {
-    lock_context(cu_ctx, |ctx: &mut ContextData| {
-        ctx.cuda_manager = mgr;
-        ctx.cuda_state = ctx_state;
-        ctx.cuda_dtor_cb = dtor_cb;
-    })
+) {
+    let map = unsafe { PRIVATE_CONTEXT_RUNTIME_DATA.get_or_insert_with(|| HashMap::new()) };
+    map.insert(
+        cu_ctx,
+        ContextRuntimeData {
+            ctx_state,
+            state_mgr,
+        },
+    );
 }
 
 // some kind of dtor
@@ -391,34 +418,24 @@ unsafe extern "system" fn context_local_storage_get_state(
     cu_ctx: CUcontext,
     state_mgr: *mut cuda_impl::rt::ContextStateManager,
 ) -> CUresult {
-    context_local_storage_get_state_impl(ctx_state, cu_ctx.decuda(), state_mgr).encuda()
+    context_local_storage_get_state_impl(ctx_state, cu_ctx, state_mgr).encuda()
 }
 
 fn context_local_storage_get_state_impl(
     ctx_state: *mut *mut cuda_impl::rt::ContextState,
-    cu_ctx: *mut context::Context,
+    cu_ctx: CUcontext,
     _: *mut cuda_impl::rt::ContextStateManager,
-) -> Result<(), CUresult> {
-    let cuda_state = lock_context(cu_ctx, |ctx: &mut ContextData| ctx.cuda_state)?;
-    if cuda_state == ptr::null_mut() {
-        Err(CUresult::CUDA_ERROR_INVALID_VALUE)
-    } else {
-        unsafe { *ctx_state = cuda_state };
-        Ok(())
-    }
-}
-
-fn lock_context<T>(
-    cu_ctx: *mut context::Context,
-    fn_impl: impl FnOnce(&mut ContextData) -> T,
-) -> Result<T, CUresult> {
-    if cu_ctx == ptr::null_mut() {
-        GlobalState::lock_current_context(fn_impl)
-    } else {
-        GlobalState::lock(|_| {
-            let ctx = unsafe { &mut *cu_ctx }.as_result_mut()?;
-            Ok(fn_impl(ctx))
-        })?
+) -> CUresult {
+    match unsafe {
+        PRIVATE_CONTEXT_RUNTIME_DATA
+            .as_ref()
+            .and_then(|map| map.get(&cu_ctx))
+    } {
+        Some(val) => {
+            unsafe { *ctx_state = val.ctx_state };
+            CUresult::CUDA_SUCCESS
+        }
+        None => CUresult::CUDA_ERROR_INVALID_VALUE,
     }
 }
 
@@ -446,7 +463,7 @@ extern "system" fn ctx_create_v2_bypass(
     flags: ::std::os::raw::c_uint,
     dev: CUdevice,
 ) -> CUresult {
-    context::create_v2(pctx.decuda(), flags, dev.decuda()).encuda()
+    unsafe { hipCtxCreate(pctx as _, flags, dev.0).into() }
 }
 
 const HEAP_ACCESS_GUID: CUuuid = CUuuid {
@@ -483,41 +500,10 @@ unsafe extern "system" fn heap_alloc(
     arg1: usize,
     arg2: usize,
 ) -> CUresult {
-    if halloc_ptr == ptr::null_mut() {
-        return CUresult::CUDA_ERROR_INVALID_VALUE;
-    }
-    let halloc = GlobalState::lock(|global_state| {
-        let halloc = os::heap_alloc(global_state.global_heap, mem::size_of::<HeapAllocRecord>())
-            as *mut HeapAllocRecord;
-        if halloc == ptr::null_mut() {
-            return Err(CUresult::CUDA_ERROR_OUT_OF_MEMORY);
-        }
-        (*halloc).arg1 = arg1;
-        (*halloc).arg2 = arg2;
-        (*halloc)._unknown = 0;
-        (*halloc).global_heap = global_state.global_heap;
-        Ok(halloc)
-    });
-    match halloc {
-        Ok(Ok(halloc)) => {
-            *halloc_ptr = halloc;
-            CUresult::CUDA_SUCCESS
-        }
-        Err(err) | Ok(Err(err)) => err,
-    }
+    r#impl::unimplemented()
 }
 
 // TODO: reverse and implement for Linux
 unsafe extern "system" fn heap_free(halloc: *mut HeapAllocRecord, arg1: *mut usize) -> CUresult {
-    if halloc == ptr::null_mut() {
-        return CUresult::CUDA_ERROR_INVALID_VALUE;
-    }
-    if arg1 != ptr::null_mut() {
-        *arg1 = (*halloc).arg2;
-    }
-    GlobalState::lock(|global_state| {
-        os::heap_free(global_state.global_heap, halloc as *mut _);
-        ()
-    })
-    .encuda()
+    r#impl::unimplemented()
 }

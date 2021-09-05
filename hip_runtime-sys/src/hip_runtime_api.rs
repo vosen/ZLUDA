@@ -809,243 +809,482 @@ impl hipError_t {
 #[must_use]
 pub struct hipError_t(pub ::std::os::raw::c_uint);
 impl hipDeviceAttribute_t {
-    #[doc = "< Maximum number of threads per block."]
-    pub const hipDeviceAttributeMaxThreadsPerBlock: hipDeviceAttribute_t = hipDeviceAttribute_t(0);
+    pub const hipDeviceAttributeCudaCompatibleBegin: hipDeviceAttribute_t = hipDeviceAttribute_t(0);
 }
 impl hipDeviceAttribute_t {
-    #[doc = "< Maximum x-dimension of a block."]
-    pub const hipDeviceAttributeMaxBlockDimX: hipDeviceAttribute_t = hipDeviceAttribute_t(1);
+    #[doc = "< Whether ECC support is enabled."]
+    pub const hipDeviceAttributeEccEnabled: hipDeviceAttribute_t = hipDeviceAttribute_t(0);
 }
 impl hipDeviceAttribute_t {
-    #[doc = "< Maximum y-dimension of a block."]
-    pub const hipDeviceAttributeMaxBlockDimY: hipDeviceAttribute_t = hipDeviceAttribute_t(2);
+    #[doc = "< Cuda only. The maximum size of the window policy in bytes."]
+    pub const hipDeviceAttributeAccessPolicyMaxWindowSize: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(1);
 }
 impl hipDeviceAttribute_t {
-    #[doc = "< Maximum z-dimension of a block."]
-    pub const hipDeviceAttributeMaxBlockDimZ: hipDeviceAttribute_t = hipDeviceAttribute_t(3);
+    #[doc = "< Cuda only. Asynchronous engines number."]
+    pub const hipDeviceAttributeAsyncEngineCount: hipDeviceAttribute_t = hipDeviceAttribute_t(2);
 }
 impl hipDeviceAttribute_t {
-    #[doc = "< Maximum x-dimension of a grid."]
-    pub const hipDeviceAttributeMaxGridDimX: hipDeviceAttribute_t = hipDeviceAttribute_t(4);
+    #[doc = "< Whether host memory can be mapped into device address space"]
+    pub const hipDeviceAttributeCanMapHostMemory: hipDeviceAttribute_t = hipDeviceAttribute_t(3);
 }
 impl hipDeviceAttribute_t {
-    #[doc = "< Maximum y-dimension of a grid."]
-    pub const hipDeviceAttributeMaxGridDimY: hipDeviceAttribute_t = hipDeviceAttribute_t(5);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Maximum z-dimension of a grid."]
-    pub const hipDeviceAttributeMaxGridDimZ: hipDeviceAttribute_t = hipDeviceAttribute_t(6);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Maximum shared memory available per block in"]
-    #[doc = "< bytes."]
-    pub const hipDeviceAttributeMaxSharedMemoryPerBlock: hipDeviceAttribute_t =
-        hipDeviceAttribute_t(7);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Constant memory size in bytes."]
-    pub const hipDeviceAttributeTotalConstantMemory: hipDeviceAttribute_t = hipDeviceAttribute_t(8);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Warp size in threads."]
-    pub const hipDeviceAttributeWarpSize: hipDeviceAttribute_t = hipDeviceAttribute_t(9);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Maximum number of 32-bit registers available to a"]
-    #[doc = "< thread block. This number is shared by all thread"]
-    #[doc = "< blocks simultaneously resident on a"]
-    #[doc = "< multiprocessor."]
-    pub const hipDeviceAttributeMaxRegistersPerBlock: hipDeviceAttribute_t =
-        hipDeviceAttribute_t(10);
+    #[doc = "< Cuda only. Device can access host registered memory"]
+    #[doc = "< at the same virtual address as the CPU"]
+    pub const hipDeviceAttributeCanUseHostPointerForRegisteredMem: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(4);
 }
 impl hipDeviceAttribute_t {
     #[doc = "< Peak clock frequency in kilohertz."]
-    pub const hipDeviceAttributeClockRate: hipDeviceAttribute_t = hipDeviceAttribute_t(11);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Peak memory clock frequency in kilohertz."]
-    pub const hipDeviceAttributeMemoryClockRate: hipDeviceAttribute_t = hipDeviceAttribute_t(12);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Global memory bus width in bits."]
-    pub const hipDeviceAttributeMemoryBusWidth: hipDeviceAttribute_t = hipDeviceAttribute_t(13);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Number of multiprocessors on the device."]
-    pub const hipDeviceAttributeMultiprocessorCount: hipDeviceAttribute_t =
-        hipDeviceAttribute_t(14);
+    pub const hipDeviceAttributeClockRate: hipDeviceAttribute_t = hipDeviceAttribute_t(5);
 }
 impl hipDeviceAttribute_t {
     #[doc = "< Compute mode that device is currently in."]
-    pub const hipDeviceAttributeComputeMode: hipDeviceAttribute_t = hipDeviceAttribute_t(15);
+    pub const hipDeviceAttributeComputeMode: hipDeviceAttribute_t = hipDeviceAttribute_t(6);
 }
 impl hipDeviceAttribute_t {
-    #[doc = "< Size of L2 cache in bytes. 0 if the device doesn't have L2"]
-    #[doc = "< cache."]
-    pub const hipDeviceAttributeL2CacheSize: hipDeviceAttribute_t = hipDeviceAttribute_t(16);
+    #[doc = "< Cuda only. Device supports Compute Preemption."]
+    pub const hipDeviceAttributeComputePreemptionSupported: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(7);
 }
 impl hipDeviceAttribute_t {
-    #[doc = "< Maximum resident threads per"]
-    #[doc = "< multiprocessor."]
-    pub const hipDeviceAttributeMaxThreadsPerMultiProcessor: hipDeviceAttribute_t =
-        hipDeviceAttribute_t(17);
+    #[doc = "< Device can possibly execute multiple kernels concurrently."]
+    pub const hipDeviceAttributeConcurrentKernels: hipDeviceAttribute_t = hipDeviceAttribute_t(8);
 }
 impl hipDeviceAttribute_t {
-    #[doc = "< Major compute capability version number."]
-    pub const hipDeviceAttributeComputeCapabilityMajor: hipDeviceAttribute_t =
-        hipDeviceAttribute_t(18);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Minor compute capability version number."]
-    pub const hipDeviceAttributeComputeCapabilityMinor: hipDeviceAttribute_t =
-        hipDeviceAttribute_t(19);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Device can possibly execute multiple kernels"]
-    #[doc = "< concurrently."]
-    pub const hipDeviceAttributeConcurrentKernels: hipDeviceAttribute_t = hipDeviceAttribute_t(20);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< PCI Bus ID."]
-    pub const hipDeviceAttributePciBusId: hipDeviceAttribute_t = hipDeviceAttribute_t(21);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< PCI Device ID."]
-    pub const hipDeviceAttributePciDeviceId: hipDeviceAttribute_t = hipDeviceAttribute_t(22);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Maximum Shared Memory Per"]
-    #[doc = "< Multiprocessor."]
-    pub const hipDeviceAttributeMaxSharedMemoryPerMultiprocessor: hipDeviceAttribute_t =
-        hipDeviceAttribute_t(23);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Multiple GPU devices."]
-    pub const hipDeviceAttributeIsMultiGpuBoard: hipDeviceAttribute_t = hipDeviceAttribute_t(24);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< iGPU"]
-    pub const hipDeviceAttributeIntegrated: hipDeviceAttribute_t = hipDeviceAttribute_t(25);
+    #[doc = "< Device can coherently access managed memory concurrently with the CPU"]
+    pub const hipDeviceAttributeConcurrentManagedAccess: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(9);
 }
 impl hipDeviceAttribute_t {
     #[doc = "< Support cooperative launch"]
-    pub const hipDeviceAttributeCooperativeLaunch: hipDeviceAttribute_t = hipDeviceAttribute_t(26);
+    pub const hipDeviceAttributeCooperativeLaunch: hipDeviceAttribute_t = hipDeviceAttribute_t(10);
 }
 impl hipDeviceAttribute_t {
     #[doc = "< Support cooperative launch on multiple devices"]
     pub const hipDeviceAttributeCooperativeMultiDeviceLaunch: hipDeviceAttribute_t =
-        hipDeviceAttribute_t(27);
+        hipDeviceAttribute_t(11);
 }
 impl hipDeviceAttribute_t {
-    #[doc = "< Maximum number of elements in 1D images"]
-    pub const hipDeviceAttributeMaxTexture1DWidth: hipDeviceAttribute_t = hipDeviceAttribute_t(28);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Maximum dimension width of 2D images in image elements"]
-    pub const hipDeviceAttributeMaxTexture2DWidth: hipDeviceAttribute_t = hipDeviceAttribute_t(29);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Maximum dimension height of 2D images in image elements"]
-    pub const hipDeviceAttributeMaxTexture2DHeight: hipDeviceAttribute_t = hipDeviceAttribute_t(30);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Maximum dimension width of 3D images in image elements"]
-    pub const hipDeviceAttributeMaxTexture3DWidth: hipDeviceAttribute_t = hipDeviceAttribute_t(31);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Maximum dimensions height of 3D images in image elements"]
-    pub const hipDeviceAttributeMaxTexture3DHeight: hipDeviceAttribute_t = hipDeviceAttribute_t(32);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Maximum dimensions depth of 3D images in image elements"]
-    pub const hipDeviceAttributeMaxTexture3DDepth: hipDeviceAttribute_t = hipDeviceAttribute_t(33);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Address of the HDP_MEM_COHERENCY_FLUSH_CNTL register"]
-    pub const hipDeviceAttributeHdpMemFlushCntl: hipDeviceAttribute_t = hipDeviceAttribute_t(34);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Address of the HDP_REG_COHERENCY_FLUSH_CNTL register"]
-    pub const hipDeviceAttributeHdpRegFlushCntl: hipDeviceAttribute_t = hipDeviceAttribute_t(35);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Maximum pitch in bytes allowed by memory copies"]
-    pub const hipDeviceAttributeMaxPitch: hipDeviceAttribute_t = hipDeviceAttribute_t(36);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "<Alignment requirement for textures"]
-    pub const hipDeviceAttributeTextureAlignment: hipDeviceAttribute_t = hipDeviceAttribute_t(37);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "<Pitch alignment requirement for 2D texture references bound to pitched memory;"]
-    pub const hipDeviceAttributeTexturePitchAlignment: hipDeviceAttribute_t =
-        hipDeviceAttribute_t(38);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "<Run time limit for kernels executed on the device"]
-    pub const hipDeviceAttributeKernelExecTimeout: hipDeviceAttribute_t = hipDeviceAttribute_t(39);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "<Device can map host memory into device address space"]
-    pub const hipDeviceAttributeCanMapHostMemory: hipDeviceAttribute_t = hipDeviceAttribute_t(40);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "<Device has ECC support enabled"]
-    pub const hipDeviceAttributeEccEnabled: hipDeviceAttribute_t = hipDeviceAttribute_t(41);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Supports cooperative launch on multiple"]
-    pub const hipDeviceAttributeCooperativeMultiDeviceUnmatchedFunc: hipDeviceAttribute_t =
-        hipDeviceAttribute_t(42);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Supports cooperative launch on multiple"]
-    pub const hipDeviceAttributeCooperativeMultiDeviceUnmatchedGridDim: hipDeviceAttribute_t =
-        hipDeviceAttribute_t(43);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Supports cooperative launch on multiple"]
-    pub const hipDeviceAttributeCooperativeMultiDeviceUnmatchedBlockDim: hipDeviceAttribute_t =
-        hipDeviceAttribute_t(44);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Supports cooperative launch on multiple"]
-    pub const hipDeviceAttributeCooperativeMultiDeviceUnmatchedSharedMem: hipDeviceAttribute_t =
-        hipDeviceAttribute_t(45);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Revision of the GPU in this device"]
-    pub const hipDeviceAttributeAsicRevision: hipDeviceAttribute_t = hipDeviceAttribute_t(46);
-}
-impl hipDeviceAttribute_t {
-    #[doc = "< Device supports allocating managed memory on this system"]
-    pub const hipDeviceAttributeManagedMemory: hipDeviceAttribute_t = hipDeviceAttribute_t(47);
+    #[doc = "< Cuda only. Device can concurrently copy memory and execute a kernel."]
+    #[doc = "< Deprecated. Use instead asyncEngineCount."]
+    pub const hipDeviceAttributeDeviceOverlap: hipDeviceAttribute_t = hipDeviceAttribute_t(12);
 }
 impl hipDeviceAttribute_t {
     #[doc = "< Host can directly access managed memory on"]
+    #[doc = "< the device without migration"]
     pub const hipDeviceAttributeDirectManagedMemAccessFromHost: hipDeviceAttribute_t =
-        hipDeviceAttribute_t(48);
+        hipDeviceAttribute_t(13);
 }
 impl hipDeviceAttribute_t {
-    #[doc = "< Device can coherently access managed memory"]
-    pub const hipDeviceAttributeConcurrentManagedAccess: hipDeviceAttribute_t =
-        hipDeviceAttribute_t(49);
+    #[doc = "< Cuda only. Device supports caching globals in L1"]
+    pub const hipDeviceAttributeGlobalL1CacheSupported: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(14);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. Link between the device and the host supports native atomic operations"]
+    pub const hipDeviceAttributeHostNativeAtomicSupported: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(15);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Device is integrated GPU"]
+    pub const hipDeviceAttributeIntegrated: hipDeviceAttribute_t = hipDeviceAttribute_t(16);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Multiple GPU devices."]
+    pub const hipDeviceAttributeIsMultiGpuBoard: hipDeviceAttribute_t = hipDeviceAttribute_t(17);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Run time limit for kernels executed on the device"]
+    pub const hipDeviceAttributeKernelExecTimeout: hipDeviceAttribute_t = hipDeviceAttribute_t(18);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Size of L2 cache in bytes. 0 if the device doesn't have L2 cache."]
+    pub const hipDeviceAttributeL2CacheSize: hipDeviceAttribute_t = hipDeviceAttribute_t(19);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< caching locals in L1 is supported"]
+    pub const hipDeviceAttributeLocalL1CacheSupported: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(20);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. 8-byte locally unique identifier in 8 bytes. Undefined on TCC and non-Windows platforms"]
+    pub const hipDeviceAttributeLuid: hipDeviceAttribute_t = hipDeviceAttribute_t(21);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. Luid device node mask. Undefined on TCC and non-Windows platforms"]
+    pub const hipDeviceAttributeLuidDeviceNodeMask: hipDeviceAttribute_t = hipDeviceAttribute_t(22);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Major compute capability version number."]
+    pub const hipDeviceAttributeComputeCapabilityMajor: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(23);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Device supports allocating managed memory on this system"]
+    pub const hipDeviceAttributeManagedMemory: hipDeviceAttribute_t = hipDeviceAttribute_t(24);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. Max block size per multiprocessor"]
+    pub const hipDeviceAttributeMaxBlocksPerMultiProcessor: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(25);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Max block size in width."]
+    pub const hipDeviceAttributeMaxBlockDimX: hipDeviceAttribute_t = hipDeviceAttribute_t(26);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Max block size in height."]
+    pub const hipDeviceAttributeMaxBlockDimY: hipDeviceAttribute_t = hipDeviceAttribute_t(27);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Max block size in depth."]
+    pub const hipDeviceAttributeMaxBlockDimZ: hipDeviceAttribute_t = hipDeviceAttribute_t(28);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Max grid size  in width."]
+    pub const hipDeviceAttributeMaxGridDimX: hipDeviceAttribute_t = hipDeviceAttribute_t(29);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Max grid size  in height."]
+    pub const hipDeviceAttributeMaxGridDimY: hipDeviceAttribute_t = hipDeviceAttribute_t(30);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Max grid size  in depth."]
+    pub const hipDeviceAttributeMaxGridDimZ: hipDeviceAttribute_t = hipDeviceAttribute_t(31);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Maximum size of 1D surface."]
+    pub const hipDeviceAttributeMaxSurface1D: hipDeviceAttribute_t = hipDeviceAttribute_t(32);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. Maximum dimensions of 1D layered surface."]
+    pub const hipDeviceAttributeMaxSurface1DLayered: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(33);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Maximum dimension (width, height) of 2D surface."]
+    pub const hipDeviceAttributeMaxSurface2D: hipDeviceAttribute_t = hipDeviceAttribute_t(34);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. Maximum dimensions of 2D layered surface."]
+    pub const hipDeviceAttributeMaxSurface2DLayered: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(35);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Maximum dimension (width, height, depth) of 3D surface."]
+    pub const hipDeviceAttributeMaxSurface3D: hipDeviceAttribute_t = hipDeviceAttribute_t(36);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. Maximum dimensions of Cubemap surface."]
+    pub const hipDeviceAttributeMaxSurfaceCubemap: hipDeviceAttribute_t = hipDeviceAttribute_t(37);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. Maximum dimension of Cubemap layered surface."]
+    pub const hipDeviceAttributeMaxSurfaceCubemapLayered: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(38);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Maximum size of 1D texture."]
+    pub const hipDeviceAttributeMaxTexture1DWidth: hipDeviceAttribute_t = hipDeviceAttribute_t(39);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. Maximum dimensions of 1D layered texture."]
+    pub const hipDeviceAttributeMaxTexture1DLayered: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(40);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Maximum number of elements allocatable in a 1D linear texture."]
+    #[doc = "< Use cudaDeviceGetTexture1DLinearMaxWidth() instead on Cuda."]
+    pub const hipDeviceAttributeMaxTexture1DLinear: hipDeviceAttribute_t = hipDeviceAttribute_t(41);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. Maximum size of 1D mipmapped texture."]
+    pub const hipDeviceAttributeMaxTexture1DMipmap: hipDeviceAttribute_t = hipDeviceAttribute_t(42);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Maximum dimension width of 2D texture."]
+    pub const hipDeviceAttributeMaxTexture2DWidth: hipDeviceAttribute_t = hipDeviceAttribute_t(43);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Maximum dimension hight of 2D texture."]
+    pub const hipDeviceAttributeMaxTexture2DHeight: hipDeviceAttribute_t = hipDeviceAttribute_t(44);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. Maximum dimensions of 2D texture if gather operations  performed."]
+    pub const hipDeviceAttributeMaxTexture2DGather: hipDeviceAttribute_t = hipDeviceAttribute_t(45);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. Maximum dimensions of 2D layered texture."]
+    pub const hipDeviceAttributeMaxTexture2DLayered: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(46);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. Maximum dimensions (width, height, pitch) of 2D textures bound to pitched memory."]
+    pub const hipDeviceAttributeMaxTexture2DLinear: hipDeviceAttribute_t = hipDeviceAttribute_t(47);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. Maximum dimensions of 2D mipmapped texture."]
+    pub const hipDeviceAttributeMaxTexture2DMipmap: hipDeviceAttribute_t = hipDeviceAttribute_t(48);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Maximum dimension width of 3D texture."]
+    pub const hipDeviceAttributeMaxTexture3DWidth: hipDeviceAttribute_t = hipDeviceAttribute_t(49);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Maximum dimension height of 3D texture."]
+    pub const hipDeviceAttributeMaxTexture3DHeight: hipDeviceAttribute_t = hipDeviceAttribute_t(50);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Maximum dimension depth of 3D texture."]
+    pub const hipDeviceAttributeMaxTexture3DDepth: hipDeviceAttribute_t = hipDeviceAttribute_t(51);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. Maximum dimensions of alternate 3D texture."]
+    pub const hipDeviceAttributeMaxTexture3DAlt: hipDeviceAttribute_t = hipDeviceAttribute_t(52);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. Maximum dimensions of Cubemap texture"]
+    pub const hipDeviceAttributeMaxTextureCubemap: hipDeviceAttribute_t = hipDeviceAttribute_t(53);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. Maximum dimensions of Cubemap layered texture."]
+    pub const hipDeviceAttributeMaxTextureCubemapLayered: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(54);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Maximum dimension of a block"]
+    pub const hipDeviceAttributeMaxThreadsDim: hipDeviceAttribute_t = hipDeviceAttribute_t(55);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Maximum number of threads per block."]
+    pub const hipDeviceAttributeMaxThreadsPerBlock: hipDeviceAttribute_t = hipDeviceAttribute_t(56);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Maximum resident threads per multiprocessor."]
+    pub const hipDeviceAttributeMaxThreadsPerMultiProcessor: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(57);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Maximum pitch in bytes allowed by memory copies"]
+    pub const hipDeviceAttributeMaxPitch: hipDeviceAttribute_t = hipDeviceAttribute_t(58);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Global memory bus width in bits."]
+    pub const hipDeviceAttributeMemoryBusWidth: hipDeviceAttribute_t = hipDeviceAttribute_t(59);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Peak memory clock frequency in kilohertz."]
+    pub const hipDeviceAttributeMemoryClockRate: hipDeviceAttribute_t = hipDeviceAttribute_t(60);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Minor compute capability version number."]
+    pub const hipDeviceAttributeComputeCapabilityMinor: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(61);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. Unique ID of device group on the same multi-GPU board"]
+    pub const hipDeviceAttributeMultiGpuBoardGroupID: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(62);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Number of multiprocessors on the device."]
+    pub const hipDeviceAttributeMultiprocessorCount: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(63);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Device name."]
+    pub const hipDeviceAttributeName: hipDeviceAttribute_t = hipDeviceAttribute_t(64);
 }
 impl hipDeviceAttribute_t {
     #[doc = "< Device supports coherently accessing pageable memory"]
+    #[doc = "< without calling hipHostRegister on it"]
     pub const hipDeviceAttributePageableMemoryAccess: hipDeviceAttribute_t =
-        hipDeviceAttribute_t(50);
+        hipDeviceAttribute_t(65);
 }
 impl hipDeviceAttribute_t {
-    #[doc = "< Device accesses pageable memory via"]
+    #[doc = "< Device accesses pageable memory via the host's page tables"]
     pub const hipDeviceAttributePageableMemoryAccessUsesHostPageTables: hipDeviceAttribute_t =
-        hipDeviceAttribute_t(51);
+        hipDeviceAttribute_t(66);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< PCI Bus ID."]
+    pub const hipDeviceAttributePciBusId: hipDeviceAttribute_t = hipDeviceAttribute_t(67);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< PCI Device ID."]
+    pub const hipDeviceAttributePciDeviceId: hipDeviceAttribute_t = hipDeviceAttribute_t(68);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< PCI Domain ID."]
+    pub const hipDeviceAttributePciDomainID: hipDeviceAttribute_t = hipDeviceAttribute_t(69);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda11 only. Maximum l2 persisting lines capacity in bytes"]
+    pub const hipDeviceAttributePersistingL2CacheMaxSize: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(70);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< 32-bit registers available to a thread block. This number is shared"]
+    #[doc = "< by all thread blocks simultaneously resident on a multiprocessor."]
+    pub const hipDeviceAttributeMaxRegistersPerBlock: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(71);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< 32-bit registers available per block."]
+    pub const hipDeviceAttributeMaxRegistersPerMultiprocessor: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(72);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda11 only. Shared memory reserved by CUDA driver per block."]
+    pub const hipDeviceAttributeReservedSharedMemPerBlock: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(73);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Maximum shared memory available per block in bytes."]
+    pub const hipDeviceAttributeMaxSharedMemoryPerBlock: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(74);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. Maximum shared memory per block usable by special opt in."]
+    pub const hipDeviceAttributeSharedMemPerBlockOptin: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(75);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. Shared memory available per multiprocessor."]
+    pub const hipDeviceAttributeSharedMemPerMultiprocessor: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(76);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. Performance ratio of single precision to double precision."]
+    pub const hipDeviceAttributeSingleToDoublePrecisionPerfRatio: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(77);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. Whether to support stream priorities."]
+    pub const hipDeviceAttributeStreamPrioritiesSupported: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(78);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. Alignment requirement for surfaces"]
+    pub const hipDeviceAttributeSurfaceAlignment: hipDeviceAttribute_t = hipDeviceAttribute_t(79);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. Whether device is a Tesla device using TCC driver"]
+    pub const hipDeviceAttributeTccDriver: hipDeviceAttribute_t = hipDeviceAttribute_t(80);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Alignment requirement for textures"]
+    pub const hipDeviceAttributeTextureAlignment: hipDeviceAttribute_t = hipDeviceAttribute_t(81);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Pitch alignment requirement for 2D texture references bound to pitched memory;"]
+    pub const hipDeviceAttributeTexturePitchAlignment: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(82);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Constant memory size in bytes."]
+    pub const hipDeviceAttributeTotalConstantMemory: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(83);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Global memory available on devicice."]
+    pub const hipDeviceAttributeTotalGlobalMem: hipDeviceAttribute_t = hipDeviceAttribute_t(84);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. An unified address space shared with the host."]
+    pub const hipDeviceAttributeUnifiedAddressing: hipDeviceAttribute_t = hipDeviceAttribute_t(85);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Cuda only. Unique ID in 16 byte."]
+    pub const hipDeviceAttributeUuid: hipDeviceAttribute_t = hipDeviceAttribute_t(86);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Warp size in threads."]
+    pub const hipDeviceAttributeWarpSize: hipDeviceAttribute_t = hipDeviceAttribute_t(87);
+}
+impl hipDeviceAttribute_t {
+    pub const hipDeviceAttributeCudaCompatibleEnd: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(9999);
+}
+impl hipDeviceAttribute_t {
+    pub const hipDeviceAttributeAmdSpecificBegin: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(10000);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Frequency in khz of the timer used by the device-side \"clock*\""]
+    pub const hipDeviceAttributeClockInstructionRate: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(10000);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Device architecture"]
+    pub const hipDeviceAttributeArch: hipDeviceAttribute_t = hipDeviceAttribute_t(10001);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Maximum Shared Memory PerMultiprocessor."]
+    pub const hipDeviceAttributeMaxSharedMemoryPerMultiprocessor: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(10002);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Device gcn architecture"]
+    pub const hipDeviceAttributeGcnArch: hipDeviceAttribute_t = hipDeviceAttribute_t(10003);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Device gcnArch name in 256 bytes"]
+    pub const hipDeviceAttributeGcnArchName: hipDeviceAttribute_t = hipDeviceAttribute_t(10004);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Address of the HDP_MEM_COHERENCY_FLUSH_CNTL register"]
+    pub const hipDeviceAttributeHdpMemFlushCntl: hipDeviceAttribute_t = hipDeviceAttribute_t(10005);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Address of the HDP_REG_COHERENCY_FLUSH_CNTL register"]
+    pub const hipDeviceAttributeHdpRegFlushCntl: hipDeviceAttribute_t = hipDeviceAttribute_t(10006);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Supports cooperative launch on multiple"]
+    #[doc = "< devices with unmatched functions"]
+    pub const hipDeviceAttributeCooperativeMultiDeviceUnmatchedFunc: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(10007);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Supports cooperative launch on multiple"]
+    #[doc = "< devices with unmatched grid dimensions"]
+    pub const hipDeviceAttributeCooperativeMultiDeviceUnmatchedGridDim: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(10008);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Supports cooperative launch on multiple"]
+    #[doc = "< devices with unmatched block dimensions"]
+    pub const hipDeviceAttributeCooperativeMultiDeviceUnmatchedBlockDim: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(10009);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Supports cooperative launch on multiple"]
+    #[doc = "< devices with unmatched shared memories"]
+    pub const hipDeviceAttributeCooperativeMultiDeviceUnmatchedSharedMem: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(10010);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Whether it is LargeBar"]
+    pub const hipDeviceAttributeIsLargeBar: hipDeviceAttribute_t = hipDeviceAttribute_t(10011);
+}
+impl hipDeviceAttribute_t {
+    #[doc = "< Revision of the GPU in this device"]
+    pub const hipDeviceAttributeAsicRevision: hipDeviceAttribute_t = hipDeviceAttribute_t(10012);
 }
 impl hipDeviceAttribute_t {
     #[doc = "< '1' if Device supports hipStreamWaitValue32() and"]
     #[doc = "< hipStreamWaitValue64() , '0' otherwise."]
     pub const hipDeviceAttributeCanUseStreamWaitValue: hipDeviceAttribute_t =
-        hipDeviceAttribute_t(52);
+        hipDeviceAttribute_t(10013);
+}
+impl hipDeviceAttribute_t {
+    pub const hipDeviceAttributeAmdSpecificEnd: hipDeviceAttribute_t = hipDeviceAttribute_t(19999);
+}
+impl hipDeviceAttribute_t {
+    pub const hipDeviceAttributeVendorSpecificBegin: hipDeviceAttribute_t =
+        hipDeviceAttribute_t(20000);
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -1065,9 +1304,7 @@ impl hipComputeMode {
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipComputeMode(pub ::std::os::raw::c_uint);
-pub type __int32_t = ::std::os::raw::c_int;
 pub type __uint32_t = ::std::os::raw::c_uint;
-pub type __int64_t = ::std::os::raw::c_long;
 pub type __uint64_t = ::std::os::raw::c_ulong;
 pub type hipDeviceptr_t = *mut ::std::os::raw::c_void;
 impl hipChannelFormatKind {
@@ -2021,6 +2258,9 @@ pub struct ihipEvent_t {
 }
 pub type hipEvent_t = *mut ihipEvent_t;
 impl hipLimit_t {
+    pub const hipLimitPrintfFifoSize: hipLimit_t = hipLimit_t(1);
+}
+impl hipLimit_t {
     pub const hipLimitMallocHeapSize: hipLimit_t = hipLimit_t(2);
 }
 #[repr(transparent)]
@@ -2050,13 +2290,47 @@ impl hipMemoryAdvise {
     pub const hipMemAdviseSetAccessedBy: hipMemoryAdvise = hipMemoryAdvise(5);
 }
 impl hipMemoryAdvise {
-    #[doc = "< Let the Unified Memory subsystem decide on"]
-    #[doc = "< the page faulting policy for the specified device"]
+    #[doc = "< Let HIP to decide on the page faulting policy"]
+    #[doc = "< for the specified device"]
     pub const hipMemAdviseUnsetAccessedBy: hipMemoryAdvise = hipMemoryAdvise(6);
+}
+impl hipMemoryAdvise {
+    #[doc = "< The default memory model is fine-grain. That allows"]
+    #[doc = "< coherent operations between host and device, while"]
+    #[doc = "< executing kernels. The coarse-grain can be used"]
+    #[doc = "< for data that only needs to be coherent at dispatch"]
+    #[doc = "< boundaries for better performance"]
+    pub const hipMemAdviseSetCoarseGrain: hipMemoryAdvise = hipMemoryAdvise(100);
+}
+impl hipMemoryAdvise {
+    #[doc = "< Restores cache coherency policy back to fine-grain"]
+    pub const hipMemAdviseUnsetCoarseGrain: hipMemoryAdvise = hipMemoryAdvise(101);
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipMemoryAdvise(pub ::std::os::raw::c_uint);
+impl hipMemRangeCoherencyMode {
+    #[doc = "< Updates to memory with this attribute can be"]
+    #[doc = "< done coherently from all devices"]
+    pub const hipMemRangeCoherencyModeFineGrain: hipMemRangeCoherencyMode =
+        hipMemRangeCoherencyMode(0);
+}
+impl hipMemRangeCoherencyMode {
+    #[doc = "< Writes to memory with this attribute can be"]
+    #[doc = "< performed by a single device at a time"]
+    pub const hipMemRangeCoherencyModeCoarseGrain: hipMemRangeCoherencyMode =
+        hipMemRangeCoherencyMode(1);
+}
+impl hipMemRangeCoherencyMode {
+    #[doc = "< Memory region queried contains subregions with"]
+    #[doc = "< both hipMemRangeCoherencyModeFineGrain and"]
+    #[doc = "< hipMemRangeCoherencyModeCoarseGrain attributes"]
+    pub const hipMemRangeCoherencyModeIndeterminate: hipMemRangeCoherencyMode =
+        hipMemRangeCoherencyMode(2);
+}
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct hipMemRangeCoherencyMode(pub ::std::os::raw::c_uint);
 impl hipMemRangeAttribute {
     #[doc = "< Whether the range will mostly be read and"]
     #[doc = "< only occassionally be written to"]
@@ -2067,14 +2341,20 @@ impl hipMemRangeAttribute {
     pub const hipMemRangeAttributePreferredLocation: hipMemRangeAttribute = hipMemRangeAttribute(2);
 }
 impl hipMemRangeAttribute {
-    #[doc = "< Memory range has cudaMemAdviseSetAccessedBy"]
-    #[doc = "< set for specified device"]
+    #[doc = "< Memory range has hipMemAdviseSetAccessedBy"]
+    #[doc = "< set for the specified device"]
     pub const hipMemRangeAttributeAccessedBy: hipMemRangeAttribute = hipMemRangeAttribute(3);
 }
 impl hipMemRangeAttribute {
-    #[doc = "< The last location to which the range was prefetched"]
+    #[doc = "< The last location to where the range was"]
+    #[doc = "< prefetched"]
     pub const hipMemRangeAttributeLastPrefetchLocation: hipMemRangeAttribute =
         hipMemRangeAttribute(4);
+}
+impl hipMemRangeAttribute {
+    #[doc = "< Returns coherency mode"]
+    #[doc = "< @ref hipMemRangeCoherencyMode for the range"]
+    pub const hipMemRangeAttributeCoherencyMode: hipMemRangeAttribute = hipMemRangeAttribute(100);
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -2278,7 +2558,157 @@ pub struct hipExternalMemoryBufferDesc_st {
 }
 pub type hipExternalMemoryBufferDesc = hipExternalMemoryBufferDesc_st;
 pub type hipExternalMemory_t = *mut ::std::os::raw::c_void;
+impl hipExternalSemaphoreHandleType_enum {
+    pub const hipExternalSemaphoreHandleTypeOpaqueFd: hipExternalSemaphoreHandleType_enum =
+        hipExternalSemaphoreHandleType_enum(1);
+}
+impl hipExternalSemaphoreHandleType_enum {
+    pub const hipExternalSemaphoreHandleTypeOpaqueWin32: hipExternalSemaphoreHandleType_enum =
+        hipExternalSemaphoreHandleType_enum(2);
+}
+impl hipExternalSemaphoreHandleType_enum {
+    pub const hipExternalSemaphoreHandleTypeOpaqueWin32Kmt: hipExternalSemaphoreHandleType_enum =
+        hipExternalSemaphoreHandleType_enum(3);
+}
+impl hipExternalSemaphoreHandleType_enum {
+    pub const hipExternalSemaphoreHandleTypeD3D12Fence: hipExternalSemaphoreHandleType_enum =
+        hipExternalSemaphoreHandleType_enum(4);
+}
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct hipExternalSemaphoreHandleType_enum(pub ::std::os::raw::c_uint);
+pub use self::hipExternalSemaphoreHandleType_enum as hipExternalSemaphoreHandleType;
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct hipExternalSemaphoreHandleDesc_st {
+    pub type_: hipExternalSemaphoreHandleType,
+    pub handle: hipExternalSemaphoreHandleDesc_st__bindgen_ty_1,
+    pub flags: ::std::os::raw::c_uint,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union hipExternalSemaphoreHandleDesc_st__bindgen_ty_1 {
+    pub fd: ::std::os::raw::c_int,
+    pub win32: hipExternalSemaphoreHandleDesc_st__bindgen_ty_1__bindgen_ty_1,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct hipExternalSemaphoreHandleDesc_st__bindgen_ty_1__bindgen_ty_1 {
+    pub handle: *mut ::std::os::raw::c_void,
+    pub name: *const ::std::os::raw::c_void,
+}
+pub type hipExternalSemaphoreHandleDesc = hipExternalSemaphoreHandleDesc_st;
+pub type hipExternalSemaphore_t = *mut ::std::os::raw::c_void;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct hipExternalSemaphoreSignalParams_st {
+    pub params: hipExternalSemaphoreSignalParams_st__bindgen_ty_1,
+    pub flags: ::std::os::raw::c_uint,
+    pub reserved: [::std::os::raw::c_uint; 16usize],
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct hipExternalSemaphoreSignalParams_st__bindgen_ty_1 {
+    pub fence: hipExternalSemaphoreSignalParams_st__bindgen_ty_1__bindgen_ty_1,
+    pub keyedMutex: hipExternalSemaphoreSignalParams_st__bindgen_ty_1__bindgen_ty_2,
+    pub reserved: [::std::os::raw::c_uint; 12usize],
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct hipExternalSemaphoreSignalParams_st__bindgen_ty_1__bindgen_ty_1 {
+    pub value: ::std::os::raw::c_ulonglong,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct hipExternalSemaphoreSignalParams_st__bindgen_ty_1__bindgen_ty_2 {
+    pub key: ::std::os::raw::c_ulonglong,
+}
+pub type hipExternalSemaphoreSignalParams = hipExternalSemaphoreSignalParams_st;
+#[doc = " External semaphore wait parameters, compatible with driver type"]
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct hipExternalSemaphoreWaitParams_st {
+    pub params: hipExternalSemaphoreWaitParams_st__bindgen_ty_1,
+    pub flags: ::std::os::raw::c_uint,
+    pub reserved: [::std::os::raw::c_uint; 16usize],
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct hipExternalSemaphoreWaitParams_st__bindgen_ty_1 {
+    pub fence: hipExternalSemaphoreWaitParams_st__bindgen_ty_1__bindgen_ty_1,
+    pub keyedMutex: hipExternalSemaphoreWaitParams_st__bindgen_ty_1__bindgen_ty_2,
+    pub reserved: [::std::os::raw::c_uint; 10usize],
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct hipExternalSemaphoreWaitParams_st__bindgen_ty_1__bindgen_ty_1 {
+    pub value: ::std::os::raw::c_ulonglong,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct hipExternalSemaphoreWaitParams_st__bindgen_ty_1__bindgen_ty_2 {
+    pub key: ::std::os::raw::c_ulonglong,
+    pub timeoutMs: ::std::os::raw::c_uint,
+}
+#[doc = " External semaphore wait parameters, compatible with driver type"]
+pub type hipExternalSemaphoreWaitParams = hipExternalSemaphoreWaitParams_st;
+impl hipGLDeviceList {
+    #[doc = "< All hip devices used by current OpenGL context."]
+    pub const hipGLDeviceListAll: hipGLDeviceList = hipGLDeviceList(1);
+}
+impl hipGLDeviceList {
+    #[doc = "< Hip devices used by current OpenGL context in current"]
+    #[doc = "< frame"]
+    pub const hipGLDeviceListCurrentFrame: hipGLDeviceList = hipGLDeviceList(2);
+}
+impl hipGLDeviceList {
+    #[doc = "< Hip devices used by current OpenGL context in next"]
+    #[doc = "< frame."]
+    pub const hipGLDeviceListNextFrame: hipGLDeviceList = hipGLDeviceList(3);
+}
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct hipGLDeviceList(pub ::std::os::raw::c_uint);
+impl hipGraphicsRegisterFlags {
+    pub const hipGraphicsRegisterFlagsNone: hipGraphicsRegisterFlags = hipGraphicsRegisterFlags(0);
+}
+impl hipGraphicsRegisterFlags {
+    #[doc = "< HIP will not write to this registered resource"]
+    pub const hipGraphicsRegisterFlagsReadOnly: hipGraphicsRegisterFlags =
+        hipGraphicsRegisterFlags(1);
+}
+impl hipGraphicsRegisterFlags {
+    pub const hipGraphicsRegisterFlagsWriteDiscard: hipGraphicsRegisterFlags =
+        hipGraphicsRegisterFlags(2);
+}
+impl hipGraphicsRegisterFlags {
+    #[doc = "< HIP will bind this resource to a surface"]
+    pub const hipGraphicsRegisterFlagsSurfaceLoadStore: hipGraphicsRegisterFlags =
+        hipGraphicsRegisterFlags(4);
+}
+impl hipGraphicsRegisterFlags {
+    pub const hipGraphicsRegisterFlagsTextureGather: hipGraphicsRegisterFlags =
+        hipGraphicsRegisterFlags(8);
+}
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct hipGraphicsRegisterFlags(pub ::std::os::raw::c_uint);
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _hipGraphicsResource {
+    _unused: [u8; 0],
+}
+pub type hipGraphicsResource = _hipGraphicsResource;
+pub type hipGraphicsResource_t = *mut hipGraphicsResource;
 extern "C" {
+    #[doc = "  @defgroup API HIP API"]
+    #[doc = "  @{"]
+    #[doc = ""]
+    #[doc = "  Defines the HIP API.  See the individual sections for more information."]
+    #[doc = "  @defgroup Driver Initialization and Version"]
+    #[doc = "  @{"]
+    #[doc = "  This section describes the initializtion and version functions of HIP runtime API."]
+    #[doc = ""]
     #[doc = " @brief Explicitly initializes the HIP runtime."]
     #[doc = ""]
     #[doc = " Most HIP APIs implicitly initialize the HIP runtime."]
@@ -2396,6 +2826,10 @@ extern "C" {
     pub fn hipDeviceTotalMem(bytes: *mut usize, device: hipDevice_t) -> hipError_t;
 }
 extern "C" {
+    #[doc = " @}"]
+    #[doc = "  @defgroup Device Device Management"]
+    #[doc = "  @{"]
+    #[doc = "  This section describes the device management functions of HIP runtime API."]
     #[doc = " @brief Waits on all active streams on current device"]
     #[doc = ""]
     #[doc = " When this command is invoked, the host thread gets blocked until all the commands associated"]
@@ -2718,13 +3152,40 @@ extern "C" {
     pub fn hipIpcCloseMemHandle(devPtr: *mut ::std::os::raw::c_void) -> hipError_t;
 }
 extern "C" {
+    #[doc = " @brief Gets an opaque interprocess handle for an event."]
+    #[doc = ""]
+    #[doc = " This opaque handle may be copied into other processes and opened with cudaIpcOpenEventHandle."]
+    #[doc = " Then cudaEventRecord, cudaEventSynchronize, cudaStreamWaitEvent and cudaEventQuery may be used in"]
+    #[doc = " either process. Operations on the imported event after the exported event has been freed with hipEventDestroy"]
+    #[doc = " will result in undefined behavior."]
+    #[doc = ""]
+    #[doc = " @param[out]  handle Pointer to cudaIpcEventHandle to return the opaque event handle"]
+    #[doc = " @param[in]   event  Event allocated with cudaEventInterprocess and cudaEventDisableTiming flags"]
+    #[doc = ""]
+    #[doc = " @returns #hipSuccess, #hipErrorInvalidConfiguration, #hipErrorInvalidValue"]
+    #[doc = ""]
     pub fn hipIpcGetEventHandle(handle: *mut hipIpcEventHandle_t, event: hipEvent_t) -> hipError_t;
 }
 extern "C" {
+    #[doc = " @brief Opens an interprocess event handles."]
+    #[doc = ""]
+    #[doc = " Opens an interprocess event handle exported from another process with cudaIpcGetEventHandle. The returned"]
+    #[doc = " hipEvent_t behaves like a locally created event with the hipEventDisableTiming flag specified. This event"]
+    #[doc = " need be freed with hipEventDestroy. Operations on the imported event after the exported event has been freed"]
+    #[doc = " with hipEventDestroy will result in undefined behavior. If the function is called within the same process where"]
+    #[doc = " handle is returned by hipIpcGetEventHandle, it will return hipErrorInvalidContext."]
+    #[doc = ""]
+    #[doc = " @param[out]  event  Pointer to hipEvent_t to return the event"]
+    #[doc = " @param[in]   handle The opaque interprocess handle to open"]
+    #[doc = ""]
+    #[doc = " @returns #hipSuccess, #hipErrorInvalidValue, #hipErrorInvalidContext"]
+    #[doc = ""]
     pub fn hipIpcOpenEventHandle(event: *mut hipEvent_t, handle: hipIpcEventHandle_t)
         -> hipError_t;
 }
 extern "C" {
+    #[doc = " @}"]
+    #[doc = ""]
     #[doc = "  @defgroup Execution Execution Control"]
     #[doc = "  @{"]
     #[doc = "  This section describes the execution control functions of HIP runtime API."]
@@ -2777,6 +3238,12 @@ extern "C" {
     ) -> hipError_t;
 }
 extern "C" {
+    #[doc = " @}"]
+    #[doc = "-------------------------------------------------------------------------------------------------"]
+    #[doc = "-------------------------------------------------------------------------------------------------"]
+    #[doc = "  @defgroup Error Error Handling"]
+    #[doc = "  @{"]
+    #[doc = "  This section describes the error handling functions of HIP runtime API."]
     #[doc = " @brief Return last error returned by any HIP runtime API call and resets the stored error code to"]
     #[doc = " #hipSuccess"]
     #[doc = ""]
@@ -2975,6 +3442,9 @@ extern "C" {
     ) -> hipError_t;
 }
 extern "C" {
+    pub fn hipStreamGetCtx(stream: hipStream_t, pctx: *mut hipCtx_t) -> hipError_t;
+}
+extern "C" {
     #[doc = " @brief Return flags associated with this stream."]
     #[doc = ""]
     #[doc = " @param[in] stream stream to be queried"]
@@ -3058,7 +3528,7 @@ pub type hipStreamCallback_t = ::std::option::Option<
 extern "C" {
     #[doc = " @brief Adds a callback to be called on the host after all currently enqueued"]
     #[doc = " items in the stream have completed.  For each"]
-    #[doc = " cudaStreamAddCallback call, a callback will be executed exactly once."]
+    #[doc = " hipStreamAddCallback call, a callback will be executed exactly once."]
     #[doc = " The callback will block later work in the stream until it is finished."]
     #[doc = " @param[in] stream   - Stream to add callback to"]
     #[doc = " @param[in] callback - The function to call once preceding stream operations are complete"]
@@ -3077,7 +3547,13 @@ extern "C" {
     ) -> hipError_t;
 }
 extern "C" {
-    #[doc = " @brief Enqueues a wait command to the stream."]
+    #[doc = " @}"]
+    #[doc = "-------------------------------------------------------------------------------------------------"]
+    #[doc = "-------------------------------------------------------------------------------------------------"]
+    #[doc = "  @defgroup Stream Memory Operations"]
+    #[doc = "  @{"]
+    #[doc = "  This section describes Stream Memory Wait and Write functions of HIP runtime API."]
+    #[doc = " @brief Enqueues a wait command to the stream.[BETA]"]
     #[doc = ""]
     #[doc = " @param [in] stream - Stream identifier"]
     #[doc = " @param [in] ptr    - Pointer to memory object allocated using 'hipMallocSignalMemory' flag"]
@@ -3102,18 +3578,21 @@ extern "C" {
     #[doc = " @note Support for hipStreamWaitValue32 can be queried using 'hipDeviceGetAttribute()' and"]
     #[doc = " 'hipDeviceAttributeCanUseStreamWaitValue' flag."]
     #[doc = ""]
+    #[doc = " @beta This API is marked as beta, meaning, while this is feature complete,"]
+    #[doc = " it is still open to changes and may have outstanding issues."]
+    #[doc = ""]
     #[doc = " @see hipExtMallocWithFlags, hipFree, hipStreamWaitValue64, hipStreamWriteValue64,"]
     #[doc = " hipStreamWriteValue32, hipDeviceGetAttribute"]
     pub fn hipStreamWaitValue32(
         stream: hipStream_t,
         ptr: *mut ::std::os::raw::c_void,
-        value: i32,
+        value: u32,
         flags: ::std::os::raw::c_uint,
         mask: u32,
     ) -> hipError_t;
 }
 extern "C" {
-    #[doc = " @brief Enqueues a wait command to the stream."]
+    #[doc = " @brief Enqueues a wait command to the stream.[BETA]"]
     #[doc = ""]
     #[doc = " @param [in] stream - Stream identifier"]
     #[doc = " @param [in] ptr    - Pointer to memory object allocated using 'hipMallocSignalMemory' flag"]
@@ -3138,18 +3617,21 @@ extern "C" {
     #[doc = " @note Support for hipStreamWaitValue64 can be queried using 'hipDeviceGetAttribute()' and"]
     #[doc = " 'hipDeviceAttributeCanUseStreamWaitValue' flag."]
     #[doc = ""]
+    #[doc = " @beta This API is marked as beta, meaning, while this is feature complete,"]
+    #[doc = " it is still open to changes and may have outstanding issues."]
+    #[doc = ""]
     #[doc = " @see hipExtMallocWithFlags, hipFree, hipStreamWaitValue32, hipStreamWriteValue64,"]
     #[doc = " hipStreamWriteValue32, hipDeviceGetAttribute"]
     pub fn hipStreamWaitValue64(
         stream: hipStream_t,
         ptr: *mut ::std::os::raw::c_void,
-        value: i64,
+        value: u64,
         flags: ::std::os::raw::c_uint,
         mask: u64,
     ) -> hipError_t;
 }
 extern "C" {
-    #[doc = " @brief Enqueues a write command to the stream."]
+    #[doc = " @brief Enqueues a write command to the stream.[BETA]"]
     #[doc = ""]
     #[doc = " @param [in] stream - Stream identifier"]
     #[doc = " @param [in] ptr    - Pointer to a GPU accessible memory object"]
@@ -3160,18 +3642,21 @@ extern "C" {
     #[doc = ""]
     #[doc = " Enqueues a write command to the stream, write operation is performed after all earlier commands"]
     #[doc = " on this stream have completed the execution."]
+    #[doc = ""]
+    #[doc = " @beta This API is marked as beta, meaning, while this is feature complete,"]
+    #[doc = " it is still open to changes and may have outstanding issues."]
     #[doc = ""]
     #[doc = " @see hipExtMallocWithFlags, hipFree, hipStreamWriteValue32, hipStreamWaitValue32,"]
     #[doc = " hipStreamWaitValue64"]
     pub fn hipStreamWriteValue32(
         stream: hipStream_t,
         ptr: *mut ::std::os::raw::c_void,
-        value: i32,
+        value: u32,
         flags: ::std::os::raw::c_uint,
     ) -> hipError_t;
 }
 extern "C" {
-    #[doc = " @brief Enqueues a write command to the stream."]
+    #[doc = " @brief Enqueues a write command to the stream.[BETA]"]
     #[doc = ""]
     #[doc = " @param [in] stream - Stream identifier"]
     #[doc = " @param [in] ptr    - Pointer to a GPU accessible memory object"]
@@ -3183,22 +3668,30 @@ extern "C" {
     #[doc = " Enqueues a write command to the stream, write operation is performed after all earlier commands"]
     #[doc = " on this stream have completed the execution."]
     #[doc = ""]
+    #[doc = " @beta This API is marked as beta, meaning, while this is feature complete,"]
+    #[doc = " it is still open to changes and may have outstanding issues."]
+    #[doc = ""]
     #[doc = " @see hipExtMallocWithFlags, hipFree, hipStreamWriteValue32, hipStreamWaitValue32,"]
     #[doc = " hipStreamWaitValue64"]
     pub fn hipStreamWriteValue64(
         stream: hipStream_t,
         ptr: *mut ::std::os::raw::c_void,
-        value: i64,
+        value: u64,
         flags: ::std::os::raw::c_uint,
     ) -> hipError_t;
 }
 extern "C" {
+    #[doc = " @}"]
+    #[doc = "-------------------------------------------------------------------------------------------------"]
+    #[doc = "-------------------------------------------------------------------------------------------------"]
+    #[doc = "  @defgroup Event Event Management"]
+    #[doc = "  @{"]
+    #[doc = "  This section describes the event management functions of HIP runtime API."]
     #[doc = " @brief Create an event with the specified flags"]
     #[doc = ""]
     #[doc = " @param[in,out] event Returns the newly created event."]
     #[doc = " @param[in] flags     Flags to control event behavior.  Valid values are #hipEventDefault,"]
     #[doc = "#hipEventBlockingSync, #hipEventDisableTiming, #hipEventInterprocess"]
-    #[doc = ""]
     #[doc = " #hipEventDefault : Default flag.  The event will use active synchronization and will support"]
     #[doc = "timing.  Blocking synchronization provides lowest possible latency at the expense of dedicating a"]
     #[doc = "CPU to poll on the event."]
@@ -3207,7 +3700,6 @@ extern "C" {
     #[doc = "for the synchroniation but can result in lower power and more resources for other CPU threads."]
     #[doc = " #hipEventDisableTiming : Disable recording of timing information. Events created with this flag"]
     #[doc = "would not record profiling data and provide best performance if used for synchronization."]
-    #[doc = ""]
     #[doc = " @warning On AMD platform, hipEventInterprocess support is under development.  Use of this flag"]
     #[doc = "will return an error."]
     #[doc = ""]
@@ -3323,6 +3815,18 @@ extern "C" {
     pub fn hipEventQuery(event: hipEvent_t) -> hipError_t;
 }
 extern "C" {
+    #[doc = " @}"]
+    #[doc = "-------------------------------------------------------------------------------------------------"]
+    #[doc = "-------------------------------------------------------------------------------------------------"]
+    #[doc = "  @defgroup Memory Memory Management"]
+    #[doc = "  @{"]
+    #[doc = "  This section describes the memory management functions of HIP runtime API."]
+    #[doc = "  The following CUDA APIs are not currently supported:"]
+    #[doc = "  - cudaMalloc3D"]
+    #[doc = "  - cudaMalloc3DArray"]
+    #[doc = "  - TODO - more 2D, 3D, array APIs here."]
+    #[doc = ""]
+    #[doc = ""]
     #[doc = "  @brief Return attributes for the specified pointer"]
     #[doc = ""]
     #[doc = "  @param[out] attributes for the specified pointer"]
@@ -3335,6 +3839,66 @@ extern "C" {
         attributes: *mut hipPointerAttribute_t,
         ptr: *const ::std::os::raw::c_void,
     ) -> hipError_t;
+}
+extern "C" {
+    #[doc = "  @brief Imports an external semaphore."]
+    #[doc = ""]
+    #[doc = "  @param[out] extSem_out  External semaphores to be waited on"]
+    #[doc = "  @param[in] semHandleDesc Semaphore import handle descriptor"]
+    #[doc = ""]
+    #[doc = "  @return #hipSuccess, #hipErrorInvalidDevice, #hipErrorInvalidValue"]
+    #[doc = ""]
+    #[doc = "  @see"]
+    pub fn hipImportExternalSemaphore(
+        extSem_out: *mut hipExternalSemaphore_t,
+        semHandleDesc: *const hipExternalSemaphoreHandleDesc,
+    ) -> hipError_t;
+}
+extern "C" {
+    #[doc = "  @brief Signals a set of external semaphore objects."]
+    #[doc = ""]
+    #[doc = "  @param[in] extSem_out  External semaphores to be waited on"]
+    #[doc = "  @param[in] paramsArray Array of semaphore parameters"]
+    #[doc = "  @param[in] numExtSems Number of semaphores to wait on"]
+    #[doc = "  @param[in] stream Stream to enqueue the wait operations in"]
+    #[doc = ""]
+    #[doc = "  @return #hipSuccess, #hipErrorInvalidDevice, #hipErrorInvalidValue"]
+    #[doc = ""]
+    #[doc = "  @see"]
+    pub fn hipSignalExternalSemaphoresAsync(
+        extSemArray: *const hipExternalSemaphore_t,
+        paramsArray: *const hipExternalSemaphoreSignalParams,
+        numExtSems: ::std::os::raw::c_uint,
+        stream: hipStream_t,
+    ) -> hipError_t;
+}
+extern "C" {
+    #[doc = "  @brief Waits on a set of external semaphore objects"]
+    #[doc = ""]
+    #[doc = "  @param[in] extSem_out  External semaphores to be waited on"]
+    #[doc = "  @param[in] paramsArray Array of semaphore parameters"]
+    #[doc = "  @param[in] numExtSems Number of semaphores to wait on"]
+    #[doc = "  @param[in] stream Stream to enqueue the wait operations in"]
+    #[doc = ""]
+    #[doc = "  @return #hipSuccess, #hipErrorInvalidDevice, #hipErrorInvalidValue"]
+    #[doc = ""]
+    #[doc = "  @see"]
+    pub fn hipWaitExternalSemaphoresAsync(
+        extSemArray: *const hipExternalSemaphore_t,
+        paramsArray: *const hipExternalSemaphoreWaitParams,
+        numExtSems: ::std::os::raw::c_uint,
+        stream: hipStream_t,
+    ) -> hipError_t;
+}
+extern "C" {
+    #[doc = "  @brief Destroys an external semaphore object and releases any references to the underlying resource. Any outstanding signals or waits must have completed before the semaphore is destroyed."]
+    #[doc = ""]
+    #[doc = "  @param[in] extSem handle to an external memory object"]
+    #[doc = ""]
+    #[doc = "  @return #hipSuccess, #hipErrorInvalidDevice, #hipErrorInvalidValue"]
+    #[doc = ""]
+    #[doc = "  @see"]
+    pub fn hipDestroyExternalSemaphore(extSem: hipExternalSemaphore_t) -> hipError_t;
 }
 extern "C" {
     #[doc = "  @brief Imports an external memory object."]
@@ -3454,7 +4018,14 @@ extern "C" {
     ) -> hipError_t;
 }
 extern "C" {
-    #[doc = " @brief Allocates memory that will be automatically managed by AMD HMM."]
+    #[doc = "-------------------------------------------------------------------------------------------------"]
+    #[doc = "-------------------------------------------------------------------------------------------------"]
+    #[doc = "  @addtogroup Memory Managed Memory"]
+    #[doc = "  @{"]
+    #[doc = "  @ingroup Memory"]
+    #[doc = "  This section describes the managed memory management functions of HIP runtime API."]
+    #[doc = ""]
+    #[doc = " @brief Allocates memory that will be automatically managed by HIP."]
     #[doc = ""]
     #[doc = " @param [out] dev_ptr - pointer to allocated device memory"]
     #[doc = " @param [in]  size    - requested allocation size in bytes"]
@@ -3469,7 +4040,7 @@ extern "C" {
     ) -> hipError_t;
 }
 extern "C" {
-    #[doc = " @brief Prefetches memory to the specified destination device using AMD HMM."]
+    #[doc = " @brief Prefetches memory to the specified destination device using HIP."]
     #[doc = ""]
     #[doc = " @param [in] dev_ptr  pointer to be prefetched"]
     #[doc = " @param [in] count    size in bytes for prefetching"]
@@ -3485,7 +4056,7 @@ extern "C" {
     ) -> hipError_t;
 }
 extern "C" {
-    #[doc = " @brief Advise about the usage of a given memory range to AMD HMM."]
+    #[doc = " @brief Advise about the usage of a given memory range to HIP."]
     #[doc = ""]
     #[doc = " @param [in] dev_ptr  pointer to memory to set the advice for"]
     #[doc = " @param [in] count    size in bytes of the memory range"]
@@ -3501,9 +4072,9 @@ extern "C" {
     ) -> hipError_t;
 }
 extern "C" {
-    #[doc = " @brief Query an attribute of a given memory range in AMD HMM."]
+    #[doc = " @brief Query an attribute of a given memory range in HIP."]
     #[doc = ""]
-    #[doc = " @param [in/out] data   a pointer to a memory location where the result of each"]
+    #[doc = " @param [in,out] data   a pointer to a memory location where the result of each"]
     #[doc = "                        attribute query will be written to"]
     #[doc = " @param [in] data_size  the size of data"]
     #[doc = " @param [in] attribute  the attribute to query"]
@@ -3520,9 +4091,9 @@ extern "C" {
     ) -> hipError_t;
 }
 extern "C" {
-    #[doc = " @brief Query attributes of a given memory range in AMD HMM."]
+    #[doc = " @brief Query attributes of a given memory range in HIP."]
     #[doc = ""]
-    #[doc = " @param [in/out] data     a two-dimensional array containing pointers to memory locations"]
+    #[doc = " @param [in,out] data     a two-dimensional array containing pointers to memory locations"]
     #[doc = "                          where the result of each attribute query will be written to"]
     #[doc = " @param [in] data_sizes   an array, containing the sizes of each result"]
     #[doc = " @param [in] attributes   the attribute to query"]
@@ -3542,24 +4113,25 @@ extern "C" {
     ) -> hipError_t;
 }
 extern "C" {
-    #[doc = " @brief Attach memory to a stream asynchronously in AMD HMM."]
+    #[doc = " @brief Attach memory to a stream asynchronously in HIP."]
     #[doc = ""]
     #[doc = " @param [in] stream     - stream in which to enqueue the attach operation"]
     #[doc = " @param [in] dev_ptr    - pointer to memory (must be a pointer to managed memory or"]
     #[doc = "                          to a valid host-accessible region of system-allocated memory)"]
     #[doc = " @param [in] length     - length of memory (defaults to zero)"]
-    #[doc = " @param [in] flags      - must be one of cudaMemAttachGlobal, cudaMemAttachHost or"]
-    #[doc = "                          cudaMemAttachSingle (defaults to cudaMemAttachSingle)"]
+    #[doc = " @param [in] flags      - must be one of hipMemAttachGlobal, hipMemAttachHost or"]
+    #[doc = "                          hipMemAttachSingle (defaults to hipMemAttachSingle)"]
     #[doc = ""]
     #[doc = " @returns #hipSuccess, #hipErrorInvalidValue"]
     pub fn hipStreamAttachMemAsync(
         stream: hipStream_t,
-        dev_ptr: *mut hipDeviceptr_t,
+        dev_ptr: *mut ::std::os::raw::c_void,
         length: usize,
         flags: ::std::os::raw::c_uint,
     ) -> hipError_t;
 }
 extern "C" {
+    #[doc = " @}"]
     #[doc = "  @brief Allocate device accessible page locked host memory [Deprecated]"]
     #[doc = ""]
     #[doc = "  @param[out] ptr Pointer to the allocated host pinned memory"]
@@ -3729,7 +4301,6 @@ extern "C" {
     #[doc = "  @return #hipSuccess,"]
     #[doc = "          #hipErrorInvalidValue (if pointer is invalid, including device pointers allocated with"]
     #[doc = "hipMalloc)"]
-    #[doc = ""]
     #[doc = "  @deprecated use hipHostFree() instead"]
     pub fn hipFreeHost(ptr: *mut ::std::os::raw::c_void) -> hipError_t;
 }
@@ -3923,6 +4494,18 @@ extern "C" {
     ) -> hipError_t;
 }
 extern "C" {
+    #[doc = "  @brief Returns a global pointer from a module."]
+    #[doc = "  Returns in *dptr and *bytes the pointer and size of the global of name name located in module hmod."]
+    #[doc = "  If no variable of that name exists, it returns hipErrorNotFound. Both parameters dptr and bytes are optional."]
+    #[doc = "  If one of them is NULL, it is ignored and hipSuccess is returned."]
+    #[doc = ""]
+    #[doc = "  @param[out]  dptr  Returned global device pointer"]
+    #[doc = "  @param[out]  bytes Returned global size in bytes"]
+    #[doc = "  @param[in]   hmod  Module to retrieve global from"]
+    #[doc = "  @param[in]   name  Name of global to retrieve"]
+    #[doc = ""]
+    #[doc = "  @return #hipSuccess, #hipErrorInvalidValue, #hipErrorNotFound, #hipErrorInvalidContext"]
+    #[doc = ""]
     pub fn hipModuleGetGlobal(
         dptr: *mut hipDeviceptr_t,
         bytes: *mut usize,
@@ -4648,6 +5231,13 @@ extern "C" {
     pub fn hipDrvMemcpy3DAsync(pCopy: *const HIP_MEMCPY3D, stream: hipStream_t) -> hipError_t;
 }
 extern "C" {
+    #[doc = " @}"]
+    #[doc = "-------------------------------------------------------------------------------------------------"]
+    #[doc = "-------------------------------------------------------------------------------------------------"]
+    #[doc = "  @defgroup PeerToPeer PeerToPeer Device Memory Access"]
+    #[doc = "  @{"]
+    #[doc = "  @warning PeerToPeer support is experimental."]
+    #[doc = "  This section describes the PeerToPeer device memory access functions of HIP runtime API."]
     #[doc = " @brief Determine if a device can access a peer's memory."]
     #[doc = ""]
     #[doc = " @param [out] canAccessPeer Returns the peer access capability (0 or 1)"]
@@ -4756,6 +5346,17 @@ extern "C" {
     ) -> hipError_t;
 }
 extern "C" {
+    #[doc = " @}"]
+    #[doc = "-------------------------------------------------------------------------------------------------"]
+    #[doc = "-------------------------------------------------------------------------------------------------"]
+    #[doc = "  @defgroup Context Context Management"]
+    #[doc = "  @{"]
+    #[doc = "  This section describes the context management functions of HIP runtime API."]
+    #[doc = ""]
+    #[doc = "  @addtogroup ContextD Context Management [Deprecated]"]
+    #[doc = "  @{"]
+    #[doc = "  @ingroup Context"]
+    #[doc = "  This section describes the deprecated context management functions of HIP runtime API."]
     #[doc = " @brief Create a context and set it as current/ default context"]
     #[doc = ""]
     #[doc = " @param [out] ctx"]
@@ -4974,6 +5575,7 @@ extern "C" {
     pub fn hipCtxDisablePeerAccess(peerCtx: hipCtx_t) -> hipError_t;
 }
 extern "C" {
+    #[doc = " @}"]
     #[doc = " @brief Get the state of the primary context."]
     #[doc = ""]
     #[doc = " @param [in] Device to get primary context flags for"]
@@ -5042,6 +5644,12 @@ extern "C" {
     ) -> hipError_t;
 }
 extern "C" {
+    #[doc = " @}"]
+    #[doc = ""]
+    #[doc = "  @defgroup Module Module Management"]
+    #[doc = "  @{"]
+    #[doc = "  This section describes the module management functions of HIP runtime API."]
+    #[doc = ""]
     #[doc = " @brief Loads code object from file into a hipModule_t"]
     #[doc = ""]
     #[doc = " @param [in] fname"]
@@ -5217,7 +5825,7 @@ extern "C" {
     #[doc = " @brief Launches kernels on multiple devices where thread blocks can cooperate and"]
     #[doc = " synchronize as they execute."]
     #[doc = ""]
-    #[doc = " @param [in] hipLaunchParams          List of launch parameters, one per device."]
+    #[doc = " @param [in] launchParamsList         List of launch parameters, one per device."]
     #[doc = " @param [in] numDevices               Size of the launchParamsList array."]
     #[doc = " @param [in] flags                    Flags to control launch behavior."]
     #[doc = ""]
@@ -5245,6 +5853,12 @@ extern "C" {
     ) -> hipError_t;
 }
 extern "C" {
+    #[doc = " @}"]
+    #[doc = ""]
+    #[doc = "  @defgroup Occupancy Occupancy"]
+    #[doc = "  @{"]
+    #[doc = "  This section describes the occupancy functions of HIP runtime API."]
+    #[doc = ""]
     #[doc = " @brief determine the grid and block sizes to achieves maximum occupancy for a kernel"]
     #[doc = ""]
     #[doc = " @param [out] gridSize           minimum grid size for maximum potential occupancy"]
@@ -5373,6 +5987,12 @@ extern "C" {
     pub fn hipProfilerStop() -> hipError_t;
 }
 extern "C" {
+    #[doc = " @}"]
+    #[doc = "-------------------------------------------------------------------------------------------------"]
+    #[doc = "-------------------------------------------------------------------------------------------------"]
+    #[doc = "  @defgroup Clang Launch API to support the triple-chevron syntax"]
+    #[doc = "  @{"]
+    #[doc = "  This section describes the API to support the triple-chevron syntax."]
     #[doc = " @brief Configure a kernel launch."]
     #[doc = ""]
     #[doc = " @param [in] gridDim   grid dimension specified as multiple of blockDim."]
@@ -5460,6 +6080,13 @@ extern "C" {
     ) -> hipError_t;
 }
 extern "C" {
+    #[doc = " @}"]
+    #[doc = "-------------------------------------------------------------------------------------------------"]
+    #[doc = "-------------------------------------------------------------------------------------------------"]
+    #[doc = "  @defgroup Texture Texture Management"]
+    #[doc = "  @{"]
+    #[doc = "  This section describes the texture management functions of HIP runtime API."]
+    #[doc = ""]
     #[doc = "  @addtogroup TexturD Texture Management [Deprecated]"]
     #[doc = "  @{"]
     #[doc = "  @ingroup Texture"]
@@ -5777,4 +6404,512 @@ extern "C" {
 }
 extern "C" {
     pub fn hipGetStreamDeviceId(stream: hipStream_t) -> ::std::os::raw::c_int;
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ihipGraph {
+    _unused: [u8; 0],
+}
+#[doc = " An opaque value that represents a hip graph"]
+pub type hipGraph_t = *mut ihipGraph;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct hipGraphNode {
+    _unused: [u8; 0],
+}
+#[doc = " An opaque value that represents a hip graph node"]
+pub type hipGraphNode_t = *mut hipGraphNode;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct hipGraphExec {
+    _unused: [u8; 0],
+}
+#[doc = " An opaque value that represents a hip graph Exec"]
+pub type hipGraphExec_t = *mut hipGraphExec;
+impl hipGraphNodeType {
+    #[doc = "< GPU kernel node"]
+    pub const hipGraphNodeTypeKernel: hipGraphNodeType = hipGraphNodeType(1);
+}
+impl hipGraphNodeType {
+    #[doc = "< Memcpy 3D node"]
+    pub const hipGraphNodeTypeMemcpy: hipGraphNodeType = hipGraphNodeType(2);
+}
+impl hipGraphNodeType {
+    #[doc = "< Memset 1D node"]
+    pub const hipGraphNodeTypeMemset: hipGraphNodeType = hipGraphNodeType(3);
+}
+impl hipGraphNodeType {
+    #[doc = "< Host (executable) node"]
+    pub const hipGraphNodeTypeHost: hipGraphNodeType = hipGraphNodeType(4);
+}
+impl hipGraphNodeType {
+    #[doc = "< Node which executes an embedded graph"]
+    pub const hipGraphNodeTypeGraph: hipGraphNodeType = hipGraphNodeType(5);
+}
+impl hipGraphNodeType {
+    #[doc = "< Empty (no-op) node"]
+    pub const hipGraphNodeTypeEmpty: hipGraphNodeType = hipGraphNodeType(6);
+}
+impl hipGraphNodeType {
+    #[doc = "< External event wait node"]
+    pub const hipGraphNodeTypeWaitEvent: hipGraphNodeType = hipGraphNodeType(7);
+}
+impl hipGraphNodeType {
+    #[doc = "< External event record node"]
+    pub const hipGraphNodeTypeEventRecord: hipGraphNodeType = hipGraphNodeType(8);
+}
+impl hipGraphNodeType {
+    #[doc = "< Memcpy 1D node"]
+    pub const hipGraphNodeTypeMemcpy1D: hipGraphNodeType = hipGraphNodeType(9);
+}
+impl hipGraphNodeType {
+    #[doc = "< MemcpyFromSymbol node"]
+    pub const hipGraphNodeTypeMemcpyFromSymbol: hipGraphNodeType = hipGraphNodeType(10);
+}
+impl hipGraphNodeType {
+    #[doc = "< MemcpyToSymbol node"]
+    pub const hipGraphNodeTypeMemcpyToSymbol: hipGraphNodeType = hipGraphNodeType(11);
+}
+impl hipGraphNodeType {
+    pub const hipGraphNodeTypeCount: hipGraphNodeType = hipGraphNodeType(12);
+}
+#[repr(transparent)]
+#[doc = " @brief hipGraphNodeType"]
+#[doc = " @enum"]
+#[doc = ""]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct hipGraphNodeType(pub ::std::os::raw::c_uint);
+pub type hipHostFn_t =
+    ::std::option::Option<unsafe extern "C" fn(userData: *mut ::std::os::raw::c_void)>;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct hipHostNodeParams {
+    pub fn_: hipHostFn_t,
+    pub userData: *mut ::std::os::raw::c_void,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct hipKernelNodeParams {
+    pub blockDim: dim3,
+    pub extra: *mut *mut ::std::os::raw::c_void,
+    pub func: *mut ::std::os::raw::c_void,
+    pub gridDim: dim3,
+    pub kernelParams: *mut *mut ::std::os::raw::c_void,
+    pub sharedMemBytes: ::std::os::raw::c_uint,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct hipMemsetParams {
+    pub dst: *mut ::std::os::raw::c_void,
+    pub elementSize: ::std::os::raw::c_uint,
+    pub height: usize,
+    pub pitch: usize,
+    pub value: ::std::os::raw::c_uint,
+    pub width: usize,
+}
+impl hipGraphExecUpdateResult {
+    #[doc = "< The update succeeded"]
+    pub const hipGraphExecUpdateSuccess: hipGraphExecUpdateResult = hipGraphExecUpdateResult(0);
+}
+impl hipGraphExecUpdateResult {
+    #[doc = "< The update failed for an unexpected reason which is described"]
+    #[doc = "< in the return value of the function"]
+    pub const hipGraphExecUpdateError: hipGraphExecUpdateResult = hipGraphExecUpdateResult(1);
+}
+impl hipGraphExecUpdateResult {
+    #[doc = "< The update failed because the topology changed"]
+    pub const hipGraphExecUpdateErrorTopologyChanged: hipGraphExecUpdateResult =
+        hipGraphExecUpdateResult(2);
+}
+impl hipGraphExecUpdateResult {
+    #[doc = "< The update failed because a node type changed"]
+    pub const hipGraphExecUpdateErrorNodeTypeChanged: hipGraphExecUpdateResult =
+        hipGraphExecUpdateResult(3);
+}
+impl hipGraphExecUpdateResult {
+    pub const hipGraphExecUpdateErrorFunctionChanged: hipGraphExecUpdateResult =
+        hipGraphExecUpdateResult(4);
+}
+impl hipGraphExecUpdateResult {
+    pub const hipGraphExecUpdateErrorParametersChanged: hipGraphExecUpdateResult =
+        hipGraphExecUpdateResult(5);
+}
+impl hipGraphExecUpdateResult {
+    pub const hipGraphExecUpdateErrorNotSupported: hipGraphExecUpdateResult =
+        hipGraphExecUpdateResult(6);
+}
+impl hipGraphExecUpdateResult {
+    pub const hipGraphExecUpdateErrorUnsupportedFunctionChange: hipGraphExecUpdateResult =
+        hipGraphExecUpdateResult(7);
+}
+#[repr(transparent)]
+#[doc = " @brief hipGraphExecUpdateResult"]
+#[doc = " @enum"]
+#[doc = ""]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct hipGraphExecUpdateResult(pub ::std::os::raw::c_uint);
+impl hipStreamCaptureMode {
+    pub const hipStreamCaptureModeGlobal: hipStreamCaptureMode = hipStreamCaptureMode(0);
+}
+impl hipStreamCaptureMode {
+    pub const hipStreamCaptureModeThreadLocal: hipStreamCaptureMode = hipStreamCaptureMode(1);
+}
+impl hipStreamCaptureMode {
+    pub const hipStreamCaptureModeRelaxed: hipStreamCaptureMode = hipStreamCaptureMode(2);
+}
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct hipStreamCaptureMode(pub ::std::os::raw::c_uint);
+impl hipStreamCaptureStatus {
+    #[doc = "< Stream is not capturing"]
+    pub const hipStreamCaptureStatusNone: hipStreamCaptureStatus = hipStreamCaptureStatus(0);
+}
+impl hipStreamCaptureStatus {
+    #[doc = "< Stream is actively capturing"]
+    pub const hipStreamCaptureStatusActive: hipStreamCaptureStatus = hipStreamCaptureStatus(1);
+}
+impl hipStreamCaptureStatus {
+    #[doc = "< Stream is part of a capture sequence that has been"]
+    #[doc = "< invalidated, but not terminated"]
+    pub const hipStreamCaptureStatusInvalidated: hipStreamCaptureStatus = hipStreamCaptureStatus(2);
+}
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct hipStreamCaptureStatus(pub ::std::os::raw::c_uint);
+extern "C" {
+    pub fn hipStreamBeginCapture(stream: hipStream_t, mode: hipStreamCaptureMode) -> hipError_t;
+}
+extern "C" {
+    pub fn hipStreamEndCapture(stream: hipStream_t, pGraph: *mut hipGraph_t) -> hipError_t;
+}
+extern "C" {
+    #[doc = "-------------------------------------------------------------------------------------------------"]
+    #[doc = "-------------------------------------------------------------------------------------------------"]
+    #[doc = "  @defgroup Graph Graph Management"]
+    #[doc = "  @{"]
+    #[doc = "  This section describes the graph management functions of HIP runtime API."]
+    #[doc = " @brief Creates a graph"]
+    #[doc = ""]
+    #[doc = " @param [out] pGraph - pointer to graph to create."]
+    #[doc = " @param [in] flags - flags for graph creation, must be 0."]
+    #[doc = ""]
+    #[doc = " @returns #hipSuccess."]
+    #[doc = ""]
+    pub fn hipGraphCreate(pGraph: *mut hipGraph_t, flags: ::std::os::raw::c_uint) -> hipError_t;
+}
+extern "C" {
+    #[doc = " @brief Destroys a graph"]
+    #[doc = ""]
+    #[doc = " @param [in] graph - instance of graph to destroy."]
+    #[doc = ""]
+    #[doc = " @returns #hipSuccess."]
+    #[doc = ""]
+    pub fn hipGraphDestroy(graph: hipGraph_t) -> hipError_t;
+}
+extern "C" {
+    #[doc = " @brief Destroys an executable graph"]
+    #[doc = ""]
+    #[doc = " @param [in] pGraphExec - instance of executable graph to destry."]
+    #[doc = ""]
+    #[doc = " @returns #hipSuccess."]
+    #[doc = ""]
+    pub fn hipGraphExecDestroy(pGraphExec: hipGraphExec_t) -> hipError_t;
+}
+extern "C" {
+    #[doc = " @brief Creates an executable graph from a graph"]
+    #[doc = ""]
+    #[doc = " @param [out] pGraphExec - pointer to instantiated executable graph to create."]
+    #[doc = " @param [in] graph - instance of graph to instantiate."]
+    #[doc = " @param [out] pErrorNode - pointer to error node in case error occured in graph instantiation,"]
+    #[doc = "  it could modify the correponding node."]
+    #[doc = " @param [out] pLogBuffer - pointer to log buffer."]
+    #[doc = " @param [in] bufferSize - the size of log buffer."]
+    #[doc = ""]
+    #[doc = " @returns #hipSuccess, #hipErrorOutOfMemory."]
+    #[doc = ""]
+    pub fn hipGraphInstantiate(
+        pGraphExec: *mut hipGraphExec_t,
+        graph: hipGraph_t,
+        pErrorNode: *mut hipGraphNode_t,
+        pLogBuffer: *mut ::std::os::raw::c_char,
+        bufferSize: usize,
+    ) -> hipError_t;
+}
+extern "C" {
+    #[doc = " @brief launches an executable graph in a stream"]
+    #[doc = ""]
+    #[doc = " @param [in] graphExec - instance of executable graph to launch."]
+    #[doc = " @param [in] stream - instance of stream in which to launch executable graph."]
+    #[doc = " @returns #hipSuccess, #hipErrorOutOfMemory, #hipErrorInvalidHandle, #hipErrorInvalidValue"]
+    #[doc = ""]
+    pub fn hipGraphLaunch(graphExec: hipGraphExec_t, stream: hipStream_t) -> hipError_t;
+}
+extern "C" {
+    #[doc = " @brief Creates a kernel execution node and adds it to a graph."]
+    #[doc = ""]
+    #[doc = " @param [out] pGraphNode - pointer to graph node to create."]
+    #[doc = " @param [in,out] graph - instance of graph to add the created node."]
+    #[doc = " @param [in] pDependencies - pointer to the dependencies on the kernel execution node."]
+    #[doc = " @param [in] numDependencies - the number of the dependencies."]
+    #[doc = " @param [in] pNodeParams - pointer to the parameters to the kernel execution node on the GPU."]
+    #[doc = " @returns #hipSuccess, #hipErrorInvalidValue, #hipErrorInvalidDeviceFunction"]
+    #[doc = ""]
+    pub fn hipGraphAddKernelNode(
+        pGraphNode: *mut hipGraphNode_t,
+        graph: hipGraph_t,
+        pDependencies: *const hipGraphNode_t,
+        numDependencies: usize,
+        pNodeParams: *const hipKernelNodeParams,
+    ) -> hipError_t;
+}
+extern "C" {
+    #[doc = " @brief Creates a memcpy node and adds it to a graph."]
+    #[doc = ""]
+    #[doc = " @param [out] pGraphNode - pointer to graph node to create."]
+    #[doc = " @param [in,out] graph - instance of graph to add the created node."]
+    #[doc = " @param [in] pDependencies - const pointer to the dependencies on the kernel execution node."]
+    #[doc = " @param [in] numDependencies - the number of the dependencies."]
+    #[doc = " @param [in] pCopyParams - const pointer to the parameters for the memory copy."]
+    #[doc = " @returns #hipSuccess, #hipErrorInvalidValue"]
+    #[doc = ""]
+    pub fn hipGraphAddMemcpyNode(
+        pGraphNode: *mut hipGraphNode_t,
+        graph: hipGraph_t,
+        pDependencies: *const hipGraphNode_t,
+        numDependencies: usize,
+        pCopyParams: *const hipMemcpy3DParms,
+    ) -> hipError_t;
+}
+extern "C" {
+    #[doc = " @brief Creates a 1D memcpy node and adds it to a graph."]
+    #[doc = ""]
+    #[doc = " @param [out] pGraphNode - pointer to graph node to create."]
+    #[doc = " @param [in,out] graph - instance of the graph to add the created node."]
+    #[doc = " @param [in] pDependencies - const pointer to the dependencies on the kernel execution node."]
+    #[doc = " @param [in] numDependencies - the number of the dependencies."]
+    #[doc = " @param [in] dst - pointer to memory address to the destination."]
+    #[doc = " @param [in] src - pointer to memory address to the source."]
+    #[doc = " @param [in] count - the size of the memory to copy."]
+    #[doc = " @param [in] kind - the type of memory copy."]
+    #[doc = " @returns #hipSuccess, #hipErrorInvalidValue"]
+    #[doc = ""]
+    pub fn hipGraphAddMemcpyNode1D(
+        pGraphNode: *mut hipGraphNode_t,
+        graph: hipGraph_t,
+        pDependencies: *const hipGraphNode_t,
+        numDependencies: usize,
+        dst: *mut ::std::os::raw::c_void,
+        src: *const ::std::os::raw::c_void,
+        count: usize,
+        kind: hipMemcpyKind,
+    ) -> hipError_t;
+}
+extern "C" {
+    #[doc = " @brief Creates a memset node and adds it to a graph."]
+    #[doc = ""]
+    #[doc = " @param [out] pGraphNode - pointer to the graph node to create."]
+    #[doc = " @param [in,out] graph - instance of the graph to add the created node."]
+    #[doc = " @param [in] pDependencies - const pointer to the dependencies on the kernel execution node."]
+    #[doc = " @param [in] numDependencies - the number of the dependencies."]
+    #[doc = " @param [in] pMemsetParams - const pointer to the parameters for the memory set."]
+    #[doc = " @returns #hipSuccess, #hipErrorInvalidValue"]
+    #[doc = ""]
+    pub fn hipGraphAddMemsetNode(
+        pGraphNode: *mut hipGraphNode_t,
+        graph: hipGraph_t,
+        pDependencies: *const hipGraphNode_t,
+        numDependencies: usize,
+        pMemsetParams: *const hipMemsetParams,
+    ) -> hipError_t;
+}
+extern "C" {
+    #[doc = " @brief Returns graph nodes."]
+    #[doc = ""]
+    #[doc = " @param [in] graph - instance of graph to get the nodes."]
+    #[doc = " @param [out] nodes - pointer to the graph nodes."]
+    #[doc = " @param [out] numNodes - the number of graph nodes."]
+    #[doc = " @returns #hipSuccess, #hipErrorInvalidValue"]
+    #[doc = ""]
+    pub fn hipGraphGetNodes(
+        graph: hipGraph_t,
+        nodes: *mut hipGraphNode_t,
+        numNodes: *mut usize,
+    ) -> hipError_t;
+}
+extern "C" {
+    #[doc = " @brief Returns graph's root nodes."]
+    #[doc = ""]
+    #[doc = " @param [in] graph - instance of the graph to get the nodes."]
+    #[doc = " @param [out] pRootNodes - pointer to the graph's root nodes."]
+    #[doc = " @param [out] pNumRootNodes - the number of graph's root nodes."]
+    #[doc = " @returns #hipSuccess, #hipErrorInvalidValue"]
+    #[doc = ""]
+    pub fn hipGraphGetRootNodes(
+        graph: hipGraph_t,
+        pRootNodes: *mut hipGraphNode_t,
+        pNumRootNodes: *mut usize,
+    ) -> hipError_t;
+}
+extern "C" {
+    #[doc = " @brief Gets kernel node's parameters."]
+    #[doc = ""]
+    #[doc = " @param [in] node - instance of the node to get parameters from."]
+    #[doc = " @param [out] pNodeParams - pointer to the parameters"]
+    #[doc = " @returns #hipSuccess, #hipErrorInvalidValue"]
+    #[doc = ""]
+    pub fn hipGraphKernelNodeGetParams(
+        node: hipGraphNode_t,
+        pNodeParams: *mut hipKernelNodeParams,
+    ) -> hipError_t;
+}
+extern "C" {
+    #[doc = " @brief Sets a kernel node's parameters."]
+    #[doc = ""]
+    #[doc = " @param [in] node - instance of the node to set parameters to."]
+    #[doc = " @param [in] pNodeParams - const pointer to the parameters."]
+    #[doc = " @returns #hipSuccess, #hipErrorInvalidValue"]
+    #[doc = ""]
+    pub fn hipGraphKernelNodeSetParams(
+        node: hipGraphNode_t,
+        pNodeParams: *const hipKernelNodeParams,
+    ) -> hipError_t;
+}
+extern "C" {
+    #[doc = " @brief Gets a memcpy node's parameters."]
+    #[doc = ""]
+    #[doc = " @param [in] node - instance of the node to get parameters from."]
+    #[doc = " @param [out] pNodeParams - pointer to the parameters."]
+    #[doc = " @returns #hipSuccess, #hipErrorInvalidValue"]
+    #[doc = ""]
+    pub fn hipGraphMemcpyNodeGetParams(
+        node: hipGraphNode_t,
+        pNodeParams: *mut hipMemcpy3DParms,
+    ) -> hipError_t;
+}
+extern "C" {
+    #[doc = " @brief Sets a memcpy node's parameters."]
+    #[doc = ""]
+    #[doc = " @param [in] node - instance of the node to set parameters to."]
+    #[doc = " @param [in] pNodeParams - const pointer to the parameters."]
+    #[doc = " @returns #hipSuccess, #hipErrorInvalidValue"]
+    #[doc = ""]
+    pub fn hipGraphMemcpyNodeSetParams(
+        node: hipGraphNode_t,
+        pNodeParams: *const hipMemcpy3DParms,
+    ) -> hipError_t;
+}
+extern "C" {
+    #[doc = " @brief Gets a memset node's parameters."]
+    #[doc = ""]
+    #[doc = " @param [in] node - instane of the node to get parameters from."]
+    #[doc = " @param [out] pNodeParams - pointer to the parameters."]
+    #[doc = " @returns #hipSuccess, #hipErrorInvalidValue"]
+    #[doc = ""]
+    pub fn hipGraphMemsetNodeGetParams(
+        node: hipGraphNode_t,
+        pNodeParams: *mut hipMemsetParams,
+    ) -> hipError_t;
+}
+extern "C" {
+    #[doc = " @brief Sets a memset node's parameters."]
+    #[doc = ""]
+    #[doc = " @param [in] node - instance of the node to set parameters to."]
+    #[doc = " @param [out] pNodeParams - pointer to the parameters."]
+    #[doc = " @returns #hipSuccess, #hipErrorInvalidValue"]
+    #[doc = ""]
+    pub fn hipGraphMemsetNodeSetParams(
+        node: hipGraphNode_t,
+        pNodeParams: *const hipMemsetParams,
+    ) -> hipError_t;
+}
+extern "C" {
+    #[doc = " @brief Sets the parameters for a kernel node in the given graphExec."]
+    #[doc = ""]
+    #[doc = " @param [in] hGraphExec - instance of the executable graph with the node."]
+    #[doc = " @param [in] node - instance of the node to set parameters to."]
+    #[doc = " @param [in] pNodeParams - const pointer to the kernel node parameters."]
+    #[doc = " @returns #hipSuccess, #hipErrorInvalidValue"]
+    #[doc = ""]
+    pub fn hipGraphExecKernelNodeSetParams(
+        hGraphExec: hipGraphExec_t,
+        node: hipGraphNode_t,
+        pNodeParams: *const hipKernelNodeParams,
+    ) -> hipError_t;
+}
+extern "C" {
+    #[doc = " @brief Adds dependency edges to a graph."]
+    #[doc = ""]
+    #[doc = " @param [in] graph - instance of the graph to add dependencies."]
+    #[doc = " @param [in] from - pointer to the graph nodes with dependenties to add from."]
+    #[doc = " @param [in] to - pointer to the graph nodes to add dependenties to."]
+    #[doc = " @param [in] numDependencies - the number of dependencies to add."]
+    #[doc = " @returns #hipSuccess, #hipErrorInvalidValue"]
+    #[doc = ""]
+    pub fn hipGraphAddDependencies(
+        graph: hipGraph_t,
+        from: *const hipGraphNode_t,
+        to: *const hipGraphNode_t,
+        numDependencies: usize,
+    ) -> hipError_t;
+}
+extern "C" {
+    #[doc = " @brief Creates an empty node and adds it to a graph."]
+    #[doc = ""]
+    #[doc = " @param [out] pGraphNode - pointer to the graph node to create and add to the graph."]
+    #[doc = " @param [in,out] graph - instane of the graph the node is add to."]
+    #[doc = " @param [in] pDependencies - const pointer to the node dependenties."]
+    #[doc = " @param [in] numDependencies - the number of dependencies."]
+    #[doc = " @returns #hipSuccess, #hipErrorInvalidValue"]
+    #[doc = ""]
+    pub fn hipGraphAddEmptyNode(
+        pGraphNode: *mut hipGraphNode_t,
+        graph: hipGraph_t,
+        pDependencies: *const hipGraphNode_t,
+        numDependencies: usize,
+    ) -> hipError_t;
+}
+#[doc = "-------------------------------------------------------------------------------------------------"]
+#[doc = "-------------------------------------------------------------------------------------------------"]
+#[doc = "  @defgroup GL Interop"]
+#[doc = "  @{"]
+#[doc = "  This section describes Stream Memory Wait and Write functions of HIP runtime API."]
+pub type GLuint = ::std::os::raw::c_uint;
+extern "C" {
+    pub fn hipGLGetDevices(
+        pHipDeviceCount: *mut ::std::os::raw::c_uint,
+        pHipDevices: *mut ::std::os::raw::c_int,
+        hipDeviceCount: ::std::os::raw::c_uint,
+        deviceList: hipGLDeviceList,
+    ) -> hipError_t;
+}
+extern "C" {
+    pub fn hipGraphicsGLRegisterBuffer(
+        resource: *mut *mut hipGraphicsResource,
+        buffer: GLuint,
+        flags: ::std::os::raw::c_uint,
+    ) -> hipError_t;
+}
+extern "C" {
+    pub fn hipGraphicsMapResources(
+        count: ::std::os::raw::c_int,
+        resources: *mut hipGraphicsResource_t,
+        stream: hipStream_t,
+    ) -> hipError_t;
+}
+extern "C" {
+    pub fn hipGraphicsResourceGetMappedPointer(
+        devPtr: *mut *mut ::std::os::raw::c_void,
+        size: *mut usize,
+        resource: hipGraphicsResource_t,
+    ) -> hipError_t;
+}
+extern "C" {
+    pub fn hipGraphicsUnmapResources(
+        count: ::std::os::raw::c_int,
+        resources: *mut hipGraphicsResource_t,
+        stream: hipStream_t,
+    ) -> hipError_t;
+}
+extern "C" {
+    pub fn hipGraphicsUnregisterResource(resource: hipGraphicsResource_t) -> hipError_t;
 }
