@@ -1,244 +1,28 @@
-use ocl_core::DeviceId;
+use hip_runtime_sys::{hipError_t, hipFuncGetAttributes};
 
-use super::{stream::Stream, CUresult, GlobalState, HasLivenessCookie, LiveCheck};
-use crate::cuda::CUfunction_attribute;
+use super::{CUresult, HasLivenessCookie, LiveCheck};
+use crate::cuda::{CUfunction, CUfunction_attribute};
 use ::std::os::raw::{c_uint, c_void};
-use std::{hint, mem, ptr};
-
-const CU_LAUNCH_PARAM_END: *mut c_void = 0 as *mut _;
-const CU_LAUNCH_PARAM_BUFFER_POINTER: *mut c_void = 1 as *mut _;
-const CU_LAUNCH_PARAM_BUFFER_SIZE: *mut c_void = 2 as *mut _;
-
-pub type Function = LiveCheck<FunctionData>;
-
-impl HasLivenessCookie for FunctionData {
-    #[cfg(target_pointer_width = "64")]
-    const COOKIE: usize = 0x5e2ab14d5840678e;
-
-    #[cfg(target_pointer_width = "32")]
-    const COOKIE: usize = 0x33e6a1e6;
-
-    const LIVENESS_FAIL: CUresult = CUresult::CUDA_ERROR_INVALID_HANDLE;
-
-    fn try_drop(&mut self) -> Result<(), CUresult> {
-        Ok(())
-    }
-}
-
-pub struct FunctionData {
-    pub base: ocl_core::Kernel,
-    pub device: ocl_core::DeviceId,
-    pub arg_size: Vec<(usize, bool)>,
-    pub use_shared_mem: bool,
-    pub legacy_args: LegacyArguments,
-}
-
-pub struct LegacyArguments {
-    block_shape: Option<(i32, i32, i32)>,
-}
-
-impl LegacyArguments {
-    pub fn new() -> Self {
-        LegacyArguments { block_shape: None }
-    }
-
-    #[allow(dead_code)]
-    pub fn is_initialized(&self) -> bool {
-        self.block_shape.is_some()
-    }
-
-    pub fn reset(&mut self) {
-        self.block_shape = None;
-    }
-}
-
-unsafe fn set_arg(
-    kernel: &ocl_core::Kernel,
-    arg_index: usize,
-    arg_size: usize,
-    arg_value: *const c_void,
-    is_mem: bool,
-) -> Result<(), CUresult> {
-    if is_mem {
-        let error = 0;
-        unsafe {
-            ocl_core::ffi::clSetKernelArgSVMPointer(
-                kernel.as_ptr(),
-                arg_index as u32,
-                *(arg_value as *const _),
-            )
-        };
-        if error != 0 {
-            panic!("clSetKernelArgSVMPointer");
-        }
-    } else {
-        unsafe {
-            ocl_core::set_kernel_arg(
-                kernel,
-                arg_index as u32,
-                ocl_core::ArgVal::from_raw(arg_size, arg_value, is_mem),
-            )?;
-        };
-    }
-    Ok(())
-}
-
-pub fn launch_kernel(
-    f: *mut Function,
-    grid_dim_x: c_uint,
-    grid_dim_y: c_uint,
-    grid_dim_z: c_uint,
-    block_dim_x: c_uint,
-    block_dim_y: c_uint,
-    block_dim_z: c_uint,
-    shared_mem_bytes: c_uint,
-    hstream: *mut Stream,
-    kernel_params: *mut *mut c_void,
-    extra: *mut *mut c_void,
-) -> Result<(), CUresult> {
-    if f == ptr::null_mut()
-        || (kernel_params == ptr::null_mut() && extra == ptr::null_mut())
-        || (kernel_params != ptr::null_mut() && extra != ptr::null_mut())
-    {
-        return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
-    }
-    GlobalState::lock_stream(hstream, |stream_data| {
-        let dev = unsafe { &mut *(*stream_data.context).device };
-        let queue = stream_data.cmd_list.as_ref().unwrap();
-        let func: &mut FunctionData = unsafe { &mut *f }.as_result_mut()?;
-        if kernel_params != ptr::null_mut() {
-            for (i, &(arg_size, is_mem)) in func.arg_size.iter().enumerate() {
-                unsafe { set_arg(&func.base, i, arg_size, *kernel_params.add(i), is_mem)? };
-            }
-        } else {
-            let mut offset = 0;
-            let mut buffer_ptr = None;
-            let mut buffer_size = None;
-            loop {
-                match unsafe { *extra.add(offset) } {
-                    CU_LAUNCH_PARAM_END => break,
-                    CU_LAUNCH_PARAM_BUFFER_POINTER => {
-                        buffer_ptr = Some(unsafe { *extra.add(offset + 1) as *mut u8 });
-                    }
-                    CU_LAUNCH_PARAM_BUFFER_SIZE => {
-                        buffer_size = Some(unsafe { *(*extra.add(offset + 1) as *mut usize) });
-                    }
-                    _ => return Err(CUresult::CUDA_ERROR_INVALID_VALUE),
-                }
-                offset += 2;
-            }
-            match (buffer_size, buffer_ptr) {
-                (Some(buffer_size), Some(buffer_ptr)) => {
-                    let sum_of_kernel_argument_sizes =
-                        func.arg_size.iter().fold(0, |offset, &(size_of_arg, _)| {
-                            size_of_arg + round_up_to_multiple(offset, size_of_arg)
-                        });
-                    if buffer_size < sum_of_kernel_argument_sizes {
-                        return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
-                    }
-                    let mut offset = 0;
-                    for (i, &(arg_size, is_mem)) in func.arg_size.iter().enumerate() {
-                        let buffer_offset = round_up_to_multiple(offset, arg_size);
-                        unsafe {
-                            set_arg(
-                                &func.base,
-                                i,
-                                arg_size,
-                                buffer_ptr.add(buffer_offset) as *const _,
-                                is_mem,
-                            )?
-                        };
-                        offset = buffer_offset + arg_size;
-                    }
-                }
-                _ => return Err(CUresult::CUDA_ERROR_INVALID_VALUE),
-            }
-        }
-        if func.use_shared_mem {
-            unsafe {
-                set_arg(
-                    &func.base,
-                    func.arg_size.len(),
-                    shared_mem_bytes as usize,
-                    ptr::null(),
-                    false,
-                )?
-            };
-        }
-        let buffers = dev.allocations.iter().copied().collect::<Vec<_>>();
-        let err = unsafe {
-            ocl_core::ffi::clSetKernelExecInfo(
-                func.base.as_ptr(),
-                ocl_core::ffi::CL_KERNEL_EXEC_INFO_SVM_PTRS,
-                buffers.len() * mem::size_of::<*mut c_void>(),
-                buffers.as_ptr() as *const _,
-            )
-        };
-        assert_eq!(err, 0);
-        let global_dims = [
-            (block_dim_x * grid_dim_x) as usize,
-            (block_dim_y * grid_dim_y) as usize,
-            (block_dim_z * grid_dim_z) as usize,
-        ];
-        unsafe {
-            ocl_core::enqueue_kernel::<&mut ocl_core::Event, ocl_core::Event>(
-                queue,
-                &func.base,
-                3,
-                None,
-                &global_dims,
-                Some([
-                    block_dim_x as usize,
-                    block_dim_y as usize,
-                    block_dim_z as usize,
-                ]),
-                None,
-                None,
-            )?
-        };
-        Ok::<_, CUresult>(())
-    })?
-}
-
-fn round_up_to_multiple(x: usize, multiple: usize) -> usize {
-    ((x + multiple - 1) / multiple) * multiple
-}
+use std::{mem, ptr};
 
 pub(crate) fn get_attribute(
     pi: *mut i32,
-    attrib: CUfunction_attribute,
-    func: *mut Function,
-) -> Result<(), CUresult> {
+    cu_attrib: CUfunction_attribute,
+    func: CUfunction,
+) -> hipError_t {
     if pi == ptr::null_mut() || func == ptr::null_mut() {
-        return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
+        return hipError_t::hipErrorInvalidValue;
     }
-    match attrib {
-        CUfunction_attribute::CU_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK => {
-            let max_threads = GlobalState::lock_function(func, |func| {
-                if let ocl_core::KernelWorkGroupInfoResult::WorkGroupSize(size) =
-                    ocl_core::get_kernel_work_group_info(
-                        &func.base,
-                        &func.device,
-                        ocl_core::KernelWorkGroupInfo::WorkGroupSize,
-                    )?
-                {
-                    Ok(size)
-                } else {
-                    Err(CUresult::CUDA_ERROR_UNKNOWN)
-                }
-            })??;
-            unsafe { *pi = max_threads as i32 };
-            Ok(())
-        }
-        _ => Err(CUresult::CUDA_ERROR_NOT_SUPPORTED),
+    let mut hip_attrib = unsafe { mem::zeroed() };
+    let err = unsafe { hipFuncGetAttributes(&mut hip_attrib, func as _) };
+    if err != hipError_t::hipSuccess {
+        return err;
     }
-}
-
-pub(crate) fn set_block_shape(func: *mut Function, x: i32, y: i32, z: i32) -> Result<(), CUresult> {
-    if func == ptr::null_mut() || x < 0 || y < 0 || z < 0 {
-        return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
-    }
-    GlobalState::lock_function(func, |func| {
-        func.legacy_args.block_shape = Some((x, y, z));
-    })
+    let value = match cu_attrib {
+        CU_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK => hip_attrib.maxThreadsPerBlock,
+        CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES => hip_attrib.sharedSizeBytes as i32,
+        _ => return hipError_t::hipErrorInvalidValue,
+    };
+    unsafe { *pi = value };
+    hipError_t::hipSuccess
 }
