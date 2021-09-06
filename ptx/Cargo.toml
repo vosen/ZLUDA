@@ -22,7 +22,7 @@ version = "0.19"
 features = ["lexer"]
 
 [dev-dependencies]
-level_zero-sys = { path = "../level_zero-sys" }
-level_zero = { path = "../level_zero" }
+hip_runtime-sys = { path = "../hip_runtime-sys" }
+tempfile = "3"
 spirv_tools-sys = { path = "../spirv_tools-sys" }
 paste = "1.0"

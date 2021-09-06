@@ -8,9 +8,7 @@ extern crate quick_error;
 extern crate bit_vec;
 extern crate half;
 #[cfg(test)]
-extern crate level_zero as ze;
-#[cfg(test)]
-extern crate level_zero_sys as l0;
+extern crate hip_runtime_sys as hip;
 extern crate rspirv;
 extern crate spirv_headers as spirv;
 
