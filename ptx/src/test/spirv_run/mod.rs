@@ -1,5 +1,18 @@
 use crate::ptx;
 use crate::translate;
+use hip_runtime_sys::hipError_t;
+use hip_runtime_sys::hipGetDeviceProperties;
+use hip_runtime_sys::hipInit;
+use hip_runtime_sys::hipMalloc;
+use hip_runtime_sys::hipMemcpyAsync;
+use hip_runtime_sys::hipMemcpyKind;
+use hip_runtime_sys::hipMemcpyWithStream;
+use hip_runtime_sys::hipMemset;
+use hip_runtime_sys::hipModuleGetFunction;
+use hip_runtime_sys::hipModuleLaunchKernel;
+use hip_runtime_sys::hipModuleLoadData;
+use hip_runtime_sys::hipStreamCreate;
+use hip_runtime_sys::hipStreamSynchronize;
 use rspirv::{
     binary::{Assemble, Disassemble},
     dr::{Block, Function, Instruction, Loader, Operand},
@@ -8,15 +21,21 @@ use spirv_headers::Word;
 use spirv_tools_sys::{
     spv_binary, spv_endianness_t, spv_parsed_instruction_t, spv_result_t, spv_target_env,
 };
+use std::collections::hash_map::Entry;
 use std::error;
 use std::ffi::{c_void, CStr, CString};
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
+use std::fs::File;
 use std::hash::Hash;
+use std::io;
+use std::io::Read;
+use std::io::Write;
 use std::mem;
+use std::process::Command;
 use std::slice;
 use std::{borrow::Cow, collections::HashMap, env, fs, path::PathBuf, ptr, str};
-use std::{cmp, collections::hash_map::Entry};
+use tempfile::NamedTempFile;
 
 macro_rules! test_ptx {
     ($fn_name:ident, $input:expr, $output:expr) => {
@@ -223,102 +242,61 @@ fn test_ptx_assert<
     Ok(())
 }
 
+macro_rules! hip_call {
+    ($expr:expr) => {
+        #[allow(unused_unsafe)]
+        {
+            let err = unsafe { $expr };
+            if err != hip_runtime_sys::hipError_t::hipSuccess {
+                return Result::Err(err);
+            }
+        }
+    };
+}
+
 fn run_spirv<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Default>(
     name: &CStr,
     module: translate::Module,
     input: &[Input],
     output: &mut [Output],
-) -> ze::Result<Vec<Output>> {
-    ze::init()?;
+) -> Result<Vec<Output>, hipError_t> {
+    hip_call! { hipInit(0) };
     let spirv = module.spirv.assemble();
-    let byte_il = unsafe {
-        slice::from_raw_parts::<u8>(
-            spirv.as_ptr() as *const _,
-            spirv.len() * mem::size_of::<u32>(),
-        )
-    };
-    let use_shared_mem = module
-        .kernel_info
-        .get(name.to_str().unwrap())
-        .map(|info| info.uses_shared_mem)
-        .unwrap_or(false);
-    let result = vec![0u8.into(); output.len()];
+    let mut result = vec![0u8.into(); output.len()];
     {
-        let mut drivers = ze::Driver::get()?;
-        let drv = drivers.drain(0..1).next().unwrap();
-        let mut devices = drv.devices()?;
-        let dev = devices.drain(0..1).next().unwrap();
-        let ctx = ze::Context::new(drv, None)?;
-        let queue = ze::CommandQueue::new(&ctx, dev)?;
-        let (module, maybe_log) = match module.should_link_ptx_impl {
-            Some((ptx_impl, _)) => ze::Module::build_link_spirv(
-                &ctx,
-                dev,
-                &[ptx_impl, byte_il],
-                Some(module.build_options.as_c_str()),
-            ),
-            None => {
-                let (module, log) = ze::Module::build_spirv_logged(
-                    &ctx,
-                    dev,
-                    byte_il,
-                    Some(module.build_options.as_c_str()),
-                );
-                (module, Some(log))
-            }
+        let dev = 0;
+        let mut stream = ptr::null_mut();
+        hip_call! { hipStreamCreate(&mut stream) };
+        let mut dev_props = unsafe { mem::zeroed() };
+        hip_call! { hipGetDeviceProperties(&mut dev_props, dev) };
+        let gcn_arch_slice = unsafe {
+            slice::from_raw_parts(
+                dev_props.gcnArchName.as_ptr() as _,
+                dev_props.gcnArchName.len(),
+            )
         };
-        let module = match module {
-            Ok(m) => m,
-            Err(err) => {
-                let raw_err_string = maybe_log
-                    .map(|log| log.to_cstring())
-                    .transpose()?
-                    .unwrap_or(CString::default());
-                let err_string = raw_err_string.to_string_lossy();
-                panic!("{:?}\n{}", err, err_string);
-            }
-        };
-        let kernel = ze::Kernel::new_resident(&module, name)?;
-        kernel.set_indirect_access(
-            ze::sys::ze_kernel_indirect_access_flags_t::ZE_KERNEL_INDIRECT_ACCESS_FLAG_DEVICE,
-        )?;
-        let inp_b = ze::DeviceBuffer::<Input>::new(&ctx, dev, cmp::max(input.len(), 1))?;
-        let out_b = ze::DeviceBuffer::<Output>::new(&ctx, dev, cmp::max(output.len(), 1))?;
-        let event_pool =
-            ze::EventPool::new(&ctx, ze::sys::ze_event_pool_flags_t(0), 3, Some(&[dev]))?;
-        let ev0 = ze::Event::new(
-            &event_pool,
-            0,
-            ze::sys::ze_event_scope_flags_t(0),
-            ze::sys::ze_event_scope_flags_t(0),
-        )?;
-        let ev1 = ze::Event::new(
-            &event_pool,
-            1,
-            ze::sys::ze_event_scope_flags_t(0),
-            ze::sys::ze_event_scope_flags_t(0),
-        )?;
-        let ev2 = ze::Event::new(
-            &event_pool,
-            2,
-            ze::sys::ze_event_scope_flags_t(0),
-            ze::sys::ze_event_scope_flags_t(0),
-        )?;
-        {
-            let init_evs = [&ev0, &ev1];
-            kernel.set_group_size(1, 1, 1)?;
-            kernel.set_arg_buffer(0, &inp_b)?;
-            kernel.set_arg_buffer(1, &out_b)?;
-            if use_shared_mem {
-                unsafe { kernel.set_arg_raw(2, 128, ptr::null())? };
-            }
-            ze::CommandListBuilder::new(&ctx, dev)?
-                .append_memory_copy(&inp_b, input, Some(&init_evs[0]), &[])?
-                .append_memory_fill(&out_b, &Output::default(), Some(&init_evs[1]), &[])?
-                .append_launch_kernel(&kernel, &[1, 1, 1], Some(&ev2), &init_evs)?
-                .append_memory_copy(&*result, &out_b, None, &[&ev2])?
-                .execute(&queue)?;
-        }
+        let dev_name =
+            if let Ok(Ok(name)) = CStr::from_bytes_with_nul(gcn_arch_slice).map(|x| x.to_str()) {
+                name
+            } else {
+                return Err(hipError_t::hipErrorUnknown);
+            };
+        let elf_module = compile_amd(dev_name, &*spirv, module.should_link_ptx_impl)
+            .map_err(|_| hipError_t::hipErrorUnknown)?;
+        let mut module = ptr::null_mut();
+        hip_call! { hipModuleLoadData(&mut module, elf_module.as_ptr() as _) };
+        let mut kernel = ptr::null_mut();
+        hip_call! { hipModuleGetFunction(&mut kernel, module, name.as_ptr()) };
+        let mut inp_b = ptr::null_mut();
+        hip_call! { hipMalloc(&mut inp_b, input.len()) };
+        let mut out_b = ptr::null_mut();
+        hip_call! { hipMalloc(&mut out_b, output.len()) };
+        hip_call! { hipMemcpyWithStream(inp_b, input.as_ptr() as _, input.len() * mem::size_of::<Input>(), hipMemcpyKind::hipMemcpyHostToDevice, stream) };
+        hip_call! { hipMemset(out_b, 0, output.len() * mem::size_of::<Output>()) };
+        let mut args = [&inp_b, &out_b];
+        hip_call! { hipModuleLaunchKernel(kernel, 1,1,1,1,1,1, 0, stream, args.as_mut_ptr() as _, ptr::null_mut()) };
+        hip_call! { hipMemcpyAsync(result.as_mut_ptr() as _, out_b, output.len() * mem::size_of::<Output>(), hipMemcpyKind::hipMemcpyDeviceToHost, stream) };
+        hip_call! { hipStreamSynchronize(stream) };
     }
     Ok(result)
 }
@@ -402,7 +380,7 @@ fn test_spvtxt_assert<'a>(
                 }
             }
         }
-        panic!(spirv_text.to_string());
+        panic!("{}", spirv_text.to_string());
     }
     unsafe { spirv_tools::spvContextDestroy(spv_context) };
     Ok(())
@@ -581,4 +559,126 @@ unsafe extern "C" fn parse_instruction_cb(
         result_vec.push(*(inst.words.add(i as usize)));
     }
     spv_result_t::SPV_SUCCESS
+}
+
+const LLVM_SPIRV: &'static str = "/home/vosen/amd/llvm-project/build/bin/llvm-spirv";
+const AMDGPU: &'static str = "/opt/amdgpu-pro/";
+const AMDGPU_TARGET: &'static str = "amdgcn-amd-amdhsa";
+const AMDGPU_BITCODE: [&'static str; 8] = [
+    "opencl.bc",
+    "ocml.bc",
+    "ockl.bc",
+    "oclc_correctly_rounded_sqrt_off.bc",
+    "oclc_daz_opt_on.bc",
+    "oclc_finite_only_off.bc",
+    "oclc_unsafe_math_off.bc",
+    "oclc_wavefrontsize64_off.bc",
+];
+const AMDGPU_BITCODE_DEVICE_PREFIX: &'static str = "oclc_isa_version_";
+
+fn compile_amd(
+    device_name: &str,
+    spirv_il: &[u32],
+    ptx_lib: Option<(&'static [u8], &'static [u8])>,
+) -> io::Result<Vec<u8>> {
+    let dir = tempfile::tempdir()?;
+    let mut spirv = NamedTempFile::new_in(&dir)?;
+    let llvm = NamedTempFile::new_in(&dir)?;
+    let spirv_il_u8 = unsafe {
+        slice::from_raw_parts(
+            spirv_il.as_ptr() as *const u8,
+            spirv_il.len() * mem::size_of::<u32>(),
+        )
+    };
+    spirv.write_all(spirv_il_u8)?;
+    let llvm_spirv_path = match env::var("LLVM_SPIRV") {
+        Ok(path) => Cow::Owned(path),
+        Err(_) => Cow::Borrowed(LLVM_SPIRV),
+    };
+    let to_llvm_cmd = Command::new(&*llvm_spirv_path)
+        .arg("-r")
+        .arg("-o")
+        .arg(llvm.path())
+        .arg(spirv.path())
+        .status()?;
+    assert!(to_llvm_cmd.success());
+    let linked_binary = NamedTempFile::new_in(&dir)?;
+    let mut llvm_link = PathBuf::from(AMDGPU);
+    llvm_link.push("bin");
+    llvm_link.push("llvm-link");
+    let mut linker_cmd = Command::new(&llvm_link);
+    linker_cmd
+        .arg("--only-needed")
+        .arg("-o")
+        .arg(linked_binary.path())
+        .arg(llvm.path())
+        .args(get_bitcode_paths(device_name));
+    if cfg!(debug_assertions) {
+        linker_cmd.arg("-v");
+    }
+    let status = linker_cmd.status()?;
+    assert!(status.success());
+    let mut ptx_lib_bitcode = NamedTempFile::new_in(&dir)?;
+    let compiled_binary = NamedTempFile::new_in(&dir)?;
+    let mut cland_exe = PathBuf::from(AMDGPU);
+    cland_exe.push("bin");
+    cland_exe.push("clang");
+    let mut compiler_cmd = Command::new(&cland_exe);
+    compiler_cmd
+        .arg(format!("-mcpu={}", device_name))
+        .arg("-nogpulib")
+        .arg("-mno-wavefrontsize64")
+        .arg("-O3")
+        .arg("-Xlinker")
+        .arg("--no-undefined")
+        .arg("-target")
+        .arg(AMDGPU_TARGET)
+        .arg("-o")
+        .arg(compiled_binary.path())
+        .arg("-x")
+        .arg("ir")
+        .arg(linked_binary.path());
+    if let Some((_, bitcode)) = ptx_lib {
+        ptx_lib_bitcode.write_all(bitcode)?;
+        compiler_cmd.arg(ptx_lib_bitcode.path());
+    };
+    if cfg!(debug_assertions) {
+        compiler_cmd.arg("-v");
+    }
+    let status = compiler_cmd.status()?;
+    assert!(status.success());
+    let mut result = Vec::new();
+    let compiled_bin_path = compiled_binary.path();
+    let mut compiled_binary = File::open(compiled_bin_path)?;
+    compiled_binary.read_to_end(&mut result)?;
+    let mut persistent = PathBuf::from("/tmp/zluda");
+    std::fs::create_dir_all(&persistent)?;
+    persistent.push(compiled_bin_path.file_name().unwrap());
+    std::fs::copy(compiled_bin_path, persistent)?;
+    Ok(result)
+}
+
+fn get_bitcode_paths(device_name: &str) -> impl Iterator<Item = PathBuf> {
+    let generic_paths = AMDGPU_BITCODE.iter().map(|x| {
+        let mut path = PathBuf::from(AMDGPU);
+        path.push("amdgcn");
+        path.push("bitcode");
+        path.push(x);
+        path
+    });
+    let suffix = if let Some(suffix_idx) = device_name.find(':') {
+        suffix_idx
+    } else {
+        device_name.len()
+    };
+    let mut additional_path = PathBuf::from(AMDGPU);
+    additional_path.push("amdgcn");
+    additional_path.push("bitcode");
+    additional_path.push(format!(
+        "{}{}{}",
+        AMDGPU_BITCODE_DEVICE_PREFIX,
+        &device_name[3..suffix],
+        ".bc"
+    ));
+    generic_paths.chain(std::iter::once(additional_path))
 }
