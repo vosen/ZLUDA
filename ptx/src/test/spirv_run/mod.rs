@@ -269,11 +269,9 @@ fn run_spirv<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + D
         hip_call! { hipStreamCreate(&mut stream) };
         let mut dev_props = unsafe { mem::zeroed() };
         hip_call! { hipGetDeviceProperties(&mut dev_props, dev) };
+        let nul_terminator = dev_props.gcnArchName.iter().position(|&x| x == 0).unwrap();
         let gcn_arch_slice = unsafe {
-            slice::from_raw_parts(
-                dev_props.gcnArchName.as_ptr() as _,
-                dev_props.gcnArchName.len(),
-            )
+            slice::from_raw_parts(dev_props.gcnArchName.as_ptr() as _, nul_terminator + 1)
         };
         let dev_name =
             if let Ok(Ok(name)) = CStr::from_bytes_with_nul(gcn_arch_slice).map(|x| x.to_str()) {
@@ -288,9 +286,9 @@ fn run_spirv<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + D
         let mut kernel = ptr::null_mut();
         hip_call! { hipModuleGetFunction(&mut kernel, module, name.as_ptr()) };
         let mut inp_b = ptr::null_mut();
-        hip_call! { hipMalloc(&mut inp_b, input.len()) };
+        hip_call! { hipMalloc(&mut inp_b, input.len() * mem::size_of::<Input>()) };
         let mut out_b = ptr::null_mut();
-        hip_call! { hipMalloc(&mut out_b, output.len()) };
+        hip_call! { hipMalloc(&mut out_b, output.len() * mem::size_of::<Output>()) };
         hip_call! { hipMemcpyWithStream(inp_b, input.as_ptr() as _, input.len() * mem::size_of::<Input>(), hipMemcpyKind::hipMemcpyHostToDevice, stream) };
         hip_call! { hipMemset(out_b, 0, output.len() * mem::size_of::<Output>()) };
         let mut args = [&inp_b, &out_b];
@@ -562,7 +560,7 @@ unsafe extern "C" fn parse_instruction_cb(
 }
 
 const LLVM_SPIRV: &'static str = "/home/vosen/amd/llvm-project/build/bin/llvm-spirv";
-const AMDGPU: &'static str = "/opt/amdgpu-pro/";
+const AMDGPU: &'static str = "/opt/rocm/";
 const AMDGPU_TARGET: &'static str = "amdgcn-amd-amdhsa";
 const AMDGPU_BITCODE: [&'static str; 8] = [
     "opencl.bc",
@@ -604,6 +602,7 @@ fn compile_amd(
     assert!(to_llvm_cmd.success());
     let linked_binary = NamedTempFile::new_in(&dir)?;
     let mut llvm_link = PathBuf::from(AMDGPU);
+    llvm_link.push("llvm");
     llvm_link.push("bin");
     llvm_link.push("llvm-link");
     let mut linker_cmd = Command::new(&llvm_link);
@@ -620,10 +619,11 @@ fn compile_amd(
     assert!(status.success());
     let mut ptx_lib_bitcode = NamedTempFile::new_in(&dir)?;
     let compiled_binary = NamedTempFile::new_in(&dir)?;
-    let mut cland_exe = PathBuf::from(AMDGPU);
-    cland_exe.push("bin");
-    cland_exe.push("clang");
-    let mut compiler_cmd = Command::new(&cland_exe);
+    let mut clang_exe = PathBuf::from(AMDGPU);
+    clang_exe.push("llvm");
+    clang_exe.push("bin");
+    clang_exe.push("clang");
+    let mut compiler_cmd = Command::new(&clang_exe);
     compiler_cmd
         .arg(format!("-mcpu={}", device_name))
         .arg("-nogpulib")

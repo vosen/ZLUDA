@@ -2893,7 +2893,7 @@ fn emit_function_body_ops(
                         result_type,
                         Some(a.dst),
                         opencl,
-                        spirv::CLOp::native_rsqrt as spirv::Word,
+                        spirv::CLOp::rsqrt as spirv::Word,
                         [dr::Operand::IdRef(a.src)].iter().cloned(),
                     )?;
                 }
@@ -2912,7 +2912,7 @@ fn emit_function_body_ops(
                         result_type,
                         Some(arg.dst),
                         opencl,
-                        spirv::CLOp::native_sin as u32,
+                        spirv::CLOp::sin as u32,
                         [dr::Operand::IdRef(arg.src)].iter().cloned(),
                     )?;
                 }
@@ -2922,7 +2922,7 @@ fn emit_function_body_ops(
                         result_type,
                         Some(arg.dst),
                         opencl,
-                        spirv::CLOp::native_cos as u32,
+                        spirv::CLOp::cos as u32,
                         [dr::Operand::IdRef(arg.src)].iter().cloned(),
                     )?;
                 }
@@ -2932,7 +2932,7 @@ fn emit_function_body_ops(
                         result_type,
                         Some(arg.dst),
                         opencl,
-                        spirv::CLOp::native_log2 as u32,
+                        spirv::CLOp::log2 as u32,
                         [dr::Operand::IdRef(arg.src)].iter().cloned(),
                     )?;
                 }
@@ -2942,7 +2942,7 @@ fn emit_function_body_ops(
                         result_type,
                         Some(arg.dst),
                         opencl,
-                        spirv::CLOp::native_exp2 as u32,
+                        spirv::CLOp::exp2 as u32,
                         [dr::Operand::IdRef(arg.src)].iter().cloned(),
                     )?;
                 }
@@ -3124,7 +3124,7 @@ fn emit_sqrt(
 ) -> Result<(), TranslateError> {
     let result_type = map.get_or_add_scalar(builder, details.typ.into());
     let (ocl_op, rounding) = match details.kind {
-        ast::SqrtKind::Approx => (spirv::CLOp::native_sqrt, None),
+        ast::SqrtKind::Approx => (spirv::CLOp::sqrt, None),
         ast::SqrtKind::Rounding(rnd) => (spirv::CLOp::sqrt, Some(rnd)),
     };
     builder.ext_inst(
@@ -4036,7 +4036,16 @@ fn emit_implicit_conversion(
                     cv.to_space.to_spirv(),
                 ),
             );
-            builder.bitcast(result_type, Some(cv.dst), cv.src)?;
+            if cv.to_space == ast::StateSpace::Generic && cv.from_space != ast::StateSpace::Generic
+            {
+                builder.ptr_cast_to_generic(result_type, Some(cv.dst), cv.src)?;
+            } else if cv.from_space == ast::StateSpace::Generic
+                && cv.to_space != ast::StateSpace::Generic
+            {
+                builder.generic_cast_to_ptr(result_type, Some(cv.dst), cv.src)?;
+            } else {
+                builder.bitcast(result_type, Some(cv.dst), cv.src)?;
+            }
         }
         (_, _, &ConversionKind::AddressOf) => {
             let dst_type = map.get_or_add(builder, SpirvType::new(cv.to_type.clone()));
