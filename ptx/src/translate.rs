@@ -431,7 +431,7 @@ pub fn to_spirv_module<'a>(ast: ast::Module<'a>) -> Result<Module, TranslateErro
         })
         .collect::<Result<Vec<_>, _>>()?;
     let must_link_ptx_impl = ptx_impl_imports.len() > 0;
-    let directives = ptx_impl_imports
+    let mut directives = ptx_impl_imports
         .into_iter()
         .map(|(_, v)| v)
         .chain(directives.into_iter())
@@ -439,7 +439,7 @@ pub fn to_spirv_module<'a>(ast: ast::Module<'a>) -> Result<Module, TranslateErro
     let mut builder = dr::Builder::new();
     builder.reserve_ids(id_defs.current_id());
     let call_map = get_kernels_call_map(&directives);
-    let mut directives = convert_dynamic_shared_memory_usage(directives, &mut || builder.id());
+    //let mut directives = convert_dynamic_shared_memory_usage(directives, &mut || builder.id());
     normalize_variable_decls(&mut directives);
     let denorm_information = compute_denorm_information(&directives);
     // https://www.khronos.org/registry/spir-v/specs/unified1/SPIRV.html#_a_id_logicallayout_a_logical_layout_of_a_module
@@ -532,8 +532,8 @@ fn emit_directives<'input>(
     let empty_body = Vec::new();
     for d in directives.iter() {
         match d {
-            Directive::Variable(_, var) => {
-                emit_variable(builder, map, &var)?;
+            Directive::Variable(linking, var) => {
+                emit_variable(builder, map, id_defs, *linking, &var)?;
             }
             Directive::Method(f) => {
                 let f_body = match &f.body {
@@ -547,7 +547,7 @@ fn emit_directives<'input>(
                     }
                 };
                 for var in f.globals.iter() {
-                    emit_variable(builder, map, var)?;
+                    emit_variable(builder, map, id_defs, ast::LinkingDirective::NONE, var)?;
                 }
                 let func_decl = (*f.func_decl).borrow();
                 let fn_id = emit_function_header(
@@ -602,7 +602,7 @@ fn emit_directives<'input>(
                         }
                     }
                 }
-                emit_function_body_ops(builder, map, opencl_id, &f_body)?;
+                emit_function_body_ops(builder, map, id_defs, opencl_id, &f_body)?;
                 builder.end_function()?;
                 if let (
                     ast::MethodDeclaration {
@@ -2497,9 +2497,10 @@ fn get_function_type(
     )
 }
 
-fn emit_function_body_ops(
+fn emit_function_body_ops<'input>(
     builder: &mut dr::Builder,
     map: &mut TypeWordMap,
+    id_defs: &GlobalStringIdResolver<'input>,
     opencl: spirv::Word,
     func: &[ExpandedStatement],
 ) -> Result<(), TranslateError> {
@@ -2541,7 +2542,7 @@ fn emit_function_body_ops(
                 builder.function_call(result_type, result_id, call.name, arg_list)?;
             }
             Statement::Variable(var) => {
-                emit_variable(builder, map, var)?;
+                emit_variable(builder, map, id_defs, ast::LinkingDirective::NONE, var)?;
             }
             Statement::Constant(cnst) => {
                 let typ_id = map.get_or_add_scalar(builder, cnst.typ);
@@ -3287,9 +3288,11 @@ fn vec_repr<T: Copy>(t: T) -> Vec<u8> {
     result
 }
 
-fn emit_variable(
+fn emit_variable<'input>(
     builder: &mut dr::Builder,
     map: &mut TypeWordMap,
+    id_defs: &GlobalStringIdResolver<'input>,
+    linking: ast::LinkingDirective,
     var: &ast::Variable<spirv::Word>,
 ) -> Result<(), TranslateError> {
     let (must_init, st_class) = match var.state_space {
@@ -3323,7 +3326,43 @@ fn emit_variable(
             [dr::Operand::LiteralInt32(align)].iter().cloned(),
         );
     }
+    emit_linking_decoration(builder, id_defs, var.name, linking);
     Ok(())
+}
+
+fn emit_linking_decoration<'input>(
+    builder: &mut dr::Builder,
+    id_defs: &GlobalStringIdResolver<'input>,
+    name: spirv::Word,
+    linking: ast::LinkingDirective,
+) {
+    if linking.contains(ast::LinkingDirective::EXTERN) {
+        let external_name = id_defs.reverse_variables.get(&name).unwrap();
+        builder.decorate(
+            name,
+            spirv::Decoration::LinkageAttributes,
+            [
+                dr::Operand::LiteralString(external_name.to_string()),
+                dr::Operand::LinkageType(spirv::LinkageType::Import),
+            ]
+            .iter()
+            .cloned(),
+        );
+    }
+    if linking.contains(ast::LinkingDirective::VISIBLE) {
+        let external_name = id_defs.reverse_variables.get(&name).unwrap();
+        builder.decorate(
+            name,
+            spirv::Decoration::LinkageAttributes,
+            [
+                dr::Operand::LiteralString(external_name.to_string()),
+                dr::Operand::LinkageType(spirv::LinkageType::Export),
+            ]
+            .iter()
+            .cloned(),
+        );
+    }
+    // TODO: handle LinkingDirective::WEAK
 }
 
 fn emit_mad_uint(
@@ -4902,6 +4941,7 @@ impl<'input> FnSigMapper<'input> {
 struct GlobalStringIdResolver<'input> {
     current_id: spirv::Word,
     variables: HashMap<Cow<'input, str>, spirv::Word>,
+    reverse_variables: HashMap<spirv::Word, &'input str>,
     variables_type_check: HashMap<u32, Option<(ast::Type, ast::StateSpace, bool)>>,
     special_registers: SpecialRegistersMap,
     fns: HashMap<spirv::Word, FnSigMapper<'input>>,
@@ -4912,6 +4952,7 @@ impl<'input> GlobalStringIdResolver<'input> {
         Self {
             current_id: start_id,
             variables: HashMap::new(),
+            reverse_variables: HashMap::new(),
             variables_type_check: HashMap::new(),
             special_registers: SpecialRegistersMap::new(),
             fns: HashMap::new(),
@@ -4942,6 +4983,7 @@ impl<'input> GlobalStringIdResolver<'input> {
             hash_map::Entry::Vacant(e) => {
                 let numeric_id = self.current_id;
                 e.insert(numeric_id);
+                self.reverse_variables.insert(numeric_id, id);
                 self.current_id += 1;
                 numeric_id
             }
