@@ -32,6 +32,7 @@ use std::io;
 use std::io::Read;
 use std::io::Write;
 use std::mem;
+use std::path::Path;
 use std::process::Command;
 use std::slice;
 use std::{borrow::Cow, collections::HashMap, env, fs, path::PathBuf, ptr, str};
@@ -292,7 +293,7 @@ fn run_spirv<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + D
         hip_call! { hipMemcpyWithStream(inp_b, input.as_ptr() as _, input.len() * mem::size_of::<Input>(), hipMemcpyKind::hipMemcpyHostToDevice, stream) };
         hip_call! { hipMemset(out_b, 0, output.len() * mem::size_of::<Output>()) };
         let mut args = [&inp_b, &out_b];
-        hip_call! { hipModuleLaunchKernel(kernel, 1,1,1,1,1,1, 0, stream, args.as_mut_ptr() as _, ptr::null_mut()) };
+        hip_call! { hipModuleLaunchKernel(kernel, 1,1,1,1,1,1, 1024, stream, args.as_mut_ptr() as _, ptr::null_mut()) };
         hip_call! { hipMemcpyAsync(result.as_mut_ptr() as _, out_b, output.len() * mem::size_of::<Output>(), hipMemcpyKind::hipMemcpyDeviceToHost, stream) };
         hip_call! { hipStreamSynchronize(stream) };
     }
@@ -600,6 +601,9 @@ fn compile_amd(
         .arg(spirv.path())
         .status()?;
     assert!(to_llvm_cmd.success());
+    if cfg!(debug_assertions) {
+        persist_file(llvm.path())?;
+    }
     let linked_binary = NamedTempFile::new_in(&dir)?;
     let mut llvm_link = PathBuf::from(AMDGPU);
     llvm_link.push("llvm");
@@ -617,6 +621,9 @@ fn compile_amd(
     }
     let status = linker_cmd.status()?;
     assert!(status.success());
+    if cfg!(debug_assertions) {
+        persist_file(linked_binary.path())?;
+    }
     let mut ptx_lib_bitcode = NamedTempFile::new_in(&dir)?;
     let compiled_binary = NamedTempFile::new_in(&dir)?;
     let mut clang_exe = PathBuf::from(AMDGPU);
@@ -651,11 +658,18 @@ fn compile_amd(
     let compiled_bin_path = compiled_binary.path();
     let mut compiled_binary = File::open(compiled_bin_path)?;
     compiled_binary.read_to_end(&mut result)?;
+    if cfg!(debug_assertions) {
+        persist_file(compiled_bin_path)?;
+    }
+    Ok(result)
+}
+
+fn persist_file(path: &Path) -> io::Result<()> {
     let mut persistent = PathBuf::from("/tmp/zluda");
     std::fs::create_dir_all(&persistent)?;
-    persistent.push(compiled_bin_path.file_name().unwrap());
-    std::fs::copy(compiled_bin_path, persistent)?;
-    Ok(result)
+    persistent.push(path.file_name().unwrap());
+    std::fs::copy(path, persistent)?;
+    Ok(())
 }
 
 fn get_bitcode_paths(device_name: &str) -> impl Iterator<Item = PathBuf> {

@@ -10,6 +10,7 @@
          %34 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
                OpEntryPoint Kernel %1 "reg_local"
+               OpExecutionMode %1 ContractionOff
                OpDecorate %4 Alignment 8
        %void = OpTypeVoid
       %ulong = OpTypeInt 64 0
@@ -50,10 +51,10 @@
                OpStore %7 %12
          %14 = OpLoad %ulong %7
          %19 = OpIAdd %ulong %14 %ulong_1
-         %26 = OpBitcast %_ptr_Generic_ulong %4
+         %26 = OpPtrCastToGeneric %_ptr_Generic_ulong %4
          %27 = OpCopyObject %ulong %19
                OpStore %26 %27 Aligned 8
-         %28 = OpBitcast %_ptr_Generic_ulong %4
+         %28 = OpPtrCastToGeneric %_ptr_Generic_ulong %4
          %47 = OpBitcast %_ptr_Generic_uchar %28
          %48 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %47 %ulong_0
          %21 = OpBitcast %_ptr_Generic_ulong %48
