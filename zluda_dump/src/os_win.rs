@@ -137,18 +137,27 @@ pub fn get_thunk(
     use dynasmrt::{dynasm, DynasmApi};
     let mut ops = dynasmrt::x86::Assembler::new().unwrap();
     let start = ops.offset();
+    // Let's hope there's never more than 4 arguments
     dynasm!(ops
         ; .arch x64
+        ; push rbp
+        ; mov rbp, rsp
         ; push rcx
         ; push rdx
+        ; push r8
+        ; push r9
         ; mov rcx, QWORD guid as i64
         ; mov rdx, QWORD idx as i64
         ; mov rax, QWORD report_fn as i64
         ; call rax
+        ; pop r9
+        ; pop r8
         ; pop rdx
         ; pop rcx
         ; mov rax, QWORD original_fn as i64
-        ; jmp rax
+        ; call rax
+        ; pop rbp
+        ; ret
         ; int 3
     );
     let exe_buf = ops.finalize().unwrap();

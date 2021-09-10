@@ -1,5 +1,6 @@
 use crate::cuda::CUuuid;
 use std::ffi::{c_void, CStr};
+use std::mem;
 
 const NVCUDA_DEFAULT_PATH: &'static [u8] = b"/usr/lib/x86_64-linux-gnu/libcuda.so.1\0";
 
@@ -36,23 +37,34 @@ pub fn get_thunk(
     guid: *const CUuuid,
     idx: usize,
 ) -> *const c_void {
-    use std::mem;
-
     use dynasmrt::{dynasm, DynasmApi};
     let mut ops = dynasmrt::x86::Assembler::new().unwrap();
     let start = ops.offset();
+    // Let's hope there's never more than 6 arguments
     dynasm!(ops
         ; .arch x64
+        ; push rbp
+        ; mov rbp, rsp
         ; push rdi
         ; push rsi
+        ; push rdx
+        ; push rcx
+        ; push r8
+        ; push r9
         ; mov rdi, QWORD guid as i64
         ; mov rsi, QWORD idx as i64
         ; mov rax, QWORD report_fn as i64
         ; call rax
+        ; pop r9
+        ; pop r8
+        ; pop rcx
+        ; pop rdx
         ; pop rsi
         ; pop rdi
         ; mov rax, QWORD original_fn as i64
-        ; jmp rax
+        ; call rax
+        ; pop rbp
+        ; ret
         ; int 3
     );
     let exe_buf = ops.finalize().unwrap();
