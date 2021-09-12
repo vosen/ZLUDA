@@ -128,12 +128,14 @@ static CUDART_INTERFACE_VTABLE: [VTableEntry; CUDART_INTERFACE_LENGTH] = [
     VTableEntry { ptr: ptr::null() },
     VTableEntry { ptr: ptr::null() },
     VTableEntry {
-        ptr: get_module_from_cubin_ext as *const (),
+        ptr: get_module_from_cubin_ext1 as *const (),
     },
     VTableEntry {
         ptr: cudart_interface_fn6 as *const (),
     },
-    VTableEntry { ptr: ptr::null() },
+    VTableEntry {
+        ptr: get_module_from_cubin_ext2 as _,
+    },
     VTableEntry { ptr: ptr::null() },
 ];
 
@@ -237,8 +239,14 @@ unsafe extern "system" fn get_module_from_cubin(
     {
         return CUresult::CUDA_ERROR_INVALID_VALUE;
     }
-    //let result = result.decuda();
     let fatbin_header = (*fatbinc_wrapper).data;
+    get_module_from_cubin_unwrapped(fatbin_header, result)
+}
+
+unsafe extern "system" fn get_module_from_cubin_unwrapped(
+    fatbin_header: *const FatbinHeader,
+    result: *mut CUmodule,
+) -> CUresult {
     if (*fatbin_header).magic != FATBIN_MAGIC || (*fatbin_header).version != FATBIN_VERSION {
         return CUresult::CUDA_ERROR_INVALID_VALUE;
     }
@@ -273,11 +281,12 @@ unsafe extern "system" fn get_module_from_cubin(
     CUresult::CUDA_ERROR_COMPAT_NOT_SUPPORTED_ON_DEVICE
 }
 
-unsafe extern "system" fn get_module_from_cubin_ext(
+unsafe extern "system" fn get_module_from_cubin_ext1(
     result: *mut CUmodule,
     fatbinc_wrapper: *const FatbincWrapper,
     ptr1: *mut c_void,
     ptr2: *mut c_void,
+    _unknown: usize,
 ) -> CUresult {
     // Not sure what those two parameters are actually used for,
     // they are somehow involved in __cudaRegisterHostVar
@@ -333,7 +342,24 @@ unsafe fn decompress_kernel_module(file: *const FatbinFileHeader) -> Option<Vec<
     }
 }
 
-unsafe extern "system" fn cudart_interface_fn6(_: u64) {}
+unsafe extern "system" fn cudart_interface_fn6(_: usize) -> CUresult {
+    CUresult::CUDA_SUCCESS
+}
+
+// From the assembly looks like arg5 is a count of something in arg3 and arg4
+unsafe extern "system" fn get_module_from_cubin_ext2(
+    fatbinc_wrapper: *const FatbinHeader,
+    result: *mut CUmodule,
+    _arg3: usize,
+    _arg4: usize,
+    arg5: c_uint,
+) -> CUresult {
+    if arg5 != 0 {
+        CUresult::CUDA_ERROR_NOT_SUPPORTED
+    } else {
+        get_module_from_cubin_unwrapped(fatbinc_wrapper, result)
+    }
+}
 
 const TOOLS_TLS_GUID: CUuuid = CUuuid {
     bytes: [
@@ -535,7 +561,9 @@ static DEVICE_EXTENDED_RT_VTABLE: [VTableEntry; DEVICE_EXTENDED_RT_LENGTH] = [
     VTableEntry { ptr: ptr::null() },
     VTableEntry { ptr: ptr::null() },
     VTableEntry { ptr: ptr::null() },
-    VTableEntry { ptr: device_get_something as _ },
+    VTableEntry {
+        ptr: device_get_something as _,
+    },
     VTableEntry { ptr: ptr::null() },
     VTableEntry { ptr: ptr::null() },
     VTableEntry { ptr: ptr::null() },
@@ -573,10 +601,7 @@ unsafe extern "system" fn device_get_attribute_ext(
 
 // I don't know is this function return,
 // but on my GTX 1060 it returns 0
-unsafe extern "system" fn device_get_something(
-    result: *mut c_uchar,
-    _dev: CUdevice,
-) -> CUresult {
+unsafe extern "system" fn device_get_something(result: *mut c_uchar, _dev: CUdevice) -> CUresult {
     if result == ptr::null_mut() {
         return CUresult::CUDA_ERROR_INVALID_VALUE;
     }

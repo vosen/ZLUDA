@@ -163,7 +163,7 @@ pub unsafe fn cuModuleLoadData(
 
 unsafe fn record_module_image_raw(module: CUmodule, raw_image: *const ::std::os::raw::c_void) {
     if *(raw_image as *const u32) == 0x464c457f {
-        os_log!("Unsupported ELF module: {:?}", raw_image);
+        os_log!("Unsupported ELF module image: {:?}", raw_image);
         return;
     }
     let image = to_str(raw_image);
@@ -708,12 +708,22 @@ static mut ORIGINAL_GET_MODULE_FROM_CUBIN: Option<
         fatbinc_wrapper: *const FatbincWrapper,
     ) -> CUresult,
 > = None;
-static mut ORIGINAL_GET_MODULE_FROM_CUBIN_EXT: Option<
+static mut ORIGINAL_GET_MODULE_FROM_CUBIN_EXT1: Option<
     unsafe extern "system" fn(
         result: *mut CUmodule,
         fatbinc_wrapper: *const FatbincWrapper,
         ptr1: *mut c_void,
         ptr2: *mut c_void,
+        _unknown: usize,
+    ) -> CUresult,
+> = None;
+static mut ORIGINAL_GET_MODULE_FROM_CUBIN_EXT2: Option<
+    unsafe extern "system" fn(
+        fatbinc_wrapper: *const FatbinHeader,
+        result: *mut CUmodule,
+        ptr1: *mut c_void,
+        ptr2: *mut c_void,
+        _unknown: usize,
     ) -> CUresult,
 > = None;
 
@@ -843,8 +853,12 @@ unsafe fn get_export_override_fn(
             get_module_from_cubin as *const _
         }
         (CUDART_INTERFACE_GUID, 6) => {
-            ORIGINAL_GET_MODULE_FROM_CUBIN_EXT = mem::transmute(original_fn);
-            get_module_from_cubin_ext as *const _
+            ORIGINAL_GET_MODULE_FROM_CUBIN_EXT1 = mem::transmute(original_fn);
+            get_module_from_cubin_ext1 as *const _
+        }
+        (CUDART_INTERFACE_GUID, 8) => {
+            ORIGINAL_GET_MODULE_FROM_CUBIN_EXT2 = mem::transmute(original_fn);
+            get_module_from_cubin_ext2 as *const _
         }
         _ => os::get_thunk(original_fn, report_unknown_export_table_call, guid, idx),
     }
@@ -906,7 +920,14 @@ unsafe fn get_module_from_cubin_impl(
     {
         return CUresult::CUDA_ERROR_INVALID_VALUE;
     }
-    let fatbin_header = (*fatbinc_wrapper).data;
+    get_module_from_cubin_unwrapped(module, (*fatbinc_wrapper).data, get_module_base)
+}
+
+unsafe fn get_module_from_cubin_unwrapped(
+    module: *mut CUmodule,
+    fatbin_header: *const FatbinHeader,
+    get_module_base: impl FnOnce() -> CUresult,
+) -> CUresult {
     if (*fatbin_header).magic != FATBIN_MAGIC || (*fatbin_header).version != FATBIN_VERSION {
         return CUresult::CUDA_ERROR_INVALID_VALUE;
     }
@@ -936,6 +957,8 @@ unsafe fn get_module_from_cubin_impl(
             },
             Err(_) => {}
         }
+    } else {
+        os_log!("Unsupported runtime module: {:?}", *module);
     }
     result
 }
@@ -949,14 +972,27 @@ unsafe extern "system" fn get_module_from_cubin(
     })
 }
 
-unsafe extern "system" fn get_module_from_cubin_ext(
+unsafe extern "system" fn get_module_from_cubin_ext1(
     module: *mut CUmodule,
     fatbinc_wrapper: *const FatbincWrapper,
     ptr1: *mut c_void,
     ptr2: *mut c_void,
+    _unknown: usize,
 ) -> CUresult {
     get_module_from_cubin_impl(module, fatbinc_wrapper, || {
-        ORIGINAL_GET_MODULE_FROM_CUBIN_EXT.unwrap()(module, fatbinc_wrapper, ptr1, ptr2)
+        ORIGINAL_GET_MODULE_FROM_CUBIN_EXT1.unwrap()(module, fatbinc_wrapper, ptr1, ptr2, _unknown)
+    })
+}
+
+unsafe extern "system" fn get_module_from_cubin_ext2(
+    fatbin_header: *const FatbinHeader,
+    module: *mut CUmodule,
+    ptr1: *mut c_void,
+    ptr2: *mut c_void,
+    _unknown: usize,
+) -> CUresult {
+    get_module_from_cubin_unwrapped(module, fatbin_header, || {
+        ORIGINAL_GET_MODULE_FROM_CUBIN_EXT2.unwrap()(fatbin_header, module, ptr1, ptr2, _unknown)
     })
 }
 
