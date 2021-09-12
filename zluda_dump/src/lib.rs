@@ -813,6 +813,13 @@ const HEAP_ACCESS_GUID: CUuuid = CUuuid {
     ],
 };
 
+const DEVICE_EXTENDED_RT_GUID: CUuuid = CUuuid {
+    bytes: [
+        0xB1u8, 0x05, 0x41, 0xE1, 0xF7, 0xC7, 0xC7, 0x4A, 0x9F, 0x64, 0xF2, 0x23, 0xBE, 0x99, 0xF1,
+        0xE2,
+    ],
+};
+
 unsafe fn get_export_override_fn(
     original_fn: *const c_void,
     guid: *const CUuuid,
@@ -828,7 +835,9 @@ unsafe fn get_export_override_fn(
         | (CONTEXT_LOCAL_STORAGE_INTERFACE_V0301_GUID, 2)
         | (CTX_CREATE_BYPASS_GUID, 1)
         | (HEAP_ACCESS_GUID, 1)
-        | (HEAP_ACCESS_GUID, 2) => original_fn,
+        | (HEAP_ACCESS_GUID, 2)
+        | (DEVICE_EXTENDED_RT_GUID, 5)
+        | (DEVICE_EXTENDED_RT_GUID, 13) => original_fn,
         (CUDART_INTERFACE_GUID, 1) => {
             ORIGINAL_GET_MODULE_FROM_CUBIN = mem::transmute(original_fn);
             get_module_from_cubin as *const _
