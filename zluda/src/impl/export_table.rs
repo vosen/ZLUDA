@@ -2,6 +2,7 @@ use hip_runtime_sys::{
     hipCtxCreate, hipDevicePrimaryCtxGetState, hipDevicePrimaryCtxRelease,
     hipDevicePrimaryCtxRetain, hipError_t,
 };
+use ocl_core::ffi::c_uchar;
 
 use crate::r#impl;
 
@@ -49,6 +50,10 @@ pub fn get(table: *mut *const std::os::raw::c_void, id: *const CUuuid) -> CUresu
         }
         HEAP_ACCESS_GUID => {
             unsafe { *table = HEAP_ACCESS_VTABLE.as_ptr() as *const _ };
+            CUresult::CUDA_SUCCESS
+        }
+        DEVICE_EXTENDED_RT_GUID => {
+            unsafe { *table = DEVICE_EXTENDED_RT_VTABLE.as_ptr() as *const _ };
             CUresult::CUDA_SUCCESS
         }
         _ => CUresult::CUDA_ERROR_NOT_SUPPORTED,
@@ -503,4 +508,78 @@ unsafe extern "system" fn heap_alloc(
 // TODO: reverse and implement for Linux
 unsafe extern "system" fn heap_free(halloc: *mut HeapAllocRecord, arg1: *mut usize) -> CUresult {
     r#impl::unimplemented()
+}
+
+const DEVICE_EXTENDED_RT_GUID: CUuuid = CUuuid {
+    bytes: [
+        0xB1u8, 0x05, 0x41, 0xE1, 0xF7, 0xC7, 0xC7, 0x4A, 0x9F, 0x64, 0xF2, 0x23, 0xBE, 0x99, 0xF1,
+        0xE2,
+    ],
+};
+const DEVICE_EXTENDED_RT_LENGTH: usize = 21;
+static DEVICE_EXTENDED_RT_VTABLE: [VTableEntry; DEVICE_EXTENDED_RT_LENGTH] = [
+    VTableEntry {
+        length: mem::size_of::<[VTableEntry; DEVICE_EXTENDED_RT_LENGTH]>(),
+    },
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry {
+        ptr: device_get_attribute_ext as _,
+    },
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry { ptr: device_get_something as _ },
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry { ptr: ptr::null() },
+    VTableEntry { ptr: ptr::null() },
+];
+
+unsafe extern "system" fn device_get_attribute_ext(
+    _dev: CUdevice,
+    attribute: c_uint,
+    unknown: c_int,
+    result: *mut [usize; 2],
+) -> CUresult {
+    if result == ptr::null_mut() {
+        return CUresult::CUDA_ERROR_INVALID_VALUE;
+    }
+    if unknown != 0 {
+        return CUresult::CUDA_ERROR_UNKNOWN;
+    }
+    // TODO: make real implementation
+    // Optix checks this probably toto know if HW RT is available
+    if attribute == 0x20000001 {
+        (&mut *result)[0] = 2;
+        (&mut *result)[1] = 0x130; // GTX 1080
+    } else if attribute == 0x20000002 {
+        (&mut *result)[0] = 2;
+        (&mut *result)[1] = 0x138; // GTX 1080
+    } else {
+        return CUresult::CUDA_ERROR_NOT_SUPPORTED;
+    }
+    CUresult::CUDA_SUCCESS
+}
+
+// I don't know is this function return,
+// but on my GTX 1060 it returns 0
+unsafe extern "system" fn device_get_something(
+    result: *mut c_uchar,
+    _dev: CUdevice,
+) -> CUresult {
+    if result == ptr::null_mut() {
+        return CUresult::CUDA_ERROR_INVALID_VALUE;
+    }
+    *result = 0;
+    CUresult::CUDA_SUCCESS
 }
