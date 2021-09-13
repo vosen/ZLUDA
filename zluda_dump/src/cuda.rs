@@ -2574,7 +2574,7 @@ extern_redirect! {
         stateOut: *mut CUlinkState,
     ) -> CUresult;
 }
-extern_redirect! {
+extern_redirect_with! {
     pub fn cuLinkAddData(
         state: CUlinkState,
         type_: CUjitInputType,
@@ -2585,8 +2585,9 @@ extern_redirect! {
         options: *mut CUjit_option,
         optionValues: *mut *mut ::std::os::raw::c_void,
     ) -> CUresult;
+    super::cuLinkAddData;
 }
-extern_redirect! {
+extern_redirect_with! {
     pub fn cuLinkAddData_v2(
         state: CUlinkState,
         type_: CUjitInputType,
@@ -2597,8 +2598,9 @@ extern_redirect! {
         options: *mut CUjit_option,
         optionValues: *mut *mut ::std::os::raw::c_void,
     ) -> CUresult;
+    super::cuLinkAddData;
 }
-extern_redirect! {
+extern_redirect_with! {
     pub fn cuLinkAddFile(
         state: CUlinkState,
         type_: CUjitInputType,
@@ -2607,8 +2609,9 @@ extern_redirect! {
         options: *mut CUjit_option,
         optionValues: *mut *mut ::std::os::raw::c_void,
     ) -> CUresult;
+    super::cuLinkAddFile;
 }
-extern_redirect! {
+extern_redirect_with! {
     pub fn cuLinkAddFile_v2(
         state: CUlinkState,
         type_: CUjitInputType,
@@ -2617,6 +2620,7 @@ extern_redirect! {
         options: *mut CUjit_option,
         optionValues: *mut *mut ::std::os::raw::c_void,
     ) -> CUresult;
+    super::cuLinkAddFile;
 }
 extern_redirect! {
     pub fn cuLinkComplete(

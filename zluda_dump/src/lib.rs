@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{hash_map, BTreeMap, HashMap},
     env,
     error::Error,
     ffi::{c_void, CStr},
@@ -14,8 +14,8 @@ use std::{
 use std::{fs::File, ptr};
 
 use cuda::{
-    CUdevice, CUdevice_attribute, CUdeviceptr, CUfunction, CUjit_option, CUmodule, CUresult,
-    CUstream, CUuuid,
+    CUdevice, CUdevice_attribute, CUdeviceptr, CUfunction, CUjitInputType, CUjit_option,
+    CUlinkState, CUmodule, CUresult, CUstream, CUuuid,
 };
 use ptx::ast;
 use regex::Regex;
@@ -70,7 +70,10 @@ macro_rules! extern_redirect_with {
 mod cuda;
 
 pub static mut LIBCUDA_HANDLE: *mut c_void = ptr::null_mut();
+pub static mut PENDING_LINKING: Option<HashMap<CUlinkState, Vec<ModuleDump>>> = None;
+pub static mut LINKED_CUBINS: Option<HashMap<*mut c_void, ModuleDump>> = None;
 pub static mut MODULES: Option<HashMap<CUmodule, ModuleDump>> = None;
+pub static mut MODULE_DUMP_COUNTER: usize = 0;
 pub static mut KERNELS: Option<HashMap<CUfunction, KernelDump>> = None;
 static mut BUFFERS: Option<BTreeMap<usize, (usize, AllocLocation)>> = None;
 pub static mut LAUNCH_COUNTER: usize = 0;
@@ -169,50 +172,100 @@ unsafe fn record_module_image_raw(module: CUmodule, raw_image: *const ::std::os:
     let image = to_str(raw_image);
     match image {
         None => os_log!("Malformed module image: {:?}", raw_image),
-        Some(image) => record_module_image(module, image),
+        Some(image) => record_module_image_with_module(module, raw_image, image),
     };
 }
 
-unsafe fn record_module_image(module: CUmodule, image: &str) {
+unsafe fn record_module_image_with_module(
+    module: CUmodule,
+    raw_image: *const ::std::os::raw::c_void,
+    image: &str,
+) {
+    match record_module_image_impl(raw_image, image) {
+        Ok(dump) => {
+            MODULES
+                .get_or_insert_with(|| HashMap::new())
+                .insert(module, dump);
+        }
+        Err(e) => {
+            os_log!("{}", e);
+        }
+    }
+}
+
+unsafe fn record_module_image_with_linker(
+    link_obj: CUlinkState,
+    raw_image: *const ::std::os::raw::c_void,
+    image: &str,
+) {
+    match record_module_image_impl(raw_image, image) {
+        Ok(dump) => {
+            match PENDING_LINKING
+                .get_or_insert_with(|| HashMap::new())
+                .entry(link_obj)
+            {
+                hash_map::Entry::Occupied(mut vec) => {
+                    vec.get_mut().push(dump);
+                }
+                hash_map::Entry::Vacant(e) => {
+                    e.insert(vec![dump]);
+                }
+            };
+        }
+        Err(e) => {
+            os_log!("{}", e);
+        }
+    }
+}
+
+unsafe fn record_module_image_impl(
+    raw_image: *const ::std::os::raw::c_void,
+    image: &str,
+) -> Result<ModuleDump, Box<dyn Error>> {
     if !image.contains(&".version") {
-        os_log!("Malformed module image: {:?}", module);
-    } else {
-        let mut errors = Vec::new();
-        let ast = ptx::ModuleParser::new().parse(&mut errors, image);
-        let kernels_args = match (&*errors, ast) {
-            (&[], Ok(ast)) => {
-                let kernels_args = ast
-                    .directives
-                    .iter()
-                    .filter_map(directive_to_kernel)
-                    .collect::<HashMap<_, _>>();
-                Some(kernels_args)
-            }
-            (_, _) => {
-                // Don't print errors - it's usually too verbose to be useful
-                os_log!("Errors when parsing module: {:?}", module);
-                None
-            }
-        };
-        MODULES.as_mut().unwrap().insert(
-            module,
-            ModuleDump {
-                content: Rc::new(image.to_string()),
-                kernels_args,
-            },
-        );
+        return Err(format!(
+            "Malformed module image (no `.version`): {:?}",
+            raw_image
+        ))?;
     }
+    let mut errors = Vec::new();
+    let ast = ptx::ModuleParser::new().parse(&mut errors, image);
+    let kernels_args = match (&*errors, ast) {
+        (&[], Ok(ast)) => {
+            let kernels_args = ast
+                .directives
+                .iter()
+                .filter_map(directive_to_kernel)
+                .collect::<HashMap<_, _>>();
+            Some(kernels_args)
+        }
+        (err_vec, res) => {
+            // Don't print errors - it's usually too verbose to be useful
+            os_log!(
+                "{} errors when parsing module image: {:?}",
+                err_vec.len() + res.iter().len(),
+                raw_image
+            );
+            None
+        }
+    };
+    let dump = ModuleDump {
+        content: Rc::new(image.to_string()),
+        kernels_args,
+    };
     if let Err(e) = try_dump_module_image(image) {
-        os_log!("Errors when saving module: {:?}, {}", module, e);
+        return Err(format!(
+            "Errors when saving module image: {:?}, {}",
+            raw_image, e
+        ))?;
     }
+    Ok(dump)
 }
 
 unsafe fn try_dump_module_image(image: &str) -> Result<(), Box<dyn Error>> {
     let mut dump_path = get_dump_dir()?;
-    dump_path.push(format!(
-        "module_{:04}.ptx",
-        MODULES.as_ref().unwrap().len() - 1
-    ));
+    dump_path.push(format!("module_{:04}.ptx", MODULE_DUMP_COUNTER));
+    MODULE_DUMP_COUNTER += 1;
     let mut file = File::create(dump_path)?;
     file.write_all(image.as_bytes())?;
     Ok(())
@@ -952,7 +1005,9 @@ unsafe fn get_module_from_cubin_unwrapped(
     if let Some(text) = maybe_kernel_text {
         match CStr::from_bytes_with_nul(&text) {
             Ok(cstr) => match cstr.to_str() {
-                Ok(utf8_str) => record_module_image(*module, utf8_str),
+                Ok(utf8_str) => {
+                    record_module_image_with_module(*module, text.as_ptr() as _, utf8_str)
+                }
                 Err(_) => {}
             },
             Err(_) => {}
@@ -1055,4 +1110,62 @@ pub unsafe fn cuDeviceGetAttribute(
         }
     }
     cont(pi, attrib, dev)
+}
+
+#[allow(non_snake_case)]
+pub unsafe fn cuLinkAddData(
+    state: CUlinkState,
+    type_: CUjitInputType,
+    data: *mut ::std::os::raw::c_void,
+    size: usize,
+    name: *const ::std::os::raw::c_char,
+    numOptions: ::std::os::raw::c_uint,
+    options: *mut CUjit_option,
+    optionValues: *mut *mut ::std::os::raw::c_void,
+    cont: impl FnOnce(
+        CUlinkState,
+        CUjitInputType,
+        *mut ::std::os::raw::c_void,
+        usize,
+        *const ::std::os::raw::c_char,
+        ::std::os::raw::c_uint,
+        *mut CUjit_option,
+        *mut *mut ::std::os::raw::c_void,
+    ) -> CUresult,
+) -> CUresult {
+    if let Some(image) = to_str(data) {
+        record_module_image_with_linker(state, data, image)
+    } else {
+        os_log!("PTX module not a string: {:?}", data);
+    }
+    cont(
+        state,
+        type_,
+        data,
+        size,
+        name,
+        numOptions,
+        options,
+        optionValues,
+    )
+}
+
+#[allow(non_snake_case)]
+pub unsafe fn cuLinkAddFile(
+    state: CUlinkState,
+    type_: CUjitInputType,
+    path: *const ::std::os::raw::c_char,
+    numOptions: ::std::os::raw::c_uint,
+    options: *mut CUjit_option,
+    optionValues: *mut *mut ::std::os::raw::c_void,
+    cont: impl FnOnce(
+        CUlinkState,
+        CUjitInputType,
+        *const ::std::os::raw::c_char,
+        ::std::os::raw::c_uint,
+        *mut CUjit_option,
+        *mut *mut ::std::os::raw::c_void,
+    ) -> CUresult,
+) -> CUresult {
+    cont(state, type_, path, numOptions, options, optionValues)
 }

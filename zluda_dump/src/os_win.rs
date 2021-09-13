@@ -90,7 +90,7 @@ macro_rules! os_log {
 pub fn __log_impl(s: String) {
     let log_to_stderr = std::io::stderr().as_raw_handle() != ptr::null_mut();
     if log_to_stderr {
-        eprintln!("[ZLUDA_DUMP] {}\n", s);
+        eprintln!("[ZLUDA_DUMP] {}", s);
     } else {
         let mut win_str = String::with_capacity("[ZLUDA_DUMP] ".len() + s.len() + 2);
         win_str.push_str("[ZLUDA_DUMP] ");
