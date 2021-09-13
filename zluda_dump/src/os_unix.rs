@@ -19,12 +19,12 @@ pub unsafe fn get_proc_address(handle: *mut c_void, func: &CStr) -> *mut c_void 
 macro_rules! os_log {
     ($format:tt) => {
         {
-            eprintln!($format);
+            eprintln!("[ZLUDA_DUMP] {}", format!($format));
         }
     };
     ($format:tt, $($obj: expr),+) => {
         {
-            eprintln!($format, $($obj,)+);
+            eprintln!("[ZLUDA_DUMP] {}", format!($format, $($obj,)+));
         }
     };
 }
