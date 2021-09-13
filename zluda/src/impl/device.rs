@@ -62,6 +62,10 @@ pub fn get_attribute(pi: *mut i32, attrib: CUdevice_attribute, dev_idx: c_int) -
     }
     //let mut props = unsafe { mem::zeroed() };
     let hip_attrib = match attrib {
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_ASYNC_ENGINE_COUNT => {
+            unsafe { *pi = 1 };
+            return hipError_t::hipSuccess;
+        }
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_GPU_OVERLAP
         | CUdevice_attribute::CU_DEVICE_ATTRIBUTE_UNIFIED_ADDRESSING
         | CUdevice_attribute::CU_DEVICE_ATTRIBUTE_STREAM_PRIORITIES_SUPPORTED
