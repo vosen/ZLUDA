@@ -2207,7 +2207,10 @@ pub extern "system" fn cuInit(Flags: ::std::os::raw::c_uint) -> CUresult {
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuDriverGetVersion(driverVersion: *mut ::std::os::raw::c_int) -> CUresult {
-    unsafe { hipDriverGetVersion(driverVersion).into() }
+    // GeekBench checks this value
+    // TODO: encode something more sensible
+    unsafe { *driverVersion = r#impl::driver_get_version() };
+    CUresult::CUDA_SUCCESS
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2382,7 +2385,8 @@ pub extern "system" fn cuCtxGetFlags(flags: *mut ::std::os::raw::c_uint) -> CUre
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuCtxSynchronize() -> CUresult {
-    unsafe { hipCtxSynchronize().into() }
+    // hipCtxSynchronize is not implemented
+    unsafe { hipDeviceSynchronize().into() }
 }
 
 #[cfg_attr(not(test), no_mangle)]

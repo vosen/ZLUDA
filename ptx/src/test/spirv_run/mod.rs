@@ -270,17 +270,7 @@ fn run_spirv<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + D
         hip_call! { hipStreamCreate(&mut stream) };
         let mut dev_props = unsafe { mem::zeroed() };
         hip_call! { hipGetDeviceProperties(&mut dev_props, dev) };
-        let nul_terminator = dev_props.gcnArchName.iter().position(|&x| x == 0).unwrap();
-        let gcn_arch_slice = unsafe {
-            slice::from_raw_parts(dev_props.gcnArchName.as_ptr() as _, nul_terminator + 1)
-        };
-        let dev_name =
-            if let Ok(Ok(name)) = CStr::from_bytes_with_nul(gcn_arch_slice).map(|x| x.to_str()) {
-                name
-            } else {
-                return Err(hipError_t::hipErrorUnknown);
-            };
-        let elf_module = compile_amd(dev_name, &*spirv, module.should_link_ptx_impl)
+        let elf_module = compile_amd(&dev_props, &*spirv, module.should_link_ptx_impl)
             .map_err(|_| hipError_t::hipErrorUnknown)?;
         let mut module = ptr::null_mut();
         hip_call! { hipModuleLoadData(&mut module, elf_module.as_ptr() as _) };
@@ -576,10 +566,24 @@ const AMDGPU_BITCODE: [&'static str; 8] = [
 const AMDGPU_BITCODE_DEVICE_PREFIX: &'static str = "oclc_isa_version_";
 
 fn compile_amd(
-    device_name: &str,
+    device_pros: &hip::hipDeviceProp_t,
     spirv_il: &[u32],
     ptx_lib: Option<(&'static [u8], &'static [u8])>,
 ) -> io::Result<Vec<u8>> {
+    let null_terminator = device_pros
+        .gcnArchName
+        .iter()
+        .position(|&x| x == 0)
+        .unwrap();
+    let gcn_arch_slice = unsafe {
+        slice::from_raw_parts(device_pros.gcnArchName.as_ptr() as _, null_terminator + 1)
+    };
+    let device_name =
+        if let Ok(Ok(name)) = CStr::from_bytes_with_nul(gcn_arch_slice).map(|x| x.to_str()) {
+            name
+        } else {
+            return Err(io::Error::new(io::ErrorKind::Other, ""));
+        };
     let dir = tempfile::tempdir()?;
     let mut spirv = NamedTempFile::new_in(&dir)?;
     let llvm = NamedTempFile::new_in(&dir)?;

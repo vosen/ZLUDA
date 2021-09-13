@@ -5,13 +5,13 @@ use std::fs::File;
 use std::io::{self, Read, Write};
 use std::ops::Add;
 use std::os::raw::c_char;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::{fs, mem, ptr, slice};
+use std::{env, fs, mem, ptr, slice};
 
 use hip_runtime_sys::{
-    hipCtxGetCurrent, hipCtxGetDevice, hipDeviceGetAttribute, hipDeviceGetName, hipError_t,
-    hipGetDeviceProperties, hipGetStreamDeviceId, hipModuleLoadData,
+    hipCtxGetCurrent, hipCtxGetDevice, hipDeviceGetAttribute, hipDeviceGetName, hipDeviceProp_t,
+    hipError_t, hipGetDeviceProperties, hipGetStreamDeviceId, hipModuleLoadData,
 };
 use tempfile::NamedTempFile;
 
@@ -85,18 +85,8 @@ pub fn load_data_impl(pmod: *mut CUmodule, spirv_data: SpirvModule) -> Result<()
     }
     let mut props = unsafe { mem::zeroed() };
     let err = unsafe { hipGetDeviceProperties(&mut props, dev) };
-    if err != hipError_t::hipSuccess {
-        return Err(err);
-    }
-    let gcn_arch_slice =
-        unsafe { slice::from_raw_parts(props.gcnArchName.as_ptr() as _, props.gcnArchName.len()) };
-    let name = if let Ok(Ok(name)) = CStr::from_bytes_with_nul(gcn_arch_slice).map(|x| x.to_str()) {
-        name
-    } else {
-        return Err(hipError_t::hipErrorUnknown);
-    };
     let arch_binary = compile_amd(
-        name,
+        &props,
         &spirv_data.binaries[..],
         spirv_data.should_link_ptx_impl,
     )
@@ -109,7 +99,7 @@ pub fn load_data_impl(pmod: *mut CUmodule, spirv_data: SpirvModule) -> Result<()
 }
 
 const LLVM_SPIRV: &'static str = "/home/vosen/amd/llvm-project/build/bin/llvm-spirv";
-const AMDGPU: &'static str = "/opt/amdgpu-pro/";
+const AMDGPU: &'static str = "/opt/rocm/";
 const AMDGPU_TARGET: &'static str = "amdgcn-amd-amdhsa";
 const AMDGPU_BITCODE: [&'static str; 8] = [
     "opencl.bc",
@@ -124,11 +114,24 @@ const AMDGPU_BITCODE: [&'static str; 8] = [
 const AMDGPU_BITCODE_DEVICE_PREFIX: &'static str = "oclc_isa_version_";
 
 fn compile_amd(
-    device_name: &str,
+    device_pros: &hipDeviceProp_t,
     spirv_il: &[u32],
     ptx_lib: Option<(&'static [u8], &'static [u8])>,
 ) -> io::Result<Vec<u8>> {
-    use std::env;
+    let null_terminator = device_pros
+        .gcnArchName
+        .iter()
+        .position(|&x| x == 0)
+        .unwrap();
+    let gcn_arch_slice = unsafe {
+        slice::from_raw_parts(device_pros.gcnArchName.as_ptr() as _, null_terminator + 1)
+    };
+    let device_name =
+        if let Ok(Ok(name)) = CStr::from_bytes_with_nul(gcn_arch_slice).map(|x| x.to_str()) {
+            name
+        } else {
+            return Err(io::Error::new(io::ErrorKind::Other, ""));
+        };
     let dir = tempfile::tempdir()?;
     let mut spirv = NamedTempFile::new_in(&dir)?;
     let llvm = NamedTempFile::new_in(&dir)?;
@@ -150,8 +153,12 @@ fn compile_amd(
         .arg(spirv.path())
         .status()?;
     assert!(to_llvm_cmd.success());
+    if cfg!(debug_assertions) {
+        persist_file(llvm.path())?;
+    }
     let linked_binary = NamedTempFile::new_in(&dir)?;
     let mut llvm_link = PathBuf::from(AMDGPU);
+    llvm_link.push("llvm");
     llvm_link.push("bin");
     llvm_link.push("llvm-link");
     let mut linker_cmd = Command::new(&llvm_link);
@@ -166,12 +173,16 @@ fn compile_amd(
     }
     let status = linker_cmd.status()?;
     assert!(status.success());
+    if cfg!(debug_assertions) {
+        persist_file(linked_binary.path())?;
+    }
     let mut ptx_lib_bitcode = NamedTempFile::new_in(&dir)?;
     let compiled_binary = NamedTempFile::new_in(&dir)?;
-    let mut cland_exe = PathBuf::from(AMDGPU);
-    cland_exe.push("bin");
-    cland_exe.push("clang");
-    let mut compiler_cmd = Command::new(&cland_exe);
+    let mut clang_exe = PathBuf::from(AMDGPU);
+    clang_exe.push("llvm");
+    clang_exe.push("bin");
+    clang_exe.push("clang");
+    let mut compiler_cmd = Command::new(&clang_exe);
     compiler_cmd
         .arg(format!("-mcpu={}", device_name))
         .arg("-nogpulib")
@@ -199,11 +210,18 @@ fn compile_amd(
     let compiled_bin_path = compiled_binary.path();
     let mut compiled_binary = File::open(compiled_bin_path)?;
     compiled_binary.read_to_end(&mut result)?;
+    if cfg!(debug_assertions) {
+        persist_file(compiled_bin_path)?;
+    }
+    Ok(result)
+}
+
+fn persist_file(path: &Path) -> io::Result<()> {
     let mut persistent = PathBuf::from("/tmp/zluda");
     std::fs::create_dir_all(&persistent)?;
-    persistent.push(compiled_bin_path.file_name().unwrap());
-    std::fs::copy(compiled_bin_path, persistent)?;
-    Ok(result)
+    persistent.push(path.file_name().unwrap());
+    std::fs::copy(path, persistent)?;
+    Ok(())
 }
 
 fn get_bitcode_paths(device_name: &str) -> impl Iterator<Item = PathBuf> {
