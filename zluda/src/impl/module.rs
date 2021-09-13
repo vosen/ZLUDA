@@ -185,6 +185,7 @@ fn compile_amd(
     let mut compiler_cmd = Command::new(&clang_exe);
     compiler_cmd
         .arg(format!("-mcpu={}", device_name))
+        .arg("-ffp-contract=off")
         .arg("-nogpulib")
         .arg("-mno-wavefrontsize64")
         .arg("-O3")

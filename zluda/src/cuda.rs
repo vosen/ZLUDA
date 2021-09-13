@@ -2588,7 +2588,23 @@ pub extern "system" fn cuMemGetInfo_v2(free: *mut usize, total: *mut usize) -> C
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuMemAlloc_v2(dptr: *mut CUdeviceptr, bytesize: usize) -> CUresult {
-    unsafe { hipMalloc(dptr as _, bytesize).into() }
+    let mut dev_ptr = std::ptr::null_mut();
+    let err = unsafe { hipMalloc(&mut dev_ptr, bytesize) }.into();
+    if err != CUresult::CUDA_SUCCESS {
+        return err;
+    }
+    // HACK ALERT: GeekBench is buggy and sometimes assumes that buffers are zeroed-out on creation
+    let err = unsafe { hipMemsetD8(dev_ptr, 0, bytesize) }.into();
+    /*
+    let bytesize_rounded_down = bytesize & !3usize;
+    let bytes = usize::min(bytesize_rounded_down, 4096);
+    let err = unsafe { hipMemsetD32(dev_ptr, 0, bytes / 1024).into() };
+    */
+    if err != CUresult::CUDA_SUCCESS {
+        return err;
+    }
+    unsafe { *dptr = CUdeviceptr(dev_ptr as usize) };
+    CUresult::CUDA_SUCCESS
 }
 
 #[cfg_attr(not(test), no_mangle)]
