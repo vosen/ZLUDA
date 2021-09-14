@@ -607,40 +607,32 @@ SharedVariable: ast::Variable<&'input str> = {
 }
 
 ModuleVariable: (ast::LinkingDirective, ast::Variable<&'input str>) = {
-    <linking:LinkingDirectives> ".global" <def:GlobalVariableDefinitionNoArray> => {
+    <linking:LinkingDirectives> <state_space:VariableStateSpace> <def:GlobalVariableDefinitionNoArray> => {
         let (align, v_type, name, array_init) = def;
-        let state_space = ast::StateSpace::Global;
         (linking, ast::Variable { align, v_type, state_space, name, array_init })
     },
-    <linking:LinkingDirectives> ".shared" <def:GlobalVariableDefinitionNoArray> => {
-        let (align, v_type, name, array_init) = def;
-        let state_space = ast::StateSpace::Shared;
-        (linking, ast::Variable { align, v_type, state_space, name, array_init: Vec::new() })
-    },
-    <linking:LinkingDirectives> <space:Or<".global", ".shared">> <var:VariableArrayOrPointer<SizedScalarType>> =>? {
+    <linking:LinkingDirectives> <space:VariableStateSpace> <var:VariableArrayOrPointer<SizedScalarType>> =>? {
         let (align, t, name, arr_or_ptr) = var;
         let (v_type, state_space, array_init) = match arr_or_ptr {
             ast::ArrayOrPointer::Array { dimensions, init } => {
-                if space == ".global" {
-                    (ast::Type::Array(t, dimensions), ast::StateSpace::Global, init)
-                } else {
-                    (ast::Type::Array(t, dimensions), ast::StateSpace::Shared, init)
-                }
+                (ast::Type::Array(t, dimensions), space, init)
             }
             ast::ArrayOrPointer::Pointer => {
                 if !linking.contains(ast::LinkingDirective::EXTERN) {
                     return Err(ParseError::User { error: ast::PtxError::NonExternPointer });
                 }
-                if space == ".global" {
-                    (ast::Type::Array(t, Vec::new()), ast::StateSpace::Global, Vec::new())
-                } else {
-                    (ast::Type::Array(t, Vec::new()), ast::StateSpace::Shared, Vec::new())
-                }
+                (ast::Type::Array(t, Vec::new()), space, Vec::new())
             }
         };
         Ok((linking, ast::Variable{ align, v_type, state_space, name, array_init }))
     }
 }
+
+VariableStateSpace: ast::StateSpace = {
+    ".const" => ast::StateSpace::Const,
+    ".global" => ast::StateSpace::Global,
+    ".shared" => ast::StateSpace::Shared,
+};
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parameter-state-space
 ParamVariable: (Option<u32>, Vec<u8>, ast::Type, &'input str) = {
@@ -2096,4 +2088,11 @@ CommaNonEmpty<T>: Vec<T> = {
 Or<T1, T2>: T1 = {
     T1,
     T2
+}
+
+#[inline]
+Or3<T1, T2, T3>: T1 = {
+    T1,
+    T2,
+    T3
 }
