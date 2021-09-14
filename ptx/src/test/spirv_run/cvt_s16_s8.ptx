@@ -1,0 +1,26 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry cvt_s16_s8(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .b32 	    temp_16;
+    .reg .b32 	    temp_8;
+
+	// inline asm
+	/*ptx_texBake_end*/
+	// inline asm
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.global.b32    temp_8, [in_addr];
+	cvt.s16.s8      temp_16, temp_8;
+    st.b32          [out_addr], temp_16;
+	ret;
+}
