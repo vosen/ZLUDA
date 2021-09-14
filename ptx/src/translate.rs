@@ -37,6 +37,10 @@ fn error_unreachable() -> TranslateError {
     TranslateError::Unreachable
 }
 
+fn error_unknown_symbol() -> TranslateError {
+    TranslateError::UnknownSymbol
+}
+
 #[derive(PartialEq, Eq, Hash, Clone)]
 enum SpirvType {
     Base(SpirvScalarKey),
@@ -3301,7 +3305,7 @@ fn emit_variable<'input>(
         }
         ast::StateSpace::Global => (true, spirv::StorageClass::CrossWorkgroup),
         ast::StateSpace::Shared => (false, spirv::StorageClass::Workgroup),
-        ast::StateSpace::Const => todo!(),
+        ast::StateSpace::Const => (false, spirv::StorageClass::UniformConstant),
         ast::StateSpace::Generic => todo!(),
         ast::StateSpace::Sreg => todo!(),
     };
@@ -4168,6 +4172,7 @@ fn normalize_identifiers<'input, 'b>(
         match s {
             ast::Statement::Label(id) => {
                 id_defs.add_def(*id, None, false);
+                eprintln!("{}", id);
             }
             _ => (),
         }
@@ -4996,7 +5001,7 @@ impl<'input> GlobalStringIdResolver<'input> {
         self.variables
             .get(id)
             .copied()
-            .ok_or(TranslateError::UnknownSymbol)
+            .ok_or_else(error_unknown_symbol)
     }
 
     fn current_id(&self) -> spirv::Word {
@@ -5058,7 +5063,7 @@ pub struct GlobalFnDeclResolver<'input, 'a> {
 
 impl<'input, 'a> GlobalFnDeclResolver<'input, 'a> {
     fn get_fn_sig_resolver(&self, id: spirv::Word) -> Result<&FnSigMapper<'input>, TranslateError> {
-        self.fns.get(&id).ok_or(TranslateError::UnknownSymbol)
+        self.fns.get(&id).ok_or_else(error_unknown_symbol)
     }
 }
 
@@ -5099,8 +5104,7 @@ impl<'a, 'b> FnStringIdResolver<'a, 'b> {
         match self.global_variables.get(id) {
             Some(id) => Ok(*id),
             None => {
-                let sreg =
-                    PtxSpecialRegister::try_parse(id).ok_or(TranslateError::UnknownSymbol)?;
+                let sreg = PtxSpecialRegister::try_parse(id).ok_or_else(error_unknown_symbol)?;
                 Ok(self.special_registers.get_or_add(self.current_id, sreg))
             }
         }
@@ -5778,25 +5782,13 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
                 ast::Instruction::Not(t, a.map(visitor, &ast::Type::Scalar(t))?)
             }
             ast::Instruction::Cvt(d, a) => {
-                let (dst_t, src_t) = match &d {
-                    ast::CvtDetails::FloatFromFloat(desc) => (
-                        ast::Type::Scalar(desc.dst.into()),
-                        ast::Type::Scalar(desc.src.into()),
-                    ),
-                    ast::CvtDetails::FloatFromInt(desc) => (
-                        ast::Type::Scalar(desc.dst.into()),
-                        ast::Type::Scalar(desc.src.into()),
-                    ),
-                    ast::CvtDetails::IntFromFloat(desc) => (
-                        ast::Type::Scalar(desc.dst.into()),
-                        ast::Type::Scalar(desc.src.into()),
-                    ),
-                    ast::CvtDetails::IntFromInt(desc) => (
-                        ast::Type::Scalar(desc.dst.into()),
-                        ast::Type::Scalar(desc.src.into()),
-                    ),
+                let (dst_t, src_t, int_to_int) = match &d {
+                    ast::CvtDetails::FloatFromFloat(desc) => ((desc.dst, desc.src, false)),
+                    ast::CvtDetails::FloatFromInt(desc) => ((desc.dst, desc.src, false)),
+                    ast::CvtDetails::IntFromFloat(desc) => ((desc.dst, desc.src, false)),
+                    ast::CvtDetails::IntFromInt(desc) => ((desc.dst, desc.src, true)),
                 };
-                ast::Instruction::Cvt(d, a.map_different_types(visitor, &dst_t, &src_t)?)
+                ast::Instruction::Cvt(d, a.map_cvt(visitor, dst_t, src_t, int_to_int)?)
             }
             ast::Instruction::Shl(t, a) => {
                 ast::Instruction::Shl(t, a.map_shift(visitor, &ast::Type::Scalar(t))?)
@@ -6411,6 +6403,44 @@ impl<T: ArgParamsEx> ast::Arg2<T> {
             dst: new_dst,
             src: new_src,
         })
+    }
+
+    fn map_cvt<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
+        self,
+        visitor: &mut V,
+        dst_t: ast::ScalarType,
+        src_t: ast::ScalarType,
+        is_int_to_int: bool,
+    ) -> Result<ast::Arg2<U>, TranslateError> {
+        let dst = visitor.operand(
+            ArgumentDescriptor {
+                op: self.dst,
+                is_dst: true,
+                is_memory_access: false,
+                non_default_implicit_conversion: if is_int_to_int {
+                    Some(should_convert_relaxed_dst_wrapper)
+                } else {
+                    None
+                },
+            },
+            &ast::Type::Scalar(dst_t),
+            ast::StateSpace::Reg,
+        )?;
+        let src = visitor.operand(
+            ArgumentDescriptor {
+                op: self.src,
+                is_dst: false,
+                is_memory_access: false,
+                non_default_implicit_conversion: if is_int_to_int {
+                    Some(should_convert_relaxed_src_wrapper)
+                } else {
+                    None
+                },
+            },
+            &ast::Type::Scalar(src_t),
+            ast::StateSpace::Reg,
+        )?;
+        Ok(ast::Arg2 { dst, src })
     }
 
     fn map_different_types<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(

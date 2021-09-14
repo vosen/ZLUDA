@@ -19,10 +19,10 @@
 	ld.param.u64 	in_addr, [input];
     ld.param.u64 	out_addr, [output];
 
-    ld.const.b16    temp1, constparams[0];
-    ld.const.b16    temp2, constparams[1];
-    ld.const.b16    temp3, constparams[2];
-    ld.const.b16    temp4, constparams[3];
+    ld.const.b16    temp1, [constparams];
+    ld.const.b16    temp2, [constparams+2];
+    ld.const.b16    temp3, [constparams+4];
+    ld.const.b16    temp4, [constparams+6];
     st.u16          [out_addr], temp1;
     st.u16          [out_addr+2], temp2;
     st.u16          [out_addr+4], temp3;

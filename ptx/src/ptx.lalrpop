@@ -14,7 +14,7 @@ extern {
 match {
     r"\s+" => { },
     r"//[^\n\r]*[\n\r]*" => { },
-    r"/\*([^\*]*\*+[^\*/])*([^\*]*\*+|[^\*])*\*/" => { },
+    r"/\*[^*]*\*+(?:[^/*][^*]*\*+)*/" => { },
     r"0[fF][0-9a-zA-Z]{8}" => F32NumToken,
     r"0[dD][0-9a-zA-Z]{16}" => F64NumToken,
     r"0[xX][0-9a-zA-Z]+U?" => HexNumToken,
@@ -1143,11 +1143,11 @@ InstCvt: ast::Instruction<ast::ParsedArgParams<'input>> = {
             }
         ), a)
     },
-    "cvt" <s:".sat"?> ".f64" ".f32" <a:Arg2> => {
+    "cvt" <s:".sat"?> <f:".ftz"?> ".f64" ".f32" <a:Arg2> => {
         ast::Instruction::Cvt(ast::CvtDetails::FloatFromFloat(
             ast::CvtDesc {
                 rounding: None,
-                flush_to_zero: None,
+                flush_to_zero: Some(f.is_some()),
                 saturate: s.is_some(),
                 dst: ast::ScalarType::F64,
                 src: ast::ScalarType::F32
