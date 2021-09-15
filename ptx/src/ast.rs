@@ -287,6 +287,9 @@ pub enum Instruction<P: ArgParams> {
     Bfe { typ: ScalarType, arg: Arg4<P> },
     Bfi { typ: ScalarType, arg: Arg5<P> },
     Rem { typ: ScalarType, arg: Arg3<P> },
+    Prmt { control: u16, arg: Arg3<P> },
+    Activemask { arg: Arg1<P> },
+    Membar { level: MemScope },
 }
 
 #[derive(Copy, Clone)]

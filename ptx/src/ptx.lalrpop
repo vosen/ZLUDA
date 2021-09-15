@@ -70,6 +70,7 @@ match {
     ".func",
     ".ge",
     ".geu",
+    ".gl",
     ".global",
     ".gpu",
     ".gt",
@@ -142,6 +143,7 @@ match {
 } else {
     // IF YOU ARE ADDING A NEW TOKEN HERE ALSO ADD IT BELOW TO ExtendedID
     "abs",
+    "activemask",
     "add",
     "and",
     "atom",
@@ -165,6 +167,7 @@ match {
     "mad",
     "map_f64_to_f32",
     "max",
+    "membar",
     "min",
     "mov",
     "mul",
@@ -172,6 +175,7 @@ match {
     "not",
     "or",
     "popc",
+    "prmt",
     "rcp",
     "rem",
     "ret",
@@ -196,6 +200,7 @@ match {
 
 ExtendedID : &'input str = {
     "abs",
+    "activemask",
     "add",
     "and",
     "atom",
@@ -219,6 +224,7 @@ ExtendedID : &'input str = {
     "mad",
     "map_f64_to_f32",
     "max",
+    "membar",
     "min",
     "mov",
     "mul",
@@ -226,6 +232,7 @@ ExtendedID : &'input str = {
     "not",
     "or",
     "popc",
+    "prmt",
     "rcp",
     "rem",
     "ret",
@@ -286,6 +293,16 @@ U8Num: u8 = {
     <x:NumToken> =>? {
         let (text, radix, _) = x;
         match u8::from_str_radix(text, radix) {
+            Ok(x) => Ok(x),
+            Err(err) => Err(ParseError::User { error: ast::PtxError::from(err) })
+        }
+    }
+}
+
+U16Num: u16 = {
+    <x:NumToken> =>? {
+        let (text, radix, _) = x;
+        match u16::from_str_radix(text, radix) {
             Ok(x) => Ok(x),
             Err(err) => Err(ParseError::User { error: ast::PtxError::from(err) })
         }
@@ -761,6 +778,9 @@ Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
     InstRem,
     InstBfe,
     InstBfi,
+    InstPrmt,
+    InstActivemask,
+    InstMembar,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
@@ -818,6 +838,12 @@ LdStQualifier: ast::LdStQualifier = {
 MemScope: ast::MemScope = {
     ".cta" => ast::MemScope::Cta,
     ".gpu" => ast::MemScope::Gpu,
+    ".sys" => ast::MemScope::Sys
+};
+
+MembarLevel: ast::MemScope = {
+    ".cta" => ast::MemScope::Cta,
+    ".gl" => ast::MemScope::Gpu,
     ".sys" => ast::MemScope::Sys
 };
 
@@ -1445,8 +1471,9 @@ SelpType: ast::ScalarType = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-bar
 InstBar: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "bar" ".sync" <a:Arg1Bar> => ast::Instruction::Bar(ast::BarDetails::SyncAligned, a),
+    "barrier" ".sync" <a:Arg1Bar> => ast::Instruction::Bar(ast::BarDetails::SyncAligned, a),
     "barrier" ".sync" ".aligned" <a:Arg1Bar> => ast::Instruction::Bar(ast::BarDetails::SyncAligned, a),
-    "bar" ".sync" <a:Arg1Bar> => ast::Instruction::Bar(ast::BarDetails::SyncAligned, a)
 }
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-atom
@@ -1731,11 +1758,25 @@ InstBfi: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "bfi" <typ:BitType> <arg:Arg5> => ast::Instruction::Bfi{ <> }
 }
 
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-prmt
+InstPrmt: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "prmt" ".b32" <arg:Arg3> "," <control:U16Num> => ast::Instruction::Prmt{ <> }
+}
+
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-rem
 InstRem: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "rem" <typ:IntType> <arg:Arg3> => ast::Instruction::Rem{ <> }
 }
 
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-activemask
+InstActivemask: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "activemask" ".b32" <arg:Arg1> => ast::Instruction::Activemask{ <> }
+}
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-membar
+InstMembar: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "membar" <level:MembarLevel> => ast::Instruction::Membar{ <> }
+}
 
 NegTypeFtz: ast::ScalarType = {
     ".f16" => ast::ScalarType::F16,
