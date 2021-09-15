@@ -1,0 +1,67 @@
+               OpCapability GenericPointer
+               OpCapability Linkage
+               OpCapability Addresses
+               OpCapability Kernel
+               OpCapability Int8
+               OpCapability Int16
+               OpCapability Int64
+               OpCapability Float16
+               OpCapability Float64
+         %31 = OpExtInstImport "OpenCL.std"
+               OpMemoryModel Physical64 OpenCL
+               OpEntryPoint Kernel %1 "prmt"
+               OpExecutionMode %1 ContractionOff
+       %void = OpTypeVoid
+      %ulong = OpTypeInt 64 0
+         %34 = OpTypeFunction %void %ulong %ulong
+%_ptr_Function_ulong = OpTypePointer Function %ulong
+       %uint = OpTypeInt 32 0
+%_ptr_Function_uint = OpTypePointer Function %uint
+%_ptr_Generic_uint = OpTypePointer Generic %uint
+    %ulong_4 = OpConstant %ulong 4
+      %uchar = OpTypeInt 8 0
+%_ptr_Generic_uchar = OpTypePointer Generic %uchar
+    %v4uchar = OpTypeVector %uchar 4
+          %1 = OpFunction %void None %34
+          %8 = OpFunctionParameter %ulong
+          %9 = OpFunctionParameter %ulong
+         %29 = OpLabel
+          %2 = OpVariable %_ptr_Function_ulong Function
+          %3 = OpVariable %_ptr_Function_ulong Function
+          %4 = OpVariable %_ptr_Function_ulong Function
+          %5 = OpVariable %_ptr_Function_ulong Function
+          %6 = OpVariable %_ptr_Function_uint Function
+          %7 = OpVariable %_ptr_Function_uint Function
+               OpStore %2 %8
+               OpStore %3 %9
+         %10 = OpLoad %ulong %2 Aligned 8
+               OpStore %4 %10
+         %11 = OpLoad %ulong %3 Aligned 8
+               OpStore %5 %11
+         %13 = OpLoad %ulong %4
+         %23 = OpConvertUToPtr %_ptr_Generic_uint %13
+         %12 = OpLoad %uint %23 Aligned 4
+               OpStore %6 %12
+         %15 = OpLoad %ulong %4
+         %24 = OpConvertUToPtr %_ptr_Generic_uint %15
+         %41 = OpBitcast %_ptr_Generic_uchar %24
+         %42 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %41 %ulong_4
+         %22 = OpBitcast %_ptr_Generic_uint %42
+         %14 = OpLoad %uint %22 Aligned 4
+               OpStore %7 %14
+         %17 = OpLoad %uint %6
+         %18 = OpLoad %uint %7
+         %26 = OpCopyObject %uint %17
+         %27 = OpCopyObject %uint %18
+         %44 = OpBitcast %v4uchar %26
+         %45 = OpBitcast %v4uchar %27
+         %46 = OpVectorShuffle %v4uchar %44 %45 4 0 6 7
+         %25 = OpBitcast %uint %46
+         %16 = OpCopyObject %uint %25
+               OpStore %7 %16
+         %19 = OpLoad %ulong %5
+         %20 = OpLoad %uint %7
+         %28 = OpConvertUToPtr %_ptr_Generic_uint %19
+               OpStore %28 %20 Aligned 4
+               OpReturn
+               OpFunctionEnd

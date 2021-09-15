@@ -1,0 +1,45 @@
+               OpCapability GenericPointer
+               OpCapability Linkage
+               OpCapability Addresses
+               OpCapability Kernel
+               OpCapability Int8
+               OpCapability Int16
+               OpCapability Int64
+               OpCapability Float16
+               OpCapability Float64
+         %16 = OpExtInstImport "OpenCL.std"
+               OpMemoryModel Physical64 OpenCL
+               OpEntryPoint Kernel %1 "activemask"
+               OpExecutionMode %1 ContractionOff
+       %void = OpTypeVoid
+      %ulong = OpTypeInt 64 0
+         %19 = OpTypeFunction %void %ulong %ulong
+%_ptr_Function_ulong = OpTypePointer Function %ulong
+       %uint = OpTypeInt 32 0
+%_ptr_Function_uint = OpTypePointer Function %uint
+     %v4uint = OpTypeVector %uint 4
+       %bool = OpTypeBool
+       %true = OpConstantTrue %bool
+%_ptr_Generic_uint = OpTypePointer Generic %uint
+          %1 = OpFunction %void None %19
+          %6 = OpFunctionParameter %ulong
+          %7 = OpFunctionParameter %ulong
+         %14 = OpLabel
+          %2 = OpVariable %_ptr_Function_ulong Function
+          %3 = OpVariable %_ptr_Function_ulong Function
+          %4 = OpVariable %_ptr_Function_ulong Function
+          %5 = OpVariable %_ptr_Function_uint Function
+               OpStore %2 %6
+               OpStore %3 %7
+          %8 = OpLoad %ulong %3 Aligned 8
+               OpStore %4 %8
+         %26 = OpSubgroupBallotKHR %v4uint %true
+          %9 = OpCompositeExtract %uint %26 0
+               OpStore %5 %9
+         %10 = OpLoad %ulong %4
+         %11 = OpLoad %uint %5
+         %12 = OpConvertUToPtr %_ptr_Generic_uint %10
+         %13 = OpCopyObject %uint %11
+               OpStore %12 %13 Aligned 4
+               OpReturn
+               OpFunctionEnd
