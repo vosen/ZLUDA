@@ -2184,11 +2184,11 @@ pub struct CUgraphExecUpdateResult_enum(pub ::std::os::raw::c_uint);
 pub use self::CUgraphExecUpdateResult_enum as CUgraphExecUpdateResult;
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuGetErrorString(
+pub unsafe extern "system" fn cuGetErrorString(
     CUresult(e): CUresult,
     pStr: *mut *const ::std::os::raw::c_char,
 ) -> CUresult {
-    unsafe { *pStr = hipGetErrorString(hipError_t(e)) };
+    *pStr = hipGetErrorString(hipError_t(e));
     CUresult::CUDA_SUCCESS
 }
 
@@ -2273,17 +2273,20 @@ pub extern "system" fn cuDeviceGetNvSciSyncAttributes(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuDeviceGetProperties(prop: *mut CUdevprop, dev: CUdevice) -> CUresult {
-    r#impl::unimplemented()
+pub unsafe extern "system" fn cuDeviceGetProperties(
+    prop: *mut CUdevprop,
+    dev: CUdevice,
+) -> CUresult {
+    r#impl::device::get_properties(prop, dev).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuDeviceComputeCapability(
+pub unsafe extern "system" fn cuDeviceComputeCapability(
     major: *mut ::std::os::raw::c_int,
     minor: *mut ::std::os::raw::c_int,
     dev: CUdevice,
 ) -> CUresult {
-    r#impl::unimplemented()
+    hipDeviceComputeCapability(major, minor, dev.0).into()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2309,7 +2312,7 @@ pub extern "system" fn cuDevicePrimaryCtxSetFlags(
     dev: CUdevice,
     flags: ::std::os::raw::c_uint,
 ) -> CUresult {
-    cuDevicePrimaryCtxSetFlags_v2(dev, flags)
+    CUresult::CUDA_SUCCESS
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2317,7 +2320,7 @@ pub extern "system" fn cuDevicePrimaryCtxSetFlags_v2(
     dev: CUdevice,
     flags: ::std::os::raw::c_uint,
 ) -> CUresult {
-    r#impl::unimplemented()
+    cuDevicePrimaryCtxSetFlags(dev, flags)
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2391,12 +2394,12 @@ pub extern "system" fn cuCtxSynchronize() -> CUresult {
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuCtxSetLimit(limit: CUlimit, value: usize) -> CUresult {
-    r#impl::unimplemented()
+    r#impl::context::set_limit(limit, value)
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuCtxGetLimit(pvalue: *mut usize, limit: CUlimit) -> CUresult {
-    r#impl::unimplemented()
+pub unsafe extern "system" fn cuCtxGetLimit(pvalue: *mut usize, limit: CUlimit) -> CUresult {
+    r#impl::context::get_limit(pvalue, limit)
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2406,7 +2409,7 @@ pub extern "system" fn cuCtxGetCacheConfig(pconfig: *mut CUfunc_cache) -> CUresu
 
 #[cfg_attr(not(test), no_mangle)]
 pub extern "system" fn cuCtxSetCacheConfig(config: CUfunc_cache) -> CUresult {
-    r#impl::unimplemented()
+    CUresult::CUDA_SUCCESS
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2504,13 +2507,13 @@ pub extern "system" fn cuModuleGetFunction(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuModuleGetGlobal_v2(
+pub unsafe extern "system" fn cuModuleGetGlobal_v2(
     dptr: *mut CUdeviceptr,
     bytes: *mut usize,
     hmod: CUmodule,
     name: *const ::std::os::raw::c_char,
 ) -> CUresult {
-    r#impl::unimplemented()
+    hipModuleGetGlobal(dptr as _, bytes, hmod as _, name).into()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2532,17 +2535,17 @@ pub extern "system" fn cuModuleGetSurfRef(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuLinkCreate_v2(
+pub unsafe extern "system" fn cuLinkCreate_v2(
     numOptions: ::std::os::raw::c_uint,
     options: *mut CUjit_option,
     optionValues: *mut *mut ::std::os::raw::c_void,
     stateOut: *mut CUlinkState,
 ) -> CUresult {
-    r#impl::unimplemented()
+    r#impl::link::create(numOptions, options, optionValues, stateOut)
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuLinkAddData_v2(
+pub unsafe extern "system" fn cuLinkAddData_v2(
     state: CUlinkState,
     type_: CUjitInputType,
     data: *mut ::std::os::raw::c_void,
@@ -2552,7 +2555,16 @@ pub extern "system" fn cuLinkAddData_v2(
     options: *mut CUjit_option,
     optionValues: *mut *mut ::std::os::raw::c_void,
 ) -> CUresult {
-    r#impl::unimplemented()
+    r#impl::link::add_data(
+        state,
+        type_,
+        data,
+        size,
+        name,
+        numOptions,
+        options,
+        optionValues,
+    )
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2573,17 +2585,17 @@ pub extern "system" fn cuLinkComplete(
     cubinOut: *mut *mut ::std::os::raw::c_void,
     sizeOut: *mut usize,
 ) -> CUresult {
-    r#impl::unimplemented()
+    r#impl::link::complete(state, cubinOut, sizeOut)
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuLinkDestroy(state: CUlinkState) -> CUresult {
-    r#impl::unimplemented()
+pub unsafe extern "system" fn cuLinkDestroy(state: CUlinkState) -> CUresult {
+    r#impl::link::destroy(state)
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuMemGetInfo_v2(free: *mut usize, total: *mut usize) -> CUresult {
-    r#impl::unimplemented()
+pub unsafe extern "system" fn cuMemGetInfo_v2(free: *mut usize, total: *mut usize) -> CUresult {
+    hipMemGetInfo(free, total).into()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2641,17 +2653,17 @@ pub extern "system" fn cuMemAllocHost_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuMemFreeHost(p: *mut ::std::os::raw::c_void) -> CUresult {
-    r#impl::unimplemented()
+pub unsafe extern "system" fn cuMemFreeHost(p: *mut ::std::os::raw::c_void) -> CUresult {
+    hipFreeHost(p).into()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuMemHostAlloc(
+pub unsafe extern "system" fn cuMemHostAlloc(
     pp: *mut *mut ::std::os::raw::c_void,
     bytesize: usize,
     Flags: ::std::os::raw::c_uint,
 ) -> CUresult {
-    r#impl::unimplemented()
+    hipMemAllocHost(pp, bytesize).into()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2694,7 +2706,7 @@ pub extern "system" fn cuDeviceGetPCIBusId(
     len: ::std::os::raw::c_int,
     dev: CUdevice,
 ) -> CUresult {
-    r#impl::unimplemented()
+    unsafe { hipDeviceGetPCIBusId(pciBusId, len, dev.0) }.into()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2883,8 +2895,8 @@ pub extern "system" fn cuMemcpy2DUnaligned_v2(pCopy: *const CUDA_MEMCPY2D) -> CU
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuMemcpy3D_v2(pCopy: *const CUDA_MEMCPY3D) -> CUresult {
-    r#impl::unimplemented()
+pub unsafe extern "system" fn cuMemcpy3D_v2(pCopy: *const CUDA_MEMCPY3D) -> CUresult {
+    r#impl::memory::copy_3d(pCopy).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2915,13 +2927,13 @@ pub extern "system" fn cuMemcpyPeerAsync(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuMemcpyHtoDAsync_v2(
+pub unsafe extern "system" fn cuMemcpyHtoDAsync_v2(
     dstDevice: CUdeviceptr,
     srcHost: *const ::std::os::raw::c_void,
     ByteCount: usize,
     hStream: CUstream,
 ) -> CUresult {
-    r#impl::unimplemented()
+    hipMemcpyHtoDAsync(dstDevice.0 as _, srcHost as _, ByteCount, hStream as _).into()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -3153,16 +3165,16 @@ pub extern "system" fn cuArrayGetDescriptor_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuArrayDestroy(hArray: CUarray) -> CUresult {
-    r#impl::unimplemented()
+pub unsafe extern "system" fn cuArrayDestroy(hArray: CUarray) -> CUresult {
+    hipArrayDestroy(hArray as _).into()
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuArray3DCreate_v2(
+pub unsafe extern "system" fn cuArray3DCreate_v2(
     pHandle: *mut CUarray,
     pAllocateArray: *const CUDA_ARRAY3D_DESCRIPTOR,
 ) -> CUresult {
-    r#impl::unimplemented()
+    hipArray3DCreate(pHandle as _, pAllocateArray as _).into()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -3307,12 +3319,12 @@ pub extern "system" fn cuMemRetainAllocationHandle(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuPointerGetAttribute(
+pub unsafe extern "system" fn cuPointerGetAttribute(
     data: *mut ::std::os::raw::c_void,
     attribute: CUpointer_attribute,
     ptr: CUdeviceptr,
 ) -> CUresult {
-    r#impl::unimplemented()
+    r#impl::pointer::get_attribute(data, attribute, ptr).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]

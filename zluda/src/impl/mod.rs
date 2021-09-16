@@ -20,6 +20,10 @@ pub mod function;
 #[cfg_attr(not(windows), path = "os_unix.rs")]
 pub(crate) mod os;
 pub(crate) mod module;
+pub(crate) mod context;
+pub(crate) mod memory;
+pub(crate) mod link;
+pub(crate) mod pointer;
 
 #[cfg(debug_assertions)]
 pub fn unimplemented() -> CUresult {
@@ -29,6 +33,19 @@ pub fn unimplemented() -> CUresult {
 #[cfg(not(debug_assertions))]
 pub fn unimplemented() -> CUresult {
     CUresult::CUDA_ERROR_NOT_SUPPORTED
+}
+
+#[macro_export]
+macro_rules! hip_call {
+    ($expr:expr) => {
+        #[allow(unused_unsafe)]
+        {
+            let err = unsafe { $expr };
+            if err != hip_runtime_sys::hipError_t::hipSuccess {
+                return Result::Err(err);
+            }
+        }
+    };
 }
 
 pub trait HasLivenessCookie: Sized {
