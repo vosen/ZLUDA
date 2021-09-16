@@ -2565,6 +2565,7 @@ pub unsafe extern "system" fn cuLinkAddData_v2(
         options,
         optionValues,
     )
+    .encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
@@ -2580,12 +2581,12 @@ pub extern "system" fn cuLinkAddFile_v2(
 }
 
 #[cfg_attr(not(test), no_mangle)]
-pub extern "system" fn cuLinkComplete(
+pub unsafe extern "system" fn cuLinkComplete(
     state: CUlinkState,
     cubinOut: *mut *mut ::std::os::raw::c_void,
     sizeOut: *mut usize,
 ) -> CUresult {
-    r#impl::link::complete(state, cubinOut, sizeOut)
+    r#impl::link::complete(state, cubinOut, sizeOut).encuda()
 }
 
 #[cfg_attr(not(test), no_mangle)]
