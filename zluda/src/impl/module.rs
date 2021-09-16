@@ -7,7 +7,7 @@ use std::ops::Add;
 use std::os::raw::c_char;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::{env, fs, mem, ptr, slice};
+use std::{env, fs, iter, mem, ptr, slice};
 
 use hip_runtime_sys::{
     hipCtxGetCurrent, hipCtxGetDevice, hipDeviceGetAttribute, hipDeviceGetName, hipDeviceProp_t,
@@ -87,7 +87,7 @@ pub fn load_data_impl(pmod: *mut CUmodule, spirv_data: SpirvModule) -> Result<()
     let err = unsafe { hipGetDeviceProperties(&mut props, dev) };
     let arch_binary = compile_amd(
         &props,
-        &[&spirv_data.binaries[..]],
+        iter::once(&spirv_data.binaries[..]),
         spirv_data.should_link_ptx_impl,
     )
     .map_err(|_| hipError_t::hipErrorUnknown)?;
@@ -113,9 +113,9 @@ const AMDGPU_BITCODE: [&'static str; 8] = [
 ];
 const AMDGPU_BITCODE_DEVICE_PREFIX: &'static str = "oclc_isa_version_";
 
-fn compile_amd(
+pub(crate) fn compile_amd<'a>(
     device_pros: &hipDeviceProp_t,
-    spirv_il: &[&[u32]],
+    spirv_il: impl Iterator<Item = &'a [u32]>,
     ptx_lib: Option<(&'static [u8], &'static [u8])>,
 ) -> io::Result<Vec<u8>> {
     let null_terminator = device_pros
@@ -134,7 +134,6 @@ fn compile_amd(
         };
     let dir = tempfile::tempdir()?;
     let spirv_files = spirv_il
-        .iter()
         .map(|spirv| {
             let mut spirv_file = NamedTempFile::new_in(&dir)?;
             let spirv_u8 = unsafe {
