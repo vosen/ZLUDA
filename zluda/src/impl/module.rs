@@ -136,15 +136,15 @@ fn compile_amd(
     let spirv_files = spirv_il
         .iter()
         .map(|spirv| {
-            let mut spirv = NamedTempFile::new_in(&dir)?;
-            let spirv_il_u8 = unsafe {
+            let mut spirv_file = NamedTempFile::new_in(&dir)?;
+            let spirv_u8 = unsafe {
                 slice::from_raw_parts(
-                    spirv_il.as_ptr() as *const u8,
-                    spirv_il.len() * mem::size_of::<u32>(),
+                    spirv.as_ptr() as *const u8,
+                    spirv.len() * mem::size_of::<u32>(),
                 )
             };
-            spirv.write_all(spirv_il_u8)?;
-            Ok::<_, io::Error>(spirv)
+            spirv_file.write_all(spirv_u8)?;
+            Ok::<_, io::Error>(spirv_file)
         })
         .collect::<Result<Vec<_>, _>>()?;
     let llvm_spirv_path = match env::var("LLVM_SPIRV") {
