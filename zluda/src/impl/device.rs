@@ -1,5 +1,8 @@
 use super::{transmute_lifetime, transmute_lifetime_mut, CUresult};
-use crate::cuda;
+use crate::{
+    cuda::{self, CUdevice, CUdevprop},
+    hip_call,
+};
 use cuda::{CUdevice_attribute, CUuuid_st};
 use hip_runtime_sys::{
     hipDeviceAttribute_t, hipDeviceGetAttribute, hipError_t, hipGetDeviceProperties,
@@ -323,5 +326,23 @@ pub fn get_luid(
 ) -> Result<(), CUresult> {
     unsafe { ptr::write_bytes(luid, 0u8, 8) };
     unsafe { *dev_node_mask = 0 };
+    Ok(())
+}
+
+pub(crate) unsafe fn get_properties(prop: *mut CUdevprop, dev: CUdevice) -> Result<(), hipError_t> {
+    if prop == ptr::null_mut() {
+        return Err(hipError_t::hipErrorInvalidValue);
+    }
+    let mut hip_props = mem::zeroed();
+    hip_call! { hipGetDeviceProperties(&mut hip_props, dev.0) };
+    (*prop).maxThreadsPerBlock = hip_props.maxThreadsPerBlock;
+    (*prop).maxThreadsDim = hip_props.maxThreadsDim;
+    (*prop).maxGridSize = hip_props.maxGridSize;
+    (*prop).totalConstantMemory = usize::min(hip_props.totalConstMem, i32::MAX as usize) as i32;
+    (*prop).SIMDWidth = hip_props.warpSize;
+    (*prop).memPitch = usize::min(hip_props.memPitch, i32::MAX as usize) as i32;
+    (*prop).regsPerBlock = hip_props.regsPerBlock;
+    (*prop).clockRate = hip_props.clockRate;
+    (*prop).textureAlign = usize::min(hip_props.textureAlignment, i32::MAX as usize) as i32;
     Ok(())
 }
