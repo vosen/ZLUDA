@@ -7,39 +7,64 @@
                OpCapability Int64
                OpCapability Float16
                OpCapability Float64
-         %18 = OpExtInstImport "OpenCL.std"
+         %40 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
-               OpEntryPoint Kernel %1 "activemask"
+               OpEntryPoint Kernel %1 "lanemask_lt"
                OpExecutionMode %1 ContractionOff
-               OpDecorate %15 LinkageAttributes "__zluda_ptx_impl__activemask" Import
+               OpDecorate %11 LinkageAttributes "__zluda_ptx_impl__sreg_lanemask_lt" Import
        %void = OpTypeVoid
        %uint = OpTypeInt 32 0
-         %21 = OpTypeFunction %uint
+         %43 = OpTypeFunction %uint
       %ulong = OpTypeInt 64 0
-         %23 = OpTypeFunction %void %ulong %ulong
+         %45 = OpTypeFunction %void %ulong %ulong
 %_ptr_Function_ulong = OpTypePointer Function %ulong
 %_ptr_Function_uint = OpTypePointer Function %uint
 %_ptr_Generic_uint = OpTypePointer Generic %uint
-         %15 = OpFunction %uint None %21
+     %uint_1 = OpConstant %uint 1
+         %11 = OpFunction %uint None %43
                OpFunctionEnd
-          %1 = OpFunction %void None %23
-          %6 = OpFunctionParameter %ulong
-          %7 = OpFunctionParameter %ulong
-         %14 = OpLabel
+          %1 = OpFunction %void None %45
+         %13 = OpFunctionParameter %ulong
+         %14 = OpFunctionParameter %ulong
+         %38 = OpLabel
           %2 = OpVariable %_ptr_Function_ulong Function
           %3 = OpVariable %_ptr_Function_ulong Function
           %4 = OpVariable %_ptr_Function_ulong Function
-          %5 = OpVariable %_ptr_Function_uint Function
-               OpStore %2 %6
-               OpStore %3 %7
-          %8 = OpLoad %ulong %3 Aligned 8
-               OpStore %4 %8
-          %9 = OpFunctionCall %uint %15
-               OpStore %5 %9
-         %10 = OpLoad %ulong %4
-         %11 = OpLoad %uint %5
-         %12 = OpConvertUToPtr %_ptr_Generic_uint %10
-         %13 = OpCopyObject %uint %11
-               OpStore %12 %13 Aligned 4
+          %5 = OpVariable %_ptr_Function_ulong Function
+          %6 = OpVariable %_ptr_Function_uint Function
+          %7 = OpVariable %_ptr_Function_uint Function
+          %8 = OpVariable %_ptr_Function_uint Function
+               OpStore %2 %13
+               OpStore %3 %14
+         %15 = OpLoad %ulong %2 Aligned 8
+               OpStore %4 %15
+         %16 = OpLoad %ulong %3 Aligned 8
+               OpStore %5 %16
+         %18 = OpLoad %ulong %4
+         %29 = OpConvertUToPtr %_ptr_Generic_uint %18
+         %28 = OpLoad %uint %29 Aligned 4
+         %17 = OpCopyObject %uint %28
+               OpStore %6 %17
+         %20 = OpLoad %uint %6
+         %31 = OpCopyObject %uint %20
+         %30 = OpIAdd %uint %31 %uint_1
+         %19 = OpCopyObject %uint %30
+               OpStore %7 %19
+         %10 = OpFunctionCall %uint %11
+         %32 = OpCopyObject %uint %10
+         %21 = OpCopyObject %uint %32
+               OpStore %8 %21
+         %23 = OpLoad %uint %7
+         %24 = OpLoad %uint %8
+         %34 = OpCopyObject %uint %23
+         %35 = OpCopyObject %uint %24
+         %33 = OpIAdd %uint %34 %35
+         %22 = OpCopyObject %uint %33
+               OpStore %7 %22
+         %25 = OpLoad %ulong %5
+         %26 = OpLoad %uint %7
+         %36 = OpConvertUToPtr %_ptr_Generic_uint %25
+         %37 = OpCopyObject %uint %26
+               OpStore %36 %37 Aligned 4
                OpReturn
                OpFunctionEnd
