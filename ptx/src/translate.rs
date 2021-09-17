@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::collections::{hash_map, HashMap, HashSet};
 use std::{borrow::Cow, collections::BTreeSet, ffi::CString, hash::Hash, iter, mem, rc::Rc};
 
-use rspirv::binary::Assemble;
+use rspirv::binary::{Assemble, Disassemble};
 
 static ZLUDA_PTX_IMPL_INTEL: &'static [u8] = include_bytes!("../lib/zluda_ptx_impl.spv");
 static ZLUDA_PTX_IMPL_AMD: &'static [u8] = include_bytes!("../lib/zluda_ptx_impl.bc");
@@ -607,6 +607,7 @@ fn emit_directives<'input>(
                     }
                 }
                 emit_function_body_ops(builder, map, id_defs, opencl_id, &f_body)?;
+                builder.select_block(None)?;
                 builder.end_function()?;
                 if let (
                     ast::MethodDeclaration {
@@ -988,6 +989,7 @@ fn compute_denorm_information<'input>(
                         Statement::Variable(_) => {}
                         Statement::PtrAccess { .. } => {}
                         Statement::RepackVector(_) => {}
+                        Statement::FunctionPointer(_) => {}
                     }
                 }
                 denorm_methods.insert(method_key, flush_counter);
@@ -1411,6 +1413,15 @@ fn extract_globals<'input, 'b>(
                     fn_name,
                 )?);
             }
+            Statement::Instruction(ast::Instruction::Activemask { arg }) => {
+                let fn_name = [ZLUDA_PTX_PREFIX, "activemask"].concat();
+                local.push(instruction_to_fn_call(
+                    id_def,
+                    ptx_impl_imports,
+                    ast::Instruction::Activemask { arg },
+                    fn_name,
+                )?);
+            }
             Statement::Instruction(ast::Instruction::Atom(
                 details
                 @
@@ -1596,6 +1607,21 @@ fn convert_to_typed_statements(
     for s in func {
         match s {
             Statement::Instruction(inst) => match inst {
+                ast::Instruction::Mov(
+                    mov,
+                    ast::Arg2Mov {
+                        dst: ast::Operand::Reg(dst_reg),
+                        src: ast::Operand::Reg(src_reg),
+                    },
+                ) if fn_defs.fns.contains_key(&src_reg) => {
+                    if mov.typ != ast::Type::Scalar(ast::ScalarType::U64) {
+                        return Err(TranslateError::MismatchedType);
+                    }
+                    result.push(TypedStatement::FunctionPointer(FunctionPointerDetails {
+                        dst: dst_reg,
+                        src: src_reg,
+                    }));
+                }
                 ast::Instruction::Call(call) => {
                     let resolver = fn_defs.get_fn_sig_resolver(call.func)?;
                     let resolved_call = resolver.resolve_in_spirv_repr(call)?;
@@ -1724,7 +1750,7 @@ fn instruction_to_fn_call(
     let return_arguments_count = arguments
         .iter()
         .position(|(desc, _, _)| !desc.is_dst)
-        .unwrap_or(0);
+        .unwrap_or(arguments.len());
     let (return_arguments, input_arguments) = arguments.split_at(return_arguments_count);
     let fn_id = register_external_fn_call(
         id_defs,
@@ -1826,7 +1852,8 @@ fn normalize_labels(
             | Statement::Constant(..)
             | Statement::Label(..)
             | Statement::PtrAccess { .. }
-            | Statement::RepackVector(..) => {}
+            | Statement::RepackVector(..)
+            | Statement::FunctionPointer(..) => {}
         }
     }
     iter::once(Statement::Label(id_def.register_intermediate(None)))
@@ -1983,6 +2010,9 @@ fn insert_mem_ssa_statements<'a, 'b>(
             }
             Statement::RepackVector(repack) => {
                 insert_mem_ssa_statement_default(id_def, &mut result, repack)?
+            }
+            Statement::FunctionPointer(func_ptr) => {
+                insert_mem_ssa_statement_default(id_def, &mut result, func_ptr)?
             }
             s @ Statement::Variable(_) | s @ Statement::Label(_) => result.push(s),
             _ => return Err(error_unreachable()),
@@ -2235,6 +2265,7 @@ fn expand_arguments<'a, 'b>(
             Statement::RetValue(d, id) => result.push(Statement::RetValue(d, id)),
             Statement::Conversion(conv) => result.push(Statement::Conversion(conv)),
             Statement::Constant(c) => result.push(Statement::Constant(c)),
+            Statement::FunctionPointer(d) => result.push(Statement::FunctionPointer(d)),
         }
     }
     Ok(result)
@@ -2421,7 +2452,8 @@ fn insert_implicit_conversions(
             | s @ Statement::Variable(_)
             | s @ Statement::LoadVar(..)
             | s @ Statement::StoreVar(..)
-            | s @ Statement::RetValue(_, _) => result.push(s),
+            | s @ Statement::RetValue(..)
+            | s @ Statement::FunctionPointer(..) => result.push(s),
         }
     }
     Ok(result)
@@ -2652,6 +2684,16 @@ fn emit_function_body_ops<'input>(
                     bra.if_false,
                     iter::empty(),
                 )?;
+            }
+            Statement::FunctionPointer(FunctionPointerDetails { dst, src }) => {
+                // TODO: implement properly
+                let zero = map.get_or_add_constant(
+                    builder,
+                    &ast::Type::Scalar(ast::ScalarType::U64),
+                    &vec_repr(0u64),
+                )?;
+                let result_type = map.get_or_add_scalar(builder, ast::ScalarType::U64);
+                builder.copy_object(result_type, Some(*dst), zero)?;
             }
             Statement::Instruction(inst) => match inst {
                 ast::Instruction::Abs(d, arg) => emit_abs(builder, map, opencl, d, arg)?,
@@ -2975,14 +3017,13 @@ fn emit_function_body_ops<'input>(
                     let result_type = map.get_or_add_scalar(builder, (*typ).into());
                     builder_fn(builder, result_type, Some(arg.dst), arg.src1, arg.src2)?;
                 }
-                ast::Instruction::Bfe { .. } => {
+                ast::Instruction::Bfe { .. }
+                | ast::Instruction::Bfi { .. }
+                | ast::Instruction::Activemask { .. } => {
                     // Should have beeen replaced with a funciton call earlier
                     return Err(error_unreachable());
                 }
-                ast::Instruction::Bfi { .. } => {
-                    // Should have beeen replaced with a funciton call earlier
-                    return Err(error_unreachable());
-                }
+
                 ast::Instruction::Rem { typ, arg } => {
                     let builder_fn = if typ.kind() == ast::ScalarKind::Signed {
                         dr::Builder::s_mod
@@ -3016,18 +3057,6 @@ fn emit_function_body_ops<'input>(
                         components,
                     )?;
                     builder.bitcast(b32_type, Some(arg.dst), dst_vector)?;
-                }
-                ast::Instruction::Activemask { arg } => {
-                    let b32_type = map.get_or_add_scalar(builder, ast::ScalarType::B32);
-                    let vec4_b32_type =
-                        map.get_or_add(builder, SpirvType::Vector(SpirvScalarKey::B32, 4));
-                    let pred_true = map.get_or_add_constant(
-                        builder,
-                        &ast::Type::Scalar(ast::ScalarType::Pred),
-                        &[1],
-                    )?;
-                    let dst_vector = builder.subgroup_ballot_khr(vec4_b32_type, None, pred_true)?;
-                    builder.composite_extract(b32_type, Some(arg.src), dst_vector, [0])?;
                 }
                 ast::Instruction::Membar { level } => {
                     let (scope, semantics) = match level {
@@ -5293,6 +5322,44 @@ impl<'b> MutableNumericIdResolver<'b> {
     }
 }
 
+struct FunctionPointerDetails {
+    dst: spirv::Word,
+    src: spirv::Word,
+}
+
+impl<T: ArgParamsEx<Id = spirv::Word>, U: ArgParamsEx<Id = spirv::Word>> Visitable<T, U>
+    for FunctionPointerDetails
+{
+    fn visit(
+        self,
+        visitor: &mut impl ArgumentMapVisitor<T, U>,
+    ) -> Result<Statement<ast::Instruction<U>, U>, TranslateError> {
+        Ok(Statement::FunctionPointer(FunctionPointerDetails {
+            dst: visitor.id(
+                ArgumentDescriptor {
+                    op: self.dst,
+                    is_dst: true,
+                    is_memory_access: false,
+                    non_default_implicit_conversion: None,
+                },
+                Some((
+                    &ast::Type::Scalar(ast::ScalarType::U64),
+                    ast::StateSpace::Reg,
+                )),
+            )?,
+            src: visitor.id(
+                ArgumentDescriptor {
+                    op: self.src,
+                    is_dst: false,
+                    is_memory_access: false,
+                    non_default_implicit_conversion: None,
+                },
+                None,
+            )?,
+        }))
+    }
+}
+
 enum Statement<I, P: ast::ArgParams> {
     Label(u32),
     Variable(ast::Variable<P::Id>),
@@ -5307,6 +5374,7 @@ enum Statement<I, P: ast::ArgParams> {
     RetValue(ast::RetData, spirv::Word),
     PtrAccess(PtrAccess<P>),
     RepackVector(RepackVectorDetails),
+    FunctionPointer(FunctionPointerDetails),
 }
 
 impl ExpandedStatement {
@@ -5397,6 +5465,12 @@ impl ExpandedStatement {
                     packed,
                     unpacked,
                     ..repack
+                })
+            }
+            Statement::FunctionPointer(FunctionPointerDetails { dst, src }) => {
+                Statement::FunctionPointer(FunctionPointerDetails {
+                    dst: f(dst, true),
+                    src: f(src, false),
                 })
             }
         }

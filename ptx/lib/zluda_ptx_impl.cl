@@ -291,6 +291,11 @@ atomic_add(atom_acq_rel_sys_shared_add_f64, memory_order_acq_rel, memory_order_a
     ulong FUNC(brev_b64)(ulong base) {
         return __llvm_bitreverse_i64(base);
     }
+
+    // Taken from __ballot definition in hipamd/include/hip/amd_detail/amd_device_functions.h
+    uint FUNC(activemask)() {
+        return (uint)__builtin_amdgcn_uicmp(1, 0, 33);
+    }
 #endif
 
 void FUNC(__assertfail)(

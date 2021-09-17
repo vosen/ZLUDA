@@ -209,6 +209,7 @@ test_ptx!(cvt_f64_f32, [0.125f32], [0.125f64]);
 test_ptx!(prmt, [0x70c507d6u32, 0x6fbd4b5cu32], [0x6fbdd65cu32]);
 test_ptx!(activemask, [0u32], [1u32]);
 test_ptx!(membar, [152731u32], [152731u32]);
+test_ptx!(func_ptr, [152731u64], [152732u64]);
 
 struct DisplayError<T: Debug> {
     err: T,

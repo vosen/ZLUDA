@@ -1,0 +1,73 @@
+               OpCapability GenericPointer
+               OpCapability Linkage
+               OpCapability Addresses
+               OpCapability Kernel
+               OpCapability Int8
+               OpCapability Int16
+               OpCapability Int64
+               OpCapability Float16
+               OpCapability Float64
+         %38 = OpExtInstImport "OpenCL.std"
+               OpMemoryModel Physical64 OpenCL
+               OpEntryPoint Kernel %11 "func_ptr"
+               OpExecutionMode %11 ContractionOff
+       %void = OpTypeVoid
+      %float = OpTypeFloat 32
+         %41 = OpTypeFunction %float %float %float
+%_ptr_Function_float = OpTypePointer Function %float
+      %ulong = OpTypeInt 64 0
+         %44 = OpTypeFunction %void %ulong %ulong
+%_ptr_Function_ulong = OpTypePointer Function %ulong
+%_ptr_Generic_ulong = OpTypePointer Generic %ulong
+    %ulong_1 = OpConstant %ulong 1
+    %ulong_0 = OpConstant %ulong 0
+          %1 = OpFunction %float None %41
+          %5 = OpFunctionParameter %float
+          %6 = OpFunctionParameter %float
+         %10 = OpLabel
+          %3 = OpVariable %_ptr_Function_float Function
+          %4 = OpVariable %_ptr_Function_float Function
+          %2 = OpVariable %_ptr_Function_float Function
+               OpStore %3 %5
+               OpStore %4 %6
+          %8 = OpLoad %float %3
+          %9 = OpLoad %float %4
+          %7 = OpFAdd %float %8 %9
+               OpStore %2 %7
+               OpFunctionEnd
+         %11 = OpFunction %void None %44
+         %19 = OpFunctionParameter %ulong
+         %20 = OpFunctionParameter %ulong
+         %36 = OpLabel
+         %12 = OpVariable %_ptr_Function_ulong Function
+         %13 = OpVariable %_ptr_Function_ulong Function
+         %14 = OpVariable %_ptr_Function_ulong Function
+         %15 = OpVariable %_ptr_Function_ulong Function
+         %16 = OpVariable %_ptr_Function_ulong Function
+         %17 = OpVariable %_ptr_Function_ulong Function
+         %18 = OpVariable %_ptr_Function_ulong Function
+               OpStore %12 %19
+               OpStore %13 %20
+         %21 = OpLoad %ulong %12 Aligned 8
+               OpStore %14 %21
+         %22 = OpLoad %ulong %13 Aligned 8
+               OpStore %15 %22
+         %24 = OpLoad %ulong %14
+         %34 = OpConvertUToPtr %_ptr_Generic_ulong %24
+         %23 = OpLoad %ulong %34 Aligned 8
+               OpStore %16 %23
+         %26 = OpLoad %ulong %16
+         %25 = OpIAdd %ulong %26 %ulong_1
+               OpStore %17 %25
+         %27 = OpCopyObject %ulong %ulong_0
+               OpStore %18 %27
+         %29 = OpLoad %ulong %17
+         %30 = OpLoad %ulong %18
+         %28 = OpIAdd %ulong %29 %30
+               OpStore %17 %28
+         %31 = OpLoad %ulong %15
+         %32 = OpLoad %ulong %17
+         %35 = OpConvertUToPtr %_ptr_Generic_ulong %31
+               OpStore %35 %32 Aligned 8
+               OpReturn
+               OpFunctionEnd
