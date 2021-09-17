@@ -9,7 +9,9 @@ use rspirv::binary::{Assemble, Disassemble};
 
 static ZLUDA_PTX_IMPL_INTEL: &'static [u8] = include_bytes!("../lib/zluda_ptx_impl.spv");
 static ZLUDA_PTX_IMPL_AMD: &'static [u8] = include_bytes!("../lib/zluda_ptx_impl.bc");
-static ZLUDA_PTX_PREFIX: &'static str = "__zluda_ptx_impl__";
+const ZLUDA_PTX_PREFIX: &'static str = "__zluda_ptx_impl__";
+const ZLUDA_PTX_PREFIX_SREG_CLOCK: &'static str = "__zluda_ptx_impl__sreg_clock";
+const ZLUDA_PTX_PREFIX_SREG_LANEMASK_LT: &'static str = "__zluda_ptx_impl__sreg_lanemask_lt";
 
 quick_error! {
     #[derive(Debug)]
@@ -1013,25 +1015,6 @@ fn compute_denorm_information<'input>(
             (name, width_to_denorm)
         })
         .collect()
-}
-
-fn emit_builtins(
-    builder: &mut dr::Builder,
-    map: &mut TypeWordMap,
-    id_defs: &GlobalStringIdResolver,
-) {
-    for (reg, id) in id_defs.special_registers.builtins() {
-        let result_type = map.get_or_add(
-            builder,
-            SpirvType::pointer_to(reg.get_type(), spirv::StorageClass::Input),
-        );
-        builder.variable(result_type, Some(id), spirv::StorageClass::Input, None);
-        builder.decorate(
-            id,
-            spirv::Decoration::BuiltIn,
-            [dr::Operand::BuiltIn(reg.get_builtin())].iter().cloned(),
-        );
-    }
 }
 
 fn emit_function_header<'a>(
@@ -4815,6 +4798,8 @@ enum PtxSpecialRegister {
     Ctaid64,
     Nctaid,
     Nctaid64,
+    Clock,
+    LanemaskLt,
 }
 
 impl PtxSpecialRegister {
@@ -4824,6 +4809,8 @@ impl PtxSpecialRegister {
             "%ntid" => Some(Self::Ntid),
             "%ctaid" => Some(Self::Ctaid),
             "%nctaid" => Some(Self::Nctaid),
+            "%clock" => Some(Self::Clock),
+            "%lanemask_lt" => Some(Self::LanemaskLt),
             _ => None,
         }
     }
@@ -4838,6 +4825,8 @@ impl PtxSpecialRegister {
             PtxSpecialRegister::Ctaid64 => ast::Type::Vector(ast::ScalarType::U64, 3),
             PtxSpecialRegister::Nctaid => ast::Type::Vector(ast::ScalarType::U32, 4),
             PtxSpecialRegister::Nctaid64 => ast::Type::Vector(ast::ScalarType::U64, 3),
+            PtxSpecialRegister::Clock => ast::Type::Scalar(ast::ScalarType::U32),
+            PtxSpecialRegister::LanemaskLt => ast::Type::Scalar(ast::ScalarType::U32),
         }
     }
 
@@ -4846,26 +4835,13 @@ impl PtxSpecialRegister {
             PtxSpecialRegister::Tid
             | PtxSpecialRegister::Ntid
             | PtxSpecialRegister::Ctaid
-            | PtxSpecialRegister::Nctaid => ast::ScalarType::U32,
+            | PtxSpecialRegister::Nctaid
+            | PtxSpecialRegister::Clock
+            | PtxSpecialRegister::LanemaskLt => ast::ScalarType::U32,
             PtxSpecialRegister::Tid64
             | PtxSpecialRegister::Ntid64
             | PtxSpecialRegister::Ctaid64
             | PtxSpecialRegister::Nctaid64 => ast::ScalarType::U64,
-        }
-    }
-
-    fn get_builtin(self) -> spirv::BuiltIn {
-        match self {
-            PtxSpecialRegister::Tid | PtxSpecialRegister::Tid64 => {
-                spirv::BuiltIn::LocalInvocationId
-            }
-            PtxSpecialRegister::Ntid | PtxSpecialRegister::Ntid64 => {
-                spirv::BuiltIn::EnqueuedWorkgroupSize
-            }
-            PtxSpecialRegister::Ctaid | PtxSpecialRegister::Ctaid64 => spirv::BuiltIn::WorkgroupId,
-            PtxSpecialRegister::Nctaid | PtxSpecialRegister::Nctaid64 => {
-                spirv::BuiltIn::NumWorkgroups
-            }
         }
     }
 
@@ -4883,6 +4859,10 @@ impl PtxSpecialRegister {
             PtxSpecialRegister::Nctaid | PtxSpecialRegister::Nctaid64 => {
                 ("_Z14get_num_groupsj", ast::ScalarType::U64)
             }
+            PtxSpecialRegister::Clock => (ZLUDA_PTX_PREFIX_SREG_CLOCK, ast::ScalarType::U32),
+            PtxSpecialRegister::LanemaskLt => {
+                (ZLUDA_PTX_PREFIX_SREG_LANEMASK_LT, ast::ScalarType::U32)
+            }
         }
     }
 
@@ -4899,7 +4879,9 @@ impl PtxSpecialRegister {
             PtxSpecialRegister::Tid64
             | PtxSpecialRegister::Ntid64
             | PtxSpecialRegister::Ctaid64
-            | PtxSpecialRegister::Nctaid64 => None,
+            | PtxSpecialRegister::Nctaid64
+            | PtxSpecialRegister::Clock => None,
+            PtxSpecialRegister::LanemaskLt => None,
         }
     }
 }

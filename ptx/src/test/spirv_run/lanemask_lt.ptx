@@ -1,0 +1,25 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry lanemask_lt(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .b32 	    temp;
+    .reg .b32 	    temp2;
+    .reg .b32 	    less_lane;
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.u32          temp, [in_addr];
+	add.u32		    temp2, temp, 1;
+    mov.u32         less_lane, %lanemask_lt;
+	add.u32         temp2, temp2, less_lane;
+    st.u32          [out_addr], temp2;
+	ret;
+}
