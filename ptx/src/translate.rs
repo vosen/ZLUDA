@@ -10,8 +10,6 @@ use rspirv::binary::{Assemble, Disassemble};
 static ZLUDA_PTX_IMPL_INTEL: &'static [u8] = include_bytes!("../lib/zluda_ptx_impl.spv");
 static ZLUDA_PTX_IMPL_AMD: &'static [u8] = include_bytes!("../lib/zluda_ptx_impl.bc");
 const ZLUDA_PTX_PREFIX: &'static str = "__zluda_ptx_impl__";
-const ZLUDA_PTX_PREFIX_SREG_CLOCK: &'static str = "__zluda_ptx_impl__sreg_clock";
-const ZLUDA_PTX_PREFIX_SREG_LANEMASK_LT: &'static str = "__zluda_ptx_impl__sreg_lanemask_lt";
 
 quick_error! {
     #[derive(Debug)]
@@ -426,8 +424,8 @@ pub struct KernelInfo {
     pub uses_shared_mem: bool,
 }
 
-pub fn to_spirv_module<'a>(ast: ast::Module<'a>) -> Result<Module, TranslateError> {
-    let mut id_defs = GlobalStringIdResolver::new(1);
+pub fn to_spirv_module<'input>(ast: ast::Module<'input>) -> Result<Module, TranslateError> {
+    let mut id_defs = GlobalStringIdResolver::<'input>::new(1);
     let mut ptx_impl_imports = HashMap::new();
     let directives = ast
         .directives
@@ -1135,9 +1133,9 @@ fn emit_memory_model(builder: &mut dr::Builder) {
     );
 }
 
-fn translate_directive<'input>(
-    id_defs: &mut GlobalStringIdResolver<'input>,
-    ptx_impl_imports: &mut HashMap<String, Directive<'input>>,
+fn translate_directive<'input, 'a>(
+    id_defs: &'a mut GlobalStringIdResolver<'input>,
+    ptx_impl_imports: &'a mut HashMap<String, Directive<'input>>,
     d: ast::Directive<'input, ast::ParsedArgParams<'input>>,
 ) -> Result<Option<Directive<'input>>, TranslateError> {
     Ok(match d {
@@ -1157,11 +1155,11 @@ fn translate_directive<'input>(
     })
 }
 
-fn translate_function<'a>(
-    id_defs: &mut GlobalStringIdResolver<'a>,
-    ptx_impl_imports: &mut HashMap<String, Directive<'a>>,
-    f: ast::ParsedFunction<'a>,
-) -> Result<Option<Function<'a>>, TranslateError> {
+fn translate_function<'input, 'a>(
+    id_defs: &'a mut GlobalStringIdResolver<'input>,
+    ptx_impl_imports: &'a mut HashMap<String, Directive<'input>>,
+    f: ast::ParsedFunction<'input>,
+) -> Result<Option<Function<'input>>, TranslateError> {
     let import_as = match &f.func_directive {
         ast::MethodDeclaration {
             name: ast::MethodName::Func("__assertfail"),
@@ -1206,7 +1204,7 @@ fn rename_fn_params<'a, 'b>(
 }
 
 fn to_ssa<'input, 'b>(
-    ptx_impl_imports: &mut HashMap<String, Directive>,
+    ptx_impl_imports: &'b mut HashMap<String, Directive<'input>>,
     mut id_defs: FnStringIdResolver<'input, 'b>,
     fn_defs: GlobalFnDeclResolver<'input, 'b>,
     func_decl: Rc<RefCell<ast::MethodDeclaration<'input, spirv::Word>>>,
@@ -1231,6 +1229,8 @@ fn to_ssa<'input, 'b>(
     let unadorned_statements = normalize_predicates(normalized_ids, &mut numeric_id_defs)?;
     let typed_statements =
         convert_to_typed_statements(unadorned_statements, &fn_defs, &mut numeric_id_defs)?;
+    let typed_statements =
+        fix_special_registers2(ptx_impl_imports, typed_statements, &mut numeric_id_defs)?;
     let (func_decl, typed_statements) =
         convert_to_stateful_memory_access(func_decl, typed_statements, &mut numeric_id_defs)?;
     let ssa_statements = insert_mem_ssa_statements(
@@ -1238,8 +1238,6 @@ fn to_ssa<'input, 'b>(
         &mut numeric_id_defs,
         &mut (*func_decl).borrow_mut(),
     )?;
-    let ssa_statements =
-        fix_special_registers(ptx_impl_imports, ssa_statements, &mut numeric_id_defs)?;
     let mut numeric_id_defs = numeric_id_defs.finish();
     let expanded_statements = expand_arguments(ssa_statements, &mut numeric_id_defs)?;
     let expanded_statements =
@@ -1257,90 +1255,147 @@ fn to_ssa<'input, 'b>(
     })
 }
 
-fn fix_special_registers(
-    ptx_impl_imports: &mut HashMap<String, Directive>,
+fn fix_special_registers2<'a, 'b, 'input>(
+    ptx_impl_imports: &'a mut HashMap<String, Directive<'input>>,
     typed_statements: Vec<TypedStatement>,
-    numeric_id_defs: &mut NumericIdResolver,
+    numeric_id_defs: &'a mut NumericIdResolver<'b>,
 ) -> Result<Vec<TypedStatement>, TranslateError> {
-    let mut result = Vec::with_capacity(typed_statements.len());
+    let result = Vec::with_capacity(typed_statements.len());
+    let mut sreg_sresolver = SpecialRegisterResolver {
+        ptx_impl_imports,
+        numeric_id_defs,
+        result,
+    };
     for s in typed_statements {
         match s {
-            Statement::LoadVar(
-                details
-                @
-                LoadVarDetails {
-                    member_index: Some((_, Some(_))),
-                    ..
-                },
-            ) => {
-                let index = details.member_index.unwrap().0;
-                let sreg = numeric_id_defs
-                    .special_registers
-                    .get(details.arg.src)
-                    .ok_or_else(|| error_unreachable())?;
-                let (ocl_name, ocl_type) = sreg.get_opencl_fn_type();
-                let index_constant = numeric_id_defs.register_intermediate(Some((
-                    ast::Type::Scalar(ast::ScalarType::U32),
-                    ast::StateSpace::Reg,
-                )));
-                result.push(Statement::Constant(ConstantDefinition {
-                    dst: index_constant,
-                    typ: ast::ScalarType::U32,
-                    value: ast::ImmediateValue::U64(index as u64),
-                }));
-                let fn_result = numeric_id_defs.register_intermediate(Some((
-                    ast::Type::Scalar(ocl_type),
-                    ast::StateSpace::Reg,
-                )));
-                let return_arguments =
-                    vec![(fn_result, ast::Type::Scalar(ocl_type), ast::StateSpace::Reg)];
-                let input_arguments = vec![(
-                    TypedOperand::Reg(index_constant),
-                    ast::Type::Scalar(ast::ScalarType::U32),
-                    ast::StateSpace::Reg,
-                )];
-                let fn_call = register_external_fn_call(
-                    numeric_id_defs,
-                    ptx_impl_imports,
-                    ocl_name.to_string(),
-                    return_arguments.iter().map(|(_, typ, space)| (typ, *space)),
-                    input_arguments.iter().map(|(_, typ, space)| (typ, *space)),
-                )?;
-                result.push(Statement::Call(ResolvedCall {
-                    uniform: false,
-                    return_arguments,
-                    name: fn_call,
-                    input_arguments,
-                }));
-                result.push(Statement::Conversion(ImplicitConversion {
-                    src: fn_result,
-                    dst: details.arg.dst,
-                    from_type: ast::Type::Scalar(ocl_type),
-                    from_space: ast::StateSpace::Reg,
-                    to_type: ast::Type::Scalar(ast::ScalarType::U32),
-                    to_space: ast::StateSpace::Reg,
-                    kind: ConversionKind::Default,
-                }));
+            Statement::Call(details) => {
+                let new_statement = details.visit(&mut sreg_sresolver)?;
+                sreg_sresolver.result.push(new_statement);
             }
-            s => result.push(s),
+            Statement::Instruction(details) => {
+                let new_statement = details.visit(&mut sreg_sresolver)?;
+                sreg_sresolver.result.push(new_statement);
+            }
+            Statement::Conditional(details) => {
+                let new_statement = details.visit(&mut sreg_sresolver)?;
+                sreg_sresolver.result.push(new_statement);
+            }
+            Statement::Conversion(details) => {
+                let new_statement = details.visit(&mut sreg_sresolver)?;
+                sreg_sresolver.result.push(new_statement);
+            }
+            Statement::PtrAccess(details) => {
+                let new_statement = details.visit(&mut sreg_sresolver)?;
+                sreg_sresolver.result.push(new_statement);
+            }
+            Statement::RepackVector(details) => {
+                let new_statement = details.visit(&mut sreg_sresolver)?;
+                sreg_sresolver.result.push(new_statement);
+            }
+            s @ Statement::Variable(_)
+            | s @ Statement::Label(_)
+            | s @ Statement::FunctionPointer(_) => sreg_sresolver.result.push(s),
+            _ => return Err(error_unreachable()),
         }
     }
-    Ok(result)
+    Ok(sreg_sresolver.result)
 }
 
-fn get_sreg_id_scalar_type(
-    numeric_id_defs: &mut NumericIdResolver,
-    sreg: PtxSpecialRegister,
-) -> Option<(spirv::Word, ast::ScalarType, u8)> {
-    match sreg.normalized_sreg_and_type() {
-        Some((normalized_sreg, typ, vec_width)) => Some((
-            numeric_id_defs
-                .special_registers
-                .get_or_add(numeric_id_defs.current_id, normalized_sreg),
-            typ,
-            vec_width,
-        )),
-        None => None,
+struct SpecialRegisterResolver<'a, 'b, 'input> {
+    ptx_impl_imports: &'a mut HashMap<String, Directive<'input>>,
+    numeric_id_defs: &'a mut NumericIdResolver<'b>,
+    result: Vec<TypedStatement>,
+}
+
+impl<'a, 'b, 'input> SpecialRegisterResolver<'a, 'b, 'input> {
+    fn replace_sreg(
+        &mut self,
+        desc: ArgumentDescriptor<spirv::Word>,
+        vector_index: Option<u8>,
+    ) -> Result<spirv::Word, TranslateError> {
+        if let Some(sreg) = self.numeric_id_defs.special_registers.get(desc.op) {
+            if desc.is_dst {
+                return Err(TranslateError::MismatchedType);
+            }
+            let input_arguments = match (vector_index, sreg.get_function_input_type()) {
+                (Some(idx), Some(inp_type)) => {
+                    if inp_type != ast::ScalarType::U8 {
+                        return Err(TranslateError::Unreachable);
+                    }
+                    let constant = self.numeric_id_defs.register_intermediate(Some((
+                        ast::Type::Scalar(inp_type),
+                        ast::StateSpace::Reg,
+                    )));
+                    self.result.push(Statement::Constant(ConstantDefinition {
+                        dst: constant,
+                        typ: inp_type,
+                        value: ast::ImmediateValue::U64(idx as u64),
+                    }));
+                    vec![(
+                        TypedOperand::Reg(constant),
+                        ast::Type::Scalar(inp_type),
+                        ast::StateSpace::Reg,
+                    )]
+                }
+                (None, None) => Vec::new(),
+                _ => return Err(TranslateError::MismatchedType),
+            };
+            let ocl_fn_name = [ZLUDA_PTX_PREFIX, sreg.get_unprefixed_function_name()].concat();
+            let return_type = sreg.get_function_return_type();
+            let fn_result = self.numeric_id_defs.register_intermediate(Some((
+                ast::Type::Scalar(return_type),
+                ast::StateSpace::Reg,
+            )));
+            let return_arguments = vec![(
+                fn_result,
+                ast::Type::Scalar(return_type),
+                ast::StateSpace::Reg,
+            )];
+            let fn_call = register_external_fn_call(
+                self.numeric_id_defs,
+                self.ptx_impl_imports,
+                ocl_fn_name.to_string(),
+                return_arguments.iter().map(|(_, typ, space)| (typ, *space)),
+                input_arguments.iter().map(|(_, typ, space)| (typ, *space)),
+            )?;
+            self.result.push(Statement::Call(ResolvedCall {
+                uniform: false,
+                return_arguments,
+                name: fn_call,
+                input_arguments,
+            }));
+            Ok(fn_result)
+        } else {
+            Ok(desc.op)
+        }
+    }
+}
+
+impl<'a, 'b, 'input> ArgumentMapVisitor<TypedArgParams, TypedArgParams>
+    for SpecialRegisterResolver<'a, 'b, 'input>
+{
+    fn id(
+        &mut self,
+        desc: ArgumentDescriptor<spirv::Word>,
+        _: Option<(&ast::Type, ast::StateSpace)>,
+    ) -> Result<spirv::Word, TranslateError> {
+        self.replace_sreg(desc, None)
+    }
+
+    fn operand(
+        &mut self,
+        desc: ArgumentDescriptor<TypedOperand>,
+        typ: &ast::Type,
+        state_space: ast::StateSpace,
+    ) -> Result<TypedOperand, TranslateError> {
+        Ok(match desc.op {
+            TypedOperand::Reg(reg) => TypedOperand::Reg(self.replace_sreg(desc.new_op(reg), None)?),
+            op @ TypedOperand::RegOffset(_, _) => op,
+            op @ TypedOperand::Imm(_) => op,
+            TypedOperand::VecMember(reg, idx) => {
+                TypedOperand::VecMember(self.replace_sreg(desc.new_op(reg), Some(idx))?, idx)
+            }
+        })
     }
 }
 
@@ -1968,22 +2023,8 @@ fn insert_mem_ssa_statements<'a, 'b>(
                 }
                 inst => insert_mem_ssa_statement_default(id_def, &mut result, inst)?,
             },
-            Statement::Conditional(mut bra) => {
-                let generated_id = id_def.register_intermediate(Some((
-                    ast::Type::Scalar(ast::ScalarType::Pred),
-                    ast::StateSpace::Reg,
-                )));
-                result.push(Statement::LoadVar(LoadVarDetails {
-                    arg: Arg2 {
-                        dst: generated_id,
-                        src: bra.predicate,
-                    },
-                    state_space: ast::StateSpace::Reg,
-                    typ: ast::Type::Scalar(ast::ScalarType::Pred),
-                    member_index: None,
-                }));
-                bra.predicate = generated_id;
-                result.push(Statement::Conditional(bra));
+            Statement::Conditional(bra) => {
+                insert_mem_ssa_statement_default(id_def, &mut result, bra)?
             }
             Statement::Conversion(conv) => {
                 insert_mem_ssa_statement_default(id_def, &mut result, conv)?
@@ -1997,7 +2038,9 @@ fn insert_mem_ssa_statements<'a, 'b>(
             Statement::FunctionPointer(func_ptr) => {
                 insert_mem_ssa_statement_default(id_def, &mut result, func_ptr)?
             }
-            s @ Statement::Variable(_) | s @ Statement::Label(_) => result.push(s),
+            s @ Statement::Variable(_) | s @ Statement::Label(_) | s @ Statement::Constant(..) => {
+                result.push(s)
+            }
             _ => return Err(error_unreachable()),
         }
     }
@@ -4539,6 +4582,7 @@ fn convert_to_stateful_memory_access<'a, 'input>(
         match statement {
             l @ Statement::Label(_) => result.push(l),
             c @ Statement::Conditional(_) => result.push(c),
+            c @ Statement::Constant(..) => result.push(c),
             Statement::Variable(var) => {
                 if !remapped_ids.contains_key(&var.name) {
                     result.push(Statement::Variable(var));
@@ -4791,13 +4835,9 @@ fn is_64_bit_integer(id_defs: &NumericIdResolver, id: spirv::Word) -> bool {
 #[derive(Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 enum PtxSpecialRegister {
     Tid,
-    Tid64,
     Ntid,
-    Ntid64,
     Ctaid,
-    Ctaid64,
     Nctaid,
-    Nctaid64,
     Clock,
     LanemaskLt,
 }
@@ -4817,71 +4857,43 @@ impl PtxSpecialRegister {
 
     fn get_type(self) -> ast::Type {
         match self {
-            PtxSpecialRegister::Tid => ast::Type::Vector(ast::ScalarType::U32, 4),
-            PtxSpecialRegister::Tid64 => ast::Type::Vector(ast::ScalarType::U64, 3),
-            PtxSpecialRegister::Ntid => ast::Type::Vector(ast::ScalarType::U32, 4),
-            PtxSpecialRegister::Ntid64 => ast::Type::Vector(ast::ScalarType::U64, 3),
-            PtxSpecialRegister::Ctaid => ast::Type::Vector(ast::ScalarType::U32, 4),
-            PtxSpecialRegister::Ctaid64 => ast::Type::Vector(ast::ScalarType::U64, 3),
-            PtxSpecialRegister::Nctaid => ast::Type::Vector(ast::ScalarType::U32, 4),
-            PtxSpecialRegister::Nctaid64 => ast::Type::Vector(ast::ScalarType::U64, 3),
-            PtxSpecialRegister::Clock => ast::Type::Scalar(ast::ScalarType::U32),
-            PtxSpecialRegister::LanemaskLt => ast::Type::Scalar(ast::ScalarType::U32),
+            PtxSpecialRegister::Tid
+            | PtxSpecialRegister::Ntid
+            | PtxSpecialRegister::Ctaid
+            | PtxSpecialRegister::Nctaid => ast::Type::Vector(self.get_function_return_type(), 4),
+            _ => ast::Type::Scalar(self.get_function_return_type()),
         }
     }
 
-    fn get_scalar_type(self) -> ast::ScalarType {
+    fn get_function_return_type(self) -> ast::ScalarType {
+        match self {
+            PtxSpecialRegister::Tid => ast::ScalarType::U32,
+            PtxSpecialRegister::Ntid => ast::ScalarType::U32,
+            PtxSpecialRegister::Ctaid => ast::ScalarType::U32,
+            PtxSpecialRegister::Nctaid => ast::ScalarType::U32,
+            PtxSpecialRegister::Clock => ast::ScalarType::U32,
+            PtxSpecialRegister::LanemaskLt => ast::ScalarType::U32,
+        }
+    }
+
+    fn get_function_input_type(self) -> Option<ast::ScalarType> {
         match self {
             PtxSpecialRegister::Tid
             | PtxSpecialRegister::Ntid
             | PtxSpecialRegister::Ctaid
-            | PtxSpecialRegister::Nctaid
-            | PtxSpecialRegister::Clock
-            | PtxSpecialRegister::LanemaskLt => ast::ScalarType::U32,
-            PtxSpecialRegister::Tid64
-            | PtxSpecialRegister::Ntid64
-            | PtxSpecialRegister::Ctaid64
-            | PtxSpecialRegister::Nctaid64 => ast::ScalarType::U64,
+            | PtxSpecialRegister::Nctaid => Some(ast::ScalarType::U8),
+            PtxSpecialRegister::Clock | PtxSpecialRegister::LanemaskLt => None,
         }
     }
 
-    fn get_opencl_fn_type(self) -> (&'static str, ast::ScalarType) {
+    fn get_unprefixed_function_name(self) -> &'static str {
         match self {
-            PtxSpecialRegister::Tid | PtxSpecialRegister::Tid64 => {
-                ("_Z12get_local_idj", ast::ScalarType::U64)
-            }
-            PtxSpecialRegister::Ntid | PtxSpecialRegister::Ntid64 => {
-                ("_Z14get_local_sizej", ast::ScalarType::U64)
-            }
-            PtxSpecialRegister::Ctaid | PtxSpecialRegister::Ctaid64 => {
-                ("_Z12get_group_idj", ast::ScalarType::U64)
-            }
-            PtxSpecialRegister::Nctaid | PtxSpecialRegister::Nctaid64 => {
-                ("_Z14get_num_groupsj", ast::ScalarType::U64)
-            }
-            PtxSpecialRegister::Clock => (ZLUDA_PTX_PREFIX_SREG_CLOCK, ast::ScalarType::U32),
-            PtxSpecialRegister::LanemaskLt => {
-                (ZLUDA_PTX_PREFIX_SREG_LANEMASK_LT, ast::ScalarType::U32)
-            }
-        }
-    }
-
-    fn normalized_sreg_and_type(self) -> Option<(PtxSpecialRegister, ast::ScalarType, u8)> {
-        match self {
-            PtxSpecialRegister::Tid => Some((PtxSpecialRegister::Tid64, ast::ScalarType::U64, 3)),
-            PtxSpecialRegister::Ntid => Some((PtxSpecialRegister::Ntid64, ast::ScalarType::U64, 3)),
-            PtxSpecialRegister::Ctaid => {
-                Some((PtxSpecialRegister::Ctaid64, ast::ScalarType::U64, 3))
-            }
-            PtxSpecialRegister::Nctaid => {
-                Some((PtxSpecialRegister::Nctaid64, ast::ScalarType::U64, 3))
-            }
-            PtxSpecialRegister::Tid64
-            | PtxSpecialRegister::Ntid64
-            | PtxSpecialRegister::Ctaid64
-            | PtxSpecialRegister::Nctaid64
-            | PtxSpecialRegister::Clock => None,
-            PtxSpecialRegister::LanemaskLt => None,
+            PtxSpecialRegister::Tid => "sreg_tid",
+            PtxSpecialRegister::Ntid => "sreg_ntid",
+            PtxSpecialRegister::Ctaid => "sreg_ctaid",
+            PtxSpecialRegister::Nctaid => "sreg_nctaid",
+            PtxSpecialRegister::Clock => "sreg_clock",
+            PtxSpecialRegister::LanemaskLt => "sreg_lanemask_lt",
         }
     }
 }
@@ -4897,16 +4909,6 @@ impl SpecialRegistersMap {
             reg_to_id: HashMap::new(),
             id_to_reg: HashMap::new(),
         }
-    }
-
-    fn builtins<'a>(&'a self) -> impl Iterator<Item = (PtxSpecialRegister, spirv::Word)> + 'a {
-        self.reg_to_id.iter().filter_map(|(sreg, id)| {
-            if sreg.normalized_sreg_and_type().is_none() {
-                Some((*sreg, *id))
-            } else {
-                None
-            }
-        })
     }
 
     fn interface(&self) -> Vec<spirv::Word> {
@@ -6414,6 +6416,35 @@ struct BrachCondition {
     predicate: spirv::Word,
     if_true: spirv::Word,
     if_false: spirv::Word,
+}
+
+impl<From: ArgParamsEx<Id = spirv::Word>, To: ArgParamsEx<Id = spirv::Word>> Visitable<From, To>
+    for BrachCondition
+{
+    fn visit(
+        self,
+        visitor: &mut impl ArgumentMapVisitor<From, To>,
+    ) -> Result<Statement<ast::Instruction<To>, To>, TranslateError> {
+        let predicate = visitor.id(
+            ArgumentDescriptor {
+                op: self.predicate,
+                is_dst: false,
+                is_memory_access: false,
+                non_default_implicit_conversion: None,
+            },
+            Some((
+                &ast::Type::Scalar(ast::ScalarType::Pred),
+                ast::StateSpace::Reg,
+            )),
+        )?;
+        let if_true = self.if_true;
+        let if_false = self.if_false;
+        Ok(Statement::Conditional(BrachCondition {
+            predicate,
+            if_true,
+            if_false,
+        }))
+    }
 }
 
 #[derive(Clone)]

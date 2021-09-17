@@ -297,6 +297,22 @@ atomic_add(atom_acq_rel_sys_shared_add_f64, memory_order_acq_rel, memory_order_a
         return (uint)__builtin_amdgcn_uicmp(1, 0, 33);
     }
 
+    uint FUNC(sreg_tid)(uchar dim) {
+        return (uint)get_local_id(dim);
+    }
+
+    uint FUNC(sreg_ntid)(uchar dim) {
+        return (uint)get_local_size(dim);
+    }
+
+    uint FUNC(sreg_ctaid)(uchar dim) {
+        return (uint)get_group_id(dim);
+    }
+
+    uint FUNC(sreg_nctaid)(uchar dim) {
+        return (uint)get_num_groups(dim);
+    }
+
     uint FUNC(sreg_clock)() {
         return (uint)__builtin_amdgcn_s_memtime();
     }
