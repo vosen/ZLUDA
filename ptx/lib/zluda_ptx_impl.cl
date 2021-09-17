@@ -296,6 +296,19 @@ atomic_add(atom_acq_rel_sys_shared_add_f64, memory_order_acq_rel, memory_order_a
     uint FUNC(activemask)() {
         return (uint)__builtin_amdgcn_uicmp(1, 0, 33);
     }
+
+    uint FUNC(sreg_clock)() {
+        return (uint)__builtin_amdgcn_s_memtime();
+    }
+
+    // Taken from __ballot definition in hipamd/include/hip/amd_detail/amd_device_functions.h
+    // They return active threads, which I think is incorrect
+    extern __attribute__((const)) uint __ockl_lane_u32();
+    uint FUNC(sreg_lanemask_lt)() {
+        uint lane_idx = __ockl_lane_u32();
+        ulong mask = (1UL << lane_idx) - 1UL;
+        return (uint)mask;
+    }
 #endif
 
 void FUNC(__assertfail)(
