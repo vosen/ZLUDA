@@ -67,11 +67,16 @@ pub(crate) unsafe fn complete(
     hip_call! { hipCtxGetDevice(&mut dev) };
     let mut props = unsafe { mem::zeroed() };
     hip_call! { hipGetDeviceProperties(&mut props, dev) };
-    let state: &LinkState = mem::transmute(state);
+    let state: &mut LinkState = mem::transmute(state);
     let spirv_bins = state.modules.iter().map(|m| &m.binaries[..]);
     let should_link_ptx_impl = state.modules.iter().find_map(|m| m.should_link_ptx_impl);
-    let arch_binary = module::compile_amd(&props, spirv_bins, should_link_ptx_impl)
+    let mut arch_binary = module::compile_amd(&props, spirv_bins, should_link_ptx_impl)
         .map_err(|_| hipError_t::hipErrorUnknown)?;
+    let ptr = arch_binary.as_mut_ptr();
+    let size = arch_binary.len();
+    state.result = Some(arch_binary);
+    *cubin_out = ptr as _;
+    *size_out = size;
     Ok(())
 }
 
