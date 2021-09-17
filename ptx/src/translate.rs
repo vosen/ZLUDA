@@ -2729,16 +2729,19 @@ fn emit_function_body_ops<'input>(
                     builder.branch(arg.src)?;
                 }
                 ast::Instruction::Ld(data, arg) => {
-                    if data.qualifier != ast::LdStQualifier::Weak {
-                        todo!()
-                    }
+                    let mem_access = match data.qualifier {
+                        ast::LdStQualifier::Weak => spirv::MemoryAccess::NONE,
+                        // ld.volatile does not match Volatile OpLoad nor Relaxed OpAtomicLoad
+                        ast::LdStQualifier::Volatile => spirv::MemoryAccess::VOLATILE,
+                        _ => return Err(TranslateError::Todo),
+                    };
                     let result_type =
                         map.get_or_add(builder, SpirvType::new(ast::Type::from(data.typ.clone())));
                     builder.load(
                         result_type,
                         Some(arg.dst),
                         arg.src,
-                        Some(spirv::MemoryAccess::ALIGNED),
+                        Some(mem_access | spirv::MemoryAccess::ALIGNED),
                         [dr::Operand::LiteralInt32(
                             ast::Type::from(data.typ.clone()).size_of() as u32,
                         )]
@@ -2747,13 +2750,16 @@ fn emit_function_body_ops<'input>(
                     )?;
                 }
                 ast::Instruction::St(data, arg) => {
-                    if data.qualifier != ast::LdStQualifier::Weak {
-                        todo!()
-                    }
+                    let mem_access = match data.qualifier {
+                        ast::LdStQualifier::Weak => spirv::MemoryAccess::NONE,
+                        // st.volatile does not match Volatile OpStore nor Relaxed OpAtomicStore
+                        ast::LdStQualifier::Volatile => spirv::MemoryAccess::VOLATILE,
+                        _ => return Err(TranslateError::Todo),
+                    };
                     builder.store(
                         arg.src1,
                         arg.src2,
-                        Some(spirv::MemoryAccess::ALIGNED),
+                        Some(mem_access | spirv::MemoryAccess::ALIGNED),
                         [dr::Operand::LiteralInt32(
                             ast::Type::from(data.typ.clone()).size_of() as u32,
                         )]
