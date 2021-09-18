@@ -60,6 +60,18 @@ macro_rules! test_ptx {
             }
         }
     };
+
+    ($fn_name:ident) => {
+        paste::item! {
+            #[test]
+            fn [<$fn_name _spvtxt>]() -> Result<(), Box<dyn std::error::Error>> {
+                let ptx_txt = include_str!(concat!(stringify!($fn_name), ".ptx"));
+                let spirv_file_name = concat!(stringify!($fn_name), ".spvtxt");
+                let spirv_txt = include_bytes!(concat!(stringify!($fn_name), ".spvtxt"));
+                test_spvtxt_assert(ptx_txt, spirv_txt, spirv_file_name)
+            }
+        }
+    };
 }
 
 test_ptx!(ld_st, [1u64], [1u64]);
@@ -209,8 +221,9 @@ test_ptx!(cvt_f64_f32, [0.125f32], [0.125f64]);
 test_ptx!(prmt, [0x70c507d6u32, 0x6fbd4b5cu32], [0x6fbdd65cu32]);
 test_ptx!(activemask, [0u32], [1u32]);
 test_ptx!(membar, [152731u32], [152731u32]);
-test_ptx!(func_ptr, [152731u64], [152732u64]);
-test_ptx!(lanemask_lt, [187235u32], [187236u32]);
+test_ptx!(func_ptr);
+test_ptx!(lanemask_lt);
+test_ptx!(extern_func);
 
 struct DisplayError<T: Debug> {
     err: T,
