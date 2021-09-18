@@ -133,7 +133,11 @@ pub(crate) fn compile_amd<'a>(
             return Err(io::Error::new(io::ErrorKind::Other, ""));
         };
     let dir = tempfile::tempdir()?;
-    let spirv_files = spirv_il
+    let llvm_spirv_path = match env::var("LLVM_SPIRV") {
+        Ok(path) => Cow::Owned(path),
+        Err(_) => Cow::Borrowed(LLVM_SPIRV),
+    };
+    let llvm_files = spirv_il
         .map(|spirv| {
             let mut spirv_file = NamedTempFile::new_in(&dir)?;
             let spirv_u8 = unsafe {
@@ -143,24 +147,24 @@ pub(crate) fn compile_amd<'a>(
                 )
             };
             spirv_file.write_all(spirv_u8)?;
-            Ok::<_, io::Error>(spirv_file)
+            if cfg!(debug_assertions) {
+                persist_file(spirv_file.path())?;
+            }
+            let llvm = NamedTempFile::new_in(&dir)?;
+            let to_llvm_cmd = Command::new(&*llvm_spirv_path)
+                //.arg("--spirv-debug")
+                .arg("-r")
+                .arg("-o")
+                .arg(llvm.path())
+                .arg(spirv_file.path())
+                .status()?;
+            assert!(to_llvm_cmd.success());
+            if cfg!(debug_assertions) {
+                persist_file(llvm.path())?;
+            }
+            Ok::<_, io::Error>(llvm)
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let llvm_spirv_path = match env::var("LLVM_SPIRV") {
-        Ok(path) => Cow::Owned(path),
-        Err(_) => Cow::Borrowed(LLVM_SPIRV),
-    };
-    let llvm = NamedTempFile::new_in(&dir)?;
-    let to_llvm_cmd = Command::new(&*llvm_spirv_path)
-        .arg("-r")
-        .arg("-o")
-        .arg(llvm.path())
-        .args(spirv_files.iter().map(|f| f.path()))
-        .status()?;
-    assert!(to_llvm_cmd.success());
-    if cfg!(debug_assertions) {
-        persist_file(llvm.path())?;
-    }
     let linked_binary = NamedTempFile::new_in(&dir)?;
     let mut llvm_link = PathBuf::from(AMDGPU);
     llvm_link.push("llvm");
@@ -171,7 +175,7 @@ pub(crate) fn compile_amd<'a>(
         .arg("--only-needed")
         .arg("-o")
         .arg(linked_binary.path())
-        .arg(llvm.path())
+        .args(llvm_files.iter().map(|f| f.path()))
         .args(get_bitcode_paths(device_name));
     if cfg!(debug_assertions) {
         linker_cmd.arg("-v");
