@@ -76,8 +76,8 @@ You should install most recent run-time an developer driver packages as outlined
 If you are building on Linux you must also symlink (or rename) the ZLUDA output binaries after ZLUDA build finishes:
 ```
 ln -s libnvcuda.so target/release/libcuda.so
-ln -s libcuda.so target/release/libcuda.so.1
-ln -s libnvidia-ml.so target/release/libnvml.so
+ln -s libnvcuda.so target/release/libcuda.so.1
+ln -s libnvml.so target/release/libnvidia-ml.so
 ```
 
 ## Contributing

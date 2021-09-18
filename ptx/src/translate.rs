@@ -1163,9 +1163,11 @@ fn translate_function<'input, 'a>(
 ) -> Result<Option<Function<'input>>, TranslateError> {
     let import_as = match &f.func_directive {
         ast::MethodDeclaration {
-            name: ast::MethodName::Func("__assertfail"),
+            name: ast::MethodName::Func(func_name),
             ..
-        } => Some("__zluda_ptx_impl____assertfail".to_owned()),
+        } if *func_name == "__assertfail" || *func_name == "vprintf" => {
+            Some([ZLUDA_PTX_PREFIX, func_name].concat())
+        }
         _ => None,
     };
     let (str_resolver, fn_resolver, fn_decl) = id_defs.start_fn(&f.func_directive)?;
