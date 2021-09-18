@@ -1112,6 +1112,7 @@ fn emit_capabilities(builder: &mut dr::Builder) {
     builder.capability(spirv::Capability::Int64);
     builder.capability(spirv::Capability::Float16);
     builder.capability(spirv::Capability::Float64);
+    builder.capability(spirv::Capability::DenormFlushToZero);
     // TODO: re-enable when Intel float control extension works
     //builder.capability(spirv::Capability::FunctionFloatControlINTEL);
 }

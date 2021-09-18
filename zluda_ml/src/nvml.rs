@@ -1131,7 +1131,12 @@ pub use self::nvmlPcieLinkState_enum as nvmlPcieLinkState_t;
 
 #[no_mangle]
 pub extern "C" fn nvmlInit_v2() -> nvmlReturn_t {
-    crate::r#impl::init_v2().into()
+    crate::r#impl::init().into()
+}
+
+#[no_mangle]
+pub extern "C" fn nvmlInit() -> nvmlReturn_t {
+    crate::r#impl::init().into()
 }
 
 #[no_mangle]
@@ -1150,7 +1155,7 @@ pub extern "C" fn nvmlErrorString(result: nvmlReturn_t) -> *const ::std::os::raw
 }
 
 #[no_mangle]
-pub extern "C" fn nvmlSystemGetDriverVersion(
+pub unsafe extern "C" fn nvmlSystemGetDriverVersion(
     version: *mut ::std::os::raw::c_char,
     length: ::std::os::raw::c_uint,
 ) -> nvmlReturn_t {
