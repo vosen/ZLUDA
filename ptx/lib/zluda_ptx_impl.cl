@@ -335,3 +335,10 @@ void FUNC(__assertfail)(
     __attribute__((unused)) __private ulong* charSize
 ) {
 }
+
+uint FUNC(vprintf)(
+    __attribute__((unused)) __generic void* format,
+    __attribute__((unused)) __generic void* valist
+) {
+    return 0;
+}
