@@ -16,6 +16,7 @@ use hip_runtime_sys::{
 use tempfile::NamedTempFile;
 
 use crate::cuda::CUmodule;
+use crate::hip_call;
 
 pub struct SpirvModule {
     pub binaries: Vec<u32>,
@@ -73,28 +74,31 @@ pub(crate) fn load_data(
     module: *mut CUmodule,
     image: *const std::ffi::c_void,
 ) -> Result<(), hipError_t> {
+    if image == ptr::null() {
+        return Err(hipError_t::hipErrorInvalidValue);
+    }
+    if unsafe { *(image as *const u32) } == 0x464c457f {
+        return match unsafe { hipModuleLoadData(module as _, image) } {
+            hipError_t::hipSuccess => Ok(()),
+            e => Err(e),
+        };
+    }
     let spirv_data = SpirvModule::new_raw(image as *const _)?;
     load_data_impl(module, spirv_data)
 }
 
 pub fn load_data_impl(pmod: *mut CUmodule, spirv_data: SpirvModule) -> Result<(), hipError_t> {
     let mut dev = 0;
-    let err = unsafe { hipCtxGetDevice(&mut dev) };
-    if err != hipError_t::hipSuccess {
-        return Err(err);
-    }
+    hip_call! { hipCtxGetDevice(&mut dev) };
     let mut props = unsafe { mem::zeroed() };
-    let err = unsafe { hipGetDeviceProperties(&mut props, dev) };
+    hip_call! { hipGetDeviceProperties(&mut props, dev) };
     let arch_binary = compile_amd(
         &props,
         iter::once(&spirv_data.binaries[..]),
         spirv_data.should_link_ptx_impl,
     )
     .map_err(|_| hipError_t::hipErrorUnknown)?;
-    let err = unsafe { hipModuleLoadData(pmod as _, arch_binary.as_ptr() as _) };
-    if err != hipError_t::hipSuccess {
-        return Err(err);
-    }
+    hip_call! { hipModuleLoadData(pmod as _, arch_binary.as_ptr() as _) };
     Ok(())
 }
 
@@ -172,7 +176,6 @@ pub(crate) fn compile_amd<'a>(
     llvm_link.push("llvm-link");
     let mut linker_cmd = Command::new(&llvm_link);
     linker_cmd
-        .arg("--only-needed")
         .arg("-o")
         .arg(linked_binary.path())
         .args(llvm_files.iter().map(|f| f.path()))
