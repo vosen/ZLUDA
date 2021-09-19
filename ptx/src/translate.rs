@@ -543,10 +543,10 @@ fn emit_directives<'input>(
                 let f_body = match &f.body {
                     Some(f) => f,
                     None => {
-                        if f.linkage == ast::LinkingDirective::NONE {
-                            continue;
-                        } else {
+                        if f.linkage.contains(ast::LinkingDirective::EXTERN) {
                             &empty_body
+                        } else {
+                            continue;
                         }
                     }
                 };
