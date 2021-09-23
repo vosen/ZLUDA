@@ -1970,6 +1970,9 @@ ArgCall: (Vec<&'input str>, &'input str, Vec<ast::Operand<&'input str>>) = {
     "(" <ret_params:Comma<ExtendedID>> ")" "," <func:ExtendedID> "," "(" <param_list:Comma<CallOperand>> ")" => {
         (ret_params, func, param_list)
     },
+    "(" <ret_params:Comma<ExtendedID>> ")" "," <func:ExtendedID> => {
+        (ret_params, func, Vec::new())
+    },
     <func:ExtendedID> "," "(" <param_list:Comma<CallOperand>> ")" => (Vec::new(), func, param_list),
     <func:ExtendedID> => (Vec::new(), func, Vec::<ast::Operand<_>>::new()),
 };
