@@ -434,6 +434,7 @@ pub fn to_spirv_module<'input>(ast: ast::Module<'input>) -> Result<Module, Trans
             translate_directive(&mut id_defs, &mut ptx_impl_imports, directive).transpose()
         })
         .collect::<Result<Vec<_>, _>>()?;
+    let directives = hoist_function_globals(directives);
     let must_link_ptx_impl = ptx_impl_imports.len() > 0;
     let mut directives = ptx_impl_imports
         .into_iter()
@@ -458,6 +459,7 @@ pub fn to_spirv_module<'input>(ast: ast::Module<'input>) -> Result<Module, Trans
     let mut kernel_info = HashMap::new();
     let (build_options, should_flush_denorms) =
         emit_denorm_build_string(&call_map, &denorm_information);
+    let (directives, globals_use_map) = get_globals_use_map(directives);
     emit_directives(
         &mut builder,
         &mut map,
@@ -465,6 +467,7 @@ pub fn to_spirv_module<'input>(ast: ast::Module<'input>) -> Result<Module, Trans
         opencl_id,
         should_flush_denorms,
         &call_map,
+        globals_use_map,
         directives,
         &mut kernel_info,
     )?;
@@ -479,6 +482,79 @@ pub fn to_spirv_module<'input>(ast: ast::Module<'input>) -> Result<Module, Trans
         },
         build_options,
     })
+}
+
+fn get_globals_use_map<'input>(
+    directives: Vec<Directive<'input>>,
+) -> (
+    Vec<Directive<'input>>,
+    HashMap<ast::MethodName<'input, spirv::Word>, HashSet<spirv::Word>>,
+) {
+    let mut known_globals = HashSet::new();
+    for directive in directives.iter() {
+        match directive {
+            Directive::Variable(_, ast::Variable { name, .. }) => {
+                known_globals.insert(*name);
+            }
+            Directive::Method(..) => {}
+        }
+    }
+    let mut symbol_uses_map = HashMap::new();
+    let directives = directives
+        .into_iter()
+        .map(|directive| match directive {
+            Directive::Variable(..) | Directive::Method(Function { body: None, .. }) => directive,
+            Directive::Method(Function {
+                func_decl,
+                body: Some(mut statements),
+                globals,
+                import_as,
+                tuning,
+                linkage,
+            }) => {
+                let method_name = func_decl.borrow().name;
+                statements = statements
+                    .into_iter()
+                    .map(|statement| {
+                        statement.map_id(&mut |symbol, _| {
+                            if known_globals.contains(&symbol) {
+                                multi_hash_map_append(&mut symbol_uses_map, method_name, symbol);
+                            }
+                            symbol
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                Directive::Method(Function {
+                    func_decl,
+                    body: Some(statements),
+                    globals,
+                    import_as,
+                    tuning,
+                    linkage,
+                })
+            }
+        })
+        .collect::<Vec<_>>();
+    (directives, symbol_uses_map)
+}
+
+fn hoist_function_globals(directives: Vec<Directive>) -> Vec<Directive> {
+    let mut result = Vec::with_capacity(directives.len());
+    for directive in directives {
+        match directive {
+            Directive::Method(method) => {
+                for variable in method.globals {
+                    result.push(Directive::Variable(ast::LinkingDirective::NONE, variable));
+                }
+                result.push(Directive::Method(Function {
+                    globals: Vec::new(),
+                    ..method
+                }))
+            }
+            _ => result.push(directive),
+        }
+    }
+    result
 }
 
 // TODO: remove this once we have pef-function support for denorms
@@ -531,6 +607,7 @@ fn emit_directives<'input>(
     opencl_id: spirv::Word,
     should_flush_denorms: bool,
     call_map: &HashMap<&'input str, HashSet<spirv::Word>>,
+    globals_use_map: HashMap<ast::MethodName<'input, spirv::Word>, HashSet<spirv::Word>>,
     directives: Vec<Directive<'input>>,
     kernel_info: &mut HashMap<String, KernelInfo>,
 ) -> Result<(), TranslateError> {
@@ -559,10 +636,9 @@ fn emit_directives<'input>(
                     builder,
                     map,
                     &id_defs,
-                    &f.globals,
                     &*func_decl,
                     call_map,
-                    &directives,
+                    &globals_use_map,
                     kernel_info,
                 )?;
                 if func_decl.name.is_kernel() {
@@ -626,16 +702,17 @@ fn emit_function_linkage<'input>(
     if f.linkage == ast::LinkingDirective::NONE {
         return Ok(());
     };
-    let linking_name = f.import_as.as_deref().map_or_else(
-        || match f.func_decl.borrow().name {
-            ast::MethodName::Kernel(kernel_name) => Ok(kernel_name),
-            ast::MethodName::Func(fn_id) => match id_defs.reverse_variables.get(&fn_id) {
+    let linking_name = match f.func_decl.borrow().name {
+        // According to SPIR-V rules linkage attributes are invalid on kernels
+        ast::MethodName::Kernel(..) => return Ok(()),
+        ast::MethodName::Func(fn_id) => f.import_as.as_deref().map_or_else(
+            || match id_defs.reverse_variables.get(&fn_id) {
                 Some(fn_name) => Ok(fn_name),
                 None => Err(error_unknown_symbol()),
             },
-        },
-        Result::Ok,
-    )?;
+            Result::Ok,
+        )?,
+    };
     emit_linking_decoration(builder, id_defs, Some(linking_name), fn_name, f.linkage);
     Ok(())
 }
@@ -712,7 +789,7 @@ fn multi_hash_map_append<
             entry.get_mut().extend(iter::once(value));
         }
         hash_map::Entry::Vacant(entry) => {
-            entry.insert(Default::default());
+            entry.insert(Default::default()).extend(iter::once(value));
         }
     }
 }
@@ -857,6 +934,9 @@ fn convert_dynamic_shared_memory_usage<'input>(
                     linkage,
                 }));
             }
+            // Existing .shared globals are now unused, they were replaced by kernel-specific globals
+            Directive::Variable(_, ast::Variable { name, .. })
+                if globals_shared.contains_key(&name) => {}
             directive => result.push(directive),
         }
     }
@@ -873,34 +953,35 @@ fn insert_arguments_remap_statements(
     globals_shared: &HashMap<u32, (GlobalSharedSize, ast::Type)>,
     statements: Vec<Statement<ast::Instruction<ExpandedArgParams>, ExpandedArgParams>>,
 ) -> Vec<Statement<ast::Instruction<ExpandedArgParams>, ExpandedArgParams>> {
-    let shared_id_param = match method_name {
+    let (shared_id_param, shared_id_type) = match method_name {
         ast::MethodName::Kernel(kernel_name) => {
             let globals_shared_size = match kernels_to_global_shared.get(kernel_name) {
                 Some(s) => *s,
                 None => return statements,
             };
             let shared_id_param = new_id();
+            func_decl_ref.shared_mem = Some(shared_id_param);
             let (linkage, type_) = match globals_shared_size {
                 GlobalSharedSize::ExternUnsized => (
                     ast::LinkingDirective::EXTERN,
-                    ast::Type::Array(ast::ScalarType::U8, Vec::new()),
+                    ast::Type::Array(ast::ScalarType::B8, Vec::new()),
                 ),
                 GlobalSharedSize::Sized(size) => (
                     ast::LinkingDirective::NONE,
-                    ast::Type::Array(ast::ScalarType::U8, vec![size as u32]),
+                    ast::Type::Array(ast::ScalarType::B8, vec![size as u32]),
                 ),
             };
             result.push(Directive::Variable(
                 linkage,
                 ast::Variable {
                     align: None,
-                    v_type: type_,
+                    v_type: type_.clone(),
                     state_space: ast::StateSpace::Shared,
                     name: shared_id_param,
                     array_init: Vec::new(),
                 },
             ));
-            shared_id_param
+            (shared_id_param, Some(type_))
         }
         ast::MethodName::Func(function_name) => {
             if !functions_to_global_shared.contains(&function_name) {
@@ -914,7 +995,7 @@ fn insert_arguments_remap_statements(
                 name: shared_id_param,
                 array_init: Vec::new(),
             });
-            shared_id_param
+            (shared_id_param, None)
         }
     };
     replace_uses_of_shared_memory(
@@ -922,6 +1003,7 @@ fn insert_arguments_remap_statements(
         globals_shared,
         functions_to_global_shared,
         shared_id_param,
+        shared_id_type,
         statements,
     )
 }
@@ -948,6 +1030,7 @@ fn replace_uses_of_shared_memory<'a>(
     extern_shared_decls: &HashMap<spirv::Word, (GlobalSharedSize, ast::Type)>,
     methods_using_extern_shared: &HashSet<spirv::Word>,
     shared_id_param: spirv::Word,
+    shared_id_type: Option<ast::Type>,
     statements: Vec<ExpandedStatement>,
 ) -> Vec<ExpandedStatement> {
     let mut result = Vec::with_capacity(statements.len());
@@ -958,6 +1041,22 @@ fn replace_uses_of_shared_memory<'a>(
                 // because there's simply no way to pass shared ptr
                 // without converting it to .b64 first
                 if methods_using_extern_shared.contains(&call.name) {
+                    let shared_id_param = match shared_id_type {
+                        Some(ref global_shared_defined_type) => {
+                            let dst = new_id();
+                            result.push(Statement::Conversion(ImplicitConversion {
+                                src: shared_id_param,
+                                dst,
+                                from_type: global_shared_defined_type.clone(),
+                                to_type: ast::Type::Scalar(ast::ScalarType::B8),
+                                from_space: ast::StateSpace::Shared,
+                                to_space: ast::StateSpace::Shared,
+                                kind: ConversionKind::PtrToPtr,
+                            }));
+                            dst
+                        }
+                        None => shared_id_param,
+                    };
                     call.input_arguments.push((
                         shared_id_param,
                         ast::Type::Scalar(ast::ScalarType::B8),
@@ -998,10 +1097,7 @@ fn replace_uses_of_shared_memory<'a>(
 // * If it's a kernel -> size of .shared globals in use (direct or indirect)
 // * If it's a function -> does it use .shared global (directly or indirectly)
 fn resolve_indirect_uses_of_globals_shared<'input>(
-    mut methods_use_of_globals_shared: HashMap<
-        ast::MethodName<'input, spirv::Word>,
-        GlobalSharedSize,
-    >,
+    methods_use_of_globals_shared: HashMap<ast::MethodName<'input, spirv::Word>, GlobalSharedSize>,
     kernels_methods_call_map: &HashMap<&'input str, HashSet<spirv::Word>>,
 ) -> (HashMap<&'input str, GlobalSharedSize>, HashSet<spirv::Word>) {
     let mut kernel_use = HashMap::new();
@@ -1116,14 +1212,13 @@ fn compute_denorm_information<'input>(
         .collect()
 }
 
-fn emit_function_header<'a>(
+fn emit_function_header<'input>(
     builder: &mut dr::Builder,
     map: &mut TypeWordMap,
-    defined_globals: &GlobalStringIdResolver<'a>,
-    synthetic_globals: &[ast::Variable<spirv::Word>],
-    func_decl: &ast::MethodDeclaration<'a, spirv::Word>,
-    call_map: &HashMap<&'a str, HashSet<spirv::Word>>,
-    direcitves: &[Directive],
+    defined_globals: &GlobalStringIdResolver<'input>,
+    func_decl: &ast::MethodDeclaration<'input, spirv::Word>,
+    call_map: &HashMap<&'input str, HashSet<spirv::Word>>,
+    globals_use_map: &HashMap<ast::MethodName<'input, spirv::Word>, HashSet<spirv::Word>>,
     kernel_info: &mut HashMap<String, KernelInfo>,
 ) -> Result<spirv::Word, TranslateError> {
     if let ast::MethodName::Kernel(name) = func_decl.name {
@@ -1154,38 +1249,28 @@ fn emit_function_header<'a>(
     let fn_id = match func_decl.name {
         ast::MethodName::Kernel(name) => {
             let fn_id = defined_globals.get_id(name)?;
-            let mut global_variables = defined_globals
-                .variables_type_check
-                .iter()
-                .filter_map(|(k, t)| t.as_ref().map(|_| *k))
-                .collect::<Vec<_>>();
-            let mut interface = defined_globals.special_registers.interface();
-            for ast::Variable { name, .. } in synthetic_globals {
-                interface.push(*name);
-            }
-            let empty_hash_set = HashSet::new();
-            let child_fns = call_map.get(name).unwrap_or(&empty_hash_set);
-            for directive in direcitves {
-                match directive {
-                    Directive::Method(Function {
-                        func_decl, globals, ..
-                    }) => {
-                        match (**func_decl).borrow().name {
-                            ast::MethodName::Func(name) => {
-                                if child_fns.contains(&name) {
-                                    for var in globals {
-                                        interface.push(var.name);
-                                    }
-                                }
-                            }
-                            ast::MethodName::Kernel(_) => {}
-                        };
-                    }
-                    _ => {}
-                }
-            }
-            global_variables.append(&mut interface);
-            builder.entry_point(spirv::ExecutionModel::Kernel, fn_id, name, global_variables);
+            let interface = globals_use_map
+                .get(&ast::MethodName::Kernel(name))
+                .into_iter()
+                .flatten()
+                .copied()
+                .chain({
+                    call_map
+                        .get(name)
+                        .into_iter()
+                        .flat_map(|subfunctions| {
+                            subfunctions.iter().flat_map(|subfunction| {
+                                globals_use_map
+                                    .get(&ast::MethodName::Func(*subfunction))
+                                    .into_iter()
+                                    .flatten()
+                                    .copied()
+                            })
+                        })
+                        .into_iter()
+                })
+                .collect::<Vec<spirv::Word>>();
+            builder.entry_point(spirv::ExecutionModel::Kernel, fn_id, name, interface);
             fn_id
         }
         ast::MethodName::Func(name) => name,
@@ -3571,7 +3656,8 @@ fn emit_variable<'input>(
             [dr::Operand::LiteralInt32(align)].iter().cloned(),
         );
     }
-    if var.state_space != ast::StateSpace::Shared || !linking.contains(ast::LinkingDirective::EXTERN)
+    if var.state_space != ast::StateSpace::Shared
+        || !linking.contains(ast::LinkingDirective::EXTERN)
     {
         emit_linking_decoration(builder, id_defs, None, var.name, linking);
     }
@@ -4328,11 +4414,35 @@ fn emit_implicit_conversion(
             );
             if cv.to_space == ast::StateSpace::Generic && cv.from_space != ast::StateSpace::Generic
             {
-                builder.ptr_cast_to_generic(result_type, Some(cv.dst), cv.src)?;
+                let src = if cv.from_type != cv.to_type {
+                    let temp_type = map.get_or_add(
+                        builder,
+                        SpirvType::Pointer(
+                            Box::new(SpirvType::new(cv.to_type.clone())),
+                            cv.from_space.to_spirv(),
+                        ),
+                    );
+                    builder.bitcast(temp_type, None, cv.src)?
+                } else {
+                    cv.src
+                };
+                builder.ptr_cast_to_generic(result_type, Some(cv.dst), src)?;
             } else if cv.from_space == ast::StateSpace::Generic
                 && cv.to_space != ast::StateSpace::Generic
             {
-                builder.generic_cast_to_ptr(result_type, Some(cv.dst), cv.src)?;
+                let src = if cv.from_type != cv.to_type {
+                    let temp_type = map.get_or_add(
+                        builder,
+                        SpirvType::Pointer(
+                            Box::new(SpirvType::new(cv.to_type.clone())),
+                            cv.from_space.to_spirv(),
+                        ),
+                    );
+                    builder.bitcast(temp_type, None, cv.src)?
+                } else {
+                    cv.src
+                };
+                builder.generic_cast_to_ptr(result_type, Some(cv.dst), src)?;
             } else {
                 builder.bitcast(result_type, Some(cv.dst), cv.src)?;
             }
@@ -5033,22 +5143,6 @@ impl SpecialRegistersMap {
             reg_to_id: HashMap::new(),
             id_to_reg: HashMap::new(),
         }
-    }
-
-    fn interface(&self) -> Vec<spirv::Word> {
-        return Vec::new();
-        /*
-        self.reg_to_id
-            .iter()
-            .filter_map(|(sreg, id)| {
-                if sreg.normalized_sreg_and_type().is_none() {
-                    Some(*id)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>()
-        */
     }
 
     fn get(&self, id: spirv::Word) -> Option<PtxSpecialRegister> {

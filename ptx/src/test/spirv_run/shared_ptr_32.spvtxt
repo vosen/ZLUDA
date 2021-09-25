@@ -7,26 +7,28 @@
                OpCapability Int64
                OpCapability Float16
                OpCapability Float64
-         %32 = OpExtInstImport "OpenCL.std"
+               OpCapability DenormFlushToZero
+         %34 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
-               OpEntryPoint Kernel %1 "shared_ptr_32" %4
-               OpDecorate %4 Alignment 4
+               OpEntryPoint Kernel %1 "shared_ptr_32" %32
+               OpExecutionMode %1 ContractionOff
        %void = OpTypeVoid
        %uint = OpTypeInt 32 0
       %uchar = OpTypeInt 8 0
    %uint_128 = OpConstant %uint 128
 %_arr_uchar_uint_128 = OpTypeArray %uchar %uint_128
 %_ptr_Workgroup__arr_uchar_uint_128 = OpTypePointer Workgroup %_arr_uchar_uint_128
-          %4 = OpVariable %_ptr_Workgroup__arr_uchar_uint_128 Workgroup
+         %32 = OpVariable %_ptr_Workgroup__arr_uchar_uint_128 Workgroup
       %ulong = OpTypeInt 64 0
-         %40 = OpTypeFunction %void %ulong %ulong
+         %42 = OpTypeFunction %void %ulong %ulong
 %_ptr_Function_ulong = OpTypePointer Function %ulong
 %_ptr_Function_uint = OpTypePointer Function %uint
+ %uint_128_0 = OpConstant %uint 128
 %_ptr_CrossWorkgroup_ulong = OpTypePointer CrossWorkgroup %ulong
 %_ptr_Workgroup_ulong = OpTypePointer Workgroup %ulong
     %ulong_0 = OpConstant %ulong 0
 %_ptr_Workgroup_uchar = OpTypePointer Workgroup %uchar
-          %1 = OpFunction %void None %40
+          %1 = OpFunction %void None %42
          %10 = OpFunctionParameter %ulong
          %11 = OpFunctionParameter %ulong
          %30 = OpLabel
@@ -43,7 +45,8 @@
                OpStore %5 %12
          %13 = OpLoad %ulong %3 Aligned 8
                OpStore %6 %13
-         %25 = OpConvertPtrToU %uint %4
+         %33 = OpBitcast %_ptr_Workgroup__arr_uchar_uint_128 %32
+         %25 = OpConvertPtrToU %uint %33
          %14 = OpCopyObject %uint %25
                OpStore %7 %14
          %16 = OpLoad %ulong %5
@@ -56,9 +59,9 @@
                OpStore %27 %18 Aligned 8
          %20 = OpLoad %uint %7
          %28 = OpConvertUToPtr %_ptr_Workgroup_ulong %20
-         %46 = OpBitcast %_ptr_Workgroup_uchar %28
-         %47 = OpInBoundsPtrAccessChain %_ptr_Workgroup_uchar %46 %ulong_0
-         %24 = OpBitcast %_ptr_Workgroup_ulong %47
+         %49 = OpBitcast %_ptr_Workgroup_uchar %28
+         %50 = OpInBoundsPtrAccessChain %_ptr_Workgroup_uchar %49 %ulong_0
+         %24 = OpBitcast %_ptr_Workgroup_ulong %50
          %19 = OpLoad %ulong %24 Aligned 8
                OpStore %9 %19
          %21 = OpLoad %ulong %6

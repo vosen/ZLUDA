@@ -7,9 +7,13 @@
                OpCapability Int64
                OpCapability Float16
                OpCapability Float64
+               OpCapability DenormFlushToZero
          %37 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
                OpEntryPoint Kernel %4 "call"
+               OpExecutionMode %4 ContractionOff
+               OpDecorate %4 LinkageAttributes "call" Export
+               OpDecorate %1 LinkageAttributes "incr" Export
        %void = OpTypeVoid
       %ulong = OpTypeInt 64 0
          %40 = OpTypeFunction %void %ulong %ulong

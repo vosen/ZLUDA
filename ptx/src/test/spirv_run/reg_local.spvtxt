@@ -7,6 +7,7 @@
                OpCapability Int64
                OpCapability Float16
                OpCapability Float64
+               OpCapability DenormFlushToZero
          %34 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
                OpEntryPoint Kernel %1 "reg_local"
@@ -51,22 +52,24 @@
                OpStore %7 %12
          %14 = OpLoad %ulong %7
          %19 = OpIAdd %ulong %14 %ulong_1
-         %26 = OpPtrCastToGeneric %_ptr_Generic_ulong %4
+         %46 = OpBitcast %_ptr_Function_ulong %4
+         %26 = OpPtrCastToGeneric %_ptr_Generic_ulong %46
          %27 = OpCopyObject %ulong %19
                OpStore %26 %27 Aligned 8
-         %28 = OpPtrCastToGeneric %_ptr_Generic_ulong %4
-         %47 = OpBitcast %_ptr_Generic_uchar %28
-         %48 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %47 %ulong_0
-         %21 = OpBitcast %_ptr_Generic_ulong %48
+         %47 = OpBitcast %_ptr_Function_ulong %4
+         %28 = OpPtrCastToGeneric %_ptr_Generic_ulong %47
+         %49 = OpBitcast %_ptr_Generic_uchar %28
+         %50 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %49 %ulong_0
+         %21 = OpBitcast %_ptr_Generic_ulong %50
          %29 = OpLoad %ulong %21 Aligned 8
          %15 = OpCopyObject %ulong %29
                OpStore %7 %15
          %16 = OpLoad %ulong %6
          %17 = OpLoad %ulong %7
          %30 = OpConvertUToPtr %_ptr_CrossWorkgroup_ulong %16
-         %50 = OpBitcast %_ptr_CrossWorkgroup_uchar %30
-         %51 = OpInBoundsPtrAccessChain %_ptr_CrossWorkgroup_uchar %50 %ulong_0_0
-         %23 = OpBitcast %_ptr_CrossWorkgroup_ulong %51
+         %52 = OpBitcast %_ptr_CrossWorkgroup_uchar %30
+         %53 = OpInBoundsPtrAccessChain %_ptr_CrossWorkgroup_uchar %52 %ulong_0_0
+         %23 = OpBitcast %_ptr_CrossWorkgroup_ulong %53
          %31 = OpCopyObject %ulong %17
                OpStore %23 %31 Aligned 8
                OpReturn
