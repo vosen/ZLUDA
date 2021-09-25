@@ -7,22 +7,21 @@
                OpCapability Int64
                OpCapability Float16
                OpCapability Float64
-         %30 = OpExtInstImport "OpenCL.std"
+               OpCapability DenormFlushToZero
+         %32 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
-               OpEntryPoint Kernel %2 "shared_ptr_take_address" %1
+               OpEntryPoint Kernel %2 "shared_ptr_take_address" %30
                OpExecutionMode %2 ContractionOff
-               OpDecorate %1 Alignment 4
-               OpDecorate %1 LinkageAttributes "shared_mem" Import
        %void = OpTypeVoid
       %uchar = OpTypeInt 8 0
 %_ptr_Workgroup_uchar = OpTypePointer Workgroup %uchar
-          %1 = OpVariable %_ptr_Workgroup_uchar Workgroup
+         %30 = OpVariable %_ptr_Workgroup_uchar Workgroup
       %ulong = OpTypeInt 64 0
-         %35 = OpTypeFunction %void %ulong %ulong
+         %37 = OpTypeFunction %void %ulong %ulong
 %_ptr_Function_ulong = OpTypePointer Function %ulong
 %_ptr_CrossWorkgroup_ulong = OpTypePointer CrossWorkgroup %ulong
 %_ptr_Workgroup_ulong = OpTypePointer Workgroup %ulong
-          %2 = OpFunction %void None %35
+          %2 = OpFunction %void None %37
          %10 = OpFunctionParameter %ulong
          %11 = OpFunctionParameter %ulong
          %28 = OpLabel
@@ -39,7 +38,8 @@
                OpStore %5 %12
          %13 = OpLoad %ulong %4 Aligned 8
                OpStore %6 %13
-         %23 = OpConvertPtrToU %ulong %1
+         %31 = OpBitcast %_ptr_Workgroup_uchar %30
+         %23 = OpConvertPtrToU %ulong %31
          %14 = OpCopyObject %ulong %23
                OpStore %7 %14
          %16 = OpLoad %ulong %5

@@ -1,7 +1,7 @@
 import os, sys, subprocess
 
 def main(path):
-    dirs = os.listdir(path)
+    dirs = sorted(os.listdir(path))
     for file in dirs:
         if not file.endswith(".spvtxt"):
             continue

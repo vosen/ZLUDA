@@ -7,23 +7,26 @@
                OpCapability Int64
                OpCapability Float16
                OpCapability Float64
-         %25 = OpExtInstImport "OpenCL.std"
+               OpCapability DenormFlushToZero
+         %28 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
-               OpEntryPoint Kernel %1 "shared_variable" %4
-               OpDecorate %4 Alignment 4
+               OpEntryPoint Kernel %1 "shared_variable" %25
+               OpExecutionMode %1 ContractionOff
        %void = OpTypeVoid
        %uint = OpTypeInt 32 0
       %uchar = OpTypeInt 8 0
    %uint_128 = OpConstant %uint 128
 %_arr_uchar_uint_128 = OpTypeArray %uchar %uint_128
 %_ptr_Workgroup__arr_uchar_uint_128 = OpTypePointer Workgroup %_arr_uchar_uint_128
-          %4 = OpVariable %_ptr_Workgroup__arr_uchar_uint_128 Workgroup
+         %25 = OpVariable %_ptr_Workgroup__arr_uchar_uint_128 Workgroup
       %ulong = OpTypeInt 64 0
-         %33 = OpTypeFunction %void %ulong %ulong
+         %36 = OpTypeFunction %void %ulong %ulong
 %_ptr_Function_ulong = OpTypePointer Function %ulong
 %_ptr_CrossWorkgroup_ulong = OpTypePointer CrossWorkgroup %ulong
+ %uint_128_0 = OpConstant %uint 128
 %_ptr_Workgroup_ulong = OpTypePointer Workgroup %ulong
-          %1 = OpFunction %void None %33
+ %uint_128_1 = OpConstant %uint 128
+          %1 = OpFunction %void None %36
           %9 = OpFunctionParameter %ulong
          %10 = OpFunctionParameter %ulong
          %23 = OpLabel
@@ -44,9 +47,11 @@
          %13 = OpLoad %ulong %19 Aligned 8
                OpStore %7 %13
          %15 = OpLoad %ulong %7
-         %20 = OpBitcast %_ptr_Workgroup_ulong %4
+         %26 = OpBitcast %_ptr_Workgroup__arr_uchar_uint_128 %25
+         %20 = OpBitcast %_ptr_Workgroup_ulong %26
                OpStore %20 %15 Aligned 8
-         %21 = OpBitcast %_ptr_Workgroup_ulong %4
+         %27 = OpBitcast %_ptr_Workgroup__arr_uchar_uint_128 %25
+         %21 = OpBitcast %_ptr_Workgroup_ulong %27
          %16 = OpLoad %ulong %21 Aligned 8
                OpStore %8 %16
          %17 = OpLoad %ulong %6
