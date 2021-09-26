@@ -1304,9 +1304,11 @@ fn emit_capabilities(builder: &mut dr::Builder) {
 }
 
 // http://htmlpreview.github.io/?https://github.com/KhronosGroup/SPIRV-Registry/blob/master/extensions/KHR/SPV_KHR_float_controls.html
-fn emit_extensions(_builder: &mut dr::Builder) {
+fn emit_extensions(builder: &mut dr::Builder) {
     // TODO: re-enable when Intel float control extension works
     //builder.extension("SPV_INTEL_float_controls2");
+    builder.extension("SPV_KHR_float_controls");
+    builder.extension("SPV_KHR_no_integer_wrap_decoration");
 }
 
 fn emit_opencl_import(builder: &mut dr::Builder) -> spirv::Word {

@@ -26,3 +26,4 @@ hip_runtime-sys = { path = "../hip_runtime-sys" }
 tempfile = "3"
 spirv_tools-sys = { path = "../spirv_tools-sys" }
 paste = "1.0"
+cuda-driver-sys = "0.3.0"

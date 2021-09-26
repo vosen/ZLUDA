@@ -14,7 +14,8 @@
 	ld.param.u64 	in_addr, [input];
     ld.param.u64 	out_addr, [output];
 
-    ld.global.f32          temp, [in_addr];
-    st.global.f32          [out_addr], temp;
+    mov.b64                 temp, 0x0123456789abcdef;
+    ld.global.f32           temp, [in_addr];
+    st.global.f32           [out_addr], temp;
 	ret;
 }
