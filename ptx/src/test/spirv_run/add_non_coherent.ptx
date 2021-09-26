@@ -1,5 +1,5 @@
 .version 6.5
-.target sm_30
+.target sm_32
 .address_size 64
 
 .visible .entry add_non_coherent(
