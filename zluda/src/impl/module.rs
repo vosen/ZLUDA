@@ -54,20 +54,16 @@ impl SpirvModule {
 }
 
 pub(crate) fn load(module: *mut CUmodule, fname: *const i8) -> Result<(), hipError_t> {
-    let length = (0..)
-        .position(|i| unsafe { *fname.add(i) == 0 })
-        .ok_or(hipError_t::hipErrorInvalidValue)?;
-    let file_name = CStr::from_bytes_with_nul(unsafe { slice::from_raw_parts(fname as _, length) })
-        .map_err(|_| hipError_t::hipErrorInvalidValue)?;
-    let valid_file_name = file_name
+    let file_name = unsafe { CStr::from_ptr(fname) }
         .to_str()
         .map_err(|_| hipError_t::hipErrorInvalidValue)?;
-    let mut file = File::open(valid_file_name).map_err(|_| hipError_t::hipErrorFileNotFound)?;
+    let mut file = File::open(file_name).map_err(|_| hipError_t::hipErrorFileNotFound)?;
     let mut file_buffer = Vec::new();
     file.read_to_end(&mut file_buffer)
         .map_err(|_| hipError_t::hipErrorUnknown)?;
-    drop(file);
-    load_data(module, file_buffer.as_ptr() as _)
+    let result = load_data(module, file_buffer.as_ptr() as _);
+    drop(file_buffer);
+    result
 }
 
 pub(crate) fn load_data(
@@ -200,6 +196,8 @@ pub(crate) fn compile_amd<'a>(
         .arg("-ffp-contract=off")
         .arg("-nogpulib")
         .arg("-mno-wavefrontsize64")
+        .arg("-O3")
+        .arg("-Xclang")
         .arg("-O3")
         .arg("-Xlinker")
         .arg("--no-undefined")
