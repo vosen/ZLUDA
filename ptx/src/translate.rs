@@ -789,6 +789,14 @@ impl<'input> MethodsCallMap<'input> {
             })
     }
 
+    fn methods(
+        &self,
+    ) -> impl Iterator<Item = (ast::MethodName<'input, spirv::Word>, &HashSet<spirv::Word>)> {
+        self.map
+            .iter()
+            .map(|(method, children)| (*method, children))
+    }
+
     fn visit_callees(
         &self,
         method: ast::MethodName<'input, spirv::Word>,
@@ -1102,18 +1110,23 @@ fn resolve_indirect_uses_of_globals_shared<'input>(
     kernels_methods_call_map: &MethodsCallMap<'input>,
 ) -> HashMap<ast::MethodName<'input, spirv::Word>, BTreeSet<spirv::Word>> {
     let mut result = HashMap::new();
-    for (method, direct_globals) in methods_use_of_globals_shared.iter() {
-        let mut indirect_globals = direct_globals.iter().copied().collect::<BTreeSet<_>>();
-        kernels_methods_call_map.visit_callees(*method, |func| {
+    for (method, callees) in kernels_methods_call_map.methods() {
+        let mut indirect_globals = methods_use_of_globals_shared
+            .get(&method)
+            .into_iter()
+            .flatten()
+            .copied()
+            .collect::<BTreeSet<_>>();
+        for &callee in callees {
             indirect_globals.extend(
                 methods_use_of_globals_shared
-                    .get(&ast::MethodName::Func(func))
+                    .get(&ast::MethodName::Func(callee))
                     .into_iter()
                     .flatten()
                     .copied(),
             );
-        });
-        result.insert(*method, indirect_globals);
+        }
+        result.insert(method, indirect_globals);
     }
     result
 }

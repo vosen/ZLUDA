@@ -219,6 +219,7 @@ test_ptx!(prmt, [0x70c507d6u32, 0x6fbd4b5cu32], [0x6fbdd65cu32]);
 test_ptx!(activemask, [0u32], [1u32]);
 test_ptx!(membar, [152731u32], [152731u32]);
 test_ptx!(shared_unify_extern, [7681u64, 7682u64], [15363u64]);
+test_ptx!(shared_unify_local, [16752u64, 714u64], [17466u64]);
 
 test_ptx!(assertfail);
 test_ptx!(func_ptr);
