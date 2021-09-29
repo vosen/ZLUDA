@@ -2,7 +2,7 @@ use crate::ast;
 use half::f16;
 use rspirv::dr;
 use std::cell::RefCell;
-use std::collections::{hash_map, HashMap, HashSet};
+use std::collections::{hash_map, BTreeMap, HashMap, HashSet};
 use std::{borrow::Cow, collections::BTreeSet, ffi::CString, hash::Hash, iter, mem, rc::Rc};
 
 use rspirv::binary::{Assemble, Disassemble};
@@ -443,7 +443,7 @@ pub fn to_spirv_module<'input>(ast: ast::Module<'input>) -> Result<Module, Trans
         .collect::<Vec<_>>();
     let mut builder = dr::Builder::new();
     builder.reserve_ids(id_defs.current_id());
-    let call_map = get_kernels_call_map(&directives);
+    let call_map = MethodsCallMap::new(&directives);
     let mut directives =
         convert_dynamic_shared_memory_usage(directives, &call_map, &mut || builder.id());
     normalize_variable_decls(&mut directives);
@@ -559,7 +559,7 @@ fn hoist_function_globals(directives: Vec<Directive>) -> Vec<Directive> {
 
 // TODO: remove this once we have pef-function support for denorms
 fn emit_denorm_build_string<'input>(
-    call_map: &HashMap<&str, HashSet<u32>>,
+    call_map: &MethodsCallMap,
     denorm_information: &HashMap<
         ast::MethodName<'input, spirv::Word>,
         HashMap<u8, (spirv::FPDenormMode, isize)>,
@@ -580,7 +580,7 @@ fn emit_denorm_build_string<'input>(
         })
         .collect::<HashMap<_, _>>();
     let mut flush_over_preserve = 0;
-    for (kernel, children) in call_map {
+    for (kernel, children) in call_map.kernels() {
         flush_over_preserve += *denorm_counts
             .get(&ast::MethodName::Kernel(kernel))
             .unwrap_or(&0);
@@ -606,7 +606,7 @@ fn emit_directives<'input>(
     id_defs: &GlobalStringIdResolver<'input>,
     opencl_id: spirv::Word,
     should_flush_denorms: bool,
-    call_map: &HashMap<&'input str, HashSet<spirv::Word>>,
+    call_map: &MethodsCallMap<'input>,
     globals_use_map: HashMap<ast::MethodName<'input, spirv::Word>, HashSet<spirv::Word>>,
     directives: Vec<Directive<'input>>,
     kernel_info: &mut HashMap<String, KernelInfo>,
@@ -717,61 +717,89 @@ fn emit_function_linkage<'input>(
     Ok(())
 }
 
-fn get_kernels_call_map<'input>(
-    module: &[Directive<'input>],
-) -> HashMap<&'input str, HashSet<spirv::Word>> {
-    let mut directly_called_by = HashMap::new();
-    for directive in module {
-        match directive {
-            Directive::Method(Function {
-                func_decl,
-                body: Some(statements),
-                ..
-            }) => {
-                let call_key: ast::MethodName<_> = (**func_decl).borrow().name;
-                if let hash_map::Entry::Vacant(entry) = directly_called_by.entry(call_key) {
-                    entry.insert(Vec::new());
-                }
-                for statement in statements {
-                    match statement {
-                        Statement::Call(call) => {
-                            multi_hash_map_append(&mut directly_called_by, call_key, call.name);
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-    let mut result = HashMap::new();
-    for (method_key, children) in directly_called_by.iter() {
-        match method_key {
-            ast::MethodName::Kernel(name) => {
-                let mut visited = HashSet::new();
-                for child in children {
-                    add_call_map_single(&directly_called_by, &mut visited, *child);
-                }
-                result.insert(*name, visited);
-            }
-            ast::MethodName::Func(_) => {}
-        }
-    }
-    result
+struct MethodsCallMap<'input> {
+    map: HashMap<ast::MethodName<'input, spirv::Word>, HashSet<spirv::Word>>,
 }
 
-fn add_call_map_single<'input>(
-    directly_called_by: &HashMap<ast::MethodName<'input, spirv::Word>, Vec<spirv::Word>>,
-    visited: &mut HashSet<spirv::Word>,
-    current: spirv::Word,
-) {
-    if !visited.insert(current) {
-        return;
-    }
-    if let Some(children) = directly_called_by.get(&ast::MethodName::Func(current)) {
-        for child in children {
-            add_call_map_single(directly_called_by, visited, *child);
+impl<'input> MethodsCallMap<'input> {
+    fn new(module: &[Directive<'input>]) -> Self {
+        let mut directly_called_by = HashMap::new();
+        for directive in module {
+            match directive {
+                Directive::Method(Function {
+                    func_decl,
+                    body: Some(statements),
+                    ..
+                }) => {
+                    let call_key: ast::MethodName<_> = (**func_decl).borrow().name;
+                    if let hash_map::Entry::Vacant(entry) = directly_called_by.entry(call_key) {
+                        entry.insert(Vec::new());
+                    }
+                    for statement in statements {
+                        match statement {
+                            Statement::Call(call) => {
+                                multi_hash_map_append(&mut directly_called_by, call_key, call.name);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                _ => {}
+            }
         }
+        let mut result = HashMap::new();
+        for (&method_key, children) in directly_called_by.iter() {
+            let mut visited = HashSet::new();
+            for child in children {
+                Self::add_call_map_single(&directly_called_by, &mut visited, *child);
+            }
+            result.insert(method_key, visited);
+        }
+        MethodsCallMap { map: result }
+    }
+
+    fn add_call_map_single(
+        directly_called_by: &HashMap<ast::MethodName<'input, spirv::Word>, Vec<spirv::Word>>,
+        visited: &mut HashSet<spirv::Word>,
+        current: spirv::Word,
+    ) {
+        if !visited.insert(current) {
+            return;
+        }
+        if let Some(children) = directly_called_by.get(&ast::MethodName::Func(current)) {
+            for child in children {
+                Self::add_call_map_single(directly_called_by, visited, *child);
+            }
+        }
+    }
+
+    fn get_kernel_children(&self, name: &'input str) -> impl Iterator<Item = &spirv::Word> {
+        self.map
+            .get(&ast::MethodName::Kernel(name))
+            .into_iter()
+            .flatten()
+    }
+
+    fn kernels(&self) -> impl Iterator<Item = (&'input str, &HashSet<spirv::Word>)> {
+        self.map
+            .iter()
+            .filter_map(|(method, children)| match method {
+                ast::MethodName::Kernel(kernel) => Some((*kernel, children)),
+                ast::MethodName::Func(..) => None,
+            })
+    }
+
+    fn visit_callees(
+        &self,
+        method: ast::MethodName<'input, spirv::Word>,
+        f: impl FnMut(spirv::Word),
+    ) {
+        self.map
+            .get(&method)
+            .into_iter()
+            .flatten()
+            .copied()
+            .for_each(f);
     }
 }
 
@@ -820,14 +848,14 @@ fn multi_hash_map_append<
 */
 fn convert_dynamic_shared_memory_usage<'input>(
     module: Vec<Directive<'input>>,
-    kernels_methods_call_map: &HashMap<&'input str, HashSet<spirv::Word>>,
+    kernels_methods_call_map: &MethodsCallMap<'input>,
     new_id: &mut impl FnMut() -> spirv::Word,
 ) -> Vec<Directive<'input>> {
     let mut globals_shared = HashMap::new();
     for dir in module.iter() {
         match dir {
             Directive::Variable(
-                linking,
+                _,
                 ast::Variable {
                     state_space: ast::StateSpace::Shared,
                     name,
@@ -835,12 +863,7 @@ fn convert_dynamic_shared_memory_usage<'input>(
                     ..
                 },
             ) => {
-                let size = if linking.contains(ast::LinkingDirective::EXTERN) {
-                    GlobalSharedSize::ExternUnsized
-                } else {
-                    GlobalSharedSize::Sized((*v_type).size_of())
-                };
-                globals_shared.insert(*name, (size, v_type.clone()));
+                globals_shared.insert(*name, v_type.clone());
             }
             _ => {}
         }
@@ -848,7 +871,7 @@ fn convert_dynamic_shared_memory_usage<'input>(
     if globals_shared.len() == 0 {
         return module;
     }
-    let mut methods_to_globals_shared_direct_only_use = HashMap::<_, GlobalSharedSize>::new();
+    let mut methods_to_directly_used_shared_globals = HashMap::<_, HashSet<spirv::Word>>::new();
     let module = module
         .into_iter()
         .map(|directive| match directive {
@@ -865,16 +888,11 @@ fn convert_dynamic_shared_memory_usage<'input>(
                     .into_iter()
                     .map(|statement| {
                         statement.map_id(&mut |id, _| {
-                            if let Some((size, _)) = globals_shared.get(&id) {
-                                match methods_to_globals_shared_direct_only_use.entry(call_key) {
-                                    hash_map::Entry::Occupied(mut e) => {
-                                        let original_size = *e.get();
-                                        e.insert(original_size.fold(*size));
-                                    }
-                                    hash_map::Entry::Vacant(mut e) => {
-                                        e.insert(*size);
-                                    }
-                                }
+                            if let Some(type_) = globals_shared.get(&id) {
+                                methods_to_directly_used_shared_globals
+                                    .entry(call_key)
+                                    .or_insert_with(HashSet::new)
+                                    .insert(id);
                             }
                             id
                         })
@@ -894,13 +912,12 @@ fn convert_dynamic_shared_memory_usage<'input>(
         .collect::<Vec<_>>();
     // If there's a chain `kernel` -> `fn1` -> `fn2`, where only `fn2` uses extern shared,
     // make sure it gets propagated to `fn1` and `kernel`
-    let (kernels_to_global_shared, functions_to_global_shared) =
-        resolve_indirect_uses_of_globals_shared(
-            methods_to_globals_shared_direct_only_use,
-            kernels_methods_call_map,
-        );
+    let methods_to_indirectly_used_shared_globals = resolve_indirect_uses_of_globals_shared(
+        methods_to_directly_used_shared_globals,
+        kernels_methods_call_map,
+    );
     // now visit every method declaration and inject those additional arguments
-    let mut result = Vec::with_capacity(module.len());
+    let mut directives = Vec::with_capacity(module.len());
     for directive in module.into_iter() {
         match directive {
             Directive::Method(Function {
@@ -915,17 +932,17 @@ fn convert_dynamic_shared_memory_usage<'input>(
                     let func_decl_ref = &mut (*func_decl).borrow_mut();
                     let method_name = func_decl_ref.name;
                     insert_arguments_remap_statements(
-                        method_name,
-                        &kernels_to_global_shared,
                         new_id,
-                        &mut result,
-                        &functions_to_global_shared,
-                        func_decl_ref,
+                        kernels_methods_call_map,
                         &globals_shared,
+                        &methods_to_indirectly_used_shared_globals,
+                        method_name,
+                        &mut directives,
+                        func_decl_ref,
                         statements,
                     )
                 };
-                result.push(Directive::Method(Function {
+                directives.push(Directive::Method(Function {
                     func_decl,
                     globals,
                     body: Some(statements),
@@ -934,77 +951,79 @@ fn convert_dynamic_shared_memory_usage<'input>(
                     linkage,
                 }));
             }
-            // Existing .shared globals are now unused, they were replaced by kernel-specific globals
-            Directive::Variable(_, ast::Variable { name, .. })
-                if globals_shared.contains_key(&name) => {}
-            directive => result.push(directive),
+            directive => directives.push(directive),
         }
     }
-    result
+    directives
 }
 
-fn insert_arguments_remap_statements(
-    method_name: ast::MethodName<u32>,
-    kernels_to_global_shared: &HashMap<&str, GlobalSharedSize>,
+fn insert_arguments_remap_statements<'input>(
     new_id: &mut impl FnMut() -> u32,
+    kernels_methods_call_map: &MethodsCallMap<'input>,
+    globals_shared: &HashMap<u32, ast::Type>,
+    methods_to_indirectly_used_shared_globals: &HashMap<
+        ast::MethodName<'input, spirv::Word>,
+        BTreeSet<spirv::Word>,
+    >,
+    method_name: ast::MethodName<u32>,
     result: &mut Vec<Directive>,
-    functions_to_global_shared: &HashSet<u32>,
     func_decl_ref: &mut std::cell::RefMut<ast::MethodDeclaration<u32>>,
-    globals_shared: &HashMap<u32, (GlobalSharedSize, ast::Type)>,
     statements: Vec<Statement<ast::Instruction<ExpandedArgParams>, ExpandedArgParams>>,
 ) -> Vec<Statement<ast::Instruction<ExpandedArgParams>, ExpandedArgParams>> {
-    let (shared_id_param, shared_id_type) = match method_name {
-        ast::MethodName::Kernel(kernel_name) => {
-            let globals_shared_size = match kernels_to_global_shared.get(kernel_name) {
-                Some(s) => *s,
-                None => return statements,
-            };
-            let shared_id_param = new_id();
-            func_decl_ref.shared_mem = Some(shared_id_param);
-            let (linkage, type_) = match globals_shared_size {
-                GlobalSharedSize::ExternUnsized => (
-                    ast::LinkingDirective::EXTERN,
-                    ast::Type::Array(ast::ScalarType::B8, Vec::new()),
-                ),
-                GlobalSharedSize::Sized(size) => (
-                    ast::LinkingDirective::NONE,
-                    ast::Type::Array(ast::ScalarType::B8, vec![size as u32]),
-                ),
-            };
-            result.push(Directive::Variable(
-                linkage,
-                ast::Variable {
-                    align: None,
-                    v_type: type_.clone(),
-                    state_space: ast::StateSpace::Shared,
-                    name: shared_id_param,
-                    array_init: Vec::new(),
-                },
-            ));
-            (shared_id_param, Some(type_))
-        }
-        ast::MethodName::Func(function_name) => {
-            if !functions_to_global_shared.contains(&function_name) {
-                return statements;
+    let remapped_globals_in_method =
+        if let Some(method_globals) = methods_to_indirectly_used_shared_globals.get(&method_name) {
+            match method_name {
+                ast::MethodName::Func(..) => {
+                    let remapped_globals = method_globals
+                        .iter()
+                        .map(|global| {
+                            (
+                                *global,
+                                (
+                                    new_id(),
+                                    globals_shared
+                                        .get(&global)
+                                        .unwrap_or_else(|| todo!())
+                                        .clone(),
+                                ),
+                            )
+                        })
+                        .collect::<BTreeMap<_, _>>();
+                    for (_, (new_shared_global_id, shared_global_type)) in remapped_globals.iter() {
+                        func_decl_ref.input_arguments.push(ast::Variable {
+                            align: None,
+                            v_type: shared_global_type.clone(),
+                            state_space: ast::StateSpace::Shared,
+                            name: *new_shared_global_id,
+                            array_init: Vec::new(),
+                        });
+                    }
+                    remapped_globals
+                }
+                ast::MethodName::Kernel(..) => method_globals
+                    .iter()
+                    .map(|global| {
+                        (
+                            *global,
+                            (
+                                *global,
+                                globals_shared
+                                    .get(&global)
+                                    .unwrap_or_else(|| todo!())
+                                    .clone(),
+                            ),
+                        )
+                    })
+                    .collect::<BTreeMap<_, _>>(),
             }
-            let shared_id_param = new_id();
-            func_decl_ref.input_arguments.push(ast::Variable {
-                align: None,
-                v_type: ast::Type::Pointer(ast::ScalarType::B8, ast::StateSpace::Shared),
-                state_space: ast::StateSpace::Reg,
-                name: shared_id_param,
-                array_init: Vec::new(),
-            });
-            (shared_id_param, None)
-        }
-    };
+        } else {
+            return statements;
+        };
     replace_uses_of_shared_memory(
         new_id,
-        globals_shared,
-        functions_to_global_shared,
-        shared_id_param,
-        shared_id_type,
+        methods_to_indirectly_used_shared_globals,
         statements,
+        remapped_globals_in_method,
     )
 }
 
@@ -1025,13 +1044,14 @@ impl GlobalSharedSize {
     }
 }
 
-fn replace_uses_of_shared_memory<'a>(
+fn replace_uses_of_shared_memory<'input>(
     new_id: &mut impl FnMut() -> spirv::Word,
-    extern_shared_decls: &HashMap<spirv::Word, (GlobalSharedSize, ast::Type)>,
-    methods_using_extern_shared: &HashSet<spirv::Word>,
-    shared_id_param: spirv::Word,
-    shared_id_type: Option<ast::Type>,
+    methods_to_indirectly_used_shared_globals: &HashMap<
+        ast::MethodName<'input, spirv::Word>,
+        BTreeSet<spirv::Word>,
+    >,
     statements: Vec<ExpandedStatement>,
+    remapped_globals_in_method: BTreeMap<spirv::Word, (spirv::Word, ast::Type)>,
 ) -> Vec<ExpandedStatement> {
     let mut result = Vec::with_capacity(statements.len());
     for statement in statements {
@@ -1040,48 +1060,26 @@ fn replace_uses_of_shared_memory<'a>(
                 // We can safely skip checking call arguments,
                 // because there's simply no way to pass shared ptr
                 // without converting it to .b64 first
-                if methods_using_extern_shared.contains(&call.name) {
-                    let shared_id_param = match shared_id_type {
-                        Some(ref global_shared_defined_type) => {
-                            let dst = new_id();
-                            result.push(Statement::Conversion(ImplicitConversion {
-                                src: shared_id_param,
-                                dst,
-                                from_type: global_shared_defined_type.clone(),
-                                to_type: ast::Type::Scalar(ast::ScalarType::B8),
-                                from_space: ast::StateSpace::Shared,
-                                to_space: ast::StateSpace::Shared,
-                                kind: ConversionKind::PtrToPtr,
-                            }));
-                            dst
-                        }
-                        None => shared_id_param,
-                    };
-                    call.input_arguments.push((
-                        shared_id_param,
-                        ast::Type::Scalar(ast::ScalarType::B8),
-                        ast::StateSpace::Shared,
-                    ));
+                if let Some(shared_globals_used_by_callee) =
+                    methods_to_indirectly_used_shared_globals.get(&ast::MethodName::Func(call.name))
+                {
+                    for &shared_global_used_by_callee in shared_globals_used_by_callee {
+                        let (remapped_shared_id, type_) = remapped_globals_in_method
+                            .get(&shared_global_used_by_callee)
+                            .unwrap_or_else(|| todo!());
+                        call.input_arguments.push((
+                            *remapped_shared_id,
+                            type_.clone(),
+                            ast::StateSpace::Shared,
+                        ));
+                    }
                 }
                 result.push(Statement::Call(call))
             }
             statement => {
                 let new_statement = statement.map_id(&mut |id, _| {
-                    if let Some((_, type_)) = extern_shared_decls.get(&id) {
-                        if *type_ == ast::Type::Scalar(ast::ScalarType::B8) {
-                            return shared_id_param;
-                        }
-                        let replacement_id = new_id();
-                        result.push(Statement::Conversion(ImplicitConversion {
-                            src: shared_id_param,
-                            dst: replacement_id,
-                            from_type: ast::Type::Scalar(ast::ScalarType::B8),
-                            from_space: ast::StateSpace::Shared,
-                            to_type: type_.clone(),
-                            to_space: ast::StateSpace::Shared,
-                            kind: ConversionKind::PtrToPtr,
-                        }));
-                        replacement_id
+                    if let Some((remapped_shared_id, _)) = remapped_globals_in_method.get(&id) {
+                        *remapped_shared_id
                     } else {
                         id
                     }
@@ -1097,33 +1095,27 @@ fn replace_uses_of_shared_memory<'a>(
 // * If it's a kernel -> size of .shared globals in use (direct or indirect)
 // * If it's a function -> does it use .shared global (directly or indirectly)
 fn resolve_indirect_uses_of_globals_shared<'input>(
-    methods_use_of_globals_shared: HashMap<ast::MethodName<'input, spirv::Word>, GlobalSharedSize>,
-    kernels_methods_call_map: &HashMap<&'input str, HashSet<spirv::Word>>,
-) -> (HashMap<&'input str, GlobalSharedSize>, HashSet<spirv::Word>) {
-    let mut kernel_use = HashMap::new();
-    let mut functions_using_global = HashSet::new();
-    let empty = HashSet::new();
-    for (method, globals) in methods_use_of_globals_shared.iter() {
-        match method {
-            ast::MethodName::Kernel(kernel_name) => {
-                let mut size = *globals;
-                for &called_subfunction in
-                    kernels_methods_call_map.get(kernel_name).unwrap_or(&empty)
-                {
-                    if let Some(new_size) = methods_use_of_globals_shared
-                        .get(&ast::MethodName::Func(called_subfunction))
-                    {
-                        size = size.fold(*new_size);
-                    }
-                }
-                kernel_use.insert(*kernel_name, size);
-            }
-            ast::MethodName::Func(fn_id) => {
-                functions_using_global.insert(*fn_id);
-            }
-        }
+    methods_use_of_globals_shared: HashMap<
+        ast::MethodName<'input, spirv::Word>,
+        HashSet<spirv::Word>,
+    >,
+    kernels_methods_call_map: &MethodsCallMap<'input>,
+) -> HashMap<ast::MethodName<'input, spirv::Word>, BTreeSet<spirv::Word>> {
+    let mut result = HashMap::new();
+    for (method, direct_globals) in methods_use_of_globals_shared.iter() {
+        let mut indirect_globals = direct_globals.iter().copied().collect::<BTreeSet<_>>();
+        kernels_methods_call_map.visit_callees(*method, |func| {
+            indirect_globals.extend(
+                methods_use_of_globals_shared
+                    .get(&ast::MethodName::Func(func))
+                    .into_iter()
+                    .flatten()
+                    .copied(),
+            );
+        });
+        result.insert(*method, indirect_globals);
     }
-    (kernel_use, functions_using_global)
+    result
 }
 
 type DenormCountMap<T> = HashMap<T, isize>;
@@ -1217,7 +1209,7 @@ fn emit_function_header<'input>(
     map: &mut TypeWordMap,
     defined_globals: &GlobalStringIdResolver<'input>,
     func_decl: &ast::MethodDeclaration<'input, spirv::Word>,
-    call_map: &HashMap<&'input str, HashSet<spirv::Word>>,
+    call_map: &MethodsCallMap<'input>,
     globals_use_map: &HashMap<ast::MethodName<'input, spirv::Word>, HashSet<spirv::Word>>,
     kernel_info: &mut HashMap<String, KernelInfo>,
 ) -> Result<spirv::Word, TranslateError> {
@@ -1256,16 +1248,14 @@ fn emit_function_header<'input>(
                 .copied()
                 .chain({
                     call_map
-                        .get(name)
-                        .into_iter()
-                        .flat_map(|subfunctions| {
-                            subfunctions.iter().flat_map(|subfunction| {
-                                globals_use_map
-                                    .get(&ast::MethodName::Func(*subfunction))
-                                    .into_iter()
-                                    .flatten()
-                                    .copied()
-                            })
+                        .get_kernel_children(name)
+                        .copied()
+                        .flat_map(|subfunction| {
+                            globals_use_map
+                                .get(&ast::MethodName::Func(subfunction))
+                                .into_iter()
+                                .flatten()
+                                .copied()
                         })
                         .into_iter()
                 })
