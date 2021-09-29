@@ -8,41 +8,40 @@
                OpCapability Float16
                OpCapability Float64
                OpCapability DenormFlushToZero
-         %41 = OpExtInstImport "OpenCL.std"
+               OpExtension "SPV_KHR_float_controls"
+               OpExtension "SPV_KHR_no_integer_wrap_decoration"
+         %35 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
-               OpEntryPoint Kernel %12 "extern_shared_call" %37
+               OpEntryPoint Kernel %12 "extern_shared_call" %1
                OpExecutionMode %12 ContractionOff
+               OpDecorate %1 Alignment 4
        %void = OpTypeVoid
-      %uchar = OpTypeInt 8 0
-%_ptr_Workgroup_uchar = OpTypePointer Workgroup %uchar
-         %45 = OpTypeFunction %void %_ptr_Workgroup_uchar
-      %ulong = OpTypeInt 64 0
-%_ptr_Function_ulong = OpTypePointer Function %ulong
        %uint = OpTypeInt 32 0
 %_ptr_Workgroup_uint = OpTypePointer Workgroup %uint
+          %1 = OpVariable %_ptr_Workgroup_uint Workgroup
+         %39 = OpTypeFunction %void %_ptr_Workgroup_uint
+      %ulong = OpTypeInt 64 0
+%_ptr_Function_ulong = OpTypePointer Function %ulong
 %_ptr_Workgroup_ulong = OpTypePointer Workgroup %ulong
     %ulong_2 = OpConstant %ulong 2
-         %37 = OpVariable %_ptr_Workgroup_uchar Workgroup
-         %51 = OpTypeFunction %void %ulong %ulong
+         %43 = OpTypeFunction %void %ulong %ulong
 %_ptr_CrossWorkgroup_ulong = OpTypePointer CrossWorkgroup %ulong
-          %2 = OpFunction %void None %45
-         %34 = OpFunctionParameter %_ptr_Workgroup_uchar
+          %2 = OpFunction %void None %39
+         %34 = OpFunctionParameter %_ptr_Workgroup_uint
          %11 = OpLabel
           %3 = OpVariable %_ptr_Function_ulong Function
-         %35 = OpBitcast %_ptr_Workgroup_uint %34
-          %9 = OpBitcast %_ptr_Workgroup_ulong %35
+          %9 = OpBitcast %_ptr_Workgroup_ulong %34
           %4 = OpLoad %ulong %9 Aligned 8
                OpStore %3 %4
           %6 = OpLoad %ulong %3
           %5 = OpIAdd %ulong %6 %ulong_2
                OpStore %3 %5
           %7 = OpLoad %ulong %3
-         %36 = OpBitcast %_ptr_Workgroup_uint %34
-         %10 = OpBitcast %_ptr_Workgroup_ulong %36
+         %10 = OpBitcast %_ptr_Workgroup_ulong %34
                OpStore %10 %7 Aligned 8
                OpReturn
                OpFunctionEnd
-         %12 = OpFunction %void None %51
+         %12 = OpFunction %void None %43
          %18 = OpFunctionParameter %ulong
          %19 = OpFunctionParameter %ulong
          %32 = OpLabel
@@ -62,13 +61,10 @@
          %22 = OpLoad %ulong %28 Aligned 8
                OpStore %17 %22
          %24 = OpLoad %ulong %17
-         %38 = OpBitcast %_ptr_Workgroup_uint %37
-         %29 = OpBitcast %_ptr_Workgroup_ulong %38
+         %29 = OpBitcast %_ptr_Workgroup_ulong %1
                OpStore %29 %24 Aligned 8
-         %39 = OpBitcast %_ptr_Workgroup_uchar %37
-         %53 = OpFunctionCall %void %2 %39
-         %40 = OpBitcast %_ptr_Workgroup_uint %37
-         %30 = OpBitcast %_ptr_Workgroup_ulong %40
+         %45 = OpFunctionCall %void %2 %1
+         %30 = OpBitcast %_ptr_Workgroup_ulong %1
          %25 = OpLoad %ulong %30 Aligned 8
                OpStore %17 %25
          %26 = OpLoad %ulong %16

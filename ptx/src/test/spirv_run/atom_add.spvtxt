@@ -8,32 +8,32 @@
                OpCapability Float16
                OpCapability Float64
                OpCapability DenormFlushToZero
-         %42 = OpExtInstImport "OpenCL.std"
+               OpExtension "SPV_KHR_float_controls"
+               OpExtension "SPV_KHR_no_integer_wrap_decoration"
+         %38 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
-               OpEntryPoint Kernel %1 "atom_add" %38
+               OpEntryPoint Kernel %1 "atom_add" %4
                OpExecutionMode %1 ContractionOff
+               OpDecorate %4 Alignment 4
        %void = OpTypeVoid
        %uint = OpTypeInt 32 0
       %uchar = OpTypeInt 8 0
   %uint_1024 = OpConstant %uint 1024
 %_arr_uchar_uint_1024 = OpTypeArray %uchar %uint_1024
 %_ptr_Workgroup__arr_uchar_uint_1024 = OpTypePointer Workgroup %_arr_uchar_uint_1024
-         %38 = OpVariable %_ptr_Workgroup__arr_uchar_uint_1024 Workgroup
+          %4 = OpVariable %_ptr_Workgroup__arr_uchar_uint_1024 Workgroup
       %ulong = OpTypeInt 64 0
-         %50 = OpTypeFunction %void %ulong %ulong
+         %46 = OpTypeFunction %void %ulong %ulong
 %_ptr_Function_ulong = OpTypePointer Function %ulong
 %_ptr_Function_uint = OpTypePointer Function %uint
 %_ptr_Generic_uint = OpTypePointer Generic %uint
     %ulong_4 = OpConstant %ulong 4
 %_ptr_Generic_uchar = OpTypePointer Generic %uchar
-%uint_1024_0 = OpConstant %uint 1024
 %_ptr_Workgroup_uint = OpTypePointer Workgroup %uint
-%uint_1024_1 = OpConstant %uint 1024
      %uint_1 = OpConstant %uint 1
      %uint_0 = OpConstant %uint 0
-%uint_1024_2 = OpConstant %uint 1024
   %ulong_4_0 = OpConstant %ulong 4
-          %1 = OpFunction %void None %50
+          %1 = OpFunction %void None %46
           %9 = OpFunctionParameter %ulong
          %10 = OpFunctionParameter %ulong
          %36 = OpLabel
@@ -55,22 +55,19 @@
                OpStore %7 %13
          %16 = OpLoad %ulong %5
          %30 = OpConvertUToPtr %_ptr_Generic_uint %16
-         %55 = OpBitcast %_ptr_Generic_uchar %30
-         %56 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %55 %ulong_4
-         %26 = OpBitcast %_ptr_Generic_uint %56
+         %51 = OpBitcast %_ptr_Generic_uchar %30
+         %52 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %51 %ulong_4
+         %26 = OpBitcast %_ptr_Generic_uint %52
          %15 = OpLoad %uint %26 Aligned 4
                OpStore %8 %15
          %17 = OpLoad %uint %7
-         %39 = OpBitcast %_ptr_Workgroup__arr_uchar_uint_1024 %38
-         %31 = OpBitcast %_ptr_Workgroup_uint %39
+         %31 = OpBitcast %_ptr_Workgroup_uint %4
                OpStore %31 %17 Aligned 4
          %19 = OpLoad %uint %8
-         %40 = OpBitcast %_ptr_Workgroup__arr_uchar_uint_1024 %38
-         %32 = OpBitcast %_ptr_Workgroup_uint %40
+         %32 = OpBitcast %_ptr_Workgroup_uint %4
          %18 = OpAtomicIAdd %uint %32 %uint_1 %uint_0 %19
                OpStore %7 %18
-         %41 = OpBitcast %_ptr_Workgroup__arr_uchar_uint_1024 %38
-         %33 = OpBitcast %_ptr_Workgroup_uint %41
+         %33 = OpBitcast %_ptr_Workgroup_uint %4
          %20 = OpLoad %uint %33 Aligned 4
                OpStore %8 %20
          %21 = OpLoad %ulong %6
@@ -80,9 +77,9 @@
          %23 = OpLoad %ulong %6
          %24 = OpLoad %uint %8
          %35 = OpConvertUToPtr %_ptr_Generic_uint %23
-         %63 = OpBitcast %_ptr_Generic_uchar %35
-         %64 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %63 %ulong_4_0
-         %28 = OpBitcast %_ptr_Generic_uint %64
+         %56 = OpBitcast %_ptr_Generic_uchar %35
+         %57 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %56 %ulong_4_0
+         %28 = OpBitcast %_ptr_Generic_uint %57
                OpStore %28 %24 Aligned 4
                OpReturn
                OpFunctionEnd

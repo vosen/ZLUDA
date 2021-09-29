@@ -8,37 +8,37 @@
                OpCapability Float16
                OpCapability Float64
                OpCapability DenormFlushToZero
-         %46 = OpExtInstImport "OpenCL.std"
+               OpExtension "SPV_KHR_float_controls"
+               OpExtension "SPV_KHR_no_integer_wrap_decoration"
+         %42 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
-               OpEntryPoint Kernel %1 "atom_add_float" %42
+               OpEntryPoint Kernel %1 "atom_add_float" %4
                OpExecutionMode %1 ContractionOff
                OpDecorate %37 LinkageAttributes "__zluda_ptx_impl__atom_relaxed_gpu_shared_add_f32" Import
+               OpDecorate %4 Alignment 4
        %void = OpTypeVoid
       %float = OpTypeFloat 32
 %_ptr_Workgroup_float = OpTypePointer Workgroup %float
-         %50 = OpTypeFunction %float %_ptr_Workgroup_float %float
+         %46 = OpTypeFunction %float %_ptr_Workgroup_float %float
        %uint = OpTypeInt 32 0
       %uchar = OpTypeInt 8 0
   %uint_1024 = OpConstant %uint 1024
 %_arr_uchar_uint_1024 = OpTypeArray %uchar %uint_1024
 %_ptr_Workgroup__arr_uchar_uint_1024 = OpTypePointer Workgroup %_arr_uchar_uint_1024
-         %42 = OpVariable %_ptr_Workgroup__arr_uchar_uint_1024 Workgroup
+          %4 = OpVariable %_ptr_Workgroup__arr_uchar_uint_1024 Workgroup
       %ulong = OpTypeInt 64 0
-         %57 = OpTypeFunction %void %ulong %ulong
+         %53 = OpTypeFunction %void %ulong %ulong
 %_ptr_Function_ulong = OpTypePointer Function %ulong
 %_ptr_Function_float = OpTypePointer Function %float
 %_ptr_Generic_float = OpTypePointer Generic %float
     %ulong_4 = OpConstant %ulong 4
 %_ptr_Generic_uchar = OpTypePointer Generic %uchar
-%uint_1024_0 = OpConstant %uint 1024
-%uint_1024_1 = OpConstant %uint 1024
-%uint_1024_2 = OpConstant %uint 1024
   %ulong_4_0 = OpConstant %ulong 4
-         %37 = OpFunction %float None %50
+         %37 = OpFunction %float None %46
          %39 = OpFunctionParameter %_ptr_Workgroup_float
          %40 = OpFunctionParameter %float
                OpFunctionEnd
-          %1 = OpFunction %void None %57
+          %1 = OpFunction %void None %53
           %9 = OpFunctionParameter %ulong
          %10 = OpFunctionParameter %ulong
          %36 = OpLabel
@@ -60,22 +60,19 @@
                OpStore %7 %13
          %16 = OpLoad %ulong %5
          %30 = OpConvertUToPtr %_ptr_Generic_float %16
-         %62 = OpBitcast %_ptr_Generic_uchar %30
-         %63 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %62 %ulong_4
-         %26 = OpBitcast %_ptr_Generic_float %63
+         %58 = OpBitcast %_ptr_Generic_uchar %30
+         %59 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %58 %ulong_4
+         %26 = OpBitcast %_ptr_Generic_float %59
          %15 = OpLoad %float %26 Aligned 4
                OpStore %8 %15
          %17 = OpLoad %float %7
-         %43 = OpBitcast %_ptr_Workgroup__arr_uchar_uint_1024 %42
-         %31 = OpBitcast %_ptr_Workgroup_float %43
+         %31 = OpBitcast %_ptr_Workgroup_float %4
                OpStore %31 %17 Aligned 4
          %19 = OpLoad %float %8
-         %44 = OpBitcast %_ptr_Workgroup__arr_uchar_uint_1024 %42
-         %32 = OpBitcast %_ptr_Workgroup_float %44
+         %32 = OpBitcast %_ptr_Workgroup_float %4
          %18 = OpFunctionCall %float %37 %32 %19
                OpStore %7 %18
-         %45 = OpBitcast %_ptr_Workgroup__arr_uchar_uint_1024 %42
-         %33 = OpBitcast %_ptr_Workgroup_float %45
+         %33 = OpBitcast %_ptr_Workgroup_float %4
          %20 = OpLoad %float %33 Aligned 4
                OpStore %8 %20
          %21 = OpLoad %ulong %6
@@ -85,9 +82,9 @@
          %23 = OpLoad %ulong %6
          %24 = OpLoad %float %8
          %35 = OpConvertUToPtr %_ptr_Generic_float %23
-         %67 = OpBitcast %_ptr_Generic_uchar %35
-         %68 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %67 %ulong_4_0
-         %28 = OpBitcast %_ptr_Generic_float %68
+         %60 = OpBitcast %_ptr_Generic_uchar %35
+         %61 = OpInBoundsPtrAccessChain %_ptr_Generic_uchar %60 %ulong_4_0
+         %28 = OpBitcast %_ptr_Generic_float %61
                OpStore %28 %24 Aligned 4
                OpReturn
                OpFunctionEnd

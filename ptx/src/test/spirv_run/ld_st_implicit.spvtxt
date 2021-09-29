@@ -7,20 +7,25 @@
                OpCapability Int64
                OpCapability Float16
                OpCapability Float64
-         %21 = OpExtInstImport "OpenCL.std"
+               OpCapability DenormFlushToZero
+               OpExtension "SPV_KHR_float_controls"
+               OpExtension "SPV_KHR_no_integer_wrap_decoration"
+         %23 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
                OpEntryPoint Kernel %1 "ld_st_implicit"
+               OpExecutionMode %1 ContractionOff
        %void = OpTypeVoid
       %ulong = OpTypeInt 64 0
-         %24 = OpTypeFunction %void %ulong %ulong
+         %26 = OpTypeFunction %void %ulong %ulong
 %_ptr_Function_ulong = OpTypePointer Function %ulong
+%ulong_81985529216486895 = OpConstant %ulong 81985529216486895
       %float = OpTypeFloat 32
 %_ptr_CrossWorkgroup_float = OpTypePointer CrossWorkgroup %float
        %uint = OpTypeInt 32 0
-          %1 = OpFunction %void None %24
+          %1 = OpFunction %void None %26
           %7 = OpFunctionParameter %ulong
           %8 = OpFunctionParameter %ulong
-         %19 = OpLabel
+         %21 = OpLabel
           %2 = OpVariable %_ptr_Function_ulong Function
           %3 = OpVariable %_ptr_Function_ulong Function
           %4 = OpVariable %_ptr_Function_ulong Function
@@ -32,18 +37,20 @@
                OpStore %4 %9
          %10 = OpLoad %ulong %3 Aligned 8
                OpStore %5 %10
-         %12 = OpLoad %ulong %4
-         %16 = OpConvertUToPtr %_ptr_CrossWorkgroup_float %12
-         %15 = OpLoad %float %16 Aligned 4
-         %29 = OpBitcast %uint %15
-         %11 = OpUConvert %ulong %29
+         %11 = OpCopyObject %ulong %ulong_81985529216486895
                OpStore %6 %11
-         %13 = OpLoad %ulong %5
-         %14 = OpLoad %ulong %6
-         %17 = OpConvertUToPtr %_ptr_CrossWorkgroup_float %13
-         %30 = OpBitcast %ulong %14
-         %31 = OpUConvert %uint %30
-         %18 = OpBitcast %float %31
-               OpStore %17 %18 Aligned 4
+         %13 = OpLoad %ulong %4
+         %18 = OpConvertUToPtr %_ptr_CrossWorkgroup_float %13
+         %17 = OpLoad %float %18 Aligned 4
+         %31 = OpBitcast %uint %17
+         %12 = OpUConvert %ulong %31
+               OpStore %6 %12
+         %14 = OpLoad %ulong %5
+         %15 = OpLoad %ulong %6
+         %19 = OpConvertUToPtr %_ptr_CrossWorkgroup_float %14
+         %32 = OpBitcast %ulong %15
+         %33 = OpUConvert %uint %32
+         %20 = OpBitcast %float %33
+               OpStore %19 %20 Aligned 4
                OpReturn
                OpFunctionEnd
