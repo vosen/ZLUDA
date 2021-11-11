@@ -4,10 +4,10 @@ use std::{
     error::Error,
     ffi::{c_void, CStr},
     fs,
-    io::prelude::*,
+    io::{self, prelude::*},
     mem,
     os::raw::{c_int, c_uint, c_ulong, c_ushort},
-    path::PathBuf,
+    path::{Path, PathBuf},
     rc::Rc,
     slice,
 };
@@ -20,10 +20,6 @@ use cuda::{
 use ptx::ast;
 use regex::Regex;
 
-#[cfg_attr(windows, path = "os_win.rs")]
-#[cfg_attr(not(windows), path = "os_unix.rs")]
-mod os;
-
 const CU_LAUNCH_PARAM_END: *mut c_void = 0 as *mut _;
 const CU_LAUNCH_PARAM_BUFFER_POINTER: *mut c_void = 1 as *mut _;
 const CU_LAUNCH_PARAM_BUFFER_SIZE: *mut c_void = 2 as *mut _;
@@ -32,7 +28,7 @@ macro_rules! extern_redirect {
     (pub fn $fn_name:ident ( $($arg_id:ident: $arg_type:ty),* $(,)? ) -> $ret_type:ty ;) => {
         #[no_mangle]
         pub extern "system" fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
-            unsafe { $crate::init_libcuda_handle() };
+            unsafe { $crate::init_libcuda_handle(stringify!($fn_name)) };
             let name = std::ffi::CString::new(stringify!($fn_name)).unwrap();
             let fn_ptr = unsafe { crate::os::get_proc_address($crate::LIBCUDA_HANDLE, &name) };
             if fn_ptr == std::ptr::null_mut() {
@@ -51,7 +47,7 @@ macro_rules! extern_redirect_with {
     ) => {
         #[no_mangle]
         pub extern "system" fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
-            unsafe { $crate::init_libcuda_handle() };
+            unsafe { $crate::init_libcuda_handle(stringify!($fn_name)) };
             let continuation = |$( $arg_id : $arg_type),* | {
                 let name = std::ffi::CString::new(stringify!($fn_name)).unwrap();
                 let fn_ptr = unsafe { crate::os::get_proc_address($crate::LIBCUDA_HANDLE, &name) };
@@ -68,6 +64,10 @@ macro_rules! extern_redirect_with {
 
 #[allow(warnings)]
 mod cuda;
+mod log;
+#[cfg_attr(windows, path = "os_win.rs")]
+#[cfg_attr(not(windows), path = "os_unix.rs")]
+mod os;
 
 pub static mut LIBCUDA_HANDLE: *mut c_void = ptr::null_mut();
 pub static mut PENDING_LINKING: Option<HashMap<CUlinkState, Vec<ModuleDump>>> = None;
@@ -81,6 +81,42 @@ pub static mut KERNEL_PATTERN: Option<Regex> = None;
 pub static mut OVERRIDE_COMPUTE_CAPABILITY_MAJOR: Option<i32> = None;
 pub static mut KERNEL_INDEX_MINIMUM: usize = 0;
 pub static mut KERNEL_INDEX_MAXIMUM: usize = usize::MAX;
+pub(crate) static mut LOG_FACTORY: Option<log::Factory> = None;
+
+pub(crate) struct Settings {
+    dump_dir: Option<PathBuf>,
+}
+
+impl Settings {
+    fn read_and_init(logger: &mut log::FunctionLogger) -> Self {
+        let maybe_dump_dir = Self::read_and_init_dump_dir();
+        let dump_dir = match maybe_dump_dir {
+            Ok(d) => d,
+            Err(err) => {
+                logger.log(log::LogEntry::ErrorBox(err));
+                None
+            }
+        };
+        Settings { dump_dir }
+    }
+
+    fn read_and_init_dump_dir() -> Result<Option<PathBuf>, Box<dyn Error>> {
+        let dir = match env::var("ZLUDA_DUMP_DIR") {
+            Ok(dir) => dir,
+            Err(env::VarError::NotPresent) => return Ok(None),
+            Err(err) => return Err(Box::new(err) as Box<_>),
+        };
+        Ok(Some(Self::create_dump_directory(dir)?))
+    }
+
+    fn create_dump_directory(dir: String) -> io::Result<PathBuf> {
+        let mut main_dir = PathBuf::from(dir);
+        let current_exe = env::current_exe()?;
+        main_dir.push(current_exe.file_name().unwrap());
+        fs::create_dir_all(&main_dir)?;
+        Ok(main_dir)
+    }
+}
 
 #[derive(Clone, Copy)]
 enum AllocLocation {
@@ -102,8 +138,10 @@ pub struct KernelDump {
 
 // We are doing dlopen here instead of just using LD_PRELOAD,
 // it's because CUDA Runtime API does dlopen to open libcuda.so, which ignores LD_PRELOAD
-pub unsafe fn init_libcuda_handle() {
+pub unsafe fn init_libcuda_handle(func: &'static str) {
     if LIBCUDA_HANDLE == ptr::null_mut() {
+        let mut log_factory = log::Factory::new();
+        let (logger, settings) = log_factory.get_first_logger_and_init_settings(func);
         MODULES = Some(HashMap::new());
         KERNELS = Some(HashMap::new());
         BUFFERS = Some(BTreeMap::new());
@@ -147,7 +185,7 @@ pub unsafe fn init_libcuda_handle() {
             },
             Err(_) => (),
         }
-        os_log!("Initialized");
+        drop(logger);
     }
 }
 
