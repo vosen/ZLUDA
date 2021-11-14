@@ -7,9 +7,11 @@ use std::{
     io::{self, prelude::*},
     mem,
     os::raw::{c_int, c_uint, c_ulong, c_ushort},
-    path::{Path, PathBuf},
+    path::PathBuf,
+    ptr::NonNull,
     rc::Rc,
     slice,
+    sync::Mutex,
 };
 use std::{fs::File, ptr};
 
@@ -20,6 +22,9 @@ use cuda::{
 use ptx::ast;
 use regex::Regex;
 
+#[macro_use]
+extern crate lazy_static;
+
 const CU_LAUNCH_PARAM_END: *mut c_void = 0 as *mut _;
 const CU_LAUNCH_PARAM_BUFFER_POINTER: *mut c_void = 1 as *mut _;
 const CU_LAUNCH_PARAM_BUFFER_SIZE: *mut c_void = 2 as *mut _;
@@ -28,14 +33,11 @@ macro_rules! extern_redirect {
     (pub fn $fn_name:ident ( $($arg_id:ident: $arg_type:ty),* $(,)? ) -> $ret_type:ty ;) => {
         #[no_mangle]
         pub extern "system" fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
-            unsafe { $crate::init_libcuda_handle(stringify!($fn_name)) };
-            let name = std::ffi::CString::new(stringify!($fn_name)).unwrap();
-            let fn_ptr = unsafe { crate::os::get_proc_address($crate::LIBCUDA_HANDLE, &name) };
-            if fn_ptr == std::ptr::null_mut() {
-                return CUresult::CUDA_ERROR_UNKNOWN;
-            }
-            let typed_fn = unsafe { std::mem::transmute::<_, extern "system" fn( $( $arg_id : $arg_type),* ) -> $ret_type>(fn_ptr) };
-            typed_fn($( $arg_id ),*)
+            let original_fn = |fn_ptr| {
+                let typed_fn = unsafe { std::mem::transmute::<_, extern "system" fn( $( $arg_id : $arg_type),* ) -> $ret_type>(fn_ptr) };
+                typed_fn($( $arg_id ),*)
+            };
+            crate::handle_cuda_function_call(stringify!($fn_name), original_fn)
         }
     };
 }
@@ -47,17 +49,11 @@ macro_rules! extern_redirect_with {
     ) => {
         #[no_mangle]
         pub extern "system" fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
-            unsafe { $crate::init_libcuda_handle(stringify!($fn_name)) };
-            let continuation = |$( $arg_id : $arg_type),* | {
-                let name = std::ffi::CString::new(stringify!($fn_name)).unwrap();
-                let fn_ptr = unsafe { crate::os::get_proc_address($crate::LIBCUDA_HANDLE, &name) };
-                if fn_ptr == std::ptr::null_mut() {
-                    return CUresult::CUDA_ERROR_UNKNOWN;
-                }
+            let original_fn = |fn_ptr| {
                 let typed_fn = unsafe { std::mem::transmute::<_, extern "system" fn( $( $arg_id : $arg_type),* ) -> $ret_type>(fn_ptr) };
                 typed_fn($( $arg_id ),*)
             };
-            unsafe { $receiver($( $arg_id ),* , continuation) }
+            crate::handle_cuda_function_call(stringify!($fn_name), original_fn)
         }
     };
 }
@@ -81,10 +77,81 @@ pub static mut KERNEL_PATTERN: Option<Regex> = None;
 pub static mut OVERRIDE_COMPUTE_CAPABILITY_MAJOR: Option<i32> = None;
 pub static mut KERNEL_INDEX_MINIMUM: usize = 0;
 pub static mut KERNEL_INDEX_MAXIMUM: usize = usize::MAX;
-pub(crate) static mut LOG_FACTORY: Option<log::Factory> = None;
+static mut LOG_FACTORY: Option<log::Factory> = None;
 
-pub(crate) struct Settings {
+lazy_static! {
+    static ref GLOBAL_STATE: Mutex<GlobalState> = Mutex::new(GlobalState::new());
+}
+
+struct GlobalState {
+    log_factory: log::Factory,
+    // We split off fields that require a mutable reference to log factory to be
+    // created, additionally creation of some fields in this struct can fail
+    // initalization (e.g. we passed path a non-existant path to libcuda)
+    delayed_state: LateInit<GlobalDelayedState>,
+}
+
+unsafe impl Send for GlobalState {}
+
+impl GlobalState {
+    fn new() -> Self {
+        GlobalState {
+            log_factory: log::Factory::new(),
+            delayed_state: LateInit::Unitialized,
+        }
+    }
+}
+
+enum LateInit<T> {
+    Success(T),
+    Unitialized,
+    Error,
+}
+
+impl<T> LateInit<T> {
+    fn as_mut(&mut self) -> Option<&mut T> {
+        match self {
+            LateInit::Success(t) => Some(t),
+            LateInit::Unitialized => None,
+            LateInit::Error => None,
+        }
+    }
+}
+
+struct GlobalDelayedState {
+    settings: Settings,
+    libcuda_handle: NonNull<c_void>,
+    cuda_state: CUDAStateTracker,
+}
+
+impl GlobalDelayedState {
+    fn new<'a>(
+        func: &'static str,
+        factory: &'a mut log::Factory,
+    ) -> (LateInit<Self>, log::FunctionLogger<'a>) {
+        let (mut fn_logger, settings) = factory.get_first_logger_and_init_settings(func);
+        let maybe_libcuda_handle = unsafe { os::load_cuda_library(&settings.libcuda_path) };
+        let libcuda_handle = match NonNull::new(maybe_libcuda_handle) {
+            Some(h) => h,
+            None => {
+                fn_logger.log(log::LogEntry::ErrorBox(
+                    format!("Invalid CUDA library at path {}", &settings.libcuda_path).into(),
+                ));
+                return (LateInit::Error, fn_logger);
+            }
+        };
+        let delayed_state = GlobalDelayedState {
+            settings,
+            libcuda_handle,
+            cuda_state: CUDAStateTracker::new(),
+        };
+        (LateInit::Success(delayed_state), fn_logger)
+    }
+}
+
+struct Settings {
     dump_dir: Option<PathBuf>,
+    libcuda_path: String,
 }
 
 impl Settings {
@@ -97,7 +164,18 @@ impl Settings {
                 None
             }
         };
-        Settings { dump_dir }
+        let libcuda_path = match env::var("ZLUDA_DUMP_LIBCUDA_FILE") {
+            Err(env::VarError::NotPresent) => os::LIBCUDA_DEFAULT_PATH.to_owned(),
+            Err(e) => {
+                logger.log(log::LogEntry::ErrorBox(Box::new(e) as _));
+                os::LIBCUDA_DEFAULT_PATH.to_owned()
+            }
+            Ok(env_string) => env_string,
+        };
+        Settings {
+            dump_dir,
+            libcuda_path,
+        }
     }
 
     fn read_and_init_dump_dir() -> Result<Option<PathBuf>, Box<dyn Error>> {
@@ -118,16 +196,63 @@ impl Settings {
     }
 }
 
-#[derive(Clone, Copy)]
-enum AllocLocation {
-    Device,
-    DeviceV2,
-    Host,
+// This struct contains all the information about current state of CUDA runtime
+// that are relevant to us: modules, kernels, linking objects, etc.
+struct CUDAStateTracker {
+    modules: HashMap<CUmodule, Option<ModuleDump>>,
+    module_counter: usize,
+}
+
+impl CUDAStateTracker {
+    fn new() -> Self {
+        CUDAStateTracker {
+            modules: HashMap::new(),
+            module_counter: 0,
+        }
+    }
 }
 
 pub struct ModuleDump {
     content: Rc<String>,
     kernels_args: Option<HashMap<String, Vec<usize>>>,
+}
+
+fn handle_cuda_function_call(
+    func: &'static str,
+    original_cuda_fn: impl FnOnce(NonNull<c_void>) -> CUresult,
+) -> CUresult {
+    let global_state_mutex = &*GLOBAL_STATE;
+    // We unwrap because there's really no sensible thing we could do,
+    // alternatively we could return a CUDA error, but I think it's fine to
+    // crash. This is a diagnostic utility, if the lock was poisoned we can't
+    // extract any useful trace or logging anyway
+    let mut global_state = &mut *global_state_mutex.lock().unwrap();
+    let (mut logger, delayed_state) = match global_state.delayed_state {
+        LateInit::Success(ref mut delayed_state) => {
+            (global_state.log_factory.get_logger(func), delayed_state)
+        }
+        // There's no libcuda to load, so we might as well panic
+        LateInit::Error => panic!(),
+        LateInit::Unitialized => {
+            let (new_delayed_state, logger) =
+                GlobalDelayedState::new(func, &mut global_state.log_factory);
+            global_state.delayed_state = new_delayed_state;
+            (logger, global_state.delayed_state.as_mut().unwrap())
+        }
+    };
+    let name = std::ffi::CString::new(func).unwrap();
+    let fn_ptr =
+        unsafe { os::get_proc_address(delayed_state.libcuda_handle.as_ptr(), name.as_c_str()) };
+    let cu_result = original_cuda_fn(NonNull::new(fn_ptr).unwrap());
+    logger.result = Some(cu_result);
+    cu_result
+}
+
+#[derive(Clone, Copy)]
+enum AllocLocation {
+    Device,
+    DeviceV2,
+    Host,
 }
 
 pub struct KernelDump {
@@ -145,7 +270,7 @@ pub unsafe fn init_libcuda_handle(func: &'static str) {
         MODULES = Some(HashMap::new());
         KERNELS = Some(HashMap::new());
         BUFFERS = Some(BTreeMap::new());
-        let libcuda_handle = os::load_cuda_library();
+        let libcuda_handle = ptr::null_mut();
         assert_ne!(libcuda_handle, ptr::null_mut());
         LIBCUDA_HANDLE = libcuda_handle;
         match env::var("ZLUDA_DUMP_KERNEL") {

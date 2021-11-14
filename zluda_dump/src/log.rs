@@ -1,5 +1,8 @@
+use crate::cuda::CUuuid;
+
 use super::CUresult;
 use super::Settings;
+use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::Display;
 use std::fs::File;
@@ -193,7 +196,20 @@ impl Factory {
     pub(crate) fn get_logger(&mut self, func: &'static str) -> FunctionLogger {
         FunctionLogger {
             result: None,
-            name: func,
+            name: Cow::Borrowed(func),
+            fallible_emitter: &mut self.fallible_emitter,
+            infallible_emitter: &mut self.infallible_emitter,
+            write_buffer: &mut self.write_buffer,
+            log_queue: &mut self.log_queue,
+        }
+    }
+
+    pub(crate) fn get_logger_dark_api(&mut self, guid: CUuuid, idx: usize) -> FunctionLogger {
+        let guid = guid.bytes;
+        let fn_name = format!("{{{:02X}{:02X}{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}}}::{}", guid[0], guid[1], guid[2], guid[3], guid[4], guid[5], guid[6], guid[7], guid[8], guid[9], guid[10], guid[11], guid[12], guid[13], guid[14], guid[15], idx);
+        FunctionLogger {
+            result: None,
+            name: Cow::Owned(fn_name),
             fallible_emitter: &mut self.fallible_emitter,
             infallible_emitter: &mut self.infallible_emitter,
             write_buffer: &mut self.write_buffer,
@@ -209,7 +225,7 @@ impl Factory {
 // * We want to handle panics gracefully with Drop
 pub(crate) struct FunctionLogger<'a> {
     pub(crate) result: Option<CUresult>,
-    name: &'static str,
+    name: Cow<'static, str>,
     infallible_emitter: &'a mut Box<dyn WriteTrailingZeroAware>,
     fallible_emitter: &'a mut Option<Box<dyn WriteTrailingZeroAware>>,
     write_buffer: &'a mut WriteBuffer,
@@ -223,7 +239,7 @@ impl<'a> FunctionLogger<'a> {
 
     fn flush_log_queue_to_write_buffer(&mut self) {
         self.write_buffer.start_line();
-        self.write_buffer.write(self.name);
+        self.write_buffer.write(&self.name);
         self.write_buffer.write("(...) -> ");
         if let Some(result) = self.result {
             write!(self.write_buffer, "{:#X}", result.0).unwrap_or_else(|_| unreachable!());
@@ -360,7 +376,7 @@ mod os {
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, io, rc::Rc, str};
+    use std::{borrow::Cow, cell::RefCell, io, rc::Rc, str};
 
     use super::{FunctionLogger, LogEntry, WriteTrailingZeroAware};
     use crate::{log::WriteBuffer, CUresult};
@@ -422,7 +438,7 @@ mod tests {
         let mut log_queue = Vec::new();
         let mut func_logger = FunctionLogger {
             result: Some(CUresult::CUDA_SUCCESS),
-            name: "cuInit",
+            name: Cow::Borrowed("cuInit"),
             infallible_emitter: &mut infallible_emitter,
             fallible_emitter: &mut fallible_emitter,
             write_buffer: &mut write_buffer,
