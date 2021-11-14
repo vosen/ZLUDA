@@ -1,0 +1,1 @@
+sed 's/(.*//g' log.txt | sort | uniq > uniq.txt

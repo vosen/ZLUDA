@@ -1,12 +1,13 @@
 use crate::cuda::CUuuid;
-use std::ffi::{c_void, CStr};
+use std::ffi::{c_void, CStr, CString};
 use std::mem;
 
-const NVCUDA_DEFAULT_PATH: &'static [u8] = b"/usr/lib/x86_64-linux-gnu/libcuda.so.1\0";
+pub(crate) const LIBCUDA_DEFAULT_PATH: &'static str = b"/usr/lib/x86_64-linux-gnu/libcuda.so.1\0";
 
-pub unsafe fn load_cuda_library() -> *mut c_void {
+pub unsafe fn load_cuda_library(libcuda_path: &str) -> *mut c_void {
+    let libcuda_path = CString::new(libcuda_path).unwrap();
     libc::dlopen(
-        NVCUDA_DEFAULT_PATH.as_ptr() as *const _,
+        libcuda_path.as_ptr() as *const _,
         libc::RTLD_LOCAL | libc::RTLD_NOW,
     )
 }

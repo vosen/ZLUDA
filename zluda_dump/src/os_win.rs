@@ -15,12 +15,12 @@ use winapi::{
 
 use crate::cuda::CUuuid;
 
-const NVCUDA_DEFAULT_PATH: &[u16] = wch_c!(r"C:\Windows\System32\nvcuda.dll");
+pub(crate) const LIBCUDA_DEFAULT_PATH: &'static str = "C:\\Windows\\System32\\nvcuda.dll";
 const LOAD_LIBRARY_NO_REDIRECT: &'static [u8] = b"ZludaLoadLibraryW_NoRedirect\0";
 
 include!("../../zluda_redirect/src/payload_guid.rs");
 
-pub unsafe fn load_cuda_library() -> *mut c_void {
+pub unsafe fn load_cuda_library(libcuda_path: &str) -> *mut c_void {
     let load_lib = if is_detoured() {
         match get_non_detoured_load_library() {
             Some(load_lib) => load_lib,
@@ -29,7 +29,11 @@ pub unsafe fn load_cuda_library() -> *mut c_void {
     } else {
         LoadLibraryW
     };
-    load_lib(NVCUDA_DEFAULT_PATH.as_ptr()) as *mut _
+    let libcuda_path_uf16 = libcuda_path
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    load_lib(libcuda_path_uf16.as_ptr()) as *mut _
 }
 
 unsafe fn is_detoured() -> bool {

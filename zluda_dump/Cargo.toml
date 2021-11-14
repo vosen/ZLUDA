@@ -14,6 +14,7 @@ lz4-sys = "1.9"
 regex = "1.4"
 dynasm = "1.1"
 dynasmrt = "1.1"
+lazy_static = "1.4"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["libloaderapi", "debugapi", "std"] }
