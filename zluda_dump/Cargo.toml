@@ -15,6 +15,8 @@ regex = "1.4"
 dynasm = "1.1"
 dynasmrt = "1.1"
 lazy_static = "1.4"
+# we don't need elf32, but goblin has a bug where elf64 does not build without elf32
+goblin = { version = "0.4", default-features = false, features = ["elf64", "elf32", "archive"] }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["libloaderapi", "debugapi", "std"] }
