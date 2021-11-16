@@ -1,14 +1,17 @@
+use crate::cuda::CUmodule;
 use crate::cuda::CUuuid;
 
 use super::CUresult;
 use super::Settings;
 use std::borrow::Cow;
 use std::error::Error;
+use std::ffi::c_void;
 use std::fmt::Display;
 use std::fs::File;
 use std::io;
 use std::io::Stderr;
 use std::io::Write;
+use std::str::Utf8Error;
 
 const LOG_PREFIX: &[u8] = b"[ZLUDA_DUMP] ";
 
@@ -237,6 +240,12 @@ impl<'a> FunctionLogger<'a> {
         self.log_queue.push(l);
     }
 
+    pub(crate) fn log_io_error(&mut self, error: io::Result<()>) {
+        if let Err(e) = error {
+            self.log_queue.push(LogEntry::IoError(e));
+        }
+    }
+
     fn flush_log_queue_to_write_buffer(&mut self) {
         self.write_buffer.start_line();
         self.write_buffer.write(&self.name);
@@ -284,6 +293,14 @@ impl<'a> Drop for FunctionLogger<'a> {
 pub(crate) enum LogEntry {
     IoError(io::Error),
     ErrorBox(Box<dyn Error>),
+    UnsupportedModule {
+        module: CUmodule,
+        raw_image: *const c_void,
+        kind: &'static str,
+    },
+    MalformedModulePath(Utf8Error),
+    MalformedModuleText(Utf8Error),
+    ModuleParsingError(usize),
 }
 
 impl Display for LogEntry {
@@ -291,6 +308,26 @@ impl Display for LogEntry {
         match self {
             LogEntry::IoError(e) => e.fmt(f),
             LogEntry::ErrorBox(e) => e.fmt(f),
+            LogEntry::UnsupportedModule {
+                module,
+                raw_image,
+                kind,
+            } => {
+                write!(
+                    f,
+                    "Unsupported {} module {:?} loaded from module image {:?}",
+                    kind, module, raw_image
+                )
+            }
+            LogEntry::MalformedModulePath(e) => e.fmt(f),
+            LogEntry::MalformedModuleText(e) => e.fmt(f),
+            LogEntry::ModuleParsingError(index) => {
+                write!(
+                    f,
+                    "Error parsing module, log has been written to module_{:04}.log",
+                    index
+                )
+            }
         }
     }
 }

@@ -2491,15 +2491,16 @@ extern_redirect! {
 extern_redirect! {
     pub fn cuCtxDetach(ctx: CUcontext) -> CUresult;
 }
-extern_redirect! {
+extern_redirect_with_post! {
     pub fn cuModuleLoad(module: *mut CUmodule, fname: *const ::std::os::raw::c_char) -> CUresult;
+    super::cuModuleLoad_Post;
 }
-extern_redirect_with! {
+extern_redirect_with_post! {
     pub fn cuModuleLoadData(
         module: *mut CUmodule,
         image: *const ::std::os::raw::c_void,
     ) -> CUresult;
-    super::cuModuleLoadData;
+    super::cuModuleLoadData_Post;
 }
 extern_redirect_with! {
     pub fn cuModuleLoadDataEx(
