@@ -6,11 +6,14 @@ use super::Settings;
 use std::borrow::Cow;
 use std::error::Error;
 use std::ffi::c_void;
+use std::ffi::FromBytesWithNulError;
+use std::ffi::NulError;
 use std::fmt::Display;
 use std::fs::File;
 use std::io;
 use std::io::Stderr;
 use std::io::Write;
+use std::path::PathBuf;
 use std::str::Utf8Error;
 
 const LOG_PREFIX: &[u8] = b"[ZLUDA_DUMP] ";
@@ -253,7 +256,7 @@ impl<'a> FunctionLogger<'a> {
         if let Some(result) = self.result {
             write!(self.write_buffer, "{:#X}", result.0).unwrap_or_else(|_| unreachable!());
         } else {
-            self.write_buffer.write("(INTERNAL ERROR)");
+            self.write_buffer.write("(UNKNOWN)");
         };
         self.write_buffer.end_line();
         for entry in self.log_queue.iter() {
@@ -292,6 +295,7 @@ impl<'a> Drop for FunctionLogger<'a> {
 // Structured log type. We don't want frontend to care about log formatting
 pub(crate) enum LogEntry {
     IoError(io::Error),
+    CreatedDumpDirectory(PathBuf),
     ErrorBox(Box<dyn Error>),
     UnsupportedModule {
         module: CUmodule,
@@ -299,14 +303,35 @@ pub(crate) enum LogEntry {
         kind: &'static str,
     },
     MalformedModulePath(Utf8Error),
-    MalformedModuleText(Utf8Error),
-    ModuleParsingError(usize),
+    NonUtf8ModuleText(Utf8Error),
+    NulInsideModuleText(NulError),
+    ModuleParsingError(String),
+    Lz4DecompressionFailure,
+    UnknownExportTableFn,
+    UnknownModule(CUmodule),
+    UnexpectedArgument {
+        arg_name: &'static str,
+        expected: Vec<UInt>,
+        observed: UInt,
+    },
+    UnexpectedBinaryField {
+        field_name: &'static str,
+        expected: Vec<UInt>,
+        observed: UInt,
+    },
 }
 
 impl Display for LogEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             LogEntry::IoError(e) => e.fmt(f),
+            LogEntry::CreatedDumpDirectory(dir) => {
+                write!(
+                    f,
+                    "Created dump directory {} ",
+                    dir.as_os_str().to_string_lossy()
+                )
+            }
             LogEntry::ErrorBox(e) => e.fmt(f),
             LogEntry::UnsupportedModule {
                 module,
@@ -320,14 +345,55 @@ impl Display for LogEntry {
                 )
             }
             LogEntry::MalformedModulePath(e) => e.fmt(f),
-            LogEntry::MalformedModuleText(e) => e.fmt(f),
-            LogEntry::ModuleParsingError(index) => {
+            LogEntry::NonUtf8ModuleText(e) => e.fmt(f),
+            LogEntry::ModuleParsingError(file_name) => {
                 write!(
                     f,
-                    "Error parsing module, log has been written to module_{:04}.log",
-                    index
+                    "Error parsing module, log has been written to {}",
+                    file_name
                 )
             }
+            LogEntry::NulInsideModuleText(e) => e.fmt(f),
+            LogEntry::Lz4DecompressionFailure => write!(f, "LZ4 decompression failure"),
+            LogEntry::UnknownExportTableFn => write!(f, "Unknown export table function"),
+            LogEntry::UnknownModule(hmod) => write!(f, "Unknown module {:?}", hmod),
+            LogEntry::UnexpectedBinaryField {
+                field_name,
+                expected,
+                observed,
+            } => write!(
+                f,
+                "Unexected field {}. Expected: [{}], observed: {}",
+                field_name,
+                expected
+                    .iter()
+                    .map(|x| x.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                observed
+            ),
+            LogEntry::UnexpectedArgument {
+                arg_name,
+                expected,
+                observed,
+            } => write!(f, "Unexected argument"),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum UInt {
+    U16(u16),
+    U32(u32),
+    USize(usize),
+}
+
+impl Display for UInt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UInt::U16(x) => write!(f, "{:#x}", x),
+            UInt::U32(x) => write!(f, "{:#x}", x),
+            UInt::USize(x) => write!(f, "{:#x}", x),
         }
     }
 }

@@ -2355,13 +2355,12 @@ extern_redirect! {
         dev: CUdevice,
     ) -> CUresult;
 }
-extern_redirect_with! {
+extern_redirect! {
     pub fn cuDeviceGetAttribute(
         pi: *mut ::std::os::raw::c_int,
         attrib: CUdevice_attribute,
         dev: CUdevice,
     ) -> CUresult;
-    super::cuDeviceGetAttribute;
 }
 extern_redirect! {
     pub fn cuDeviceGetNvSciSyncAttributes(
@@ -2502,7 +2501,7 @@ extern_redirect_with_post! {
     ) -> CUresult;
     super::cuModuleLoadData_Post;
 }
-extern_redirect_with! {
+extern_redirect_with_post! {
     pub fn cuModuleLoadDataEx(
         module: *mut CUmodule,
         image: *const ::std::os::raw::c_void,
@@ -2510,7 +2509,7 @@ extern_redirect_with! {
         options: *mut CUjit_option,
         optionValues: *mut *mut ::std::os::raw::c_void,
     ) -> CUresult;
-    super::cuModuleLoadDataEx;
+    super::cuModuleLoadDataEx_Post;
 }
 extern_redirect! {
     pub fn cuModuleLoadFatBinary(
@@ -2521,13 +2520,13 @@ extern_redirect! {
 extern_redirect! {
     pub fn cuModuleUnload(hmod: CUmodule) -> CUresult;
 }
-extern_redirect_with! {
+extern_redirect_with_post! {
     pub fn cuModuleGetFunction(
         hfunc: *mut CUfunction,
         hmod: CUmodule,
         name: *const ::std::os::raw::c_char,
     ) -> CUresult;
-    super::cuModuleGetFunction;
+    super::cuModuleGetFunction_Post;
 }
 extern_redirect! {
     pub fn cuModuleGetGlobal(
@@ -2575,7 +2574,7 @@ extern_redirect! {
         stateOut: *mut CUlinkState,
     ) -> CUresult;
 }
-extern_redirect_with! {
+extern_redirect! {
     pub fn cuLinkAddData(
         state: CUlinkState,
         type_: CUjitInputType,
@@ -2586,9 +2585,8 @@ extern_redirect_with! {
         options: *mut CUjit_option,
         optionValues: *mut *mut ::std::os::raw::c_void,
     ) -> CUresult;
-    super::cuLinkAddData;
 }
-extern_redirect_with! {
+extern_redirect! {
     pub fn cuLinkAddData_v2(
         state: CUlinkState,
         type_: CUjitInputType,
@@ -2599,9 +2597,8 @@ extern_redirect_with! {
         options: *mut CUjit_option,
         optionValues: *mut *mut ::std::os::raw::c_void,
     ) -> CUresult;
-    super::cuLinkAddData;
 }
-extern_redirect_with! {
+extern_redirect! {
     pub fn cuLinkAddFile(
         state: CUlinkState,
         type_: CUjitInputType,
@@ -2610,9 +2607,8 @@ extern_redirect_with! {
         options: *mut CUjit_option,
         optionValues: *mut *mut ::std::os::raw::c_void,
     ) -> CUresult;
-    super::cuLinkAddFile;
 }
-extern_redirect_with! {
+extern_redirect! {
     pub fn cuLinkAddFile_v2(
         state: CUlinkState,
         type_: CUjitInputType,
@@ -2621,7 +2617,6 @@ extern_redirect_with! {
         options: *mut CUjit_option,
         optionValues: *mut *mut ::std::os::raw::c_void,
     ) -> CUresult;
-    super::cuLinkAddFile;
 }
 extern_redirect! {
     pub fn cuLinkComplete(
@@ -2639,13 +2634,11 @@ extern_redirect! {
 extern_redirect! {
     pub fn cuMemGetInfo_v2(free: *mut usize, total: *mut usize) -> CUresult;
 }
-extern_redirect_with! {
+extern_redirect! {
     pub fn cuMemAlloc(dptr: *mut CUdeviceptr, bytesize: usize) -> CUresult;
-    super::cuMemAlloc;
 }
-extern_redirect_with! {
+extern_redirect! {
     pub fn cuMemAlloc_v2(dptr: *mut CUdeviceptr, bytesize: usize) -> CUresult;
-    super::cuMemAlloc_v2;
 }
 extern_redirect! {
     pub fn cuMemAllocPitch(
@@ -2694,13 +2687,12 @@ extern_redirect! {
 extern_redirect! {
     pub fn cuMemFreeHost(p: *mut ::std::os::raw::c_void) -> CUresult;
 }
-extern_redirect_with! {
+extern_redirect! {
     pub fn cuMemHostAlloc(
         pp: *mut *mut ::std::os::raw::c_void,
         bytesize: usize,
         Flags: ::std::os::raw::c_uint,
     ) -> CUresult;
-    super::cuMemHostAlloc;
 }
 extern_redirect! {
     pub fn cuMemHostGetDevicePointer(
@@ -3658,7 +3650,7 @@ extern_redirect! {
 extern_redirect! {
     pub fn cuFuncSetSharedMemConfig(hfunc: CUfunction, config: CUsharedconfig) -> CUresult;
 }
-extern_redirect_with! {
+extern_redirect! {
     pub fn cuLaunchKernel(
         f: CUfunction,
         gridDimX: ::std::os::raw::c_uint,
@@ -3672,7 +3664,6 @@ extern_redirect_with! {
         kernelParams: *mut *mut ::std::os::raw::c_void,
         extra: *mut *mut ::std::os::raw::c_void,
     ) -> CUresult;
-    super::cuLaunchKernel;
 }
 extern_redirect! {
     pub fn cuLaunchCooperativeKernel(
@@ -4394,12 +4385,12 @@ extern_redirect! {
         hStream: CUstream,
     ) -> CUresult;
 }
-extern_redirect_with! {
+extern_redirect_with_post! {
     pub fn cuGetExportTable(
         ppExportTable: *mut *const ::std::os::raw::c_void,
         pExportTableId: *const CUuuid,
     ) -> CUresult;
-    super::cuGetExportTable;
+    super::cuGetExportTable_Post;
 }
 extern_redirect! {
     pub fn cuFuncGetModule(hmod: *mut CUmodule, hfunc: CUfunction) -> CUresult;
