@@ -1,9 +1,9 @@
 use ptx::{ast::PtxError, Token};
 
-use crate::{cuda::CUmodule, log, Settings};
+use crate::{cuda::CUmodule, dark_api, log, Settings};
 use std::{
     collections::HashMap,
-    ffi::{c_void, CStr},
+    ffi::{c_void, CStr, CString},
     fs::{self, File},
     io::{self, Read, Write},
     path::PathBuf,
@@ -18,6 +18,9 @@ pub(crate) struct StateTracker {
     writer: DumpWriter,
     modules: HashMap<CUmodule, Option<ParsedModule>>,
     module_counter: usize,
+    submodule_counter: usize,
+    last_module_version: Option<usize>,
+    pub(crate) dark_api: dark_api::DarkApiState,
 }
 
 impl StateTracker {
@@ -26,6 +29,9 @@ impl StateTracker {
             writer: DumpWriter::new(settings.dump_dir.clone()),
             modules: HashMap::new(),
             module_counter: 0,
+            submodule_counter: 0,
+            last_module_version: None,
+            dark_api: dark_api::DarkApiState::new(),
         }
     }
 
@@ -57,6 +63,48 @@ impl StateTracker {
         module_file.read_to_end(&mut read_buff)?;
         self.record_new_module(module, read_buff.as_ptr() as *const _, fn_logger);
         Ok(())
+    }
+
+    pub(crate) fn record_new_submodule(
+        &mut self,
+        module: CUmodule,
+        version: Option<usize>,
+        submodule: &[u8],
+        fn_logger: &mut log::FunctionLogger,
+        type_: &'static str,
+    ) {
+        if !self.modules.contains_key(&module) {
+            self.module_counter += 1;
+            self.submodule_counter = 0;
+            self.modules.insert(module, None);
+        }
+        if version != self.last_module_version {
+            self.submodule_counter = 0;
+        }
+        self.submodule_counter += 1;
+        self.last_module_version = version;
+        fn_logger.log_io_error(self.writer.save_module(
+            self.module_counter,
+            version,
+            Some(self.submodule_counter),
+            submodule,
+            type_,
+        ));
+        if type_ == "ptx" {
+            match CString::new(submodule) {
+                Err(e) => fn_logger.log(log::LogEntry::NulInsideModuleText(e)),
+                Ok(submodule_cstring) => match submodule_cstring.to_str() {
+                    Err(e) => fn_logger.log(log::LogEntry::NonUtf8ModuleText(e)),
+                    Ok(submodule_text) => self.try_parse_and_record_kernels(
+                        fn_logger,
+                        self.module_counter,
+                        version,
+                        Some(self.submodule_counter),
+                        submodule_text,
+                    ),
+                },
+            }
+        }
     }
 
     pub(crate) fn record_new_module(
@@ -93,30 +141,55 @@ impl StateTracker {
         raw_image: *const c_void,
         fn_logger: &mut log::FunctionLogger,
     ) {
+        self.modules.insert(module, None);
         let module_text = unsafe { CStr::from_ptr(raw_image as *const _) }.to_str();
         let module_text = match module_text {
             Ok(m) => m,
             Err(utf8_err) => {
-                fn_logger.log(log::LogEntry::MalformedModuleText(utf8_err));
+                fn_logger.log(log::LogEntry::NonUtf8ModuleText(utf8_err));
                 return;
             }
         };
-        fn_logger.log_io_error(self.writer.save_module(self.module_counter, module_text));
+        fn_logger.log_io_error(self.writer.save_module(
+            self.module_counter,
+            None,
+            None,
+            module_text.as_bytes(),
+            "ptx",
+        ));
+        self.try_parse_and_record_kernels(fn_logger, self.module_counter, None, None, module_text);
+    }
+
+    fn try_parse_and_record_kernels(
+        &mut self,
+        fn_logger: &mut log::FunctionLogger,
+        module_index: usize,
+        version: Option<usize>,
+        submodule_index: Option<usize>,
+        module_text: &str,
+    ) {
         let mut errors = Vec::new();
         let ast = ptx::ModuleParser::new().parse(&mut errors, module_text);
         let ast = match (&*errors, ast) {
             (&[], Ok(ast)) => ast,
             (err_vec, res) => {
-                fn_logger.log(log::LogEntry::ModuleParsingError(self.module_counter));
+                fn_logger.log(log::LogEntry::ModuleParsingError(
+                    DumpWriter::get_file_name(module_index, version, submodule_index, "log"),
+                ));
                 fn_logger.log_io_error(self.writer.save_module_error_log(
-                    self.module_counter,
+                    module_index,
+                    version,
+                    submodule_index,
                     err_vec,
                     res.err(),
                 ));
                 return;
             }
         };
-        // TODO: store kernel names and details
+    }
+
+    pub(crate) fn module_exists(&self, hmod: CUmodule) -> bool {
+        self.modules.contains_key(&hmod)
     }
 }
 
@@ -135,20 +208,34 @@ impl DumpWriter {
         Self { dump_dir }
     }
 
-    fn save_module(&self, index: usize, text: &str) -> io::Result<()> {
+    fn save_module(
+        &self,
+        module_index: usize,
+        version: Option<usize>,
+        submodule_index: Option<usize>,
+        buffer: &[u8],
+        kind: &'static str,
+    ) -> io::Result<()> {
         let mut dump_file = match &self.dump_dir {
             None => return Ok(()),
             Some(d) => d.clone(),
         };
-        dump_file.push(format!("module_{:04}.ptx", index));
+        dump_file.push(Self::get_file_name(
+            module_index,
+            version,
+            submodule_index,
+            kind,
+        ));
         let mut file = File::create(dump_file)?;
-        file.write_all(text.as_bytes())?;
+        file.write_all(buffer)?;
         Ok(())
     }
 
     fn save_module_error_log<'input>(
         &self,
-        index: usize,
+        module_index: usize,
+        version: Option<usize>,
+        submodule_index: Option<usize>,
         recoverable: &[ptx::ParseError<usize, Token<'input>, PtxError>],
         unrecoverable: Option<ptx::ParseError<usize, Token<'input>, PtxError>>,
     ) -> io::Result<()> {
@@ -156,11 +243,37 @@ impl DumpWriter {
             None => return Ok(()),
             Some(d) => d.clone(),
         };
-        log_file.push(format!("module_{:04}.log", index));
+        log_file.push(Self::get_file_name(
+            module_index,
+            version,
+            submodule_index,
+            "log",
+        ));
         let mut file = File::create(log_file)?;
-        for err in unrecoverable.iter().chain(recoverable.iter()) {
-            writeln!(file, "{}", err)?;
+        for error in unrecoverable.iter().chain(recoverable.iter()) {
+            writeln!(file, "{}", error)?;
         }
         Ok(())
+    }
+
+    fn get_file_name(
+        module_index: usize,
+        version: Option<usize>,
+        submodule_index: Option<usize>,
+        kind: &str,
+    ) -> String {
+        match (version, submodule_index) {
+            (Some(version), Some(submodule_index)) => format!(
+                "module_{:04}_v{}_{}.{}",
+                module_index, version, submodule_index, kind
+            ),
+            (Some(version), None) => {
+                format!("module_{:04}_v{}.{}", module_index, version, kind)
+            }
+            (None, Some(submodule_index)) => {
+                format!("module_{:04}_{}.{}", module_index, submodule_index, kind)
+            }
+            (None, None) => format!("module_{:04}.{}", module_index, kind),
+        }
     }
 }

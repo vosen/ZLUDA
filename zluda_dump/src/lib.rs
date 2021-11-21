@@ -80,6 +80,7 @@ macro_rules! extern_redirect_with {
 
 #[allow(warnings)]
 mod cuda;
+mod dark_api;
 mod log;
 #[cfg_attr(windows, path = "os_win.rs")]
 #[cfg_attr(not(windows), path = "os_unix.rs")]
@@ -132,9 +133,16 @@ enum LateInit<T> {
 impl<T> LateInit<T> {
     fn as_mut(&mut self) -> Option<&mut T> {
         match self {
-            LateInit::Success(t) => Some(t),
-            LateInit::Unitialized => None,
-            LateInit::Error => None,
+            Self::Success(t) => Some(t),
+            Self::Unitialized => None,
+            Self::Error => None,
+        }
+    }
+
+    pub(crate) fn unwrap_mut(&mut self) -> &mut T {
+        match self {
+            Self::Success(t) => t,
+            Self::Unitialized | Self::Error => panic!(),
         }
     }
 }
@@ -180,7 +188,11 @@ impl Settings {
     fn read_and_init(logger: &mut log::FunctionLogger) -> Self {
         let maybe_dump_dir = Self::read_and_init_dump_dir();
         let dump_dir = match maybe_dump_dir {
-            Ok(d) => d,
+            Ok(Some(dir)) => {
+                logger.log(log::LogEntry::CreatedDumpDirectory(dir.clone()));
+                Some(dir)
+            },
+            Ok(None) => None,
             Err(err) => {
                 logger.log(log::LogEntry::ErrorBox(err));
                 None
@@ -212,8 +224,16 @@ impl Settings {
     fn create_dump_directory(dir: String) -> io::Result<PathBuf> {
         let mut main_dir = PathBuf::from(dir);
         let current_exe = env::current_exe()?;
-        main_dir.push(current_exe.file_name().unwrap());
-        fs::create_dir_all(&main_dir)?;
+        let file_name_base = current_exe.file_name().unwrap().to_string_lossy();
+        main_dir.push(&*file_name_base);
+        let mut suffix = 1;
+        // This can get into infinite loop. Unfortunately try_exists is unstable:
+        // https://doc.rust-lang.org/std/path/struct.Path.html#method.try_exists
+        while main_dir.exists() {
+            main_dir.set_file_name(format!("{}_{}", file_name_base, suffix));
+            suffix += 1;
+        }
+        fs::create_dir_all(&*main_dir)?;
         Ok(main_dir)
     }
 }
@@ -403,6 +423,20 @@ pub(crate) fn cuModuleLoadData_Post(
         return;
     }
     state.record_new_module(unsafe { *module }, raw_image, fn_logger)
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuModuleLoadDataEx_Post(
+    module: *mut CUmodule,
+    raw_image: *const ::std::os::raw::c_void,
+    _numOptions: ::std::os::raw::c_uint,
+    _options: *mut CUjit_option,
+    _optionValues: *mut *mut ::std::os::raw::c_void,
+    fn_logger: &mut log::FunctionLogger,
+    state: &mut trace::StateTracker,
+    result: CUresult,
+) {
+    cuModuleLoadData_Post(module, raw_image, fn_logger, state, result)
 }
 
 unsafe fn record_module_image_raw(module: CUmodule, raw_image: *const ::std::os::raw::c_void) {
@@ -1409,4 +1443,32 @@ pub unsafe fn cuLinkAddFile(
     ) -> CUresult,
 ) -> CUresult {
     cont(state, type_, path, numOptions, options, optionValues)
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuGetExportTable_Post(
+    ppExportTable: *mut *const ::std::os::raw::c_void,
+    pExportTableId: *const CUuuid,
+    _fn_logger: &mut log::FunctionLogger,
+    state: &mut trace::StateTracker,
+    result: CUresult,
+) {
+    if result != CUresult::CUDA_SUCCESS {
+        return;
+    }
+    dark_api::override_export_table(ppExportTable, pExportTableId, state)
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuModuleGetFunction_Post(
+    hfunc: *mut CUfunction,
+    hmod: CUmodule,
+    name: *const ::std::os::raw::c_char,
+    fn_logger: &mut log::FunctionLogger,
+    state: &mut trace::StateTracker,
+    result: CUresult,
+) {
+    if !state.module_exists(hmod) {
+        fn_logger.log(log::LogEntry::UnknownModule(hmod))
+    }
 }
