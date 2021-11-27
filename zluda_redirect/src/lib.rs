@@ -4,14 +4,14 @@ extern crate detours_sys;
 extern crate winapi;
 
 use std::{
-    ffi::c_void,
+    ffi::{c_void, CStr},
     mem,
-    os::raw::{c_int, c_uint, c_ulong},
+    os::raw::c_uint,
     ptr, slice, usize,
 };
 
 use detours_sys::{
-    DetourAttach, DetourDetach, DetourRestoreAfterWith, DetourTransactionAbort,
+    DetourAttach, DetourEnumerateExports, DetourRestoreAfterWith, DetourTransactionAbort,
     DetourTransactionBegin, DetourTransactionCommit, DetourUpdateProcessWithDll,
     DetourUpdateThread,
 };
@@ -22,9 +22,8 @@ use winapi::{
         handleapi::{CloseHandle, INVALID_HANDLE_VALUE},
         minwinbase::LPSECURITY_ATTRIBUTES,
         processthreadsapi::{
-            CreateProcessA, GetCurrentProcessId, GetCurrentThread, GetCurrentThreadId, OpenThread,
-            ResumeThread, SuspendThread, TerminateProcess, LPPROCESS_INFORMATION, LPSTARTUPINFOA,
-            LPSTARTUPINFOW,
+            CreateProcessA, GetCurrentProcessId, GetCurrentThreadId, OpenThread, ResumeThread,
+            SuspendThread, TerminateProcess, LPPROCESS_INFORMATION, LPSTARTUPINFOA, LPSTARTUPINFOW,
         },
         tlhelp32::{
             CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32,
@@ -61,12 +60,9 @@ static mut ZLUDA_PATH_UTF8: Vec<u8> = Vec::new();
 static mut ZLUDA_PATH_UTF16: Option<&'static [u16]> = None;
 static mut ZLUDA_ML_PATH_UTF8: Vec<u8> = Vec::new();
 static mut ZLUDA_ML_PATH_UTF16: Option<&'static [u16]> = None;
-static mut DETACH_LOAD_LIBRARY: bool = false;
-static mut NVCUDA_ORIGINAL_MODULE: HMODULE = ptr::null_mut();
-static mut CUINIT_ORIGINAL_FN: FARPROC = ptr::null_mut();
 static mut CURRENT_MODULE_FILENAME: Vec<u8> = Vec::new();
+static mut DETOUR_DETACH: Option<DetourDetachGuard> = None;
 const CUDA_ERROR_NOT_SUPPORTED: c_uint = 801;
-const CUDA_ERROR_UNKNOWN: c_uint = 999;
 
 static mut LOAD_LIBRARY_A: unsafe extern "system" fn(lpLibFileName: LPCSTR) -> HMODULE =
     LoadLibraryA;
@@ -79,6 +75,12 @@ static mut LOAD_LIBRARY_EX_A: unsafe extern "system" fn(
     hFile: HANDLE,
     dwFlags: DWORD,
 ) -> HMODULE = LoadLibraryExA;
+
+static mut LOAD_LIBRARY_EX_W: unsafe extern "system" fn(
+    lpLibFileName: LPCWSTR,
+    hFile: HANDLE,
+    dwFlags: DWORD,
+) -> HMODULE = LoadLibraryExW;
 
 static mut CREATE_PROCESS_A: unsafe extern "system" fn(
     lpApplicationName: LPCSTR,
@@ -145,12 +147,6 @@ static mut CREATE_PROCESS_WITH_LOGON_W: unsafe extern "system" fn(
     lpStartupInfo: LPSTARTUPINFOW,
     lpProcessInformation: LPPROCESS_INFORMATION,
 ) -> BOOL = CreateProcessWithLogonW;
-
-static mut LOAD_LIBRARY_EX_W: unsafe extern "system" fn(
-    lpLibFileName: LPCWSTR,
-    hFile: HANDLE,
-    dwFlags: DWORD,
-) -> HMODULE = LoadLibraryExW;
 
 #[no_mangle]
 #[allow(non_snake_case)]
@@ -347,7 +343,7 @@ unsafe extern "system" fn ZludaCreateProcessWithTokenW(
         dwLogonFlags,
         lpApplicationName,
         lpCommandLine,
-        dwCreationFlags,
+        dwCreationFlags | CREATE_SUSPENDED,
         lpEnvironment,
         lpCurrentDirectory,
         lpStartupInfo,
@@ -356,159 +352,199 @@ unsafe extern "system" fn ZludaCreateProcessWithTokenW(
     continue_create_process_hook(create_proc_result, dwCreationFlags, lpProcessInformation)
 }
 
+// This type encapsulates typical calling sequence of detours and cleanup.
+// We have two ways we do detours:
+// * If we are loaded before nvcuda.dll, we hook LoadLibrary*
+// * If we are loaded after nvcuda.dll, we override every cu* function
+// Additionally, within both of those we attach to CreateProcess*
+struct DetourDetachGuard {
+    state: DetourUndoState,
+    suspended_threads: Vec<*mut c_void>,
+    // First element is the original fn, second is the new fn
+    overriden_functions: Vec<(*mut *mut c_void, *mut c_void)>,
+}
+
+impl DetourDetachGuard {
+    // First element in the pair is ptr to original fn, second argument is the
+    // new function. We accept *mut *mut c_void instead of *mut c_void as the
+    // first element in the pair, because somehow otherwise original functions
+    // also get overriden, so for example ZludaLoadLibraryExW ends calling
+    // itself recursively until stack overflow exception occurs
+    unsafe fn detour_functions<'a>(
+        override_fn_pairs: Vec<(*mut *mut c_void, *mut c_void)>,
+    ) -> Option<Self> {
+        let mut result = DetourDetachGuard {
+            state: DetourUndoState::DoNothing,
+            suspended_threads: Vec::new(),
+            overriden_functions: override_fn_pairs,
+        };
+        if DetourTransactionBegin() != NO_ERROR as i32 {
+            return None;
+        }
+        result.state = DetourUndoState::AbortTransactionResumeThreads;
+        if !Self::suspend_all_threads_except_current(&mut result.suspended_threads) {
+            return None;
+        }
+        for thread_handle in result.suspended_threads.iter().copied() {
+            if DetourUpdateThread(thread_handle) != NO_ERROR as i32 {
+                return None;
+            }
+        }
+        result.overriden_functions.extend_from_slice(&[
+            (
+                &mut CREATE_PROCESS_A as *mut _ as _,
+                ZludaCreateProcessA as _,
+            ),
+            (
+                &mut CREATE_PROCESS_W as *mut _ as _,
+                ZludaCreateProcessW as _,
+            ),
+            (
+                &mut CREATE_PROCESS_AS_USER_W as *mut _ as _,
+                ZludaCreateProcessAsUserW as _,
+            ),
+            (
+                &mut CREATE_PROCESS_WITH_LOGON_W as *mut _ as _,
+                ZludaCreateProcessWithLogonW as _,
+            ),
+            (
+                &mut CREATE_PROCESS_WITH_TOKEN_W as *mut _ as _,
+                ZludaCreateProcessWithTokenW as _,
+            ),
+        ]);
+        for (original_fn, new_fn) in result.overriden_functions.iter().copied() {
+            if DetourAttach(original_fn, new_fn) != NO_ERROR as i32 {
+                return None;
+            }
+        }
+        if DetourTransactionCommit() != NO_ERROR as i32 {
+            return None;
+        }
+        result.state = DetourUndoState::DoNothing;
+        // HACK ALERT
+        // I really have no idea how this could happen.
+        // Perhaps a thread was closed?
+        if !result.resume_threads() {
+            if cfg!(debug_assertions) {
+                panic!();
+            }
+        }
+        result.state = DetourUndoState::DetachDetours;
+        Some(result)
+    }
+
+    unsafe fn suspend_all_threads_except_current(threads: &mut Vec<*mut c_void>) -> bool {
+        let thread_snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+        if thread_snapshot == INVALID_HANDLE_VALUE {
+            return false;
+        }
+        let current_thread = GetCurrentThreadId();
+        let current_process = GetCurrentProcessId();
+        let mut thread = mem::zeroed::<THREADENTRY32>();
+        thread.dwSize = mem::size_of::<THREADENTRY32>() as u32;
+        if Thread32First(thread_snapshot, &mut thread) == 0 {
+            CloseHandle(thread_snapshot);
+            return false;
+        }
+        loop {
+            if thread.th32OwnerProcessID == current_process && thread.th32ThreadID != current_thread
+            {
+                let thread_handle = OpenThread(THREAD_SUSPEND_RESUME, 0, thread.th32ThreadID);
+                if thread_handle == ptr::null_mut() {
+                    CloseHandle(thread_snapshot);
+                    return false;
+                }
+                if SuspendThread(thread_handle) == (-1i32 as u32) {
+                    CloseHandle(thread_handle);
+                    CloseHandle(thread_snapshot);
+                    return false;
+                }
+                threads.push(thread_handle);
+            }
+            if Thread32Next(thread_snapshot, &mut thread) == 0 {
+                break;
+            }
+        }
+        CloseHandle(thread_snapshot);
+        true
+    }
+
+    // returns true on success
+    unsafe fn resume_threads(&self) -> bool {
+        let mut success = true;
+        for t in self.suspended_threads.iter().copied() {
+            if ResumeThread(t) == -1i32 as u32 {
+                success = false;
+            }
+            if CloseHandle(t) == 0 {
+                success = false;
+            }
+        }
+        success
+    }
+}
+
+impl Drop for DetourDetachGuard {
+    fn drop(&mut self) {
+        match self.state {
+            DetourUndoState::DoNothing => {}
+            DetourUndoState::AbortTransactionResumeThreads => {
+                unsafe { DetourTransactionAbort() };
+                unsafe { self.resume_threads() };
+            }
+            DetourUndoState::DetachDetours => {
+                // TODO: implement
+            }
+        }
+    }
+}
+
+// Along with Drop impl this forms a state machine for undoing detours.
+// I would like to model this as a an usual full state machine with fields in
+// variants, but you can't move fields out of type that implements Drop
+enum DetourUndoState {
+    DoNothing,
+    AbortTransactionResumeThreads,
+    DetachDetours,
+}
+
 unsafe fn continue_create_process_hook(
     create_proc_result: BOOL,
-    creation_flags: DWORD,
+    original_creation_flags: DWORD,
     process_information: LPPROCESS_INFORMATION,
 ) -> BOOL {
     if create_proc_result == 0 {
         return 0;
     }
+    // Detours injection can fail for various reasons, like child being 32bit.
+    // If we did not manage to inject then too bad, it's better if the child
+    // continues uninjected than to break the parent
     if DetourUpdateProcessWithDll(
         (*process_information).hProcess,
         &mut CURRENT_MODULE_FILENAME.as_ptr() as *mut _ as *mut _,
         1,
-    ) == 0
+    ) != FALSE
     {
-        TerminateProcess((*process_information).hProcess, 1);
-        return 0;
+        detours_sys::DetourCopyPayloadToProcess(
+            (*process_information).hProcess,
+            &PAYLOAD_NVML_GUID,
+            ZLUDA_ML_PATH_UTF16.unwrap().as_ptr() as *mut _,
+            (ZLUDA_ML_PATH_UTF16.unwrap().len() * mem::size_of::<u16>()) as u32,
+        );
+        detours_sys::DetourCopyPayloadToProcess(
+            (*process_information).hProcess,
+            &PAYLOAD_NVCUDA_GUID,
+            ZLUDA_PATH_UTF16.unwrap().as_ptr() as *mut _,
+            (ZLUDA_PATH_UTF16.unwrap().len() * mem::size_of::<u16>()) as u32,
+        );
     }
-    if detours_sys::DetourCopyPayloadToProcess(
-        (*process_information).hProcess,
-        &PAYLOAD_NVCUDA_GUID,
-        ZLUDA_PATH_UTF16.unwrap().as_ptr() as *mut _,
-        (ZLUDA_PATH_UTF16.unwrap().len() * mem::size_of::<u16>()) as u32,
-    ) == FALSE
-    {
-        TerminateProcess((*process_information).hProcess, 1);
-        return 0;
-    }
-
-    if detours_sys::DetourCopyPayloadToProcess(
-        (*process_information).hProcess,
-        &PAYLOAD_NVML_GUID,
-        ZLUDA_ML_PATH_UTF16.unwrap().as_ptr() as *mut _,
-        (ZLUDA_ML_PATH_UTF16.unwrap().len() * mem::size_of::<u16>()) as u32,
-    ) == FALSE
-    {
-        TerminateProcess((*process_information).hProcess, 1);
-        return 0;
-    }
-    if creation_flags & CREATE_SUSPENDED == 0 {
+    if original_creation_flags & CREATE_SUSPENDED == 0 {
         if ResumeThread((*process_information).hThread) == -1i32 as u32 {
             TerminateProcess((*process_information).hProcess, 1);
             return 0;
         }
     }
     create_proc_result
-}
-
-unsafe extern "C" fn cuinit_detour(flags: c_uint) -> c_uint {
-    let zluda_module = LoadLibraryW(ZLUDA_PATH_UTF16.unwrap().as_ptr());
-    if zluda_module == ptr::null_mut() {
-        return CUDA_ERROR_UNKNOWN;
-    }
-    let suspended_threads = suspend_all_threads_except_current();
-    let suspended_threads = match suspended_threads {
-        Some(t) => t,
-        None => return CUDA_ERROR_UNKNOWN,
-    };
-    if DetourTransactionBegin() != NO_ERROR as i32 {
-        resume_threads(&suspended_threads);
-        return CUDA_ERROR_UNKNOWN;
-    }
-    for t in suspended_threads.iter() {
-        if DetourUpdateThread(*t) != NO_ERROR as i32 {
-            DetourTransactionAbort();
-            resume_threads(&suspended_threads);
-            return CUDA_ERROR_UNKNOWN;
-        }
-    }
-    if detours_sys::DetourEnumerateExports(
-        NVCUDA_ORIGINAL_MODULE as *mut _,
-        &zluda_module as *const _ as *mut _,
-        Some(override_nvcuda_export),
-    ) == FALSE
-    {
-        DetourTransactionAbort();
-        resume_threads(&suspended_threads);
-        return CUDA_ERROR_UNKNOWN;
-    }
-    if DetourTransactionCommit() != NO_ERROR as i32 {
-        DetourTransactionAbort();
-        resume_threads(&suspended_threads);
-        return CUDA_ERROR_UNKNOWN;
-    }
-    resume_threads(&suspended_threads);
-    let zluda_cuinit = GetProcAddress(zluda_module, b"cuInit\0".as_ptr() as *const _);
-    (mem::transmute::<_, unsafe extern "C" fn(c_uint) -> c_uint>(zluda_cuinit))(flags)
-}
-
-unsafe fn suspend_all_threads_except_current() -> Option<Vec<*mut c_void>> {
-    let thread_snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
-    if thread_snap == INVALID_HANDLE_VALUE {
-        return None;
-    }
-    let current_thread = GetCurrentThreadId();
-    let current_process = GetCurrentProcessId();
-    let mut threads = Vec::new();
-    let mut thread = mem::zeroed::<THREADENTRY32>();
-    thread.dwSize = mem::size_of::<THREADENTRY32>() as u32;
-    if Thread32First(thread_snap, &mut thread) == 0 {
-        CloseHandle(thread_snap);
-        return None;
-    }
-    loop {
-        if thread.th32OwnerProcessID == current_process && thread.th32ThreadID != current_thread {
-            let thread_handle = OpenThread(THREAD_SUSPEND_RESUME, 0, thread.th32ThreadID);
-            if thread_handle == ptr::null_mut() {
-                CloseHandle(thread_snap);
-                resume_threads(&threads);
-                return None;
-            }
-            if SuspendThread(thread_handle) == (-1i32 as u32) {
-                CloseHandle(thread_snap);
-                resume_threads(&threads);
-                return None;
-            }
-            threads.push(thread_handle);
-        }
-        if Thread32Next(thread_snap, &mut thread) == 0 {
-            break;
-        }
-    }
-    CloseHandle(thread_snap);
-    Some(threads)
-}
-
-unsafe fn resume_threads(threads: &[*mut c_void]) {
-    for t in threads {
-        ResumeThread(*t);
-        CloseHandle(*t);
-    }
-}
-
-unsafe extern "stdcall" fn override_nvcuda_export(
-    context_ptr: *mut c_void,
-    _: c_ulong,
-    name: LPCSTR,
-    mut address: *mut c_void,
-) -> c_int {
-    let zluda_module: HMODULE = *(context_ptr as *mut HMODULE);
-    let mut zluda_fn = GetProcAddress(zluda_module, name);
-    if zluda_fn == ptr::null_mut() {
-        // We only support 64 bits and in all relevant calling conventions stack
-        // is caller-cleaned, so probably we will not crash
-        zluda_fn = unsupported_cuda_fn as *mut _;
-    }
-    if DetourAttach((&mut address) as *mut _, zluda_fn as *mut _) != NO_ERROR as i32 {
-        return FALSE;
-    }
-    TRUE
-}
-
-unsafe extern "C" fn unsupported_cuda_fn() -> c_uint {
-    CUDA_ERROR_NOT_SUPPORTED
 }
 
 fn is_nvcuda_dll_utf8(lib: *const u8) -> bool {
@@ -595,21 +631,23 @@ unsafe extern "system" fn DllMain(instDLL: HINSTANCE, dwReason: u32, _: *const u
         }
         // If the application (directly or not) links to nvcuda.dll, nvcuda.dll
         // will get loaded before we can act. In this case, instead of
-        // redirecting LoadLibrary* to load ZLUDA, we redirect cuInit to
-        // a cuInit implementation that will load ZLUDA and set up detouts.
-        // We can't do it here because LoadLibrary* inside DllMain is illegal.
-        // We greatly prefer wholesale redirecting inside LoadLibrary*.
-        // Hooking inside cuInit is brittle in the face of multiple
-        // threads (DetourUpdateThread)
-        match get_cuinit() {
-            Some((nvcuda_mod, cuinit_fn)) => attach_cuinit(nvcuda_mod, cuinit_fn),
+        // redirecting LoadLibrary* to load ZLUDA, we override already loaded
+        // functions
+        let detach_guard = match get_cuinit() {
+            Some((nvcuda_mod, _)) => attach_cuinit(nvcuda_mod),
             None => attach_load_libary(),
+        };
+        match detach_guard {
+            Some(g) => {
+                DETOUR_DETACH = Some(g);
+                TRUE
+            }
+            None => FALSE,
         }
     } else if dwReason == DLL_PROCESS_DETACH {
-        if DETACH_LOAD_LIBRARY {
-            detach_load_library()
-        } else {
-            detach_cuinit()
+        match DETOUR_DETACH.take() {
+            Some(_) => TRUE,
+            None => FALSE,
         }
     } else {
         TRUE
@@ -652,133 +690,71 @@ unsafe fn get_cuinit() -> Option<(HMODULE, FARPROC)> {
 }
 
 #[must_use]
-unsafe fn attach_cuinit(nvcuda_mod: HMODULE, mut cuinit: FARPROC) -> i32 {
-    if DetourTransactionBegin() != NO_ERROR as i32 {
-        return FALSE;
+unsafe fn attach_cuinit(nvcuda_mod: HMODULE) -> Option<DetourDetachGuard> {
+    let zluda_module = LoadLibraryW(ZLUDA_PATH_UTF16.unwrap().as_ptr());
+    if zluda_module == ptr::null_mut() {
+        return None;
     }
-    if !attach_create_process() {
-        return FALSE;
+    let original_functions = gather_imports(nvcuda_mod);
+    let override_functions = gather_imports(zluda_module);
+    let mut override_fn_pairs = Vec::with_capacity(original_functions.len());
+    // TODO: optimize
+    for (original_fn_name, mut original_fn_address) in original_functions {
+        let override_fn_address =
+            match override_functions.binary_search_by_key(&original_fn_name, |(name, _)| *name) {
+                Ok(x) => override_functions[x].1,
+                Err(_) => {
+                    // TODO: print a warning in debug
+                    cuda_unsupported as _
+                }
+            };
+        override_fn_pairs.push((&mut original_fn_address as *mut _ as _, override_fn_address));
     }
-    NVCUDA_ORIGINAL_MODULE = nvcuda_mod;
-    CUINIT_ORIGINAL_FN = cuinit;
-    if DetourAttach(mem::transmute(&mut cuinit), cuinit_detour as *mut _) != NO_ERROR as i32 {
-        return FALSE;
-    }
-    if DetourTransactionCommit() != NO_ERROR as i32 {
-        return FALSE;
-    }
+    DetourDetachGuard::detour_functions(override_fn_pairs)
+}
+
+unsafe extern "system" fn cuda_unsupported() -> c_uint {
+    CUDA_ERROR_NOT_SUPPORTED
+}
+
+unsafe fn gather_imports(module: HINSTANCE) -> Vec<(&'static CStr, *mut c_void)> {
+    let mut result = Vec::new();
+    DetourEnumerateExports(
+        module as _,
+        &mut result as *mut _ as *mut _,
+        Some(gather_imports_impl),
+    );
+    result
+}
+
+unsafe extern "stdcall" fn gather_imports_impl(
+    context: *mut c_void,
+    _: u32,
+    name: LPCSTR,
+    code: *mut c_void,
+) -> i32 {
+    let result: &mut Vec<(&'static CStr, *mut c_void)> = &mut *(context as *mut Vec<_>);
+    result.push((CStr::from_ptr(name), code));
     TRUE
 }
 
 #[must_use]
-unsafe fn detach_cuinit() -> i32 {
-    if DetourTransactionBegin() != NO_ERROR as i32 {
-        return FALSE;
-    }
-    if !detach_create_process() {
-        return FALSE;
-    }
-    if DetourUpdateThread(GetCurrentThread()) != NO_ERROR as i32 {
-        return FALSE;
-    }
-    if DetourDetach(
-        mem::transmute(&mut CUINIT_ORIGINAL_FN),
-        cuinit_detour as *mut _,
-    ) != NO_ERROR as i32
-    {
-        return FALSE;
-    }
-    if DetourTransactionCommit() != NO_ERROR as i32 {
-        return FALSE;
-    }
-    TRUE
-}
+unsafe fn attach_load_libary() -> Option<DetourDetachGuard> {
+    let detour_functions = vec![
+        (&mut LOAD_LIBRARY_A as *mut _ as _, ZludaLoadLibraryA as _),
+        (&mut LOAD_LIBRARY_W as *mut _ as _, ZludaLoadLibraryW as _),
+        (
+            &mut LOAD_LIBRARY_EX_A as *mut _ as _,
+            ZludaLoadLibraryExA as _,
+        ),
+        (
+            &mut LOAD_LIBRARY_EX_W as *mut _ as _,
+            ZludaLoadLibraryExW as _,
+        ),
+    ];
+    let result = DetourDetachGuard::detour_functions(detour_functions);
 
-#[must_use]
-unsafe fn attach_load_libary() -> i32 {
-    if DetourTransactionBegin() != NO_ERROR as i32 {
-        return FALSE;
-    }
-    if !attach_create_process() {
-        return FALSE;
-    }
-    if DetourAttach(
-        mem::transmute(&mut LOAD_LIBRARY_A),
-        ZludaLoadLibraryA as *mut _,
-    ) != NO_ERROR as i32
-    {
-        return FALSE;
-    }
-    if DetourAttach(
-        mem::transmute(&mut LOAD_LIBRARY_W),
-        ZludaLoadLibraryW as *mut _,
-    ) != NO_ERROR as i32
-    {
-        return FALSE;
-    }
-    if DetourAttach(
-        mem::transmute(&mut LOAD_LIBRARY_EX_A),
-        ZludaLoadLibraryExA as *mut _,
-    ) != NO_ERROR as i32
-    {
-        return FALSE;
-    }
-    if DetourAttach(
-        mem::transmute(&mut LOAD_LIBRARY_EX_W),
-        ZludaLoadLibraryExW as *mut _,
-    ) != NO_ERROR as i32
-    {
-        return FALSE;
-    }
-    if DetourTransactionCommit() != NO_ERROR as i32 {
-        return FALSE;
-    }
-    TRUE
-}
-
-#[must_use]
-unsafe fn detach_load_library() -> i32 {
-    if DetourTransactionBegin() != NO_ERROR as i32 {
-        return FALSE;
-    }
-    if !detach_create_process() {
-        return FALSE;
-    }
-    if DetourUpdateThread(GetCurrentThread()) != NO_ERROR as i32 {
-        return FALSE;
-    }
-    if DetourDetach(
-        mem::transmute(&mut LOAD_LIBRARY_A),
-        ZludaLoadLibraryA as *mut _,
-    ) != NO_ERROR as i32
-    {
-        return FALSE;
-    }
-    if DetourDetach(
-        mem::transmute(&mut LOAD_LIBRARY_W),
-        ZludaLoadLibraryW as *mut _,
-    ) != NO_ERROR as i32
-    {
-        return FALSE;
-    }
-    if DetourDetach(
-        mem::transmute(&mut LOAD_LIBRARY_EX_A),
-        ZludaLoadLibraryExA as *mut _,
-    ) != NO_ERROR as i32
-    {
-        return FALSE;
-    }
-    if DetourDetach(
-        mem::transmute(&mut LOAD_LIBRARY_EX_W),
-        ZludaLoadLibraryExW as *mut _,
-    ) != NO_ERROR as i32
-    {
-        return FALSE;
-    }
-    if DetourTransactionCommit() != NO_ERROR as i32 {
-        return FALSE;
-    }
-    TRUE
+    result
 }
 
 fn get_zluda_dlls_paths() -> Option<(&'static [u16], &'static [u16])> {
@@ -809,84 +785,4 @@ fn get_payload(guid: &detours_sys::GUID) -> Option<&'static [u16]> {
             });
         }
     }
-}
-
-#[must_use]
-unsafe fn attach_create_process() -> bool {
-    if DetourAttach(
-        mem::transmute(&mut CREATE_PROCESS_A),
-        ZludaCreateProcessA as *mut _,
-    ) != NO_ERROR as i32
-    {
-        return false;
-    }
-    if DetourAttach(
-        mem::transmute(&mut CREATE_PROCESS_W),
-        ZludaCreateProcessW as *mut _,
-    ) != NO_ERROR as i32
-    {
-        return false;
-    }
-    if DetourAttach(
-        mem::transmute(&mut CREATE_PROCESS_AS_USER_W),
-        ZludaCreateProcessAsUserW as *mut _,
-    ) != NO_ERROR as i32
-    {
-        return false;
-    }
-    if DetourAttach(
-        mem::transmute(&mut CREATE_PROCESS_WITH_LOGON_W),
-        ZludaCreateProcessWithLogonW as *mut _,
-    ) != NO_ERROR as i32
-    {
-        return false;
-    }
-    if DetourAttach(
-        mem::transmute(&mut CREATE_PROCESS_WITH_TOKEN_W),
-        ZludaCreateProcessWithTokenW as *mut _,
-    ) != NO_ERROR as i32
-    {
-        return false;
-    }
-    true
-}
-
-#[must_use]
-unsafe fn detach_create_process() -> bool {
-    if DetourDetach(
-        mem::transmute(&mut CREATE_PROCESS_A),
-        ZludaCreateProcessA as *mut _,
-    ) != NO_ERROR as i32
-    {
-        return false;
-    }
-    if DetourDetach(
-        mem::transmute(&mut CREATE_PROCESS_W),
-        ZludaCreateProcessW as *mut _,
-    ) != NO_ERROR as i32
-    {
-        return false;
-    }
-    if DetourDetach(
-        mem::transmute(&mut CREATE_PROCESS_AS_USER_W),
-        ZludaCreateProcessAsUserW as *mut _,
-    ) != NO_ERROR as i32
-    {
-        return false;
-    }
-    if DetourDetach(
-        mem::transmute(&mut CREATE_PROCESS_WITH_LOGON_W),
-        ZludaCreateProcessWithLogonW as *mut _,
-    ) != NO_ERROR as i32
-    {
-        return false;
-    }
-    if DetourDetach(
-        mem::transmute(&mut CREATE_PROCESS_WITH_TOKEN_W),
-        ZludaCreateProcessWithTokenW as *mut _,
-    ) != NO_ERROR as i32
-    {
-        return false;
-    }
-    true
 }
