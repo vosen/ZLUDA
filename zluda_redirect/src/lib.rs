@@ -361,7 +361,7 @@ struct DetourDetachGuard {
     state: DetourUndoState,
     suspended_threads: Vec<*mut c_void>,
     // First element is the original fn, second is the new fn
-    overriden_functions: Vec<(*mut *mut c_void, *mut c_void)>,
+    overriden_functions: Vec<(*mut c_void, *mut c_void)>,
 }
 
 impl DetourDetachGuard {
@@ -371,7 +371,7 @@ impl DetourDetachGuard {
     // also get overriden, so for example ZludaLoadLibraryExW ends calling
     // itself recursively until stack overflow exception occurs
     unsafe fn detour_functions<'a>(
-        override_fn_pairs: Vec<(*mut *mut c_void, *mut c_void)>,
+        override_fn_pairs: Vec<(*mut c_void, *mut c_void)>,
     ) -> Option<Self> {
         let mut result = DetourDetachGuard {
             state: DetourUndoState::DoNothing,
@@ -391,29 +391,23 @@ impl DetourDetachGuard {
             }
         }
         result.overriden_functions.extend_from_slice(&[
+            (CREATE_PROCESS_A as _, ZludaCreateProcessA as _),
+            (CREATE_PROCESS_W as _, ZludaCreateProcessW as _),
             (
-                &mut CREATE_PROCESS_A as *mut _ as _,
-                ZludaCreateProcessA as _,
-            ),
-            (
-                &mut CREATE_PROCESS_W as *mut _ as _,
-                ZludaCreateProcessW as _,
-            ),
-            (
-                &mut CREATE_PROCESS_AS_USER_W as *mut _ as _,
+                CREATE_PROCESS_AS_USER_W as _,
                 ZludaCreateProcessAsUserW as _,
             ),
             (
-                &mut CREATE_PROCESS_WITH_LOGON_W as *mut _ as _,
+                CREATE_PROCESS_WITH_LOGON_W as _,
                 ZludaCreateProcessWithLogonW as _,
             ),
             (
-                &mut CREATE_PROCESS_WITH_TOKEN_W as *mut _ as _,
+                CREATE_PROCESS_WITH_TOKEN_W as _,
                 ZludaCreateProcessWithTokenW as _,
             ),
         ]);
-        for (original_fn, new_fn) in result.overriden_functions.iter().copied() {
-            if DetourAttach(original_fn, new_fn) != NO_ERROR as i32 {
+        for (original_fn, new_fn) in result.overriden_functions.iter_mut() {
+            if DetourAttach(original_fn as *mut _, *new_fn) != NO_ERROR as i32 {
                 return None;
             }
         }
@@ -708,7 +702,7 @@ unsafe fn attach_cuinit(nvcuda_mod: HMODULE) -> Option<DetourDetachGuard> {
                     cuda_unsupported as _
                 }
             };
-        override_fn_pairs.push((&mut original_fn_address as *mut _ as _, override_fn_address));
+        override_fn_pairs.push((original_fn_address as _, override_fn_address));
     }
     DetourDetachGuard::detour_functions(override_fn_pairs)
 }
