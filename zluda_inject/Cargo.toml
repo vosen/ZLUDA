@@ -11,3 +11,9 @@ path = "src/main.rs"
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["jobapi2", "processthreadsapi", "synchapi", "winbase", "std"] }
 detours-sys = { path = "../detours-sys" }
+
+[dev-dependencies]
+# dependency for integration tests
+zluda_redirect = { path = "../zluda_redirect" }
+# dependency for integration tests
+zluda_dump = { path = "../zluda_dump" }

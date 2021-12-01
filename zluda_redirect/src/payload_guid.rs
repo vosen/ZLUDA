@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 const PAYLOAD_NVCUDA_GUID: detours_sys::GUID = detours_sys::GUID {
     Data1: 0xC225FC0C,
     Data2: 0x00D7,
