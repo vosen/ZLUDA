@@ -21,6 +21,7 @@ fn main() -> Result<(), VarError> {
     helpers_dir.push("tests");
     helpers_dir.push("helpers");
     let helpers_dir_as_string = helpers_dir.to_string_lossy();
+    println!("cargo:rerun-if-changed={}", helpers_dir_as_string);
     for rust_file in fs::read_dir(&helpers_dir).unwrap().filter_map(rust_file) {
         let full_file_path = format!(
             "{}{}{}",
@@ -28,7 +29,6 @@ fn main() -> Result<(), VarError> {
             path::MAIN_SEPARATOR,
             rust_file
         );
-        println!("cargo:rerun-if-changed={}", full_file_path);
         let mut rustc_cmd = Command::new(&*rustc_exe);
         if debug {
             rustc_cmd.arg("-g");
