@@ -13,7 +13,7 @@ winapi = { version = "0.3", features = ["jobapi2", "processthreadsapi", "synchap
 detours-sys = { path = "../detours-sys" }
 
 [dev-dependencies]
-# dependency for integration tests
+# all of those are used in integration tests
 zluda_redirect = { path = "../zluda_redirect" }
-# dependency for integration tests
 zluda_dump = { path = "../zluda_dump" }
+zluda_ml = { path = "../zluda_ml" }

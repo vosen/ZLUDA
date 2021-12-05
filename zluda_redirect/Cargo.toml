@@ -11,3 +11,4 @@ crate-type = ["cdylib"]
 detours-sys = { path = "../detours-sys" }
 wchar = "0.6"
 winapi = { version = "0.3", features = ["processthreadsapi", "winbase", "winnt", "winerror", "libloaderapi", "tlhelp32", "handleapi", "std"] }
+tempfile = "3"
