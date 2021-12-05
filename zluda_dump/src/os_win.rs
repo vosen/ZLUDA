@@ -66,7 +66,6 @@ impl PlatformLibrary {
             if module == ptr::null_mut() {
                 break;
             }
-            let mut size = 0;
             let payload = GetProcAddress(module as _, b"ZLUDA_REDIRECT\0".as_ptr() as _);
             if payload != ptr::null_mut() {
                 return Some(module as _);
