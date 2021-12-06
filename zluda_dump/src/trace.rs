@@ -21,6 +21,7 @@ pub(crate) struct StateTracker {
     submodule_counter: usize,
     last_module_version: Option<usize>,
     pub(crate) dark_api: dark_api::DarkApiState,
+    pub(crate) override_cc_major: Option<u32>,
 }
 
 impl StateTracker {
@@ -32,6 +33,7 @@ impl StateTracker {
             submodule_counter: 0,
             last_module_version: None,
             dark_api: dark_api::DarkApiState::new(),
+            override_cc_major: settings.override_cc_major,
         }
     }
 

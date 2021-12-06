@@ -182,6 +182,7 @@ impl GlobalDelayedState {
 struct Settings {
     dump_dir: Option<PathBuf>,
     libcuda_path: String,
+    override_cc_major: Option<u32>,
 }
 
 impl Settings {
@@ -191,7 +192,7 @@ impl Settings {
             Ok(Some(dir)) => {
                 logger.log(log::LogEntry::CreatedDumpDirectory(dir.clone()));
                 Some(dir)
-            },
+            }
             Ok(None) => None,
             Err(err) => {
                 logger.log(log::LogEntry::ErrorBox(err));
@@ -206,9 +207,24 @@ impl Settings {
             }
             Ok(env_string) => env_string,
         };
+        let override_cc_major = match env::var("ZLUDA_OVERRIDE_COMPUTE_CAPABILITY_MAJOR") {
+            Err(env::VarError::NotPresent) => None,
+            Err(e) => {
+                logger.log(log::LogEntry::ErrorBox(Box::new(e) as _));
+                None
+            }
+            Ok(env_string) => match str::parse::<u32>(&*env_string) {
+                Err(e) => {
+                    logger.log(log::LogEntry::ErrorBox(Box::new(e) as _));
+                    None
+                }
+                Ok(cc) => Some(cc),
+            },
+        };
         Settings {
             dump_dir,
             libcuda_path,
+            override_cc_major,
         }
     }
 
@@ -1470,5 +1486,41 @@ pub(crate) fn cuModuleGetFunction_Post(
 ) {
     if !state.module_exists(hmod) {
         fn_logger.log(log::LogEntry::UnknownModule(hmod))
+    }
+    match unsafe { CStr::from_ptr(name) }.to_str() {
+        Ok(str) => fn_logger.log(log::LogEntry::FunctionParameter {
+            name: "name",
+            value: str.to_string(),
+        }),
+        Err(e) => fn_logger.log(log::LogEntry::MalformedFunctionName(e)),
+    }
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuDeviceGetAttribute_Post(
+    pi: *mut ::std::os::raw::c_int,
+    attrib: CUdevice_attribute,
+    dev: CUdevice,
+    fn_logger: &mut log::FunctionLogger,
+    state: &mut trace::StateTracker,
+    result: CUresult,
+) {
+    fn_logger.log(log::LogEntry::FunctionParameter {
+        name: "attrib",
+        value: attrib.0.to_string(),
+    });
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuDeviceComputeCapability_Post(
+    major: *mut ::std::os::raw::c_int,
+    minor: *mut ::std::os::raw::c_int,
+    dev: CUdevice,
+    fn_logger: &mut log::FunctionLogger,
+    state: &mut trace::StateTracker,
+    result: CUresult,
+) {
+    if let Some(major_ver_override) = state.override_cc_major {
+        unsafe { *major = major_ver_override as i32 };
     }
 }
