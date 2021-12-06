@@ -2355,12 +2355,13 @@ extern_redirect! {
         dev: CUdevice,
     ) -> CUresult;
 }
-extern_redirect! {
+extern_redirect_with_post! {
     pub fn cuDeviceGetAttribute(
         pi: *mut ::std::os::raw::c_int,
         attrib: CUdevice_attribute,
         dev: CUdevice,
     ) -> CUresult;
+    super::cuDeviceGetAttribute_Post;
 }
 extern_redirect! {
     pub fn cuDeviceGetNvSciSyncAttributes(
@@ -2372,12 +2373,13 @@ extern_redirect! {
 extern_redirect! {
     pub fn cuDeviceGetProperties(prop: *mut CUdevprop, dev: CUdevice) -> CUresult;
 }
-extern_redirect! {
+extern_redirect_with_post! {
     pub fn cuDeviceComputeCapability(
         major: *mut ::std::os::raw::c_int,
         minor: *mut ::std::os::raw::c_int,
         dev: CUdevice,
     ) -> CUresult;
+    super::cuDeviceComputeCapability_Post;
 }
 extern_redirect! {
     pub fn cuDevicePrimaryCtxRetain(pctx: *mut CUcontext, dev: CUdevice) -> CUresult;

@@ -302,6 +302,11 @@ pub(crate) enum LogEntry {
         raw_image: *const c_void,
         kind: &'static str,
     },
+    MalformedFunctionName(Utf8Error),
+    FunctionParameter {
+        name: &'static str,
+        value: String,
+    },
     MalformedModulePath(Utf8Error),
     NonUtf8ModuleText(Utf8Error),
     NulInsideModuleText(NulError),
@@ -377,6 +382,8 @@ impl Display for LogEntry {
                 expected,
                 observed,
             } => write!(f, "Unexected argument"),
+            LogEntry::MalformedFunctionName(e) => e.fmt(f),
+            LogEntry::FunctionParameter { name, value } => write!(f, "{}: {}", name, value),
         }
     }
 }
