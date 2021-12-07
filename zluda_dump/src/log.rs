@@ -368,7 +368,7 @@ impl Display for LogEntry {
                 observed,
             } => write!(
                 f,
-                #"Unexected field {}. Expected one of: {{{}}}, observed: {}"#,
+                "Unexpected field {}. Expected one of: {{{}}}, observed: {}",
                 field_name,
                 expected
                     .iter()
