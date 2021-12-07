@@ -491,7 +491,8 @@ unsafe fn record_submodules(
         if fatbin_file_kind == FATBIN_FILE_HEADER_KIND_PTX {
             let decompressed = decompress_kernel_module(fatbin_file);
             match decompressed {
-                Some(decompressed) => {
+                Some(mut decompressed) => {
+                    decompressed.pop(); // remove trailing zero
                     state.record_new_submodule(module, version, &*decompressed, fn_logger, "ptx")
                 }
                 None => fn_logger.log(log::LogEntry::Lz4DecompressionFailure),

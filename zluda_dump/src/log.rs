@@ -368,7 +368,7 @@ impl Display for LogEntry {
                 observed,
             } => write!(
                 f,
-                "Unexected field {}. Expected: [{}], observed: {}",
+                #"Unexected field {}. Expected one of: {{{}}}, observed: {}"#,
                 field_name,
                 expected
                     .iter()
@@ -381,7 +381,17 @@ impl Display for LogEntry {
                 arg_name,
                 expected,
                 observed,
-            } => write!(f, "Unexected argument"),
+            } => write!(
+                f,
+                "Unexpected argument {}. Expected one of: {{{}}}, observed: {}",
+                arg_name,
+                expected
+                    .iter()
+                    .map(|x| x.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                observed
+            ),
             LogEntry::MalformedFunctionName(e) => e.fmt(f),
             LogEntry::FunctionParameter { name, value } => write!(f, "{}: {}", name, value),
         }
