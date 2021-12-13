@@ -394,9 +394,11 @@ Directive: Option<ast::Directive<'input, ast::ParsedArgParams<'input>>> = {
         let (linking, var) = v;
         Some(ast::Directive::Variable(linking, var))
     },
-    ! => {
-        let err = <>;
-        errors.push(err.error);
+    @L ! @R => {
+        let (start, _, end)= (<>);
+        errors.push(ParseError::User { error: 
+            ast::PtxError::UnrecognizedDirective { start, end }
+        });
         None
     }
 };
@@ -527,15 +529,10 @@ Statement: Option<ast::Statement<ast::ParsedArgParams<'input>>> = {
     PragmaStatement => None,
     "{" <s:Statement*> "}" => Some(ast::Statement::Block(without_none(s))),
     @L ! ";" @R => {
-        let (start, mut err, _, end) = (<>);
-        // TODO: report this error more generally, perhaps in user error?
-        err.error = match err.error {
-            ParseError::UnrecognizedToken { token: (_, token, _), expected } => {
-                ParseError::UnrecognizedToken { token: (start, token, end), expected }
-            }
-            e => e
-        };
-        errors.push(err.error);
+        let (start, _, _, end) = (<>);
+        errors.push(ParseError::User { error: 
+            ast::PtxError::UnrecognizedStatement { start, end }
+        });
         None
     }
 };

@@ -31,6 +31,16 @@ pub enum PtxError {
     ArrayInitalizer,
     #[error("")]
     NonExternPointer,
+    #[error("{start}:{end}")]
+    UnrecognizedStatement {
+        start: usize,
+        end: usize,
+    },
+    #[error("{start}:{end}")]
+    UnrecognizedDirective {
+        start: usize,
+        end: usize,
+    },
 }
 
 // For some weird reson this is illegal:
