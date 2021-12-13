@@ -177,6 +177,7 @@ impl StateTracker {
                 DumpWriter::get_file_name(module_index, version, submodule_index, "log"),
             ));
             fn_logger.log_io_error(self.writer.save_module_error_log(
+                module_text,
                 module_index,
                 version,
                 submodule_index,
@@ -230,6 +231,7 @@ impl DumpWriter {
 
     fn save_module_error_log<'input>(
         &self,
+        module_text: &str,
         module_index: usize,
         version: Option<usize>,
         submodule_index: Option<usize>,
@@ -247,7 +249,7 @@ impl DumpWriter {
         ));
         let mut file = File::create(log_file)?;
         for error in errors {
-            let pretty_print_error = DisplayParseError("", error);
+            let pretty_print_error = unsafe { DisplayParseError::new(error, module_text) };
             writeln!(file, "{}", pretty_print_error)?;
         }
         Ok(())

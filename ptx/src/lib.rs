@@ -31,6 +31,7 @@ mod translate;
 use std::fmt;
 
 pub use crate::ptx::ModuleParser;
+use ast::PtxError;
 pub use lalrpop_util::lexer::Token;
 pub use lalrpop_util::ParseError;
 pub use rspirv::dr::Error as SpirvError;
@@ -91,30 +92,47 @@ impl ModuleParserExt for ModuleParser {
     }
 }
 
-pub struct DisplayParseError<'a, Loc, Tok, Err>(pub &'a str, pub &'a ParseError<Loc, Tok, Err>);
+pub struct DisplayParseError<'a, Loc, Tok, Err>(&'a str, &'a ParseError<Loc, Tok, Err>);
 
-impl<'a, Loc, Tok, Err> fmt::Display for DisplayParseError<'a, Loc, Tok, Err>
+impl<'a, Loc: fmt::Display + Into<usize> + Copy, Tok, Err> DisplayParseError<'a, Loc, Tok, Err> {
+    // unsafe because there's no guarantee that the input str is the one that this error was created from
+    pub unsafe fn new(error: &'a ParseError<Loc, Tok, Err>, text: &'a str) -> Self {
+        Self(text, error)
+    }
+}
+
+impl<'a, Loc, Tok> fmt::Display for DisplayParseError<'a, Loc, Tok, PtxError>
 where
-    Loc: fmt::Display + Into<usize> + Copy,
+    Loc: fmt::Display,
     Tok: fmt::Display,
-    Err: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.1 {
-            ParseError::UnrecognizedToken {
-                token: (start, token, end),
-                ..
-            } => {
-                let full_instruction =
-                    unsafe { self.0.get_unchecked((*start).into()..(*end).into()) };
-                write!(
-                    f,
-                    "`{}` unrecognized token `{}` found at {}:{}",
-                    full_instruction, token, start, end
-                )
-            }
-            _ => self.fmt(f),
+            ParseError::User {
+                error: PtxError::UnrecognizedStatement { start, end },
+            } => self.fmt_unrecognized(f, *start, *end, "statement"),
+            ParseError::User {
+                error: PtxError::UnrecognizedDirective { start, end },
+            } => self.fmt_unrecognized(f, *start, *end, "directive"),
+            _ => self.1.fmt(f),
         }
+    }
+}
+
+impl<'a, Loc, Tok, Err> DisplayParseError<'a, Loc, Tok, Err> {
+    fn fmt_unrecognized(
+        &self,
+        f: &mut fmt::Formatter,
+        start: usize,
+        end: usize,
+        kind: &'static str,
+    ) -> fmt::Result {
+        let full_substring = unsafe { self.0.get_unchecked(start..end) };
+        write!(
+            f,
+            "Unrecognized {} `{}` found at {}:{}",
+            kind, full_substring, start, end
+        )
     }
 }
 
