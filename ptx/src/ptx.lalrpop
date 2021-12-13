@@ -526,8 +526,15 @@ Statement: Option<ast::Statement<ast::ParsedArgParams<'input>>> = {
     <p:PredAt?> <i:Instruction> ";" => Some(ast::Statement::Instruction(p, i)),
     PragmaStatement => None,
     "{" <s:Statement*> "}" => Some(ast::Statement::Block(without_none(s))),
-    ! ";" => {
-        let (err, _) = (<>);
+    @L ! ";" @R => {
+        let (start, mut err, _, end) = (<>);
+        // TODO: report this error more generally, perhaps in user error?
+        err.error = match err.error {
+            ParseError::UnrecognizedToken { token: (_, token, _), expected } => {
+                ParseError::UnrecognizedToken { token: (start, token, end), expected }
+            }
+            e => e
+        };
         errors.push(err.error);
         None
     }
