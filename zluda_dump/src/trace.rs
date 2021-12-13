@@ -1,4 +1,5 @@
 use ptx::{ast::PtxError, Token};
+use ptx::{DisplayParseError, ModuleParserExt};
 
 use crate::{cuda::CUmodule, dark_api, log, Settings};
 use std::{
@@ -170,24 +171,18 @@ impl StateTracker {
         submodule_index: Option<usize>,
         module_text: &str,
     ) {
-        let mut errors = Vec::new();
-        let ast = ptx::ModuleParser::new().parse(&mut errors, module_text);
-        let ast = match (&*errors, ast) {
-            (&[], Ok(ast)) => ast,
-            (err_vec, res) => {
-                fn_logger.log(log::LogEntry::ModuleParsingError(
-                    DumpWriter::get_file_name(module_index, version, submodule_index, "log"),
-                ));
-                fn_logger.log_io_error(self.writer.save_module_error_log(
-                    module_index,
-                    version,
-                    submodule_index,
-                    err_vec,
-                    res.err(),
-                ));
-                return;
-            }
-        };
+        let (ast, errors) = ptx::ModuleParser::parse_unchecked(module_text);
+        if !errors.is_empty() {
+            fn_logger.log(log::LogEntry::ModuleParsingError(
+                DumpWriter::get_file_name(module_index, version, submodule_index, "log"),
+            ));
+            fn_logger.log_io_error(self.writer.save_module_error_log(
+                module_index,
+                version,
+                submodule_index,
+                &*errors,
+            ));
+        }
     }
 
     pub(crate) fn module_exists(&self, hmod: CUmodule) -> bool {
@@ -238,8 +233,7 @@ impl DumpWriter {
         module_index: usize,
         version: Option<usize>,
         submodule_index: Option<usize>,
-        recoverable: &[ptx::ParseError<usize, Token<'input>, PtxError>],
-        unrecoverable: Option<ptx::ParseError<usize, Token<'input>, PtxError>>,
+        errors: &[ptx::ParseError<usize, Token<'input>, PtxError>],
     ) -> io::Result<()> {
         let mut log_file = match &self.dump_dir {
             None => return Ok(()),
@@ -252,8 +246,9 @@ impl DumpWriter {
             "log",
         ));
         let mut file = File::create(log_file)?;
-        for error in unrecoverable.iter().chain(recoverable.iter()) {
-            writeln!(file, "{}", error)?;
+        for error in errors {
+            let pretty_print_error = DisplayParseError("", error);
+            writeln!(file, "{}", pretty_print_error)?;
         }
         Ok(())
     }
