@@ -271,61 +271,79 @@ NumToken: (&'input str, u32, bool) = {
 }
 
 F32Num: f32 = {
-    <s:F32NumToken> =>? {
+    <s:F32NumToken> => {
         match u32::from_str_radix(&s[2..], 16) {
-            Ok(x) => Ok(unsafe { std::mem::transmute::<_, f32>(x) }),
-            Err(err) => Err(ParseError::User { error: ast::PtxError::from(err) })
+            Ok(x) => unsafe { std::mem::transmute::<_, f32>(x) },
+            Err(err) => {
+                errors.push(ParseError::User { error: ast::PtxError::from(err) });
+                0.0
+            }
         }
         
     }
 }
 
 F64Num: f64 = {
-    <s:F64NumToken> =>? {
+    <s:F64NumToken> => {
         match u64::from_str_radix(&s[2..], 16) {
-            Ok(x) => Ok(unsafe { std::mem::transmute::<_, f64>(x) }),
-            Err(err) => Err(ParseError::User { error: ast::PtxError::from(err) })
+            Ok(x) => unsafe { std::mem::transmute::<_, f64>(x) },
+            Err(err) => {
+                errors.push(ParseError::User { error: ast::PtxError::from(err) });
+                0.0
+            }
         }
     }
 }
 
 U8Num: u8 = {
-    <x:NumToken> =>? {
+    <x:NumToken> => {
         let (text, radix, _) = x;
         match u8::from_str_radix(text, radix) {
-            Ok(x) => Ok(x),
-            Err(err) => Err(ParseError::User { error: ast::PtxError::from(err) })
+            Ok(x) => x,
+            Err(err) => {
+                errors.push(ParseError::User { error: ast::PtxError::from(err) });
+                0
+            }
         }
     }
 }
 
 U16Num: u16 = {
-    <x:NumToken> =>? {
+    <x:NumToken> => {
         let (text, radix, _) = x;
         match u16::from_str_radix(text, radix) {
-            Ok(x) => Ok(x),
-            Err(err) => Err(ParseError::User { error: ast::PtxError::from(err) })
+            Ok(x) => x,
+            Err(err) => {
+                errors.push(ParseError::User { error: ast::PtxError::from(err) });
+                0
+            }
         }
     }
 }
 
 U32Num: u32 = {
-    <x:NumToken> =>? {
+    <x:NumToken> => {
         let (text, radix, _) = x;
         match u32::from_str_radix(text, radix) {
-            Ok(x) => Ok(x),
-            Err(err) => Err(ParseError::User { error: ast::PtxError::from(err) })
+            Ok(x) => x,
+            Err(err) => {
+                errors.push(ParseError::User { error: ast::PtxError::from(err) });
+                0
+            }
         }
     }
 }
 
 // TODO: handle negative number properly
 S32Num: i32 = {
-    <sign:"-"?> <x:NumToken> =>? {
+    <sign:"-"?> <x:NumToken> => {
         let (text, radix, _) = x;
         match i32::from_str_radix(text, radix) {
-            Ok(x) => Ok(if sign.is_some() { -x } else { x }),
-            Err(err) => Err(ParseError::User { error: ast::PtxError::from(err) })
+            Ok(x) => if sign.is_some() { -x } else { x },
+            Err(err) => {
+                errors.push(ParseError::User { error: ast::PtxError::from(err) });
+                0
+            }
         }
     }
 }
@@ -337,11 +355,17 @@ pub Module: ast::Module<'input> = {
 };
 
 Version: (u8, u8) = {
-    ".version" <v:VersionNumber> =>? {
+    ".version" <v:VersionNumber> => {
         let dot = v.find('.').unwrap();
-        let major = v[..dot].parse::<u8>().map_err(|e| ParseError::from(ast::PtxError::from(e)))?;
-        let minor = v[dot+1..].parse::<u8>().map_err(|e| ParseError::from(ast::PtxError::from(e)))?;
-        Ok((major,minor))
+        let major = v[..dot].parse::<u8>().unwrap_or_else(|err| {
+            errors.push(ParseError::User { error: ast::PtxError::from(err) });
+            0
+        });
+        let minor = v[dot+1..].parse::<u8>().unwrap_or_else(|err| {
+            errors.push(ParseError::User { error: ast::PtxError::from(err) });
+            0
+        });
+        (major,minor)
     }
 }
 
@@ -580,7 +604,7 @@ LocalVariable: ast::Variable<&'input str> = {
         let state_space = ast::StateSpace::Local;
         ast::Variable { align, v_type, state_space, name, array_init: Vec::new() }
     },
-    ".local" <var:VariableArrayOrPointer<SizedScalarType>> =>? {
+    ".local" <var:VariableArrayOrPointer<SizedScalarType>> => {
         let (align, t, name, arr_or_ptr) = var;
         let state_space = ast::StateSpace::Local;
         let (v_type, array_init) = match arr_or_ptr {
@@ -588,10 +612,11 @@ LocalVariable: ast::Variable<&'input str> = {
                 (ast::Type::Array(t, dimensions), init)
             }
             ast::ArrayOrPointer::Pointer => {
-                return Err(ParseError::User { error: ast::PtxError::ZeroDimensionArray });
+                errors.push(ParseError::User { error: ast::PtxError::ZeroDimensionArray });
+                (ast::Type::Array(t, Vec::new()), Vec::new())
             }
         };
-        Ok(ast::Variable { align, v_type, state_space, name, array_init })
+        ast::Variable { align, v_type, state_space, name, array_init }
     }
 }
 
@@ -608,7 +633,7 @@ SharedVariable: ast::Variable<&'input str> = {
         let v_type = ast::Type::Vector(t, v_len);
         ast::Variable { align, v_type, state_space, name, array_init: Vec::new() }
     },
-    ".shared" <var:VariableArrayOrPointer<SizedScalarType>> =>? {
+    ".shared" <var:VariableArrayOrPointer<SizedScalarType>> => {
         let (align, t, name, arr_or_ptr) = var;
         let state_space = ast::StateSpace::Shared;
         let (v_type, array_init) = match arr_or_ptr {
@@ -616,10 +641,11 @@ SharedVariable: ast::Variable<&'input str> = {
                 (ast::Type::Array(t, dimensions), init)
             }
             ast::ArrayOrPointer::Pointer => {
-                return Err(ParseError::User { error: ast::PtxError::ZeroDimensionArray });
+                errors.push(ParseError::User { error: ast::PtxError::ZeroDimensionArray });
+                (ast::Type::Array(t, Vec::new()), Vec::new())
             }
         };
-        Ok(ast::Variable { align, v_type, state_space, name, array_init })
+        ast::Variable { align, v_type, state_space, name, array_init }
     }
 }
 
@@ -628,7 +654,7 @@ ModuleVariable: (ast::LinkingDirective, ast::Variable<&'input str>) = {
         let (align, v_type, name, array_init) = def;
         (linking, ast::Variable { align, v_type, state_space, name, array_init })
     },
-    <linking:LinkingDirectives> <space:VariableStateSpace> <var:VariableArrayOrPointer<SizedScalarType>> =>? {
+    <linking:LinkingDirectives> <space:VariableStateSpace> <var:VariableArrayOrPointer<SizedScalarType>> => {
         let (align, t, name, arr_or_ptr) = var;
         let (v_type, state_space, array_init) = match arr_or_ptr {
             ast::ArrayOrPointer::Array { dimensions, init } => {
@@ -636,12 +662,12 @@ ModuleVariable: (ast::LinkingDirective, ast::Variable<&'input str>) = {
             }
             ast::ArrayOrPointer::Pointer => {
                 if !linking.contains(ast::LinkingDirective::EXTERN) {
-                    return Err(ParseError::User { error: ast::PtxError::NonExternPointer });
+                    errors.push(ParseError::User { error: ast::PtxError::NonExternPointer });
                 }
                 (ast::Type::Array(t, Vec::new()), space, Vec::new())
             }
         };
-        Ok((linking, ast::Variable{ align, v_type, state_space, name, array_init }))
+        (linking, ast::Variable{ align, v_type, state_space, name, array_init })
     }
 }
 
@@ -673,13 +699,12 @@ ParamVariable: (Option<u32>, Vec<u8>, ast::Type, &'input str) = {
 }
 
 ParamDeclaration: (Option<u32>, ast::Type, &'input str) = {
-    <var:ParamVariable> =>? {
+    <var:ParamVariable> => {
         let (align, array_init, v_type, name) = var;
         if array_init.len() > 0 {
-            Err(ParseError::User { error: ast::PtxError::ArrayInitalizer })
-        } else {
-            Ok((align, v_type, name))
+            errors.push(ParseError::User { error: ast::PtxError::ArrayInitalizer });
         }
+        (align, v_type, name)
     }
 }
 
@@ -1873,25 +1898,34 @@ CallOperand: ast::Operand<&'input str> = {
 //       https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#constants
 ImmediateValue: ast::ImmediateValue = {
     // TODO: treat negation correctly
-    <neg:"-"?> <x:NumToken> =>? {
+    <neg:"-"?> <x:NumToken> => {
         let (num, radix, is_unsigned) = x;
         if neg.is_some() {
             match i64::from_str_radix(num, radix) {
-                Ok(x) => Ok(ast::ImmediateValue::S64(-x)),
-                Err(err) => Err(ParseError::User { error: ast::PtxError::from(err) })
+                Ok(x) => ast::ImmediateValue::S64(-x),
+                Err(err) => {
+                    errors.push(ParseError::User { error: ast::PtxError::from(err) });
+                    ast::ImmediateValue::S64(0)
+                }
             }
         } else if is_unsigned {
             match u64::from_str_radix(num, radix) {
-                Ok(x) => Ok(ast::ImmediateValue::U64(x)),
-                Err(err) => Err(ParseError::User { error: ast::PtxError::from(err) })
+                Ok(x) => ast::ImmediateValue::U64(x),
+                Err(err) => {
+                    errors.push(ParseError::User { error: ast::PtxError::from(err) });
+                    ast::ImmediateValue::U64(0)
+                }
             }
         } else {
             match i64::from_str_radix(num, radix) {
-                Ok(x) => Ok(ast::ImmediateValue::S64(x)),
+                Ok(x) => ast::ImmediateValue::S64(x),
                 Err(_) => {
                     match u64::from_str_radix(num, radix) {
-                        Ok(x) => Ok(ast::ImmediateValue::U64(x)),
-                        Err(err) => Err(ParseError::User { error: ast::PtxError::from(err) })
+                        Ok(x) => ast::ImmediateValue::U64(x),
+                        Err(err) => {
+                            errors.push(ParseError::User { error: ast::PtxError::from(err) });
+                            ast::ImmediateValue::U64(0)
+                        }
                     }
                 }
             }
@@ -1918,13 +1952,25 @@ Arg2: ast::Arg2<ast::ParsedArgParams<'input>> = {
 };
 
 MemberOperand: (&'input str, u8) = {
-    <pref:ExtendedID> "." <suf:ExtendedID> =>? {
-        let suf_idx = vector_index(suf)?;
-        Ok((pref, suf_idx))
+    <pref:ExtendedID> "." <suf:ExtendedID> => {
+        let suf_idx = match vector_index(suf) {
+            Ok(x) => x,
+            Err(err) => {
+                errors.push(err);
+                0
+            }
+        };
+        (pref, suf_idx)
     },
-    <pref:ExtendedID> <suf:DotID>  =>? {
-        let suf_idx = vector_index(&suf[1..])?;
-        Ok((pref, suf_idx))
+    <pref:ExtendedID> <suf:DotID> => {
+        let suf_idx = match vector_index(&suf[1..]) {
+            Ok(x) => x,
+            Err(err) => {
+                errors.push(err);
+                0
+            }
+        };
+        (pref, suf_idx)
     }
 };
 
@@ -2055,16 +2101,22 @@ VariableVector<T>: (Option<u32>, u8, T, &'input str) = {
 
 // empty dimensions [0] means it's a pointer
 VariableArrayOrPointer<T>: (Option<u32>, T, &'input str, ast::ArrayOrPointer) = {
-    <align:Align?> <typ:SizedScalarType> <name:ExtendedID> <dims:ArrayDimensions> <init:ArrayInitializer?> =>? {
+    <align:Align?> <typ:SizedScalarType> <name:ExtendedID> <dims:ArrayDimensions> <init:ArrayInitializer?> => {
         let mut dims = dims;
         let array_init = match init {
             Some(init) => {
-                let init_vec = init.to_vec(typ, &mut dims)?;
+                let init_vec = match init.to_vec(typ, &mut dims) {
+                    Err(error) => {
+                        errors.push(ParseError::User { error });
+                        Vec::new()
+                    }
+                    Ok(x) => x
+                };
                 ast::ArrayOrPointer::Array { dimensions: dims, init: init_vec }
             }
             None => {
                 if dims.len() > 1 && dims.contains(&0) {
-                    return Err(ParseError::User { error: ast::PtxError::ZeroDimensionArray })
+                    errors.push(ParseError::User { error: ast::PtxError::ZeroDimensionArray });
                 }
                 match &*dims {
                     [0] => ast::ArrayOrPointer::Pointer,
@@ -2072,7 +2124,7 @@ VariableArrayOrPointer<T>: (Option<u32>, T, &'input str, ast::ArrayOrPointer) = 
                 }
             }
         };
-        Ok((align, typ, name, array_init))
+        (align, typ, name, array_init)
     }
 }
 
