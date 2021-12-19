@@ -1,5 +1,7 @@
 use crate::cuda::CUmodule;
 use crate::cuda::CUuuid;
+use crate::format;
+use crate::format::FormatCudaObject;
 
 use super::CUresult;
 use super::Settings;
@@ -202,26 +204,33 @@ impl Factory {
     pub(crate) fn get_logger(&mut self, func: &'static str) -> FunctionLogger {
         FunctionLogger {
             result: None,
-            name: Cow::Borrowed(func),
+            name: CudaFunctionName::Normal(func),
             fallible_emitter: &mut self.fallible_emitter,
             infallible_emitter: &mut self.infallible_emitter,
             write_buffer: &mut self.write_buffer,
             log_queue: &mut self.log_queue,
+            finished_writing_args: false,
+            args_to_write: 0,
         }
     }
 
-    pub(crate) fn get_logger_dark_api(&mut self, guid: CUuuid, idx: usize) -> FunctionLogger {
-        let guid = guid.bytes;
-        let fn_name = format!("{{{:02X}{:02X}{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}}}::{}", guid[0], guid[1], guid[2], guid[3], guid[4], guid[5], guid[6], guid[7], guid[8], guid[9], guid[10], guid[11], guid[12], guid[13], guid[14], guid[15], idx);
+    pub(crate) fn get_logger_dark_api(&mut self, guid: CUuuid, index: usize) -> FunctionLogger {
         FunctionLogger {
             result: None,
-            name: Cow::Owned(fn_name),
+            name: CudaFunctionName::Dark { guid, index },
             fallible_emitter: &mut self.fallible_emitter,
             infallible_emitter: &mut self.infallible_emitter,
             write_buffer: &mut self.write_buffer,
             log_queue: &mut self.log_queue,
+            finished_writing_args: false,
+            args_to_write: 0,
         }
     }
+}
+
+enum CudaFunctionName {
+    Normal(&'static str),
+    Dark { guid: CUuuid, index: usize },
 }
 
 // This encapsulates log output for a single function call.
@@ -231,11 +240,13 @@ impl Factory {
 // * We want to handle panics gracefully with Drop
 pub(crate) struct FunctionLogger<'a> {
     pub(crate) result: Option<CUresult>,
-    name: Cow<'static, str>,
+    name: CudaFunctionName,
     infallible_emitter: &'a mut Box<dyn WriteTrailingZeroAware>,
     fallible_emitter: &'a mut Option<Box<dyn WriteTrailingZeroAware>>,
     write_buffer: &'a mut WriteBuffer,
     log_queue: &'a mut Vec<LogEntry>,
+    args_to_write: usize,
+    finished_writing_args: bool,
 }
 
 impl<'a> FunctionLogger<'a> {
@@ -250,11 +261,16 @@ impl<'a> FunctionLogger<'a> {
     }
 
     fn flush_log_queue_to_write_buffer(&mut self) {
-        self.write_buffer.start_line();
-        self.write_buffer.write(&self.name);
-        self.write_buffer.write("(...) -> ");
+        // TODO: remove this once everything has been converted to dtailed logging
+        if !self.finished_writing_args {
+            self.begin_writing_arguments(0);
+            self.write_buffer.write("...) -> ");
+        }
         if let Some(result) = self.result {
-            write!(self.write_buffer, "{:#X}", result.0).unwrap_or_else(|_| unreachable!());
+            match format::stringify_curesult(result) {
+                Some(text) => self.write_buffer.write(text),
+                None => write!(self.write_buffer, "{}", result.0).unwrap(),
+            }
         } else {
             self.write_buffer.write("(UNKNOWN)");
         };
@@ -273,6 +289,35 @@ impl<'a> FunctionLogger<'a> {
         write!(self.write_buffer, "    {}", entry).unwrap_or_else(|_| unreachable!());
         self.write_buffer.end_line();
         self.write_buffer.finish();
+    }
+
+    pub(crate) fn begin_writing_arguments(&mut self, len: usize) {
+        self.args_to_write = len;
+        match self.name {
+            CudaFunctionName::Normal(fn_name) => self.write_buffer.write(fn_name),
+            CudaFunctionName::Dark { guid, index } => {
+                guid.write_post_execution(CUresult::CUDA_SUCCESS, &mut self.write_buffer);
+                write!(&mut self.write_buffer, "::{}", index).ok();
+            }
+        }
+        self.write_buffer.write("(")
+    }
+
+    pub(crate) fn write_single_argument<'x>(
+        &mut self,
+        result: CUresult,
+        arg: impl FormatCudaObject,
+    ) {
+        self.args_to_write -= 1;
+        arg.write_post_execution(result, self.write_buffer);
+        if self.args_to_write != 0 {
+            self.write_buffer.write(", ")
+        }
+    }
+
+    pub(crate) fn end_writing_arguments(&mut self) {
+        self.write_buffer.write(") -> ");
+        self.finished_writing_args = true;
     }
 }
 

@@ -42,6 +42,11 @@ macro_rules! extern_redirect {
     };
 }
 
+macro_rules! count_tts {
+    () => {0usize};
+    ($_head:tt $($tail:tt)*) => {1usize + count_tts!($($tail)*)};
+}
+
 macro_rules! extern_redirect_with_post {
     (
         pub fn $fn_name:ident ( $($arg_id:ident: $arg_type:ty),* $(,)? ) -> $ret_type:ty ;
@@ -53,9 +58,18 @@ macro_rules! extern_redirect_with_post {
                 let typed_fn = unsafe { std::mem::transmute::<_, extern "system" fn( $( $arg_id : $arg_type),* ) -> $ret_type>(fn_ptr) };
                 typed_fn($( $arg_id ),*)
             };
+            let get_formatted_args = |fn_logger: &mut crate::log::FunctionLogger, result: CUresult| {
+                let arg_count = (count_tts!($($arg_id),*) + 1) / 2;
+                fn_logger.begin_writing_arguments(arg_count);
+                $(
+                    fn_logger.write_single_argument(result, $arg_id);
+                )*
+                fn_logger.end_writing_arguments();
+            };
             crate::handle_cuda_function_call_with_probes(
                 stringify!($fn_name),
                 || (), original_fn,
+                get_formatted_args,
                 move |logger, state, _, cuda_result| $post_fn ( $( $arg_id ),* , logger, state, cuda_result )
             )
         }
@@ -81,6 +95,7 @@ macro_rules! extern_redirect_with {
 #[allow(warnings)]
 mod cuda;
 mod dark_api;
+mod format;
 mod log;
 #[cfg_attr(windows, path = "os_win.rs")]
 #[cfg_attr(not(windows), path = "os_unix.rs")]
@@ -294,6 +309,7 @@ fn handle_cuda_function_call_with_probes<T, PostFn>(
     func: &'static str,
     pre_probe: impl FnOnce() -> T,
     original_cuda_fn: impl FnOnce(NonNull<c_void>) -> CUresult,
+    print_arguments_fn: impl FnOnce(&mut crate::log::FunctionLogger, CUresult),
     post_probe: PostFn,
 ) -> CUresult
 where
@@ -325,6 +341,7 @@ where
     let pre_result = pre_probe();
     let cu_result = original_cuda_fn(fn_ptr);
     logger.result = Some(cu_result);
+    print_arguments_fn(&mut logger, cu_result);
     post_probe(
         &mut logger,
         &mut delayed_state.cuda_state,
@@ -1220,6 +1237,7 @@ struct FatbincWrapper {
 }
 
 const FATBIN_MAGIC: c_uint = 0xBA55ED50;
+const LEGACY_FATBIN_MAGIC: c_uint = 0x1EE55A01;
 const FATBIN_VERSION: c_ushort = 0x01;
 
 #[repr(C, align(8))]
@@ -1484,16 +1502,6 @@ pub(crate) fn cuModuleGetFunction_Post(
     state: &mut trace::StateTracker,
     result: CUresult,
 ) {
-    if !state.module_exists(hmod) {
-        fn_logger.log(log::LogEntry::UnknownModule(hmod))
-    }
-    match unsafe { CStr::from_ptr(name) }.to_str() {
-        Ok(str) => fn_logger.log(log::LogEntry::FunctionParameter {
-            name: "name",
-            value: str.to_string(),
-        }),
-        Err(e) => fn_logger.log(log::LogEntry::MalformedFunctionName(e)),
-    }
 }
 
 #[allow(non_snake_case)]
@@ -1505,10 +1513,6 @@ pub(crate) fn cuDeviceGetAttribute_Post(
     state: &mut trace::StateTracker,
     result: CUresult,
 ) {
-    fn_logger.log(log::LogEntry::FunctionParameter {
-        name: "attrib",
-        value: attrib.0.to_string(),
-    });
 }
 
 #[allow(non_snake_case)]
@@ -1522,5 +1526,18 @@ pub(crate) fn cuDeviceComputeCapability_Post(
 ) {
     if let Some(major_ver_override) = state.override_cc_major {
         unsafe { *major = major_ver_override as i32 };
+    }
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuModuleLoadFatBinary_Post(
+    module: *mut CUmodule,
+    fatCubin: *const ::std::os::raw::c_void,
+    fn_logger: &mut log::FunctionLogger,
+    state: &mut trace::StateTracker,
+    result: CUresult,
+) {
+    if result == CUresult::CUDA_SUCCESS {
+        panic!()
     }
 }

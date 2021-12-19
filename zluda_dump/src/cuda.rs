@@ -2513,11 +2513,12 @@ extern_redirect_with_post! {
     ) -> CUresult;
     super::cuModuleLoadDataEx_Post;
 }
-extern_redirect! {
+extern_redirect_with_post! {
     pub fn cuModuleLoadFatBinary(
         module: *mut CUmodule,
         fatCubin: *const ::std::os::raw::c_void,
     ) -> CUresult;
+    super::cuModuleLoadFatBinary_Post;
 }
 extern_redirect! {
     pub fn cuModuleUnload(hmod: CUmodule) -> CUresult;
