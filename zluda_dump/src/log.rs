@@ -267,7 +267,7 @@ impl<'a> FunctionLogger<'a> {
             self.write_buffer.write("...) -> ");
         }
         if let Some(result) = self.result {
-            match format::stringify_curesult(result) {
+            match format::stringify_CUresult(result) {
                 Some(text) => self.write_buffer.write(text),
                 None => write!(self.write_buffer, "{}", result.0).unwrap(),
             }
