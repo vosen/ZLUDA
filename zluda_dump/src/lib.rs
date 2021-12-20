@@ -37,7 +37,15 @@ macro_rules! extern_redirect {
                 let typed_fn = unsafe { std::mem::transmute::<_, extern "system" fn( $( $arg_id : $arg_type),* ) -> $ret_type>(fn_ptr) };
                 typed_fn($( $arg_id ),*)
             };
-            crate::handle_cuda_function_call(stringify!($fn_name), original_fn)
+            let get_formatted_args = |fn_logger: &mut crate::log::FunctionLogger, result: CUresult| {
+                let arg_count = (count_tts!($($arg_id),*) + 1) / 2;
+                fn_logger.begin_writing_arguments(arg_count);
+                $(
+                    fn_logger.write_single_argument(result, $arg_id);
+                )*
+                fn_logger.end_writing_arguments();
+            };
+            crate::handle_cuda_function_call(stringify!($fn_name), original_fn, get_formatted_args)
         }
     };
 }
@@ -277,32 +285,9 @@ pub struct ModuleDump {
 fn handle_cuda_function_call(
     func: &'static str,
     original_cuda_fn: impl FnOnce(NonNull<c_void>) -> CUresult,
+    print_arguments_fn: impl FnOnce(&mut crate::log::FunctionLogger, CUresult),
 ) -> CUresult {
-    let global_state_mutex = &*GLOBAL_STATE;
-    // We unwrap because there's really no sensible thing we could do,
-    // alternatively we could return a CUDA error, but I think it's fine to
-    // crash. This is a diagnostic utility, if the lock was poisoned we can't
-    // extract any useful trace or logging anyway
-    let mut global_state = &mut *global_state_mutex.lock().unwrap();
-    let (mut logger, delayed_state) = match global_state.delayed_state {
-        LateInit::Success(ref mut delayed_state) => {
-            (global_state.log_factory.get_logger(func), delayed_state)
-        }
-        // There's no libcuda to load, so we might as well panic
-        LateInit::Error => panic!(),
-        LateInit::Unitialized => {
-            let (new_delayed_state, logger) =
-                GlobalDelayedState::new(func, &mut global_state.log_factory);
-            global_state.delayed_state = new_delayed_state;
-            (logger, global_state.delayed_state.as_mut().unwrap())
-        }
-    };
-    let name = std::ffi::CString::new(func).unwrap();
-    let fn_ptr =
-        unsafe { os::get_proc_address(delayed_state.libcuda_handle.as_ptr(), name.as_c_str()) };
-    let cu_result = original_cuda_fn(NonNull::new(fn_ptr).unwrap());
-    logger.result = Some(cu_result);
-    cu_result
+    handle_cuda_function_call_with_probes(func, || (), original_cuda_fn, print_arguments_fn, |_| ())
 }
 
 fn handle_cuda_function_call_with_probes<T, PostFn>(
