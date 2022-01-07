@@ -292,15 +292,18 @@ fn cuda_derive_display_trait_for_item(
                     _ => unreachable!(),
                 });
                 let fn_name = format_ident!("write_{}", ident);
+                let original_fn_name = ident.to_string();
                 Some(match arg_name_iter.next() {
                     Some(first_arg_name) => quote! {
                         pub fn #fn_name(writer: &mut (impl std::io::Write + ?Sized), #(#inputs_iter,)*) -> std::io::Result<()> {
                             writer.write_all(concat!("(", stringify!(#first_arg_name), ": ").as_bytes())?;
-                            CudaDisplay::write(&#first_arg_name, writer)?;
+                            let mut arg_idx = 0usize;
+                            CudaDisplay::write(&#first_arg_name, #original_fn_name, arg_idx, writer)?;
                             #(
                                 writer.write_all(b", ")?;
                                 writer.write_all(concat!(stringify!(#arg_name_iter), ": ").as_bytes())?;
-                                CudaDisplay::write(&#arg_name_iter, writer)?;
+                                CudaDisplay::write(&#arg_name_iter, #original_fn_name, arg_idx, writer)?;
+                                arg_idx += 1;
                             )*
                             writer.write_all(b")")
                         }
@@ -337,7 +340,7 @@ fn cuda_derive_display_trait_for_item(
                 let variants = state.enums.get(&item_struct.ident).unwrap().iter();
                 Some(quote! {
                     impl #trait_ for #path_prefix :: #enum_ {
-                        fn write(&self, writer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
+                        fn write(&self, _fn_name: &'static str, _index: usize, writer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
                             match self {
                                 #(& #path_prefix_iter :: #enum_iter :: #variants => writer.write_all(stringify!(#variants).as_bytes()),)*
                                 _ => write!(writer, "{}", self.0)
@@ -368,12 +371,12 @@ fn cuda_derive_display_trait_for_item(
                 };
                 Some(quote! {
                     impl #trait_ for #path_prefix :: #struct_ {
-                        fn write(&self, writer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
+                        fn write(&self, _fn_name: &'static str, _index: usize, writer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
                             writer.write_all(concat!("{ ", stringify!(#first_field), ": ").as_bytes())?;
-                            #trait_::write(&self.#first_field, writer)?;
+                            #trait_::write(&self.#first_field, "", 0, writer)?;
                             #(
                                 writer.write_all(concat!(", ", stringify!(#rest_of_fields), ": ").as_bytes())?;
-                                #trait_iter::write(&self.#rest_of_fields, writer)?;
+                                #trait_iter::write(&self.#rest_of_fields, "", 0, writer)?;
                             )*
                             writer.write_all(b" }")
                         }
@@ -386,7 +389,7 @@ fn cuda_derive_display_trait_for_item(
                 let type_ = item_type.ident;
                 Some(quote! {
                     impl #trait_ for #path_prefix :: #type_ {
-                        fn write(&self, writer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
+                        fn write(&self, _fn_name: &'static str, _index: usize, writer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
                             write!(writer, "{:p}", *self)
                         }
                     }
@@ -402,7 +405,7 @@ fn cuda_derive_display_trait_for_item(
                                     let type_ = &item_type.ident;
                                     return Some(quote! {
                                         impl #trait_ for #path_prefix :: #type_ {
-                                            fn write(&self, writer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
+                                            fn write(&self, _fn_name: &'static str, _index: usize, writer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
                                                 write!(writer, "{:p}", unsafe { std::mem::transmute::<#path_prefix :: #type_, *mut ::std::ffi::c_void>(*self) })
                                             }
                                         }

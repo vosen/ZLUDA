@@ -364,7 +364,7 @@ unsafe extern "system" fn get_module_from_cubin(
         writer.write_all(b"(")?;
         writer.write_all(stringify!(module).as_bytes())?;
         writer.write_all(b": ")?;
-        format::CudaDisplay::write(&module, writer)?;
+        format::CudaDisplay::write(&module, "", 0, writer)?;
         writer.write_all(b", ")?;
         writer.write_all(stringify!(fatbinc_wrapper).as_bytes())?;
         write!(writer, ": {:p})", fatbinc_wrapper)
@@ -399,7 +399,7 @@ unsafe extern "system" fn get_module_from_cubin_ext1(
         writer.write_all(b"(")?;
         writer.write_all(stringify!(module).as_bytes())?;
         writer.write_all(b": ")?;
-        format::CudaDisplay::write(&module, writer)?;
+        format::CudaDisplay::write(&module, "", 0, writer)?;
         writer.write_all(b", ")?;
         writer.write_all(stringify!(fatbinc_wrapper).as_bytes())?;
         write!(writer, ": {:p}, ", fatbinc_wrapper)?;
@@ -464,7 +464,7 @@ unsafe extern "system" fn get_module_from_cubin_ext2(
         write!(writer, ": {:p}, ", fatbin_header)?;
         writer.write_all(stringify!(module).as_bytes())?;
         writer.write_all(b": ")?;
-        format::CudaDisplay::write(&module, writer)?;
+        format::CudaDisplay::write(&module, "", 0, writer)?;
         writer.write_all(b", ")?;
         writer.write_all(stringify!(ptr1).as_bytes())?;
         write!(writer, ": {:p}, ", ptr1)?;
