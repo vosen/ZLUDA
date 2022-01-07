@@ -1,11 +1,9 @@
+use crate::format;
+use crate::{log, os, trace::StateTracker};
 use crate::{log::UInt, GlobalDelayedState};
+use cuda_types::{CUmodule, CUresult, CUuuid};
 use std::borrow::Cow;
-
-use crate::{
-    cuda::{CUmodule, CUresult, CUuuid},
-    log, os,
-    trace::StateTracker,
-};
+use std::hash::Hash;
 use std::{
     collections::{hash_map, HashMap},
     ffi::c_void,
@@ -17,8 +15,17 @@ use std::{
 pub(crate) struct DarkApiState {
     // Key is Box<CUuuid, because thunk reporting unknown export table needs a
     // stablememory location for the guid
-    overrides: HashMap<Box<CUuuid>, Vec<*const c_void>>,
+    overrides: HashMap<Box<CUuuidWrapper>, Vec<*const c_void>>,
     original: OriginalExports,
+}
+
+#[derive(Eq, PartialEq)]
+pub(crate) struct CUuuidWrapper(pub CUuuid);
+
+impl Hash for CUuuidWrapper {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.bytes.hash(state);
+    }
 }
 
 pub(crate) struct OriginalExports {
@@ -69,11 +76,13 @@ pub(crate) fn override_export_table(
 ) {
     let state = &mut state.dark_api;
     let export_table_mut = unsafe { &mut *pp_export_table };
-    let export_id = Box::new(unsafe { *p_export_table_id });
+    let export_id = Box::new(CUuuidWrapper(unsafe { *p_export_table_id }));
     *export_table_mut = match state.overrides.entry(export_id) {
         hash_map::Entry::Occupied(entry) => entry.get().as_ptr() as *const _,
         hash_map::Entry::Vacant(entry) => {
-            let guid_ptr = &**entry.key() as *const _;
+            let guid_ptr = unsafe {
+                mem::transmute::<*const CUuuidWrapper, *const CUuuid>(&**entry.key() as *const _)
+            };
             entry
                 .insert(unsafe {
                     create_new_override(*pp_export_table as *const _, guid_ptr, &mut state.original)
@@ -123,7 +132,7 @@ unsafe extern "system" fn report_unknown_export_table_call(
     if let Ok(mut global_state) = crate::GLOBAL_STATE.lock() {
         let mut logger = global_state
             .log_factory
-            .get_logger_dark_api(*export_table, idx);
+            .get_logger_dark_api(*export_table, idx, None);
         logger.log(log::LogEntry::UnknownExportTableFn)
     }
 }
@@ -351,10 +360,21 @@ unsafe extern "system" fn get_module_from_cubin(
     module: *mut CUmodule,
     fatbinc_wrapper: *const FatbincWrapper,
 ) -> CUresult {
+    let arguments_writer = Box::new(move |writer: &mut dyn std::io::Write| {
+        writer.write_all(b"(")?;
+        writer.write_all(stringify!(module).as_bytes())?;
+        writer.write_all(b": ")?;
+        format::CudaDisplay::write(&module, writer)?;
+        writer.write_all(b", ")?;
+        writer.write_all(stringify!(fatbinc_wrapper).as_bytes())?;
+        write!(writer, ": {:p})", fatbinc_wrapper)
+    });
     let global_state = &mut *super::GLOBAL_STATE.lock().unwrap();
-    let mut fn_logger = global_state
-        .log_factory
-        .get_logger_dark_api(CUDART_INTERFACE_GUID, 1);
+    let mut fn_logger = global_state.log_factory.get_logger_dark_api(
+        CUDART_INTERFACE_GUID,
+        1,
+        Some(arguments_writer),
+    );
     let global_state = &mut *super::GLOBAL_STATE.lock().unwrap();
     let delayed_state = global_state.delayed_state.unwrap_mut();
     record_submodules_from_wrapped_fatbin(
@@ -375,10 +395,27 @@ unsafe extern "system" fn get_module_from_cubin_ext1(
     ptr2: *mut c_void,
     _unknown: usize,
 ) -> CUresult {
+    let arguments_writer = Box::new(move |writer: &mut dyn std::io::Write| {
+        writer.write_all(b"(")?;
+        writer.write_all(stringify!(module).as_bytes())?;
+        writer.write_all(b": ")?;
+        format::CudaDisplay::write(&module, writer)?;
+        writer.write_all(b", ")?;
+        writer.write_all(stringify!(fatbinc_wrapper).as_bytes())?;
+        write!(writer, ": {:p}, ", fatbinc_wrapper)?;
+        writer.write_all(stringify!(ptr1).as_bytes())?;
+        write!(writer, ": {:p}, ", ptr1)?;
+        writer.write_all(stringify!(ptr2).as_bytes())?;
+        write!(writer, ": {:p}, ", ptr2)?;
+        writer.write_all(stringify!(_unknown).as_bytes())?;
+        write!(writer, ": {})", _unknown)
+    });
     let global_state = &mut *super::GLOBAL_STATE.lock().unwrap();
-    let mut fn_logger = global_state
-        .log_factory
-        .get_logger_dark_api(CUDART_INTERFACE_GUID, 6);
+    let mut fn_logger = global_state.log_factory.get_logger_dark_api(
+        CUDART_INTERFACE_GUID,
+        6,
+        Some(arguments_writer),
+    );
     if ptr1 != ptr::null_mut() {
         fn_logger.log(log::LogEntry::UnexpectedArgument {
             arg_name: stringify!(ptr1),
@@ -421,10 +458,27 @@ unsafe extern "system" fn get_module_from_cubin_ext2(
     ptr2: *mut c_void,
     _unknown: usize,
 ) -> CUresult {
+    let arguments_writer = Box::new(move |writer: &mut dyn std::io::Write| {
+        writer.write_all(b"(")?;
+        writer.write_all(stringify!(fatbin_header).as_bytes())?;
+        write!(writer, ": {:p}, ", fatbin_header)?;
+        writer.write_all(stringify!(module).as_bytes())?;
+        writer.write_all(b": ")?;
+        format::CudaDisplay::write(&module, writer)?;
+        writer.write_all(b", ")?;
+        writer.write_all(stringify!(ptr1).as_bytes())?;
+        write!(writer, ": {:p}, ", ptr1)?;
+        writer.write_all(stringify!(ptr2).as_bytes())?;
+        write!(writer, ": {:p}, ", ptr2)?;
+        writer.write_all(stringify!(_unknown).as_bytes())?;
+        write!(writer, ": {})", _unknown)
+    });
     let global_state = &mut *super::GLOBAL_STATE.lock().unwrap();
-    let mut fn_logger = global_state
-        .log_factory
-        .get_logger_dark_api(CUDART_INTERFACE_GUID, 8);
+    let mut fn_logger = global_state.log_factory.get_logger_dark_api(
+        CUDART_INTERFACE_GUID,
+        8,
+        Some(arguments_writer),
+    );
     if ptr1 != ptr::null_mut() {
         fn_logger.log(log::LogEntry::UnexpectedArgument {
             arg_name: stringify!(ptr1),

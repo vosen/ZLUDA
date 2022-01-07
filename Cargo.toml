@@ -1,6 +1,8 @@
 [workspace]
 
 members = [
+    "cuda_base",
+    "cuda_types",
     "detours-sys",
     "hip_runtime-sys",
     "level_zero-sys",

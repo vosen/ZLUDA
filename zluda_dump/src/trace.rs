@@ -1,7 +1,8 @@
 use ptx::{ast::PtxError, Token};
 use ptx::{DisplayParseError, ModuleParserExt};
 
-use crate::{cuda::CUmodule, dark_api, log, Settings};
+use crate::{dark_api, log, Settings};
+use cuda_types::CUmodule;
 use std::{
     collections::HashMap,
     ffi::{c_void, CStr, CString},
@@ -171,7 +172,7 @@ impl StateTracker {
         submodule_index: Option<usize>,
         module_text: &str,
     ) {
-        let (ast, errors) = ptx::ModuleParser::parse_unchecked(module_text);
+        let (_ast, errors) = ptx::ModuleParser::parse_unchecked(module_text);
         if !errors.is_empty() {
             fn_logger.log(log::LogEntry::ModuleParsingError(
                 DumpWriter::get_file_name(module_index, version, submodule_index, "log"),
@@ -184,10 +185,6 @@ impl StateTracker {
                 &*errors,
             ));
         }
-    }
-
-    pub(crate) fn module_exists(&self, hmod: CUmodule) -> bool {
-        self.modules.contains_key(&hmod)
     }
 }
 
