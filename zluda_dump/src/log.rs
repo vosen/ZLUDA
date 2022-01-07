@@ -269,7 +269,7 @@ impl<'a> FunctionLogger<'a> {
         match self.name {
             CudaFunctionName::Normal(fn_name) => self.write_buffer.write(fn_name),
             CudaFunctionName::Dark { guid, index } => {
-                format::CudaDisplay::write(&guid, &mut self.write_buffer).ok();
+                format::CudaDisplay::write(&guid, "", 0, &mut self.write_buffer).ok();
                 write!(&mut self.write_buffer, "::{}", index).ok();
             }
         }
@@ -283,7 +283,7 @@ impl<'a> FunctionLogger<'a> {
         }
         self.write_buffer.write_all(b" -> ").ok();
         if let Some(result) = self.result {
-            format::CudaDisplay::write(&result, self.write_buffer).ok();
+            format::CudaDisplay::write(&result, "", 0, self.write_buffer).ok();
         } else {
             self.write_buffer.write_all(b"UNKNOWN").ok();
         };
