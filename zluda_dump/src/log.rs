@@ -1,14 +1,11 @@
-use crate::cuda::CUmodule;
-use crate::cuda::CUuuid;
 use crate::format;
-use crate::format::FormatCudaObject;
+use cuda_types::CUmodule;
+use cuda_types::CUuuid;
 
 use super::CUresult;
 use super::Settings;
-use std::borrow::Cow;
 use std::error::Error;
 use std::ffi::c_void;
-use std::ffi::FromBytesWithNulError;
 use std::ffi::NulError;
 use std::fmt::Display;
 use std::fs::File;
@@ -185,8 +182,9 @@ impl Factory {
     pub(crate) fn get_first_logger_and_init_settings(
         &mut self,
         func: &'static str,
+        arguments_writer: Box<dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>>,
     ) -> (FunctionLogger, Settings) {
-        let mut first_logger = self.get_logger(func);
+        let mut first_logger = self.get_logger(func, arguments_writer);
         let settings = Settings::read_and_init(&mut first_logger);
         match Self::initalize_fallible_emitter(&settings) {
             Ok(fallible_emitter) => {
@@ -201,7 +199,11 @@ impl Factory {
         (first_logger, settings)
     }
 
-    pub(crate) fn get_logger(&mut self, func: &'static str) -> FunctionLogger {
+    pub(crate) fn get_logger(
+        &mut self,
+        func: &'static str,
+        arguments_writer: Box<dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>>,
+    ) -> FunctionLogger {
         FunctionLogger {
             result: None,
             name: CudaFunctionName::Normal(func),
@@ -209,12 +211,16 @@ impl Factory {
             infallible_emitter: &mut self.infallible_emitter,
             write_buffer: &mut self.write_buffer,
             log_queue: &mut self.log_queue,
-            finished_writing_args: false,
-            args_to_write: 0,
+            arguments_writer: Some(arguments_writer),
         }
     }
 
-    pub(crate) fn get_logger_dark_api(&mut self, guid: CUuuid, index: usize) -> FunctionLogger {
+    pub(crate) fn get_logger_dark_api(
+        &mut self,
+        guid: CUuuid,
+        index: usize,
+        arguments_writer: Option<Box<dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>>>,
+    ) -> FunctionLogger {
         FunctionLogger {
             result: None,
             name: CudaFunctionName::Dark { guid, index },
@@ -222,8 +228,7 @@ impl Factory {
             infallible_emitter: &mut self.infallible_emitter,
             write_buffer: &mut self.write_buffer,
             log_queue: &mut self.log_queue,
-            finished_writing_args: false,
-            args_to_write: 0,
+            arguments_writer,
         }
     }
 }
@@ -243,10 +248,9 @@ pub(crate) struct FunctionLogger<'a> {
     name: CudaFunctionName,
     infallible_emitter: &'a mut Box<dyn WriteTrailingZeroAware>,
     fallible_emitter: &'a mut Option<Box<dyn WriteTrailingZeroAware>>,
+    arguments_writer: Option<Box<dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>>>,
     write_buffer: &'a mut WriteBuffer,
     log_queue: &'a mut Vec<LogEntry>,
-    args_to_write: usize,
-    finished_writing_args: bool,
 }
 
 impl<'a> FunctionLogger<'a> {
@@ -261,22 +265,31 @@ impl<'a> FunctionLogger<'a> {
     }
 
     fn flush_log_queue_to_write_buffer(&mut self) {
-        // TODO: remove this once everything has been converted to dtailed logging
-        if !self.finished_writing_args {
-            self.begin_writing_arguments(0);
-            self.write_buffer.write("...) -> ");
-        }
-        if let Some(result) = self.result {
-            match format::stringify_CUresult(result) {
-                Some(text) => self.write_buffer.write(text),
-                None => write!(self.write_buffer, "{}", result.0).unwrap(),
+        self.write_buffer.start_line();
+        match self.name {
+            CudaFunctionName::Normal(fn_name) => self.write_buffer.write(fn_name),
+            CudaFunctionName::Dark { guid, index } => {
+                format::CudaDisplay::write(&guid, &mut self.write_buffer).ok();
+                write!(&mut self.write_buffer, "::{}", index).ok();
             }
+        }
+        match &mut self.arguments_writer {
+            Some(arg_writer) => {
+                arg_writer(&mut self.write_buffer).ok();
+            }
+            None => {
+                self.write_buffer.write_all(b"(...)").ok();
+            }
+        }
+        self.write_buffer.write_all(b" -> ").ok();
+        if let Some(result) = self.result {
+            format::CudaDisplay::write(&result, self.write_buffer).ok();
         } else {
-            self.write_buffer.write("(UNKNOWN)");
+            self.write_buffer.write_all(b"UNKNOWN").ok();
         };
         self.write_buffer.end_line();
         for entry in self.log_queue.iter() {
-            write!(self.write_buffer, "    {}", entry).unwrap_or_else(|_| unreachable!());
+            write!(self.write_buffer, "    {}", entry).ok();
             self.write_buffer.end_line();
         }
         self.write_buffer.finish();
@@ -289,35 +302,6 @@ impl<'a> FunctionLogger<'a> {
         write!(self.write_buffer, "    {}", entry).unwrap_or_else(|_| unreachable!());
         self.write_buffer.end_line();
         self.write_buffer.finish();
-    }
-
-    pub(crate) fn begin_writing_arguments(&mut self, len: usize) {
-        self.args_to_write = len;
-        match self.name {
-            CudaFunctionName::Normal(fn_name) => self.write_buffer.write(fn_name),
-            CudaFunctionName::Dark { guid, index } => {
-                guid.write_post_execution(CUresult::CUDA_SUCCESS, &mut self.write_buffer);
-                write!(&mut self.write_buffer, "::{}", index).ok();
-            }
-        }
-        self.write_buffer.write("(")
-    }
-
-    pub(crate) fn write_single_argument<'x>(
-        &mut self,
-        result: CUresult,
-        arg: impl FormatCudaObject,
-    ) {
-        self.args_to_write -= 1;
-        arg.write_post_execution(result, self.write_buffer);
-        if self.args_to_write != 0 {
-            self.write_buffer.write(", ")
-        }
-    }
-
-    pub(crate) fn end_writing_arguments(&mut self) {
-        self.write_buffer.write(") -> ");
-        self.finished_writing_args = true;
     }
 }
 
@@ -347,18 +331,12 @@ pub(crate) enum LogEntry {
         raw_image: *const c_void,
         kind: &'static str,
     },
-    MalformedFunctionName(Utf8Error),
-    FunctionParameter {
-        name: &'static str,
-        value: String,
-    },
     MalformedModulePath(Utf8Error),
     NonUtf8ModuleText(Utf8Error),
     NulInsideModuleText(NulError),
     ModuleParsingError(String),
     Lz4DecompressionFailure,
     UnknownExportTableFn,
-    UnknownModule(CUmodule),
     UnexpectedArgument {
         arg_name: &'static str,
         expected: Vec<UInt>,
@@ -406,7 +384,6 @@ impl Display for LogEntry {
             LogEntry::NulInsideModuleText(e) => e.fmt(f),
             LogEntry::Lz4DecompressionFailure => write!(f, "LZ4 decompression failure"),
             LogEntry::UnknownExportTableFn => write!(f, "Unknown export table function"),
-            LogEntry::UnknownModule(hmod) => write!(f, "Unknown module {:?}", hmod),
             LogEntry::UnexpectedBinaryField {
                 field_name,
                 expected,
@@ -437,8 +414,6 @@ impl Display for LogEntry {
                     .join(", "),
                 observed
             ),
-            LogEntry::MalformedFunctionName(e) => e.fmt(f),
-            LogEntry::FunctionParameter { name, value } => write!(f, "{}: {}", name, value),
         }
     }
 }
