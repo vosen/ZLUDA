@@ -536,7 +536,7 @@ impl<T: CudaDisplay, const N: usize> CudaDisplay for [T; N] {
     ) -> std::io::Result<()> {
         writer.write_all(b"[")?;
         for i in 0..N {
-            CudaDisplay::write(self, "", 0, writer)?;
+            CudaDisplay::write(&self[i], "", 0, writer)?;
             if i != N - 1 {
                 writer.write_all(b", ")?;
             }
