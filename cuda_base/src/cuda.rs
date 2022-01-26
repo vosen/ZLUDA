@@ -32,6 +32,10 @@ pub const CU_TRSF_NORMALIZED_COORDINATES: u32 = 2;
 pub const CU_TRSF_SRGB: u32 = 16;
 pub const CU_TRSF_DISABLE_TRILINEAR_OPTIMIZATION: u32 = 32;
 pub const CU_PARAM_TR_DEFAULT: i32 = -1;
+pub const CURRENT_IMPORT_REDIRECTION_VERSION: u32 = 1;
+pub const CURVECAPS: u32 = 28;
+pub const CURSOR_SHOWING: u32 = 1;
+pub const CUR_BLOB_VERSION: u32 = 2;
 pub type cuuint32_t = u32;
 pub type cuuint64_t = u64;
 #[repr(transparent)]
@@ -5701,5 +5705,132 @@ extern "C" {
         dependencies: *mut CUgraphNode,
         numDependencies: usize,
         flags: ::std::os::raw::c_uint,
+    ) -> CUresult;
+}
+pub type GLenum = ::std::os::raw::c_uint;
+pub type GLuint = ::std::os::raw::c_uint;
+pub type HGPUNV = *mut ::std::os::raw::c_void;
+extern "C" {
+    pub fn cuGraphicsGLRegisterBuffer(
+        pCudaResource: *mut CUgraphicsResource,
+        buffer: GLuint,
+        Flags: ::std::os::raw::c_uint,
+    ) -> CUresult;
+}
+extern "C" {
+    pub fn cuGraphicsGLRegisterImage(
+        pCudaResource: *mut CUgraphicsResource,
+        image: GLuint,
+        target: GLenum,
+        Flags: ::std::os::raw::c_uint,
+    ) -> CUresult;
+}
+extern "C" {
+    pub fn cuWGLGetDevice(pDevice: *mut CUdevice, hGpu: HGPUNV) -> CUresult;
+}
+impl CUGLDeviceList_enum {
+    pub const CU_GL_DEVICE_LIST_ALL: CUGLDeviceList_enum = CUGLDeviceList_enum(1);
+}
+impl CUGLDeviceList_enum {
+    pub const CU_GL_DEVICE_LIST_CURRENT_FRAME: CUGLDeviceList_enum = CUGLDeviceList_enum(2);
+}
+impl CUGLDeviceList_enum {
+    pub const CU_GL_DEVICE_LIST_NEXT_FRAME: CUGLDeviceList_enum = CUGLDeviceList_enum(3);
+}
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUGLDeviceList_enum(pub ::std::os::raw::c_uint);
+pub use self::CUGLDeviceList_enum as CUGLDeviceList;
+extern "C" {
+    pub fn cuGLGetDevices_v2(
+        pCudaDeviceCount: *mut ::std::os::raw::c_uint,
+        pCudaDevices: *mut CUdevice,
+        cudaDeviceCount: ::std::os::raw::c_uint,
+        deviceList: CUGLDeviceList,
+    ) -> CUresult;
+}
+extern "C" {
+    pub fn cuGLCtxCreate_v2(
+        pCtx: *mut CUcontext,
+        Flags: ::std::os::raw::c_uint,
+        device: CUdevice,
+    ) -> CUresult;
+}
+extern "C" {
+    pub fn cuGLInit() -> CUresult;
+}
+extern "C" {
+    pub fn cuGLRegisterBufferObject(buffer: GLuint) -> CUresult;
+}
+extern "C" {
+    pub fn cuGLMapBufferObject_v2_ptds(
+        dptr: *mut CUdeviceptr,
+        size: *mut usize,
+        buffer: GLuint,
+    ) -> CUresult;
+}
+extern "C" {
+    pub fn cuGLUnmapBufferObject(buffer: GLuint) -> CUresult;
+}
+extern "C" {
+    pub fn cuGLUnregisterBufferObject(buffer: GLuint) -> CUresult;
+}
+extern "C" {
+    pub fn cuGLSetBufferObjectMapFlags(buffer: GLuint, Flags: ::std::os::raw::c_uint) -> CUresult;
+}
+extern "C" {
+    pub fn cuGLMapBufferObjectAsync_v2_ptsz(
+        dptr: *mut CUdeviceptr,
+        size: *mut usize,
+        buffer: GLuint,
+        hStream: CUstream,
+    ) -> CUresult;
+}
+extern "C" {
+    pub fn cuGLUnmapBufferObjectAsync(buffer: GLuint, hStream: CUstream) -> CUresult;
+}
+extern "C" {
+    pub fn cuGLGetDevices(
+        pCudaDeviceCount: *mut ::std::os::raw::c_uint,
+        pCudaDevices: *mut CUdevice,
+        cudaDeviceCount: ::std::os::raw::c_uint,
+        deviceList: CUGLDeviceList,
+    ) -> CUresult;
+}
+extern "C" {
+    pub fn cuGLMapBufferObject_v2(
+        dptr: *mut CUdeviceptr,
+        size: *mut usize,
+        buffer: GLuint,
+    ) -> CUresult;
+}
+extern "C" {
+    pub fn cuGLMapBufferObjectAsync_v2(
+        dptr: *mut CUdeviceptr,
+        size: *mut usize,
+        buffer: GLuint,
+        hStream: CUstream,
+    ) -> CUresult;
+}
+extern "C" {
+    pub fn cuGLCtxCreate(
+        pCtx: *mut CUcontext,
+        Flags: ::std::os::raw::c_uint,
+        device: CUdevice,
+    ) -> CUresult;
+}
+extern "C" {
+    pub fn cuGLMapBufferObject(
+        dptr: *mut CUdeviceptr_v1,
+        size: *mut ::std::os::raw::c_uint,
+        buffer: GLuint,
+    ) -> CUresult;
+}
+extern "C" {
+    pub fn cuGLMapBufferObjectAsync(
+        dptr: *mut CUdeviceptr_v1,
+        size: *mut ::std::os::raw::c_uint,
+        buffer: GLuint,
+        hStream: CUstream,
     ) -> CUresult;
 }
