@@ -737,7 +737,8 @@ cuda_derive_display_trait!(
         CUexecAffinityParam_st,
         CUstreamBatchMemOpParams_union_CUstreamMemOpWaitValueParams_st,
         CUstreamBatchMemOpParams_union_CUstreamMemOpWriteValueParams_st,
-        CUuuid_st
+        CUuuid_st,
+        HGPUNV
     ],
     [
         cuCtxCreate_v3,
