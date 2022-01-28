@@ -4,7 +4,7 @@ use std::mem;
 
 pub(crate) const LIBCUDA_DEFAULT_PATH: &'static str = b"/usr/lib/x86_64-linux-gnu/libcuda.so.1\0";
 
-pub unsafe fn load_cuda_library(libcuda_path: &str) -> *mut c_void {
+pub unsafe fn load_library(libcuda_path: &str) -> *mut c_void {
     let libcuda_path = CString::new(libcuda_path).unwrap();
     libc::dlopen(
         libcuda_path.as_ptr() as *const _,
