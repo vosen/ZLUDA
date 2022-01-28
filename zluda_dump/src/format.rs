@@ -1,4 +1,3 @@
-extern crate cuda_types;
 use std::{
     ffi::{c_void, CStr},
     fmt::LowerHex,

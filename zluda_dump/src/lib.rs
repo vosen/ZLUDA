@@ -2,6 +2,7 @@ use cuda_types::{
     CUdevice, CUdevice_attribute, CUfunction, CUjit_option, CUmodule, CUresult, CUuuid,
 };
 use paste::paste;
+use side_by_side::CudaDynamicFns;
 use std::io;
 use std::{
     collections::HashMap, env, error::Error, ffi::c_void, fs, path::PathBuf, ptr::NonNull, rc::Rc,
@@ -10,47 +11,50 @@ use std::{
 
 #[macro_use]
 extern crate lazy_static;
+extern crate cuda_types;
 
 macro_rules! extern_redirect {
-    ($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:path) => {
-        #[no_mangle]
-        pub extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
-            let original_fn = |fn_ptr| {
-                let typed_fn = unsafe { std::mem::transmute::<_, extern "system" fn( $( $arg_id : $arg_type),* ) -> $ret_type>(fn_ptr) };
-                typed_fn($( $arg_id ),*)
-            };
-            let get_formatted_args = Box::new(move |writer: &mut dyn std::io::Write| {
-                (paste! { format :: [<write_ $fn_name>] }) (
-                    writer
-                    $(,$arg_id)*
-                )
-            });
-            crate::handle_cuda_function_call(stringify!($fn_name), original_fn, get_formatted_args)
-        }
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:path);*) => {
+        $(
+            #[no_mangle]
+            pub extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
+                let original_fn = |dynamic_fns: &mut crate::side_by_side::CudaDynamicFns| {
+                    dynamic_fns.$fn_name($( $arg_id ),*)
+                };
+                let get_formatted_args = Box::new(move |writer: &mut dyn std::io::Write| {
+                    (paste! { format :: [<write_ $fn_name>] }) (
+                        writer
+                        $(,$arg_id)*
+                    )
+                });
+                crate::handle_cuda_function_call(stringify!($fn_name), original_fn, get_formatted_args)
+            }
+        )*
     };
 }
 
 macro_rules! extern_redirect_with_post {
-    ($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:path) => {
-        #[no_mangle]
-        pub extern "system" fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
-            let original_fn = |fn_ptr| {
-                let typed_fn = unsafe { std::mem::transmute::<_, extern "system" fn( $( $arg_id : $arg_type),* ) -> $ret_type>(fn_ptr) };
-                typed_fn($( $arg_id ),*)
-            };
-            let get_formatted_args = Box::new(move |writer: &mut dyn std::io::Write| {
-                (paste! { format :: [<write_ $fn_name>] }) (
-                    writer
-                    $(,$arg_id)*
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:path);*) => {
+        $(
+            #[no_mangle]
+            pub extern "system" fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
+                let original_fn = |dynamic_fns: &mut crate::side_by_side::CudaDynamicFns| {
+                    dynamic_fns.$fn_name($( $arg_id ),*)
+                };
+                let get_formatted_args = Box::new(move |writer: &mut dyn std::io::Write| {
+                    (paste! { format :: [<write_ $fn_name>] }) (
+                        writer
+                        $(,$arg_id)*
+                    )
+                });
+                crate::handle_cuda_function_call_with_probes(
+                    stringify!($fn_name),
+                    || (), original_fn,
+                    get_formatted_args,
+                    move |logger, state, _, cuda_result| paste! { [<$fn_name _Post>] } ( $( $arg_id ),* , logger, state, cuda_result )
                 )
-            });
-            crate::handle_cuda_function_call_with_probes(
-                stringify!($fn_name),
-                || (), original_fn,
-                get_formatted_args,
-                move |logger, state, _, cuda_result| paste! { [<$fn_name _Post>] } ( $( $arg_id ),* , logger, state, cuda_result )
-            )
-        }
+            }
+        )*
     };
 }
 
@@ -77,6 +81,7 @@ mod log;
 #[cfg_attr(windows, path = "os_win.rs")]
 #[cfg_attr(not(windows), path = "os_unix.rs")]
 mod os;
+mod side_by_side;
 mod trace;
 
 lazy_static! {
@@ -127,7 +132,8 @@ impl<T> LateInit<T> {
 
 struct GlobalDelayedState {
     settings: Settings,
-    libcuda_handle: NonNull<c_void>,
+    libcuda: CudaDynamicFns,
+    side_by_side_lib: Option<CudaDynamicFns>,
     cuda_state: trace::StateTracker,
 }
 
@@ -139,9 +145,8 @@ impl GlobalDelayedState {
     ) -> (LateInit<Self>, log::FunctionLogger<'a>) {
         let (mut fn_logger, settings) =
             factory.get_first_logger_and_init_settings(func, arguments_writer);
-        let maybe_libcuda_handle = unsafe { os::load_cuda_library(&settings.libcuda_path) };
-        let libcuda_handle = match NonNull::new(maybe_libcuda_handle) {
-            Some(h) => h,
+        let libcuda = match unsafe { CudaDynamicFns::load_library(&settings.libcuda_path) } {
+            Some(libcuda) => libcuda,
             None => {
                 fn_logger.log(log::LogEntry::ErrorBox(
                     format!("Invalid CUDA library at path {}", &settings.libcuda_path).into(),
@@ -149,11 +154,30 @@ impl GlobalDelayedState {
                 return (LateInit::Error, fn_logger);
             }
         };
+        let side_by_side_lib = settings
+            .side_by_side_path
+            .as_ref()
+            .and_then(|side_by_side_path| {
+                match unsafe { CudaDynamicFns::load_library(&*side_by_side_path) } {
+                    Some(fns) => Some(fns),
+                    None => {
+                        fn_logger.log(log::LogEntry::ErrorBox(
+                            format!(
+                                "Invalid side-by-side CUDA library at path {}",
+                                &side_by_side_path
+                            )
+                            .into(),
+                        ));
+                        None
+                    }
+                }
+            });
         let cuda_state = trace::StateTracker::new(&settings);
         let delayed_state = GlobalDelayedState {
             settings,
-            libcuda_handle,
+            libcuda,
             cuda_state,
+            side_by_side_lib,
         };
         (LateInit::Success(delayed_state), fn_logger)
     }
@@ -163,6 +187,7 @@ struct Settings {
     dump_dir: Option<PathBuf>,
     libcuda_path: String,
     override_cc_major: Option<u32>,
+    side_by_side_path: Option<String>,
 }
 
 impl Settings {
@@ -179,7 +204,7 @@ impl Settings {
                 None
             }
         };
-        let libcuda_path = match env::var("ZLUDA_DUMP_LIBCUDA_FILE") {
+        let libcuda_path = match env::var("ZLUDA_CUDA_LIB") {
             Err(env::VarError::NotPresent) => os::LIBCUDA_DEFAULT_PATH.to_owned(),
             Err(e) => {
                 logger.log(log::LogEntry::ErrorBox(Box::new(e) as _));
@@ -201,10 +226,19 @@ impl Settings {
                 Ok(cc) => Some(cc),
             },
         };
+        let side_by_side_path = match env::var("ZLUDA_SIDE_BY_SIDE_LIB") {
+            Err(env::VarError::NotPresent) => None,
+            Err(e) => {
+                logger.log(log::LogEntry::ErrorBox(Box::new(e) as _));
+                None
+            }
+            Ok(env_string) => Some(env_string),
+        };
         Settings {
             dump_dir,
             libcuda_path,
             override_cc_major,
+            side_by_side_path,
         }
     }
 
@@ -241,7 +275,7 @@ pub struct ModuleDump {
 
 fn handle_cuda_function_call(
     func: &'static str,
-    original_cuda_fn: impl FnOnce(NonNull<c_void>) -> CUresult,
+    original_cuda_fn: impl FnOnce(&mut CudaDynamicFns) -> Option<CUresult>,
     arguments_writer: Box<dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>>,
 ) -> CUresult {
     handle_cuda_function_call_with_probes(
@@ -256,7 +290,7 @@ fn handle_cuda_function_call(
 fn handle_cuda_function_call_with_probes<T, PostFn>(
     func: &'static str,
     pre_probe: impl FnOnce() -> T,
-    original_cuda_fn: impl FnOnce(NonNull<c_void>) -> CUresult,
+    original_cuda_fn: impl FnOnce(&mut CudaDynamicFns) -> Option<CUresult>,
     arguments_writer: Box<dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>>,
     post_probe: PostFn,
 ) -> CUresult
@@ -283,13 +317,18 @@ where
             (logger, global_state.delayed_state.as_mut().unwrap())
         }
     };
-    let name = std::ffi::CString::new(func).unwrap();
-    let fn_ptr =
-        unsafe { os::get_proc_address(delayed_state.libcuda_handle.as_ptr(), name.as_c_str()) };
-    let fn_ptr = NonNull::new(fn_ptr).unwrap();
     let pre_result = pre_probe();
-    let cu_result = original_cuda_fn(fn_ptr);
-    logger.result = Some(cu_result);
+    let maybe_cu_result = original_cuda_fn(&mut delayed_state.libcuda);
+    let cu_result = match maybe_cu_result {
+        Some(result) => result,
+        None => {
+            logger.log(log::LogEntry::ErrorBox(
+                format!("No function {} in the underlying CUDA library", func).into(),
+            ));
+            CUresult::CUDA_ERROR_UNKNOWN
+        }
+    };
+    logger.result = maybe_cu_result;
     post_probe(
         &mut logger,
         &mut delayed_state.cuda_state,

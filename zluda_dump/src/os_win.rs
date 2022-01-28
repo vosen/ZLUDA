@@ -73,7 +73,7 @@ impl PlatformLibrary {
     }
 }
 
-pub unsafe fn load_cuda_library(libcuda_path: &str) -> *mut c_void {
+pub unsafe fn load_library(libcuda_path: &str) -> *mut c_void {
     let libcuda_path_uf16 = libcuda_path
         .encode_utf16()
         .chain(std::iter::once(0))
