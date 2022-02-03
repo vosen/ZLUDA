@@ -11,6 +11,3 @@ crate-type = ["cdylib"]
 detours-sys = { path = "../detours-sys" }
 wchar = "0.6"
 winapi = { version = "0.3", features = [ "sysinfoapi", "memoryapi", "processthreadsapi", "winbase", "winnt", "winerror", "libloaderapi", "tlhelp32", "handleapi", "std"] }
-tempfile = "3"
-goblin = { version = "0.4", default-features = false, features = ["pe64"] }
-memoffset = "0.6"

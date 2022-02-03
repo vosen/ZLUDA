@@ -6,32 +6,35 @@ extern crate winapi;
 use std::{
     collections::HashMap,
     ffi::{c_void, CStr},
-    io, mem,
-    os::raw::c_uint,
-    ptr, slice, usize,
+    mem, ptr, slice, usize,
 };
 
 use detours_sys::{
-    DetourAllocateRegionWithinJumpBounds, DetourAttach, DetourEnumerateExports,
-    DetourRestoreAfterWith, DetourTransactionAbort, DetourTransactionBegin,
+    DetourAttach, DetourRestoreAfterWith, DetourTransactionAbort, DetourTransactionBegin,
     DetourTransactionCommit, DetourUpdateProcessWithDll, DetourUpdateThread,
 };
-use goblin::pe::{
-    self,
-    header::{CoffHeader, DOS_MAGIC, PE_MAGIC, PE_POINTER_OFFSET},
-    optional_header::StandardFields64,
-};
-use memoffset::offset_of;
-use tempfile::TempDir;
 use wchar::wch;
+use winapi::{
+    shared::minwindef::{BOOL, LPVOID},
+    um::{
+        handleapi::{CloseHandle, INVALID_HANDLE_VALUE},
+        minwinbase::LPSECURITY_ATTRIBUTES,
+        processthreadsapi::{
+            CreateProcessA, GetCurrentProcessId, GetCurrentThreadId, OpenThread, ResumeThread,
+            SuspendThread, TerminateProcess, LPPROCESS_INFORMATION, LPSTARTUPINFOA, LPSTARTUPINFOW,
+        },
+        tlhelp32::{
+            CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32,
+        },
+        winbase::CREATE_SUSPENDED,
+        winnt::{LPSTR, LPWSTR, THREAD_SUSPEND_RESUME},
+    },
+};
 use winapi::{
     shared::minwindef::{DWORD, FALSE, HMODULE, TRUE},
     um::{
         libloaderapi::{GetModuleHandleA, LoadLibraryExA},
-        memoryapi::VirtualProtect,
-        processthreadsapi::{FlushInstructionCache, GetCurrentProcess},
-        sysinfoapi::GetSystemInfo,
-        winnt::{LPCSTR, PAGE_READWRITE},
+        winnt::LPCSTR,
     },
 };
 use winapi::{
@@ -47,26 +50,6 @@ use winapi::{
     shared::winerror::NO_ERROR,
     um::libloaderapi::{LoadLibraryA, LoadLibraryExW, LoadLibraryW},
 };
-use winapi::{
-    shared::{
-        minwindef::{BOOL, LPVOID},
-        winerror::E_UNEXPECTED,
-    },
-    um::{
-        handleapi::{CloseHandle, INVALID_HANDLE_VALUE},
-        libloaderapi::GetModuleHandleW,
-        minwinbase::LPSECURITY_ATTRIBUTES,
-        processthreadsapi::{
-            CreateProcessA, GetCurrentProcessId, GetCurrentThreadId, OpenThread, ResumeThread,
-            SuspendThread, TerminateProcess, LPPROCESS_INFORMATION, LPSTARTUPINFOA, LPSTARTUPINFOW,
-        },
-        tlhelp32::{
-            CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32,
-        },
-        winbase::{CopyFileW, CreateSymbolicLinkW, CREATE_SUSPENDED},
-        winnt::{LPSTR, LPWSTR, THREAD_SUSPEND_RESUME},
-    },
-};
 
 include!("payload_guid.rs");
 
@@ -74,13 +57,12 @@ const NVCUDA_UTF8: &'static str = "NVCUDA.DLL";
 const NVCUDA_UTF16: &[u16] = wch!("NVCUDA.DLL");
 const NVML_UTF8: &'static str = "NVML.DLL";
 const NVML_UTF16: &[u16] = wch!("NVML.DLL");
-static mut ZLUDA_PATH_UTF8: Vec<u8> = Vec::new();
-static mut ZLUDA_PATH_UTF16: Option<&'static [u16]> = None;
-static mut ZLUDA_ML_PATH_UTF8: Vec<u8> = Vec::new();
-static mut ZLUDA_ML_PATH_UTF16: Option<&'static [u16]> = None;
+static mut ZLUDA_PATH_UTF8: Option<&'static [u8]> = None;
+static mut ZLUDA_PATH_UTF16: Vec<u16> = Vec::new();
+static mut ZLUDA_ML_PATH_UTF8: Option<&'static [u8]> = None;
+static mut ZLUDA_ML_PATH_UTF16: Vec<u16> = Vec::new();
 static mut CURRENT_MODULE_FILENAME: Vec<u8> = Vec::new();
 static mut DETOUR_STATE: Option<DetourDetachGuard> = None;
-const CUDA_ERROR_NOT_SUPPORTED: c_uint = 801;
 
 #[no_mangle]
 #[used]
@@ -197,9 +179,9 @@ unsafe extern "system" fn ZludaLoadLibraryW_NoRedirect(lpLibFileName: LPCWSTR) -
 #[allow(non_snake_case)]
 unsafe extern "system" fn ZludaLoadLibraryA(lpLibFileName: LPCSTR) -> HMODULE {
     let nvcuda_file_name = if is_nvcuda_dll_utf8(lpLibFileName as *const _) {
-        ZLUDA_PATH_UTF8.as_ptr() as *const _
+        ZLUDA_PATH_UTF8.unwrap().as_ptr() as *const _
     } else if is_nvml_dll_utf8(lpLibFileName as *const _) {
-        ZLUDA_ML_PATH_UTF8.as_ptr() as *const _
+        ZLUDA_ML_PATH_UTF8.unwrap().as_ptr() as *const _
     } else {
         lpLibFileName
     };
@@ -209,9 +191,9 @@ unsafe extern "system" fn ZludaLoadLibraryA(lpLibFileName: LPCSTR) -> HMODULE {
 #[allow(non_snake_case)]
 unsafe extern "system" fn ZludaLoadLibraryW(lpLibFileName: LPCWSTR) -> HMODULE {
     let nvcuda_file_name = if is_nvcuda_dll_utf16(lpLibFileName) {
-        ZLUDA_PATH_UTF16.unwrap().as_ptr()
+        ZLUDA_PATH_UTF16.as_ptr()
     } else if is_nvml_dll_utf16(lpLibFileName as *const _) {
-        ZLUDA_ML_PATH_UTF16.unwrap().as_ptr()
+        ZLUDA_ML_PATH_UTF16.as_ptr()
     } else {
         lpLibFileName
     };
@@ -225,9 +207,9 @@ unsafe extern "system" fn ZludaLoadLibraryExA(
     dwFlags: DWORD,
 ) -> HMODULE {
     let nvcuda_file_name = if is_nvcuda_dll_utf8(lpLibFileName as *const _) {
-        ZLUDA_PATH_UTF8.as_ptr() as *const _
+        ZLUDA_PATH_UTF8.unwrap().as_ptr() as *const _
     } else if is_nvml_dll_utf8(lpLibFileName as *const _) {
-        ZLUDA_ML_PATH_UTF8.as_ptr() as *const _
+        ZLUDA_ML_PATH_UTF8.unwrap().as_ptr() as *const _
     } else {
         lpLibFileName
     };
@@ -241,9 +223,9 @@ unsafe extern "system" fn ZludaLoadLibraryExW(
     dwFlags: DWORD,
 ) -> HMODULE {
     let nvcuda_file_name = if is_nvcuda_dll_utf16(lpLibFileName) {
-        ZLUDA_PATH_UTF16.unwrap().as_ptr()
+        ZLUDA_PATH_UTF16.as_ptr()
     } else if is_nvml_dll_utf16(lpLibFileName as *const _) {
-        ZLUDA_ML_PATH_UTF16.unwrap().as_ptr()
+        ZLUDA_ML_PATH_UTF16.as_ptr()
     } else {
         lpLibFileName
     };
@@ -390,67 +372,6 @@ unsafe extern "system" fn ZludaCreateProcessWithTokenW(
         lpProcessInformation,
     );
     continue_create_process_hook(create_proc_result, dwCreationFlags, lpProcessInformation)
-}
-
-static mut MAIN: unsafe extern "system" fn() -> DWORD = zluda_main;
-static mut COR_EXE_MAIN: unsafe extern "system" fn() -> DWORD = zluda_main_clr;
-
-// https://docs.microsoft.com/en-us/windows/win32/dlls/dynamic-link-library-search-order#search-order-for-desktop-applications
-// "If a DLL with the same module name is already loaded in memory, the system
-// uses the loaded DLL, no matter which directory it is in. The system does not
-// search for the DLL."
-unsafe extern "system" fn zluda_main() -> DWORD {
-    zluda_main_impl(MAIN)
-}
-
-unsafe extern "system" fn zluda_main_clr() -> DWORD {
-    zluda_main_impl(COR_EXE_MAIN)
-}
-
-unsafe fn zluda_main_impl(original: unsafe extern "system" fn() -> DWORD) -> DWORD {
-    let temp_dir = match do_zluda_preload() {
-        Ok(f) => f,
-        Err(e) => return e.raw_os_error().unwrap_or(E_UNEXPECTED) as DWORD,
-    };
-    let result = original();
-    drop(temp_dir);
-    result
-}
-
-unsafe fn do_zluda_preload() -> std::io::Result<TempDir> {
-    let temp_dir = tempfile::tempdir()?;
-    do_single_zluda_preload(&temp_dir, ZLUDA_PATH_UTF16.unwrap().as_ptr(), NVCUDA_UTF8)?;
-    do_single_zluda_preload(&temp_dir, ZLUDA_ML_PATH_UTF16.unwrap().as_ptr(), NVML_UTF8)?;
-    Ok(temp_dir)
-}
-
-unsafe fn do_single_zluda_preload(
-    temp_dir: &TempDir,
-    full_path: *const u16,
-    file_name: &'static str,
-) -> io::Result<()> {
-    let mut temp_file_path = temp_dir.path().to_path_buf();
-    temp_file_path.push(file_name);
-    let mut temp_file_path_utf16 = temp_file_path
-        .into_os_string()
-        .to_string_lossy()
-        .encode_utf16()
-        .collect::<Vec<_>>();
-    temp_file_path_utf16.push(0);
-    // Probably we are not in developer mode, do a copty then
-    if 0 == CreateSymbolicLinkW(
-        temp_file_path_utf16.as_ptr(),
-        full_path,
-        0x2, //SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE
-    ) {
-        if 0 == CopyFileW(full_path, temp_file_path_utf16.as_ptr(), 1) {
-            return Err(io::Error::last_os_error());
-        }
-    }
-    if ptr::null_mut() == ZludaLoadLibraryW_NoRedirect(temp_file_path_utf16.as_ptr()) {
-        return Err(io::Error::last_os_error());
-    }
-    Ok(())
 }
 
 // This type encapsulates typical calling sequence of detours and cleanup.
@@ -633,21 +554,31 @@ unsafe fn continue_create_process_hook(
     // continues uninjected than to break the parent
     if DetourUpdateProcessWithDll(
         (*process_information).hProcess,
-        &mut CURRENT_MODULE_FILENAME.as_ptr() as *mut _ as *mut _,
+        &mut ZLUDA_ML_PATH_UTF8.unwrap().as_ptr() as *mut _ as *mut _,
         1,
     ) != FALSE
+        && DetourUpdateProcessWithDll(
+            (*process_information).hProcess,
+            &mut ZLUDA_PATH_UTF8.unwrap().as_ptr() as *mut _ as *mut _,
+            1,
+        ) != FALSE
+        && DetourUpdateProcessWithDll(
+            (*process_information).hProcess,
+            &mut CURRENT_MODULE_FILENAME.as_ptr() as *mut _ as *mut _,
+            1,
+        ) != FALSE
     {
         detours_sys::DetourCopyPayloadToProcess(
             (*process_information).hProcess,
             &PAYLOAD_NVML_GUID,
-            ZLUDA_ML_PATH_UTF16.unwrap().as_ptr() as *mut _,
-            (ZLUDA_ML_PATH_UTF16.unwrap().len() * mem::size_of::<u16>()) as u32,
+            ZLUDA_ML_PATH_UTF16.as_ptr() as *mut _,
+            (ZLUDA_ML_PATH_UTF16.len() * mem::size_of::<u16>()) as u32,
         );
         detours_sys::DetourCopyPayloadToProcess(
             (*process_information).hProcess,
             &PAYLOAD_NVCUDA_GUID,
-            ZLUDA_PATH_UTF16.unwrap().as_ptr() as *mut _,
-            (ZLUDA_PATH_UTF16.unwrap().len() * mem::size_of::<u16>()) as u32,
+            ZLUDA_PATH_UTF16.as_ptr() as *mut _,
+            (ZLUDA_PATH_UTF16.len() * mem::size_of::<u16>()) as u32,
         );
     }
     if original_creation_flags & CREATE_SUSPENDED == 0 {
@@ -733,23 +664,18 @@ unsafe extern "system" fn DllMain(instDLL: HINSTANCE, dwReason: u32, _: *const u
         }
         match get_zluda_dlls_paths() {
             Some((nvcuda_path, nvml_path)) => {
-                ZLUDA_PATH_UTF16 = Some(nvcuda_path);
-                ZLUDA_ML_PATH_UTF16 = Some(nvml_path);
-                // from_utf16_lossy(...) handles terminating NULL correctly
-                ZLUDA_PATH_UTF8 = String::from_utf16_lossy(nvcuda_path).into_bytes();
-                ZLUDA_ML_PATH_UTF8 = String::from_utf16_lossy(nvml_path).into_bytes();
+                ZLUDA_PATH_UTF8 = Some(nvcuda_path);
+                ZLUDA_ML_PATH_UTF8 = Some(nvml_path);
+                ZLUDA_PATH_UTF16 = std::str::from_utf8_unchecked(nvcuda_path)
+                    .encode_utf16()
+                    .collect::<Vec<_>>();
+                ZLUDA_ML_PATH_UTF16 = std::str::from_utf8_unchecked(nvml_path)
+                    .encode_utf16()
+                    .collect::<Vec<_>>();
             }
             None => return FALSE,
         }
-        // If the application (directly or not) links to nvcuda.dll, nvcuda.dll
-        // will get loaded before we can act. In this case, instead of
-        // redirecting LoadLibrary* to load ZLUDA, we override already loaded
-        // functions
-        let detach_guard = match get_cuinit() {
-            Some((nvcuda_mod, _)) => detour_already_loaded_nvcuda(nvcuda_mod),
-            None => detour_main(),
-        };
-        match detach_guard {
+        match detour_already_loaded_nvcuda() {
             Some(g) => {
                 DETOUR_STATE = Some(g);
                 TRUE
@@ -787,42 +713,9 @@ unsafe fn initialize_current_module_name(current_module: HINSTANCE) -> bool {
     }
 }
 
-unsafe fn get_cuinit() -> Option<(HMODULE, FARPROC)> {
-    let nvcuda = GetModuleHandleA(b"nvcuda\0".as_ptr() as _);
-    if nvcuda == ptr::null_mut() {
-        return None;
-    }
-    let cuinit_addr = GetProcAddress(nvcuda, b"cuInit\0".as_ptr() as _);
-    if cuinit_addr == ptr::null_mut() {
-        return None;
-    }
-    Some((nvcuda as *mut _, cuinit_addr))
-}
-
 #[must_use]
-unsafe fn detour_already_loaded_nvcuda(nvcuda_mod: HMODULE) -> Option<DetourDetachGuard> {
-    let zluda_module = LoadLibraryW(ZLUDA_PATH_UTF16.unwrap().as_ptr());
-    if zluda_module == ptr::null_mut() {
-        return None;
-    }
-    let original_functions = gather_imports(nvcuda_mod);
-    let override_functions = gather_imports(zluda_module);
-    let mut override_fn_pairs = HashMap::with_capacity(original_functions.len());
-    // TODO: optimize
-    for (original_fn_name, original_fn_address) in original_functions {
-        let override_fn_address =
-            match override_functions.binary_search_by_key(&original_fn_name, |(name, _)| *name) {
-                Ok(x) => override_functions[x].1,
-                Err(_) => {
-                    // TODO: print a warning in debug
-                    cuda_unsupported as _
-                }
-            };
-        override_fn_pairs.insert(
-            original_fn_name,
-            (original_fn_address as _, override_fn_address),
-        );
-    }
+unsafe fn detour_already_loaded_nvcuda() -> Option<DetourDetachGuard> {
+    let nvcuda_mod = GetModuleHandleA(b"nvcuda\0".as_ptr() as _);
     let detour_functions = vec![
         (
             &mut LOAD_LIBRARY_A as *mut _ as *mut *mut c_void,
@@ -838,146 +731,10 @@ unsafe fn detour_already_loaded_nvcuda(nvcuda_mod: HMODULE) -> Option<DetourDeta
             ZludaLoadLibraryExW as _,
         ),
     ];
-    DetourDetachGuard::detour_functions(nvcuda_mod, detour_functions, override_fn_pairs)
+    DetourDetachGuard::detour_functions(nvcuda_mod, detour_functions, HashMap::new())
 }
 
-unsafe extern "system" fn cuda_unsupported() -> c_uint {
-    CUDA_ERROR_NOT_SUPPORTED
-}
-
-unsafe fn gather_imports(module: HINSTANCE) -> Vec<(&'static CStr, *mut c_void)> {
-    let mut result = Vec::new();
-    DetourEnumerateExports(
-        module as _,
-        &mut result as *mut _ as *mut _,
-        Some(gather_imports_impl),
-    );
-    result
-}
-
-unsafe extern "stdcall" fn gather_imports_impl(
-    context: *mut c_void,
-    _: u32,
-    name: LPCSTR,
-    code: *mut c_void,
-) -> i32 {
-    let result: &mut Vec<(&'static CStr, *mut c_void)> = &mut *(context as *mut Vec<_>);
-    result.push((CStr::from_ptr(name), code));
-    TRUE
-}
-
-#[must_use]
-unsafe fn detour_main() -> Option<DetourDetachGuard> {
-    if !override_entry_point() {
-        return None;
-    }
-    let mut detour_functions = vec![
-        (
-            &mut LOAD_LIBRARY_A as *mut _ as *mut *mut c_void,
-            ZludaLoadLibraryA as *mut c_void,
-        ),
-        (&mut LOAD_LIBRARY_W as *mut _ as _, ZludaLoadLibraryW as _),
-        (
-            &mut LOAD_LIBRARY_EX_A as *mut _ as _,
-            ZludaLoadLibraryExA as _,
-        ),
-        (
-            &mut LOAD_LIBRARY_EX_W as *mut _ as _,
-            ZludaLoadLibraryExW as _,
-        ),
-    ];
-    detour_functions.extend(get_clr_entry_point());
-    DetourDetachGuard::detour_functions(ptr::null_mut(), detour_functions, HashMap::new())
-}
-
-unsafe fn override_entry_point() -> bool {
-    let exe_handle = GetModuleHandleW(ptr::null());
-    let dos_signature = exe_handle as *mut u16;
-    if *dos_signature != DOS_MAGIC {
-        return false;
-    }
-    let pe_offset = *((exe_handle as *mut u8).add(PE_POINTER_OFFSET as usize) as *mut u32);
-    let pe_sig = (exe_handle as *mut u8).add(pe_offset as usize) as *mut u32;
-    if (*pe_sig) != PE_MAGIC {
-        return false;
-    }
-    let coff_header = pe_sig.add(1) as *mut CoffHeader;
-    let standard_coff_fields = coff_header.add(1) as *mut StandardFields64;
-    if (*standard_coff_fields).magic != pe::optional_header::MAGIC_64 {
-        return false;
-    }
-    let entry_point = mem::transmute::<_, unsafe extern "system" fn() -> DWORD>(
-        (exe_handle as *mut u8).add((*standard_coff_fields).address_of_entry_point as usize),
-    );
-    let mut allocated_size = 0;
-    let exe_region = DetourAllocateRegionWithinJumpBounds(exe_handle as _, &mut allocated_size);
-    if (allocated_size as usize) < mem::size_of::<JmpThunk64>() || exe_region == ptr::null_mut() {
-        return false;
-    }
-    MAIN = entry_point;
-    *(exe_region as *mut JmpThunk64) = JmpThunk64::new(zluda_main);
-    FlushInstructionCache(
-        GetCurrentProcess(),
-        exe_region,
-        mem::size_of::<JmpThunk64>(),
-    );
-    let new_address_of_entry_point = (exe_region as *mut u8).offset_from(exe_handle as *mut u8);
-    let entry_point_offset = offset_of!(StandardFields64, address_of_entry_point);
-    let mut system_info = mem::zeroed();
-    GetSystemInfo(&mut system_info);
-    let pointer_to_address_of_entry_point =
-        (standard_coff_fields as *mut u8).add(entry_point_offset) as *mut i32;
-    let page_size = system_info.dwPageSize as usize;
-    let page_start = (((pointer_to_address_of_entry_point as usize) / page_size) * page_size) as _;
-    let mut old_protect = 0;
-    if VirtualProtect(page_start, page_size, PAGE_READWRITE, &mut old_protect) == 0 {
-        return false;
-    }
-    *pointer_to_address_of_entry_point = new_address_of_entry_point as i32;
-    if VirtualProtect(page_start, page_size, old_protect, &mut old_protect) == 0 {
-        return false;
-    }
-    true
-}
-
-// mov rax, $address;
-// jmp rax;
-// int 3;
-#[repr(packed)]
-#[allow(dead_code)]
-#[cfg(target_pointer_width = "64")]
-struct JmpThunk64 {
-    mov_rax: [u8; 2],
-    address: u64,
-    jmp_rax: [u8; 2],
-    int3: u8,
-}
-
-impl JmpThunk64 {
-    fn new<T: Sized>(target: unsafe extern "system" fn() -> T) -> Self {
-        JmpThunk64 {
-            mov_rax: [0x48, 0xB8],
-            address: target as u64,
-            jmp_rax: [0xFF, 0xE0],
-            int3: 0xcc,
-        }
-    }
-}
-
-unsafe fn get_clr_entry_point() -> Option<(*mut *mut c_void, *mut c_void)> {
-    let mscoree = GetModuleHandleA(b"mscoree\0".as_ptr() as _);
-    if mscoree == ptr::null_mut() {
-        return None;
-    }
-    let proc = GetProcAddress(mscoree, b"_CorExeMain\0".as_ptr() as _);
-    if proc == ptr::null_mut() {
-        return None;
-    }
-    COR_EXE_MAIN = mem::transmute(proc);
-    Some((&mut COR_EXE_MAIN as *mut _ as _, zluda_main_clr as _))
-}
-
-fn get_zluda_dlls_paths() -> Option<(&'static [u16], &'static [u16])> {
+fn get_zluda_dlls_paths() -> Option<(&'static [u8], &'static [u8])> {
     match get_payload(&PAYLOAD_NVCUDA_GUID) {
         None => None,
         Some(nvcuda_payload) => match get_payload(&PAYLOAD_NVML_GUID) {
@@ -987,22 +744,17 @@ fn get_zluda_dlls_paths() -> Option<(&'static [u16], &'static [u16])> {
     }
 }
 
-fn get_payload(guid: &detours_sys::GUID) -> Option<&'static [u16]> {
-    let mut module = ptr::null_mut();
-    loop {
-        module = unsafe { detours_sys::DetourEnumerateModules(module) };
-        if module == ptr::null_mut() {
-            return None;
-        }
-        let mut size = 0;
-        let payload_ptr = unsafe { detours_sys::DetourFindPayload(module, guid, &mut size) };
-        if payload_ptr != ptr::null_mut() {
-            return Some(unsafe {
-                slice::from_raw_parts(
-                    payload_ptr as *const _,
-                    (size as usize) / mem::size_of::<u16>(),
-                )
-            });
-        }
+fn get_payload(guid: &detours_sys::GUID) -> Option<&'static [u8]> {
+    let mut size = 0;
+    let payload_ptr = unsafe { detours_sys::DetourFindPayloadEx(guid, &mut size) };
+    if payload_ptr != ptr::null_mut() {
+        Some(unsafe {
+            slice::from_raw_parts(
+                payload_ptr as *const _,
+                (size as usize) / mem::size_of::<u16>(),
+            )
+        })
+    } else {
+        None
     }
 }

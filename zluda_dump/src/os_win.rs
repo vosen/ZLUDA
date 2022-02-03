@@ -18,7 +18,6 @@ const GET_PROC_ADDRESS_NO_REDIRECT: &'static [u8] = b"ZludaGetProcAddress_NoRedi
 lazy_static! {
     static ref PLATFORM_LIBRARY: PlatformLibrary = unsafe { PlatformLibrary::new() };
 }
-include!("../../zluda_redirect/src/payload_guid.rs");
 
 #[allow(non_snake_case)]
 struct PlatformLibrary {

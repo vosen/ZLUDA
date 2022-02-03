@@ -43,6 +43,8 @@ fn main() -> Result<(), VarError> {
             .arg("-ldylib=nvcuda")
             .arg("-C")
             .arg(format!("opt-level={}", opt_level))
+            .arg("-L")
+            .arg(format!("{}", out_dir))
             .arg("--out-dir")
             .arg(format!("{}", out_dir))
             .arg("--target")
@@ -52,11 +54,11 @@ fn main() -> Result<(), VarError> {
     }
     std::fs::copy(
         format!(
-            "{}{}do_cuinit_main_clr.exe",
+            "{}{}do_cuinit_late_clr.exe",
             helpers_dir_as_string,
             path::MAIN_SEPARATOR
         ),
-        format!("{}{}do_cuinit_main_clr.exe", out_dir, path::MAIN_SEPARATOR),
+        format!("{}{}do_cuinit_late_clr.exe", out_dir, path::MAIN_SEPARATOR),
     )
     .unwrap();
     println!("cargo:rustc-env=HELPERS_OUT_DIR={}", &out_dir);
