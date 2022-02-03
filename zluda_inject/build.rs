@@ -50,6 +50,15 @@ fn main() -> Result<(), VarError> {
             .arg(full_file_path);
         assert!(rustc_cmd.status().unwrap().success());
     }
+    std::fs::copy(
+        format!(
+            "{}{}do_cuinit_main_clr.exe",
+            helpers_dir_as_string,
+            path::MAIN_SEPARATOR
+        ),
+        format!("{}{}do_cuinit_main_clr.exe", out_dir, path::MAIN_SEPARATOR),
+    )
+    .unwrap();
     println!("cargo:rustc-env=HELPERS_OUT_DIR={}", &out_dir);
     Ok(())
 }

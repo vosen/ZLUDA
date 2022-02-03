@@ -15,6 +15,11 @@ fn do_cuinit() -> io::Result<()> {
     run_process_and_check_for_zluda_dump("do_cuinit_main")
 }
 
+#[test]
+fn do_cuinit_clr() -> io::Result<()> {
+    run_process_and_check_for_zluda_dump("do_cuinit_main_clr")
+}
+
 fn run_process_and_check_for_zluda_dump(name: &'static str) -> io::Result<()> {
     let zluda_with_exe = PathBuf::from(env!("CARGO_BIN_EXE_zluda_with"));
     let mut zluda_dump_dll = zluda_with_exe.parent().unwrap().to_path_buf();
