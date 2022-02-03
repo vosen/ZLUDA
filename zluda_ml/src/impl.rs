@@ -1,5 +1,3 @@
-use std::io::Write;
-use std::slice;
 use std::{
     os::raw::{c_char, c_uint},
     ptr,
