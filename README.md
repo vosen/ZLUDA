@@ -221,7 +221,7 @@ cargo xtask --release
 
 - Why is this project suddenly back after 3 years? What happened to Intel GPU support?
 
-  In 2021 I was contacted by Intel about the development od ZLUDA. I was an Intel employee at the time. While we were building a case for ZLUDA internally, I was asked for a far-reaching discretion: not to advertise the fact that Intel was evaluating ZLUDA and definitely not to make any commits to the public ZLUDA repo. After some deliberation, Intel decided that there is no business case for running CUDA applications on Intel GPUs.
+  In 2021 I was contacted by Intel about the development of ZLUDA. I was an Intel employee at the time. While we were building a case for ZLUDA internally, I was asked for a far-reaching discretion: not to advertise the fact that Intel was evaluating ZLUDA and definitely not to make any commits to the public ZLUDA repo. After some deliberation, Intel decided that there is no business case for running CUDA applications on Intel GPUs.
 
   Shortly thereafter I got in contact with AMD and in early 2022 I have left Intel and signed a ZLUDA development contract with AMD. Once again I was asked for a far-reaching discretion: not to advertise the fact that AMD is evaluating ZLUDA and definitely not to make any commits to the public ZLUDA repo. After two years of development and some deliberation, AMD decided that there is no business case for running CUDA applications on AMD GPUs.
 
