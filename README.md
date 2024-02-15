@@ -56,6 +56,10 @@ Build by running:
 cargo xtask --release
 ```
 
+## Unknown issues
+
+If an application fails to start under ZLUDA or crashes please check [Known Issues](#known-issues) section below. If nothing there applies, then please read [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
 ## Known Issues
 
 ### Hardware
@@ -244,7 +248,7 @@ cargo xtask --release
 
 ## For developers
 
-If you are curious about ZLUDA's architecture, you can read a broad overview in [ARCHITECTURE.md](ARCHITECTURE.md).
+If you are curious about ZLUDA's architecture, you can read a broad overview in [ARCHITECTURE.md](ARCHITECTURE.md). If you want to debug ZLUDA check the "Debugging" section in [TROUBLESHOOTING.md](TROUBLESHOOTING.md#debugging).
 
 ## License
 
