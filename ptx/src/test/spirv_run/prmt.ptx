@@ -11,13 +11,17 @@
     .reg .u64 	    out_addr;
     .reg .u32 	    temp1;
     .reg .u32 	    temp2;
+    .reg .u32 	    temp3;
+    .reg .u32 	    temp4;
 
 	ld.param.u64 	in_addr, [input];
     ld.param.u64 	out_addr, [output];
 
     ld.u32          temp1, [in_addr];
     ld.u32          temp2, [in_addr+4];
-	prmt.b32        temp2, temp1, temp2, 30212;
-    st.u32          [out_addr], temp2;
+	prmt.b32        temp3, temp1, temp2, 30212;
+    prmt.b32        temp4, temp1, temp2, 32268;
+    st.u32          [out_addr], temp3;
+    st.u32          [out_addr+4], temp4;
 	ret;
 }

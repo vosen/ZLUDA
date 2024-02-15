@@ -1097,6 +1097,15 @@ InstSetp: ast::Instruction<ast::ParsedArgParams<'input>> = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#half-precision-comparison-instructions-set
 InstSet: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "set" <cmp_op:SetpCompareOp> <ftz:".ftz"?> ".f16x2" ".f16x2" <arg:Arg3> => {
+        let data = ast::SetData {
+            dst_type: ast::ScalarType::F16x2,
+            src_type: ast::ScalarType::F16x2,
+            flush_to_zero: ftz.is_some(),
+        cmp_op: cmp_op,
+        };
+        ast::Instruction::Set(data, arg)
+    },
     "set" <cmp_op:SetpCompareOp> <ftz:".ftz"?> ".u32" ".f16x2" <arg:Arg3> => {
         let data = ast::SetData {
             dst_type: ast::ScalarType::U32,

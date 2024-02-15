@@ -271,7 +271,7 @@ test_ptx!(const, [0u16], [10u16, 20, 30, 40]);
 test_ptx!(cvt_s16_s8, [0x139231C2u32], [0xFFFFFFC2u32]);
 test_ptx!(cvt_f64_f32, [0.125f32], [0.125f64]);
 test_ptx!(cvt_f32_f16, [0xa1u16], [0x37210000u32]);
-test_ptx!(prmt, [0x70c507d6u32, 0x6fbd4b5cu32], [0x6fbdd65cu32]);
+test_ptx!(prmt, [0x70c507d6u32, 0x6fbd4b5cu32], [0x6fbdd65cu32, 0x6FFFD600]);
 test_ptx!(
     prmt_non_immediate,
     [0x70c507d6u32, 0x6fbd4b5cu32],
