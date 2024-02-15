@@ -336,7 +336,7 @@ test_ptx!(
     [f16::from_f32(2.0), f16::from_f32(3.0)],
     [f16::from_f32(2.0), f16::from_f32(5.0)]
 );
-test_ptx!(st_f16x2, [0xc1690e6eu32, 0x13739444u32], [0xffffu32]);
+test_ptx!(set_f16x2, [0xc1690e6eu32, 0x13739444u32, 0x424834CC, 0x4248B4CC], [0xffffu32, 0x3C000000]);
 test_ptx!(
     dp4a,
     [0xde3032f5u32, 0x2474fe15, 0xf51d8d6c],

@@ -3926,7 +3926,28 @@ pub unsafe extern "system" fn cublasGemmBatchedEx(
     computeType: cublasComputeType_t,
     algo: cublasGemmAlgo_t,
 ) -> cublasStatus_t {
-    crate::unsupported()
+    crate::gemm_batched_ex(
+        handle,
+        transa,
+        transb,
+        m,
+        n,
+        k,
+        alpha,
+        Aarray,
+        Atype,
+        lda,
+        Barray,
+        Btype,
+        ldb,
+        beta,
+        Carray,
+        Ctype,
+        ldc,
+        batchCount,
+        computeType,
+        algo,
+    )
 }
 
 #[no_mangle]
@@ -3955,7 +3976,31 @@ pub unsafe extern "system" fn cublasGemmStridedBatchedEx(
     computeType: cublasComputeType_t,
     algo: cublasGemmAlgo_t,
 ) -> cublasStatus_t {
-    crate::unsupported()
+    crate::gemm_strided_batched_ex(
+        handle,
+        transa,
+        transb,
+        m,
+        n,
+        k,
+        alpha,
+        A,
+        Atype,
+        lda,
+        strideA,
+        B,
+        Btype,
+        ldb,
+        strideB,
+        beta,
+        C,
+        Ctype,
+        ldc,
+        strideC,
+        batchCount,
+        computeType,
+        algo,
+    )
 }
 
 #[no_mangle]

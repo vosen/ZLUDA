@@ -162,7 +162,9 @@ pub(crate) unsafe fn get_attribute(
         | CUdevice_attribute::CU_DEVICE_ATTRIBUTE_DEFERRED_MAPPING_CUDA_ARRAY_SUPPORTED
         | CUdevice_attribute::CU_DEVICE_ATTRIBUTE_IPC_EVENT_SUPPORTED
         | CUdevice_attribute::CU_DEVICE_ATTRIBUTE_CLUSTER_LAUNCH
-        | CUdevice_attribute::CU_DEVICE_ATTRIBUTE_UNIFIED_FUNCTION_POINTERS => {
+        | CUdevice_attribute::CU_DEVICE_ATTRIBUTE_UNIFIED_FUNCTION_POINTERS
+        // Possibly true, used by llama.cpp
+        | CUdevice_attribute::CU_DEVICE_ATTRIBUTE_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED => {
             *pi = 0;
             return Ok(());
         }

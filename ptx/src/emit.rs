@@ -1176,15 +1176,26 @@ fn emit_inst_set(
 ) -> Result<(), TranslateError> {
     let builder = ctx.builder.get();
     let temp_result = emit_inst_setp_float(ctx, details.cmp_op, None, arg.src1, arg.src2)?;
-    if details.src_type != ast::ScalarType::F16x2 || details.dst_type == ast::ScalarType::F16x2 {
+    if details.src_type != ast::ScalarType::F16x2 {
         return Err(TranslateError::todo());
     }
-    let b16vec2_type = get_llvm_type(ctx, &ast::Type::Vector(ast::ScalarType::B16, 2))?;
-    let b16vec2_result = unsafe { LLVMBuildSExt(builder, temp_result, b16vec2_type, LLVM_UNNAMED) };
-    let u32_type = get_llvm_type(ctx, &ast::Type::Scalar(ast::ScalarType::U32))?;
-    ctx.names.register_result(arg.dst, |dst_name| unsafe {
-        LLVMBuildBitCast(builder, b16vec2_result, u32_type, dst_name)
-    });
+    if details.dst_type.is_integer() && details.dst_type.size_of() == mem::size_of::<u32>() as u8 {
+        let b16vec2_type = get_llvm_type(ctx, &ast::Type::Vector(ast::ScalarType::B16, 2))?;
+        let b16vec2_result =
+            unsafe { LLVMBuildSExt(builder, temp_result, b16vec2_type, LLVM_UNNAMED) };
+
+        let u32_type = get_llvm_type(ctx, &ast::Type::Scalar(ast::ScalarType::U32))?;
+        ctx.names.register_result(arg.dst, |dst_name| unsafe {
+            LLVMBuildBitCast(builder, b16vec2_result, u32_type, dst_name)
+        });
+    } else if matches!(details.dst_type, ast::ScalarType::F16x2) {
+        let f16x2_type = get_llvm_type(ctx, &ast::Type::Scalar(ast::ScalarType::F16x2))?;
+        ctx.names.register_result(arg.dst, |dst_name| unsafe {
+            LLVMBuildUIToFP(builder, temp_result, f16x2_type, dst_name)
+        });
+    } else {
+        return Err(TranslateError::todo());
+    }
     Ok(())
 }
 
