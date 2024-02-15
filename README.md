@@ -248,7 +248,7 @@ If an application fails to start under ZLUDA or crashes please check [Known Issu
 
 ## For developers
 
-If you are curious about ZLUDA's architecture, you can read a broad overview in [ARCHITECTURE.md](ARCHITECTURE.md).
+If you are curious about ZLUDA's architecture, you can read a broad overview in [ARCHITECTURE.md](ARCHITECTURE.md). If you want to debug ZLUDA check the "Debugging" section in [TROUBLESHOOTING.md](TROUBLESHOOTING.md#debugging).
 
 ## License
 
