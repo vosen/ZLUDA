@@ -1176,15 +1176,26 @@ fn emit_inst_set(
 ) -> Result<(), TranslateError> {
     let builder = ctx.builder.get();
     let temp_result = emit_inst_setp_float(ctx, details.cmp_op, None, arg.src1, arg.src2)?;
-    if details.src_type != ast::ScalarType::F16x2 || details.dst_type == ast::ScalarType::F16x2 {
+    if details.src_type != ast::ScalarType::F16x2 {
         return Err(TranslateError::todo());
     }
-    let b16vec2_type = get_llvm_type(ctx, &ast::Type::Vector(ast::ScalarType::B16, 2))?;
-    let b16vec2_result = unsafe { LLVMBuildSExt(builder, temp_result, b16vec2_type, LLVM_UNNAMED) };
-    let u32_type = get_llvm_type(ctx, &ast::Type::Scalar(ast::ScalarType::U32))?;
-    ctx.names.register_result(arg.dst, |dst_name| unsafe {
-        LLVMBuildBitCast(builder, b16vec2_result, u32_type, dst_name)
-    });
+    if details.dst_type.is_integer() && details.dst_type.size_of() == mem::size_of::<u32>() as u8 {
+        let b16vec2_type = get_llvm_type(ctx, &ast::Type::Vector(ast::ScalarType::B16, 2))?;
+        let b16vec2_result =
+            unsafe { LLVMBuildSExt(builder, temp_result, b16vec2_type, LLVM_UNNAMED) };
+
+        let u32_type = get_llvm_type(ctx, &ast::Type::Scalar(ast::ScalarType::U32))?;
+        ctx.names.register_result(arg.dst, |dst_name| unsafe {
+            LLVMBuildBitCast(builder, b16vec2_result, u32_type, dst_name)
+        });
+    } else if matches!(details.dst_type, ast::ScalarType::F16x2) {
+        let f16x2_type = get_llvm_type(ctx, &ast::Type::Scalar(ast::ScalarType::F16x2))?;
+        ctx.names.register_result(arg.dst, |dst_name| unsafe {
+            LLVMBuildUIToFP(builder, temp_result, f16x2_type, dst_name)
+        });
+    } else {
+        return Err(TranslateError::todo());
+    }
     Ok(())
 }
 
@@ -1654,14 +1665,17 @@ fn emit_inst_prmt(
 ) -> Result<(), TranslateError> {
     let builder = ctx.builder.get();
     let components = [
-        ((control >> 0) & 0b1111) as u32,
-        ((control >> 4) & 0b1111) as u32,
-        ((control >> 8) & 0b1111) as u32,
-        ((control >> 12) & 0b1111) as u32,
+        ((control >> 0) & 0b0111) as u32,
+        ((control >> 4) & 0b0111) as u32,
+        ((control >> 8) & 0b0111) as u32,
+        ((control >> 12) & 0b0111) as u32,
     ];
-    if components.iter().any(|&c| c > 7) {
-        return Err(TranslateError::todo());
-    }
+    let sext_components = [
+        ((control >> 0) & 0b1000) != 0,
+        ((control >> 4) & 0b1000) != 0,
+        ((control >> 8) & 0b1000) != 0,
+        ((control >> 12) & 0b1000) != 0,
+    ];
     let llvm_i32 = get_llvm_type(ctx, &ast::Type::Scalar(ast::ScalarType::U32))?;
     let llvm_vec4_i8 = get_llvm_type(ctx, &ast::Type::Vector(ast::ScalarType::U8, 4))?;
     let src1 = ctx.names.value(arg.src1)?;
@@ -1674,9 +1688,24 @@ fn emit_inst_prmt(
         unsafe { LLVMConstInt(llvm_i32, components[2] as _, 0) },
         unsafe { LLVMConstInt(llvm_i32, components[3] as _, 0) },
     ];
-    let mask = unsafe { LLVMConstVector(components_llvm.as_mut_ptr(), 4) };
-    let shuffle_result =
+    let mask =
+        unsafe { LLVMConstVector(components_llvm.as_mut_ptr(), components_llvm.len() as u32) };
+    let mut shuffle_result =
         unsafe { LLVMBuildShuffleVector(builder, src1_vector, src2_vector, mask, LLVM_UNNAMED) };
+    // In sext case I'd prefer to just emit V_PERM_B32 directly and be done with it,
+    // but V_PERM_B32 can sext only odd-indexed bytes.
+    let llvm_i8 = get_llvm_type(ctx, &ast::Type::Scalar(ast::ScalarType::U8))?;
+    let const_7 = unsafe { LLVMConstInt(llvm_i8, 7, 0) };
+    for (idx, requires_sext) in sext_components.iter().copied().enumerate() {
+        if !requires_sext {
+            continue;
+        }
+        let idx = unsafe { LLVMConstInt(llvm_i32, idx as u64, 0) };
+        let scalar = unsafe { LLVMBuildExtractElement(builder, shuffle_result, idx, LLVM_UNNAMED) };
+        let shift = unsafe { LLVMBuildAShr(builder, scalar, const_7, LLVM_UNNAMED) };
+        shuffle_result =
+            unsafe { LLVMBuildInsertElement(builder, shuffle_result, shift, idx, LLVM_UNNAMED) };
+    }
     ctx.names.register_result(arg.dst, |dst_name| unsafe {
         LLVMBuildBitCast(builder, shuffle_result, llvm_i32, dst_name)
     });

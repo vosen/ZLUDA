@@ -271,7 +271,7 @@ test_ptx!(const, [0u16], [10u16, 20, 30, 40]);
 test_ptx!(cvt_s16_s8, [0x139231C2u32], [0xFFFFFFC2u32]);
 test_ptx!(cvt_f64_f32, [0.125f32], [0.125f64]);
 test_ptx!(cvt_f32_f16, [0xa1u16], [0x37210000u32]);
-test_ptx!(prmt, [0x70c507d6u32, 0x6fbd4b5cu32], [0x6fbdd65cu32]);
+test_ptx!(prmt, [0x70c507d6u32, 0x6fbd4b5cu32], [0x6fbdd65cu32, 0x6FFFD600]);
 test_ptx!(
     prmt_non_immediate,
     [0x70c507d6u32, 0x6fbd4b5cu32],
@@ -336,7 +336,7 @@ test_ptx!(
     [f16::from_f32(2.0), f16::from_f32(3.0)],
     [f16::from_f32(2.0), f16::from_f32(5.0)]
 );
-test_ptx!(st_f16x2, [0xc1690e6eu32, 0x13739444u32], [0xffffu32]);
+test_ptx!(set_f16x2, [0xc1690e6eu32, 0x13739444u32, 0x424834CC, 0x4248B4CC], [0xffffu32, 0x3C000000]);
 test_ptx!(
     dp4a,
     [0xde3032f5u32, 0x2474fe15, 0xf51d8d6c],
