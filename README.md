@@ -192,12 +192,12 @@ If an application fails to start under ZLUDA or crashes please check [Known Issu
 #### 3DF Zephyr
 - ZLUDA is much slower than CUDA.
 
-  3DF Zephyr is triggering an uderlying ROCm/HIP performance issue.
+  3DF Zephyr is triggering an underlying ROCm/HIP performance issue.
 
 #### Reality Capture
 - ZLUDA is much slower than CUDA.
 
-  Reality Capture is triggering an uderlying ROCm/HIP performance issue.
+  Reality Capture is triggering an underlying ROCm/HIP performance issue.
 
 #### CompuBench
 
