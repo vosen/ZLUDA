@@ -127,6 +127,16 @@ If an application fails to start under ZLUDA or crashes please check [Known Issu
 
 ### Applications
 
+#### llama.cpp
+
+If you are building llama.cpp with cmake and don't want it to crash on ZLUDA then you should use `CUDA_DOCKER_ARCH=compute_61` like this:
+```
+make CUDA_DOCKER_ARCH=compute_61 
+```
+Alternatively, building with cmake should work with no changes.
+
+Performance is currently much lower than the native HIP backend, see the discussion in #102.
+
 #### Arnold
 
 * ZLUDA implements minimum of OptiX framework to support Arnold. ZLUDA's OptiX is buggy, unoptimized and incomplete. It's been tested with Arnold 7.1.4.1 command line rendering on Linux.
