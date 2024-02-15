@@ -56,6 +56,10 @@ Build by running:
 cargo xtask --release
 ```
 
+## Unknown issues
+
+If an application fails to start under ZLUDA or crashes please check [Known Issues](#known-issues) section below. If nothing there applies, then please read [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
 ## Known Issues
 
 ### Hardware
