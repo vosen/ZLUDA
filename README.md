@@ -37,7 +37,7 @@ Make sure you have the following installed:
 * Rust (1.66.1 or newer)
 * C++ compiler
 * (Linux only) ROCm 5.7+ (_not ROCm 6_) (https://rocm.docs.amd.com/en/latest/deploy/linux/install_overview.html)
-* (Windows only) Recent AMD Radeon Software Adrenalin (https://rocm.docs.amd.com/en/latest/deploy/linux/install_overview.html)
+* (Windows only) Recent [AMD Radeon Software Adrenalin](https://www.amd.com/en/technologies/software)
 * (Recommended, optional) Ninja (https://ninja-build.org/)
 
 Alternatively, if you are building for Linux, [.devcontainer](.devcontainer) directory contains various developer Dockerfiles with all the required dependencies
