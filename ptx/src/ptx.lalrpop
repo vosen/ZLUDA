@@ -201,6 +201,7 @@ match {
     "function_name",
     "generic",
     "inlined_at",
+    "isspacep",
     "ld",
     "ldmatrix",
     "lg2",
@@ -282,6 +283,7 @@ ExtendedID : &'input str = {
     "function_name",
     "generic",
     "inlined_at",
+    "isspacep",
     "ld",
     "ldmatrix",
     "lg2",
@@ -839,6 +841,7 @@ Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
     InstMatch,
     InstRed,
     InstNanosleep,
+    InstIsspacep,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
@@ -2369,6 +2372,19 @@ InstNanosleep: ast::Instruction<ast::ParsedArgParams<'input>> = {
     // Bare minimum for xgboost
     "nanosleep" ".u32" <a:Arg1> => {
         ast::Instruction::Nanosleep(a)
+    }
+}
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#miscellaneous-instructions-nanosleep
+InstIsspacep: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "isspacep" ".local" <a:Arg2> => {
+        ast::Instruction::Isspacep(ast::StateSpace::Local, a)
+    },
+    "isspacep" ".shared" <a:Arg2> => {
+        ast::Instruction::Isspacep(ast::StateSpace::Shared, a)
+    },
+    "isspacep" ".global" <a:Arg2> => {
+        ast::Instruction::Isspacep(ast::StateSpace::Global, a)
     }
 }
 

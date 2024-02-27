@@ -6594,6 +6594,14 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
                     ast::StateSpace::Reg,
                 )),
             )?),
+            ast::Instruction::Isspacep(space, arg) => ast::Instruction::Isspacep(
+                space,
+                arg.map_different_types(
+                    visitor,
+                    &ast::Type::Scalar(ast::ScalarType::Pred),
+                    &ast::Type::Scalar(ast::ScalarType::U64),
+                )?,
+            ),
         })
     }
 }
@@ -6915,6 +6923,7 @@ impl<T: ast::ArgParams> ast::Instruction<T> {
             ast::Instruction::Vshr { .. } => None,
             ast::Instruction::Dp4a { .. } => None,
             ast::Instruction::MatchAny { .. } => None,
+            ast::Instruction::Isspacep { .. } => None,
             ast::Instruction::Sub(ast::ArithDetails::Signed(_), _) => None,
             ast::Instruction::Sub(ast::ArithDetails::Unsigned(_), _) => None,
             ast::Instruction::Add(ast::ArithDetails::Signed(_), _) => None,

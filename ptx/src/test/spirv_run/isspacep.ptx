@@ -1,0 +1,28 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry isspacep(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .pred      is_global;
+    .reg .pred      is_shared;
+
+    .reg .u32       is_global_u32;
+    .reg .u32       is_shared_u32;
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+	isspacep.global	is_global, in_addr;
+    selp.u32        is_global_u32, 1, 0, is_global;
+	isspacep.shared	is_shared, in_addr;
+    selp.u32        is_shared_u32, 1, 0, is_shared;
+    st.u32          [out_addr], is_global_u32;
+    st.u32          [out_addr+4], is_shared_u32;
+	ret;
+}

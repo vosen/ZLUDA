@@ -1137,6 +1137,7 @@ fn emit_instruction(
         ast::Instruction::Vshr(arg) => emit_inst_vshr(ctx, arg)?,
         ast::Instruction::Set(details, arg) => emit_inst_set(ctx, details, arg)?,
         ast::Instruction::Red(details, arg) => emit_inst_red(ctx, details, arg)?,
+        ast::Instruction::Isspacep(space, arg) => emit_inst_isspacep(ctx, *space, arg)?,
         // replaced by function calls or Statement variants
         ast::Instruction::Activemask { .. }
         | ast::Instruction::Bar(..)
@@ -1159,6 +1160,70 @@ fn emit_instruction(
         | ast::Instruction::Nanosleep(..)
         | ast::Instruction::MatchAny(..) => return Err(TranslateError::unreachable()),
     })
+}
+
+fn emit_inst_isspacep(
+    ctx: &mut EmitContext,
+    space: ast::StateSpace,
+    arg: &ast::Arg2<ExpandedArgParams>,
+) -> Result<(), TranslateError> {
+    match space {
+        ast::StateSpace::Local => {
+            emit_inst_isspacep_impl(ctx, Some(arg.dst), arg.src, b"llvm.amdgcn.is.private\0")?;
+            Ok(())
+        }
+        ast::StateSpace::Shared => {
+            emit_inst_isspacep_impl(ctx, Some(arg.dst), arg.src, b"llvm.amdgcn.is.shared\0")?;
+            Ok(())
+        }
+        ast::StateSpace::Global => {
+            let builder = ctx.builder.get();
+            let is_private =
+                emit_inst_isspacep_impl(ctx, None, arg.src, b"llvm.amdgcn.is.private\0")?;
+            let is_shared =
+                emit_inst_isspacep_impl(ctx, None, arg.src, b"llvm.amdgcn.is.shared\0")?;
+            let private_or_shared =
+                unsafe { LLVMBuildOr(builder, is_private, is_shared, LLVM_UNNAMED) };
+            let i1_true = unsafe {
+                LLVMConstInt(
+                    get_llvm_type(ctx, &ast::Type::Scalar(ast::ScalarType::Pred))?,
+                    1,
+                    0,
+                )
+            };
+            ctx.names.register_result(arg.dst, |dst| unsafe {
+                // I'd rathr user LLVMBuildNeg(...), but when using LLVMBuildNeg(...) in LLVM 15,
+                // LLVM emits this broken IR:
+                //      %"14" = sub i1 false, %4
+                LLVMBuildSub(builder, i1_true, private_or_shared, dst)
+            });
+            Ok(())
+        }
+        _ => Err(TranslateError::unreachable()),
+    }
+}
+
+fn emit_inst_isspacep_impl(
+    ctx: &mut EmitContext,
+    dst: Option<Id>,
+    src: Id,
+    intrinsic: &[u8],
+) -> Result<LLVMValueRef, TranslateError> {
+    let src = ctx.names.value(src)?;
+    let b8 = get_llvm_type(ctx, &ast::Type::Scalar(ast::ScalarType::B8))?;
+    let b8_generic_ptr = unsafe {
+        LLVMPointerType(
+            b8,
+            get_llvm_address_space(&ctx.constants, ast::StateSpace::Generic)?,
+        )
+    };
+    let src = unsafe { LLVMBuildIntToPtr(ctx.builder.get(), src, b8_generic_ptr, LLVM_UNNAMED) };
+    emit_intrinsic_arg2(
+        ctx,
+        (ast::ScalarType::Pred, dst),
+        (ast::ScalarType::B8, ast::StateSpace::Generic, src),
+        intrinsic,
+    )
 }
 
 fn emit_inst_red(
@@ -1397,7 +1462,7 @@ fn emit_inst_abs(
         emit_intrinsic_arg2(
             ctx,
             (details.typ, Some(args.dst)),
-            (details.typ, args.src),
+            (details.typ, ast::StateSpace::Reg, args.src),
             intrinsic_name.as_bytes(),
         )?;
     } else {
@@ -1565,7 +1630,7 @@ fn emit_inst_rsqrt(
     let sqrt_result = emit_intrinsic_arg2(
         ctx,
         (details.typ, None),
-        (details.typ, args.src),
+        (details.typ, ast::StateSpace::Reg, args.src),
         intrinsic_fn,
     )?;
     unsafe { LLVMZludaSetFastMathFlags(sqrt_result, FastMathFlags::ApproxFunc) };
@@ -1623,7 +1688,7 @@ fn emit_inst_sqrt(
     let sqrt_result = emit_intrinsic_arg2(
         ctx,
         (details.type_, Some(args.dst)),
-        (details.type_, args.src),
+        (details.type_, ast::StateSpace::Reg, args.src),
         intrinsic_fn,
     )?;
     unsafe { LLVMZludaSetFastMathFlags(sqrt_result, fast_math) };
@@ -2468,7 +2533,7 @@ fn emit_inst_cvt(
                         emit_intrinsic_arg2(
                             ctx,
                             (type_, Some(args.dst)),
-                            (type_, args.src),
+                            (type_, ast::StateSpace::Reg, args.src),
                             intrinsic_fn,
                         )?;
                     }
@@ -2482,7 +2547,7 @@ fn emit_inst_cvt(
                         emit_intrinsic_arg2(
                             ctx,
                             (type_, Some(args.dst)),
-                            (type_, args.src),
+                            (type_, ast::StateSpace::Reg, args.src),
                             intrinsic_fn,
                         )?;
                     }
@@ -2496,7 +2561,7 @@ fn emit_inst_cvt(
                         emit_intrinsic_arg2(
                             ctx,
                             (type_, Some(args.dst)),
-                            (type_, args.src),
+                            (type_, ast::StateSpace::Reg, args.src),
                             intrinsic_fn,
                         )?;
                     }
@@ -2510,7 +2575,7 @@ fn emit_inst_cvt(
                         emit_intrinsic_arg2(
                             ctx,
                             (type_, Some(args.dst)),
-                            (type_, args.src),
+                            (type_, ast::StateSpace::Reg, args.src),
                             intrinsic_fn,
                         )?;
                     }
@@ -2676,7 +2741,7 @@ fn emit_inst_cos(
     let cos_value = emit_intrinsic_arg2(
         ctx,
         (ast::ScalarType::F32, Some(args.dst)),
-        (ast::ScalarType::F32, args.src),
+        (ast::ScalarType::F32, ast::StateSpace::Reg, args.src),
         function_name,
     )?;
     unsafe { LLVMZludaSetFastMathFlags(cos_value, FastMathFlags::ApproxFunc) };
@@ -2691,7 +2756,7 @@ fn emit_inst_sin(
     let cos_value = emit_intrinsic_arg2(
         ctx,
         (ast::ScalarType::F32, Some(args.dst)),
-        (ast::ScalarType::F32, args.src),
+        (ast::ScalarType::F32, ast::StateSpace::Reg, args.src),
         function_name,
     )?;
     unsafe { LLVMZludaSetFastMathFlags(cos_value, FastMathFlags::ApproxFunc) };
@@ -2895,7 +2960,7 @@ fn emit_inst_brev(
     emit_intrinsic_arg2(
         ctx,
         (type_, Some(args.dst)),
-        (type_, args.src),
+        (type_, ast::StateSpace::Reg, args.src),
         function_name,
     )?;
     Ok(())
@@ -2913,8 +2978,12 @@ fn emit_inst_popc(
         _ => return Err(TranslateError::unreachable()),
     };
     let popc_dst = if shorten { None } else { Some(args.dst) };
-    let popc_result =
-        emit_intrinsic_arg2(ctx, (type_, popc_dst), (type_, args.src), function_name)?;
+    let popc_result = emit_intrinsic_arg2(
+        ctx,
+        (type_, popc_dst),
+        (type_, ast::StateSpace::Reg, args.src),
+        function_name,
+    )?;
     if shorten {
         let llvm_i32 = get_llvm_type(ctx, &ast::Type::Scalar(ast::ScalarType::U32))?;
         ctx.names.register_result(args.dst, |dst_name| unsafe {
@@ -2932,7 +3001,7 @@ fn emit_inst_ex2(
     let llvm_value = emit_intrinsic_arg2(
         ctx,
         (ast::ScalarType::F32, Some(args.dst)),
-        (ast::ScalarType::F32, args.src),
+        (ast::ScalarType::F32, ast::StateSpace::Reg, args.src),
         function_name,
     )?;
     unsafe { LLVMZludaSetFastMathFlags(llvm_value, FastMathFlags::ApproxFunc) };
@@ -2947,7 +3016,7 @@ fn emit_inst_lg2(
     let llvm_value = emit_intrinsic_arg2(
         ctx,
         (ast::ScalarType::F32, Some(args.dst)),
-        (ast::ScalarType::F32, args.src),
+        (ast::ScalarType::F32, ast::StateSpace::Reg, args.src),
         function_name,
     )?;
     unsafe { LLVMZludaSetFastMathFlags(llvm_value, FastMathFlags::ApproxFunc) };
@@ -2986,16 +3055,16 @@ fn emit_intrinsic_arg0(
 fn emit_intrinsic_arg2(
     ctx: &mut EmitContext,
     (dst_type, dst): (ast::ScalarType, Option<Id>),
-    (src_type, src): (ast::ScalarType, Id),
+    (src_type, src_space, src): (ast::ScalarType, ast::StateSpace, impl GetLLVMValue),
     intrinsic_name: &[u8],
 ) -> Result<LLVMValueRef, TranslateError> {
     let builder = ctx.builder.get();
-    let mut llvm_src = ctx.names.value(src)?;
+    let mut llvm_src = src.get_llvm_value(&mut ctx.names)?;
     let dst_type = get_llvm_type(ctx, &ast::Type::Scalar(dst_type))?;
     let function_type = get_llvm_function_type(
         ctx,
         dst_type,
-        iter::once((&ast::Type::Scalar(src_type), ast::StateSpace::Reg)),
+        iter::once((&ast::Type::Scalar(src_type), src_space)),
     )?;
     let mut function_value =
         unsafe { LLVMGetNamedFunction(ctx.module.get(), intrinsic_name.as_ptr() as _) };
