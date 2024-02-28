@@ -1316,6 +1316,7 @@ pub enum TuningDirective {
     MaxNtid(u32, u32, u32),
     ReqNtid(u32, u32, u32),
     MinNCtaPerSm(u32),
+    Noreturn
 }
 
 #[repr(u8)]

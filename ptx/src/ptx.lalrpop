@@ -116,6 +116,7 @@ match {
     ".ne",
     ".neu",
     ".noftz",
+    ".noreturn",
     ".num",
     ".or",
     ".param",
@@ -531,6 +532,8 @@ LinkingDirective: ast::LinkingDirective = {
 };
 
 TuningDirective: ast::TuningDirective = {
+    // not a performance tuning directive but fits here in the grammar
+    ".noreturn" => ast::TuningDirective::Noreturn,
     ".maxnreg" <ncta:U32Num> => ast::TuningDirective::MaxNReg(ncta),
     ".maxntid" <nx:U32Num> => ast::TuningDirective::MaxNtid(nx, 1, 1),
     ".maxntid" <nx:U32Num> "," <ny:U32Num> => ast::TuningDirective::MaxNtid(nx, ny, 1),

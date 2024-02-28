@@ -3345,6 +3345,7 @@ fn to_llvm_module_impl2<'a, 'input>(
     if let Some(ref mut raytracing_state) = raytracing {
         translation_module = raytracing::run_on_normalized(translation_module, raytracing_state)?;
     }
+    let translation_module = return_from_noreturn(translation_module);
     let translation_module = extract_builtin_functions(translation_module);
     let translation_module = resolve_instruction_types(translation_module, functions)?;
     let mut translation_module = restructure_function_return_types(translation_module)?;
@@ -3390,6 +3391,32 @@ fn to_llvm_module_impl2<'a, 'input>(
         _llvm_context: llvm_context,
         bitcode_modules,
     })
+}
+
+// In PTX it's legal to have a function like this:
+//      .func noreturn(.param .b64 noreturn_0)
+//      .noreturn
+//      {
+//      }
+// Which trips up LLVM. We normalize this by inserting `ret;`
+fn return_from_noreturn(
+    mut translation_module: TranslationModule<NormalizedArgParams>,
+) -> TranslationModule<NormalizedArgParams> {
+    for directive in translation_module.directives.iter_mut() {
+        match directive {
+            TranslationDirective::Method(method) => {
+                if let Some(ref mut body) = method.body {
+                    if body.is_empty() && method.tuning.contains(&ast::TuningDirective::Noreturn) {
+                        body.push(Statement::Instruction(ast::Instruction::Ret(
+                            ast::RetData { uniform: false },
+                        )));
+                    }
+                }
+            }
+            TranslationDirective::Variable(..) => {}
+        }
+    }
+    translation_module
 }
 
 // From "Performance Tips for Frontend Authors" (https://llvm.org/docs/Frontend/PerformanceTips.html):
@@ -3586,7 +3613,8 @@ fn create_metadata<'input>(
                     match tuning {
                         // TODO: measure
                         ast::TuningDirective::MaxNReg(_)
-                        | ast::TuningDirective::MinNCtaPerSm(_) => {}
+                        | ast::TuningDirective::MinNCtaPerSm(_)
+                        | ast::TuningDirective::Noreturn => {}
                         ast::TuningDirective::MaxNtid(x, y, z) => {
                             let size = x as u64 * y as u64 * z as u64;
                             kernel_metadata.push((
@@ -3632,7 +3660,8 @@ fn insert_compilation_mode_prologue<'input>(
                 for t in tuning.iter_mut() {
                     match t {
                         ast::TuningDirective::MaxNReg(_)
-                        | ast::TuningDirective::MinNCtaPerSm(_) => {}
+                        | ast::TuningDirective::MinNCtaPerSm(_)
+                        | ast::TuningDirective::Noreturn => {}
                         ast::TuningDirective::MaxNtid(_, _, z) => {
                             *z *= 2;
                         }

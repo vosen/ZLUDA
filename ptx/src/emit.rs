@@ -575,6 +575,17 @@ fn emit_tuning_single<'a>(
                 format!("{0},{0}", size).as_bytes(),
             );
         }
+        ast::TuningDirective::Noreturn => {
+            let noreturn = b"noreturn";
+            let attr_kind = unsafe {
+                LLVMGetEnumAttributeKindForName(noreturn.as_ptr().cast(), noreturn.len())
+            };
+            if attr_kind == 0 {
+                panic!();
+            }
+            let noreturn = unsafe { LLVMCreateEnumAttribute(ctx.context.get(), attr_kind, 0) };
+            unsafe { LLVMAddAttributeAtIndex(llvm_method, LLVMAttributeFunctionIndex, noreturn) };
+        }
     }
 }
 
