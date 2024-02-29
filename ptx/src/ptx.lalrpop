@@ -652,8 +652,8 @@ Initializer: ast::Initializer<&'input str> = {
 
 InitializerNoAdd: ast::Initializer<&'input str> = {
     <val:ImmediateValue> => ast::Initializer::Constant(val),
-    <id:ExtendedID> => ast::Initializer::Global(id, ast::Type::Struct(Vec::new())),
-    "generic" "(" <id:ExtendedID> ")" => ast::Initializer::GenericGlobal(id, ast::Type::Struct(Vec::new())),
+    <id:ExtendedID> => ast::Initializer::Global(id, ast::InitializerType::Unknown),
+    "generic" "(" <id:ExtendedID> ")" => ast::Initializer::GenericGlobal(id, ast::InitializerType::Unknown),
     "{" <array_init:Comma<Initializer>> "}" => ast::Initializer::Array(array_init)
 }
 

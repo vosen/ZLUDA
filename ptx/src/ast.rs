@@ -1383,10 +1383,17 @@ pub enum TextureGeometry {
 #[derive(Clone)]
 pub enum Initializer<ID> {
     Constant(ImmediateValue),
-    Global(ID, Type),
-    GenericGlobal(ID, Type),
+    Global(ID, InitializerType),
+    GenericGlobal(ID, InitializerType),
     Add(Box<(Initializer<ID>, Initializer<ID>)>),
     Array(Vec<Initializer<ID>>),
+}
+
+#[derive(Clone)]
+pub enum InitializerType {
+    Unknown,
+    Value(Type),
+    Function(Vec<Type>, Vec<Type>),
 }
 
 #[cfg(test)]

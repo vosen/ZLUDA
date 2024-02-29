@@ -127,6 +127,7 @@ test_ptx!(cvta, [3.0f32], [3.0f32]);
 test_ptx!(block, [1u64], [2u64]);
 test_ptx!(local_align, [1u64], [1u64]);
 test_ptx!(call, [1u64], [2u64]);
+test_ptx!(call_global_ptr, [12u64], [13u64]);
 // In certain situations LLVM will miscompile AMDGPU binaries.
 // This happens if the return type of a function is a .b8 array.
 // This test checks if our workaround for this bug works

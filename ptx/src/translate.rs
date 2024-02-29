@@ -1483,8 +1483,11 @@ fn resolve_initializers<'input>(
             ast::Initializer::Constant(_) => {}
             ast::Initializer::Global(name, type_)
             | ast::Initializer::GenericGlobal(name, type_) => {
-                let (src_type, _, _, _) = id_defs.get_typed(*name)?;
-                *type_ = src_type;
+                *type_ = if let Some((src_type, _, _, _)) = id_defs.try_get_typed(*name)? {
+                    ast::InitializerType::Value(src_type)
+                } else {
+                    ast::InitializerType::Unknown
+                };
             }
             ast::Initializer::Add(subinit) => {
                 resolve_initializer_impl(id_defs, &mut (*subinit).0)?;
@@ -3367,6 +3370,7 @@ fn to_llvm_module_impl2<'a, 'input>(
         // raytracing passes rely heavily on particular PTX patterns, they must run before implicit conversions
         translation_module = raytracing::postprocess(translation_module, raytracing_state)?;
     }
+    let translation_module = resolve_type_of_global_fnptrs(translation_module)?;
     let translation_module = insert_implicit_conversions(translation_module)?;
     let translation_module = insert_compilation_mode_prologue(translation_module);
     let translation_module = normalize_labels(translation_module)?;
@@ -3396,6 +3400,76 @@ fn to_llvm_module_impl2<'a, 'input>(
         _llvm_context: llvm_context,
         bitcode_modules,
     })
+}
+
+fn resolve_type_of_global_fnptrs(
+    mut translation_module: TranslationModule<ExpandedArgParams>,
+) -> Result<TranslationModule<ExpandedArgParams>, TranslateError> {
+    let mut functions: FxHashMap<Id, (Vec<ast::Type>, Vec<ast::Type>)> = FxHashMap::default();
+    for directive in translation_module.directives.iter_mut() {
+        match directive {
+            TranslationDirective::Variable(_, _, variable) => {
+                if let Some(ref mut initializer) = variable.initializer {
+                    set_iniitalizer_type(&mut functions, initializer);
+                }
+            }
+            TranslationDirective::Method(method) => {
+                if method.is_kernel {
+                    continue;
+                }
+                match functions.entry(method.name) {
+                    hash_map::Entry::Occupied(_) => {}
+                    hash_map::Entry::Vacant(entry) => {
+                        entry.insert((
+                            extract_argument_types(&method.return_arguments)?,
+                            extract_argument_types(&method.input_arguments)?,
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    Ok(translation_module)
+}
+
+fn extract_argument_types(
+    args: &[ast::VariableDeclaration<Id>],
+) -> Result<Vec<ast::Type>, TranslateError> {
+    args.iter()
+        .map(|var| {
+            if var.state_space != ast::StateSpace::Reg {
+                return Err(TranslateError::unreachable());
+            }
+            Ok(var.type_.clone())
+        })
+        .collect()
+}
+
+fn set_iniitalizer_type(
+    functions: &mut FxHashMap<Id, (Vec<ast::Type>, Vec<ast::Type>)>,
+    initializer: &mut ast::Initializer<Id>,
+) {
+    match initializer {
+        ast::Initializer::Constant(_) => {}
+        ast::Initializer::Global(name, type_) | ast::Initializer::GenericGlobal(name, type_) => {
+            if let Some((return_arguments, input_arguments)) = functions.get(name) {
+                *type_ = ast::InitializerType::Function(
+                    return_arguments.clone(),
+                    input_arguments.clone(),
+                );
+            }
+        }
+        ast::Initializer::Add(add) => {
+            let (add1, add2) = &mut **add;
+            set_iniitalizer_type(functions, add1);
+            set_iniitalizer_type(functions, add2);
+        }
+        ast::Initializer::Array(array) => {
+            for initializer in array.iter_mut() {
+                set_iniitalizer_type(functions, initializer);
+            }
+        }
+    }
 }
 
 // In PTX it's legal to have a function like this:
@@ -5204,6 +5278,20 @@ impl<'input> IdNameMapBuilder<'input> {
             type_,
             state_space,
             initializer,
+        }
+    }
+
+    pub(crate) fn try_get_typed(
+        &self,
+        id: Id,
+    ) -> Result<Option<(ast::Type, ast::StateSpace, Option<u32>, bool)>, TranslateError> {
+        match self.type_check.get(&id) {
+            Some(Some(x)) => Ok(Some(x.clone())),
+            Some(None) => Ok(None),
+            None => match self.globals.special_registers.get(id) {
+                Some(x) => Ok(Some((x.get_type(), ast::StateSpace::Sreg, None, true))),
+                None => Err(TranslateError::untyped_symbol()),
+            },
         }
     }
 

@@ -406,7 +406,7 @@ unsafe fn get_llvm_const(
             let name = ctx.names.value(id)?;
             let b64 = get_llvm_type(ctx, &ast::Type::Scalar(ast::ScalarType::B64))?;
             let mut zero = LLVMConstInt(b64, 0, 0);
-            let src_type = get_llvm_type(ctx, &type_)?;
+            let src_type = get_initializer_llvm_type(ctx, type_)?;
             let global_ptr = LLVMConstInBoundsGEP2(src_type, name, &mut zero, 1);
             LLVMConstPtrToInt(global_ptr, b64)
         }
@@ -414,7 +414,7 @@ unsafe fn get_llvm_const(
             let name = ctx.names.value(id)?;
             let b64 = get_llvm_type(ctx, &ast::Type::Scalar(ast::ScalarType::B64))?;
             let mut zero = LLVMConstInt(b64, 0, 0);
-            let src_type = get_llvm_type(ctx, &type_)?;
+            let src_type = get_initializer_llvm_type(ctx, type_)?;
             let global_ptr = LLVMConstInBoundsGEP2(src_type, name, &mut zero, 1);
             // void pointers are illegal in LLVM IR
             let b8 = get_llvm_type(ctx, &ast::Type::Scalar(ast::ScalarType::B8))?;
@@ -428,6 +428,28 @@ unsafe fn get_llvm_const(
         _ => return Err(TranslateError::todo()),
     };
     Ok(const_value)
+}
+
+fn get_initializer_llvm_type(
+    ctx: &mut EmitContext,
+    type_: ast::InitializerType,
+) -> Result<LLVMTypeRef, TranslateError> {
+    Ok(match type_ {
+        ast::InitializerType::Unknown => return Err(TranslateError::unreachable()),
+        ast::InitializerType::Value(type_) => get_llvm_type(ctx, &type_)?,
+        ast::InitializerType::Function(return_args, input_args) => {
+            let return_type = match &*return_args {
+                [] => llvm::void_type(&ctx.context),
+                [type_] => get_llvm_type(ctx, type_)?,
+                [..] => get_llvm_type_struct(ctx, return_args.into_iter().map(Cow::Owned))?,
+            };
+            get_llvm_function_type(
+                ctx,
+                return_type,
+                input_args.iter().map(|type_| (type_, ast::StateSpace::Reg)),
+            )?
+        }
+    })
 }
 
 unsafe fn get_llvm_const_scalar(
