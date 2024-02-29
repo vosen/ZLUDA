@@ -97,6 +97,7 @@ match {
     ".l",
     ".le",
     ".leu",
+    ".level",
     ".lo",
     ".loc",
     ".local",
@@ -2065,11 +2066,23 @@ InstMembar: ast::Instruction<ast::ParsedArgParams<'input>> = {
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#texture-instructions-tex
 InstTex: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "tex" <geometry: UnlayeredTextureGeometry> ".v4" <channel_type:TextureChannelType> <coordinate_type:TextureCoordinateType> <dst:DstOperandVec> "," "[" <image:Operand> "," <coordinates:SrcOperandVec> "]" => {
-        let args = ast::Arg4Tex {
+        let args = ast::Arg5Tex {
             dst,
             image,
             coordinates,
-            layer: None
+            layer: None,
+            lod: None
+        };
+        let details = ast::TexDetails { geometry, channel_type, coordinate_type, direct: false };
+        ast::Instruction::Tex(details, args)
+    },
+    "tex" ".level" <geometry: UnlayeredTextureGeometry> ".v4" <channel_type:TextureChannelType> <coordinate_type:TextureCoordinateType> <dst:DstOperandVec> "," "[" <image:Operand> "," <coordinates:SrcOperandVec> "]" "," <lod:Operand> => {
+        let args = ast::Arg5Tex {
+            dst,
+            image,
+            coordinates,
+            layer: None,
+            lod: Some(lod)
         };
         let details = ast::TexDetails { geometry, channel_type, coordinate_type, direct: false };
         ast::Instruction::Tex(details, args)
@@ -2080,11 +2093,25 @@ InstTex: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "tex" ".a1d" ".v4" <channel_type:TextureChannelType> <coordinate_type:TextureCoordinateType>
         <dst:DstOperandVec> "," "[" <image:SrcOperand> "," "{" <layer:SrcOperand> "," <x:RegOrImmediate> "}" "]" => {
         let geometry = ast::TextureGeometry::Array1D;
-        let args = ast::Arg4Tex {
+        let args = ast::Arg5Tex {
             dst,
             image,
             coordinates: ast::Operand::VecPack(vec![x]),
-            layer: Some(layer)
+            layer: Some(layer),
+            lod: None
+        };
+        let details = ast::TexDetails { geometry, channel_type, coordinate_type, direct: false };
+        ast::Instruction::Tex(details, args)
+    },
+    "tex" ".level" ".a1d" ".v4" <channel_type:TextureChannelType> <coordinate_type:TextureCoordinateType>
+        <dst:DstOperandVec> "," "[" <image:SrcOperand> "," "{" <layer:SrcOperand> "," <x:RegOrImmediate> "}" "]" "," <lod:Operand> => {
+        let geometry = ast::TextureGeometry::Array1D;
+        let args = ast::Arg5Tex {
+            dst,
+            image,
+            coordinates: ast::Operand::VecPack(vec![x]),
+            layer: Some(layer),
+            lod: Some(lod)
         };
         let details = ast::TexDetails { geometry, channel_type, coordinate_type, direct: false };
         ast::Instruction::Tex(details, args)
@@ -2092,11 +2119,25 @@ InstTex: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "tex" ".a2d" ".v4" <channel_type:TextureChannelType> <coordinate_type:TextureCoordinateType>
         <dst:DstOperandVec> "," "[" <image:SrcOperand> "," "{" <layer:SrcOperand> "," <x:RegOrImmediate> "," <y:RegOrImmediate> "," RegOrImmediate "}" "]" => {
         let geometry = ast::TextureGeometry::Array2D;
-        let args = ast::Arg4Tex {
+        let args = ast::Arg5Tex {
             dst,
             image,
             coordinates: ast::Operand::VecPack(vec![x, y]),
-            layer: Some(layer)
+            layer: Some(layer),
+            lod: None
+        };
+        let details = ast::TexDetails { geometry, channel_type, coordinate_type, direct: false };
+        ast::Instruction::Tex(details, args)
+    },
+    "tex" ".level" ".a2d" ".v4" <channel_type:TextureChannelType> <coordinate_type:TextureCoordinateType>
+        <dst:DstOperandVec> "," "[" <image:SrcOperand> "," "{" <layer:SrcOperand> "," <x:RegOrImmediate> "," <y:RegOrImmediate> "," RegOrImmediate "}" "]" "," <lod:Operand>  => {
+        let geometry = ast::TextureGeometry::Array2D;
+        let args = ast::Arg5Tex {
+            dst,
+            image,
+            coordinates: ast::Operand::VecPack(vec![x, y]),
+            layer: Some(layer),
+            lod: Some(lod)
         };
         let details = ast::TexDetails { geometry, channel_type, coordinate_type, direct: false };
         ast::Instruction::Tex(details, args)
@@ -2106,33 +2147,36 @@ InstTex: ast::Instruction<ast::ParsedArgParams<'input>> = {
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#surface-instructions-suld
 InstSuld: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "suld" ".b" <geometry: UnlayeredTextureGeometry> <vector:VectorPrefix?> <type_:AnyBitType> ".trap" <dst:DstOperandVec> "," "[" <image:Operand> "," <coordinates:SrcOperandVec> "]"  => {
-        let args = ast::Arg4Tex {
+        let args = ast::Arg5Tex {
             dst, 
             image,
             coordinates,
             layer: None,
+            lod: None,
         };
         let details = ast::SurfaceDetails { geometry, vector, type_, direct: false, };
         ast::Instruction::Suld(details, args)
     },
     "suld" ".b" ".a1d" <vector:VectorPrefix?> <type_:AnyBitType> ".trap" <dst:DstOperandVec> "," "[" <image:Operand> "," "{" <layer:SrcOperand> "," <x:RegOrImmediate> "}" "]"  => {
         let geometry = ast::TextureGeometry::Array1D;
-        let args = ast::Arg4Tex {
+        let args = ast::Arg5Tex {
             dst,
             image,
             coordinates: ast::Operand::VecPack(vec![x]),
             layer: Some(layer),
+            lod: None,
         };
         let details = ast::SurfaceDetails { geometry, vector, type_, direct: false, };
         ast::Instruction::Suld(details, args)
     },
     "suld" ".b" ".a2d" <vector:VectorPrefix?> <type_:AnyBitType> ".trap" <dst:DstOperandVec> "," "[" <image:Operand> "," "{" <layer:SrcOperand> "," <x:RegOrImmediate> "," <y:RegOrImmediate> "," RegOrImmediate "}" "]"  => {
         let geometry = ast::TextureGeometry::Array2D;
-        let args = ast::Arg4Tex {
+        let args = ast::Arg5Tex {
             dst,
             image,
             coordinates: ast::Operand::VecPack(vec![x, y]),
             layer: Some(layer),
+            lod: None,
         };
         let details = ast::SurfaceDetails { geometry, vector, type_, direct: false, };
         ast::Instruction::Suld(details, args)

@@ -2775,9 +2775,14 @@ fn replace_instructions_with_builtins_impl<'input>(
             }
             Statement::Instruction(ast::Instruction::Tex(tex, arg)) => {
                 let geometry = tex.geometry.as_ptx();
+                let op_name = if arg.lod.is_none() {
+                    "tex"
+                } else {
+                    "tex_level"
+                };
                 let fn_name = [
                     ZLUDA_PTX_PREFIX,
-                    "tex",
+                    op_name,
                     tex.suffix(),
                     "_",
                     geometry,
@@ -8089,7 +8094,7 @@ fn texture_geometry_to_vec_length(geometry: ast::TextureGeometry) -> u8 {
     }
 }
 
-impl<T: ArgParamsEx> ast::Arg4Tex<T> {
+impl<T: ArgParamsEx> ast::Arg5Tex<T> {
     fn map<U: ArgParamsEx, V: ArgumentMapVisitor<T, U>>(
         self,
         visitor: &mut V,
@@ -8097,7 +8102,7 @@ impl<T: ArgParamsEx> ast::Arg4Tex<T> {
         geometry: ast::TextureGeometry,
         value_type: ast::Type,
         coordinate_type: ast::ScalarType,
-    ) -> Result<ast::Arg4Tex<U>, TranslateError> {
+    ) -> Result<ast::Arg5Tex<U>, TranslateError> {
         let dst = visitor.operand(
             ArgumentDescriptor {
                 op: self.dst,
@@ -8144,11 +8149,27 @@ impl<T: ArgParamsEx> ast::Arg4Tex<T> {
             &ast::Type::Vector(coordinate_type, coord_length),
             ast::StateSpace::Reg,
         )?;
-        Ok(ast::Arg4Tex {
+        let lod = self
+            .lod
+            .map(|lod| {
+                visitor.operand(
+                    ArgumentDescriptor {
+                        op: lod,
+                        is_dst: false,
+                        is_memory_access: false,
+                        non_default_implicit_conversion: None,
+                    },
+                    &ast::Type::Scalar(coordinate_type),
+                    ast::StateSpace::Reg,
+                )
+            })
+            .transpose()?;
+        Ok(ast::Arg5Tex {
             dst,
             image,
             layer,
             coordinates,
+            lod,
         })
     }
 }

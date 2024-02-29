@@ -459,8 +459,8 @@ pub enum Instruction<P: ArgParams> {
     Membar {
         level: MemScope,
     },
-    Tex(TexDetails, Arg4Tex<P>),
-    Suld(SurfaceDetails, Arg4Tex<P>),
+    Tex(TexDetails, Arg5Tex<P>),
+    Suld(SurfaceDetails, Arg5Tex<P>),
     Sust(SurfaceDetails, Arg4Sust<P>),
     Shfl(ShflMode, Arg5Shfl<P>),
     Shf(FunnelShift, Arg4<P>),
@@ -616,13 +616,6 @@ pub struct Arg4Setp<P: ArgParams> {
     pub src2: P::Operand,
 }
 
-pub struct Arg4Tex<P: ArgParams> {
-    pub dst: P::Operand,
-    pub image: P::Operand,
-    pub layer: Option<P::Operand>,
-    pub coordinates: P::Operand,
-}
-
 pub struct Arg4Sust<P: ArgParams> {
     pub image: P::Operand,
     pub coordinates: P::Operand,
@@ -636,6 +629,14 @@ pub struct Arg5<P: ArgParams> {
     pub src2: P::Operand,
     pub src3: P::Operand,
     pub src4: P::Operand,
+}
+
+pub struct Arg5Tex<P: ArgParams> {
+    pub dst: P::Operand,
+    pub image: P::Operand,
+    pub layer: Option<P::Operand>,
+    pub coordinates: P::Operand,
+    pub lod: Option<P::Operand>,
 }
 
 pub struct Arg5Setp<P: ArgParams> {
@@ -1316,7 +1317,7 @@ pub enum TuningDirective {
     MaxNtid(u32, u32, u32),
     ReqNtid(u32, u32, u32),
     MinNCtaPerSm(u32),
-    Noreturn
+    Noreturn,
 }
 
 #[repr(u8)]

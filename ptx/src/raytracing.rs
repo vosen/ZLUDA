@@ -2996,11 +2996,12 @@ fn convert_optix_builtin_variable_and_attribute_access_single_function<'input>(
             }
             Statement::Instruction(ast::Instruction::Tex(
                 tex,
-                ast::Arg4Tex {
+                ast::Arg5Tex {
                     dst,
                     image,
                     layer,
                     coordinates,
+                    lod,
                 },
             )) => {
                 if let Some(StateSpaceRemapping::ToBlock(id, ast::StateSpace::Global, offset)) =
@@ -3014,11 +3015,12 @@ fn convert_optix_builtin_variable_and_attribute_access_single_function<'input>(
                     )?;
                     result.push(Statement::Instruction(ast::Instruction::Tex(
                         tex,
-                        ast::Arg4Tex {
+                        ast::Arg5Tex {
                             dst,
                             image,
                             layer,
                             coordinates,
+                            lod,
                         },
                     )));
                 } else {
