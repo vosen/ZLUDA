@@ -1107,3 +1107,34 @@ unsafe fn emit_weak_fn<T: CudaDriverFns>(cuda: T) {
         CUresult::CUDA_SUCCESS
     );
 }
+
+
+cuda_driver_test!(weak_func_address);
+
+unsafe fn weak_func_address<T: CudaDriverFns>(cuda: T) {
+    let input1 = " 
+        .version 6.5
+        .target sm_50
+        .address_size 64
+        
+        .weak .func foobar(.reg .b32 input);
+        
+        .weak .global .align 8 .u64 fn_ptrs[2] = {0, foobar};
+        
+        .weak .func foobar(.reg .b32 input)
+        {
+            ret;
+        }\0"
+    .to_string();
+    assert_eq!(cuda.cuInit(0), CUresult::CUDA_SUCCESS);
+    let mut ctx = ptr::null_mut();
+    assert_eq!(
+        cuda.cuCtxCreate_v2(&mut ctx, 0, CUdevice_v1(0)),
+        CUresult::CUDA_SUCCESS
+    );
+    let mut module = mem::zeroed();
+    assert_eq!(
+        cuda.cuModuleLoadData(&mut module, input1.as_ptr().cast()),
+        CUresult::CUDA_SUCCESS
+    );
+}
