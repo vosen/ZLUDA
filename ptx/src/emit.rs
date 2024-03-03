@@ -402,54 +402,25 @@ unsafe fn get_llvm_const(
             let const2 = get_llvm_const(ctx, type_, Some(init2))?;
             LLVMConstAdd(const1, const2)
         }
-        (_, Some(ast::Initializer::Global(id, type_))) => {
+        (_, Some(ast::Initializer::Global(id))) => {
             let name = ctx.names.value(id)?;
             let b64 = get_llvm_type(ctx, &ast::Type::Scalar(ast::ScalarType::B64))?;
-            let mut zero = LLVMConstInt(b64, 0, 0);
-            let src_type = get_initializer_llvm_type(ctx, type_)?;
-            let global_ptr = LLVMConstInBoundsGEP2(src_type, name, &mut zero, 1);
-            LLVMConstPtrToInt(global_ptr, b64)
+            LLVMConstPtrToInt(name, b64)
         }
-        (_, Some(ast::Initializer::GenericGlobal(id, type_))) => {
+        (_, Some(ast::Initializer::GenericGlobal(id))) => {
             let name = ctx.names.value(id)?;
-            let b64 = get_llvm_type(ctx, &ast::Type::Scalar(ast::ScalarType::B64))?;
-            let mut zero = LLVMConstInt(b64, 0, 0);
-            let src_type = get_initializer_llvm_type(ctx, type_)?;
-            let global_ptr = LLVMConstInBoundsGEP2(src_type, name, &mut zero, 1);
-            // void pointers are illegal in LLVM IR
             let b8 = get_llvm_type(ctx, &ast::Type::Scalar(ast::ScalarType::B8))?;
             let b8_generic_ptr = LLVMPointerType(
                 b8,
                 get_llvm_address_space(&ctx.constants, ast::StateSpace::Generic)?,
             );
-            let generic_ptr = LLVMConstAddrSpaceCast(global_ptr, b8_generic_ptr);
+            let generic_ptr = LLVMConstAddrSpaceCast(name, b8_generic_ptr);
+            let b64 = get_llvm_type(ctx, &ast::Type::Scalar(ast::ScalarType::B64))?;
             LLVMConstPtrToInt(generic_ptr, b64)
         }
         _ => return Err(TranslateError::todo()),
     };
     Ok(const_value)
-}
-
-fn get_initializer_llvm_type(
-    ctx: &mut EmitContext,
-    type_: ast::InitializerType,
-) -> Result<LLVMTypeRef, TranslateError> {
-    Ok(match type_ {
-        ast::InitializerType::Unknown => return Err(TranslateError::unreachable()),
-        ast::InitializerType::Value(type_) => get_llvm_type(ctx, &type_)?,
-        ast::InitializerType::Function(return_args, input_args) => {
-            let return_type = match &*return_args {
-                [] => llvm::void_type(&ctx.context),
-                [type_] => get_llvm_type(ctx, type_)?,
-                [..] => get_llvm_type_struct(ctx, return_args.into_iter().map(Cow::Owned))?,
-            };
-            get_llvm_function_type(
-                ctx,
-                return_type,
-                input_args.iter().map(|type_| (type_, ast::StateSpace::Reg)),
-            )?
-        }
-    })
 }
 
 unsafe fn get_llvm_const_scalar(
@@ -1305,7 +1276,8 @@ fn emit_inst_bfind(
     let builder = ctx.builder.get();
     let src = arg.src.get_llvm_value(&mut ctx.names)?;
     let llvm_dst_type = get_llvm_type(ctx, &ast::Type::Scalar(ast::ScalarType::U32))?;
-    let const_0 = unsafe { LLVMConstInt(llvm_dst_type, 0, 0) };
+    let llvm_src_type = get_llvm_type(ctx, &ast::Type::Scalar(details.type_))?;
+    let const_0 = unsafe { LLVMConstInt(llvm_src_type, 0, 0) };
     let const_int_max = unsafe { LLVMConstInt(llvm_dst_type, u64::MAX, 0) };
     let is_zero = unsafe {
         LLVMBuildICmp(
@@ -1316,7 +1288,7 @@ fn emit_inst_bfind(
             LLVM_UNNAMED,
         )
     };
-    let mut clz_result = emit_inst_clz_impl(ctx, ast::ScalarType::U32, None, arg.src, true)?;
+    let mut clz_result = emit_inst_clz_impl(ctx, details.type_, None, arg.src, true)?;
     if !details.shift {
         let bits = unsafe {
             LLVMConstInt(
