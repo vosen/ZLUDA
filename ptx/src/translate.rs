@@ -392,7 +392,7 @@ impl<'a, 'input> LinkingResolver<'a, 'input> {
             linking,
             Cow::Borrowed(decl.name()),
             symbol,
-            decl.name.is_kernel(),
+            decl.name.is_kernel() && is_definition,
         )
     }
 
@@ -591,10 +591,21 @@ impl<'input> ResolvedLinking<'input> {
         explicit_initializer: bool,
     ) -> Result<VisibilityAdjustment, TranslateError> {
         if linking == ast::LinkingDirective::None {
-            if self.implicit_globals.get(&name).copied() == Some((module, directive)) {
-                Ok(VisibilityAdjustment::Global)
-            } else {
-                Ok(VisibilityAdjustment::Module)
+            match self.implicit_globals.get(&name).copied() {
+                Some((implicit_module, implicit_directive)) => {
+                    if implicit_module == module {
+                        if implicit_directive == directive {
+                            Ok(VisibilityAdjustment::Global)
+                        } else {
+                            // If it were something other than a declaration it would
+                            // fail module-level symbol resolution
+                            Ok(VisibilityAdjustment::GlobalDeclaration(None))
+                        }
+                    } else {
+                        Ok(VisibilityAdjustment::Module)
+                    }
+                }
+                None => Ok(VisibilityAdjustment::Module),
             }
         } else {
             if let Some((global_module, global_directive, type_)) = self.explicit_globals.get(&name)

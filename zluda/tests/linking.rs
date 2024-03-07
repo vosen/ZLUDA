@@ -229,16 +229,6 @@ impl Directive {
             Directive::Shared => unimplemented!(),
         }
     }
-
-    fn assert_exact(self) -> bool {
-        match self {
-            Directive::Kernel => false,
-            Directive::Method => true,
-            Directive::Global => false,
-            Directive::Const => false,
-            Directive::Shared => unimplemented!(),
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -368,45 +358,6 @@ fn create_kernel(linking: Linking, directive: Directive, defined: bool) -> Strin
     kernel.push_str(directive.to_str(defined));
     kernel.push('\0');
     kernel
-}
-
-fn assert_compatible(
-    results: Vec<(Linking, Directive, bool, i32, Option<i32>)>,
-    expected: [(Linking, Directive, bool, i32, Option<i32>); 50],
-) {
-    if results.len() != expected.len() {
-        panic!();
-    }
-    let mut broken = Vec::new();
-    for (result, expected) in results.into_iter().zip(IntoIterator::into_iter(expected)) {
-        let (linking, directive, defined, build_result, load_result) = result;
-        let (_, _, _, expected_build, expected_load) = expected;
-        if expected_build == 0 {
-            if build_result != 0 {
-                broken.push((
-                    linking,
-                    directive,
-                    defined,
-                    (build_result, load_result),
-                    (expected_build, expected_load),
-                ));
-                continue;
-            }
-            if expected_load == Some(0) {
-                if load_result != Some(0) {
-                    broken.push((
-                        linking,
-                        directive,
-                        defined,
-                        (build_result, load_result),
-                        (expected_build, expected_load),
-                    ));
-                    continue;
-                }
-            }
-        }
-    }
-    assert_eq!(broken, []);
 }
 
 fn assert_compatible_compile<T: Clone + Hash + Debug + Eq>(
@@ -1109,22 +1060,16 @@ unsafe fn emit_weak_fn<T: CudaDriverFns>(cuda: T) {
 }
 
 
-cuda_driver_test!(weak_func_address);
+cuda_driver_test!(static_entry_decl);
 
-unsafe fn weak_func_address<T: CudaDriverFns>(cuda: T) {
+unsafe fn static_entry_decl<T: CudaDriverFns>(cuda: T) {
     let input1 = " 
         .version 6.5
-        .target sm_50
+        .target sm_35
         .address_size 64
         
-        .weak .func foobar(.reg .b32 input);
-        
-        .weak .global .align 8 .u64 fn_ptrs[2] = {0, foobar};
-        
-        .weak .func foobar(.reg .b32 input)
-        {
-            ret;
-        }\0"
+        .entry foobar();
+        .entry foobar() { ret; }\0"
     .to_string();
     assert_eq!(cuda.cuInit(0), CUresult::CUDA_SUCCESS);
     let mut ctx = ptr::null_mut();
