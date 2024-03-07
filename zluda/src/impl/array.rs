@@ -81,3 +81,15 @@ pub(crate) unsafe fn create(
         Err(CUresult::CUDA_ERROR_INVALID_VALUE)
     }
 }
+
+pub(crate) unsafe fn mipmapped_create(
+    p_handle: *mut hipMipmappedArray_t,
+    p_mipmapped_array_desc: *const HIP_ARRAY3D_DESCRIPTOR,
+    num_mipmap_levels: u32,
+) -> hipError_t {
+    hipMipmappedArrayCreate(
+        p_handle,
+        p_mipmapped_array_desc.cast_mut(),
+        num_mipmap_levels,
+    )
+}

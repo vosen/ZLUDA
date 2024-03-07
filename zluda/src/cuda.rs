@@ -213,6 +213,7 @@ cuda_function_declarations!(
         cuLinkComplete,
         cuLinkDestroy,
         cuLinkCreate_v2,
+        cuMipmappedArrayCreate,
     ]
 );
 
@@ -1237,9 +1238,7 @@ mod definitions {
         surface::create(pSurfObject, pResDesc)
     }
 
-    pub(crate) unsafe fn cuSurfObjectDestroy(
-        surfObject: hipSurfaceObject_t,
-    ) -> hipError_t {
+    pub(crate) unsafe fn cuSurfObjectDestroy(surfObject: hipSurfaceObject_t) -> hipError_t {
         hipDestroySurfaceObject(surfObject)
     }
 
@@ -1646,5 +1645,13 @@ mod definitions {
         stateOut: *mut *mut link::LinkState,
     ) -> Result<(), CUresult> {
         link::create(numOptions, options, optionValues, stateOut)
+    }
+
+    pub(crate) unsafe fn cuMipmappedArrayCreate(
+        pHandle: *mut hipMipmappedArray_t,
+        pMipmappedArrayDesc: *const HIP_ARRAY3D_DESCRIPTOR,
+        numMipmapLevels: ::std::os::raw::c_uint,
+    ) -> hipError_t {
+        array::mipmapped_create(pHandle, pMipmappedArrayDesc, numMipmapLevels)
     }
 }
