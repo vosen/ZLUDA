@@ -253,6 +253,7 @@ impl FromCuda<CUgraphExec> for hipGraphExec_t {}
 impl FromCuda<CUgraphicsResource> for hipGraphicsResource_t {}
 impl FromCuda<CUlimit> for hipLimit_t {}
 impl FromCuda<CUsurfObject> for hipSurfaceObject_t {}
+impl FromCuda<CUmipmappedArray> for hipMipmappedArray_t {}
 
 impl<From, Into: FromCuda<From>> FromCuda<*mut From> for *mut Into {}
 impl<From, Into: FromCuda<From>> FromCuda<*const From> for *const Into {}
