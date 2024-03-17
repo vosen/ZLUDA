@@ -3,7 +3,7 @@ extern crate convert_case;
 
 use convert_case::{Case, Casing, StateConverter};
 use std::{
-    env,
+    env, io,
     path::PathBuf,
     process::{Command, Stdio},
 };
@@ -17,8 +17,9 @@ fn main() {
         .map(|comp| comp.from_case(Case::Snake));
     let msvc = is_msvc();
     let (llvm_dir, additonal_cmake_file) = get_llvm_dir();
-    let out_dir = build_cmake_targets(llvm_components.clone(), llvm_dir, additonal_cmake_file);
-    emit_compile_and_linking_information(llvm_components, out_dir, msvc)
+    let (cmake_profile, out_dir) =
+        build_cmake_targets(llvm_components.clone(), llvm_dir, additonal_cmake_file);
+    emit_compile_and_linking_information(llvm_components, cmake_profile, out_dir, msvc)
 }
 
 fn is_msvc() -> bool {
@@ -41,11 +42,14 @@ fn build_cmake_targets<'a>(
     components: impl Iterator<Item = StateConverter<'a, &'static str>>,
     llvm_dir: PathBuf,
     additional_cmake_file: PathBuf,
-) -> PathBuf {
+) -> (String, PathBuf) {
     let mut cmake = Config::new(llvm_dir);
     use_ninja(&mut cmake);
     cmake
         .always_configure(true)
+        // Should be detected automatically, but we have reports of
+        // LLVM fiding ZLIB on Windows and then failing to link it
+        .define("LLVM_ENABLE_ZLIB", "OFF")
         .define("LLVM_ENABLE_TERMINFO", "OFF")
         .define("LLVM_BUILD_TOOLS", "OFF")
         .define("LLVM_TARGETS_TO_BUILD", "")
@@ -57,7 +61,10 @@ fn build_cmake_targets<'a>(
             .build_target(&format!("LLVM{}", component.to_case(Case::Pascal)))
             .build();
     }
-    cmake.build_target("llvm-config").build()
+    (
+        cmake.get_profile().to_string(),
+        cmake.build_target("llvm-config").build(),
+    )
 }
 
 fn use_ninja(cmake: &mut Config) {
@@ -76,31 +83,27 @@ fn use_ninja(cmake: &mut Config) {
 }
 
 fn emit_compile_and_linking_information<'a>(
-    llvm_components: impl Iterator<Item = StateConverter<'a, &'static str>>,
+    llvm_components: impl Iterator<Item = StateConverter<'a, &'static str>> + Clone,
+    cmake_profile: String,
     out_dir: PathBuf,
     is_msvc: bool,
 ) {
-    let mut llvm_config_path = out_dir.clone();
-    llvm_config_path.push("build");
-    llvm_config_path.push("bin");
-    llvm_config_path.push("llvm-config");
-    let mut llvm_config_cmd = Command::new(&llvm_config_path);
-    llvm_config_cmd.args([
-        "--cxxflags",
-        "--ldflags",
-        "--libdir",
-        "--libnames",
-        "--system-libs",
-        "--link-static",
-    ]);
-    for component in llvm_components {
-        llvm_config_cmd.arg(&component.to_case(Case::Flat));
-    }
-    let llvm_config_output = llvm_config_cmd
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-        .unwrap();
+    // MSBuild uses didfferent output path from ninja or Makefile.
+    // Not sure how to query CMake about it, so we just try once with
+    // ninja/Makefile path and then once with MSBuild path
+    let llvm_config_output = execute_llvm_config(
+        &out_dir,
+        &["build", "bin", "llvm-config"],
+        llvm_components.clone(),
+    )
+    .or_else(|_| {
+        execute_llvm_config(
+            &out_dir,
+            &["build", &*cmake_profile, "bin", "llvm-config"],
+            llvm_components,
+        )
+    })
+    .unwrap();
     if !llvm_config_output.status.success() {
         panic!()
     }
@@ -137,4 +140,29 @@ fn emit_compile_and_linking_information<'a>(
     if !is_msvc {
         println!("cargo:rustc-link-lib=stdc++");
     }
+}
+
+fn execute_llvm_config<'a>(
+    out_dir: &PathBuf,
+    llvm_config_exe_relative: &[&str],
+    llvm_components: impl Iterator<Item = StateConverter<'a, &'static str>>,
+) -> io::Result<std::process::Output> {
+    let mut llvm_config_path = out_dir.clone();
+    llvm_config_path.extend(llvm_config_exe_relative);
+    let mut llvm_config_cmd = Command::new(&llvm_config_path);
+    llvm_config_cmd.args([
+        "--cxxflags",
+        "--ldflags",
+        "--libdir",
+        "--libnames",
+        "--system-libs",
+        "--link-static",
+    ]);
+    for component in llvm_components {
+        llvm_config_cmd.arg(&component.to_case(Case::Flat));
+    }
+    llvm_config_cmd
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
 }
