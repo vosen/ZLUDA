@@ -48,8 +48,14 @@ fn build_cmake_targets<'a>(
     cmake
         .always_configure(true)
         // Should be detected automatically, but we have reports of
-        // LLVM fiding ZLIB on Windows and then failing to link it
+        // LLVM fiding ZLIB on Windows and then failing to link it.
+        // Out of caution we explicitly disable all autodetectable components
+        .define("LLVM_ENABLE_LIBXML2", "OFF")
         .define("LLVM_ENABLE_ZLIB", "OFF")
+        .define("LLVM_ENABLE_ZSTD", "OFF")
+        .define("LLVM_ENABLE_CURL", "OFF")
+        .define("LLVM_ENABLE_HTTPLIB", "OFF")
+        .define("LLVM_ENABLE_LIBEDIT", "OFF")
         .define("LLVM_ENABLE_TERMINFO", "OFF")
         .define("LLVM_BUILD_TOOLS", "OFF")
         .define("LLVM_TARGETS_TO_BUILD", "")
