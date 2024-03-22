@@ -6511,9 +6511,17 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
                 ast::Instruction::Tex(details, arg)
             }
             ast::Instruction::Suld(details, arg) => {
+                let image_type_space = if details.direct {
+                    (ast::Type::Texref, ast::StateSpace::Global)
+                } else {
+                    (
+                        ast::Type::Scalar(ast::ScalarType::B64),
+                        ast::StateSpace::Reg,
+                    )
+                };
                 let arg = arg.map(
                     visitor,
-                    (ast::Type::Surfref, ast::StateSpace::Global),
+                    image_type_space,
                     details.geometry,
                     details.value_type(),
                     ast::ScalarType::B32,
@@ -8148,6 +8156,14 @@ impl<T: ArgParamsEx> ast::Arg4Sust<T> {
         visitor: &mut V,
         details: &ast::SurfaceDetails,
     ) -> Result<ast::Arg4Sust<U>, TranslateError> {
+        let (type_, space) = if details.direct {
+            (ast::Type::Surfref, ast::StateSpace::Global)
+        } else {
+            (
+                ast::Type::Scalar(ast::ScalarType::B64),
+                ast::StateSpace::Reg,
+            )
+        };
         let image = visitor.operand(
             ArgumentDescriptor {
                 op: self.image,
@@ -8155,8 +8171,8 @@ impl<T: ArgParamsEx> ast::Arg4Sust<T> {
                 is_memory_access: false,
                 non_default_implicit_conversion: None,
             },
-            &ast::Type::Surfref,
-            ast::StateSpace::Global,
+            &type_,
+            space,
         )?;
         let layer = self
             .layer
