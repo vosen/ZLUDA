@@ -213,6 +213,7 @@ generate_tests!(
         CU_AD_FORMAT_SIGNED_INT8,
         CU_AD_FORMAT_SIGNED_INT16,
         CU_AD_FORMAT_SIGNED_INT32,
+        // TODO: update half crate
         //CU_AD_FORMAT_HALF,
         CU_AD_FORMAT_FLOAT
     ],
@@ -337,13 +338,13 @@ const BYTE_FILLER2: u8 = 0xfe;
 
 unsafe fn force_transmute<From: SustValue, To: SustValue>(f: From) -> To {
     if mem::size_of::<From>() == mem::size_of::<To>()
-        && mem::size_of::<To>() == mem::size_of::<u32>()
+        && mem::size_of::<To>() == mem::size_of::<f32>()
     {
         return mem::transmute_copy(&f);
     }
-    if mem::size_of::<To>() == mem::size_of::<u32>() {
+    if mem::size_of::<To>() == mem::size_of::<f32>() {
         if let Some(value) = <dyn Any>::downcast_ref::<f16>(&f) {
-            return mem::transmute_copy(&((value.to_f64() / f16::MAX.to_f64()) as f32));
+            return mem::transmute_copy(&value.to_f32());
         }
         if let Some(value) = <dyn Any>::downcast_ref::<u8>(&f) {
             return mem::transmute_copy(&((*value as f64 / u8::MAX as f64) as f32));
@@ -359,6 +360,9 @@ unsafe fn force_transmute<From: SustValue, To: SustValue>(f: From) -> To {
         }
     }
     if mem::size_of::<To>() == mem::size_of::<f16>() {
+        if let Some(_) = <dyn Any>::downcast_ref::<f16>(&f) {
+            return mem::transmute_copy(&f);
+        }
         if let Some(value) = <dyn Any>::downcast_ref::<u8>(&f) {
             return mem::transmute_copy(&f16::from_f64(*value as f64 / u8::MAX as f64));
         }

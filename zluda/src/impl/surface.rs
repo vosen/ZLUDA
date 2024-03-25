@@ -109,9 +109,9 @@ fn channel_format_desc(
     bits.3 *= bit_width;
     Ok(hipChannelFormatDesc {
         x: bits.0 as i32,
-        y: bits.0 as i32,
-        z: bits.0 as i32,
-        w: bits.0 as i32,
+        y: bits.1 as i32,
+        z: bits.2 as i32,
+        w: bits.3 as i32,
         f: kind,
     })
 }

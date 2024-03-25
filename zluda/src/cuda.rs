@@ -215,7 +215,7 @@ cuda_function_declarations!(
         cuLinkCreate_v2,
         cuMipmappedArrayCreate,
         cuMipmappedArrayDestroy,
-        cuMipmappedArrayGetLevel,
+        cuMipmappedArrayGetLevel
     ]
 );
 
@@ -1249,10 +1249,8 @@ mod definitions {
         pResDesc: *const CUDA_RESOURCE_DESC,
         pTexDesc: *const HIP_TEXTURE_DESC,
         pResViewDesc: *const HIP_RESOURCE_VIEW_DESC,
-    ) -> hipError_t {
-        let mut tex_desc = *pTexDesc;
-        tex_desc.maxMipmapLevelClamp = 0f32;
-        texobj::create(pTexObject, pResDesc, &tex_desc, pResViewDesc)
+    ) -> Result<(), CUresult> {
+        texobj::create(pTexObject, pResDesc, pTexDesc, pResViewDesc)
     }
 
     pub(crate) unsafe fn cuTexObjectDestroy(texObject: hipTextureObject_t) -> hipError_t {
@@ -1652,24 +1650,24 @@ mod definitions {
     }
 
     pub(crate) unsafe fn cuMipmappedArrayCreate(
-        pHandle: *mut hipMipmappedArray_t,
+        pHandle: *mut CUmipmappedArray,
         pMipmappedArrayDesc: *const HIP_ARRAY3D_DESCRIPTOR,
         numMipmapLevels: ::std::os::raw::c_uint,
-    ) -> hipError_t {
+    ) -> Result<(), CUresult> {
         array::mipmapped_create(pHandle, pMipmappedArrayDesc, numMipmapLevels)
     }
 
     pub(crate) unsafe fn cuMipmappedArrayDestroy(
-        hMipmappedArray: hipMipmappedArray_t,
+        hMipmappedArray: CUmipmappedArray,
     ) -> hipError_t {
-        hipMipmappedArrayDestroy(hMipmappedArray)
+        array::mipmapped_destroy(hMipmappedArray)
     }
 
     pub(crate) unsafe fn cuMipmappedArrayGetLevel(
         pLevelArray: *mut CUarray,
-        hMipmappedArray: hipMipmappedArray_t,
+        hMipmappedArray: CUmipmappedArray,
         level: ::std::os::raw::c_uint,
-    ) -> hipError_t {
-        hipMipmappedArrayGetLevel(pLevelArray.cast(), hMipmappedArray, level)
+    ) -> Result<(), CUresult> {
+        array::mipmapped_get_level(pLevelArray, hMipmappedArray, level)
     }
 }

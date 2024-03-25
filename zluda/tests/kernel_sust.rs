@@ -425,7 +425,6 @@ unsafe fn kernel_sust_impl<
     for value in values.iter_mut() {
         *value = rng.gen::<SustType>();
     }
-    dbg!(&values);
     let mut args = vec![
         &x as *const _ as *const c_void,
         &y as *const _ as *const _,
