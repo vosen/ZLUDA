@@ -33,8 +33,6 @@
     .reg .u64 	    texture;
     .reg .u64 	    output;
     .reg .f32       f<5>;
-    .reg .f32       level;
-    .reg .b16       rs<5>;
 
 	ld.param.u64 	texture, [texture_param];
 	ld.param.u64 	output, [output_param];
