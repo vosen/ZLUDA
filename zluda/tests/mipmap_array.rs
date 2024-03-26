@@ -1,6 +1,7 @@
 use crate::common::CudaDriverFns;
 use cuda_types::*;
-use std::{mem, ptr};
+use half::f16;
+use std::{ffi::c_void, mem, ptr};
 
 mod common;
 
@@ -11,7 +12,7 @@ mod common;
 cuda_driver_test!(mipmap_texture_to_surface);
 
 unsafe fn mipmap_texture_to_surface<T: CudaDriverFns>(cuda: T) {
-    let kernel = include_str!("mipmap_texture_to_surface.ptx");
+    let kernel = include_str!("mipmap_array.ptx");
     let mut kernel = kernel.to_owned();
     kernel.push('\0');
     assert_eq!(cuda.cuInit(0), CUresult::CUDA_SUCCESS);
@@ -32,7 +33,7 @@ unsafe fn mipmap_texture_to_surface<T: CudaDriverFns>(cuda: T) {
         Depth: 0,
         Format: CUarray_format::CU_AD_FORMAT_HALF,
         NumChannels: 4,
-        Flags: 2,
+        Flags: 0,
     };
     assert_eq!(
         cuda.cuMipmappedArrayCreate(&mut mipmap_array, &mipmap_desc, 8),
@@ -44,6 +45,12 @@ unsafe fn mipmap_texture_to_surface<T: CudaDriverFns>(cuda: T) {
         cuda.cuMipmappedArrayGetLevel(&mut array_0, mipmap_array, 0),
         CUresult::CUDA_SUCCESS
     );
+    let mut queried_descriptor = mem::zeroed();
+    assert_eq!(
+        cuda.cuArray3DGetDescriptor_v2(&mut queried_descriptor, array_0),
+        CUresult::CUDA_SUCCESS
+    );
+    assert_eq!(mipmap_desc.Depth, queried_descriptor.Depth);
     assert_eq!(
         cuda.cuMipmappedArrayGetLevel(&mut array_1, mipmap_array, 1),
         CUresult::CUDA_SUCCESS
@@ -69,11 +76,6 @@ unsafe fn mipmap_texture_to_surface<T: CudaDriverFns>(cuda: T) {
     };
     assert_eq!(
         cuda.cuMemcpy2DUnaligned_v2(&memcpy_from_host),
-        CUresult::CUDA_SUCCESS
-    );
-    let mut func = mem::zeroed();
-    assert_eq!(
-        cuda.cuModuleGetFunction(&mut func, module, b"texture_to_surface\0".as_ptr().cast()),
         CUresult::CUDA_SUCCESS
     );
     let mut texture = mem::zeroed();
@@ -121,10 +123,19 @@ unsafe fn mipmap_texture_to_surface<T: CudaDriverFns>(cuda: T) {
         cuda.cuSurfObjectCreate(&mut surface, &surface_resource_desc),
         CUresult::CUDA_SUCCESS
     );
+    let mut texture_to_surface = mem::zeroed();
+    assert_eq!(
+        cuda.cuModuleGetFunction(
+            &mut texture_to_surface,
+            module,
+            b"texture_to_surface\0".as_ptr().cast()
+        ),
+        CUresult::CUDA_SUCCESS
+    );
     let mut params = [&mut texture, &mut surface];
     assert_eq!(
         cuda.cuLaunchKernel(
-            func,
+            texture_to_surface,
             1,
             1,
             1,
@@ -166,12 +177,100 @@ unsafe fn mipmap_texture_to_surface<T: CudaDriverFns>(cuda: T) {
         CUresult::CUDA_SUCCESS
     );
     assert_eq!(&pixels, &memcpy_dst);
+    let texture_resource_desc = CUDA_RESOURCE_DESC {
+        resType: CUresourcetype::CU_RESOURCE_TYPE_MIPMAPPED_ARRAY,
+        res: CUDA_RESOURCE_DESC_st__bindgen_ty_1 {
+            mipmap: CUDA_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_2 {
+                hMipmappedArray: mipmap_array,
+            },
+        },
+        flags: 0,
+    };
+    let texture_desc = CUDA_TEXTURE_DESC {
+        addressMode: [
+            CUaddress_mode::CU_TR_ADDRESS_MODE_CLAMP,
+            CUaddress_mode::CU_TR_ADDRESS_MODE_CLAMP,
+            CUaddress_mode::CU_TR_ADDRESS_MODE_CLAMP,
+        ],
+        filterMode: CUfilter_mode::CU_TR_FILTER_MODE_LINEAR,
+        flags: 2,
+        maxAnisotropy: 0,
+        mipmapFilterMode: CUfilter_mode::CU_TR_FILTER_MODE_LINEAR,
+        mipmapLevelBias: 0f32,
+        minMipmapLevelClamp: 0f32,
+        maxMipmapLevelClamp: 7f32,
+        borderColor: [0f32, 0f32, 0f32, 0f32],
+        reserved: mem::zeroed(),
+    };
+    let mut mipmapped_tex_obj = mem::zeroed();
+    assert_eq!(
+        cuda.cuTexObjectCreate(
+            &mut mipmapped_tex_obj,
+            &texture_resource_desc,
+            &texture_desc,
+            ptr::null()
+        ),
+        CUresult::CUDA_SUCCESS
+    );
+    let mut read_tex_2d_mip = mem::zeroed();
+    assert_eq!(
+        cuda.cuModuleGetFunction(
+            &mut read_tex_2d_mip,
+            module,
+            b"read_tex_2d_mip\0".as_ptr().cast()
+        ),
+        CUresult::CUDA_SUCCESS
+    );
+    let mut output_buffer = mem::zeroed();
+    assert_eq!(
+        cuda.cuMemAlloc_v2(&mut output_buffer, 4 * mem::size_of::<u32>()),
+        CUresult::CUDA_SUCCESS
+    );
+    let mut params = [
+        &mut mipmapped_tex_obj as *mut _ as *mut c_void,
+        &mut output_buffer as *mut _ as *mut c_void,
+    ];
+    assert_eq!(
+        cuda.cuLaunchKernel(
+            read_tex_2d_mip,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            ptr::null_mut(),
+            params.as_mut_ptr().cast(),
+            ptr::null_mut(),
+        ),
+        CUresult::CUDA_SUCCESS
+    );
+    assert_eq!(
+        cuda.cuStreamSynchronize(ptr::null_mut()),
+        CUresult::CUDA_SUCCESS
+    );
+    let mut output = [f32::MAX; 4];
+    assert_eq!(
+        cuda.cuMemcpyDtoH_v2(
+            output.as_mut_ptr().cast(),
+            output_buffer,
+            4 * mem::size_of::<u32>()
+        ),
+        CUresult::CUDA_SUCCESS
+    );
+    let pixels_f32 = pixels
+        .iter()
+        .copied()
+        .map(|x| mem::transmute::<_, f16>(x).to_f32())
+        .collect::<Vec<_>>();
+    assert_eq!(&output[..], &*pixels_f32);
 }
 
 cuda_driver_test!(mipmap_texture_to_surface2);
 
 unsafe fn mipmap_texture_to_surface2<T: CudaDriverFns>(cuda: T) {
-    let kernel = include_str!("mipmap_texture_to_surface.ptx");
+    let kernel = include_str!("mipmap_array.ptx");
     let mut kernel = kernel.to_owned();
     kernel.push('\0');
     assert_eq!(cuda.cuInit(0), CUresult::CUDA_SUCCESS);

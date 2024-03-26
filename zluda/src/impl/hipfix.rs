@@ -3,6 +3,8 @@ use cuda_types::*;
 use hip_runtime_sys::*;
 use std::{env, ptr};
 
+use self::array::get_mipmapped;
+
 use super::{function::FunctionData, stream, LiveCheck};
 
 // For some reason HIP does not tolerate hipArraySurfaceLoadStore, even though
@@ -27,7 +29,23 @@ pub(crate) fn get_non_broken_format(format: hipArray_Format) -> (u32, hipArray_F
 
 #[must_use]
 pub(crate) fn get_broken_format(array: &hipArray) -> Option<hipArray_Format> {
-    Some(match (array.textureType, array.Format) {
+    get_broken_format_impl(array.textureType, array.Format)
+}
+
+#[must_use]
+pub(crate) unsafe fn get_broken_format_mipmapped(
+    array: CUmipmappedArray,
+) -> Result<(&'static hipMipmappedArray, Option<hipArray_Format>), CUresult> {
+    let (hip_array, flag) = get_mipmapped(array);
+    let hip_array_ref = hip_array
+        .as_ref()
+        .ok_or(CUresult::CUDA_ERROR_INVALID_VALUE)?;
+    let format_override = get_broken_format_impl(flag, hip_array_ref.format);
+    Ok((hip_array_ref, format_override))
+}
+
+fn get_broken_format_impl(hack_flag: u32, format: hipArray_Format) -> Option<hipArray_Format> {
+    Some(match (hack_flag, format) {
         (2, hipArray_Format::HIP_AD_FORMAT_UNSIGNED_INT16) => hipArray_Format::HIP_AD_FORMAT_HALF,
         (1, hipArray_Format::HIP_AD_FORMAT_UNSIGNED_INT16) => {
             hipArray_Format::HIP_AD_FORMAT_SIGNED_INT16
@@ -42,7 +60,7 @@ pub(crate) fn get_broken_format(array: &hipArray) -> Option<hipArray_Format> {
 // memcpy3d fails when copying array1d arrays, so we mark all layered arrays by
 // settings LSB
 pub(crate) mod array {
-    use super::get_broken_format;
+    use super::{get_broken_format, get_broken_format_mipmapped};
     use crate::{
         hip_call_cuda,
         r#impl::{memcpy3d_from_cuda, memory_type_from_cuda, FromCuda},
@@ -62,10 +80,10 @@ pub(crate) mod array {
             let hip_array = get(cuda.res.array.hArray);
             cuda.res.array.hArray = mem::transmute(hip_array);
             if let Some(hip_array) = hip_array.as_ref() {
-                if let Some(format_) = get_broken_format(hip_array) {
+                if let Some(new_format) = get_broken_format(hip_array) {
                     return if res_desc_view == ptr::null() {
                         let res_desc_view = HIP_RESOURCE_VIEW_DESC {
-                            format: resource_view_format(format_, hip_array.NumChannels)?,
+                            format: resource_view_format(new_format, hip_array.NumChannels)?,
                             width: hip_array.width as usize,
                             height: hip_array.height as usize,
                             depth: hip_array.depth as usize,
@@ -83,6 +101,36 @@ pub(crate) mod array {
                         Err(CUresult::CUDA_ERROR_NOT_SUPPORTED)
                     };
                 }
+            }
+            Ok(fn_(
+                (&cuda as *const CUDA_RESOURCE_DESC).cast::<HIP_RESOURCE_DESC>(),
+                res_desc_view,
+            ))
+        } else if cuda.resType == CUresourcetype::CU_RESOURCE_TYPE_MIPMAPPED_ARRAY {
+            let (hip_mipmapped_array, format_override) =
+                get_broken_format_mipmapped(cuda.res.mipmap.hMipmappedArray)?;
+            let mut cuda = *cuda;
+            cuda.res.mipmap.hMipmappedArray = mem::transmute(hip_mipmapped_array as *const _);
+            if let Some(new_format) = format_override {
+                return if res_desc_view == ptr::null() {
+                    let res_desc_view = HIP_RESOURCE_VIEW_DESC {
+                        format: resource_view_format(new_format, hip_mipmapped_array.num_channels)?,
+                        width: hip_mipmapped_array.width as usize,
+                        height: hip_mipmapped_array.height as usize,
+                        depth: hip_mipmapped_array.depth as usize,
+                        firstMipmapLevel: hip_mipmapped_array.min_mipmap_level,
+                        lastMipmapLevel: hip_mipmapped_array.max_mipmap_level,
+                        firstLayer: 0,
+                        lastLayer: 0,
+                        reserved: mem::zeroed(),
+                    };
+                    Ok(fn_(
+                        (&cuda as *const CUDA_RESOURCE_DESC).cast::<HIP_RESOURCE_DESC>(),
+                        &res_desc_view,
+                    ))
+                } else {
+                    Err(CUresult::CUDA_ERROR_NOT_SUPPORTED)
+                };
             }
             Ok(fn_(
                 (&cuda as *const CUDA_RESOURCE_DESC).cast::<HIP_RESOURCE_DESC>(),

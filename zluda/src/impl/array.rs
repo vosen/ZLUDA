@@ -47,12 +47,13 @@ pub(crate) unsafe fn get_descriptor_3d(
     flags |= CUDA_ARRAY3D_SURFACE_LDST;
     let array = hipfix::array::get(array);
     if let (Some(array), Some(array_descriptor)) = (array.as_ref(), array_descriptor.as_mut()) {
+        let real_format = hipfix::get_broken_format(array).unwrap_or(array.Format);
         *array_descriptor = CUDA_ARRAY3D_DESCRIPTOR {
             Width: array.width as usize,
             Height: array.height as usize,
             Depth: array.depth as usize,
             NumChannels: array.NumChannels,
-            Format: mem::transmute(array.Format), // compatible
+            Format: mem::transmute(real_format), // compatible
             Flags: flags,
         };
         hipError_t::hipSuccess
@@ -129,6 +130,14 @@ pub(crate) unsafe fn mipmapped_get_level(
         ));
         let hip_array_mut = hip_array.as_mut().ok_or(CUresult::CUDA_ERROR_UNKNOWN)?;
         hip_array_mut.textureType = hack_flag;
+        if mipmapped_array.height == 0 {
+            // HIP returns 1 here for no good reason
+            hip_array_mut.height = 0;
+        }
+        if mipmapped_array.depth == 0 {
+            // HIP returns 1 here for no good reason
+            hip_array_mut.depth = 0;
+        }
         *level_array = mem::transmute(hip_array);
         Ok(())
     } else {

@@ -7,9 +7,6 @@
 	.param .u64 surface_param
 )
 {
-	.reg .u64 	    in_addr;
-    .reg .u64 	    out_addr;
-
     .reg .u64 	    texture;
     .reg .u64 	    surface;
     .reg .f32       f<5>;
@@ -24,5 +21,29 @@
     { cvt.rn.f16.f32 rs3, f3;}
     { cvt.rn.f16.f32 rs4, f4;}
     sust.b.2d.v4.b16.trap [surface, {0, 0}], {rs1, rs2, rs3, rs4};
+	ret;
+}
+
+
+.entry read_tex_2d_mip(
+	.param .u64 texture_param,
+	.param .u64 output_param
+)
+{
+    .reg .u64 	    texture;
+    .reg .u64 	    output;
+    .reg .f32       f<5>;
+    .reg .f32       level;
+    .reg .b16       rs<5>;
+
+	ld.param.u64 	texture, [texture_param];
+	ld.param.u64 	output, [output_param];
+
+    // 3F800000 = 1.0
+    tex.level.2d.v4.f32.f32 {f1, f2, f3, f4}, [texture, {0f00000000, 0f00000000}], 0f3f800000;
+    st.global.f32   [output], f1;
+    st.global.f32   [output+4], f2;
+    st.global.f32   [output+8], f3;
+    st.global.f32   [output+12], f4;
 	ret;
 }
