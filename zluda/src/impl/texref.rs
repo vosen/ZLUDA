@@ -94,7 +94,7 @@ pub(crate) unsafe fn set_array(
     if let Some(array) = array.as_ref() {
         hip_call_cuda!(hipTexRefSetFormat(
             texref,
-            hipfix::get_broken_format(array.textureType, array.Format),
+            hipfix::get_broken_format(array).unwrap_or(array.Format),
             array.NumChannels as i32,
         ));
         hip_call_cuda!(hipTexRefSetArray(texref, array, HIP_TRSA_OVERRIDE_FORMAT));

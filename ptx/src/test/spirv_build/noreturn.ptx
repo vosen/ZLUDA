@@ -1,0 +1,8 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.weak .func noreturn(.param .b64 noreturn_0)
+.noreturn 
+{
+}

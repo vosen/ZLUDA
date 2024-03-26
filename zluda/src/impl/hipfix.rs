@@ -3,6 +3,8 @@ use cuda_types::*;
 use hip_runtime_sys::*;
 use std::{env, ptr};
 
+use self::array::get_mipmapped;
+
 use super::{function::FunctionData, stream, LiveCheck};
 
 // For some reason HIP does not tolerate hipArraySurfaceLoadStore, even though
@@ -26,8 +28,24 @@ pub(crate) fn get_non_broken_format(format: hipArray_Format) -> (u32, hipArray_F
 }
 
 #[must_use]
-pub(crate) fn get_broken_format(broken: u32, format: hipArray_Format) -> hipArray_Format {
-    match (broken, format) {
+pub(crate) fn get_broken_format(array: &hipArray) -> Option<hipArray_Format> {
+    get_broken_format_impl(array.textureType, array.Format)
+}
+
+#[must_use]
+pub(crate) unsafe fn get_broken_format_mipmapped(
+    array: CUmipmappedArray,
+) -> Result<(&'static hipMipmappedArray, Option<hipArray_Format>), CUresult> {
+    let (hip_array, flag) = get_mipmapped(array);
+    let hip_array_ref = hip_array
+        .as_ref()
+        .ok_or(CUresult::CUDA_ERROR_INVALID_VALUE)?;
+    let format_override = get_broken_format_impl(flag, hip_array_ref.format);
+    Ok((hip_array_ref, format_override))
+}
+
+fn get_broken_format_impl(hack_flag: u32, format: hipArray_Format) -> Option<hipArray_Format> {
+    Some(match (hack_flag, format) {
         (2, hipArray_Format::HIP_AD_FORMAT_UNSIGNED_INT16) => hipArray_Format::HIP_AD_FORMAT_HALF,
         (1, hipArray_Format::HIP_AD_FORMAT_UNSIGNED_INT16) => {
             hipArray_Format::HIP_AD_FORMAT_SIGNED_INT16
@@ -35,13 +53,14 @@ pub(crate) fn get_broken_format(broken: u32, format: hipArray_Format) -> hipArra
         (1, hipArray_Format::HIP_AD_FORMAT_UNSIGNED_INT8) => {
             hipArray_Format::HIP_AD_FORMAT_SIGNED_INT8
         }
-        (_, f) => f,
-    }
+        (_, _) => return None,
+    })
 }
 
 // memcpy3d fails when copying array1d arrays, so we mark all layered arrays by
 // settings LSB
 pub(crate) mod array {
+    use super::{get_broken_format, get_broken_format_mipmapped};
     use crate::{
         hip_call_cuda,
         r#impl::{memcpy3d_from_cuda, memory_type_from_cuda, FromCuda},
@@ -51,21 +70,169 @@ pub(crate) mod array {
     use std::{mem, ptr};
 
     pub(crate) unsafe fn with_resource_desc<T>(
-        cuda: *const CUDA_RESOURCE_DESC,
-        fn_: impl FnOnce(*const HIP_RESOURCE_DESC) -> T,
-    ) -> T {
-        let cuda = &*cuda;
+        res_desc: *const CUDA_RESOURCE_DESC,
+        res_desc_view: *const HIP_RESOURCE_VIEW_DESC,
+        fn_: impl FnOnce(*const HIP_RESOURCE_DESC, *const HIP_RESOURCE_VIEW_DESC) -> T,
+    ) -> Result<T, CUresult> {
+        let cuda = &*res_desc;
         if cuda.resType == CUresourcetype::CU_RESOURCE_TYPE_ARRAY {
             let mut cuda = *cuda;
-            cuda.res.array.hArray = mem::transmute(get(cuda.res.array.hArray));
-            fn_((&cuda as *const CUDA_RESOURCE_DESC).cast::<HIP_RESOURCE_DESC>())
+            let hip_array = get(cuda.res.array.hArray);
+            cuda.res.array.hArray = mem::transmute(hip_array);
+            if let Some(hip_array) = hip_array.as_ref() {
+                if let Some(new_format) = get_broken_format(hip_array) {
+                    return if res_desc_view == ptr::null() {
+                        let res_desc_view = HIP_RESOURCE_VIEW_DESC {
+                            format: resource_view_format(new_format, hip_array.NumChannels)?,
+                            width: hip_array.width as usize,
+                            height: hip_array.height as usize,
+                            depth: hip_array.depth as usize,
+                            firstMipmapLevel: 0,
+                            lastMipmapLevel: 0,
+                            firstLayer: 0,
+                            lastLayer: 0,
+                            reserved: mem::zeroed(),
+                        };
+                        Ok(fn_(
+                            (&cuda as *const CUDA_RESOURCE_DESC).cast::<HIP_RESOURCE_DESC>(),
+                            &res_desc_view,
+                        ))
+                    } else {
+                        Err(CUresult::CUDA_ERROR_NOT_SUPPORTED)
+                    };
+                }
+            }
+            Ok(fn_(
+                (&cuda as *const CUDA_RESOURCE_DESC).cast::<HIP_RESOURCE_DESC>(),
+                res_desc_view,
+            ))
+        } else if cuda.resType == CUresourcetype::CU_RESOURCE_TYPE_MIPMAPPED_ARRAY {
+            let (hip_mipmapped_array, format_override) =
+                get_broken_format_mipmapped(cuda.res.mipmap.hMipmappedArray)?;
+            let mut cuda = *cuda;
+            cuda.res.mipmap.hMipmappedArray = mem::transmute(hip_mipmapped_array as *const _);
+            if let Some(new_format) = format_override {
+                return if res_desc_view == ptr::null() {
+                    let res_desc_view = HIP_RESOURCE_VIEW_DESC {
+                        format: resource_view_format(new_format, hip_mipmapped_array.num_channels)?,
+                        width: hip_mipmapped_array.width as usize,
+                        height: hip_mipmapped_array.height as usize,
+                        depth: hip_mipmapped_array.depth as usize,
+                        firstMipmapLevel: hip_mipmapped_array.min_mipmap_level,
+                        lastMipmapLevel: hip_mipmapped_array.max_mipmap_level,
+                        firstLayer: 0,
+                        lastLayer: 0,
+                        reserved: mem::zeroed(),
+                    };
+                    Ok(fn_(
+                        (&cuda as *const CUDA_RESOURCE_DESC).cast::<HIP_RESOURCE_DESC>(),
+                        &res_desc_view,
+                    ))
+                } else {
+                    Err(CUresult::CUDA_ERROR_NOT_SUPPORTED)
+                };
+            }
+            Ok(fn_(
+                (&cuda as *const CUDA_RESOURCE_DESC).cast::<HIP_RESOURCE_DESC>(),
+                res_desc_view,
+            ))
         } else {
-            fn_((cuda as *const CUDA_RESOURCE_DESC).cast::<HIP_RESOURCE_DESC>())
+            Ok(fn_(
+                (cuda as *const CUDA_RESOURCE_DESC).cast::<HIP_RESOURCE_DESC>(),
+                res_desc_view,
+            ))
         }
+    }
+
+    fn resource_view_format(
+        format: hipArray_Format,
+        num_channels: u32,
+    ) -> Result<HIPresourceViewFormat, CUresult> {
+        Ok(match (format, num_channels) {
+            (hipArray_Format::HIP_AD_FORMAT_UNSIGNED_INT8, 1) => {
+                HIPresourceViewFormat::HIP_RES_VIEW_FORMAT_UINT_1X8
+            }
+            (hipArray_Format::HIP_AD_FORMAT_UNSIGNED_INT8, 2) => {
+                HIPresourceViewFormat::HIP_RES_VIEW_FORMAT_UINT_2X8
+            }
+            (hipArray_Format::HIP_AD_FORMAT_UNSIGNED_INT8, 4) => {
+                HIPresourceViewFormat::HIP_RES_VIEW_FORMAT_UINT_4X8
+            }
+            (hipArray_Format::HIP_AD_FORMAT_SIGNED_INT8, 1) => {
+                HIPresourceViewFormat::HIP_RES_VIEW_FORMAT_SINT_1X8
+            }
+            (hipArray_Format::HIP_AD_FORMAT_SIGNED_INT8, 2) => {
+                HIPresourceViewFormat::HIP_RES_VIEW_FORMAT_SINT_2X8
+            }
+            (hipArray_Format::HIP_AD_FORMAT_SIGNED_INT8, 4) => {
+                HIPresourceViewFormat::HIP_RES_VIEW_FORMAT_SINT_4X8
+            }
+            (hipArray_Format::HIP_AD_FORMAT_UNSIGNED_INT16, 1) => {
+                HIPresourceViewFormat::HIP_RES_VIEW_FORMAT_UINT_1X16
+            }
+            (hipArray_Format::HIP_AD_FORMAT_UNSIGNED_INT16, 2) => {
+                HIPresourceViewFormat::HIP_RES_VIEW_FORMAT_UINT_2X16
+            }
+            (hipArray_Format::HIP_AD_FORMAT_UNSIGNED_INT16, 4) => {
+                HIPresourceViewFormat::HIP_RES_VIEW_FORMAT_UINT_4X16
+            }
+            (hipArray_Format::HIP_AD_FORMAT_SIGNED_INT16, 1) => {
+                HIPresourceViewFormat::HIP_RES_VIEW_FORMAT_SINT_1X16
+            }
+            (hipArray_Format::HIP_AD_FORMAT_SIGNED_INT16, 2) => {
+                HIPresourceViewFormat::HIP_RES_VIEW_FORMAT_SINT_2X16
+            }
+            (hipArray_Format::HIP_AD_FORMAT_SIGNED_INT16, 4) => {
+                HIPresourceViewFormat::HIP_RES_VIEW_FORMAT_SINT_4X16
+            }
+            (hipArray_Format::HIP_AD_FORMAT_UNSIGNED_INT32, 1) => {
+                HIPresourceViewFormat::HIP_RES_VIEW_FORMAT_UINT_1X32
+            }
+            (hipArray_Format::HIP_AD_FORMAT_UNSIGNED_INT32, 2) => {
+                HIPresourceViewFormat::HIP_RES_VIEW_FORMAT_UINT_2X32
+            }
+            (hipArray_Format::HIP_AD_FORMAT_UNSIGNED_INT32, 4) => {
+                HIPresourceViewFormat::HIP_RES_VIEW_FORMAT_UINT_4X32
+            }
+            (hipArray_Format::HIP_AD_FORMAT_SIGNED_INT32, 1) => {
+                HIPresourceViewFormat::HIP_RES_VIEW_FORMAT_SINT_1X32
+            }
+            (hipArray_Format::HIP_AD_FORMAT_SIGNED_INT32, 2) => {
+                HIPresourceViewFormat::HIP_RES_VIEW_FORMAT_SINT_2X32
+            }
+            (hipArray_Format::HIP_AD_FORMAT_SIGNED_INT32, 4) => {
+                HIPresourceViewFormat::HIP_RES_VIEW_FORMAT_SINT_4X32
+            }
+            (hipArray_Format::HIP_AD_FORMAT_HALF, 1) => {
+                HIPresourceViewFormat::HIP_RES_VIEW_FORMAT_FLOAT_1X16
+            }
+            (hipArray_Format::HIP_AD_FORMAT_HALF, 2) => {
+                HIPresourceViewFormat::HIP_RES_VIEW_FORMAT_FLOAT_2X16
+            }
+            (hipArray_Format::HIP_AD_FORMAT_HALF, 4) => {
+                HIPresourceViewFormat::HIP_RES_VIEW_FORMAT_FLOAT_4X16
+            }
+            (hipArray_Format::HIP_AD_FORMAT_FLOAT, 1) => {
+                HIPresourceViewFormat::HIP_RES_VIEW_FORMAT_FLOAT_1X32
+            }
+            (hipArray_Format::HIP_AD_FORMAT_FLOAT, 2) => {
+                HIPresourceViewFormat::HIP_RES_VIEW_FORMAT_FLOAT_2X32
+            }
+            (hipArray_Format::HIP_AD_FORMAT_FLOAT, 4) => {
+                HIPresourceViewFormat::HIP_RES_VIEW_FORMAT_FLOAT_4X32
+            }
+            _ => return Err(CUresult::CUDA_ERROR_NOT_SUPPORTED),
+        })
     }
 
     pub(crate) fn get(cuda: CUarray) -> hipArray_t {
         (cuda as usize & !3usize) as hipArray_t
+    }
+
+    pub(crate) fn get_mipmapped(cuda: CUmipmappedArray) -> (hipMipmappedArray_t, u32) {
+        let array = (cuda as usize & !3usize) as hipMipmappedArray_t;
+        let broken_flag = (cuda as usize & 3usize) as u32;
+        (array, broken_flag)
     }
 
     pub(crate) fn to_cuda(array: hipArray_t, layered_dims: usize) -> CUarray {

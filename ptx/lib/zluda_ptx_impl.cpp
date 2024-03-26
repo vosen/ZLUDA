@@ -321,16 +321,26 @@ extern "C"
     tex_1d_f16(s32, int, tex1Dfetch_f16);
     tex_1d_f16(f32, float, tex1D_f16);
 
-#define tex_2d(CHANNEL_TYPE, HIP_CHANNEL_TYPE, COORD_TYPE, HIP_COORD_TYPE)                                                                                             \
-    HIP_CHANNEL_TYPE##4 ::Native_vec_ FUNC(tex_2d_v4_##CHANNEL_TYPE##_##COORD_TYPE)(struct textureReference GLOBAL_SPACE * ptr, HIP_COORD_TYPE##2 ::Native_vec_ coord) \
-    {                                                                                                                                                                  \
-        hipTextureObject_t textureObject = ptr->textureObject;                                                                                                         \
-        return tex2D<HIP_CHANNEL_TYPE##4>(textureObject, float(coord.x), float(coord.y)).data;                                                                         \
-    }                                                                                                                                                                  \
-    HIP_CHANNEL_TYPE##4 ::Native_vec_ FUNC(tex_indirect_2d_v4_##CHANNEL_TYPE##_##COORD_TYPE)(uint64_t texobj, HIP_COORD_TYPE##2 ::Native_vec_ coord)                   \
-    {                                                                                                                                                                  \
-        hipTextureObject_t textureObject = (hipTextureObject_t)texobj;                                                                                                 \
-        return tex2D<HIP_CHANNEL_TYPE##4>(textureObject, float(coord.x), float(coord.y)).data;                                                                         \
+#define tex_2d(CHANNEL_TYPE, HIP_CHANNEL_TYPE, COORD_TYPE, HIP_COORD_TYPE)                                                                                                                       \
+    HIP_CHANNEL_TYPE##4 ::Native_vec_ FUNC(tex_2d_v4_##CHANNEL_TYPE##_##COORD_TYPE)(struct textureReference GLOBAL_SPACE * ptr, HIP_COORD_TYPE##2 ::Native_vec_ coord)                           \
+    {                                                                                                                                                                                            \
+        hipTextureObject_t textureObject = ptr->textureObject;                                                                                                                                   \
+        return tex2D<HIP_CHANNEL_TYPE##4>(textureObject, float(coord.x), float(coord.y)).data;                                                                                                   \
+    }                                                                                                                                                                                            \
+    HIP_CHANNEL_TYPE##4 ::Native_vec_ FUNC(tex_level_2d_v4_##CHANNEL_TYPE##_##COORD_TYPE)(struct textureReference GLOBAL_SPACE * ptr, HIP_COORD_TYPE##2 ::Native_vec_ coord, HIP_COORD_TYPE lod) \
+    {                                                                                                                                                                                            \
+        hipTextureObject_t textureObject = ptr->textureObject;                                                                                                                                   \
+        return tex2DLod<HIP_CHANNEL_TYPE##4>(textureObject, float(coord.x), float(coord.y), float(lod)).data;                                                                                    \
+    }                                                                                                                                                                                            \
+    HIP_CHANNEL_TYPE##4 ::Native_vec_ FUNC(tex_indirect_2d_v4_##CHANNEL_TYPE##_##COORD_TYPE)(uint64_t texobj, HIP_COORD_TYPE##2 ::Native_vec_ coord)                                             \
+    {                                                                                                                                                                                            \
+        hipTextureObject_t textureObject = (hipTextureObject_t)texobj;                                                                                                                           \
+        return tex2D<HIP_CHANNEL_TYPE##4>(textureObject, float(coord.x), float(coord.y)).data;                                                                                                   \
+    }                                                                                                                                                                                            \
+    HIP_CHANNEL_TYPE##4 ::Native_vec_ FUNC(tex_level_indirect_2d_v4_##CHANNEL_TYPE##_##COORD_TYPE)(uint64_t texobj, HIP_COORD_TYPE##2 ::Native_vec_ coord, HIP_COORD_TYPE lod)                   \
+    {                                                                                                                                                                                            \
+        hipTextureObject_t textureObject = (hipTextureObject_t)texobj;                                                                                                                           \
+        return tex2DLod<HIP_CHANNEL_TYPE##4>(textureObject, float(coord.x), float(coord.y), float(lod)).data;                                                                                    \
     }
 
     __device__ half4 __ockl_image_sampleh_2D(unsigned int CONSTANT_SPACE *i, unsigned int ADDRESS_SPACE_CONSTANT *s, float2::Native_vec_ c);
@@ -357,16 +367,26 @@ extern "C"
     tex_2d_f16(s32, int);
     tex_2d_f16(f32, float);
 
-#define tex_3d(CHANNEL_TYPE, HIP_CHANNEL_TYPE, COORD_TYPE, HIP_COORD_TYPE)                                                                                             \
-    HIP_CHANNEL_TYPE##4 ::Native_vec_ FUNC(tex_3d_v4_##CHANNEL_TYPE##_##COORD_TYPE)(struct textureReference GLOBAL_SPACE * ptr, HIP_COORD_TYPE##4 ::Native_vec_ coord) \
-    {                                                                                                                                                                  \
-        hipTextureObject_t textureObject = ptr->textureObject;                                                                                                         \
-        return tex3D<HIP_CHANNEL_TYPE##4>(textureObject, float(coord.x), float(coord.y), float(coord.z)).data;                                                         \
-    }                                                                                                                                                                  \
-    HIP_CHANNEL_TYPE##4 ::Native_vec_ FUNC(tex_indirect_3d_v4_##CHANNEL_TYPE##_##COORD_TYPE)(uint64_t texobj, HIP_COORD_TYPE##4 ::Native_vec_ coord)                   \
-    {                                                                                                                                                                  \
-        hipTextureObject_t textureObject = (hipTextureObject_t)texobj;                                                                                                 \
-        return tex3D<HIP_CHANNEL_TYPE##4>(textureObject, float(coord.x), float(coord.y), float(coord.z)).data;                                                         \
+#define tex_3d(CHANNEL_TYPE, HIP_CHANNEL_TYPE, COORD_TYPE, HIP_COORD_TYPE)                                                                                                                       \
+    HIP_CHANNEL_TYPE##4 ::Native_vec_ FUNC(tex_3d_v4_##CHANNEL_TYPE##_##COORD_TYPE)(struct textureReference GLOBAL_SPACE * ptr, HIP_COORD_TYPE##4 ::Native_vec_ coord)                           \
+    {                                                                                                                                                                                            \
+        hipTextureObject_t textureObject = ptr->textureObject;                                                                                                                                   \
+        return tex3D<HIP_CHANNEL_TYPE##4>(textureObject, float(coord.x), float(coord.y), float(coord.z)).data;                                                                                   \
+    }                                                                                                                                                                                            \
+    HIP_CHANNEL_TYPE##4 ::Native_vec_ FUNC(tex_level_3d_v4_##CHANNEL_TYPE##_##COORD_TYPE)(struct textureReference GLOBAL_SPACE * ptr, HIP_COORD_TYPE##4 ::Native_vec_ coord, HIP_COORD_TYPE lod) \
+    {                                                                                                                                                                                            \
+        hipTextureObject_t textureObject = ptr->textureObject;                                                                                                                                   \
+        return tex3DLod<HIP_CHANNEL_TYPE##4>(textureObject, float(coord.x), float(coord.y), float(coord.z), float(lod)).data;                                                                    \
+    }                                                                                                                                                                                            \
+    HIP_CHANNEL_TYPE##4 ::Native_vec_ FUNC(tex_indirect_3d_v4_##CHANNEL_TYPE##_##COORD_TYPE)(uint64_t texobj, HIP_COORD_TYPE##4 ::Native_vec_ coord)                                             \
+    {                                                                                                                                                                                            \
+        hipTextureObject_t textureObject = (hipTextureObject_t)texobj;                                                                                                                           \
+        return tex3D<HIP_CHANNEL_TYPE##4>(textureObject, float(coord.x), float(coord.y), float(coord.z)).data;                                                                                   \
+    }                                                                                                                                                                                            \
+    HIP_CHANNEL_TYPE##4 ::Native_vec_ FUNC(tex_level_indirect_3d_v4_##CHANNEL_TYPE##_##COORD_TYPE)(uint64_t texobj, HIP_COORD_TYPE##4 ::Native_vec_ coord, HIP_COORD_TYPE lod)                   \
+    {                                                                                                                                                                                            \
+        hipTextureObject_t textureObject = (hipTextureObject_t)texobj;                                                                                                                           \
+        return tex3DLod<HIP_CHANNEL_TYPE##4>(textureObject, float(coord.x), float(coord.y), float(coord.z), float(lod)).data;                                                                    \
     }
 
     __device__ half4 __ockl_image_sampleh_3D(unsigned int CONSTANT_SPACE *i, unsigned int ADDRESS_SPACE_CONSTANT *s, float4::Native_vec_ c);
@@ -393,16 +413,26 @@ extern "C"
     tex_3d_f16(s32, int);
     tex_3d_f16(f32, float);
 
-#define tex_a1d(CHANNEL_TYPE, HIP_CHANNEL_TYPE, COORD_TYPE, HIP_COORD_TYPE)                                                                                        \
-    HIP_CHANNEL_TYPE##4 ::Native_vec_ FUNC(tex_a1d_v4_##CHANNEL_TYPE##_##COORD_TYPE)(struct textureReference GLOBAL_SPACE * ptr, uint32_t layer, HIP_COORD_TYPE x) \
-    {                                                                                                                                                              \
-        hipTextureObject_t textureObject = ptr->textureObject;                                                                                                     \
-        return tex1DLayered<HIP_CHANNEL_TYPE##4>(textureObject, float(x), int(layer)).data;                                                                        \
-    }                                                                                                                                                              \
-    HIP_CHANNEL_TYPE##4 ::Native_vec_ FUNC(tex_indirect_a1d_v4_##CHANNEL_TYPE##_##COORD_TYPE)(uint64_t texobj, uint32_t layer, HIP_COORD_TYPE x)                   \
-    {                                                                                                                                                              \
-        hipTextureObject_t textureObject = (hipTextureObject_t)texobj;                                                                                             \
-        return tex1DLayered<HIP_CHANNEL_TYPE##4>(textureObject, float(x), int(layer)).data;                                                                        \
+#define tex_a1d(CHANNEL_TYPE, HIP_CHANNEL_TYPE, COORD_TYPE, HIP_COORD_TYPE)                                                                                                                  \
+    HIP_CHANNEL_TYPE##4 ::Native_vec_ FUNC(tex_a1d_v4_##CHANNEL_TYPE##_##COORD_TYPE)(struct textureReference GLOBAL_SPACE * ptr, uint32_t layer, HIP_COORD_TYPE x)                           \
+    {                                                                                                                                                                                        \
+        hipTextureObject_t textureObject = ptr->textureObject;                                                                                                                               \
+        return tex1DLayered<HIP_CHANNEL_TYPE##4>(textureObject, float(x), int(layer)).data;                                                                                                  \
+    }                                                                                                                                                                                        \
+    HIP_CHANNEL_TYPE##4 ::Native_vec_ FUNC(tex_level_a1d_v4_##CHANNEL_TYPE##_##COORD_TYPE)(struct textureReference GLOBAL_SPACE * ptr, uint32_t layer, HIP_COORD_TYPE x, HIP_COORD_TYPE lod) \
+    {                                                                                                                                                                                        \
+        hipTextureObject_t textureObject = ptr->textureObject;                                                                                                                               \
+        return tex1DLayeredLod<HIP_CHANNEL_TYPE##4>(textureObject, float(x), int(layer), float(lod)).data;                                                                                   \
+    }                                                                                                                                                                                        \
+    HIP_CHANNEL_TYPE##4 ::Native_vec_ FUNC(tex_indirect_a1d_v4_##CHANNEL_TYPE##_##COORD_TYPE)(uint64_t texobj, uint32_t layer, HIP_COORD_TYPE x)                                             \
+    {                                                                                                                                                                                        \
+        hipTextureObject_t textureObject = (hipTextureObject_t)texobj;                                                                                                                       \
+        return tex1DLayered<HIP_CHANNEL_TYPE##4>(textureObject, float(x), int(layer)).data;                                                                                                  \
+    }                                                                                                                                                                                        \
+    HIP_CHANNEL_TYPE##4 ::Native_vec_ FUNC(tex_level_indirect_a1d_v4_##CHANNEL_TYPE##_##COORD_TYPE)(uint64_t texobj, uint32_t layer, HIP_COORD_TYPE x, HIP_COORD_TYPE lod)                   \
+    {                                                                                                                                                                                        \
+        hipTextureObject_t textureObject = (hipTextureObject_t)texobj;                                                                                                                       \
+        return tex1DLayeredLod<HIP_CHANNEL_TYPE##4>(textureObject, float(x), int(layer), float(lod)).data;                                                                                   \
     }
 
     __device__ half4 __ockl_image_sampleh_1Da(unsigned int CONSTANT_SPACE *i, unsigned int ADDRESS_SPACE_CONSTANT *s, float2::Native_vec_ c);
@@ -429,16 +459,26 @@ extern "C"
     tex_a1d_f16(s32, int);
     tex_a1d_f16(f32, float);
 
-#define tex_a2d(CHANNEL_TYPE, HIP_CHANNEL_TYPE, COORD_TYPE, HIP_COORD_TYPE)                                                                                                          \
-    HIP_CHANNEL_TYPE##4 ::Native_vec_ FUNC(tex_a2d_v4_##CHANNEL_TYPE##_##COORD_TYPE)(struct textureReference GLOBAL_SPACE * ptr, uint32_t layer, HIP_COORD_TYPE x, HIP_COORD_TYPE y) \
-    {                                                                                                                                                                                \
-        hipTextureObject_t textureObject = ptr->textureObject;                                                                                                                       \
-        return tex2DLayered<HIP_CHANNEL_TYPE##4>(textureObject, float(x), float(y), int(layer)).data;                                                                                \
-    }                                                                                                                                                                                \
-    HIP_CHANNEL_TYPE##4 ::Native_vec_ FUNC(tex_indirect_a2d_v4_##CHANNEL_TYPE##_##COORD_TYPE)(uint64_t texobj, uint32_t layer, HIP_COORD_TYPE x, HIP_COORD_TYPE y)                   \
-    {                                                                                                                                                                                \
-        hipTextureObject_t textureObject = (hipTextureObject_t)texobj;                                                                                                               \
-        return tex2DLayered<HIP_CHANNEL_TYPE##4>(textureObject, float(x), float(y), int(layer)).data;                                                                                \
+#define tex_a2d(CHANNEL_TYPE, HIP_CHANNEL_TYPE, COORD_TYPE, HIP_COORD_TYPE)                                                                                                                                    \
+    HIP_CHANNEL_TYPE##4 ::Native_vec_ FUNC(tex_a2d_v4_##CHANNEL_TYPE##_##COORD_TYPE)(struct textureReference GLOBAL_SPACE * ptr, uint32_t layer, HIP_COORD_TYPE x, HIP_COORD_TYPE y)                           \
+    {                                                                                                                                                                                                          \
+        hipTextureObject_t textureObject = ptr->textureObject;                                                                                                                                                 \
+        return tex2DLayered<HIP_CHANNEL_TYPE##4>(textureObject, float(x), float(y), int(layer)).data;                                                                                                          \
+    }                                                                                                                                                                                                          \
+    HIP_CHANNEL_TYPE##4 ::Native_vec_ FUNC(tex_level_a2d_v4_##CHANNEL_TYPE##_##COORD_TYPE)(struct textureReference GLOBAL_SPACE * ptr, uint32_t layer, HIP_COORD_TYPE x, HIP_COORD_TYPE y, HIP_COORD_TYPE lod) \
+    {                                                                                                                                                                                                          \
+        hipTextureObject_t textureObject = ptr->textureObject;                                                                                                                                                 \
+        return tex2DLayeredLod<HIP_CHANNEL_TYPE##4>(textureObject, float(x), float(y), int(layer), float(lod)).data;                                                                                           \
+    }                                                                                                                                                                                                          \
+    HIP_CHANNEL_TYPE##4 ::Native_vec_ FUNC(tex_indirect_a2d_v4_##CHANNEL_TYPE##_##COORD_TYPE)(uint64_t texobj, uint32_t layer, HIP_COORD_TYPE x, HIP_COORD_TYPE y)                                             \
+    {                                                                                                                                                                                                          \
+        hipTextureObject_t textureObject = (hipTextureObject_t)texobj;                                                                                                                                         \
+        return tex2DLayered<HIP_CHANNEL_TYPE##4>(textureObject, float(x), float(y), int(layer)).data;                                                                                                          \
+    }                                                                                                                                                                                                          \
+    HIP_CHANNEL_TYPE##4 ::Native_vec_ FUNC(tex_level_indirect_a2d_v4_##CHANNEL_TYPE##_##COORD_TYPE)(uint64_t texobj, uint32_t layer, HIP_COORD_TYPE x, HIP_COORD_TYPE y, HIP_COORD_TYPE lod)                   \
+    {                                                                                                                                                                                                          \
+        hipTextureObject_t textureObject = (hipTextureObject_t)texobj;                                                                                                                                         \
+        return tex2DLayeredLod<HIP_CHANNEL_TYPE##4>(textureObject, float(x), float(y), int(layer), float(lod)).data;                                                                                           \
     }
 
     __device__ half4 __ockl_image_sampleh_2Da(unsigned int CONSTANT_SPACE *i, unsigned int ADDRESS_SPACE_CONSTANT *s, float4::Native_vec_ c);
