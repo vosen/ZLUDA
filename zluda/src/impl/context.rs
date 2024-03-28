@@ -222,6 +222,20 @@ pub(crate) fn set_limit(limit: hipLimit_t, value: usize) -> Result<(), CUresult>
     Ok(())
 }
 
+pub(crate) fn set_flags(flags: u32) -> Result<(), CUresult> {
+    with_current(|ctx| match ctx.variant {
+        ContextVariant::NonPrimary(ref context) => {
+            context
+                .flags
+                .store(flags, std::sync::atomic::Ordering::SeqCst);
+            Ok(())
+        }
+        // This looks stupid, but this is an actual CUDA behavior,
+        // see primary_context.rs test
+        ContextVariant::Primary(_) => Ok(()),
+    })?
+}
+
 pub(crate) unsafe fn get_api_version(ctx: *mut Context, version: *mut u32) -> Result<(), CUresult> {
     if ctx == ptr::null_mut() {
         return Err(CUresult::CUDA_ERROR_INVALID_CONTEXT);

@@ -18,17 +18,37 @@ unsafe fn primary_context<T: CudaDriverFns>(cuda: T) {
         cuda.cuDevicePrimaryCtxSetFlags_v2(CUdevice_v1(0), 1),
         CUresult::CUDA_SUCCESS
     );
+    assert_eq!(
+        cuda.cuDevicePrimaryCtxGetState(CUdevice_v1(0), &mut flags, &mut active),
+        CUresult::CUDA_SUCCESS
+    );
+    assert_eq!((1, 0), (flags, active));
     let mut primary_ctx = ptr::null_mut();
     assert_eq!(
         cuda.cuDevicePrimaryCtxRetain(&mut primary_ctx, CUdevice_v1(0)),
         CUresult::CUDA_SUCCESS
     );
+    assert_eq!(
+        cuda.cuCtxPushCurrent_v2(primary_ctx),
+        CUresult::CUDA_SUCCESS
+    );
+    assert_eq!(cuda.cuCtxSetFlags(2), CUresult::CUDA_SUCCESS);
+    assert_eq!(
+        cuda.cuCtxSetCurrent(ptr::null_mut()),
+        CUresult::CUDA_SUCCESS
+    );
+    assert_eq!(
+        cuda.cuDevicePrimaryCtxGetState(CUdevice_v1(0), &mut flags, &mut active),
+        CUresult::CUDA_SUCCESS
+    );
+    assert_eq!((1, 1), (flags, active));
     assert_ne!(primary_ctx, ptr::null_mut());
     let mut active_ctx = ptr::null_mut();
     assert_eq!(
         cuda.cuCtxGetCurrent(&mut active_ctx),
         CUresult::CUDA_SUCCESS
     );
+    assert_eq!(active_ctx, ptr::null_mut());
     assert_ne!(primary_ctx, active_ctx);
     assert_eq!(
         cuda.cuDevicePrimaryCtxGetState(CUdevice_v1(0), &mut flags, &mut active),

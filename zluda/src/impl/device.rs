@@ -1,6 +1,6 @@
 use super::context::{ContextInnerMutable, ContextVariant, PrimaryContextData};
 use super::{
-    context, LiveCheck, ZludaObject, GLOBAL_STATE
+    context, LiveCheck, GLOBAL_STATE
 };
 use crate::r#impl::context::ContextData;
 use crate::{r#impl::IntoCuda, hip_call_cuda};
@@ -12,11 +12,7 @@ use paste::paste;
 use std::{
     mem,
     os::raw::{c_char, c_uint},
-    ptr,
-    sync::{
-        atomic::AtomicU32,
-        Mutex,
-    }, ops::AddAssign, ffi::CString,
+    ptr,ffi::CString,
 };
 
 const ZLUDA_SUFFIX: &'static [u8] = b" [ZLUDA]\0";
