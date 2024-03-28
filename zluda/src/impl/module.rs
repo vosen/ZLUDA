@@ -31,13 +31,11 @@ impl ZludaObject for ModuleData {
         let deregistration_err = if !by_owner {
             if let Some(ctx) = self.owner {
                 let ctx = unsafe { LiveCheck::as_result(ctx.as_ptr())? };
-                let mut ctx_mutable = ctx
-                    .mutable
-                    .lock()
-                    .map_err(|_| CUresult::CUDA_ERROR_UNKNOWN)?;
-                ctx_mutable
-                    .modules
-                    .remove(&unsafe { LiveCheck::from_raw(self) });
+                ctx.with_inner_mut(|ctx_mutable| {
+                    ctx_mutable
+                        .modules
+                        .remove(&unsafe { LiveCheck::from_raw(self) });
+                })?;
             }
             Ok(())
         } else {
@@ -104,11 +102,9 @@ pub(crate) unsafe fn load_impl(
             isa,
             input,
         )?);
-        let mut ctx_mutable = ctx
-            .mutable
-            .lock()
-            .map_err(|_| CUresult::CUDA_ERROR_UNKNOWN)?;
-        ctx_mutable.modules.insert(module);
+        ctx.with_inner_mut(|ctx_mutable| {
+            ctx_mutable.modules.insert(module);
+        })?;
         *output = module;
         Ok(())
     })?

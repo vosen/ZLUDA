@@ -121,20 +121,27 @@ impl CudaDarkApi for CudaDarkApiZluda {
         value: *mut c_void,
         dtor_callback: Option<extern "system" fn(cuda_types::CUcontext, *mut c_void, *mut c_void)>,
     ) -> CUresult {
-        with_context_or_current(cu_ctx, |ctx| {
-            let mut ctx_mutable = ctx
-                .mutable
-                .lock()
-                .map_err(|_| CUresult::CUDA_ERROR_UNKNOWN)?;
-            ctx_mutable.local_storage.insert(
-                key,
-                LocalStorageValue {
-                    value,
-                    _dtor_callback: dtor_callback,
-                },
-            );
-            Ok(())
-        })
+        unsafe fn context_local_storage_insert_impl(
+            cu_ctx: cuda_types::CUcontext,
+            key: *mut c_void,
+            value: *mut c_void,
+            dtor_callback: Option<
+                extern "system" fn(cuda_types::CUcontext, *mut c_void, *mut c_void),
+            >,
+        ) -> Result<(), CUresult> {
+            with_context_or_current(cu_ctx, |ctx| {
+                ctx.with_inner_mut(|ctx_mutable| {
+                    ctx_mutable.local_storage.insert(
+                        key,
+                        LocalStorageValue {
+                            value,
+                            _dtor_callback: dtor_callback,
+                        },
+                    );
+                })
+            })?
+        }
+        context_local_storage_insert_impl(cu_ctx, key, value, dtor_callback).into_cuda()
     }
 
     // TODO
@@ -143,29 +150,30 @@ impl CudaDarkApi for CudaDarkApiZluda {
     }
 
     unsafe extern "system" fn context_local_storage_get(
-        result: *mut *mut c_void,
+        cu_result: *mut *mut c_void,
         cu_ctx: cuda_types::CUcontext,
         key: *mut c_void,
     ) -> CUresult {
-        let mut cu_result = None;
-        let query_cu_result = with_context_or_current(cu_ctx, |ctx| {
-            let ctx_mutable = ctx
-                .mutable
-                .lock()
-                .map_err(|_| CUresult::CUDA_ERROR_UNKNOWN)?;
-            cu_result = ctx_mutable.local_storage.get(&key).map(|v| v.value);
-            Ok(())
-        });
-        if query_cu_result != CUresult::CUDA_SUCCESS {
-            query_cu_result
-        } else {
-            match cu_result {
-                Some(value) => {
-                    *result = value;
-                    CUresult::CUDA_SUCCESS
-                }
-                None => CUresult::CUDA_ERROR_INVALID_VALUE,
+        unsafe fn context_local_storage_get_impl(
+            cu_ctx: cuda_types::CUcontext,
+            key: *mut c_void,
+        ) -> Result<*mut c_void, CUresult> {
+            with_context_or_current(cu_ctx, |ctx| {
+                ctx.with_inner_mut(|ctx_mutable| {
+                    ctx_mutable
+                        .local_storage
+                        .get(&key)
+                        .map(|v| v.value)
+                        .ok_or(CUresult::CUDA_ERROR_INVALID_VALUE)
+                })?
+            })?
+        }
+        match context_local_storage_get_impl(cu_ctx, key) {
+            Ok(result) => {
+                *cu_result = result;
+                CUresult::CUDA_SUCCESS
             }
+            Err(err) => err,
         }
     }
 
@@ -386,14 +394,14 @@ impl CudaDarkApi for CudaDarkApiZluda {
     }
 }
 
-unsafe fn with_context_or_current(
+unsafe fn with_context_or_current<T>(
     ctx: CUcontext,
-    f: impl FnOnce(&context::ContextData) -> Result<(), CUresult>,
-) -> CUresult {
+    fn_: impl FnOnce(&context::ContextData) -> T,
+) -> Result<T, CUresult> {
     if ctx == ptr::null_mut() {
-        context::with_current(|c| f(c)).into_cuda()
+        context::with_current(|c| fn_(c))
     } else {
         let ctx = FromCuda::from_cuda(ctx);
-        LiveCheck::as_result(ctx).map(f).into_cuda()
+        Ok(fn_(LiveCheck::as_result(ctx)?))
     }
 }
