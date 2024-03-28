@@ -1,6 +1,8 @@
+use super::context::{ContextInnerMutable, ContextVariant, PrimaryContextData};
 use super::{
-    context,  LiveCheck, GLOBAL_STATE,
+    context, LiveCheck, GLOBAL_STATE
 };
+use crate::r#impl::context::ContextData;
 use crate::{r#impl::IntoCuda, hip_call_cuda};
 use crate::hip_call;
 use cuda_types::{CUdevice_attribute, CUdevprop, CUuuid_st, CUresult};
@@ -10,11 +12,7 @@ use paste::paste;
 use std::{
     mem,
     os::raw::{c_char, c_uint},
-    ptr,
-    sync::{
-        atomic::AtomicU32,
-        Mutex,
-    }, ops::AddAssign, ffi::CString,
+    ptr,ffi::CString,
 };
 
 const ZLUDA_SUFFIX: &'static [u8] = b" [ZLUDA]\0";
@@ -28,9 +26,7 @@ pub const COMPUTE_CAPABILITY_MINOR: u32 = 8;
 pub(crate) struct Device {
     pub(crate) compilation_mode: CompilationMode,
     pub(crate) comgr_isa: CString,
-    // Primary context is lazy-initialized, the mutex is here to secure retain
-    // from multiple threads
-    primary_context: Mutex<Option<context::Context>>,
+    primary_context: context::Context,
 }
 
 impl Device {
@@ -48,7 +44,7 @@ impl Device {
         Ok(Self {
             compilation_mode,
             comgr_isa,
-            primary_context: Mutex::new(None),
+            primary_context: LiveCheck::new(ContextData::new_primary(index as i32)),
         })
     }
 }
@@ -516,38 +512,29 @@ unsafe fn primary_ctx_get_or_retain(
     if pctx == ptr::null_mut() {
         return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
     }
-    let ctx = primary_ctx(hip_dev, |ctx| {
-        let ctx = match ctx {
-            Some(ref mut ctx) => ctx,
-            None => {
-                ctx.insert(LiveCheck::new(context::ContextData::new(0, hip_dev, true, 0)?))
-            },
-        };
-        if increment_refcount {
-            ctx.as_mut_unchecked().ref_count.get_mut().add_assign(1);
+    let ctx = primary_ctx(hip_dev, |ctx, raw_ctx| {
+        if increment_refcount || ctx.ref_count == 0  {
+            ctx.ref_count += 1;
         }
-        Ok(ctx as *mut _)
+        Ok(raw_ctx.cast_mut())
     })??;
     *pctx = ctx;
     Ok(())
 }
 
 pub(crate) unsafe fn primary_ctx_release(hip_dev: hipDevice_t) -> Result<(), CUresult> {
-    primary_ctx(hip_dev, move |maybe_ctx| {
-        if let Some(ctx) = maybe_ctx {
-            let ctx_data = ctx.as_mut_unchecked();
-            let ref_count = ctx_data.ref_count.get_mut();
-            *ref_count -= 1;
-            if *ref_count == 0 {
-                //TODO: fix
-                //ctx.try_drop(false)
-                Ok(())
-            } else {
-                Ok(())
-            }
-        } else {
-            Err(CUresult::CUDA_ERROR_INVALID_CONTEXT)
+    primary_ctx(hip_dev, |ctx, _| {
+        if ctx.ref_count == 0 {
+            return Err(CUresult::CUDA_ERROR_INVALID_CONTEXT);
         }
+        ctx.ref_count -= 1;
+        if ctx.ref_count == 0 {
+            // Even if we encounter errors we can't really surface them
+            ctx.mutable.drop_with_result().ok();
+            ctx.mutable = ContextInnerMutable::new();
+            ctx.flags = 0;
+        }
+        Ok(())
     })?
 }
 
@@ -566,53 +553,43 @@ pub(crate) unsafe fn primary_ctx_set_flags(
     hip_dev: hipDevice_t,
     flags: ::std::os::raw::c_uint,
 ) -> Result<(), CUresult> {
-    primary_ctx(hip_dev, move |maybe_ctx| {
-        if let Some(ctx) = maybe_ctx {
-            let ctx = ctx.as_mut_unchecked();
-            ctx.flags = AtomicU32::new(flags);
-            Ok(())
-        } else {
-            Err(CUresult::CUDA_ERROR_INVALID_CONTEXT)
-        }
+    primary_ctx(hip_dev, |ctx, _| {
+        ctx.flags = flags;
+        // TODO: actually use flags
+        Ok(())
     })?
 }
 
 pub(crate) unsafe fn primary_ctx_get_state(
     hip_dev: hipDevice_t,
-    flags_ptr: *mut ::std::os::raw::c_uint,
-    active_ptr: *mut ::std::os::raw::c_int,
+    flags_ptr: *mut u32,
+    active_ptr: *mut i32,
 ) -> Result<(), CUresult> {
     if flags_ptr == ptr::null_mut() || active_ptr == ptr::null_mut() {
         return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
     }
-    let maybe_flags = primary_ctx(hip_dev, move |maybe_ctx| {
-        if let Some(ctx) = maybe_ctx {
-            let ctx = ctx.as_mut_unchecked();
-            Some(*ctx.flags.get_mut())
-        } else {
-            None
-        }
+    let (flags, active) = primary_ctx(hip_dev, |ctx, _| {
+        (ctx.flags, (ctx.ref_count > 0) as i32)
     })?;
-    if let Some(flags) = maybe_flags {
-        *flags_ptr = flags;
-        *active_ptr = 1;
-    } else {
-        *flags_ptr = 0;
-        *active_ptr = 0;
-    }
+    *flags_ptr = flags;
+    *active_ptr = active;
     Ok(())
 }
 
 pub(crate) unsafe fn primary_ctx<T>(
     dev: hipDevice_t,
-    f: impl FnOnce(&mut Option<context::Context>) -> T,
+    fn_: impl FnOnce(&mut PrimaryContextData, *const LiveCheck<ContextData>) -> T,
 ) -> Result<T, CUresult> {
     let device = GLOBAL_STATE.get()?.device(dev)?;
-    let mut maybe_primary_context = device
-        .primary_context
-        .lock()
-        .map_err(|_| CUresult::CUDA_ERROR_UNKNOWN)?;
-    Ok(f(&mut maybe_primary_context))
+    let raw_ptr = &device.primary_context as *const _;
+    let context = device.primary_context.as_ref_unchecked();
+    match context.variant {
+        ContextVariant::Primary(ref mutex_over_primary_ctx) => {
+            let mut primary_ctx = mutex_over_primary_ctx.lock().map_err(|_| CUresult::CUDA_ERROR_UNKNOWN)?;
+            Ok(fn_(&mut primary_ctx, raw_ptr))
+        },
+        ContextVariant::NonPrimary(..) => Err(CUresult::CUDA_ERROR_UNKNOWN)
+    }
 }
 
 pub(crate) unsafe fn get_name(name: *mut i8, len: i32, device: i32) -> hipError_t {

@@ -21,13 +21,11 @@ impl ZludaObject for StreamData {
         if !by_owner {
             let ctx = unsafe { LiveCheck::as_result(self.ctx)? };
             {
-                let mut ctx_mutable = ctx
-                    .mutable
-                    .lock()
-                    .map_err(|_| CUresult::CUDA_ERROR_UNKNOWN)?;
-                ctx_mutable
-                    .streams
-                    .remove(&unsafe { LiveCheck::from_raw(&mut *self) });
+                ctx.with_inner_mut(|ctx_mutable| {
+                    ctx_mutable
+                        .streams
+                        .remove(&unsafe { LiveCheck::from_raw(&mut *self) });
+                })?;
             }
         }
         hip_call_cuda!(hipStreamDestroy(self.base));
@@ -59,11 +57,9 @@ pub(crate) unsafe fn create_with_priority(
         ctx: ptr::null_mut(),
     })));
     let ctx = context::with_current(|ctx| {
-        let mut ctx_mutable = ctx
-            .mutable
-            .lock()
-            .map_err(|_| CUresult::CUDA_ERROR_UNKNOWN)?;
-        ctx_mutable.streams.insert(stream);
+        ctx.with_inner_mut(|ctx_mutable| {
+            ctx_mutable.streams.insert(stream);
+        })?;
         Ok(LiveCheck::from_raw(ctx as *const _ as _))
     })??;
     (*stream).as_mut_unchecked().ctx = ctx;

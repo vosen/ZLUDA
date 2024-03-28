@@ -69,6 +69,7 @@ cuda_function_declarations!(
         cuCtxGetDevice,
         cuCtxGetLimit,
         cuCtxSetLimit,
+        cuCtxSetFlags,
         cuCtxGetStreamPriorityRange,
         cuCtxSynchronize,
         cuCtxSetCacheConfig,
@@ -483,6 +484,10 @@ mod definitions {
 
     pub(crate) unsafe fn cuCtxSetLimit(limit: hipLimit_t, value: usize) -> Result<(), CUresult> {
         context::set_limit(limit, value)
+    }
+
+    pub(crate) unsafe fn cuCtxSetFlags(flags: u32) -> Result<(), CUresult> {
+        context::set_flags(flags)
     }
 
     pub(crate) unsafe fn cuCtxGetStreamPriorityRange(
