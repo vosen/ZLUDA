@@ -19,7 +19,7 @@ use std::path::PathBuf;
 use std::str::Utf8Error;
 use zluda_dark_api::AnyUInt;
 use zluda_dark_api::FatbinFileKind;
-use zluda_dark_api::Lz4DecompressionFailure;
+use zluda_dark_api::DecompressionFailure;
 use zluda_dark_api::UnexpectedFieldError;
 
 const LOG_PREFIX: &[u8] = b"[ZLUDA_DUMP] ";
@@ -447,7 +447,7 @@ impl Display for LogEntry {
                     file_name
                 )
             }
-            LogEntry::Lz4DecompressionFailure => write!(f, "LZ4 decompression failure"),
+            LogEntry::Lz4DecompressionFailure => write!(f, "Decompression failure"),
             LogEntry::UnknownExportTableFn => write!(f, "Unknown export table function"),
             LogEntry::UnexpectedBinaryField {
                 field_name,
@@ -591,8 +591,8 @@ impl From<io::Error> for LogEntry {
     }
 }
 
-impl From<Lz4DecompressionFailure> for LogEntry {
-    fn from(_err: Lz4DecompressionFailure) -> Self {
+impl From<DecompressionFailure> for LogEntry {
+    fn from(_err: DecompressionFailure) -> Self {
         LogEntry::Lz4DecompressionFailure
     }
 }
