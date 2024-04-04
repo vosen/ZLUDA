@@ -2079,17 +2079,17 @@ fn emit_inst_mad_lo(
     )
 }
 
-// TODO: support mad.hi.cc
 fn emit_inst_madcc(
     ctx: &mut EmitContext,
     type_: ast::ScalarType,
     is_hi: bool,
     arg: &Arg4CarryOut<ExpandedArgParams>,
 ) -> Result<(), TranslateError> {
-    let builder = ctx.builder.get();
-    let src1 = ctx.names.value(arg.src1)?;
-    let src2 = ctx.names.value(arg.src2)?;
-    let mul_result = unsafe { LLVMBuildMul(builder, src1, src2, LLVM_UNNAMED) };
+    let mul_result = if is_hi {
+        emit_inst_mul_hi_impl(ctx, type_, None, arg.src1, arg.src2)?
+    } else {
+        emit_inst_mul_low_impl(ctx, None, arg.src1, arg.src2, LLVMBuildMul)?
+    };
     emit_inst_addsub_cc_impl(
         ctx,
         "add",
@@ -2099,6 +2099,21 @@ fn emit_inst_madcc(
         mul_result,
         arg.src3,
     )
+    /*
+        let builder = ctx.builder.get();
+        let src1 = ctx.names.value(arg.src1)?;
+        let src2 = ctx.names.value(arg.src2)?;
+        let mul_result = unsafe { LLVMBuildMul(builder, src1, src2, LLVM_UNNAMED) };
+        emit_inst_addsub_cc_impl(
+            ctx,
+            "add",
+            type_,
+            arg.dst,
+            arg.carry_out,
+            mul_result,
+            arg.src3,
+        )
+    */
 }
 
 fn get_llvm_type_struct<'a>(
