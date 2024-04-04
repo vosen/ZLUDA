@@ -290,6 +290,7 @@ test_ptx!(
     [2147487519u32, 4294934539]
 );
 test_ptx!(madc_cc2, [0xDEADu32], [0u32, 1, 1, 2]);
+test_ptx!(mad_hi_cc, [0x26223377u32, 0x70777766u32, 0x60666633u32], [0x71272866u32, 0u32, 1, 1, 2]); // Multi-tap :)
 test_ptx!(mov_vector_cast, [0x200000001u64], [2u32, 1u32]);
 test_ptx!(
     cvt_clamp,
