@@ -380,6 +380,7 @@ pub enum Instruction<P: ArgParams> {
     },
     MadCC {
         type_: ScalarType,
+        is_hi: bool,
         arg: Arg4<P>,
     },
     Fma(ArithFloat, Arg4<P>),

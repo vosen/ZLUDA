@@ -621,8 +621,8 @@ fn emit_statement(
         crate::translate::Statement::MadC(MadCDetails { type_, is_hi, arg }) => {
             emit_inst_madc(ctx, type_, is_hi, &arg)?
         }
-        crate::translate::Statement::MadCC(MadCCDetails { type_, arg }) => {
-            emit_inst_madcc(ctx, type_, &arg)?
+        crate::translate::Statement::MadCC(MadCCDetails { type_, is_hi, arg }) => {
+            emit_inst_madcc(ctx, type_, is_hi, &arg)?
         }
         crate::translate::Statement::AddC(type_, arg) => emit_inst_add_c(ctx, type_, &arg)?,
         crate::translate::Statement::AddCC(type_, arg) => {
@@ -2083,6 +2083,7 @@ fn emit_inst_mad_lo(
 fn emit_inst_madcc(
     ctx: &mut EmitContext,
     type_: ast::ScalarType,
+    is_hi: bool,
     arg: &Arg4CarryOut<ExpandedArgParams>,
 ) -> Result<(), TranslateError> {
     let builder = ctx.builder.get();

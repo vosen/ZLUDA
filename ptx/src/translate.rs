@@ -1999,9 +1999,10 @@ fn insert_hardware_registers_impl<'input>(
                 is_hi,
                 arg: Arg4CarryIn::new(arg, carry_out, TypedOperand::Reg(overflow_flag)),
             })),
-            Statement::Instruction(ast::Instruction::MadCC { type_, arg }) => {
+            Statement::Instruction(ast::Instruction::MadCC { type_, is_hi, arg }) => {
                 result.push(Statement::MadCC(MadCCDetails {
                     type_,
+                    is_hi,
                     arg: Arg4CarryOut::new(arg, TypedOperand::Reg(overflow_flag)),
                 }))
             }
@@ -5568,6 +5569,7 @@ impl<T: ArgParamsEx<Id = Id>, U: ArgParamsEx<Id = Id>> Visitable<T, U> for MadCD
 
 pub(crate) struct MadCCDetails<P: ast::ArgParams> {
     pub(crate) type_: ast::ScalarType,
+    pub(crate) is_hi: bool,
     pub(crate) arg: Arg4CarryOut<P>,
 }
 
@@ -5578,6 +5580,7 @@ impl<T: ArgParamsEx<Id = Id>, U: ArgParamsEx<Id = Id>> Visitable<T, U> for MadCC
     ) -> Result<Statement<ast::Instruction<U>, U>, TranslateError> {
         Ok(Statement::MadCC(MadCCDetails {
             type_: self.type_,
+            is_hi: self.is_hi,
             arg: self.arg.map(visitor, self.type_)?,
         }))
     }
@@ -6486,8 +6489,9 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
                 carry_out,
                 arg: arg.map(visitor, &ast::Type::Scalar(type_), false)?,
             },
-            ast::Instruction::MadCC { type_, arg } => ast::Instruction::MadCC {
+            ast::Instruction::MadCC { type_, arg, is_hi } => ast::Instruction::MadCC {
                 type_,
+                is_hi,
                 arg: arg.map(visitor, &ast::Type::Scalar(type_), false)?,
             },
             ast::Instruction::Tex(details, arg) => {
