@@ -1516,7 +1516,12 @@ InstMad: ast::Instruction<ast::ParsedArgParams<'input>> = {
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#extended-precision-arithmetic-instructions-mad-cc
 InstMadCC: ast::Instruction<ast::ParsedArgParams<'input>> = {
-    "mad" ".lo" ".cc" <type_:IntType3264> <arg:Arg4> => ast::Instruction::MadCC{<>},
+    "mad" ".lo" ".cc" <type_:IntType3264> <arg:Arg4> => {
+        ast::Instruction::MadCC { type_, arg, is_hi: false }
+    },
+    "mad" ".hi" ".cc" <type_:IntType3264> <arg:Arg4> => {
+        ast::Instruction::MadCC { type_, arg, is_hi: true }
+    },
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#extended-precision-arithmetic-instructions-madc

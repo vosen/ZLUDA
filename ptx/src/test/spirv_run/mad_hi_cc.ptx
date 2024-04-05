@@ -1,0 +1,41 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry mad_hi_cc(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+    .reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .u32 	    unused;
+
+    .reg .s32 	    dst1;
+    .reg .b32 	    src1;
+    .reg .b32 	    src2;
+    .reg .b32 	    src3;
+
+    .reg .b32 	    result_1;
+    .reg .b32 	    carry_out_1;
+    .reg .b32 	    carry_out_2;
+
+    ld.param.u64    in_addr, [input];
+    ld.param.u64    out_addr, [output];
+
+    // test valid computational results
+    ld.s32          src1, [in_addr];
+    ld.s32          src2, [in_addr+4];
+    ld.b32          src3, [in_addr+8];
+    mad.hi.cc.s32   dst1, src1, src2, src3;
+
+    mad.hi.cc.u32   unused, 65536, 65536, 4294967294; // non-overflowing
+    addc.u32        carry_out_1, 0, 0; // carry_out_1 should be 0
+    mad.hi.cc.u32   unused, 65536, 65536, 4294967295; // overflowing
+    addc.u32        carry_out_2, 0, 0; // carry_out_2 should be 1
+
+    st.s32          [out_addr], dst1;
+    st.s32          [out_addr+4], carry_out_1;
+    st.s32          [out_addr+8], carry_out_2;
+    ret;
+}
