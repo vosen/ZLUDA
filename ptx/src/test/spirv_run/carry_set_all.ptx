@@ -22,6 +22,10 @@
     .reg .b32 	    carry5_sub;
     .reg .b32 	    carry6_add;
     .reg .b32 	    carry6_sub;
+    .reg .b32 	    carry7_add;
+    .reg .b32 	    carry7_sub;
+    .reg .b32 	    carry8_add;
+    .reg .b32 	    carry8_sub;
 
     ld.param.u64    out_addr, [output];
 
@@ -49,18 +53,32 @@
     addc.u32        carry6_add, 0, 0;
     subc.u32        carry6_sub, 0, 0;
 
+    add.cc.u32      carry7_add, 0, 0;
+    subc.cc.u32     carry7_add, 0, 0;
+    addc.u32        carry7_add, 0, 0;
+    subc.u32        carry7_sub, 0, 0;
+
+    add.cc.u32      carry8_add, 0, 0;
+    subc.cc.u32     carry8_add, 0, 1;
+    addc.u32        carry8_add, 0, 0;
+    subc.u32        carry8_sub, 0, 0;
+
     st.u32          [out_addr], carry1_add;
     st.u32          [out_addr+4], carry2_add;
     st.u32          [out_addr+8], carry3_add;
     st.u32          [out_addr+12], carry4_add;
     st.u32          [out_addr+16], carry5_add;
     st.u32          [out_addr+20], carry6_add;
+    st.u32          [out_addr+24], carry7_add;
+    st.u32          [out_addr+28], carry8_add;
 
-    st.u32          [out_addr+24], carry1_sub;
-    st.u32          [out_addr+28], carry2_sub;
-    st.u32          [out_addr+32], carry3_sub;
-    st.u32          [out_addr+36], carry4_sub;
-    st.u32          [out_addr+40], carry5_sub;
-    st.u32          [out_addr+44], carry6_sub;
+    st.u32          [out_addr+32], carry1_sub;
+    st.u32          [out_addr+36], carry2_sub;
+    st.u32          [out_addr+40], carry3_sub;
+    st.u32          [out_addr+44], carry4_sub;
+    st.u32          [out_addr+48], carry5_sub;
+    st.u32          [out_addr+52], carry6_sub;
+    st.u32          [out_addr+56], carry7_sub;
+    st.u32          [out_addr+60], carry8_sub;
 	ret;
 }

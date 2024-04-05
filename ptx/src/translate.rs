@@ -1963,30 +1963,26 @@ fn insert_hardware_registers<'input>(
 }
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#extended-precision-integer-arithmetic-instructions
-// NVIDIA documentation is misleading. In fact there is no single CC.CF,
-// but separate registers for overflow (`add` and `mad`) and underflow (`sub`)
-// For reference check the .ptx tests
+// NVIDIA documentation is slightly misleading when it comes to subc and sub.cc.
+// They both invert the CC flag. Meaning that for sub:
+// * sub.cc x, 0,1 will set CC to 0
+// * sub.cc x, 0,0 will set CC to 1
+// and for subc:
+// * if CC is 1 then subc will compute d = a - b
+// * if CC is 0 then subc will compute d = (a - b) + 1
 fn insert_hardware_registers_impl<'input>(
     id_defs: &mut IdNameMapBuilder<'input>,
     typed_statements: Vec<TypedStatement>,
 ) -> Result<Vec<TypedStatement>, TranslateError> {
     let mut result = Vec::with_capacity(typed_statements.len());
-    let overflow_flag_var = id_defs.register_variable_def(
+    let carry_flag_variable = id_defs.register_variable_def(
         None,
         ast::Type::Scalar(ast::ScalarType::Pred),
         ast::StateSpace::Reg,
         Some(ast::Initializer::Constant(ast::ImmediateValue::U64(0))),
     );
-    let underflow_flag_var = id_defs.register_variable_def(
-        None,
-        ast::Type::Scalar(ast::ScalarType::Pred),
-        ast::StateSpace::Reg,
-        Some(ast::Initializer::Constant(ast::ImmediateValue::U64(0))),
-    );
-    let overflow_flag = overflow_flag_var.name;
-    let underflow_flag = underflow_flag_var.name;
-    result.push(Statement::Variable(overflow_flag_var));
-    result.push(Statement::Variable(underflow_flag_var));
+    let carry_flag = carry_flag_variable.name;
+    result.push(Statement::Variable(carry_flag_variable));
     for statement in typed_statements {
         match statement {
             Statement::Instruction(ast::Instruction::MadC {
@@ -1997,38 +1993,88 @@ fn insert_hardware_registers_impl<'input>(
             }) => result.push(Statement::MadC(MadCDetails {
                 type_,
                 is_hi,
-                arg: Arg4CarryIn::new(arg, carry_out, TypedOperand::Reg(overflow_flag)),
+                arg: Arg4CarryIn::new(arg, carry_out, TypedOperand::Reg(carry_flag)),
             })),
             Statement::Instruction(ast::Instruction::MadCC { type_, is_hi, arg }) => {
                 result.push(Statement::MadCC(MadCCDetails {
                     type_,
                     is_hi,
-                    arg: Arg4CarryOut::new(arg, TypedOperand::Reg(overflow_flag)),
+                    arg: Arg4CarryOut::new(arg, TypedOperand::Reg(carry_flag)),
                 }))
             }
             Statement::Instruction(ast::Instruction::AddC(details, args)) => {
                 result.push(Statement::AddC(
                     details.type_,
-                    Arg3CarryIn::new(args, details.carry_out, TypedOperand::Reg(overflow_flag)),
+                    Arg3CarryIn::new(args, details.carry_out, TypedOperand::Reg(carry_flag)),
                 ))
             }
             Statement::Instruction(ast::Instruction::AddCC(details, args)) => {
                 result.push(Statement::AddCC(
                     details,
-                    Arg3CarryOut::new(args, TypedOperand::Reg(overflow_flag)),
+                    Arg3CarryOut::new(args, TypedOperand::Reg(carry_flag)),
                 ))
             }
             Statement::Instruction(ast::Instruction::SubC(details, args)) => {
+                let inverted_carry_in = id_defs.register_intermediate(Some((
+                    ast::Type::Scalar(ast::ScalarType::Pred),
+                    ast::StateSpace::Reg,
+                )));
+                result.push(Statement::Instruction(ast::Instruction::Not(
+                    ast::ScalarType::Pred,
+                    ast::Arg2 {
+                        dst: TypedOperand::Reg(inverted_carry_in),
+                        src: TypedOperand::Reg(carry_flag),
+                    },
+                )));
+                let (carry_out_id, carry_out_postprocess) = if details.carry_out {
+                    let inverted_carry_out = id_defs.register_intermediate(Some((
+                        ast::Type::Scalar(ast::ScalarType::Pred),
+                        ast::StateSpace::Reg,
+                    )));
+                    let invert_statement = Statement::Instruction(ast::Instruction::Not(
+                        ast::ScalarType::Pred,
+                        ast::Arg2 {
+                            dst: TypedOperand::Reg(carry_flag),
+                            src: TypedOperand::Reg(inverted_carry_out),
+                        },
+                    ));
+                    (
+                        Some(TypedOperand::Reg(inverted_carry_out)),
+                        Some(invert_statement),
+                    )
+                } else {
+                    (None, None)
+                };
                 result.push(Statement::SubC(
                     details.type_,
-                    Arg3CarryIn::new(args, details.carry_out, TypedOperand::Reg(underflow_flag)),
-                ))
+                    Arg3CarryIn {
+                        dst: args.dst,
+                        carry_out: carry_out_id,
+                        carry_in: TypedOperand::Reg(inverted_carry_in),
+                        src1: args.src1,
+                        src2: args.src2,
+                    },
+                ));
+                if let Some(carry_out_postprocess) = carry_out_postprocess {
+                    result.push(carry_out_postprocess);
+                }
             }
-            Statement::Instruction(ast::Instruction::SubCC(details, args)) => {
+            Statement::Instruction(ast::Instruction::SubCC(type_, args)) => {
+                let temp = id_defs.register_intermediate(Some((
+                    ast::Type::Scalar(ast::ScalarType::Pred),
+                    ast::StateSpace::Reg,
+                )));
                 result.push(Statement::SubCC(
-                    details,
-                    Arg3CarryOut::new(args, TypedOperand::Reg(underflow_flag)),
-                ))
+                    type_,
+                    Arg3CarryOut::new(args, TypedOperand::Reg(temp)),
+                ));
+                result.push(Statement::Instruction(ast::Instruction::Not(
+                    ast::ScalarType::Pred,
+                    ast::Arg2 {
+                        dst: TypedOperand::Reg(carry_flag),
+                        src: TypedOperand::Reg(temp),
+                    },
+                )));
             }
             s => result.push(s),
         }
