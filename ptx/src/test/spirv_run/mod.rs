@@ -271,7 +271,11 @@ test_ptx!(const, [0u16], [10u16, 20, 30, 40]);
 test_ptx!(cvt_s16_s8, [0x139231C2u32], [0xFFFFFFC2u32]);
 test_ptx!(cvt_f64_f32, [0.125f32], [0.125f64]);
 test_ptx!(cvt_f32_f16, [0xa1u16], [0x37210000u32]);
-test_ptx!(prmt, [0x70c507d6u32, 0x6fbd4b5cu32], [0x6fbdd65cu32, 0x6FFFD600]);
+test_ptx!(
+    prmt,
+    [0x70c507d6u32, 0x6fbd4b5cu32],
+    [0x6fbdd65cu32, 0x6FFFD600]
+);
 test_ptx!(
     prmt_non_immediate,
     [0x70c507d6u32, 0x6fbd4b5cu32],
@@ -289,8 +293,11 @@ test_ptx!(
     [65521u32, 2147549199, 0x1000],
     [2147487519u32, 4294934539]
 );
-test_ptx!(madc_cc2, [0xDEADu32], [0u32, 1, 1, 2]);
-test_ptx!(mad_hi_cc, [0x26223377u32, 0x70777766u32, 0x60666633u32], [0x71272866u32, 0u32, 1u32]); // Multi-tap :)
+test_ptx!(
+    mad_hi_cc,
+    [0x26223377u32, 0x70777766u32, 0x60666633u32],
+    [0x71272866u32, 0u32, 1u32]
+); // Multi-tap :)
 test_ptx!(mov_vector_cast, [0x200000001u64], [2u32, 1u32]);
 test_ptx!(
     cvt_clamp,
@@ -323,11 +330,10 @@ test_ptx!(
     ],
     [4294967295u32, 0, 2]
 );
-test_ptx!(carry_mixed, [0xDEADu32], [1u32, 1u32]);
 test_ptx!(
-    subc_cc2,
+    carry_set_all,
     [0xDEADu32],
-    [0u32, 1, 0, 4294967295, 1, 4294967295, 1]
+    [1u32, 0, 0, 1, 0, 1, 0u32, 4294967295, 4294967295, 0u32, 4294967295, 0u32]
 );
 test_ptx!(vshr, [0x6f3650f4u32, 22, 0xc62d4586], [0xC62D4742u32]);
 test_ptx!(bfind, [0u32, 1u32, 0x64eb0414], [u32::MAX, 0, 30]);
@@ -337,7 +343,11 @@ test_ptx!(
     [f16::from_f32(2.0), f16::from_f32(3.0)],
     [f16::from_f32(2.0), f16::from_f32(5.0)]
 );
-test_ptx!(set_f16x2, [0xc1690e6eu32, 0x13739444u32, 0x424834CC, 0x4248B4CC], [0xffffu32, 0x3C000000]);
+test_ptx!(
+    set_f16x2,
+    [0xc1690e6eu32, 0x13739444u32, 0x424834CC, 0x4248B4CC],
+    [0xffffu32, 0x3C000000]
+);
 test_ptx!(
     dp4a,
     [0xde3032f5u32, 0x2474fe15, 0xf51d8d6c],
