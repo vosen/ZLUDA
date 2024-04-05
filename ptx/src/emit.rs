@@ -13,6 +13,7 @@ use zluda_llvm::prelude::*;
 use zluda_llvm::zluda::*;
 use zluda_llvm::*;
 
+use crate::ast::SetpData;
 use crate::translate::{
     self, Arg4CarryOut, ConstType, ConversionKind, DenormSummary, ExpandedArgParams, FPDenormMode,
     MadCCDetails, MadCDetails, TranslationModule, TypeKind, TypeParts,
@@ -1137,6 +1138,7 @@ fn emit_instruction(
         ast::Instruction::Vshr(arg) => emit_inst_vshr(ctx, arg)?,
         ast::Instruction::Set(details, arg) => emit_inst_set(ctx, details, arg)?,
         ast::Instruction::Red(details, arg) => emit_inst_red(ctx, details, arg)?,
+        ast::Instruction::Sad(type_, arg) => emit_inst_sad(ctx, *type_, arg)?,
         // replaced by function calls or Statement variants
         ast::Instruction::Activemask { .. }
         | ast::Instruction::Bar(..)
@@ -1159,6 +1161,35 @@ fn emit_instruction(
         | ast::Instruction::Nanosleep(..)
         | ast::Instruction::MatchAny(..) => return Err(TranslateError::unreachable()),
     })
+}
+
+fn emit_inst_sad(
+    ctx: &mut EmitContext,
+    type_: ast::ScalarType,
+    arg: &ast::Arg4<ExpandedArgParams>,
+) -> Result<(), TranslateError> {
+    let builder = ctx.builder.get();
+    let less_than = emit_inst_setp_int(
+        ctx,
+        &SetpData {
+            typ: type_,
+            flush_to_zero: None,
+            cmp_op: ast::SetpCompareOp::Less,
+        },
+        None,
+        arg.src1,
+        arg.src2,
+    )?;
+    let a = ctx.names.value(arg.src1)?;
+    let b = ctx.names.value(arg.src2)?;
+    let b_minus_a = unsafe { LLVMBuildSub(builder, b, a, LLVM_UNNAMED) };
+    let a_minus_b = unsafe { LLVMBuildSub(builder, a, b, LLVM_UNNAMED) };
+    let a_or_b = unsafe { LLVMBuildSelect(builder, less_than, b_minus_a, a_minus_b, LLVM_UNNAMED) };
+    let src3 = ctx.names.value(arg.src3)?;
+    ctx.names.register_result(arg.dst, |dst_name| unsafe {
+        LLVMBuildAdd(builder, src3, a_or_b, dst_name)
+    });
+    Ok(())
 }
 
 fn emit_inst_red(

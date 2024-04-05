@@ -6644,6 +6644,9 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
                     ast::StateSpace::Reg,
                 )),
             )?),
+            ast::Instruction::Sad(type_, a) => {
+                ast::Instruction::Sad(type_, a.map(visitor, &ast::Type::Scalar(type_), false)?)
+            }
         })
     }
 }
@@ -7000,6 +7003,7 @@ impl<T: ast::ArgParams> ast::Instruction<T> {
             ast::Instruction::Shf(..) => None,
             ast::Instruction::Vote(..) => None,
             ast::Instruction::Nanosleep(..) => None,
+            ast::Instruction::Sad(_, _) => None,
             ast::Instruction::Sub(ast::ArithDetails::Float(float_control), _)
             | ast::Instruction::Add(ast::ArithDetails::Float(float_control), _)
             | ast::Instruction::Mul(ast::MulDetails::Float(float_control), _)

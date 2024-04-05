@@ -476,6 +476,7 @@ pub enum Instruction<P: ArgParams> {
     MatchAny(Arg3<P>),
     Red(AtomDetails, Arg2St<P>),
     Nanosleep(Arg1<P>),
+    Sad(ScalarType, Arg4<P>),
 }
 
 #[derive(Copy, Clone)]
