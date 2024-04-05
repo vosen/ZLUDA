@@ -1969,7 +1969,7 @@ fn insert_hardware_registers<'input>(
 // * sub.cc x, 0,0 will set CC to 1
 // and for subc:
 // * if CC is 1 then subc will compute d = a - b
-// * if CC is 0 then subc will compute d = (a - b) + 1
+// * if CC is 0 then subc will compute d = a - b - 1
 fn insert_hardware_registers_impl<'input>(
     id_defs: &mut IdNameMapBuilder<'input>,
     typed_statements: Vec<TypedStatement>,
