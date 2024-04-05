@@ -2099,21 +2099,6 @@ fn emit_inst_madcc(
         mul_result,
         arg.src3,
     )
-    /*
-        let builder = ctx.builder.get();
-        let src1 = ctx.names.value(arg.src1)?;
-        let src2 = ctx.names.value(arg.src2)?;
-        let mul_result = unsafe { LLVMBuildMul(builder, src1, src2, LLVM_UNNAMED) };
-        emit_inst_addsub_cc_impl(
-            ctx,
-            "add",
-            type_,
-            arg.dst,
-            arg.carry_out,
-            mul_result,
-            arg.src3,
-        )
-    */
 }
 
 fn get_llvm_type_struct<'a>(
@@ -2192,29 +2177,6 @@ fn emit_inst_madc(
         mul_result,
         args.src3,
     )
-    /*
-       let src3 = ctx.names.value(args.src3)?;
-       let add_no_carry = unsafe { LLVMBuildAdd(builder, mul_result, src3, LLVM_UNNAMED) };
-       let carry_flag = ctx.names.value(args.carry_in)?;
-       let llvm_type = get_llvm_type(ctx, &ast::Type::Scalar(type_))?;
-       let carry_flag = unsafe { LLVMBuildZExt(builder, carry_flag, llvm_type, LLVM_UNNAMED) };
-       if let Some(carry_out) = args.carry_out {
-           emit_inst_addsub_cc_impl(
-               ctx,
-               "add",
-               type_,
-               args.dst,
-               carry_out,
-               add_no_carry,
-               carry_flag,
-           )?;
-       } else {
-           ctx.names.register_result(args.dst, |dst| unsafe {
-               LLVMBuildAdd(builder, add_no_carry, carry_flag, dst)
-           });
-       }
-       Ok(())
-    */
 }
 
 fn emit_inst_add_c(

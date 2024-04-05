@@ -17,9 +17,8 @@
     .reg .b32 	    src3;
 
     .reg .b32 	    result_1;
-    .reg .b32 	    carry_out_1_1;
-    .reg .b32 	    carry_out_1_2;
-    .reg .b32 	    carry_out_1_3;
+    .reg .b32 	    carry_out_1;
+    .reg .b32 	    carry_out_2;
 
     ld.param.u64    in_addr, [input];
     ld.param.u64    out_addr, [output];
@@ -29,22 +28,14 @@
     ld.s32          src2, [in_addr+4];
     ld.b32          src3, [in_addr+8];
     mad.hi.cc.s32   dst1, src1, src2, src3;
+
+    mad.hi.cc.u32   unused, 65536, 65536, 4294967294; // non-overflowing
+    addc.u32        carry_out_1, 0, 0; // carry_out_1 should be 0
+    mad.hi.cc.u32   unused, 65536, 65536, 4294967295; // overflowing
+    addc.u32        carry_out_2, 0, 0; // carry_out_2 should be 1
+
     st.s32          [out_addr], dst1;
-
-    // set carry=1
-    mad.lo.cc.u32      unused, 0, 0, 4294967295;
-    // overflow addition
-    madc.hi.cc.u32     result_1, 65536, 65536, 4294967295;
-    // write carry
-    madc.lo.u32        carry_out_1_1, 0, 0, 0;
-    // overflow is also detected by addc
-    addc.u32            carry_out_1_2, 0, 0;
-    // but not subc
-    subc.u32            carry_out_1_3, 2, 0;
-
-    st.s32          [out_addr+4], result_1;
-    st.s32          [out_addr+8], carry_out_1_1;
-    st.s32          [out_addr+12], carry_out_1_2;
-    st.s32          [out_addr+16], carry_out_1_3;
+    st.s32          [out_addr+4], carry_out_1;
+    st.s32          [out_addr+8], carry_out_2;
     ret;
 }

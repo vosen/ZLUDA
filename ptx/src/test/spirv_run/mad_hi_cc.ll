@@ -1,12 +1,12 @@
 target datalayout = "e-p:64:64-p1:64:64-p2:32:32-p3:32:32-p4:64:64-p5:32:32-p6:32:32-i64:64-v16:16-v24:32-v32:32-v48:64-v96:128-v192:256-v256:256-v512:512-v1024:1024-v2048:2048-n32:64-S32-A5-G1-ni:7"
 target triple = "amdgcn-amd-amdhsa"
 
-define protected amdgpu_kernel void @mad_hi_cc(ptr addrspace(4) byref(i64) %"76", ptr addrspace(4) byref(i64) %"77") #0 {
-"99":
+define protected amdgpu_kernel void @mad_hi_cc(ptr addrspace(4) byref(i64) %"61", ptr addrspace(4) byref(i64) %"62") #0 {
+"78":
+  %"14" = alloca i1, align 1, addrspace(5)
+  store i1 false, ptr addrspace(5) %"14", align 1
   %"15" = alloca i1, align 1, addrspace(5)
   store i1 false, ptr addrspace(5) %"15", align 1
-  %"16" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"16", align 1
   %"4" = alloca i64, align 8, addrspace(5)
   %"5" = alloca i64, align 8, addrspace(5)
   %"6" = alloca i32, align 4, addrspace(5)
@@ -17,90 +17,69 @@ define protected amdgpu_kernel void @mad_hi_cc(ptr addrspace(4) byref(i64) %"76"
   %"11" = alloca i32, align 4, addrspace(5)
   %"12" = alloca i32, align 4, addrspace(5)
   %"13" = alloca i32, align 4, addrspace(5)
-  %"14" = alloca i32, align 4, addrspace(5)
-  %"17" = load i64, ptr addrspace(4) %"76", align 8
-  store i64 %"17", ptr addrspace(5) %"4", align 8
-  %"18" = load i64, ptr addrspace(4) %"77", align 8
-  store i64 %"18", ptr addrspace(5) %"5", align 8
-  %"20" = load i64, ptr addrspace(5) %"4", align 8
-  %"79" = inttoptr i64 %"20" to ptr
-  %"78" = load i32, ptr %"79", align 4
-  store i32 %"78", ptr addrspace(5) %"8", align 4
-  %"22" = load i64, ptr addrspace(5) %"4", align 8
-  %"80" = inttoptr i64 %"22" to ptr
-  %"101" = getelementptr inbounds i8, ptr %"80", i64 4
-  %"81" = load i32, ptr %"101", align 4
-  store i32 %"81", ptr addrspace(5) %"9", align 4
-  %"24" = load i64, ptr addrspace(5) %"4", align 8
-  %"82" = inttoptr i64 %"24" to ptr
-  %"103" = getelementptr inbounds i8, ptr %"82", i64 8
-  %"23" = load i32, ptr %"103", align 4
-  store i32 %"23", ptr addrspace(5) %"10", align 4
-  %"27" = load i32, ptr addrspace(5) %"8", align 4
-  %"28" = load i32, ptr addrspace(5) %"9", align 4
-  %"29" = load i32, ptr addrspace(5) %"10", align 4
-  %0 = sext i32 %"27" to i64
-  %1 = sext i32 %"28" to i64
+  %"16" = load i64, ptr addrspace(4) %"61", align 8
+  store i64 %"16", ptr addrspace(5) %"4", align 8
+  %"17" = load i64, ptr addrspace(4) %"62", align 8
+  store i64 %"17", ptr addrspace(5) %"5", align 8
+  %"19" = load i64, ptr addrspace(5) %"4", align 8
+  %"64" = inttoptr i64 %"19" to ptr
+  %"63" = load i32, ptr %"64", align 4
+  store i32 %"63", ptr addrspace(5) %"8", align 4
+  %"21" = load i64, ptr addrspace(5) %"4", align 8
+  %"65" = inttoptr i64 %"21" to ptr
+  %"80" = getelementptr inbounds i8, ptr %"65", i64 4
+  %"66" = load i32, ptr %"80", align 4
+  store i32 %"66", ptr addrspace(5) %"9", align 4
+  %"23" = load i64, ptr addrspace(5) %"4", align 8
+  %"67" = inttoptr i64 %"23" to ptr
+  %"82" = getelementptr inbounds i8, ptr %"67", i64 8
+  %"22" = load i32, ptr %"82", align 4
+  store i32 %"22", ptr addrspace(5) %"10", align 4
+  %"26" = load i32, ptr addrspace(5) %"8", align 4
+  %"27" = load i32, ptr addrspace(5) %"9", align 4
+  %"28" = load i32, ptr addrspace(5) %"10", align 4
+  %0 = sext i32 %"26" to i64
+  %1 = sext i32 %"27" to i64
   %2 = mul nsw i64 %0, %1
   %3 = lshr i64 %2, 32
   %4 = trunc i64 %3 to i32
-  %5 = call { i32, i1 } @llvm.uadd.with.overflow.i32(i32 %4, i32 %"29")
-  %"25" = extractvalue { i32, i1 } %5, 0
-  %"26" = extractvalue { i32, i1 } %5, 1
-  store i32 %"25", ptr addrspace(5) %"7", align 4
-  store i1 %"26", ptr addrspace(5) %"15", align 1
-  %"30" = load i64, ptr addrspace(5) %"5", align 8
-  %"31" = load i32, ptr addrspace(5) %"7", align 4
-  %"86" = inttoptr i64 %"30" to ptr
-  store i32 %"31", ptr %"86", align 4
-  %6 = call { i32, i1 } @llvm.uadd.with.overflow.i32(i32 0, i32 -1)
-  %"32" = extractvalue { i32, i1 } %6, 0
-  %"33" = extractvalue { i32, i1 } %6, 1
-  store i32 %"32", ptr addrspace(5) %"6", align 4
-  store i1 %"33", ptr addrspace(5) %"15", align 1
-  %"36" = load i1, ptr addrspace(5) %"15", align 1
-  %7 = zext i1 %"36" to i32
+  %5 = call { i32, i1 } @llvm.uadd.with.overflow.i32(i32 %4, i32 %"28")
+  %"24" = extractvalue { i32, i1 } %5, 0
+  %"25" = extractvalue { i32, i1 } %5, 1
+  store i32 %"24", ptr addrspace(5) %"7", align 4
+  store i1 %"25", ptr addrspace(5) %"14", align 1
+  %6 = call { i32, i1 } @llvm.uadd.with.overflow.i32(i32 1, i32 -2)
+  %"29" = extractvalue { i32, i1 } %6, 0
+  %"30" = extractvalue { i32, i1 } %6, 1
+  store i32 %"29", ptr addrspace(5) %"6", align 4
+  store i1 %"30", ptr addrspace(5) %"14", align 1
+  %"32" = load i1, ptr addrspace(5) %"14", align 1
+  %7 = zext i1 %"32" to i32
+  %"71" = add i32 0, %7
+  store i32 %"71", ptr addrspace(5) %"12", align 4
   %8 = call { i32, i1 } @llvm.uadd.with.overflow.i32(i32 1, i32 -1)
-  %9 = extractvalue { i32, i1 } %8, 0
-  %10 = extractvalue { i32, i1 } %8, 1
-  %11 = call { i32, i1 } @llvm.uadd.with.overflow.i32(i32 %9, i32 %7)
-  %"87" = extractvalue { i32, i1 } %11, 0
-  %12 = extractvalue { i32, i1 } %11, 1
-  %"35" = xor i1 %10, %12
-  store i32 %"87", ptr addrspace(5) %"11", align 4
-  store i1 %"35", ptr addrspace(5) %"15", align 1
-  %"38" = load i1, ptr addrspace(5) %"15", align 1
-  %13 = zext i1 %"38" to i32
-  %"88" = add i32 0, %13
-  store i32 %"88", ptr addrspace(5) %"12", align 4
-  %"40" = load i1, ptr addrspace(5) %"15", align 1
-  %14 = zext i1 %"40" to i32
-  %"89" = add i32 0, %14
-  store i32 %"89", ptr addrspace(5) %"13", align 4
-  %"42" = load i1, ptr addrspace(5) %"16", align 1
-  %15 = zext i1 %"42" to i32
-  %"90" = sub i32 2, %15
-  store i32 %"90", ptr addrspace(5) %"14", align 4
-  %"43" = load i64, ptr addrspace(5) %"5", align 8
-  %"44" = load i32, ptr addrspace(5) %"11", align 4
-  %"91" = inttoptr i64 %"43" to ptr
-  %"105" = getelementptr inbounds i8, ptr %"91", i64 4
-  store i32 %"44", ptr %"105", align 4
-  %"45" = load i64, ptr addrspace(5) %"5", align 8
-  %"46" = load i32, ptr addrspace(5) %"12", align 4
-  %"93" = inttoptr i64 %"45" to ptr
-  %"107" = getelementptr inbounds i8, ptr %"93", i64 8
-  store i32 %"46", ptr %"107", align 4
-  %"47" = load i64, ptr addrspace(5) %"5", align 8
-  %"48" = load i32, ptr addrspace(5) %"13", align 4
-  %"95" = inttoptr i64 %"47" to ptr
-  %"109" = getelementptr inbounds i8, ptr %"95", i64 12
-  store i32 %"48", ptr %"109", align 4
-  %"49" = load i64, ptr addrspace(5) %"5", align 8
-  %"50" = load i32, ptr addrspace(5) %"14", align 4
-  %"97" = inttoptr i64 %"49" to ptr
-  %"111" = getelementptr inbounds i8, ptr %"97", i64 16
-  store i32 %"50", ptr %"111", align 4
+  %"33" = extractvalue { i32, i1 } %8, 0
+  %"34" = extractvalue { i32, i1 } %8, 1
+  store i32 %"33", ptr addrspace(5) %"6", align 4
+  store i1 %"34", ptr addrspace(5) %"14", align 1
+  %"36" = load i1, ptr addrspace(5) %"14", align 1
+  %9 = zext i1 %"36" to i32
+  %"72" = add i32 0, %9
+  store i32 %"72", ptr addrspace(5) %"13", align 4
+  %"37" = load i64, ptr addrspace(5) %"5", align 8
+  %"38" = load i32, ptr addrspace(5) %"7", align 4
+  %"73" = inttoptr i64 %"37" to ptr
+  store i32 %"38", ptr %"73", align 4
+  %"39" = load i64, ptr addrspace(5) %"5", align 8
+  %"40" = load i32, ptr addrspace(5) %"12", align 4
+  %"74" = inttoptr i64 %"39" to ptr
+  %"84" = getelementptr inbounds i8, ptr %"74", i64 4
+  store i32 %"40", ptr %"84", align 4
+  %"41" = load i64, ptr addrspace(5) %"5", align 8
+  %"42" = load i32, ptr addrspace(5) %"13", align 4
+  %"76" = inttoptr i64 %"41" to ptr
+  %"86" = getelementptr inbounds i8, ptr %"76", i64 8
+  store i32 %"42", ptr %"86", align 4
   ret void
 }
 
