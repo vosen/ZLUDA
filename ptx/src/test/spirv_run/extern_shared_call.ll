@@ -3,49 +3,45 @@ target triple = "amdgcn-amd-amdhsa"
 
 @shared_mem = external hidden addrspace(3) global [0 x i32], align 4
 
-define private void @"2"(ptr addrspace(3) %"37") #0 {
-"35":
+define private void @"2"(ptr addrspace(3) %"35") #0 {
+"33":
   %"10" = alloca i1, align 1, addrspace(5)
   store i1 false, ptr addrspace(5) %"10", align 1
-  %"11" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"11", align 1
   %"3" = alloca i64, align 8, addrspace(5)
-  %"14" = load i64, ptr addrspace(3) %"37", align 8
-  store i64 %"14", ptr addrspace(5) %"3", align 8
-  %"16" = load i64, ptr addrspace(5) %"3", align 8
-  %"15" = add i64 %"16", 2
-  store i64 %"15", ptr addrspace(5) %"3", align 8
-  %"17" = load i64, ptr addrspace(5) %"3", align 8
-  store i64 %"17", ptr addrspace(3) %"37", align 8
+  %"12" = load i64, ptr addrspace(3) %"35", align 8
+  store i64 %"12", ptr addrspace(5) %"3", align 8
+  %"14" = load i64, ptr addrspace(5) %"3", align 8
+  %"13" = add i64 %"14", 2
+  store i64 %"13", ptr addrspace(5) %"3", align 8
+  %"15" = load i64, ptr addrspace(5) %"3", align 8
+  store i64 %"15", ptr addrspace(3) %"35", align 8
   ret void
 }
 
-define protected amdgpu_kernel void @extern_shared_call(ptr addrspace(4) byref(i64) %"27", ptr addrspace(4) byref(i64) %"28") #0 {
-"36":
-  %"12" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"12", align 1
-  %"13" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"13", align 1
+define protected amdgpu_kernel void @extern_shared_call(ptr addrspace(4) byref(i64) %"25", ptr addrspace(4) byref(i64) %"26") #0 {
+"34":
+  %"11" = alloca i1, align 1, addrspace(5)
+  store i1 false, ptr addrspace(5) %"11", align 1
   %"7" = alloca i64, align 8, addrspace(5)
   %"8" = alloca i64, align 8, addrspace(5)
   %"9" = alloca i64, align 8, addrspace(5)
-  %"18" = load i64, ptr addrspace(4) %"27", align 8
-  store i64 %"18", ptr addrspace(5) %"7", align 8
-  %"19" = load i64, ptr addrspace(4) %"28", align 8
-  store i64 %"19", ptr addrspace(5) %"8", align 8
-  %"21" = load i64, ptr addrspace(5) %"7", align 8
-  %"31" = inttoptr i64 %"21" to ptr addrspace(1)
-  %"20" = load i64, ptr addrspace(1) %"31", align 8
-  store i64 %"20", ptr addrspace(5) %"9", align 8
-  %"22" = load i64, ptr addrspace(5) %"9", align 8
-  store i64 %"22", ptr addrspace(3) @shared_mem, align 8
+  %"16" = load i64, ptr addrspace(4) %"25", align 8
+  store i64 %"16", ptr addrspace(5) %"7", align 8
+  %"17" = load i64, ptr addrspace(4) %"26", align 8
+  store i64 %"17", ptr addrspace(5) %"8", align 8
+  %"19" = load i64, ptr addrspace(5) %"7", align 8
+  %"29" = inttoptr i64 %"19" to ptr addrspace(1)
+  %"18" = load i64, ptr addrspace(1) %"29", align 8
+  store i64 %"18", ptr addrspace(5) %"9", align 8
+  %"20" = load i64, ptr addrspace(5) %"9", align 8
+  store i64 %"20", ptr addrspace(3) @shared_mem, align 8
   call void @"2"(ptr addrspace(3) @shared_mem)
-  %"23" = load i64, ptr addrspace(3) @shared_mem, align 8
-  store i64 %"23", ptr addrspace(5) %"9", align 8
-  %"24" = load i64, ptr addrspace(5) %"8", align 8
-  %"25" = load i64, ptr addrspace(5) %"9", align 8
-  %"34" = inttoptr i64 %"24" to ptr addrspace(1)
-  store i64 %"25", ptr addrspace(1) %"34", align 8
+  %"21" = load i64, ptr addrspace(3) @shared_mem, align 8
+  store i64 %"21", ptr addrspace(5) %"9", align 8
+  %"22" = load i64, ptr addrspace(5) %"8", align 8
+  %"23" = load i64, ptr addrspace(5) %"9", align 8
+  %"32" = inttoptr i64 %"22" to ptr addrspace(1)
+  store i64 %"23", ptr addrspace(1) %"32", align 8
   ret void
 }
 

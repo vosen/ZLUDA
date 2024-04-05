@@ -3,49 +3,47 @@ target triple = "amdgcn-amd-amdhsa"
 
 @constparams = protected addrspace(4) externally_initialized global [4 x i16] [i16 10, i16 20, i16 30, i16 40], align 8
 
-define protected amdgpu_kernel void @const(ptr addrspace(4) byref(i64) %"39", ptr addrspace(4) byref(i64) %"40") #0 {
-"53":
+define protected amdgpu_kernel void @const(ptr addrspace(4) byref(i64) %"38", ptr addrspace(4) byref(i64) %"39") #0 {
+"52":
   %"11" = alloca i1, align 1, addrspace(5)
   store i1 false, ptr addrspace(5) %"11", align 1
-  %"12" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"12", align 1
   %"5" = alloca i64, align 8, addrspace(5)
   %"6" = alloca i64, align 8, addrspace(5)
   %"7" = alloca i16, align 2, addrspace(5)
   %"8" = alloca i16, align 2, addrspace(5)
   %"9" = alloca i16, align 2, addrspace(5)
   %"10" = alloca i16, align 2, addrspace(5)
+  %"12" = load i64, ptr addrspace(4) %"38", align 8
+  store i64 %"12", ptr addrspace(5) %"5", align 8
   %"13" = load i64, ptr addrspace(4) %"39", align 8
-  store i64 %"13", ptr addrspace(5) %"5", align 8
-  %"14" = load i64, ptr addrspace(4) %"40", align 8
-  store i64 %"14", ptr addrspace(5) %"6", align 8
-  %"15" = load i16, ptr addrspace(4) @constparams, align 2
-  store i16 %"15", ptr addrspace(5) %"7", align 2
-  %"16" = load i16, ptr addrspace(4) getelementptr inbounds (i8, ptr addrspace(4) @constparams, i64 2), align 2
-  store i16 %"16", ptr addrspace(5) %"8", align 2
-  %"17" = load i16, ptr addrspace(4) getelementptr inbounds (i8, ptr addrspace(4) @constparams, i64 4), align 2
-  store i16 %"17", ptr addrspace(5) %"9", align 2
-  %"18" = load i16, ptr addrspace(4) getelementptr inbounds (i8, ptr addrspace(4) @constparams, i64 6), align 2
-  store i16 %"18", ptr addrspace(5) %"10", align 2
-  %"19" = load i64, ptr addrspace(5) %"6", align 8
-  %"20" = load i16, ptr addrspace(5) %"7", align 2
-  %"45" = inttoptr i64 %"19" to ptr
-  store i16 %"20", ptr %"45", align 2
-  %"21" = load i64, ptr addrspace(5) %"6", align 8
-  %"22" = load i16, ptr addrspace(5) %"8", align 2
-  %"47" = inttoptr i64 %"21" to ptr
-  %"61" = getelementptr inbounds i8, ptr %"47", i64 2
-  store i16 %"22", ptr %"61", align 2
-  %"23" = load i64, ptr addrspace(5) %"6", align 8
-  %"24" = load i16, ptr addrspace(5) %"9", align 2
-  %"49" = inttoptr i64 %"23" to ptr
-  %"63" = getelementptr inbounds i8, ptr %"49", i64 4
-  store i16 %"24", ptr %"63", align 2
-  %"25" = load i64, ptr addrspace(5) %"6", align 8
-  %"26" = load i16, ptr addrspace(5) %"10", align 2
-  %"51" = inttoptr i64 %"25" to ptr
-  %"65" = getelementptr inbounds i8, ptr %"51", i64 6
-  store i16 %"26", ptr %"65", align 2
+  store i64 %"13", ptr addrspace(5) %"6", align 8
+  %"14" = load i16, ptr addrspace(4) @constparams, align 2
+  store i16 %"14", ptr addrspace(5) %"7", align 2
+  %"15" = load i16, ptr addrspace(4) getelementptr inbounds (i8, ptr addrspace(4) @constparams, i64 2), align 2
+  store i16 %"15", ptr addrspace(5) %"8", align 2
+  %"16" = load i16, ptr addrspace(4) getelementptr inbounds (i8, ptr addrspace(4) @constparams, i64 4), align 2
+  store i16 %"16", ptr addrspace(5) %"9", align 2
+  %"17" = load i16, ptr addrspace(4) getelementptr inbounds (i8, ptr addrspace(4) @constparams, i64 6), align 2
+  store i16 %"17", ptr addrspace(5) %"10", align 2
+  %"18" = load i64, ptr addrspace(5) %"6", align 8
+  %"19" = load i16, ptr addrspace(5) %"7", align 2
+  %"44" = inttoptr i64 %"18" to ptr
+  store i16 %"19", ptr %"44", align 2
+  %"20" = load i64, ptr addrspace(5) %"6", align 8
+  %"21" = load i16, ptr addrspace(5) %"8", align 2
+  %"46" = inttoptr i64 %"20" to ptr
+  %"60" = getelementptr inbounds i8, ptr %"46", i64 2
+  store i16 %"21", ptr %"60", align 2
+  %"22" = load i64, ptr addrspace(5) %"6", align 8
+  %"23" = load i16, ptr addrspace(5) %"9", align 2
+  %"48" = inttoptr i64 %"22" to ptr
+  %"62" = getelementptr inbounds i8, ptr %"48", i64 4
+  store i16 %"23", ptr %"62", align 2
+  %"24" = load i64, ptr addrspace(5) %"6", align 8
+  %"25" = load i16, ptr addrspace(5) %"10", align 2
+  %"50" = inttoptr i64 %"24" to ptr
+  %"64" = getelementptr inbounds i8, ptr %"50", i64 6
+  store i16 %"25", ptr %"64", align 2
   ret void
 }
 
