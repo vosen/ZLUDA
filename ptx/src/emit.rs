@@ -1174,7 +1174,7 @@ fn emit_inst_sad(
         &SetpData {
             typ: type_,
             flush_to_zero: None,
-            cmp_op: ast::SetpCompareOp::Less,
+            cmp_op: ast::SetpCompareOp::Greater,
         },
         None,
         arg.src1,
@@ -1182,9 +1182,9 @@ fn emit_inst_sad(
     )?;
     let a = ctx.names.value(arg.src1)?;
     let b = ctx.names.value(arg.src2)?;
-    let b_minus_a = unsafe { LLVMBuildSub(builder, b, a, LLVM_UNNAMED) };
     let a_minus_b = unsafe { LLVMBuildSub(builder, a, b, LLVM_UNNAMED) };
-    let a_or_b = unsafe { LLVMBuildSelect(builder, less_than, b_minus_a, a_minus_b, LLVM_UNNAMED) };
+    let b_minus_a = unsafe { LLVMBuildSub(builder, b, a, LLVM_UNNAMED) };
+    let a_or_b = unsafe { LLVMBuildSelect(builder, less_than, a_minus_b, b_minus_a, LLVM_UNNAMED) };
     let src3 = ctx.names.value(arg.src3)?;
     ctx.names.register_result(arg.dst, |dst_name| unsafe {
         LLVMBuildAdd(builder, src3, a_or_b, dst_name)

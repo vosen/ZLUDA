@@ -33,18 +33,18 @@ define protected amdgpu_kernel void @sad(ptr addrspace(4) byref(i64) %"38", ptr 
   %"21" = load i32, ptr addrspace(5) %"6", align 4
   %"22" = load i32, ptr addrspace(5) %"7", align 4
   %"23" = load i32, ptr addrspace(5) %"8", align 4
-  %0 = icmp ult i32 %"21", %"22"
-  %1 = sub i32 %"22", %"21"
-  %2 = sub i32 %"21", %"22"
+  %0 = icmp ugt i32 %"21", %"22"
+  %1 = sub i32 %"21", %"22"
+  %2 = sub i32 %"22", %"21"
   %3 = select i1 %0, i32 %1, i32 %2
   %"46" = add i32 %"23", %3
   store i32 %"46", ptr addrspace(5) %"9", align 4
   %"25" = load i32, ptr addrspace(5) %"6", align 4
   %"26" = load i32, ptr addrspace(5) %"7", align 4
   %"27" = load i32, ptr addrspace(5) %"8", align 4
-  %4 = icmp slt i32 %"25", %"26"
-  %5 = sub i32 %"26", %"25"
-  %6 = sub i32 %"25", %"26"
+  %4 = icmp sgt i32 %"25", %"26"
+  %5 = sub i32 %"25", %"26"
+  %6 = sub i32 %"26", %"25"
   %7 = select i1 %4, i32 %5, i32 %6
   %"50" = add i32 %"27", %7
   store i32 %"50", ptr addrspace(5) %"10", align 4
