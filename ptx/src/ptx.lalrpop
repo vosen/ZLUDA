@@ -224,6 +224,7 @@ match {
     "rem",
     "ret",
     "rsqrt",
+    "sad",
     "selp",
     "set",
     "setp",
@@ -305,6 +306,7 @@ ExtendedID : &'input str = {
     "rem",
     "ret",
     "rsqrt",
+    "sad",
     "selp",
     "set",
     "setp",
@@ -839,6 +841,7 @@ Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
     InstMatch,
     InstRed,
     InstNanosleep,
+    InstSad
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld
@@ -2374,6 +2377,13 @@ InstNanosleep: ast::Instruction<ast::ParsedArgParams<'input>> = {
     // Bare minimum for xgboost
     "nanosleep" ".u32" <a:Arg1> => {
         ast::Instruction::Nanosleep(a)
+    }
+}
+
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-sad
+InstSad: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "sad" <type_:IntType> <a:Arg4> => {
+        ast::Instruction::Sad(type_, a)
     }
 }
 
