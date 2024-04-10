@@ -155,6 +155,221 @@ static __device__ float4::Native_vec_ __pack_to_float4(const T &t)
     return result;
 }
 
+typedef uint32_t uint8 __attribute__((ext_vector_type(8)));
+typedef uint32_t zluda_uint3 __attribute__((ext_vector_type(3)));
+typedef uint8 CONSTANT_SPACE *surface_ptr;
+
+template <typename To, typename From>
+static __device__ To transmute(From f)
+{
+    union
+    {
+        To t;
+        From f;
+    } u = {To{0}};
+    u.f = f;
+    return u.t;
+}
+
+enum class ImageGeometry
+{
+    _1D,
+    _2D,
+    _3D,
+    A1D,
+    A2D
+};
+
+// clang-format off
+template <ImageGeometry> struct Coordinates;
+template <> struct Coordinates<ImageGeometry::_1D> { using type = uint1::Native_vec_; };
+template <> struct Coordinates<ImageGeometry::_2D> { using type = uint2::Native_vec_; };
+template <> struct Coordinates<ImageGeometry::_3D> { using type = uint4::Native_vec_; };
+template <> struct Coordinates<ImageGeometry::A1D>
+{
+    using type = uint2::Native_vec_; using arg_type = uint1::Native_vec_;
+    static __device__ type pack_layer(uint32_t layer, arg_type coord)
+    {
+        return type { coord.x, layer };
+    }
+};
+template <> struct Coordinates<ImageGeometry::A2D>
+{
+    using type = zluda_uint3; using arg_type = uint2::Native_vec_;
+    static __device__ type pack_layer(uint32_t layer, arg_type coord)
+    {
+        return type { coord.x, coord.y, layer };
+    }
+};
+// clang-format on
+
+template <typename T, ImageGeometry geo>
+static __device__ void image_store_pck(T value, typename Coordinates<geo>::type coord, surface_ptr surface)
+{
+    if constexpr (sizeof(T) <= sizeof(uint))
+    {
+        uint value_dword = transmute<uint>(value);
+        if constexpr (geo == ImageGeometry::_1D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0x1 dim:1D unorm" : : "v"(value_dword), "v"(coord.x), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::_2D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0x1 dim:2D unorm" : : "v"(value_dword), "v"(coord), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::_3D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0x1 dim:3D unorm" : : "v"(value_dword), "v"(transmute<zluda_uint3>(coord)), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::A1D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0x1 dim:1D_ARRAY unorm" : : "v"(value_dword), "v"(coord), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::A2D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0x1 dim:2D_ARRAY unorm" : : "v"(value_dword), "v"(coord), "s"(*surface) : "memory");
+        }
+        else
+        {
+            static_assert(!std::is_same<T, T>::value, "Invalid geometry");
+        }
+    }
+    else if constexpr (sizeof(T) == sizeof(uint2))
+    {
+        uint2::Native_vec_ value_dword2 = transmute<uint2::Native_vec_>(value);
+        if constexpr (geo == ImageGeometry::_1D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0x3 dim:1D unorm" : : "v"(value_dword2), "v"(coord.x), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::_2D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0x3 dim:2D unorm" : : "v"(value_dword2), "v"(coord), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::_3D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0x3 dim:3D unorm" : : "v"(value_dword2), "v"(transmute<zluda_uint3>(coord)), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::A1D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0x3 dim:1D_ARRAY unorm" : : "v"(value_dword2), "v"(coord), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::A2D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0x3 dim:2D_ARRAY unorm" : : "v"(value_dword2), "v"(coord), "s"(*surface) : "memory");
+        }
+        else
+        {
+            static_assert(!std::is_same<T, T>::value, "Invalid geometry");
+        }
+    }
+    else if constexpr (sizeof(T) == sizeof(uint4))
+    {
+        uint4::Native_vec_ value_dword4 = transmute<uint4::Native_vec_>(value);
+        if constexpr (geo == ImageGeometry::_1D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0xf dim:1D unorm" : : "v"(value_dword4), "v"(coord.x), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::_2D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0xf dim:2D unorm" : : "v"(value_dword4), "v"(coord), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::_3D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0xf dim:3D unorm" : : "v"(value_dword4), "v"(transmute<zluda_uint3>(coord)), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::A1D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0xf dim:1D_ARRAY unorm" : : "v"(value_dword4), "v"(coord), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::A2D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0xf dim:2D_ARRAY unorm" : : "v"(value_dword4), "v"(coord), "s"(*surface) : "memory");
+        }
+        else
+        {
+            static_assert(!std::is_same<T, T>::value, "Invalid geometry");
+        }
+    }
+    else
+    {
+        static_assert(!std::is_same<T, T>::value, "Invalid vector size");
+    }
+}
+
+template <ImageGeometry geo>
+static __device__ uint4::Native_vec_ image_load_pck_full(typename Coordinates<geo>::type coord, surface_ptr surface)
+{
+    uint4::Native_vec_ data;
+    if constexpr (geo == ImageGeometry::_1D)
+    {
+        asm volatile("image_load_pck %0, %1, %2 dmask:0xf dim:1D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord.x), "s"(*surface) : "memory");
+    }
+    else if constexpr (geo == ImageGeometry::_2D)
+    {
+        auto s = *surface;
+        asm volatile("image_load_pck %0, %1, %2 dmask:0xf dim:2D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(s) : "memory");
+    }
+    else if constexpr (geo == ImageGeometry::_3D)
+    {
+        asm volatile("image_load_pck %0, %1, %2 dmask:0xf dim:3D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(transmute<zluda_uint3>(coord)), "s"(*surface) : "memory");
+    }
+    else if constexpr (geo == ImageGeometry::A1D)
+    {
+        asm volatile("image_load_pck %0, %1, %2 dmask:0xf dim:1D_ARRAY unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(*surface) : "memory");
+    }
+    else if constexpr (geo == ImageGeometry::A2D)
+    {
+        asm volatile("image_load_pck %0, %1, %2 dmask:0xf dim:2D_ARRAY unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(*surface) : "memory");
+    }
+    else
+    {
+        static_assert(!std::is_same<void, void>::value, "Invalid geometry");
+    }
+    return data;
+}
+
+template <typename T, ImageGeometry geo>
+static __device__ void image_store_pck_full_with(uint4::Native_vec_ data, T value, typename Coordinates<geo>::type coord, surface_ptr surface)
+{
+    union
+    {
+        uint4::Native_vec_ full_vec;
+        T value;
+    } u = {0};
+    u.full_vec = data;
+    u.value = value;
+    image_store_pck<uint4::Native_vec_, geo>(u.full_vec, coord, surface);
+}
+
+constexpr auto IMAGE_RESERVED_TOP_BITS = 3;
+
+static __device__ surface_ptr get_surface_pointer(uint64_t s)
+{
+    return (surface_ptr)((s << IMAGE_RESERVED_TOP_BITS) >> IMAGE_RESERVED_TOP_BITS);
+}
+
+static __device__ uint32_t x_coordinate_shift(uint64_t s)
+{
+    return uint32_t(s >> (64 - IMAGE_RESERVED_TOP_BITS));
+}
+
+template <typename T, ImageGeometry geo>
+static __device__ void sust_b_indirect_zero(uint64_t surf_arg, typename Coordinates<geo>::type coord, T data)
+{
+    surface_ptr surface = get_surface_pointer(surf_arg);
+    uint32_t shift_x = x_coordinate_shift(surf_arg);
+    coord.x = coord.x >> shift_x;
+    if (shift_x <= __builtin_ctz(sizeof(T))) [[likely]]
+    {
+        image_store_pck<T, geo>(data, coord, surface);
+    }
+    else
+    {
+        uint4::Native_vec_ pix = image_load_pck_full<geo>(coord, surface);
+        image_store_pck_full_with<T, geo>(pix, data, coord, surface);
+    }
+}
+
 extern "C"
 {
 #define atomic_inc(NAME, SUCCESS, FAILURE, SCOPE, SPACE)                                                                              \
@@ -619,6 +834,113 @@ extern "C"
     suld_b_a2d_vec(_v4, b16, ushort4);
     suld_b_a2d_vec(_v4, b32, uint4);
     // suld_b_a2d_vec(_v4, b64, ulong4);
+
+    static __device__ uint64_t repack(struct textureReference GLOBAL_SPACE *ptr)
+    {
+        uint32_t channels = uint32_t(ptr->numChannels);
+        uint32_t format_width = 0;
+        hipArray_Format format = ptr->format;
+        switch (format)
+        {
+        case hipArray_Format::HIP_AD_FORMAT_UNSIGNED_INT8:
+        case hipArray_Format::HIP_AD_FORMAT_SIGNED_INT8:
+            format_width = 1;
+            break;
+        case hipArray_Format::HIP_AD_FORMAT_UNSIGNED_INT16:
+        case hipArray_Format::HIP_AD_FORMAT_SIGNED_INT16:
+        case hipArray_Format::HIP_AD_FORMAT_HALF:
+            format_width = 2;
+            break;
+        case hipArray_Format::HIP_AD_FORMAT_UNSIGNED_INT32:
+        case hipArray_Format::HIP_AD_FORMAT_SIGNED_INT32:
+        case hipArray_Format::HIP_AD_FORMAT_FLOAT:
+            format_width = 4;
+            break;
+        default:
+            __builtin_unreachable();
+        }
+        uint64_t shift_size = uint64_t(__builtin_ctz(format_width * channels));
+        return uint64_t(ptr->textureObject) | (shift_size << (64 - 3));
+    }
+
+#define SUST_B_ZERO(TYPE, GEOMETRY, HIP_TYPE)                                                                                                           \
+    void FUNC(sust_b_indirect_##TYPE##_zero)(uint64_t surf_arg, typename Coordinates<GEOMETRY>::type coord, HIP_TYPE::Native_vec_ data)                 \
+    {                                                                                                                                                   \
+        sust_b_indirect_zero<HIP_TYPE::Native_vec_, GEOMETRY>(surf_arg, coord, data);                                                                   \
+    }                                                                                                                                                   \
+    void FUNC(sust_b_##TYPE##_zero)(struct textureReference GLOBAL_SPACE * ptr, typename Coordinates<GEOMETRY>::type coord, HIP_TYPE::Native_vec_ data) \
+    {                                                                                                                                                   \
+        FUNC_CALL(sust_b_indirect_##TYPE##_zero)                                                                                                        \
+        (repack(ptr), coord, data);                                                                                                                     \
+    }
+
+#define SUST_B_ZERO_ARRAY(TYPE, GEOMETRY, HIP_TYPE)                                                                                                                         \
+    void FUNC(sust_b_indirect_##TYPE##_zero)(uint64_t surf_arg, uint32_t layer, typename Coordinates<GEOMETRY>::arg_type coord, HIP_TYPE::Native_vec_ data)                 \
+    {                                                                                                                                                                       \
+        auto coord_array = Coordinates<GEOMETRY>::pack_layer(layer, coord);                                                                                                 \
+        sust_b_indirect_zero<HIP_TYPE::Native_vec_, GEOMETRY>(surf_arg, coord_array, data);                                                                                 \
+    }                                                                                                                                                                       \
+    void FUNC(sust_b_##TYPE##_zero)(struct textureReference GLOBAL_SPACE * ptr, uint32_t layer, typename Coordinates<GEOMETRY>::arg_type coord, HIP_TYPE::Native_vec_ data) \
+    {                                                                                                                                                                       \
+        FUNC_CALL(sust_b_indirect_##TYPE##_zero)                                                                                                                            \
+        (repack(ptr), layer, coord, data);                                                                                                                                  \
+    }
+
+    SUST_B_ZERO(1d_b8, ImageGeometry::_1D, uchar1);
+    SUST_B_ZERO(1d_b16, ImageGeometry::_1D, ushort1);
+    SUST_B_ZERO(1d_b32, ImageGeometry::_1D, uint1);
+    SUST_B_ZERO(1d_b64, ImageGeometry::_1D, ulong1);
+    SUST_B_ZERO(1d_v2_b8, ImageGeometry::_1D, uchar2);
+    SUST_B_ZERO(1d_v2_b16, ImageGeometry::_1D, ushort2);
+    SUST_B_ZERO(1d_v2_b32, ImageGeometry::_1D, uint2);
+    SUST_B_ZERO(1d_v2_b64, ImageGeometry::_1D, ulong2);
+    SUST_B_ZERO(1d_v4_b8, ImageGeometry::_1D, uchar4);
+    SUST_B_ZERO(1d_v4_b16, ImageGeometry::_1D, ushort4);
+    SUST_B_ZERO(1d_v4_b32, ImageGeometry::_1D, uint4);
+    SUST_B_ZERO(2d_b8, ImageGeometry::_2D, uchar1);
+    SUST_B_ZERO(2d_b16, ImageGeometry::_2D, ushort1);
+    SUST_B_ZERO(2d_b32, ImageGeometry::_2D, uint1);
+    SUST_B_ZERO(2d_b64, ImageGeometry::_2D, ulong1);
+    SUST_B_ZERO(2d_v2_b8, ImageGeometry::_2D, uchar2);
+    SUST_B_ZERO(2d_v2_b16, ImageGeometry::_2D, ushort2);
+    SUST_B_ZERO(2d_v2_b32, ImageGeometry::_2D, uint2);
+    SUST_B_ZERO(2d_v2_b64, ImageGeometry::_2D, ulong2);
+    SUST_B_ZERO(2d_v4_b8, ImageGeometry::_2D, uchar4);
+    SUST_B_ZERO(2d_v4_b16, ImageGeometry::_2D, ushort4);
+    SUST_B_ZERO(2d_v4_b32, ImageGeometry::_2D, uint4);
+    SUST_B_ZERO(3d_b8, ImageGeometry::_3D, uchar1);
+    SUST_B_ZERO(3d_b16, ImageGeometry::_3D, ushort1);
+    SUST_B_ZERO(3d_b32, ImageGeometry::_3D, uint1);
+    SUST_B_ZERO(3d_b64, ImageGeometry::_3D, ulong1);
+    SUST_B_ZERO(3d_v2_b8, ImageGeometry::_3D, uchar2);
+    SUST_B_ZERO(3d_v2_b16, ImageGeometry::_3D, ushort2);
+    SUST_B_ZERO(3d_v2_b32, ImageGeometry::_3D, uint2);
+    SUST_B_ZERO(3d_v2_b64, ImageGeometry::_3D, ulong2);
+    SUST_B_ZERO(3d_v4_b8, ImageGeometry::_3D, uchar4);
+    SUST_B_ZERO(3d_v4_b16, ImageGeometry::_3D, ushort4);
+    SUST_B_ZERO(3d_v4_b32, ImageGeometry::_3D, uint4);
+    SUST_B_ZERO_ARRAY(a1d_b8, ImageGeometry::A1D, uchar1);
+    SUST_B_ZERO_ARRAY(a1d_b16, ImageGeometry::A1D, ushort1);
+    SUST_B_ZERO_ARRAY(a1d_b32, ImageGeometry::A1D, uint1);
+    SUST_B_ZERO_ARRAY(a1d_b64, ImageGeometry::A1D, ulong1);
+    SUST_B_ZERO_ARRAY(a1d_v2_b8, ImageGeometry::A1D, uchar2);
+    SUST_B_ZERO_ARRAY(a1d_v2_b16, ImageGeometry::A1D, ushort2);
+    SUST_B_ZERO_ARRAY(a1d_v2_b32, ImageGeometry::A1D, uint2);
+    SUST_B_ZERO_ARRAY(a1d_v2_b64, ImageGeometry::A1D, ulong2);
+    SUST_B_ZERO_ARRAY(a1d_v4_b8, ImageGeometry::A1D, uchar4);
+    SUST_B_ZERO_ARRAY(a1d_v4_b16, ImageGeometry::A1D, ushort4);
+    SUST_B_ZERO_ARRAY(a1d_v4_b32, ImageGeometry::A1D, uint4);
+    SUST_B_ZERO_ARRAY(a2d_b8, ImageGeometry::A2D, uchar1);
+    SUST_B_ZERO_ARRAY(a2d_b16, ImageGeometry::A2D, ushort1);
+    SUST_B_ZERO_ARRAY(a2d_b32, ImageGeometry::A2D, uint1);
+    SUST_B_ZERO_ARRAY(a2d_b64, ImageGeometry::A2D, ulong1);
+    SUST_B_ZERO_ARRAY(a2d_v2_b8, ImageGeometry::A2D, uchar2);
+    SUST_B_ZERO_ARRAY(a2d_v2_b16, ImageGeometry::A2D, ushort2);
+    SUST_B_ZERO_ARRAY(a2d_v2_b32, ImageGeometry::A2D, uint2);
+    SUST_B_ZERO_ARRAY(a2d_v2_b64, ImageGeometry::A2D, ulong2);
+    SUST_B_ZERO_ARRAY(a2d_v4_b8, ImageGeometry::A2D, uchar4);
+    SUST_B_ZERO_ARRAY(a2d_v4_b16, ImageGeometry::A2D, ushort4);
+    SUST_B_ZERO_ARRAY(a2d_v4_b32, ImageGeometry::A2D, uint4);
 
 #define sust_b_1d_vec(VEC, TYPE, HIP_TYPE)                                                                                                     \
     void FUNC(sust_b_1d##VEC##_##TYPE##_trap)(struct textureReference GLOBAL_SPACE * ptr, int1::Native_vec_ coord, HIP_TYPE::Native_vec_ data) \

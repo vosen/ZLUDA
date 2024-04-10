@@ -7,15 +7,40 @@ use crate::hip_call_cuda;
 use super::{hipfix, FromCuda};
 
 pub(crate) unsafe fn create(
-    p_surf_object: *mut hipSurfaceObject_t,
+    result: *mut hipSurfaceObject_t,
     p_res_desc: *const CUDA_RESOURCE_DESC,
 ) -> Result<(), CUresult> {
     if p_res_desc == ptr::null() {
         return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
     }
     let desc = to_surface_desc(*p_res_desc)?;
-    hip_call_cuda!(hipCreateSurfaceObject(p_surf_object, &desc));
+    let mut surf_obj = mem::zeroed();
+    hip_call_cuda!(hipCreateSurfaceObject(&mut surf_obj, &desc));
+    if desc.resType != hipResourceType::hipResourceTypeArray {
+        panic!()
+    }
+    let format_size = format_size((&*desc.res.array.array).Format);
+    let channels = (&*desc.res.array.array).NumChannels;
+    let pixel_size = format_size * channels as usize;
+    let shift_amount = (pixel_size.trailing_zeros() as usize) << (64 - 3);
+    surf_obj = (surf_obj as usize | shift_amount) as _;
+    dbg!(surf_obj);
+    *result = surf_obj;
     Ok(())
+}
+
+pub(crate) fn format_size(f: hipArray_Format) -> usize {
+    match f {
+        hipArray_Format::HIP_AD_FORMAT_UNSIGNED_INT8
+        | hipArray_Format::HIP_AD_FORMAT_SIGNED_INT8 => 1,
+        hipArray_Format::HIP_AD_FORMAT_UNSIGNED_INT16
+        | hipArray_Format::HIP_AD_FORMAT_SIGNED_INT16
+        | hipArray_Format::HIP_AD_FORMAT_HALF => 2,
+        hipArray_Format::HIP_AD_FORMAT_UNSIGNED_INT32
+        | hipArray_Format::HIP_AD_FORMAT_SIGNED_INT32
+        | hipArray_Format::HIP_AD_FORMAT_FLOAT => 4,
+        _ => panic!(),
+    }
 }
 
 unsafe fn to_surface_desc(res_desc: CUDA_RESOURCE_DESC) -> Result<hipResourceDesc, CUresult> {
