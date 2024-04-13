@@ -177,6 +177,15 @@ static __device__ To transmute(From f)
         u.f = f;
         return u.t;
     }
+    else if constexpr (sizeof(To) < sizeof(From))
+    {
+        union
+        {
+            From f;
+            To t;
+        } u = {From{f}};
+        return u.t;
+    }
     else
     {
         static_assert(sizeof(To) == 0);
@@ -348,7 +357,7 @@ static __device__ void image_store_pck_full_with(uint4::Native_vec_ data, T valu
     //     ds_write_b128 v2, v[5:8]
     //     ds_write_b16 v2, v9
     //     ds_read_b128 v[5:8], v2
-    // tested with ROCm 5.7.1
+    // tested with ROCm 5.7.1 on gfx1030
     if constexpr (sizeof(T) == sizeof(uint8_t))
     {
         uint32_t x = uint32_t(std::bit_cast<uint8_t>(value));
@@ -420,7 +429,17 @@ static __device__ uint32_t x_coordinate_shift(struct textureReference GLOBAL_SPA
 }
 
 template <typename T, ImageGeometry geo, typename Surface>
-static __device__ void sust_b_indirect_zero(Surface surf_arg, typename Coordinates<geo>::type coord, T data)
+static __device__ T suld_b_zero(Surface surf_arg, typename Coordinates<geo>::type coord)
+{
+    surface_ptr surface = get_surface_pointer(surf_arg);
+    uint32_t shift_x = x_coordinate_shift(surf_arg);
+    coord.x = coord.x >> shift_x;
+    uint4::Native_vec_ pixel = image_load_pck_full<geo>(coord, surface);
+    return transmute<T>(pixel);
+}
+
+template <typename T, ImageGeometry geo, typename Surface>
+static __device__ void sust_b_zero(Surface surf_arg, typename Coordinates<geo>::type coord, T data)
 {
     surface_ptr surface = get_surface_pointer(surf_arg);
     uint32_t shift_x = x_coordinate_shift(surf_arg);
@@ -431,8 +450,8 @@ static __device__ void sust_b_indirect_zero(Surface surf_arg, typename Coordinat
     }
     else
     {
-        uint4::Native_vec_ pix = image_load_pck_full<geo>(coord, surface);
-        image_store_pck_full_with<T, geo>(pix, data, coord, surface);
+        uint4::Native_vec_ pixel = image_load_pck_full<geo>(coord, surface);
+        image_store_pck_full_with<T, geo>(pixel, data, coord, surface);
     }
 }
 
@@ -902,25 +921,43 @@ extern "C"
     // suld_b_a2d_vec(_v4, b64, ulong4);
 
 #define SUST_B_ZERO(TYPE, GEOMETRY, HIP_TYPE)                                                                                                           \
+    HIP_TYPE::Native_vec_ FUNC(suld_b_indirect_##TYPE##_zero)(uint64_t surf_arg, typename Coordinates<GEOMETRY>::type coord)                            \
+    {                                                                                                                                                   \
+        return suld_b_zero<HIP_TYPE::Native_vec_, GEOMETRY>(surf_arg, coord);                                                                           \
+    }                                                                                                                                                   \
     void FUNC(sust_b_indirect_##TYPE##_zero)(uint64_t surf_arg, typename Coordinates<GEOMETRY>::type coord, HIP_TYPE::Native_vec_ data)                 \
     {                                                                                                                                                   \
-        sust_b_indirect_zero<HIP_TYPE::Native_vec_, GEOMETRY>(surf_arg, coord, data);                                                                   \
+        sust_b_zero<HIP_TYPE::Native_vec_, GEOMETRY>(surf_arg, coord, data);                                                                            \
+    }                                                                                                                                                   \
+    HIP_TYPE::Native_vec_ FUNC(suld_b_##TYPE##_zero)(struct textureReference GLOBAL_SPACE * ptr, typename Coordinates<GEOMETRY>::type coord)            \
+    {                                                                                                                                                   \
+        return suld_b_zero<HIP_TYPE::Native_vec_, GEOMETRY>(ptr, coord);                                                                                \
     }                                                                                                                                                   \
     void FUNC(sust_b_##TYPE##_zero)(struct textureReference GLOBAL_SPACE * ptr, typename Coordinates<GEOMETRY>::type coord, HIP_TYPE::Native_vec_ data) \
     {                                                                                                                                                   \
-        sust_b_indirect_zero<HIP_TYPE::Native_vec_, GEOMETRY>(ptr, coord, data);                                                                        \
+        sust_b_zero<HIP_TYPE::Native_vec_, GEOMETRY>(ptr, coord, data);                                                                                 \
     }
 
 #define SUST_B_ZERO_ARRAY(TYPE, GEOMETRY, HIP_TYPE)                                                                                                                         \
+    HIP_TYPE::Native_vec_ FUNC(suld_b_indirect_##TYPE##_zero)(uint64_t surf_arg, uint32_t layer, typename Coordinates<GEOMETRY>::arg_type coord)                            \
+    {                                                                                                                                                                       \
+        auto coord_array = Coordinates<GEOMETRY>::pack_layer(layer, coord);                                                                                                 \
+        return suld_b_zero<HIP_TYPE::Native_vec_, GEOMETRY>(surf_arg, coord_array);                                                                                         \
+    }                                                                                                                                                                       \
     void FUNC(sust_b_indirect_##TYPE##_zero)(uint64_t surf_arg, uint32_t layer, typename Coordinates<GEOMETRY>::arg_type coord, HIP_TYPE::Native_vec_ data)                 \
     {                                                                                                                                                                       \
         auto coord_array = Coordinates<GEOMETRY>::pack_layer(layer, coord);                                                                                                 \
-        sust_b_indirect_zero<HIP_TYPE::Native_vec_, GEOMETRY>(surf_arg, coord_array, data);                                                                                 \
+        sust_b_zero<HIP_TYPE::Native_vec_, GEOMETRY>(surf_arg, coord_array, data);                                                                                          \
+    }                                                                                                                                                                       \
+    HIP_TYPE::Native_vec_ FUNC(suld_b_##TYPE##_zero)(struct textureReference GLOBAL_SPACE * ptr, uint32_t layer, typename Coordinates<GEOMETRY>::arg_type coord)            \
+    {                                                                                                                                                                       \
+        auto coord_array = Coordinates<GEOMETRY>::pack_layer(layer, coord);                                                                                                 \
+        return suld_b_zero<HIP_TYPE::Native_vec_, GEOMETRY>(ptr, coord_array);                                                                                              \
     }                                                                                                                                                                       \
     void FUNC(sust_b_##TYPE##_zero)(struct textureReference GLOBAL_SPACE * ptr, uint32_t layer, typename Coordinates<GEOMETRY>::arg_type coord, HIP_TYPE::Native_vec_ data) \
     {                                                                                                                                                                       \
         auto coord_array = Coordinates<GEOMETRY>::pack_layer(layer, coord);                                                                                                 \
-        sust_b_indirect_zero<HIP_TYPE::Native_vec_, GEOMETRY>(ptr, coord_array, data);                                                                                      \
+        sust_b_zero<HIP_TYPE::Native_vec_, GEOMETRY>(ptr, coord_array, data);                                                                                               \
     }
 
     SUST_B_ZERO(1d_b8, ImageGeometry::_1D, uchar1);
