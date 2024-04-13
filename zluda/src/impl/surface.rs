@@ -31,6 +31,12 @@ pub(crate) unsafe fn create(
     Ok(())
 }
 
+pub(crate) unsafe fn destroy(surf_object: hipSurfaceObject_t) -> hipError_t {
+    hipDestroySurfaceObject(
+        (((surf_object as usize) << IMAGE_RESERVED_TOP_BITS) >> IMAGE_RESERVED_TOP_BITS) as _,
+    )
+}
+
 pub(crate) fn format_size(f: hipArray_Format) -> Result<usize, CUresult> {
     Ok(match f {
         hipArray_Format::HIP_AD_FORMAT_UNSIGNED_INT8
