@@ -1,10 +1,7 @@
-use crate::{
-    hip_call_cuda,
-    r#impl::{hipfix, surface},
-};
+use crate::{hip_call_cuda, r#impl::hipfix};
 use cuda_types::{CUarray, CUresult};
 use hip_runtime_sys::*;
-use std::{mem, ptr};
+use std::ptr;
 
 pub(crate) unsafe fn set_array(
     surfref: *mut textureReference,
@@ -21,14 +18,6 @@ pub(crate) unsafe fn set_array(
         array.Format,
         array.NumChannels as i32,
     ));
-    //assert_eq!(hipError_t::hipSuccess, hipHostGetDevicePointer(&mut dev_ptr, surfref.cast(), 0));
-    dbg!(surfref);
-    // TODO: clear bits on the old textureobject
     hip_call_cuda!(hipTexRefSetArray(surfref, array, HIP_TRSA_OVERRIDE_FORMAT));
-    let format_size = surface::format_size(array.Format);
-    let pixel_size = format_size * array.NumChannels as usize;
-    let shift_amount = (pixel_size.trailing_zeros() as usize) << (64 - 3);
-    let mut surfref = &mut *surfref;
-    surfref.textureObject = (surfref.textureObject as usize | shift_amount) as _;
     Ok(())
 }
