@@ -317,6 +317,102 @@ static __device__ void image_store_pck(T value, typename Coordinates<geo>::type 
     }
 }
 
+template <typename T, ImageGeometry geo>
+static __device__ T image_load_pck(typename Coordinates<geo>::type coord, surface_ptr surface)
+{
+    if constexpr (sizeof(T) <= sizeof(uint))
+    {
+        uint data;
+        if constexpr (geo == ImageGeometry::_1D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0x1 dim:1D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord.x), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::_2D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0x1 dim:2D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::_3D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0x1 dim:3D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(transmute<zluda_uint3>(coord)), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::A1D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0x1 dim:1D_ARRAY unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::A2D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0x1 dim:2D_ARRAY unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(*surface) : "memory");
+        }
+        else
+        {
+            static_assert(sizeof(ImageGeometry) == 0, "Invalid geometry");
+        }
+        return transmute<T>(data);
+    }
+    else if constexpr (sizeof(T) == sizeof(uint2::Native_vec_))
+    {
+        uint2::Native_vec_ data;
+        if constexpr (geo == ImageGeometry::_1D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0x3 dim:1D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord.x), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::_2D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0x3 dim:2D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::_3D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0x3 dim:3D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(transmute<zluda_uint3>(coord)), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::A1D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0x3 dim:1D_ARRAY unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::A2D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0x3 dim:2D_ARRAY unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(*surface) : "memory");
+        }
+        else
+        {
+            static_assert(sizeof(ImageGeometry) == 0, "Invalid geometry");
+        }
+        return transmute<T>(data);
+    }
+    else if constexpr (sizeof(T) == sizeof(uint4::Native_vec_))
+    {
+        uint4::Native_vec_ data;
+        if constexpr (geo == ImageGeometry::_1D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0xf dim:1D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord.x), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::_2D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0xf dim:2D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::_3D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0xf dim:3D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(transmute<zluda_uint3>(coord)), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::A1D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0xf dim:1D_ARRAY unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::A2D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0xf dim:2D_ARRAY unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(*surface) : "memory");
+        }
+        else
+        {
+            static_assert(sizeof(ImageGeometry) == 0, "Invalid geometry");
+        }
+        return transmute<T>(data);
+    }
+    else
+    {
+        static_assert(sizeof(T) == 0, "Invalid vector size");
+    }
+}
+
 template <ImageGeometry geo>
 static __device__ uint4::Native_vec_ image_load_pck_full(typename Coordinates<geo>::type coord, surface_ptr surface)
 {
@@ -327,8 +423,7 @@ static __device__ uint4::Native_vec_ image_load_pck_full(typename Coordinates<ge
     }
     else if constexpr (geo == ImageGeometry::_2D)
     {
-        auto s = *surface;
-        asm volatile("image_load_pck %0, %1, %2 dmask:0xf dim:2D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(s) : "memory");
+        asm volatile("image_load_pck %0, %1, %2 dmask:0xf dim:2D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(*surface) : "memory");
     }
     else if constexpr (geo == ImageGeometry::_3D)
     {
@@ -434,8 +529,7 @@ static __device__ T suld_b_zero(Surface surf_arg, typename Coordinates<geo>::typ
     surface_ptr surface = get_surface_pointer(surf_arg);
     uint32_t shift_x = x_coordinate_shift(surf_arg);
     coord.x = coord.x >> shift_x;
-    uint4::Native_vec_ pixel = image_load_pck_full<geo>(coord, surface);
-    return transmute<T>(pixel);
+    return image_load_pck<T, geo>(coord, surface);
 }
 
 template <typename T, ImageGeometry geo, typename Surface>

@@ -22,10 +22,19 @@ pub(crate) unsafe fn create(
     }
     let mut surf_obj = mem::zeroed();
     hip_call_cuda!(hipCreateSurfaceObject(&mut surf_obj, &desc));
+    let top_reserved_bits = surf_obj as usize >> (usize::BITS - IMAGE_RESERVED_TOP_BITS);
+    if top_reserved_bits != 0 {
+        #[allow(unused_must_use)]
+        {
+            hipDestroySurfaceObject(surf_obj);
+        }
+        return Err(CUresult::CUDA_ERROR_UNKNOWN);
+    }
     let format_size = format_size((&*desc.res.array.array).Format)?;
     let channels = (&*desc.res.array.array).NumChannels;
     let pixel_size = format_size * channels as usize;
-    let shift_amount = (pixel_size.trailing_zeros() as usize) << (64 - IMAGE_RESERVED_TOP_BITS);
+    let shift_amount =
+        (pixel_size.trailing_zeros() as usize) << (usize::BITS - IMAGE_RESERVED_TOP_BITS);
     surf_obj = (surf_obj as usize | shift_amount) as _;
     *result = surf_obj;
     Ok(())

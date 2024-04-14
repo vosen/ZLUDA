@@ -2934,7 +2934,7 @@ fn replace_instructions_with_builtins_impl<'input>(
                     vector,
                     "_",
                     suld.type_.to_ptx_name(),
-                    "_trap",
+                    "_zero",
                 ]
                 .concat();
                 statements.push(instruction_to_fn_call(
