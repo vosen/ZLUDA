@@ -340,10 +340,6 @@ unsafe fn kernel_suld_impl<
     if mem::size_of::<Format>() * CHANNELS < mem::size_of::<SustType>() * SULD_N {
         return;
     }
-    // TODO: reenable those tests
-    if mem::size_of::<Format>() != mem::size_of::<SustType>() || CHANNELS != SULD_N {
-        return;
-    }
     let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
     let size = 4usize;
     let random_size = rand::distributions::Uniform::<u32>::new(1, size as u32);

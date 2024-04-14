@@ -215,10 +215,6 @@ Performance is currently much lower than the native HIP backend, see the discuss
   
   This is a ROCm/HIP bug. Currently, CompuBench tests have to be run one at a time.
 
-- Some tests output black screen.
-  
-  This is due to a bug (or an unintended hardware feature) in CompuBench that just happens to work on NVIDIA GPUs.
-
 #### V-Ray Benchmark
 
 - Currently, ZLUDA crashes when running V-Ray benchmark. Nonetheless, certain "lucky" older combinations of ZLUDA and ROCm/HIP are known to run V-Ray Benchmark successfully.

@@ -11,6 +11,7 @@
 //   https://llvm.org/docs/AMDGPUUsage.html
 
 #include <cstdint>
+#include <bit>
 #include <hip/hip_runtime.h>
 #define HIP_NO_HALF
 #include <hip/amd_detail/amd_hip_fp16.h>
@@ -153,6 +154,399 @@ static __device__ float4::Native_vec_ __pack_to_float4(const T &t)
     w.value = t.w;
     result.w = w.float_;
     return result;
+}
+
+typedef uint32_t uint8 __attribute__((ext_vector_type(8)));
+typedef uint32_t zluda_uint3 __attribute__((ext_vector_type(3)));
+typedef uint8 CONSTANT_SPACE *surface_ptr;
+
+template <typename To, typename From>
+static __device__ To transmute(From f)
+{
+    if constexpr (sizeof(To) == sizeof(From))
+    {
+        return std::bit_cast<To>(f);
+    }
+    else if constexpr (sizeof(To) > sizeof(From))
+    {
+        union
+        {
+            To t;
+            From f;
+        } u = {To{0}};
+        u.f = f;
+        return u.t;
+    }
+    else if constexpr (sizeof(To) < sizeof(From))
+    {
+        union
+        {
+            From f;
+            To t;
+        } u = {From{f}};
+        return u.t;
+    }
+    else
+    {
+        static_assert(sizeof(To) == 0);
+    }
+}
+
+enum class ImageGeometry
+{
+    _1D,
+    _2D,
+    _3D,
+    A1D,
+    A2D
+};
+
+// clang-format off
+template <ImageGeometry> struct Coordinates;
+template <> struct Coordinates<ImageGeometry::_1D> { using type = uint1::Native_vec_; };
+template <> struct Coordinates<ImageGeometry::_2D> { using type = uint2::Native_vec_; };
+template <> struct Coordinates<ImageGeometry::_3D> { using type = uint4::Native_vec_; };
+template <> struct Coordinates<ImageGeometry::A1D>
+{
+    using type = uint2::Native_vec_; using arg_type = uint1::Native_vec_;
+    static __device__ type pack_layer(uint32_t layer, arg_type coord)
+    {
+        return type { coord.x, layer };
+    }
+};
+template <> struct Coordinates<ImageGeometry::A2D>
+{
+    using type = zluda_uint3; using arg_type = uint2::Native_vec_;
+    static __device__ type pack_layer(uint32_t layer, arg_type coord)
+    {
+        return type { coord.x, coord.y, layer };
+    }
+};
+// clang-format on
+
+template <typename T, ImageGeometry geo>
+static __device__ void image_store_pck(T value, typename Coordinates<geo>::type coord, surface_ptr surface)
+{
+    if constexpr (sizeof(T) <= sizeof(uint))
+    {
+        uint value_dword = transmute<uint>(value);
+        if constexpr (geo == ImageGeometry::_1D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0x1 dim:1D unorm" : : "v"(value_dword), "v"(coord.x), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::_2D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0x1 dim:2D unorm" : : "v"(value_dword), "v"(coord), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::_3D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0x1 dim:3D unorm" : : "v"(value_dword), "v"(transmute<zluda_uint3>(coord)), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::A1D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0x1 dim:1D_ARRAY unorm" : : "v"(value_dword), "v"(coord), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::A2D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0x1 dim:2D_ARRAY unorm" : : "v"(value_dword), "v"(coord), "s"(*surface) : "memory");
+        }
+        else
+        {
+            static_assert(sizeof(T) == 0, "Invalid geometry");
+        }
+    }
+    else if constexpr (sizeof(T) == sizeof(uint2::Native_vec_))
+    {
+        uint2::Native_vec_ value_dword2 = transmute<uint2::Native_vec_>(value);
+        if constexpr (geo == ImageGeometry::_1D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0x3 dim:1D unorm" : : "v"(value_dword2), "v"(coord.x), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::_2D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0x3 dim:2D unorm" : : "v"(value_dword2), "v"(coord), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::_3D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0x3 dim:3D unorm" : : "v"(value_dword2), "v"(transmute<zluda_uint3>(coord)), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::A1D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0x3 dim:1D_ARRAY unorm" : : "v"(value_dword2), "v"(coord), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::A2D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0x3 dim:2D_ARRAY unorm" : : "v"(value_dword2), "v"(coord), "s"(*surface) : "memory");
+        }
+        else
+        {
+            static_assert(sizeof(T) == 0, "Invalid geometry");
+        }
+    }
+    else if constexpr (sizeof(T) == sizeof(uint4::Native_vec_))
+    {
+        uint4::Native_vec_ value_dword4 = transmute<uint4::Native_vec_>(value);
+        if constexpr (geo == ImageGeometry::_1D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0xf dim:1D unorm" : : "v"(value_dword4), "v"(coord.x), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::_2D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0xf dim:2D unorm" : : "v"(value_dword4), "v"(coord), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::_3D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0xf dim:3D unorm" : : "v"(value_dword4), "v"(transmute<zluda_uint3>(coord)), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::A1D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0xf dim:1D_ARRAY unorm" : : "v"(value_dword4), "v"(coord), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::A2D)
+        {
+            asm volatile("image_store_pck %0, %1, %2 dmask:0xf dim:2D_ARRAY unorm" : : "v"(value_dword4), "v"(coord), "s"(*surface) : "memory");
+        }
+        else
+        {
+            static_assert(sizeof(T) == 0, "Invalid geometry");
+        }
+    }
+    else
+    {
+        static_assert(sizeof(T) == 0, "Invalid vector size");
+    }
+}
+
+template <typename T, ImageGeometry geo>
+static __device__ T image_load_pck(typename Coordinates<geo>::type coord, surface_ptr surface)
+{
+    if constexpr (sizeof(T) <= sizeof(uint))
+    {
+        uint data;
+        if constexpr (geo == ImageGeometry::_1D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0x1 dim:1D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord.x), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::_2D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0x1 dim:2D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::_3D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0x1 dim:3D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(transmute<zluda_uint3>(coord)), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::A1D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0x1 dim:1D_ARRAY unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::A2D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0x1 dim:2D_ARRAY unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(*surface) : "memory");
+        }
+        else
+        {
+            static_assert(sizeof(ImageGeometry) == 0, "Invalid geometry");
+        }
+        return transmute<T>(data);
+    }
+    else if constexpr (sizeof(T) == sizeof(uint2::Native_vec_))
+    {
+        uint2::Native_vec_ data;
+        if constexpr (geo == ImageGeometry::_1D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0x3 dim:1D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord.x), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::_2D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0x3 dim:2D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::_3D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0x3 dim:3D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(transmute<zluda_uint3>(coord)), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::A1D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0x3 dim:1D_ARRAY unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::A2D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0x3 dim:2D_ARRAY unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(*surface) : "memory");
+        }
+        else
+        {
+            static_assert(sizeof(ImageGeometry) == 0, "Invalid geometry");
+        }
+        return transmute<T>(data);
+    }
+    else if constexpr (sizeof(T) == sizeof(uint4::Native_vec_))
+    {
+        uint4::Native_vec_ data;
+        if constexpr (geo == ImageGeometry::_1D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0xf dim:1D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord.x), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::_2D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0xf dim:2D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::_3D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0xf dim:3D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(transmute<zluda_uint3>(coord)), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::A1D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0xf dim:1D_ARRAY unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(*surface) : "memory");
+        }
+        else if constexpr (geo == ImageGeometry::A2D)
+        {
+            asm volatile("image_load_pck %0, %1, %2 dmask:0xf dim:2D_ARRAY unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(*surface) : "memory");
+        }
+        else
+        {
+            static_assert(sizeof(ImageGeometry) == 0, "Invalid geometry");
+        }
+        return transmute<T>(data);
+    }
+    else
+    {
+        static_assert(sizeof(T) == 0, "Invalid vector size");
+    }
+}
+
+template <ImageGeometry geo>
+static __device__ uint4::Native_vec_ image_load_pck_full(typename Coordinates<geo>::type coord, surface_ptr surface)
+{
+    uint4::Native_vec_ data;
+    if constexpr (geo == ImageGeometry::_1D)
+    {
+        asm volatile("image_load_pck %0, %1, %2 dmask:0xf dim:1D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord.x), "s"(*surface) : "memory");
+    }
+    else if constexpr (geo == ImageGeometry::_2D)
+    {
+        asm volatile("image_load_pck %0, %1, %2 dmask:0xf dim:2D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(*surface) : "memory");
+    }
+    else if constexpr (geo == ImageGeometry::_3D)
+    {
+        asm volatile("image_load_pck %0, %1, %2 dmask:0xf dim:3D unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(transmute<zluda_uint3>(coord)), "s"(*surface) : "memory");
+    }
+    else if constexpr (geo == ImageGeometry::A1D)
+    {
+        asm volatile("image_load_pck %0, %1, %2 dmask:0xf dim:1D_ARRAY unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(*surface) : "memory");
+    }
+    else if constexpr (geo == ImageGeometry::A2D)
+    {
+        asm volatile("image_load_pck %0, %1, %2 dmask:0xf dim:2D_ARRAY unorm\ns_waitcnt vmcnt(0)" : "=v"(data) : "v"(coord), "s"(*surface) : "memory");
+    }
+    else
+    {
+        static_assert(sizeof(ImageGeometry) == 0, "Invalid geometry");
+    }
+    return data;
+}
+
+template <typename T, ImageGeometry geo>
+static __device__ void image_store_pck_full_with(uint4::Native_vec_ data, T value, typename Coordinates<geo>::type coord, surface_ptr surface)
+{
+    // We avoid unions for types smaller than sizeof(uint32_t),
+    // because in those cases we get this garbage:
+    //     ds_write_b128 v2, v[5:8]
+    //     ds_write_b16 v2, v9
+    //     ds_read_b128 v[5:8], v2
+    // tested with ROCm 5.7.1 on gfx1030
+    if constexpr (sizeof(T) == sizeof(uint8_t))
+    {
+        uint32_t x = uint32_t(std::bit_cast<uint8_t>(value));
+        uint32_t data_0 = ((data[0]) >> 8) << 8;
+        data[0] = data_0 | x;
+    }
+    else if constexpr (sizeof(T) == sizeof(uint16_t))
+    {
+        uint32_t x = uint32_t(std::bit_cast<uint16_t>(value));
+        uint32_t data_0 = ((data[0]) >> 16) << 16;
+        data[0] = data_0 | x;
+    }
+    else
+    {
+        union
+        {
+            uint4::Native_vec_ full_vec;
+            T value;
+        } u = {0};
+        u.full_vec = data;
+        u.value = value;
+        data = u.full_vec;
+    }
+    image_store_pck<uint4::Native_vec_, geo>(data, coord, surface);
+}
+
+constexpr auto IMAGE_RESERVED_TOP_BITS = 3;
+
+static __device__ surface_ptr get_surface_pointer(uint64_t s)
+{
+    return (surface_ptr)((s << IMAGE_RESERVED_TOP_BITS) >> IMAGE_RESERVED_TOP_BITS);
+}
+
+static __device__ surface_ptr get_surface_pointer(struct textureReference GLOBAL_SPACE *surf_ref)
+{
+    return (surface_ptr)(surf_ref->textureObject);
+}
+
+static __device__ uint32_t x_coordinate_shift(uint64_t s)
+{
+    return uint32_t(s >> (64 - IMAGE_RESERVED_TOP_BITS));
+}
+
+static __device__ uint32_t x_coordinate_shift(struct textureReference GLOBAL_SPACE *ptr)
+{
+    uint32_t channels = uint32_t(ptr->numChannels);
+    uint32_t format_width = 0;
+    hipArray_Format format = ptr->format;
+    switch (format)
+    {
+    case hipArray_Format::HIP_AD_FORMAT_UNSIGNED_INT8:
+    case hipArray_Format::HIP_AD_FORMAT_SIGNED_INT8:
+        format_width = 1;
+        break;
+    case hipArray_Format::HIP_AD_FORMAT_UNSIGNED_INT16:
+    case hipArray_Format::HIP_AD_FORMAT_SIGNED_INT16:
+    case hipArray_Format::HIP_AD_FORMAT_HALF:
+        format_width = 2;
+        break;
+    case hipArray_Format::HIP_AD_FORMAT_UNSIGNED_INT32:
+    case hipArray_Format::HIP_AD_FORMAT_SIGNED_INT32:
+    case hipArray_Format::HIP_AD_FORMAT_FLOAT:
+        format_width = 4;
+        break;
+    default:
+        __builtin_unreachable();
+    }
+    return uint32_t(__builtin_ctz(format_width * channels));
+}
+
+template <typename T, ImageGeometry geo, typename Surface>
+static __device__ T suld_b_zero(Surface surf_arg, typename Coordinates<geo>::type coord)
+{
+    surface_ptr surface = get_surface_pointer(surf_arg);
+    uint32_t shift_x = x_coordinate_shift(surf_arg);
+    coord.x = coord.x >> shift_x;
+    return image_load_pck<T, geo>(coord, surface);
+}
+
+template <typename T, ImageGeometry geo, typename Surface>
+static __device__ void sust_b_zero(Surface surf_arg, typename Coordinates<geo>::type coord, T data)
+{
+    surface_ptr surface = get_surface_pointer(surf_arg);
+    uint32_t shift_x = x_coordinate_shift(surf_arg);
+    coord.x = coord.x >> shift_x;
+    if (shift_x <= __builtin_ctz(sizeof(T))) [[likely]]
+    {
+        image_store_pck<T, geo>(data, coord, surface);
+    }
+    else
+    {
+        uint4::Native_vec_ pixel = image_load_pck_full<geo>(coord, surface);
+        image_store_pck_full_with<T, geo>(pixel, data, coord, surface);
+    }
 }
 
 extern "C"
@@ -620,179 +1014,101 @@ extern "C"
     suld_b_a2d_vec(_v4, b32, uint4);
     // suld_b_a2d_vec(_v4, b64, ulong4);
 
-#define sust_b_1d_vec(VEC, TYPE, HIP_TYPE)                                                                                                     \
-    void FUNC(sust_b_1d##VEC##_##TYPE##_trap)(struct textureReference GLOBAL_SPACE * ptr, int1::Native_vec_ coord, HIP_TYPE::Native_vec_ data) \
-    {                                                                                                                                          \
-        hipTextureObject_t textureObject = ptr->textureObject;                                                                                 \
-        TEXTURE_OBJECT_PARAMETERS_INIT;                                                                                                        \
-        (void)s;                                                                                                                               \
-        int byte_coord = __hipGetPixelAddr(coord.x, __ockl_image_channel_data_type_1D(i), __ockl_image_channel_order_1D(i));                   \
-        HIP_TYPE hip_data;                                                                                                                     \
-        hip_data.data = data;                                                                                                                  \
-        auto tmp = __pack_to_float4(hip_data);                                                                                                 \
-        __ockl_image_store_1D(i, byte_coord, tmp);                                                                                             \
-    }                                                                                                                                          \
-    void FUNC(sust_b_indirect_1d##VEC##_##TYPE##_trap)(uint64_t serf_arg, int1::Native_vec_ coord, HIP_TYPE::Native_vec_ data)                 \
-    {                                                                                                                                          \
-        hipSurfaceObject_t surfObj = (hipSurfaceObject_t)serf_arg;                                                                             \
-        HIP_TYPE hip_data;                                                                                                                     \
-        hip_data.data = data;                                                                                                                  \
-        surf1Dwrite(hip_data, surfObj, coord.x);                                                                                               \
+#define SUST_B_ZERO(TYPE, GEOMETRY, HIP_TYPE)                                                                                                           \
+    HIP_TYPE::Native_vec_ FUNC(suld_b_indirect_##TYPE##_zero)(uint64_t surf_arg, typename Coordinates<GEOMETRY>::type coord)                            \
+    {                                                                                                                                                   \
+        return suld_b_zero<HIP_TYPE::Native_vec_, GEOMETRY>(surf_arg, coord);                                                                           \
+    }                                                                                                                                                   \
+    void FUNC(sust_b_indirect_##TYPE##_zero)(uint64_t surf_arg, typename Coordinates<GEOMETRY>::type coord, HIP_TYPE::Native_vec_ data)                 \
+    {                                                                                                                                                   \
+        sust_b_zero<HIP_TYPE::Native_vec_, GEOMETRY>(surf_arg, coord, data);                                                                            \
+    }                                                                                                                                                   \
+    HIP_TYPE::Native_vec_ FUNC(suld_b_##TYPE##_zero)(struct textureReference GLOBAL_SPACE * ptr, typename Coordinates<GEOMETRY>::type coord)            \
+    {                                                                                                                                                   \
+        return suld_b_zero<HIP_TYPE::Native_vec_, GEOMETRY>(ptr, coord);                                                                                \
+    }                                                                                                                                                   \
+    void FUNC(sust_b_##TYPE##_zero)(struct textureReference GLOBAL_SPACE * ptr, typename Coordinates<GEOMETRY>::type coord, HIP_TYPE::Native_vec_ data) \
+    {                                                                                                                                                   \
+        sust_b_zero<HIP_TYPE::Native_vec_, GEOMETRY>(ptr, coord, data);                                                                                 \
     }
 
-    sust_b_1d_vec(, b8, uchar1);
-    sust_b_1d_vec(, b16, ushort1);
-    sust_b_1d_vec(, b32, uint1);
-    // sust_b_1d_vec(, b64, ulong1);
-    sust_b_1d_vec(_v2, b8, uchar2);
-    sust_b_1d_vec(_v2, b16, ushort2);
-    sust_b_1d_vec(_v2, b32, uint2);
-    // sust_b_1d_vec(_v2, b64, ulong2);
-    sust_b_1d_vec(_v4, b8, uchar4);
-    sust_b_1d_vec(_v4, b16, ushort4);
-    sust_b_1d_vec(_v4, b32, uint4);
-    // sust_b_1d_vec(_v4, b64, ulong4);
-
-#define sust_b_2d_vec(VEC, TYPE, HIP_TYPE)                                                                                                     \
-    void FUNC(sust_b_2d##VEC##_##TYPE##_trap)(struct textureReference GLOBAL_SPACE * ptr, int2::Native_vec_ coord, HIP_TYPE::Native_vec_ data) \
-    {                                                                                                                                          \
-        hipTextureObject_t textureObject = ptr->textureObject;                                                                                 \
-        TEXTURE_OBJECT_PARAMETERS_INIT;                                                                                                        \
-        (void)s;                                                                                                                               \
-        int byte_coord = __hipGetPixelAddr(coord.x, __ockl_image_channel_data_type_2D(i), __ockl_image_channel_order_2D(i));                   \
-        HIP_TYPE hip_data;                                                                                                                     \
-        hip_data.data = data;                                                                                                                  \
-        auto tmp = __pack_to_float4(hip_data);                                                                                                 \
-        __ockl_image_store_2D(i, int2(byte_coord, coord.y).data, tmp);                                                                         \
-    }                                                                                                                                          \
-    void FUNC(sust_b_indirect_2d##VEC##_##TYPE##_trap)(uint64_t serf_arg, int2::Native_vec_ coord, HIP_TYPE::Native_vec_ data)                 \
-    {                                                                                                                                          \
-        hipSurfaceObject_t surfObj = (hipSurfaceObject_t)serf_arg;                                                                             \
-        HIP_TYPE hip_data;                                                                                                                     \
-        hip_data.data = data;                                                                                                                  \
-        surf2Dwrite(hip_data, surfObj, coord.x, coord.y);                                                                                      \
+#define SUST_B_ZERO_ARRAY(TYPE, GEOMETRY, HIP_TYPE)                                                                                                                         \
+    HIP_TYPE::Native_vec_ FUNC(suld_b_indirect_##TYPE##_zero)(uint64_t surf_arg, uint32_t layer, typename Coordinates<GEOMETRY>::arg_type coord)                            \
+    {                                                                                                                                                                       \
+        auto coord_array = Coordinates<GEOMETRY>::pack_layer(layer, coord);                                                                                                 \
+        return suld_b_zero<HIP_TYPE::Native_vec_, GEOMETRY>(surf_arg, coord_array);                                                                                         \
+    }                                                                                                                                                                       \
+    void FUNC(sust_b_indirect_##TYPE##_zero)(uint64_t surf_arg, uint32_t layer, typename Coordinates<GEOMETRY>::arg_type coord, HIP_TYPE::Native_vec_ data)                 \
+    {                                                                                                                                                                       \
+        auto coord_array = Coordinates<GEOMETRY>::pack_layer(layer, coord);                                                                                                 \
+        sust_b_zero<HIP_TYPE::Native_vec_, GEOMETRY>(surf_arg, coord_array, data);                                                                                          \
+    }                                                                                                                                                                       \
+    HIP_TYPE::Native_vec_ FUNC(suld_b_##TYPE##_zero)(struct textureReference GLOBAL_SPACE * ptr, uint32_t layer, typename Coordinates<GEOMETRY>::arg_type coord)            \
+    {                                                                                                                                                                       \
+        auto coord_array = Coordinates<GEOMETRY>::pack_layer(layer, coord);                                                                                                 \
+        return suld_b_zero<HIP_TYPE::Native_vec_, GEOMETRY>(ptr, coord_array);                                                                                              \
+    }                                                                                                                                                                       \
+    void FUNC(sust_b_##TYPE##_zero)(struct textureReference GLOBAL_SPACE * ptr, uint32_t layer, typename Coordinates<GEOMETRY>::arg_type coord, HIP_TYPE::Native_vec_ data) \
+    {                                                                                                                                                                       \
+        auto coord_array = Coordinates<GEOMETRY>::pack_layer(layer, coord);                                                                                                 \
+        sust_b_zero<HIP_TYPE::Native_vec_, GEOMETRY>(ptr, coord_array, data);                                                                                               \
     }
 
-    sust_b_2d_vec(, b8, uchar1);
-    sust_b_2d_vec(, b16, ushort1);
-    sust_b_2d_vec(, b32, uint1);
-    // sust_b_2d_vec(, b64, ulong1);
-    sust_b_2d_vec(_v2, b8, uchar2);
-    sust_b_2d_vec(_v2, b16, ushort2);
-    sust_b_2d_vec(_v2, b32, uint2);
-    // sust_b_2d_vec(_v2, b64, ulong2);
-    sust_b_2d_vec(_v4, b8, uchar4);
-    sust_b_2d_vec(_v4, b16, ushort4);
-    sust_b_2d_vec(_v4, b32, uint4);
-    // sust_b_2d_vec(_v4, b64, ulong4);
-
-#define sust_b_3d_vec(VEC, TYPE, HIP_TYPE)                                                                                                     \
-    void FUNC(sust_b_3d##VEC##_##TYPE##_trap)(struct textureReference GLOBAL_SPACE * ptr, int4::Native_vec_ coord, HIP_TYPE::Native_vec_ data) \
-    {                                                                                                                                          \
-        hipTextureObject_t textureObject = ptr->textureObject;                                                                                 \
-        TEXTURE_OBJECT_PARAMETERS_INIT;                                                                                                        \
-        (void)s;                                                                                                                               \
-        int byte_coord = __hipGetPixelAddr(coord.x, __ockl_image_channel_data_type_3D(i), __ockl_image_channel_order_3D(i));                   \
-        HIP_TYPE hip_data;                                                                                                                     \
-        hip_data.data = data;                                                                                                                  \
-        auto tmp = __pack_to_float4(hip_data);                                                                                                 \
-        __ockl_image_store_3D(i, int4(byte_coord, coord.y, coord.z, 0).data, tmp);                                                             \
-    }                                                                                                                                          \
-    void FUNC(sust_b_indirect_3d##VEC##_##TYPE##_trap)(uint64_t serf_arg, int4::Native_vec_ coord, HIP_TYPE::Native_vec_ data)                 \
-    {                                                                                                                                          \
-        hipSurfaceObject_t surfObj = (hipSurfaceObject_t)serf_arg;                                                                             \
-        __HIP_SURFACE_OBJECT_PARAMETERS_INIT;                                                                                                  \
-        int byte_coord = __hipGetPixelAddr(coord.x, __ockl_image_channel_data_type_3D(i), __ockl_image_channel_order_3D(i));                   \
-        HIP_TYPE hip_data;                                                                                                                     \
-        hip_data.data = data;                                                                                                                  \
-        auto tmp = __pack_to_float4(hip_data);                                                                                                 \
-        __ockl_image_store_3D(i, int4(byte_coord, coord.y, coord.z, 0).data, tmp);                                                             \
-    }
-
-    sust_b_3d_vec(, b8, uchar1);
-    sust_b_3d_vec(, b16, ushort1);
-    sust_b_3d_vec(, b32, uint1);
-    // sust_b_3d_vec(, b64, ulong1);
-    sust_b_3d_vec(_v2, b8, uchar2);
-    sust_b_3d_vec(_v2, b16, ushort2);
-    sust_b_3d_vec(_v2, b32, uint2);
-    // sust_b_3d_vec(_v2, b64, ulong2);
-    sust_b_3d_vec(_v4, b8, uchar4);
-    sust_b_3d_vec(_v4, b16, ushort4);
-    sust_b_3d_vec(_v4, b32, uint4);
-    // sust_b_3d_vec(_v4, b64, ulong4);
-
-#define sust_b_a1d_vec(VEC, TYPE, HIP_TYPE)                                                                                               \
-    void FUNC(sust_b_a1d##VEC##_##TYPE##_trap)(struct textureReference GLOBAL_SPACE * ptr, uint layer, int x, HIP_TYPE::Native_vec_ data) \
-    {                                                                                                                                     \
-        hipTextureObject_t textureObject = ptr->textureObject;                                                                            \
-        TEXTURE_OBJECT_PARAMETERS_INIT;                                                                                                   \
-        (void)s;                                                                                                                          \
-        int byte_coord = __hipGetPixelAddr(x, __ockl_image_channel_data_type_1Da(i), __ockl_image_channel_order_1Da(i));                  \
-        HIP_TYPE hip_data;                                                                                                                \
-        hip_data.data = data;                                                                                                             \
-        auto tmp = __pack_to_float4(hip_data);                                                                                            \
-        __ockl_image_store_1Da(i, int2(byte_coord, int(layer)).data, tmp);                                                                \
-    }                                                                                                                                     \
-    void FUNC(sust_b_indirect_a1d##VEC##_##TYPE##_trap)(uint64_t serf_arg, uint layer, int x, HIP_TYPE::Native_vec_ data)                 \
-    {                                                                                                                                     \
-        hipSurfaceObject_t surfObj = (hipSurfaceObject_t)serf_arg;                                                                        \
-        __HIP_SURFACE_OBJECT_PARAMETERS_INIT;                                                                                             \
-        int byte_coord = __hipGetPixelAddr(x, __ockl_image_channel_data_type_1Da(i), __ockl_image_channel_order_1Da(i));                  \
-        HIP_TYPE hip_data;                                                                                                                \
-        hip_data.data = data;                                                                                                             \
-        auto tmp = __pack_to_float4(hip_data);                                                                                            \
-        __ockl_image_store_1Da(i, int2(byte_coord, int(layer)).data, tmp);                                                                \
-    }
-
-    sust_b_a1d_vec(, b8, uchar1);
-    sust_b_a1d_vec(, b16, ushort1);
-    sust_b_a1d_vec(, b32, uint1);
-    // sust_b_a1d_vec(, b64, ulong1);
-    sust_b_a1d_vec(_v2, b8, uchar2);
-    sust_b_a1d_vec(_v2, b16, ushort2);
-    sust_b_a1d_vec(_v2, b32, uint2);
-    // sust_b_a1d_vec(_v2, b64, ulong2);
-    sust_b_a1d_vec(_v4, b8, uchar4);
-    sust_b_a1d_vec(_v4, b16, ushort4);
-    sust_b_a1d_vec(_v4, b32, uint4);
-    // sust_b_a1d_vec(_v4, b64, ulong4);
-
-#define sust_b_a2d_vec(VEC, TYPE, HIP_TYPE)                                                                                                      \
-    void FUNC(sust_b_a2d##VEC##_##TYPE##_trap)(struct textureReference GLOBAL_SPACE * ptr, uint layer, int x, int y, HIP_TYPE::Native_vec_ data) \
-    {                                                                                                                                            \
-        hipTextureObject_t textureObject = ptr->textureObject;                                                                                   \
-        TEXTURE_OBJECT_PARAMETERS_INIT;                                                                                                          \
-        (void)s;                                                                                                                                 \
-        int byte_coord = __hipGetPixelAddr(x, __ockl_image_channel_data_type_2Da(i), __ockl_image_channel_order_2Da(i));                         \
-        HIP_TYPE hip_data;                                                                                                                       \
-        hip_data.data = data;                                                                                                                    \
-        auto tmp = __pack_to_float4(hip_data);                                                                                                   \
-        __ockl_image_store_2Da(i, int4(byte_coord, y, int(layer), 0).data, tmp);                                                                 \
-    }                                                                                                                                            \
-    void FUNC(sust_b_indirect_a2d##VEC##_##TYPE##_trap)(uint64_t serf_arg, uint layer, int x, int y, HIP_TYPE::Native_vec_ data)                 \
-    {                                                                                                                                            \
-        hipSurfaceObject_t surfObj = (hipSurfaceObject_t)serf_arg;                                                                               \
-        __HIP_SURFACE_OBJECT_PARAMETERS_INIT;                                                                                                    \
-        int byte_coord = __hipGetPixelAddr(x, __ockl_image_channel_data_type_2Da(i), __ockl_image_channel_order_2Da(i));                         \
-        HIP_TYPE hip_data;                                                                                                                       \
-        hip_data.data = data;                                                                                                                    \
-        auto tmp = __pack_to_float4(hip_data);                                                                                                   \
-        __ockl_image_store_2Da(i, int4(byte_coord, y, int(layer), 0).data, tmp);                                                                 \
-    }
-
-    sust_b_a2d_vec(, b8, uchar1);
-    sust_b_a2d_vec(, b16, ushort1);
-    sust_b_a2d_vec(, b32, uint1);
-    // sust_b_a2d_vec(, b64, ulong1);
-    sust_b_a2d_vec(_v2, b8, uchar2);
-    sust_b_a2d_vec(_v2, b16, ushort2);
-    sust_b_a2d_vec(_v2, b32, uint2);
-    // sust_b_a2d_vec(_v2, b64, ulong2);
-    sust_b_a2d_vec(_v4, b8, uchar4);
-    sust_b_a2d_vec(_v4, b16, ushort4);
-    sust_b_a2d_vec(_v4, b32, uint4);
-    // sust_b_a2d_vec(_v4, b64, ulong4);
+    SUST_B_ZERO(1d_b8, ImageGeometry::_1D, uchar1);
+    SUST_B_ZERO(1d_b16, ImageGeometry::_1D, ushort1);
+    SUST_B_ZERO(1d_b32, ImageGeometry::_1D, uint1);
+    SUST_B_ZERO(1d_b64, ImageGeometry::_1D, ulong1);
+    SUST_B_ZERO(1d_v2_b8, ImageGeometry::_1D, uchar2);
+    SUST_B_ZERO(1d_v2_b16, ImageGeometry::_1D, ushort2);
+    SUST_B_ZERO(1d_v2_b32, ImageGeometry::_1D, uint2);
+    SUST_B_ZERO(1d_v2_b64, ImageGeometry::_1D, ulong2);
+    SUST_B_ZERO(1d_v4_b8, ImageGeometry::_1D, uchar4);
+    SUST_B_ZERO(1d_v4_b16, ImageGeometry::_1D, ushort4);
+    SUST_B_ZERO(1d_v4_b32, ImageGeometry::_1D, uint4);
+    SUST_B_ZERO(2d_b8, ImageGeometry::_2D, uchar1);
+    SUST_B_ZERO(2d_b16, ImageGeometry::_2D, ushort1);
+    SUST_B_ZERO(2d_b32, ImageGeometry::_2D, uint1);
+    SUST_B_ZERO(2d_b64, ImageGeometry::_2D, ulong1);
+    SUST_B_ZERO(2d_v2_b8, ImageGeometry::_2D, uchar2);
+    SUST_B_ZERO(2d_v2_b16, ImageGeometry::_2D, ushort2);
+    SUST_B_ZERO(2d_v2_b32, ImageGeometry::_2D, uint2);
+    SUST_B_ZERO(2d_v2_b64, ImageGeometry::_2D, ulong2);
+    SUST_B_ZERO(2d_v4_b8, ImageGeometry::_2D, uchar4);
+    SUST_B_ZERO(2d_v4_b16, ImageGeometry::_2D, ushort4);
+    SUST_B_ZERO(2d_v4_b32, ImageGeometry::_2D, uint4);
+    SUST_B_ZERO(3d_b8, ImageGeometry::_3D, uchar1);
+    SUST_B_ZERO(3d_b16, ImageGeometry::_3D, ushort1);
+    SUST_B_ZERO(3d_b32, ImageGeometry::_3D, uint1);
+    SUST_B_ZERO(3d_b64, ImageGeometry::_3D, ulong1);
+    SUST_B_ZERO(3d_v2_b8, ImageGeometry::_3D, uchar2);
+    SUST_B_ZERO(3d_v2_b16, ImageGeometry::_3D, ushort2);
+    SUST_B_ZERO(3d_v2_b32, ImageGeometry::_3D, uint2);
+    SUST_B_ZERO(3d_v2_b64, ImageGeometry::_3D, ulong2);
+    SUST_B_ZERO(3d_v4_b8, ImageGeometry::_3D, uchar4);
+    SUST_B_ZERO(3d_v4_b16, ImageGeometry::_3D, ushort4);
+    SUST_B_ZERO(3d_v4_b32, ImageGeometry::_3D, uint4);
+    SUST_B_ZERO_ARRAY(a1d_b8, ImageGeometry::A1D, uchar1);
+    SUST_B_ZERO_ARRAY(a1d_b16, ImageGeometry::A1D, ushort1);
+    SUST_B_ZERO_ARRAY(a1d_b32, ImageGeometry::A1D, uint1);
+    SUST_B_ZERO_ARRAY(a1d_b64, ImageGeometry::A1D, ulong1);
+    SUST_B_ZERO_ARRAY(a1d_v2_b8, ImageGeometry::A1D, uchar2);
+    SUST_B_ZERO_ARRAY(a1d_v2_b16, ImageGeometry::A1D, ushort2);
+    SUST_B_ZERO_ARRAY(a1d_v2_b32, ImageGeometry::A1D, uint2);
+    SUST_B_ZERO_ARRAY(a1d_v2_b64, ImageGeometry::A1D, ulong2);
+    SUST_B_ZERO_ARRAY(a1d_v4_b8, ImageGeometry::A1D, uchar4);
+    SUST_B_ZERO_ARRAY(a1d_v4_b16, ImageGeometry::A1D, ushort4);
+    SUST_B_ZERO_ARRAY(a1d_v4_b32, ImageGeometry::A1D, uint4);
+    SUST_B_ZERO_ARRAY(a2d_b8, ImageGeometry::A2D, uchar1);
+    SUST_B_ZERO_ARRAY(a2d_b16, ImageGeometry::A2D, ushort1);
+    SUST_B_ZERO_ARRAY(a2d_b32, ImageGeometry::A2D, uint1);
+    SUST_B_ZERO_ARRAY(a2d_b64, ImageGeometry::A2D, ulong1);
+    SUST_B_ZERO_ARRAY(a2d_v2_b8, ImageGeometry::A2D, uchar2);
+    SUST_B_ZERO_ARRAY(a2d_v2_b16, ImageGeometry::A2D, ushort2);
+    SUST_B_ZERO_ARRAY(a2d_v2_b32, ImageGeometry::A2D, uint2);
+    SUST_B_ZERO_ARRAY(a2d_v2_b64, ImageGeometry::A2D, ulong2);
+    SUST_B_ZERO_ARRAY(a2d_v4_b8, ImageGeometry::A2D, uchar4);
+    SUST_B_ZERO_ARRAY(a2d_v4_b16, ImageGeometry::A2D, ushort4);
+    SUST_B_ZERO_ARRAY(a2d_v4_b32, ImageGeometry::A2D, uint4);
 
     __device__ static inline bool is_upper_warp()
     {
