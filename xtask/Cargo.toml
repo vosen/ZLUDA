@@ -12,3 +12,6 @@ cargo_metadata = "=0.17.0"
 cargo-platform = "=0.1.5"
 serde = "1.0.193"
 serde_json = "1.0.108"
+flate2 = { version = "1.0.28", features = ["cloudflare_zlib"], default-features = false }
+zip = { version = "0.6.6", features = ["deflate", "time"], default-features = false }
+time = { version = "=0.3.23", features = ["local-offset"] }

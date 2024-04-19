@@ -1,7 +1,10 @@
 use argh::{EarlyExit, FromArgs, TopLevelCommand};
+use cargo_metadata::camino::Utf8PathBuf;
 use serde::Deserialize;
 use std::{
+    convert::TryFrom,
     env,
+    fs::File,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -60,7 +63,7 @@ struct BuildCommand {
 }
 
 #[derive(FromArgs)]
-/// Package build artifacts into an archive (.zip or .tar.gz)
+/// Compile ZLUDA and package binaries into an archive (.zip or .tar.gz)
 #[argh(subcommand, name = "zip")]
 struct ZipCommand {
     /// use artifacts from release mode
@@ -73,8 +76,13 @@ fn main() -> Result<(), DynError> {
     let args: Arguments = argh::from_env();
     std::process::exit(match args.command {
         Subcommand::Build(BuildCommand { release }) => build(!release)?,
-        Subcommand::Zip(_) => panic!(),
+        Subcommand::Zip(ZipCommand { release }) => build_and_zip(!release)?,
     })
+}
+
+fn build_and_zip(is_debug: bool) -> Result<i32, DynError> {
+    let workspace = build_impl(is_debug)?;
+    zip(workspace)
 }
 
 #[derive(Deserialize)]
@@ -92,8 +100,6 @@ struct Project {
     #[serde(skip_deserializing)]
     kind: TargetKind,
     #[serde(default)]
-    top_level: bool,
-    #[serde(default)]
     windows_only: bool,
     #[serde(default)]
     linux_only: bool,
@@ -103,6 +109,8 @@ struct Project {
     broken: bool,
     #[serde(default)]
     skip_dump_link: bool,
+    #[serde(default)]
+    skip_zip: bool,
     #[serde(default)]
     linux_names: Vec<String>,
     #[serde(default)]
@@ -116,14 +124,56 @@ enum TargetKind {
     Cdylib,
 }
 
+struct Workspace {
+    pub cargo: String,
+    pub project_root: PathBuf,
+    pub projects: Vec<Project>,
+    pub target_directory: Utf8PathBuf,
+}
+
+impl Workspace {
+    fn open(is_debug: bool) -> Result<Self, DynError> {
+        let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+        let project_root = Self::project_root()?;
+        let mut cmd = cargo_metadata::MetadataCommand::new();
+        cmd.cargo_path(&cargo).current_dir(&project_root).no_deps();
+        let cargo_metadata = cmd.exec()?;
+        let projects = cargo_metadata
+            .packages
+            .into_iter()
+            .filter_map(Project::new)
+            .filter(|p| !p.skip_build(is_debug))
+            .collect::<Vec<_>>();
+        let mut target_directory = cargo_metadata.target_directory;
+        target_directory.push(if is_debug { "debug" } else { "release" });
+        Ok(Workspace {
+            cargo,
+            project_root,
+            projects,
+            target_directory,
+        })
+    }
+
+    fn project_root() -> Result<PathBuf, DynError> {
+        Ok(Path::new(&env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .nth(1)
+            .ok_or::<DynError>("CARGO_MANIFEST_DIR".into())?
+            .to_path_buf())
+    }
+
+    fn cargo_command(&self) -> Command {
+        let mut command = Command::new(&self.cargo);
+        command.current_dir(&self.project_root);
+        command
+    }
+}
+
 impl Project {
-    fn new(json_pkg: cargo_metadata::Package) -> Self {
-        let mut project = serde_json::from_value::<Option<ZludaMetadata>>(json_pkg.metadata)
-            .unwrap()
-            .map_or(Default::default(), |x| x.zluda);
-        if project != Default::default() {
-            project.top_level = true;
-        }
+    fn new(json_pkg: cargo_metadata::Package) -> Option<Self> {
+        let project_metadata =
+            serde_json::from_value::<Option<ZludaMetadata>>(json_pkg.metadata).unwrap()?;
+        let mut project = project_metadata.zluda;
         project.name = json_pkg.name;
         if let Some((target_name, kind)) = json_pkg.targets.into_iter().find_map(|t| {
             match t.kind.first().map(std::ops::Deref::deref) {
@@ -135,13 +185,10 @@ impl Project {
             project.target_name = target_name;
             project.kind = kind;
         }
-        project
+        Some(project)
     }
 
     fn skip_build(&self, is_debug: bool) -> bool {
-        if !self.top_level {
-            return true;
-        }
         if self.broken {
             return true;
         }
@@ -159,49 +206,93 @@ impl Project {
 }
 
 fn build(is_debug: bool) -> Result<i32, DynError> {
-    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-    let project_root = project_root()?;
-    let mut cmd = cargo_metadata::MetadataCommand::new();
-    cmd.cargo_path(&cargo).current_dir(&project_root).no_deps();
-    let metadata = cmd.exec()?;
-    let projects = metadata
-        .packages
-        .into_iter()
-        .map(Project::new)
-        .filter(|p| !p.skip_build(is_debug))
-        .collect::<Vec<_>>();
-    let mut command = Command::new(&cargo);
-    command.current_dir(&project_root).arg("build");
-    projects.iter().fold(&mut command, |command, proj| {
-        command.args(["-p", &proj.name])
-    });
+    build_impl(is_debug)?;
+    Ok(0)
+}
+
+fn build_impl(is_debug: bool) -> Result<Workspace, DynError> {
+    let workspace = Workspace::open(is_debug)?;
+    let mut command = workspace.cargo_command();
+    command.arg("build");
+    workspace
+        .projects
+        .iter()
+        .fold(&mut command, |command, proj| {
+            command.args(["-p", &proj.name])
+        });
     if !is_debug {
         command.arg("--release");
     }
     let build_result = command.status()?.code().unwrap();
     if build_result != 0 {
-        return Ok(build_result);
+        return Err(format!("{command:?} failed with exit code {build_result}").into());
     }
-    os::create_dump_dir_and_symlinks(is_debug, metadata.target_directory, projects);
+    os::create_dump_dir_and_symlinks(is_debug, &workspace);
+    Ok(workspace)
+}
+
+fn zip(workspace: Workspace) -> Result<i32, DynError> {
+    fn get_zip_entry_options(
+        f: &File,
+        time_offset: time::UtcOffset,
+    ) -> Option<zip::write::FileOptions> {
+        let time = f.metadata().ok()?.modified().ok()?;
+        let time = time::OffsetDateTime::from(time).to_offset(time_offset);
+        Some(
+            zip::write::FileOptions::default()
+                .last_modified_time(zip::DateTime::try_from(time).ok()?),
+        )
+    }
+    let mut target_file = workspace.target_directory.clone();
+    target_file.push("zluda.zip");
+    let zip_archive = File::create(target_file)?;
+    let mut zip_writer = zip::write::ZipWriter::new(zip_archive);
+    let time_offset = time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC);
+    for p in workspace.projects {
+        if p.skip_zip {
+            continue;
+        }
+        let mut src_file = File::open(format!(
+            "{}/{}{}",
+            &workspace.target_directory,
+            p.target_name,
+            p.kind.suffix()
+        ))?;
+        zip_writer.start_file(
+            format!("zluda/{}{}", p.target_name, p.kind.suffix()),
+            get_zip_entry_options(&src_file, time_offset)
+                .unwrap_or(zip::write::FileOptions::default()),
+        )?;
+        std::io::copy(&mut src_file, &mut zip_writer)?;
+    }
+    zip_writer.finish()?;
     Ok(0)
 }
 
-fn project_root() -> Result<PathBuf, DynError> {
-    Ok(Path::new(&env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(1)
-        .ok_or::<DynError>("CARGO_MANIFEST_DIR".into())?
-        .to_path_buf())
-}
+impl TargetKind {
+    #[cfg(unix)]
+    fn prefix(self) -> &'static str {
+        match self {
+            TargetKind::Binary => "",
+            TargetKind::Cdylib => "lib",
+        }
+    }
 
-#[cfg(not(unix))]
-mod os {
-    use super::Project;
-    use cargo_metadata::camino::Utf8PathBuf;
+    #[cfg(unix)]
+    fn suffix(self) -> &'static str {
+        match self {
+            TargetKind::Binary => "",
+            TargetKind::Cdylib => ".so",
+        }
+    }
 
-    // This is 100% intentional, we don't want symlinks on Windows since
-    // we use completely different scheme for injections here
-    pub(crate) fn create_dump_dir_and_symlinks(_: bool, _: Utf8PathBuf, _: Vec<Project>) {}
+    #[cfg(windows)]
+    fn suffix(self) -> &'static str {
+        match self {
+            TargetKind::Binary => ".exe",
+            TargetKind::Cdylib => ".dll",
+        }
+    }
 }
 
 #[cfg(unix)]
@@ -211,11 +302,10 @@ mod os {
 
     pub(crate) fn create_dump_dir_and_symlinks(
         is_debug: bool,
-        mut target_directory: Utf8PathBuf,
+        mut target_directory: &Utf8PathBuf,
         projects: Vec<Project>,
     ) {
         use std::fs;
-        target_directory.push(if is_debug { "debug" } else { "release" });
         let mut dump_dir = target_directory.clone();
         dump_dir.push("dump");
         fs::create_dir_all(&dump_dir).unwrap();
@@ -278,4 +368,13 @@ mod os {
             }
         }
     }
+}
+
+#[cfg(windows)]
+mod os {
+    use crate::Workspace;
+
+    // This is 100% intentional, we don't want symlinks on Windows since
+    // we use a completely different scheme for injections there
+    pub(crate) fn create_dump_dir_and_symlinks(_: bool, _: &Workspace) {}
 }

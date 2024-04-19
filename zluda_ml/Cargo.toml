@@ -15,5 +15,4 @@ atiadlxx-sys = { path = "../atiadlxx-sys" }
 rocm_smi-sys = { path = "../rocm_smi-sys" }
 
 [package.metadata.zluda]
-top_level = true
 linux_names = ["libnvidia-ml.so", "libnvidia-ml.so.1"]

@@ -58,4 +58,4 @@ opt-level = 3
 opt-level = 3
 
 [profile.dev.package.xtask]
-opt-level = 3
+opt-level = 2

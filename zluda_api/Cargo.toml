@@ -26,3 +26,4 @@ features = [
 [package.metadata.zluda]
 debug_only = true
 windows_only = true
+skip_zip = true
