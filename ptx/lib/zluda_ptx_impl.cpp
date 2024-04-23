@@ -1395,8 +1395,36 @@ extern "C"
             char c = *(s++);
             if (c == 0)
                 break;
-            if (c == '%')
+            if (c != '%')
+                continue;
+
+            // %% requires no additional handling
+            if (*s == '%')
             {
+                s++;
+                continue;
+            }
+
+            // %s uses __ockl_printf_append_string_n
+            // https://github.com/ROCm/clr/blob/5a715ed160c69a2deebac187a0368900a774f3e8/hipamd/include/hip/amd_detail/hip_assert.h#L73
+            if (*s == 's')
+            {
+                s++;
+                const char *value = (const char *)read_valist(valist_ptr, valist_offset, 8);
+                handle = __ockl_printf_append_string_n(handle, value, strlen_plus_one(value), 0);
+                continue;
+            }
+
+            // Keep scanning until we figure out the length of this specifier or if we reach the end of the string
+            while (*s != 0) {
+                // "The width is not specified in the format string, but as an additional integer value argument preceding the argument that has to be formatted."
+                if (*s == '*') {
+                    s++;
+                    uint64_t value = read_valist(valist_ptr, valist_offset, 4);
+                    handle = __ockl_printf_append_args(handle, 1, value, 0, 0, 0, 0, 0, 0, 0);
+                    continue;
+                }
+
                 uint8_t len = 0;
                 if (parse_printf_specifier(s, len))
                 {
@@ -1408,6 +1436,9 @@ extern "C"
                     if (specifier_with_length)
                     {
                         s += specifier_with_length;
+                    } else {
+                        s++;
+                        continue;
                     }
                 }
 
@@ -1416,6 +1447,7 @@ extern "C"
                     uint64_t value = read_valist(valist_ptr, valist_offset, len);
                     handle = __ockl_printf_append_args(handle, 1, value, 0, 0, 0, 0, 0, 0, 0);
                 }
+                break;
             }
         }
         return (uint32_t)__ockl_printf_append_args(handle, 0, 0, 0, 0, 0, 0, 0, 0, 1);
