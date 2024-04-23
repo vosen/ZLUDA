@@ -1,5 +1,5 @@
 // Compile and disassemble:
-//   python3 ./cvt.py > cvt.h && /opt/rocm/llvm/bin/clang -std=c++17 -Xclang -no-opaque-pointers -Wall -Wextra -Wsign-compare -Wconversion -x hip zluda_ptx_impl.cpp -S -emit-llvm --cuda-device-only -nogpulib -O3 -Xclang -fallow-half-arguments-and-returns -o - | sed -e 's/define/define linkonce_odr/g' | sed -e '/@llvm.used/d' | sed -e 's/\"target-cpu\"=\"[^\"]*\"//g' | sed -e 's/\"target-features\"=\"[^\"]*\"//g' | sed -e 's/\"denormal-fp-math-f32\"=\"[^\"]*\"//g' | sed -e 's/!llvm.module.flags = !{!0, !1, !2, !3, !4}/!llvm.module.flags = !{ }/g' | sed -e 's/memory(none)/readnone/g' | sed -e 's/memory(argmem: readwrite, inaccessiblemem: readwrite)/inaccessiblemem_or_argmemonly/g' | sed -e 's/memory(read)/readonly/g' | sed -e 's/memory(argmem: readwrite)/argmemonly/g'  | llvm-as-13 -o zluda_ptx_impl.bc && /opt/rocm/llvm/bin/llvm-dis zluda_ptx_impl.bc
+//   python3 ./cvt.py > cvt.h && /opt/rocm/llvm/bin/clang -std=c++20 -Xclang -no-opaque-pointers -Wall -Wextra -Wsign-compare -Wconversion -x hip zluda_ptx_impl.cpp -S -emit-llvm --cuda-device-only -nogpulib -O3 -Xclang -fallow-half-arguments-and-returns -o - | sed -e 's/define/define linkonce_odr/g' | sed -e '/@llvm.used/d' | sed -e 's/\"target-cpu\"=\"[^\"]*\"//g' | sed -e 's/\"target-features\"=\"[^\"]*\"//g' | sed -e 's/\"denormal-fp-math-f32\"=\"[^\"]*\"//g' | sed -e 's/!llvm.module.flags = !{!0, !1, !2, !3, !4}/!llvm.module.flags = !{ }/g' | sed -e 's/memory(none)/readnone/g' | sed -e 's/memory(argmem: readwrite, inaccessiblemem: readwrite)/inaccessiblemem_or_argmemonly/g' | sed -e 's/memory(read)/readonly/g' | sed -e 's/memory(argmem: readwrite)/argmemonly/g'  | llvm-as-13 -o zluda_ptx_impl.bc && /opt/rocm/llvm/bin/llvm-dis zluda_ptx_impl.bc
 // Compile to binary:
 //   /opt/rocm/llvm/bin/clang -x ir -target amdgcn-amd-amdhsa -Xlinker --no-undefined zluda_ptx_impl.bc -mno-wavefrontsize64 -mcpu=gfx1030
 // Decompile:
@@ -1260,6 +1260,7 @@ extern "C"
             default:
                 return 0;
             }
+            return 2;
         case 'l':
             switch (s[1])
             {
@@ -1289,17 +1290,18 @@ extern "C"
                 case 'X':
                 case 'n':
                     len = 8;
-                    return 2;
+                    break;
                 default:
                     return 0;
                 }
+                return 3;
             default:
                 return 0;
             }
+            return 2;
         default:
             return 0;
         }
-        return 1;
     }
 
     __device__ static bool parse_printf_specifier(const char *s, uint8_t &len)
@@ -1407,16 +1409,16 @@ extern "C"
                     {
                         s += specifier_with_length;
                     }
-                    if (len > 0)
-                    {
-                        uint64_t value = read_valist(valist_ptr, valist_offset, len);
-                        handle = __ockl_printf_append_args(handle, 1, value, 0, 0, 0, 0, 0, 0, 0);
-                    }
+                }
+
+                if (len > 0)
+                {
+                    uint64_t value = read_valist(valist_ptr, valist_offset, len);
+                    handle = __ockl_printf_append_args(handle, 1, value, 0, 0, 0, 0, 0, 0, 0);
                 }
             }
         }
         return (uint32_t)__ockl_printf_append_args(handle, 0, 0, 0, 0, 0, 0, 0, 0, 1);
-        return 1;
     }
 
     int64_t __ockl_mul_hi_i64(int64_t x, int64_t y) __attribute__((device));
