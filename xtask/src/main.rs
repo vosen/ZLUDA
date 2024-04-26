@@ -2,9 +2,7 @@ use argh::{EarlyExit, FromArgs, TopLevelCommand};
 use cargo_metadata::camino::Utf8PathBuf;
 use serde::Deserialize;
 use std::{
-    convert::TryFrom,
     env,
-    fs::File,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -76,13 +74,13 @@ fn main() -> Result<(), DynError> {
     let args: Arguments = argh::from_env();
     std::process::exit(match args.command {
         Subcommand::Build(BuildCommand { release }) => build(!release)?,
-        Subcommand::Zip(ZipCommand { release }) => build_and_zip(!release)?,
+        Subcommand::Zip(ZipCommand { release }) => build_and_zip(!release),
     })
 }
 
-fn build_and_zip(is_debug: bool) -> Result<i32, DynError> {
-    let workspace = build_impl(is_debug)?;
-    zip(workspace)
+fn build_and_zip(is_debug: bool) -> i32 {
+    let workspace = build_impl(is_debug).unwrap();
+    os::zip(workspace)
 }
 
 #[derive(Deserialize)]
@@ -227,46 +225,8 @@ fn build_impl(is_debug: bool) -> Result<Workspace, DynError> {
     if build_result != 0 {
         return Err(format!("{command:?} failed with exit code {build_result}").into());
     }
-    os::create_dump_dir_and_symlinks(is_debug, &workspace);
+    os::create_dump_dir_and_symlinks(&workspace);
     Ok(workspace)
-}
-
-fn zip(workspace: Workspace) -> Result<i32, DynError> {
-    fn get_zip_entry_options(
-        f: &File,
-        time_offset: time::UtcOffset,
-    ) -> Option<zip::write::FileOptions> {
-        let time = f.metadata().ok()?.modified().ok()?;
-        let time = time::OffsetDateTime::from(time).to_offset(time_offset);
-        Some(
-            zip::write::FileOptions::default()
-                .last_modified_time(zip::DateTime::try_from(time).ok()?),
-        )
-    }
-    let mut target_file = workspace.target_directory.clone();
-    target_file.push("zluda.zip");
-    let zip_archive = File::create(target_file)?;
-    let mut zip_writer = zip::write::ZipWriter::new(zip_archive);
-    let time_offset = time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC);
-    for p in workspace.projects {
-        if p.skip_zip {
-            continue;
-        }
-        let mut src_file = File::open(format!(
-            "{}/{}{}",
-            &workspace.target_directory,
-            p.target_name,
-            p.kind.suffix()
-        ))?;
-        zip_writer.start_file(
-            format!("zluda/{}{}", p.target_name, p.kind.suffix()),
-            get_zip_entry_options(&src_file, time_offset)
-                .unwrap_or(zip::write::FileOptions::default()),
-        )?;
-        std::io::copy(&mut src_file, &mut zip_writer)?;
-    }
-    zip_writer.finish()?;
-    Ok(0)
 }
 
 impl TargetKind {
@@ -297,19 +257,17 @@ impl TargetKind {
 
 #[cfg(unix)]
 mod os {
-    use super::{Project, TargetKind};
+    use crate::Workspace;
     use cargo_metadata::camino::Utf8PathBuf;
+    use flate2::{write::GzEncoder, Compression};
+    use std::fs::File;
 
-    pub(crate) fn create_dump_dir_and_symlinks(
-        is_debug: bool,
-        mut target_directory: &Utf8PathBuf,
-        projects: Vec<Project>,
-    ) {
+    pub(crate) fn create_dump_dir_and_symlinks(workspace: &Workspace) {
         use std::fs;
-        let mut dump_dir = target_directory.clone();
+        let mut dump_dir = workspace.target_directory.clone();
         dump_dir.push("dump");
         fs::create_dir_all(&dump_dir).unwrap();
-        for project in projects {
+        for project in workspace.projects.iter() {
             let dst = format!(
                 "{}{}{}",
                 project.kind.prefix(),
@@ -317,15 +275,15 @@ mod os {
                 project.kind.suffix()
             );
             let dump_dst = format!("../{}", dst);
-            for src_file in project.linux_names {
-                force_symlink(&dst, &target_directory, &src_file);
+            for src_file in project.linux_names.iter() {
+                force_symlink(&dst, &workspace.target_directory, src_file);
                 if project.skip_dump_link {
                     continue;
                 }
-                force_symlink(&dump_dst, &dump_dir, &src_file);
+                force_symlink(&dump_dst, &dump_dir, src_file);
             }
-            for src_file in project.dump_names {
-                force_symlink(&dump_dst, &dump_dir, &src_file);
+            for src_file in project.dump_names.iter() {
+                force_symlink(&dump_dst, &dump_dir, src_file);
             }
         }
     }
@@ -353,20 +311,74 @@ mod os {
         }
     }
 
-    impl TargetKind {
-        fn prefix(self) -> &'static str {
-            match self {
-                TargetKind::Binary => "",
-                TargetKind::Cdylib => "lib",
+    pub fn zip(workspace: Workspace) -> i32 {
+        let mut target_file = workspace.target_directory.clone();
+        target_file.push("zluda.tar.gz");
+        let gz_file = File::create(target_file).unwrap();
+        let gz = GzEncoder::new(gz_file, Compression::default());
+        let mut tar = tar::Builder::new(gz);
+        for project in workspace.projects {
+            if project.skip_zip {
+                continue;
+            }
+            let mut src_file = File::open(format!(
+                "{}/{}{}{}",
+                &workspace.target_directory,
+                project.kind.prefix(),
+                project.target_name,
+                project.kind.suffix()
+            ))
+            .unwrap();
+            let file_in_archive_path = format!(
+                "zluda/{}{}{}",
+                project.kind.prefix(),
+                project.target_name,
+                project.kind.suffix()
+            );
+            tar.append_file(
+                format!(
+                    "zluda/{}{}{}",
+                    project.kind.prefix(),
+                    project.target_name,
+                    project.kind.suffix()
+                ),
+                &mut src_file,
+            )
+            .unwrap();
+            for linux_name in project.linux_names.iter() {
+                let mut header = tar::Header::new_gnu();
+                header.set_entry_type(tar::EntryType::Symlink);
+                tar.append_link(
+                    &mut header,
+                    format!("zluda/{}", linux_name),
+                    &file_in_archive_path,
+                )
+                .unwrap();
+                if project.skip_dump_link {
+                    continue;
+                }
+                let mut header = tar::Header::new_gnu();
+                header.set_entry_type(tar::EntryType::Symlink);
+                tar.append_link(
+                    &mut header,
+                    format!("zluda/dump/{}", linux_name),
+                    &file_in_archive_path,
+                )
+                .unwrap();
+            }
+            for dump_name in project.dump_names.iter() {
+                let mut header = tar::Header::new_gnu();
+                header.set_entry_type(tar::EntryType::Symlink);
+                tar.append_link(
+                    &mut header,
+                    format!("zluda/dump/{}", dump_name),
+                    &file_in_archive_path,
+                )
+                .unwrap();
             }
         }
-
-        fn suffix(self) -> &'static str {
-            match self {
-                TargetKind::Binary => "",
-                TargetKind::Cdylib => ".so",
-            }
-        }
+        tar.finish().unwrap();
+        0
     }
 }
 
@@ -376,5 +388,46 @@ mod os {
 
     // This is 100% intentional, we don't want symlinks on Windows since
     // we use a completely different scheme for injections there
-    pub(crate) fn create_dump_dir_and_symlinks(_: bool, _: &Workspace) {}
+    pub(crate) fn create_dump_dir_and_symlinks(_: &Workspace) {}
+
+    pub fn zip(workspace: Workspace) -> i32 {
+        fn get_zip_entry_options(
+            f: &File,
+            time_offset: time::UtcOffset,
+        ) -> Option<zip::write::FileOptions> {
+            let time = f.metadata().unwrap().modified().unwrap();
+            let time = time::OffsetDateTime::from(time).to_offset(time_offset);
+            Some(
+                zip::write::FileOptions::default()
+                    .last_modified_time(zip::DateTime::try_from(time).unwrap()),
+            )
+        }
+        let mut target_file = workspace.target_directory.clone();
+        target_file.push("zluda.zip");
+        let zip_archive = File::create(target_file).unwrap();
+        let mut zip_writer = zip::write::ZipWriter::new(zip_archive);
+        let time_offset = time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC);
+        for p in workspace.projects {
+            if p.skip_zip {
+                continue;
+            }
+            let mut src_file = File::open(format!(
+                "{}/{}{}",
+                &workspace.target_directory,
+                p.target_name,
+                p.kind.suffix()
+            ))
+            .unwrap();
+            zip_writer
+                .start_file(
+                    format!("zluda/{}{}", p.target_name, p.kind.suffix()),
+                    get_zip_entry_options(&src_file, time_offset)
+                        .unwrap_or(zip::write::FileOptions::default()),
+                )
+                .unwrap();
+            std::io::copy(&mut src_file, &mut zip_writer).unwrap();
+        }
+        zip_writer.finish().unwrap();
+        Ok(0)
+    }
 }
