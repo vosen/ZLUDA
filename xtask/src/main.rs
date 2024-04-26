@@ -113,6 +113,8 @@ struct Project {
     linux_names: Vec<String>,
     #[serde(default)]
     dump_names: Vec<String>,
+    #[serde(default)]
+    dump_nvidia_names: Vec<String>,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Debug)]
@@ -260,13 +262,16 @@ mod os {
     use crate::Workspace;
     use cargo_metadata::camino::Utf8PathBuf;
     use flate2::{write::GzEncoder, Compression};
-    use std::fs::File;
+    use std::{fs::File, time::{Duration, SystemTime}};
 
     pub(crate) fn create_dump_dir_and_symlinks(workspace: &Workspace) {
         use std::fs;
         let mut dump_dir = workspace.target_directory.clone();
         dump_dir.push("dump");
         fs::create_dir_all(&dump_dir).unwrap();
+        let mut dump_nvidia_dir = dump_dir.clone();
+        dump_nvidia_dir.set_file_name("dump_nvidia");
+        fs::create_dir_all(&dump_nvidia_dir).unwrap();
         for project in workspace.projects.iter() {
             let dst = format!(
                 "{}{}{}",
@@ -284,6 +289,9 @@ mod os {
             }
             for src_file in project.dump_names.iter() {
                 force_symlink(&dump_dst, &dump_dir, src_file);
+            }
+            for src_file in project.dump_nvidia_names.iter() {
+                force_symlink(&dump_dst, &dump_nvidia_dir, src_file);
             }
         }
     }
@@ -317,6 +325,7 @@ mod os {
         let gz_file = File::create(target_file).unwrap();
         let gz = GzEncoder::new(gz_file, Compression::default());
         let mut tar = tar::Builder::new(gz);
+        let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap_or(Duration::ZERO);
         for project in workspace.projects {
             if project.skip_zip {
                 continue;
@@ -329,56 +338,57 @@ mod os {
                 project.kind.suffix()
             ))
             .unwrap();
-            let file_in_archive_path = format!(
-                "zluda/{}{}{}",
+            let file_name = format!(
+                "{}{}{}",
                 project.kind.prefix(),
                 project.target_name,
                 project.kind.suffix()
             );
-            tar.append_file(
-                format!(
-                    "zluda/{}{}{}",
-                    project.kind.prefix(),
-                    project.target_name,
-                    project.kind.suffix()
-                ),
-                &mut src_file,
-            )
-            .unwrap();
-            for linux_name in project.linux_names.iter() {
-                let mut header = tar::Header::new_gnu();
-                header.set_entry_type(tar::EntryType::Symlink);
-                tar.append_link(
-                    &mut header,
-                    format!("zluda/{}", linux_name),
-                    &file_in_archive_path,
-                )
+            tar.append_file(format!("zluda/{file_name}"), &mut src_file)
                 .unwrap();
+            for linux_name in project.linux_names.iter() {
+                let mut header = tar_header_symlink(time);
+                tar.append_link(&mut header, format!("zluda/{}", linux_name), &file_name)
+                    .unwrap();
                 if project.skip_dump_link {
                     continue;
                 }
-                let mut header = tar::Header::new_gnu();
-                header.set_entry_type(tar::EntryType::Symlink);
+                let mut header = tar_header_symlink(time);
                 tar.append_link(
                     &mut header,
                     format!("zluda/dump/{}", linux_name),
-                    &file_in_archive_path,
+                    format!("../{file_name}"),
                 )
                 .unwrap();
             }
             for dump_name in project.dump_names.iter() {
-                let mut header = tar::Header::new_gnu();
-                header.set_entry_type(tar::EntryType::Symlink);
+                let mut header = tar_header_symlink(time);
                 tar.append_link(
                     &mut header,
                     format!("zluda/dump/{}", dump_name),
-                    &file_in_archive_path,
+                    format!("../{file_name}"),
+                )
+                .unwrap();
+            }
+            for dump_name in project.dump_nvidia_names.iter() {
+                let mut header = tar_header_symlink(time);
+                tar.append_link(
+                    &mut header,
+                    format!("zluda/dump_nvidia/{}", dump_name),
+                    format!("../{file_name}"),
                 )
                 .unwrap();
             }
         }
         tar.finish().unwrap();
         0
+    }
+
+fn tar_header_symlink(time: Duration) -> tar::Header {
+        let mut header = tar::Header::new_gnu();
+        header.set_mtime(time.as_secs());
+        header.set_entry_type(tar::EntryType::Symlink);
+        header
     }
 }
 
