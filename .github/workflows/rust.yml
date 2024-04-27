@@ -39,13 +39,11 @@ jobs:
         tar -xzf target/release/zluda.tar.gz -C target/release
     # https://stackoverflow.com/a/64195658
     - name: Set revision hash
-      run: |
-        GIT_SHA="$(git rev-parse --short HEAD)"
-        echo "SHORT_SHA=$GIT_SHA" >> $GITHUB_ENV
+      run: echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
     - name: Upload
       uses: actions/upload-artifact@v4
       with:
-        name: zluda-linux-${SHORT_SHA}
+        name: zluda-linux-${{ env.SHORT_SHA }}
         path: target/release/zluda
   build_win:
     name: Build and publish (Windows)
