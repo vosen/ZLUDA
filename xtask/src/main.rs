@@ -262,7 +262,10 @@ mod os {
     use crate::Workspace;
     use cargo_metadata::camino::Utf8PathBuf;
     use flate2::{write::GzEncoder, Compression};
-    use std::{fs::File, time::{Duration, SystemTime}};
+    use std::{
+        fs::File,
+        time::{Duration, SystemTime},
+    };
 
     pub(crate) fn create_dump_dir_and_symlinks(workspace: &Workspace) {
         use std::fs;
@@ -325,7 +328,9 @@ mod os {
         let gz_file = File::create(target_file).unwrap();
         let gz = GzEncoder::new(gz_file, Compression::default());
         let mut tar = tar::Builder::new(gz);
-        let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap_or(Duration::ZERO);
+        let time = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or(Duration::ZERO);
         for project in workspace.projects {
             if project.skip_zip {
                 continue;
@@ -384,7 +389,7 @@ mod os {
         0
     }
 
-fn tar_header_symlink(time: Duration) -> tar::Header {
+    fn tar_header_symlink(time: Duration) -> tar::Header {
         let mut header = tar::Header::new_gnu();
         header.set_mtime(time.as_secs());
         header.set_entry_type(tar::EntryType::Symlink);
@@ -395,12 +400,13 @@ fn tar_header_symlink(time: Duration) -> tar::Header {
 #[cfg(windows)]
 mod os {
     use crate::Workspace;
+    use std::{convert::TryFrom, fs::File};
 
     // This is 100% intentional, we don't want symlinks on Windows since
     // we use a completely different scheme for injections there
     pub(crate) fn create_dump_dir_and_symlinks(_: &Workspace) {}
 
-    pub fn zip(workspace: Workspace) -> i32 {
+    pub(crate) fn zip(workspace: Workspace) -> i32 {
         fn get_zip_entry_options(
             f: &File,
             time_offset: time::UtcOffset,
@@ -438,6 +444,6 @@ mod os {
             std::io::copy(&mut src_file, &mut zip_writer).unwrap();
         }
         zip_writer.finish().unwrap();
-        Ok(0)
+        0
     }
 }
