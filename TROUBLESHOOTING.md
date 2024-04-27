@@ -92,11 +92,14 @@ If you are dumping original CUDA use:
 
 ### Linux
 
-Known bug: when dumping from original CUDA you should remove (or rename) all the files in `<ZLUDA_DIRECTORY>/dump` except `libcuda.so` and `libcuda.so.1`.
-
-Use it like this:
+If dumping from ZLUDA use it like this:
 ```
 LD_LIBRARY_PATH="<ZLUDA_DIRECTORY>/dump:$LD_LIBRARY_PATH" <APPLICATION> <APPLICATION_ARGUMENTS>
+```
+
+If dumping from NVIDIA CUDA use it like this:
+```
+LD_LIBRARY_PATH="<ZLUDA_DIRECTORY>/dump_nvidia:$LD_LIBRARY_PATH" <APPLICATION> <APPLICATION_ARGUMENTS>
 ```
 
 ### Result
