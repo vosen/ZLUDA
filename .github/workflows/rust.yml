@@ -14,6 +14,9 @@ jobs:
     name: Build and publish (Linux)
     runs-on: ubuntu-20.04
     steps:
+    - uses: jlumbroso/free-disk-space@main
+      with:
+        tool-cache: true
     - name: Install ROCm
       run: |
         sudo mkdir --parents --mode=0755 /etc/apt/keyrings
