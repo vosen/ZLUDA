@@ -31,7 +31,8 @@ jobs:
       run: |
         cargo xtask zip -r
         tar -xzf target/release/zluda.tar.gz target/release
-    - name: Uplod
+    - name: Upload
       uses: actions/upload-artifact@v4
-      path: target/release/zluda
+      with:
+        path: target/release/zluda
 
