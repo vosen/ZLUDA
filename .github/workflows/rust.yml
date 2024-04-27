@@ -59,7 +59,7 @@ jobs:
         Expand-Archive -Path target/release/zluda.zip -DestinationPath target/release
     # https://stackoverflow.com/a/74033027
     - name: Set revision hash
-      run: echo "SHORT_SHA=$("${{ github.sha }}".SubString(0, 8))" >> $env:GITHUB_ENV
+      run: echo "SHORT_SHA=$("${{ github.sha }}".SubString(0, 7))" >> $env:GITHUB_ENV
     - name: Upload
       uses: actions/upload-artifact@v4
       with:
