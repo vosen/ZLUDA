@@ -20,12 +20,12 @@ jobs:
     - name: Install ROCm
       run: |
         sudo mkdir --parents --mode=0755 /etc/apt/keyrings
-        sudo sh -c 'wget https://repo.radeon.com/rocm/rocm.gpg.key -O - |  gpg --dearmor | tee /etc/apt/keyrings/rocm.gpg > /dev/null'
-        sudo sh -c 'echo deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/$ROCM_VERSION focal main > /etc/apt/sources.list.d/rocm.list'
+        "sudo sh -c 'wget https://repo.radeon.com/rocm/rocm.gpg.key -O - |  gpg --dearmor | tee /etc/apt/keyrings/rocm.gpg > /dev/null'"
+        "sudo sh -c 'echo deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/$ROCM_VERSION focal main > /etc/apt/sources.list.d/rocm.list'"
         sudo apt-get update
         sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends rocminfo rocm-gdb rocprofiler rocm-smi-lib hip-runtime-amd comgr hipblaslt-dev hipfft-dev rocblas-dev rocsolver-dev rocsparse-dev miopen-hip-dev rocm-device-libs
-        sudo echo 'export PATH="$PATH:/opt/rocm/bin"' > /etc/profile.d/rocm.sh && \
-        sudo echo '/opt/rocm/lib' > /etc/ld.so.conf.d/rocm.conf && \
+        sudo echo 'export PATH="$PATH:/opt/rocm/bin"' > /etc/profile.d/rocm.sh
+        sudo echo '/opt/rocm/lib' > /etc/ld.so.conf.d/rocm.conf
         sudo ldconfig
     - name: Build
       run: |
