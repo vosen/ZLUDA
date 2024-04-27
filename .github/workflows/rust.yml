@@ -33,7 +33,7 @@ jobs:
     - name: Build
       run: |
         cargo xtask zip -r
-        tar -xzf target/release/zluda.tar.gz target/release
+        tar -xzf target/release/zluda.tar.gz -C target/release
     - name: Upload
       uses: actions/upload-artifact@v4
       with:
