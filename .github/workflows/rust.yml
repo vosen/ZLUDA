@@ -15,8 +15,6 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
     - uses: jlumbroso/free-disk-space@main
-      with:
-        tool-cache: true
     - name: Install ROCm
       run: |
         sudo mkdir --parents --mode=0755 /etc/apt/keyrings
@@ -31,11 +29,16 @@ jobs:
       with:
         submodules: true
     - name: Build
+      # We use tar to unpack .tar.gz we've created because Github actions/upload-artifact
+      # is broken and will _always_ zip your artifact (even if it is a single file).
+      # See here: https://github.com/actions/upload-artifact/issues/39
+      # and here: https://github.com/actions/upload-artifact/issues/109
       run: |
         cargo xtask zip -r
         tar -xzf target/release/zluda.tar.gz -C target/release
     - name: Upload
       uses: actions/upload-artifact@v4
       with:
+        name: zluda-linux-${{ env.SHA }}
         path: target/release/zluda
 
