@@ -109,6 +109,10 @@ pub(crate) unsafe fn get_attribute(
         return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
     }
     let hip_attrib = match attrib {
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_WARP_SIZE => {
+            *pi = 32;
+            return Ok(());
+        }
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_ASYNC_ENGINE_COUNT => {
             *pi = 1;
             return Ok(());
