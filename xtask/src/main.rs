@@ -322,7 +322,7 @@ mod os {
         }
     }
 
-    pub fn zip(workspace: Workspace) -> i32 {
+    pub(crate) fn zip(workspace: Workspace) -> i32 {
         let mut target_file = workspace.target_directory.clone();
         target_file.push("zluda.tar.gz");
         let gz_file = File::create(target_file).unwrap();
