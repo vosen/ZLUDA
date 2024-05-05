@@ -2,9 +2,7 @@ target datalayout = "e-p:64:64-p1:64:64-p2:32:32-p3:32:32-p4:64:64-p5:32:32-p6:3
 target triple = "amdgcn-amd-amdhsa"
 
 define protected amdgpu_kernel void @setp_bool(ptr addrspace(4) byref(i64) %"44", ptr addrspace(4) byref(i64) %"45") #0 {
-"50":
   %"16" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"16", align 1
   %"4" = alloca i64, align 8, addrspace(5)
   %"5" = alloca i64, align 8, addrspace(5)
   %"6" = alloca float, align 4, addrspace(5)
@@ -13,6 +11,13 @@ define protected amdgpu_kernel void @setp_bool(ptr addrspace(4) byref(i64) %"44"
   %"9" = alloca i1, align 1, addrspace(5)
   %"10" = alloca i1, align 1, addrspace(5)
   %"11" = alloca i1, align 1, addrspace(5)
+  %1 = alloca i1, align 1, addrspace(5)
+  %2 = alloca float, align 4, addrspace(5)
+  %3 = alloca float, align 4, addrspace(5)
+  br label %4
+
+4:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"16", align 1
   %"17" = load i64, ptr addrspace(4) %"44", align 8
   store i64 %"17", ptr addrspace(5) %"4", align 8
   %"18" = load i64, ptr addrspace(4) %"45", align 8
@@ -23,47 +28,44 @@ define protected amdgpu_kernel void @setp_bool(ptr addrspace(4) byref(i64) %"44"
   store float %"19", ptr addrspace(5) %"6", align 4
   %"22" = load i64, ptr addrspace(5) %"4", align 8
   %"47" = inttoptr i64 %"22" to ptr
-  %"52" = getelementptr inbounds i8, ptr %"47", i64 4
-  %"21" = load float, ptr %"52", align 4
+  %"51" = getelementptr inbounds i8, ptr %"47", i64 4
+  %"21" = load float, ptr %"51", align 4
   store float %"21", ptr addrspace(5) %"7", align 4
   %"24" = load i64, ptr addrspace(5) %"4", align 8
   %"48" = inttoptr i64 %"24" to ptr
-  %"54" = getelementptr inbounds i8, ptr %"48", i64 8
-  %"23" = load float, ptr %"54", align 4
+  %"53" = getelementptr inbounds i8, ptr %"48", i64 8
+  %"23" = load float, ptr %"53", align 4
   store float %"23", ptr addrspace(5) %"8", align 4
-  %0 = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %0, align 1
-  %"25" = load i1, ptr addrspace(5) %0, align 1
+  store i1 false, ptr addrspace(5) %1, align 1
+  %"25" = load i1, ptr addrspace(5) %1, align 1
   store i1 %"25", ptr addrspace(5) %"9", align 1
   %"28" = load float, ptr addrspace(5) %"6", align 4
   %"29" = load float, ptr addrspace(5) %"7", align 4
   %"30" = load i1, ptr addrspace(5) %"9", align 1
-  %1 = fcmp ogt float %"28", %"29"
-  %2 = xor i1 %1, true
-  %"26" = and i1 %1, %"30"
-  %"27" = and i1 %2, %"30"
+  %5 = fcmp ogt float %"28", %"29"
+  %6 = xor i1 %5, true
+  %"26" = and i1 %5, %"30"
+  %"27" = and i1 %6, %"30"
   store i1 %"26", ptr addrspace(5) %"10", align 1
   store i1 %"27", ptr addrspace(5) %"11", align 1
   %"31" = load i1, ptr addrspace(5) %"10", align 1
   br i1 %"31", label %"12", label %"13"
 
-"12":                                             ; preds = %"50"
+"12":                                             ; preds = %4
   %"33" = load float, ptr addrspace(5) %"6", align 4
-  %3 = alloca float, align 4, addrspace(5)
-  store float %"33", ptr addrspace(5) %3, align 4
-  %"32" = load float, ptr addrspace(5) %3, align 4
+  store float %"33", ptr addrspace(5) %2, align 4
+  %"32" = load float, ptr addrspace(5) %2, align 4
   store float %"32", ptr addrspace(5) %"8", align 4
   br label %"13"
 
-"13":                                             ; preds = %"12", %"50"
+"13":                                             ; preds = %"12", %4
   %"34" = load i1, ptr addrspace(5) %"11", align 1
   br i1 %"34", label %"14", label %"15"
 
 "14":                                             ; preds = %"13"
   %"36" = load float, ptr addrspace(5) %"7", align 4
-  %4 = alloca float, align 4, addrspace(5)
-  store float %"36", ptr addrspace(5) %4, align 4
-  %"35" = load float, ptr addrspace(5) %4, align 4
+  store float %"36", ptr addrspace(5) %3, align 4
+  %"35" = load float, ptr addrspace(5) %3, align 4
   store float %"35", ptr addrspace(5) %"8", align 4
   br label %"15"
 

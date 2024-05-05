@@ -2,9 +2,7 @@ target datalayout = "e-p:64:64-p1:64:64-p2:32:32-p3:32:32-p4:64:64-p5:32:32-p6:3
 target triple = "amdgcn-amd-amdhsa"
 
 define protected amdgpu_kernel void @mov_vector_cast(ptr addrspace(4) byref(i64) %"34", ptr addrspace(4) byref(i64) %"35") #0 {
-"49":
   %"15" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"15", align 1
   %"4" = alloca i64, align 8, addrspace(5)
   %"5" = alloca i64, align 8, addrspace(5)
   %"6" = alloca i64, align 8, addrspace(5)
@@ -14,6 +12,12 @@ define protected amdgpu_kernel void @mov_vector_cast(ptr addrspace(4) byref(i64)
   %"10" = alloca half, align 2, addrspace(5)
   %"11" = alloca half, align 2, addrspace(5)
   %"12" = alloca half, align 2, addrspace(5)
+  %1 = alloca i64, align 8, addrspace(5)
+  %2 = alloca i64, align 8, addrspace(5)
+  br label %3
+
+3:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"15", align 1
   %"16" = load i64, ptr addrspace(4) %"34", align 8
   store i64 %"16", ptr addrspace(5) %"4", align 8
   %"17" = load i64, ptr addrspace(4) %"35", align 8
@@ -23,9 +27,8 @@ define protected amdgpu_kernel void @mov_vector_cast(ptr addrspace(4) byref(i64)
   %"18" = load i64, ptr %"36", align 8
   store i64 %"18", ptr addrspace(5) %"6", align 8
   %"20" = load i64, ptr addrspace(5) %"6", align 8
-  %0 = alloca i64, align 8, addrspace(5)
-  store i64 %"20", ptr addrspace(5) %0, align 8
-  %"13" = load i64, ptr addrspace(5) %0, align 8
+  store i64 %"20", ptr addrspace(5) %1, align 8
+  %"13" = load i64, ptr addrspace(5) %1, align 8
   %"38" = bitcast i64 %"13" to <2 x i32>
   %"39" = extractelement <2 x i32> %"38", i32 0
   %"40" = extractelement <2 x i32> %"38", i32 1
@@ -34,9 +37,8 @@ define protected amdgpu_kernel void @mov_vector_cast(ptr addrspace(4) byref(i64)
   store float %"21", ptr addrspace(5) %"7", align 4
   store float %"22", ptr addrspace(5) %"8", align 4
   %"23" = load i64, ptr addrspace(5) %"6", align 8
-  %1 = alloca i64, align 8, addrspace(5)
-  store i64 %"23", ptr addrspace(5) %1, align 8
-  %"14" = load i64, ptr addrspace(5) %1, align 8
+  store i64 %"23", ptr addrspace(5) %2, align 8
+  %"14" = load i64, ptr addrspace(5) %2, align 8
   %"42" = bitcast i64 %"14" to <4 x i16>
   %"43" = extractelement <4 x i16> %"42", i32 0
   %"44" = extractelement <4 x i16> %"42", i32 1
@@ -57,8 +59,8 @@ define protected amdgpu_kernel void @mov_vector_cast(ptr addrspace(4) byref(i64)
   %"30" = load i64, ptr addrspace(5) %"5", align 8
   %"31" = load float, ptr addrspace(5) %"7", align 4
   %"48" = inttoptr i64 %"30" to ptr
-  %"51" = getelementptr inbounds i8, ptr %"48", i64 4
-  store float %"31", ptr %"51", align 4
+  %"50" = getelementptr inbounds i8, ptr %"48", i64 4
+  store float %"31", ptr %"50", align 4
   ret void
 }
 

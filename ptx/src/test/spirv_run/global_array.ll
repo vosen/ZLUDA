@@ -5,15 +5,17 @@ target triple = "amdgcn-amd-amdhsa"
 @foobar = protected addrspace(1) externally_initialized global [4 x [2 x i64]] [[2 x i64] [i64 -1, i64 2], [2 x i64] [i64 3, i64 0], [2 x i64] [i64 ptrtoint (ptr addrspace(1) @asdas to i64), i64 0], [2 x i64] zeroinitializer]
 
 define protected amdgpu_kernel void @global_array(ptr addrspace(4) byref(i64) %"16", ptr addrspace(4) byref(i64) %"17") #0 {
-"21":
   %"9" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"9", align 1
   %"6" = alloca i64, align 8, addrspace(5)
   %"7" = alloca i64, align 8, addrspace(5)
   %"8" = alloca i32, align 4, addrspace(5)
-  %0 = alloca i64, align 8, addrspace(5)
-  store i64 ptrtoint (ptr addrspace(1) @foobar to i64), ptr addrspace(5) %0, align 8
-  %"10" = load i64, ptr addrspace(5) %0, align 8
+  %1 = alloca i64, align 8, addrspace(5)
+  br label %2
+
+2:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"9", align 1
+  store i64 ptrtoint (ptr addrspace(1) @foobar to i64), ptr addrspace(5) %1, align 8
+  %"10" = load i64, ptr addrspace(5) %1, align 8
   store i64 %"10", ptr addrspace(5) %"6", align 8
   %"11" = load i64, ptr addrspace(4) %"17", align 8
   store i64 %"11", ptr addrspace(5) %"7", align 8

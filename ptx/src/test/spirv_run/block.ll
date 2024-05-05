@@ -2,14 +2,16 @@ target datalayout = "e-p:64:64-p1:64:64-p2:32:32-p3:32:32-p4:64:64-p5:32:32-p6:3
 target triple = "amdgcn-amd-amdhsa"
 
 define protected amdgpu_kernel void @block(ptr addrspace(4) byref(i64) %"22", ptr addrspace(4) byref(i64) %"23") #0 {
-"26":
   %"9" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"9", align 1
   %"4" = alloca i64, align 8, addrspace(5)
   %"5" = alloca i64, align 8, addrspace(5)
   %"6" = alloca i64, align 8, addrspace(5)
   %"7" = alloca i64, align 8, addrspace(5)
   %"8" = alloca i64, align 8, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"9", align 1
   %"10" = load i64, ptr addrspace(4) %"22", align 8
   store i64 %"10", ptr addrspace(5) %"4", align 8
   %"11" = load i64, ptr addrspace(4) %"23", align 8

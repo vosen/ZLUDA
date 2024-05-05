@@ -2,9 +2,7 @@ target datalayout = "e-p:64:64-p1:64:64-p2:32:32-p3:32:32-p4:64:64-p5:32:32-p6:3
 target triple = "amdgcn-amd-amdhsa"
 
 define protected amdgpu_kernel void @subc_cc(ptr addrspace(4) byref(i64) %"57", ptr addrspace(4) byref(i64) %"58") #0 {
-"72":
   %"13" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"13", align 1
   %"4" = alloca i64, align 8, addrspace(5)
   %"5" = alloca i64, align 8, addrspace(5)
   %"6" = alloca i32, align 4, addrspace(5)
@@ -14,6 +12,10 @@ define protected amdgpu_kernel void @subc_cc(ptr addrspace(4) byref(i64) %"57", 
   %"10" = alloca i32, align 4, addrspace(5)
   %"11" = alloca i32, align 4, addrspace(5)
   %"12" = alloca i32, align 4, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"13", align 1
   %"18" = load i64, ptr addrspace(4) %"57", align 8
   store i64 %"18", ptr addrspace(5) %"4", align 8
   %"19" = load i64, ptr addrspace(4) %"58", align 8
@@ -24,24 +26,24 @@ define protected amdgpu_kernel void @subc_cc(ptr addrspace(4) byref(i64) %"57", 
   store i32 %"59", ptr addrspace(5) %"9", align 4
   %"23" = load i64, ptr addrspace(5) %"4", align 8
   %"61" = inttoptr i64 %"23" to ptr
-  %"74" = getelementptr inbounds i8, ptr %"61", i64 4
-  %"62" = load i32, ptr %"74", align 4
+  %"73" = getelementptr inbounds i8, ptr %"61", i64 4
+  %"62" = load i32, ptr %"73", align 4
   store i32 %"62", ptr addrspace(5) %"10", align 4
   %"25" = load i64, ptr addrspace(5) %"4", align 8
   %"63" = inttoptr i64 %"25" to ptr
-  %"76" = getelementptr inbounds i8, ptr %"63", i64 8
-  %"24" = load i32, ptr %"76", align 4
+  %"75" = getelementptr inbounds i8, ptr %"63", i64 8
+  %"24" = load i32, ptr %"75", align 4
   store i32 %"24", ptr addrspace(5) %"11", align 4
   %"27" = load i64, ptr addrspace(5) %"4", align 8
   %"64" = inttoptr i64 %"27" to ptr
-  %"78" = getelementptr inbounds i8, ptr %"64", i64 12
-  %"26" = load i32, ptr %"78", align 4
+  %"77" = getelementptr inbounds i8, ptr %"64", i64 12
+  %"26" = load i32, ptr %"77", align 4
   store i32 %"26", ptr addrspace(5) %"12", align 4
   %"29" = load i32, ptr addrspace(5) %"9", align 4
   %"30" = load i32, ptr addrspace(5) %"10", align 4
-  %0 = call { i32, i1 } @llvm.usub.with.overflow.i32(i32 %"29", i32 %"30")
-  %"28" = extractvalue { i32, i1 } %0, 0
-  %"14" = extractvalue { i32, i1 } %0, 1
+  %2 = call { i32, i1 } @llvm.usub.with.overflow.i32(i32 %"29", i32 %"30")
+  %"28" = extractvalue { i32, i1 } %2, 0
+  %"14" = extractvalue { i32, i1 } %2, 1
   store i32 %"28", ptr addrspace(5) %"6", align 4
   %"31" = xor i1 %"14", true
   store i1 %"31", ptr addrspace(5) %"13", align 1
@@ -49,14 +51,14 @@ define protected amdgpu_kernel void @subc_cc(ptr addrspace(4) byref(i64) %"57", 
   %"15" = xor i1 %"32", true
   %"34" = load i32, ptr addrspace(5) %"6", align 4
   %"35" = load i32, ptr addrspace(5) %"11", align 4
-  %1 = zext i1 %"15" to i32
-  %2 = call { i32, i1 } @llvm.usub.with.overflow.i32(i32 %"34", i32 %"35")
-  %3 = extractvalue { i32, i1 } %2, 0
-  %4 = extractvalue { i32, i1 } %2, 1
-  %5 = call { i32, i1 } @llvm.usub.with.overflow.i32(i32 %3, i32 %1)
-  %"33" = extractvalue { i32, i1 } %5, 0
-  %6 = extractvalue { i32, i1 } %5, 1
-  %"16" = xor i1 %4, %6
+  %3 = zext i1 %"15" to i32
+  %4 = call { i32, i1 } @llvm.usub.with.overflow.i32(i32 %"34", i32 %"35")
+  %5 = extractvalue { i32, i1 } %4, 0
+  %6 = extractvalue { i32, i1 } %4, 1
+  %7 = call { i32, i1 } @llvm.usub.with.overflow.i32(i32 %5, i32 %3)
+  %"33" = extractvalue { i32, i1 } %7, 0
+  %8 = extractvalue { i32, i1 } %7, 1
+  %"16" = xor i1 %6, %8
   store i32 %"33", ptr addrspace(5) %"7", align 4
   %"36" = xor i1 %"16", true
   store i1 %"36", ptr addrspace(5) %"13", align 1
@@ -64,9 +66,9 @@ define protected amdgpu_kernel void @subc_cc(ptr addrspace(4) byref(i64) %"57", 
   %"17" = xor i1 %"37", true
   %"39" = load i32, ptr addrspace(5) %"7", align 4
   %"40" = load i32, ptr addrspace(5) %"12", align 4
-  %7 = zext i1 %"17" to i32
-  %8 = sub i32 %"39", %"40"
-  %"38" = sub i32 %8, %7
+  %9 = zext i1 %"17" to i32
+  %10 = sub i32 %"39", %"40"
+  %"38" = sub i32 %10, %9
   store i32 %"38", ptr addrspace(5) %"8", align 4
   %"41" = load i64, ptr addrspace(5) %"5", align 8
   %"42" = load i32, ptr addrspace(5) %"6", align 4
@@ -75,13 +77,13 @@ define protected amdgpu_kernel void @subc_cc(ptr addrspace(4) byref(i64) %"57", 
   %"43" = load i64, ptr addrspace(5) %"5", align 8
   %"44" = load i32, ptr addrspace(5) %"7", align 4
   %"70" = inttoptr i64 %"43" to ptr
-  %"80" = getelementptr inbounds i8, ptr %"70", i64 4
-  store i32 %"44", ptr %"80", align 4
+  %"79" = getelementptr inbounds i8, ptr %"70", i64 4
+  store i32 %"44", ptr %"79", align 4
   %"45" = load i64, ptr addrspace(5) %"5", align 8
   %"46" = load i32, ptr addrspace(5) %"8", align 4
   %"71" = inttoptr i64 %"45" to ptr
-  %"82" = getelementptr inbounds i8, ptr %"71", i64 8
-  store i32 %"46", ptr %"82", align 4
+  %"81" = getelementptr inbounds i8, ptr %"71", i64 8
+  store i32 %"46", ptr %"81", align 4
   ret void
 }
 

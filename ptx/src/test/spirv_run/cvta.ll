@@ -2,25 +2,27 @@ target datalayout = "e-p:64:64-p1:64:64-p2:32:32-p3:32:32-p4:64:64-p5:32:32-p6:3
 target triple = "amdgcn-amd-amdhsa"
 
 define protected amdgpu_kernel void @cvta(ptr addrspace(4) byref(i64) %"18", ptr addrspace(4) byref(i64) %"19") #0 {
-"26":
   %"7" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"7", align 1
   %"4" = alloca i64, align 8, addrspace(5)
   %"5" = alloca i64, align 8, addrspace(5)
   %"6" = alloca float, align 4, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"7", align 1
   %"8" = load i64, ptr addrspace(4) %"18", align 8
   store i64 %"8", ptr addrspace(5) %"4", align 8
   %"9" = load i64, ptr addrspace(4) %"19", align 8
   store i64 %"9", ptr addrspace(5) %"5", align 8
   %"11" = load i64, ptr addrspace(5) %"4", align 8
-  %0 = inttoptr i64 %"11" to ptr
-  %1 = addrspacecast ptr %0 to ptr addrspace(1)
-  %"20" = ptrtoint ptr addrspace(1) %1 to i64
+  %2 = inttoptr i64 %"11" to ptr
+  %3 = addrspacecast ptr %2 to ptr addrspace(1)
+  %"20" = ptrtoint ptr addrspace(1) %3 to i64
   store i64 %"20", ptr addrspace(5) %"4", align 8
   %"13" = load i64, ptr addrspace(5) %"5", align 8
-  %2 = inttoptr i64 %"13" to ptr
-  %3 = addrspacecast ptr %2 to ptr addrspace(1)
-  %"22" = ptrtoint ptr addrspace(1) %3 to i64
+  %4 = inttoptr i64 %"13" to ptr
+  %5 = addrspacecast ptr %4 to ptr addrspace(1)
+  %"22" = ptrtoint ptr addrspace(1) %5 to i64
   store i64 %"22", ptr addrspace(5) %"5", align 8
   %"15" = load i64, ptr addrspace(5) %"4", align 8
   %"24" = inttoptr i64 %"15" to ptr addrspace(1)

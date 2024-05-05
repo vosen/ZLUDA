@@ -2,15 +2,17 @@ target datalayout = "e-p:64:64-p1:64:64-p2:32:32-p3:32:32-p4:64:64-p5:32:32-p6:3
 target triple = "amdgcn-amd-amdhsa"
 
 define protected amdgpu_kernel void @mov_address(ptr addrspace(4) byref(i64) %"8", ptr addrspace(4) byref(i64) %"9") #0 {
-"11":
   %"6" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"6", align 1
   %"4" = alloca [8 x i8], align 1, addrspace(5)
   %"5" = alloca i64, align 8, addrspace(5)
+  %1 = alloca i64, align 8, addrspace(5)
+  br label %2
+
+2:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"6", align 1
   %"10" = ptrtoint ptr addrspace(5) %"4" to i64
-  %0 = alloca i64, align 8, addrspace(5)
-  store i64 %"10", ptr addrspace(5) %0, align 8
-  %"7" = load i64, ptr addrspace(5) %0, align 8
+  store i64 %"10", ptr addrspace(5) %1, align 8
+  %"7" = load i64, ptr addrspace(5) %1, align 8
   store i64 %"7", ptr addrspace(5) %"5", align 8
   ret void
 }

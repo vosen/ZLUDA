@@ -2,13 +2,15 @@ target datalayout = "e-p:64:64-p1:64:64-p2:32:32-p3:32:32-p4:64:64-p5:32:32-p6:3
 target triple = "amdgcn-amd-amdhsa"
 
 define protected amdgpu_kernel void @div_approx(ptr addrspace(4) byref(i64) %"22", ptr addrspace(4) byref(i64) %"23") #0 {
-"27":
   %"8" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"8", align 1
   %"4" = alloca i64, align 8, addrspace(5)
   %"5" = alloca i64, align 8, addrspace(5)
   %"6" = alloca float, align 4, addrspace(5)
   %"7" = alloca float, align 4, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"8", align 1
   %"9" = load i64, ptr addrspace(4) %"22", align 8
   store i64 %"9", ptr addrspace(5) %"4", align 8
   %"10" = load i64, ptr addrspace(4) %"23", align 8
@@ -19,8 +21,8 @@ define protected amdgpu_kernel void @div_approx(ptr addrspace(4) byref(i64) %"22
   store float %"11", ptr addrspace(5) %"6", align 4
   %"14" = load i64, ptr addrspace(5) %"4", align 8
   %"25" = inttoptr i64 %"14" to ptr
-  %"29" = getelementptr inbounds i8, ptr %"25", i64 4
-  %"13" = load float, ptr %"29", align 4
+  %"28" = getelementptr inbounds i8, ptr %"25", i64 4
+  %"13" = load float, ptr %"28", align 4
   store float %"13", ptr addrspace(5) %"7", align 4
   %"16" = load float, ptr addrspace(5) %"6", align 4
   %"17" = load float, ptr addrspace(5) %"7", align 4

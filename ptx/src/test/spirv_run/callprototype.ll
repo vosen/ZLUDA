@@ -2,15 +2,17 @@ target datalayout = "e-p:64:64-p1:64:64-p2:32:32-p3:32:32-p4:64:64-p5:32:32-p6:3
 target triple = "amdgcn-amd-amdhsa"
 
 define private i64 @incr(i64 %"33") #0 {
-"54":
   %"20" = alloca i64, align 8, addrspace(5)
   %"19" = alloca i64, align 8, addrspace(5)
   %"22" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"22", align 1
   %"46" = alloca i64, align 8, addrspace(5)
   %"47" = alloca i64, align 8, addrspace(5)
   %"16" = alloca i64, align 8, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
   store i64 %"33", ptr addrspace(5) %"20", align 8
+  store i1 false, ptr addrspace(5) %"22", align 1
   %"34" = load i64, ptr addrspace(5) %"20", align 8
   store i64 %"34", ptr addrspace(5) %"47", align 8
   %"35" = load i64, ptr addrspace(5) %"47", align 8
@@ -27,15 +29,17 @@ define private i64 @incr(i64 %"33") #0 {
 }
 
 define protected amdgpu_kernel void @callprototype(ptr addrspace(4) byref(i64) %"42", ptr addrspace(4) byref(i64) %"43") #0 {
-"53":
   %"21" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"21", align 1
   %"7" = alloca i64, align 8, addrspace(5)
   %"8" = alloca i64, align 8, addrspace(5)
   %"9" = alloca i64, align 8, addrspace(5)
   %"10" = alloca i64, align 8, addrspace(5)
   %"44" = alloca i64, align 8, addrspace(5)
   %"45" = alloca i64, align 8, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"21", align 1
   %"23" = load i64, ptr addrspace(4) %"42", align 8
   store i64 %"23", ptr addrspace(5) %"7", align 8
   %"24" = load i64, ptr addrspace(4) %"43", align 8
@@ -49,8 +53,8 @@ define protected amdgpu_kernel void @callprototype(ptr addrspace(4) byref(i64) %
   store i64 ptrtoint (ptr @incr to i64), ptr addrspace(5) %"10", align 8
   %"17" = load i64, ptr addrspace(5) %"44", align 8
   %"29" = load i64, ptr addrspace(5) %"10", align 8
-  %0 = inttoptr i64 %"29" to ptr
-  %"18" = call i64 %0(i64 %"17")
+  %2 = inttoptr i64 %"29" to ptr
+  %"18" = call i64 %2(i64 %"17")
   store i64 %"18", ptr addrspace(5) %"45", align 8
   %"30" = load i64, ptr addrspace(5) %"45", align 8
   store i64 %"30", ptr addrspace(5) %"9", align 8

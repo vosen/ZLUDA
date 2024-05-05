@@ -4,16 +4,18 @@ target triple = "amdgcn-amd-amdhsa"
 %struct.i64i32 = type { i64, i32 }
 
 define private %struct.i64i32 @"1"(i32 %"39", i32 %"40") #0 {
-"62":
   %"18" = alloca i32, align 4, addrspace(5)
   %"19" = alloca i32, align 4, addrspace(5)
   %"16" = alloca i64, align 8, addrspace(5)
   %"17" = alloca i32, align 4, addrspace(5)
   %"22" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"22", align 1
   %"20" = alloca i32, align 4, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
   store i32 %"39", ptr addrspace(5) %"18", align 4
   store i32 %"40", ptr addrspace(5) %"19", align 4
+  store i1 false, ptr addrspace(5) %"22", align 1
   %"42" = load i32, ptr addrspace(5) %"18", align 4
   %"43" = load i32, ptr addrspace(5) %"19", align 4
   %"41" = add i32 %"42", %"43"
@@ -27,15 +29,13 @@ define private %struct.i64i32 @"1"(i32 %"39", i32 %"40") #0 {
   store i32 %"46", ptr addrspace(5) %"17", align 4
   %"49" = load i64, ptr addrspace(5) %"16", align 8
   %"50" = load i32, ptr addrspace(5) %"17", align 4
-  %0 = insertvalue %struct.i64i32 undef, i64 %"49", 0
-  %1 = insertvalue %struct.i64i32 %0, i32 %"50", 1
-  ret %struct.i64i32 %1
+  %2 = insertvalue %struct.i64i32 undef, i64 %"49", 0
+  %3 = insertvalue %struct.i64i32 %2, i32 %"50", 1
+  ret %struct.i64i32 %3
 }
 
 define protected amdgpu_kernel void @call_multi_return(ptr addrspace(4) byref(i64) %"55", ptr addrspace(4) byref(i64) %"56") #0 {
-"61":
   %"21" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"21", align 1
   %"9" = alloca i64, align 8, addrspace(5)
   %"10" = alloca i64, align 8, addrspace(5)
   %"11" = alloca i32, align 4, addrspace(5)
@@ -43,6 +43,10 @@ define protected amdgpu_kernel void @call_multi_return(ptr addrspace(4) byref(i6
   %"13" = alloca i64, align 8, addrspace(5)
   %"14" = alloca i64, align 8, addrspace(5)
   %"15" = alloca i32, align 4, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"21", align 1
   %"23" = load i64, ptr addrspace(4) %"55", align 8
   store i64 %"23", ptr addrspace(5) %"9", align 8
   %"24" = load i64, ptr addrspace(4) %"56", align 8
@@ -53,14 +57,14 @@ define protected amdgpu_kernel void @call_multi_return(ptr addrspace(4) byref(i6
   store i32 %"25", ptr addrspace(5) %"11", align 4
   %"28" = load i64, ptr addrspace(5) %"9", align 8
   %"58" = inttoptr i64 %"28" to ptr addrspace(1)
-  %"64" = getelementptr inbounds i8, ptr addrspace(1) %"58", i64 4
-  %"27" = load i32, ptr addrspace(1) %"64", align 4
+  %"62" = getelementptr inbounds i8, ptr addrspace(1) %"58", i64 4
+  %"27" = load i32, ptr addrspace(1) %"62", align 4
   store i32 %"27", ptr addrspace(5) %"12", align 4
   %"31" = load i32, ptr addrspace(5) %"11", align 4
   %"32" = load i32, ptr addrspace(5) %"12", align 4
-  %0 = call %struct.i64i32 @"1"(i32 %"31", i32 %"32")
-  %"29" = extractvalue %struct.i64i32 %0, 0
-  %"30" = extractvalue %struct.i64i32 %0, 1
+  %2 = call %struct.i64i32 @"1"(i32 %"31", i32 %"32")
+  %"29" = extractvalue %struct.i64i32 %2, 0
+  %"30" = extractvalue %struct.i64i32 %2, 1
   store i64 %"29", ptr addrspace(5) %"13", align 8
   store i32 %"30", ptr addrspace(5) %"15", align 4
   %"34" = load i32, ptr addrspace(5) %"15", align 4
@@ -73,8 +77,8 @@ define protected amdgpu_kernel void @call_multi_return(ptr addrspace(4) byref(i6
   %"37" = load i64, ptr addrspace(5) %"10", align 8
   %"38" = load i64, ptr addrspace(5) %"14", align 8
   %"60" = inttoptr i64 %"37" to ptr addrspace(1)
-  %"66" = getelementptr inbounds i8, ptr addrspace(1) %"60", i64 8
-  store i64 %"38", ptr addrspace(1) %"66", align 8
+  %"64" = getelementptr inbounds i8, ptr addrspace(1) %"60", i64 8
+  store i64 %"38", ptr addrspace(1) %"64", align 8
   ret void
 }
 
