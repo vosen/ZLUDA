@@ -2526,58 +2526,6 @@ fn insert_implicit_conversions2_impl<'input>(
     Ok(result)
 }
 
-fn normalize_labels<'input>(
-    module: TranslationModule<'input, ExpandedArgParams>,
-) -> Result<TranslationModule<'input, ExpandedArgParams>, TranslateError> {
-    convert_methods_simple(module, normalize_labels2_impl)
-}
-
-fn normalize_labels2_impl<'input>(
-    id_defs: &mut IdNameMapBuilder<'input>,
-    fn_body: Vec<ExpandedStatement>,
-) -> Result<Vec<ExpandedStatement>, TranslateError> {
-    let mut labels_in_use = FxHashSet::default();
-    for statement in fn_body.iter() {
-        match statement {
-            Statement::Instruction(i) => {
-                if let Some(target) = i.jump_target() {
-                    labels_in_use.insert(target);
-                }
-            }
-            Statement::Conditional(cond) => {
-                labels_in_use.insert(cond.if_true);
-                labels_in_use.insert(cond.if_false);
-            }
-            Statement::Call(..)
-            | Statement::Variable(..)
-            | Statement::LoadVar(..)
-            | Statement::StoreVar(..)
-            | Statement::RetValue(..)
-            | Statement::Conversion(..)
-            | Statement::Constant(..)
-            | Statement::Label(..)
-            | Statement::PtrAccess { .. }
-            | Statement::RepackVector(..)
-            | Statement::MadC(..)
-            | Statement::MadCC(..)
-            | Statement::AddC(..)
-            | Statement::AddCC(..)
-            | Statement::SubC(..)
-            | Statement::SubCC(..)
-            | Statement::AsmVolatile { .. }
-            | Statement::FunctionPointer(..) => {}
-        }
-    }
-    Ok(
-        iter::once(Statement::Label(id_defs.register_intermediate(None)))
-            .chain(fn_body.into_iter().filter(|s| match s {
-                Statement::Label(i) => labels_in_use.contains(i),
-                _ => true,
-            }))
-            .collect::<Vec<_>>(),
-    )
-}
-
 fn hoist_globals<'input, P: ast::ArgParams<Id = Id>>(
     module: TranslationModule<'input, P>,
 ) -> TranslationModule<'input, P> {
@@ -3410,9 +3358,7 @@ fn to_llvm_module_impl2<'a, 'input>(
     }
     let translation_module = insert_implicit_conversions(translation_module)?;
     let translation_module = insert_compilation_mode_prologue(translation_module);
-    let translation_module = normalize_labels(translation_module)?;
     let translation_module = hoist_globals(translation_module);
-    let translation_module = move_variables_to_start(translation_module)?;
     let mut translation_module = replace_instructions_with_builtins(translation_module)?;
     if raytracing.is_some() {
         translation_module = raytracing::replace_tex_builtins_hack(translation_module)?;
@@ -3437,49 +3383,6 @@ fn to_llvm_module_impl2<'a, 'input>(
         _llvm_context: llvm_context,
         bitcode_modules,
     })
-}
-
-// From "Performance Tips for Frontend Authors" (https://llvm.org/docs/Frontend/PerformanceTips.html):
-// "The SROA (Scalar Replacement Of Aggregates) and Mem2Reg passes only attempt to eliminate alloca
-// instructions that are in the entry basic block. Given SSA is the canonical form expected by much
-// of the optimizer; if allocas can not be eliminated by Mem2Reg or SROA, the optimizer is likely to
-// be less effective than it could be."
-// Empirically, this is true. Moving allocas to the start gives us less spill-happy assembly
-fn move_variables_to_start<'input, P: ast::ArgParams<Id = Id>>(
-    module: TranslationModule<'input, P>,
-) -> Result<TranslationModule<'input, P>, TranslateError> {
-    convert_methods_simple(module, move_variables_to_start_impl)
-}
-
-fn move_variables_to_start_impl<'input, P: ast::ArgParams>(
-    _: &mut IdNameMapBuilder<'input>,
-    fn_body: Vec<Statement<ast::Instruction<P>, P>>,
-) -> Result<Vec<Statement<ast::Instruction<P>, P>>, TranslateError> {
-    if fn_body.is_empty() {
-        return Ok(fn_body);
-    }
-    let mut result = (0..fn_body.len())
-        .into_iter()
-        .map(|_| mem::MaybeUninit::<_>::uninit())
-        .collect::<Vec<_>>();
-    let variables_count = fn_body.iter().fold(0, |acc, statement| {
-        acc + matches!(statement, Statement::Variable(..)) as usize
-    });
-    let mut variable = 1usize;
-    let mut non_variable = variables_count + 1;
-    // methods always start with an entry label
-    let mut statements = fn_body.into_iter();
-    let start_label = statements.next().ok_or_else(TranslateError::unreachable)?;
-    unsafe { result.get_unchecked_mut(0).write(start_label) };
-    for statement in statements {
-        let index = match statement {
-            Statement::Variable(_) => &mut variable,
-            _ => &mut non_variable,
-        };
-        unsafe { result.get_unchecked_mut(*index).write(statement) };
-        *index += 1;
-    }
-    Ok(unsafe { mem::transmute(result) })
 }
 
 // PTX definition of param state space does not translate cleanly into AMDGPU notion of an address space:
@@ -6899,15 +6802,6 @@ pub(crate) enum TypeKind {
     Texref,
     Surfref,
     Struct,
-}
-
-impl<T: ast::ArgParams<Id = Id>> ast::Instruction<T> {
-    fn jump_target(&self) -> Option<Id> {
-        match self {
-            ast::Instruction::Bra(_, a) => Some(a.src),
-            _ => None,
-        }
-    }
 }
 
 impl<T: ast::ArgParams> ast::Instruction<T> {

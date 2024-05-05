@@ -5,18 +5,20 @@ target triple = "amdgcn-amd-amdhsa"
 @bar = protected addrspace(1) externally_initialized global [4 x i64] [i64 ptrtoint (ptr addrspacecast (ptr addrspace(1) @foo to ptr) to i64), i64 add (i64 ptrtoint (ptr addrspacecast (ptr addrspace(1) @foo to ptr) to i64), i64 4), i64 add (i64 ptrtoint (ptr addrspacecast (ptr addrspace(1) @foo to ptr) to i64), i64 8), i64 add (i64 ptrtoint (ptr addrspacecast (ptr addrspace(1) @foo to ptr) to i64), i64 12)]
 
 define protected amdgpu_kernel void @generic(ptr addrspace(4) byref(i64) %"46", ptr addrspace(4) byref(i64) %"47") #0 {
-"57":
   %"10" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"10", align 1
   %"6" = alloca i64, align 8, addrspace(5)
   %"7" = alloca i64, align 8, addrspace(5)
   %"8" = alloca i32, align 4, addrspace(5)
   %"9" = alloca i32, align 4, addrspace(5)
+  %1 = alloca i32, align 4, addrspace(5)
+  br label %2
+
+2:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"10", align 1
   %"11" = load i64, ptr addrspace(4) %"47", align 8
   store i64 %"11", ptr addrspace(5) %"7", align 8
-  %0 = alloca i32, align 4, addrspace(5)
-  store i32 1, ptr addrspace(5) %0, align 4
-  %"12" = load i32, ptr addrspace(5) %0, align 4
+  store i32 1, ptr addrspace(5) %1, align 4
+  %"12" = load i32, ptr addrspace(5) %1, align 4
   store i32 %"12", ptr addrspace(5) %"8", align 4
   %"13" = load i64, ptr addrspace(1) @bar, align 8
   store i64 %"13", ptr addrspace(5) %"6", align 8

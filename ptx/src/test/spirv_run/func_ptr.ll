@@ -2,14 +2,16 @@ target datalayout = "e-p:64:64-p1:64:64-p2:32:32-p3:32:32-p4:64:64-p5:32:32-p6:3
 target triple = "amdgcn-amd-amdhsa"
 
 define private float @"1"(float %"15", float %"16") #0 {
-"38":
   %"3" = alloca float, align 4, addrspace(5)
   %"4" = alloca float, align 4, addrspace(5)
   %"2" = alloca float, align 4, addrspace(5)
   %"13" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"13", align 1
+  br label %1
+
+1:                                                ; preds = %0
   store float %"15", ptr addrspace(5) %"3", align 4
   store float %"16", ptr addrspace(5) %"4", align 4
+  store i1 false, ptr addrspace(5) %"13", align 1
   %"18" = load float, ptr addrspace(5) %"3", align 4
   %"19" = load float, ptr addrspace(5) %"4", align 4
   %"17" = fadd float %"18", %"19"
@@ -19,14 +21,16 @@ define private float @"1"(float %"15", float %"16") #0 {
 }
 
 define protected amdgpu_kernel void @func_ptr(ptr addrspace(4) byref(i64) %"34", ptr addrspace(4) byref(i64) %"35") #0 {
-"39":
   %"14" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"14", align 1
   %"8" = alloca i64, align 8, addrspace(5)
   %"9" = alloca i64, align 8, addrspace(5)
   %"10" = alloca i64, align 8, addrspace(5)
   %"11" = alloca i64, align 8, addrspace(5)
   %"12" = alloca i64, align 8, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"14", align 1
   %"21" = load i64, ptr addrspace(4) %"34", align 8
   store i64 %"21", ptr addrspace(5) %"8", align 8
   %"22" = load i64, ptr addrspace(4) %"35", align 8

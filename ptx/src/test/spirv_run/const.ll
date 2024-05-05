@@ -4,15 +4,17 @@ target triple = "amdgcn-amd-amdhsa"
 @constparams = protected addrspace(4) externally_initialized global [4 x i16] [i16 10, i16 20, i16 30, i16 40], align 8
 
 define protected amdgpu_kernel void @const(ptr addrspace(4) byref(i64) %"38", ptr addrspace(4) byref(i64) %"39") #0 {
-"52":
   %"11" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"11", align 1
   %"5" = alloca i64, align 8, addrspace(5)
   %"6" = alloca i64, align 8, addrspace(5)
   %"7" = alloca i16, align 2, addrspace(5)
   %"8" = alloca i16, align 2, addrspace(5)
   %"9" = alloca i16, align 2, addrspace(5)
   %"10" = alloca i16, align 2, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"11", align 1
   %"12" = load i64, ptr addrspace(4) %"38", align 8
   store i64 %"12", ptr addrspace(5) %"5", align 8
   %"13" = load i64, ptr addrspace(4) %"39", align 8
@@ -32,18 +34,18 @@ define protected amdgpu_kernel void @const(ptr addrspace(4) byref(i64) %"38", pt
   %"20" = load i64, ptr addrspace(5) %"6", align 8
   %"21" = load i16, ptr addrspace(5) %"8", align 2
   %"46" = inttoptr i64 %"20" to ptr
-  %"60" = getelementptr inbounds i8, ptr %"46", i64 2
-  store i16 %"21", ptr %"60", align 2
+  %"59" = getelementptr inbounds i8, ptr %"46", i64 2
+  store i16 %"21", ptr %"59", align 2
   %"22" = load i64, ptr addrspace(5) %"6", align 8
   %"23" = load i16, ptr addrspace(5) %"9", align 2
   %"48" = inttoptr i64 %"22" to ptr
-  %"62" = getelementptr inbounds i8, ptr %"48", i64 4
-  store i16 %"23", ptr %"62", align 2
+  %"61" = getelementptr inbounds i8, ptr %"48", i64 4
+  store i16 %"23", ptr %"61", align 2
   %"24" = load i64, ptr addrspace(5) %"6", align 8
   %"25" = load i16, ptr addrspace(5) %"10", align 2
   %"50" = inttoptr i64 %"24" to ptr
-  %"64" = getelementptr inbounds i8, ptr %"50", i64 6
-  store i16 %"25", ptr %"64", align 2
+  %"63" = getelementptr inbounds i8, ptr %"50", i64 6
+  store i16 %"25", ptr %"63", align 2
   ret void
 }
 

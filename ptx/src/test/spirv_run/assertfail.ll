@@ -4,42 +4,44 @@ target triple = "amdgcn-amd-amdhsa"
 declare void @__zluda_ptx_impl____assertfail(i64, i64, i32, i64, i64) #0
 
 define protected amdgpu_kernel void @assertfail(ptr addrspace(4) byref(i64) %"62", ptr addrspace(4) byref(i64) %"63") #1 {
-"81":
   %"35" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"35", align 1
   %"15" = alloca i64, align 8, addrspace(5)
   %"16" = alloca i64, align 8, addrspace(5)
   %"17" = alloca i64, align 8, addrspace(5)
   %"18" = alloca i64, align 8, addrspace(5)
   %"19" = alloca i32, align 4, addrspace(5)
+  %1 = alloca i32, align 4, addrspace(5)
   %"64" = alloca i64, align 8, addrspace(5)
   %"66" = alloca i64, align 8, addrspace(5)
   %"68" = alloca i32, align 4, addrspace(5)
   %"70" = alloca i64, align 8, addrspace(5)
   %"72" = alloca i64, align 8, addrspace(5)
+  br label %2
+
+2:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"35", align 1
   %"36" = load i64, ptr addrspace(4) %"62", align 8
   store i64 %"36", ptr addrspace(5) %"15", align 8
   %"37" = load i64, ptr addrspace(4) %"63", align 8
   store i64 %"37", ptr addrspace(5) %"16", align 8
-  %0 = alloca i32, align 4, addrspace(5)
-  store i32 0, ptr addrspace(5) %0, align 4
-  %"74" = load i32, ptr addrspace(5) %0, align 4
+  store i32 0, ptr addrspace(5) %1, align 4
+  %"74" = load i32, ptr addrspace(5) %1, align 4
   store i32 %"74", ptr addrspace(5) %"19", align 4
   %"39" = load i64, ptr addrspace(5) %"15", align 8
-  %"83" = getelementptr inbounds i8, ptr addrspace(5) %"64", i64 0
-  store i64 %"39", ptr addrspace(5) %"83", align 8
+  %"82" = getelementptr inbounds i8, ptr addrspace(5) %"64", i64 0
+  store i64 %"39", ptr addrspace(5) %"82", align 8
   %"40" = load i64, ptr addrspace(5) %"15", align 8
-  %"85" = getelementptr inbounds i8, ptr addrspace(5) %"66", i64 0
-  store i64 %"40", ptr addrspace(5) %"85", align 8
+  %"84" = getelementptr inbounds i8, ptr addrspace(5) %"66", i64 0
+  store i64 %"40", ptr addrspace(5) %"84", align 8
   %"41" = load i32, ptr addrspace(5) %"19", align 4
-  %"87" = getelementptr inbounds i8, ptr addrspace(5) %"68", i64 0
-  store i32 %"41", ptr addrspace(5) %"87", align 4
+  %"86" = getelementptr inbounds i8, ptr addrspace(5) %"68", i64 0
+  store i32 %"41", ptr addrspace(5) %"86", align 4
   %"42" = load i64, ptr addrspace(5) %"15", align 8
-  %"89" = getelementptr inbounds i8, ptr addrspace(5) %"70", i64 0
-  store i64 %"42", ptr addrspace(5) %"89", align 8
+  %"88" = getelementptr inbounds i8, ptr addrspace(5) %"70", i64 0
+  store i64 %"42", ptr addrspace(5) %"88", align 8
   %"43" = load i64, ptr addrspace(5) %"15", align 8
-  %"91" = getelementptr inbounds i8, ptr addrspace(5) %"72", i64 0
-  store i64 %"43", ptr addrspace(5) %"91", align 8
+  %"90" = getelementptr inbounds i8, ptr addrspace(5) %"72", i64 0
+  store i64 %"43", ptr addrspace(5) %"90", align 8
   %"30" = load i64, ptr addrspace(5) %"64", align 8
   %"31" = load i64, ptr addrspace(5) %"66", align 8
   %"32" = load i32, ptr addrspace(5) %"68", align 4

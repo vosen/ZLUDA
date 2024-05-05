@@ -2,15 +2,17 @@ target datalayout = "e-p:64:64-p1:64:64-p2:32:32-p3:32:32-p4:64:64-p5:32:32-p6:3
 target triple = "amdgcn-amd-amdhsa"
 
 define private i64 @incr(i64 %"29") #0 {
-"49":
   %"18" = alloca i64, align 8, addrspace(5)
   %"17" = alloca i64, align 8, addrspace(5)
   %"20" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"20", align 1
   %"42" = alloca i64, align 8, addrspace(5)
   %"43" = alloca i64, align 8, addrspace(5)
   %"14" = alloca i64, align 8, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
   store i64 %"29", ptr addrspace(5) %"18", align 8
+  store i1 false, ptr addrspace(5) %"20", align 1
   %"30" = load i64, ptr addrspace(5) %"18", align 8
   store i64 %"30", ptr addrspace(5) %"43", align 8
   %"31" = load i64, ptr addrspace(5) %"43", align 8
@@ -27,14 +29,16 @@ define private i64 @incr(i64 %"29") #0 {
 }
 
 define protected amdgpu_kernel void @call(ptr addrspace(4) byref(i64) %"38", ptr addrspace(4) byref(i64) %"39") #0 {
-"48":
   %"19" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"19", align 1
   %"7" = alloca i64, align 8, addrspace(5)
   %"8" = alloca i64, align 8, addrspace(5)
   %"9" = alloca i64, align 8, addrspace(5)
   %"40" = alloca i64, align 8, addrspace(5)
   %"41" = alloca i64, align 8, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"19", align 1
   %"21" = load i64, ptr addrspace(4) %"38", align 8
   store i64 %"21", ptr addrspace(5) %"7", align 8
   %"22" = load i64, ptr addrspace(4) %"39", align 8

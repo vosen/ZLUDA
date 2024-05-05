@@ -4,13 +4,15 @@ target triple = "amdgcn-amd-amdhsa"
 @"4" = private addrspace(3) global [128 x i8] undef, align 4
 
 define protected amdgpu_kernel void @shared_variable(ptr addrspace(4) byref(i64) %"18", ptr addrspace(4) byref(i64) %"19") #0 {
-"24":
   %"9" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"9", align 1
   %"5" = alloca i64, align 8, addrspace(5)
   %"6" = alloca i64, align 8, addrspace(5)
   %"7" = alloca i64, align 8, addrspace(5)
   %"8" = alloca i64, align 8, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"9", align 1
   %"10" = load i64, ptr addrspace(4) %"18", align 8
   store i64 %"10", ptr addrspace(5) %"5", align 8
   %"11" = load i64, ptr addrspace(4) %"19", align 8

@@ -2,9 +2,7 @@ target datalayout = "e-p:64:64-p1:64:64-p2:32:32-p3:32:32-p4:64:64-p5:32:32-p6:3
 target triple = "amdgcn-amd-amdhsa"
 
 define protected amdgpu_kernel void @bfind_shiftamt(ptr addrspace(4) byref(i64) %"41", ptr addrspace(4) byref(i64) %"42") #0 {
-"52":
   %"12" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"12", align 1
   %"4" = alloca i64, align 8, addrspace(5)
   %"5" = alloca i64, align 8, addrspace(5)
   %"6" = alloca i32, align 4, addrspace(5)
@@ -13,6 +11,10 @@ define protected amdgpu_kernel void @bfind_shiftamt(ptr addrspace(4) byref(i64) 
   %"9" = alloca i32, align 4, addrspace(5)
   %"10" = alloca i32, align 4, addrspace(5)
   %"11" = alloca i32, align 4, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"12", align 1
   %"13" = load i64, ptr addrspace(4) %"41", align 8
   store i64 %"13", ptr addrspace(5) %"4", align 8
   %"14" = load i64, ptr addrspace(4) %"42", align 8
@@ -23,28 +25,28 @@ define protected amdgpu_kernel void @bfind_shiftamt(ptr addrspace(4) byref(i64) 
   store i32 %"15", ptr addrspace(5) %"6", align 4
   %"18" = load i64, ptr addrspace(5) %"4", align 8
   %"44" = inttoptr i64 %"18" to ptr
-  %"54" = getelementptr inbounds i8, ptr %"44", i64 4
-  %"17" = load i32, ptr %"54", align 4
+  %"53" = getelementptr inbounds i8, ptr %"44", i64 4
+  %"17" = load i32, ptr %"53", align 4
   store i32 %"17", ptr addrspace(5) %"7", align 4
   %"20" = load i64, ptr addrspace(5) %"4", align 8
   %"45" = inttoptr i64 %"20" to ptr
-  %"56" = getelementptr inbounds i8, ptr %"45", i64 8
-  %"19" = load i32, ptr %"56", align 4
+  %"55" = getelementptr inbounds i8, ptr %"45", i64 8
+  %"19" = load i32, ptr %"55", align 4
   store i32 %"19", ptr addrspace(5) %"8", align 4
   %"22" = load i32, ptr addrspace(5) %"6", align 4
-  %0 = icmp eq i32 %"22", 0
-  %1 = call i32 @llvm.ctlz.i32(i32 %"22", i1 true)
-  %"46" = select i1 %0, i32 -1, i32 %1
+  %2 = icmp eq i32 %"22", 0
+  %3 = call i32 @llvm.ctlz.i32(i32 %"22", i1 true)
+  %"46" = select i1 %2, i32 -1, i32 %3
   store i32 %"46", ptr addrspace(5) %"9", align 4
   %"24" = load i32, ptr addrspace(5) %"7", align 4
-  %2 = icmp eq i32 %"24", 0
-  %3 = call i32 @llvm.ctlz.i32(i32 %"24", i1 true)
-  %"47" = select i1 %2, i32 -1, i32 %3
+  %4 = icmp eq i32 %"24", 0
+  %5 = call i32 @llvm.ctlz.i32(i32 %"24", i1 true)
+  %"47" = select i1 %4, i32 -1, i32 %5
   store i32 %"47", ptr addrspace(5) %"10", align 4
   %"26" = load i32, ptr addrspace(5) %"8", align 4
-  %4 = icmp eq i32 %"26", 0
-  %5 = call i32 @llvm.ctlz.i32(i32 %"26", i1 true)
-  %"48" = select i1 %4, i32 -1, i32 %5
+  %6 = icmp eq i32 %"26", 0
+  %7 = call i32 @llvm.ctlz.i32(i32 %"26", i1 true)
+  %"48" = select i1 %6, i32 -1, i32 %7
   store i32 %"48", ptr addrspace(5) %"11", align 4
   %"27" = load i64, ptr addrspace(5) %"5", align 8
   %"28" = load i32, ptr addrspace(5) %"9", align 4
@@ -53,13 +55,13 @@ define protected amdgpu_kernel void @bfind_shiftamt(ptr addrspace(4) byref(i64) 
   %"29" = load i64, ptr addrspace(5) %"5", align 8
   %"30" = load i32, ptr addrspace(5) %"10", align 4
   %"50" = inttoptr i64 %"29" to ptr
-  %"58" = getelementptr inbounds i8, ptr %"50", i64 4
-  store i32 %"30", ptr %"58", align 4
+  %"57" = getelementptr inbounds i8, ptr %"50", i64 4
+  store i32 %"30", ptr %"57", align 4
   %"31" = load i64, ptr addrspace(5) %"5", align 8
   %"32" = load i32, ptr addrspace(5) %"11", align 4
   %"51" = inttoptr i64 %"31" to ptr
-  %"60" = getelementptr inbounds i8, ptr %"51", i64 8
-  store i32 %"32", ptr %"60", align 4
+  %"59" = getelementptr inbounds i8, ptr %"51", i64 8
+  store i32 %"32", ptr %"59", align 4
   ret void
 }
 

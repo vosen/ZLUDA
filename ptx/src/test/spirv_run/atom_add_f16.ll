@@ -4,20 +4,22 @@ target triple = "amdgcn-amd-amdhsa"
 @"4" = private addrspace(3) global [1024 x i8] undef, align 4
 
 define protected amdgpu_kernel void @atom_add_f16(ptr addrspace(4) byref(i64) %"26", ptr addrspace(4) byref(i64) %"27") #0 {
-"37":
   %"8" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"8", align 1
   %"5" = alloca i64, align 8, addrspace(5)
   %"6" = alloca i64, align 8, addrspace(5)
   %"7" = alloca half, align 2, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"8", align 1
   %"9" = load i64, ptr addrspace(4) %"26", align 8
   store i64 %"9", ptr addrspace(5) %"5", align 8
   %"10" = load i64, ptr addrspace(4) %"27", align 8
   store i64 %"10", ptr addrspace(5) %"6", align 8
   %"12" = load i64, ptr addrspace(5) %"5", align 8
   %"28" = inttoptr i64 %"12" to ptr
-  %"39" = getelementptr inbounds i8, ptr %"28", i64 2
-  %"29" = load i16, ptr %"39", align 2
+  %"38" = getelementptr inbounds i8, ptr %"28", i64 2
+  %"29" = load i16, ptr %"38", align 2
   %"11" = bitcast i16 %"29" to half
   store half %"11", ptr addrspace(5) %"7", align 2
   %"14" = load i64, ptr addrspace(5) %"5", align 8
@@ -38,9 +40,9 @@ define protected amdgpu_kernel void @atom_add_f16(ptr addrspace(4) byref(i64) %"
   %"20" = load i64, ptr addrspace(5) %"6", align 8
   %"21" = load half, ptr addrspace(5) %"7", align 2
   %"35" = inttoptr i64 %"20" to ptr
-  %"41" = getelementptr inbounds i8, ptr %"35", i64 2
+  %"40" = getelementptr inbounds i8, ptr %"35", i64 2
   %"36" = bitcast half %"21" to i16
-  store i16 %"36", ptr %"41", align 2
+  store i16 %"36", ptr %"40", align 2
   ret void
 }
 

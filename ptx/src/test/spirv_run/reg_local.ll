@@ -2,13 +2,15 @@ target datalayout = "e-p:64:64-p1:64:64-p2:32:32-p3:32:32-p4:64:64-p5:32:32-p6:3
 target triple = "amdgcn-amd-amdhsa"
 
 define protected amdgpu_kernel void @reg_local(ptr addrspace(4) byref(i64) %"23", ptr addrspace(4) byref(i64) %"24") #0 {
-"33":
   %"8" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"8", align 1
   %"4" = alloca [8 x i8], align 8, addrspace(5)
   %"5" = alloca i64, align 8, addrspace(5)
   %"6" = alloca i64, align 8, addrspace(5)
   %"7" = alloca i64, align 8, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"8", align 1
   %"9" = load i64, ptr addrspace(4) %"23", align 8
   store i64 %"9", ptr addrspace(5) %"5", align 8
   %"10" = load i64, ptr addrspace(4) %"24", align 8
@@ -22,14 +24,14 @@ define protected amdgpu_kernel void @reg_local(ptr addrspace(4) byref(i64) %"23"
   %"27" = addrspacecast ptr addrspace(5) %"4" to ptr
   store i64 %"18", ptr %"27", align 8
   %"29" = addrspacecast ptr addrspace(5) %"4" to ptr
-  %"37" = getelementptr inbounds i8, ptr %"29", i64 0
-  %"30" = load i64, ptr %"37", align 8
+  %"36" = getelementptr inbounds i8, ptr %"29", i64 0
+  %"30" = load i64, ptr %"36", align 8
   store i64 %"30", ptr addrspace(5) %"7", align 8
   %"15" = load i64, ptr addrspace(5) %"6", align 8
   %"16" = load i64, ptr addrspace(5) %"7", align 8
   %"31" = inttoptr i64 %"15" to ptr addrspace(1)
-  %"39" = getelementptr inbounds i8, ptr addrspace(1) %"31", i64 0
-  store i64 %"16", ptr addrspace(1) %"39", align 8
+  %"38" = getelementptr inbounds i8, ptr addrspace(1) %"31", i64 0
+  store i64 %"16", ptr addrspace(1) %"38", align 8
   ret void
 }
 

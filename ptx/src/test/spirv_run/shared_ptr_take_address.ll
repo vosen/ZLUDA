@@ -4,21 +4,23 @@ target triple = "amdgcn-amd-amdhsa"
 @shared_mem = external hidden addrspace(3) global [0 x i8], align 4
 
 define protected amdgpu_kernel void @shared_ptr_take_address(ptr addrspace(4) byref(i64) %"22", ptr addrspace(4) byref(i64) %"23") #0 {
-"29":
   %"10" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"10", align 1
   %"5" = alloca i64, align 8, addrspace(5)
   %"6" = alloca i64, align 8, addrspace(5)
   %"7" = alloca i64, align 8, addrspace(5)
   %"8" = alloca i64, align 8, addrspace(5)
   %"9" = alloca i64, align 8, addrspace(5)
+  %1 = alloca i64, align 8, addrspace(5)
+  br label %2
+
+2:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"10", align 1
   %"11" = load i64, ptr addrspace(4) %"22", align 8
   store i64 %"11", ptr addrspace(5) %"5", align 8
   %"12" = load i64, ptr addrspace(4) %"23", align 8
   store i64 %"12", ptr addrspace(5) %"6", align 8
-  %0 = alloca i64, align 8, addrspace(5)
-  store i64 ptrtoint (ptr addrspace(3) @shared_mem to i64), ptr addrspace(5) %0, align 8
-  %"13" = load i64, ptr addrspace(5) %0, align 8
+  store i64 ptrtoint (ptr addrspace(3) @shared_mem to i64), ptr addrspace(5) %1, align 8
+  %"13" = load i64, ptr addrspace(5) %1, align 8
   store i64 %"13", ptr addrspace(5) %"7", align 8
   %"15" = load i64, ptr addrspace(5) %"5", align 8
   %"25" = inttoptr i64 %"15" to ptr addrspace(1)

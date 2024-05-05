@@ -8,9 +8,7 @@ target triple = "amdgcn-amd-amdhsa"
 declare void @__zluda_ptx_impl____assertfail(i64, i64, i32, i64, i64) #0
 
 define protected amdgpu_kernel void @amdgpu_unnamed(ptr addrspace(4) byref(i64) %"57", ptr addrspace(4) byref(i64) %"58") #1 {
-"73":
   %"33" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"33", align 1
   %"14" = alloca i64, align 8, addrspace(5)
   %"15" = alloca i64, align 8, addrspace(5)
   %"16" = alloca i64, align 8, addrspace(5)
@@ -19,10 +17,17 @@ define protected amdgpu_kernel void @amdgpu_unnamed(ptr addrspace(4) byref(i64) 
   %"19" = alloca i64, align 8, addrspace(5)
   %"20" = alloca i32, align 4, addrspace(5)
   %"59" = alloca i64, align 8, addrspace(5)
+  %1 = alloca i64, align 8, addrspace(5)
   %"60" = alloca i64, align 8, addrspace(5)
+  %2 = alloca i64, align 8, addrspace(5)
   %"61" = alloca i32, align 4, addrspace(5)
   %"62" = alloca i64, align 8, addrspace(5)
+  %3 = alloca i64, align 8, addrspace(5)
   %"63" = alloca i64, align 8, addrspace(5)
+  br label %4
+
+4:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"33", align 1
   %"34" = load i64, ptr addrspace(4) %"57", align 8
   store i64 %"34", ptr addrspace(5) %"14", align 8
   %"35" = load i64, ptr addrspace(4) %"58", align 8
@@ -37,28 +42,25 @@ define protected amdgpu_kernel void @amdgpu_unnamed(ptr addrspace(4) byref(i64) 
   %"40" = load i1, ptr addrspace(5) %"18", align 1
   br i1 %"40", label %"13", label %"27"
 
-"27":                                             ; preds = %"73"
-  %0 = alloca i64, align 8, addrspace(5)
-  store i64 ptrtoint (ptr addrspace(1) @0 to i64), ptr addrspace(5) %0, align 8
-  %"66" = load i64, ptr addrspace(5) %0, align 8
+"27":                                             ; preds = %4
+  store i64 ptrtoint (ptr addrspace(1) @0 to i64), ptr addrspace(5) %1, align 8
+  %"66" = load i64, ptr addrspace(5) %1, align 8
   store i64 %"66", ptr addrspace(5) %"19", align 8
   %"42" = load i64, ptr addrspace(5) %"19", align 8
   store i64 %"42", ptr addrspace(5) %"59", align 8
-  %1 = alloca i64, align 8, addrspace(5)
-  store i64 ptrtoint (ptr addrspace(1) @1 to i64), ptr addrspace(5) %1, align 8
-  %"68" = load i64, ptr addrspace(5) %1, align 8
+  store i64 ptrtoint (ptr addrspace(1) @1 to i64), ptr addrspace(5) %2, align 8
+  %"68" = load i64, ptr addrspace(5) %2, align 8
   store i64 %"68", ptr addrspace(5) %"19", align 8
   %"44" = load i64, ptr addrspace(5) %"19", align 8
   store i64 %"44", ptr addrspace(5) %"60", align 8
   store i32 1, ptr addrspace(5) %"61", align 4
-  %2 = alloca i64, align 8, addrspace(5)
-  store i64 ptrtoint (ptr addrspace(1) @2 to i64), ptr addrspace(5) %2, align 8
-  %"70" = load i64, ptr addrspace(5) %2, align 8
+  store i64 ptrtoint (ptr addrspace(1) @2 to i64), ptr addrspace(5) %3, align 8
+  %"70" = load i64, ptr addrspace(5) %3, align 8
   store i64 %"70", ptr addrspace(5) %"19", align 8
   %"46" = load i64, ptr addrspace(5) %"19", align 8
   store i64 %"46", ptr addrspace(5) %"62", align 8
-  %"75" = getelementptr inbounds i8, ptr addrspace(5) %"63", i64 0
-  store i64 1, ptr addrspace(5) %"75", align 8
+  %"74" = getelementptr inbounds i8, ptr addrspace(5) %"63", i64 0
+  store i64 1, ptr addrspace(5) %"74", align 8
   %"28" = load i64, ptr addrspace(5) %"59", align 8
   %"29" = load i64, ptr addrspace(5) %"60", align 8
   %"30" = load i32, ptr addrspace(5) %"61", align 4
@@ -67,7 +69,7 @@ define protected amdgpu_kernel void @amdgpu_unnamed(ptr addrspace(4) byref(i64) 
   call void @__zluda_ptx_impl____assertfail(i64 %"28", i64 %"29", i32 %"30", i64 %"31", i64 %"32")
   br label %"13"
 
-"13":                                             ; preds = %"27", %"73"
+"13":                                             ; preds = %"27", %4
   %"48" = load i64, ptr addrspace(5) %"16", align 8
   %"47" = add i64 %"48", 1
   store i64 %"47", ptr addrspace(5) %"17", align 8

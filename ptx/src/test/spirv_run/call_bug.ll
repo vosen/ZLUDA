@@ -2,15 +2,17 @@ target datalayout = "e-p:64:64-p1:64:64-p2:32:32-p3:32:32-p4:64:64-p5:32:32-p6:3
 target triple = "amdgcn-amd-amdhsa"
 
 define private [2 x i32] @incr(i64 %"21") #0 {
-"56":
   %"16" = alloca i64, align 8, addrspace(5)
   %"15" = alloca [2 x i32], align 4, addrspace(5)
   %"19" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"19", align 1
   %"42" = alloca [2 x i32], align 4, addrspace(5)
   %"43" = alloca i64, align 8, addrspace(5)
   %"4" = alloca i64, align 8, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
   store i64 %"21", ptr addrspace(5) %"16", align 8
+  store i1 false, ptr addrspace(5) %"19", align 1
   %"22" = load i64, ptr addrspace(5) %"16", align 8
   store i64 %"22", ptr addrspace(5) %"43", align 8
   %"23" = load i64, ptr addrspace(5) %"43", align 8
@@ -27,15 +29,17 @@ define private [2 x i32] @incr(i64 %"21") #0 {
 }
 
 define protected amdgpu_kernel void @call_bug(ptr addrspace(4) byref(i64) %"44", ptr addrspace(4) byref(i64) %"45") #0 {
-"57":
   %"20" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"20", align 1
   %"8" = alloca i64, align 8, addrspace(5)
   %"9" = alloca i64, align 8, addrspace(5)
   %"10" = alloca i64, align 8, addrspace(5)
   %"11" = alloca i64, align 8, addrspace(5)
   %"46" = alloca i64, align 8, addrspace(5)
   %"47" = alloca [2 x i32], align 4, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"20", align 1
   %"29" = load i64, ptr addrspace(4) %"44", align 8
   store i64 %"29", ptr addrspace(5) %"8", align 8
   %"30" = load i64, ptr addrspace(4) %"45", align 8
@@ -49,11 +53,11 @@ define protected amdgpu_kernel void @call_bug(ptr addrspace(4) byref(i64) %"44",
   store i64 ptrtoint (ptr @incr to i64), ptr addrspace(5) %"11", align 8
   %"17" = load i64, ptr addrspace(5) %"46", align 8
   %"35" = load i64, ptr addrspace(5) %"11", align 8
-  %0 = inttoptr i64 %"35" to ptr
-  %"18" = call [2 x i32] %0(i64 %"17")
+  %2 = inttoptr i64 %"35" to ptr
+  %"18" = call [2 x i32] %2(i64 %"17")
   store [2 x i32] %"18", ptr addrspace(5) %"47", align 4
-  %"59" = getelementptr inbounds i8, ptr addrspace(5) %"47", i64 0
-  %"36" = load i64, ptr addrspace(5) %"59", align 8
+  %"57" = getelementptr inbounds i8, ptr addrspace(5) %"47", i64 0
+  %"36" = load i64, ptr addrspace(5) %"57", align 8
   store i64 %"36", ptr addrspace(5) %"10", align 8
   %"37" = load i64, ptr addrspace(5) %"9", align 8
   %"38" = load i64, ptr addrspace(5) %"10", align 8

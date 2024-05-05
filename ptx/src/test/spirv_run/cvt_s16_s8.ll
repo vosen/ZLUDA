@@ -2,13 +2,15 @@ target datalayout = "e-p:64:64-p1:64:64-p2:32:32-p3:32:32-p4:64:64-p5:32:32-p6:3
 target triple = "amdgcn-amd-amdhsa"
 
 define protected amdgpu_kernel void @cvt_s16_s8(ptr addrspace(4) byref(i64) %"17", ptr addrspace(4) byref(i64) %"18") #0 {
-"23":
   %"8" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"8", align 1
   %"4" = alloca i64, align 8, addrspace(5)
   %"5" = alloca i64, align 8, addrspace(5)
   %"6" = alloca i32, align 4, addrspace(5)
   %"7" = alloca i32, align 4, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"8", align 1
   %"9" = load i64, ptr addrspace(4) %"17", align 8
   store i64 %"9", ptr addrspace(5) %"4", align 8
   %"10" = load i64, ptr addrspace(4) %"18", align 8
@@ -18,8 +20,8 @@ define protected amdgpu_kernel void @cvt_s16_s8(ptr addrspace(4) byref(i64) %"17
   %"11" = load i32, ptr addrspace(1) %"19", align 4
   store i32 %"11", ptr addrspace(5) %"7", align 4
   %"14" = load i32, ptr addrspace(5) %"7", align 4
-  %"25" = trunc i32 %"14" to i8
-  %"20" = sext i8 %"25" to i16
+  %"24" = trunc i32 %"14" to i8
+  %"20" = sext i8 %"24" to i16
   %"13" = sext i16 %"20" to i32
   store i32 %"13", ptr addrspace(5) %"6", align 4
   %"15" = load i64, ptr addrspace(5) %"5", align 8

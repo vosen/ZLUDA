@@ -10,15 +10,17 @@ declare float @__zluda_ptx_impl__cvt_rp_f32_s32(i32) #0
 declare float @__zluda_ptx_impl__cvt_rz_f32_s32(i32) #0
 
 define protected amdgpu_kernel void @cvt_f32_s32(ptr addrspace(4) byref(i64) %"49", ptr addrspace(4) byref(i64) %"50") #1 {
-"75":
   %"10" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"10", align 1
   %"4" = alloca i64, align 8, addrspace(5)
   %"5" = alloca i64, align 8, addrspace(5)
   %"6" = alloca i32, align 4, addrspace(5)
   %"7" = alloca i32, align 4, addrspace(5)
   %"8" = alloca i32, align 4, addrspace(5)
   %"9" = alloca i32, align 4, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"10", align 1
   %"11" = load i64, ptr addrspace(4) %"49", align 8
   store i64 %"11", ptr addrspace(5) %"4", align 8
   %"12" = load i64, ptr addrspace(4) %"50", align 8
@@ -29,18 +31,18 @@ define protected amdgpu_kernel void @cvt_f32_s32(ptr addrspace(4) byref(i64) %"4
   store i32 %"51", ptr addrspace(5) %"6", align 4
   %"16" = load i64, ptr addrspace(5) %"4", align 8
   %"53" = inttoptr i64 %"16" to ptr
-  %"89" = getelementptr inbounds i8, ptr %"53", i64 4
-  %"54" = load i32, ptr %"89", align 4
+  %"88" = getelementptr inbounds i8, ptr %"53", i64 4
+  %"54" = load i32, ptr %"88", align 4
   store i32 %"54", ptr addrspace(5) %"7", align 4
   %"18" = load i64, ptr addrspace(5) %"4", align 8
   %"55" = inttoptr i64 %"18" to ptr
-  %"91" = getelementptr inbounds i8, ptr %"55", i64 8
-  %"56" = load i32, ptr %"91", align 4
+  %"90" = getelementptr inbounds i8, ptr %"55", i64 8
+  %"56" = load i32, ptr %"90", align 4
   store i32 %"56", ptr addrspace(5) %"8", align 4
   %"20" = load i64, ptr addrspace(5) %"4", align 8
   %"57" = inttoptr i64 %"20" to ptr
-  %"93" = getelementptr inbounds i8, ptr %"57", i64 12
-  %"58" = load i32, ptr %"93", align 4
+  %"92" = getelementptr inbounds i8, ptr %"57", i64 12
+  %"58" = load i32, ptr %"92", align 4
   store i32 %"58", ptr addrspace(5) %"9", align 4
   %"22" = load i32, ptr addrspace(5) %"6", align 4
   %"59" = call float @__zluda_ptx_impl__cvt_rn_f32_s32(i32 %"22")
@@ -66,21 +68,21 @@ define protected amdgpu_kernel void @cvt_f32_s32(ptr addrspace(4) byref(i64) %"4
   %"31" = load i64, ptr addrspace(5) %"5", align 8
   %"32" = load i32, ptr addrspace(5) %"7", align 4
   %"69" = inttoptr i64 %"31" to ptr addrspace(1)
-  %"95" = getelementptr inbounds i8, ptr addrspace(1) %"69", i64 4
+  %"94" = getelementptr inbounds i8, ptr addrspace(1) %"69", i64 4
   %"70" = bitcast i32 %"32" to float
-  store float %"70", ptr addrspace(1) %"95", align 4
+  store float %"70", ptr addrspace(1) %"94", align 4
   %"33" = load i64, ptr addrspace(5) %"5", align 8
   %"34" = load i32, ptr addrspace(5) %"8", align 4
   %"71" = inttoptr i64 %"33" to ptr addrspace(1)
-  %"97" = getelementptr inbounds i8, ptr addrspace(1) %"71", i64 8
+  %"96" = getelementptr inbounds i8, ptr addrspace(1) %"71", i64 8
   %"72" = bitcast i32 %"34" to float
-  store float %"72", ptr addrspace(1) %"97", align 4
+  store float %"72", ptr addrspace(1) %"96", align 4
   %"35" = load i64, ptr addrspace(5) %"5", align 8
   %"36" = load i32, ptr addrspace(5) %"9", align 4
   %"73" = inttoptr i64 %"35" to ptr addrspace(1)
-  %"99" = getelementptr inbounds i8, ptr addrspace(1) %"73", i64 12
+  %"98" = getelementptr inbounds i8, ptr addrspace(1) %"73", i64 12
   %"74" = bitcast i32 %"36" to float
-  store float %"74", ptr addrspace(1) %"99", align 4
+  store float %"74", ptr addrspace(1) %"98", align 4
   ret void
 }
 

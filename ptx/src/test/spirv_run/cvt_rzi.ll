@@ -2,13 +2,15 @@ target datalayout = "e-p:64:64-p1:64:64-p2:32:32-p3:32:32-p4:64:64-p5:32:32-p6:3
 target triple = "amdgcn-amd-amdhsa"
 
 define protected amdgpu_kernel void @cvt_rzi(ptr addrspace(4) byref(i64) %"27", ptr addrspace(4) byref(i64) %"28") #0 {
-"33":
   %"8" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"8", align 1
   %"4" = alloca i64, align 8, addrspace(5)
   %"5" = alloca i64, align 8, addrspace(5)
   %"6" = alloca float, align 4, addrspace(5)
   %"7" = alloca float, align 4, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"8", align 1
   %"9" = load i64, ptr addrspace(4) %"27", align 8
   store i64 %"9", ptr addrspace(5) %"4", align 8
   %"10" = load i64, ptr addrspace(4) %"28", align 8
@@ -19,8 +21,8 @@ define protected amdgpu_kernel void @cvt_rzi(ptr addrspace(4) byref(i64) %"27", 
   store float %"11", ptr addrspace(5) %"6", align 4
   %"14" = load i64, ptr addrspace(5) %"4", align 8
   %"30" = inttoptr i64 %"14" to ptr
-  %"35" = getelementptr inbounds i8, ptr %"30", i64 4
-  %"13" = load float, ptr %"35", align 4
+  %"34" = getelementptr inbounds i8, ptr %"30", i64 4
+  %"13" = load float, ptr %"34", align 4
   store float %"13", ptr addrspace(5) %"7", align 4
   %"16" = load float, ptr addrspace(5) %"6", align 4
   %"15" = call float @llvm.trunc.f32(float %"16")
@@ -35,8 +37,8 @@ define protected amdgpu_kernel void @cvt_rzi(ptr addrspace(4) byref(i64) %"27", 
   %"21" = load i64, ptr addrspace(5) %"5", align 8
   %"22" = load float, ptr addrspace(5) %"7", align 4
   %"32" = inttoptr i64 %"21" to ptr
-  %"37" = getelementptr inbounds i8, ptr %"32", i64 4
-  store float %"22", ptr %"37", align 4
+  %"36" = getelementptr inbounds i8, ptr %"32", i64 4
+  store float %"22", ptr %"36", align 4
   ret void
 }
 

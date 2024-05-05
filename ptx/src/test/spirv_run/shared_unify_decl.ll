@@ -4,16 +4,18 @@ target triple = "amdgcn-amd-amdhsa"
 @shared_ex = external hidden addrspace(3) global [0 x i32]
 @shared_mod = private addrspace(3) global [4 x i32] undef
 
-define private i64 @"3"(ptr addrspace(3) %"66", ptr addrspace(3) %"67") #0 {
-"59":
+define private i64 @"3"(ptr addrspace(3) %"63", ptr addrspace(3) %"64") #0 {
   %"8" = alloca i64, align 8, addrspace(5)
   %"20" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"20", align 1
   %"9" = alloca i64, align 8, addrspace(5)
   %"10" = alloca i64, align 8, addrspace(5)
-  %"23" = load i64, ptr addrspace(3) %"67", align 8
+  br label %1
+
+1:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"20", align 1
+  %"23" = load i64, ptr addrspace(3) %"64", align 8
   store i64 %"23", ptr addrspace(5) %"9", align 8
-  %"24" = load i64, ptr addrspace(3) %"66", align 8
+  %"24" = load i64, ptr addrspace(3) %"63", align 8
   store i64 %"24", ptr addrspace(5) %"10", align 8
   %"26" = load i64, ptr addrspace(5) %"10", align 8
   %"27" = load i64, ptr addrspace(5) %"9", align 8
@@ -23,29 +25,33 @@ define private i64 @"3"(ptr addrspace(3) %"66", ptr addrspace(3) %"67") #0 {
   ret i64 %"28"
 }
 
-define private i64 @"5"(i64 %"29", ptr addrspace(3) %"68", ptr addrspace(3) %"69") #0 {
-"60":
+define private i64 @"5"(i64 %"29", ptr addrspace(3) %"65", ptr addrspace(3) %"66") #0 {
   %"12" = alloca i64, align 8, addrspace(5)
   %"11" = alloca i64, align 8, addrspace(5)
   %"21" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"21", align 1
+  br label %1
+
+1:                                                ; preds = %0
   store i64 %"29", ptr addrspace(5) %"12", align 8
+  store i1 false, ptr addrspace(5) %"21", align 1
   %"30" = load i64, ptr addrspace(5) %"12", align 8
-  store i64 %"30", ptr addrspace(3) %"68", align 8
-  %"31" = call i64 @"3"(ptr addrspace(3) %"68", ptr addrspace(3) %"69")
+  store i64 %"30", ptr addrspace(3) %"65", align 8
+  %"31" = call i64 @"3"(ptr addrspace(3) %"65", ptr addrspace(3) %"66")
   store i64 %"31", ptr addrspace(5) %"11", align 8
   %"32" = load i64, ptr addrspace(5) %"11", align 8
   ret i64 %"32"
 }
 
 define protected amdgpu_kernel void @shared_unify_decl(ptr addrspace(4) byref(i64) %"46", ptr addrspace(4) byref(i64) %"47") #0 {
-"61":
   %"22" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"22", align 1
   %"16" = alloca i64, align 8, addrspace(5)
   %"17" = alloca i64, align 8, addrspace(5)
   %"18" = alloca i64, align 8, addrspace(5)
   %"19" = alloca i64, align 8, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"22", align 1
   %"33" = load i64, ptr addrspace(4) %"46", align 8
   store i64 %"33", ptr addrspace(5) %"16", align 8
   %"34" = load i64, ptr addrspace(4) %"47", align 8
@@ -56,8 +62,8 @@ define protected amdgpu_kernel void @shared_unify_decl(ptr addrspace(4) byref(i6
   store i64 %"35", ptr addrspace(5) %"18", align 8
   %"38" = load i64, ptr addrspace(5) %"16", align 8
   %"54" = inttoptr i64 %"38" to ptr addrspace(1)
-  %"71" = getelementptr inbounds i8, ptr addrspace(1) %"54", i64 8
-  %"37" = load i64, ptr addrspace(1) %"71", align 8
+  %"68" = getelementptr inbounds i8, ptr addrspace(1) %"54", i64 8
+  %"37" = load i64, ptr addrspace(1) %"68", align 8
   store i64 %"37", ptr addrspace(5) %"19", align 8
   %"39" = load i64, ptr addrspace(5) %"19", align 8
   store i64 %"39", ptr addrspace(3) @shared_mod, align 8

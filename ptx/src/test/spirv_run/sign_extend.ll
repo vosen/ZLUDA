@@ -2,12 +2,14 @@ target datalayout = "e-p:64:64-p1:64:64-p2:32:32-p3:32:32-p4:64:64-p5:32:32-p6:3
 target triple = "amdgcn-amd-amdhsa"
 
 define protected amdgpu_kernel void @sign_extend(ptr addrspace(4) byref(i64) %"14", ptr addrspace(4) byref(i64) %"15") #0 {
-"19":
   %"7" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"7", align 1
   %"4" = alloca i64, align 8, addrspace(5)
   %"5" = alloca i64, align 8, addrspace(5)
   %"6" = alloca i32, align 4, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"7", align 1
   %"8" = load i64, ptr addrspace(4) %"14", align 8
   store i64 %"8", ptr addrspace(5) %"4", align 8
   %"9" = load i64, ptr addrspace(4) %"15", align 8

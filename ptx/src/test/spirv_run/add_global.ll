@@ -4,13 +4,15 @@ target triple = "amdgcn-amd-amdhsa"
 @PI = protected addrspace(1) externally_initialized global float 0x400921FB60000000, align 4
 
 define protected amdgpu_kernel void @add_global(ptr addrspace(4) byref(i64) %"20", ptr addrspace(4) byref(i64) %"21") #0 {
-"24":
   %"9" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"9", align 1
   %"5" = alloca i64, align 8, addrspace(5)
   %"6" = alloca i64, align 8, addrspace(5)
   %"7" = alloca float, align 4, addrspace(5)
   %"8" = alloca float, align 4, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"9", align 1
   %"10" = load i64, ptr addrspace(4) %"20", align 8
   store i64 %"10", ptr addrspace(5) %"5", align 8
   %"11" = load i64, ptr addrspace(4) %"21", align 8
