@@ -38,9 +38,6 @@ struct EmitContext<'a> {
     names: NamedIdGenerator,
     denorm_statistics: FxHashMap<Id, DenormSummary>,
     compilation_mode: CompilationMode,
-    llvm_lifetime_start: LLVMValueRef,
-    llvm_lifetime_end: LLVMValueRef,
-    llvm_lifetime_type: LLVMTypeRef,
 }
 
 impl<'a> EmitContext<'a> {
@@ -54,38 +51,8 @@ impl<'a> EmitContext<'a> {
         compilation_mode: CompilationMode,
     ) -> Self {
         let builder = unsafe { llvm::Builder::create(context.get()) };
-        let constants = Constants::amdgpu();
         let texref_underlying_type =
             unsafe { LLVMStructCreateNamed(context.get(), TEXREF_UNDERLYING) };
-        let llvm_lifetime_type = unsafe {
-            LLVMFunctionType(
-                llvm::void_type(context),
-                [
-                    LLVMInt64TypeInContext(context.get()),
-                    LLVMPointerType(
-                        LLVMInt8TypeInContext(context.get()),
-                        constants.private_space,
-                    ),
-                ]
-                .as_mut_ptr(),
-                2,
-                0,
-            )
-        };
-        let llvm_lifetime_start = unsafe {
-            LLVMAddFunction(
-                module.get(),
-                format!("llvm.lifetime.start.p{}\0", constants.private_space).as_ptr() as _,
-                llvm_lifetime_type,
-            )
-        };
-        let llvm_lifetime_end = unsafe {
-            LLVMAddFunction(
-                module.get(),
-                format!("llvm.lifetime.end.p{}\0", constants.private_space).as_ptr() as _,
-                llvm_lifetime_type,
-            )
-        };
         EmitContext {
             context,
             module,
@@ -95,9 +62,6 @@ impl<'a> EmitContext<'a> {
             names: NamedIdGenerator::new(id_gen, id_defs, directive),
             denorm_statistics,
             compilation_mode,
-            llvm_lifetime_start,
-            llvm_lifetime_end,
-            llvm_lifetime_type,
         }
     }
 }
@@ -541,12 +505,12 @@ fn emit_function_variable(
 ) -> Result<(), TranslateError> {
     let builder = ctx.builder.get();
     let llvm_type = get_llvm_type(ctx, &variable.type_)?;
-    let (value, _) = emit_alloca(
+    let value = emit_alloca(
         ctx,
-        (llvm_type, variable.type_.layout().size()),
+        llvm_type,
         get_llvm_address_space(&ctx.constants, variable.state_space)?,
         Some(variable.name),
-    )?;
+    );
     match variable.initializer {
         None => {}
         Some(init) => {
@@ -1103,27 +1067,12 @@ fn emit_value_copy(
     dst: Id,
 ) -> Result<(), TranslateError> {
     let builder = ctx.builder.get();
-    let llvm_type = get_llvm_type(ctx, type_)?;
-    let (temp_value, (width, value_i8)) = emit_alloca(
-        ctx,
-        (llvm_type, type_.layout().size()),
-        ctx.constants.private_space,
-        None,
-    )?;
+    let type_ = get_llvm_type(ctx, type_)?;
+    let temp_value = emit_alloca(ctx, type_, ctx.constants.private_space, None);
     unsafe { LLVMBuildStore(builder, src, temp_value) };
     ctx.names.register_result(dst, |dst| unsafe {
-        LLVMBuildLoad2(builder, llvm_type, temp_value, dst)
+        LLVMBuildLoad2(builder, type_, temp_value, dst)
     });
-    unsafe {
-        LLVMBuildCall2(
-            builder,
-            ctx.llvm_lifetime_type,
-            ctx.llvm_lifetime_end,
-            [width, value_i8].as_mut_ptr(),
-            2,
-            LLVM_UNNAMED,
-        )
-    };
     Ok(())
 }
 
@@ -1134,10 +1083,10 @@ fn emit_value_copy(
 // be less effective than it could be."
 fn emit_alloca(
     ctx: &mut EmitContext,
-    (type_, type_size): (LLVMTypeRef, usize),
+    type_: LLVMTypeRef,
     addr_space: u32,
     name: Option<Id>,
-) -> Result<(LLVMValueRef, (LLVMValueRef, LLVMValueRef)), TranslateError> {
+) -> LLVMValueRef {
     let builder = ctx.builder.get();
     let current_bb = unsafe { LLVMGetInsertBlock(builder) };
     let variables_bb = unsafe { LLVMGetFirstBasicBlock(LLVMGetBasicBlockParent(current_bb)) };
@@ -1146,36 +1095,7 @@ fn emit_alloca(
         LLVMZludaBuildAlloca(builder, type_, addr_space, name)
     });
     unsafe { LLVMPositionBuilderAtEnd(builder, current_bb) };
-    let width = unsafe {
-        LLVMConstInt(
-            LLVMInt64TypeInContext(ctx.context.get()),
-            type_size as u64,
-            0,
-        )
-    };
-    let result_i8 = unsafe {
-        LLVMBuildPointerCast(
-            builder,
-            result,
-            get_llvm_pointer_type(
-                ctx,
-                &ast::Type::Scalar(ast::ScalarType::B8),
-                ast::StateSpace::Reg,
-            )?,
-            LLVM_UNNAMED,
-        )
-    };
-    unsafe {
-        LLVMBuildCall2(
-            builder,
-            ctx.llvm_lifetime_type,
-            ctx.llvm_lifetime_start,
-            [width, result_i8].as_mut_ptr(),
-            2,
-            LLVM_UNNAMED,
-        )
-    };
-    Ok((result, (width, result_i8)))
+    result
 }
 
 fn emit_instruction(
