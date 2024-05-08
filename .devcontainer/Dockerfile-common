@@ -33,7 +33,7 @@ RUN wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86
   cuda-nvml-dev-${CUDA_VERSION} \
   libcudnn8-dev
 
-ARG RUST_VERSION=1.66.1
+ARG RUST_VERSION=1.70.0
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain=${RUST_VERSION}
 RUN . $HOME/.cargo/env && cargo install bindgen-cli --locked
 
