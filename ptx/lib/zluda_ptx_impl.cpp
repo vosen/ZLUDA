@@ -1406,7 +1406,7 @@ extern "C"
             }
 
             // %s uses __ockl_printf_append_string_n
-            // https://github.com/ROCm/clr/blob/5a715ed160c69a2deebac187a0368900a774f3e8/hipamd/include/hip/amd_detail/hip_assert.h#L73
+            // https://github.com/ROCm/ROCm-Device-Libs/blob/rocm-5.7.x/ockl/src/services.cl#L343
             if (*s == 's')
             {
                 s++;
@@ -1437,6 +1437,7 @@ extern "C"
                     {
                         s += specifier_with_length;
                     } else {
+                        // Assume the unknown character is a sub-specifier and move on
                         s++;
                         continue;
                     }
@@ -1450,7 +1451,8 @@ extern "C"
                 break;
             }
         }
-        return (uint32_t)__ockl_printf_append_args(handle, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+        __ockl_printf_append_args(handle, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+        return 1;
     }
 
     int64_t __ockl_mul_hi_i64(int64_t x, int64_t y) __attribute__((device));
