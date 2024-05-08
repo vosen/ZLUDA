@@ -214,6 +214,7 @@ fn build_impl(is_debug: bool) -> Result<Workspace, DynError> {
     let workspace = Workspace::open(is_debug)?;
     let mut command = workspace.cargo_command();
     command.arg("build");
+    command.arg("--locked");
     workspace
         .projects
         .iter()

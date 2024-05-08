@@ -1337,9 +1337,6 @@ fn emit_int_trap(ctx: &mut EmitContext) -> Result<(), TranslateError> {
             0,
             LLVM_UNNAMED,
         );
-        // llvm.trap is not a terminator,
-        // LLVM might fail with an unterminated basic block if we don't insert unreachable
-        LLVMBuildUnreachable(builder);
     }
     Ok(())
 }
