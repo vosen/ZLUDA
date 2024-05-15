@@ -1,5 +1,5 @@
 // Compile and disassemble:
-//   python3 ./cvt.py > cvt.h && /opt/rocm/llvm/bin/clang -std=c++17 -Xclang -no-opaque-pointers -Wall -Wextra -Wsign-compare -Wconversion -x hip zluda_ptx_impl.cpp -S -emit-llvm --cuda-device-only -nogpulib -O3 -Xclang -fallow-half-arguments-and-returns -o - | sed -e 's/define/define linkonce_odr/g' | sed -e '/@llvm.used/d' | sed -e 's/\"target-cpu\"=\"[^\"]*\"//g' | sed -e 's/\"target-features\"=\"[^\"]*\"//g' | sed -e 's/\"denormal-fp-math-f32\"=\"[^\"]*\"//g' | sed -e 's/!llvm.module.flags = !{!0, !1, !2, !3, !4}/!llvm.module.flags = !{ }/g' | sed -e 's/memory(none)/readnone/g' | sed -e 's/memory(argmem: readwrite, inaccessiblemem: readwrite)/inaccessiblemem_or_argmemonly/g' | sed -e 's/memory(read)/readonly/g' | sed -e 's/memory(argmem: readwrite)/argmemonly/g'  | llvm-as-13 -o zluda_ptx_impl.bc && /opt/rocm/llvm/bin/llvm-dis zluda_ptx_impl.bc
+//   python3 ./cvt.py > cvt.h && /opt/rocm/llvm/bin/clang -std=c++20 -Xclang -no-opaque-pointers -Wall -Wextra -Wsign-compare -Wconversion -x hip zluda_ptx_impl.cpp -S -emit-llvm --cuda-device-only -nogpulib -O3 -Xclang -fallow-half-arguments-and-returns -o - | sed -e 's/define/define linkonce_odr/g' | sed -e '/@llvm.used/d' | sed -e 's/\"target-cpu\"=\"[^\"]*\"//g' | sed -e 's/\"target-features\"=\"[^\"]*\"//g' | sed -e 's/\"denormal-fp-math-f32\"=\"[^\"]*\"//g' | sed -e 's/!llvm.module.flags = !{!0, !1, !2, !3, !4}/!llvm.module.flags = !{ }/g' | sed -e 's/memory(none)/readnone/g' | sed -e 's/memory(argmem: readwrite, inaccessiblemem: readwrite)/inaccessiblemem_or_argmemonly/g' | sed -e 's/memory(read)/readonly/g' | sed -e 's/memory(argmem: readwrite)/argmemonly/g'  | llvm-as-13 -o zluda_ptx_impl.bc && /opt/rocm/llvm/bin/llvm-dis zluda_ptx_impl.bc
 // Compile to binary:
 //   /opt/rocm/llvm/bin/clang -x ir -target amdgcn-amd-amdhsa -Xlinker --no-undefined zluda_ptx_impl.bc -mno-wavefrontsize64 -mcpu=gfx1030
 // Decompile:
@@ -1260,6 +1260,7 @@ extern "C"
             default:
                 return 0;
             }
+            return 2;
         case 'l':
             switch (s[1])
             {
@@ -1289,17 +1290,18 @@ extern "C"
                 case 'X':
                 case 'n':
                     len = 8;
-                    return 2;
+                    break;
                 default:
                     return 0;
                 }
+                return 3;
             default:
                 return 0;
             }
+            return 2;
         default:
             return 0;
         }
-        return 1;
     }
 
     __device__ static bool parse_printf_specifier(const char *s, uint8_t &len)
@@ -1393,8 +1395,36 @@ extern "C"
             char c = *(s++);
             if (c == 0)
                 break;
-            if (c == '%')
+            if (c != '%')
+                continue;
+
+            // %% requires no additional handling
+            if (*s == '%')
             {
+                s++;
+                continue;
+            }
+
+            // %s uses __ockl_printf_append_string_n
+            // https://github.com/ROCm/ROCm-Device-Libs/blob/rocm-5.7.x/ockl/src/services.cl#L343
+            if (*s == 's')
+            {
+                s++;
+                const char *value = (const char *)read_valist(valist_ptr, valist_offset, 8);
+                handle = __ockl_printf_append_string_n(handle, value, strlen_plus_one(value), 0);
+                continue;
+            }
+
+            // Keep scanning until we figure out the length of this specifier or if we reach the end of the string
+            while (*s != 0) {
+                // "The width is not specified in the format string, but as an additional integer value argument preceding the argument that has to be formatted."
+                if (*s == '*') {
+                    s++;
+                    uint64_t value = read_valist(valist_ptr, valist_offset, 4);
+                    handle = __ockl_printf_append_args(handle, 1, value, 0, 0, 0, 0, 0, 0, 0);
+                    continue;
+                }
+
                 uint8_t len = 0;
                 if (parse_printf_specifier(s, len))
                 {
@@ -1406,16 +1436,22 @@ extern "C"
                     if (specifier_with_length)
                     {
                         s += specifier_with_length;
-                    }
-                    if (len > 0)
-                    {
-                        uint64_t value = read_valist(valist_ptr, valist_offset, len);
-                        handle = __ockl_printf_append_args(handle, 1, value, 0, 0, 0, 0, 0, 0, 0);
+                    } else {
+                        // Assume the unknown character is a sub-specifier and move on
+                        s++;
+                        continue;
                     }
                 }
+
+                if (len > 0)
+                {
+                    uint64_t value = read_valist(valist_ptr, valist_offset, len);
+                    handle = __ockl_printf_append_args(handle, 1, value, 0, 0, 0, 0, 0, 0, 0);
+                }
+                break;
             }
         }
-        return (uint32_t)__ockl_printf_append_args(handle, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+        __ockl_printf_append_args(handle, 0, 0, 0, 0, 0, 0, 0, 0, 1);
         return 1;
     }
 
