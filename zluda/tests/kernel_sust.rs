@@ -419,7 +419,10 @@ unsafe fn kernel_sust_impl<
     let x = random_size.sample(&mut rng) * sizeof_pixel;
     let y = random_size.sample(&mut rng);
     let z = random_size.sample(&mut rng);
-    let values = [rng.gen::<SustType>(); SUST_N];
+    let mut values = [SustType::default(); SUST_N];
+    for value in values.iter_mut() {
+        *value = rng.gen::<SustType>();
+    }
     let mut args = vec![
         &x as *const _ as *const c_void,
         &y as *const _ as *const _,

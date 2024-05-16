@@ -97,6 +97,7 @@ match {
     ".l",
     ".le",
     ".leu",
+    ".level",
     ".lo",
     ".loc",
     ".local",
@@ -116,6 +117,7 @@ match {
     ".ne",
     ".neu",
     ".noftz",
+    ".noreturn",
     ".num",
     ".or",
     ".param",
@@ -201,6 +203,7 @@ match {
     "function_name",
     "generic",
     "inlined_at",
+    "isspacep",
     "ld",
     "ldmatrix",
     "lg2",
@@ -283,6 +286,7 @@ ExtendedID : &'input str = {
     "function_name",
     "generic",
     "inlined_at",
+    "isspacep",
     "ld",
     "ldmatrix",
     "lg2",
@@ -531,6 +535,8 @@ LinkingDirective: ast::LinkingDirective = {
 };
 
 TuningDirective: ast::TuningDirective = {
+    // not a performance tuning directive but fits here in the grammar
+    ".noreturn" => ast::TuningDirective::Noreturn,
     ".maxnreg" <ncta:U32Num> => ast::TuningDirective::MaxNReg(ncta),
     ".maxntid" <nx:U32Num> => ast::TuningDirective::MaxNtid(nx, 1, 1),
     ".maxntid" <nx:U32Num> "," <ny:U32Num> => ast::TuningDirective::MaxNtid(nx, ny, 1),
@@ -648,8 +654,8 @@ Initializer: ast::Initializer<&'input str> = {
 
 InitializerNoAdd: ast::Initializer<&'input str> = {
     <val:ImmediateValue> => ast::Initializer::Constant(val),
-    <id:ExtendedID> => ast::Initializer::Global(id, ast::Type::Struct(Vec::new())),
-    "generic" "(" <id:ExtendedID> ")" => ast::Initializer::GenericGlobal(id, ast::Type::Struct(Vec::new())),
+    <id:ExtendedID> => ast::Initializer::Global(id),
+    "generic" "(" <id:ExtendedID> ")" => ast::Initializer::GenericGlobal(id),
     "{" <array_init:Comma<Initializer>> "}" => ast::Initializer::Array(array_init)
 }
 
@@ -841,6 +847,7 @@ Instruction: ast::Instruction<ast::ParsedArgParams<'input>> = {
     InstMatch,
     InstRed,
     InstNanosleep,
+    InstIsspacep,
     InstSad
 };
 
@@ -2067,11 +2074,23 @@ InstMembar: ast::Instruction<ast::ParsedArgParams<'input>> = {
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#texture-instructions-tex
 InstTex: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "tex" <geometry: UnlayeredTextureGeometry> ".v4" <channel_type:TextureChannelType> <coordinate_type:TextureCoordinateType> <dst:DstOperandVec> "," "[" <image:Operand> "," <coordinates:SrcOperandVec> "]" => {
-        let args = ast::Arg4Tex {
+        let args = ast::Arg5Tex {
             dst,
             image,
             coordinates,
-            layer: None
+            layer: None,
+            lod: None
+        };
+        let details = ast::TexDetails { geometry, channel_type, coordinate_type, direct: false };
+        ast::Instruction::Tex(details, args)
+    },
+    "tex" ".level" <geometry: UnlayeredTextureGeometry> ".v4" <channel_type:TextureChannelType> <coordinate_type:TextureCoordinateType> <dst:DstOperandVec> "," "[" <image:Operand> "," <coordinates:SrcOperandVec> "]" "," <lod:Operand> => {
+        let args = ast::Arg5Tex {
+            dst,
+            image,
+            coordinates,
+            layer: None,
+            lod: Some(lod)
         };
         let details = ast::TexDetails { geometry, channel_type, coordinate_type, direct: false };
         ast::Instruction::Tex(details, args)
@@ -2082,11 +2101,25 @@ InstTex: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "tex" ".a1d" ".v4" <channel_type:TextureChannelType> <coordinate_type:TextureCoordinateType>
         <dst:DstOperandVec> "," "[" <image:SrcOperand> "," "{" <layer:SrcOperand> "," <x:RegOrImmediate> "}" "]" => {
         let geometry = ast::TextureGeometry::Array1D;
-        let args = ast::Arg4Tex {
+        let args = ast::Arg5Tex {
             dst,
             image,
             coordinates: ast::Operand::VecPack(vec![x]),
-            layer: Some(layer)
+            layer: Some(layer),
+            lod: None
+        };
+        let details = ast::TexDetails { geometry, channel_type, coordinate_type, direct: false };
+        ast::Instruction::Tex(details, args)
+    },
+    "tex" ".level" ".a1d" ".v4" <channel_type:TextureChannelType> <coordinate_type:TextureCoordinateType>
+        <dst:DstOperandVec> "," "[" <image:SrcOperand> "," "{" <layer:SrcOperand> "," <x:RegOrImmediate> "}" "]" "," <lod:Operand> => {
+        let geometry = ast::TextureGeometry::Array1D;
+        let args = ast::Arg5Tex {
+            dst,
+            image,
+            coordinates: ast::Operand::VecPack(vec![x]),
+            layer: Some(layer),
+            lod: Some(lod)
         };
         let details = ast::TexDetails { geometry, channel_type, coordinate_type, direct: false };
         ast::Instruction::Tex(details, args)
@@ -2094,11 +2127,25 @@ InstTex: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "tex" ".a2d" ".v4" <channel_type:TextureChannelType> <coordinate_type:TextureCoordinateType>
         <dst:DstOperandVec> "," "[" <image:SrcOperand> "," "{" <layer:SrcOperand> "," <x:RegOrImmediate> "," <y:RegOrImmediate> "," RegOrImmediate "}" "]" => {
         let geometry = ast::TextureGeometry::Array2D;
-        let args = ast::Arg4Tex {
+        let args = ast::Arg5Tex {
             dst,
             image,
             coordinates: ast::Operand::VecPack(vec![x, y]),
-            layer: Some(layer)
+            layer: Some(layer),
+            lod: None
+        };
+        let details = ast::TexDetails { geometry, channel_type, coordinate_type, direct: false };
+        ast::Instruction::Tex(details, args)
+    },
+    "tex" ".level" ".a2d" ".v4" <channel_type:TextureChannelType> <coordinate_type:TextureCoordinateType>
+        <dst:DstOperandVec> "," "[" <image:SrcOperand> "," "{" <layer:SrcOperand> "," <x:RegOrImmediate> "," <y:RegOrImmediate> "," RegOrImmediate "}" "]" "," <lod:Operand>  => {
+        let geometry = ast::TextureGeometry::Array2D;
+        let args = ast::Arg5Tex {
+            dst,
+            image,
+            coordinates: ast::Operand::VecPack(vec![x, y]),
+            layer: Some(layer),
+            lod: Some(lod)
         };
         let details = ast::TexDetails { geometry, channel_type, coordinate_type, direct: false };
         ast::Instruction::Tex(details, args)
@@ -2108,33 +2155,36 @@ InstTex: ast::Instruction<ast::ParsedArgParams<'input>> = {
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#surface-instructions-suld
 InstSuld: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "suld" ".b" <geometry: UnlayeredTextureGeometry> <vector:VectorPrefix?> <type_:AnyBitType> ".trap" <dst:DstOperandVec> "," "[" <image:Operand> "," <coordinates:SrcOperandVec> "]"  => {
-        let args = ast::Arg4Tex {
+        let args = ast::Arg5Tex {
             dst, 
             image,
             coordinates,
             layer: None,
+            lod: None,
         };
         let details = ast::SurfaceDetails { geometry, vector, type_, direct: false, };
         ast::Instruction::Suld(details, args)
     },
     "suld" ".b" ".a1d" <vector:VectorPrefix?> <type_:AnyBitType> ".trap" <dst:DstOperandVec> "," "[" <image:Operand> "," "{" <layer:SrcOperand> "," <x:RegOrImmediate> "}" "]"  => {
         let geometry = ast::TextureGeometry::Array1D;
-        let args = ast::Arg4Tex {
+        let args = ast::Arg5Tex {
             dst,
             image,
             coordinates: ast::Operand::VecPack(vec![x]),
             layer: Some(layer),
+            lod: None,
         };
         let details = ast::SurfaceDetails { geometry, vector, type_, direct: false, };
         ast::Instruction::Suld(details, args)
     },
     "suld" ".b" ".a2d" <vector:VectorPrefix?> <type_:AnyBitType> ".trap" <dst:DstOperandVec> "," "[" <image:Operand> "," "{" <layer:SrcOperand> "," <x:RegOrImmediate> "," <y:RegOrImmediate> "," RegOrImmediate "}" "]"  => {
         let geometry = ast::TextureGeometry::Array2D;
-        let args = ast::Arg4Tex {
+        let args = ast::Arg5Tex {
             dst,
             image,
             coordinates: ast::Operand::VecPack(vec![x, y]),
             layer: Some(layer),
+            lod: None,
         };
         let details = ast::SurfaceDetails { geometry, vector, type_, direct: false, };
         ast::Instruction::Suld(details, args)
@@ -2380,12 +2430,27 @@ InstNanosleep: ast::Instruction<ast::ParsedArgParams<'input>> = {
     }
 }
 
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#miscellaneous-instructions-nanosleep
+InstIsspacep: ast::Instruction<ast::ParsedArgParams<'input>> = {
+    "isspacep" ".local" <a:Arg2> => {
+        ast::Instruction::Isspacep(ast::StateSpace::Local, a)
+    },
+    "isspacep" ".shared" <a:Arg2> => {
+        ast::Instruction::Isspacep(ast::StateSpace::Shared, a)
+    },
+    "isspacep" ".global" <a:Arg2> => {
+        ast::Instruction::Isspacep(ast::StateSpace::Global, a)
+    }
+}
+
+
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-sad
 InstSad: ast::Instruction<ast::ParsedArgParams<'input>> = {
     "sad" <type_:IntType> <a:Arg4> => {
         ast::Instruction::Sad(type_, a)
     }
 }
+
 
 NegTypeFtz: ast::ScalarType = {
     ".f16" => ast::ScalarType::F16,

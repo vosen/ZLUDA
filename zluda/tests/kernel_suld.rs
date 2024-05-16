@@ -377,7 +377,10 @@ unsafe fn kernel_suld_impl<
     let x = random_size.sample(&mut rng) * sizeof_pixel;
     let y = random_size.sample(&mut rng);
     let z = random_size.sample(&mut rng);
-    let values = [rng.gen::<SustType>(); SULD_N];
+    let mut values = [SustType::default(); SULD_N];
+    for value in values.iter_mut() {
+        *value = rng.gen::<SustType>();
+    }
     let converted_values = force_transmute(values, BYTE_FILLER3);
     *host_side_data.get_unchecked_mut(geo.address(size, x, y, z, sizeof_pixel)) = converted_values;
     assert_eq!(

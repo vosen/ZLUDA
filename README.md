@@ -127,6 +127,13 @@ If an application fails to start under ZLUDA or crashes please check [Known Issu
 
 ### Applications
 
+#### Meshroom
+
+Meshroom works only with on Windows due to an underlying ROCm/HIP issue.
+
+Meshroom 2023.3.0 might not work, it's recommended to use Meshroom freshly built from develop branch. See #79 and alicevision/Meshroom#595. Please open an issue here if you run into problems.
+
+
 #### llama.cpp
 
 If you are building llama.cpp with cmake and don't want it to crash on ZLUDA then you should use `CUDA_DOCKER_ARCH=compute_61` like this:

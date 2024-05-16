@@ -220,6 +220,7 @@ impl FromCuda<CUlibraryOption> for CUlibraryOption {}
 impl FromCuda<CUDA_KERNEL_NODE_PARAMS_v1> for CUDA_KERNEL_NODE_PARAMS_v1 {}
 impl FromCuda<CUjitInputType> for CUjitInputType {}
 impl FromCuda<CUDA_RESOURCE_DESC> for CUDA_RESOURCE_DESC {}
+impl FromCuda<CUmipmappedArray> for CUmipmappedArray {}
 
 impl FromCuda<CUcontext> for *mut context::Context {}
 impl FromCuda<CUstream> for *mut stream::Stream {}
