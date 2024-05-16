@@ -3585,7 +3585,7 @@ fn emit_store_var(
 
 fn emit_label(ctx: &mut EmitContext, label: Id) -> Result<(), TranslateError> {
     let new_block = unsafe { LLVMValueAsBasicBlock(ctx.names.value(label)?) };
-    terminate_current_block_if_not_terminated(ctx, None);
+    terminate_current_block_if_not_terminated(ctx, Some(new_block));
     unsafe { LLVMPositionBuilderAtEnd(ctx.builder.get(), new_block) };
     Ok(())
 }
