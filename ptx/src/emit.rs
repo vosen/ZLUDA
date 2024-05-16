@@ -544,7 +544,7 @@ fn emit_method<'a, 'input>(
         emit_statement(ctx, is_kernel, statement)?;
     }
     // happens if there is a post-ret trailing label
-    terminate_current_block_if_needed(ctx, None);
+    terminate_current_block_if_not_terminated(ctx, None);
     unsafe { LLVMPositionBuilderAtEnd(ctx.builder.get(), bb_with_variables) };
     unsafe { LLVMBuildBr(ctx.builder.get(), starting_bb) };
     Ok(())
@@ -625,6 +625,9 @@ fn emit_statement(
     is_kernel: bool,
     statement: crate::translate::ExpandedStatement,
 ) -> Result<(), TranslateError> {
+    if !matches!(statement, crate::translate::Statement::Label(..)) {
+        start_next_block_if_terminated(ctx);
+    }
     Ok(match statement {
         crate::translate::Statement::Label(label) => emit_label(ctx, label)?,
         crate::translate::Statement::Variable(var) => emit_function_variable(ctx, var)?,
@@ -1248,7 +1251,6 @@ fn emit_inst_isspacep_impl(
         intrinsic,
     )
 }
-
 
 fn emit_inst_sad(
     ctx: &mut EmitContext,
@@ -3583,12 +3585,15 @@ fn emit_store_var(
 
 fn emit_label(ctx: &mut EmitContext, label: Id) -> Result<(), TranslateError> {
     let new_block = unsafe { LLVMValueAsBasicBlock(ctx.names.value(label)?) };
-    terminate_current_block_if_needed(ctx, Some(new_block));
+    terminate_current_block_if_not_terminated(ctx, None);
     unsafe { LLVMPositionBuilderAtEnd(ctx.builder.get(), new_block) };
     Ok(())
 }
 
-fn terminate_current_block_if_needed(ctx: &mut EmitContext, new_block: Option<LLVMBasicBlockRef>) {
+fn terminate_current_block_if_not_terminated(
+    ctx: &mut EmitContext,
+    new_block: Option<LLVMBasicBlockRef>,
+) {
     let current_block = unsafe { LLVMGetInsertBlock(ctx.builder.get()) };
     if current_block == ptr::null_mut() {
         return;
@@ -3601,6 +3606,21 @@ fn terminate_current_block_if_needed(ctx: &mut EmitContext, new_block: Option<LL
         Some(new_block) => unsafe { LLVMBuildBr(ctx.builder.get(), new_block) },
         None => unsafe { LLVMBuildUnreachable(ctx.builder.get()) },
     };
+}
+
+// Some PTX instructions (exit) that are LLVM terminators
+// can be emitted in the middle of a basic block
+// Happens in eg. Meshroom
+fn start_next_block_if_terminated(ctx: &mut EmitContext) {
+    let current_block = unsafe { LLVMGetInsertBlock(ctx.builder.get()) };
+    let terminator = unsafe { LLVMGetBasicBlockTerminator(current_block) };
+    if terminator == ptr::null_mut() {
+        return;
+    }
+    let next_block = unsafe { LLVMCreateBasicBlockInContext(ctx.context.get(), LLVM_UNNAMED) };
+    unsafe { LLVMBuildBr(ctx.builder.get(), next_block) };
+    unsafe { LLVMMoveBasicBlockAfter(next_block, current_block) };
+    unsafe { LLVMPositionBuilderAtEnd(ctx.builder.get(), next_block) };
 }
 
 fn emit_method_declaration<'input>(
