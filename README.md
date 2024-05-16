@@ -131,20 +131,7 @@ If an application fails to start under ZLUDA or crashes please check [Known Issu
 
 Meshroom works only with on Windows due to an underlying ROCm/HIP issue.
 
-Until this Pull Request gets merged: https://github.com/alicevision/CCTag/pull/210 and then gets picked up by AliceVision and then gets picked up by Meshroom you need to build AliceVision from source with a small change and replace it in the Meshroom directory.
-
-In `src\cmake\Dependencies.cmake` change
-  ```
-    ExternalProject_Add(${CCTAG_TARGET}
-        GIT_REPOSITORY https://github.com/alicevision/CCTag
-        GIT_TAG v1.0.3
-  ```
-  to
-  ```
-      ExternalProject_Add(${CCTAG_TARGET}
-          GIT_REPOSITORY https://github.com/alicevision/CCTag
-          GIT_TAG ee7a02dc329efe1e43a4afad36cb0e37644ba957
-  ```
+Meshroom 2023.3.0 might not work, it's recommended to use Meshroom freshly built from develop branch. See #79 and alicevision/Meshroom#595. Please open an issue here if you run into problems.
 
 
 #### llama.cpp
