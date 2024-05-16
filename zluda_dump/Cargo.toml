@@ -44,3 +44,4 @@ rand = "0.8.5"
 # Nominally debug_only, but useful for power users
 [package.metadata.zluda]
 dump_names = ["libcuda.so", "libcuda.so.1"]
+dump_nvidia_names = ["libcuda.so", "libcuda.so.1"]

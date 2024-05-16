@@ -1,0 +1,84 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry carry_set_all(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    
+    .reg .b32 	    carry1_add;
+    .reg .b32 	    carry1_sub;
+    .reg .b32 	    carry2_add;
+    .reg .b32 	    carry2_sub;
+    .reg .b32 	    carry3_add;
+    .reg .b32 	    carry3_sub;
+    .reg .b32 	    carry4_add;
+    .reg .b32 	    carry4_sub;
+    .reg .b32 	    carry5_add;
+    .reg .b32 	    carry5_sub;
+    .reg .b32 	    carry6_add;
+    .reg .b32 	    carry6_sub;
+    .reg .b32 	    carry7_add;
+    .reg .b32 	    carry7_sub;
+    .reg .b32 	    carry8_add;
+    .reg .b32 	    carry8_sub;
+
+    ld.param.u64    out_addr, [output];
+
+    sub.cc.u32      carry1_add, 0, 0;
+    addc.u32        carry1_add, 0, 0;
+    subc.u32        carry1_sub, 0, 0;
+
+    sub.cc.u32      carry2_add, 0, 1;
+    addc.u32        carry2_add, 0, 0;
+    subc.u32        carry2_sub, 0, 0;
+
+    add.cc.u32      carry3_add, 0, 0;
+    addc.u32        carry3_add, 0, 0;
+    subc.u32        carry3_sub, 0, 0;
+
+    add.cc.u32      carry4_add, 4294967295, 4294967295;
+    addc.u32        carry4_add, 0, 0;
+    subc.u32        carry4_sub, 0, 0;
+
+    mad.lo.cc.u32   carry5_add, 0, 0, 0;
+    addc.u32        carry5_add, 0, 0;
+    subc.u32        carry5_sub, 0, 0;
+
+    mad.lo.cc.u32   carry6_add, 1, 4294967295, 4294967295;
+    addc.u32        carry6_add, 0, 0;
+    subc.u32        carry6_sub, 0, 0;
+
+    add.cc.u32      carry7_add, 0, 0;
+    subc.cc.u32     carry7_add, 0, 0;
+    addc.u32        carry7_add, 0, 0;
+    subc.u32        carry7_sub, 0, 0;
+
+    add.cc.u32      carry8_add, 0, 0;
+    subc.cc.u32     carry8_add, 0, 1;
+    addc.u32        carry8_add, 0, 0;
+    subc.u32        carry8_sub, 0, 0;
+
+    st.u32          [out_addr], carry1_add;
+    st.u32          [out_addr+4], carry2_add;
+    st.u32          [out_addr+8], carry3_add;
+    st.u32          [out_addr+12], carry4_add;
+    st.u32          [out_addr+16], carry5_add;
+    st.u32          [out_addr+20], carry6_add;
+    st.u32          [out_addr+24], carry7_add;
+    st.u32          [out_addr+28], carry8_add;
+
+    st.u32          [out_addr+32], carry1_sub;
+    st.u32          [out_addr+36], carry2_sub;
+    st.u32          [out_addr+40], carry3_sub;
+    st.u32          [out_addr+44], carry4_sub;
+    st.u32          [out_addr+48], carry5_sub;
+    st.u32          [out_addr+52], carry6_sub;
+    st.u32          [out_addr+56], carry7_sub;
+    st.u32          [out_addr+60], carry8_sub;
+	ret;
+}

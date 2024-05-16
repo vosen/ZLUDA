@@ -312,7 +312,9 @@ unsafe fn byte_fill<T: Copy>(vec: &mut Vec<T>, value: u8) {
 
 fn extend_bytes_with(slice: &[u8], elm: u8, desired_length: usize) -> Vec<u8> {
     let mut result = slice.to_vec();
-    result.extend(std::iter::repeat(elm).take(desired_length - slice.len()));
+    if desired_length > slice.len() {
+        result.extend(std::iter::repeat(elm).take(desired_length - slice.len()));
+    }
     result
 }
 
@@ -335,10 +337,6 @@ unsafe fn kernel_sust_impl<
 {
     // CUDA kernels fail at runtime if the pixel is smaller than `sust` write size
     if mem::size_of::<Format>() * CHANNELS < mem::size_of::<SustType>() * SUST_N {
-        return;
-    }
-    // TODO: reenable those tests
-    if mem::size_of::<Format>() != mem::size_of::<SustType>() || CHANNELS != SUST_N {
         return;
     }
     let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
@@ -464,4 +462,8 @@ unsafe fn kernel_sust_impl<
     assert_eq!(expected, &*observed);
     let mut unused = mem::zeroed();
     assert_eq!(cuda.cuCtxPopCurrent(&mut unused), CUresult::CUDA_SUCCESS);
+    assert_eq!(
+        cuda.cuDevicePrimaryCtxRelease_v2(CUdevice_v1(0)),
+        CUresult::CUDA_SUCCESS
+    );
 }

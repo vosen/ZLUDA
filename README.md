@@ -66,7 +66,7 @@ If an application fails to start under ZLUDA or crashes please check [Known Issu
 
 - If both integrated AMD GPU and dedicated AMD GPU are present in the system, ZLUDA uses the integrated GPU.
 
-  This is a bug in underying ROCm/HIP runtime. You can work around it by disabling the integrated GPU.
+  This is a bug in underlying ROCm/HIP runtime. You can work around it by disabling the integrated GPU.
 
   On Windows we recommend you use environment variable `HIP_VISIBLE_DEVICES=1` environment variable (more [here](https://rocmdocs.amd.com/en/latest/conceptual/gpu-isolation.html#hip-visible-devices)) or disable it system-wide in Device Manager.
 
@@ -234,10 +234,6 @@ Performance is currently much lower than the native HIP backend, see the discuss
 - When running multiple tests, first test passes and the subsequent tests fail with `CUDA_ERROR_UNKNOWN`.
   
   This is a ROCm/HIP bug. Currently, CompuBench tests have to be run one at a time.
-
-- Some tests output black screen.
-  
-  This is due to a bug (or an unintended hardware feature) in CompuBench that just happens to work on NVIDIA GPUs.
 
 #### V-Ray Benchmark
 

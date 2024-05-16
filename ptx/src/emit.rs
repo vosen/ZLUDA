@@ -7,12 +7,13 @@ use std::ffi::CStr;
 use std::fmt::Display;
 use std::io::Write;
 use std::ptr::null_mut;
-use std::{convert, iter, mem, ptr};
+use std::{iter, mem, ptr};
 use zluda_llvm::core::*;
 use zluda_llvm::prelude::*;
 use zluda_llvm::zluda::*;
 use zluda_llvm::*;
 
+use crate::ast::SetpData;
 use crate::translate::{
     self, Arg4CarryOut, ConstType, ConversionKind, DenormSummary, ExpandedArgParams, FPDenormMode,
     MadCCDetails, MadCDetails, TranslationModule, TypeKind, TypeParts,
@@ -156,7 +157,7 @@ impl NamedIdGenerator {
         if let Some(id) = id {
             self.register_result(id, func)
         } else {
-            func(b"\0".as_ptr() as _)
+            func(LLVM_UNNAMED)
         }
     }
 
@@ -497,10 +498,12 @@ fn emit_function_variable(
 ) -> Result<(), TranslateError> {
     let builder = ctx.builder.get();
     let llvm_type = get_llvm_type(ctx, &variable.type_)?;
-    let addr_space = get_llvm_address_space(&ctx.constants, variable.state_space)?;
-    let value = ctx.names.register_result(variable.name, |name| unsafe {
-        LLVMZludaBuildAlloca(builder, llvm_type, addr_space, name)
-    });
+    let value = emit_alloca(
+        ctx,
+        llvm_type,
+        get_llvm_address_space(&ctx.constants, variable.state_space)?,
+        Some(variable.name),
+    );
     match variable.initializer {
         None => {}
         Some(init) => {
@@ -523,12 +526,27 @@ fn emit_method<'a, 'input>(
     let llvm_method = emit_method_declaration(ctx, &method)?;
     emit_linkage_for_method(&method, is_kernel, llvm_method);
     emit_tuning(ctx, llvm_method, &method.tuning);
-    for statement in method.body.iter().flat_map(convert::identity) {
+    let statements = match method.body {
+        Some(statements) => statements,
+        None => return Ok(()),
+    };
+    // Initial BB that holds all the variable declarations
+    let bb_with_variables =
+        unsafe { LLVMAppendBasicBlockInContext(ctx.context.get(), llvm_method, LLVM_UNNAMED) };
+    // Rest of the code
+    let starting_bb =
+        unsafe { LLVMAppendBasicBlockInContext(ctx.context.get(), llvm_method, LLVM_UNNAMED) };
+    unsafe { LLVMPositionBuilderAtEnd(ctx.builder.get(), starting_bb) };
+    for statement in statements.iter() {
         register_basic_blocks(ctx, llvm_method, statement);
     }
-    for statement in method.body.into_iter().flatten() {
+    for statement in statements.into_iter() {
         emit_statement(ctx, is_kernel, statement)?;
     }
+    // happens if there is a post-ret trailing label
+    terminate_current_block_if_needed(ctx, None);
+    unsafe { LLVMPositionBuilderAtEnd(ctx.builder.get(), bb_with_variables) };
+    unsafe { LLVMBuildBr(ctx.builder.get(), starting_bb) };
     Ok(())
 }
 
@@ -607,7 +625,6 @@ fn emit_statement(
     is_kernel: bool,
     statement: crate::translate::ExpandedStatement,
 ) -> Result<(), TranslateError> {
-    start_synthetic_basic_block_if_needed(ctx, &statement);
     Ok(match statement {
         crate::translate::Statement::Label(label) => emit_label(ctx, label)?,
         crate::translate::Statement::Variable(var) => emit_function_variable(ctx, var)?,
@@ -625,8 +642,8 @@ fn emit_statement(
         crate::translate::Statement::MadC(MadCDetails { type_, is_hi, arg }) => {
             emit_inst_madc(ctx, type_, is_hi, &arg)?
         }
-        crate::translate::Statement::MadCC(MadCCDetails { type_, arg }) => {
-            emit_inst_madcc(ctx, type_, &arg)?
+        crate::translate::Statement::MadCC(MadCCDetails { type_, is_hi, arg }) => {
+            emit_inst_madcc(ctx, type_, is_hi, &arg)?
         }
         crate::translate::Statement::AddC(type_, arg) => emit_inst_add_c(ctx, type_, &arg)?,
         crate::translate::Statement::AddCC(type_, arg) => {
@@ -750,27 +767,6 @@ fn emit_ret_value(
     }
     unsafe { LLVMBuildRet(builder, ret_value) };
     Ok(())
-}
-
-fn start_synthetic_basic_block_if_needed(
-    ctx: &mut EmitContext,
-    statement: &crate::translate::ExpandedStatement,
-) {
-    let current_block = unsafe { LLVMGetInsertBlock(ctx.builder.get()) };
-    if current_block == ptr::null_mut() {
-        return;
-    }
-    let terminator = unsafe { LLVMGetBasicBlockTerminator(current_block) };
-    if terminator == ptr::null_mut() {
-        return;
-    }
-    if let crate::translate::Statement::Label(..) = statement {
-        return;
-    }
-    let new_block =
-        unsafe { LLVMCreateBasicBlockInContext(ctx.context.get(), b"\0".as_ptr() as _) };
-    unsafe { LLVMInsertExistingBasicBlockAfterInsertBlock(ctx.builder.get(), new_block) };
-    unsafe { LLVMPositionBuilderAtEnd(ctx.builder.get(), new_block) };
 }
 
 fn emit_ptr_access(
@@ -1076,12 +1072,34 @@ fn emit_value_copy(
 ) -> Result<(), TranslateError> {
     let builder = ctx.builder.get();
     let type_ = get_llvm_type(ctx, type_)?;
-    let temp_value = unsafe { LLVMBuildAlloca(builder, type_, LLVM_UNNAMED) };
+    let temp_value = emit_alloca(ctx, type_, ctx.constants.private_space, None);
     unsafe { LLVMBuildStore(builder, src, temp_value) };
     ctx.names.register_result(dst, |dst| unsafe {
         LLVMBuildLoad2(builder, type_, temp_value, dst)
     });
     Ok(())
+}
+
+// From "Performance Tips for Frontend Authors" (https://llvm.org/docs/Frontend/PerformanceTips.html):
+// "The SROA (Scalar Replacement Of Aggregates) and Mem2Reg passes only attempt to eliminate alloca
+// instructions that are in the entry basic block. Given SSA is the canonical form expected by much
+// of the optimizer; if allocas can not be eliminated by Mem2Reg or SROA, the optimizer is likely to
+// be less effective than it could be."
+fn emit_alloca(
+    ctx: &mut EmitContext,
+    type_: LLVMTypeRef,
+    addr_space: u32,
+    name: Option<Id>,
+) -> LLVMValueRef {
+    let builder = ctx.builder.get();
+    let current_bb = unsafe { LLVMGetInsertBlock(builder) };
+    let variables_bb = unsafe { LLVMGetFirstBasicBlock(LLVMGetBasicBlockParent(current_bb)) };
+    unsafe { LLVMPositionBuilderAtEnd(builder, variables_bb) };
+    let result = ctx.names.register_result_option(name, |name| unsafe {
+        LLVMZludaBuildAlloca(builder, type_, addr_space, name)
+    });
+    unsafe { LLVMPositionBuilderAtEnd(builder, current_bb) };
+    result
 }
 
 fn emit_instruction(
@@ -1142,6 +1160,7 @@ fn emit_instruction(
         ast::Instruction::Set(details, arg) => emit_inst_set(ctx, details, arg)?,
         ast::Instruction::Red(details, arg) => emit_inst_red(ctx, details, arg)?,
         ast::Instruction::Isspacep(space, arg) => emit_inst_isspacep(ctx, *space, arg)?,
+        ast::Instruction::Sad(type_, arg) => emit_inst_sad(ctx, *type_, arg)?,
         // replaced by function calls or Statement variants
         ast::Instruction::Activemask { .. }
         | ast::Instruction::Bar(..)
@@ -1228,6 +1247,36 @@ fn emit_inst_isspacep_impl(
         (ast::ScalarType::B8, ast::StateSpace::Generic, src),
         intrinsic,
     )
+}
+
+
+fn emit_inst_sad(
+    ctx: &mut EmitContext,
+    type_: ast::ScalarType,
+    arg: &ast::Arg4<ExpandedArgParams>,
+) -> Result<(), TranslateError> {
+    let builder = ctx.builder.get();
+    let less_than = emit_inst_setp_int(
+        ctx,
+        &SetpData {
+            typ: type_,
+            flush_to_zero: None,
+            cmp_op: ast::SetpCompareOp::Greater,
+        },
+        None,
+        arg.src1,
+        arg.src2,
+    )?;
+    let a = ctx.names.value(arg.src1)?;
+    let b = ctx.names.value(arg.src2)?;
+    let a_minus_b = unsafe { LLVMBuildSub(builder, a, b, LLVM_UNNAMED) };
+    let b_minus_a = unsafe { LLVMBuildSub(builder, b, a, LLVM_UNNAMED) };
+    let a_or_b = unsafe { LLVMBuildSelect(builder, less_than, a_minus_b, b_minus_a, LLVM_UNNAMED) };
+    let src3 = ctx.names.value(arg.src3)?;
+    ctx.names.register_result(arg.dst, |dst_name| unsafe {
+        LLVMBuildAdd(builder, src3, a_or_b, dst_name)
+    });
+    Ok(())
 }
 
 fn emit_inst_red(
@@ -1359,9 +1408,6 @@ fn emit_int_trap(ctx: &mut EmitContext) -> Result<(), TranslateError> {
             0,
             LLVM_UNNAMED,
         );
-        // llvm.trap is not a terminator,
-        // LLVM might fail with an unterminated basic block if we don't insert unreachable
-        LLVMBuildUnreachable(builder);
     }
     Ok(())
 }
@@ -2149,16 +2195,17 @@ fn emit_inst_mad_lo(
     )
 }
 
-// TODO: support mad.hi.cc
 fn emit_inst_madcc(
     ctx: &mut EmitContext,
     type_: ast::ScalarType,
+    is_hi: bool,
     arg: &Arg4CarryOut<ExpandedArgParams>,
 ) -> Result<(), TranslateError> {
-    let builder = ctx.builder.get();
-    let src1 = ctx.names.value(arg.src1)?;
-    let src2 = ctx.names.value(arg.src2)?;
-    let mul_result = unsafe { LLVMBuildMul(builder, src1, src2, LLVM_UNNAMED) };
+    let mul_result = if is_hi {
+        emit_inst_mul_hi_impl(ctx, type_, None, arg.src1, arg.src2)?
+    } else {
+        emit_inst_mul_low_impl(ctx, None, arg.src1, arg.src2, LLVMBuildMul)?
+    };
     emit_inst_addsub_cc_impl(
         ctx,
         "add",
@@ -2246,29 +2293,6 @@ fn emit_inst_madc(
         mul_result,
         args.src3,
     )
-    /*
-       let src3 = ctx.names.value(args.src3)?;
-       let add_no_carry = unsafe { LLVMBuildAdd(builder, mul_result, src3, LLVM_UNNAMED) };
-       let carry_flag = ctx.names.value(args.carry_in)?;
-       let llvm_type = get_llvm_type(ctx, &ast::Type::Scalar(type_))?;
-       let carry_flag = unsafe { LLVMBuildZExt(builder, carry_flag, llvm_type, LLVM_UNNAMED) };
-       if let Some(carry_out) = args.carry_out {
-           emit_inst_addsub_cc_impl(
-               ctx,
-               "add",
-               type_,
-               args.dst,
-               carry_out,
-               add_no_carry,
-               carry_flag,
-           )?;
-       } else {
-           ctx.names.register_result(args.dst, |dst| unsafe {
-               LLVMBuildAdd(builder, add_no_carry, carry_flag, dst)
-           });
-       }
-       Ok(())
-    */
 }
 
 fn emit_inst_add_c(
@@ -3559,12 +3583,12 @@ fn emit_store_var(
 
 fn emit_label(ctx: &mut EmitContext, label: Id) -> Result<(), TranslateError> {
     let new_block = unsafe { LLVMValueAsBasicBlock(ctx.names.value(label)?) };
-    terminate_current_block_if_needed(ctx, new_block);
+    terminate_current_block_if_needed(ctx, Some(new_block));
     unsafe { LLVMPositionBuilderAtEnd(ctx.builder.get(), new_block) };
     Ok(())
 }
 
-fn terminate_current_block_if_needed(ctx: &mut EmitContext, new_block: LLVMBasicBlockRef) {
+fn terminate_current_block_if_needed(ctx: &mut EmitContext, new_block: Option<LLVMBasicBlockRef>) {
     let current_block = unsafe { LLVMGetInsertBlock(ctx.builder.get()) };
     if current_block == ptr::null_mut() {
         return;
@@ -3573,7 +3597,10 @@ fn terminate_current_block_if_needed(ctx: &mut EmitContext, new_block: LLVMBasic
     if terminator != ptr::null_mut() {
         return;
     }
-    unsafe { LLVMBuildBr(ctx.builder.get(), new_block) };
+    match new_block {
+        Some(new_block) => unsafe { LLVMBuildBr(ctx.builder.get(), new_block) },
+        None => unsafe { LLVMBuildUnreachable(ctx.builder.get()) },
+    };
 }
 
 fn emit_method_declaration<'input>(

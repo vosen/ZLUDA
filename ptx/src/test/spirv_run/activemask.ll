@@ -3,22 +3,22 @@ target triple = "amdgcn-amd-amdhsa"
 
 declare i32 @__zluda_ptx_impl__activemask() #0
 
-define protected amdgpu_kernel void @activemask(ptr addrspace(4) byref(i64) %"12", ptr addrspace(4) byref(i64) %"13") #1 {
-"16":
+define protected amdgpu_kernel void @activemask(ptr addrspace(4) byref(i64) %"11", ptr addrspace(4) byref(i64) %"12") #1 {
   %"6" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"6", align 1
-  %"7" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"7", align 1
   %"4" = alloca i64, align 8, addrspace(5)
   %"5" = alloca i32, align 4, addrspace(5)
-  %"8" = load i64, ptr addrspace(4) %"13", align 8
-  store i64 %"8", ptr addrspace(5) %"4", align 8
-  %"9" = call i32 @__zluda_ptx_impl__activemask()
-  store i32 %"9", ptr addrspace(5) %"5", align 4
-  %"10" = load i64, ptr addrspace(5) %"4", align 8
-  %"11" = load i32, ptr addrspace(5) %"5", align 4
-  %"14" = inttoptr i64 %"10" to ptr
-  store i32 %"11", ptr %"14", align 4
+  br label %1
+
+1:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"6", align 1
+  %"7" = load i64, ptr addrspace(4) %"12", align 8
+  store i64 %"7", ptr addrspace(5) %"4", align 8
+  %"8" = call i32 @__zluda_ptx_impl__activemask()
+  store i32 %"8", ptr addrspace(5) %"5", align 4
+  %"9" = load i64, ptr addrspace(5) %"4", align 8
+  %"10" = load i32, ptr addrspace(5) %"5", align 4
+  %"13" = inttoptr i64 %"9" to ptr
+  store i32 %"10", ptr %"13", align 4
   ret void
 }
 

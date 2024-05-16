@@ -4,76 +4,76 @@ target triple = "amdgcn-amd-amdhsa"
 @shared_ex = external hidden addrspace(3) global [0 x i32]
 @shared_mod = private addrspace(3) global [4 x i32] undef
 
-define private i64 @"3"(ptr addrspace(3) %"69", ptr addrspace(3) %"70") #0 {
-"62":
+define private i64 @"3"(ptr addrspace(3) %"63", ptr addrspace(3) %"64") #0 {
   %"8" = alloca i64, align 8, addrspace(5)
   %"20" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"20", align 1
-  %"21" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"21", align 1
   %"9" = alloca i64, align 8, addrspace(5)
   %"10" = alloca i64, align 8, addrspace(5)
-  %"26" = load i64, ptr addrspace(3) %"70", align 8
-  store i64 %"26", ptr addrspace(5) %"9", align 8
-  %"27" = load i64, ptr addrspace(3) %"69", align 8
-  store i64 %"27", ptr addrspace(5) %"10", align 8
-  %"29" = load i64, ptr addrspace(5) %"10", align 8
-  %"30" = load i64, ptr addrspace(5) %"9", align 8
-  %"53" = add i64 %"29", %"30"
-  store i64 %"53", ptr addrspace(5) %"8", align 8
-  %"31" = load i64, ptr addrspace(5) %"8", align 8
-  ret i64 %"31"
+  br label %1
+
+1:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"20", align 1
+  %"23" = load i64, ptr addrspace(3) %"64", align 8
+  store i64 %"23", ptr addrspace(5) %"9", align 8
+  %"24" = load i64, ptr addrspace(3) %"63", align 8
+  store i64 %"24", ptr addrspace(5) %"10", align 8
+  %"26" = load i64, ptr addrspace(5) %"10", align 8
+  %"27" = load i64, ptr addrspace(5) %"9", align 8
+  %"50" = add i64 %"26", %"27"
+  store i64 %"50", ptr addrspace(5) %"8", align 8
+  %"28" = load i64, ptr addrspace(5) %"8", align 8
+  ret i64 %"28"
 }
 
-define private i64 @"5"(i64 %"32", ptr addrspace(3) %"71", ptr addrspace(3) %"72") #0 {
-"63":
+define private i64 @"5"(i64 %"29", ptr addrspace(3) %"65", ptr addrspace(3) %"66") #0 {
   %"12" = alloca i64, align 8, addrspace(5)
   %"11" = alloca i64, align 8, addrspace(5)
-  %"22" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"22", align 1
-  %"23" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"23", align 1
-  store i64 %"32", ptr addrspace(5) %"12", align 8
-  %"33" = load i64, ptr addrspace(5) %"12", align 8
-  store i64 %"33", ptr addrspace(3) %"71", align 8
-  %"34" = call i64 @"3"(ptr addrspace(3) %"71", ptr addrspace(3) %"72")
-  store i64 %"34", ptr addrspace(5) %"11", align 8
-  %"35" = load i64, ptr addrspace(5) %"11", align 8
-  ret i64 %"35"
+  %"21" = alloca i1, align 1, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
+  store i64 %"29", ptr addrspace(5) %"12", align 8
+  store i1 false, ptr addrspace(5) %"21", align 1
+  %"30" = load i64, ptr addrspace(5) %"12", align 8
+  store i64 %"30", ptr addrspace(3) %"65", align 8
+  %"31" = call i64 @"3"(ptr addrspace(3) %"65", ptr addrspace(3) %"66")
+  store i64 %"31", ptr addrspace(5) %"11", align 8
+  %"32" = load i64, ptr addrspace(5) %"11", align 8
+  ret i64 %"32"
 }
 
-define protected amdgpu_kernel void @shared_unify_decl(ptr addrspace(4) byref(i64) %"49", ptr addrspace(4) byref(i64) %"50") #0 {
-"64":
-  %"24" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"24", align 1
-  %"25" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"25", align 1
+define protected amdgpu_kernel void @shared_unify_decl(ptr addrspace(4) byref(i64) %"46", ptr addrspace(4) byref(i64) %"47") #0 {
+  %"22" = alloca i1, align 1, addrspace(5)
   %"16" = alloca i64, align 8, addrspace(5)
   %"17" = alloca i64, align 8, addrspace(5)
   %"18" = alloca i64, align 8, addrspace(5)
   %"19" = alloca i64, align 8, addrspace(5)
-  %"36" = load i64, ptr addrspace(4) %"49", align 8
-  store i64 %"36", ptr addrspace(5) %"16", align 8
-  %"37" = load i64, ptr addrspace(4) %"50", align 8
-  store i64 %"37", ptr addrspace(5) %"17", align 8
-  %"39" = load i64, ptr addrspace(5) %"16", align 8
-  %"56" = inttoptr i64 %"39" to ptr addrspace(1)
-  %"38" = load i64, ptr addrspace(1) %"56", align 8
-  store i64 %"38", ptr addrspace(5) %"18", align 8
-  %"41" = load i64, ptr addrspace(5) %"16", align 8
-  %"57" = inttoptr i64 %"41" to ptr addrspace(1)
-  %"74" = getelementptr inbounds i8, ptr addrspace(1) %"57", i64 8
-  %"40" = load i64, ptr addrspace(1) %"74", align 8
-  store i64 %"40", ptr addrspace(5) %"19", align 8
-  %"42" = load i64, ptr addrspace(5) %"19", align 8
-  store i64 %"42", ptr addrspace(3) @shared_mod, align 8
-  %"44" = load i64, ptr addrspace(5) %"18", align 8
-  %"59" = call i64 @"5"(i64 %"44", ptr addrspace(3) @shared_ex, ptr addrspace(3) @shared_mod)
-  store i64 %"59", ptr addrspace(5) %"19", align 8
-  %"45" = load i64, ptr addrspace(5) %"17", align 8
-  %"46" = load i64, ptr addrspace(5) %"19", align 8
-  %"61" = inttoptr i64 %"45" to ptr
-  store i64 %"46", ptr %"61", align 8
+  br label %1
+
+1:                                                ; preds = %0
+  store i1 false, ptr addrspace(5) %"22", align 1
+  %"33" = load i64, ptr addrspace(4) %"46", align 8
+  store i64 %"33", ptr addrspace(5) %"16", align 8
+  %"34" = load i64, ptr addrspace(4) %"47", align 8
+  store i64 %"34", ptr addrspace(5) %"17", align 8
+  %"36" = load i64, ptr addrspace(5) %"16", align 8
+  %"53" = inttoptr i64 %"36" to ptr addrspace(1)
+  %"35" = load i64, ptr addrspace(1) %"53", align 8
+  store i64 %"35", ptr addrspace(5) %"18", align 8
+  %"38" = load i64, ptr addrspace(5) %"16", align 8
+  %"54" = inttoptr i64 %"38" to ptr addrspace(1)
+  %"68" = getelementptr inbounds i8, ptr addrspace(1) %"54", i64 8
+  %"37" = load i64, ptr addrspace(1) %"68", align 8
+  store i64 %"37", ptr addrspace(5) %"19", align 8
+  %"39" = load i64, ptr addrspace(5) %"19", align 8
+  store i64 %"39", ptr addrspace(3) @shared_mod, align 8
+  %"41" = load i64, ptr addrspace(5) %"18", align 8
+  %"56" = call i64 @"5"(i64 %"41", ptr addrspace(3) @shared_ex, ptr addrspace(3) @shared_mod)
+  store i64 %"56", ptr addrspace(5) %"19", align 8
+  %"42" = load i64, ptr addrspace(5) %"17", align 8
+  %"43" = load i64, ptr addrspace(5) %"19", align 8
+  %"58" = inttoptr i64 %"42" to ptr
+  store i64 %"43", ptr %"58", align 8
   ret void
 }
 

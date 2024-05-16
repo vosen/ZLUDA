@@ -1931,30 +1931,26 @@ fn insert_hardware_registers<'input>(
 }
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#extended-precision-integer-arithmetic-instructions
-// NVIDIA documentation is misleading. In fact there is no single CC.CF,
-// but separate registers for overflow (`add` and `mad`) and underflow (`sub`)
-// For reference check the .ptx tests
+// NVIDIA documentation is slightly misleading when it comes to subc and sub.cc.
+// They both invert the CC flag. Meaning that for sub:
+// * sub.cc x, 0,1 will set CC to 0
+// * sub.cc x, 0,0 will set CC to 1
+// and for subc:
+// * if CC is 1 then subc will compute d = a - b
+// * if CC is 0 then subc will compute d = a - b - 1
 fn insert_hardware_registers_impl<'input>(
     id_defs: &mut IdNameMapBuilder<'input>,
     typed_statements: Vec<TypedStatement>,
 ) -> Result<Vec<TypedStatement>, TranslateError> {
     let mut result = Vec::with_capacity(typed_statements.len());
-    let overflow_flag_var = id_defs.register_variable_def(
+    let carry_flag_variable = id_defs.register_variable_def(
         None,
         ast::Type::Scalar(ast::ScalarType::Pred),
         ast::StateSpace::Reg,
         Some(ast::Initializer::Constant(ast::ImmediateValue::U64(0))),
     );
-    let underflow_flag_var = id_defs.register_variable_def(
-        None,
-        ast::Type::Scalar(ast::ScalarType::Pred),
-        ast::StateSpace::Reg,
-        Some(ast::Initializer::Constant(ast::ImmediateValue::U64(0))),
-    );
-    let overflow_flag = overflow_flag_var.name;
-    let underflow_flag = underflow_flag_var.name;
-    result.push(Statement::Variable(overflow_flag_var));
-    result.push(Statement::Variable(underflow_flag_var));
+    let carry_flag = carry_flag_variable.name;
+    result.push(Statement::Variable(carry_flag_variable));
     for statement in typed_statements {
         match statement {
             Statement::Instruction(ast::Instruction::MadC {
@@ -1965,37 +1961,88 @@ fn insert_hardware_registers_impl<'input>(
             }) => result.push(Statement::MadC(MadCDetails {
                 type_,
                 is_hi,
-                arg: Arg4CarryIn::new(arg, carry_out, TypedOperand::Reg(overflow_flag)),
+                arg: Arg4CarryIn::new(arg, carry_out, TypedOperand::Reg(carry_flag)),
             })),
-            Statement::Instruction(ast::Instruction::MadCC { type_, arg }) => {
+            Statement::Instruction(ast::Instruction::MadCC { type_, is_hi, arg }) => {
                 result.push(Statement::MadCC(MadCCDetails {
                     type_,
-                    arg: Arg4CarryOut::new(arg, TypedOperand::Reg(overflow_flag)),
+                    is_hi,
+                    arg: Arg4CarryOut::new(arg, TypedOperand::Reg(carry_flag)),
                 }))
             }
             Statement::Instruction(ast::Instruction::AddC(details, args)) => {
                 result.push(Statement::AddC(
                     details.type_,
-                    Arg3CarryIn::new(args, details.carry_out, TypedOperand::Reg(overflow_flag)),
+                    Arg3CarryIn::new(args, details.carry_out, TypedOperand::Reg(carry_flag)),
                 ))
             }
             Statement::Instruction(ast::Instruction::AddCC(details, args)) => {
                 result.push(Statement::AddCC(
                     details,
-                    Arg3CarryOut::new(args, TypedOperand::Reg(overflow_flag)),
+                    Arg3CarryOut::new(args, TypedOperand::Reg(carry_flag)),
                 ))
             }
             Statement::Instruction(ast::Instruction::SubC(details, args)) => {
+                let inverted_carry_in = id_defs.register_intermediate(Some((
+                    ast::Type::Scalar(ast::ScalarType::Pred),
+                    ast::StateSpace::Reg,
+                )));
+                result.push(Statement::Instruction(ast::Instruction::Not(
+                    ast::ScalarType::Pred,
+                    ast::Arg2 {
+                        dst: TypedOperand::Reg(inverted_carry_in),
+                        src: TypedOperand::Reg(carry_flag),
+                    },
+                )));
+                let (carry_out_id, carry_out_postprocess) = if details.carry_out {
+                    let inverted_carry_out = id_defs.register_intermediate(Some((
+                        ast::Type::Scalar(ast::ScalarType::Pred),
+                        ast::StateSpace::Reg,
+                    )));
+                    let invert_statement = Statement::Instruction(ast::Instruction::Not(
+                        ast::ScalarType::Pred,
+                        ast::Arg2 {
+                            dst: TypedOperand::Reg(carry_flag),
+                            src: TypedOperand::Reg(inverted_carry_out),
+                        },
+                    ));
+                    (
+                        Some(TypedOperand::Reg(inverted_carry_out)),
+                        Some(invert_statement),
+                    )
+                } else {
+                    (None, None)
+                };
                 result.push(Statement::SubC(
                     details.type_,
-                    Arg3CarryIn::new(args, details.carry_out, TypedOperand::Reg(underflow_flag)),
-                ))
+                    Arg3CarryIn {
+                        dst: args.dst,
+                        carry_out: carry_out_id,
+                        carry_in: TypedOperand::Reg(inverted_carry_in),
+                        src1: args.src1,
+                        src2: args.src2,
+                    },
+                ));
+                if let Some(carry_out_postprocess) = carry_out_postprocess {
+                    result.push(carry_out_postprocess);
+                }
             }
-            Statement::Instruction(ast::Instruction::SubCC(details, args)) => {
+            Statement::Instruction(ast::Instruction::SubCC(type_, args)) => {
+                let temp = id_defs.register_intermediate(Some((
+                    ast::Type::Scalar(ast::ScalarType::Pred),
+                    ast::StateSpace::Reg,
+                )));
                 result.push(Statement::SubCC(
-                    details,
-                    Arg3CarryOut::new(args, TypedOperand::Reg(underflow_flag)),
-                ))
+                    type_,
+                    Arg3CarryOut::new(args, TypedOperand::Reg(temp)),
+                ));
+                result.push(Statement::Instruction(ast::Instruction::Not(
+                    ast::ScalarType::Pred,
+                    ast::Arg2 {
+                        dst: TypedOperand::Reg(carry_flag),
+                        src: TypedOperand::Reg(temp),
+                    },
+                )));
             }
             s => result.push(s),
         }
@@ -2447,58 +2494,6 @@ fn insert_implicit_conversions2_impl<'input>(
     Ok(result)
 }
 
-fn normalize_labels<'input>(
-    module: TranslationModule<'input, ExpandedArgParams>,
-) -> Result<TranslationModule<'input, ExpandedArgParams>, TranslateError> {
-    convert_methods_simple(module, normalize_labels2_impl)
-}
-
-fn normalize_labels2_impl<'input>(
-    id_defs: &mut IdNameMapBuilder<'input>,
-    fn_body: Vec<ExpandedStatement>,
-) -> Result<Vec<ExpandedStatement>, TranslateError> {
-    let mut labels_in_use = FxHashSet::default();
-    for statement in fn_body.iter() {
-        match statement {
-            Statement::Instruction(i) => {
-                if let Some(target) = i.jump_target() {
-                    labels_in_use.insert(target);
-                }
-            }
-            Statement::Conditional(cond) => {
-                labels_in_use.insert(cond.if_true);
-                labels_in_use.insert(cond.if_false);
-            }
-            Statement::Call(..)
-            | Statement::Variable(..)
-            | Statement::LoadVar(..)
-            | Statement::StoreVar(..)
-            | Statement::RetValue(..)
-            | Statement::Conversion(..)
-            | Statement::Constant(..)
-            | Statement::Label(..)
-            | Statement::PtrAccess { .. }
-            | Statement::RepackVector(..)
-            | Statement::MadC(..)
-            | Statement::MadCC(..)
-            | Statement::AddC(..)
-            | Statement::AddCC(..)
-            | Statement::SubC(..)
-            | Statement::SubCC(..)
-            | Statement::AsmVolatile { .. }
-            | Statement::FunctionPointer(..) => {}
-        }
-    }
-    Ok(
-        iter::once(Statement::Label(id_defs.register_intermediate(None)))
-            .chain(fn_body.into_iter().filter(|s| match s {
-                Statement::Label(i) => labels_in_use.contains(i),
-                _ => true,
-            }))
-            .collect::<Vec<_>>(),
-    )
-}
-
 fn hoist_globals<'input, P: ast::ArgParams<Id = Id>>(
     module: TranslationModule<'input, P>,
 ) -> TranslationModule<'input, P> {
@@ -2860,7 +2855,7 @@ fn replace_instructions_with_builtins_impl<'input>(
                     vector,
                     "_",
                     suld.type_.to_ptx_name(),
-                    "_trap",
+                    "_zero",
                 ]
                 .concat();
                 statements.push(instruction_to_fn_call(
@@ -2881,7 +2876,7 @@ fn replace_instructions_with_builtins_impl<'input>(
                     vector,
                     "_",
                     sust.type_.to_ptx_name(),
-                    "_trap",
+                    "_zero",
                 ]
                 .concat();
                 statements.push(instruction_to_fn_call(
@@ -3337,9 +3332,7 @@ fn to_llvm_module_impl2<'a, 'input>(
     }
     let translation_module = insert_implicit_conversions(translation_module)?;
     let translation_module = insert_compilation_mode_prologue(translation_module);
-    let translation_module = normalize_labels(translation_module)?;
     let translation_module = hoist_globals(translation_module);
-    let translation_module = move_variables_to_start(translation_module)?;
     let mut translation_module = replace_instructions_with_builtins(translation_module)?;
     if raytracing.is_some() {
         translation_module = raytracing::replace_tex_builtins_hack(translation_module)?;
@@ -3390,49 +3383,6 @@ fn return_from_noreturn(
         }
     }
     translation_module
-}
-
-// From "Performance Tips for Frontend Authors" (https://llvm.org/docs/Frontend/PerformanceTips.html):
-// "The SROA (Scalar Replacement Of Aggregates) and Mem2Reg passes only attempt to eliminate alloca
-// instructions that are in the entry basic block. Given SSA is the canonical form expected by much
-// of the optimizer; if allocas can not be eliminated by Mem2Reg or SROA, the optimizer is likely to
-// be less effective than it could be."
-// Empirically, this is true. Moving allocas to the start gives us less spill-happy assembly
-fn move_variables_to_start<'input, P: ast::ArgParams<Id = Id>>(
-    module: TranslationModule<'input, P>,
-) -> Result<TranslationModule<'input, P>, TranslateError> {
-    convert_methods_simple(module, move_variables_to_start_impl)
-}
-
-fn move_variables_to_start_impl<'input, P: ast::ArgParams>(
-    _: &mut IdNameMapBuilder<'input>,
-    fn_body: Vec<Statement<ast::Instruction<P>, P>>,
-) -> Result<Vec<Statement<ast::Instruction<P>, P>>, TranslateError> {
-    if fn_body.is_empty() {
-        return Ok(fn_body);
-    }
-    let mut result = (0..fn_body.len())
-        .into_iter()
-        .map(|_| mem::MaybeUninit::<_>::uninit())
-        .collect::<Vec<_>>();
-    let variables_count = fn_body.iter().fold(0, |acc, statement| {
-        acc + matches!(statement, Statement::Variable(..)) as usize
-    });
-    let mut variable = 1usize;
-    let mut non_variable = variables_count + 1;
-    // methods always start with an entry label
-    let mut statements = fn_body.into_iter();
-    let start_label = statements.next().ok_or_else(TranslateError::unreachable)?;
-    unsafe { result.get_unchecked_mut(0).write(start_label) };
-    for statement in statements {
-        let index = match statement {
-            Statement::Variable(_) => &mut variable,
-            _ => &mut non_variable,
-        };
-        unsafe { result.get_unchecked_mut(*index).write(statement) };
-        *index += 1;
-    }
-    Ok(unsafe { mem::transmute(result) })
 }
 
 // PTX definition of param state space does not translate cleanly into AMDGPU notion of an address space:
@@ -5570,6 +5520,7 @@ impl<T: ArgParamsEx<Id = Id>, U: ArgParamsEx<Id = Id>> Visitable<T, U> for MadCD
 
 pub(crate) struct MadCCDetails<P: ast::ArgParams> {
     pub(crate) type_: ast::ScalarType,
+    pub(crate) is_hi: bool,
     pub(crate) arg: Arg4CarryOut<P>,
 }
 
@@ -5580,6 +5531,7 @@ impl<T: ArgParamsEx<Id = Id>, U: ArgParamsEx<Id = Id>> Visitable<T, U> for MadCC
     ) -> Result<Statement<ast::Instruction<U>, U>, TranslateError> {
         Ok(Statement::MadCC(MadCCDetails {
             type_: self.type_,
+            is_hi: self.is_hi,
             arg: self.arg.map(visitor, self.type_)?,
         }))
     }
@@ -6488,8 +6440,9 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
                 carry_out,
                 arg: arg.map(visitor, &ast::Type::Scalar(type_), false)?,
             },
-            ast::Instruction::MadCC { type_, arg } => ast::Instruction::MadCC {
+            ast::Instruction::MadCC { type_, arg, is_hi } => ast::Instruction::MadCC {
                 type_,
+                is_hi,
                 arg: arg.map(visitor, &ast::Type::Scalar(type_), false)?,
             },
             ast::Instruction::Tex(details, arg) => {
@@ -6604,6 +6557,9 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
                     ast::StateSpace::Reg,
                 )),
             )?),
+            ast::Instruction::Sad(type_, a) => {
+                ast::Instruction::Sad(type_, a.map(visitor, &ast::Type::Scalar(type_), false)?)
+            }
             ast::Instruction::Isspacep(space, arg) => ast::Instruction::Isspacep(
                 space,
                 arg.map_different_types(
@@ -6612,6 +6568,7 @@ impl<T: ArgParamsEx> ast::Instruction<T> {
                     &ast::Type::Scalar(ast::ScalarType::U64),
                 )?,
             ),
+
         })
     }
 }
@@ -6866,15 +6823,6 @@ pub(crate) enum TypeKind {
     Struct,
 }
 
-impl<T: ast::ArgParams<Id = Id>> ast::Instruction<T> {
-    fn jump_target(&self) -> Option<Id> {
-        match self {
-            ast::Instruction::Bra(_, a) => Some(a.src),
-            _ => None,
-        }
-    }
-}
-
 impl<T: ast::ArgParams> ast::Instruction<T> {
     // .wide instructions don't support ftz, so it's enough to just look at the
     // type declared by the instruction
@@ -6969,6 +6917,7 @@ impl<T: ast::ArgParams> ast::Instruction<T> {
             ast::Instruction::Shf(..) => None,
             ast::Instruction::Vote(..) => None,
             ast::Instruction::Nanosleep(..) => None,
+            ast::Instruction::Sad(_, _) => None,
             ast::Instruction::Sub(ast::ArithDetails::Float(float_control), _)
             | ast::Instruction::Add(ast::ArithDetails::Float(float_control), _)
             | ast::Instruction::Mul(ast::MulDetails::Float(float_control), _)

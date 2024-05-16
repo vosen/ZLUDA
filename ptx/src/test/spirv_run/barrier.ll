@@ -4,11 +4,11 @@ target triple = "amdgcn-amd-amdhsa"
 declare void @__zluda_ptx_impl__barrier_sync(i32) #0
 
 define protected amdgpu_kernel void @barrier() #1 {
-"5":
   %"2" = alloca i1, align 1, addrspace(5)
+  br label %1
+
+1:                                                ; preds = %0
   store i1 false, ptr addrspace(5) %"2", align 1
-  %"3" = alloca i1, align 1, addrspace(5)
-  store i1 false, ptr addrspace(5) %"3", align 1
   call void @__zluda_ptx_impl__barrier_sync(i32 0)
   ret void
 }
