@@ -3610,7 +3610,7 @@ fn terminate_current_block_if_not_terminated(
 
 // Some PTX instructions (exit) that are LLVM terminators
 // can be emitted in the middle of a basic block
-// Happens in eg. Meshroom
+// Happens in e.g. Meshroom
 fn start_next_block_if_terminated(ctx: &mut EmitContext) {
     let current_block = unsafe { LLVMGetInsertBlock(ctx.builder.get()) };
     let terminator = unsafe { LLVMGetBasicBlockTerminator(current_block) };
@@ -3618,8 +3618,7 @@ fn start_next_block_if_terminated(ctx: &mut EmitContext) {
         return;
     }
     let next_block = unsafe { LLVMCreateBasicBlockInContext(ctx.context.get(), LLVM_UNNAMED) };
-    unsafe { LLVMBuildBr(ctx.builder.get(), next_block) };
-    unsafe { LLVMMoveBasicBlockAfter(next_block, current_block) };
+    unsafe { LLVMInsertExistingBasicBlockAfterInsertBlock(ctx.builder.get(), next_block) };
     unsafe { LLVMPositionBuilderAtEnd(ctx.builder.get(), next_block) };
 }
 
