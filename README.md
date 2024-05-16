@@ -244,6 +244,8 @@ Performance is currently much lower than the native HIP backend, see the discuss
 
   Realistically, it's now abandoned and will only possibly receive updates to run workloads I am personally interested in (DLSS).
 
+  With that said, there is a fork [here](https://github.com/lshqqytiger/ZLUDA) that appears to be more active.
+
 * What underlying GPU API does ZLUDA use? Is it OpenCL? ROCm? Vulkan?
 
   ZLUDA is built purely on ROCm/HIP. On both Windows and Linux.
