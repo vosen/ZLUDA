@@ -131,7 +131,7 @@ If an application fails to start under ZLUDA or crashes please check [Known Issu
 
 CGBN crashes due to an underlying ROCm/HIP issue.
 
-You can solve the issue by building comgr with LLVM containing this patch: ROCm/llvm-project#91. ZLUDA must be able to find amd_comgr.dll/libamd_comgr.so.2 in the library search path.
+You can solve the issue by building comgr with LLVM containing this patch: ROCm/llvm-project#91. ZLUDA then must be able to find the comgr library (amd_comgr.dll on Windows and libamd_comgr.so.2 on Linux) in a library search path.
 
 #### Meshroom
 
