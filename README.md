@@ -1,3 +1,23 @@
+# :warning: IMPORTANT :warning:
+
+## What happened
+The code that was previously here has been taken down at AMD's request.
+The code was released with AMD's approval through an email. AMD's legal department now says it's not legally binding, hence the rollback.  
+Before anyone asks: I have received no legal threats or any communication from NVIDIA.
+
+## What now
+At this point, one more hostile corporation does not make much difference. I plan to rebuild ZLUDA starting from the pre-AMD codebase. Funding for the project is coming along and I hope to be able to share the details in the coming weeks. It will have a different scope and certain features will not come back.  
+I wanted it to be a surprise, but one of those features was support for NVIDIA GameWorks. I got it working in Batman: Arkham Knight, but I never finished it, and now that code will never see the light of the day:
+
+| Settings | ZLUDA OFF | ZLUDA ON
+:---:|:---:|:---:
+![Graphics settings](https://imgur.com/yUB4MpQ.jpg) | ![ZLUDA OFF](https://imgur.com/XEtL2kx.jpg)  |  ![ZLUDA OFF](https://imgur.com/TEo9XcQ.jpg)
+
+Feel free to discuss the topic [here](https://github.com/vosen/ZLUDA/discussions/261)
+
+---
+---
+
 # ZLUDA
 
 ZLUDA is a drop-in replacement for CUDA on Intel GPU. ZLUDA allows to run unmodified CUDA applications using Intel GPUs with near-native performance (more below). It works with current integrated Intel UHD GPUs and will work with future Intel Xe GPUs
