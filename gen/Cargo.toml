@@ -1,0 +1,15 @@
+[package]
+name = "gen"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+gen_impl = { path = "../gen_impl" }
+convert_case = "0.6.0"
+rustc-hash = "2.0.0"
+syn = "2.0.67"
+quote = "1.0"
+proc-macro2 = "1.0.86"

@@ -1,0 +1,9 @@
+[package]
+name = "ptx_parser"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+logos = "0.14"
+winnow = { version =  "0.6.18", features = ["debug"] }
+gen = { path = "../gen" }
