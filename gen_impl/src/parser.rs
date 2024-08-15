@@ -7,6 +7,7 @@ use std::fmt::Write;
 use syn::bracketed;
 use syn::parse::Peek;
 use syn::punctuated::Punctuated;
+use syn::spanned::Spanned;
 use syn::LitInt;
 use syn::Type;
 use syn::{braced, parse::Parse, token, Ident, ItemEnum, Token};
@@ -155,6 +156,10 @@ impl Rule {
 struct IdentOrTypeSuffix(IdentLike);
 
 impl IdentOrTypeSuffix {
+    fn span(&self) -> Span {
+        self.0.span()
+    }
+
     fn peek(input: syn::parse::ParseStream) -> bool {
         input.peek(Token![::])
     }
@@ -278,6 +283,15 @@ impl std::fmt::Debug for DotModifier {
 }
 
 impl DotModifier {
+    pub fn span(&self) -> Span {
+        let part1 = self.part1.span();
+        if let Some(ref part2) = self.part2 {
+            part1.join(part2.span()).unwrap_or(part1)
+        } else {
+            part1
+        }
+    }
+
     pub fn ident(&self) -> Ident {
         let mut result = String::new();
         write!(&mut result, "{}", self.part1).unwrap();
@@ -285,11 +299,11 @@ impl DotModifier {
             write!(&mut result, "_{}", part2.0).unwrap();
         } else {
             match self.part1 {
-                IdentLike::Type | IdentLike::Const => result.push('_'),
+                IdentLike::Type(_) | IdentLike::Const(_) => result.push('_'),
                 IdentLike::Ident(_) | IdentLike::Integer(_) => {}
             }
         }
-        Ident::new(&result.to_ascii_lowercase(), Span::call_site())
+        Ident::new(&result.to_ascii_lowercase(), self.span())
     }
 
     pub fn variant_capitalized(&self) -> Ident {
@@ -321,7 +335,7 @@ impl DotModifier {
             };
             result.push(c);
         }
-        Ident::new(&result, Span::call_site())
+        Ident::new(&result, self.span())
     }
 
     pub fn tokens(&self) -> TokenStream {
@@ -353,17 +367,28 @@ impl Parse for DotModifier {
 
 #[derive(PartialEq, Eq, Hash, Clone)]
 enum IdentLike {
-    Type,
-    Const,
+    Type(Token![type]),
+    Const(Token![const]),
     Ident(Ident),
     Integer(LitInt),
+}
+
+impl IdentLike {
+    fn span(&self) -> Span {
+        match self {
+            IdentLike::Type(c) => c.span(),
+            IdentLike::Const(t) => t.span(),
+            IdentLike::Ident(i) => i.span(),
+            IdentLike::Integer(l) => l.span(),
+        }
+    }
 }
 
 impl std::fmt::Display for IdentLike {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            IdentLike::Type => f.write_str("type"),
-            IdentLike::Const => f.write_str("const"),
+            IdentLike::Type(_) => f.write_str("type"),
+            IdentLike::Const(_) => f.write_str("const"),
             IdentLike::Ident(ident) => write!(f, "{}", ident),
             IdentLike::Integer(integer) => write!(f, "{}", integer),
         }
@@ -373,8 +398,8 @@ impl std::fmt::Display for IdentLike {
 impl ToTokens for IdentLike {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
-            IdentLike::Type => quote! { type }.to_tokens(tokens),
-            IdentLike::Const => quote! { const }.to_tokens(tokens),
+            IdentLike::Type(_) => quote! { type }.to_tokens(tokens),
+            IdentLike::Const(_) => quote! { const }.to_tokens(tokens),
             IdentLike::Ident(ident) => quote! { #ident }.to_tokens(tokens),
             IdentLike::Integer(int) => quote! { #int }.to_tokens(tokens),
         }
@@ -385,11 +410,9 @@ impl Parse for IdentLike {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let lookahead = input.lookahead1();
         Ok(if lookahead.peek(Token![const]) {
-            input.parse::<Token![const]>()?;
-            IdentLike::Const
+            IdentLike::Const(input.parse::<Token![const]>()?)
         } else if lookahead.peek(Token![type]) {
-            input.parse::<Token![type]>()?;
-            IdentLike::Type
+            IdentLike::Type(input.parse::<Token![type]>()?)
         } else if lookahead.peek(Ident) {
             IdentLike::Ident(input.parse::<Ident>()?)
         } else if lookahead.peek(LitInt) {

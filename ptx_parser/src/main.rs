@@ -2,9 +2,8 @@ use gen::derive_parser;
 use logos::Logos;
 use std::mem;
 use std::num::{ParseFloatError, ParseIntError};
-use winnow::combinator::{alt, empty, fail, opt};
-use winnow::stream::SliceLen;
-use winnow::token::{any, literal};
+use winnow::combinator::*;
+use winnow::token::any;
 use winnow::{
     error::{ContextError, ParserError},
     stream::{Offset, Stream, StreamIsPartial},
@@ -205,6 +204,8 @@ type ParserState<'a, 'input> = Stateful<&'a [Token<'input>], Vec<PtxError>>;
 fn ident<'a, 'input>(stream: &mut ParserState<'a, 'input>) -> PResult<&'input str> {
     any.verify_map(|t| {
         if let Token::Ident(text) = t {
+            Some(text)
+        } else if let Some(text) = t.opcode_text() {
             Some(text)
         } else {
             None
@@ -563,7 +564,6 @@ derive_parser!(
     pub enum ScalarType { }
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
-
     mov.type  d, a => {
         Instruction::Mov{
             data: MovDetails::new(type_.into()),
