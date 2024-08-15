@@ -199,9 +199,10 @@ pub struct RetData {
     pub uniform: bool,
 }
 
-type ParserState<'a, 'input> = Stateful<&'a [Token<'input>], Vec<PtxError>>;
+type PtxParserState = Vec<PtxError>;
+type PtxParser<'a, 'input> = Stateful<&'a [Token<'input>], PtxParserState>;
 
-fn ident<'a, 'input>(stream: &mut ParserState<'a, 'input>) -> PResult<&'input str> {
+fn ident<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<&'input str> {
     any.verify_map(|t| {
         if let Token::Ident(text) = t {
             Some(text)
@@ -214,7 +215,7 @@ fn ident<'a, 'input>(stream: &mut ParserState<'a, 'input>) -> PResult<&'input st
     .parse_next(stream)
 }
 
-fn num<'a, 'input>(stream: &mut ParserState<'a, 'input>) -> PResult<(&'input str, u32, bool)> {
+fn num<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<(&'input str, u32, bool)> {
     any.verify_map(|t| {
         Some(match t {
             Token::Hex(s) => {
@@ -239,9 +240,9 @@ fn num<'a, 'input>(stream: &mut ParserState<'a, 'input>) -> PResult<(&'input str
 }
 
 fn take_error<'a, 'input: 'a, O, E>(
-    mut parser: impl Parser<ParserState<'a, 'input>, Result<O, (O, PtxError)>, E>,
-) -> impl Parser<ParserState<'a, 'input>, O, E> {
-    move |input: &mut ParserState<'a, 'input>| {
+    mut parser: impl Parser<PtxParser<'a, 'input>, Result<O, (O, PtxError)>, E>,
+) -> impl Parser<PtxParser<'a, 'input>, O, E> {
+    move |input: &mut PtxParser<'a, 'input>| {
         Ok(match parser.parse_next(input)? {
             Ok(x) => x,
             Err((x, err)) => {
@@ -252,7 +253,7 @@ fn take_error<'a, 'input: 'a, O, E>(
     }
 }
 
-fn int_immediate<'a, 'input>(input: &mut ParserState<'a, 'input>) -> PResult<ast::ImmediateValue> {
+fn int_immediate<'a, 'input>(input: &mut PtxParser<'a, 'input>) -> PResult<ast::ImmediateValue> {
     take_error((opt(Token::Minus), num).map(|(neg, x)| {
         let (num, radix, is_unsigned) = x;
         if neg.is_some() {
@@ -278,7 +279,7 @@ fn int_immediate<'a, 'input>(input: &mut ParserState<'a, 'input>) -> PResult<ast
     .parse_next(input)
 }
 
-fn f32<'a, 'input>(stream: &mut ParserState<'a, 'input>) -> PResult<f32> {
+fn f32<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<f32> {
     take_error(any.verify_map(|t| match t {
         Token::F32(f) => Some(match u32::from_str_radix(&f[2..], 16) {
             Ok(x) => Ok(f32::from_bits(x)),
@@ -289,7 +290,7 @@ fn f32<'a, 'input>(stream: &mut ParserState<'a, 'input>) -> PResult<f32> {
     .parse_next(stream)
 }
 
-fn f64<'a, 'input>(stream: &mut ParserState<'a, 'input>) -> PResult<f64> {
+fn f64<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<f64> {
     take_error(any.verify_map(|t| match t {
         Token::F64(f) => Some(match u64::from_str_radix(&f[2..], 16) {
             Ok(x) => Ok(f64::from_bits(x)),
@@ -300,7 +301,7 @@ fn f64<'a, 'input>(stream: &mut ParserState<'a, 'input>) -> PResult<f64> {
     .parse_next(stream)
 }
 
-fn s32<'a, 'input>(stream: &mut ParserState<'a, 'input>) -> PResult<i32> {
+fn s32<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<i32> {
     take_error((opt(Token::Minus), num).map(|(sign, x)| {
         let (text, radix, _) = x;
         match i32::from_str_radix(text, radix) {
@@ -312,7 +313,7 @@ fn s32<'a, 'input>(stream: &mut ParserState<'a, 'input>) -> PResult<i32> {
 }
 
 fn immediate_value<'a, 'input>(
-    stream: &mut ParserState<'a, 'input>,
+    stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<ast::ImmediateValue> {
     alt((
         int_immediate,
@@ -324,7 +325,7 @@ fn immediate_value<'a, 'input>(
 
 impl<Ident> ast::ParsedOperand<Ident> {
     fn parse<'a, 'input>(
-        stream: &mut ParserState<'a, 'input>,
+        stream: &mut PtxParser<'a, 'input>,
     ) -> PResult<ast::ParsedOperand<&'input str>> {
         use winnow::combinator::*;
         use winnow::token::any;
@@ -338,7 +339,7 @@ impl<Ident> ast::ParsedOperand<Ident> {
             }
         }
         fn ident_operands<'a, 'input>(
-            stream: &mut ParserState<'a, 'input>,
+            stream: &mut PtxParser<'a, 'input>,
         ) -> PResult<ast::ParsedOperand<&'input str>> {
             let main_ident = ident.parse_next(stream)?;
             alt((
@@ -354,7 +355,7 @@ impl<Ident> ast::ParsedOperand<Ident> {
             .parse_next(stream)
         }
         fn vector_operand<'a, 'input>(
-            stream: &mut ParserState<'a, 'input>,
+            stream: &mut PtxParser<'a, 'input>,
         ) -> PResult<Vec<&'input str>> {
             let (_, r1, _, r2) =
                 (Token::LBracket, ident, Token::Comma, ident).parse_next(stream)?;
@@ -565,9 +566,9 @@ derive_parser!(
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
     mov.type  d, a => {
-        Instruction::Mov{
+        Instruction::Mov {
             data: MovDetails::new(type_.into()),
-            arguments: MovArgs { dst: d, src: a }
+            arguments: MovArgs { dst: d, src: a },
         }
     }
     .type: ScalarType = { .pred,
@@ -704,7 +705,7 @@ fn main() {
     );
     let tokens = lexer.map(|t| t.unwrap()).collect::<Vec<_>>();
     println!("{:?}", &tokens);
-    let mut stream = ParserState {
+    let mut stream = PtxParser {
         input: &tokens[..],
         state: Vec::new(),
     };

@@ -383,7 +383,7 @@ fn emit_parse_function(
                 let code_block = &def.code_block.0;
                 let args = def.function_arguments_declarations();
                 quote! {
-                    fn #fn_name<'input>( #(#args),* ) -> Instruction<ParsedOperand<'input>> #code_block
+                    fn #fn_name<'input>(state: &mut PtxParserState, #(#args),* ) -> Instruction<ParsedOperand<'input>> #code_block
                 }
             })
         })
@@ -473,7 +473,7 @@ fn emit_parse_function(
 
         #(#fns_)*
 
-        fn parse_instruction<'a, 'input>(stream: &mut ParserState<'a, 'input>) -> winnow::error::PResult<Instruction<ParsedOperand<'input>>>
+        fn parse_instruction<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> winnow::error::PResult<Instruction<ParsedOperand<'input>>>
         {
             use winnow::Parser;
             use winnow::token::*;
@@ -695,7 +695,7 @@ fn emit_definition_parser(
     let fn_args = definition.function_arguments();
     let fn_name = format_ident!("{}_{}", opcode, fn_idx);
     let fn_call = quote! {
-        #fn_name(  #(#fn_args),* )
+        #fn_name(&mut stream.state,  #(#fn_args),* )
     };
     quote! {
         #(#unordered_parse_declarations)*
