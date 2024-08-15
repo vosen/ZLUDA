@@ -174,9 +174,9 @@ impl SingleOpcodeDefinition {
             .chain(self.arguments.0.iter().map(|arg| {
                 let name = &arg.ident;
                 if arg.optional {
-                    quote! { #name : Option<&str> }
+                    quote! { #name : Option<ParsedOperand<'input>> }
                 } else {
-                    quote! { #name : &str }
+                    quote! { #name : ParsedOperand<'input> }
                 }
             }))
     }
@@ -377,7 +377,7 @@ fn emit_parse_function(
                 let code_block = &def.code_block.0;
                 let args = def.function_arguments_declarations();
                 quote! {
-                    fn #fn_name( #(#args),* ) -> Instruction<ParsedOperand> #code_block
+                    fn #fn_name<'input>( #(#args),* ) -> Instruction<ParsedOperand<'input>> #code_block
                 }
             })
         })
@@ -452,7 +452,7 @@ fn emit_parse_function(
 
         #(#fns_)*
 
-        fn parse_instruction<'input>(stream: &mut (impl winnow::stream::Stream<Token = #type_name<'input>, Slice = &'input [#type_name<'input>]> + winnow::stream::StreamIsPartial)) -> winnow::error::PResult<Instruction<ParsedOperand>> 
+        fn parse_instruction<'a, 'input>(stream: &mut ParserState<'a, 'input>) -> winnow::error::PResult<Instruction<ParsedOperand<'input>>> 
         {
             use winnow::Parser;
             use winnow::token::*;
@@ -642,9 +642,9 @@ fn emit_definition_parser(
                 empty
             }
         };
-        let ident = {
+        let operand = {
             quote! {
-                any.verify_map(|t| match t { #token_type::Ident(s) => Some(s), _ => None })
+                ParsedOperand::parse
             }
         };
         let post_bracket = if arg.post_bracket {
@@ -657,7 +657,7 @@ fn emit_definition_parser(
             }
         };
         let parser = quote! {
-            (#comma, #pre_bracket, #pre_pipe, #can_be_negated, #ident, #post_bracket)
+            (#comma, #pre_bracket, #pre_pipe, #can_be_negated, #operand, #post_bracket)
         };
         let arg_name = &arg.ident;
         if arg.optional {

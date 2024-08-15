@@ -67,7 +67,7 @@ impl GenerateInstructionType {
         let visit_slice_fn = format_ident!("visit{}_slice", kind.fn_suffix());
         let (type_parameters, visitor_parameters, return_type) = if kind == VisitKind::Map {
             (
-                quote! { <#type_parameters, To: Operand> },
+                quote! { <#type_parameters, To> },
                 quote! { <#short_parameters, To> },
                 quote! { #type_name<To> },
             )

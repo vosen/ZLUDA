@@ -7,3 +7,4 @@ edition = "2021"
 logos = "0.14"
 winnow = { version =  "0.6.18", features = ["debug"] }
 gen = { path = "../gen" }
+thiserror = "1.0"
