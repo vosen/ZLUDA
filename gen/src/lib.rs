@@ -3,7 +3,9 @@ use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, ToTokens};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::{collections::hash_map, hash::Hash, rc::Rc};
-use syn::{parse_macro_input, punctuated::Punctuated, Ident, ItemEnum, Token, TypePath, Variant};
+use syn::{
+    parse_macro_input, punctuated::Punctuated, Ident, ItemEnum, Token, Type, TypePath, Variant,
+};
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#vectors
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#fundamental-types
@@ -46,7 +48,7 @@ impl OpcodeDefinitions {
                 _ => {}
             }
             'check_definitions: for i in unselected.iter().copied() {
-                // just pick the first alternative and attempt every modifier
+                // Attempt every modifier
                 'check_candidates: for candidate in definitions[i]
                     .unordered_modifiers
                     .iter()
@@ -203,32 +205,31 @@ impl SingleOpcodeDefinition {
         output: &mut FxHashMap<Ident, Vec<SingleOpcodeDefinition>>,
         parser::OpcodeDefinition(pattern_seq, rules): parser::OpcodeDefinition,
     ) {
-        let mut rules = rules
-            .into_iter()
-            .map(|r| (r.modifier.clone(), Rc::new(r)))
-            .collect::<FxHashMap<_, _>>();
+        let (mut named_rules, mut unnamed_rules) = gather_rules(rules);
         let mut last_opcode = pattern_seq.0.last().unwrap().0 .0.name.clone();
         for (opcode_decl, code_block) in pattern_seq.0.into_iter().rev() {
             let current_opcode = opcode_decl.0.name.clone();
             if last_opcode != current_opcode {
-                rules = FxHashMap::default();
+                named_rules = FxHashMap::default();
+                unnamed_rules = FxHashMap::default();
             }
             let mut possible_modifiers = FxHashSet::default();
-            for (_, options) in rules.iter() {
+            for (_, options) in named_rules.iter() {
                 possible_modifiers.extend(options.alternatives.iter().cloned());
             }
             let parser::OpcodeDecl(instruction, arguments) = opcode_decl;
             let mut unordered_modifiers = instruction
                 .modifiers
                 .into_iter()
-                .map(
-                    |parser::MaybeDotModifier { optional, modifier }| match rules.get(&modifier) {
+                .map(|parser::MaybeDotModifier { optional, modifier }| {
+                    match named_rules.get(&modifier) {
                         Some(alts) => {
                             if alts.alternatives.len() == 1 && alts.type_.is_none() {
                                 DotModifierRef::Direct {
                                     optional,
                                     value: alts.alternatives[0].clone(),
                                     name: modifier,
+                                    type_: alts.type_.clone(),
                                 }
                             } else {
                                 DotModifierRef::Indirect {
@@ -239,15 +240,17 @@ impl SingleOpcodeDefinition {
                             }
                         }
                         None => {
+                            let type_ = unnamed_rules.get(&modifier).cloned();
                             possible_modifiers.insert(modifier.clone());
                             DotModifierRef::Direct {
                                 optional,
                                 value: modifier.clone(),
                                 name: modifier,
+                                type_,
                             }
                         }
-                    },
-                )
+                    }
+                })
                 .collect::<Vec<_>>();
             let ordered_modifiers = Self::extract_ordered_modifiers(&mut unordered_modifiers);
             let entry = Self {
@@ -291,6 +294,29 @@ impl SingleOpcodeDefinition {
         result.reverse();
         result
     }
+}
+
+fn gather_rules(
+    rules: Vec<parser::Rule>,
+) -> (
+    FxHashMap<parser::DotModifier, Rc<parser::Rule>>,
+    FxHashMap<parser::DotModifier, Type>,
+) {
+    let mut named = FxHashMap::default();
+    let mut unnamed = FxHashMap::default();
+    for rule in rules {
+        match rule.modifier {
+            Some(ref modifier) => {
+                named.insert(modifier.clone(), Rc::new(rule));
+            }
+            None => unnamed.extend(
+                rule.alternatives
+                    .into_iter()
+                    .map(|alt| (alt, rule.type_.as_ref().unwrap().clone())),
+            ),
+        }
+    }
+    (named, unnamed)
 }
 
 #[proc_macro]
@@ -512,7 +538,7 @@ fn emit_definition_parser(
     let ordered_parse = definition.ordered_modifiers.iter().rev().map(|modifier| {
         let arg_name = modifier.ident();
         match modifier {
-            DotModifierRef::Direct { optional, value, .. } => {
+            DotModifierRef::Direct { optional, value, type_: None, .. } => {
                 let variant = value.dot_capitalized();
                 if *optional {
                     quote! {
@@ -524,6 +550,7 @@ fn emit_definition_parser(
                     }
                 }
             }
+            DotModifierRef::Direct {  type_: Some(_), .. } => { todo!() }
             DotModifierRef::Indirect { optional, value, .. } => {
                 let variants = value.alternatives.iter().map(|alt| {
                     let type_ = value.type_.as_ref().unwrap();
@@ -566,7 +593,12 @@ fn emit_definition_parser(
         .unordered_modifiers
         .iter()
         .map(|modifier| match modifier {
-            DotModifierRef::Direct { name, value, .. } => {
+            DotModifierRef::Direct {
+                name,
+                value,
+                type_: None,
+                ..
+            } => {
                 let name = name.ident();
                 let token_variant = value.dot_capitalized();
                 quote! {
@@ -575,6 +607,24 @@ fn emit_definition_parser(
                             #return_error_ref;
                         }
                         #name = true;
+                    }
+                }
+            }
+            DotModifierRef::Direct {
+                name,
+                value,
+                type_: Some(type_),
+                ..
+            } => {
+                let variable = name.ident();
+                let token_variant = value.dot_capitalized();
+                let enum_variant = value.variant_capitalized();
+                quote! {
+                    #token_type :: #token_variant =>  {
+                        if #variable.is_some() {
+                            #return_error_ref;
+                        }
+                        #variable = Some(#type_ :: #enum_variant);
                     }
                 }
             }
@@ -606,6 +656,7 @@ fn emit_definition_parser(
                 DotModifierRef::Direct {
                     optional: false,
                     name,
+                    type_: None,
                     ..
                 } => {
                     let variable = name.ident();
@@ -615,7 +666,20 @@ fn emit_definition_parser(
                         }
                     }
                 }
-                DotModifierRef::Direct { optional: true, .. } => TokenStream::new(),
+                DotModifierRef::Direct {
+                    optional: false,
+                    name,
+                    type_: Some(type_),
+                    ..
+                } => {
+                    let variable = name.ident();
+                    quote! {
+                        let #variable = match #variable {
+                            Some(x) => x,
+                            None => #return_error
+                        };
+                    }
+                }
                 DotModifierRef::Indirect {
                     optional: false,
                     name,
@@ -629,7 +693,8 @@ fn emit_definition_parser(
                         };
                     }
                 }
-                DotModifierRef::Indirect { optional: true, .. } => TokenStream::new(),
+                DotModifierRef::Direct { optional: true, .. }
+                | DotModifierRef::Indirect { optional: true, .. } => TokenStream::new(),
             });
     let arguments_parse = definition.arguments.0.iter().enumerate().map(|(idx, arg)| {
         let comma = if idx == 0 {
@@ -772,6 +837,7 @@ enum DotModifierRef {
         optional: bool,
         value: parser::DotModifier,
         name: parser::DotModifier,
+        type_: Option<Type>,
     },
     Indirect {
         optional: bool,
@@ -790,10 +856,26 @@ impl DotModifierRef {
 
     fn type_of(&self) -> Option<syn::Type> {
         Some(match self {
-            DotModifierRef::Direct { optional: true, .. } => syn::parse_quote! { bool },
             DotModifierRef::Direct {
-                optional: false, ..
+                optional: true,
+                type_: None,
+                ..
+            } => syn::parse_quote! { bool },
+            DotModifierRef::Direct {
+                optional: false,
+                type_: None,
+                ..
             } => return None,
+            DotModifierRef::Direct {
+                optional: true,
+                type_: Some(type_),
+                ..
+            } => syn::parse_quote! { Option<#type_> },
+            DotModifierRef::Direct {
+                optional: false,
+                type_: Some(type_),
+                ..
+            } => type_.clone(),
             DotModifierRef::Indirect {
                 optional, value, ..
             } => {
@@ -812,7 +894,10 @@ impl DotModifierRef {
 
     fn type_of_check(&self) -> syn::Type {
         match self {
-            DotModifierRef::Direct { .. } => syn::parse_quote! { bool },
+            DotModifierRef::Direct { type_: None, .. } => syn::parse_quote! { bool },
+            DotModifierRef::Direct {
+                type_: Some(type_), ..
+            } => syn::parse_quote! { Option<#type_> },
             DotModifierRef::Indirect { value, .. } => {
                 let type_ = value
                     .type_

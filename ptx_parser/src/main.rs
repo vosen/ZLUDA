@@ -39,9 +39,9 @@ pub struct MovDetails {
 }
 
 impl MovDetails {
-    pub fn new(typ: Type) -> Self {
+    fn new(vector: Option<VectorPrefix>, scalar: ScalarType) -> Self {
         MovDetails {
-            typ,
+            typ: Type::maybe_vector(vector, scalar),
             src_is_address: false,
             dst_width: 0,
             src_width: 0,
@@ -99,7 +99,7 @@ gen::generate_instruction_type!(
 );
 
 pub struct LdDetails {
-    pub qualifier: LdStQualifier,
+    pub qualifier: ast::LdStQualifier,
     pub state_space: StateSpace,
     pub caching: LdCacheOperator,
     pub typ: Type,
@@ -164,39 +164,52 @@ pub enum Type {
     Array(ScalarType, Vec<u32>),
 }
 
+impl Type {
+    fn maybe_vector(vector: Option<VectorPrefix>, scalar: ScalarType) -> Self {
+        match vector {
+            Some(VectorPrefix::V2) => Type::Vector(scalar, 2),
+            Some(VectorPrefix::V4) => Type::Vector(scalar, 4),
+            None => Type::Scalar(scalar),
+        }
+    }
+}
+
 impl From<ScalarType> for Type {
     fn from(value: ScalarType) -> Self {
         Type::Scalar(value)
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub enum LdStQualifier {
-    Weak,
-    Volatile,
-    Relaxed(MemScope),
-    Acquire(MemScope),
-    Release(MemScope),
-}
-
 pub struct StData {
-    pub qualifier: LdStQualifier,
+    pub qualifier: ast::LdStQualifier,
     pub state_space: StateSpace,
-    pub caching: StCacheOperator,
+    pub caching: ast::StCacheOperator,
     pub typ: Type,
-}
-
-#[derive(PartialEq, Eq)]
-pub enum StCacheOperator {
-    Writeback,
-    L2Only,
-    Streaming,
-    Writethrough,
 }
 
 #[derive(Copy, Clone)]
 pub struct RetData {
     pub uniform: bool,
+}
+
+impl From<RawStCacheOperator> for ast::StCacheOperator {
+    fn from(value: RawStCacheOperator) -> Self {
+        match value {
+            RawStCacheOperator::Wb => ast::StCacheOperator::Writeback,
+            RawStCacheOperator::Cg => ast::StCacheOperator::L2Only,
+            RawStCacheOperator::Cs => ast::StCacheOperator::Streaming,
+            RawStCacheOperator::Wt => ast::StCacheOperator::Writethrough,
+        }
+    }
+}
+
+impl From<RawLdStQualifier> for ast::LdStQualifier {
+    fn from(value: RawLdStQualifier) -> Self {
+        match value {
+            RawLdStQualifier::Weak => ast::LdStQualifier::Weak,
+            RawLdStQualifier::Volatile => ast::LdStQualifier::Volatile,
+        }
+    }
 }
 
 type PtxParserState = Vec<PtxError>;
@@ -312,9 +325,7 @@ fn s32<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<i32> {
     .parse_next(stream)
 }
 
-fn immediate_value<'a, 'input>(
-    stream: &mut PtxParser<'a, 'input>,
-) -> PResult<ast::ImmediateValue> {
+fn immediate_value<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::ImmediateValue> {
     alt((
         int_immediate,
         f32.map(ast::ImmediateValue::F32),
@@ -387,6 +398,8 @@ pub enum PtxError {
         #[from]
         source: ParseFloatError,
     },
+    #[error("")]
+    Todo,
     #[error("")]
     SyntaxError,
     #[error("")]
@@ -555,7 +568,8 @@ derive_parser!(
 
     #[derive(Copy, Clone, PartialEq, Eq, Hash)]
     pub enum StateSpace {
-        Reg
+        Reg,
+        Generic,
     }
 
     #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -565,33 +579,84 @@ derive_parser!(
     pub enum ScalarType { }
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
-    mov.type  d, a => {
+    mov{.vec}.type  d, a => {
         Instruction::Mov {
-            data: MovDetails::new(type_.into()),
+            data: MovDetails::new(vec, type_),
             arguments: MovArgs { dst: d, src: a },
         }
     }
-    .type: ScalarType = { .pred,
-                          .b16, .b32, .b64,
-                          .u16, .u32, .u64,
-                          .s16, .s32, .s64,
-                                .f32, .f64 };
+    .vec: VectorPrefix = { .v2, .v4 };
+    .type: ScalarType =  { .pred,
+                           .b16, .b32, .b64,
+                           .u16, .u32, .u64,
+                           .s16, .s32, .s64,
+                                 .f32, .f64 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-st
     st{.weak}{.ss}{.cop}{.level::eviction_priority}{.level::cache_hint}{.vec}.type  [a], b{, cache_policy} => {
-        todo!()
+        if level_eviction_priority.is_some() || level_cache_hint || cache_policy.is_some() {
+            state.push(PtxError::Todo);
+        }
+        Instruction::St {
+            data: StData {
+                qualifier: weak.unwrap_or(RawLdStQualifier::Weak).into(),
+                state_space: ss.unwrap_or(StateSpace::Generic),
+                caching: cop.unwrap_or(RawStCacheOperator::Wb).into(),
+                typ: Type::maybe_vector(vec, type_)
+            },
+            arguments: StArgs { src1:a, src2:b }
+        }
     }
     st.volatile{.ss}{.vec}.type                                                     [a], b => {
-        todo!()
+        Instruction::St {
+            data: StData {
+                qualifier: volatile.into(),
+                state_space: ss.unwrap_or(StateSpace::Generic),
+                caching: ast::StCacheOperator::Writeback,
+                typ: Type::maybe_vector(vec, type_)
+            },
+            arguments: StArgs { src1:a, src2:b }
+        }
     }
     st.relaxed.scope{.ss}{.level::eviction_priority}{.level::cache_hint}{.vec}.type [a], b{, cache_policy} => {
-        todo!()
+        if level_eviction_priority.is_some() || level_cache_hint || cache_policy.is_some() {
+            state.push(PtxError::Todo);
+        }
+        Instruction::St {
+            data: StData {
+                qualifier: ast::LdStQualifier::Relaxed(scope),
+                state_space: ss.unwrap_or(StateSpace::Generic),
+                caching: ast::StCacheOperator::Writeback,
+                typ: Type::maybe_vector(vec, type_)
+            },
+            arguments: StArgs { src1:a, src2:b }
+        }
     }
     st.release.scope{.ss}{.level::eviction_priority}{.level::cache_hint}{.vec}.type [a], b{, cache_policy} => {
-        todo!()
+        if level_eviction_priority.is_some() || level_cache_hint || cache_policy.is_some() {
+            state.push(PtxError::Todo);
+        }
+        Instruction::St {
+            data: StData {
+                qualifier: ast::LdStQualifier::Release(scope),
+                state_space: ss.unwrap_or(StateSpace::Generic),
+                caching: ast::StCacheOperator::Writeback,
+                typ: Type::maybe_vector(vec, type_)
+            },
+            arguments: StArgs { src1:a, src2:b }
+        }
     }
     st.mmio.relaxed.sys{.global}.type                                               [a], b => {
-        todo!()
+        state.push(PtxError::Todo);
+        Instruction::St {
+            data: StData {
+                qualifier: ast::LdStQualifier::Relaxed(MemScope::Sys),
+                state_space: global.unwrap_or(StateSpace::Generic),
+                caching: ast::StCacheOperator::Writeback,
+                typ: type_.into()
+            },
+            arguments: StArgs { src1:a, src2:b }
+        }
     }
 
     .ss: StateSpace =           { .global, .local, .param{::func}, .shared{::cta, ::cluster} };
@@ -605,6 +670,8 @@ derive_parser!(
                                   .u8, .u16, .u32, .u64,
                                   .s8, .s16, .s32, .s64,
                                   .f32, .f64 };
+    RawLdStQualifier =          { .weak, .volatile };
+    StateSpace =                { .global };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-ld
     ld{.weak}{.ss}{.cop}{.level::eviction_priority}{.level::cache_hint}{.level::prefetch_size}{.vec}.type   d, [a]{.unified}{, cache_policy} => {

@@ -1,3 +1,5 @@
+use super::MemScope;
+
 #[derive(Clone)]
 pub enum ParsedOperand<Ident> {
     Reg(Ident),
@@ -13,4 +15,21 @@ pub enum ImmediateValue {
     S64(i64),
     F32(f32),
     F64(f64),
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum StCacheOperator {
+    Writeback,
+    L2Only,
+    Streaming,
+    Writethrough,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum LdStQualifier {
+    Weak,
+    Volatile,
+    Relaxed(MemScope),
+    Acquire(MemScope),
+    Release(MemScope),
 }

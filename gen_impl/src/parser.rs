@@ -97,7 +97,7 @@ impl Parse for CodeBlock {
 }
 
 pub struct Rule {
-    pub modifier: DotModifier,
+    pub modifier: Option<DotModifier>,
     pub type_: Option<Type>,
     pub alternatives: Vec<DotModifier>,
 }
@@ -105,6 +105,7 @@ pub struct Rule {
 impl Rule {
     fn peek(input: syn::parse::ParseStream) -> bool {
         DotModifier::peek(input)
+            || (input.peek(Ident) && input.peek2(Token![=]) && !input.peek3(Token![>]))
     }
 
     fn parse_alternatives(input: syn::parse::ParseStream) -> syn::Result<Vec<DotModifier>> {
@@ -181,12 +182,16 @@ impl Parse for IdentOrTypeSuffix {
 
 impl Parse for Rule {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let modifier = input.parse::<DotModifier>()?;
-        let type_ = if input.peek(Token![:]) {
-            input.parse::<Token![:]>()?;
-            Some(input.parse::<Type>()?)
+        let (modifier, type_) = if DotModifier::peek(input) {
+            let modifier = Some(input.parse::<DotModifier>()?);
+            if input.peek(Token![:]) {
+                input.parse::<Token![:]>()?;
+                (modifier, Some(input.parse::<Type>()?))
+            } else {
+                (modifier, None)
+            }
         } else {
-            None
+            (None, Some(input.parse::<Type>()?))
         };
         input.parse::<Token![=]>()?;
         let content;
