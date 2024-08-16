@@ -2,9 +2,10 @@ use gen_impl::parser;
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, ToTokens};
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::{collections::hash_map, hash::Hash, rc::Rc};
+use std::{collections::hash_map, hash::Hash, iter, rc::Rc};
 use syn::{
-    parse_macro_input, punctuated::Punctuated, Ident, ItemEnum, Token, Type, TypePath, Variant,
+    parse_macro_input, parse_quote, punctuated::Punctuated, Ident, ItemEnum, Token, Type, TypePath,
+    Variant,
 };
 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#vectors
@@ -176,10 +177,15 @@ impl SingleOpcodeDefinition {
             })
             .chain(self.arguments.0.iter().map(|arg| {
                 let name = &arg.ident;
-                if arg.optional {
-                    quote! { #name : Option<ParsedOperand<'input>> }
+                let arg_type = if arg.unified {
+                    quote! { (ParsedOperand<'input>, bool) }
                 } else {
-                    quote! { #name : ParsedOperand<'input> }
+                    quote! { ParsedOperand<'input> }
+                };
+                if arg.optional {
+                    quote! { #name : Option<#arg_type> }
+                } else {
+                    quote! { #name : #arg_type }
                 }
             }))
     }
@@ -477,7 +483,8 @@ fn emit_parse_function(
             #type_name :: #variant => Some(#value),
         }
     });
-    let modifier_names = all_modifier.iter().map(|m| m.dot_capitalized());
+    let modifier_names = iter::once(Ident::new("DotUnified", Span::call_site()))
+        .chain(all_modifier.iter().map(|m| m.dot_capitalized()));
     quote! {
         impl<'input> #type_name<'input> {
             fn opcode_text(self) -> Option<&'static str> {
@@ -550,7 +557,16 @@ fn emit_definition_parser(
                     }
                 }
             }
-            DotModifierRef::Direct {  type_: Some(_), .. } => { todo!() }
+            DotModifierRef::Direct {  optional: false, type_: Some(type_), name, value } => {
+                let variable = name.ident();
+                let variant = value.dot_capitalized();
+                let parsed_variant = value.variant_capitalized();
+                quote! {
+                    any.verify(|t| *t == #token_type :: #variant).parse_next(&mut stream)?;
+                    #variable = #type_ :: #parsed_variant;
+                }
+            }
+            DotModifierRef::Direct {  optional: true, type_: Some(_), .. } => { todo!() }
             DotModifierRef::Indirect { optional, value, .. } => {
                 let variants = value.alternatives.iter().map(|alt| {
                     let type_ = value.type_.as_ref().unwrap();
@@ -669,7 +685,7 @@ fn emit_definition_parser(
                 DotModifierRef::Direct {
                     optional: false,
                     name,
-                    type_: Some(type_),
+                    type_: Some(_),
                     ..
                 } => {
                     let variable = name.ident();
@@ -700,11 +716,11 @@ fn emit_definition_parser(
         let comma = if idx == 0 {
             quote! { empty }
         } else {
-            quote! { any.verify(|t| *t == #token_type::Comma) }
+            quote! { any.verify(|t| *t == #token_type::Comma).void() }
         };
         let pre_bracket = if arg.pre_bracket {
             quote! {
-                any.verify(|t| *t == #token_type::LBracket).map(|_| ())
+                any.verify(|t| *t == #token_type::LBracket).void()
             }
         } else {
             quote! {
@@ -713,7 +729,7 @@ fn emit_definition_parser(
         };
         let pre_pipe = if arg.pre_pipe {
             quote! {
-                any.verify(|t| *t == #token_type::Or).map(|_| ())
+                any.verify(|t| *t == #token_type::Or).void()
             }
         } else {
             quote! {
@@ -736,24 +752,42 @@ fn emit_definition_parser(
         };
         let post_bracket = if arg.post_bracket {
             quote! {
-                any.verify(|t| *t == #token_type::RBracket).map(|_| ())
+                any.verify(|t| *t == #token_type::RBracket).void()
             }
         } else {
             quote! {
                 empty
             }
         };
-        let parser = quote! {
-            (#comma, #pre_bracket, #pre_pipe, #can_be_negated, #operand, #post_bracket)
-        };
-        let arg_name = &arg.ident;
-        if arg.optional {
+        let unified = if arg.unified {
             quote! {
-                let #arg_name = opt(#parser.map(|(_, _, _, _, name, _)| name)).parse_next(stream)?;
+                opt(any.verify(|t| *t == #token_type::DotUnified).void()).map(|u| u.is_some())
             }
         } else {
             quote! {
-                let #arg_name = #parser.map(|(_, _, _, _, name, _)| name).parse_next(stream)?;
+                empty
+            }
+        };
+        let pattern = quote! {
+            (#comma, #pre_bracket, #pre_pipe, #can_be_negated, #operand, #post_bracket, #unified)
+        };
+        let arg_name = &arg.ident;
+        let inner_parser = if arg.unified {
+            quote! {
+                #pattern.map(|(_, _, _, _, name, _, unified)| (name, unified))
+            }
+        } else {
+            quote! {
+                #pattern.map(|(_, _, _, _, name, _, _)| name)
+            }
+        };
+        if arg.optional {
+            quote! {
+                let #arg_name = opt(#inner_parser).parse_next(stream)?;
+            }
+        } else {
+            quote! {
+                let #arg_name = #inner_parser.parse_next(stream)?;
             }
         }
     });
@@ -812,6 +846,10 @@ fn write_definitions_into_tokens<'a>(
         };
         variants.push(arg);
     }
+    variants.push(parse_quote! {
+        #[token(".unified")]
+        DotUnified
+    });
     (all_opcodes, all_modifiers)
 }
 

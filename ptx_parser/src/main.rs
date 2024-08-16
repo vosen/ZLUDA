@@ -73,7 +73,7 @@ gen::generate_instruction_type!(
         },
         Add {
             type: { data.type_().into() },
-            data: ArithDetails,
+            data: ast::ArithDetails,
             arguments<T>: {
                 dst: T,
                 src1: T,
@@ -101,7 +101,7 @@ gen::generate_instruction_type!(
 pub struct LdDetails {
     pub qualifier: ast::LdStQualifier,
     pub state_space: StateSpace,
-    pub caching: LdCacheOperator,
+    pub caching: ast::LdCacheOperator,
     pub typ: Type,
     pub non_coherent: bool,
 }
@@ -143,15 +143,6 @@ pub enum RoundingMode {
     Zero,
     NegativeInf,
     PositiveInf,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub enum LdCacheOperator {
-    Cached,
-    L2Only,
-    Streaming,
-    LastUse,
-    Uncached,
 }
 
 #[derive(PartialEq, Eq, Clone, Hash)]
@@ -203,11 +194,34 @@ impl From<RawStCacheOperator> for ast::StCacheOperator {
     }
 }
 
+impl From<RawLdCacheOperator> for ast::LdCacheOperator {
+    fn from(value: RawLdCacheOperator) -> Self {
+        match value {
+            RawLdCacheOperator::Ca => ast::LdCacheOperator::Cached,
+            RawLdCacheOperator::Cg => ast::LdCacheOperator::L2Only,
+            RawLdCacheOperator::Cs => ast::LdCacheOperator::Streaming,
+            RawLdCacheOperator::Lu => ast::LdCacheOperator::LastUse,
+            RawLdCacheOperator::Cv => ast::LdCacheOperator::Uncached,
+        }
+    }
+}
+
 impl From<RawLdStQualifier> for ast::LdStQualifier {
     fn from(value: RawLdStQualifier) -> Self {
         match value {
             RawLdStQualifier::Weak => ast::LdStQualifier::Weak,
             RawLdStQualifier::Volatile => ast::LdStQualifier::Volatile,
+        }
+    }
+}
+
+impl From<RawFloatRounding> for ast::RoundingMode {
+    fn from(value: RawFloatRounding) -> Self {
+        match value {
+            RawFloatRounding::Rn => ast::RoundingMode::NearestEven,
+            RawFloatRounding::Rz => ast::RoundingMode::Zero,
+            RawFloatRounding::Rm => ast::RoundingMode::NegativeInf,
+            RawFloatRounding::Rp => ast::RoundingMode::PositiveInf,
         }
     }
 }
@@ -332,6 +346,12 @@ fn immediate_value<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<as
         f64.map(ast::ImmediateValue::F64),
     ))
     .parse_next(stream)
+}
+
+fn fn_body<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<Vec<Instruction<ParsedOperand<'input>>>> {
+    repeat(3.., terminated(parse_instruction, Token::Semicolon)).parse_next(stream)
 }
 
 impl<Ident> ast::ParsedOperand<Ident> {
@@ -518,7 +538,7 @@ impl<'input, I: Stream<Token = Self> + StreamIsPartial, E: ParserError<I>> Parse
     for Token<'input>
 {
     fn parse_next(&mut self, input: &mut I) -> PResult<Self, E> {
-        any.parse_next(input)
+        any.verify(|t| t == self).parse_next(input)
     }
 }
 
@@ -540,14 +560,14 @@ derive_parser!(
         Comma,
         #[token(".")]
         Dot,
+        #[token(";")]
+        Semicolon,
         #[regex(r"[a-zA-Z][a-zA-Z0-9_$]*|[_$%][a-zA-Z0-9_$]+", |lex| lex.slice(), priority = 0)]
         Ident(&'input str),
         #[token("|")]
         Or,
         #[token("!")]
         Not,
-        #[token(";")]
-        Semicolon,
         #[token("[")]
         LBracket,
         #[token("]")]
@@ -675,23 +695,82 @@ derive_parser!(
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-ld
     ld{.weak}{.ss}{.cop}{.level::eviction_priority}{.level::cache_hint}{.level::prefetch_size}{.vec}.type   d, [a]{.unified}{, cache_policy} => {
-        todo!()
+        let (a, unified) = a;
+        if level_eviction_priority.is_some() || level_cache_hint || level_prefetch_size.is_some() || unified || cache_policy.is_some() {
+            state.push(PtxError::Todo);
+        }
+        Instruction::Ld {
+            data: LdDetails {
+                qualifier: weak.unwrap_or(RawLdStQualifier::Weak).into(),
+                state_space: ss.unwrap_or(StateSpace::Generic),
+                caching: cop.unwrap_or(RawLdCacheOperator::Ca).into(),
+                typ: Type::maybe_vector(vec, type_),
+                non_coherent: false
+            },
+            arguments: LdArgs { dst:d, src:a }
+        }
     }
     ld.volatile{.ss}{.level::prefetch_size}{.vec}.type                                                      d, [a] => {
-        todo!()
+        if level_prefetch_size.is_some() {
+            state.push(PtxError::Todo);
+        }
+        Instruction::Ld {
+            data: LdDetails {
+                qualifier: volatile.into(),
+                state_space: ss.unwrap_or(StateSpace::Generic),
+                caching: ast::LdCacheOperator::Cached,
+                typ: Type::maybe_vector(vec, type_),
+                non_coherent: false
+            },
+            arguments: LdArgs { dst:d, src:a }
+        }
     }
     ld.relaxed.scope{.ss}{.level::eviction_priority}{.level::cache_hint}{.level::prefetch_size}{.vec}.type  d, [a]{, cache_policy} => {
-        todo!()
+        if level_eviction_priority.is_some() || level_cache_hint || level_prefetch_size.is_some() || cache_policy.is_some() {
+            state.push(PtxError::Todo);
+        }
+        Instruction::Ld {
+            data: LdDetails {
+                qualifier: ast::LdStQualifier::Relaxed(scope),
+                state_space: ss.unwrap_or(StateSpace::Generic),
+                caching: ast::LdCacheOperator::Cached,
+                typ: Type::maybe_vector(vec, type_),
+                non_coherent: false
+            },
+            arguments: LdArgs { dst:d, src:a }
+        }
     }
     ld.acquire.scope{.ss}{.level::eviction_priority}{.level::cache_hint}{.level::prefetch_size}{.vec}.type  d, [a]{, cache_policy} => {
-        todo!()
+        if level_eviction_priority.is_some() || level_cache_hint || level_prefetch_size.is_some() || cache_policy.is_some() {
+            state.push(PtxError::Todo);
+        }
+        Instruction::Ld {
+            data: LdDetails {
+                qualifier: ast::LdStQualifier::Acquire(scope),
+                state_space: ss.unwrap_or(StateSpace::Generic),
+                caching: ast::LdCacheOperator::Cached,
+                typ: Type::maybe_vector(vec, type_),
+                non_coherent: false
+            },
+            arguments: LdArgs { dst:d, src:a }
+        }
     }
     ld.mmio.relaxed.sys{.global}.type                                                                       d, [a] => {
-        todo!()
+        state.push(PtxError::Todo);
+        Instruction::Ld {
+            data: LdDetails {
+                qualifier: ast::LdStQualifier::Relaxed(MemScope::Sys),
+                state_space: global.unwrap_or(StateSpace::Generic),
+                caching: ast::LdCacheOperator::Cached,
+                typ: type_.into(),
+                non_coherent: false
+            },
+            arguments: LdArgs { dst:d, src:a }
+        }
     }
 
     .ss: StateSpace =                       { .const, .global, .local, .param{::entry, ::func}, .shared{::cta, ::cluster} };
-    .cop: RawCacheOp =                      { .ca, .cg, .cs, .lu, .cv };
+    .cop: RawLdCacheOperator =              { .ca, .cg, .cs, .lu, .cv };
     .level::eviction_priority: EvictionPriority =
                                             { .L1::evict_normal, .L1::evict_unchanged, .L1::evict_first, .L1::evict_last, .L1::no_allocate };
     .level::cache_hint =                    { .L2::cache_hint };
@@ -702,47 +781,144 @@ derive_parser!(
                                               .u8, .u16, .u32, .u64,
                                               .s8, .s16, .s32, .s64,
                                               .f32, .f64 };
+    RawLdStQualifier =                      { .weak, .volatile };
+    StateSpace =                            { .global };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#integer-arithmetic-instructions-add
     add.type        d, a, b => {
-        todo!()
+        Instruction::Add {
+            data: ast::ArithDetails::Integer(
+                ast::ArithInteger {
+                    type_,
+                    saturate: false
+                }
+            ),
+            arguments: AddArgs {
+                dst: d, src1: a, src2: b
+            }
+        }
     }
     add{.sat}.s32   d, a, b => {
-        todo!()
+        Instruction::Add {
+            data: ast::ArithDetails::Integer(
+                ast::ArithInteger {
+                    type_: s32,
+                    saturate: sat
+                }
+            ),
+            arguments: AddArgs {
+                dst: d, src1: a, src2: b
+            }
+        }
     }
 
     .type: ScalarType = { .u16, .u32, .u64,
                           .s16, .s64,
                           .u16x2, .s16x2 };
+    ScalarType =        { .s32 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-add
     add{.rnd}{.ftz}{.sat}.f32  d, a, b => {
-        todo!()
+        Instruction::Add {
+            data: ast::ArithDetails::Float(
+                ast::ArithFloat {
+                    type_: f32,
+                    rounding: rnd.map(Into::into),
+                    flush_to_zero: Some(ftz),
+                    saturate: sat
+                }
+            ),
+            arguments: AddArgs {
+                dst: d, src1: a, src2: b
+            }
+        }
     }
     add{.rnd}.f64              d, a, b => {
-        todo!()
+        Instruction::Add {
+            data: ast::ArithDetails::Float(
+                ast::ArithFloat {
+                    type_: f64,
+                    rounding: rnd.map(Into::into),
+                    flush_to_zero: None,
+                    saturate: false
+                }
+            ),
+            arguments: AddArgs {
+                dst: d, src1: a, src2: b
+            }
+        }
     }
 
     .rnd: RawFloatRounding = { .rn, .rz, .rm, .rp };
+    ScalarType =        { .f32, .f64 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#half-precision-floating-point-instructions-add
     add{.rnd}{.ftz}{.sat}.f16   d, a, b => {
-        todo!()
+        Instruction::Add {
+            data: ast::ArithDetails::Float(
+                ast::ArithFloat {
+                    type_: f16,
+                    rounding: rnd.map(Into::into),
+                    flush_to_zero: Some(ftz),
+                    saturate: sat
+                }
+            ),
+            arguments: AddArgs {
+                dst: d, src1: a, src2: b
+            }
+        }
     }
     add{.rnd}{.ftz}{.sat}.f16x2 d, a, b => {
-        todo!()
+        Instruction::Add {
+            data: ast::ArithDetails::Float(
+                ast::ArithFloat {
+                    type_: f16x2,
+                    rounding: rnd.map(Into::into),
+                    flush_to_zero: Some(ftz),
+                    saturate: sat
+                }
+            ),
+            arguments: AddArgs {
+                dst: d, src1: a, src2: b
+            }
+        }
     }
     add{.rnd}.bf16              d, a, b => {
-        todo!()
+        Instruction::Add {
+            data: ast::ArithDetails::Float(
+                ast::ArithFloat {
+                    type_: bf16,
+                    rounding: rnd.map(Into::into),
+                    flush_to_zero: None,
+                    saturate: false
+                }
+            ),
+            arguments: AddArgs {
+                dst: d, src1: a, src2: b
+            }
+        }
     }
     add{.rnd}.bf16x2            d, a, b => {
-        todo!()
+        Instruction::Add {
+            data: ast::ArithDetails::Float(
+                ast::ArithFloat {
+                    type_: bf16x2,
+                    rounding: rnd.map(Into::into),
+                    flush_to_zero: None,
+                    saturate: false
+                }
+            ),
+            arguments: AddArgs {
+                dst: d, src1: a, src2: b
+            }
+        }
     }
 
     .rnd: RawFloatRounding = { .rn };
+    ScalarType =        { .f16, .f16x2, .bf16, .bf16x2 };
 
-    ret => {
-        todo!()
+    ret{.uni} => {
+        Instruction::Ret { data: RetData { uniform: uni } }
     }
 
 );
@@ -776,7 +952,8 @@ fn main() {
         input: &tokens[..],
         state: Vec::new(),
     };
-    parse_instruction(&mut stream).unwrap();
+    let fn_body = fn_body.parse(stream).unwrap();
+    println!("{}", fn_body.len());
     //parse_prefix(&mut lexer);
     let mut parser = &*tokens;
     println!("{}", mem::size_of::<Token>());
