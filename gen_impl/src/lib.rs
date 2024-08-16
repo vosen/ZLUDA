@@ -2,11 +2,13 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 use syn::{
     braced, parse::Parse, punctuated::Punctuated, token, Expr, Ident, Token, Type, TypeParam,
+    Visibility,
 };
 
 pub mod parser;
 
 pub struct GenerateInstructionType {
+    pub visibility: Option<Visibility>,
     pub name: Ident,
     pub type_parameters: Punctuated<TypeParam, Token![,]>,
     pub short_parameters: Punctuated<Ident, Token![,]>,
@@ -16,16 +18,17 @@ pub struct GenerateInstructionType {
 impl GenerateInstructionType {
     pub fn emit_arg_types(&self, tokens: &mut TokenStream) {
         for v in self.variants.iter() {
-            v.emit_type(&self.type_parameters, tokens);
+            v.emit_type(&self.visibility, &self.type_parameters, tokens);
         }
     }
 
     pub fn emit_instruction_type(&self, tokens: &mut TokenStream) {
+        let vis = &self.visibility;
         let type_name = &self.name;
         let type_parameters = &self.type_parameters;
         let variants = self.variants.iter().map(|v| v.emit_variant());
         quote! {
-            enum #type_name<#type_parameters> {
+            #vis enum #type_name<#type_parameters> {
                 #(#variants),*
             }
         }
@@ -133,6 +136,11 @@ impl VisitKind {
 
 impl Parse for GenerateInstructionType {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let visibility = if !input.peek(Token![enum]) {
+            Some(input.parse::<Visibility>()?)
+        } else {
+            None
+        };
         input.parse::<Token![enum]>()?;
         let name = input.parse::<Ident>()?;
         input.parse::<Token![<]>()?;
@@ -146,6 +154,7 @@ impl Parse for GenerateInstructionType {
         braced!(variants_buffer in input);
         let variants = variants_buffer.parse_terminated(InstructionVariant::parse, Token![,])?;
         Ok(Self {
+            visibility,
             name,
             type_parameters,
             short_parameters,
@@ -262,6 +271,7 @@ impl InstructionVariant {
 
     fn emit_type(
         &self,
+        vis: &Option<Visibility>,
         type_parameters: &Punctuated<TypeParam, Token![,]>,
         tokens: &mut TokenStream,
     ) {
@@ -275,9 +285,9 @@ impl InstructionVariant {
         } else {
             None
         };
-        let fields = arguments.fields.iter().map(ArgumentField::emit_field);
+        let fields = arguments.fields.iter().map(|f| f.emit_field(vis));
         quote! {
-            struct #name #type_parameters {
+            #vis struct #name #type_parameters {
                 #(#fields),*
             }
         }
@@ -559,11 +569,11 @@ impl ArgumentField {
         }
     }
 
-    fn emit_field(&self) -> TokenStream {
+    fn emit_field(&self, vis: &Option<Visibility>) -> TokenStream {
         let name = &self.name;
         let type_ = &self.repr;
         quote! {
-            #name: #type_
+            #vis #name: #type_
         }
     }
 }

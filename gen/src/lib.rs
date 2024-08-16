@@ -178,9 +178,9 @@ impl SingleOpcodeDefinition {
             .chain(self.arguments.0.iter().map(|arg| {
                 let name = &arg.ident;
                 let arg_type = if arg.unified {
-                    quote! { (ParsedOperand<'input>, bool) }
+                    quote! { (ParsedOperandStr<'input>, bool) }
                 } else {
-                    quote! { ParsedOperand<'input> }
+                    quote! { ParsedOperandStr<'input> }
                 };
                 if arg.optional {
                     quote! { #name : Option<#arg_type> }
@@ -415,7 +415,7 @@ fn emit_parse_function(
                 let code_block = &def.code_block.0;
                 let args = def.function_arguments_declarations();
                 quote! {
-                    fn #fn_name<'input>(state: &mut PtxParserState, #(#args),* ) -> Instruction<ParsedOperand<'input>> #code_block
+                    fn #fn_name<'input>(state: &mut PtxParserState, #(#args),* ) -> Instruction<ParsedOperandStr<'input>> #code_block
                 }
             })
         })
@@ -506,7 +506,7 @@ fn emit_parse_function(
 
         #(#fns_)*
 
-        fn parse_instruction<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> winnow::error::PResult<Instruction<ParsedOperand<'input>>>
+        fn parse_instruction<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> winnow::error::PResult<Instruction<ParsedOperandStr<'input>>>
         {
             use winnow::Parser;
             use winnow::token::*;
@@ -747,7 +747,7 @@ fn emit_definition_parser(
         };
         let operand = {
             quote! {
-                ParsedOperand::parse
+                ParsedOperandStr::parse
             }
         };
         let post_bracket = if arg.post_bracket {
