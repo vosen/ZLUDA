@@ -1,3 +1,5 @@
+use std::intrinsics::unreachable;
+
 use super::{MemScope, ScalarType, StateSpace, VectorPrefix};
 use bitflags::bitflags;
 
@@ -6,25 +8,6 @@ pub enum Statement<P: Operand> {
     Variable(MultiVariable<P::Ident>),
     Instruction(Option<PredAt<P::Ident>>, Instruction<P>),
     Block(Vec<Statement<P>>),
-}
-
-pub struct MultiVariable<ID> {
-    pub var: Variable<ID>,
-    pub count: Option<u32>,
-}
-
-#[derive(Clone)]
-pub struct Variable<ID> {
-    pub align: Option<u32>,
-    pub v_type: Type,
-    pub state_space: StateSpace,
-    pub name: ID,
-    pub array_init: Vec<u8>,
-}
-
-pub struct PredAt<ID> {
-    pub not: bool,
-    pub label: ID,
 }
 
 gen::generate_instruction_type!(
@@ -68,12 +51,43 @@ gen::generate_instruction_type!(
                 src2: T,
             }
         },
+        Mul {
+            type: { data.type_().into() },
+            data: MulDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { data.dst_type().into() },
+                },
+                src1: T,
+                src2: T,
+            }
+        },
         Ret {
             data: RetData
         },
         Trap { }
     }
 );
+
+pub struct MultiVariable<ID> {
+    pub var: Variable<ID>,
+    pub count: Option<u32>,
+}
+
+#[derive(Clone)]
+pub struct Variable<ID> {
+    pub align: Option<u32>,
+    pub v_type: Type,
+    pub state_space: StateSpace,
+    pub name: ID,
+    pub array_init: Vec<u8>,
+}
+
+pub struct PredAt<ID> {
+    pub not: bool,
+    pub label: ID,
+}
 
 pub trait Visitor<T> {
     fn visit(&mut self, args: &T, type_: &Type, space: StateSpace, is_dst: bool);
@@ -185,7 +199,7 @@ pub enum ArithDetails {
 }
 
 impl ArithDetails {
-    pub fn type_(&self) -> super::ScalarType {
+    pub fn type_(&self) -> ScalarType {
         match self {
             ArithDetails::Integer(t) => t.type_,
             ArithDetails::Float(arith) => arith.type_,
@@ -195,13 +209,13 @@ impl ArithDetails {
 
 #[derive(Copy, Clone)]
 pub struct ArithInteger {
-    pub type_: super::ScalarType,
+    pub type_: ScalarType,
     pub saturate: bool,
 }
 
 #[derive(Copy, Clone)]
 pub struct ArithFloat {
-    pub type_: super::ScalarType,
+    pub type_: ScalarType,
     pub rounding: Option<RoundingMode>,
     pub flush_to_zero: Option<bool>,
     pub saturate: bool,
@@ -291,4 +305,45 @@ pub enum Directive<'input, O: Operand> {
 pub struct Module<'input> {
     pub version: (u8, u8),
     pub directives: Vec<Directive<'input, ParsedOperand<&'input str>>>,
+}
+
+#[derive(Copy, Clone)]
+pub enum MulDetails {
+    Integer {
+        type_: ScalarType,
+        control: MulIntControl,
+    },
+    Float(ArithFloat),
+}
+
+impl MulDetails {
+    fn type_(&self) -> ScalarType {
+        match self {
+            MulDetails::Integer { type_, .. } => *type_,
+            MulDetails::Float(arith) => arith.type_,
+        }
+    }
+
+    fn dst_type(&self) -> ScalarType {
+        match self {
+            MulDetails::Integer {
+                type_,
+                control: MulIntControl::Wide,
+            } => match type_ {
+                ScalarType::U16 => ScalarType::U32,
+                ScalarType::S16 => ScalarType::S32,
+                ScalarType::U32 => ScalarType::U64,
+                ScalarType::S32 => ScalarType::S64,
+                _ => unreachable!(),
+            },
+            _ => self.type_(),
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum MulIntControl {
+    Low,
+    High,
+    Wide,
 }

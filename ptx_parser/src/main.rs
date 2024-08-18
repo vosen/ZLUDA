@@ -16,6 +16,16 @@ use winnow::{prelude::*, Stateful};
 mod ast;
 pub use ast::*;
 
+impl From<RawMulIntControl> for ast::MulIntControl {
+    fn from(value: RawMulIntControl) -> Self {
+        match value {
+            RawMulIntControl::Lo => ast::MulIntControl::Low,
+            RawMulIntControl::Hi => ast::MulIntControl::High,
+            RawMulIntControl::Wide => ast::MulIntControl::Wide,
+        }
+    }
+}
+
 impl From<RawStCacheOperator> for ast::StCacheOperator {
     fn from(value: RawStCacheOperator) -> Self {
         match value {
@@ -1066,7 +1076,6 @@ derive_parser!(
             arguments: ast::StArgs { src1:a, src2:b }
         }
     }
-
     .ss: StateSpace =           { .global, .local, .param{::func}, .shared{::cta, ::cluster} };
     .level::eviction_priority: EvictionPriority =
                                 { .L1::evict_normal, .L1::evict_unchanged, .L1::evict_first, .L1::evict_last, .L1::no_allocate };
@@ -1156,7 +1165,6 @@ derive_parser!(
             arguments: LdArgs { dst:d, src:a }
         }
     }
-
     .ss: StateSpace =                       { .const, .global, .local, .param{::entry, ::func}, .shared{::cta, ::cluster} };
     .cop: RawLdCacheOperator =              { .ca, .cg, .cs, .lu, .cv };
     .level::eviction_priority: EvictionPriority =
@@ -1199,7 +1207,6 @@ derive_parser!(
             }
         }
     }
-
     .type: ScalarType = { .u16, .u32, .u64,
                           .s16, .s64,
                           .u16x2, .s16x2 };
@@ -1236,7 +1243,6 @@ derive_parser!(
             }
         }
     }
-
     .rnd: RawFloatRounding = { .rn, .rz, .rm, .rp };
     ScalarType =        { .f32, .f64 };
 
@@ -1301,10 +1307,124 @@ derive_parser!(
             }
         }
     }
-
     .rnd: RawFloatRounding = { .rn };
     ScalarType =        { .f16, .f16x2, .bf16, .bf16x2 };
 
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-mul
+    mul.mode.type  d, a, b => {
+        ast::Instruction::Mul {
+            data: ast::MulDetails::Integer {
+                type_,
+                control: mode.into()
+            },
+            arguments: MulArgs { dst: d, src1: a, src2: b }
+        }
+    }
+    .mode: RawMulIntControl =   { .hi, .lo };
+    .type: ScalarType =         { .u16, .u32, .u64,
+                                  .s16, .s32, .s64 };
+    // "The .wide suffix is supported only for 16- and 32-bit integer types"
+    mul.wide.type  d, a, b => {
+        ast::Instruction::Mul {
+            data: ast::MulDetails::Integer {
+                type_,
+                control: wide.into()
+            },
+            arguments: MulArgs { dst: d, src1: a, src2: b }
+        }
+    }
+    .type: ScalarType = { .u16, .u32,
+                          .s16, .s32 };
+    RawMulIntControl =  { .wide };
+
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-mul
+    mul{.rnd}{.ftz}{.sat}.f32  d, a, b => {
+        ast::Instruction::Mul {
+            data: ast::MulDetails::Float (
+                ArithFloat {
+                    type_: f32,
+                    rounding: rnd.map(Into::into),
+                    flush_to_zero: Some(ftz),
+                    saturate: sat,
+                }
+            ),
+            arguments: MulArgs { dst: d, src1: a, src2: b }
+        }
+    }
+    mul{.rnd}.f64              d, a, b => {
+        ast::Instruction::Mul {
+            data: ast::MulDetails::Float (
+                ArithFloat {
+                    type_: f64,
+                    rounding: rnd.map(Into::into),
+                    flush_to_zero: None,
+                    saturate: false,
+                }
+            ),
+            arguments: MulArgs { dst: d, src1: a, src2: b }
+        }
+    }
+    .rnd: RawFloatRounding = { .rn, .rz, .rm, .rp };
+    ScalarType = { .f32, .f64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#half-precision-floating-point-instructions-mul
+    mul{.rnd}{.ftz}{.sat}.f16   d, a, b => {
+        ast::Instruction::Mul {
+            data: ast::MulDetails::Float (
+                ArithFloat {
+                    type_: f16,
+                    rounding: rnd.map(Into::into),
+                    flush_to_zero: Some(ftz),
+                    saturate: sat,
+                }
+            ),
+            arguments: MulArgs { dst: d, src1: a, src2: b }
+        }
+    }
+    mul{.rnd}{.ftz}{.sat}.f16x2 d, a, b => {
+        ast::Instruction::Mul {
+            data: ast::MulDetails::Float (
+                ArithFloat {
+                    type_: f16x2,
+                    rounding: rnd.map(Into::into),
+                    flush_to_zero: Some(ftz),
+                    saturate: sat,
+                }
+            ),
+            arguments: MulArgs { dst: d, src1: a, src2: b }
+        }
+    }
+    mul{.rnd}.bf16   d, a, b => {
+        ast::Instruction::Mul {
+            data: ast::MulDetails::Float (
+                ArithFloat {
+                    type_: bf16,
+                    rounding: rnd.map(Into::into),
+                    flush_to_zero: None,
+                    saturate: false,
+                }
+            ),
+            arguments: MulArgs { dst: d, src1: a, src2: b }
+        }
+    }
+    mul{.rnd}.bf16x2 d, a, b => {
+        ast::Instruction::Mul {
+            data: ast::MulDetails::Float (
+                ArithFloat {
+                    type_: bf16x2,
+                    rounding: rnd.map(Into::into),
+                    flush_to_zero: None,
+                    saturate: false,
+                }
+            ),
+            arguments: MulArgs { dst: d, src1: a, src2: b }
+        }
+    }
+    .rnd: RawFloatRounding = { .rn };
+    ScalarType = { .f16, .f16x2, .bf16, .bf16x2 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-ret
     ret{.uni} => {
         Instruction::Ret { data: RetData { uniform: uni } }
     }
