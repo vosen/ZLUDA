@@ -1,4 +1,31 @@
-use super::{MemScope, ScalarType, VectorPrefix, StateSpace};
+use super::{MemScope, ScalarType, StateSpace, VectorPrefix};
+use bitflags::bitflags;
+
+pub enum Statement<P: Operand> {
+    Label(P::Ident),
+    Variable(MultiVariable<P::Ident>),
+    Instruction(Option<PredAt<P::Ident>>, Instruction<P>),
+    Block(Vec<Statement<P>>),
+}
+
+pub struct MultiVariable<ID> {
+    pub var: Variable<ID>,
+    pub count: Option<u32>,
+}
+
+#[derive(Clone)]
+pub struct Variable<ID> {
+    pub align: Option<u32>,
+    pub v_type: Type,
+    pub state_space: StateSpace,
+    pub name: ID,
+    pub array_init: Vec<u8>,
+}
+
+pub struct PredAt<ID> {
+    pub not: bool,
+    pub label: ID,
+}
 
 gen::generate_instruction_type!(
     pub enum Instruction<T> {
@@ -118,6 +145,14 @@ pub enum ParsedOperand<Ident> {
     VecPack(Vec<Ident>),
 }
 
+impl<Ident> Operand for ParsedOperand<Ident> {
+    type Ident = Ident;
+}
+
+pub trait Operand {
+    type Ident;
+}
+
 #[derive(Copy, Clone)]
 pub enum ImmediateValue {
     U64(u64),
@@ -142,8 +177,6 @@ pub enum LdCacheOperator {
     LastUse,
     Uncached,
 }
-
-
 
 #[derive(Copy, Clone)]
 pub enum ArithDetails {
@@ -199,7 +232,6 @@ pub struct LdDetails {
     pub non_coherent: bool,
 }
 
-
 pub struct StData {
     pub qualifier: LdStQualifier,
     pub state_space: StateSpace,
@@ -210,4 +242,53 @@ pub struct StData {
 #[derive(Copy, Clone)]
 pub struct RetData {
     pub uniform: bool,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum TuningDirective {
+    MaxNReg(u32),
+    MaxNtid(u32, u32, u32),
+    ReqNtid(u32, u32, u32),
+    MinNCtaPerSm(u32),
+}
+
+pub struct MethodDeclaration<'input, ID> {
+    pub return_arguments: Vec<Variable<ID>>,
+    pub name: MethodName<'input, ID>,
+    pub input_arguments: Vec<Variable<ID>>,
+    pub shared_mem: Option<ID>,
+}
+
+#[derive(Hash, PartialEq, Eq, Copy, Clone)]
+pub enum MethodName<'input, ID> {
+    Kernel(&'input str),
+    Func(ID),
+}
+
+bitflags! {
+    pub struct LinkingDirective: u8 {
+        const NONE = 0b000;
+        const EXTERN = 0b001;
+        const VISIBLE = 0b10;
+        const WEAK = 0b100;
+    }
+}
+
+pub struct Function<'a, ID, S> {
+    pub func_directive: MethodDeclaration<'a, ID>,
+    pub tuning: Vec<TuningDirective>,
+    pub body: Option<Vec<S>>,
+}
+
+pub enum Directive<'input, O: Operand> {
+    Variable(LinkingDirective, Variable<O::Ident>),
+    Method(
+        LinkingDirective,
+        Function<'input, &'input str, Statement<O>>,
+    ),
+}
+
+pub struct Module<'input> {
+    pub version: (u8, u8),
+    pub directives: Vec<Directive<'input, ParsedOperand<&'input str>>>,
 }

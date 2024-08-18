@@ -332,7 +332,8 @@ impl DotModifier {
                 capitalize = true;
                 continue;
             }
-            let c = if capitalize {
+            // Special hack to emit `BF16`` instead of `Bf16``
+            let c = if capitalize || c == 'f' && result.ends_with('B') {
                 capitalize = false;
                 c.to_ascii_uppercase()
             } else {

@@ -8,3 +8,4 @@ logos = "0.14"
 winnow = { version =  "0.6.18", features = ["debug"] }
 gen = { path = "../gen" }
 thiserror = "1.0"
+bitflags = "1.2"

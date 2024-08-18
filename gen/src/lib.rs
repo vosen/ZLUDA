@@ -11,15 +11,17 @@ use syn::{
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#vectors
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#fundamental-types
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#alternate-floating-point-data-formats
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#packed-floating-point-data-types
+// https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#packed-integer-data-types
 #[rustfmt::skip]
 static POSTFIX_MODIFIERS: &[&str] = &[
     ".v2", ".v4",
-    ".s8", ".s16", ".s32", ".s64",
-    ".u8", ".u16", ".u32", ".u64",
+    ".s8", ".s16", ".s16x2", ".s32", ".s64",
+    ".u8", ".u16", ".u16x2", ".u32", ".u64",
     ".f16", ".f16x2", ".f32", ".f64",
     ".b8", ".b16", ".b32", ".b64", ".b128",
     ".pred",
-    ".bf16", ".e4m3", ".e5m2", ".tf32",
+    ".bf16", ".bf16x2", ".e4m3", ".e5m2", ".tf32",
 ];
 
 static POSTFIX_TYPES: &[&str] = &["ScalarType", "VectorPrefix"];
