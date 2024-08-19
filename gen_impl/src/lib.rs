@@ -1,8 +1,8 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 use syn::{
-    braced, parse::Parse, punctuated::Punctuated, token, Expr, Ident, Token, Type, TypeParam,
-    Visibility,
+    braced, parse::Parse, punctuated::Punctuated, token, Expr, Ident, PathSegment, Token, Type,
+    TypeParam, Visibility,
 };
 
 pub mod parser;
@@ -18,7 +18,7 @@ pub struct GenerateInstructionType {
 impl GenerateInstructionType {
     pub fn emit_arg_types(&self, tokens: &mut TokenStream) {
         for v in self.variants.iter() {
-            v.emit_type(&self.visibility, &self.type_parameters, tokens);
+            v.emit_type(&self.visibility, tokens);
         }
     }
 
@@ -165,7 +165,7 @@ impl Parse for GenerateInstructionType {
 
 pub struct InstructionVariant {
     pub name: Ident,
-    pub type_: Option<Expr>,
+    pub type_: Option<Option<Expr>>,
     pub space: Option<Expr>,
     pub data: Option<Type>,
     pub arguments: Option<InstructionArguments>,
@@ -225,7 +225,7 @@ impl InstructionVariant {
         &self,
         enum_: &Ident,
         tokens: &mut TokenStream,
-        mut fn_: impl FnMut(&InstructionArguments, &Option<Expr>, &Option<Expr>) -> TokenStream,
+        mut fn_: impl FnMut(&InstructionArguments, &Option<Option<Expr>>, &Option<Expr>) -> TokenStream,
     ) {
         let name = &self.name;
         let arguments = match &self.arguments {
@@ -238,9 +238,10 @@ impl InstructionVariant {
             }
             Some(args) => args,
         };
+        let data = &self.data.as_ref().map(|_| quote! { data,});
         let arg_calls = fn_(arguments, &self.type_, &self.space);
         quote! {
-            #enum_ :: #name { arguments, data } => {
+            #enum_ :: #name { #data arguments } => {
                 #arg_calls
             }
         }
@@ -269,19 +270,14 @@ impl InstructionVariant {
         .to_tokens(tokens);
     }
 
-    fn emit_type(
-        &self,
-        vis: &Option<Visibility>,
-        type_parameters: &Punctuated<TypeParam, Token![,]>,
-        tokens: &mut TokenStream,
-    ) {
+    fn emit_type(&self, vis: &Option<Visibility>, tokens: &mut TokenStream) {
         let arguments = match self.arguments {
             Some(ref a) => a,
             None => return,
         };
         let name = self.args_name();
         let type_parameters = if arguments.generic.is_some() {
-            Some(quote! { <#type_parameters> })
+            Some(quote! { <T> })
         } else {
             None
         };
@@ -324,7 +320,7 @@ impl Parse for InstructionVariant {
 }
 
 enum VariantProperty {
-    Type(Expr),
+    Type(Option<Expr>),
     Space(Expr),
     Data(Type),
     Arguments(InstructionArguments),
@@ -336,7 +332,12 @@ impl VariantProperty {
         Ok(if lookahead.peek(Token![type]) {
             input.parse::<Token![type]>()?;
             input.parse::<Token![:]>()?;
-            VariantProperty::Type(input.parse::<Expr>()?)
+            VariantProperty::Type(if input.peek(Token![!]) {
+                input.parse::<Token![!]>()?;
+                None
+            } else {
+                Some(input.parse::<Expr>()?)
+            })
         } else if lookahead.peek(Ident) {
             let key = input.parse::<Ident>()?;
             match &*key.to_string() {
@@ -352,7 +353,7 @@ impl VariantProperty {
                     let generics = if input.peek(Token![<]) {
                         input.parse::<Token![<]>()?;
                         let gen_params =
-                            Punctuated::<TypeParam, Token![,]>::parse_separated_nonempty(input)?;
+                            Punctuated::<PathSegment, syn::token::PathSep>::parse_separated_nonempty(input)?;
                         input.parse::<Token![>]>()?;
                         Some(gen_params)
                     } else {
@@ -380,13 +381,13 @@ impl VariantProperty {
 }
 
 pub struct InstructionArguments {
-    pub generic: Option<Punctuated<TypeParam, Token![,]>>,
+    pub generic: Option<Punctuated<PathSegment, syn::token::PathSep>>,
     pub fields: Punctuated<ArgumentField, Token![,]>,
 }
 
 impl InstructionArguments {
     pub fn parse(
-        generic: Option<Punctuated<TypeParam, Token![,]>>,
+        generic: Option<Punctuated<PathSegment, syn::token::PathSep>>,
         input: syn::parse::ParseStream,
     ) -> syn::Result<Self> {
         let fields = Punctuated::<ArgumentField, Token![,]>::parse_terminated_with(
@@ -396,13 +397,17 @@ impl InstructionArguments {
         Ok(Self { generic, fields })
     }
 
-    fn emit_visit(&self, parent_type: &Option<Expr>, parent_space: &Option<Expr>) -> TokenStream {
+    fn emit_visit(
+        &self,
+        parent_type: &Option<Option<Expr>>,
+        parent_space: &Option<Expr>,
+    ) -> TokenStream {
         self.emit_visit_impl(parent_type, parent_space, ArgumentField::emit_visit)
     }
 
     fn emit_visit_mut(
         &self,
-        parent_type: &Option<Expr>,
+        parent_type: &Option<Option<Expr>>,
         parent_space: &Option<Expr>,
     ) -> TokenStream {
         self.emit_visit_impl(parent_type, parent_space, ArgumentField::emit_visit_mut)
@@ -410,7 +415,7 @@ impl InstructionArguments {
 
     fn emit_visit_map(
         &self,
-        parent_type: &Option<Expr>,
+        parent_type: &Option<Option<Expr>>,
         parent_space: &Option<Expr>,
     ) -> TokenStream {
         self.emit_visit_impl(parent_type, parent_space, ArgumentField::emit_visit_map)
@@ -418,14 +423,19 @@ impl InstructionArguments {
 
     fn emit_visit_impl(
         &self,
-        parent_type: &Option<Expr>,
+        parent_type: &Option<Option<Expr>>,
         parent_space: &Option<Expr>,
-        mut fn_: impl FnMut(&ArgumentField, &Option<Expr>, &Option<Expr>) -> TokenStream,
+        mut fn_: impl FnMut(&ArgumentField, &Option<Option<Expr>>, &Option<Expr>, bool) -> TokenStream,
     ) -> TokenStream {
+        let is_ident = if let Some(ref generic) = self.generic {
+            generic.len() > 1
+        } else {
+            false
+        };
         let field_calls = self
             .fields
             .iter()
-            .map(|f| fn_(f, parent_type, parent_space));
+            .map(|f| fn_(f, parent_type, parent_space, is_ident));
         quote! {
             #(#field_calls)*
         }
@@ -487,25 +497,37 @@ impl ArgumentField {
         input.parse::<Type>()
     }
 
-    fn emit_visit(&self, parent_type: &Option<Expr>, parent_space: &Option<Expr>) -> TokenStream {
-        self.emit_visit_impl(parent_type, parent_space, false)
+    fn emit_visit(
+        &self,
+        parent_type: &Option<Option<Expr>>,
+        parent_space: &Option<Expr>,
+        is_ident: bool,
+    ) -> TokenStream {
+        self.emit_visit_impl(parent_type, parent_space, is_ident, false)
     }
 
     fn emit_visit_mut(
         &self,
-        parent_type: &Option<Expr>,
+        parent_type: &Option<Option<Expr>>,
         parent_space: &Option<Expr>,
+        is_ident: bool,
     ) -> TokenStream {
-        self.emit_visit_impl(parent_type, parent_space, true)
+        self.emit_visit_impl(parent_type, parent_space, is_ident, true)
     }
 
     fn emit_visit_impl(
         &self,
-        parent_type: &Option<Expr>,
+        parent_type: &Option<Option<Expr>>,
         parent_space: &Option<Expr>,
+        is_ident: bool,
         is_mut: bool,
     ) -> TokenStream {
-        let type_ = self.type_.as_ref().or(parent_type.as_ref()).unwrap();
+        let (is_typeless, type_) = match (self.type_.as_ref(), parent_type) {
+            (Some(type_), _) => (false, Some(type_)),
+            (None, None) => panic!("No type set"),
+            (None, Some(None)) => (true, None),
+            (None, Some(Some(type_))) => (false, Some(type_)),
+        };
         let space = self
             .space
             .as_ref()
@@ -514,38 +536,72 @@ impl ArgumentField {
             .unwrap_or_else(|| quote! { StateSpace::Reg });
         let is_dst = self.is_dst;
         let name = &self.name;
-        let (operand_fn, arguments_name) = if is_mut {
-            (
-                quote! {
-                    VisitOperand::visit_mut
-                },
-                quote! {
-                    &mut arguments.#name
-                },
-            )
+        let type_space = if is_typeless {
+            quote! {
+                let type_space = None;
+            }
         } else {
-            (
-                quote! {
-                    VisitOperand::visit
-                },
-                quote! {
-                    & arguments.#name
-                },
-            )
+            quote! {
+                let type_ = #type_;
+                let space = #space;
+                let type_space = Some((std::borrow::Borrow::<Type>::borrow(&type_), space));
+            }
         };
-        quote! {{
-            let type_ = #type_;
-            let space = #space;
-            #operand_fn(#arguments_name, |x| visitor.visit(x, &type_, space, #is_dst));
-        }}
+        if is_ident {
+            if is_mut {
+                quote! {
+                    {
+                        #type_space
+                        visitor.visit_ident(&mut arguments.#name, type_space, #is_dst);
+                    }
+                }
+            } else {
+                quote! {
+                    {
+                        #type_space
+                        visitor.visit_ident(& arguments.#name, type_space, #is_dst);
+                    }
+                }
+            }
+        } else {
+            let (operand_fn, arguments_name) = if is_mut {
+                (
+                    quote! {
+                        VisitOperand::visit_mut
+                    },
+                    quote! {
+                        &mut arguments.#name
+                    },
+                )
+            } else {
+                (
+                    quote! {
+                        VisitOperand::visit
+                    },
+                    quote! {
+                        & arguments.#name
+                    },
+                )
+            };
+            quote! {{
+                #type_space
+                #operand_fn(#arguments_name, |x| visitor.visit(x, type_space, #is_dst));
+            }}
+        }
     }
 
     fn emit_visit_map(
         &self,
-        parent_type: &Option<Expr>,
+        parent_type: &Option<Option<Expr>>,
         parent_space: &Option<Expr>,
+        is_ident: bool,
     ) -> TokenStream {
-        let type_ = self.type_.as_ref().or(parent_type.as_ref()).unwrap();
+        let (is_typeless, type_) = match (self.type_.as_ref(), parent_type) {
+            (Some(type_), _) => (false, Some(type_)),
+            (None, None) => panic!("No type set"),
+            (None, Some(None)) => (true, None),
+            (None, Some(Some(type_))) => (false, Some(type_)),
+        };
         let space = self
             .space
             .as_ref()
@@ -554,11 +610,30 @@ impl ArgumentField {
             .unwrap_or_else(|| quote! { StateSpace::Reg });
         let is_dst = self.is_dst;
         let name = &self.name;
-        quote! {
-            let #name = {
+        let type_space = if is_typeless {
+            quote! {
+                let type_space = None;
+            }
+        } else {
+            quote! {
                 let type_ = #type_;
                 let space = #space;
-                MapOperand::map(arguments.#name, |x| visitor.visit(x, &type_, space, #is_dst))
+                let type_space = Some((std::borrow::Borrow::<Type>::borrow(&type_), space));
+            }
+        };
+        let map_call = if is_ident {
+            quote! {
+                visitor.visit_ident(arguments.#name, type_space, #is_dst)
+            }
+        } else {
+            quote! {
+                MapOperand::map(arguments.#name, |x| visitor.visit(x, type_space, #is_dst))
+            }
+        };
+        quote! {
+            let #name = {
+                #type_space
+                #map_call
             };
         }
     }
@@ -700,27 +775,6 @@ mod tests {
         assert_eq!("P :: Operand", to_string(src.repr));
         assert!(matches!(src.type_, None));
         assert!(matches!(src.space, None));
-    }
-
-    #[test]
-    fn visit_variant() {
-        let input = quote! {
-            Ld {
-                type: ScalarType::U32,
-                data: LdDetails,
-                arguments<P>: {
-                    dst: {
-                        repr: P::Operand,
-                        type: ScalarType::U32
-                    },
-                    src: P::Operand,
-                },
-            }
-        };
-        let variant = syn::parse2::<InstructionVariant>(input).unwrap();
-        let mut output = TokenStream::new();
-        variant.emit_visit(&Ident::new("Instruction", Span::call_site()), &mut output);
-        assert_eq!(output.to_string(), "Instruction :: Ld { arguments , data } => { { let type_ = ScalarType :: U32 ; let space = StateSpace :: Reg ; visitor . visit (& arguments . dst , & type_ , space , true) ; } { let type_ = ScalarType :: U32 ; let space = StateSpace :: Reg ; visitor . visit (& arguments . src , & type_ , space , false) ; } }");
     }
 
     #[test]

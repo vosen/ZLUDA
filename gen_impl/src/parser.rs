@@ -86,13 +86,27 @@ impl Parse for OpcodeDecl {
     }
 }
 
-pub struct CodeBlock(pub proc_macro2::Group);
+pub struct CodeBlock {
+    pub special: bool,
+    pub code: proc_macro2::Group,
+}
 
 impl Parse for CodeBlock {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        input.parse::<Token![=>]>()?;
-        let group = input.parse::<proc_macro2::Group>()?;
-        Ok(Self(group))
+        let lookahead = input.lookahead1();
+        let (special, code) = if lookahead.peek(Token![<]) {
+            input.parse::<Token![<]>()?;
+            input.parse::<Token![=]>()?;
+            //input.parse::<Token![>]>()?;
+            (true, input.parse::<proc_macro2::Group>()?)
+        } else if lookahead.peek(Token![=]) {
+            input.parse::<Token![=]>()?;
+            input.parse::<Token![>]>()?;
+            (false, input.parse::<proc_macro2::Group>()?)
+        } else {
+            return Err(lookahead.error());
+        };
+        Ok(Self{special, code})
     }
 }
 
@@ -761,7 +775,7 @@ mod tests {
             .ss: StateSpace =           { .global, .local, .param{::func}, .shared{::cta, ::cluster} }
         };
         let rule = syn::parse2::<super::Rule>(input).unwrap();
-        assert_eq!(". ss", rule.modifier.tokens().to_string());
+        assert_eq!(". ss", rule.modifier.unwrap().tokens().to_string());
         assert_eq!(
             "StateSpace",
             rule.type_.unwrap().to_token_stream().to_string()
@@ -791,7 +805,7 @@ mod tests {
             .cop: StCacheOperator =     { .wb, .cg, .cs, .wt }
         };
         let rule = syn::parse2::<super::Rule>(input).unwrap();
-        assert_eq!(". cop", rule.modifier.tokens().to_string());
+        assert_eq!(". cop", rule.modifier.unwrap().tokens().to_string());
         assert_eq!(
             "StCacheOperator",
             rule.type_.unwrap().to_token_stream().to_string()
@@ -818,5 +832,13 @@ mod tests {
         assert!(a.post_bracket);
         assert!(!a.can_be_negated);
         assert!(a.unified);
+    }
+
+    #[test]
+    fn special_block() {
+        let input = quote! {
+            bra <= { bra(stream) }
+        };
+        syn::parse2::<super::OpcodeDefinition>(input).unwrap();
     }
 }

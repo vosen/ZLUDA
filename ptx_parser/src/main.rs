@@ -623,7 +623,7 @@ fn predicated_instruction<'a, 'input>(
 }
 
 fn pred_at<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::PredAt<&'input str>> {
-    (Token::At, opt(Token::Not), ident)
+    (Token::At, opt(Token::Exclamation), ident)
         .map(|(_, not, label)| ast::PredAt {
             not: not.is_some(),
             label,
@@ -888,6 +888,21 @@ impl<'input, I: Stream<Token = Self> + StreamIsPartial, E: ParserError<I>> Parse
     }
 }
 
+fn bra<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    preceded(
+        opt(Token::DotUni),
+        any.verify_map(|t| match t {
+            Token::Ident(ident) => Some(ast::Instruction::Bra {
+                arguments: BraArgs { src: ident },
+            }),
+            _ => None,
+        }),
+    )
+    .parse_next(stream)
+}
+
 // Modifiers are turned into arguments to the blocks, with type:
 // * If it is an alternative:
 //   * If it is mandatory then its type is Foo (as defined by the relevant rule)
@@ -919,9 +934,9 @@ derive_parser!(
         #[regex(r#""[^"]*""#)]
         String,
         #[token("|")]
-        Or,
+        Pipe,
         #[token("!")]
-        Not,
+        Exclamation,
         #[token("(")]
         LParen,
         #[token(")")]
@@ -1460,6 +1475,36 @@ derive_parser!(
                                   .s16, .s32, .s64,
                                   .f32, .f64,
                                   .f16, .f16x2, .bf16, .bf16x2 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-not
+    not.type d, a => {
+        ast::Instruction::Not {
+            data: type_,
+            arguments: NotArgs { dst: d, src: a }
+        }
+    }
+    .type: ScalarType = { .pred, .b16, .b32, .b64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-or
+    or.type d, a, b => {
+        ast::Instruction::Or {
+            data: type_,
+            arguments: OrArgs { dst: d, src1: a, src2: b }
+        }
+    }
+    .type: ScalarType = { .pred, .b16, .b32, .b64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-and
+    and.type d, a, b => {
+        ast::Instruction::And {
+            data: type_,
+            arguments: AndArgs { dst: d, src1: a, src2: b }
+        }
+    }
+    .type: ScalarType = { .pred, .b16, .b32, .b64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-bra
+    bra <= { bra(stream) }
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-ret
     ret{.uni} => {

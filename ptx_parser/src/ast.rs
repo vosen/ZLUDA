@@ -31,7 +31,7 @@ gen::generate_instruction_type!(
             }
         },
         Add {
-            type: { data.type_().into() },
+            type: { Type::from(data.type_()) },
             data: ArithDetails,
             arguments<T>: {
                 dst: T,
@@ -51,12 +51,12 @@ gen::generate_instruction_type!(
             }
         },
         Mul {
-            type: { data.type_().into() },
+            type: { Type::from(data.type_()) },
             data: MulDetails,
             arguments<T>: {
                 dst: {
                     repr: T,
-                    type: { data.dst_type().into() },
+                    type: { Type::from(data.dst_type()) },
                 },
                 src1: T,
                 src2: T,
@@ -67,19 +67,19 @@ gen::generate_instruction_type!(
             arguments<T>: {
                 dst1: {
                     repr: T,
-                    type: ScalarType::Pred.into()
+                    type: Type::from(ScalarType::Pred)
                 },
                 dst2: {
                     repr: Option<T>,
-                    type: ScalarType::Pred.into()
+                    type: Type::from(ScalarType::Pred)
                 },
                 src1: {
                     repr: T,
-                    type: data.type_.into(),
+                    type: Type::from(data.type_),
                 },
                 src2: {
                     repr: T,
-                    type: data.type_.into(),
+                    type: Type::from(data.type_),
                 }
             }
         },
@@ -88,24 +88,56 @@ gen::generate_instruction_type!(
             arguments<T>: {
                 dst1: {
                     repr: T,
-                    type: ScalarType::Pred.into()
+                    type: Type::from(ScalarType::Pred)
                 },
                 dst2: {
                     repr: Option<T>,
-                    type: ScalarType::Pred.into()
+                    type: Type::from(ScalarType::Pred)
                 },
                 src1: {
                     repr: T,
-                    type: data.base.type_.into(),
+                    type: Type::from(data.base.type_),
                 },
                 src2: {
                     repr: T,
-                    type: data.base.type_.into(),
+                    type: Type::from(data.base.type_),
                 },
                 src3: {
                     repr: T,
-                    type: ScalarType::Pred.into()
+                    type: Type::from(ScalarType::Pred)
                 }
+            }
+        },
+        Not {
+            data: ScalarType,
+            type: { Type::Scalar(data.clone()) },
+            arguments<T>: {
+                dst: T,
+                src: T,
+            }
+        },
+        Or {
+            data: ScalarType,
+            type: { Type::Scalar(data.clone()) },
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+            }
+        },
+        And {
+            data: ScalarType,
+            type: { Type::Scalar(data.clone()) },
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+            }
+        },
+        Bra {
+            type: !,
+            arguments<T::Ident>: {
+                src: T
             }
         },
         Ret {
@@ -115,21 +147,26 @@ gen::generate_instruction_type!(
     }
 );
 
-pub trait Visitor<T> {
-    fn visit(&mut self, args: &T, type_: &Type, space: StateSpace, is_dst: bool);
+pub trait Visitor<T: Operand> {
+    fn visit(&mut self, args: &T, type_space: Option<(&Type, StateSpace)>, is_dst: bool);
+    fn visit_ident(&self, args: &T::Ident, type_space: Option<(&Type, StateSpace)>, is_dst: bool);
 }
 
-pub trait VisitorMut<T> {
-    fn visit(&mut self, args: &mut T, type_: &Type, space: StateSpace, is_dst: bool);
+pub trait VisitorMut<T: Operand> {
+    fn visit(&mut self, args: &mut T, type_space: Option<(&Type, StateSpace)>, is_dst: bool);
+    fn visit_ident(&mut self, args: &mut T::Ident, type_space: Option<(&Type, StateSpace)>, is_dst: bool);
 }
 
-pub trait VisitorMap<From, To> {
-    fn visit(&mut self, args: From, type_: &Type, space: StateSpace, is_dst: bool) -> To;
+pub trait VisitorMap<From: Operand, To: Operand> {
+    fn visit(&mut self, args: From, type_space: Option<(&Type, StateSpace)>, is_dst: bool) -> To;
+    fn visit_ident(&mut self, args: From::Ident, type_space: Option<(&Type, StateSpace)>, is_dst: bool) -> To::Ident;
 }
 
 trait VisitOperand {
-    type Operand;
+    type Operand: Operand;
+    #[allow(unused)] // Used by generated code
     fn visit(&self, fn_: impl FnOnce(&Self::Operand));
+    #[allow(unused)] // Used by generated code
     fn visit_mut(&mut self, fn_: impl FnOnce(&mut Self::Operand));
 }
 
@@ -156,6 +193,7 @@ impl<T: Operand> VisitOperand for Option<T> {
 trait MapOperand: Sized {
     type Input;
     type Output<U>;
+    #[allow(unused)] // Used by generated code
     fn map<U>(self, fn_: impl FnOnce(Self::Input) -> U) -> Self::Output<U>;
 }
 
@@ -289,12 +327,12 @@ pub enum ParsedOperand<Ident> {
     VecPack(Vec<Ident>),
 }
 
-impl<Ident> Operand for ParsedOperand<Ident> {
+impl<Ident: Copy> Operand for ParsedOperand<Ident> {
     type Ident = Ident;
 }
 
 pub trait Operand {
-    type Ident;
+    type Ident: Copy;
 }
 
 #[derive(Copy, Clone)]
@@ -447,6 +485,7 @@ pub enum MulDetails {
 }
 
 impl MulDetails {
+    #[allow(unused)] // Used by generated code
     fn type_(&self) -> ScalarType {
         match self {
             MulDetails::Integer { type_, .. } => *type_,
@@ -454,6 +493,7 @@ impl MulDetails {
         }
     }
 
+    #[allow(unused)] // Used by generated code
     fn dst_type(&self) -> ScalarType {
         match self {
             MulDetails::Integer {
@@ -521,7 +561,7 @@ impl SetpData {
 pub struct SetpBoolData {
     pub base: SetpData,
     pub bool_op: SetpBoolPostOp,
-    pub negate_src3: bool
+    pub negate_src3: bool,
 }
 
 #[derive(PartialEq, Eq, Copy, Clone)]

@@ -231,7 +231,8 @@ impl SingleOpcodeDefinition {
     }
 
     fn extract_and_insert(
-        output: &mut FxHashMap<Ident, Vec<SingleOpcodeDefinition>>,
+        definitions: &mut FxHashMap<Ident, Vec<SingleOpcodeDefinition>>,
+        special_definitions: &mut FxHashMap<Ident, proc_macro2::Group>,
         parser::OpcodeDefinition(pattern_seq, rules): parser::OpcodeDefinition,
     ) {
         let (mut named_rules, mut unnamed_rules) = gather_rules(rules);
@@ -242,8 +243,18 @@ impl SingleOpcodeDefinition {
                 named_rules = FxHashMap::default();
                 unnamed_rules = FxHashMap::default();
             }
-            let mut possible_modifiers = FxHashSet::default();
             let parser::OpcodeDecl(instruction, arguments) = opcode_decl;
+            if code_block.special {
+                if !instruction.modifiers.is_empty() || !arguments.0.is_empty() {
+                    panic!(
+                        "`{}`: no modifiers or arguments are allowed in parser definition.",
+                        instruction.name
+                    );
+                }
+                special_definitions.insert(instruction.name, code_block.code);
+                continue;
+            }
+            let mut possible_modifiers = FxHashSet::default();
             let mut unordered_modifiers = instruction
                 .modifiers
                 .into_iter()
@@ -287,7 +298,7 @@ impl SingleOpcodeDefinition {
                 arguments,
                 code_block,
             };
-            multihash_extend(output, current_opcode.clone(), entry);
+            multihash_extend(definitions, current_opcode.clone(), entry);
             last_opcode = current_opcode;
         }
     }
@@ -350,10 +361,15 @@ fn gather_rules(
 pub fn derive_parser(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let parse_definitions = parse_macro_input!(tokens as gen_impl::parser::ParseDefinitions);
     let mut definitions = FxHashMap::default();
+    let mut special_definitions = FxHashMap::default();
     let types = OpcodeDefinitions::get_enum_types(&parse_definitions.definitions);
     let enum_types_tokens = emit_enum_types(types, parse_definitions.additional_enums);
     for definition in parse_definitions.definitions.into_iter() {
-        SingleOpcodeDefinition::extract_and_insert(&mut definitions, definition);
+        SingleOpcodeDefinition::extract_and_insert(
+            &mut definitions,
+            &mut special_definitions,
+            definition,
+        );
     }
     let definitions = definitions
         .into_iter()
@@ -363,9 +379,12 @@ pub fn derive_parser(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream
         })
         .collect::<FxHashMap<_, _>>();
     let mut token_enum = parse_definitions.token_type;
-    let (all_opcode, all_modifier) =
-        write_definitions_into_tokens(&definitions, &mut token_enum.variants);
-    let token_impl = emit_parse_function(&token_enum.ident, &definitions, all_opcode, all_modifier);
+    let (all_opcode, all_modifier) = write_definitions_into_tokens(
+        &definitions,
+        special_definitions.keys(),
+        &mut token_enum.variants,
+    );
+    let token_impl = emit_parse_function(&token_enum.ident, &definitions, &special_definitions, all_opcode, all_modifier);
     let tokens = quote! {
         #enum_types_tokens
 
@@ -422,6 +441,7 @@ fn emit_enum_types(
 fn emit_parse_function(
     type_name: &Ident,
     defs: &FxHashMap<Ident, OpcodeDefinitions>,
+    special_defs: &FxHashMap<Ident, proc_macro2::Group>,
     all_opcode: Vec<&Ident>,
     all_modifier: FxHashSet<&parser::DotModifier>,
 ) -> TokenStream {
@@ -433,7 +453,7 @@ fn emit_parse_function(
                 let mut fn_name = opcode.to_string();
                 write!(&mut fn_name, "_{}", idx).ok();
                 let fn_name = Ident::new(&fn_name, Span::call_site());
-                let code_block = &def.code_block.0;
+                let code_block = &def.code_block.code;
                 let args = def.function_arguments_declarations();
                 quote! {
                     fn #fn_name<'input>(state: &mut PtxParserState, #(#args),* ) -> Instruction<ParsedOperandStr<'input>> #code_block
@@ -494,7 +514,12 @@ fn emit_parse_function(
         }
         .to_tokens(&mut result);
         result
-    });
+    }).chain(special_defs.iter().map(|(opcode, code)| {
+        let opcode_variant = Ident::new(&capitalize(&opcode.to_string()), opcode.span());
+        quote! {
+            #opcode_variant => { #code? }
+        }
+    }));
     let opcodes = all_opcode.into_iter().map(|op_ident| {
         let op = op_ident.to_string();
         let variant = Ident::new(&capitalize(&op), op_ident.span());
@@ -749,7 +774,7 @@ fn emit_definition_parser(
         };
         let pre_pipe = if arg.pre_pipe {
             quote! {
-                any.verify(|t| *t == #token_type::Or).void()
+                any.verify(|t| *t == #token_type::Pipe).void()
             }
         } else {
             quote! {
@@ -845,6 +870,7 @@ fn emit_definition_parser(
 
 fn write_definitions_into_tokens<'a>(
     defs: &'a FxHashMap<Ident, OpcodeDefinitions>,
+    special_definitions: impl Iterator<Item = &'a Ident>,
     variants: &mut Punctuated<Variant, Token![,]>,
 ) -> (Vec<&'a Ident>, FxHashSet<&'a parser::DotModifier>) {
     let mut all_opcodes = Vec::new();
@@ -863,6 +889,16 @@ fn write_definitions_into_tokens<'a>(
                 all_modifiers.insert(modifier);
             }
         }
+    }
+    for opcode in special_definitions {
+        all_opcodes.push(opcode);
+        let opcode_as_string = opcode.to_string();
+        let variant_name = Ident::new(&capitalize(&opcode_as_string), opcode.span());
+        let arg: Variant = syn::parse_quote! {
+            #[token(#opcode_as_string)]
+            #variant_name
+        };
+        variants.push(arg);
     }
     for modifier in all_modifiers.iter() {
         let modifier_as_string = modifier.to_string();
