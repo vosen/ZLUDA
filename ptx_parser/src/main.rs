@@ -769,6 +769,8 @@ pub enum PtxError {
     #[error("")]
     NonF32Ftz,
     #[error("")]
+    WrongType,
+    #[error("")]
     WrongArrayType,
     #[error("")]
     WrongVectorElement,
@@ -995,6 +997,9 @@ derive_parser!(
 
     #[derive(Copy, Clone, PartialEq, Eq, Hash)]
     pub enum ScalarType { }
+
+    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    pub enum SetpBoolPostOp { }
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
     mov{.vec}.type  d, a => {
@@ -1424,6 +1429,38 @@ derive_parser!(
     .rnd: RawFloatRounding = { .rn };
     ScalarType = { .f16, .f16x2, .bf16, .bf16x2 };
 
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions-setp
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#half-precision-comparison-instructions-setp
+    setp.CmpOp{.ftz}.type         p[|q], a, b => {
+        let data = ast::SetpData::try_parse(state, cmpop, ftz, type_);
+        ast::Instruction::Setp {
+            data,
+            arguments: SetpArgs { dst1: p, dst2: q, src1: a, src2: b }
+        }
+    }
+    setp.CmpOp.BoolOp{.ftz}.type  p[|q], a, b, {!}c => {
+        let (negate_src3, c) = c;
+        let base = ast::SetpData::try_parse(state, cmpop, ftz, type_);
+        let data = ast::SetpBoolData {
+            base,
+            bool_op: boolop,
+            negate_src3
+        };
+        ast::Instruction::SetpBool {
+            data,
+            arguments: SetpBoolArgs { dst1: p, dst2: q, src1: a, src2: b, src3: c }
+        }
+    }
+    .CmpOp: RawSetpCompareOp  = { .eq, .ne, .lt, .le, .gt, .ge,
+                                  .lo, .ls, .hi, .hs, // signed
+                                  .equ, .neu, .ltu, .leu, .gtu, .geu, .num, .nan }; // float-only
+    .BoolOp: SetpBoolPostOp  =  { .and, .or, .xor };
+    .type: ScalarType   =       { .b16, .b32, .b64,
+                                  .u16, .u32, .u64,
+                                  .s16, .s32, .s64,
+                                  .f32, .f64,
+                                  .f16, .f16x2, .bf16, .bf16x2 };
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-ret
     ret{.uni} => {
         Instruction::Ret { data: RetData { uniform: uni } }
@@ -1432,8 +1469,6 @@ derive_parser!(
 );
 
 fn main() {
-    use winnow::combinator::*;
-    use winnow::token::*;
     use winnow::Parser;
 
     let lexer = Token::lexer(

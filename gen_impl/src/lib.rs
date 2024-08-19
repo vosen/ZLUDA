@@ -70,7 +70,7 @@ impl GenerateInstructionType {
         let visit_slice_fn = format_ident!("visit{}_slice", kind.fn_suffix());
         let (type_parameters, visitor_parameters, return_type) = if kind == VisitKind::Map {
             (
-                quote! { <#type_parameters, To> },
+                quote! { <#type_parameters, To: Operand> },
                 quote! { <#short_parameters, To> },
                 quote! { #type_name<To> },
             )
@@ -514,19 +514,29 @@ impl ArgumentField {
             .unwrap_or_else(|| quote! { StateSpace::Reg });
         let is_dst = self.is_dst;
         let name = &self.name;
-        let arguments_name = if is_mut {
-            quote! {
-                &mut arguments.#name
-            }
+        let (operand_fn, arguments_name) = if is_mut {
+            (
+                quote! {
+                    VisitOperand::visit_mut
+                },
+                quote! {
+                    &mut arguments.#name
+                },
+            )
         } else {
-            quote! {
-                & arguments.#name
-            }
+            (
+                quote! {
+                    VisitOperand::visit
+                },
+                quote! {
+                    & arguments.#name
+                },
+            )
         };
         quote! {{
             let type_ = #type_;
             let space = #space;
-            visitor.visit(#arguments_name, &type_, space, #is_dst);
+            #operand_fn(#arguments_name, |x| visitor.visit(x, &type_, space, #is_dst));
         }}
     }
 
@@ -548,7 +558,7 @@ impl ArgumentField {
             let #name = {
                 let type_ = #type_;
                 let space = #space;
-                visitor.visit(arguments.#name, &type_, space, #is_dst)
+                MapOperand::map(arguments.#name, |x| visitor.visit(x, &type_, space, #is_dst))
             };
         }
     }

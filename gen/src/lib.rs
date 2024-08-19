@@ -1,3 +1,4 @@
+use either::Either;
 use gen_impl::parser;
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, ToTokens};
@@ -28,7 +29,7 @@ static POSTFIX_TYPES: &[&str] = &["ScalarType", "VectorPrefix"];
 
 struct OpcodeDefinitions {
     definitions: Vec<SingleOpcodeDefinition>,
-    block_selection: Vec<Vec<(Option<parser::DotModifier>, usize)>>,
+    block_selection: Vec<Vec<(Option<Vec<parser::DotModifier>>, usize)>>,
 }
 
 impl OpcodeDefinitions {
@@ -51,33 +52,51 @@ impl OpcodeDefinitions {
                 _ => {}
             }
             'check_definitions: for i in unselected.iter().copied() {
-                // Attempt every modifier
-                'check_candidates: for candidate in definitions[i]
+                let mut candidates = definitions[i]
                     .unordered_modifiers
                     .iter()
                     .chain(definitions[i].ordered_modifiers.iter())
-                {
-                    let candidate = if let DotModifierRef::Direct {
-                        optional: false,
-                        value,
-                        ..
-                    } = candidate
-                    {
-                        value
-                    } else {
-                        continue;
-                    };
+                    .filter(|modifier| match modifier {
+                        DotModifierRef::Direct {
+                            optional: false, ..
+                        }
+                        | DotModifierRef::Indirect {
+                            optional: false, ..
+                        } => true,
+                        _ => false,
+                    })
+                    .collect::<Vec<_>>();
+                candidates.sort_by_key(|modifier| match modifier {
+                    DotModifierRef::Direct { .. } => 1,
+                    DotModifierRef::Indirect { value, .. } => value.alternatives.len(),
+                });
+                // Attempt every modifier
+                'check_candidates: for candidate_modifier in candidates {
                     // check all other unselected patterns
                     for j in unselected.iter().copied() {
                         if i == j {
                             continue;
                         }
-                        if definitions[j].possible_modifiers.contains(candidate) {
-                            continue 'check_candidates;
+                        let candidate_set = match candidate_modifier {
+                            DotModifierRef::Direct { value, .. } => Either::Left(iter::once(value)),
+                            DotModifierRef::Indirect { value, .. } => {
+                                Either::Right(value.alternatives.iter())
+                            }
+                        };
+                        for candidate_value in candidate_set {
+                            if definitions[j].possible_modifiers.contains(candidate_value) {
+                                continue 'check_candidates;
+                            }
                         }
                     }
                     // it's unique
-                    selections[i] = Some((Some(candidate), generation));
+                    let candidate_vec = match candidate_modifier {
+                        DotModifierRef::Direct { value, .. } => vec![value.clone()],
+                        DotModifierRef::Indirect { value, .. } => {
+                            value.alternatives.iter().cloned().collect::<Vec<_>>()
+                        }
+                    };
+                    selections[i] = Some((Some(candidate_vec), generation));
                     selected_something = true;
                     continue 'check_definitions;
                 }
@@ -96,9 +115,9 @@ impl OpcodeDefinitions {
             let mut current_generation_definitions = Vec::new();
             for (idx, selection) in selections.iter_mut().enumerate() {
                 match selection {
-                    Some((modifier, generation)) => {
+                    Some((modifier_set, generation)) => {
                         if *generation == current_generation {
-                            current_generation_definitions.push((modifier.cloned(), idx));
+                            current_generation_definitions.push((modifier_set.clone(), idx));
                             *selection = None;
                         }
                     }
@@ -181,6 +200,8 @@ impl SingleOpcodeDefinition {
                 let name = &arg.ident;
                 let arg_type = if arg.unified {
                     quote! { (ParsedOperandStr<'input>, bool) }
+                } else if arg.can_be_negated {
+                    quote! { (bool, ParsedOperandStr<'input>) }
                 } else {
                     quote! { ParsedOperandStr<'input> }
                 };
@@ -222,9 +243,6 @@ impl SingleOpcodeDefinition {
                 unnamed_rules = FxHashMap::default();
             }
             let mut possible_modifiers = FxHashSet::default();
-            for (_, options) in named_rules.iter() {
-                possible_modifiers.extend(options.alternatives.iter().cloned());
-            }
             let parser::OpcodeDecl(instruction, arguments) = opcode_decl;
             let mut unordered_modifiers = instruction
                 .modifiers
@@ -232,6 +250,7 @@ impl SingleOpcodeDefinition {
                 .map(|parser::MaybeDotModifier { optional, modifier }| {
                     match named_rules.get(&modifier) {
                         Some(alts) => {
+                            possible_modifiers.extend(alts.alternatives.iter().cloned());
                             if alts.alternatives.len() == 1 && alts.type_.is_none() {
                                 DotModifierRef::Direct {
                                     optional,
@@ -437,11 +456,10 @@ fn emit_parse_function(
             for (selection_key, selected_definition) in selection_layer {
                 let def_parser = emit_definition_parser(type_name,  (opcode,*selected_definition), &def.definitions[*selected_definition]);
                 match selection_key {
-                    Some(selection_key) => {
-                        let selection_key =
-                            selection_key.dot_capitalized();
+                    Some(selection_keys) => {
+                        let selection_keys = selection_keys.iter().map(|k| k.dot_capitalized());
                         quote! {
-                            else if modifiers.contains(& #type_name :: #selection_key) {
+                            else if false #(|| modifiers.contains(& #type_name :: #selection_keys))* {
                                 #def_parser
                             }
                         }
@@ -715,7 +733,7 @@ fn emit_definition_parser(
                 | DotModifierRef::Indirect { optional: true, .. } => TokenStream::new(),
             });
     let arguments_parse = definition.arguments.0.iter().enumerate().map(|(idx, arg)| {
-        let comma = if idx == 0 {
+        let comma = if idx == 0 || arg.pre_pipe {
             quote! { empty }
         } else {
             quote! { any.verify(|t| *t == #token_type::Comma).void() }
@@ -774,9 +792,16 @@ fn emit_definition_parser(
             (#comma, #pre_bracket, #pre_pipe, #can_be_negated, #operand, #post_bracket, #unified)
         };
         let arg_name = &arg.ident;
+        if arg.unified && arg.can_be_negated {
+            panic!("TODO: argument can't be both prefixed by `!` and suffixed by  `.unified`")
+        }
         let inner_parser = if arg.unified {
             quote! {
                 #pattern.map(|(_, _, _, _, name, _, unified)| (name, unified))
+            }
+        } else if arg.can_be_negated {
+            quote! {
+                #pattern.map(|(_, _, _, negated, name, _, _)| (negated, name))
             }
         } else {
             quote! {
