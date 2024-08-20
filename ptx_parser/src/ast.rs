@@ -140,6 +140,13 @@ gen::generate_instruction_type!(
                 src: T
             }
         },
+        Call {
+            data: CallDetails,
+            arguments: CallArgs<T>,
+            visit: arguments.visit(data, visitor),
+            visit_mut: arguments.visit_mut(data, visitor),
+            map: Instruction::Call{ arguments: arguments.map(&data, visitor), data }
+        },
         Ret {
             data: RetData
         },
@@ -154,39 +161,63 @@ pub trait Visitor<T: Operand> {
 
 pub trait VisitorMut<T: Operand> {
     fn visit(&mut self, args: &mut T, type_space: Option<(&Type, StateSpace)>, is_dst: bool);
-    fn visit_ident(&mut self, args: &mut T::Ident, type_space: Option<(&Type, StateSpace)>, is_dst: bool);
+    fn visit_ident(
+        &mut self,
+        args: &mut T::Ident,
+        type_space: Option<(&Type, StateSpace)>,
+        is_dst: bool,
+    );
 }
 
 pub trait VisitorMap<From: Operand, To: Operand> {
     fn visit(&mut self, args: From, type_space: Option<(&Type, StateSpace)>, is_dst: bool) -> To;
-    fn visit_ident(&mut self, args: From::Ident, type_space: Option<(&Type, StateSpace)>, is_dst: bool) -> To::Ident;
+    fn visit_ident(
+        &mut self,
+        args: From::Ident,
+        type_space: Option<(&Type, StateSpace)>,
+        is_dst: bool,
+    ) -> To::Ident;
 }
 
 trait VisitOperand {
     type Operand: Operand;
     #[allow(unused)] // Used by generated code
-    fn visit(&self, fn_: impl FnOnce(&Self::Operand));
+    fn visit(&self, fn_: impl FnMut(&Self::Operand));
     #[allow(unused)] // Used by generated code
-    fn visit_mut(&mut self, fn_: impl FnOnce(&mut Self::Operand));
+    fn visit_mut(&mut self, fn_: impl FnMut(&mut Self::Operand));
 }
 
 impl<T: Operand> VisitOperand for T {
     type Operand = Self;
-    fn visit(&self, fn_: impl FnOnce(&Self::Operand)) {
+    fn visit(&self, mut fn_: impl FnMut(&Self::Operand)) {
         fn_(self)
     }
-    fn visit_mut(&mut self, fn_: impl FnOnce(&mut Self::Operand)) {
+    fn visit_mut(&mut self, mut fn_: impl FnMut(&mut Self::Operand)) {
         fn_(self)
     }
 }
 
 impl<T: Operand> VisitOperand for Option<T> {
     type Operand = T;
-    fn visit(&self, fn_: impl FnOnce(&Self::Operand)) {
+    fn visit(&self, fn_: impl FnMut(&Self::Operand)) {
         self.as_ref().map(fn_);
     }
-    fn visit_mut(&mut self, fn_: impl FnOnce(&mut Self::Operand)) {
+    fn visit_mut(&mut self, fn_: impl FnMut(&mut Self::Operand)) {
         self.as_mut().map(fn_);
+    }
+}
+
+impl<T: Operand> VisitOperand for Vec<T> {
+    type Operand = T;
+    fn visit(&self, mut fn_: impl FnMut(&Self::Operand)) {
+        for o in self {
+            fn_(o)
+        }
+    }
+    fn visit_mut(&mut self, mut fn_: impl FnMut(&mut Self::Operand)) {
+        for o in self {
+            fn_(o)
+        }
     }
 }
 
@@ -646,6 +677,68 @@ impl From<RawSetpCompareOp> for SetpCompareFloat {
             RawSetpCompareOp::Geu => SetpCompareFloat::NanGreaterOrEq,
             RawSetpCompareOp::Num => SetpCompareFloat::IsNotNan,
             RawSetpCompareOp::Nan => SetpCompareFloat::IsAnyNan,
+        }
+    }
+}
+
+pub struct CallDetails {
+    uniform: bool,
+    ret_params: Vec<(Type, StateSpace)>,
+    param_list: Vec<(Type, StateSpace)>,
+}
+
+pub struct CallArgs<T: Operand> {
+    pub ret_params: Vec<T::Ident>,
+    pub func: T::Ident,
+    pub param_list: Vec<T>,
+}
+
+impl<T: Operand> CallArgs<T> {
+    #[allow(dead_code)] // Used by generated code
+    fn visit(&self, details: &CallDetails, visitor: &mut impl Visitor<T>) {
+        for (param, (type_, space)) in self.ret_params.iter().zip(details.ret_params.iter()) {
+            visitor.visit_ident(param, Some((type_, *space)), true);
+        }
+        visitor.visit_ident(&self.func, None, false);
+        for (param, (type_, space)) in self.param_list.iter().zip(details.param_list.iter()) {
+            visitor.visit(param, Some((type_, *space)), true);
+        }
+    }
+
+    #[allow(dead_code)] // Used by generated code
+    fn visit_mut(&mut self, details: &CallDetails, visitor: &mut impl VisitorMut<T>) {
+        for (param, (type_, space)) in self.ret_params.iter_mut().zip(details.ret_params.iter()) {
+            visitor.visit_ident(param, Some((type_, *space)), true);
+        }
+        visitor.visit_ident(&mut self.func, None, false);
+        for (param, (type_, space)) in self.param_list.iter_mut().zip(details.param_list.iter()) {
+            visitor.visit(param, Some((type_, *space)), true);
+        }
+    }
+
+    #[allow(dead_code)] // Used by generated code
+    fn map<U: Operand>(
+        self,
+        details: &CallDetails,
+        visitor: &mut impl VisitorMap<T, U>,
+    ) -> CallArgs<U> {
+        let ret_params = self
+            .ret_params
+            .into_iter()
+            .zip(details.ret_params.iter())
+            .map(|(param, (type_, space))| visitor.visit_ident(param, Some((type_, *space)), true))
+            .collect::<Vec<_>>();
+        let func = visitor.visit_ident(self.func, None, false);
+        let param_list = self
+            .param_list
+            .into_iter()
+            .zip(details.param_list.iter())
+            .map(|(param, (type_, space))| visitor.visit(param, Some((type_, *space)), true))
+            .collect::<Vec<_>>();
+        CallArgs {
+            ret_params,
+            func,
+            param_list,
         }
     }
 }

@@ -1,8 +1,8 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 use syn::{
-    braced, parse::Parse, punctuated::Punctuated, token, Expr, Ident, PathSegment, Token, Type,
-    TypeParam, Visibility,
+    braced, parse::Parse, punctuated::Punctuated, token, Expr, Ident, LitBool, PathSegment, Token,
+    Type, TypeParam, Visibility,
 };
 
 pub mod parser;
@@ -168,7 +168,10 @@ pub struct InstructionVariant {
     pub type_: Option<Option<Expr>>,
     pub space: Option<Expr>,
     pub data: Option<Type>,
-    pub arguments: Option<InstructionArguments>,
+    pub arguments: Option<Arguments>,
+    pub visit: Option<Expr>,
+    pub visit_mut: Option<Expr>,
+    pub map: Option<Expr>,
 }
 
 impl InstructionVariant {
@@ -194,17 +197,23 @@ impl InstructionVariant {
             }
             Some(args) => {
                 let args_name = self.args_name();
-                match &args.generic {
-                    None => {
+                match &args {
+                    Arguments::Def(InstructionArguments { generic: None, .. }) => {
                         quote! {
                             arguments: #args_name,
                         }
                     }
-                    Some(generics) => {
+                    Arguments::Def(InstructionArguments {
+                        generic: Some(generics),
+                        ..
+                    }) => {
                         quote! {
                             arguments: #args_name <#generics>,
                         }
                     }
+                    Arguments::Decl(type_) => quote! {
+                        arguments: #type_,
+                    },
                 }
             }
         };
@@ -214,15 +223,21 @@ impl InstructionVariant {
     }
 
     fn emit_visit(&self, enum_: &Ident, tokens: &mut TokenStream) {
-        self.emit_visit_impl(enum_, tokens, InstructionArguments::emit_visit)
+        self.emit_visit_impl(&self.visit, enum_, tokens, InstructionArguments::emit_visit)
     }
 
     fn emit_visit_mut(&self, enum_: &Ident, tokens: &mut TokenStream) {
-        self.emit_visit_impl(enum_, tokens, InstructionArguments::emit_visit_mut)
+        self.emit_visit_impl(
+            &self.visit_mut,
+            enum_,
+            tokens,
+            InstructionArguments::emit_visit_mut,
+        )
     }
 
     fn emit_visit_impl(
         &self,
+        visit_fn: &Option<Expr>,
         enum_: &Ident,
         tokens: &mut TokenStream,
         mut fn_: impl FnMut(&InstructionArguments, &Option<Option<Expr>>, &Option<Expr>) -> TokenStream,
@@ -236,7 +251,14 @@ impl InstructionVariant {
                 .to_tokens(tokens);
                 return;
             }
-            Some(args) => args,
+            Some(Arguments::Decl(_)) => {
+                quote! {
+                    #enum_ :: #name { data, arguments } => { #visit_fn }
+                }
+                .to_tokens(tokens);
+                return;
+            }
+            Some(Arguments::Def(args)) => args,
         };
         let data = &self.data.as_ref().map(|_| quote! { data,});
         let arg_calls = fn_(arguments, &self.type_, &self.space);
@@ -250,10 +272,24 @@ impl InstructionVariant {
 
     fn emit_visit_map(&self, enum_: &Ident, tokens: &mut TokenStream) {
         let name = &self.name;
-        let arguments = &self.arguments.as_ref().map(|_| quote! { arguments,});
         let data = &self.data.as_ref().map(|_| quote! { data,});
+        let arguments = match self.arguments {
+            None => None,
+            Some(Arguments::Decl(_)) => {
+                let map = self.map.as_ref().unwrap();
+                quote! {
+                    #enum_ :: #name { #data arguments } => {
+                        #map
+                    }
+                }
+                .to_tokens(tokens);
+                return;
+            }
+            Some(Arguments::Def(ref def)) => Some(def),
+        };
+        let arguments_ident = &self.arguments.as_ref().map(|_| quote! { arguments,});
         let mut arg_calls = None;
-        let arguments_init = self.arguments.as_ref().map(|arguments| {
+        let arguments_init = arguments.as_ref().map(|arguments| {
             let arg_type = self.args_name();
             arg_calls = Some(arguments.emit_visit_map(&self.type_, &self.space));
             let arg_names = arguments.fields.iter().map(|arg| &arg.name);
@@ -262,7 +298,7 @@ impl InstructionVariant {
             }
         });
         quote! {
-            #enum_ :: #name { #data #arguments } => {
+            #enum_ :: #name { #data #arguments_ident } => {
                 #arg_calls
                 #enum_ :: #name { #data #arguments_init }
             }
@@ -272,7 +308,8 @@ impl InstructionVariant {
 
     fn emit_type(&self, vis: &Option<Visibility>, tokens: &mut TokenStream) {
         let arguments = match self.arguments {
-            Some(ref a) => a,
+            Some(Arguments::Def(ref a)) => a,
+            Some(Arguments::Decl(_)) => return,
             None => return,
         };
         let name = self.args_name();
@@ -301,12 +338,18 @@ impl Parse for InstructionVariant {
         let mut space = None;
         let mut data = None;
         let mut arguments = None;
+        let mut visit = None;
+        let mut visit_mut = None;
+        let mut map = None;
         for property in properties {
             match property {
                 VariantProperty::Type(t) => type_ = Some(t),
                 VariantProperty::Space(s) => space = Some(s),
                 VariantProperty::Data(d) => data = Some(d),
                 VariantProperty::Arguments(a) => arguments = Some(a),
+                VariantProperty::Visit(e) => visit = Some(e),
+                VariantProperty::VisitMut(e) => visit_mut = Some(e),
+                VariantProperty::Map(e) => map = Some(e),
             }
         }
         Ok(Self {
@@ -315,6 +358,9 @@ impl Parse for InstructionVariant {
             space,
             data,
             arguments,
+            visit,
+            visit_mut,
+            map,
         })
     }
 }
@@ -323,7 +369,10 @@ enum VariantProperty {
     Type(Option<Expr>),
     Space(Expr),
     Data(Type),
-    Arguments(InstructionArguments),
+    Arguments(Arguments),
+    Visit(Expr),
+    VisitMut(Expr),
+    Map(Expr),
 }
 
 impl VariantProperty {
@@ -360,15 +409,33 @@ impl VariantProperty {
                         None
                     };
                     input.parse::<Token![:]>()?;
-                    let fields;
-                    braced!(fields in input);
-                    VariantProperty::Arguments(InstructionArguments::parse(generics, &fields)?)
+                    if input.peek(token::Brace) {
+                        let fields;
+                        braced!(fields in input);
+                        VariantProperty::Arguments(Arguments::Def(InstructionArguments::parse(
+                            generics, &fields,
+                        )?))
+                    } else {
+                        VariantProperty::Arguments(Arguments::Decl(input.parse::<Type>()?))
+                    }
+                }
+                "visit" => {
+                    input.parse::<Token![:]>()?;
+                    VariantProperty::Visit(input.parse::<Expr>()?)
+                }
+                "visit_mut" => {
+                    input.parse::<Token![:]>()?;
+                    VariantProperty::VisitMut(input.parse::<Expr>()?)
+                }
+                "map" => {
+                    input.parse::<Token![:]>()?;
+                    VariantProperty::Map(input.parse::<Expr>()?)
                 }
                 x => {
                     return Err(syn::Error::new(
                         key.span(),
                         format!(
-                            "Unexpected key `{}`. Expected `type`, `data` or `arguments`.",
+                            "Unexpected key `{}`. Expected `type`, `data`, `arguments`, `visit, `visit_mut` or `map`.",
                             x
                         ),
                     ))
@@ -378,6 +445,11 @@ impl VariantProperty {
             return Err(lookahead.error());
         })
     }
+}
+
+pub enum Arguments {
+    Decl(Type),
+    Def(InstructionArguments),
 }
 
 pub struct InstructionArguments {
@@ -453,7 +525,7 @@ pub struct ArgumentField {
 impl ArgumentField {
     fn parse_block(
         input: syn::parse::ParseStream,
-    ) -> syn::Result<(Type, Option<Expr>, Option<Expr>)> {
+    ) -> syn::Result<(Type, Option<Expr>, Option<Expr>, Option<bool>)> {
         let content;
         braced!(content in input);
         let all_fields =
@@ -469,6 +541,10 @@ impl ArgumentField {
                     match &*name_ident.to_string() {
                         "repr" => ExprOrPath::Repr(content.parse::<Type>()?),
                         "space" => ExprOrPath::Space(content.parse::<Expr>()?),
+                        "dst" => {
+                            let ident = content.parse::<LitBool>()?;
+                            ExprOrPath::Dst(ident.value)
+                        }
                         name => {
                             return Err(syn::Error::new(
                                 name_ident.span(),
@@ -483,14 +559,16 @@ impl ArgumentField {
         let mut repr = None;
         let mut type_ = None;
         let mut space = None;
+        let mut is_dst = None;
         for exp_or_path in all_fields {
             match exp_or_path {
                 ExprOrPath::Repr(r) => repr = Some(r),
                 ExprOrPath::Type(t) => type_ = Some(t),
                 ExprOrPath::Space(s) => space = Some(s),
+                ExprOrPath::Dst(x) => is_dst = Some(x),
             }
         }
-        Ok((repr.unwrap(), type_, space))
+        Ok((repr.unwrap(), type_, space, is_dst))
     }
 
     fn parse_basic(input: &syn::parse::ParseBuffer) -> syn::Result<Type> {
@@ -666,15 +744,19 @@ impl ArgumentField {
 impl Parse for ArgumentField {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let name = input.parse::<Ident>()?;
-        let is_dst = Self::is_dst(&name)?;
+
         input.parse::<Token![:]>()?;
         let lookahead = input.lookahead1();
-        let (repr, type_, space) = if lookahead.peek(token::Brace) {
+        let (repr, type_, space, is_dst) = if lookahead.peek(token::Brace) {
             Self::parse_block(input)?
         } else if lookahead.peek(syn::Ident) {
-            (Self::parse_basic(input)?, None, None)
+            (Self::parse_basic(input)?, None, None, None)
         } else {
             return Err(lookahead.error());
+        };
+        let is_dst = match is_dst {
+            Some(x) => x,
+            None => Self::is_dst(&name)?,
         };
         Ok(Self {
             name,
@@ -690,6 +772,7 @@ enum ExprOrPath {
     Repr(Type),
     Type(Expr),
     Space(Expr),
+    Dst(bool),
 }
 
 #[cfg(test)]
