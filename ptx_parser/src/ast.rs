@@ -557,7 +557,7 @@ pub struct SetpData {
 
 impl SetpData {
     pub(crate) fn try_parse(
-        errors: &mut PtxParserState,
+        state: &mut PtxParserState,
         cmp_op: super::RawSetpCompareOp,
         ftz: bool,
         type_: ScalarType,
@@ -565,7 +565,7 @@ impl SetpData {
         let flush_to_zero = match (ftz, type_) {
             (_, ScalarType::F32) => Some(ftz),
             _ => {
-                errors.push(PtxError::NonF32Ftz);
+                state.errors.push(PtxError::NonF32Ftz);
                 None
             }
         };
@@ -576,7 +576,7 @@ impl SetpData {
             match SetpCompareInt::try_from(cmp_op) {
                 Ok(op) => SetpCompareOp::Integer(op),
                 Err(err) => {
-                    errors.push(err);
+                    state.errors.push(err);
                     SetpCompareOp::Integer(SetpCompareInt::Eq)
                 }
             }
@@ -682,36 +682,52 @@ impl From<RawSetpCompareOp> for SetpCompareFloat {
 }
 
 pub struct CallDetails {
-    uniform: bool,
-    ret_params: Vec<(Type, StateSpace)>,
-    param_list: Vec<(Type, StateSpace)>,
+    pub uniform: bool,
+    pub return_arguments: Vec<(Type, StateSpace)>,
+    pub input_arguments: Vec<(Type, StateSpace)>,
 }
 
 pub struct CallArgs<T: Operand> {
-    pub ret_params: Vec<T::Ident>,
+    pub return_arguments: Vec<T::Ident>,
     pub func: T::Ident,
-    pub param_list: Vec<T>,
+    pub input_arguments: Vec<T>,
 }
 
 impl<T: Operand> CallArgs<T> {
     #[allow(dead_code)] // Used by generated code
     fn visit(&self, details: &CallDetails, visitor: &mut impl Visitor<T>) {
-        for (param, (type_, space)) in self.ret_params.iter().zip(details.ret_params.iter()) {
+        for (param, (type_, space)) in self
+            .return_arguments
+            .iter()
+            .zip(details.return_arguments.iter())
+        {
             visitor.visit_ident(param, Some((type_, *space)), true);
         }
         visitor.visit_ident(&self.func, None, false);
-        for (param, (type_, space)) in self.param_list.iter().zip(details.param_list.iter()) {
+        for (param, (type_, space)) in self
+            .input_arguments
+            .iter()
+            .zip(details.input_arguments.iter())
+        {
             visitor.visit(param, Some((type_, *space)), true);
         }
     }
 
     #[allow(dead_code)] // Used by generated code
     fn visit_mut(&mut self, details: &CallDetails, visitor: &mut impl VisitorMut<T>) {
-        for (param, (type_, space)) in self.ret_params.iter_mut().zip(details.ret_params.iter()) {
+        for (param, (type_, space)) in self
+            .return_arguments
+            .iter_mut()
+            .zip(details.return_arguments.iter())
+        {
             visitor.visit_ident(param, Some((type_, *space)), true);
         }
         visitor.visit_ident(&mut self.func, None, false);
-        for (param, (type_, space)) in self.param_list.iter_mut().zip(details.param_list.iter()) {
+        for (param, (type_, space)) in self
+            .input_arguments
+            .iter_mut()
+            .zip(details.input_arguments.iter())
+        {
             visitor.visit(param, Some((type_, *space)), true);
         }
     }
@@ -722,23 +738,23 @@ impl<T: Operand> CallArgs<T> {
         details: &CallDetails,
         visitor: &mut impl VisitorMap<T, U>,
     ) -> CallArgs<U> {
-        let ret_params = self
-            .ret_params
+        let return_arguments = self
+            .return_arguments
             .into_iter()
-            .zip(details.ret_params.iter())
+            .zip(details.return_arguments.iter())
             .map(|(param, (type_, space))| visitor.visit_ident(param, Some((type_, *space)), true))
             .collect::<Vec<_>>();
         let func = visitor.visit_ident(self.func, None, false);
-        let param_list = self
-            .param_list
+        let input_arguments = self
+            .input_arguments
             .into_iter()
-            .zip(details.param_list.iter())
+            .zip(details.input_arguments.iter())
             .map(|(param, (type_, space))| visitor.visit(param, Some((type_, *space)), true))
             .collect::<Vec<_>>();
         CallArgs {
-            ret_params,
+            return_arguments,
             func,
-            param_list,
+            input_arguments,
         }
     }
 }
