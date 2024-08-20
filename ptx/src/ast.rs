@@ -16,6 +16,8 @@ pub enum PtxError {
         source: ParseFloatError,
     },
     #[error("")]
+    Unsupported32Bit,
+    #[error("")]
     SyntaxError,
     #[error("")]
     NonF32Ftz,

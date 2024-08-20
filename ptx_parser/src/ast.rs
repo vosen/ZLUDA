@@ -192,6 +192,14 @@ gen::generate_instruction_type!(
         Ret {
             data: RetData
         },
+        Cvta {
+            data: CvtaDetails,
+            type: { Type::Scalar(ScalarType::B64) },
+            arguments<T>: {
+                dst: T,
+                src: T,
+            }
+        },
         Trap { }
     }
 );
@@ -824,9 +832,9 @@ impl<T: Operand> CallArgs<T> {
 }
 
 pub struct CvtDetails {
-    from: ScalarType,
-    to: ScalarType,
-    mode: CvtMode,
+    pub from: ScalarType,
+    pub to: ScalarType,
+    pub mode: CvtMode,
 }
 
 pub enum CvtMode {
@@ -976,4 +984,14 @@ pub struct ShrData {
 pub enum RightShiftKind {
     Arithmetic,
     Logical,
+}
+
+pub struct CvtaDetails {
+    pub state_space: StateSpace,
+    pub direction: CvtaDirection,
+}
+
+pub enum CvtaDirection {
+    GenericToExplicit,
+    ExplicitToGeneric,
 }

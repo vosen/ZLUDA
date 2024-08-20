@@ -814,6 +814,8 @@ pub enum PtxError {
     #[error("")]
     NonF32Ftz,
     #[error("")]
+    Unsupported32Bit,
+    #[error("")]
     WrongType,
     #[error("")]
     UnknownFunction,
@@ -1653,7 +1655,7 @@ derive_parser!(
                                   .s8,   .s16, .s32, .s64,
                                   .bf16, .f16, .f32, .f64 };
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-shl
-    shl.type d, a, b => { 
+    shl.type d, a, b => {
         ast::Instruction::Shl { data: type_, arguments: ShlArgs { dst: d, src1: a, src2: b } }
     }
     .type: ScalarType = { .b16, .b32, .b64 };
@@ -1666,10 +1668,43 @@ derive_parser!(
             arguments: ShrArgs { dst: d, src1: a, src2: b }
         }
     }
-
     .type: ScalarType = { .b16, .b32, .b64,
                           .u16, .u32, .u64,
                           .s16, .s32, .s64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvta
+    cvta.space.size     p, a => {
+        if size != ScalarType::U64 {
+            state.errors.push(PtxError::Unsupported32Bit);
+        }
+        let data = ast::CvtaDetails {
+            state_space: space,
+            direction: ast::CvtaDirection::ExplicitToGeneric
+        };
+        let arguments = ast::CvtaArgs {
+            dst: p, src: a
+        };
+        ast::Instruction::Cvta {
+            data, arguments
+        }
+    }
+    cvta.to.space.size  p, a => {
+        if size != ScalarType::U64 {
+            state.errors.push(PtxError::Unsupported32Bit);
+        }
+        let data = ast::CvtaDetails {
+            state_space: space,
+            direction: ast::CvtaDirection::GenericToExplicit
+        };
+        let arguments = ast::CvtaArgs {
+            dst: p, src: a
+        };
+        ast::Instruction::Cvta {
+            data, arguments
+        }
+    }
+    .space: StateSpace = { .const, .global, .local, .shared{::cta, ::cluster}, .param{::entry} };
+    .size: ScalarType  = { .u32, .u64 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-ret
     ret{.uni} => {
