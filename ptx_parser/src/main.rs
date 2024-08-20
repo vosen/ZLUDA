@@ -1652,6 +1652,24 @@ derive_parser!(
     .atype: ScalarType =        { .u8,   .u16, .u32, .u64,
                                   .s8,   .s16, .s32, .s64,
                                   .bf16, .f16, .f32, .f64 };
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-shl
+    shl.type d, a, b => { 
+        ast::Instruction::Shl { data: type_, arguments: ShlArgs { dst: d, src1: a, src2: b } }
+    }
+    .type: ScalarType = { .b16, .b32, .b64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-shr
+    shr.type d, a, b => {
+        let kind = if type_.kind() == ast::ScalarKind::Signed { RightShiftKind::Arithmetic} else { RightShiftKind::Logical };
+        ast::Instruction::Shr {
+            data: ast::ShrData { type_, kind },
+            arguments: ShrArgs { dst: d, src1: a, src2: b }
+        }
+    }
+
+    .type: ScalarType = { .b16, .b32, .b64,
+                          .u16, .u32, .u64,
+                          .s16, .s32, .s64 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-ret
     ret{.uni} => {

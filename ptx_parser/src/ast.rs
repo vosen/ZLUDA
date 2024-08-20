@@ -165,6 +165,30 @@ gen::generate_instruction_type!(
                 },
             }
         },
+        Shr {
+            data: ShrData,
+            type: { Type::Scalar(data.type_.clone()) },
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::U32) },
+                },
+            }
+        },
+        Shl {
+            data: ScalarType,
+            type: { Type::Scalar(data.clone()) },
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::U32) },
+                },
+            }
+        },
         Ret {
             data: RetData
         },
@@ -942,4 +966,14 @@ pub struct CvtDesc {
     pub saturate: bool,
     pub dst: ScalarType,
     pub src: ScalarType,
+}
+
+pub struct ShrData {
+    pub type_: ScalarType,
+    pub kind: RightShiftKind,
+}
+
+pub enum RightShiftKind {
+    Arithmetic,
+    Logical,
 }
