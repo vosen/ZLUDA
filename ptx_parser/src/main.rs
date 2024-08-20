@@ -60,13 +60,13 @@ impl From<RawLdStQualifier> for ast::LdStQualifier {
     }
 }
 
-impl From<RawFloatRounding> for ast::RoundingMode {
-    fn from(value: RawFloatRounding) -> Self {
+impl From<RawRoundingMode> for ast::RoundingMode {
+    fn from(value: RawRoundingMode) -> Self {
         match value {
-            RawFloatRounding::Rn => ast::RoundingMode::NearestEven,
-            RawFloatRounding::Rz => ast::RoundingMode::Zero,
-            RawFloatRounding::Rm => ast::RoundingMode::NegativeInf,
-            RawFloatRounding::Rp => ast::RoundingMode::PositiveInf,
+            RawRoundingMode::Rn | RawRoundingMode::Rni => ast::RoundingMode::NearestEven,
+            RawRoundingMode::Rz | RawRoundingMode::Rzi => ast::RoundingMode::Zero,
+            RawRoundingMode::Rm | RawRoundingMode::Rmi => ast::RoundingMode::NegativeInf,
+            RawRoundingMode::Rp | RawRoundingMode::Rpi => ast::RoundingMode::PositiveInf,
         }
     }
 }
@@ -1380,7 +1380,7 @@ derive_parser!(
             }
         }
     }
-    .rnd: RawFloatRounding = { .rn, .rz, .rm, .rp };
+    .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
     ScalarType =        { .f32, .f64 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#half-precision-floating-point-instructions-add
@@ -1444,7 +1444,7 @@ derive_parser!(
             }
         }
     }
-    .rnd: RawFloatRounding = { .rn };
+    .rnd: RawRoundingMode = { .rn };
     ScalarType =        { .f16, .f16x2, .bf16, .bf16x2 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-mul
@@ -1502,7 +1502,7 @@ derive_parser!(
             arguments: MulArgs { dst: d, src1: a, src2: b }
         }
     }
-    .rnd: RawFloatRounding = { .rn, .rz, .rm, .rp };
+    .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
     ScalarType = { .f32, .f64 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#half-precision-floating-point-instructions-mul
@@ -1558,7 +1558,7 @@ derive_parser!(
             arguments: MulArgs { dst: d, src1: a, src2: b }
         }
     }
-    .rnd: RawFloatRounding = { .rn };
+    .rnd: RawRoundingMode = { .rn };
     ScalarType = { .f16, .f16x2, .bf16, .bf16x2 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions-setp
@@ -1625,6 +1625,33 @@ derive_parser!(
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-call
     call <= { call(stream) }
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt
+    cvt{.ifrnd}{.ftz}{.sat}.dtype.atype         d, a => {
+        let data = ast::CvtDetails::new(&mut state.errors, ifrnd, ftz, sat, dtype, atype);
+        let arguments = ast::CvtArgs { dst: d, src: a };
+        ast::Instruction::Cvt {
+            data, arguments
+        }
+    }
+    // cvt.frnd2{.relu}{.satfinite}.f16.f32       d, a;
+    // cvt.frnd2{.relu}{.satfinite}.f16x2.f32     d, a, b;
+    // cvt.frnd2{.relu}{.satfinite}.bf16.f32      d, a;
+    // cvt.frnd2{.relu}{.satfinite}.bf16x2.f32    d, a, b;
+    // cvt.rna{.satfinite}.tf32.f32               d, a;
+    // cvt.frnd2{.relu}.tf32.f32                   d, a;
+    // cvt.rn.satfinite{.relu}.f8x2type.f32       d, a, b;
+    // cvt.rn.satfinite{.relu}.f8x2type.f16x2     d, a;
+    // cvt.rn.{.relu}.f16x2.f8x2type              d, a;
+
+    .ifrnd: RawRoundingMode =   { .rn,  .rz,  .rm,  .rp,  .rni, .rzi, .rmi, .rpi };
+    .frnd2: RawRoundingMode =   { .rn,  .rz };
+    .dtype: ScalarType =        { .u8,   .u16, .u32, .u64,
+                                  .s8,   .s16, .s32, .s64,
+                                  .bf16, .f16, .f32, .f64 };
+    .atype: ScalarType =        { .u8,   .u16, .u32, .u64,
+                                  .s8,   .s16, .s32, .s64,
+                                  .bf16, .f16, .f32, .f64 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-ret
     ret{.uni} => {

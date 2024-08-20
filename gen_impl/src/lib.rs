@@ -847,7 +847,11 @@ mod tests {
         assert_eq!("ScalarType :: U32", to_string(variant.type_.unwrap()));
         assert_eq!("StateSpace :: Global", to_string(variant.space.unwrap()));
         assert_eq!("LdDetails", to_string(variant.data.unwrap()));
-        let arguments = variant.arguments.unwrap();
+        let arguments = if let Some(Arguments::Def(a)) = variant.arguments {
+            a
+        } else {
+            panic!()
+        };
         assert_eq!("P", to_string(arguments.generic));
         let mut fields = arguments.fields.into_iter();
         let dst = fields.next().unwrap();

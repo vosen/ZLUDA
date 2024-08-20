@@ -1,4 +1,9 @@
-use super::{MemScope, RawSetpCompareOp, ScalarType, SetpBoolPostOp, StateSpace, VectorPrefix};
+use std::cmp::Ordering;
+
+use super::{
+    MemScope, RawRoundingMode, RawSetpCompareOp, ScalarType, SetpBoolPostOp, StateSpace,
+    VectorPrefix,
+};
 use crate::{PtxError, PtxParserState};
 use bitflags::bitflags;
 
@@ -147,6 +152,19 @@ gen::generate_instruction_type!(
             visit_mut: arguments.visit_mut(data, visitor),
             map: Instruction::Call{ arguments: arguments.map(&data, visitor), data }
         },
+        Cvt {
+            data: CvtDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { Type::Scalar(data.to) },
+                },
+                src: {
+                    repr: T,
+                    type: { Type::Scalar(data.from) },
+                },
+            }
+        },
         Ret {
             data: RetData
         },
@@ -284,6 +302,28 @@ impl Type {
 }
 
 impl ScalarType {
+    pub fn size_of(self) -> u8 {
+        match self {
+            ScalarType::U8 | ScalarType::S8 | ScalarType::B8 => 1,
+            ScalarType::U16
+            | ScalarType::S16
+            | ScalarType::B16
+            | ScalarType::F16
+            | ScalarType::BF16 => 2,
+            ScalarType::U32
+            | ScalarType::S32
+            | ScalarType::B32
+            | ScalarType::F32
+            | ScalarType::U16x2
+            | ScalarType::S16x2
+            | ScalarType::F16x2
+            | ScalarType::BF16x2 => 4,
+            ScalarType::U64 | ScalarType::S64 | ScalarType::B64 | ScalarType::F64 => 8,
+            ScalarType::B128 => 16,
+            ScalarType::Pred => 1,
+        }
+    }
+
     pub fn kind(self) -> ScalarKind {
         match self {
             ScalarType::U8 => ScalarKind::Unsigned,
@@ -757,4 +797,149 @@ impl<T: Operand> CallArgs<T> {
             input_arguments,
         }
     }
+}
+
+pub struct CvtDetails {
+    from: ScalarType,
+    to: ScalarType,
+    mode: CvtMode,
+}
+
+pub enum CvtMode {
+    // int from int
+    ZeroExtend,
+    SignExtend,
+    Truncate,
+    Bitcast,
+    // float from float
+    FPExtend {
+        flush_to_zero: Option<bool>,
+    },
+    FPTruncate {
+        // float rounding
+        rounding: RoundingMode,
+        flush_to_zero: Option<bool>,
+    },
+    FPRound {
+        integer_rounding: Option<RoundingMode>,
+        flush_to_zero: Option<bool>,
+    },
+    // int from float
+    SignedFromFP {
+        rounding: RoundingMode,
+        flush_to_zero: Option<bool>,
+    }, // integer rounding
+    UnsignedFromFP {
+        rounding: RoundingMode,
+        flush_to_zero: Option<bool>,
+    }, // integer rounding
+    // float from int, ftz is allowed in the grammar, but clearly nonsensical
+    FPFromSigned(RoundingMode),   // float rounding
+    FPFromUnsigned(RoundingMode), // float rounding
+}
+
+impl CvtDetails {
+    pub(crate) fn new(
+        errors: &mut Vec<PtxError>,
+        rnd: Option<RawRoundingMode>,
+        ftz: bool,
+        saturate: bool,
+        dst: ScalarType,
+        src: ScalarType,
+    ) -> Self {
+        if saturate {
+            errors.push(PtxError::Todo);
+        }
+        // Modifier .ftz can only be specified when either .dtype or .atype is .f32 and applies only to single precision (.f32) inputs and results.
+        let flush_to_zero = match (dst, src) {
+            (ScalarType::F32, _) | (_, ScalarType::F32) => Some(ftz),
+            _ => {
+                if ftz {
+                    errors.push(PtxError::NonF32Ftz);
+                }
+                None
+            }
+        };
+        let rounding = rnd.map(Into::into);
+        let mut unwrap_rounding = || match rounding {
+            Some(rnd) => rnd,
+            None => {
+                errors.push(PtxError::SyntaxError);
+                RoundingMode::NearestEven
+            }
+        };
+        let mode = match (dst.kind(), src.kind()) {
+            (ScalarKind::Float, ScalarKind::Float) => match dst.size_of().cmp(&src.size_of()) {
+                Ordering::Less => CvtMode::FPTruncate {
+                    rounding: unwrap_rounding(),
+                    flush_to_zero,
+                },
+                Ordering::Equal => CvtMode::FPRound {
+                    integer_rounding: rounding,
+                    flush_to_zero,
+                },
+                Ordering::Greater => {
+                    if rounding.is_some() {
+                        errors.push(PtxError::SyntaxError);
+                    }
+                    CvtMode::FPExtend { flush_to_zero }
+                }
+            },
+            (ScalarKind::Unsigned, ScalarKind::Float) => CvtMode::UnsignedFromFP {
+                rounding: unwrap_rounding(),
+                flush_to_zero,
+            },
+            (ScalarKind::Signed, ScalarKind::Float) => CvtMode::SignedFromFP {
+                rounding: unwrap_rounding(),
+                flush_to_zero,
+            },
+            (ScalarKind::Float, ScalarKind::Unsigned) => CvtMode::FPFromUnsigned(unwrap_rounding()),
+            (ScalarKind::Float, ScalarKind::Signed) => CvtMode::FPFromSigned(unwrap_rounding()),
+            (
+                ScalarKind::Unsigned | ScalarKind::Signed,
+                ScalarKind::Unsigned | ScalarKind::Signed,
+            ) => match dst.size_of().cmp(&src.size_of()) {
+                Ordering::Less => {
+                    if dst.kind() != src.kind() {
+                        errors.push(PtxError::Todo);
+                    }
+                    CvtMode::Truncate
+                }
+                Ordering::Equal => CvtMode::Bitcast,
+                Ordering::Greater => {
+                    if dst.kind() != src.kind() {
+                        errors.push(PtxError::Todo);
+                    }
+                    if src.kind() == ScalarKind::Signed {
+                        CvtMode::SignExtend
+                    } else {
+                        CvtMode::ZeroExtend
+                    }
+                }
+            },
+            (_, _) => {
+                errors.push(PtxError::SyntaxError);
+                CvtMode::Bitcast
+            }
+        };
+        CvtDetails {
+            mode,
+            to: dst,
+            from: src,
+        }
+    }
+}
+
+pub struct CvtIntToIntDesc {
+    pub dst: ScalarType,
+    pub src: ScalarType,
+    pub saturate: bool,
+}
+
+pub struct CvtDesc {
+    pub rounding: Option<RoundingMode>,
+    pub flush_to_zero: Option<bool>,
+    pub saturate: bool,
+    pub dst: ScalarType,
+    pub src: ScalarType,
 }
