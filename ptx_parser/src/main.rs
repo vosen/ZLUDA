@@ -71,6 +71,16 @@ impl From<RawRoundingMode> for ast::RoundingMode {
     }
 }
 
+impl VectorPrefix {
+    pub(crate) fn len(self) -> u8 {
+        match self {
+            VectorPrefix::V2 => 2,
+            VectorPrefix::V4 => 4,
+            VectorPrefix::V8 => 8,
+        }
+    }
+}
+
 struct PtxParserState<'input> {
     errors: Vec<PtxError>,
     function_declarations:
@@ -1134,6 +1144,9 @@ derive_parser!(
 
     #[derive(Copy, Clone, PartialEq, Eq, Hash)]
     pub enum SetpBoolPostOp { }
+
+    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    pub enum AtomSemantics { }
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
     mov{.vec}.type  d, a => {
@@ -2344,6 +2357,147 @@ derive_parser!(
         }
     }
     ScalarType =        { .f32, .f64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions-selp
+    selp.type d, a, b, c => {
+        ast::Instruction::Selp {
+            data: type_,
+            arguments: SelpArgs { dst: d, src1: a, src2: b, src3: c  }
+        }
+    }
+    .type: ScalarType = { .b16, .b32, .b64,
+                          .u16, .u32, .u64,
+                          .s16, .s32, .s64,
+                          .f32, .f64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-bar
+    barrier{.cta}.sync{.aligned}    a{, b} => {
+        let _ = cta;
+        ast::Instruction::Bar {
+            data: ast::BarData { aligned },
+            arguments: BarArgs { src1: a, src2: b }
+        }
+    }
+    //barrier{.cta}.arrive{.aligned}    a, b;
+    //barrier{.cta}.red.popc{.aligned}.u32  d, a{, b}, {!}c;
+    //barrier{.cta}.red.op{.aligned}.pred   p, a{, b}, {!}c;
+    bar{.cta}.sync                  a{, b} => {
+        let _ = cta;
+        ast::Instruction::Bar {
+            data: ast::BarData { aligned: true },
+            arguments: BarArgs { src1: a, src2: b }
+        }
+    }
+    //bar{.cta}.arrive    a, b;
+    //bar{.cta}.red.popc.u32  d, a{, b}, {!}c;
+    //bar{.cta}.red.op.pred   p, a{, b}, {!}c;
+    //.op = { .and, .or };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-atom
+    atom{.sem}{.scope}{.space}.op{.level::cache_hint}.type                                      d, [a], b{, cache_policy} => {
+        if level_cache_hint || cache_policy.is_some() {
+            state.errors.push(PtxError::Todo);
+        }
+        ast::Instruction::Atom {
+            data: AtomDetails {
+                semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
+                scope: scope.unwrap_or(MemScope::Gpu),
+                space: space.unwrap_or(StateSpace::Generic),
+                op: ast::AtomicOp::new(op, type_.kind()),
+                type_: type_.into()
+            },
+            arguments: AtomArgs { dst: d, src1: a, src2: b }
+        }
+    }
+    atom{.sem}{.scope}{.space}.cas.cas_type                                                     d, [a], b, c => {
+        ast::Instruction::AtomCas {
+            data: AtomCasDetails {
+                semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
+                scope: scope.unwrap_or(MemScope::Gpu),
+                space: space.unwrap_or(StateSpace::Generic),
+                type_: cas_type
+            },
+            arguments: AtomCasArgs { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+    atom{.sem}{.scope}{.space}.exch{.level::cache_hint}.b128                                    d, [a], b{, cache_policy} => {
+        if level_cache_hint || cache_policy.is_some() {
+            state.errors.push(PtxError::Todo);
+        }
+        ast::Instruction::Atom {
+            data: AtomDetails {
+                semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
+                scope: scope.unwrap_or(MemScope::Gpu),
+                space: space.unwrap_or(StateSpace::Generic),
+                op: ast::AtomicOp::new(exch, b128.kind()),
+                type_: b128.into()
+            },
+            arguments: AtomArgs { dst: d, src1: a, src2: b }
+        }
+    }
+    atom{.sem}{.scope}{.global}.float_op{.level::cache_hint}.vec_32_bit.f32                     d, [a], b{, cache_policy} => {
+        if level_cache_hint || cache_policy.is_some() {
+            state.errors.push(PtxError::Todo);
+        }
+        ast::Instruction::Atom {
+            data: AtomDetails {
+                semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
+                scope: scope.unwrap_or(MemScope::Gpu),
+                space: global.unwrap_or(StateSpace::Generic),
+                op: ast::AtomicOp::new(float_op, f32.kind()),
+                type_: ast::Type::Vector(f32, vec_32_bit.len())
+            },
+            arguments: AtomArgs { dst: d, src1: a, src2: b }
+        }
+    }
+    atom{.sem}{.scope}{.global}.float_op.noftz{.level::cache_hint}{.vec_16_bit}.half_word_type  d, [a], b{, cache_policy} => {
+        if level_cache_hint || cache_policy.is_some() {
+            state.errors.push(PtxError::Todo);
+        }
+        ast::Instruction::Atom {
+            data: AtomDetails {
+                semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
+                scope: scope.unwrap_or(MemScope::Gpu),
+                space: global.unwrap_or(StateSpace::Generic),
+                op: ast::AtomicOp::new(float_op, half_word_type.kind()),
+                type_: ast::Type::maybe_vector(vec_16_bit, half_word_type)
+            },
+            arguments: AtomArgs { dst: d, src1: a, src2: b }
+        }
+    }
+    atom{.sem}{.scope}{.global}.float_op.noftz{.level::cache_hint}{.vec_32_bit}.packed_type     d, [a], b{, cache_policy} => {
+        if level_cache_hint || cache_policy.is_some() {
+            state.errors.push(PtxError::Todo);
+        }
+        ast::Instruction::Atom {
+            data: AtomDetails {
+                semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
+                scope: scope.unwrap_or(MemScope::Gpu),
+                space: global.unwrap_or(StateSpace::Generic),
+                op: ast::AtomicOp::new(float_op, packed_type.kind()),
+                type_: ast::Type::maybe_vector(vec_32_bit, packed_type)
+            },
+            arguments: AtomArgs { dst: d, src1: a, src2: b }
+        }
+    }
+    .space: StateSpace =            { .global, .shared{::cta, ::cluster} };
+    .sem: AtomSemantics =           { .relaxed, .acquire, .release, .acq_rel };
+    .scope: MemScope =              { .cta, .cluster, .gpu, .sys };
+    .op: RawAtomicOp =              { .and, .or, .xor,
+                                      .exch,
+                                      .add, .inc, .dec,
+                                      .min, .max };
+    .level::cache_hint =            { .L2::cache_hint };
+    .type: ScalarType =             { .b32, .b64, .u32, .u64, .s32, .s64, .f32, .f64 };
+    .cas_type: ScalarType =         { .b32, .b64, .u32, .u64, .s32, .s64, .f32, .f64, .b16, .b128 };
+    .half_word_type: ScalarType =   { .f16, .bf16 };
+    .packed_type: ScalarType =      { .f16x2, .bf16x2 };
+    .vec_16_bit: VectorPrefix =     { .v2, .v4, .v8 };
+    .vec_32_bit:  VectorPrefix =    { .v2, .v4 };
+    .float_op: RawAtomicOp =        { .add, .min, .max };
+    ScalarType =                    { .b16, .b128, .f32 };
+    StateSpace =                    { .global };
+    RawAtomicOp =                   { .exch };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-ret
     ret{.uni} => {

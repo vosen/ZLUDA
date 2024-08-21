@@ -1,8 +1,8 @@
 use std::cmp::Ordering;
 
 use super::{
-    MemScope, RawRoundingMode, RawSetpCompareOp, ScalarType, SetpBoolPostOp, StateSpace,
-    VectorPrefix,
+    AtomSemantics, MemScope, RawRoundingMode, RawSetpCompareOp, ScalarType, SetpBoolPostOp,
+    StateSpace, VectorPrefix,
 };
 use crate::{PtxError, PtxParserState};
 use bitflags::bitflags;
@@ -282,6 +282,52 @@ gen::generate_instruction_type!(
                 src: T,
             }
         },
+        Selp {
+            type: { Type::Scalar(data.clone()) },
+            data: ScalarType,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::Pred)
+                },
+            }
+        },
+        Bar {
+            type: Type::Scalar(ScalarType::U32),
+            data: BarData,
+            arguments<T>: {
+                src1: T,
+                src2: Option<T>,
+            }
+        },
+        Atom {
+            type: &data.type_,
+            data: AtomDetails,
+            arguments<T>: {
+                dst: T,
+                src1: {
+                    repr: T,
+                    space: { data.space },
+                },
+                src2: T,
+            }
+        },
+        AtomCas {
+            type: Type::Scalar(data.type_),
+            data: AtomCasDetails,
+            arguments<T>: {
+                dst: T,
+                src1: {
+                    repr: T,
+                    space: { data.space },
+                },
+                src2: T,
+                src3: T,
+            }
+        },
         Trap { }
     }
 );
@@ -408,8 +454,7 @@ pub enum Type {
 impl Type {
     pub(crate) fn maybe_vector(vector: Option<VectorPrefix>, scalar: ScalarType) -> Self {
         match vector {
-            Some(VectorPrefix::V2) => Type::Vector(scalar, 2),
-            Some(VectorPrefix::V4) => Type::Vector(scalar, 4),
+            Some(prefix) => Type::Vector(scalar, prefix.len()),
             None => Type::Scalar(scalar),
         }
     }
@@ -1166,4 +1211,62 @@ pub enum RcpKind {
 pub struct RsqrtData {
     pub flush_to_zero: Option<bool>,
     pub type_: ScalarType,
+}
+
+pub struct BarData {
+    pub aligned: bool,
+}
+
+pub struct AtomDetails {
+    pub type_: Type,
+    pub semantics: AtomSemantics,
+    pub scope: MemScope,
+    pub space: StateSpace,
+    pub op: AtomicOp,
+}
+
+#[derive(Copy, Clone)]
+pub enum AtomicOp {
+    And,
+    Or,
+    Xor,
+    Exchange,
+    Add,
+    IncrementWrap,
+    DecrementWrap,
+    SignedMin,
+    UnsignedMin,
+    SignedMax,
+    UnsignedMax,
+    FloatAdd,
+    FloatMin,
+    FloatMax,
+}
+
+impl AtomicOp {
+    pub(crate) fn new(op: super::RawAtomicOp, kind: ScalarKind) -> Self {
+        use super::RawAtomicOp;
+        match (op, kind) {
+            (RawAtomicOp::And, _) => Self::And,
+            (RawAtomicOp::Or, _) => Self::Or,
+            (RawAtomicOp::Xor, _) => Self::Xor,
+            (RawAtomicOp::Exch, _) => Self::Exchange,
+            (RawAtomicOp::Add, _) => Self::Add,
+            (RawAtomicOp::Inc, _) => Self::IncrementWrap,
+            (RawAtomicOp::Dec, _) => Self::DecrementWrap,
+            (RawAtomicOp::Min, ScalarKind::Signed) => Self::SignedMin,
+            (RawAtomicOp::Min, ScalarKind::Float) => Self::FloatMin,
+            (RawAtomicOp::Min, _) => Self::UnsignedMin,
+            (RawAtomicOp::Max, ScalarKind::Signed) => Self::SignedMax,
+            (RawAtomicOp::Max, ScalarKind::Float) => Self::FloatMax,
+            (RawAtomicOp::Max, _) => Self::UnsignedMax,
+        }
+    }
+}
+
+pub struct AtomCasDetails {
+    pub type_: ScalarType,
+    pub semantics: AtomSemantics,
+    pub scope: MemScope,
+    pub space: StateSpace,
 }
