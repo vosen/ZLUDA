@@ -221,6 +221,25 @@ gen::generate_instruction_type!(
                 src3: T,
             }
         },
+        Fma {
+            type: { Type::from(data.type_) },
+            data: ArithFloat,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: T,
+            }
+        },
+        Sub {
+            type: { Type::from(data.type_()) },
+            data: ArithDetails,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+            }
+        },
         Trap { }
     }
 );
