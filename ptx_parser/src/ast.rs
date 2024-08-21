@@ -258,6 +258,30 @@ gen::generate_instruction_type!(
                 src2: T,
             }
         },
+        Rcp {
+            type: { Type::from(data.type_) },
+            data: RcpData,
+            arguments<T>: {
+                dst: T,
+                src: T,
+            }
+        },
+        Sqrt {
+            type: { Type::from(data.type_) },
+            data: RcpData,
+            arguments<T>: {
+                dst: T,
+                src: T,
+            }
+        },
+        Rsqrt {
+            type: { Type::from(data.type_) },
+            data: RsqrtData,
+            arguments<T>: {
+                dst: T,
+                src: T,
+            }
+        },
         Trap { }
     }
 );
@@ -1115,5 +1139,31 @@ impl MinMaxDetails {
 pub struct MinMaxFloat {
     pub flush_to_zero: Option<bool>,
     pub nan: bool,
+    pub type_: ScalarType,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum DivFloatKind {
+    Approx,
+    Full,
+    Rounding(RoundingMode),
+}
+
+#[derive(Copy, Clone)]
+pub struct RcpData {
+    pub kind: RcpKind,
+    pub flush_to_zero: Option<bool>,
+    pub type_: ScalarType,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum RcpKind {
+    Approx,
+    Full(RoundingMode),
+}
+
+#[derive(Copy, Clone)]
+pub struct RsqrtData {
+    pub flush_to_zero: Option<bool>,
     pub type_: ScalarType,
 }
