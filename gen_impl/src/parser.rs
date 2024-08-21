@@ -73,7 +73,7 @@ pub struct OpcodeDecl(pub Instruction, pub Arguments);
 
 impl OpcodeDecl {
     fn peek(input: syn::parse::ParseStream) -> bool {
-        Instruction::peek(input)
+        Instruction::peek(input) && !input.peek2(Token![=])
     }
 }
 
@@ -106,7 +106,7 @@ impl Parse for CodeBlock {
         } else {
             return Err(lookahead.error());
         };
-        Ok(Self{special, code})
+        Ok(Self { special, code })
     }
 }
 

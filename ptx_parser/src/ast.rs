@@ -200,6 +200,27 @@ gen::generate_instruction_type!(
                 src: T,
             }
         },
+        Abs {
+            data: AbsDetails,
+            type: { Type::Scalar(data.type_) },
+            arguments<T>: {
+                dst: T,
+                src: T,
+            }
+        },
+        Mad {
+            type: { Type::from(data.type_()) },
+            data: MadDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { Type::from(data.dst_type()) },
+                },
+                src1: T,
+                src2: T,
+                src3: T,
+            }
+        },
         Trap { }
     }
 );
@@ -588,16 +609,14 @@ pub enum MulDetails {
 }
 
 impl MulDetails {
-    #[allow(unused)] // Used by generated code
-    fn type_(&self) -> ScalarType {
+    pub fn type_(&self) -> ScalarType {
         match self {
             MulDetails::Integer { type_, .. } => *type_,
             MulDetails::Float(arith) => arith.type_,
         }
     }
 
-    #[allow(unused)] // Used by generated code
-    fn dst_type(&self) -> ScalarType {
+    pub fn dst_type(&self) -> ScalarType {
         match self {
             MulDetails::Integer {
                 type_,
@@ -994,4 +1013,46 @@ pub struct CvtaDetails {
 pub enum CvtaDirection {
     GenericToExplicit,
     ExplicitToGeneric,
+}
+
+#[derive(Copy, Clone)]
+pub struct AbsDetails {
+    pub flush_to_zero: Option<bool>,
+    pub type_: ScalarType,
+}
+
+#[derive(Copy, Clone)]
+pub enum MadDetails {
+    Integer {
+        control: MulIntControl,
+        saturate: bool,
+        type_: ScalarType,
+    },
+    Float(ArithFloat),
+}
+
+impl MadDetails {
+    pub fn dst_type(&self) -> ScalarType {
+        match self {
+            MadDetails::Integer {
+                type_,
+                control: MulIntControl::Wide,
+                ..
+            } => match type_ {
+                ScalarType::U16 => ScalarType::U32,
+                ScalarType::S16 => ScalarType::S32,
+                ScalarType::U32 => ScalarType::U64,
+                ScalarType::S32 => ScalarType::S64,
+                _ => unreachable!(),
+            },
+            _ => self.type_(),
+        }
+    }
+
+    fn type_(&self) -> ScalarType {
+        match self {
+            MadDetails::Integer { type_, .. } => *type_,
+            MadDetails::Float(arith) => arith.type_,
+        }
+    }
 }
