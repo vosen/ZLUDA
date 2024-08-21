@@ -201,7 +201,7 @@ gen::generate_instruction_type!(
             }
         },
         Abs {
-            data: AbsDetails,
+            data: TypeFtz,
             type: { Type::Scalar(data.type_) },
             arguments<T>: {
                 dst: T,
@@ -276,7 +276,7 @@ gen::generate_instruction_type!(
         },
         Rsqrt {
             type: { Type::from(data.type_) },
-            data: RsqrtData,
+            data: TypeFtz,
             arguments<T>: {
                 dst: T,
                 src: T,
@@ -327,6 +327,163 @@ gen::generate_instruction_type!(
                 src2: T,
                 src3: T,
             }
+        },
+        Div {
+            type: Type::Scalar(data.type_()),
+            data: DivDetails,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+            }
+        },
+        Neg {
+            type: Type::Scalar(data.type_),
+            data: TypeFtz,
+            arguments<T>: {
+                dst: T,
+                src: T
+            }
+        },
+        Sin {
+            type: Type::Scalar(ScalarType::F32),
+            data: FlushToZero,
+            arguments<T>: {
+                dst: T,
+                src: T
+            }
+        },
+        Cos {
+            type: Type::Scalar(ScalarType::F32),
+            data: FlushToZero,
+            arguments<T>: {
+                dst: T,
+                src: T
+            }
+        },
+        Lg2 {
+            type: Type::Scalar(ScalarType::F32),
+            data: FlushToZero,
+            arguments<T>: {
+                dst: T,
+                src: T
+            }
+        },
+        Ex2 {
+            type: Type::Scalar(ScalarType::F32),
+            data: TypeFtz,
+            arguments<T>: {
+                dst: T,
+                src: T
+            }
+        },
+        Clz {
+            type: Type::Scalar(data.clone()),
+            data: ScalarType,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32)
+                },
+                src: T
+            }
+        },
+        Brev {
+            type: Type::Scalar(data.clone()),
+            data: ScalarType,
+            arguments<T>: {
+                dst: T,
+                src: T
+            }
+        },
+        Popc {
+            type: Type::Scalar(data.clone()),
+            data: ScalarType,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32)
+                },
+                src: T
+            }
+        },
+        Xor {
+            type: Type::Scalar(data.clone()),
+            data: ScalarType,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T
+            }
+        },
+        Rem {
+            type: Type::Scalar(data.clone()),
+            data: ScalarType,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T
+            }
+        },
+        Bfe {
+            type: Type::Scalar(data.clone()),
+            data: ScalarType,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32)
+                },
+                src3: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32)
+                },
+            }
+        },
+        Bfi {
+            type: Type::Scalar(data.clone()),
+            data: ScalarType,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32)
+                },
+                src4: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32)
+                },
+            }
+        },
+        PrmtSlow {
+            type: Type::Scalar(ScalarType::U32),
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: T
+            }
+        },
+        Prmt {
+            type: Type::Scalar(ScalarType::B32),
+            data: u16,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T
+            }
+        },
+        Activemask {
+            type: Type::Scalar(ScalarType::B32),
+            arguments<T>: {
+                dst: T
+            }
+        },
+        Membar {
+            data: MemScope
         },
         Trap { }
     }
@@ -1121,8 +1278,8 @@ pub enum CvtaDirection {
     ExplicitToGeneric,
 }
 
-#[derive(Copy, Clone)]
-pub struct AbsDetails {
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub struct TypeFtz {
     pub flush_to_zero: Option<bool>,
     pub type_: ScalarType,
 }
@@ -1187,13 +1344,6 @@ pub struct MinMaxFloat {
     pub type_: ScalarType,
 }
 
-#[derive(Copy, Clone, Eq, PartialEq)]
-pub enum DivFloatKind {
-    Approx,
-    Full,
-    Rounding(RoundingMode),
-}
-
 #[derive(Copy, Clone)]
 pub struct RcpData {
     pub kind: RcpKind,
@@ -1204,13 +1354,7 @@ pub struct RcpData {
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum RcpKind {
     Approx,
-    Full(RoundingMode),
-}
-
-#[derive(Copy, Clone)]
-pub struct RsqrtData {
-    pub flush_to_zero: Option<bool>,
-    pub type_: ScalarType,
+    Compliant(RoundingMode),
 }
 
 pub struct BarData {
@@ -1269,4 +1413,40 @@ pub struct AtomCasDetails {
     pub semantics: AtomSemantics,
     pub scope: MemScope,
     pub space: StateSpace,
+}
+
+#[derive(Copy, Clone)]
+pub enum DivDetails {
+    Unsigned(ScalarType),
+    Signed(ScalarType),
+    Float(DivFloatDetails),
+}
+
+impl DivDetails {
+    pub fn type_(&self) -> ScalarType {
+        match self {
+            DivDetails::Unsigned(t) => *t,
+            DivDetails::Signed(t) => *t,
+            DivDetails::Float(float) => float.type_,
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct DivFloatDetails {
+    pub type_: ScalarType,
+    pub flush_to_zero: Option<bool>,
+    pub kind: DivFloatKind,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum DivFloatKind {
+    Approx,
+    ApproxFull,
+    Rounding(RoundingMode),
+}
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub struct FlushToZero {
+    pub flush_to_zero: bool
 }

@@ -1723,7 +1723,7 @@ derive_parser!(
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#half-precision-floating-point-instructions-abs
     abs.type        d, a => {
         ast::Instruction::Abs {
-            data: ast::AbsDetails {
+            data: ast::TypeFtz {
                 flush_to_zero: None,
                 type_
             },
@@ -1734,7 +1734,7 @@ derive_parser!(
     }
     abs{.ftz}.f32   d, a => {
         ast::Instruction::Abs {
-            data: ast::AbsDetails {
+            data: ast::TypeFtz {
                 flush_to_zero: Some(ftz),
                 type_: f32
             },
@@ -1745,7 +1745,7 @@ derive_parser!(
     }
     abs.f64         d, a => {
         ast::Instruction::Abs {
-            data: ast::AbsDetails {
+            data: ast::TypeFtz {
                 flush_to_zero: None,
                 type_: f64
             },
@@ -1756,7 +1756,7 @@ derive_parser!(
     }
     abs{.ftz}.f16   d, a => {
         ast::Instruction::Abs {
-            data: ast::AbsDetails {
+            data: ast::TypeFtz {
                 flush_to_zero: Some(ftz),
                 type_: f16
             },
@@ -1767,7 +1767,7 @@ derive_parser!(
     }
     abs{.ftz}.f16x2 d, a => {
         ast::Instruction::Abs {
-            data: ast::AbsDetails {
+            data: ast::TypeFtz {
                 flush_to_zero: Some(ftz),
                 type_: f16x2
             },
@@ -1778,7 +1778,7 @@ derive_parser!(
     }
     abs.bf16        d, a => {
         ast::Instruction::Abs {
-            data: ast::AbsDetails {
+            data: ast::TypeFtz {
                 flush_to_zero: None,
                 type_: bf16
             },
@@ -1789,7 +1789,7 @@ derive_parser!(
     }
     abs.bf16x2      d, a => {
         ast::Instruction::Abs {
-            data: ast::AbsDetails {
+            data: ast::TypeFtz {
                 flush_to_zero: None,
                 type_: bf16x2
             },
@@ -2272,7 +2272,7 @@ derive_parser!(
     rcp.rnd{.ftz}.f32       d, a => {
         ast::Instruction::Rcp {
             data: ast::RcpData {
-                kind: ast::RcpKind::Full(rnd.into()),
+                kind: ast::RcpKind::Compliant(rnd.into()),
                 flush_to_zero: Some(ftz),
                 type_: f32
             },
@@ -2282,7 +2282,7 @@ derive_parser!(
     rcp.rnd.f64             d, a => {
         ast::Instruction::Rcp {
             data: ast::RcpData {
-                kind: ast::RcpKind::Full(rnd.into()),
+                kind: ast::RcpKind::Compliant(rnd.into()),
                 flush_to_zero: None,
                 type_: f64
             },
@@ -2307,7 +2307,7 @@ derive_parser!(
     sqrt.rnd{.ftz}.f32     d, a => {
         ast::Instruction::Sqrt {
             data: ast::RcpData {
-                kind: ast::RcpKind::Full(rnd.into()),
+                kind: ast::RcpKind::Compliant(rnd.into()),
                 flush_to_zero: Some(ftz),
                 type_: f32
             },
@@ -2317,7 +2317,7 @@ derive_parser!(
     sqrt.rnd.f64           d, a => {
         ast::Instruction::Sqrt {
             data: ast::RcpData {
-                kind: ast::RcpKind::Full(rnd.into()),
+                kind: ast::RcpKind::Compliant(rnd.into()),
                 flush_to_zero: None,
                 type_: f64
             },
@@ -2331,7 +2331,7 @@ derive_parser!(
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-rsqrt-approx-ftz-f64
     rsqrt.approx{.ftz}.f32  d, a => {
         ast::Instruction::Rsqrt {
-            data: ast::RsqrtData {
+            data: ast::TypeFtz {
                 flush_to_zero: Some(ftz),
                 type_: f32
             },
@@ -2340,7 +2340,7 @@ derive_parser!(
     }
     rsqrt.approx.f64        d, a => {
         ast::Instruction::Rsqrt {
-            data: ast::RsqrtData {
+            data: ast::TypeFtz {
                 flush_to_zero: None,
                 type_: f64
             },
@@ -2349,7 +2349,7 @@ derive_parser!(
     }
     rsqrt.approx.ftz.f64 d, a => {
         ast::Instruction::Rsqrt {
-            data: ast::RsqrtData {
+            data: ast::TypeFtz {
                 flush_to_zero: None,
                 type_: f64
             },
@@ -2498,6 +2498,325 @@ derive_parser!(
     ScalarType =                    { .b16, .b128, .f32 };
     StateSpace =                    { .global };
     RawAtomicOp =                   { .exch };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-div
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-div
+    div.type  d, a, b => {
+        ast::Instruction::Div {
+            data: if type_.kind() == ast::ScalarKind::Signed {
+                ast::DivDetails::Signed(type_)
+            } else {
+                ast::DivDetails::Unsigned(type_)
+            },
+            arguments: DivArgs {
+                dst: d,
+                src1: a,
+                src2: b,
+            },
+        }
+    }
+    .type: ScalarType = { .u16, .u32, .u64,
+                          .s16, .s32, .s64 };
+
+    div.approx{.ftz}.f32  d, a, b => {
+        ast::Instruction::Div {
+            data: ast::DivDetails::Float(ast::DivFloatDetails{
+                type_: f32,
+                flush_to_zero: Some(ftz),
+                kind: ast::DivFloatKind::Approx
+            }),
+            arguments: DivArgs {
+                dst: d,
+                src1: a,
+                src2: b,
+            },
+        }
+    }
+    div.full{.ftz}.f32    d, a, b => {
+        ast::Instruction::Div {
+            data: ast::DivDetails::Float(ast::DivFloatDetails{
+                type_: f32,
+                flush_to_zero: Some(ftz),
+                kind: ast::DivFloatKind::ApproxFull
+            }),
+            arguments: DivArgs {
+                dst: d,
+                src1: a,
+                src2: b,
+            },
+        }
+    }
+    div.rnd{.ftz}.f32     d, a, b => {
+        ast::Instruction::Div {
+            data: ast::DivDetails::Float(ast::DivFloatDetails{
+                type_: f32,
+                flush_to_zero: Some(ftz),
+                kind: ast::DivFloatKind::Rounding(rnd.into())
+            }),
+            arguments: DivArgs {
+                dst: d,
+                src1: a,
+                src2: b,
+            },
+        }
+    }
+    div.rnd.f64           d, a, b => {
+        ast::Instruction::Div {
+            data: ast::DivDetails::Float(ast::DivFloatDetails{
+                type_: f64,
+                flush_to_zero: None,
+                kind: ast::DivFloatKind::Rounding(rnd.into())
+            }),
+            arguments: DivArgs {
+                dst: d,
+                src1: a,
+                src2: b,
+            },
+        }
+    }
+    .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
+    ScalarType = { .f32, .f64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-neg
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-neg
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#half-precision-floating-point-instructions-neg
+    neg.type  d, a => {
+        ast::Instruction::Neg {
+            data: TypeFtz {
+                type_,
+                flush_to_zero: None
+            },
+            arguments: NegArgs { dst: d, src: a, },
+        }
+    }
+    .type: ScalarType = { .s16, .s32, .s64 };
+
+    neg{.ftz}.f32  d, a => {
+        ast::Instruction::Neg {
+            data: TypeFtz {
+                type_: f32,
+                flush_to_zero: Some(ftz)
+            },
+            arguments: NegArgs { dst: d, src: a, },
+        }
+    }
+    neg.f64        d, a => {
+        ast::Instruction::Neg {
+            data: TypeFtz {
+                type_: f64,
+                flush_to_zero: None
+            },
+            arguments: NegArgs { dst: d, src: a, },
+        }
+    }
+    neg{.ftz}.f16    d, a => {
+        ast::Instruction::Neg {
+            data: TypeFtz {
+                type_: f16,
+                flush_to_zero: Some(ftz)
+            },
+            arguments: NegArgs { dst: d, src: a, },
+        }
+    }
+    neg{.ftz}.f16x2  d, a => {
+        ast::Instruction::Neg {
+            data: TypeFtz {
+                type_: f16x2,
+                flush_to_zero: Some(ftz)
+            },
+            arguments: NegArgs { dst: d, src: a, },
+        }
+    }
+    neg.bf16         d, a => {
+        ast::Instruction::Neg {
+            data: TypeFtz {
+                type_: bf16,
+                flush_to_zero: None
+            },
+            arguments: NegArgs { dst: d, src: a, },
+        }
+    }
+    neg.bf16x2       d, a => {
+        ast::Instruction::Neg {
+            data: TypeFtz {
+                type_: bf16x2,
+                flush_to_zero: None
+            },
+            arguments: NegArgs { dst: d, src: a, },
+        }
+    }
+    ScalarType = { .f32, .f64, .f16, .f16x2, .bf16, .bf16x2 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-sin
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-cos
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-lg2
+    sin.approx{.ftz}.f32  d, a => {
+        ast::Instruction::Sin {
+            data: ast::FlushToZero {
+                flush_to_zero: ftz
+            },
+            arguments: SinArgs { dst: d, src: a, },
+        }
+    }
+    cos.approx{.ftz}.f32  d, a => {
+        ast::Instruction::Cos {
+            data: ast::FlushToZero {
+                flush_to_zero: ftz
+            },
+            arguments: CosArgs { dst: d, src: a, },
+        }
+    }
+    lg2.approx{.ftz}.f32  d, a => {
+        ast::Instruction::Lg2 {
+            data: ast::FlushToZero {
+                flush_to_zero: ftz
+            },
+            arguments: Lg2Args { dst: d, src: a, },
+        }
+    }
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-ex2
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#half-precision-floating-point-instructions-ex2
+    ex2.approx{.ftz}.f32  d, a => {
+        ast::Instruction::Ex2 {
+            data: ast::TypeFtz {
+                type_: f32,
+                flush_to_zero: Some(ftz)
+            },
+            arguments: Ex2Args { dst: d, src: a, },
+        }
+    }
+    ex2.approx.atype     d, a => {
+        ast::Instruction::Ex2 {
+            data: ast::TypeFtz {
+                type_: atype,
+                flush_to_zero: None
+            },
+            arguments: Ex2Args { dst: d, src: a, },
+        }
+    }
+    ex2.approx.ftz.btype d, a => {
+        ast::Instruction::Ex2 {
+            data: ast::TypeFtz {
+                type_: btype,
+                flush_to_zero: Some(true)
+            },
+            arguments: Ex2Args { dst: d, src: a, },
+        }
+    }
+    .atype: ScalarType = { .f16,  .f16x2 };
+    .btype: ScalarType = { .bf16, .bf16x2 };
+    ScalarType = { .f32 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-clz
+    clz.type  d, a => {
+        ast::Instruction::Clz {
+            data: type_,
+            arguments: ClzArgs { dst: d, src: a, },
+        }
+    }
+    .type: ScalarType = { .b32, .b64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-brev
+    brev.type  d, a => {
+        ast::Instruction::Brev {
+            data: type_,
+            arguments: BrevArgs { dst: d, src: a, },
+        }
+    }
+    .type: ScalarType = { .b32, .b64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-popc
+    popc.type  d, a => {
+        ast::Instruction::Popc {
+            data: type_,
+            arguments: PopcArgs { dst: d, src: a, },
+        }
+    }
+    .type: ScalarType = { .b32, .b64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-xor
+    xor.type d, a, b => {
+        ast::Instruction::Xor {
+            data: type_,
+            arguments: XorArgs { dst: d, src1: a, src2: b, },
+        }
+    }
+    .type: ScalarType = { .pred, .b16, .b32, .b64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-rem
+    rem.type  d, a, b => {
+        ast::Instruction::Rem {
+            data: type_,
+            arguments: RemArgs { dst: d, src1: a, src2: b, },
+        }
+    }
+    .type: ScalarType = { .u16, .u32, .u64, .s16, .s32, .s64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-bfe
+    bfe.type  d, a, b, c => {
+        ast::Instruction::Bfe {
+            data: type_,
+            arguments: BfeArgs { dst: d, src1: a, src2: b, src3: c },
+        }
+    }
+    .type: ScalarType = { .u32, .u64, .s32, .s64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-bfi
+    bfi.type  f, a, b, c, d => {
+        ast::Instruction::Bfi {
+            data: type_,
+            arguments: BfiArgs { dst: f, src1: a, src2: b, src3: c, src4: d },
+        }
+    }
+    .type: ScalarType = { .b32, .b64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-prmt
+    // prmt.b32{.mode}  d, a, b, c;
+    // .mode = { .f4e, .b4e, .rc8, .ecl, .ecr, .rc16 };
+    prmt.b32  d, a, b, c => {
+        match c {
+            ast::ParsedOperand::Imm(ImmediateValue::U64(control)) => ast::Instruction::Prmt {
+                data: control as u16,
+                arguments: PrmtArgs {
+                    dst: d, src1: a, src2: b
+                }
+            },
+            _ => ast::Instruction::PrmtSlow {
+                arguments: PrmtSlowArgs {
+                    dst: d, src1: a, src2: b, src3: c
+                }
+            }
+        }
+    }
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-activemask
+    activemask.b32 d => {
+        ast::Instruction::Activemask {
+            arguments: ActivemaskArgs { dst: d }
+        }
+    }
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-membar
+    // fence{.sem}.scope;
+    // fence.op_restrict.release.cluster;
+    // fence.proxy.proxykind;
+    // fence.proxy.to_proxykind::from_proxykind.release.scope;
+    // fence.proxy.to_proxykind::from_proxykind.acquire.scope  [addr], size;
+    //membar.proxy.proxykind;
+    //.sem       = { .sc, .acq_rel };
+    //.scope     = { .cta, .cluster, .gpu, .sys };
+    //.proxykind = { .alias, .async, async.global, .async.shared::{cta, cluster} };
+    //.op_restrict = { .mbarrier_init };
+    //.to_proxykind::from_proxykind = {.tensormap::generic};
+
+    membar.level => {
+        ast::Instruction::Membar { data: level }
+    }
+    membar.gl => {
+        ast::Instruction::Membar { data: MemScope::Gpu }
+    }
+    .level: MemScope      = { .cta, .sys };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-ret
     ret{.uni} => {
