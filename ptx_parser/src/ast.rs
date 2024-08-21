@@ -1,11 +1,10 @@
-use std::cmp::Ordering;
-
 use super::{
     AtomSemantics, MemScope, RawRoundingMode, RawSetpCompareOp, ScalarType, SetpBoolPostOp,
     StateSpace, VectorPrefix,
 };
 use crate::{PtxError, PtxParserState};
 use bitflags::bitflags;
+use std::cmp::Ordering;
 
 pub enum Statement<P: Operand> {
     Label(P::Ident),
@@ -14,7 +13,7 @@ pub enum Statement<P: Operand> {
     Block(Vec<Statement<P>>),
 }
 
-gen::generate_instruction_type!(
+ptx_parser_macros::generate_instruction_type!(
     pub enum Instruction<T: Operand> {
         Mov {
             type: { &data.typ },
@@ -1448,5 +1447,5 @@ pub enum DivFloatKind {
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub struct FlushToZero {
-    pub flush_to_zero: bool
+    pub flush_to_zero: bool,
 }

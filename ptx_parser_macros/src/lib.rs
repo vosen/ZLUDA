@@ -1,5 +1,5 @@
 use either::Either;
-use gen_impl::parser;
+use ptx_parser_macros_impl::parser;
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, ToTokens};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -359,7 +359,7 @@ fn gather_rules(
 
 #[proc_macro]
 pub fn derive_parser(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let parse_definitions = parse_macro_input!(tokens as gen_impl::parser::ParseDefinitions);
+    let parse_definitions = parse_macro_input!(tokens as ptx_parser_macros_impl::parser::ParseDefinitions);
     let mut definitions = FxHashMap::default();
     let mut special_definitions = FxHashMap::default();
     let types = OpcodeDefinitions::get_enum_types(&parse_definitions.definitions);
@@ -1012,7 +1012,7 @@ impl DotModifierRef {
 
 #[proc_macro]
 pub fn generate_instruction_type(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let input = parse_macro_input!(tokens as gen_impl::GenerateInstructionType);
+    let input = parse_macro_input!(tokens as ptx_parser_macros_impl::GenerateInstructionType);
     let mut result = proc_macro2::TokenStream::new();
     input.emit_arg_types(&mut result);
     input.emit_instruction_type(&mut result);

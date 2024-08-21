@@ -1,13 +1,14 @@
 [package]
-name = "gen"
-version = "0.1.0"
+name = "ptx_parser_macros"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
 edition = "2021"
 
 [lib]
 proc-macro = true
 
 [dependencies]
-gen_impl = { path = "../gen_impl" }
+ptx_parser_macros_impl = { path = "../ptx_parser_macros_impl" }
 convert_case = "0.6.0"
 rustc-hash = "2.0.0"
 syn = "2.0.67"

@@ -1,12 +1,13 @@
 [package]
 name = "ptx_parser"
-version = "0.1.0"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
 edition = "2021"
 
 [dependencies]
 logos = "0.14"
 winnow = { version =  "0.6.18" }
-gen = { path = "../gen" }
+ptx_parser_macros = { path = "../ptx_parser_macros" }
 thiserror = "1.0"
 bitflags = "1.2"
 rustc-hash = "2.0.0"

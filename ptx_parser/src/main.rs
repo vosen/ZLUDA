@@ -1,5 +1,5 @@
-use gen::derive_parser;
 use logos::Logos;
+use ptx_parser_macros::derive_parser;
 use rustc_hash::FxHashMap;
 use std::fmt::Debug;
 use std::mem;

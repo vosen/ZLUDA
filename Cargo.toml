@@ -17,9 +17,9 @@ members = [
     "zluda_redirect",
     "zluda_ml",
     "ptx",
-    "gen",
-    "gen_impl",
-    "ptx_parser"
+    "ptx_parser",
+    "ptx_parser_macros",
+    "ptx_parser_macros_impl",
 ]
 
 default-members = ["zluda_lib", "zluda_ml", "zluda_inject", "zluda_redirect"]
