@@ -240,6 +240,24 @@ gen::generate_instruction_type!(
                 src2: T,
             }
         },
+        Min {
+            type: { Type::from(data.type_()) },
+            data: MinMaxDetails,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+            }
+        },
+        Max {
+            type: { Type::from(data.type_()) },
+            data: MinMaxDetails,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+            }
+        },
         Trap { }
     }
 );
@@ -1074,4 +1092,28 @@ impl MadDetails {
             MadDetails::Float(arith) => arith.type_,
         }
     }
+}
+
+#[derive(Copy, Clone)]
+pub enum MinMaxDetails {
+    Signed(ScalarType),
+    Unsigned(ScalarType),
+    Float(MinMaxFloat),
+}
+
+impl MinMaxDetails {
+    pub fn type_(&self) -> ScalarType {
+        match self {
+            MinMaxDetails::Signed(t) => *t,
+            MinMaxDetails::Unsigned(t) => *t,
+            MinMaxDetails::Float(float) => float.type_,
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct MinMaxFloat {
+    pub flush_to_zero: Option<bool>,
+    pub nan: bool,
+    pub type_: ScalarType,
 }
