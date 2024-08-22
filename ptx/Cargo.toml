@@ -2,13 +2,12 @@
 name = "ptx"
 version = "0.0.0"
 authors = ["Andrzej Janik <vosen@vosen.pl>"]
-edition = "2018"
+edition = "2021"
 
 [lib]
 
 [dependencies]
-lalrpop-util = "0.19"
-regex = "1"
+ptx_parser = { path = "../ptx_parser" }
 rspirv = "0.7"
 spirv_headers = "1.5" 
 quick-error = "1.2"
@@ -16,10 +15,6 @@ thiserror = "1.0"
 bit-vec = "0.6"
 half ="1.6"
 bitflags = "1.2"
-
-[build-dependencies.lalrpop]
-version = "0.19"
-features = ["lexer"]
 
 [dev-dependencies]
 hip_runtime-sys = { path = "../hip_runtime-sys" }

@@ -717,7 +717,7 @@ impl<Ident: Copy> Operand for ParsedOperand<Ident> {
     type Ident = Ident;
 }
 
-pub trait Operand {
+pub trait Operand: Sized {
     type Ident: Copy;
 }
 

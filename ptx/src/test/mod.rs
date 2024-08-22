@@ -1,4 +1,3 @@
-use super::ptx;
 use super::TranslateError;
 
 mod spirv_run;
