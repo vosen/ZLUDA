@@ -555,12 +555,46 @@ pub trait VisitorMap<From: Operand, To: Operand, Err> {
     ) -> Result<To::Ident, Err>;
 }
 
-impl<
-        T: Operand,
-        U: Operand,
-        Err,
-        Fn: FnMut(T, Option<(&Type, StateSpace)>, bool) -> Result<U, Err>,
-    > VisitorMap<T, U, Err> for Fn
+impl<T: Copy, U: Copy, Err, Fn> VisitorMap<ParsedOperand<T>, ParsedOperand<U>, Err> for Fn
+where
+    Fn: FnMut(T, Option<(&Type, StateSpace)>, bool) -> Result<U, Err>,
+{
+    fn visit(
+        &mut self,
+        args: ParsedOperand<T>,
+        type_space: Option<(&Type, StateSpace)>,
+        is_dst: bool,
+    ) -> Result<ParsedOperand<U>, Err> {
+        Ok(match args {
+            ParsedOperand::Reg(ident) => ParsedOperand::Reg((self)(ident, type_space, is_dst)?),
+            ParsedOperand::RegOffset(ident, imm) => {
+                ParsedOperand::RegOffset((self)(ident, type_space, is_dst)?, imm)
+            }
+            ParsedOperand::Imm(imm) => ParsedOperand::Imm(imm),
+            ParsedOperand::VecMember(ident, index) => {
+                ParsedOperand::VecMember((self)(ident, type_space, is_dst)?, index)
+            }
+            ParsedOperand::VecPack(vec) => ParsedOperand::VecPack(
+                vec.into_iter()
+                    .map(|ident| (self)(ident, type_space, is_dst))
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+        })
+    }
+
+    fn visit_ident(
+        &mut self,
+        args: T,
+        type_space: Option<(&Type, StateSpace)>,
+        is_dst: bool,
+    ) -> Result<U, Err> {
+        (self)(args, type_space, is_dst)
+    }
+}
+
+impl<T: Operand<Ident = T>, U: Operand<Ident = U>, Err, Fn> VisitorMap<T, U, Err> for Fn
+where
+    Fn: FnMut(T, Option<(&Type, StateSpace)>, bool) -> Result<U, Err>,
 {
     fn visit(
         &mut self,
@@ -573,12 +607,11 @@ impl<
 
     fn visit_ident(
         &mut self,
-        args: T::Ident,
+        args: T,
         type_space: Option<(&Type, StateSpace)>,
         is_dst: bool,
-    ) -> Result<U::Ident, Err> {
-        let value: U = (self)(T::from_ident(args), type_space, is_dst)?;
-        Ok(value)
+    ) -> Result<U, Err> {
+        (self)(args, type_space, is_dst)
     }
 }
 
@@ -923,6 +956,15 @@ pub struct MethodDeclaration<'input, ID> {
     pub name: MethodName<'input, ID>,
     pub input_arguments: Vec<Variable<ID>>,
     pub shared_mem: Option<ID>,
+}
+
+impl<'input> MethodDeclaration<'input, &'input str> {
+    pub fn name(&self) -> &'input str {
+        match self.name {
+            MethodName::Kernel(n) => n,
+            MethodName::Func(n) => n,
+        }
+    }
 }
 
 #[derive(Hash, PartialEq, Eq, Copy, Clone)]

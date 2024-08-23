@@ -24,11 +24,10 @@ lalrpop_mod!(
 );
 
 pub mod ast;
-mod pass;
+pub(crate) mod pass;
 #[cfg(test)]
 mod test;
 mod translate;
-mod translate2;
 
 use std::fmt;
 

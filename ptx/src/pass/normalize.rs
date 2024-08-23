@@ -9,7 +9,7 @@ type NormalizedStatement = Statement<
     ast::ParsedOperand<SpirvWord>,
 >;
 
-fn run<'input, 'b>(
+pub(crate) fn run<'input, 'b>(
     id_defs: &mut FnStringIdResolver<'input, 'b>,
     fn_defs: &GlobalFnDeclResolver<'input, 'b>,
     func: Vec<ast::Statement<ast::ParsedOperand<&'input str>>>,
@@ -47,7 +47,11 @@ fn expand_map_variables<'a, 'b>(
         ast::Statement::Instruction(p, i) => result.push(Statement::Instruction((
             p.map(|p| pred_map_variable(p, &mut |id| id_defs.get_id(id)))
                 .transpose()?,
-            op_map_variable(i, &mut |id| id_defs.get_id(id))?,
+            ast::visit_map(i, &mut |id,
+                                    _: Option<(&ast::Type, ast::StateSpace)>,
+                                    _: bool| {
+                id_defs.get_id(id)
+            })?,
         ))),
         ast::Statement::Variable(var) => {
             let var_type = var.var.v_type.clone();
