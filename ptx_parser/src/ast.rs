@@ -147,9 +147,9 @@ ptx_parser_macros::generate_instruction_type!(
         Call {
             data: CallDetails,
             arguments: CallArgs<T>,
-            visit: arguments.visit(data, visitor),
-            visit_mut: arguments.visit_mut(data, visitor),
-            map: Instruction::Call{ arguments: arguments.map(&data, visitor), data }
+            visit: arguments.visit(data, visitor)?,
+            visit_mut: arguments.visit_mut(data, visitor)?,
+            map: Instruction::Call{ arguments: arguments.map(&data, visitor)?, data }
         },
         Cvt {
             data: CvtDetails,
@@ -488,93 +488,185 @@ ptx_parser_macros::generate_instruction_type!(
     }
 );
 
-pub trait Visitor<T: Operand> {
-    fn visit(&mut self, args: &T, type_space: Option<(&Type, StateSpace)>, is_dst: bool);
-    fn visit_ident(&self, args: &T::Ident, type_space: Option<(&Type, StateSpace)>, is_dst: bool);
+pub trait Visitor<T: Operand, Err> {
+    fn visit(
+        &mut self,
+        args: &T,
+        type_space: Option<(&Type, StateSpace)>,
+        is_dst: bool,
+    ) -> Result<(), Err>;
+    fn visit_ident(
+        &mut self,
+        args: &T::Ident,
+        type_space: Option<(&Type, StateSpace)>,
+        is_dst: bool,
+    ) -> Result<(), Err>;
 }
 
-pub trait VisitorMut<T: Operand> {
-    fn visit(&mut self, args: &mut T, type_space: Option<(&Type, StateSpace)>, is_dst: bool);
+impl<T: Operand, Err, Fn: FnMut(&T, Option<(&Type, StateSpace)>, bool) -> Result<(), Err>>
+    Visitor<T, Err> for Fn
+{
+    fn visit(
+        &mut self,
+        args: &T,
+        type_space: Option<(&Type, StateSpace)>,
+        is_dst: bool,
+    ) -> Result<(), Err> {
+        (self)(args, type_space, is_dst)
+    }
+
+    fn visit_ident(
+        &mut self,
+        args: &T::Ident,
+        type_space: Option<(&Type, StateSpace)>,
+        is_dst: bool,
+    ) -> Result<(), Err> {
+        (self)(&T::from_ident(*args), type_space, is_dst)
+    }
+}
+
+pub trait VisitorMut<T: Operand, Err> {
+    fn visit(
+        &mut self,
+        args: &mut T,
+        type_space: Option<(&Type, StateSpace)>,
+        is_dst: bool,
+    ) -> Result<(), Err>;
     fn visit_ident(
         &mut self,
         args: &mut T::Ident,
         type_space: Option<(&Type, StateSpace)>,
         is_dst: bool,
-    );
+    ) -> Result<(), Err>;
 }
 
-pub trait VisitorMap<From: Operand, To: Operand> {
-    fn visit(&mut self, args: From, type_space: Option<(&Type, StateSpace)>, is_dst: bool) -> To;
+pub trait VisitorMap<From: Operand, To: Operand, Err> {
+    fn visit(
+        &mut self,
+        args: From,
+        type_space: Option<(&Type, StateSpace)>,
+        is_dst: bool,
+    ) -> Result<To, Err>;
     fn visit_ident(
         &mut self,
         args: From::Ident,
         type_space: Option<(&Type, StateSpace)>,
         is_dst: bool,
-    ) -> To::Ident;
+    ) -> Result<To::Ident, Err>;
 }
 
-trait VisitOperand {
+impl<
+        T: Operand,
+        U: Operand,
+        Err,
+        Fn: FnMut(T, Option<(&Type, StateSpace)>, bool) -> Result<U, Err>,
+    > VisitorMap<T, U, Err> for Fn
+{
+    fn visit(
+        &mut self,
+        args: T,
+        type_space: Option<(&Type, StateSpace)>,
+        is_dst: bool,
+    ) -> Result<U, Err> {
+        (self)(args, type_space, is_dst)
+    }
+
+    fn visit_ident(
+        &mut self,
+        args: T::Ident,
+        type_space: Option<(&Type, StateSpace)>,
+        is_dst: bool,
+    ) -> Result<U::Ident, Err> {
+        let value: U = (self)(T::from_ident(args), type_space, is_dst)?;
+        Ok(value)
+    }
+}
+
+trait VisitOperand<Err> {
     type Operand: Operand;
     #[allow(unused)] // Used by generated code
-    fn visit(&self, fn_: impl FnMut(&Self::Operand));
+    fn visit(&self, fn_: impl FnMut(&Self::Operand) -> Result<(), Err>) -> Result<(), Err>;
     #[allow(unused)] // Used by generated code
-    fn visit_mut(&mut self, fn_: impl FnMut(&mut Self::Operand));
+    fn visit_mut(
+        &mut self,
+        fn_: impl FnMut(&mut Self::Operand) -> Result<(), Err>,
+    ) -> Result<(), Err>;
 }
 
-impl<T: Operand> VisitOperand for T {
+impl<T: Operand, Err> VisitOperand<Err> for T {
     type Operand = Self;
-    fn visit(&self, mut fn_: impl FnMut(&Self::Operand)) {
+    fn visit(&self, mut fn_: impl FnMut(&Self::Operand) -> Result<(), Err>) -> Result<(), Err> {
         fn_(self)
     }
-    fn visit_mut(&mut self, mut fn_: impl FnMut(&mut Self::Operand)) {
+    fn visit_mut(
+        &mut self,
+        mut fn_: impl FnMut(&mut Self::Operand) -> Result<(), Err>,
+    ) -> Result<(), Err> {
         fn_(self)
     }
 }
 
-impl<T: Operand> VisitOperand for Option<T> {
+impl<T: Operand, Err> VisitOperand<Err> for Option<T> {
     type Operand = T;
-    fn visit(&self, fn_: impl FnMut(&Self::Operand)) {
-        self.as_ref().map(fn_);
+    fn visit(&self, mut fn_: impl FnMut(&Self::Operand) -> Result<(), Err>) -> Result<(), Err> {
+        if let Some(x) = self {
+            fn_(x)?;
+        }
+        Ok(())
     }
-    fn visit_mut(&mut self, fn_: impl FnMut(&mut Self::Operand)) {
-        self.as_mut().map(fn_);
+    fn visit_mut(
+        &mut self,
+        mut fn_: impl FnMut(&mut Self::Operand) -> Result<(), Err>,
+    ) -> Result<(), Err> {
+        if let Some(x) = self {
+            fn_(x)?;
+        }
+        Ok(())
     }
 }
 
-impl<T: Operand> VisitOperand for Vec<T> {
+impl<T: Operand, Err> VisitOperand<Err> for Vec<T> {
     type Operand = T;
-    fn visit(&self, mut fn_: impl FnMut(&Self::Operand)) {
+    fn visit(&self, mut fn_: impl FnMut(&Self::Operand) -> Result<(), Err>) -> Result<(), Err> {
         for o in self {
-            fn_(o)
+            fn_(o)?;
         }
+        Ok(())
     }
-    fn visit_mut(&mut self, mut fn_: impl FnMut(&mut Self::Operand)) {
+    fn visit_mut(
+        &mut self,
+        mut fn_: impl FnMut(&mut Self::Operand) -> Result<(), Err>,
+    ) -> Result<(), Err> {
         for o in self {
-            fn_(o)
+            fn_(o)?;
         }
+        Ok(())
     }
 }
 
-trait MapOperand: Sized {
+trait MapOperand<Err>: Sized {
     type Input;
     type Output<U>;
     #[allow(unused)] // Used by generated code
-    fn map<U>(self, fn_: impl FnOnce(Self::Input) -> U) -> Self::Output<U>;
+    fn map<U>(
+        self,
+        fn_: impl FnOnce(Self::Input) -> Result<U, Err>,
+    ) -> Result<Self::Output<U>, Err>;
 }
 
-impl<T: Operand> MapOperand for T {
+impl<T: Operand, Err> MapOperand<Err> for T {
     type Input = Self;
     type Output<U> = U;
-    fn map<U>(self, fn_: impl FnOnce(T) -> U) -> U {
+    fn map<U>(self, fn_: impl FnOnce(T) -> Result<U, Err>) -> Result<U, Err> {
         fn_(self)
     }
 }
 
-impl<T: Operand> MapOperand for Option<T> {
+impl<T: Operand, Err> MapOperand<Err> for Option<T> {
     type Input = T;
     type Output<U> = Option<U>;
-    fn map<U>(self, fn_: impl FnOnce(T) -> U) -> Option<U> {
-        self.map(|x| fn_(x))
+    fn map<U>(self, fn_: impl FnOnce(T) -> Result<U, Err>) -> Result<Option<U>, Err> {
+        self.map(|x| fn_(x)).transpose()
     }
 }
 
@@ -715,10 +807,16 @@ pub enum ParsedOperand<Ident> {
 
 impl<Ident: Copy> Operand for ParsedOperand<Ident> {
     type Ident = Ident;
+
+    fn from_ident(ident: Self::Ident) -> Self {
+        ParsedOperand::Reg(ident)
+    }
 }
 
-pub trait Operand {
+pub trait Operand: Sized {
     type Ident: Copy;
+
+    fn from_ident(ident: Self::Ident) -> Self;
 }
 
 #[derive(Copy, Clone)]
@@ -1048,67 +1146,77 @@ pub struct CallArgs<T: Operand> {
 
 impl<T: Operand> CallArgs<T> {
     #[allow(dead_code)] // Used by generated code
-    fn visit(&self, details: &CallDetails, visitor: &mut impl Visitor<T>) {
+    fn visit<Err>(
+        &self,
+        details: &CallDetails,
+        visitor: &mut impl Visitor<T, Err>,
+    ) -> Result<(), Err> {
         for (param, (type_, space)) in self
             .return_arguments
             .iter()
             .zip(details.return_arguments.iter())
         {
-            visitor.visit_ident(param, Some((type_, *space)), true);
+            visitor.visit_ident(param, Some((type_, *space)), true)?;
         }
-        visitor.visit_ident(&self.func, None, false);
+        visitor.visit_ident(&self.func, None, false)?;
         for (param, (type_, space)) in self
             .input_arguments
             .iter()
             .zip(details.input_arguments.iter())
         {
-            visitor.visit(param, Some((type_, *space)), true);
+            visitor.visit(param, Some((type_, *space)), true)?;
         }
+        Ok(())
     }
 
     #[allow(dead_code)] // Used by generated code
-    fn visit_mut(&mut self, details: &CallDetails, visitor: &mut impl VisitorMut<T>) {
+    fn visit_mut<Err>(
+        &mut self,
+        details: &CallDetails,
+        visitor: &mut impl VisitorMut<T, Err>,
+    ) -> Result<(), Err> {
         for (param, (type_, space)) in self
             .return_arguments
             .iter_mut()
             .zip(details.return_arguments.iter())
         {
-            visitor.visit_ident(param, Some((type_, *space)), true);
+            visitor.visit_ident(param, Some((type_, *space)), true)?;
         }
-        visitor.visit_ident(&mut self.func, None, false);
+        visitor.visit_ident(&mut self.func, None, false)?;
         for (param, (type_, space)) in self
             .input_arguments
             .iter_mut()
             .zip(details.input_arguments.iter())
         {
-            visitor.visit(param, Some((type_, *space)), true);
+            visitor.visit(param, Some((type_, *space)), true)?;
         }
+        Ok(())
     }
 
     #[allow(dead_code)] // Used by generated code
-    fn map<U: Operand>(
+    fn map<U: Operand, Err>(
         self,
         details: &CallDetails,
-        visitor: &mut impl VisitorMap<T, U>,
-    ) -> CallArgs<U> {
+        visitor: &mut impl VisitorMap<T, U, Err>,
+    ) -> Result<CallArgs<U>, Err> {
         let return_arguments = self
             .return_arguments
             .into_iter()
             .zip(details.return_arguments.iter())
             .map(|(param, (type_, space))| visitor.visit_ident(param, Some((type_, *space)), true))
-            .collect::<Vec<_>>();
-        let func = visitor.visit_ident(self.func, None, false);
+            .collect::<Result<Vec<_>, _>>()?;
+        let func = visitor.visit_ident(self.func, None, false)?;
         let input_arguments = self
             .input_arguments
             .into_iter()
             .zip(details.input_arguments.iter())
             .map(|(param, (type_, space))| visitor.visit(param, Some((type_, *space)), true))
-            .collect::<Vec<_>>();
-        CallArgs {
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(CallArgs {
             return_arguments,
             func,
             input_arguments,
-        }
+        })
     }
 }
 

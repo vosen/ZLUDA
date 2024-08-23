@@ -1017,7 +1017,7 @@ pub fn generate_instruction_type(tokens: proc_macro::TokenStream) -> proc_macro:
     input.emit_arg_types(&mut result);
     input.emit_instruction_type(&mut result);
     input.emit_visit(&mut result);
-    input.emit_visit_mut(&mut result);
+    //input.emit_visit_mut(&mut result);
     input.emit_visit_map(&mut result);
     result.into()
 }

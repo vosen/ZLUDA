@@ -67,37 +67,29 @@ impl GenerateInstructionType {
         let visit_ref = kind.reference();
         let visitor_type = format_ident!("Visitor{}", kind.type_suffix());
         let visit_fn = format_ident!("visit{}", kind.fn_suffix());
-        let visit_slice_fn = format_ident!("visit{}_slice", kind.fn_suffix());
         let (type_parameters, visitor_parameters, return_type) = if kind == VisitKind::Map {
             (
-                quote! { <#type_parameters, To: Operand> },
-                quote! { <#short_parameters, To> },
-                quote! { #type_name<To> },
+                quote! { <#type_parameters, To: Operand, Err> },
+                quote! { <#short_parameters, To, Err> },
+                quote! { std::result::Result<#type_name<To>, Err> },
             )
         } else {
             (
-                quote! { <#type_parameters> },
-                quote! { <#short_parameters> },
-                quote! { () },
+                quote! { <#type_parameters, Err> },
+                quote! { <#short_parameters, Err> },
+                quote! { std::result::Result<(), Err> },
             )
         };
         quote! {
-            fn #visit_fn #type_parameters (i: #visit_ref #type_name<#short_parameters>, visitor: &mut impl #visitor_type #visitor_parameters ) -> #return_type {
-                match i {
+            pub fn #visit_fn #type_parameters (i: #visit_ref #type_name<#short_parameters>, visitor: &mut impl #visitor_type #visitor_parameters ) -> #return_type {
+                Ok(match i {
                     #inner_tokens
-                }
+                })
             }
         }.to_tokens(tokens);
         if kind == VisitKind::Map {
             return;
         }
-        quote! {
-            fn #visit_slice_fn #type_parameters (instructions: #visit_ref [#type_name<#short_parameters>], visitor: &mut impl #visitor_type #visitor_parameters) {
-                for i in instructions {
-                    #visit_fn(i, visitor)
-                }
-            }
-        }.to_tokens(tokens);
     }
 }
 
@@ -630,14 +622,14 @@ impl ArgumentField {
                 quote! {
                     {
                         #type_space
-                        visitor.visit_ident(&mut arguments.#name, type_space, #is_dst);
+                        visitor.visit_ident(&mut arguments.#name, type_space, #is_dst)?;
                     }
                 }
             } else {
                 quote! {
                     {
                         #type_space
-                        visitor.visit_ident(& arguments.#name, type_space, #is_dst);
+                        visitor.visit_ident(& arguments.#name, type_space, #is_dst)?;
                     }
                 }
             }
@@ -663,7 +655,7 @@ impl ArgumentField {
             };
             quote! {{
                 #type_space
-                #operand_fn(#arguments_name, |x| visitor.visit(x, type_space, #is_dst));
+                #operand_fn(#arguments_name, |x| visitor.visit(x, type_space, #is_dst))?;
             }}
         }
     }
@@ -701,11 +693,11 @@ impl ArgumentField {
         };
         let map_call = if is_ident {
             quote! {
-                visitor.visit_ident(arguments.#name, type_space, #is_dst)
+                visitor.visit_ident(arguments.#name, type_space, #is_dst)?
             }
         } else {
             quote! {
-                MapOperand::map(arguments.#name, |x| visitor.visit(x, type_space, #is_dst))
+                MapOperand::map(arguments.#name, |x| visitor.visit(x, type_space, #is_dst))?
             }
         };
         quote! {

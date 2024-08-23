@@ -7,7 +7,7 @@ edition = "2018"
 [lib]
 
 [dependencies]
-lalrpop-util = "0.19"
+ptx_parser = { path = "../ptx_parser" }
 regex = "1"
 rspirv = "0.7"
 spirv_headers = "1.5" 
@@ -17,8 +17,12 @@ bit-vec = "0.6"
 half ="1.6"
 bitflags = "1.2"
 
+[dependencies.lalrpop-util]
+version = "0.19.12"
+features = ["lexer"]
+
 [build-dependencies.lalrpop]
-version = "0.19"
+version = "0.19.12"
 features = ["lexer"]
 
 [dev-dependencies]

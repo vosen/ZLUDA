@@ -1,8 +1,8 @@
+use derive_more::Display;
 use logos::Logos;
 use ptx_parser_macros::derive_parser;
 use rustc_hash::FxHashMap;
 use std::fmt::Debug;
-use std::mem;
 use std::num::{ParseFloatError, ParseIntError};
 use winnow::ascii::dec_uint;
 use winnow::combinator::*;
@@ -81,16 +81,16 @@ impl VectorPrefix {
     }
 }
 
-struct PtxParserState<'input> {
-    errors: Vec<PtxError>,
+struct PtxParserState<'a, 'input> {
+    errors: &'a mut Vec<PtxError>,
     function_declarations:
         FxHashMap<&'input str, (Vec<(ast::Type, StateSpace)>, Vec<(ast::Type, StateSpace)>)>,
 }
 
-impl<'input> PtxParserState<'input> {
-    fn new() -> Self {
+impl<'a, 'input> PtxParserState<'a, 'input> {
+    fn new(errors: &'a mut Vec<PtxError>) -> Self {
         Self {
-            errors: Vec::new(),
+            errors,
             function_declarations: FxHashMap::default(),
         }
     }
@@ -115,7 +115,7 @@ impl<'input> PtxParserState<'input> {
     }
 }
 
-impl<'input> Debug for PtxParserState<'input> {
+impl<'a, 'input> Debug for PtxParserState<'a, 'input> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PtxParserState")
             .field("errors", &self.errors) /*  .field("function_decl", &self.function_decl) */
@@ -123,7 +123,7 @@ impl<'input> Debug for PtxParserState<'input> {
     }
 }
 
-type PtxParser<'a, 'input> = Stateful<&'a [Token<'input>], PtxParserState<'input>>;
+type PtxParser<'a, 'input> = Stateful<&'a [Token<'input>], PtxParserState<'a, 'input>>;
 
 fn ident<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<&'input str> {
     any.verify_map(|t| {
@@ -275,6 +275,18 @@ fn immediate_value<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<as
         f64.map(ast::ImmediateValue::F64),
     ))
     .parse_next(stream)
+}
+
+pub fn parse_module_unchecked<'input>(text: &'input str) -> Option<ast::Module<'input>> {
+    let lexer = Token::lexer(text);
+    let input = lexer.collect::<Result<Vec<_>, _>>().ok()?;
+    let mut errors = Vec::new();
+    let state = PtxParserState::new(&mut errors);
+    let parser = PtxParser {
+        state,
+        input: &input[..],
+    };
+    module.parse(parser).ok()
 }
 
 fn module<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::Module<'input>> {
@@ -818,6 +830,8 @@ pub enum PtxError {
         source: ParseFloatError,
     },
     #[error("")]
+    Lexer(#[from] TokenError),
+    #[error("")]
     Todo,
     #[error("")]
     SyntaxError,
@@ -1042,9 +1056,15 @@ fn empty_call<'input>(
 
 type ParsedOperandStr<'input> = ast::ParsedOperand<&'input str>;
 
+#[derive(Clone, PartialEq, Default, Debug, Display)]
+pub struct TokenError;
+
+impl std::error::Error for TokenError {}
+
 derive_parser!(
     #[derive(Logos, PartialEq, Eq, Debug, Clone, Copy)]
     #[logos(skip r"\s+")]
+    #[logos(error = TokenError)]
     enum Token<'input> {
         #[token(",")]
         Comma,
@@ -1134,6 +1154,7 @@ derive_parser!(
     pub enum StateSpace {
         Reg,
         Generic,
+        Sreg,
     }
 
     #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -2824,57 +2845,6 @@ derive_parser!(
     }
 
 );
-
-fn main() {
-    use winnow::Parser;
-
-    let lexer = Token::lexer(
-        "
-        .version 6.5
-        .target sm_30
-        .address_size 64
-        
-        .const .align 8 .b32 constparams;
-        
-        .visible .entry const(
-            .param .u64 input,
-            .param .u64 output
-        )
-        {
-            .reg .u64 	    in_addr;
-            .reg .u64 	    out_addr;
-            .reg .b16 	    temp1;
-            .reg .b16 	    temp2;
-            .reg .b16 	    temp3;
-            .reg .b16 	    temp4;
-        
-            ld.param.u64 	in_addr, [input];
-            ld.param.u64 	out_addr, [output];
-        
-            ld.const.b16    temp1, [constparams];
-            ld.const.b16    temp2, [constparams+2];
-            ld.const.b16    temp3, [constparams+4];
-            ld.const.b16    temp4, [constparams+6];
-            st.u16          [out_addr], temp1;
-            st.u16          [out_addr+2], temp2;
-            st.u16          [out_addr+4], temp3;
-            st.u16          [out_addr+6], temp4;
-            ret;
-        }
-        
-        ",
-    );
-    let tokens = lexer.clone().collect::<Vec<_>>();
-    println!("{:?}", &tokens);
-    let tokens = lexer.map(|t| t.unwrap()).collect::<Vec<_>>();
-    println!("{:?}", &tokens);
-    let stream = PtxParser {
-        input: &tokens[..],
-        state: PtxParserState::new(),
-    };
-    let _module = module.parse(stream).unwrap();
-    println!("{}", mem::size_of::<Token>());
-}
 
 #[cfg(test)]
 mod tests {

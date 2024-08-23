@@ -34,15 +34,9 @@ pub enum PtxError {
     #[error("")]
     NonExternPointer,
     #[error("{start}:{end}")]
-    UnrecognizedStatement {
-        start: usize,
-        end: usize,
-    },
+    UnrecognizedStatement { start: usize, end: usize },
     #[error("{start}:{end}")]
-    UnrecognizedDirective {
-        start: usize,
-        end: usize,
-    },
+    UnrecognizedDirective { start: usize, end: usize },
 }
 
 // For some weird reson this is illegal:
@@ -578,11 +572,15 @@ impl CvtDetails {
         if saturate {
             if src.kind() == ScalarKind::Signed {
                 if dst.kind() == ScalarKind::Signed && dst.size_of() >= src.size_of() {
-                    err.push(ParseError::from(PtxError::SyntaxError));
+                    err.push(ParseError::User {
+                        error: PtxError::SyntaxError,
+                    });
                 }
             } else {
                 if dst == src || dst.size_of() >= src.size_of() {
-                    err.push(ParseError::from(PtxError::SyntaxError));
+                    err.push(ParseError::User {
+                        error: PtxError::SyntaxError,
+                    });
                 }
             }
         }
@@ -598,7 +596,9 @@ impl CvtDetails {
         err: &'err mut Vec<ParseError<usize, Token<'input>, PtxError>>,
     ) -> Self {
         if flush_to_zero && dst != ScalarType::F32 {
-            err.push(ParseError::from(PtxError::NonF32Ftz));
+            err.push(ParseError::from(lalrpop_util::ParseError::User {
+                error: PtxError::NonF32Ftz,
+            }));
         }
         CvtDetails::FloatFromInt(CvtDesc {
             dst,
@@ -618,7 +618,9 @@ impl CvtDetails {
         err: &'err mut Vec<ParseError<usize, Token<'input>, PtxError>>,
     ) -> Self {
         if flush_to_zero && src != ScalarType::F32 {
-            err.push(ParseError::from(PtxError::NonF32Ftz));
+            err.push(ParseError::from(lalrpop_util::ParseError::User {
+                error: PtxError::NonF32Ftz,
+            }));
         }
         CvtDetails::IntFromFloat(CvtDesc {
             dst,
