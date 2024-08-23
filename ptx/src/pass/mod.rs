@@ -8,7 +8,9 @@ use std::{
     rc::Rc,
 };
 
-pub(crate) mod normalize;
+mod convert_to_typed;
+mod normalize_identifiers;
+mod normalize_predicates;
 
 static ZLUDA_PTX_IMPL_INTEL: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.spv");
 static ZLUDA_PTX_IMPL_AMD: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.bc");
@@ -161,13 +163,13 @@ fn to_ssa<'input, 'b>(
             })
         }
     };
-    let normalized_ids = normalize::run(&mut id_defs, &fn_defs, f_body)?;
+    let normalized_ids = normalize_identifiers::run(&mut id_defs, &fn_defs, f_body)?;
+    let mut numeric_id_defs = id_defs.finish();
+    let unadorned_statements = normalize_predicates::run(normalized_ids, &mut numeric_id_defs)?;
+    let typed_statements =
+        convert_to_typed::run(unadorned_statements, &fn_defs, &mut numeric_id_defs)?;
     todo!()
     /*
-    let mut numeric_id_defs = id_defs.finish();
-    let unadorned_statements = normalize_predicates(normalized_ids, &mut numeric_id_defs)?;
-    let typed_statements =
-        convert_to_typed_statements(unadorned_statements, &fn_defs, &mut numeric_id_defs)?;
     let typed_statements =
         fix_special_registers2(ptx_impl_imports, typed_statements, &mut numeric_id_defs)?;
     let (func_decl, typed_statements) =
@@ -857,3 +859,32 @@ pub(crate) struct Function<'input> {
 }
 
 type ExpandedStatement = Statement<ast::Instruction<SpirvWord>, SpirvWord>;
+
+type NormalizedStatement = Statement<
+    (
+        Option<ast::PredAt<SpirvWord>>,
+        ast::Instruction<ast::ParsedOperand<SpirvWord>>,
+    ),
+    ast::ParsedOperand<SpirvWord>,
+>;
+
+type UnconditionalStatement =
+    Statement<ast::Instruction<ast::ParsedOperand<SpirvWord>>, ast::ParsedOperand<SpirvWord>>;
+
+type TypedStatement = Statement<ast::Instruction<TypedOperand>, TypedOperand>;
+
+#[derive(Copy, Clone)]
+enum TypedOperand {
+    Reg(SpirvWord),
+    RegOffset(SpirvWord, i32),
+    Imm(ast::ImmediateValue),
+    VecMember(SpirvWord, u8),
+}
+
+impl ast::Operand for TypedOperand {
+    type Ident = SpirvWord;
+
+    fn from_ident(ident: Self::Ident) -> Self {
+        TypedOperand::Reg(ident)
+    }
+}

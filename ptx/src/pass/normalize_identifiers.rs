@@ -1,14 +1,6 @@
 use super::*;
 use ptx_parser as ast;
 
-type NormalizedStatement = Statement<
-    (
-        Option<ast::PredAt<SpirvWord>>,
-        ast::Instruction<ast::ParsedOperand<SpirvWord>>,
-    ),
-    ast::ParsedOperand<SpirvWord>,
->;
-
 pub(crate) fn run<'input, 'b>(
     id_defs: &mut FnStringIdResolver<'input, 'b>,
     fn_defs: &GlobalFnDeclResolver<'input, 'b>,
