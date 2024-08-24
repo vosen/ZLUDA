@@ -798,12 +798,7 @@ struct RepackVectorDetails {
     typ: ast::ScalarType,
     packed: SpirvWord,
     unpacked: Vec<SpirvWord>,
-    non_default_implicit_conversion: Option<
-        fn(
-            (ast::StateSpace, &ast::Type),
-            (ast::StateSpace, &ast::Type),
-        ) -> Result<Option<ConversionKind>, TranslateError>,
-    >,
+    relaxed_type_check: bool
 }
 
 struct FunctionPointerDetails {

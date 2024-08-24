@@ -41,6 +41,7 @@ fn expand_map_variables<'a, 'b>(
                 .transpose()?,
             ast::visit_map(i, &mut |id,
                                     _: Option<(&ast::Type, ast::StateSpace)>,
+                                    _: bool,
                                     _: bool| {
                 id_defs.get_id(id)
             })?,

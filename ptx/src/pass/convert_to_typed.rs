@@ -26,17 +26,9 @@ pub(crate) fn run(
                         src: src_reg,
                     }));
                 }
-                ast::Instruction::Call(call) => {
-                    let resolver = fn_defs.get_fn_sig_resolver(call.func)?;
-                    let resolved_call = resolver.resolve_in_spirv_repr(call)?;
-                    let mut visitor = VectorRepackVisitor::new(&mut result, id_defs);
-                    let reresolved_call = resolved_call.visit(&mut visitor)?;
-                    visitor.func.push(reresolved_call);
-                    visitor.func.extend(visitor.post_stmts);
-                }
                 inst => {
                     let mut visitor = VectorRepackVisitor::new(&mut result, id_defs);
-                    let instruction = Statement::Instruction(inst.map(&mut visitor)?);
+                    let instruction = Statement::Instruction(ast::visit_map(inst, &mut visitor)?);
                     visitor.func.push(instruction);
                     visitor.func.extend(visitor.post_stmts);
                 }
@@ -68,12 +60,7 @@ impl<'a, 'b> VectorRepackVisitor<'a, 'b> {
     fn convert_vector(
         &mut self,
         is_dst: bool,
-        non_default_implicit_conversion: Option<
-            fn(
-                (ast::StateSpace, &ast::Type),
-                (ast::StateSpace, &ast::Type),
-            ) -> Result<Option<ConversionKind>, TranslateError>,
-        >,
+        relaxed_type_check: bool,
         typ: &ast::Type,
         state_space: ast::StateSpace,
         idx: Vec<SpirvWord>,
@@ -91,7 +78,7 @@ impl<'a, 'b> VectorRepackVisitor<'a, 'b> {
             typ: scalar_t,
             packed: temp_vec,
             unpacked: idx,
-            non_default_implicit_conversion,
+            relaxed_type_check,
         });
         if is_dst {
             self.post_stmts = Some(statement);
@@ -110,6 +97,7 @@ impl<'a, 'b> ast::VisitorMap<ast::ParsedOperand<SpirvWord>, TypedOperand, Transl
         ident: SpirvWord,
         _: Option<(&ptx_parser::Type, ptx_parser::StateSpace)>,
         _: bool,
+        _: bool,
     ) -> Result<SpirvWord, TranslateError> {
         Ok(ident)
     }
@@ -119,6 +107,7 @@ impl<'a, 'b> ast::VisitorMap<ast::ParsedOperand<SpirvWord>, TypedOperand, Transl
         op: ast::ParsedOperand<SpirvWord>,
         type_space: Option<(&ptx_parser::Type, ptx_parser::StateSpace)>,
         is_dst: bool,
+        relaxed_type_check: bool,
     ) -> Result<TypedOperand, TranslateError> {
         Ok(match op {
             ast::ParsedOperand::Reg(reg) => TypedOperand::Reg(reg),
@@ -129,7 +118,7 @@ impl<'a, 'b> ast::VisitorMap<ast::ParsedOperand<SpirvWord>, TypedOperand, Transl
                 let (type_, space) = type_space.ok_or(TranslateError::MismatchedType)?;
                 TypedOperand::Reg(self.convert_vector(
                     is_dst,
-                    desc.non_default_implicit_conversion,
+                    relaxed_type_check,
                     type_,
                     space,
                     vec,
