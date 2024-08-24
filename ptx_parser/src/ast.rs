@@ -27,7 +27,10 @@ ptx_parser_macros::generate_instruction_type!(
             type: { &data.typ },
             data: LdDetails,
             arguments<T>: {
-                dst: T,
+                dst: {
+                    repr: T,
+                    relaxed_type_check: true,
+                },
                 src: {
                     repr: T,
                     space: { data.state_space },
@@ -51,7 +54,10 @@ ptx_parser_macros::generate_instruction_type!(
                     repr: T,
                     space: { data.state_space },
                 },
-                src2: T,
+                src2: {
+                    repr: T,
+                    relaxed_type_check: true,
+                }
             }
         },
         Mul {
@@ -157,10 +163,13 @@ ptx_parser_macros::generate_instruction_type!(
                 dst: {
                     repr: T,
                     type: { Type::Scalar(data.to) },
+                    // TODO: double check
+                    relaxed_type_check: true,
                 },
                 src: {
                     repr: T,
                     type: { Type::Scalar(data.from) },
+                    relaxed_type_check: true,
                 },
             }
         },
@@ -494,16 +503,18 @@ pub trait Visitor<T: Operand, Err> {
         args: &T,
         type_space: Option<(&Type, StateSpace)>,
         is_dst: bool,
+        relaxed_type_check: bool,
     ) -> Result<(), Err>;
     fn visit_ident(
         &mut self,
         args: &T::Ident,
         type_space: Option<(&Type, StateSpace)>,
         is_dst: bool,
+        relaxed_type_check: bool,
     ) -> Result<(), Err>;
 }
 
-impl<T: Operand, Err, Fn: FnMut(&T, Option<(&Type, StateSpace)>, bool) -> Result<(), Err>>
+impl<T: Operand, Err, Fn: FnMut(&T, Option<(&Type, StateSpace)>, bool, bool) -> Result<(), Err>>
     Visitor<T, Err> for Fn
 {
     fn visit(
@@ -511,8 +522,9 @@ impl<T: Operand, Err, Fn: FnMut(&T, Option<(&Type, StateSpace)>, bool) -> Result
         args: &T,
         type_space: Option<(&Type, StateSpace)>,
         is_dst: bool,
+        relaxed_type_check: bool,
     ) -> Result<(), Err> {
-        (self)(args, type_space, is_dst)
+        (self)(args, type_space, is_dst, relaxed_type_check)
     }
 
     fn visit_ident(
@@ -520,8 +532,14 @@ impl<T: Operand, Err, Fn: FnMut(&T, Option<(&Type, StateSpace)>, bool) -> Result
         args: &T::Ident,
         type_space: Option<(&Type, StateSpace)>,
         is_dst: bool,
+        relaxed_type_check: bool,
     ) -> Result<(), Err> {
-        (self)(&T::from_ident(*args), type_space, is_dst)
+        (self)(
+            &T::from_ident(*args),
+            type_space,
+            is_dst,
+            relaxed_type_check,
+        )
     }
 }
 
@@ -531,12 +549,14 @@ pub trait VisitorMut<T: Operand, Err> {
         args: &mut T,
         type_space: Option<(&Type, StateSpace)>,
         is_dst: bool,
+        relaxed_type_check: bool,
     ) -> Result<(), Err>;
     fn visit_ident(
         &mut self,
         args: &mut T::Ident,
         type_space: Option<(&Type, StateSpace)>,
         is_dst: bool,
+        relaxed_type_check: bool,
     ) -> Result<(), Err>;
 }
 
@@ -546,37 +566,44 @@ pub trait VisitorMap<From: Operand, To: Operand, Err> {
         args: From,
         type_space: Option<(&Type, StateSpace)>,
         is_dst: bool,
+        relaxed_type_check: bool,
     ) -> Result<To, Err>;
     fn visit_ident(
         &mut self,
         args: From::Ident,
         type_space: Option<(&Type, StateSpace)>,
         is_dst: bool,
+        relaxed_type_check: bool,
     ) -> Result<To::Ident, Err>;
 }
 
 impl<T: Copy, U: Copy, Err, Fn> VisitorMap<ParsedOperand<T>, ParsedOperand<U>, Err> for Fn
 where
-    Fn: FnMut(T, Option<(&Type, StateSpace)>, bool) -> Result<U, Err>,
+    Fn: FnMut(T, Option<(&Type, StateSpace)>, bool, bool) -> Result<U, Err>,
 {
     fn visit(
         &mut self,
         args: ParsedOperand<T>,
         type_space: Option<(&Type, StateSpace)>,
         is_dst: bool,
+        relaxed_type_check: bool,
     ) -> Result<ParsedOperand<U>, Err> {
         Ok(match args {
-            ParsedOperand::Reg(ident) => ParsedOperand::Reg((self)(ident, type_space, is_dst)?),
-            ParsedOperand::RegOffset(ident, imm) => {
-                ParsedOperand::RegOffset((self)(ident, type_space, is_dst)?, imm)
+            ParsedOperand::Reg(ident) => {
+                ParsedOperand::Reg((self)(ident, type_space, is_dst, relaxed_type_check)?)
             }
+            ParsedOperand::RegOffset(ident, imm) => ParsedOperand::RegOffset(
+                (self)(ident, type_space, is_dst, relaxed_type_check)?,
+                imm,
+            ),
             ParsedOperand::Imm(imm) => ParsedOperand::Imm(imm),
-            ParsedOperand::VecMember(ident, index) => {
-                ParsedOperand::VecMember((self)(ident, type_space, is_dst)?, index)
-            }
+            ParsedOperand::VecMember(ident, index) => ParsedOperand::VecMember(
+                (self)(ident, type_space, is_dst, relaxed_type_check)?,
+                index,
+            ),
             ParsedOperand::VecPack(vec) => ParsedOperand::VecPack(
                 vec.into_iter()
-                    .map(|ident| (self)(ident, type_space, is_dst))
+                    .map(|ident| (self)(ident, type_space, is_dst, relaxed_type_check))
                     .collect::<Result<Vec<_>, _>>()?,
             ),
         })
@@ -587,22 +614,24 @@ where
         args: T,
         type_space: Option<(&Type, StateSpace)>,
         is_dst: bool,
+        relaxed_type_check: bool,
     ) -> Result<U, Err> {
-        (self)(args, type_space, is_dst)
+        (self)(args, type_space, is_dst, relaxed_type_check)
     }
 }
 
 impl<T: Operand<Ident = T>, U: Operand<Ident = U>, Err, Fn> VisitorMap<T, U, Err> for Fn
 where
-    Fn: FnMut(T, Option<(&Type, StateSpace)>, bool) -> Result<U, Err>,
+    Fn: FnMut(T, Option<(&Type, StateSpace)>, bool, bool) -> Result<U, Err>,
 {
     fn visit(
         &mut self,
         args: T,
         type_space: Option<(&Type, StateSpace)>,
         is_dst: bool,
+        relaxed_type_check: bool,
     ) -> Result<U, Err> {
-        (self)(args, type_space, is_dst)
+        (self)(args, type_space, is_dst, relaxed_type_check)
     }
 
     fn visit_ident(
@@ -610,8 +639,9 @@ where
         args: T,
         type_space: Option<(&Type, StateSpace)>,
         is_dst: bool,
+        relaxed_type_check: bool,
     ) -> Result<U, Err> {
-        (self)(args, type_space, is_dst)
+        (self)(args, type_space, is_dst, relaxed_type_check)
     }
 }
 
@@ -1198,15 +1228,15 @@ impl<T: Operand> CallArgs<T> {
             .iter()
             .zip(details.return_arguments.iter())
         {
-            visitor.visit_ident(param, Some((type_, *space)), true)?;
+            visitor.visit_ident(param, Some((type_, *space)), true, false)?;
         }
-        visitor.visit_ident(&self.func, None, false)?;
+        visitor.visit_ident(&self.func, None, false, false)?;
         for (param, (type_, space)) in self
             .input_arguments
             .iter()
             .zip(details.input_arguments.iter())
         {
-            visitor.visit(param, Some((type_, *space)), true)?;
+            visitor.visit(param, Some((type_, *space)), true, false)?;
         }
         Ok(())
     }
@@ -1222,15 +1252,15 @@ impl<T: Operand> CallArgs<T> {
             .iter_mut()
             .zip(details.return_arguments.iter())
         {
-            visitor.visit_ident(param, Some((type_, *space)), true)?;
+            visitor.visit_ident(param, Some((type_, *space)), true, false)?;
         }
-        visitor.visit_ident(&mut self.func, None, false)?;
+        visitor.visit_ident(&mut self.func, None, false, false)?;
         for (param, (type_, space)) in self
             .input_arguments
             .iter_mut()
             .zip(details.input_arguments.iter())
         {
-            visitor.visit(param, Some((type_, *space)), true)?;
+            visitor.visit(param, Some((type_, *space)), true, false)?;
         }
         Ok(())
     }
@@ -1245,14 +1275,14 @@ impl<T: Operand> CallArgs<T> {
             .return_arguments
             .into_iter()
             .zip(details.return_arguments.iter())
-            .map(|(param, (type_, space))| visitor.visit_ident(param, Some((type_, *space)), true))
+            .map(|(param, (type_, space))| visitor.visit_ident(param, Some((type_, *space)), true, false))
             .collect::<Result<Vec<_>, _>>()?;
-        let func = visitor.visit_ident(self.func, None, false)?;
+        let func = visitor.visit_ident(self.func, None, false, false)?;
         let input_arguments = self
             .input_arguments
             .into_iter()
             .zip(details.input_arguments.iter())
-            .map(|(param, (type_, space))| visitor.visit(param, Some((type_, *space)), true))
+            .map(|(param, (type_, space))| visitor.visit(param, Some((type_, *space)), true, false))
             .collect::<Result<Vec<_>, _>>()?;
         Ok(CallArgs {
             return_arguments,

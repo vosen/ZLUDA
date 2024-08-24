@@ -512,12 +512,13 @@ pub struct ArgumentField {
     pub repr: Type,
     pub space: Option<Expr>,
     pub type_: Option<Expr>,
+    pub relaxed_type_check: bool,
 }
 
 impl ArgumentField {
     fn parse_block(
         input: syn::parse::ParseStream,
-    ) -> syn::Result<(Type, Option<Expr>, Option<Expr>, Option<bool>)> {
+    ) -> syn::Result<(Type, Option<Expr>, Option<Expr>, Option<bool>, bool)> {
         let content;
         braced!(content in input);
         let all_fields =
@@ -531,6 +532,9 @@ impl ArgumentField {
                     let name_ident = content.parse::<Ident>()?;
                     content.parse::<Token![:]>()?;
                     match &*name_ident.to_string() {
+                        "relaxed_type_check" => {
+                            ExprOrPath::RelaxedTypeCheck(content.parse::<LitBool>()?.value)
+                        }
                         "repr" => ExprOrPath::Repr(content.parse::<Type>()?),
                         "space" => ExprOrPath::Space(content.parse::<Expr>()?),
                         "dst" => {
@@ -552,15 +556,17 @@ impl ArgumentField {
         let mut type_ = None;
         let mut space = None;
         let mut is_dst = None;
+        let mut relaxed_type_check = false;
         for exp_or_path in all_fields {
             match exp_or_path {
                 ExprOrPath::Repr(r) => repr = Some(r),
                 ExprOrPath::Type(t) => type_ = Some(t),
                 ExprOrPath::Space(s) => space = Some(s),
                 ExprOrPath::Dst(x) => is_dst = Some(x),
+                ExprOrPath::RelaxedTypeCheck(relaxed) => relaxed_type_check = relaxed,
             }
         }
-        Ok((repr.unwrap(), type_, space, is_dst))
+        Ok((repr.unwrap(), type_, space, is_dst, relaxed_type_check))
     }
 
     fn parse_basic(input: &syn::parse::ParseBuffer) -> syn::Result<Type> {
@@ -605,6 +611,7 @@ impl ArgumentField {
             .map(|space| quote! { #space })
             .unwrap_or_else(|| quote! { StateSpace::Reg });
         let is_dst = self.is_dst;
+        let relaxed_type_check = self.relaxed_type_check;
         let name = &self.name;
         let type_space = if is_typeless {
             quote! {
@@ -622,14 +629,14 @@ impl ArgumentField {
                 quote! {
                     {
                         #type_space
-                        visitor.visit_ident(&mut arguments.#name, type_space, #is_dst)?;
+                        visitor.visit_ident(&mut arguments.#name, type_space, #is_dst, #relaxed_type_check)?;
                     }
                 }
             } else {
                 quote! {
                     {
                         #type_space
-                        visitor.visit_ident(& arguments.#name, type_space, #is_dst)?;
+                        visitor.visit_ident(& arguments.#name, type_space, #is_dst, #relaxed_type_check)?;
                     }
                 }
             }
@@ -655,7 +662,7 @@ impl ArgumentField {
             };
             quote! {{
                 #type_space
-                #operand_fn(#arguments_name, |x| visitor.visit(x, type_space, #is_dst))?;
+                #operand_fn(#arguments_name, |x| visitor.visit(x, type_space, #is_dst, #relaxed_type_check))?;
             }}
         }
     }
@@ -679,6 +686,7 @@ impl ArgumentField {
             .map(|space| quote! { #space })
             .unwrap_or_else(|| quote! { StateSpace::Reg });
         let is_dst = self.is_dst;
+        let relaxed_type_check = self.relaxed_type_check;
         let name = &self.name;
         let type_space = if is_typeless {
             quote! {
@@ -693,11 +701,11 @@ impl ArgumentField {
         };
         let map_call = if is_ident {
             quote! {
-                visitor.visit_ident(arguments.#name, type_space, #is_dst)?
+                visitor.visit_ident(arguments.#name, type_space, #is_dst, #relaxed_type_check)?
             }
         } else {
             quote! {
-                MapOperand::map(arguments.#name, |x| visitor.visit(x, type_space, #is_dst))?
+                MapOperand::map(arguments.#name, |x| visitor.visit(x, type_space, #is_dst, #relaxed_type_check))?
             }
         };
         quote! {
@@ -739,10 +747,10 @@ impl Parse for ArgumentField {
 
         input.parse::<Token![:]>()?;
         let lookahead = input.lookahead1();
-        let (repr, type_, space, is_dst) = if lookahead.peek(token::Brace) {
+        let (repr, type_, space, is_dst, relaxed_type_check) = if lookahead.peek(token::Brace) {
             Self::parse_block(input)?
         } else if lookahead.peek(syn::Ident) {
-            (Self::parse_basic(input)?, None, None, None)
+            (Self::parse_basic(input)?, None, None, None, false)
         } else {
             return Err(lookahead.error());
         };
@@ -756,6 +764,7 @@ impl Parse for ArgumentField {
             repr,
             type_,
             space,
+            relaxed_type_check
         })
     }
 }
@@ -765,6 +774,7 @@ enum ExprOrPath {
     Type(Expr),
     Space(Expr),
     Dst(bool),
+    RelaxedTypeCheck(bool),
 }
 
 #[cfg(test)]
