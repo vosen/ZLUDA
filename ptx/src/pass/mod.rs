@@ -12,6 +12,7 @@ use std::{
 mod convert_to_stateful_memory_access;
 mod convert_to_typed;
 mod fix_special_registers;
+mod insert_mem_ssa_statements;
 mod normalize_identifiers;
 mod normalize_predicates;
 
@@ -175,13 +176,13 @@ fn to_ssa<'input, 'b>(
         fix_special_registers::run(ptx_impl_imports, typed_statements, &mut numeric_id_defs)?;
     let (func_decl, typed_statements) =
         convert_to_stateful_memory_access::run(func_decl, typed_statements, &mut numeric_id_defs)?;
-    todo!()
-    /*
-    let ssa_statements = insert_mem_ssa_statements(
+    let ssa_statements = insert_mem_ssa_statements::run(
         typed_statements,
         &mut numeric_id_defs,
         &mut (*func_decl).borrow_mut(),
     )?;
+    todo!()
+    /*
     let mut numeric_id_defs = numeric_id_defs.finish();
     let expanded_statements = expand_arguments(ssa_statements, &mut numeric_id_defs)?;
     let expanded_statements =
@@ -1205,4 +1206,10 @@ impl<
             _marker: PhantomData,
         }
     }
+}
+
+fn state_is_compatible(this: ast::StateSpace, other: ast::StateSpace) -> bool {
+    this == other
+        || this == ast::StateSpace::Reg && other == ast::StateSpace::Sreg
+        || this == ast::StateSpace::Sreg && other == ast::StateSpace::Reg
 }

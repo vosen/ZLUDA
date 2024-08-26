@@ -527,9 +527,3 @@ fn convert_to_stateful_memory_access_postprocess(
         })
     })
 }
-
-fn state_is_compatible(this: ast::StateSpace, other: ast::StateSpace) -> bool {
-    this == other
-        || this == ast::StateSpace::Reg && other == ast::StateSpace::Sreg
-        || this == ast::StateSpace::Sreg && other == ast::StateSpace::Reg
-}
