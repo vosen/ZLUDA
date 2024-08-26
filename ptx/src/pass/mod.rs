@@ -9,6 +9,7 @@ use std::{
 };
 
 mod convert_to_typed;
+mod fix_special_registers;
 mod normalize_identifiers;
 mod normalize_predicates;
 
@@ -735,6 +736,235 @@ enum Statement<I, P: ast::Operand> {
     FunctionPointer(FunctionPointerDetails),
 }
 
+impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
+    fn visit_map<To: ast::Operand<Ident = SpirvWord>, Err>(
+        self,
+        visitor: &mut impl ast::VisitorMap<T, To, Err>,
+    ) -> std::result::Result<Statement<ast::Instruction<To>, T>, Err> {
+        Ok(match self {
+            Statement::Instruction(i) => {
+                return ast::visit_map(i, visitor).map(Statement::Instruction)
+            }
+            Statement::Label(label) => {
+                Statement::Label(visitor.visit_ident(label, None, false, false)?)
+            }
+            Statement::Variable(var) => {
+                let name = visitor.visit_ident(
+                    var.name,
+                    Some((&var.v_type, var.state_space)),
+                    true,
+                    false,
+                )?;
+                Statement::Variable(ast::Variable {
+                    align: var.align,
+                    v_type: var.v_type,
+                    state_space: var.state_space,
+                    name,
+                    array_init: var.array_init,
+                })
+            }
+            Statement::Conditional(conditional) => {
+                let predicate = visitor.visit_ident(conditional.predicate, None, false, false)?;
+                let if_true = visitor.visit_ident(conditional.if_true, None, false, false)?;
+                let if_false = visitor.visit_ident(conditional.if_false, None, false, false)?;
+                Statement::Conditional(BrachCondition {
+                    predicate,
+                    if_true,
+                    if_false,
+                })
+            }
+            Statement::LoadVar(LoadVarDetails {
+                arg,
+                typ,
+                member_index,
+            }) => {
+                let dst = visitor.visit_ident(
+                    arg.dst,
+                    Some((&typ, ast::StateSpace::Reg)),
+                    true,
+                    false,
+                )?;
+                let src = visitor.visit_ident(
+                    arg.src,
+                    Some((&typ, ast::StateSpace::Local)),
+                    false,
+                    false,
+                )?;
+                Statement::LoadVar(LoadVarDetails {
+                    arg: ast::LdArgs { dst, src },
+                    typ,
+                    member_index,
+                })
+            }
+            Statement::StoreVar(StoreVarDetails {
+                arg,
+                typ,
+                member_index,
+            }) => {
+                let src1 = visitor.visit_ident(
+                    arg.src1,
+                    Some((&typ, ast::StateSpace::Local)),
+                    false,
+                    false,
+                )?;
+                let src2 = visitor.visit_ident(
+                    arg.src2,
+                    Some((&typ, ast::StateSpace::Reg)),
+                    false,
+                    false,
+                )?;
+                Statement::StoreVar(StoreVarDetails {
+                    arg: ast::StArgs { src1, src2 },
+                    typ,
+                    member_index,
+                })
+            }
+            Statement::Conversion(ImplicitConversion {
+                src,
+                dst,
+                from_type,
+                to_type,
+                from_space,
+                to_space,
+                kind,
+            }) => {
+                let dst = visitor.visit_ident(
+                    dst,
+                    Some((&to_type, ast::StateSpace::Reg)),
+                    true,
+                    false,
+                )?;
+                let src = visitor.visit_ident(
+                    src,
+                    Some((&from_type, ast::StateSpace::Reg)),
+                    false,
+                    false,
+                )?;
+                Statement::Conversion(ImplicitConversion {
+                    src,
+                    dst,
+                    from_type,
+                    to_type,
+                    from_space,
+                    to_space,
+                    kind,
+                })
+            }
+            Statement::Constant(ConstantDefinition { dst, typ, value }) => {
+                let dst = visitor.visit_ident(
+                    dst,
+                    Some((&typ.into(), ast::StateSpace::Reg)),
+                    true,
+                    false,
+                )?;
+                Statement::Constant(ConstantDefinition { dst, typ, value })
+            }
+            Statement::RetValue(data, value) => {
+                // TODO:
+                // We should report type here
+                let value = visitor.visit_ident(value, None, false, false)?;
+                Statement::RetValue(data, value)
+            }
+            Statement::PtrAccess(PtrAccess {
+                underlying_type,
+                state_space,
+                dst,
+                ptr_src,
+                offset_src,
+            }) => {
+                let dst =
+                    visitor.visit_ident(dst, Some((&underlying_type, state_space)), true, false)?;
+                let ptr_src = visitor.visit_ident(
+                    ptr_src,
+                    Some((&underlying_type, state_space)),
+                    false,
+                    false,
+                )?;
+                Statement::PtrAccess(PtrAccess {
+                    underlying_type,
+                    state_space,
+                    dst,
+                    ptr_src,
+                    offset_src,
+                })
+            }
+            Statement::RepackVector(RepackVectorDetails {
+                is_extract,
+                typ,
+                packed,
+                unpacked,
+                relaxed_type_check,
+            }) => {
+                let (packed, unpacked) = if is_extract {
+                    let unpacked = unpacked
+                        .into_iter()
+                        .map(|ident| {
+                            visitor.visit_ident(
+                                ident,
+                                Some((&typ.into(), ast::StateSpace::Reg)),
+                                true,
+                                relaxed_type_check,
+                            )
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
+                    let packed = visitor.visit_ident(
+                        packed,
+                        Some((
+                            &ast::Type::Vector(typ, unpacked.len() as u8),
+                            ast::StateSpace::Reg,
+                        )),
+                        false,
+                        false,
+                    )?;
+                    (packed, unpacked)
+                } else {
+                    let packed = visitor.visit_ident(
+                        packed,
+                        Some((
+                            &ast::Type::Vector(typ, unpacked.len() as u8),
+                            ast::StateSpace::Reg,
+                        )),
+                        true,
+                        false,
+                    )?;
+                    let unpacked = unpacked
+                        .into_iter()
+                        .map(|ident| {
+                            visitor.visit_ident(
+                                ident,
+                                Some((&typ.into(), ast::StateSpace::Reg)),
+                                false,
+                                relaxed_type_check,
+                            )
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
+                    (packed, unpacked)
+                };
+                Statement::RepackVector(RepackVectorDetails {
+                    is_extract,
+                    typ,
+                    packed,
+                    unpacked,
+                    relaxed_type_check,
+                })
+            }
+            Statement::FunctionPointer(FunctionPointerDetails { dst, src }) => {
+                let dst = visitor.visit_ident(
+                    dst,
+                    Some((
+                        &ast::Type::Scalar(ast::ScalarType::U64),
+                        ast::StateSpace::Reg,
+                    )),
+                    true,
+                    false,
+                )?;
+                let src = visitor.visit_ident(src, None, false, false)?;
+                Statement::FunctionPointer(FunctionPointerDetails { dst, src })
+            }
+        })
+    }
+}
+
 struct BrachCondition {
     predicate: SpirvWord,
     if_true: SpirvWord,
@@ -743,7 +973,6 @@ struct BrachCondition {
 struct LoadVarDetails {
     arg: ast::LdArgs<SpirvWord>,
     typ: ast::Type,
-    state_space: ast::StateSpace,
     // (index, vector_width)
     // HACK ALERT
     // For some reason IGC explodes when you try to load from builtin vectors
@@ -798,7 +1027,7 @@ struct RepackVectorDetails {
     typ: ast::ScalarType,
     packed: SpirvWord,
     unpacked: Vec<SpirvWord>,
-    relaxed_type_check: bool
+    relaxed_type_check: bool,
 }
 
 struct FunctionPointerDetails {
@@ -874,6 +1103,20 @@ enum TypedOperand {
     RegOffset(SpirvWord, i32),
     Imm(ast::ImmediateValue),
     VecMember(SpirvWord, u8),
+}
+
+impl TypedOperand {
+    fn map<Err>(
+        self,
+        fn_: impl FnOnce(SpirvWord, Option<u8>) -> Result<SpirvWord, Err>,
+    ) -> Result<Self, Err> {
+        Ok(match self {
+            TypedOperand::Reg(reg) => TypedOperand::Reg(fn_(reg, None)?),
+            TypedOperand::RegOffset(reg, off) => TypedOperand::RegOffset(fn_(reg, None)?, off),
+            TypedOperand::Imm(imm) => TypedOperand::Imm(imm),
+            TypedOperand::VecMember(reg, idx) => TypedOperand::VecMember(fn_(reg, Some(idx))?, idx),
+        })
+    }
 }
 
 impl ast::Operand for TypedOperand {
