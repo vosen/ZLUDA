@@ -5,9 +5,11 @@ use std::{
     cell::RefCell,
     collections::{hash_map, HashMap},
     ffi::CString,
+    marker::PhantomData,
     rc::Rc,
 };
 
+mod convert_to_stateful_memory_access;
 mod convert_to_typed;
 mod fix_special_registers;
 mod normalize_identifiers;
@@ -169,12 +171,12 @@ fn to_ssa<'input, 'b>(
     let unadorned_statements = normalize_predicates::run(normalized_ids, &mut numeric_id_defs)?;
     let typed_statements =
         convert_to_typed::run(unadorned_statements, &fn_defs, &mut numeric_id_defs)?;
+    let typed_statements =
+        fix_special_registers::run(ptx_impl_imports, typed_statements, &mut numeric_id_defs)?;
+    let (func_decl, typed_statements) =
+        convert_to_stateful_memory_access::run(func_decl, typed_statements, &mut numeric_id_defs)?;
     todo!()
     /*
-    let typed_statements =
-        fix_special_registers2(ptx_impl_imports, typed_statements, &mut numeric_id_defs)?;
-    let (func_decl, typed_statements) =
-        convert_to_stateful_memory_access(func_decl, typed_statements, &mut numeric_id_defs)?;
     let ssa_statements = insert_mem_ssa_statements(
         typed_statements,
         &mut numeric_id_defs,
@@ -1035,7 +1037,7 @@ struct FunctionPointerDetails {
     src: SpirvWord,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 struct SpirvWord(spirv::Word);
 
 impl From<spirv::Word> for SpirvWord {
@@ -1117,6 +1119,20 @@ impl TypedOperand {
             TypedOperand::VecMember(reg, idx) => TypedOperand::VecMember(fn_(reg, Some(idx))?, idx),
         })
     }
+
+    fn underlying_register(&self) -> Option<SpirvWord> {
+        match self {
+            Self::Reg(r) | Self::RegOffset(r, _) | Self::VecMember(r, _) => Some(*r),
+            Self::Imm(_) => None,
+        }
+    }
+
+    fn unwrap_reg(&self) -> Result<SpirvWord, TranslateError> {
+        match self {
+            TypedOperand::Reg(reg) => Ok(*reg),
+            _ => Err(error_unreachable()),
+        }
+    }
 }
 
 impl ast::Operand for TypedOperand {
@@ -1124,5 +1140,69 @@ impl ast::Operand for TypedOperand {
 
     fn from_ident(ident: Self::Ident) -> Self {
         TypedOperand::Reg(ident)
+    }
+}
+
+impl<Fn> ast::VisitorMap<TypedOperand, TypedOperand, TranslateError>
+    for FnVisitor<TypedOperand, TypedOperand, TranslateError, Fn>
+where
+    Fn: FnMut(
+        TypedOperand,
+        Option<(&ast::Type, ast::StateSpace)>,
+        bool,
+        bool,
+    ) -> Result<TypedOperand, TranslateError>,
+{
+    fn visit(
+        &mut self,
+        args: TypedOperand,
+        type_space: Option<(&ast::Type, ast::StateSpace)>,
+        is_dst: bool,
+        relaxed_type_check: bool,
+    ) -> Result<TypedOperand, TranslateError> {
+        (self.fn_)(args, type_space, is_dst, relaxed_type_check)
+    }
+
+    fn visit_ident(
+        &mut self,
+        args: SpirvWord,
+        type_space: Option<(&ast::Type, ast::StateSpace)>,
+        is_dst: bool,
+        relaxed_type_check: bool,
+    ) -> Result<SpirvWord, TranslateError> {
+        match (self.fn_)(
+            TypedOperand::Reg(args),
+            type_space,
+            is_dst,
+            relaxed_type_check,
+        )? {
+            TypedOperand::Reg(reg) => Ok(reg),
+            _ => Err(TranslateError::Unreachable),
+        }
+    }
+}
+
+struct FnVisitor<
+    T,
+    U,
+    Err,
+    Fn: FnMut(T, Option<(&ast::Type, ast::StateSpace)>, bool, bool) -> Result<U, Err>,
+> {
+    fn_: Fn,
+    _marker: PhantomData<fn(T) -> Result<U, Err>>,
+}
+
+impl<
+        T,
+        U,
+        Err,
+        Fn: FnMut(T, Option<(&ast::Type, ast::StateSpace)>, bool, bool) -> Result<U, Err>,
+    > FnVisitor<T, U, Err, Fn>
+{
+    fn new(fn_: Fn) -> Self {
+        Self {
+            fn_,
+            _marker: PhantomData,
+        }
     }
 }

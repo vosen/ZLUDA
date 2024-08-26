@@ -1,7 +1,7 @@
 use super::*;
 use std::collections::HashMap;
 
-fn run<'a, 'b, 'input>(
+pub(super) fn run<'a, 'b, 'input>(
     ptx_impl_imports: &'a mut HashMap<String, Directive<'input>>,
     typed_statements: Vec<TypedStatement>,
     numeric_id_defs: &'a mut NumericIdResolver<'b>,

@@ -760,6 +760,7 @@ pub enum Type {
     Vector(ScalarType, u8),
     // .param.b32 foo[4];
     Array(ScalarType, Vec<u32>),
+    Pointer(ScalarType, StateSpace)
 }
 
 impl Type {
