@@ -11,6 +11,7 @@ use std::{
 
 mod convert_to_stateful_memory_access;
 mod convert_to_typed;
+mod expand_arguments;
 mod fix_special_registers;
 mod insert_mem_ssa_statements;
 mod normalize_identifiers;
@@ -181,10 +182,10 @@ fn to_ssa<'input, 'b>(
         &mut numeric_id_defs,
         &mut (*func_decl).borrow_mut(),
     )?;
+    let mut numeric_id_defs = numeric_id_defs.finish();
+    let expanded_statements = expand_arguments::run(ssa_statements, &mut numeric_id_defs)?;
     todo!()
     /*
-    let mut numeric_id_defs = numeric_id_defs.finish();
-    let expanded_statements = expand_arguments(ssa_statements, &mut numeric_id_defs)?;
     let expanded_statements =
         insert_implicit_conversions(expanded_statements, &mut numeric_id_defs)?;
     let mut numeric_id_defs = numeric_id_defs.unmut();
@@ -743,7 +744,7 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
     fn visit_map<To: ast::Operand<Ident = SpirvWord>, Err>(
         self,
         visitor: &mut impl ast::VisitorMap<T, To, Err>,
-    ) -> std::result::Result<Statement<ast::Instruction<To>, T>, Err> {
+    ) -> std::result::Result<Statement<ast::Instruction<To>, To>, Err> {
         Ok(match self {
             Statement::Instruction(i) => {
                 return ast::visit_map(i, visitor).map(Statement::Instruction)
@@ -879,6 +880,12 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                     visitor.visit_ident(dst, Some((&underlying_type, state_space)), true, false)?;
                 let ptr_src = visitor.visit_ident(
                     ptr_src,
+                    Some((&underlying_type, state_space)),
+                    false,
+                    false,
+                )?;
+                let offset_src = visitor.visit(
+                    offset_src,
                     Some((&underlying_type, state_space)),
                     false,
                     false,
