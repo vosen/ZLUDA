@@ -16,6 +16,9 @@ mod fix_special_registers;
 mod insert_mem_ssa_statements;
 mod normalize_identifiers;
 mod normalize_predicates;
+mod insert_implicit_conversions;
+mod normalize_labels;
+mod extract_globals;
 
 static ZLUDA_PTX_IMPL_INTEL: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.spv");
 static ZLUDA_PTX_IMPL_AMD: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.bc");
@@ -184,14 +187,12 @@ fn to_ssa<'input, 'b>(
     )?;
     let mut numeric_id_defs = numeric_id_defs.finish();
     let expanded_statements = expand_arguments::run(ssa_statements, &mut numeric_id_defs)?;
-    todo!()
-    /*
     let expanded_statements =
-        insert_implicit_conversions(expanded_statements, &mut numeric_id_defs)?;
+        insert_implicit_conversions::run(expanded_statements, &mut numeric_id_defs)?;
     let mut numeric_id_defs = numeric_id_defs.unmut();
-    let labeled_statements = normalize_labels(expanded_statements, &mut numeric_id_defs);
+    let labeled_statements = normalize_labels::run(expanded_statements, &mut numeric_id_defs);
     let (f_body, globals) =
-        extract_globals(labeled_statements, ptx_impl_imports, &mut numeric_id_defs)?;
+        extract_globals::run(labeled_statements, ptx_impl_imports, &mut numeric_id_defs)?;
     Ok(Function {
         func_decl: func_decl,
         globals: globals,
@@ -200,7 +201,6 @@ fn to_ssa<'input, 'b>(
         tuning,
         linkage,
     })
-     */
 }
 
 pub struct Module {
@@ -1219,4 +1219,57 @@ fn state_is_compatible(this: ast::StateSpace, other: ast::StateSpace) -> bool {
     this == other
         || this == ast::StateSpace::Reg && other == ast::StateSpace::Sreg
         || this == ast::StateSpace::Sreg && other == ast::StateSpace::Reg
+}
+
+fn register_external_fn_call<'a>(
+    id_defs: &mut NumericIdResolver,
+    ptx_impl_imports: &mut HashMap<String, Directive>,
+    name: String,
+    return_arguments: impl Iterator<Item = (&'a ast::Type, ast::StateSpace)>,
+    input_arguments: impl Iterator<Item = (&'a ast::Type, ast::StateSpace)>,
+) -> Result<SpirvWord, TranslateError> {
+    match ptx_impl_imports.entry(name) {
+        hash_map::Entry::Vacant(entry) => {
+            let fn_id = id_defs.register_intermediate(None);
+            let return_arguments = fn_arguments_to_variables(id_defs, return_arguments);
+            let input_arguments = fn_arguments_to_variables(id_defs, input_arguments);
+            let func_decl = ast::MethodDeclaration::<SpirvWord> {
+                return_arguments,
+                name: ast::MethodName::Func(fn_id),
+                input_arguments,
+                shared_mem: None,
+            };
+            let func = Function {
+                func_decl: Rc::new(RefCell::new(func_decl)),
+                globals: Vec::new(),
+                body: None,
+                import_as: Some(entry.key().clone()),
+                tuning: Vec::new(),
+                linkage: ast::LinkingDirective::EXTERN,
+            };
+            entry.insert(Directive::Method(func));
+            Ok(fn_id)
+        }
+        hash_map::Entry::Occupied(entry) => match entry.get() {
+            Directive::Method(Function { func_decl, .. }) => match (**func_decl).borrow().name {
+                ast::MethodName::Func(fn_id) => Ok(fn_id),
+                ast::MethodName::Kernel(_) => Err(error_unreachable()),
+            },
+            _ => Err(error_unreachable()),
+        },
+    }
+}
+
+fn fn_arguments_to_variables<'a>(
+    id_defs: &mut NumericIdResolver,
+    args: impl Iterator<Item = (&'a ast::Type, ast::StateSpace)>,
+) -> Vec<ast::Variable<SpirvWord>> {
+    args.map(|(typ, space)| ast::Variable {
+        align: None,
+        v_type: typ.clone(),
+        state_space: space,
+        name: id_defs.register_intermediate(None),
+        array_init: Vec::new(),
+    })
+    .collect::<Vec<_>>()
 }
