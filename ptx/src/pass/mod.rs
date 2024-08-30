@@ -1,5 +1,6 @@
 use ptx_parser as ast;
 use rspirv::{binary::Assemble, dr};
+use std::hash::Hash;
 use std::{
     borrow::Cow,
     cell::RefCell,
@@ -10,11 +11,11 @@ use std::{
     mem,
     rc::Rc,
 };
-use std::hash::Hash;
 
 mod convert_dynamic_shared_memory_usage;
 mod convert_to_stateful_memory_access;
 mod convert_to_typed;
+mod emit_spirv;
 mod expand_arguments;
 mod extract_globals;
 mod fix_special_registers;
@@ -23,7 +24,6 @@ mod insert_mem_ssa_statements;
 mod normalize_identifiers;
 mod normalize_labels;
 mod normalize_predicates;
-mod emit_spirv;
 
 static ZLUDA_PTX_IMPL_INTEL: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.spv");
 static ZLUDA_PTX_IMPL_AMD: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.bc");
@@ -55,7 +55,8 @@ pub fn to_spirv_module<'input>(ast: ast::Module<'input>) -> Result<Module, Trans
         })?;
     normalize_variable_decls(&mut directives);
     let denorm_information = compute_denorm_information(&directives);
-    let (spirv, kernel_info, build_options) = emit_spirv::run(builder, &id_defs, call_map, denorm_information, directives)?;
+    let (spirv, kernel_info, build_options) =
+        emit_spirv::run(builder, &id_defs, call_map, denorm_information, directives)?;
     Ok(Module {
         spirv,
         kernel_info,
@@ -881,7 +882,10 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                 )?;
                 let offset_src = visitor.visit(
                     offset_src,
-                    Some((&underlying_type, state_space)),
+                    Some((
+                        &ast::Type::Scalar(ast::ScalarType::S64),
+                        ast::StateSpace::Reg,
+                    )),
                     false,
                     false,
                 )?;
@@ -1582,7 +1586,9 @@ fn flush_to_zero(this: &ast::Instruction<SpirvWord>) -> Option<(bool, u8)> {
         } => float_control
             .flush_to_zero
             .map(|ftz| (ftz, float_control.type_.size_of())),
-        ast::Instruction::Fma { data, .. } => data.flush_to_zero.map(|ftz| (ftz, data.type_.size_of())),
+        ast::Instruction::Fma { data, .. } => {
+            data.flush_to_zero.map(|ftz| (ftz, data.type_.size_of()))
+        }
         ast::Instruction::Setp { data, .. } => {
             data.flush_to_zero.map(|ftz| (ftz, data.type_.size_of()))
         }
