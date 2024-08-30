@@ -17,7 +17,7 @@ pub(super) fn run<'input>(
         HashMap<u8, (spirv::FPDenormMode, isize)>,
     >,
     directives: Vec<Directive<'input>>,
-) -> Result<(), TranslateError> {
+) -> Result<(dr::Module, HashMap<String, KernelInfo>, CString), TranslateError> {
     builder.set_version(1, 3);
     emit_capabilities(&mut builder);
     emit_extensions(&mut builder);
@@ -39,7 +39,8 @@ pub(super) fn run<'input>(
         globals_use_map,
         directives,
         &mut kernel_info,
-    )
+    )?;
+    Ok((builder.module(), kernel_info, build_options))
 }
 
 fn emit_capabilities(builder: &mut dr::Builder) {
@@ -942,7 +943,7 @@ fn emit_function_body_ops<'input>(
                             builder.constant_true(bool_type, Some(cnst.dst.0));
                         }
                     }
-                    _ => return Err(TranslateError::MismatchedType),
+                    _ => return Err(error_mismatched_type()),
                 }
             }
             Statement::Conversion(cv) => emit_implicit_conversion(builder, map, cv)?,
@@ -2646,7 +2647,7 @@ fn emit_load_var(
         Some((index, Some(width))) => {
             let vector_type = match details.typ {
                 ast::Type::Scalar(scalar_t) => ast::Type::Vector(scalar_t, width),
-                _ => return Err(TranslateError::MismatchedType),
+                _ => return Err(error_mismatched_type()),
             };
             let vector_type_spirv = map.get_or_add(builder, SpirvType::new(vector_type));
             let vector_temp = builder.load(

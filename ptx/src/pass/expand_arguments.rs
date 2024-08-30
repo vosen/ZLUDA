@@ -66,11 +66,11 @@ impl<'a, 'b> FlattenArguments<'a, 'b> {
         if state_space != ast::StateSpace::Reg && state_space != ast::StateSpace::Sreg {
             let (reg_type, reg_space) = self.id_def.get_typed(reg)?;
             if !state_is_compatible(reg_space, ast::StateSpace::Reg) {
-                return Err(TranslateError::MismatchedType);
+                return Err(error_mismatched_type());
             }
             let reg_scalar_type = match reg_type {
                 ast::Type::Scalar(underlying_type) => underlying_type,
-                _ => return Err(TranslateError::MismatchedType),
+                _ => return Err(error_mismatched_type()),
             };
             let id_constant_stmt = self
                 .id_def

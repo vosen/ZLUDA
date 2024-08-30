@@ -19,7 +19,7 @@ pub(crate) fn run(
                         },
                 } if fn_defs.fns.contains_key(&src_reg) => {
                     if data.typ != ast::Type::Scalar(ast::ScalarType::U64) {
-                        return Err(TranslateError::MismatchedType);
+                        return Err(error_mismatched_type());
                     }
                     result.push(TypedStatement::FunctionPointer(FunctionPointerDetails {
                         dst: dst_reg,
@@ -68,7 +68,7 @@ impl<'a, 'b> VectorRepackVisitor<'a, 'b> {
         // mov.u32 foobar, {a,b};
         let scalar_t = match typ {
             ast::Type::Vector(scalar_t, _) => *scalar_t,
-            _ => return Err(TranslateError::MismatchedType),
+            _ => return Err(error_mismatched_type()),
         };
         let temp_vec = self
             .id_def
@@ -115,7 +115,7 @@ impl<'a, 'b> ast::VisitorMap<ast::ParsedOperand<SpirvWord>, TypedOperand, Transl
             ast::ParsedOperand::Imm(x) => TypedOperand::Imm(x),
             ast::ParsedOperand::VecMember(vec, idx) => TypedOperand::VecMember(vec, idx),
             ast::ParsedOperand::VecPack(vec) => {
-                let (type_, space) = type_space.ok_or(TranslateError::MismatchedType)?;
+                let (type_, space) = type_space.ok_or(error_mismatched_type())?;
                 TypedOperand::Reg(self.convert_vector(
                     is_dst,
                     relaxed_type_check,

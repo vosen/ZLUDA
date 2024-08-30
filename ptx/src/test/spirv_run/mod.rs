@@ -1,3 +1,4 @@
+use crate::pass;
 use crate::ptx;
 use crate::translate;
 use hip_runtime_sys::hipError_t;
@@ -385,10 +386,8 @@ fn test_spvtxt_assert<'a>(
     spirv_txt: &'a [u8],
     spirv_file_name: &'a str,
 ) -> Result<(), Box<dyn error::Error + 'a>> {
-    let mut errors = Vec::new();
-    let ast = ptx::ModuleParser::new().parse(&mut errors, ptx_txt)?;
-    assert!(errors.len() == 0);
-    let spirv_module = translate::to_spirv_module(ast)?;
+    let ast = ptx_parser::parse_module_unchecked(ptx_txt).unwrap();
+    let spirv_module = pass::to_spirv_module(ast)?;
     let spv_context =
         unsafe { spirv_tools::spvContextCreate(spv_target_env::SPV_ENV_UNIVERSAL_1_3) };
     assert!(spv_context != ptr::null_mut());

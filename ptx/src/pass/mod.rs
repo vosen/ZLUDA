@@ -55,26 +55,7 @@ pub fn to_spirv_module<'input>(ast: ast::Module<'input>) -> Result<Module, Trans
         })?;
     normalize_variable_decls(&mut directives);
     let denorm_information = compute_denorm_information(&directives);
-    emit_spirv::run(builder, &id_defs, call_map, denorm_information, directives);
-    // https://www.khronos.org/registry/spir-v/specs/unified1/SPIRV.html#_a_id_logicallayout_a_logical_layout_of_a_module
-
-    todo!()
-    /*
-    let (build_options, should_flush_denorms) =
-        emit_denorm_build_string(&call_map, &denorm_information);
-    let (directives, globals_use_map) = get_globals_use_map(directives);
-    emit_directives(
-        &mut builder,
-        &mut map,
-        &id_defs,
-        opencl_id,
-        should_flush_denorms,
-        &call_map,
-        globals_use_map,
-        directives,
-        &mut kernel_info,
-    )?;
-    let spirv = builder.module();
+    let (spirv, kernel_info, build_options) = emit_spirv::run(builder, &id_defs, call_map, denorm_information, directives)?;
     Ok(Module {
         spirv,
         kernel_info,
@@ -85,7 +66,6 @@ pub fn to_spirv_module<'input>(ast: ast::Module<'input>) -> Result<Module, Trans
         },
         build_options,
     })
-     */
 }
 
 fn translate_directive<'input, 'a>(
@@ -630,7 +610,21 @@ fn error_unreachable() -> TranslateError {
 }
 
 fn error_unknown_symbol() -> TranslateError {
+    panic!()
+}
+
+#[cfg(not(debug_assertions))]
+fn error_unknown_symbol() -> TranslateError {
     TranslateError::UnknownSymbol
+}
+
+fn error_mismatched_type() -> TranslateError {
+    panic!()
+}
+
+#[cfg(not(debug_assertions))]
+fn error_mismatched_type() -> TranslateError {
+    TranslateError::MismatchedType
 }
 
 pub struct GlobalFnDeclResolver<'input, 'a> {

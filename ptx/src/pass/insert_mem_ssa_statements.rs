@@ -199,7 +199,7 @@ impl<'a, 'input> InsertMemSSAVisitor<'a, 'input> {
                         var_type = ast::Type::Scalar(scalar_t);
                         width
                     }
-                    _ => return Err(TranslateError::MismatchedType),
+                    _ => return Err(error_mismatched_type()),
                 };
                 Some((
                     idx,

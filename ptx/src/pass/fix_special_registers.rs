@@ -58,7 +58,7 @@ impl<'a, 'b, 'input> SpecialRegisterResolver<'a, 'b, 'input> {
     ) -> Result<SpirvWord, TranslateError> {
         if let Some(sreg) = self.numeric_id_defs.special_registers.get(name) {
             if is_dst {
-                return Err(TranslateError::MismatchedType);
+                return Err(error_mismatched_type());
             }
             let input_arguments = match (vector_index, sreg.get_function_input_type()) {
                 (Some(idx), Some(inp_type)) => {
@@ -81,7 +81,7 @@ impl<'a, 'b, 'input> SpecialRegisterResolver<'a, 'b, 'input> {
                     )]
                 }
                 (None, None) => Vec::new(),
-                _ => return Err(TranslateError::MismatchedType),
+                _ => return Err(error_mismatched_type()),
             };
             let ocl_fn_name = [ZLUDA_PTX_PREFIX, sreg.get_unprefixed_function_name()].concat();
             let return_type = sreg.get_function_return_type();
