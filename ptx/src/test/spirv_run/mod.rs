@@ -386,7 +386,7 @@ fn test_spvtxt_assert<'a>(
     spirv_txt: &'a [u8],
     spirv_file_name: &'a str,
 ) -> Result<(), Box<dyn error::Error + 'a>> {
-    let ast = ptx_parser::parse_module_unchecked(ptx_txt).unwrap();
+    let ast = ptx_parser::parse_module_checked(ptx_txt).unwrap();
     let spirv_module = pass::to_spirv_module(ast)?;
     let spv_context =
         unsafe { spirv_tools::spvContextCreate(spv_target_env::SPV_ENV_UNIVERSAL_1_3) };

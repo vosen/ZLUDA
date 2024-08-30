@@ -289,6 +289,43 @@ pub fn parse_module_unchecked<'input>(text: &'input str) -> Option<ast::Module<'
     module.parse(parser).ok()
 }
 
+pub fn parse_module_checked<'input>(
+    text: &'input str,
+) -> Result<ast::Module<'input>, Vec<PtxError>> {
+    let mut lexer = Token::lexer(text);
+    let mut errors = Vec::new();
+    let mut tokens = Vec::new();
+    loop {
+        let maybe_token = match lexer.next() {
+            Some(maybe_token) => maybe_token,
+            None => break,
+        };
+        match maybe_token {
+            Ok(token) => tokens.push(token),
+            Err(mut err) => {
+                err.0 = lexer.span();
+                errors.push(PtxError::from(err))
+            }
+        }
+    }
+    if !errors.is_empty() {
+        return Err(errors);
+    }
+    let parse_error = {
+        let state = PtxParserState::new(&mut errors);
+        let parser = PtxParser {
+            state,
+            input: &tokens[..],
+        };
+        match module.parse(parser) {
+            Ok(ast) => return Ok(ast),
+            Err(err) => PtxError::Parser(err.into_inner()),
+        }
+    };
+    errors.push(parse_error);
+    Err(errors)
+}
+
 fn module<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::Module<'input>> {
     (
         version,
@@ -773,10 +810,10 @@ impl<Ident> ast::ParsedOperand<Ident> {
         use winnow::token::any;
         fn vector_index<'input>(inp: &'input str) -> Result<u8, PtxError> {
             match inp {
-                "x" | "r" => Ok(0),
-                "y" | "g" => Ok(1),
-                "z" | "b" => Ok(2),
-                "w" | "a" => Ok(3),
+                ".x" | ".r" => Ok(0),
+                ".y" | ".g" => Ok(1),
+                ".z" | ".b" => Ok(2),
+                ".w" | ".a" => Ok(3),
                 _ => Err(PtxError::WrongVectorElement),
             }
         }
@@ -787,7 +824,7 @@ impl<Ident> ast::ParsedOperand<Ident> {
             alt((
                 preceded(Token::Plus, s32)
                     .map(move |offset| ast::ParsedOperand::RegOffset(main_ident, offset)),
-                take_error(preceded(Token::Dot, ident).map(move |suffix| {
+                take_error(dot_ident.map(move |suffix| {
                     let vector_index = vector_index(suffix)
                         .map_err(move |e| (ast::ParsedOperand::VecMember(main_ident, 0), e))?;
                     Ok(ast::ParsedOperand::VecMember(main_ident, vector_index))
@@ -829,8 +866,13 @@ pub enum PtxError {
         #[from]
         source: ParseFloatError,
     },
+    #[error("{source}")]
+    Lexer {
+        #[from]
+        source: TokenError,
+    },
     #[error("")]
-    Lexer(#[from] TokenError),
+    Parser(ContextError),
     #[error("")]
     Todo,
     #[error("")]
@@ -1057,13 +1099,14 @@ fn empty_call<'input>(
 type ParsedOperandStr<'input> = ast::ParsedOperand<&'input str>;
 
 #[derive(Clone, PartialEq, Default, Debug, Display)]
-pub struct TokenError;
+#[display("({}:{})", _0.start, _0.end)]
+pub struct TokenError(std::ops::Range<usize>);
 
 impl std::error::Error for TokenError {}
 
 derive_parser!(
     #[derive(Logos, PartialEq, Eq, Debug, Clone, Copy)]
-    #[logos(skip r"\s+")]
+    #[logos(skip r"(?:\s+)|(?://[^\n\r]*[\n\r]*)|(?:/\*[^*]*\*+(?:[^/*][^*]*\*+)*/)")]
     #[logos(error = TokenError)]
     enum Token<'input> {
         #[token(",")]
