@@ -189,7 +189,7 @@ impl<'a, 'input> InsertMemSSAVisitor<'a, 'input> {
             return Ok(symbol);
         };
         let (mut var_type, var_space, is_variable) = self.id_def.get_typed(symbol)?;
-        if !state_is_compatible(var_space, ast::StateSpace::Reg) || !is_variable {
+        if !space_is_compatible(var_space, ast::StateSpace::Reg) || !is_variable {
             return Ok(symbol);
         };
         let member_index = match member_index {
@@ -257,10 +257,9 @@ impl<'a, 'input> ast::VisitorMap<TypedOperand, TypedOperand, TranslateError>
                 TypedOperand::RegOffset(self.symbol(reg, None, type_space, is_dst)?, offset)
             }
             op @ TypedOperand::Imm(..) => op,
-            TypedOperand::VecMember(symbol, index) => TypedOperand::VecMember(
-                self.symbol(symbol, Some(index), type_space, is_dst)?,
-                index,
-            ),
+            TypedOperand::VecMember(symbol, index) => {
+                TypedOperand::Reg(self.symbol(symbol, Some(index), type_space, is_dst)?)
+            }
         })
     }
 

@@ -1214,7 +1214,7 @@ impl<
     }
 }
 
-fn state_is_compatible(this: ast::StateSpace, other: ast::StateSpace) -> bool {
+fn space_is_compatible(this: ast::StateSpace, other: ast::StateSpace) -> bool {
     this == other
         || this == ast::StateSpace::Reg && other == ast::StateSpace::Sreg
         || this == ast::StateSpace::Sreg && other == ast::StateSpace::Reg

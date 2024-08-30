@@ -475,7 +475,7 @@ fn convert_to_stateful_memory_access_postprocess(
                 let (old_operand_type, old_operand_space, _) = id_defs.get_typed(operand)?;
                 let converting_id = id_defs
                     .register_intermediate(Some((old_operand_type.clone(), old_operand_space)));
-                let kind = if state_is_compatible(new_operand_space, ast::StateSpace::Reg) {
+                let kind = if space_is_compatible(new_operand_space, ast::StateSpace::Reg) {
                     ConversionKind::Default
                 } else {
                     ConversionKind::PtrToPtr
