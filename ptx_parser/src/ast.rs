@@ -514,8 +514,11 @@ pub trait Visitor<T: Operand, Err> {
     ) -> Result<(), Err>;
 }
 
-impl<T: Operand, Err, Fn: FnMut(&T, Option<(&Type, StateSpace)>, bool, bool) -> Result<(), Err>>
-    Visitor<T, Err> for Fn
+impl<
+        T: Operand,
+        Err,
+        Fn: FnMut(&T, Option<(&Type, StateSpace)>, bool, bool) -> Result<(), Err>,
+    > Visitor<T, Err> for Fn
 {
     fn visit(
         &mut self,
@@ -760,7 +763,7 @@ pub enum Type {
     Vector(ScalarType, u8),
     // .param.b32 foo[4];
     Array(ScalarType, Vec<u32>),
-    Pointer(ScalarType, StateSpace)
+    Pointer(ScalarType, StateSpace),
 }
 
 impl Type {
@@ -1097,7 +1100,7 @@ impl SetpData {
         let cmp_op = if type_kind == ScalarKind::Float {
             SetpCompareOp::Float(SetpCompareFloat::from(cmp_op))
         } else {
-            match SetpCompareInt::try_from(cmp_op) {
+            match SetpCompareInt::try_from((cmp_op, type_kind)) {
                 Ok(op) => SetpCompareOp::Integer(op),
                 Err(err) => {
                     state.errors.push(err);
@@ -1129,10 +1132,14 @@ pub enum SetpCompareOp {
 pub enum SetpCompareInt {
     Eq,
     NotEq,
-    Less,
-    LessOrEq,
-    Greater,
-    GreaterOrEq,
+    UnsignedLess,
+    UnsignedLessOrEq,
+    UnsignedGreater,
+    UnsignedGreaterOrEq,
+    SignedLess,
+    SignedLessOrEq,
+    SignedGreater,
+    SignedGreaterOrEq,
 }
 
 #[derive(PartialEq, Eq, Copy, Clone)]
@@ -1153,29 +1160,41 @@ pub enum SetpCompareFloat {
     IsAnyNan,
 }
 
-impl TryFrom<RawSetpCompareOp> for SetpCompareInt {
+impl TryFrom<(RawSetpCompareOp, ScalarKind)> for SetpCompareInt {
     type Error = PtxError;
 
-    fn try_from(value: RawSetpCompareOp) -> Result<Self, PtxError> {
-        match value {
-            RawSetpCompareOp::Eq => Ok(SetpCompareInt::Eq),
-            RawSetpCompareOp::Ne => Ok(SetpCompareInt::NotEq),
-            RawSetpCompareOp::Lt => Ok(SetpCompareInt::Less),
-            RawSetpCompareOp::Le => Ok(SetpCompareInt::LessOrEq),
-            RawSetpCompareOp::Gt => Ok(SetpCompareInt::Greater),
-            RawSetpCompareOp::Ge => Ok(SetpCompareInt::GreaterOrEq),
-            RawSetpCompareOp::Lo => Ok(SetpCompareInt::Less),
-            RawSetpCompareOp::Ls => Ok(SetpCompareInt::LessOrEq),
-            RawSetpCompareOp::Hi => Ok(SetpCompareInt::Greater),
-            RawSetpCompareOp::Hs => Ok(SetpCompareInt::GreaterOrEq),
-            RawSetpCompareOp::Equ => Err(PtxError::WrongType),
-            RawSetpCompareOp::Neu => Err(PtxError::WrongType),
-            RawSetpCompareOp::Ltu => Err(PtxError::WrongType),
-            RawSetpCompareOp::Leu => Err(PtxError::WrongType),
-            RawSetpCompareOp::Gtu => Err(PtxError::WrongType),
-            RawSetpCompareOp::Geu => Err(PtxError::WrongType),
-            RawSetpCompareOp::Num => Err(PtxError::WrongType),
-            RawSetpCompareOp::Nan => Err(PtxError::WrongType),
+    fn try_from((value, kind): (RawSetpCompareOp, ScalarKind)) -> Result<Self, PtxError> {
+        match (value, kind) {
+            (RawSetpCompareOp::Eq, _) => Ok(SetpCompareInt::Eq),
+            (RawSetpCompareOp::Ne, _) => Ok(SetpCompareInt::NotEq),
+            (RawSetpCompareOp::Lt | RawSetpCompareOp::Lo, ScalarKind::Signed) => {
+                Ok(SetpCompareInt::SignedLess)
+            }
+            (RawSetpCompareOp::Lt | RawSetpCompareOp::Lo, _) => Ok(SetpCompareInt::UnsignedLess),
+            (RawSetpCompareOp::Le | RawSetpCompareOp::Ls, ScalarKind::Signed) => {
+                Ok(SetpCompareInt::SignedLessOrEq)
+            }
+            (RawSetpCompareOp::Le | RawSetpCompareOp::Ls, _) => {
+                Ok(SetpCompareInt::UnsignedLessOrEq)
+            }
+            (RawSetpCompareOp::Gt | RawSetpCompareOp::Hi, ScalarKind::Signed) => {
+                Ok(SetpCompareInt::SignedGreater)
+            }
+            (RawSetpCompareOp::Gt | RawSetpCompareOp::Hi, _) => Ok(SetpCompareInt::UnsignedGreater),
+            (RawSetpCompareOp::Ge | RawSetpCompareOp::Hs, ScalarKind::Signed) => {
+                Ok(SetpCompareInt::SignedGreaterOrEq)
+            }
+            (RawSetpCompareOp::Ge | RawSetpCompareOp::Hs, _) => {
+                Ok(SetpCompareInt::UnsignedGreaterOrEq)
+            }
+            (RawSetpCompareOp::Equ, _) => Err(PtxError::WrongType),
+            (RawSetpCompareOp::Neu, _) => Err(PtxError::WrongType),
+            (RawSetpCompareOp::Ltu, _) => Err(PtxError::WrongType),
+            (RawSetpCompareOp::Leu, _) => Err(PtxError::WrongType),
+            (RawSetpCompareOp::Gtu, _) => Err(PtxError::WrongType),
+            (RawSetpCompareOp::Geu, _) => Err(PtxError::WrongType),
+            (RawSetpCompareOp::Num, _) => Err(PtxError::WrongType),
+            (RawSetpCompareOp::Nan, _) => Err(PtxError::WrongType),
         }
     }
 }
@@ -1276,7 +1295,9 @@ impl<T: Operand> CallArgs<T> {
             .return_arguments
             .into_iter()
             .zip(details.return_arguments.iter())
-            .map(|(param, (type_, space))| visitor.visit_ident(param, Some((type_, *space)), true, false))
+            .map(|(param, (type_, space))| {
+                visitor.visit_ident(param, Some((type_, *space)), true, false)
+            })
             .collect::<Result<Vec<_>, _>>()?;
         let func = visitor.visit_ident(self.func, None, false, false)?;
         let input_arguments = self
@@ -1305,6 +1326,8 @@ pub enum CvtMode {
     SignExtend,
     Truncate,
     Bitcast,
+    SaturateUnsignedToSigned,
+    SaturateSignedToUnsigned,
     // float from float
     FPExtend {
         flush_to_zero: Option<bool>,
@@ -1389,21 +1412,11 @@ impl CvtDetails {
             },
             (ScalarKind::Float, ScalarKind::Unsigned) => CvtMode::FPFromUnsigned(unwrap_rounding()),
             (ScalarKind::Float, ScalarKind::Signed) => CvtMode::FPFromSigned(unwrap_rounding()),
-            (
-                ScalarKind::Unsigned | ScalarKind::Signed,
-                ScalarKind::Unsigned | ScalarKind::Signed,
-            ) => match dst.size_of().cmp(&src.size_of()) {
-                Ordering::Less => {
-                    if dst.kind() != src.kind() {
-                        errors.push(PtxError::Todo);
-                    }
-                    CvtMode::Truncate
-                }
+            (ScalarKind::Unsigned, ScalarKind::Unsigned)
+            | (ScalarKind::Signed, ScalarKind::Signed) => match dst.size_of().cmp(&src.size_of()) {
+                Ordering::Less => CvtMode::Truncate,
                 Ordering::Equal => CvtMode::Bitcast,
                 Ordering::Greater => {
-                    if dst.kind() != src.kind() {
-                        errors.push(PtxError::Todo);
-                    }
                     if src.kind() == ScalarKind::Signed {
                         CvtMode::SignExtend
                     } else {

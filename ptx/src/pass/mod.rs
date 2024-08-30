@@ -3,22 +3,27 @@ use rspirv::{binary::Assemble, dr};
 use std::{
     borrow::Cow,
     cell::RefCell,
-    collections::{hash_map, HashMap},
+    collections::{hash_map, HashMap, HashSet},
     ffi::CString,
+    iter,
     marker::PhantomData,
+    mem,
     rc::Rc,
 };
+use std::hash::Hash;
 
+mod convert_dynamic_shared_memory_usage;
 mod convert_to_stateful_memory_access;
 mod convert_to_typed;
 mod expand_arguments;
+mod extract_globals;
 mod fix_special_registers;
+mod insert_implicit_conversions;
 mod insert_mem_ssa_statements;
 mod normalize_identifiers;
-mod normalize_predicates;
-mod insert_implicit_conversions;
 mod normalize_labels;
-mod extract_globals;
+mod normalize_predicates;
+mod emit_spirv;
 
 static ZLUDA_PTX_IMPL_INTEL: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.spv");
 static ZLUDA_PTX_IMPL_AMD: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.bc");
@@ -34,7 +39,6 @@ pub fn to_spirv_module<'input>(ast: ast::Module<'input>) -> Result<Module, Trans
             translate_directive(&mut id_defs, &mut ptx_impl_imports, directive).transpose()
         })
         .collect::<Result<Vec<_>, _>>()?;
-    /*
     let directives = hoist_function_globals(directives);
     let must_link_ptx_impl = ptx_impl_imports.len() > 0;
     let mut directives = ptx_impl_imports
@@ -43,21 +47,19 @@ pub fn to_spirv_module<'input>(ast: ast::Module<'input>) -> Result<Module, Trans
         .chain(directives.into_iter())
         .collect::<Vec<_>>();
     let mut builder = dr::Builder::new();
-    builder.reserve_ids(id_defs.current_id());
+    builder.reserve_ids(id_defs.current_id().0);
     let call_map = MethodsCallMap::new(&directives);
     let mut directives =
-        convert_dynamic_shared_memory_usage(directives, &call_map, &mut || builder.id());
+        convert_dynamic_shared_memory_usage::run(directives, &call_map, &mut || {
+            SpirvWord(builder.id())
+        })?;
     normalize_variable_decls(&mut directives);
     let denorm_information = compute_denorm_information(&directives);
+    emit_spirv::run(builder, &id_defs, call_map, denorm_information, directives);
     // https://www.khronos.org/registry/spir-v/specs/unified1/SPIRV.html#_a_id_logicallayout_a_logical_layout_of_a_module
-    builder.set_version(1, 3);
-    emit_capabilities(&mut builder);
-    emit_extensions(&mut builder);
-    let opencl_id = emit_opencl_import(&mut builder);
-    emit_memory_model(&mut builder);
-    let mut map = TypeWordMap::new(&mut builder);
-    //emit_builtins(&mut builder, &mut map, &id_defs);
-    let mut kernel_info = HashMap::new();
+
+    todo!()
+    /*
     let (build_options, should_flush_denorms) =
         emit_denorm_build_string(&call_map, &denorm_information);
     let (directives, globals_use_map) = get_globals_use_map(directives);
@@ -84,7 +86,6 @@ pub fn to_spirv_module<'input>(ast: ast::Module<'input>) -> Result<Module, Trans
         build_options,
     })
      */
-    todo!()
 }
 
 fn translate_directive<'input, 'a>(
@@ -1272,4 +1273,400 @@ fn fn_arguments_to_variables<'a>(
         array_init: Vec::new(),
     })
     .collect::<Vec<_>>()
+}
+
+fn hoist_function_globals(directives: Vec<Directive>) -> Vec<Directive> {
+    let mut result = Vec::with_capacity(directives.len());
+    for directive in directives {
+        match directive {
+            Directive::Method(method) => {
+                for variable in method.globals {
+                    result.push(Directive::Variable(ast::LinkingDirective::NONE, variable));
+                }
+                result.push(Directive::Method(Function {
+                    globals: Vec::new(),
+                    ..method
+                }))
+            }
+            _ => result.push(directive),
+        }
+    }
+    result
+}
+
+struct MethodsCallMap<'input> {
+    map: HashMap<ast::MethodName<'input, SpirvWord>, HashSet<SpirvWord>>,
+}
+
+impl<'input> MethodsCallMap<'input> {
+    fn new(module: &[Directive<'input>]) -> Self {
+        let mut directly_called_by = HashMap::new();
+        for directive in module {
+            match directive {
+                Directive::Method(Function {
+                    func_decl,
+                    body: Some(statements),
+                    ..
+                }) => {
+                    let call_key: ast::MethodName<_> = (**func_decl).borrow().name;
+                    if let hash_map::Entry::Vacant(entry) = directly_called_by.entry(call_key) {
+                        entry.insert(Vec::new());
+                    }
+                    for statement in statements {
+                        match statement {
+                            Statement::Instruction(ast::Instruction::Call { data, arguments }) => {
+                                multi_hash_map_append(
+                                    &mut directly_called_by,
+                                    call_key,
+                                    arguments.func,
+                                );
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut result = HashMap::new();
+        for (&method_key, children) in directly_called_by.iter() {
+            let mut visited = HashSet::new();
+            for child in children {
+                Self::add_call_map_single(&directly_called_by, &mut visited, *child);
+            }
+            result.insert(method_key, visited);
+        }
+        MethodsCallMap { map: result }
+    }
+
+    fn add_call_map_single(
+        directly_called_by: &HashMap<ast::MethodName<'input, SpirvWord>, Vec<SpirvWord>>,
+        visited: &mut HashSet<SpirvWord>,
+        current: SpirvWord,
+    ) {
+        if !visited.insert(current) {
+            return;
+        }
+        if let Some(children) = directly_called_by.get(&ast::MethodName::Func(current)) {
+            for child in children {
+                Self::add_call_map_single(directly_called_by, visited, *child);
+            }
+        }
+    }
+
+    fn get_kernel_children(&self, name: &'input str) -> impl Iterator<Item = &SpirvWord> {
+        self.map
+            .get(&ast::MethodName::Kernel(name))
+            .into_iter()
+            .flatten()
+    }
+
+    fn kernels(&self) -> impl Iterator<Item = (&'input str, &HashSet<SpirvWord>)> {
+        self.map
+            .iter()
+            .filter_map(|(method, children)| match method {
+                ast::MethodName::Kernel(kernel) => Some((*kernel, children)),
+                ast::MethodName::Func(..) => None,
+            })
+    }
+
+    fn methods(
+        &self,
+    ) -> impl Iterator<Item = (ast::MethodName<'input, SpirvWord>, &HashSet<SpirvWord>)> {
+        self.map
+            .iter()
+            .map(|(method, children)| (*method, children))
+    }
+
+    fn visit_callees(&self, method: ast::MethodName<'input, SpirvWord>, f: impl FnMut(SpirvWord)) {
+        self.map
+            .get(&method)
+            .into_iter()
+            .flatten()
+            .copied()
+            .for_each(f);
+    }
+}
+
+fn multi_hash_map_append<
+    K: Eq + std::hash::Hash,
+    V,
+    Collection: std::iter::Extend<V> + std::default::Default,
+>(
+    m: &mut HashMap<K, Collection>,
+    key: K,
+    value: V,
+) {
+    match m.entry(key) {
+        hash_map::Entry::Occupied(mut entry) => {
+            entry.get_mut().extend(iter::once(value));
+        }
+        hash_map::Entry::Vacant(entry) => {
+            entry.insert(Default::default()).extend(iter::once(value));
+        }
+    }
+}
+
+fn normalize_variable_decls(directives: &mut Vec<Directive>) {
+    for directive in directives {
+        match directive {
+            Directive::Method(Function {
+                body: Some(func), ..
+            }) => {
+                func[1..].sort_by_key(|s| match s {
+                    Statement::Variable(_) => 0,
+                    _ => 1,
+                });
+            }
+            _ => (),
+        }
+    }
+}
+
+// HACK ALERT!
+// This function is a "good enough" heuristic of whetever to mark f16/f32 operations
+// in the kernel as flushing denorms to zero or preserving them
+// PTX support per-instruction ftz information. Unfortunately SPIR-V has no
+// such capability, so instead we guesstimate which use is more common in the kernel
+// and emit suitable execution mode
+fn compute_denorm_information<'input>(
+    module: &[Directive<'input>],
+) -> HashMap<ast::MethodName<'input, SpirvWord>, HashMap<u8, (spirv::FPDenormMode, isize)>> {
+    let mut denorm_methods = HashMap::new();
+    for directive in module {
+        match directive {
+            Directive::Variable(..) | Directive::Method(Function { body: None, .. }) => {}
+            Directive::Method(Function {
+                func_decl,
+                body: Some(statements),
+                ..
+            }) => {
+                let mut flush_counter = DenormCountMap::new();
+                let method_key = (**func_decl).borrow().name;
+                for statement in statements {
+                    match statement {
+                        Statement::Instruction(inst) => {
+                            if let Some((flush, width)) = flush_to_zero(inst) {
+                                denorm_count_map_update(&mut flush_counter, width, flush);
+                            }
+                        }
+                        Statement::LoadVar(..) => {}
+                        Statement::StoreVar(..) => {}
+                        Statement::Conditional(_) => {}
+                        Statement::Conversion(_) => {}
+                        Statement::Constant(_) => {}
+                        Statement::RetValue(_, _) => {}
+                        Statement::Label(_) => {}
+                        Statement::Variable(_) => {}
+                        Statement::PtrAccess { .. } => {}
+                        Statement::RepackVector(_) => {}
+                        Statement::FunctionPointer(_) => {}
+                    }
+                }
+                denorm_methods.insert(method_key, flush_counter);
+            }
+        }
+    }
+    denorm_methods
+        .into_iter()
+        .map(|(name, v)| {
+            let width_to_denorm = v
+                .into_iter()
+                .map(|(k, flush_over_preserve)| {
+                    let mode = if flush_over_preserve > 0 {
+                        spirv::FPDenormMode::FlushToZero
+                    } else {
+                        spirv::FPDenormMode::Preserve
+                    };
+                    (k, (mode, flush_over_preserve))
+                })
+                .collect();
+            (name, width_to_denorm)
+        })
+        .collect()
+}
+
+fn flush_to_zero(this: &ast::Instruction<SpirvWord>) -> Option<(bool, u8)> {
+    match this {
+        ast::Instruction::Ld { .. } => None,
+        ast::Instruction::St { .. } => None,
+        ast::Instruction::Mov { .. } => None,
+        ast::Instruction::Not { .. } => None,
+        ast::Instruction::Bra { .. } => None,
+        ast::Instruction::Shl { .. } => None,
+        ast::Instruction::Shr { .. } => None,
+        ast::Instruction::Ret { .. } => None,
+        ast::Instruction::Call { .. } => None,
+        ast::Instruction::Or { .. } => None,
+        ast::Instruction::And { .. } => None,
+        ast::Instruction::Cvta { .. } => None,
+        ast::Instruction::Selp { .. } => None,
+        ast::Instruction::Bar { .. } => None,
+        ast::Instruction::Atom { .. } => None,
+        ast::Instruction::AtomCas { .. } => None,
+        ast::Instruction::Sub {
+            data: ast::ArithDetails::Integer(_),
+            ..
+        } => None,
+        ast::Instruction::Add {
+            data: ast::ArithDetails::Integer(_),
+            ..
+        } => None,
+        ast::Instruction::Mul {
+            data: ast::MulDetails::Integer { .. },
+            ..
+        } => None,
+        ast::Instruction::Mad {
+            data: ast::MadDetails::Integer { .. },
+            ..
+        } => None,
+        ast::Instruction::Min {
+            data: ast::MinMaxDetails::Signed(_),
+            ..
+        } => None,
+        ast::Instruction::Min {
+            data: ast::MinMaxDetails::Unsigned(_),
+            ..
+        } => None,
+        ast::Instruction::Max {
+            data: ast::MinMaxDetails::Signed(_),
+            ..
+        } => None,
+        ast::Instruction::Max {
+            data: ast::MinMaxDetails::Unsigned(_),
+            ..
+        } => None,
+        ast::Instruction::Cvt {
+            data:
+                ast::CvtDetails {
+                    mode:
+                        ast::CvtMode::ZeroExtend
+                        | ast::CvtMode::SignExtend
+                        | ast::CvtMode::Truncate
+                        | ast::CvtMode::Bitcast
+                        | ast::CvtMode::SaturateUnsignedToSigned
+                        | ast::CvtMode::SaturateSignedToUnsigned
+                        | ast::CvtMode::FPFromSigned(_)
+                        | ast::CvtMode::FPFromUnsigned(_),
+                    ..
+                },
+            ..
+        } => None,
+        ast::Instruction::Div {
+            data: ast::DivDetails::Unsigned(_),
+            ..
+        } => None,
+        ast::Instruction::Div {
+            data: ast::DivDetails::Signed(_),
+            ..
+        } => None,
+        ast::Instruction::Clz { .. } => None,
+        ast::Instruction::Brev { .. } => None,
+        ast::Instruction::Popc { .. } => None,
+        ast::Instruction::Xor { .. } => None,
+        ast::Instruction::Bfe { .. } => None,
+        ast::Instruction::Bfi { .. } => None,
+        ast::Instruction::Rem { .. } => None,
+        ast::Instruction::Prmt { .. } => None,
+        ast::Instruction::Activemask { .. } => None,
+        ast::Instruction::Membar { .. } => None,
+        ast::Instruction::Sub {
+            data: ast::ArithDetails::Float(float_control),
+            ..
+        }
+        | ast::Instruction::Add {
+            data: ast::ArithDetails::Float(float_control),
+            ..
+        }
+        | ast::Instruction::Mul {
+            data: ast::MulDetails::Float(float_control),
+            ..
+        }
+        | ast::Instruction::Mad {
+            data: ast::MadDetails::Float(float_control),
+            ..
+        } => float_control
+            .flush_to_zero
+            .map(|ftz| (ftz, float_control.type_.size_of())),
+        ast::Instruction::Fma { data, .. } => data.flush_to_zero.map(|ftz| (ftz, data.type_.size_of())),
+        ast::Instruction::Setp { data, .. } => {
+            data.flush_to_zero.map(|ftz| (ftz, data.type_.size_of()))
+        }
+        ast::Instruction::SetpBool { data, .. } => data
+            .base
+            .flush_to_zero
+            .map(|ftz| (ftz, data.base.type_.size_of())),
+        ast::Instruction::Abs { data, .. }
+        | ast::Instruction::Rsqrt { data, .. }
+        | ast::Instruction::Neg { data, .. }
+        | ast::Instruction::Ex2 { data, .. } => {
+            data.flush_to_zero.map(|ftz| (ftz, data.type_.size_of()))
+        }
+        ast::Instruction::Min {
+            data: ast::MinMaxDetails::Float(float_control),
+            ..
+        }
+        | ast::Instruction::Max {
+            data: ast::MinMaxDetails::Float(float_control),
+            ..
+        } => float_control
+            .flush_to_zero
+            .map(|ftz| (ftz, ast::ScalarType::from(float_control.type_).size_of())),
+        ast::Instruction::Sqrt { data, .. } | ast::Instruction::Rcp { data, .. } => {
+            data.flush_to_zero.map(|ftz| (ftz, data.type_.size_of()))
+        }
+        // Modifier .ftz can only be specified when either .dtype or .atype
+        // is .f32 and applies only to single precision (.f32) inputs and results.
+        ast::Instruction::Cvt {
+            data:
+                ast::CvtDetails {
+                    mode:
+                        ast::CvtMode::FPExtend { flush_to_zero }
+                        | ast::CvtMode::FPTruncate { flush_to_zero, .. }
+                        | ast::CvtMode::FPRound { flush_to_zero, .. }
+                        | ast::CvtMode::SignedFromFP { flush_to_zero, .. }
+                        | ast::CvtMode::UnsignedFromFP { flush_to_zero, .. },
+                    ..
+                },
+            ..
+        } => flush_to_zero.map(|ftz| (ftz, 4)),
+        ast::Instruction::Div {
+            data:
+                ast::DivDetails::Float(ast::DivFloatDetails {
+                    type_,
+                    flush_to_zero,
+                    ..
+                }),
+            ..
+        } => flush_to_zero.map(|ftz| (ftz, type_.size_of())),
+        ast::Instruction::Sin { data, .. }
+        | ast::Instruction::Cos { data, .. }
+        | ast::Instruction::Lg2 { data, .. } => {
+            Some((data.flush_to_zero, mem::size_of::<f32>() as u8))
+        }
+        ptx_parser::Instruction::PrmtSlow { .. } => None,
+        ptx_parser::Instruction::Trap {} => None,
+    }
+}
+
+type DenormCountMap<T> = HashMap<T, isize>;
+
+fn denorm_count_map_update<T: Eq + Hash>(map: &mut DenormCountMap<T>, key: T, value: bool) {
+    let num_value = if value { 1 } else { -1 };
+    denorm_count_map_update_impl(map, key, num_value);
+}
+
+fn denorm_count_map_update_impl<T: Eq + Hash>(
+    map: &mut DenormCountMap<T>,
+    key: T,
+    num_value: isize,
+) {
+    match map.entry(key) {
+        hash_map::Entry::Occupied(mut counter) => {
+            *(counter.get_mut()) += num_value;
+        }
+        hash_map::Entry::Vacant(entry) => {
+            entry.insert(num_value);
+        }
+    }
 }

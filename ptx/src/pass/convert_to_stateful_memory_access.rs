@@ -394,25 +394,6 @@ fn is_64_bit_integer(id_defs: &NumericIdResolver, id: SpirvWord) -> bool {
     }
 }
 
-fn multi_hash_map_append<
-    K: Eq + std::hash::Hash,
-    V,
-    Collection: std::iter::Extend<V> + std::default::Default,
->(
-    m: &mut HashMap<K, Collection>,
-    key: K,
-    value: V,
-) {
-    match m.entry(key) {
-        hash_map::Entry::Occupied(mut entry) => {
-            entry.get_mut().extend(iter::once(value));
-        }
-        hash_map::Entry::Vacant(entry) => {
-            entry.insert(Default::default()).extend(iter::once(value));
-        }
-    }
-}
-
 fn is_add_ptr_direct(
     remapped_ids: &HashMap<SpirvWord, SpirvWord>,
     arg: &ast::AddArgs<TypedOperand>,
