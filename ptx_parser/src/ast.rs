@@ -1256,7 +1256,7 @@ impl<T: Operand> CallArgs<T> {
             .iter()
             .zip(details.input_arguments.iter())
         {
-            visitor.visit(param, Some((type_, *space)), true, false)?;
+            visitor.visit(param, Some((type_, *space)), false, false)?;
         }
         Ok(())
     }
@@ -1280,7 +1280,7 @@ impl<T: Operand> CallArgs<T> {
             .iter_mut()
             .zip(details.input_arguments.iter())
         {
-            visitor.visit(param, Some((type_, *space)), true, false)?;
+            visitor.visit(param, Some((type_, *space)), false, false)?;
         }
         Ok(())
     }
@@ -1304,7 +1304,7 @@ impl<T: Operand> CallArgs<T> {
             .input_arguments
             .into_iter()
             .zip(details.input_arguments.iter())
-            .map(|(param, (type_, space))| visitor.visit(param, Some((type_, *space)), true, false))
+            .map(|(param, (type_, space))| visitor.visit(param, Some((type_, *space)), false, false))
             .collect::<Result<Vec<_>, _>>()?;
         Ok(CallArgs {
             return_arguments,
