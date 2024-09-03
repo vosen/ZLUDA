@@ -1608,6 +1608,7 @@ impl AtomicOp {
             (RawAtomicOp::Or, _) => Self::Or,
             (RawAtomicOp::Xor, _) => Self::Xor,
             (RawAtomicOp::Exch, _) => Self::Exchange,
+            (RawAtomicOp::Add, ScalarKind::Float) => Self::FloatAdd,
             (RawAtomicOp::Add, _) => Self::Add,
             (RawAtomicOp::Inc, _) => Self::IncrementWrap,
             (RawAtomicOp::Dec, _) => Self::DecrementWrap,
