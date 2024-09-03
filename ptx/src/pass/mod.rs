@@ -1,6 +1,7 @@
 use ptx_parser as ast;
 use rspirv::{binary::Assemble, dr};
 use std::hash::Hash;
+use std::num::NonZeroU8;
 use std::{
     borrow::Cow,
     cell::RefCell,
@@ -360,7 +361,7 @@ impl PtxSpecialRegister {
             PtxSpecialRegister::Tid
             | PtxSpecialRegister::Ntid
             | PtxSpecialRegister::Ctaid
-            | PtxSpecialRegister::Nctaid => ast::Type::Vector(self.get_function_return_type(), 4),
+            | PtxSpecialRegister::Nctaid => ast::Type::Vector(4, self.get_function_return_type()),
             _ => ast::Type::Scalar(self.get_function_return_type()),
         }
     }
@@ -764,7 +765,12 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                 })
             }
             Statement::Conditional(conditional) => {
-                let predicate = visitor.visit_ident(conditional.predicate, None, false, false)?;
+                let predicate = visitor.visit_ident(
+                    conditional.predicate,
+                    Some((&ast::ScalarType::Pred.into(), ast::StateSpace::Reg)),
+                    false,
+                    false,
+                )?;
                 let if_true = visitor.visit_ident(conditional.if_true, None, false, false)?;
                 let if_false = visitor.visit_ident(conditional.if_false, None, false, false)?;
                 Statement::Conditional(BrachCondition {
@@ -919,7 +925,7 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                     let packed = visitor.visit_ident(
                         packed,
                         Some((
-                            &ast::Type::Vector(typ, unpacked.len() as u8),
+                            &ast::Type::Vector(unpacked.len() as u8, typ),
                             ast::StateSpace::Reg,
                         )),
                         false,
@@ -930,7 +936,7 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                     let packed = visitor.visit_ident(
                         packed,
                         Some((
-                            &ast::Type::Vector(typ, unpacked.len() as u8),
+                            &ast::Type::Vector(unpacked.len() as u8, typ),
                             ast::StateSpace::Reg,
                         )),
                         true,

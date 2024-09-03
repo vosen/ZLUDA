@@ -67,7 +67,7 @@ impl<'a, 'b> VectorRepackVisitor<'a, 'b> {
     ) -> Result<SpirvWord, TranslateError> {
         // mov.u32 foobar, {a,b};
         let scalar_t = match typ {
-            ast::Type::Vector(scalar_t, _) => *scalar_t,
+            ast::Type::Vector(_, scalar_t) => *scalar_t,
             _ => return Err(error_mismatched_type()),
         };
         let temp_vec = self

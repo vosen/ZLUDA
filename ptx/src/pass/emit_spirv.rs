@@ -291,7 +291,7 @@ impl TypeWordMap {
                 | ast::ScalarType::BF16x2
                 | ast::ScalarType::B128 => todo!(),
             },
-            ast::Type::Vector(typ, len) => {
+            ast::Type::Vector(len, typ) => {
                 let result_type =
                     self.get_or_add(b, SpirvType::Vector(SpirvScalarKey::from(*typ), *len));
                 let size_of_t = typ.size_of();
@@ -309,7 +309,7 @@ impl TypeWordMap {
                     .collect::<Result<Vec<_>, _>>()?;
                 SpirvWord(b.constant_composite(result_type.0, None, components.into_iter()))
             }
-            ast::Type::Array(typ, dims) => match dims.as_slice() {
+            ast::Type::Array(_, typ, dims) => match dims.as_slice() {
                 [] => return Err(error_unreachable()),
                 [dim] => {
                     let result_type = self
@@ -342,7 +342,7 @@ impl TypeWordMap {
                             Ok::<_, TranslateError>(
                                 self.get_or_add_constant(
                                     b,
-                                    &ast::Type::Array(*typ, rest.to_vec()),
+                                    &ast::Type::Array(None, *typ, rest.to_vec()),
                                     &init[((size_of_t as usize) * (x as usize))..],
                                 )?
                                 .0,
@@ -397,8 +397,8 @@ impl SpirvType {
     fn new(t: ast::Type) -> Self {
         match t {
             ast::Type::Scalar(t) => SpirvType::Base(t.into()),
-            ast::Type::Vector(typ, len) => SpirvType::Vector(typ.into(), len),
-            ast::Type::Array(t, len) => SpirvType::Array(t.into(), len),
+            ast::Type::Vector(len, typ) => SpirvType::Vector(typ.into(), len),
+            ast::Type::Array(_, t, len) => SpirvType::Array(t.into(), len),
             ast::Type::Pointer(pointer_t, space) => SpirvType::Pointer(
                 Box::new(SpirvType::Base(pointer_t.into())),
                 space_to_spirv(space),
@@ -809,8 +809,8 @@ fn emit_function_header<'input>(
 pub fn type_size_of(this: &ast::Type) -> usize {
     match this {
         ast::Type::Scalar(typ) => typ.size_of() as usize,
-        ast::Type::Vector(typ, len) => (typ.size_of() as usize) * (*len as usize),
-        ast::Type::Array(typ, len) => len
+        ast::Type::Vector(len, typ) => (typ.size_of() as usize) * (*len as usize),
+        ast::Type::Array(_, typ, len) => len
             .iter()
             .fold(typ.size_of() as usize, |x, y| (x as usize) * (*y as usize)),
         ast::Type::Pointer(..) => mem::size_of::<usize>(),
@@ -1853,11 +1853,16 @@ fn emit_mul_int(
             builder.i_mul(inst_type.0, Some(arg.dst.0), arg.src1.0, arg.src2.0)?;
         }
         ast::MulIntControl::High => {
+            let opencl_inst = if type_.kind() == ast::ScalarKind::Signed {
+                spirv::CLOp::s_mul_hi
+            } else {
+                spirv::CLOp::u_mul_hi
+            };
             builder.ext_inst(
                 inst_type.0,
                 Some(arg.dst.0),
                 opencl,
-                spirv::CLOp::s_mul_hi as spirv::Word,
+                opencl_inst as spirv::Word,
                 [
                     dr::Operand::IdRef(arg.src1.0),
                     dr::Operand::IdRef(arg.src2.0),
@@ -2646,7 +2651,7 @@ fn emit_load_var(
     match details.member_index {
         Some((index, Some(width))) => {
             let vector_type = match details.typ {
-                ast::Type::Scalar(scalar_t) => ast::Type::Vector(scalar_t, width),
+                ast::Type::Scalar(scalar_t) => ast::Type::Vector(width, scalar_t),
                 _ => return Err(error_mismatched_type()),
             };
             let vector_type_spirv = map.get_or_add(builder, SpirvType::new(vector_type));
@@ -2710,14 +2715,14 @@ fn to_parts(this: &ast::Type) -> TypeParts {
             width: scalar.size_of(),
             components: Vec::new(),
         },
-        ast::Type::Vector(scalar, components) => TypeParts {
+        ast::Type::Vector(components, scalar) => TypeParts {
             kind: TypeKind::Vector,
             state_space: ast::StateSpace::Reg,
             scalar_kind: scalar.kind(),
             width: scalar.size_of(),
             components: vec![*components as u32],
         },
-        ast::Type::Array(scalar, components) => TypeParts {
+        ast::Type::Array(_, scalar, components) => TypeParts {
             kind: TypeKind::Array,
             state_space: ast::StateSpace::Reg,
             scalar_kind: scalar.kind(),
@@ -2738,12 +2743,14 @@ fn type_from_parts(t: TypeParts) -> ast::Type {
     match t.kind {
         TypeKind::Scalar => ast::Type::Scalar(scalar_from_parts(t.width, t.scalar_kind)),
         TypeKind::Vector => ast::Type::Vector(
-            scalar_from_parts(t.width, t.scalar_kind),
             t.components[0] as u8,
+            scalar_from_parts(t.width, t.scalar_kind),
         ),
-        TypeKind::Array => {
-            ast::Type::Array(scalar_from_parts(t.width, t.scalar_kind), t.components)
-        }
+        TypeKind::Array => ast::Type::Array(
+            None,
+            scalar_from_parts(t.width, t.scalar_kind),
+            t.components,
+        ),
         TypeKind::Pointer => {
             ast::Type::Pointer(scalar_from_parts(t.width, t.scalar_kind), t.state_space)
         }

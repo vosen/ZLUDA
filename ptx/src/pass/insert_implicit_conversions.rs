@@ -123,13 +123,13 @@ fn insert_implicit_conversions_impl(
     Ok(())
 }
 
-fn default_implicit_conversion(
+pub(crate) fn default_implicit_conversion(
     (operand_space, operand_type): (ast::StateSpace, &ast::Type),
     (instruction_space, instruction_type): (ast::StateSpace, &ast::Type),
 ) -> Result<Option<ConversionKind>, TranslateError> {
     if instruction_space == ast::StateSpace::Reg {
         if space_is_compatible(operand_space, ast::StateSpace::Reg) {
-            if let (ast::Type::Vector(vec_underlying_type, vec_len), ast::Type::Scalar(scalar)) =
+            if let (ast::Type::Vector(vec_len, vec_underlying_type), ast::Type::Scalar(scalar)) =
                 (operand_type, instruction_type)
             {
                 if scalar.kind() == ast::ScalarKind::Bit
@@ -282,15 +282,15 @@ fn should_bitcast(instr: &ast::Type, operand: &ast::Type) -> bool {
                 ast::ScalarKind::Pred => false,
             }
         }
-        (ast::Type::Vector(inst, _), ast::Type::Vector(operand, _))
-        | (ast::Type::Array(inst, _), ast::Type::Array(operand, _)) => {
+        (ast::Type::Vector(_, inst), ast::Type::Vector(_, operand))
+        | (ast::Type::Array(_, inst, _), ast::Type::Array(_, operand, _)) => {
             should_bitcast(&ast::Type::Scalar(*inst), &ast::Type::Scalar(*operand))
         }
         _ => false,
     }
 }
 
-fn should_convert_relaxed_dst_wrapper(
+pub(crate) fn should_convert_relaxed_dst_wrapper(
     (operand_space, operand_type): (ast::StateSpace, &ast::Type),
     (instruction_space, instruction_type): (ast::StateSpace, &ast::Type),
 ) -> Result<Option<ConversionKind>, TranslateError> {
@@ -356,8 +356,8 @@ fn should_convert_relaxed_dst(
             }
             ast::ScalarKind::Pred => None,
         },
-        (ast::Type::Vector(dst_type, _), ast::Type::Vector(instr_type, _))
-        | (ast::Type::Array(dst_type, _), ast::Type::Array(instr_type, _)) => {
+        (ast::Type::Vector(_, dst_type), ast::Type::Vector(_, instr_type))
+        | (ast::Type::Array(_, dst_type, _), ast::Type::Array(_, instr_type, _)) => {
             should_convert_relaxed_dst(
                 &ast::Type::Scalar(*dst_type),
                 &ast::Type::Scalar(*instr_type),
@@ -367,7 +367,7 @@ fn should_convert_relaxed_dst(
     }
 }
 
-fn should_convert_relaxed_src_wrapper(
+pub(crate) fn should_convert_relaxed_src_wrapper(
     (operand_space, operand_type): (ast::StateSpace, &ast::Type),
     (instruction_space, instruction_type): (ast::StateSpace, &ast::Type),
 ) -> Result<Option<ConversionKind>, TranslateError> {
@@ -420,8 +420,8 @@ fn should_convert_relaxed_src(
             }
             ast::ScalarKind::Pred => None,
         },
-        (ast::Type::Vector(dst_type, _), ast::Type::Vector(instr_type, _))
-        | (ast::Type::Array(dst_type, _), ast::Type::Array(instr_type, _)) => {
+        (ast::Type::Vector(_, dst_type), ast::Type::Vector(_, instr_type))
+        | (ast::Type::Array(_, dst_type, _), ast::Type::Array(_, instr_type, _)) => {
             should_convert_relaxed_src(
                 &ast::Type::Scalar(*dst_type),
                 &ast::Type::Scalar(*instr_type),

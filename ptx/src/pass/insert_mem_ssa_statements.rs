@@ -195,7 +195,7 @@ impl<'a, 'input> InsertMemSSAVisitor<'a, 'input> {
         let member_index = match member_index {
             Some(idx) => {
                 let vector_width = match var_type {
-                    ast::Type::Vector(scalar_t, width) => {
+                    ast::Type::Vector(width, scalar_t) => {
                         var_type = ast::Type::Scalar(scalar_t);
                         width
                     }

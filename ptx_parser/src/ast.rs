@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{PtxError, PtxParserState};
 use bitflags::bitflags;
-use std::cmp::Ordering;
+use std::{cmp::Ordering, num::NonZeroU8};
 
 pub enum Statement<P: Operand> {
     Label(P::Ident),
@@ -760,17 +760,35 @@ pub enum Type {
     // .param.b32 foo;
     Scalar(ScalarType),
     // .param.v2.b32 foo;
-    Vector(ScalarType, u8),
+    Vector(u8, ScalarType),
     // .param.b32 foo[4];
-    Array(ScalarType, Vec<u32>),
+    Array(Option<NonZeroU8>, ScalarType, Vec<u32>),
     Pointer(ScalarType, StateSpace),
 }
 
 impl Type {
     pub(crate) fn maybe_vector(vector: Option<VectorPrefix>, scalar: ScalarType) -> Self {
         match vector {
-            Some(prefix) => Type::Vector(scalar, prefix.len()),
+            Some(prefix) => Type::Vector(prefix.len().get(), scalar),
             None => Type::Scalar(scalar),
+        }
+    }
+
+    pub(crate) fn maybe_vector_parsed(prefix: Option<NonZeroU8>, scalar: ScalarType) -> Self {
+        match prefix {
+            Some(prefix) => Type::Vector(prefix.get(), scalar),
+            None => Type::Scalar(scalar),
+        }
+    }
+
+    pub(crate) fn maybe_array(
+        prefix: Option<NonZeroU8>,
+        scalar: ScalarType,
+        array: Option<Vec<u32>>,
+    ) -> Self {
+        match array {
+            Some(dimensions) => Type::Array(prefix, scalar, dimensions),
+            None => Self::maybe_vector_parsed(prefix, scalar),
         }
     }
 }
@@ -1304,7 +1322,9 @@ impl<T: Operand> CallArgs<T> {
             .input_arguments
             .into_iter()
             .zip(details.input_arguments.iter())
-            .map(|(param, (type_, space))| visitor.visit(param, Some((type_, *space)), false, false))
+            .map(|(param, (type_, space))| {
+                visitor.visit(param, Some((type_, *space)), false, false)
+            })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(CallArgs {
             return_arguments,

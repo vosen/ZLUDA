@@ -467,8 +467,22 @@ fn convert_to_stateful_memory_access_postprocess(
             Some(new_id) => {
                 let (new_operand_type, new_operand_space, _) = id_defs.get_typed(*new_id)?;
                 // TODO: readd if required
-                if let Some(..) = type_space {
-                    if relaxed_conversion {
+                if let Some((expected_type, expected_space)) = type_space {
+                    let implicit_conversion = if relaxed_conversion {
+                        if is_dst {
+                            super::insert_implicit_conversions::should_convert_relaxed_dst_wrapper
+                        } else {
+                            super::insert_implicit_conversions::should_convert_relaxed_src_wrapper
+                        }
+                    } else {
+                        super::insert_implicit_conversions::default_implicit_conversion
+                    };
+                    if implicit_conversion(
+                        (new_operand_space, &new_operand_type),
+                        (expected_space, expected_type),
+                    )
+                    .is_ok()
+                    {
                         return Ok(*new_id);
                     }
                 }
