@@ -3,6 +3,7 @@ use logos::Logos;
 use ptx_parser_macros::derive_parser;
 use rustc_hash::FxHashMap;
 use std::fmt::Debug;
+use std::iter;
 use std::num::{NonZeroU8, ParseFloatError, ParseIntError};
 use winnow::ascii::dec_uint;
 use winnow::combinator::*;
@@ -397,14 +398,13 @@ fn directive<'a, 'input>(
 fn module_variable<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<(ast::LinkingDirective, ast::Variable<&'input str>)> {
-    (
-        linking_directives,
-        global_space
-            .flat_map(multi_variable)
-            // TODO: support multi var in globals
-            .map(|multi_var| multi_var.var),
-    )
-        .parse_next(stream)
+    let linking = linking_directives.parse_next(stream)?;
+    let var = global_space
+        .flat_map(|space| multi_variable(linking.contains(LinkingDirective::EXTERN), space))
+        // TODO: support multi var in globals
+        .map(|multi_var| multi_var.var)
+        .parse_next(stream)?;
+    Ok((linking, var))
 }
 
 fn file<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()> {
@@ -621,7 +621,7 @@ fn statement<'a, 'input>(
         debug_directive.map(|_| None),
         terminated(
             method_space
-                .flat_map(multi_variable)
+                .flat_map(|space| multi_variable(false, space))
                 .map(|var| Some(Statement::Variable(var))),
             Token::Semicolon,
         ),
@@ -678,6 +678,7 @@ fn variable_declaration<'a, 'input>(
 }
 
 fn multi_variable<'a, 'input: 'a>(
+    extern_: bool,
     state_space: StateSpace,
 ) -> impl Parser<PtxParser<'a, 'input>, MultiVariable<&'input str>, ContextError> {
     move |stream: &mut PtxParser<'a, 'input>| {
@@ -714,7 +715,7 @@ fn multi_variable<'a, 'input: 'a>(
             _ => None,
         };
         if let Some(ref dims) = array_dimensions {
-            if dims[0] == 0 {
+            if !extern_ && dims[0] == 0 {
                 return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
             }
         }
@@ -746,13 +747,16 @@ fn array_initializer<'a, 'input: 'a>(
         delimited(
             Token::LBrace,
             separated(
-                array_dimensions[0] as usize..=array_dimensions[0] as usize,
+                0..=array_dimensions[0] as usize,
                 single_value_append(&mut result, type_),
                 Token::Comma,
             ),
             Token::RBrace,
         )
         .parse_next(stream)?;
+        // pad with zeros
+        let result_size = type_.size_of() as usize * array_dimensions[0] as usize;
+        result.extend(iter::repeat(0u8).take(result_size - result.len()));
         Ok(result)
     }
 }
@@ -1079,11 +1083,11 @@ impl<Ident> ast::ParsedOperand<Ident> {
         fn vector_operand<'a, 'input>(
             stream: &mut PtxParser<'a, 'input>,
         ) -> PResult<Vec<&'input str>> {
-            let (_, r1, _, r2) =
-                (Token::LBracket, ident, Token::Comma, ident).parse_next(stream)?;
+            let (_, r1, _, r2) = (Token::LBrace, ident, Token::Comma, ident).parse_next(stream)?;
+            // TODO: parse .v8 literals
             dispatch! {any;
-                Token::LBracket => empty.map(|_| vec![r1, r2]),
-                Token::Comma => (ident, Token::Comma, ident, Token::LBracket).map(|(r3, _, r4, _)| vec![r1, r2, r3, r4]),
+                Token::RBrace => empty.map(|_| vec![r1, r2]),
+                Token::Comma => (ident, Token::Comma, ident, Token::RBrace).map(|(r3, _, r4, _)| vec![r1, r2, r3, r4]),
                 _ => fail
             }
             .parse_next(stream)

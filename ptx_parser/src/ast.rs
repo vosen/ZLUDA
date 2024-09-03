@@ -1109,10 +1109,11 @@ impl SetpData {
     ) -> Self {
         let flush_to_zero = match (ftz, type_) {
             (_, ScalarType::F32) => Some(ftz),
-            _ => {
+            (true, _) => {
                 state.errors.push(PtxError::NonF32Ftz);
                 None
             }
+            _ => None
         };
         let type_kind = type_.kind();
         let cmp_op = if type_kind == ScalarKind::Float {

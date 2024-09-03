@@ -124,7 +124,7 @@ impl<'a, 'b> ast::VisitorMap<ast::ParsedOperand<SpirvWord>, TypedOperand, Transl
             ast::ParsedOperand::Imm(x) => TypedOperand::Imm(x),
             ast::ParsedOperand::VecMember(vec, idx) => TypedOperand::VecMember(vec, idx),
             ast::ParsedOperand::VecPack(vec) => {
-                let (type_, space) = type_space.ok_or(error_mismatched_type())?;
+                let (type_, space) = type_space.ok_or_else(|| error_mismatched_type())?;
                 TypedOperand::Reg(self.convert_vector(
                     is_dst,
                     relaxed_type_check,
