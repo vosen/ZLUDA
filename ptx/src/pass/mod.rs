@@ -668,57 +668,56 @@ impl<'input> FnSigMapper<'input> {
         }
     }
 
-    /*
     fn resolve_in_spirv_repr(
         &self,
-        call_inst: ast::CallInst<NormalizedArgParams>,
-    ) -> Result<ResolvedCall<NormalizedArgParams>, TranslateError> {
+        data: ast::CallDetails,
+        arguments: ast::CallArgs<ast::ParsedOperand<SpirvWord>>,
+    ) -> Result<ast::Instruction<ast::ParsedOperand<SpirvWord>>, TranslateError> {
         let func_decl = (*self.func_decl).borrow();
-        let mut return_arguments = Vec::new();
-        let mut input_arguments = call_inst
-            .param_list
-            .into_iter()
-            .zip(func_decl.input_arguments.iter())
-            .map(|(id, var)| (id, var.v_type.clone(), var.state_space))
-            .collect::<Vec<_>>();
+        let mut data_return = Vec::new();
+        let mut arguments_return = Vec::new();
+        let mut data_input = data.input_arguments;
+        let mut arguments_input = arguments.input_arguments;
         let mut func_decl_return_iter = func_decl.return_arguments.iter();
-        let mut func_decl_input_iter = func_decl.input_arguments[input_arguments.len()..].iter();
-        for (idx, id) in call_inst.ret_params.iter().enumerate() {
+        let mut func_decl_input_iter = func_decl.input_arguments[arguments_input.len()..].iter();
+        for (idx, id) in arguments.return_arguments.iter().enumerate() {
             let stays_as_return = match self.return_param_args.get(idx) {
                 Some(x) => *x,
                 None => return Err(TranslateError::MismatchedType),
             };
             if stays_as_return {
                 if let Some(var) = func_decl_return_iter.next() {
-                    return_arguments.push((*id, var.v_type.clone(), var.state_space));
+                    data_return.push((var.v_type.clone(), var.state_space));
+                    arguments_return.push(*id);
                 } else {
                     return Err(TranslateError::MismatchedType);
                 }
             } else {
                 if let Some(var) = func_decl_input_iter.next() {
-                    input_arguments.push((
-                        ast::Operand::Reg(*id),
-                        var.v_type.clone(),
-                        var.state_space,
-                    ));
+                    data_input.push((var.v_type.clone(), var.state_space));
+                    arguments_input.push(ast::ParsedOperand::Reg(*id));
                 } else {
                     return Err(TranslateError::MismatchedType);
                 }
             }
         }
-        if return_arguments.len() != func_decl.return_arguments.len()
-            || input_arguments.len() != func_decl.input_arguments.len()
+        if arguments_return.len() != func_decl.return_arguments.len()
+            || arguments_input.len() != func_decl.input_arguments.len()
         {
             return Err(TranslateError::MismatchedType);
         }
-        Ok(ResolvedCall {
-            return_arguments,
-            input_arguments,
-            uniform: call_inst.uniform,
-            name: call_inst.func,
-        })
+        let data = ast::CallDetails {
+            uniform: data.uniform,
+            return_arguments: data_return,
+            input_arguments: data_input,
+        };
+        let arguments = ast::CallArgs {
+            func: arguments.func,
+            return_arguments: arguments_return,
+            input_arguments: arguments_input,
+        };
+        Ok(ast::Instruction::Call { data, arguments })
     }
-     */
 }
 
 enum Statement<I, P: ast::Operand> {

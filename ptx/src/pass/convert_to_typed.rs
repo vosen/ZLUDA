@@ -26,6 +26,15 @@ pub(crate) fn run(
                         src: src_reg,
                     }));
                 }
+                ast::Instruction::Call { data, arguments } => {
+                    let resolver = fn_defs.get_fn_sig_resolver(arguments.func)?;
+                    let resolved_call = resolver.resolve_in_spirv_repr(data, arguments)?;
+                    let mut visitor = VectorRepackVisitor::new(&mut result, id_defs);
+                    let reresolved_call =
+                        Statement::Instruction(ast::visit_map(resolved_call, &mut visitor)?);
+                    visitor.func.push(reresolved_call);
+                    visitor.func.extend(visitor.post_stmts);
+                }
                 inst => {
                     let mut visitor = VectorRepackVisitor::new(&mut result, id_defs);
                     let instruction = Statement::Instruction(ast::visit_map(inst, &mut visitor)?);

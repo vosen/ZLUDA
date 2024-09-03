@@ -1663,6 +1663,38 @@ derive_parser!(
     RawLdStQualifier =                      { .weak, .volatile };
     StateSpace =                            { .global };
 
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld-global-nc
+    ld.global{.cop}.nc{.level::eviction_priority}{.level::cache_hint}{.level::prefetch_size}{.vec}.type  d, [a]{, cache_policy} => {
+        if cop.is_some() && level_eviction_priority.is_some() {
+            state.errors.push(PtxError::SyntaxError);
+        }
+        if level_eviction_priority.is_some() || level_cache_hint || level_prefetch_size.is_some() || cache_policy.is_some() {
+            state.errors.push(PtxError::Todo);
+        }
+        Instruction::Ld {
+            data: LdDetails {
+                qualifier: ast::LdStQualifier::Weak,
+                state_space: global,
+                caching: cop.unwrap_or(RawLdCacheOperator::Ca).into(),
+                typ: Type::maybe_vector(vec, type_),
+                non_coherent: true
+            },
+            arguments: LdArgs { dst:d, src:a }
+        }
+    }
+    .cop: RawLdCacheOperator  =             { .ca, .cg, .cs };
+    .level::eviction_priority: EvictionPriority = 
+                                            { .L1::evict_normal, .L1::evict_unchanged,
+                                              .L1::evict_first, .L1::evict_last, .L1::no_allocate};
+    .level::cache_hint =                    { .L2::cache_hint };
+    .level::prefetch_size: PrefetchSize =   { .L2::64B, .L2::128B, .L2::256B };
+    .vec: VectorPrefix  =                   { .v2, .v4 };
+    .type: ScalarType =                     { .b8, .b16, .b32, .b64, .b128,
+                                              .u8, .u16, .u32, .u64,
+                                              .s8, .s16, .s32, .s64,
+                                              .f32, .f64 };
+    StateSpace =                { .global };
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#integer-arithmetic-instructions-add
     add.type        d, a, b => {
         Instruction::Add {
