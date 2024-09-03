@@ -1384,8 +1384,8 @@ impl CvtDetails {
         dst: ScalarType,
         src: ScalarType,
     ) -> Self {
-        if saturate {
-            errors.push(PtxError::Todo);
+        if saturate && dst.kind() == ScalarKind::Float {
+            errors.push(PtxError::SyntaxError);
         }
         // Modifier .ftz can only be specified when either .dtype or .atype is .f32 and applies only to single precision (.f32) inputs and results.
         let flush_to_zero = match (dst, src) {
@@ -1432,6 +1432,18 @@ impl CvtDetails {
             },
             (ScalarKind::Float, ScalarKind::Unsigned) => CvtMode::FPFromUnsigned(unwrap_rounding()),
             (ScalarKind::Float, ScalarKind::Signed) => CvtMode::FPFromSigned(unwrap_rounding()),
+            (ScalarKind::Signed, ScalarKind::Unsigned) if saturate => {
+                CvtMode::SaturateUnsignedToSigned
+            }
+            (ScalarKind::Unsigned, ScalarKind::Signed) if saturate => {
+                CvtMode::SaturateSignedToUnsigned
+            }
+            (ScalarKind::Unsigned, ScalarKind::Signed)
+            | (ScalarKind::Signed, ScalarKind::Unsigned)
+                if dst.size_of() == src.size_of() =>
+            {
+                CvtMode::Bitcast
+            }
             (ScalarKind::Unsigned, ScalarKind::Unsigned)
             | (ScalarKind::Signed, ScalarKind::Signed) => match dst.size_of().cmp(&src.size_of()) {
                 Ordering::Less => CvtMode::Truncate,
@@ -1444,6 +1456,7 @@ impl CvtDetails {
                     }
                 }
             },
+            (ScalarKind::Unsigned, ScalarKind::Signed) => CvtMode::SaturateSignedToUnsigned,
             (_, _) => {
                 errors.push(PtxError::SyntaxError);
                 CvtMode::Bitcast

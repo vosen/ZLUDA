@@ -289,7 +289,12 @@ pub fn parse_module_unchecked<'input>(text: &'input str) -> Option<ast::Module<'
         state,
         input: &input[..],
     };
-    module.parse(parser).ok()
+    let parsing_result = module.parse(parser).ok();
+    if !errors.is_empty() {
+        None
+    } else {
+        parsing_result
+    }
 }
 
 pub fn parse_module_checked<'input>(
@@ -314,19 +319,24 @@ pub fn parse_module_checked<'input>(
     if !errors.is_empty() {
         return Err(errors);
     }
-    let parse_error = {
+    let parse_result = {
         let state = PtxParserState::new(&mut errors);
         let parser = PtxParser {
             state,
             input: &tokens[..],
         };
-        match module.parse(parser) {
-            Ok(ast) => return Ok(ast),
-            Err(err) => PtxError::Parser(err.into_inner()),
-        }
+        module
+            .parse(parser)
+            .map_err(|err| PtxError::Parser(err.into_inner()))
     };
-    errors.push(parse_error);
-    Err(errors)
+    match parse_result {
+        Ok(result) if errors.is_empty() => Ok(result),
+        Ok(_) => Err(errors),
+        Err(err) => {
+            errors.push(err);
+            Err(errors)
+        }
+    }
 }
 
 fn module<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::Module<'input>> {

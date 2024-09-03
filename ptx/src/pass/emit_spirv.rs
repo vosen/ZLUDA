@@ -2163,9 +2163,6 @@ fn emit_cvt(
             builder.sat_convert_s_to_u(result_type.0, Some(arg.dst.0), arg.src.0)?;
         }
         ptx_parser::CvtMode::FPExtend { flush_to_zero } => {
-            if flush_to_zero == Some(true) {
-                todo!()
-            }
             let result_type = map.get_or_add(builder, SpirvType::from(dets.to));
             builder.f_convert(result_type.0, Some(arg.dst.0), arg.src.0)?;
         }
@@ -2173,9 +2170,6 @@ fn emit_cvt(
             rounding,
             flush_to_zero,
         } => {
-            if flush_to_zero == Some(true) {
-                todo!()
-            }
             let result_type = map.get_or_add(builder, SpirvType::from(dets.to));
             builder.f_convert(result_type.0, Some(arg.dst.0), arg.src.0)?;
             emit_rounding_decoration(builder, arg.dst, Some(rounding));
@@ -2234,9 +2228,6 @@ fn emit_cvt(
             rounding,
             flush_to_zero,
         } => {
-            if flush_to_zero == Some(true) {
-                todo!()
-            }
             let dest_t: ast::ScalarType = dets.to.into();
             let result_type = map.get_or_add(builder, SpirvType::from(dest_t));
             builder.convert_f_to_s(result_type.0, Some(arg.dst.0), arg.src.0)?;
@@ -2246,9 +2237,6 @@ fn emit_cvt(
             rounding,
             flush_to_zero,
         } => {
-            if flush_to_zero == Some(true) {
-                todo!()
-            }
             let dest_t: ast::ScalarType = dets.to.into();
             let result_type = map.get_or_add(builder, SpirvType::from(dest_t));
             builder.convert_f_to_u(result_type.0, Some(arg.dst.0), arg.src.0)?;
