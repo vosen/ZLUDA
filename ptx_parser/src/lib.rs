@@ -734,13 +734,13 @@ fn array_initializer<'a, 'input: 'a>(
             return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
         }
         delimited(
-            Token::LBracket,
+            Token::LBrace,
             separated(
                 array_dimensions[0] as usize..=array_dimensions[0] as usize,
                 single_value_append(&mut result, type_),
                 Token::Comma,
             ),
-            Token::RBracket,
+            Token::RBrace,
         )
         .parse_next(stream)?;
         Ok(result)
@@ -770,86 +770,54 @@ fn single_value_append<'a, 'input: 'a>(
     move |stream: &mut PtxParser<'a, 'input>| {
         let value = immediate_value.parse_next(stream)?;
         match (type_, value) {
-            (ScalarType::U8, ImmediateValue::U64(x)) => accumulator.extend_from_slice(
-                &u8::try_from(x)
-                    .map_err(|_| ErrMode::from_error_kind(stream, ErrorKind::Verify))?
-                    .to_le_bytes(),
-            ),
-            (ScalarType::U8, ImmediateValue::S64(x)) => accumulator.extend_from_slice(
-                &u8::try_from(x)
-                    .map_err(|_| ErrMode::from_error_kind(stream, ErrorKind::Verify))?
-                    .to_le_bytes(),
-            ),
-            (ScalarType::U16, ImmediateValue::U64(x)) => accumulator.extend_from_slice(
-                &u16::try_from(x)
-                    .map_err(|_| ErrMode::from_error_kind(stream, ErrorKind::Verify))?
-                    .to_le_bytes(),
-            ),
-            (ScalarType::U16, ImmediateValue::S64(x)) => accumulator.extend_from_slice(
-                &u16::try_from(x)
-                    .map_err(|_| ErrMode::from_error_kind(stream, ErrorKind::Verify))?
-                    .to_le_bytes(),
-            ),
-            (ScalarType::U32, ImmediateValue::U64(x)) => accumulator.extend_from_slice(
-                &u32::try_from(x)
-                    .map_err(|_| ErrMode::from_error_kind(stream, ErrorKind::Verify))?
-                    .to_le_bytes(),
-            ),
-            (ScalarType::U32, ImmediateValue::S64(x)) => accumulator.extend_from_slice(
-                &u32::try_from(x)
-                    .map_err(|_| ErrMode::from_error_kind(stream, ErrorKind::Verify))?
-                    .to_le_bytes(),
-            ),
-            (ScalarType::U64, ImmediateValue::U64(x)) => accumulator.extend_from_slice(
-                &u64::try_from(x)
-                    .map_err(|_| ErrMode::from_error_kind(stream, ErrorKind::Verify))?
-                    .to_le_bytes(),
-            ),
-            (ScalarType::U64, ImmediateValue::S64(x)) => accumulator.extend_from_slice(
-                &u64::try_from(x)
-                    .map_err(|_| ErrMode::from_error_kind(stream, ErrorKind::Verify))?
-                    .to_le_bytes(),
-            ),
-            (ScalarType::S8, ImmediateValue::U64(x)) => accumulator.extend_from_slice(
-                &i8::try_from(x)
-                    .map_err(|_| ErrMode::from_error_kind(stream, ErrorKind::Verify))?
-                    .to_le_bytes(),
-            ),
-            (ScalarType::S8, ImmediateValue::S64(x)) => accumulator.extend_from_slice(
-                &i8::try_from(x)
-                    .map_err(|_| ErrMode::from_error_kind(stream, ErrorKind::Verify))?
-                    .to_le_bytes(),
-            ),
-            (ScalarType::S16, ImmediateValue::U64(x)) => accumulator.extend_from_slice(
-                &i16::try_from(x)
-                    .map_err(|_| ErrMode::from_error_kind(stream, ErrorKind::Verify))?
-                    .to_le_bytes(),
-            ),
-            (ScalarType::S16, ImmediateValue::S64(x)) => accumulator.extend_from_slice(
-                &i16::try_from(x)
-                    .map_err(|_| ErrMode::from_error_kind(stream, ErrorKind::Verify))?
-                    .to_le_bytes(),
-            ),
-            (ScalarType::S32, ImmediateValue::U64(x)) => accumulator.extend_from_slice(
-                &i32::try_from(x)
-                    .map_err(|_| ErrMode::from_error_kind(stream, ErrorKind::Verify))?
-                    .to_le_bytes(),
-            ),
-            (ScalarType::S32, ImmediateValue::S64(x)) => accumulator.extend_from_slice(
-                &i32::try_from(x)
-                    .map_err(|_| ErrMode::from_error_kind(stream, ErrorKind::Verify))?
-                    .to_le_bytes(),
-            ),
-            (ScalarType::S64, ImmediateValue::U64(x)) => accumulator.extend_from_slice(
-                &i64::try_from(x)
-                    .map_err(|_| ErrMode::from_error_kind(stream, ErrorKind::Verify))?
-                    .to_le_bytes(),
-            ),
-            (ScalarType::S64, ImmediateValue::S64(x)) => accumulator.extend_from_slice(
-                &i64::try_from(x)
-                    .map_err(|_| ErrMode::from_error_kind(stream, ErrorKind::Verify))?
-                    .to_le_bytes(),
-            ),
+            (ScalarType::U8 | ScalarType::B8, ImmediateValue::U64(x)) => {
+                accumulator.extend_from_slice(&(x as u8).to_le_bytes())
+            }
+            (ScalarType::U8 | ScalarType::B8, ImmediateValue::S64(x)) => {
+                accumulator.extend_from_slice(&(x as u8).to_le_bytes())
+            }
+            (ScalarType::U16 | ScalarType::B16, ImmediateValue::U64(x)) => {
+                accumulator.extend_from_slice(&(x as u16).to_le_bytes())
+            }
+            (ScalarType::U16 | ScalarType::B16, ImmediateValue::S64(x)) => {
+                accumulator.extend_from_slice(&(x as u16).to_le_bytes())
+            }
+            (ScalarType::U32 | ScalarType::B32, ImmediateValue::U64(x)) => {
+                accumulator.extend_from_slice(&(x as u32).to_le_bytes())
+            }
+            (ScalarType::U32 | ScalarType::B32, ImmediateValue::S64(x)) => {
+                accumulator.extend_from_slice(&(x as u32).to_le_bytes())
+            }
+            (ScalarType::U64 | ScalarType::B64, ImmediateValue::U64(x)) => {
+                accumulator.extend_from_slice(&(x as u64).to_le_bytes())
+            }
+            (ScalarType::U64 | ScalarType::B64, ImmediateValue::S64(x)) => {
+                accumulator.extend_from_slice(&(x as u64).to_le_bytes())
+            }
+            (ScalarType::S8, ImmediateValue::U64(x)) => {
+                accumulator.extend_from_slice(&(x as i8).to_le_bytes())
+            }
+            (ScalarType::S8, ImmediateValue::S64(x)) => {
+                accumulator.extend_from_slice(&(x as i8).to_le_bytes())
+            }
+            (ScalarType::S16, ImmediateValue::U64(x)) => {
+                accumulator.extend_from_slice(&(x as i16).to_le_bytes())
+            }
+            (ScalarType::S16, ImmediateValue::S64(x)) => {
+                accumulator.extend_from_slice(&(x as i16).to_le_bytes())
+            }
+            (ScalarType::S32, ImmediateValue::U64(x)) => {
+                accumulator.extend_from_slice(&(x as i32).to_le_bytes())
+            }
+            (ScalarType::S32, ImmediateValue::S64(x)) => {
+                accumulator.extend_from_slice(&(x as i32).to_le_bytes())
+            }
+            (ScalarType::S64, ImmediateValue::U64(x)) => {
+                accumulator.extend_from_slice(&(x as i64).to_le_bytes())
+            }
+            (ScalarType::S64, ImmediateValue::S64(x)) => {
+                accumulator.extend_from_slice(&(x as i64).to_le_bytes())
+            }
             (ScalarType::F32, ImmediateValue::F32(x)) => {
                 accumulator.extend_from_slice(&x.to_le_bytes())
             }
@@ -1683,7 +1651,7 @@ derive_parser!(
         }
     }
     .cop: RawLdCacheOperator  =             { .ca, .cg, .cs };
-    .level::eviction_priority: EvictionPriority = 
+    .level::eviction_priority: EvictionPriority =
                                             { .L1::evict_normal, .L1::evict_unchanged,
                                               .L1::evict_first, .L1::evict_last, .L1::no_allocate};
     .level::cache_hint =                    { .L2::cache_hint };
