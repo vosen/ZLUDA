@@ -1608,17 +1608,13 @@ fn extract_globals<'input, 'b>(
     for statement in sorted_statements {
         match statement {
             Statement::Variable(
-                var
-                @
-                ast::Variable {
+                var @ ast::Variable {
                     state_space: ast::StateSpace::Shared,
                     ..
                 },
             )
             | Statement::Variable(
-                var
-                @
-                ast::Variable {
+                var @ ast::Variable {
                     state_space: ast::StateSpace::Global,
                     ..
                 },
@@ -1660,9 +1656,7 @@ fn extract_globals<'input, 'b>(
                 )?);
             }
             Statement::Instruction(ast::Instruction::Atom(
-                details
-                @
-                ast::AtomDetails {
+                details @ ast::AtomDetails {
                     inner:
                         ast::AtomInnerDetails::Unsigned {
                             op: ast::AtomUIntOp::Inc,
@@ -1691,9 +1685,7 @@ fn extract_globals<'input, 'b>(
                 )?);
             }
             Statement::Instruction(ast::Instruction::Atom(
-                details
-                @
-                ast::AtomDetails {
+                details @ ast::AtomDetails {
                     inner:
                         ast::AtomInnerDetails::Unsigned {
                             op: ast::AtomUIntOp::Dec,
@@ -1722,9 +1714,7 @@ fn extract_globals<'input, 'b>(
                 )?);
             }
             Statement::Instruction(ast::Instruction::Atom(
-                details
-                @
-                ast::AtomDetails {
+                details @ ast::AtomDetails {
                     inner:
                         ast::AtomInnerDetails::Float {
                             op: ast::AtomFloatOp::Add,

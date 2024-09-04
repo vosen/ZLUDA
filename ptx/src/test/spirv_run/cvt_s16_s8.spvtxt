@@ -7,6 +7,9 @@
                OpCapability Int64
                OpCapability Float16
                OpCapability Float64
+               OpCapability DenormFlushToZero
+               OpExtension "SPV_KHR_float_controls"
+               OpExtension "SPV_KHR_no_integer_wrap_decoration"
          %24 = OpExtInstImport "OpenCL.std"
                OpMemoryModel Physical64 OpenCL
                OpEntryPoint Kernel %1 "cvt_s16_s8"
@@ -45,9 +48,7 @@
          %32 = OpBitcast %uint %15
          %34 = OpUConvert %uchar %32
          %20 = OpCopyObject %uchar %34
-         %35 = OpBitcast %uchar %20
-         %37 = OpSConvert %ushort %35
-         %19 = OpCopyObject %ushort %37
+         %19 = OpSConvert %ushort %20
          %14 = OpSConvert %uint %19
                OpStore %6 %14
          %16 = OpLoad %ulong %5

@@ -1,0 +1,13 @@
+[package]
+name = "ptx_parser_macros_impl"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2021"
+
+[lib]
+
+[dependencies]
+syn = { version = "2.0.67", features = ["extra-traits", "full"] }
+quote = "1.0"
+proc-macro2 = "1.0.86"
+rustc-hash = "2.0.0"

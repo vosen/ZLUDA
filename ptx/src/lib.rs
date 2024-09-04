@@ -24,6 +24,7 @@ lalrpop_mod!(
 );
 
 pub mod ast;
+pub(crate) mod pass;
 #[cfg(test)]
 mod test;
 mod translate;
