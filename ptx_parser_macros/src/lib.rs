@@ -16,7 +16,7 @@ use syn::{
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#packed-integer-data-types
 #[rustfmt::skip]
 static POSTFIX_MODIFIERS: &[&str] = &[
-    ".v2", ".v4",
+    ".v2", ".v4", ".v8",
     ".s8", ".s16", ".s16x2", ".s32", ".s64",
     ".u8", ".u16", ".u16x2", ".u32", ".u64",
     ".f16", ".f16x2", ".f32", ".f64",

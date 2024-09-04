@@ -1335,14 +1335,6 @@ fn empty_call<'input>(
     }
 }
 
-// Modifiers are turned into arguments to the blocks, with type:
-// * If it is an alternative:
-//   * If it is mandatory then its type is Foo (as defined by the relevant rule)
-//   * If it is optional then its type is Option<Foo>
-// * Otherwise:
-//   * If it is mandatory then it is skipped
-//   * If it is optional then its type is `bool`
-
 type ParsedOperandStr<'input> = ast::ParsedOperand<&'input str>;
 
 #[derive(Clone, PartialEq, Default, Debug, Display)]
@@ -1351,6 +1343,67 @@ pub struct TokenError(std::ops::Range<usize>);
 
 impl std::error::Error for TokenError {}
 
+// This macro is responsible for generating parser code for instruction parser.
+// Instruction parsing is by far the most complex part of parsing PTX code:
+// * There are tens of instruction kinds, each with slightly different parsing rules
+// * After parsing, each instruction needs to do some early validation and generate a specific,
+//   strongly-typed object. We want strong-typing because we have a single PTX parser frontend, but
+//   there can be multiple different code emitter backends
+// * Most importantly, instruction modifiers  can come in aby order, so e.g. both 
+//   `ld.relaxed.global.u32 a, b` and `ld.global.relaxed.u32 a, b` are equally valid. This makes
+//   classic parsing generators fail: if we tried to generate parsing rules that cover every possible
+//   ordering we'd need thousands of rules. This is not a purely theoretical problem. NVCC and Clang 
+//   will always emit modifiers in the correct order, but people who write inline assembly usually
+//   get it wrong (even first party developers)
+//
+// This macro exists purely to generate repetitive code for parsing each instruction. It is
+// _not_ self-contained and is _not_ general-purpose: it relies on certain types and functions from
+// the enclosing module
+//
+// derive_parser!(...) input is split into three parts:
+// * Token type definition
+// * Partial enums
+// * Parsing definitions
+//
+// Token type definition:
+// This is the enum type that will be usesby the instruction parser. For every instruction and
+// modifier, derive_parser!(...) will add appropriate variant into this type. So e.g. if there is a
+// rule for for `bar.sync` then those two variants wil be appended to the Token enum:
+// #[token("bar")] Bar,
+// #[token(".sync")] DotSync,
+//
+// Partial enums:
+// With proper annotations, derive_parser!(...) parsing definitions are able to interpret
+// instruction modifiers as variants of a single enum type. So e.g. for definitions `ld.u32` and
+// `ld.u64` the macro can generate `enum ScalarType { U32, U64 }`. The problem is that for some
+// (but not all) of those generated enum types we want to add some attributes and additional
+// variants. In order to do so, you need to define this enum and derive_parser!(...) will append to
+// the type instead of creating a new type. This is sort of replacement for partial classes known
+// from C#
+//
+// Parsing definitions:
+// Parsing definitions consist of a list of patterns and rules:
+// * Pattern consists of:
+//   * Opcode: `ld`
+//   * Modifiers, always start with a dot: `.global`, `.relaxed`. Optionals are enclosed in braces
+//   * Arguments: `a`, `b`. Optionals are enclosed in braces
+//   * Code block: => { <code expression> }. Code blocks implictly take all modifiers ansd arguments
+//     as parameters. All modifiers and arguments are passed to the code block:
+//     * If it is an alternative (as defined in rules list later):
+//       * If it is mandatory then its type is Foo (as defined by the relevant rule)
+//       * If it is optional then its type is Option<Foo>
+//     * Otherwise:
+//       * If it is mandatory then it is skipped
+//       * If it is optional then its type is `bool`
+// * List of rules. They are associated with the preceding patterns (until different opcode or
+//   different rules). Rules are used to resolve modifiers. There are two types of rules:
+//   * Normal rule: `.foobar: FoobarEnum => { .a, .b, .c }`. This means that instead of `.foobar` we
+//     expecte one of `.a`, `.b`, `.c` and will emit value FoobarEnum::DotA, FoobarEnum::DotB, 
+//     FoobarEnum::DotC appropriately
+//   * Type-only rule: `FoobarEnum => { .a, .b, .c }` this means that all the occurences of `.a` will
+//     emit FoobarEnum::DotA to the code block. This helps to avoid copy-paste errors
+// Additionally, you can opt out from the usual parsing rule generation with a special `<=` pattern.
+// See `call` instruction to see it in action
 derive_parser!(
     #[derive(Logos, PartialEq, Eq, Debug, Clone, Copy)]
     #[logos(skip r"(?:\s+)|(?://[^\n\r]*[\n\r]*)|(?:/\*[^*]*\*+(?:[^/*][^*]*\*+)*/)")]

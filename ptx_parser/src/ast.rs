@@ -13,6 +13,21 @@ pub enum Statement<P: Operand> {
     Block(Vec<Statement<P>>),
 }
 
+// We define the instruction enum through the macro instead of normally, because we have some of how
+// we use this type in the compilee. Each instruction can be logically split into two parts:
+// properties that define instruction semantics (e.g. is memory load volatile?) that don't change
+// during compilation and arguments (e.g. memory load source and destination) that evolve during
+// compilation. To support compilation passes we need to be able to visit (and change) every
+// argument in a generic way. This macro has visibility over all the fields. Consequently, we use it
+// to generate visitor functions. There re three functions to support three different semantics:
+// visit-by-ref, visit-by-mutable-ref, visit-and-map. In a previous version of the compiler it was
+// done by hand and was very limiting (we supported only visit-and-map).
+// The visitor must implement appropriate visitor trait defined below this macro. For convenience,
+// we implemented visitors for some corresponding FnMut(...) types.
+// Properties in this macro are used to encode information about the instruction arguments (what
+// Rust type is used  for it post-parsing, what PTX type does it expect, what PTX address space does
+// it expect, etc.).
+// This information is then available to a visitor.
 ptx_parser_macros::generate_instruction_type!(
     pub enum Instruction<T: Operand> {
         Mov {
