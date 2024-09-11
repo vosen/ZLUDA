@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 ptx_parser = { path = "../ptx_parser" }
+llvm_zluda = { path = "../llvm_zluda" }
 regex = "1"
 rspirv = "0.7"
 spirv_headers = "1.5" 
@@ -27,7 +28,8 @@ features = ["lexer"]
 
 [dev-dependencies]
 hip_runtime-sys = { path = "../hip_runtime-sys" }
-tempfile = "3"
+amd_comgr-sys = { path = "../amd_comgr-sys" }
 spirv_tools-sys = { path = "../spirv_tools-sys" }
+tempfile = "3"
 paste = "1.0"
 cuda-driver-sys = "0.3.0"

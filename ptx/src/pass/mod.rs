@@ -1,3 +1,4 @@
+use llvm_zluda::inkwell::memory_buffer::MemoryBuffer;
 use ptx_parser as ast;
 use rspirv::{binary::Assemble, dr};
 use std::hash::Hash;
@@ -16,6 +17,7 @@ use std::{
 mod convert_dynamic_shared_memory_usage;
 mod convert_to_stateful_memory_access;
 mod convert_to_typed;
+mod emit_llvm;
 mod emit_spirv;
 mod expand_arguments;
 mod extract_globals;
@@ -30,7 +32,7 @@ static ZLUDA_PTX_IMPL_INTEL: &'static [u8] = include_bytes!("../../lib/zluda_ptx
 static ZLUDA_PTX_IMPL_AMD: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.bc");
 const ZLUDA_PTX_PREFIX: &'static str = "__zluda_ptx_impl__";
 
-pub fn to_spirv_module<'input>(ast: ast::Module<'input>) -> Result<Module, TranslateError> {
+pub fn to_llvm_module<'input>(ast: ast::Module<'input>) -> Result<Module, TranslateError> {
     let mut id_defs = GlobalStringIdResolver::<'input>::new(SpirvWord(1));
     let mut ptx_impl_imports = HashMap::new();
     let directives = ast
@@ -56,17 +58,10 @@ pub fn to_spirv_module<'input>(ast: ast::Module<'input>) -> Result<Module, Trans
         })?;
     normalize_variable_decls(&mut directives);
     let denorm_information = compute_denorm_information(&directives);
-    let (spirv, kernel_info, build_options) =
-        emit_spirv::run(builder, &id_defs, call_map, denorm_information, directives)?;
+    let llvm_ir = emit_llvm::run(&id_defs, call_map, directives)?;
     Ok(Module {
-        spirv,
-        kernel_info,
-        should_link_ptx_impl: if must_link_ptx_impl {
-            Some((ZLUDA_PTX_IMPL_INTEL, ZLUDA_PTX_IMPL_AMD))
-        } else {
-            None
-        },
-        build_options,
+        llvm_ir,
+        kernel_info: HashMap::new(),
     })
 }
 
@@ -187,22 +182,14 @@ fn to_ssa<'input, 'b>(
 }
 
 pub struct Module {
-    pub spirv: dr::Module,
+    pub llvm_ir: MemoryBuffer,
     pub kernel_info: HashMap<String, KernelInfo>,
-    pub should_link_ptx_impl: Option<(&'static [u8], &'static [u8])>,
-    pub build_options: CString,
-}
-
-impl Module {
-    pub fn assemble(&self) -> Vec<u32> {
-        self.spirv.assemble()
-    }
 }
 
 struct GlobalStringIdResolver<'input> {
     current_id: SpirvWord,
     variables: HashMap<Cow<'input, str>, SpirvWord>,
-    reverse_variables: HashMap<SpirvWord, &'input str>,
+    pub(crate) reverse_variables: HashMap<SpirvWord, &'input str>,
     variables_type_check: HashMap<SpirvWord, Option<(ast::Type, ast::StateSpace, bool)>>,
     special_registers: SpecialRegistersMap,
     fns: HashMap<SpirvWord, FnSigMapper<'input>>,

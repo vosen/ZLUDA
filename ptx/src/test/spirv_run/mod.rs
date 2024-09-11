@@ -2,6 +2,7 @@ use crate::pass;
 use crate::ptx;
 use crate::translate;
 use hip_runtime_sys::hipError_t;
+use llvm_zluda::inkwell::memory_buffer::MemoryBuffer;
 use rspirv::{
     binary::{Assemble, Disassemble},
     dr::{Block, Function, Instruction, Loader, Operand},
@@ -31,7 +32,7 @@ macro_rules! test_ptx {
     ($fn_name:ident, $input:expr, $output:expr) => {
         paste::item! {
             #[test]
-            fn [<$fn_name _ptx>]() -> Result<(), Box<dyn std::error::Error>> {
+            fn [<$fn_name _hip>]() -> Result<(), Box<dyn std::error::Error>> {
                 let ptx = include_str!(concat!(stringify!($fn_name), ".ptx"));
                 let input = $input;
                 let mut output = $output;
@@ -48,29 +49,9 @@ macro_rules! test_ptx {
                 test_cuda_assert(stringify!($fn_name), ptx, &input, &mut output)
             }
         }
-
-        paste::item! {
-            #[test]
-            fn [<$fn_name _spvtxt>]() -> Result<(), Box<dyn std::error::Error>> {
-                let ptx_txt = include_str!(concat!(stringify!($fn_name), ".ptx"));
-                let spirv_file_name = concat!(stringify!($fn_name), ".spvtxt");
-                let spirv_txt = include_bytes!(concat!(stringify!($fn_name), ".spvtxt"));
-                test_spvtxt_assert(ptx_txt, spirv_txt, spirv_file_name)
-            }
-        }
     };
 
-    ($fn_name:ident) => {
-        paste::item! {
-            #[test]
-            fn [<$fn_name _spvtxt>]() -> Result<(), Box<dyn std::error::Error>> {
-                let ptx_txt = include_str!(concat!(stringify!($fn_name), ".ptx"));
-                let spirv_file_name = concat!(stringify!($fn_name), ".spvtxt");
-                let spirv_txt = include_bytes!(concat!(stringify!($fn_name), ".spvtxt"));
-                test_spvtxt_assert(ptx_txt, spirv_txt, spirv_file_name)
-            }
-        }
-    };
+    ($fn_name:ident) => {};
 }
 
 test_ptx!(ld_st, [1u64], [1u64]);
@@ -255,13 +236,11 @@ fn test_hip_assert<
     input: &[Input],
     output: &mut [Output],
 ) -> Result<(), Box<dyn error::Error + 'a>> {
-    let mut errors = Vec::new();
-    let ast = ptx::ModuleParser::new().parse(&mut errors, ptx_text)?;
-    assert!(errors.len() == 0);
-    let zluda_module = translate::to_spirv_module(ast)?;
+    let ast = ptx_parser::parse_module_checked(ptx_text).unwrap();
+    let llvm_ir = pass::to_llvm_module(ast).unwrap();
     let name = CString::new(name)?;
-    let result = run_hip(name.as_c_str(), zluda_module, input, output)
-        .map_err(|err| DisplayError { err })?;
+    let result =
+        run_hip(name.as_c_str(), llvm_ir, input, output).map_err(|err| DisplayError { err })?;
     assert_eq!(result.as_slice(), output);
     Ok(())
 }
@@ -281,18 +260,6 @@ fn test_cuda_assert<
         run_cuda(name.as_c_str(), ptx_text, input, output).map_err(|err| DisplayError { err })?;
     assert_eq!(result.as_slice(), output);
     Ok(())
-}
-
-macro_rules! hip_call {
-    ($expr:expr) => {
-        #[allow(unused_unsafe)]
-        {
-            let err = unsafe { $expr };
-            if err != hip_runtime_sys::hipError_t::hipSuccess {
-                return Result::Err(err);
-            }
-        }
-    };
 }
 
 macro_rules! cuda_call {
@@ -344,124 +311,120 @@ fn run_cuda<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + De
 
 fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Default>(
     name: &CStr,
-    module: translate::Module,
+    module: pass::Module,
     input: &[Input],
     output: &mut [Output],
 ) -> Result<Vec<Output>, hipError_t> {
     use hip_runtime_sys::*;
-    hip_call! { hipInit(0) };
-    let spirv = module.spirv.assemble();
+    unsafe { hipInit(0) }.unwrap();
     let mut result = vec![0u8.into(); output.len()];
     {
         let dev = 0;
         let mut stream = ptr::null_mut();
-        hip_call! { hipStreamCreate(&mut stream) };
+        unsafe { hipStreamCreate(&mut stream) }.unwrap();
         let mut dev_props = unsafe { mem::zeroed() };
-        hip_call! { hipGetDeviceProperties(&mut dev_props, dev) };
-        let elf_module = compile_amd(&dev_props, &*spirv, module.should_link_ptx_impl)
-            .map_err(|_| hipError_t::hipErrorUnknown)?;
+        unsafe { hipGetDevicePropertiesR0600(&mut dev_props, dev) }.unwrap();
+        let elf_module = unsafe { compile_amd(&module.llvm_ir) };
         let mut module = ptr::null_mut();
-        hip_call! { hipModuleLoadData(&mut module, elf_module.as_ptr() as _) };
+        unsafe { hipModuleLoadData(&mut module, elf_module.as_ptr() as _) }.unwrap();
         let mut kernel = ptr::null_mut();
-        hip_call! { hipModuleGetFunction(&mut kernel, module, name.as_ptr()) };
+        unsafe { hipModuleGetFunction(&mut kernel, module, name.as_ptr()) }.unwrap();
         let mut inp_b = ptr::null_mut();
-        hip_call! { hipMalloc(&mut inp_b, input.len() * mem::size_of::<Input>()) };
+        unsafe { hipMalloc(&mut inp_b, input.len() * mem::size_of::<Input>()) }.unwrap();
         let mut out_b = ptr::null_mut();
-        hip_call! { hipMalloc(&mut out_b, output.len() * mem::size_of::<Output>()) };
-        hip_call! { hipMemcpyWithStream(inp_b, input.as_ptr() as _, input.len() * mem::size_of::<Input>(), hipMemcpyKind::hipMemcpyHostToDevice, stream) };
-        hip_call! { hipMemset(out_b, 0, output.len() * mem::size_of::<Output>()) };
+        unsafe { hipMalloc(&mut out_b, output.len() * mem::size_of::<Output>()) }.unwrap();
+        unsafe {
+            hipMemcpyWithStream(
+                inp_b,
+                input.as_ptr() as _,
+                input.len() * mem::size_of::<Input>(),
+                hipMemcpyKind::hipMemcpyHostToDevice,
+                stream,
+            )
+        }
+        .unwrap();
+        unsafe { hipMemset(out_b, 0, output.len() * mem::size_of::<Output>()) }.unwrap();
         let mut args = [&inp_b, &out_b];
-        hip_call! { hipModuleLaunchKernel(kernel, 1,1,1,1,1,1, 1024, stream, args.as_mut_ptr() as _, ptr::null_mut()) };
-        hip_call! { hipMemcpyAsync(result.as_mut_ptr() as _, out_b, output.len() * mem::size_of::<Output>(), hipMemcpyKind::hipMemcpyDeviceToHost, stream) };
-        hip_call! { hipStreamSynchronize(stream) };
-        hip_call! { hipFree(inp_b) };
-        hip_call! { hipFree(out_b) };
-        hip_call! { hipModuleUnload(module) };
+        unsafe {
+            hipModuleLaunchKernel(
+                kernel,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1024,
+                stream,
+                args.as_mut_ptr() as _,
+                ptr::null_mut(),
+            )
+        }
+        .unwrap();
+        unsafe {
+            hipMemcpyAsync(
+                result.as_mut_ptr() as _,
+                out_b,
+                output.len() * mem::size_of::<Output>(),
+                hipMemcpyKind::hipMemcpyDeviceToHost,
+                stream,
+            )
+        }
+        .unwrap();
+        unsafe { hipStreamSynchronize(stream) }.unwrap();
+        unsafe { hipFree(inp_b) }.unwrap();
+        unsafe { hipFree(out_b) }.unwrap();
+        unsafe { hipModuleUnload(module) }.unwrap();
     }
     Ok(result)
 }
 
-fn test_spvtxt_assert<'a>(
-    ptx_txt: &'a str,
-    spirv_txt: &'a [u8],
-    spirv_file_name: &'a str,
-) -> Result<(), Box<dyn error::Error + 'a>> {
-    let ast = ptx_parser::parse_module_checked(ptx_txt).unwrap();
-    let spirv_module = pass::to_spirv_module(ast)?;
-    let spv_context =
-        unsafe { spirv_tools::spvContextCreate(spv_target_env::SPV_ENV_UNIVERSAL_1_3) };
-    assert!(spv_context != ptr::null_mut());
-    let mut spv_binary: spv_binary = ptr::null_mut();
-    let result = unsafe {
-        spirv_tools::spvTextToBinary(
-            spv_context,
-            spirv_txt.as_ptr() as *const _,
-            spirv_txt.len(),
-            &mut spv_binary,
-            ptr::null_mut(),
-        )
-    };
-    if result != spv_result_t::SPV_SUCCESS {
-        panic!("{:?}\n{}", result, unsafe {
-            str::from_utf8_unchecked(spirv_txt)
-        });
-    }
-    let mut parsed_spirv = Vec::<u32>::new();
-    let result = unsafe {
-        spirv_tools::spvBinaryParse(
-            spv_context,
-            &mut parsed_spirv as *mut _ as *mut _,
-            (*spv_binary).code,
-            (*spv_binary).wordCount,
-            Some(parse_header_cb),
-            Some(parse_instruction_cb),
-            ptr::null_mut(),
-        )
-    };
-    assert!(result == spv_result_t::SPV_SUCCESS);
-    let mut loader = Loader::new();
-    rspirv::binary::parse_words(&parsed_spirv, &mut loader)?;
-    let spvtxt_mod = loader.module();
-    unsafe { spirv_tools::spvBinaryDestroy(spv_binary) };
-    if !is_spirv_fns_equal(&spirv_module.spirv.functions, &spvtxt_mod.functions) {
-        // We could simply use ptx_mod.disassemble, but SPIRV-Tools text formattinmg is so much nicer
-        let spv_from_ptx_binary = spirv_module.spirv.assemble();
-        let mut spv_text: spirv_tools::spv_text = ptr::null_mut();
-        let result = unsafe {
-            spirv_tools::spvBinaryToText(
-                spv_context,
-                spv_from_ptx_binary.as_ptr(),
-                spv_from_ptx_binary.len(),
-                (spirv_tools::spv_binary_to_text_options_t::SPV_BINARY_TO_TEXT_OPTION_INDENT | spirv_tools::spv_binary_to_text_options_t::SPV_BINARY_TO_TEXT_OPTION_NO_HEADER |  spirv_tools::spv_binary_to_text_options_t::SPV_BINARY_TO_TEXT_OPTION_FRIENDLY_NAMES).0,
-                &mut spv_text as *mut _,
-                ptr::null_mut()
-            )
-        };
-        unsafe { spirv_tools::spvContextDestroy(spv_context) };
-        let spirv_text = if result == spv_result_t::SPV_SUCCESS {
-            let raw_text = unsafe {
-                std::slice::from_raw_parts((*spv_text).str_ as *const u8, (*spv_text).length)
-            };
-            let spv_from_ptx_text = unsafe { str::from_utf8_unchecked(raw_text) };
-            // TODO: stop leaking kernel text
-            Cow::Borrowed(spv_from_ptx_text)
-        } else {
-            Cow::Owned(spirv_module.spirv.disassemble())
-        };
-        if let Ok(dump_path) = env::var("ZLUDA_TEST_SPIRV_DUMP_DIR") {
-            let mut path = PathBuf::from(dump_path);
-            if let Ok(()) = fs::create_dir_all(&path) {
-                path.push(spirv_file_name);
-                #[allow(unused_must_use)]
-                {
-                    fs::write(path, spirv_text.as_bytes());
-                }
-            }
-        }
-        panic!("{}", spirv_text.to_string());
-    }
-    unsafe { spirv_tools::spvContextDestroy(spv_context) };
-    Ok(())
+unsafe fn compile_amd(buffer: &MemoryBuffer) -> Vec<u8> {
+    use amd_comgr_sys::*;
+    let mut data_set = mem::zeroed();
+    amd_comgr_create_data_set(&mut data_set).unwrap();
+    let mut data = mem::zeroed();
+    amd_comgr_create_data(amd_comgr_data_kind_t::AMD_COMGR_DATA_KIND_BC, &mut data).unwrap();
+    let buffer = buffer.as_slice();
+    amd_comgr_set_data(data, buffer.len(), buffer.as_ptr().cast()).unwrap();
+    amd_comgr_set_data_name(data, "zluda.bc\0".as_ptr().cast()).unwrap();
+    amd_comgr_data_set_add(data_set, data).unwrap();
+    let mut reloc_data = mem::zeroed();
+    amd_comgr_create_data_set(&mut reloc_data).unwrap();
+    let mut action_info = mem::zeroed();
+    amd_comgr_create_action_info(&mut action_info).unwrap();
+    amd_comgr_action_info_set_isa_name(action_info, "amdgcn-amd-amdhsa--gfx1030\0".as_ptr().cast())
+        .unwrap();
+    amd_comgr_do_action(
+        amd_comgr_action_kind_t::AMD_COMGR_ACTION_CODEGEN_BC_TO_RELOCATABLE,
+        action_info,
+        data_set,
+        reloc_data,
+    )
+    .unwrap();
+    let mut exec_data = mem::zeroed();
+    amd_comgr_create_data_set(&mut exec_data).unwrap();
+    amd_comgr_do_action(
+        amd_comgr_action_kind_t::AMD_COMGR_ACTION_LINK_RELOCATABLE_TO_EXECUTABLE,
+        action_info,
+        reloc_data,
+        exec_data,
+    )
+    .unwrap();
+    let mut exec = mem::zeroed();
+    amd_comgr_action_data_get_data(
+        exec_data,
+        amd_comgr_data_kind_t::AMD_COMGR_DATA_KIND_EXECUTABLE,
+        0,
+        &mut exec,
+    )
+    .unwrap();
+    let mut size = mem::zeroed();
+    amd_comgr_get_data(exec, &mut size, ptr::null_mut()).unwrap();
+    let mut result: Vec<u8> = Vec::with_capacity(size);
+    result.set_len(size);
+    amd_comgr_get_data(exec, &mut size, result.as_mut_ptr().cast()).unwrap();
+    result
 }
 
 struct EqMap<T>
@@ -653,110 +616,6 @@ const AMDGPU_BITCODE: [&'static str; 8] = [
     "oclc_wavefrontsize64_off.bc",
 ];
 const AMDGPU_BITCODE_DEVICE_PREFIX: &'static str = "oclc_isa_version_";
-
-fn compile_amd(
-    device_pros: &hip::hipDeviceProp_t,
-    spirv_il: &[u32],
-    ptx_lib: Option<(&'static [u8], &'static [u8])>,
-) -> io::Result<Vec<u8>> {
-    let null_terminator = device_pros
-        .gcnArchName
-        .iter()
-        .position(|&x| x == 0)
-        .unwrap();
-    let gcn_arch_slice = unsafe {
-        slice::from_raw_parts(device_pros.gcnArchName.as_ptr() as _, null_terminator + 1)
-    };
-    let device_name =
-        if let Ok(Ok(name)) = CStr::from_bytes_with_nul(gcn_arch_slice).map(|x| x.to_str()) {
-            name
-        } else {
-            return Err(io::Error::new(io::ErrorKind::Other, ""));
-        };
-    let dir = tempfile::tempdir()?;
-    let mut spirv = NamedTempFile::new_in(&dir)?;
-    let llvm = NamedTempFile::new_in(&dir)?;
-    let spirv_il_u8 = unsafe {
-        slice::from_raw_parts(
-            spirv_il.as_ptr() as *const u8,
-            spirv_il.len() * mem::size_of::<u32>(),
-        )
-    };
-    spirv.write_all(spirv_il_u8)?;
-    let llvm_spirv_path = match env::var("LLVM_SPIRV") {
-        Ok(path) => Cow::Owned(path),
-        Err(_) => Cow::Borrowed(LLVM_SPIRV),
-    };
-    let to_llvm_cmd = Command::new(&*llvm_spirv_path)
-        .arg("-r")
-        .arg("-o")
-        .arg(llvm.path())
-        .arg(spirv.path())
-        .status()?;
-    assert!(to_llvm_cmd.success());
-    if cfg!(debug_assertions) {
-        persist_file(llvm.path())?;
-    }
-    let linked_binary = NamedTempFile::new_in(&dir)?;
-    let mut llvm_link = PathBuf::from(AMDGPU);
-    llvm_link.push("llvm");
-    llvm_link.push("bin");
-    llvm_link.push("llvm-link");
-    let mut linker_cmd = Command::new(&llvm_link);
-    linker_cmd
-        .arg("--only-needed")
-        .arg("-o")
-        .arg(linked_binary.path())
-        .arg(llvm.path())
-        .args(get_bitcode_paths(device_name));
-    if cfg!(debug_assertions) {
-        linker_cmd.arg("-v");
-    }
-    let status = linker_cmd.status()?;
-    assert!(status.success());
-    if cfg!(debug_assertions) {
-        persist_file(linked_binary.path())?;
-    }
-    let mut ptx_lib_bitcode = NamedTempFile::new_in(&dir)?;
-    let compiled_binary = NamedTempFile::new_in(&dir)?;
-    let mut clang_exe = PathBuf::from(AMDGPU);
-    clang_exe.push("llvm");
-    clang_exe.push("bin");
-    clang_exe.push("clang");
-    let mut compiler_cmd = Command::new(&clang_exe);
-    compiler_cmd
-        .arg(format!("-mcpu={}", device_name))
-        .arg("-ffp-contract=off")
-        .arg("-nogpulib")
-        .arg("-mno-wavefrontsize64")
-        .arg("-O3")
-        .arg("-Xlinker")
-        .arg("--no-undefined")
-        .arg("-target")
-        .arg(AMDGPU_TARGET)
-        .arg("-o")
-        .arg(compiled_binary.path())
-        .arg("-x")
-        .arg("ir")
-        .arg(linked_binary.path());
-    if let Some((_, bitcode)) = ptx_lib {
-        ptx_lib_bitcode.write_all(bitcode)?;
-        compiler_cmd.arg(ptx_lib_bitcode.path());
-    };
-    if cfg!(debug_assertions) {
-        compiler_cmd.arg("-v");
-    }
-    let status = compiler_cmd.status()?;
-    assert!(status.success());
-    let mut result = Vec::new();
-    let compiled_bin_path = compiled_binary.path();
-    let mut compiled_binary = File::open(compiled_bin_path)?;
-    compiled_binary.read_to_end(&mut result)?;
-    if cfg!(debug_assertions) {
-        persist_file(compiled_bin_path)?;
-    }
-    Ok(result)
-}
 
 fn persist_file(path: &Path) -> io::Result<()> {
     let mut persistent = PathBuf::from("/tmp/zluda");

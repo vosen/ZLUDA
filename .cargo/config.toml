@@ -1,5 +1,2 @@
-[build]
-rustflags = ["-C", "target-cpu=haswell"]
-
-[target."x86_64-pc-windows-gnu"]
-rustflags = ["-C", "link-self-contained=y", "-C", "target-cpu=haswell"]
+[patch.crates-io]
+inkwell = { git  = "https://github.com/vosen/inkwell.git", rev = "46027c2afb7e98976438cdcc41a2949dedb60b2e" }

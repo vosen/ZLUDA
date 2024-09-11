@@ -1,2 +1,1 @@
-bindgen include/hip_runtime_api.h -o src/hip_runtime_api.rs --no-layout-tests --size_t-is-usize --default-enum-style=newtype --whitelist-function "hip.*" --whitelist-type "hip.*" -- -I/home/vosen/HIP/include -I/home/vosen/hipamd/include -I/opt/rocm/include
-sed -i 's/pub struct hipError_t/#[must_use]\npub struct hipError_t/g' src/hip_runtime_api.rs
+bindgen --rust-target 1.77 /opt/rocm/include/hip/hip_runtime_api.h -o hip_runtime_api.rs --no-layout-tests --default-enum-style=newtype --allowlist-function "hip.*" --allowlist-type "hip.*" --no-derive-debug --must-use-type hipError_t --new-type-alias "^hipDeviceptr_t$" --allowlist-var "^hip.*$" -- -I/opt/rocm/include -D__HIP_PLATFORM_AMD__
