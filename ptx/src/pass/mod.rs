@@ -1,4 +1,3 @@
-use llvm_zluda::inkwell::memory_buffer::MemoryBuffer;
 use ptx_parser as ast;
 use rspirv::{binary::Assemble, dr};
 use std::hash::Hash;
@@ -17,7 +16,7 @@ use std::{
 mod convert_dynamic_shared_memory_usage;
 mod convert_to_stateful_memory_access;
 mod convert_to_typed;
-mod emit_llvm;
+pub(crate) mod emit_llvm;
 mod emit_spirv;
 mod expand_arguments;
 mod extract_globals;
@@ -182,7 +181,7 @@ fn to_ssa<'input, 'b>(
 }
 
 pub struct Module {
-    pub llvm_ir: MemoryBuffer,
+    pub llvm_ir: emit_llvm::MemoryBuffer,
     pub kernel_info: HashMap<String, KernelInfo>,
 }
 
@@ -598,6 +597,7 @@ fn error_unreachable() -> TranslateError {
     TranslateError::Unreachable
 }
 
+#[cfg(debug_assertions)]
 fn error_unknown_symbol() -> TranslateError {
     panic!()
 }
@@ -607,6 +607,7 @@ fn error_unknown_symbol() -> TranslateError {
     TranslateError::UnknownSymbol
 }
 
+#[cfg(debug_assertions)]
 fn error_mismatched_type() -> TranslateError {
     panic!()
 }

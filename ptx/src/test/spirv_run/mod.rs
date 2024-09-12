@@ -2,7 +2,6 @@ use crate::pass;
 use crate::ptx;
 use crate::translate;
 use hip_runtime_sys::hipError_t;
-use llvm_zluda::inkwell::memory_buffer::MemoryBuffer;
 use rspirv::{
     binary::{Assemble, Disassemble},
     dr::{Block, Function, Instruction, Loader, Operand},
@@ -379,21 +378,21 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
     Ok(result)
 }
 
-unsafe fn compile_amd(buffer: &MemoryBuffer) -> Vec<u8> {
+unsafe fn compile_amd(buffer: &pass::emit_llvm::MemoryBuffer) -> Vec<u8> {
     use amd_comgr_sys::*;
     let mut data_set = mem::zeroed();
     amd_comgr_create_data_set(&mut data_set).unwrap();
     let mut data = mem::zeroed();
     amd_comgr_create_data(amd_comgr_data_kind_t::AMD_COMGR_DATA_KIND_BC, &mut data).unwrap();
-    let buffer = buffer.as_slice();
+    let buffer = &**buffer;
     amd_comgr_set_data(data, buffer.len(), buffer.as_ptr().cast()).unwrap();
-    amd_comgr_set_data_name(data, "zluda.bc\0".as_ptr().cast()).unwrap();
+    amd_comgr_set_data_name(data, c"zluda.bc".as_ptr()).unwrap();
     amd_comgr_data_set_add(data_set, data).unwrap();
     let mut reloc_data = mem::zeroed();
     amd_comgr_create_data_set(&mut reloc_data).unwrap();
     let mut action_info = mem::zeroed();
     amd_comgr_create_action_info(&mut action_info).unwrap();
-    amd_comgr_action_info_set_isa_name(action_info, "amdgcn-amd-amdhsa--gfx1030\0".as_ptr().cast())
+    amd_comgr_action_info_set_isa_name(action_info, c"amdgcn-amd-amdhsa--gfx1030".as_ptr())
         .unwrap();
     amd_comgr_do_action(
         amd_comgr_action_kind_t::AMD_COMGR_ACTION_CODEGEN_BC_TO_RELOCATABLE,

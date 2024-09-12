@@ -15,8 +15,3 @@ features = [ "disable-alltargets-init", "no-llvm-linking" ]
 [build-dependencies]
 cmake = "0.1"
 cc = "1.0.69"
-
-[dependencies.inkwell]
-version = "0.5"
-default-features = false # default features contain all LLVM targets (x86, mips, riscv, etc.)
-features = [ "llvm17-0-no-llvm-linking", "no-libffi-linking" ]
