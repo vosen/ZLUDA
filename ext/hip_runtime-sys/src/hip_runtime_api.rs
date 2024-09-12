@@ -994,7 +994,10 @@ pub struct hipErrorCode_t(pub ::std::num::NonZeroU32);
 #[doc = " HIP error type\n"]
 #[must_use]
 pub type hipError_t = Result<(), hipErrorCode_t>;
-
+// Size check
+const _: fn() = || {
+    let _ = std::mem::transmute::<hipError_t, u32>;
+};
 impl hipDeviceAttribute_t {
     pub const hipDeviceAttributeCudaCompatibleBegin: hipDeviceAttribute_t = hipDeviceAttribute_t(0);
 }

@@ -27,6 +27,10 @@ impl amd_comgr_status_s {
 #[derive(Copy, Clone, Hash, PartialEq, Eq, Debug)]
 pub struct amd_comgr_status_s(pub ::std::num::NonZeroU32);
 type amd_comgr_status_t = Result<(), self::amd_comgr_status_s>;
+// Size check
+const _: fn() = || {
+    let _ = std::mem::transmute::<amd_comgr_status_t, u32>;
+};
 impl amd_comgr_language_s {
     #[doc = " No high level language."]
     pub const AMD_COMGR_LANGUAGE_NONE: amd_comgr_language_s = amd_comgr_language_s(0);

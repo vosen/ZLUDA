@@ -323,7 +323,11 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
         unsafe { hipStreamCreate(&mut stream) }.unwrap();
         let mut dev_props = unsafe { mem::zeroed() };
         unsafe { hipGetDevicePropertiesR0600(&mut dev_props, dev) }.unwrap();
-        let elf_module = unsafe { compile_amd(&module.llvm_ir) };
+        let elf_module = comgr::compile_bitcode(
+            unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) },
+            &*module.llvm_ir,
+        )
+        .unwrap();
         let mut module = ptr::null_mut();
         unsafe { hipModuleLoadData(&mut module, elf_module.as_ptr() as _) }.unwrap();
         let mut kernel = ptr::null_mut();
@@ -376,54 +380,6 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
         unsafe { hipModuleUnload(module) }.unwrap();
     }
     Ok(result)
-}
-
-unsafe fn compile_amd(buffer: &pass::emit_llvm::MemoryBuffer) -> Vec<u8> {
-    use amd_comgr_sys::*;
-    let mut data_set = mem::zeroed();
-    amd_comgr_create_data_set(&mut data_set).unwrap();
-    let mut data = mem::zeroed();
-    amd_comgr_create_data(amd_comgr_data_kind_t::AMD_COMGR_DATA_KIND_BC, &mut data).unwrap();
-    let buffer = &**buffer;
-    amd_comgr_set_data(data, buffer.len(), buffer.as_ptr().cast()).unwrap();
-    amd_comgr_set_data_name(data, c"zluda.bc".as_ptr()).unwrap();
-    amd_comgr_data_set_add(data_set, data).unwrap();
-    let mut reloc_data = mem::zeroed();
-    amd_comgr_create_data_set(&mut reloc_data).unwrap();
-    let mut action_info = mem::zeroed();
-    amd_comgr_create_action_info(&mut action_info).unwrap();
-    amd_comgr_action_info_set_isa_name(action_info, c"amdgcn-amd-amdhsa--gfx1030".as_ptr())
-        .unwrap();
-    amd_comgr_do_action(
-        amd_comgr_action_kind_t::AMD_COMGR_ACTION_CODEGEN_BC_TO_RELOCATABLE,
-        action_info,
-        data_set,
-        reloc_data,
-    )
-    .unwrap();
-    let mut exec_data = mem::zeroed();
-    amd_comgr_create_data_set(&mut exec_data).unwrap();
-    amd_comgr_do_action(
-        amd_comgr_action_kind_t::AMD_COMGR_ACTION_LINK_RELOCATABLE_TO_EXECUTABLE,
-        action_info,
-        reloc_data,
-        exec_data,
-    )
-    .unwrap();
-    let mut exec = mem::zeroed();
-    amd_comgr_action_data_get_data(
-        exec_data,
-        amd_comgr_data_kind_t::AMD_COMGR_DATA_KIND_EXECUTABLE,
-        0,
-        &mut exec,
-    )
-    .unwrap();
-    let mut size = mem::zeroed();
-    amd_comgr_get_data(exec, &mut size, ptr::null_mut()).unwrap();
-    let mut result: Vec<u8> = Vec::with_capacity(size);
-    result.set_len(size);
-    amd_comgr_get_data(exec, &mut size, result.as_mut_ptr().cast()).unwrap();
-    result
 }
 
 struct EqMap<T>

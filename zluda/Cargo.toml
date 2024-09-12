@@ -9,7 +9,7 @@ name = "zluda"
 
 [dependencies]
 ptx = { path = "../ptx" }
-hip_runtime-sys = { path = "../hip_runtime-sys" }
+hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
 lazy_static = "1.4"
 num_enum = "0.4"
 lz4-sys = "1.9"
