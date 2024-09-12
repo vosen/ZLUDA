@@ -1,0 +1,17 @@
+[package]
+name = "llvm_zluda"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+
+[dependencies]
+bitflags = "2.4"
+
+[dependencies.llvm-sys]
+version = "170"
+features = [ "disable-alltargets-init", "no-llvm-linking" ]
+
+[build-dependencies]
+cmake = "0.1"
+cc = "1.0.69"

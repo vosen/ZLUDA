@@ -1,0 +1,1 @@
+bindgen --rust-target 1.77 /opt/rocm/include/amd_comgr/amd_comgr.h -o /tmp/amd_comgr.rs --no-layout-tests --default-enum-style=newtype --allowlist-function "amd_comgr.*" --allowlist-type "amd_comgr.*" --no-derive-debug --must-use-type amd_comgr_status_t --allowlist-var "^AMD_COMGR.*$"

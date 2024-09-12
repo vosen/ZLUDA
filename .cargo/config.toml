@@ -1,5 +1,0 @@
-[build]
-rustflags = ["-C", "target-cpu=haswell"]
-
-[target."x86_64-pc-windows-gnu"]
-rustflags = ["-C", "link-self-contained=y", "-C", "target-cpu=haswell"]

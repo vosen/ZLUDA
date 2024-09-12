@@ -2,12 +2,13 @@
 name = "ptx"
 version = "0.0.0"
 authors = ["Andrzej Janik <vosen@vosen.pl>"]
-edition = "2018"
+edition = "2021"
 
 [lib]
 
 [dependencies]
 ptx_parser = { path = "../ptx_parser" }
+llvm_zluda = { path = "../llvm_zluda" }
 regex = "1"
 rspirv = "0.7"
 spirv_headers = "1.5" 
@@ -26,8 +27,9 @@ version = "0.19.12"
 features = ["lexer"]
 
 [dev-dependencies]
-hip_runtime-sys = { path = "../hip_runtime-sys" }
-tempfile = "3"
+hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
+comgr = { path = "../comgr" }
 spirv_tools-sys = { path = "../spirv_tools-sys" }
+tempfile = "3"
 paste = "1.0"
 cuda-driver-sys = "0.3.0"

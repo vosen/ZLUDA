@@ -1040,6 +1040,15 @@ pub enum MethodName<'input, ID> {
     Func(ID),
 }
 
+impl<'input, ID> MethodName<'input, ID> {
+    pub fn is_kernel(&self) -> bool {
+        match self {
+            MethodName::Kernel(_) => true,
+            MethodName::Func(_) => false,
+        }
+    }
+}
+
 bitflags! {
     pub struct LinkingDirective: u8 {
         const NONE = 0b000;
@@ -1128,7 +1137,7 @@ impl SetpData {
                 state.errors.push(PtxError::NonF32Ftz);
                 None
             }
-            _ => None
+            _ => None,
         };
         let type_kind = type_.kind();
         let cmp_op = if type_kind == ScalarKind::Float {

@@ -1,8 +1,8 @@
 [package]
-name = "hip_runtime-sys"
+name = "amd_comgr-sys"
 version = "0.0.0"
 authors = ["Andrzej Janik <vosen@vosen.pl>"]
-edition = "2018"
-links = "amdhip"
+edition = "2021"
+links = "amd_comgr"
 
 [lib]
