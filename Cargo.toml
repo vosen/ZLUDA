@@ -3,10 +3,12 @@
 resolver = "2"
 
 members = [
+    "ext/hip_runtime-sys",
+    "ext/amd_comgr-sys",
+    "comgr",
     "cuda_base",
     "cuda_types",
     "detours-sys",
-    "hip_runtime-sys",
     "level_zero-sys",
     "level_zero",
     "spirv_tools-sys",

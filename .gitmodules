@@ -5,3 +5,8 @@
 [submodule "ext/spirv-headers"]
 	path = ext/spirv-headers
 	url = https://github.com/KhronosGroup/SPIRV-Headers
+[submodule "ext/llvm-project"]
+	path = ext/llvm-project
+	url = https://github.com/llvm/llvm-project
+	branch = release/17.x
+	shallow = true

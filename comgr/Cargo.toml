@@ -1,0 +1,10 @@
+[package]
+name = "comgr"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2021"
+
+[lib]
+
+[dependencies]
+amd_comgr-sys = { path = "../ext/amd_comgr-sys" }
