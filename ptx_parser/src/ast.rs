@@ -1291,7 +1291,12 @@ impl<T: Operand> CallArgs<T> {
             .iter()
             .zip(details.return_arguments.iter())
         {
-            visitor.visit_ident(param, Some((type_, *space)), true, false)?;
+            visitor.visit_ident(
+                param,
+                Some((type_, *space)),
+                *space == StateSpace::Reg,
+                false,
+            )?;
         }
         visitor.visit_ident(&self.func, None, false, false)?;
         for (param, (type_, space)) in self
@@ -1315,7 +1320,12 @@ impl<T: Operand> CallArgs<T> {
             .iter_mut()
             .zip(details.return_arguments.iter())
         {
-            visitor.visit_ident(param, Some((type_, *space)), true, false)?;
+            visitor.visit_ident(
+                param,
+                Some((type_, *space)),
+                *space == StateSpace::Reg,
+                false,
+            )?;
         }
         visitor.visit_ident(&mut self.func, None, false, false)?;
         for (param, (type_, space)) in self
@@ -1339,7 +1349,12 @@ impl<T: Operand> CallArgs<T> {
             .into_iter()
             .zip(details.return_arguments.iter())
             .map(|(param, (type_, space))| {
-                visitor.visit_ident(param, Some((type_, *space)), true, false)
+                visitor.visit_ident(
+                    param,
+                    Some((type_, *space)),
+                    *space == StateSpace::Reg,
+                    false,
+                )
             })
             .collect::<Result<Vec<_>, _>>()?;
         let func = visitor.visit_ident(self.func, None, false, false)?;
