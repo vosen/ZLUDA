@@ -469,7 +469,6 @@ fn space_to_spirv(this: ast::StateSpace) -> spirv::StorageClass {
         ast::StateSpace::Shared => spirv::StorageClass::Workgroup,
         ast::StateSpace::Param => spirv::StorageClass::Function,
         ast::StateSpace::Reg => spirv::StorageClass::Function,
-        ast::StateSpace::Sreg => spirv::StorageClass::Input,
         ast::StateSpace::ParamEntry
         | ast::StateSpace::ParamFunc
         | ast::StateSpace::SharedCluster
@@ -693,7 +692,6 @@ fn emit_variable<'input>(
         ast::StateSpace::Shared => (false, spirv::StorageClass::Workgroup),
         ast::StateSpace::Const => (false, spirv::StorageClass::UniformConstant),
         ast::StateSpace::Generic => todo!(),
-        ast::StateSpace::Sreg => todo!(),
         ast::StateSpace::ParamEntry
         | ast::StateSpace::ParamFunc
         | ast::StateSpace::SharedCluster

@@ -128,7 +128,7 @@ pub(crate) fn default_implicit_conversion(
     (instruction_space, instruction_type): (ast::StateSpace, &ast::Type),
 ) -> Result<Option<ConversionKind>, TranslateError> {
     if instruction_space == ast::StateSpace::Reg {
-        if space_is_compatible(operand_space, ast::StateSpace::Reg) {
+        if operand_space == ast::StateSpace::Reg {
             if let (ast::Type::Vector(vec_len, vec_underlying_type), ast::Type::Scalar(scalar)) =
                 (operand_type, instruction_type)
             {
@@ -142,7 +142,7 @@ pub(crate) fn default_implicit_conversion(
             return Ok(Some(ConversionKind::AddressOf));
         }
     }
-    if !space_is_compatible(instruction_space, operand_space) {
+    if instruction_space != operand_space {
         default_implicit_conversion_space(
             (operand_space, operand_type),
             (instruction_space, instruction_type),
@@ -161,7 +161,7 @@ fn is_addressable(this: ast::StateSpace) -> bool {
         | ast::StateSpace::Global
         | ast::StateSpace::Local
         | ast::StateSpace::Shared => true,
-        ast::StateSpace::Param | ast::StateSpace::Reg | ast::StateSpace::Sreg => false,
+        ast::StateSpace::Param | ast::StateSpace::Reg => false,
         ast::StateSpace::SharedCluster
         | ast::StateSpace::SharedCta
         | ast::StateSpace::ParamEntry
@@ -178,7 +178,7 @@ fn default_implicit_conversion_space(
         || (operand_space == ast::StateSpace::Generic && coerces_to_generic(instruction_space))
     {
         Ok(Some(ConversionKind::PtrToPtr))
-    } else if space_is_compatible(operand_space, ast::StateSpace::Reg) {
+    } else if operand_space == ast::StateSpace::Reg {
         match operand_type {
             ast::Type::Pointer(operand_ptr_type, operand_ptr_space)
                 if *operand_ptr_space == instruction_space =>
@@ -210,7 +210,7 @@ fn default_implicit_conversion_space(
             },
             _ => Err(error_mismatched_type()),
         }
-    } else if space_is_compatible(instruction_space, ast::StateSpace::Reg) {
+    } else if instruction_space == ast::StateSpace::Reg {
         match instruction_type {
             ast::Type::Pointer(instruction_ptr_type, instruction_ptr_space)
                 if operand_space == *instruction_ptr_space =>
@@ -234,7 +234,7 @@ fn default_implicit_conversion_type(
     operand_type: &ast::Type,
     instruction_type: &ast::Type,
 ) -> Result<Option<ConversionKind>, TranslateError> {
-    if space_is_compatible(space, ast::StateSpace::Reg) {
+    if space == ast::StateSpace::Reg {
         if should_bitcast(instruction_type, operand_type) {
             Ok(Some(ConversionKind::Default))
         } else {
@@ -257,8 +257,7 @@ fn coerces_to_generic(this: ast::StateSpace) -> bool {
         | ast::StateSpace::Param
         | ast::StateSpace::ParamEntry
         | ast::StateSpace::ParamFunc
-        | ast::StateSpace::Generic
-        | ast::StateSpace::Sreg => false,
+        | ast::StateSpace::Generic => false,
     }
 }
 
@@ -294,7 +293,7 @@ pub(crate) fn should_convert_relaxed_dst_wrapper(
     (operand_space, operand_type): (ast::StateSpace, &ast::Type),
     (instruction_space, instruction_type): (ast::StateSpace, &ast::Type),
 ) -> Result<Option<ConversionKind>, TranslateError> {
-    if !space_is_compatible(operand_space, instruction_space) {
+    if operand_space != instruction_space {
         return Err(TranslateError::MismatchedType);
     }
     if operand_type == instruction_type {
@@ -371,7 +370,7 @@ pub(crate) fn should_convert_relaxed_src_wrapper(
     (operand_space, operand_type): (ast::StateSpace, &ast::Type),
     (instruction_space, instruction_type): (ast::StateSpace, &ast::Type),
 ) -> Result<Option<ConversionKind>, TranslateError> {
-    if !space_is_compatible(operand_space, instruction_space) {
+    if operand_space != instruction_space {
         return Err(error_mismatched_type());
     }
     if operand_type == instruction_type {

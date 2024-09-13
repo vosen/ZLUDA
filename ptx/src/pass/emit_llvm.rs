@@ -656,7 +656,6 @@ fn get_state_space(space: ast::StateSpace) -> Result<u32, TranslateError> {
     match space {
         ast::StateSpace::Reg => Ok(PRIVATE_ADDRESS_SPACE),
         ast::StateSpace::Generic => Ok(GENERIC_ADDRESS_SPACE),
-        ast::StateSpace::Sreg => Ok(PRIVATE_ADDRESS_SPACE),
         ast::StateSpace::Param => Err(TranslateError::Todo),
         ast::StateSpace::ParamEntry => Err(TranslateError::Todo),
         ast::StateSpace::ParamFunc => Err(TranslateError::Todo),

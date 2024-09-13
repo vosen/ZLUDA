@@ -525,7 +525,7 @@ impl<'b> NumericIdResolver<'b> {
             Some(Some(x)) => Ok(x.clone()),
             Some(None) => Err(TranslateError::UntypedSymbol),
             None => match self.special_registers.get(id) {
-                Some(x) => Ok((x.get_type(), ast::StateSpace::Sreg, true)),
+                Some(x) => Ok((x.get_type(), ast::StateSpace::Reg, true)),
                 None => match self.global_type_check.get(&id) {
                     Some(Some(result)) => Ok(result.clone()),
                     Some(None) | None => Err(TranslateError::UntypedSymbol),
@@ -1205,12 +1205,6 @@ impl<
             _marker: PhantomData,
         }
     }
-}
-
-fn space_is_compatible(this: ast::StateSpace, other: ast::StateSpace) -> bool {
-    this == other
-        || this == ast::StateSpace::Reg && other == ast::StateSpace::Sreg
-        || this == ast::StateSpace::Sreg && other == ast::StateSpace::Reg
 }
 
 fn register_external_fn_call<'a>(
