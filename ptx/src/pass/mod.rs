@@ -29,6 +29,7 @@ mod normalize_identifiers2;
 mod normalize_labels;
 mod normalize_predicates;
 mod normalize_predicates2;
+mod resolve_function_pointers;
 
 static ZLUDA_PTX_IMPL_INTEL: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.spv");
 static ZLUDA_PTX_IMPL_AMD: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.bc");
