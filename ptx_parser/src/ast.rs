@@ -1049,6 +1049,15 @@ impl<'input, ID> MethodName<'input, ID> {
     }
 }
 
+impl<'input> MethodName<'input, &'input str> {
+    pub fn text(&self) -> &'input str {
+        match self {
+            MethodName::Kernel(name) => *name,
+            MethodName::Func(name) => *name,
+        }
+    }
+}
+
 bitflags! {
     pub struct LinkingDirective: u8 {
         const NONE = 0b000;

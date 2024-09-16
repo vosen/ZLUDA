@@ -24,6 +24,7 @@ mod fix_special_registers;
 mod insert_implicit_conversions;
 mod insert_mem_ssa_statements;
 mod normalize_identifiers;
+mod normalize_identifiers2;
 mod normalize_labels;
 mod normalize_predicates;
 
@@ -1657,3 +1658,35 @@ fn denorm_count_map_update_impl<T: Eq + Hash>(
         }
     }
 }
+
+pub(crate) enum Directive2<'input, Instruction, Operand: ast::Operand> {
+    Variable(ast::LinkingDirective, ast::Variable<SpirvWord>),
+    Method(Function2<'input, Instruction, Operand>),
+}
+
+pub(crate) struct Function2<'input, Instruction, Operand: ast::Operand> {
+    pub func_decl: Rc<RefCell<ast::MethodDeclaration<'input, SpirvWord>>>,
+    pub globals: Vec<ast::Variable<SpirvWord>>,
+    pub body: Option<Vec<Statement<Instruction, Operand>>>,
+    import_as: Option<String>,
+    tuning: Vec<ast::TuningDirective>,
+    linkage: ast::LinkingDirective,
+}
+
+type NormalizedDirective2<'input> = Directive2<
+    'input,
+    (
+        Option<ast::PredAt<SpirvWord>>,
+        ast::Instruction<ast::ParsedOperand<SpirvWord>>,
+    ),
+    ast::ParsedOperand<SpirvWord>,
+>;
+
+type NormalizedFunction2<'input> = Function2<
+    'input,
+    (
+        Option<ast::PredAt<SpirvWord>>,
+        ast::Instruction<ast::ParsedOperand<SpirvWord>>,
+    ),
+    ast::ParsedOperand<SpirvWord>,
+>;
