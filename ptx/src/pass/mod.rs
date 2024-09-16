@@ -1,5 +1,6 @@
 use ptx_parser as ast;
 use rspirv::{binary::Assemble, dr};
+use rustc_hash::FxHashMap;
 use std::hash::Hash;
 use std::num::NonZeroU8;
 use std::{
@@ -27,6 +28,7 @@ mod normalize_identifiers;
 mod normalize_identifiers2;
 mod normalize_labels;
 mod normalize_predicates;
+mod normalize_predicates2;
 
 static ZLUDA_PTX_IMPL_INTEL: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.spv");
 static ZLUDA_PTX_IMPL_AMD: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.bc");
@@ -1690,3 +1692,43 @@ type NormalizedFunction2<'input> = Function2<
     ),
     ast::ParsedOperand<SpirvWord>,
 >;
+
+type UnconditionalDirective<'input> = Directive2<
+    'input,
+    ast::Instruction<ast::ParsedOperand<SpirvWord>>,
+    ast::ParsedOperand<SpirvWord>,
+>;
+
+type UnconditionalFunction<'input> = Function2<
+    'input,
+    ast::Instruction<ast::ParsedOperand<SpirvWord>>,
+    ast::ParsedOperand<SpirvWord>,
+>;
+
+struct GlobalStringIdentResolver2<'input> {
+    pub(crate) current_id: SpirvWord,
+    pub(crate) ident_map: FxHashMap<SpirvWord, IdentEntry<'input>>,
+}
+
+impl<'input> GlobalStringIdentResolver2<'input> {
+    fn register_intermediate(
+        &mut self,
+        type_space: Option<(ast::Type, ast::StateSpace)>,
+    ) -> SpirvWord {
+        let new_id = self.current_id;
+        self.ident_map.insert(
+            new_id,
+            IdentEntry {
+                name: None,
+                type_space,
+            },
+        );
+        self.current_id.0 += 1;
+        new_id
+    }
+}
+
+struct IdentEntry<'input> {
+    name: Option<Cow<'input, str>>,
+    type_space: Option<(ast::Type, ast::StateSpace)>,
+}
