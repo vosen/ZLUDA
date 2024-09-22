@@ -308,6 +308,7 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
             Statement::PtrAccess(_) => todo!(),
             Statement::RepackVector(_) => todo!(),
             Statement::FunctionPointer(_) => todo!(),
+            Statement::VectorAccess(_) => todo!(),
         })
     }
 

@@ -20,7 +20,7 @@ fn run_directive<'input>(
         var @ Directive2::Variable(..) => var,
         Directive2::Method(method) => {
             {
-                let func_decl = method.func_decl.borrow();
+                let func_decl = &method.func_decl;
                 match func_decl.name {
                     ptx_parser::MethodName::Kernel(_) => {}
                     ptx_parser::MethodName::Func(name) => {

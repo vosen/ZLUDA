@@ -45,6 +45,13 @@ pub(super) fn run(
                     Statement::RepackVector(repack),
                 )?;
             }
+            Statement::VectorAccess(vector_access) => {
+                insert_implicit_conversions_impl(
+                    &mut result,
+                    id_def,
+                    Statement::VectorAccess(vector_access),
+                )?;
+            }
             s @ Statement::Conditional(_)
             | s @ Statement::Conversion(_)
             | s @ Statement::Label(_)

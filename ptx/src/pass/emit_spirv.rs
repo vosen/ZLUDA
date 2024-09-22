@@ -1561,6 +1561,7 @@ fn emit_function_body_ops<'input>(
                     builder.copy_object(vector_type.0, Some(repack.packed.0), temp_vec)?;
                 }
             }
+            Statement::VectorAccess(vector_access) => todo!(),
         }
     }
     Ok(())

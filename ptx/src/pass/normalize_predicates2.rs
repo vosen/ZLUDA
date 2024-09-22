@@ -55,8 +55,8 @@ fn run_statement<'input>(
         Statement::Variable(var) => result.push(Statement::Variable(var)),
         Statement::Instruction((predicate, instruction)) => {
             if let Some(pred) = predicate {
-                let if_true = resolver.register_intermediate(None);
-                let if_false = resolver.register_intermediate(None);
+                let if_true = resolver.register_unnamed(None);
+                let if_false = resolver.register_unnamed(None);
                 let folded_bra = match &instruction {
                     ast::Instruction::Bra { arguments, .. } => Some(arguments.src),
                     _ => None,
