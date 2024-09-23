@@ -1499,7 +1499,6 @@ derive_parser!(
     pub enum StateSpace {
         Reg,
         Generic,
-        Sreg,
     }
 
     #[derive(Copy, Clone, PartialEq, Eq, Hash)]

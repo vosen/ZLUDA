@@ -17,6 +17,9 @@ thiserror = "1.0"
 bit-vec = "0.6"
 half ="1.6"
 bitflags = "1.2"
+rustc-hash = "2.0.0"
+strum = "0.26"
+strum_macros = "0.26"
 
 [dependencies.lalrpop-util]
 version = "0.19.12"

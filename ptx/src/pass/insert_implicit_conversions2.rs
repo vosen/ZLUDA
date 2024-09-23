@@ -17,58 +17,46 @@ use ptx_parser as ast;
    - generic/global st: for instruction `st [x], y`, x must be of type
      b64/u64/s64, which is bitcast to a pointer
 */
-pub(super) fn run(
+pub(super) fn run<'input>(
+    resolver: &mut GlobalStringIdentResolver2<'input>,
+    directives: Vec<Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>>,
+) -> Result<Vec<Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
+    directives
+        .into_iter()
+        .map(|directive| run_directive(resolver, directive))
+        .collect::<Result<Vec<_>, _>>()
+}
+
+fn run_directive<'a, 'input>(
+    resolver: &mut GlobalStringIdentResolver2<'input>,
+    directive: Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>,
+) -> Result<Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
+    Ok(match directive {
+        var @ Directive2::Variable(..) => var,
+        Directive2::Method(mut method) => {
+            method.body = method
+                .body
+                .map(|statements| run_statements(resolver, statements))
+                .transpose()?;
+            Directive2::Method(method)
+        }
+    })
+}
+
+fn run_statements<'input>(
+    resolver: &mut GlobalStringIdentResolver2<'input>,
     func: Vec<ExpandedStatement>,
-    id_def: &mut MutableNumericIdResolver,
 ) -> Result<Vec<ExpandedStatement>, TranslateError> {
     let mut result = Vec::with_capacity(func.len());
     for s in func.into_iter() {
-        match s {
-            Statement::Instruction(inst) => {
-                insert_implicit_conversions_impl(
-                    &mut result,
-                    id_def,
-                    Statement::Instruction(inst),
-                )?;
-            }
-            Statement::PtrAccess(access) => {
-                insert_implicit_conversions_impl(
-                    &mut result,
-                    id_def,
-                    Statement::PtrAccess(access),
-                )?;
-            }
-            Statement::RepackVector(repack) => {
-                insert_implicit_conversions_impl(
-                    &mut result,
-                    id_def,
-                    Statement::RepackVector(repack),
-                )?;
-            }
-            Statement::VectorAccess(vector_access) => {
-                insert_implicit_conversions_impl(
-                    &mut result,
-                    id_def,
-                    Statement::VectorAccess(vector_access),
-                )?;
-            }
-            s @ Statement::Conditional(_)
-            | s @ Statement::Conversion(_)
-            | s @ Statement::Label(_)
-            | s @ Statement::Constant(_)
-            | s @ Statement::Variable(_)
-            | s @ Statement::LoadVar(..)
-            | s @ Statement::StoreVar(..)
-            | s @ Statement::RetValue(..)
-            | s @ Statement::FunctionPointer(..) => result.push(s),
-        }
+        insert_implicit_conversions_impl(resolver, &mut result, s)?;
     }
     Ok(result)
 }
 
-fn insert_implicit_conversions_impl(
+fn insert_implicit_conversions_impl<'input>(
+    resolver: &mut GlobalStringIdentResolver2<'input>,
     func: &mut Vec<ExpandedStatement>,
-    id_def: &mut MutableNumericIdResolver,
     stmt: ExpandedStatement,
 ) -> Result<(), TranslateError> {
     let mut post_conv = Vec::new();
@@ -81,7 +69,7 @@ fn insert_implicit_conversions_impl(
                 None => return Ok(operand),
                 Some(t) => t,
             };
-            let (operand_type, operand_space) = id_def.get_typed(operand)?;
+            let (operand_type, operand_space) = resolver.get_typed(operand)?;
             let conversion_fn = if relaxed_type_check {
                 if is_dst {
                     should_convert_relaxed_dst_wrapper
@@ -92,17 +80,17 @@ fn insert_implicit_conversions_impl(
                 default_implicit_conversion
             };
             match conversion_fn(
-                (operand_space, &operand_type),
+                (*operand_space, &operand_type),
                 (instruction_space, instr_type),
             )? {
                 Some(conv_kind) => {
                     let conv_output = if is_dst { &mut post_conv } else { &mut *func };
                     let mut from_type = instr_type.clone();
                     let mut from_space = instruction_space;
-                    let mut to_type = operand_type;
-                    let mut to_space = operand_space;
+                    let mut to_type = operand_type.clone();
+                    let mut to_space = *operand_space;
                     let mut src =
-                        id_def.register_intermediate(instr_type.clone(), instruction_space);
+                        resolver.register_unnamed(Some((instr_type.clone(), instruction_space)));
                     let mut dst = operand;
                     let result = Ok::<_, TranslateError>(src);
                     if !is_dst {

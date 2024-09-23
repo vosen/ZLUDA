@@ -26,6 +26,7 @@ pub(super) fn run(
             | Statement::Constant(..)
             | Statement::Label(..)
             | Statement::PtrAccess { .. }
+            | Statement::VectorAccess { .. }
             | Statement::RepackVector(..)
             | Statement::FunctionPointer(..) => {}
         }
