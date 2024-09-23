@@ -27,8 +27,10 @@ mod expand_operands;
 mod extract_globals;
 mod fix_special_registers;
 mod fix_special_registers2;
+mod hoist_globals;
 mod insert_explicit_load_store;
 mod insert_implicit_conversions;
+mod insert_implicit_conversions2;
 mod insert_mem_ssa_statements;
 mod normalize_identifiers;
 mod normalize_identifiers2;
@@ -67,11 +69,13 @@ pub fn to_llvm_module<'input>(ast: ast::Module<'input>) -> Result<Module, Transl
         })?;
     normalize_variable_decls(&mut directives);
     let denorm_information = compute_denorm_information(&directives);
-    let llvm_ir = emit_llvm::run(&id_defs, call_map, directives)?;
+    todo!()
+    /*
+    let llvm_ir: emit_llvm::MemoryBuffer = emit_llvm::run(&id_defs, call_map, directives)?;
     Ok(Module {
         llvm_ir,
         kernel_info: HashMap::new(),
-    })
+    }) */
 }
 
 pub fn to_llvm_module2<'input>(ast: ast::Module<'input>) -> Result<Module, TranslateError> {
@@ -82,10 +86,17 @@ pub fn to_llvm_module2<'input>(ast: ast::Module<'input>) -> Result<Module, Trans
     let directives = normalize_predicates2::run(&mut flat_resolver, directives)?;
     let directives = resolve_function_pointers::run(directives)?;
     let directives = fix_special_registers2::run(&mut flat_resolver, &sreg_map, directives)?;
-    let directives = expand_operands::run(&mut flat_resolver, directives)?;
+    let directives: Vec<Directive2<'_, ptx_parser::Instruction<SpirvWord>, SpirvWord>> =
+        expand_operands::run(&mut flat_resolver, directives)?;
     let directives = deparamize_functions::run(&mut flat_resolver, directives)?;
     let directives = insert_explicit_load_store::run(&mut flat_resolver, directives)?;
-    todo!()
+    let directives = insert_implicit_conversions2::run(&mut flat_resolver, directives)?;
+    let directives = hoist_globals::run(directives)?;
+    let llvm_ir = emit_llvm::run(flat_resolver, directives)?;
+    Ok(Module {
+        llvm_ir,
+        kernel_info: HashMap::new(),
+    })
 }
 
 fn translate_directive<'input, 'a>(
