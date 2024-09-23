@@ -273,7 +273,6 @@ fn space_to_ptx_name(this: ast::StateSpace) -> &'static str {
         ast::StateSpace::Const => "const",
         ast::StateSpace::Local => "local",
         ast::StateSpace::Param => "param",
-        ast::StateSpace::Sreg => "sreg",
         ast::StateSpace::SharedCluster => "shared_cluster",
         ast::StateSpace::ParamEntry => "param_entry",
         ast::StateSpace::SharedCta => "shared_cta",

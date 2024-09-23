@@ -63,9 +63,9 @@ impl<'a, 'b> FlattenArguments<'a, 'b> {
         } else {
             return Err(TranslateError::UntypedSymbol);
         };
-        if state_space == ast::StateSpace::Reg || state_space == ast::StateSpace::Sreg {
+        if state_space == ast::StateSpace::Reg {
             let (reg_type, reg_space) = self.id_def.get_typed(reg)?;
-            if !space_is_compatible(reg_space, ast::StateSpace::Reg) {
+            if reg_space != ast::StateSpace::Reg {
                 return Err(error_mismatched_type());
             }
             let reg_scalar_type = match reg_type {

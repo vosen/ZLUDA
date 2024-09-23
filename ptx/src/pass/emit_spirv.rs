@@ -469,7 +469,6 @@ fn space_to_spirv(this: ast::StateSpace) -> spirv::StorageClass {
         ast::StateSpace::Shared => spirv::StorageClass::Workgroup,
         ast::StateSpace::Param => spirv::StorageClass::Function,
         ast::StateSpace::Reg => spirv::StorageClass::Function,
-        ast::StateSpace::Sreg => spirv::StorageClass::Input,
         ast::StateSpace::ParamEntry
         | ast::StateSpace::ParamFunc
         | ast::StateSpace::SharedCluster
@@ -693,7 +692,6 @@ fn emit_variable<'input>(
         ast::StateSpace::Shared => (false, spirv::StorageClass::Workgroup),
         ast::StateSpace::Const => (false, spirv::StorageClass::UniformConstant),
         ast::StateSpace::Generic => todo!(),
-        ast::StateSpace::Sreg => todo!(),
         ast::StateSpace::ParamEntry
         | ast::StateSpace::ParamFunc
         | ast::StateSpace::SharedCluster
@@ -1563,6 +1561,7 @@ fn emit_function_body_ops<'input>(
                     builder.copy_object(vector_type.0, Some(repack.packed.0), temp_vec)?;
                 }
             }
+            Statement::VectorAccess(vector_access) => todo!(),
         }
     }
     Ok(())

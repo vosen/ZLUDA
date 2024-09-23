@@ -189,7 +189,7 @@ impl<'a, 'input> InsertMemSSAVisitor<'a, 'input> {
             return Ok(symbol);
         };
         let (mut var_type, var_space, is_variable) = self.id_def.get_typed(symbol)?;
-        if !space_is_compatible(var_space, ast::StateSpace::Reg) || !is_variable {
+        if var_space != ast::StateSpace::Reg || !is_variable {
             return Ok(symbol);
         };
         let member_index = match member_index {

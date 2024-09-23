@@ -236,7 +236,7 @@ fn test_hip_assert<
     output: &mut [Output],
 ) -> Result<(), Box<dyn error::Error + 'a>> {
     let ast = ptx_parser::parse_module_checked(ptx_text).unwrap();
-    let llvm_ir = pass::to_llvm_module(ast).unwrap();
+    let llvm_ir = pass::to_llvm_module2(ast).unwrap();
     let name = CString::new(name)?;
     let result =
         run_hip(name.as_c_str(), llvm_ir, input, output).map_err(|err| DisplayError { err })?;
