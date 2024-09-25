@@ -31,10 +31,10 @@ pub(super) fn run<'a, 'input>(
         sreg_to_function,
         result: Vec::new(),
     };
-    directives
-        .into_iter()
-        .map(|directive| run_directive(&mut visitor, directive))
-        .collect::<Result<Vec<_>, _>>()
+    for directive in directives.into_iter() {
+        result.push(run_directive(&mut visitor, directive)?);
+    }
+    Ok(result)
 }
 
 fn run_directive<'a, 'input>(

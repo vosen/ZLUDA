@@ -94,7 +94,7 @@ fn run_method<'input>(
         .body
         .map(|statements| {
             for statement in statements {
-                run_statement(&remap_returns, &mut body, statement)?;
+                run_statement(resolver, &remap_returns, &mut body, statement)?;
             }
             Ok::<_, TranslateError>(body)
         })
@@ -110,6 +110,7 @@ fn run_method<'input>(
 }
 
 fn run_statement<'input>(
+    resolver: &mut GlobalStringIdentResolver2<'input>,
     remap_returns: &Vec<(SpirvWord, SpirvWord, ast::Type)>,
     result: &mut Vec<Statement<ast::Instruction<SpirvWord>, SpirvWord>>,
     statement: Statement<ast::Instruction<SpirvWord>, SpirvWord>,
@@ -132,6 +133,66 @@ fn run_statement<'input>(
                 }));
             }
             result.push(statement);
+        }
+        Statement::Instruction(ast::Instruction::Call {
+            mut data,
+            mut arguments,
+        }) => {
+            let mut post_st = Vec::new();
+            for ((type_, space), ident) in data
+                .input_arguments
+                .iter_mut()
+                .zip(arguments.input_arguments.iter_mut())
+            {
+                if *space == ptx_parser::StateSpace::Param {
+                    *space = ptx_parser::StateSpace::Reg;
+                    let old_name = *ident;
+                    *ident = resolver
+                        .register_unnamed(Some((type_.clone(), ptx_parser::StateSpace::Reg)));
+                    result.push(Statement::Instruction(ast::Instruction::Ld {
+                        data: ast::LdDetails {
+                            qualifier: ast::LdStQualifier::Weak,
+                            state_space: ast::StateSpace::Param,
+                            caching: ast::LdCacheOperator::Cached,
+                            typ: type_.clone(),
+                            non_coherent: false,
+                        },
+                        arguments: ast::LdArgs {
+                            dst: *ident,
+                            src: old_name,
+                        },
+                    }));
+                }
+            }
+            for ((type_, space), ident) in data
+                .return_arguments
+                .iter_mut()
+                .zip(arguments.return_arguments.iter_mut())
+            {
+                if *space == ptx_parser::StateSpace::Param {
+                    *space = ptx_parser::StateSpace::Reg;
+                    let old_name = *ident;
+                    *ident = resolver
+                        .register_unnamed(Some((type_.clone(), ptx_parser::StateSpace::Reg)));
+                    post_st.push(Statement::Instruction(ast::Instruction::St {
+                        data: ast::StData {
+                            qualifier: ast::LdStQualifier::Weak,
+                            state_space: ast::StateSpace::Param,
+                            caching: ast::StCacheOperator::Writethrough,
+                            typ: type_.clone(),
+                        },
+                        arguments: ast::StArgs {
+                            src1: old_name,
+                            src2: *ident,
+                        },
+                    }));
+                }
+            }
+            result.push(Statement::Instruction(ast::Instruction::Call {
+                data,
+                arguments,
+            }));
+            result.extend(post_st.into_iter());
         }
         statement => {
             result.push(statement);

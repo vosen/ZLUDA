@@ -5,7 +5,7 @@ pub(super) fn run<'input>(
 ) -> Result<Vec<Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
     let mut result = Vec::with_capacity(directives.len());
     for mut directive in directives.into_iter() {
-        run_directive(&mut result, &mut directive);
+        run_directive(&mut result, &mut directive)?;
         result.push(directive);
     }
     Ok(result)

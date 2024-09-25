@@ -326,6 +326,7 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
         let elf_module = comgr::compile_bitcode(
             unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) },
             &*module.llvm_ir,
+            module.linked_bitcode(),
         )
         .unwrap();
         let mut module = ptr::null_mut();

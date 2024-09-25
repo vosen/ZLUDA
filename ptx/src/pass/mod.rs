@@ -39,9 +39,8 @@ mod normalize_predicates;
 mod normalize_predicates2;
 mod resolve_function_pointers;
 
-static ZLUDA_PTX_IMPL_INTEL: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.spv");
-static ZLUDA_PTX_IMPL_AMD: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.bc");
-const ZLUDA_PTX_PREFIX: &'static str = "__zluda_ptx_impl__";
+static ZLUDA_PTX_IMPL: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.bc");
+const ZLUDA_PTX_PREFIX: &'static str = "__zluda_ptx_impl_";
 
 pub fn to_llvm_module<'input>(ast: ast::Module<'input>) -> Result<Module, TranslateError> {
     let mut id_defs = GlobalStringIdResolver::<'input>::new(SpirvWord(1));
@@ -218,6 +217,12 @@ fn to_ssa<'input, 'b>(
 pub struct Module {
     pub llvm_ir: emit_llvm::MemoryBuffer,
     pub kernel_info: HashMap<String, KernelInfo>,
+}
+
+impl Module {
+    pub fn linked_bitcode(&self) -> &[u8] {
+        ZLUDA_PTX_IMPL
+    }
 }
 
 struct GlobalStringIdResolver<'input> {
@@ -1975,7 +1980,7 @@ impl SpecialRegistersMap2 {
             let name =
                 ast::MethodName::Func(resolver.register_named(Cow::Owned(external_fn_name), None));
             let return_type = sreg.get_function_return_type();
-            let input_type = sreg.get_function_return_type();
+            let input_type = sreg.get_function_input_type();
             (
                 sreg,
                 ast::MethodDeclaration {
@@ -1988,14 +1993,17 @@ impl SpecialRegistersMap2 {
                         array_init: Vec::new(),
                     }],
                     name: name,
-                    input_arguments: vec![ast::Variable {
-                        align: None,
-                        v_type: input_type.into(),
-                        state_space: ast::StateSpace::Reg,
-                        name: resolver
-                            .register_unnamed(Some((input_type.into(), ast::StateSpace::Reg))),
-                        array_init: Vec::new(),
-                    }],
+                    input_arguments: input_type
+                        .into_iter()
+                        .map(|type_| ast::Variable {
+                            align: None,
+                            v_type: type_.into(),
+                            state_space: ast::StateSpace::Reg,
+                            name: resolver
+                                .register_unnamed(Some((type_.into(), ast::StateSpace::Reg))),
+                            array_init: Vec::new(),
+                        })
+                        .collect::<Vec<_>>(),
                     shared_mem: None,
                 },
             )
