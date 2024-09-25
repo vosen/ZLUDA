@@ -1,5 +1,5 @@
 use amd_comgr_sys::*;
-use std::{ffi::CStr, mem, ptr};
+use std::{ffi::CStr, iter, mem, ptr};
 
 struct Data(amd_comgr_data_t);
 
@@ -83,6 +83,20 @@ impl ActionInfo {
         unsafe { amd_comgr_action_info_set_language(self.get(), language) }
     }
 
+    fn set_options<'a>(
+        &self,
+        options: impl Iterator<Item = &'a CStr>,
+    ) -> Result<(), amd_comgr_status_s> {
+        let options = options.map(|x| x.as_ptr()).collect::<Vec<_>>();
+        unsafe {
+            amd_comgr_action_info_set_option_list(
+                self.get(),
+                options.as_ptr().cast_mut(),
+                options.len(),
+            )
+        }
+    }
+
     fn get(&self) -> amd_comgr_action_info_t {
         self.0
     }
@@ -116,21 +130,27 @@ pub fn compile_bitcode(
     let lang_action_info = ActionInfo::new()?;
     lang_action_info.set_isa_name(gcn_arch)?;
     lang_action_info.set_language(amd_comgr_language_t::AMD_COMGR_LANGUAGE_LLVM_IR)?;
-    let linked_data_set = do_action(
+    let with_device_libs = do_action(
         &bitcode_data_set,
         &lang_action_info,
         amd_comgr_action_kind_t::AMD_COMGR_ACTION_COMPILE_SOURCE_WITH_DEVICE_LIBS_TO_BC,
     )?;
-    let action_info = ActionInfo::new()?;
-    action_info.set_isa_name(gcn_arch)?;
+    let linked_data_set = do_action(
+        &with_device_libs,
+        &lang_action_info,
+        amd_comgr_action_kind_t::AMD_COMGR_ACTION_LINK_BC_TO_BC,
+    )?;
+    let compile_action_info = ActionInfo::new()?;
+    compile_action_info.set_isa_name(gcn_arch)?;
+    compile_action_info.set_options(iter::once(c"-O3"))?;
     let reloc_data_set = do_action(
         &linked_data_set,
-        &action_info,
+        &compile_action_info,
         amd_comgr_action_kind_t::AMD_COMGR_ACTION_CODEGEN_BC_TO_RELOCATABLE,
     )?;
     let exec_data_set = do_action(
         &reloc_data_set,
-        &action_info,
+        &compile_action_info,
         amd_comgr_action_kind_t::AMD_COMGR_ACTION_LINK_RELOCATABLE_TO_EXECUTABLE,
     )?;
     let executable =

@@ -338,7 +338,7 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
             Statement::Conversion(conversion) => self.emit_conversion(conversion)?,
             Statement::Constant(constant) => self.emit_constant(constant)?,
             Statement::RetValue(_, _) => todo!(),
-            Statement::PtrAccess(_) => todo!(),
+            Statement::PtrAccess(ptr_access) => self.emit_ptr_access(ptr_access)?,
             Statement::RepackVector(_) => todo!(),
             Statement::FunctionPointer(_) => todo!(),
             Statement::VectorAccess(_) => todo!(),
@@ -400,7 +400,7 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
             ast::Instruction::SetpBool { data, arguments } => todo!(),
             ast::Instruction::Not { data, arguments } => todo!(),
             ast::Instruction::Or { data, arguments } => todo!(),
-            ast::Instruction::And { data, arguments } => todo!(),
+            ast::Instruction::And { data, arguments } => self.emit_and(arguments),
             ast::Instruction::Bra { arguments } => todo!(),
             ast::Instruction::Call { data, arguments } => self.emit_call(data, arguments),
             ast::Instruction::Cvt { data, arguments } => todo!(),
@@ -448,9 +448,6 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
         data: ast::LdDetails,
         arguments: ast::LdArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        if data.non_coherent {
-            todo!()
-        }
         if data.qualifier != ast::LdStQualifier::Weak {
             todo!()
         }
@@ -492,7 +489,7 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
                 } else {
                     todo!()
                 }
-            },
+            }
             ConversionKind::SignExtend => todo!(),
             ConversionKind::BitToPtr => {
                 let src = self.resolver.value(conversion.src)?;
@@ -616,6 +613,26 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
     ) -> Result<(), TranslateError> {
         self.resolver
             .register(arguments.dst, self.resolver.value(arguments.src)?);
+        Ok(())
+    }
+
+    fn emit_ptr_access(&mut self, ptr_access: PtrAccess<SpirvWord>) -> Result<(), TranslateError> {
+        let ptr_src = self.resolver.value(ptr_access.ptr_src)?;
+        let mut offset_src = self.resolver.value(ptr_access.offset_src)?;
+        let pointee_type = get_scalar_type(self.context, ast::ScalarType::B8);
+        self.resolver.with_result(ptr_access.dst, |dst| unsafe {
+            LLVMBuildInBoundsGEP2(self.builder, pointee_type, ptr_src, &mut offset_src, 1, dst)
+        });
+        Ok(())
+    }
+
+    fn emit_and(&mut self, arguments: ast::AndArgs<SpirvWord>) -> Result<(), TranslateError> {
+        let builder = self.builder;
+        let src1 = self.resolver.value(arguments.src1)?;
+        let src2 = self.resolver.value(arguments.src2)?;
+        self.resolver.with_result(arguments.dst, |dst| unsafe {
+            LLVMBuildAnd(builder, src1, src2, dst)
+        });
         Ok(())
     }
 }
