@@ -436,9 +436,10 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
             ast::Instruction::Bfi { data, arguments } => todo!(),
             ast::Instruction::PrmtSlow { arguments } => todo!(),
             ast::Instruction::Prmt { data, arguments } => todo!(),
-            ast::Instruction::Activemask { arguments } => todo!(),
             ast::Instruction::Membar { data } => todo!(),
             ast::Instruction::Trap {} => todo!(),
+            // replaced by a function call
+            ast::Instruction::Activemask { arguments } => return Err(error_unreachable()),
         }
     }
 
@@ -478,7 +479,20 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
     fn emit_conversion(&mut self, conversion: ImplicitConversion) -> Result<(), TranslateError> {
         let builder = self.builder;
         match conversion.kind {
-            ConversionKind::Default => todo!(),
+            ConversionKind::Default => {
+                let from_layout = conversion.from_type.layout();
+                let to_layout = conversion.to_type.layout();
+                if from_layout.size() == to_layout.size() {
+                    let src = self.resolver.value(conversion.src)?;
+                    let type_ = get_type(self.context, &conversion.to_type)?;
+                    self.resolver.with_result(conversion.dst, |dst| unsafe {
+                        LLVMBuildBitCast(builder, src, type_, dst)
+                    });
+                    Ok(())
+                } else {
+                    todo!()
+                }
+            },
             ConversionKind::SignExtend => todo!(),
             ConversionKind::BitToPtr => {
                 let src = self.resolver.value(conversion.src)?;
