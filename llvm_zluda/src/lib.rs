@@ -39,4 +39,14 @@ extern "C" {
         scope: *const i8,
         ordering: LLVMAtomicOrdering,
     ) -> LLVMValueRef;
+
+    pub fn LLVMZludaBuildAtomicCmpXchg(
+        B: LLVMBuilderRef,
+        Ptr: LLVMValueRef,
+        Cmp: LLVMValueRef,
+        New: LLVMValueRef,
+        scope: *const i8,
+        SuccessOrdering: LLVMAtomicOrdering,
+        FailureOrdering: LLVMAtomicOrdering,
+    ) -> LLVMValueRef;
 }

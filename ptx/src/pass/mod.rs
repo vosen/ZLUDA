@@ -86,8 +86,7 @@ pub fn to_llvm_module2<'input>(ast: ast::Module<'input>) -> Result<Module, Trans
     let directives = normalize_predicates2::run(&mut flat_resolver, directives)?;
     let directives = resolve_function_pointers::run(directives)?;
     let directives = fix_special_registers2::run(&mut flat_resolver, &sreg_map, directives)?;
-    let directives: Vec<Directive2<'_, ptx_parser::Instruction<SpirvWord>, SpirvWord>> =
-        expand_operands::run(&mut flat_resolver, directives)?;
+    let directives = expand_operands::run(&mut flat_resolver, directives)?;
     let directives = deparamize_functions::run(&mut flat_resolver, directives)?;
     let directives = insert_explicit_load_store::run(&mut flat_resolver, directives)?;
     let directives = insert_implicit_conversions2::run(&mut flat_resolver, directives)?;

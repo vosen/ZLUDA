@@ -26,7 +26,10 @@ use std::ptr;
 use super::*;
 use llvm_zluda::analysis::{LLVMVerifierFailureAction, LLVMVerifyModule};
 use llvm_zluda::bit_writer::LLVMWriteBitcodeToMemoryBuffer;
-use llvm_zluda::{core::*, LLVMAtomicOrdering, LLVMAtomicRMWBinOp, LLVMZludaAtomicRMWBinOp};
+use llvm_zluda::{
+    core::*, LLVMAtomicOrdering, LLVMAtomicRMWBinOp, LLVMZludaAtomicRMWBinOp,
+    LLVMZludaBuildAtomicCmpXchg,
+};
 use llvm_zluda::{prelude::*, LLVMZludaBuildAtomicRMW};
 use llvm_zluda::{LLVMCallConv, LLVMZludaBuildAlloca};
 
@@ -457,7 +460,7 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
             ast::Instruction::Selp { data, arguments } => todo!(),
             ast::Instruction::Bar { data, arguments } => todo!(),
             ast::Instruction::Atom { data, arguments } => self.emit_atom(data, arguments),
-            ast::Instruction::AtomCas { data, arguments } => todo!(),
+            ast::Instruction::AtomCas { data, arguments } => self.emit_atom_cas(data, arguments),
             ast::Instruction::Div { data, arguments } => todo!(),
             ast::Instruction::Neg { data, arguments } => todo!(),
             ast::Instruction::Sin { data, arguments } => todo!(),
@@ -724,6 +727,33 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
         });
         Ok(())
     }
+
+    fn emit_atom_cas(
+        &mut self,
+        data: ptx_parser::AtomCasDetails,
+        arguments: ptx_parser::AtomCasArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let src1 = self.resolver.value(arguments.src1)?;
+        let src2 = self.resolver.value(arguments.src2)?;
+        let src3 = self.resolver.value(arguments.src3)?;
+        let success_ordering = get_ordering(data.semantics);
+        let failure_ordering = get_ordering_failure(data.semantics);
+        let temp = unsafe {
+            LLVMZludaBuildAtomicCmpXchg(
+                self.builder,
+                src1,
+                src2,
+                src3,
+                get_scope(data.scope)?,
+                success_ordering,
+                failure_ordering,
+            )
+        };
+        self.resolver.with_result(arguments.dst, |dst| unsafe {
+            LLVMBuildExtractValue(self.builder, temp, 0, dst)
+        });
+        Ok(())
+    }
 }
 
 fn get_pointer_type<'ctx>(
@@ -750,6 +780,15 @@ fn get_ordering(semantics: ast::AtomSemantics) -> LLVMAtomicOrdering {
         ast::AtomSemantics::Acquire => LLVMAtomicOrdering::LLVMAtomicOrderingAcquire,
         ast::AtomSemantics::Release => LLVMAtomicOrdering::LLVMAtomicOrderingRelease,
         ast::AtomSemantics::AcqRel => LLVMAtomicOrdering::LLVMAtomicOrderingAcquireRelease,
+    }
+}
+
+fn get_ordering_failure(semantics: ast::AtomSemantics) -> LLVMAtomicOrdering {
+    match semantics {
+        ast::AtomSemantics::Relaxed => LLVMAtomicOrdering::LLVMAtomicOrderingMonotonic,
+        ast::AtomSemantics::Acquire => LLVMAtomicOrdering::LLVMAtomicOrderingAcquire,
+        ast::AtomSemantics::Release => LLVMAtomicOrdering::LLVMAtomicOrderingAcquire,
+        ast::AtomSemantics::AcqRel => LLVMAtomicOrdering::LLVMAtomicOrderingAcquire,
     }
 }
 

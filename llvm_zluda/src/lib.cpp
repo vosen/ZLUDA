@@ -130,4 +130,19 @@ LLVMValueRef LLVMZludaBuildAtomicRMW(LLVMBuilderRef B, LLVMZludaAtomicRMWBinOp o
         context.getOrInsertSyncScopeID(scope)));
 }
 
+LLVMValueRef LLVMZludaBuildAtomicCmpXchg(LLVMBuilderRef B, LLVMValueRef Ptr,
+                                         LLVMValueRef Cmp, LLVMValueRef New,
+                                         char *scope,
+                                         LLVMAtomicOrdering SuccessOrdering,
+                                         LLVMAtomicOrdering FailureOrdering)
+{
+    auto builder = llvm::unwrap(B);
+    LLVMContext &context = builder->getContext();
+    return wrap(builder->CreateAtomicCmpXchg(
+        unwrap(Ptr), unwrap(Cmp), unwrap(New), MaybeAlign(),
+        mapFromLLVMOrdering(SuccessOrdering),
+        mapFromLLVMOrdering(FailureOrdering),
+        context.getOrInsertSyncScopeID(scope)));
+}
+
 LLVM_C_EXTERN_C_END
