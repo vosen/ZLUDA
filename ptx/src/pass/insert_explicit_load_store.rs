@@ -52,7 +52,7 @@ fn run_method<'a, 'input>(
             let new_name = visitor
                 .resolver
                 .register_unnamed(Some((arg.v_type.clone(), new_space)));
-            visitor.input_argument(old_name, new_name, old_space);
+            visitor.input_argument(old_name, new_name, old_space)?;
             arg.name = new_name;
             arg.state_space = new_space;
         }
@@ -154,7 +154,7 @@ impl<'a, 'input> InsertMemSSAVisitor<'a, 'input> {
         old_name: SpirvWord,
         new_name: SpirvWord,
         old_space: ast::StateSpace,
-    ) -> Result<(), TranslateError> {
+    ) -> Result<bool, TranslateError> {
         Ok(match old_space {
             ast::StateSpace::Reg => {
                 self.variables.insert(
@@ -164,6 +164,7 @@ impl<'a, 'input> InsertMemSSAVisitor<'a, 'input> {
                         type_: type_.clone(),
                     },
                 );
+                true
             }
             ast::StateSpace::Param => {
                 self.variables.insert(
@@ -174,19 +175,18 @@ impl<'a, 'input> InsertMemSSAVisitor<'a, 'input> {
                         name: new_name,
                     },
                 );
+                true
             }
             // Good as-is
-            ast::StateSpace::Local => {}
-            // Will be pulled into global scope later
-            ast::StateSpace::Generic
+            ast::StateSpace::Local
+            | ast::StateSpace::Generic
             | ast::StateSpace::SharedCluster
             | ast::StateSpace::Global
             | ast::StateSpace::Const
             | ast::StateSpace::SharedCta
-            | ast::StateSpace::Shared => {}
-            ast::StateSpace::ParamEntry | ast::StateSpace::ParamFunc => {
-                return Err(error_unreachable())
-            }
+            | ast::StateSpace::Shared
+            | ast::StateSpace::ParamEntry
+            | ast::StateSpace::ParamFunc => return Err(error_unreachable()),
         })
     }
 
@@ -239,17 +239,28 @@ impl<'a, 'input> InsertMemSSAVisitor<'a, 'input> {
     }
 
     fn visit_variable(&mut self, var: &mut ast::Variable<SpirvWord>) -> Result<(), TranslateError> {
-        if var.state_space != ast::StateSpace::Local {
-            let old_name = var.name;
-            let old_space = var.state_space;
-            let new_space = ast::StateSpace::Local;
-            let new_name = self
-                .resolver
-                .register_unnamed(Some((var.v_type.clone(), new_space)));
-            self.variable(&var.v_type, old_name, new_name, old_space)?;
-            var.name = new_name;
-            var.state_space = new_space;
-        }
+        let old_space = match var.state_space {
+            space @ (ptx_parser::StateSpace::Reg | ptx_parser::StateSpace::Param) => space,
+            // Do nothing
+            ptx_parser::StateSpace::Local => return Ok(()),
+            // Handled by another pass
+            ptx_parser::StateSpace::Generic
+            | ptx_parser::StateSpace::SharedCluster
+            | ptx_parser::StateSpace::ParamEntry
+            | ptx_parser::StateSpace::Global
+            | ptx_parser::StateSpace::SharedCta
+            | ptx_parser::StateSpace::Const
+            | ptx_parser::StateSpace::Shared
+            | ptx_parser::StateSpace::ParamFunc => return Ok(()),
+        };
+        let old_name = var.name;
+        let new_space = ast::StateSpace::Local;
+        let new_name = self
+            .resolver
+            .register_unnamed(Some((var.v_type.clone(), new_space)));
+        self.variable(&var.v_type, old_name, new_name, old_space)?;
+        var.name = new_name;
+        var.state_space = new_space;
         Ok(())
     }
 }
