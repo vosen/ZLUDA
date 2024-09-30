@@ -10,14 +10,28 @@
 	.reg .u64 	    in_addr;
     .reg .u64 	    out_addr;
     .reg .u32       temp<3>;
+    .reg .b32       result<2>;
+    .reg .b64       temp64_0;
+    .reg .b32       temp64_1;
+    .reg .b32       temp64_2;
+    .reg .b64       result64_<2>;
 
 	ld.param.u64 	in_addr, [input];
     ld.param.u64 	out_addr, [output];
 
-    ld.u32          temp0, [in_addr];
-	ld.u32          temp1, [in_addr+4];
-	ld.u32          temp2, [in_addr+8];
-	bfe.u32  		temp0, temp0, temp1, temp2;
-    st.u32          [out_addr], temp0;
+    ld.b64          temp64_0, [in_addr];
+	ld.b32          temp64_1, [in_addr+8];
+	ld.b32          temp64_2, [in_addr+16];
+    ld.u32          temp0, [in_addr+24];
+	ld.u32          temp1, [in_addr+28];
+	ld.u32          temp2, [in_addr+32];
+	//bfe.u64  		result64_0, temp64_0, temp64_1, temp64_2;
+	bfe.s64  		result64_1, temp64_0, temp64_1, temp64_2;
+	bfe.u32  		result0, temp0, temp1, temp2;
+	bfe.s32  		result1, temp0, temp1, temp2;
+    st.b64          [out_addr], result64_0;
+    st.b64          [out_addr], result64_1;
+    st.b32          [out_addr], result0;
+    st.b32          [out_addr], result1;
 	ret;
 }

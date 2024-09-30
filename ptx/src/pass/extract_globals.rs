@@ -219,33 +219,6 @@ fn instruction_to_fn_call(
     }))
 }
 
-fn scalar_to_ptx_name(this: ast::ScalarType) -> &'static str {
-    match this {
-        ast::ScalarType::B8 => "b8",
-        ast::ScalarType::B16 => "b16",
-        ast::ScalarType::B32 => "b32",
-        ast::ScalarType::B64 => "b64",
-        ast::ScalarType::B128 => "b128",
-        ast::ScalarType::U8 => "u8",
-        ast::ScalarType::U16 => "u16",
-        ast::ScalarType::U16x2 => "u16x2",
-        ast::ScalarType::U32 => "u32",
-        ast::ScalarType::U64 => "u64",
-        ast::ScalarType::S8 => "s8",
-        ast::ScalarType::S16 => "s16",
-        ast::ScalarType::S16x2 => "s16x2",
-        ast::ScalarType::S32 => "s32",
-        ast::ScalarType::S64 => "s64",
-        ast::ScalarType::F16 => "f16",
-        ast::ScalarType::F16x2 => "f16x2",
-        ast::ScalarType::F32 => "f32",
-        ast::ScalarType::F64 => "f64",
-        ast::ScalarType::BF16 => "bf16",
-        ast::ScalarType::BF16x2 => "bf16x2",
-        ast::ScalarType::Pred => "pred",
-    }
-}
-
 fn semantics_to_ptx_name(this: ast::AtomSemantics) -> &'static str {
     match this {
         ast::AtomSemantics::Relaxed => "relaxed",

@@ -472,14 +472,15 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
             ast::Instruction::Popc { data, arguments } => todo!(),
             ast::Instruction::Xor { data, arguments } => todo!(),
             ast::Instruction::Rem { data, arguments } => todo!(),
-            ast::Instruction::Bfe { data, arguments } => todo!(),
             ast::Instruction::Bfi { data, arguments } => todo!(),
             ast::Instruction::PrmtSlow { arguments } => todo!(),
             ast::Instruction::Prmt { data, arguments } => todo!(),
             ast::Instruction::Membar { data } => todo!(),
             ast::Instruction::Trap {} => todo!(),
             // replaced by a function call
-            ast::Instruction::Activemask { arguments } => return Err(error_unreachable()),
+            ast::Instruction::Bfe { .. } | ast::Instruction::Activemask { .. } => {
+                return Err(error_unreachable())
+            }
         }
     }
 

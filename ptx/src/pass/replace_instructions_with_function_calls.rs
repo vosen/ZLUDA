@@ -96,6 +96,10 @@ fn run_instruction<'input>(
         i @ ptx_parser::Instruction::Activemask { .. } => {
             to_call(resolver, fn_declarations, "activemask".into(), i)?
         }
+        i @ ptx_parser::Instruction::Bfe { data, .. } => {
+            let name = ["bfe_", scalar_to_ptx_name(data)].concat();
+            to_call(resolver, fn_declarations, name.into(), i)?
+        }
         i => i,
     })
 }
