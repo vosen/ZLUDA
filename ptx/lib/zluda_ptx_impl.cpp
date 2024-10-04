@@ -101,4 +101,33 @@ extern "C"
             len = sub_sat(64, pos);
         return (base << (64U - pos - len)) >> (64U - len);
     }
+
+    uint32_t __ockl_bfm_u32(uint32_t count, uint32_t offset) __attribute__((device));
+    uint32_t FUNC(bfi_b32)(uint32_t insert, uint32_t base, uint32_t pos_32, uint32_t len_32)
+    {
+        uint32_t pos = pos_32 & 0xFFU;
+        uint32_t len = len_32 & 0xFFU;
+        if (pos >= 32)
+            return base;
+        uint32_t mask;
+        if (len >= 32)
+            mask = UINT32_MAX << pos;
+        else
+            mask = __ockl_bfm_u32(len, pos);
+        return (~mask & base) | (mask & (insert << pos));
+    }
+
+    uint64_t FUNC(bfi_b64)(uint64_t insert, uint64_t base, uint32_t pos, uint32_t len)
+    {
+        // NVIDIA docs are incorrect. In 64 bit `bfe` both `pos` and `len`
+        // parameters use whole 32 bit number and not just bottom 8 bits
+        if (pos >= 64)
+            return base;
+        uint64_t mask;
+        if (len >= 64)
+            mask = UINT64_MAX << pos;
+        else
+            mask = ((1UL << len) - 1UL) << (pos);
+        return (~mask & base) | (mask & (insert << pos));
+    }
 }

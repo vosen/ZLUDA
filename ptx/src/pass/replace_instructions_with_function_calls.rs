@@ -100,6 +100,10 @@ fn run_instruction<'input>(
             let name = ["bfe_", scalar_to_ptx_name(data)].concat();
             to_call(resolver, fn_declarations, name.into(), i)?
         }
+        i @ ptx_parser::Instruction::Bfi { data, .. } => {
+            let name = ["bfi_", scalar_to_ptx_name(data)].concat();
+            to_call(resolver, fn_declarations, name.into(), i)?
+        }
         i => i,
     })
 }
