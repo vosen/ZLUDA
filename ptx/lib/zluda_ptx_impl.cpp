@@ -19,16 +19,34 @@ extern "C"
         return (uint32_t)__ockl_get_local_size(member);
     }
 
-    int32_t __ockl_bfe_i32(int32_t, uint32_t, uint32_t) __attribute__((device));
-    int32_t FUNC(bfe_s32)(int32_t base, uint32_t pos, uint32_t len)
+    uint32_t __ockl_bfe_u32(uint32_t, uint32_t, uint32_t) __attribute__((device));
+    uint32_t FUNC(bfe_u32)(uint32_t base, uint32_t pos_32, uint32_t len_32)
     {
-        return __ockl_bfe_i32(base, pos, len);
+        uint32_t pos = pos_32 & 0xFFU;
+        uint32_t len = len_32 & 0xFFU;
+        if (pos >= 32)
+            return 0;
+        // V_BFE_U32 only uses bits [4:0] for len (max value is 31)
+        if (len >= 32)
+            return base >> pos;
+        len = std::min(len, 31U);
+        return __ockl_bfe_u32(base, pos, len);
     }
 
-    uint32_t __ockl_bfe_u32(uint32_t, uint32_t, uint32_t) __attribute__((device));
-    uint32_t FUNC(bfe_u32)(uint32_t base, uint32_t pos, uint32_t len)
+    int32_t __ockl_bfe_i32(int32_t, uint32_t, uint32_t) __attribute__((device));
+    int32_t FUNC(bfe_s32)(int32_t base, uint32_t pos_32, uint32_t len_32)
     {
-        return __ockl_bfe_u32(base, pos, len);
+        uint32_t pos = pos_32 & 0xFFU;
+        uint32_t len = len_32 & 0xFFU;
+        if (len == 0)
+            return 0;
+        if (pos >= 32)
+            return (base >> 31);
+        // V_BFE_I32 only uses bits [4:0] for len (max value is 31)
+        if (len >= 32)
+            return base >> pos;
+        len = std::min(len, 31U);
+        return __ockl_bfe_i32(base, pos, len);
     }
 
     // LLVM contains mentions of llvm.amdgcn.ubfe.i64 and llvm.amdgcn.sbfe.i64,
