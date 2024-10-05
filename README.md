@@ -27,6 +27,8 @@ LD_LIBRARY_PATH=<ZLUDA_DIRECTORY> <APPLICATION> <APPLICATIONS_ARGUMENTS>
 ## Building
 **Warning**: ZLUDA is under heavy development (see news [here](https://vosen.github.io/ZLUDA/blog/zludas-third-life/)). Instructions below might not work.
 
+_Note_: This repo has submodules. Make sure to recurse submodules when cloning this repo, e.g.: `git clone --recursive https://github.com/vosen/ZLUDA.git`
+
  You should have a relatively recent version of Rust installed, then you just do:
 
 ```
