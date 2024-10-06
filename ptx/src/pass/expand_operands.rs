@@ -226,23 +226,23 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
 
     fn vec_pack(
         &mut self,
-        vecs: Vec<SpirvWord>,
+        vector_elements: Vec<SpirvWord>,
         type_space: Option<(&ast::Type, ast::StateSpace)>,
         is_dst: bool,
         relaxed_type_check: bool,
     ) -> Result<SpirvWord, TranslateError> {
-        let (scalar_t, state_space) = match type_space {
-            Some((ast::Type::Vector(_, scalar_t), space)) => (*scalar_t, space),
+        let (width, scalar_t, state_space) = match type_space {
+            Some((ast::Type::Vector(width, scalar_t), space)) => (*width, *scalar_t, space),
             _ => return Err(error_mismatched_type()),
         };
-        let temp_vec = self
+        let temporary_vector = self
             .resolver
-            .register_unnamed(Some((scalar_t.into(), state_space)));
+            .register_unnamed(Some((ast::Type::Vector(width, scalar_t), state_space)));
         let statement = Statement::RepackVector(RepackVectorDetails {
             is_extract: is_dst,
             typ: scalar_t,
-            packed: temp_vec,
-            unpacked: vecs,
+            packed: temporary_vector,
+            unpacked: vector_elements,
             relaxed_type_check,
         });
         if is_dst {
@@ -250,7 +250,7 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
         } else {
             self.result.push(statement);
         }
-        Ok(temp_vec)
+        Ok(temporary_vector)
     }
 }
 
