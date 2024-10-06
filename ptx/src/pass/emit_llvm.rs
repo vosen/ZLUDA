@@ -231,15 +231,18 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             })
             .ok_or_else(|| error_unreachable())?;
         let name = CString::new(name).map_err(|_| error_unreachable())?;
-        let fn_type = get_function_type(
-            self.context,
-            func_decl.return_arguments.iter().map(|v| &v.v_type),
-            func_decl
-                .input_arguments
-                .iter()
-                .map(|v| get_input_argument_type(self.context, &v.v_type, v.state_space)),
-        )?;
-        let fn_ = unsafe { LLVMAddFunction(self.module, name.as_ptr(), fn_type) };
+        let mut fn_ = unsafe { LLVMGetNamedFunction(self.module, name.as_ptr()) };
+        if fn_ == ptr::null_mut() {
+            let fn_type = get_function_type(
+                self.context,
+                func_decl.return_arguments.iter().map(|v| &v.v_type),
+                func_decl
+                    .input_arguments
+                    .iter()
+                    .map(|v| get_input_argument_type(self.context, &v.v_type, v.state_space)),
+            )?;
+            fn_ = unsafe { LLVMAddFunction(self.module, name.as_ptr(), fn_type) };
+        }
         if let ast::MethodName::Func(name) = func_decl.name {
             self.resolver.register(name, fn_);
         }
@@ -277,6 +280,9 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                 unsafe { LLVMAppendBasicBlockInContext(self.context, fn_, LLVM_UNNAMED.as_ptr()) };
             unsafe { LLVMPositionBuilderAtEnd(self.builder.get(), real_bb) };
             let mut method_emitter = MethodEmitContext::new(self, fn_, variables_builder);
+            for var in func_decl.return_arguments {
+                method_emitter.emit_variable(var)?;
+            }
             for statement in statements.iter() {
                 if let Statement::Label(label) = statement {
                     method_emitter.emit_label_initial(*label);
@@ -382,7 +388,7 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
             Statement::StoreVar(store) => self.emit_store_var(store)?,
             Statement::Conversion(conversion) => self.emit_conversion(conversion)?,
             Statement::Constant(constant) => self.emit_constant(constant)?,
-            Statement::RetValue(_, _) => todo!(),
+            Statement::RetValue(_, values) => self.emit_ret_value(values)?,
             Statement::PtrAccess(ptr_access) => self.emit_ptr_access(ptr_access)?,
             Statement::RepackVector(_) => todo!(),
             Statement::FunctionPointer(_) => todo!(),
@@ -560,7 +566,14 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
                 });
                 Ok(())
             }
-            ConversionKind::AddressOf => todo!(),
+            ConversionKind::AddressOf => {
+                let src = self.resolver.value(conversion.src)?;
+                let dst_type = get_type(self.context, &conversion.to_type)?;
+                self.resolver.with_result(conversion.dst, |dst| unsafe {
+                    LLVMBuildPtrToInt(self.builder, src, dst_type, dst)
+                });
+                Ok(())
+            }
         }
     }
 
@@ -795,6 +808,24 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
         self.resolver.with_result(arguments.dst, |dst| unsafe {
             LLVMBuildCall2(self.builder, fn_type, fn_, &mut src, 1, dst)
         });
+        Ok(())
+    }
+
+    fn emit_ret_value(
+        &mut self,
+        values: Vec<(SpirvWord, ptx_parser::Type)>,
+    ) -> Result<(), TranslateError> {
+        match &*values {
+            [] => unsafe { LLVMBuildRetVoid(self.builder) },
+            [(value, type_)] => {
+                let value = self.resolver.value(*value)?;
+                let type_ = get_type(self.context, type_)?;
+                let value =
+                    unsafe { LLVMBuildLoad2(self.builder, type_, value, LLVM_UNNAMED.as_ptr()) };
+                unsafe { LLVMBuildRet(self.builder, value) }
+            }
+            _ => todo!(),
+        };
         Ok(())
     }
 }

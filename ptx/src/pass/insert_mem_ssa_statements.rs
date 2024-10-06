@@ -72,7 +72,8 @@ pub(super) fn run<'a, 'b>(
                                 typ: return_reg.v_type.clone(),
                                 member_index: None,
                             }));
-                            result.push(Statement::RetValue(data, new_id));
+                            unimplemented!()
+                            //result.push(Statement::RetValue(data, new_id));
                         }
                         [] => result.push(Statement::Instruction(ast::Instruction::Ret { data })),
                         _ => unimplemented!(),

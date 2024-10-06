@@ -40,9 +40,6 @@ fn run_method<'a, 'input>(
     method: Function2<'input, ast::Instruction<SpirvWord>, SpirvWord>,
 ) -> Result<Function2<'input, ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
     let mut func_decl = method.func_decl;
-    for arg in func_decl.return_arguments.iter_mut() {
-        visitor.visit_variable(arg)?;
-    }
     let is_kernel = func_decl.name.is_kernel();
     if is_kernel {
         for arg in func_decl.input_arguments.iter_mut() {
@@ -57,12 +54,16 @@ fn run_method<'a, 'input>(
             arg.state_space = new_space;
         }
     };
+    for arg in func_decl.return_arguments.iter_mut() {
+        visitor.visit_variable(arg)?;
+    }
+    let return_arguments = &func_decl.return_arguments[..];
     let body = method
         .body
         .map(move |statements| {
             let mut result = Vec::with_capacity(statements.len());
             for statement in statements {
-                run_statement(&mut visitor, &mut result, statement)?;
+                run_statement(&mut visitor, return_arguments, &mut result, statement)?;
             }
             Ok::<_, TranslateError>(result)
         })
@@ -79,10 +80,33 @@ fn run_method<'a, 'input>(
 
 fn run_statement<'a, 'input>(
     visitor: &mut InsertMemSSAVisitor<'a, 'input>,
+    return_arguments: &[ast::Variable<SpirvWord>],
     result: &mut Vec<ExpandedStatement>,
     statement: ExpandedStatement,
 ) -> Result<(), TranslateError> {
     match statement {
+        Statement::Instruction(ast::Instruction::Ret { data }) => {
+            let statement = if return_arguments.is_empty() {
+                Statement::Instruction(ast::Instruction::Ret { data })
+            } else {
+                Statement::RetValue(
+                    data,
+                    return_arguments
+                        .iter()
+                        .map(|arg| {
+                            if arg.state_space != ast::StateSpace::Local {
+                                return Err(error_unreachable());
+                            }
+                            Ok((arg.name, arg.v_type.clone()))
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                )
+            };
+            let new_statement = statement.visit_map(visitor)?;
+            result.extend(visitor.pre.drain(..).map(Statement::Instruction));
+            result.push(new_statement);
+            result.extend(visitor.post.drain(..).map(Statement::Instruction));
+        }
         Statement::Variable(mut var) => {
             visitor.visit_variable(&mut var)?;
             result.push(Statement::Variable(var));
@@ -271,9 +295,9 @@ impl<'a, 'input> ast::VisitorMap<SpirvWord, SpirvWord, TranslateError>
     fn visit(
         &mut self,
         ident: SpirvWord,
-        type_space: Option<(&ast::Type, ast::StateSpace)>,
+        _type_space: Option<(&ast::Type, ast::StateSpace)>,
         is_dst: bool,
-        relaxed_type_check: bool,
+        _relaxed_type_check: bool,
     ) -> Result<SpirvWord, TranslateError> {
         if let Some(remap) = self.variables.get(&ident) {
             match remap {

@@ -1502,7 +1502,8 @@ fn emit_function_body_ops<'input>(
                 builder.store(dst_ptr, details.arg.src2.0, None, iter::empty())?;
             }
             Statement::RetValue(_, id) => {
-                builder.ret_value(id.0)?;
+                todo!()
+                //builder.ret_value(id.0)?;
             }
             Statement::PtrAccess(PtrAccess {
                 underlying_type,

@@ -770,7 +770,7 @@ enum Statement<I, P: ast::Operand> {
     StoreVar(StoreVarDetails),
     Conversion(ImplicitConversion),
     Constant(ConstantDefinition),
-    RetValue(ast::RetData, SpirvWord),
+    RetValue(ast::RetData, Vec<(SpirvWord, ast::Type)>),
     PtrAccess(PtrAccess<P>),
     RepackVector(RepackVectorDetails),
     FunctionPointer(FunctionPointerDetails),
@@ -906,9 +906,20 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                 Statement::Constant(ConstantDefinition { dst, typ, value })
             }
             Statement::RetValue(data, value) => {
-                // TODO:
-                // We should report type here
-                let value = visitor.visit_ident(value, None, false, false)?;
+                let value = value
+                    .into_iter()
+                    .map(|(ident, type_)| {
+                        Ok((
+                            visitor.visit_ident(
+                                ident,
+                                Some((&type_, ast::StateSpace::Local)),
+                                false,
+                                false,
+                            )?,
+                            type_,
+                        ))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
                 Statement::RetValue(data, value)
             }
             Statement::PtrAccess(PtrAccess {
@@ -1865,6 +1876,41 @@ impl<'input, 'b> ScopedResolver<'input, 'b> {
     fn end_scope(&mut self) {
         let scope = self.scopes.pop().unwrap();
         scope.flush(self.flat_resolver);
+    }
+
+    fn add_or_get_in_current_scope_untyped(
+        &mut self,
+        name: &'input str,
+    ) -> Result<SpirvWord, TranslateError> {
+        let current_scope = self.scopes.last_mut().unwrap();
+        Ok(
+            match current_scope.name_to_ident.entry(Cow::Borrowed(name)) {
+                hash_map::Entry::Occupied(occupied_entry) => {
+                    let ident = *occupied_entry.get();
+                    let entry = current_scope
+                        .ident_map
+                        .get(&ident)
+                        .ok_or_else(|| error_unreachable())?;
+                    if entry.type_space.is_some() {
+                        return Err(error_unknown_symbol());
+                    }
+                    ident
+                }
+                hash_map::Entry::Vacant(vacant_entry) => {
+                    let new_id = self.flat_resolver.current_id;
+                    self.flat_resolver.current_id.0 += 1;
+                    vacant_entry.insert(new_id);
+                    current_scope.ident_map.insert(
+                        new_id,
+                        IdentEntry {
+                            name: Some(Cow::Borrowed(name)),
+                            type_space: None,
+                        },
+                    );
+                    new_id
+                }
+            },
+        )
     }
 
     fn add(
