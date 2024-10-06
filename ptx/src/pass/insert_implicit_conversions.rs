@@ -45,11 +45,18 @@ pub(super) fn run(
                     Statement::RepackVector(repack),
                 )?;
             }
-            Statement::VectorAccess(vector_access) => {
+            Statement::VectorRead(vector_read) => {
                 insert_implicit_conversions_impl(
                     &mut result,
                     id_def,
-                    Statement::VectorAccess(vector_access),
+                    Statement::VectorRead(vector_read),
+                )?;
+            }
+            Statement::VectorWrite(vector_write) => {
+                insert_implicit_conversions_impl(
+                    &mut result,
+                    id_def,
+                    Statement::VectorWrite(vector_write),
                 )?;
             }
             s @ Statement::Conditional(_)

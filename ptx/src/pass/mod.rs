@@ -774,7 +774,8 @@ enum Statement<I, P: ast::Operand> {
     PtrAccess(PtrAccess<P>),
     RepackVector(RepackVectorDetails),
     FunctionPointer(FunctionPointerDetails),
-    VectorAccess(VectorAccess),
+    VectorRead(VectorRead),
+    VectorWrite(VectorWrite),
 }
 
 impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
@@ -954,33 +955,69 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                     offset_src,
                 })
             }
-            Statement::VectorAccess(VectorAccess {
+            Statement::VectorRead(VectorRead {
                 scalar_type,
                 vector_width,
-                dst,
-                src: vector_src,
+                scalar_dst: dst,
+                vector_src,
                 member,
             }) => {
+                let scalar_t = scalar_type.into();
+                let vector_t = ast::Type::Vector(vector_width, scalar_type);
                 let dst: SpirvWord = visitor.visit_ident(
                     dst,
-                    Some((&scalar_type.into(), ast::StateSpace::Reg)),
+                    Some((&scalar_t, ast::StateSpace::Reg)),
                     true,
                     false,
                 )?;
                 let src = visitor.visit_ident(
                     vector_src,
-                    Some((
-                        &ast::Type::Vector(vector_width, scalar_type),
-                        ast::StateSpace::Reg,
-                    )),
+                    Some((&vector_t, ast::StateSpace::Reg)),
                     false,
                     false,
                 )?;
-                Statement::VectorAccess(VectorAccess {
+                Statement::VectorRead(VectorRead {
                     scalar_type,
                     vector_width,
-                    dst,
-                    src,
+                    scalar_dst: dst,
+                    vector_src: src,
+                    member,
+                })
+            }
+            Statement::VectorWrite(VectorWrite {
+                scalar_type,
+                vector_width,
+                vector_dst,
+                vector_src,
+                scalar_src,
+                member,
+            }) => {
+                let scalar_t = scalar_type.into();
+                let vector_t = ast::Type::Vector(vector_width, scalar_type);
+                let vector_dst = visitor.visit_ident(
+                    vector_dst,
+                    Some((&vector_t, ast::StateSpace::Reg)),
+                    true,
+                    false,
+                )?;
+                let vector_src = visitor.visit_ident(
+                    vector_src,
+                    Some((&vector_t, ast::StateSpace::Reg)),
+                    false,
+                    false,
+                )?;
+                let scalar_src = visitor.visit_ident(
+                    scalar_src,
+                    Some((&scalar_t, ast::StateSpace::Reg)),
+                    false,
+                    false,
+                )?;
+                Statement::VectorWrite(VectorWrite {
+                    vector_dst,
+                    vector_src,
+                    scalar_src,
+                    scalar_type,
+                    vector_width,
                     member,
                 })
             }
@@ -1538,7 +1575,8 @@ fn compute_denorm_information<'input>(
                         Statement::Label(_) => {}
                         Statement::Variable(_) => {}
                         Statement::PtrAccess { .. } => {}
-                        Statement::VectorAccess { .. } => {}
+                        Statement::VectorRead { .. } => {}
+                        Statement::VectorWrite { .. } => {}
                         Statement::RepackVector(_) => {}
                         Statement::FunctionPointer(_) => {}
                     }
@@ -2058,11 +2096,20 @@ impl SpecialRegistersMap2 {
     }
 }
 
-pub struct VectorAccess {
+pub struct VectorRead {
     scalar_type: ast::ScalarType,
     vector_width: u8,
-    dst: SpirvWord,
-    src: SpirvWord,
+    scalar_dst: SpirvWord,
+    vector_src: SpirvWord,
+    member: u8,
+}
+
+pub struct VectorWrite {
+    scalar_type: ast::ScalarType,
+    vector_width: u8,
+    vector_dst: SpirvWord,
+    vector_src: SpirvWord,
+    scalar_src: SpirvWord,
     member: u8,
 }
 

@@ -456,7 +456,8 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
             Statement::PtrAccess(ptr_access) => self.emit_ptr_access(ptr_access)?,
             Statement::RepackVector(_) => todo!(),
             Statement::FunctionPointer(_) => todo!(),
-            Statement::VectorAccess(_) => todo!(),
+            Statement::VectorRead(vector_read) => self.emit_vector_read(vector_read)?,
+            Statement::VectorWrite(vector_write) => self.emit_vector_write(vector_write)?,
         })
     }
 
@@ -984,6 +985,39 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
         self.resolver.with_result(arguments.dst, |dst| unsafe {
             LLVMBuildXor(self.builder, src1, src2, dst)
         });
+        Ok(())
+    }
+
+    fn emit_vector_read(&mut self, vec_acccess: VectorRead) -> Result<(), TranslateError> {
+        let src = self.resolver.value(vec_acccess.vector_src)?;
+        let index = unsafe {
+            LLVMConstInt(
+                get_scalar_type(self.context, ast::ScalarType::B8),
+                vec_acccess.member as _,
+                0,
+            )
+        };
+        self.resolver
+            .with_result(vec_acccess.scalar_dst, |dst| unsafe {
+                LLVMBuildExtractElement(self.builder, src, index, dst)
+            });
+        Ok(())
+    }
+
+    fn emit_vector_write(&mut self, vector_write: VectorWrite) -> Result<(), TranslateError> {
+        let vector_src = self.resolver.value(vector_write.vector_src)?;
+        let scalar_src = self.resolver.value(vector_write.scalar_src)?;
+        let index = unsafe {
+            LLVMConstInt(
+                get_scalar_type(self.context, ast::ScalarType::B8),
+                vector_write.member as _,
+                0,
+            )
+        };
+        self.resolver
+            .with_result(vector_write.vector_dst, |dst| unsafe {
+                LLVMBuildInsertElement(self.builder, vector_src, scalar_src, index, dst)
+            });
         Ok(())
     }
 }

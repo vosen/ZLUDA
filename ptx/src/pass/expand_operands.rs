@@ -189,15 +189,12 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
 
     fn vec_member(
         &mut self,
-        vector_src: SpirvWord,
+        vector_ident: SpirvWord,
         member: u8,
         _type_space: Option<(&ast::Type, ast::StateSpace)>,
         is_dst: bool,
     ) -> Result<SpirvWord, TranslateError> {
-        if is_dst {
-            return Err(error_mismatched_type());
-        }
-        let (vector_width, scalar_type, space) = match self.resolver.get_typed(vector_src)? {
+        let (vector_width, scalar_type, space) = match self.resolver.get_typed(vector_ident)? {
             (ast::Type::Vector(vector_width, scalar_t), space) => {
                 (*vector_width, *scalar_t, *space)
             }
@@ -206,13 +203,24 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
         let temporary = self
             .resolver
             .register_unnamed(Some((scalar_type.into(), space)));
-        self.result.push(Statement::VectorAccess(VectorAccess {
-            scalar_type,
-            vector_width,
-            dst: temporary,
-            src: vector_src,
-            member: member,
-        }));
+        if is_dst {
+            self.post_stmts.push(Statement::VectorWrite(VectorWrite {
+                scalar_type,
+                vector_width,
+                vector_dst: vector_ident,
+                vector_src: vector_ident,
+                scalar_src: temporary,
+                member,
+            }));
+        } else {
+            self.result.push(Statement::VectorRead(VectorRead {
+                scalar_type,
+                vector_width,
+                scalar_dst: temporary,
+                vector_src: vector_ident,
+                member,
+            }));
+        }
         Ok(temporary)
     }
 
