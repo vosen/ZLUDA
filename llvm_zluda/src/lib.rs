@@ -1,3 +1,4 @@
+#![allow(non_upper_case_globals)]
 use llvm_sys::prelude::*;
 pub use llvm_sys::*;
 
@@ -22,6 +23,25 @@ pub enum LLVMZludaAtomicRMWBinOp {
     LLVMZludaAtomicRMWBinOpUIncWrap = 15,
     LLVMZludaAtomicRMWBinOpUDecWrap = 16,
 }
+
+// Backport from LLVM 19
+pub const LLVMZludaFastMathAllowReassoc: ::std::ffi::c_uint = 1 << 0;
+pub const LLVMZludaFastMathNoNaNs: ::std::ffi::c_uint = 1 << 1;
+pub const LLVMZludaFastMathNoInfs: ::std::ffi::c_uint = 1 << 2;
+pub const LLVMZludaFastMathNoSignedZeros: ::std::ffi::c_uint = 1 << 3;
+pub const LLVMZludaFastMathAllowReciprocal: ::std::ffi::c_uint = 1 << 4;
+pub const LLVMZludaFastMathAllowContract: ::std::ffi::c_uint = 1 << 5;
+pub const LLVMZludaFastMathApproxFunc: ::std::ffi::c_uint = 1 << 6;
+pub const LLVMZludaFastMathNone: ::std::ffi::c_uint = 0;
+pub const LLVMZludaFastMathAll: ::std::ffi::c_uint = LLVMZludaFastMathAllowReassoc
+    | LLVMZludaFastMathNoNaNs
+    | LLVMZludaFastMathNoInfs
+    | LLVMZludaFastMathNoSignedZeros
+    | LLVMZludaFastMathAllowReciprocal
+    | LLVMZludaFastMathAllowContract
+    | LLVMZludaFastMathApproxFunc;
+
+pub type LLVMZludaFastMathFlags = std::ffi::c_uint;
 
 extern "C" {
     pub fn LLVMZludaBuildAlloca(
@@ -49,4 +69,6 @@ extern "C" {
         SuccessOrdering: LLVMAtomicOrdering,
         FailureOrdering: LLVMAtomicOrdering,
     ) -> LLVMValueRef;
+
+    pub fn LLVMZludaSetFastMathFlags(FPMathInst: LLVMValueRef, FMF: LLVMZludaFastMathFlags);
 }
