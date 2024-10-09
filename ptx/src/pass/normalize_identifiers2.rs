@@ -1,6 +1,5 @@
 use super::*;
 use ptx_parser as ast;
-use rustc_hash::FxHashMap;
 
 pub(crate) fn run<'input, 'b>(
     resolver: &mut ScopedResolver<'input, 'b>,

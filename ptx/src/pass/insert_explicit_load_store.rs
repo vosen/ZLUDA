@@ -1,7 +1,4 @@
 use super::*;
-use ptx_parser::VisitorMap;
-use rustc_hash::FxHashSet;
-
 // This pass:
 // * Turns all .local, .param and .reg in-body variables into .local variables
 //   (if _not_ an input method argument)

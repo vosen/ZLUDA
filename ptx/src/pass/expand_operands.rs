@@ -281,7 +281,7 @@ impl<'a, 'b> ast::VisitorMap<ast::ParsedOperand<SpirvWord>, SpirvWord, Translate
 
     fn visit_ident(
         &mut self,
-        name: <TypedOperand as ast::Operand>::Ident,
+        name: SpirvWord,
         _type_space: Option<(&ast::Type, ast::StateSpace)>,
         _is_dst: bool,
         _relaxed_type_check: bool,

@@ -19,7 +19,7 @@
 //   unsafe { LLVMBuildAdd(builder, lhs, rhs, dst) };
 
 use std::array::TryFromSliceError;
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryInto;
 use std::ffi::{CStr, NulError};
 use std::ops::Deref;
 use std::{i8, ptr};
@@ -296,7 +296,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
 
     fn emit_global(
         &mut self,
-        linking: ast::LinkingDirective,
+        _linking: ast::LinkingDirective,
         var: ast::Variable<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let name = self
@@ -326,7 +326,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             unsafe { LLVMSetAlignment(global, align) };
         }
         if !var.array_init.is_empty() {
-            self.emit_array_init(&var.v_type, &*var.array_init, global);
+            self.emit_array_init(&var.v_type, &*var.array_init, global)?;
         }
         Ok(())
     }
@@ -412,27 +412,25 @@ fn get_input_argument_type(
     }
 }
 
-struct MethodEmitContext<'a, 'input> {
+struct MethodEmitContext<'a> {
     context: LLVMContextRef,
     module: LLVMModuleRef,
     method: LLVMValueRef,
     builder: LLVMBuilderRef,
-    id_defs: &'a GlobalStringIdentResolver2<'input>,
     variables_builder: Builder,
     resolver: &'a mut ResolveIdent,
 }
 
-impl<'a, 'input> MethodEmitContext<'a, 'input> {
-    fn new<'x>(
-        parent: &'a mut ModuleEmitContext<'x, 'input>,
+impl<'a> MethodEmitContext<'a> {
+    fn new(
+        parent: &'a mut ModuleEmitContext,
         method: LLVMValueRef,
         variables_builder: Builder,
-    ) -> MethodEmitContext<'a, 'input> {
+    ) -> MethodEmitContext<'a> {
         MethodEmitContext {
             context: parent.context,
             module: parent.module,
             builder: parent.builder.get(),
-            id_defs: parent.id_defs,
             variables_builder,
             resolver: &mut parent.resolver,
             method,
@@ -448,8 +446,6 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
             Statement::Label(label) => self.emit_label_delayed(label)?,
             Statement::Instruction(inst) => self.emit_instruction(inst)?,
             Statement::Conditional(_) => todo!(),
-            Statement::LoadVar(var) => self.emit_load_variable(var)?,
-            Statement::StoreVar(store) => self.emit_store_var(store)?,
             Statement::Conversion(conversion) => self.emit_conversion(conversion)?,
             Statement::Constant(constant) => self.emit_constant(constant)?,
             Statement::RetValue(_, values) => self.emit_ret_value(values)?,
@@ -503,13 +499,6 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
         Ok(())
     }
 
-    fn emit_store_var(&mut self, store: StoreVarDetails) -> Result<(), TranslateError> {
-        let ptr = self.resolver.value(store.arg.src1)?;
-        let value = self.resolver.value(store.arg.src2)?;
-        unsafe { LLVMBuildStore(self.builder, value, ptr) };
-        Ok(())
-    }
-
     fn emit_instruction(
         &mut self,
         inst: ast::Instruction<SpirvWord>,
@@ -520,45 +509,45 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
             ast::Instruction::Add { data, arguments } => self.emit_add(data, arguments),
             ast::Instruction::St { data, arguments } => self.emit_st(data, arguments),
             ast::Instruction::Mul { data, arguments } => self.emit_mul(data, arguments),
-            ast::Instruction::Setp { data, arguments } => todo!(),
-            ast::Instruction::SetpBool { data, arguments } => todo!(),
-            ast::Instruction::Not { data, arguments } => todo!(),
-            ast::Instruction::Or { data, arguments } => todo!(),
-            ast::Instruction::And { data, arguments } => self.emit_and(arguments),
+            ast::Instruction::Setp { .. } => todo!(),
+            ast::Instruction::SetpBool { .. } => todo!(),
+            ast::Instruction::Not { .. } => todo!(),
+            ast::Instruction::Or { .. } => todo!(),
+            ast::Instruction::And { arguments, .. } => self.emit_and(arguments),
             ast::Instruction::Bra { arguments } => self.emit_bra(arguments),
             ast::Instruction::Call { data, arguments } => self.emit_call(data, arguments),
-            ast::Instruction::Cvt { data, arguments } => todo!(),
-            ast::Instruction::Shr { data, arguments } => todo!(),
-            ast::Instruction::Shl { data, arguments } => todo!(),
+            ast::Instruction::Cvt { .. } => todo!(),
+            ast::Instruction::Shr { .. } => todo!(),
+            ast::Instruction::Shl { .. } => todo!(),
             ast::Instruction::Ret { data } => Ok(self.emit_ret(data)),
-            ast::Instruction::Cvta { data, arguments } => todo!(),
-            ast::Instruction::Abs { data, arguments } => todo!(),
-            ast::Instruction::Mad { data, arguments } => todo!(),
-            ast::Instruction::Fma { data, arguments } => todo!(),
-            ast::Instruction::Sub { data, arguments } => todo!(),
-            ast::Instruction::Min { data, arguments } => todo!(),
-            ast::Instruction::Max { data, arguments } => todo!(),
-            ast::Instruction::Rcp { data, arguments } => todo!(),
-            ast::Instruction::Sqrt { data, arguments } => todo!(),
-            ast::Instruction::Rsqrt { data, arguments } => todo!(),
-            ast::Instruction::Selp { data, arguments } => todo!(),
-            ast::Instruction::Bar { data, arguments } => todo!(),
+            ast::Instruction::Cvta { .. } => todo!(),
+            ast::Instruction::Abs { .. } => todo!(),
+            ast::Instruction::Mad { .. } => todo!(),
+            ast::Instruction::Fma { .. } => todo!(),
+            ast::Instruction::Sub { .. } => todo!(),
+            ast::Instruction::Min { .. } => todo!(),
+            ast::Instruction::Max { .. } => todo!(),
+            ast::Instruction::Rcp { .. } => todo!(),
+            ast::Instruction::Sqrt { .. } => todo!(),
+            ast::Instruction::Rsqrt { .. } => todo!(),
+            ast::Instruction::Selp { .. } => todo!(),
+            ast::Instruction::Bar { .. } => todo!(),
             ast::Instruction::Atom { data, arguments } => self.emit_atom(data, arguments),
             ast::Instruction::AtomCas { data, arguments } => self.emit_atom_cas(data, arguments),
-            ast::Instruction::Div { data, arguments } => todo!(),
-            ast::Instruction::Neg { data, arguments } => todo!(),
-            ast::Instruction::Sin { data, arguments } => todo!(),
+            ast::Instruction::Div { .. } => todo!(),
+            ast::Instruction::Neg { .. } => todo!(),
+            ast::Instruction::Sin { .. } => todo!(),
             ast::Instruction::Cos { data, arguments } => self.emit_cos(data, arguments),
-            ast::Instruction::Lg2 { data, arguments } => todo!(),
-            ast::Instruction::Ex2 { data, arguments } => todo!(),
+            ast::Instruction::Lg2 { .. } => todo!(),
+            ast::Instruction::Ex2 { .. } => todo!(),
             ast::Instruction::Clz { data, arguments } => self.emit_clz(data, arguments),
             ast::Instruction::Brev { data, arguments } => self.emit_brev(data, arguments),
-            ast::Instruction::Popc { data, arguments } => todo!(),
+            ast::Instruction::Popc { .. } => todo!(),
             ast::Instruction::Xor { data, arguments } => self.emit_xor(data, arguments),
-            ast::Instruction::Rem { data, arguments } => todo!(),
-            ast::Instruction::PrmtSlow { arguments } => todo!(),
-            ast::Instruction::Prmt { data, arguments } => todo!(),
-            ast::Instruction::Membar { data } => todo!(),
+            ast::Instruction::Rem { .. } => todo!(),
+            ast::Instruction::PrmtSlow { .. } => todo!(),
+            ast::Instruction::Prmt { .. } => todo!(),
+            ast::Instruction::Membar { .. } => todo!(),
             ast::Instruction::Trap {} => todo!(),
             // replaced by a function call
             ast::Instruction::Bfe { .. }
@@ -579,19 +568,6 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
         let type_ = get_type(self.context, &data.typ)?;
         let ptr = self.resolver.value(arguments.src)?;
         self.resolver.with_result(arguments.dst, |dst| unsafe {
-            LLVMBuildLoad2(builder, type_, ptr, dst)
-        });
-        Ok(())
-    }
-
-    fn emit_load_variable(&mut self, var: LoadVarDetails) -> Result<(), TranslateError> {
-        if var.member_index.is_some() {
-            todo!()
-        }
-        let builder = self.builder;
-        let type_ = get_type(self.context, &var.typ)?;
-        let ptr = self.resolver.value(var.arg.src)?;
-        self.resolver.with_result(var.arg.dst, |dst| unsafe {
             LLVMBuildLoad2(builder, type_, ptr, dst)
         });
         Ok(())
@@ -677,8 +653,8 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
         let fn_ = match data {
-            ast::ArithDetails::Integer(integer) => LLVMBuildAdd,
-            ast::ArithDetails::Float(float) => LLVMBuildFAdd,
+            ast::ArithDetails::Integer(..) => LLVMBuildAdd,
+            ast::ArithDetails::Float(..) => LLVMBuildFAdd,
         };
         self.resolver.with_result(arguments.dst, |dst| unsafe {
             fn_(builder, src1, src2, dst)
@@ -721,14 +697,14 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
                 }
             }
         }
-        let name = match (&*data.return_arguments, &*arguments.return_arguments) {
-            ([], []) => LLVM_UNNAMED.as_ptr(),
-            ([(type_, _)], [dst]) => self.resolver.get_or_add_raw(*dst),
+        let name = match &*arguments.return_arguments {
+            [] => LLVM_UNNAMED.as_ptr(),
+            [dst] => self.resolver.get_or_add_raw(*dst),
             _ => todo!(),
         };
         let type_ = get_function_type(
             self.context,
-            data.return_arguments.iter().map(|(type_, space)| type_),
+            data.return_arguments.iter().map(|(type_, ..)| type_),
             data.input_arguments
                 .iter()
                 .map(|(type_, space)| get_input_argument_type(self.context, &type_, *space)),
@@ -951,12 +927,12 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
         arguments: ast::MulArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let mul_fn = match data {
-            ast::MulDetails::Integer { type_, control } => match control {
+            ast::MulDetails::Integer { control, .. } => match control {
                 ast::MulIntControl::Low => LLVMBuildMul,
                 ast::MulIntControl::High => todo!(),
                 ast::MulIntControl::Wide => todo!(),
             },
-            ast::MulDetails::Float(arith_float) => LLVMBuildFMul,
+            ast::MulDetails::Float(..) => LLVMBuildFMul,
         };
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
@@ -968,7 +944,7 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
 
     fn emit_cos(
         &mut self,
-        data: ast::FlushToZero,
+        _data: ast::FlushToZero,
         arguments: ast::CosArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let llvm_fn = c"llvm.cos.f32";
