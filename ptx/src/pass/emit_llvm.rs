@@ -577,31 +577,75 @@ impl<'a> MethodEmitContext<'a> {
         let builder = self.builder;
         match conversion.kind {
             ConversionKind::Default => {
-                let from_layout = conversion.from_type.layout();
-                let to_layout = conversion.to_type.layout();
-                if from_layout.size() == to_layout.size() {
-                    let src = self.resolver.value(conversion.src)?;
-                    let type_ = get_type(self.context, &conversion.to_type)?;
-                    self.resolver.with_result(conversion.dst, |dst| unsafe {
-                        LLVMBuildBitCast(builder, src, type_, dst)
-                    });
-                    Ok(())
-                } else if to_layout.size() > from_layout.size() {
-                    // TODO: not entirely correct
-                    let src = self.resolver.value(conversion.src)?;
-                    let type_ = get_type(self.context, &conversion.to_type)?;
-                    self.resolver.with_result(conversion.dst, |dst| unsafe {
-                        LLVMBuildZExt(builder, src, type_, dst)
-                    });
-                    Ok(())
-                } else {
-                    // TODO: not entirely correct
-                    let src = self.resolver.value(conversion.src)?;
-                    let type_ = get_type(self.context, &conversion.to_type)?;
-                    self.resolver.with_result(conversion.dst, |dst| unsafe {
-                        LLVMBuildTrunc(builder, src, type_, dst)
-                    });
-                    Ok(())
+                match (conversion.from_type, conversion.to_type) {
+                    (ast::Type::Scalar(from_type), ast::Type::Scalar(to_type)) => {
+                        let from_layout = conversion.from_type.layout();
+                        let to_layout = conversion.to_type.layout();
+                        if from_layout.size() == to_layout.size() {
+                            let dst_type = get_type(self.context, &conversion.to_type)?;
+                            if from_type.kind() != ast::ScalarKind::Float
+                                && to_type.kind() != ast::ScalarKind::Float
+                            {
+                                // It is noop, but another instruction expects result of this conversion
+                                self.resolver
+                                    .register(conversion.dst, self.resolver.value(conversion.src)?);
+                            } else {
+                                let src = self.resolver.value(conversion.src)?;
+                                self.resolver.with_result(conversion.dst, |dst| unsafe {
+                                    LLVMBuildBitCast(builder, src, dst_type, dst)
+                                });
+                            }
+                            Ok(())
+                        } else {
+                            let src = self.resolver.value(conversion.src)?;
+                            // This block is safe because it's illegal to implictly convert between floating point values
+                            let same_width_bit_type = unsafe {
+                                LLVMIntTypeInContext(self.context, (from_layout.size() * 8) as u32)
+                            };
+                            let same_width_bit_value = unsafe {
+                                LLVMBuildBitCast(
+                                    builder,
+                                    src,
+                                    same_width_bit_type,
+                                    LLVM_UNNAMED.as_ptr(),
+                                )
+                            };
+                            let wide_bit_type = unsafe {
+                                LLVMIntTypeInContext(self.context, (to_layout.size() * 8) as u32)
+                            };
+                            if to_type.kind() == ast::ScalarKind::Unsigned
+                                || to_type.kind() == ast::ScalarKind::Bit
+                            {
+                                let llvm_fn = if to_type.size_of() >= from_type.size_of() {
+                                    LLVMBuildZExtOrBitCast
+                                } else {
+                                    LLVMBuildTrunc
+                                };
+                                self.resolver.with_result(conversion.dst, |dst| unsafe {
+                                    llvm_fn(builder, same_width_bit_value, wide_bit_type, dst)
+                                });
+                                Ok(())
+                            } else {
+                                let conversion_fn = if from_type.kind() == ast::ScalarKind::Signed
+                                    && to_type.kind() == ast::ScalarKind::Signed
+                                {
+                                    if to_type.size_of() >= from_type.size_of() {
+                                        LLVMBuildSExtOrBitCast
+                                    } else {
+                                        LLVMBuildTrunc
+                                    }
+                                } else {
+                                    if to_type.size_of() >= from_type.size_of() {
+                                        LLVMBuildZExtOrBitCast
+                                    } else {
+                                        LLVMBuildTrunc
+                                    }
+                                };
+                                todo!()
+                            }
+                        }
+                    }
+                    _ => todo!(),
                 }
             }
             ConversionKind::SignExtend => todo!(),
