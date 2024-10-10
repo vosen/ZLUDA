@@ -577,7 +577,7 @@ impl<'a> MethodEmitContext<'a> {
         let builder = self.builder;
         match conversion.kind {
             ConversionKind::Default => {
-                match (conversion.from_type, conversion.to_type) {
+                match (&conversion.from_type, &conversion.to_type) {
                     (ast::Type::Scalar(from_type), ast::Type::Scalar(to_type)) => {
                         let from_layout = conversion.from_type.layout();
                         let to_layout = conversion.to_type.layout();
