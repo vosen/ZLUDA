@@ -1,0 +1,34 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/rust
+{
+	"name": "zluda",
+	"build": {
+		"dockerfile": "Dockerfile"
+	},
+	"securityOpt": [ "seccomp=unconfined" ],
+	"runArgs": [
+		"--runtime=nvidia",
+		"--device=/dev/kfd",
+		"--device=/dev/dri",
+		"--group-add=video"
+	],
+	"mounts": [
+		{
+			"source": "${localEnv:HOME}/.cargo/",
+			"target": "/root/.cargo",
+			"type": "bind"
+		}
+	],
+	// https://containers.dev/features.
+	"features": {
+		"ghcr.io/devcontainers/features/rust:1": {}
+	},
+	// https://aka.ms/dev-containers-non-root.
+	"remoteUser": "root",
+	//"hostRequirements": { "gpu": "optional" }
+	"customizations": {
+		"vscode": {
+			"extensions": [ "mhutchie.git-graph" ],
+		}
+}
+}

@@ -18,16 +18,17 @@
 // while with plain LLVM-C it's just:
 //   unsafe { LLVMBuildAdd(builder, lhs, rhs, dst) };
 
-use std::convert::{TryFrom, TryInto};
-use std::ffi::CStr;
+use std::array::TryFromSliceError;
+use std::convert::TryInto;
+use std::ffi::{CStr, NulError};
 use std::ops::Deref;
-use std::ptr;
+use std::{i8, ptr};
 
 use super::*;
 use llvm_zluda::analysis::{LLVMVerifierFailureAction, LLVMVerifyModule};
 use llvm_zluda::bit_writer::LLVMWriteBitcodeToMemoryBuffer;
-use llvm_zluda::core::*;
-use llvm_zluda::prelude::*;
+use llvm_zluda::{core::*, *};
+use llvm_zluda::{prelude::*, LLVMZludaBuildAtomicRMW};
 use llvm_zluda::{LLVMCallConv, LLVMZludaBuildAlloca};
 
 const LLVM_UNNAMED: &CStr = c"";
@@ -172,7 +173,7 @@ pub(super) fn run<'input>(
     let mut emit_ctx = ModuleEmitContext::new(&context, &module, &id_defs);
     for directive in directives {
         match directive {
-            Directive2::Variable(..) => todo!(),
+            Directive2::Variable(linking, variable) => emit_ctx.emit_global(linking, variable)?,
             Directive2::Method(method) => emit_ctx.emit_method(method)?,
         }
     }
@@ -228,15 +229,18 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             })
             .ok_or_else(|| error_unreachable())?;
         let name = CString::new(name).map_err(|_| error_unreachable())?;
-        let fn_type = get_function_type(
-            self.context,
-            func_decl.return_arguments.iter().map(|v| &v.v_type),
-            func_decl
-                .input_arguments
-                .iter()
-                .map(|v| get_input_argument_type(self.context, &v.v_type, v.state_space)),
-        )?;
-        let fn_ = unsafe { LLVMAddFunction(self.module, name.as_ptr(), fn_type) };
+        let mut fn_ = unsafe { LLVMGetNamedFunction(self.module, name.as_ptr()) };
+        if fn_ == ptr::null_mut() {
+            let fn_type = get_function_type(
+                self.context,
+                func_decl.return_arguments.iter().map(|v| &v.v_type),
+                func_decl
+                    .input_arguments
+                    .iter()
+                    .map(|v| get_input_argument_type(self.context, &v.v_type, v.state_space)),
+            )?;
+            fn_ = unsafe { LLVMAddFunction(self.module, name.as_ptr(), fn_type) };
+        }
         if let ast::MethodName::Func(name) = func_decl.name {
             self.resolver.register(name, fn_);
         }
@@ -274,6 +278,14 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                 unsafe { LLVMAppendBasicBlockInContext(self.context, fn_, LLVM_UNNAMED.as_ptr()) };
             unsafe { LLVMPositionBuilderAtEnd(self.builder.get(), real_bb) };
             let mut method_emitter = MethodEmitContext::new(self, fn_, variables_builder);
+            for var in func_decl.return_arguments {
+                method_emitter.emit_variable(var)?;
+            }
+            for statement in statements.iter() {
+                if let Statement::Label(label) = statement {
+                    method_emitter.emit_label_initial(*label);
+                }
+            }
             for statement in statements {
                 method_emitter.emit_statement(statement)?;
             }
@@ -281,43 +293,144 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         }
         Ok(())
     }
+
+    fn emit_global(
+        &mut self,
+        _linking: ast::LinkingDirective,
+        var: ast::Variable<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let name = self
+            .id_defs
+            .ident_map
+            .get(&var.name)
+            .map(|entry| {
+                entry
+                    .name
+                    .as_ref()
+                    .map(|text| Ok::<_, NulError>(Cow::Owned(CString::new(&**text)?)))
+            })
+            .flatten()
+            .transpose()
+            .map_err(|_| error_unreachable())?
+            .unwrap_or(Cow::Borrowed(LLVM_UNNAMED));
+        let global = unsafe {
+            LLVMAddGlobalInAddressSpace(
+                self.module,
+                get_type(self.context, &var.v_type)?,
+                name.as_ptr(),
+                get_state_space(var.state_space)?,
+            )
+        };
+        self.resolver.register(var.name, global);
+        if let Some(align) = var.align {
+            unsafe { LLVMSetAlignment(global, align) };
+        }
+        if !var.array_init.is_empty() {
+            self.emit_array_init(&var.v_type, &*var.array_init, global)?;
+        }
+        Ok(())
+    }
+
+    // TODO: instead of Vec<u8> we should emit a typed initializer
+    fn emit_array_init(
+        &mut self,
+        type_: &ast::Type,
+        array_init: &[u8],
+        global: *mut llvm_zluda::LLVMValue,
+    ) -> Result<(), TranslateError> {
+        match type_ {
+            ast::Type::Array(None, scalar, dimensions) => {
+                if dimensions.len() != 1 {
+                    todo!()
+                }
+                if dimensions[0] as usize * scalar.size_of() as usize != array_init.len() {
+                    return Err(error_unreachable());
+                }
+                let type_ = get_scalar_type(self.context, *scalar);
+                let mut elements = array_init
+                    .chunks(scalar.size_of() as usize)
+                    .map(|chunk| self.constant_from_bytes(*scalar, chunk, type_))
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|_| error_unreachable())?;
+                let initializer =
+                    unsafe { LLVMConstArray2(type_, elements.as_mut_ptr(), elements.len() as u64) };
+                unsafe { LLVMSetInitializer(global, initializer) };
+            }
+            _ => todo!(),
+        }
+        Ok(())
+    }
+
+    fn constant_from_bytes(
+        &self,
+        scalar: ast::ScalarType,
+        bytes: &[u8],
+        llvm_type: LLVMTypeRef,
+    ) -> Result<LLVMValueRef, TryFromSliceError> {
+        Ok(match scalar {
+            ptx_parser::ScalarType::Pred
+            | ptx_parser::ScalarType::S8
+            | ptx_parser::ScalarType::B8
+            | ptx_parser::ScalarType::U8 => unsafe {
+                LLVMConstInt(llvm_type, u8::from_le_bytes(bytes.try_into()?) as u64, 0)
+            },
+            ptx_parser::ScalarType::S16
+            | ptx_parser::ScalarType::B16
+            | ptx_parser::ScalarType::U16 => unsafe {
+                LLVMConstInt(llvm_type, u16::from_le_bytes(bytes.try_into()?) as u64, 0)
+            },
+            ptx_parser::ScalarType::F16 => todo!(),
+            ptx_parser::ScalarType::BF16 => todo!(),
+            ptx_parser::ScalarType::S32 => todo!(),
+            ptx_parser::ScalarType::U64 => todo!(),
+            ptx_parser::ScalarType::S64 => todo!(),
+            ptx_parser::ScalarType::S16x2 => todo!(),
+            ptx_parser::ScalarType::B32 => todo!(),
+            ptx_parser::ScalarType::F32 => todo!(),
+            ptx_parser::ScalarType::B64 => todo!(),
+            ptx_parser::ScalarType::F64 => todo!(),
+            ptx_parser::ScalarType::B128 => todo!(),
+            ptx_parser::ScalarType::U16x2 => todo!(),
+            ptx_parser::ScalarType::F16x2 => todo!(),
+            ptx_parser::ScalarType::U32 => todo!(),
+            ptx_parser::ScalarType::BF16x2 => todo!(),
+        })
+    }
 }
 
 fn get_input_argument_type(
     context: LLVMContextRef,
-    v_type: &ptx_parser::Type,
-    state_space: ptx_parser::StateSpace,
+    v_type: &ast::Type,
+    state_space: ast::StateSpace,
 ) -> Result<LLVMTypeRef, TranslateError> {
     match state_space {
-        ptx_parser::StateSpace::ParamEntry => {
+        ast::StateSpace::ParamEntry => {
             Ok(unsafe { LLVMPointerTypeInContext(context, get_state_space(state_space)?) })
         }
-        ptx_parser::StateSpace::Reg => get_type(context, v_type),
+        ast::StateSpace::Reg => get_type(context, v_type),
         _ => return Err(error_unreachable()),
     }
 }
 
-struct MethodEmitContext<'a, 'input> {
+struct MethodEmitContext<'a> {
     context: LLVMContextRef,
     module: LLVMModuleRef,
     method: LLVMValueRef,
     builder: LLVMBuilderRef,
-    id_defs: &'a GlobalStringIdentResolver2<'input>,
     variables_builder: Builder,
     resolver: &'a mut ResolveIdent,
 }
 
-impl<'a, 'input> MethodEmitContext<'a, 'input> {
-    fn new<'x>(
-        parent: &'a mut ModuleEmitContext<'x, 'input>,
+impl<'a> MethodEmitContext<'a> {
+    fn new(
+        parent: &'a mut ModuleEmitContext,
         method: LLVMValueRef,
         variables_builder: Builder,
-    ) -> MethodEmitContext<'a, 'input> {
+    ) -> MethodEmitContext<'a> {
         MethodEmitContext {
             context: parent.context,
             module: parent.module,
             builder: parent.builder.get(),
-            id_defs: parent.id_defs,
             variables_builder,
             resolver: &mut parent.resolver,
             method,
@@ -330,18 +443,17 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
     ) -> Result<(), TranslateError> {
         Ok(match statement {
             Statement::Variable(var) => self.emit_variable(var)?,
-            Statement::Label(label) => self.emit_label(label),
+            Statement::Label(label) => self.emit_label_delayed(label)?,
             Statement::Instruction(inst) => self.emit_instruction(inst)?,
             Statement::Conditional(_) => todo!(),
-            Statement::LoadVar(var) => self.emit_load_variable(var)?,
-            Statement::StoreVar(store) => self.emit_store_var(store)?,
             Statement::Conversion(conversion) => self.emit_conversion(conversion)?,
             Statement::Constant(constant) => self.emit_constant(constant)?,
-            Statement::RetValue(_, _) => todo!(),
-            Statement::PtrAccess(_) => todo!(),
-            Statement::RepackVector(_) => todo!(),
+            Statement::RetValue(_, values) => self.emit_ret_value(values)?,
+            Statement::PtrAccess(ptr_access) => self.emit_ptr_access(ptr_access)?,
+            Statement::RepackVector(repack) => self.emit_vector_repack(repack)?,
             Statement::FunctionPointer(_) => todo!(),
-            Statement::VectorAccess(_) => todo!(),
+            Statement::VectorRead(vector_read) => self.emit_vector_read(vector_read)?,
+            Statement::VectorWrite(vector_write) => self.emit_vector_write(vector_write)?,
         })
     }
 
@@ -364,7 +476,7 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
         Ok(())
     }
 
-    fn emit_label(&mut self, label: SpirvWord) {
+    fn emit_label_initial(&mut self, label: SpirvWord) {
         let block = unsafe {
             LLVMAppendBasicBlockInContext(
                 self.context,
@@ -372,17 +484,18 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
                 self.resolver.get_or_add_raw(label),
             )
         };
+        self.resolver
+            .register(label, unsafe { LLVMBasicBlockAsValue(block) });
+    }
+
+    fn emit_label_delayed(&mut self, label: SpirvWord) -> Result<(), TranslateError> {
+        let block = self.resolver.value(label)?;
+        let block = unsafe { LLVMValueAsBasicBlock(block) };
         let last_block = unsafe { LLVMGetInsertBlock(self.builder) };
         if unsafe { LLVMGetBasicBlockTerminator(last_block) } == ptr::null_mut() {
             unsafe { LLVMBuildBr(self.builder, block) };
         }
         unsafe { LLVMPositionBuilderAtEnd(self.builder, block) };
-    }
-
-    fn emit_store_var(&mut self, store: StoreVarDetails) -> Result<(), TranslateError> {
-        let ptr = self.resolver.value(store.arg.src1)?;
-        let value = self.resolver.value(store.arg.src2)?;
-        unsafe { LLVMBuildStore(self.builder, value, ptr) };
         Ok(())
     }
 
@@ -395,50 +508,51 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
             ast::Instruction::Ld { data, arguments } => self.emit_ld(data, arguments),
             ast::Instruction::Add { data, arguments } => self.emit_add(data, arguments),
             ast::Instruction::St { data, arguments } => self.emit_st(data, arguments),
-            ast::Instruction::Mul { data, arguments } => todo!(),
-            ast::Instruction::Setp { data, arguments } => todo!(),
-            ast::Instruction::SetpBool { data, arguments } => todo!(),
-            ast::Instruction::Not { data, arguments } => todo!(),
-            ast::Instruction::Or { data, arguments } => todo!(),
-            ast::Instruction::And { data, arguments } => todo!(),
-            ast::Instruction::Bra { arguments } => todo!(),
+            ast::Instruction::Mul { data, arguments } => self.emit_mul(data, arguments),
+            ast::Instruction::Setp { .. } => todo!(),
+            ast::Instruction::SetpBool { .. } => todo!(),
+            ast::Instruction::Not { .. } => todo!(),
+            ast::Instruction::Or { .. } => todo!(),
+            ast::Instruction::And { arguments, .. } => self.emit_and(arguments),
+            ast::Instruction::Bra { arguments } => self.emit_bra(arguments),
             ast::Instruction::Call { data, arguments } => self.emit_call(data, arguments),
-            ast::Instruction::Cvt { data, arguments } => todo!(),
-            ast::Instruction::Shr { data, arguments } => todo!(),
-            ast::Instruction::Shl { data, arguments } => todo!(),
+            ast::Instruction::Cvt { .. } => todo!(),
+            ast::Instruction::Shr { .. } => todo!(),
+            ast::Instruction::Shl { .. } => todo!(),
             ast::Instruction::Ret { data } => Ok(self.emit_ret(data)),
-            ast::Instruction::Cvta { data, arguments } => todo!(),
-            ast::Instruction::Abs { data, arguments } => todo!(),
-            ast::Instruction::Mad { data, arguments } => todo!(),
-            ast::Instruction::Fma { data, arguments } => todo!(),
-            ast::Instruction::Sub { data, arguments } => todo!(),
-            ast::Instruction::Min { data, arguments } => todo!(),
-            ast::Instruction::Max { data, arguments } => todo!(),
-            ast::Instruction::Rcp { data, arguments } => todo!(),
-            ast::Instruction::Sqrt { data, arguments } => todo!(),
-            ast::Instruction::Rsqrt { data, arguments } => todo!(),
-            ast::Instruction::Selp { data, arguments } => todo!(),
-            ast::Instruction::Bar { data, arguments } => todo!(),
-            ast::Instruction::Atom { data, arguments } => todo!(),
-            ast::Instruction::AtomCas { data, arguments } => todo!(),
-            ast::Instruction::Div { data, arguments } => todo!(),
-            ast::Instruction::Neg { data, arguments } => todo!(),
-            ast::Instruction::Sin { data, arguments } => todo!(),
-            ast::Instruction::Cos { data, arguments } => todo!(),
-            ast::Instruction::Lg2 { data, arguments } => todo!(),
-            ast::Instruction::Ex2 { data, arguments } => todo!(),
-            ast::Instruction::Clz { data, arguments } => todo!(),
-            ast::Instruction::Brev { data, arguments } => todo!(),
-            ast::Instruction::Popc { data, arguments } => todo!(),
-            ast::Instruction::Xor { data, arguments } => todo!(),
-            ast::Instruction::Rem { data, arguments } => todo!(),
-            ast::Instruction::Bfe { data, arguments } => todo!(),
-            ast::Instruction::Bfi { data, arguments } => todo!(),
-            ast::Instruction::PrmtSlow { arguments } => todo!(),
-            ast::Instruction::Prmt { data, arguments } => todo!(),
-            ast::Instruction::Activemask { arguments } => todo!(),
-            ast::Instruction::Membar { data } => todo!(),
+            ast::Instruction::Cvta { .. } => todo!(),
+            ast::Instruction::Abs { .. } => todo!(),
+            ast::Instruction::Mad { .. } => todo!(),
+            ast::Instruction::Fma { .. } => todo!(),
+            ast::Instruction::Sub { .. } => todo!(),
+            ast::Instruction::Min { .. } => todo!(),
+            ast::Instruction::Max { .. } => todo!(),
+            ast::Instruction::Rcp { .. } => todo!(),
+            ast::Instruction::Sqrt { .. } => todo!(),
+            ast::Instruction::Rsqrt { .. } => todo!(),
+            ast::Instruction::Selp { .. } => todo!(),
+            ast::Instruction::Bar { .. } => todo!(),
+            ast::Instruction::Atom { data, arguments } => self.emit_atom(data, arguments),
+            ast::Instruction::AtomCas { data, arguments } => self.emit_atom_cas(data, arguments),
+            ast::Instruction::Div { .. } => todo!(),
+            ast::Instruction::Neg { .. } => todo!(),
+            ast::Instruction::Sin { .. } => todo!(),
+            ast::Instruction::Cos { data, arguments } => self.emit_cos(data, arguments),
+            ast::Instruction::Lg2 { .. } => todo!(),
+            ast::Instruction::Ex2 { .. } => todo!(),
+            ast::Instruction::Clz { data, arguments } => self.emit_clz(data, arguments),
+            ast::Instruction::Brev { data, arguments } => self.emit_brev(data, arguments),
+            ast::Instruction::Popc { .. } => todo!(),
+            ast::Instruction::Xor { data, arguments } => self.emit_xor(data, arguments),
+            ast::Instruction::Rem { .. } => todo!(),
+            ast::Instruction::PrmtSlow { .. } => todo!(),
+            ast::Instruction::Prmt { .. } => todo!(),
+            ast::Instruction::Membar { .. } => todo!(),
             ast::Instruction::Trap {} => todo!(),
+            // replaced by a function call
+            ast::Instruction::Bfe { .. }
+            | ast::Instruction::Bfi { .. }
+            | ast::Instruction::Activemask { .. } => return Err(error_unreachable()),
         }
     }
 
@@ -447,9 +561,6 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
         data: ast::LdDetails,
         arguments: ast::LdArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        if data.non_coherent {
-            todo!()
-        }
         if data.qualifier != ast::LdStQualifier::Weak {
             todo!()
         }
@@ -462,23 +573,81 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
         Ok(())
     }
 
-    fn emit_load_variable(&mut self, var: LoadVarDetails) -> Result<(), TranslateError> {
-        if var.member_index.is_some() {
-            todo!()
-        }
-        let builder = self.builder;
-        let type_ = get_type(self.context, &var.typ)?;
-        let ptr = self.resolver.value(var.arg.src)?;
-        self.resolver.with_result(var.arg.dst, |dst| unsafe {
-            LLVMBuildLoad2(builder, type_, ptr, dst)
-        });
-        Ok(())
-    }
-
     fn emit_conversion(&mut self, conversion: ImplicitConversion) -> Result<(), TranslateError> {
         let builder = self.builder;
         match conversion.kind {
-            ConversionKind::Default => todo!(),
+            ConversionKind::Default => {
+                match (&conversion.from_type, &conversion.to_type) {
+                    (ast::Type::Scalar(from_type), ast::Type::Scalar(to_type)) => {
+                        let from_layout = conversion.from_type.layout();
+                        let to_layout = conversion.to_type.layout();
+                        if from_layout.size() == to_layout.size() {
+                            let dst_type = get_type(self.context, &conversion.to_type)?;
+                            if from_type.kind() != ast::ScalarKind::Float
+                                && to_type.kind() != ast::ScalarKind::Float
+                            {
+                                // It is noop, but another instruction expects result of this conversion
+                                self.resolver
+                                    .register(conversion.dst, self.resolver.value(conversion.src)?);
+                            } else {
+                                let src = self.resolver.value(conversion.src)?;
+                                self.resolver.with_result(conversion.dst, |dst| unsafe {
+                                    LLVMBuildBitCast(builder, src, dst_type, dst)
+                                });
+                            }
+                            Ok(())
+                        } else {
+                            let src = self.resolver.value(conversion.src)?;
+                            // This block is safe because it's illegal to implictly convert between floating point values
+                            let same_width_bit_type = unsafe {
+                                LLVMIntTypeInContext(self.context, (from_layout.size() * 8) as u32)
+                            };
+                            let same_width_bit_value = unsafe {
+                                LLVMBuildBitCast(
+                                    builder,
+                                    src,
+                                    same_width_bit_type,
+                                    LLVM_UNNAMED.as_ptr(),
+                                )
+                            };
+                            let wide_bit_type = unsafe {
+                                LLVMIntTypeInContext(self.context, (to_layout.size() * 8) as u32)
+                            };
+                            if to_type.kind() == ast::ScalarKind::Unsigned
+                                || to_type.kind() == ast::ScalarKind::Bit
+                            {
+                                let llvm_fn = if to_type.size_of() >= from_type.size_of() {
+                                    LLVMBuildZExtOrBitCast
+                                } else {
+                                    LLVMBuildTrunc
+                                };
+                                self.resolver.with_result(conversion.dst, |dst| unsafe {
+                                    llvm_fn(builder, same_width_bit_value, wide_bit_type, dst)
+                                });
+                                Ok(())
+                            } else {
+                                let conversion_fn = if from_type.kind() == ast::ScalarKind::Signed
+                                    && to_type.kind() == ast::ScalarKind::Signed
+                                {
+                                    if to_type.size_of() >= from_type.size_of() {
+                                        LLVMBuildSExtOrBitCast
+                                    } else {
+                                        LLVMBuildTrunc
+                                    }
+                                } else {
+                                    if to_type.size_of() >= from_type.size_of() {
+                                        LLVMBuildZExtOrBitCast
+                                    } else {
+                                        LLVMBuildTrunc
+                                    }
+                                };
+                                todo!()
+                            }
+                        }
+                    }
+                    _ => todo!(),
+                }
+            }
             ConversionKind::SignExtend => todo!(),
             ConversionKind::BitToPtr => {
                 let src = self.resolver.value(conversion.src)?;
@@ -488,8 +657,22 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
                 });
                 Ok(())
             }
-            ConversionKind::PtrToPtr => todo!(),
-            ConversionKind::AddressOf => todo!(),
+            ConversionKind::PtrToPtr => {
+                let src = self.resolver.value(conversion.src)?;
+                let dst_type = get_pointer_type(self.context, conversion.to_space)?;
+                self.resolver.with_result(conversion.dst, |dst| unsafe {
+                    LLVMBuildAddrSpaceCast(builder, src, dst_type, dst)
+                });
+                Ok(())
+            }
+            ConversionKind::AddressOf => {
+                let src = self.resolver.value(conversion.src)?;
+                let dst_type = get_type(self.context, &conversion.to_type)?;
+                self.resolver.with_result(conversion.dst, |dst| unsafe {
+                    LLVMBuildPtrToInt(self.builder, src, dst_type, dst)
+                });
+                Ok(())
+            }
         }
     }
 
@@ -514,8 +697,8 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
         let fn_ = match data {
-            ast::ArithDetails::Integer(integer) => LLVMBuildAdd,
-            ast::ArithDetails::Float(float) => LLVMBuildFAdd,
+            ast::ArithDetails::Integer(..) => LLVMBuildAdd,
+            ast::ArithDetails::Float(..) => LLVMBuildFAdd,
         };
         self.resolver.with_result(arguments.dst, |dst| unsafe {
             fn_(builder, src1, src2, dst)
@@ -525,8 +708,8 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
 
     fn emit_st(
         &self,
-        data: ptx_parser::StData,
-        arguments: ptx_parser::StArgs<SpirvWord>,
+        data: ast::StData,
+        arguments: ast::StArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let ptr = self.resolver.value(arguments.src1)?;
         let value = self.resolver.value(arguments.src2)?;
@@ -537,14 +720,14 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
         Ok(())
     }
 
-    fn emit_ret(&self, _data: ptx_parser::RetData) {
+    fn emit_ret(&self, _data: ast::RetData) {
         unsafe { LLVMBuildRetVoid(self.builder) };
     }
 
     fn emit_call(
         &mut self,
-        data: ptx_parser::CallDetails,
-        arguments: ptx_parser::CallArgs<SpirvWord>,
+        data: ast::CallDetails,
+        arguments: ast::CallArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         if cfg!(debug_assertions) {
             for (_, space) in data.return_arguments.iter() {
@@ -558,14 +741,14 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
                 }
             }
         }
-        let name = match (&*data.return_arguments, &*arguments.return_arguments) {
-            ([], []) => LLVM_UNNAMED.as_ptr(),
-            ([(type_, _)], [dst]) => self.resolver.get_or_add_raw(*dst),
+        let name = match &*arguments.return_arguments {
+            [] => LLVM_UNNAMED.as_ptr(),
+            [dst] => self.resolver.get_or_add_raw(*dst),
             _ => todo!(),
         };
         let type_ = get_function_type(
             self.context,
-            data.return_arguments.iter().map(|(type_, space)| type_),
+            data.return_arguments.iter().map(|(type_, ..)| type_),
             data.input_arguments
                 .iter()
                 .map(|(type_, space)| get_input_argument_type(self.context, &type_, *space)),
@@ -597,11 +780,310 @@ impl<'a, 'input> MethodEmitContext<'a, 'input> {
 
     fn emit_mov(
         &mut self,
-        _data: ptx_parser::MovDetails,
-        arguments: ptx_parser::MovArgs<SpirvWord>,
+        _data: ast::MovDetails,
+        arguments: ast::MovArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         self.resolver
             .register(arguments.dst, self.resolver.value(arguments.src)?);
+        Ok(())
+    }
+
+    fn emit_ptr_access(&mut self, ptr_access: PtrAccess<SpirvWord>) -> Result<(), TranslateError> {
+        let ptr_src = self.resolver.value(ptr_access.ptr_src)?;
+        let mut offset_src = self.resolver.value(ptr_access.offset_src)?;
+        let pointee_type = get_scalar_type(self.context, ast::ScalarType::B8);
+        self.resolver.with_result(ptr_access.dst, |dst| unsafe {
+            LLVMBuildInBoundsGEP2(self.builder, pointee_type, ptr_src, &mut offset_src, 1, dst)
+        });
+        Ok(())
+    }
+
+    fn emit_and(&mut self, arguments: ast::AndArgs<SpirvWord>) -> Result<(), TranslateError> {
+        let builder = self.builder;
+        let src1 = self.resolver.value(arguments.src1)?;
+        let src2 = self.resolver.value(arguments.src2)?;
+        self.resolver.with_result(arguments.dst, |dst| unsafe {
+            LLVMBuildAnd(builder, src1, src2, dst)
+        });
+        Ok(())
+    }
+
+    fn emit_atom(
+        &mut self,
+        data: ast::AtomDetails,
+        arguments: ast::AtomArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let builder = self.builder;
+        let src1 = self.resolver.value(arguments.src1)?;
+        let src2 = self.resolver.value(arguments.src2)?;
+        let op = match data.op {
+            ast::AtomicOp::And => LLVMZludaAtomicRMWBinOp::LLVMZludaAtomicRMWBinOpAnd,
+            ast::AtomicOp::Or => LLVMZludaAtomicRMWBinOp::LLVMZludaAtomicRMWBinOpOr,
+            ast::AtomicOp::Xor => LLVMZludaAtomicRMWBinOp::LLVMZludaAtomicRMWBinOpXor,
+            ast::AtomicOp::Exchange => LLVMZludaAtomicRMWBinOp::LLVMZludaAtomicRMWBinOpXchg,
+            ast::AtomicOp::Add => LLVMZludaAtomicRMWBinOp::LLVMZludaAtomicRMWBinOpAdd,
+            ast::AtomicOp::IncrementWrap => {
+                LLVMZludaAtomicRMWBinOp::LLVMZludaAtomicRMWBinOpUIncWrap
+            }
+            ast::AtomicOp::DecrementWrap => {
+                LLVMZludaAtomicRMWBinOp::LLVMZludaAtomicRMWBinOpUDecWrap
+            }
+            ast::AtomicOp::SignedMin => LLVMZludaAtomicRMWBinOp::LLVMZludaAtomicRMWBinOpMin,
+            ast::AtomicOp::UnsignedMin => LLVMZludaAtomicRMWBinOp::LLVMZludaAtomicRMWBinOpUMin,
+            ast::AtomicOp::SignedMax => LLVMZludaAtomicRMWBinOp::LLVMZludaAtomicRMWBinOpMax,
+            ast::AtomicOp::UnsignedMax => LLVMZludaAtomicRMWBinOp::LLVMZludaAtomicRMWBinOpUMax,
+            ast::AtomicOp::FloatAdd => LLVMZludaAtomicRMWBinOp::LLVMZludaAtomicRMWBinOpFAdd,
+            ast::AtomicOp::FloatMin => LLVMZludaAtomicRMWBinOp::LLVMZludaAtomicRMWBinOpFMin,
+            ast::AtomicOp::FloatMax => LLVMZludaAtomicRMWBinOp::LLVMZludaAtomicRMWBinOpFMax,
+        };
+        self.resolver.register(arguments.dst, unsafe {
+            LLVMZludaBuildAtomicRMW(
+                builder,
+                op,
+                src1,
+                src2,
+                get_scope(data.scope)?,
+                get_ordering(data.semantics),
+            )
+        });
+        Ok(())
+    }
+
+    fn emit_atom_cas(
+        &mut self,
+        data: ast::AtomCasDetails,
+        arguments: ast::AtomCasArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let src1 = self.resolver.value(arguments.src1)?;
+        let src2 = self.resolver.value(arguments.src2)?;
+        let src3 = self.resolver.value(arguments.src3)?;
+        let success_ordering = get_ordering(data.semantics);
+        let failure_ordering = get_ordering_failure(data.semantics);
+        let temp = unsafe {
+            LLVMZludaBuildAtomicCmpXchg(
+                self.builder,
+                src1,
+                src2,
+                src3,
+                get_scope(data.scope)?,
+                success_ordering,
+                failure_ordering,
+            )
+        };
+        self.resolver.with_result(arguments.dst, |dst| unsafe {
+            LLVMBuildExtractValue(self.builder, temp, 0, dst)
+        });
+        Ok(())
+    }
+
+    fn emit_bra(&self, arguments: ast::BraArgs<SpirvWord>) -> Result<(), TranslateError> {
+        let src = self.resolver.value(arguments.src)?;
+        let src = unsafe { LLVMValueAsBasicBlock(src) };
+        unsafe { LLVMBuildBr(self.builder, src) };
+        Ok(())
+    }
+
+    fn emit_brev(
+        &mut self,
+        data: ast::ScalarType,
+        arguments: ast::BrevArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let llvm_fn = match data.size_of() {
+            4 => c"llvm.bitreverse.i32",
+            8 => c"llvm.bitreverse.i64",
+            _ => return Err(error_unreachable()),
+        };
+        let mut fn_ = unsafe { LLVMGetNamedFunction(self.module, llvm_fn.as_ptr()) };
+        let type_ = get_scalar_type(self.context, data);
+        let fn_type = get_function_type(
+            self.context,
+            iter::once(&data.into()),
+            iter::once(Ok(type_)),
+        )?;
+        if fn_ == ptr::null_mut() {
+            fn_ = unsafe { LLVMAddFunction(self.module, llvm_fn.as_ptr(), fn_type) };
+        }
+        let mut src = self.resolver.value(arguments.src)?;
+        self.resolver.with_result(arguments.dst, |dst| unsafe {
+            LLVMBuildCall2(self.builder, fn_type, fn_, &mut src, 1, dst)
+        });
+        Ok(())
+    }
+
+    fn emit_ret_value(
+        &mut self,
+        values: Vec<(SpirvWord, ptx_parser::Type)>,
+    ) -> Result<(), TranslateError> {
+        match &*values {
+            [] => unsafe { LLVMBuildRetVoid(self.builder) },
+            [(value, type_)] => {
+                let value = self.resolver.value(*value)?;
+                let type_ = get_type(self.context, type_)?;
+                let value =
+                    unsafe { LLVMBuildLoad2(self.builder, type_, value, LLVM_UNNAMED.as_ptr()) };
+                unsafe { LLVMBuildRet(self.builder, value) }
+            }
+            _ => todo!(),
+        };
+        Ok(())
+    }
+
+    fn emit_clz(
+        &mut self,
+        data: ptx_parser::ScalarType,
+        arguments: ptx_parser::ClzArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let llvm_fn = match data.size_of() {
+            4 => c"llvm.ctlz.i32",
+            8 => c"llvm.ctlz.i64",
+            _ => return Err(error_unreachable()),
+        };
+        let type_ = get_scalar_type(self.context, data.into());
+        let pred = get_scalar_type(self.context, ast::ScalarType::Pred);
+        let fn_type = get_function_type(
+            self.context,
+            iter::once(&ast::ScalarType::U32.into()),
+            [Ok(type_), Ok(pred)].into_iter(),
+        )?;
+        let mut fn_ = unsafe { LLVMGetNamedFunction(self.module, llvm_fn.as_ptr()) };
+        if fn_ == ptr::null_mut() {
+            fn_ = unsafe { LLVMAddFunction(self.module, llvm_fn.as_ptr(), fn_type) };
+        }
+        let src = self.resolver.value(arguments.src)?;
+        let false_ = unsafe { LLVMConstInt(pred, 0, 0) };
+        let mut args = [src, false_];
+        self.resolver.with_result(arguments.dst, |dst| unsafe {
+            LLVMBuildCall2(
+                self.builder,
+                fn_type,
+                fn_,
+                args.as_mut_ptr(),
+                args.len() as u32,
+                dst,
+            )
+        });
+        Ok(())
+    }
+
+    fn emit_mul(
+        &mut self,
+        data: ast::MulDetails,
+        arguments: ast::MulArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let mul_fn = match data {
+            ast::MulDetails::Integer { control, .. } => match control {
+                ast::MulIntControl::Low => LLVMBuildMul,
+                ast::MulIntControl::High => todo!(),
+                ast::MulIntControl::Wide => todo!(),
+            },
+            ast::MulDetails::Float(..) => LLVMBuildFMul,
+        };
+        let src1 = self.resolver.value(arguments.src1)?;
+        let src2 = self.resolver.value(arguments.src2)?;
+        self.resolver.with_result(arguments.dst, |dst| unsafe {
+            mul_fn(self.builder, src1, src2, dst)
+        });
+        Ok(())
+    }
+
+    fn emit_cos(
+        &mut self,
+        _data: ast::FlushToZero,
+        arguments: ast::CosArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let llvm_fn = c"llvm.cos.f32";
+        let mut fn_ = unsafe { LLVMGetNamedFunction(self.module, llvm_fn.as_ptr()) };
+        let fn_type = get_function_type(
+            self.context,
+            iter::once(&ast::ScalarType::F32.into()),
+            iter::once(Ok(get_scalar_type(self.context, ast::ScalarType::F32))),
+        )?;
+        if fn_ == ptr::null_mut() {
+            fn_ = unsafe { LLVMAddFunction(self.module, llvm_fn.as_ptr(), fn_type) };
+        }
+        let mut src = self.resolver.value(arguments.src)?;
+        let cos = self.resolver.with_result(arguments.dst, |dst| unsafe {
+            LLVMBuildCall2(self.builder, fn_type, fn_, &mut src, 1, dst)
+        });
+        unsafe { LLVMZludaSetFastMathFlags(cos, LLVMZludaFastMathApproxFunc) }
+        Ok(())
+    }
+
+    fn emit_xor(
+        &mut self,
+        _data: ptx_parser::ScalarType,
+        arguments: ptx_parser::XorArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let src1 = self.resolver.value(arguments.src1)?;
+        let src2 = self.resolver.value(arguments.src2)?;
+        self.resolver.with_result(arguments.dst, |dst| unsafe {
+            LLVMBuildXor(self.builder, src1, src2, dst)
+        });
+        Ok(())
+    }
+
+    fn emit_vector_read(&mut self, vec_acccess: VectorRead) -> Result<(), TranslateError> {
+        let src = self.resolver.value(vec_acccess.vector_src)?;
+        let index = unsafe {
+            LLVMConstInt(
+                get_scalar_type(self.context, ast::ScalarType::B8),
+                vec_acccess.member as _,
+                0,
+            )
+        };
+        self.resolver
+            .with_result(vec_acccess.scalar_dst, |dst| unsafe {
+                LLVMBuildExtractElement(self.builder, src, index, dst)
+            });
+        Ok(())
+    }
+
+    fn emit_vector_write(&mut self, vector_write: VectorWrite) -> Result<(), TranslateError> {
+        let vector_src = self.resolver.value(vector_write.vector_src)?;
+        let scalar_src = self.resolver.value(vector_write.scalar_src)?;
+        let index = unsafe {
+            LLVMConstInt(
+                get_scalar_type(self.context, ast::ScalarType::B8),
+                vector_write.member as _,
+                0,
+            )
+        };
+        self.resolver
+            .with_result(vector_write.vector_dst, |dst| unsafe {
+                LLVMBuildInsertElement(self.builder, vector_src, scalar_src, index, dst)
+            });
+        Ok(())
+    }
+
+    fn emit_vector_repack(&mut self, repack: RepackVectorDetails) -> Result<(), TranslateError> {
+        let i8_type = get_scalar_type(self.context, ast::ScalarType::B8);
+        if repack.is_extract {
+            let src = self.resolver.value(repack.packed)?;
+            for (index, dst) in repack.unpacked.iter().enumerate() {
+                let index: *mut LLVMValue = unsafe { LLVMConstInt(i8_type, index as _, 0) };
+                self.resolver.with_result(*dst, |dst| unsafe {
+                    LLVMBuildExtractElement(self.builder, src, index, dst)
+                });
+            }
+        } else {
+            let vector_type = get_type(
+                self.context,
+                &ast::Type::Vector(repack.unpacked.len() as u8, repack.typ),
+            )?;
+            let mut temp_vec = unsafe { LLVMGetUndef(vector_type) };
+            for (index, src_id) in repack.unpacked.iter().enumerate() {
+                let dst = if index == repack.unpacked.len() - 1 {
+                    Some(repack.packed)
+                } else {
+                    None
+                };
+                let scalar_src = self.resolver.value(*src_id)?;
+                let index = unsafe { LLVMConstInt(i8_type, index as _, 0) };
+                temp_vec = self.resolver.with_result_option(dst, |dst| unsafe {
+                    LLVMBuildInsertElement(self.builder, temp_vec, scalar_src, index, dst)
+                });
+            }
+        }
         Ok(())
     }
 }
@@ -611,6 +1093,35 @@ fn get_pointer_type<'ctx>(
     to_space: ast::StateSpace,
 ) -> Result<LLVMTypeRef, TranslateError> {
     Ok(unsafe { LLVMPointerTypeInContext(context, get_state_space(to_space)?) })
+}
+
+// https://llvm.org/docs/AMDGPUUsage.html#memory-scopes
+fn get_scope(scope: ast::MemScope) -> Result<*const i8, TranslateError> {
+    Ok(match scope {
+        ast::MemScope::Cta => c"workgroup-one-as",
+        ast::MemScope::Gpu => c"agent-one-as",
+        ast::MemScope::Sys => c"one-as",
+        ast::MemScope::Cluster => todo!(),
+    }
+    .as_ptr())
+}
+
+fn get_ordering(semantics: ast::AtomSemantics) -> LLVMAtomicOrdering {
+    match semantics {
+        ast::AtomSemantics::Relaxed => LLVMAtomicOrdering::LLVMAtomicOrderingMonotonic,
+        ast::AtomSemantics::Acquire => LLVMAtomicOrdering::LLVMAtomicOrderingAcquire,
+        ast::AtomSemantics::Release => LLVMAtomicOrdering::LLVMAtomicOrderingRelease,
+        ast::AtomSemantics::AcqRel => LLVMAtomicOrdering::LLVMAtomicOrderingAcquireRelease,
+    }
+}
+
+fn get_ordering_failure(semantics: ast::AtomSemantics) -> LLVMAtomicOrdering {
+    match semantics {
+        ast::AtomSemantics::Relaxed => LLVMAtomicOrdering::LLVMAtomicOrderingMonotonic,
+        ast::AtomSemantics::Acquire => LLVMAtomicOrdering::LLVMAtomicOrderingAcquire,
+        ast::AtomSemantics::Release => LLVMAtomicOrdering::LLVMAtomicOrderingAcquire,
+        ast::AtomSemantics::AcqRel => LLVMAtomicOrdering::LLVMAtomicOrderingAcquire,
+    }
 }
 
 fn get_type(context: LLVMContextRef, type_: &ast::Type) -> Result<LLVMTypeRef, TranslateError> {
@@ -747,8 +1258,24 @@ impl ResolveIdent {
             .ok_or_else(|| error_unreachable())
     }
 
-    fn with_result(&mut self, word: SpirvWord, fn_: impl FnOnce(*const i8) -> LLVMValueRef) {
+    fn with_result(
+        &mut self,
+        word: SpirvWord,
+        fn_: impl FnOnce(*const i8) -> LLVMValueRef,
+    ) -> LLVMValueRef {
         let t = self.get_or_ad_impl(word, |dst| fn_(dst.as_ptr().cast()));
         self.register(word, t);
+        t
+    }
+
+    fn with_result_option(
+        &mut self,
+        word: Option<SpirvWord>,
+        fn_: impl FnOnce(*const i8) -> LLVMValueRef,
+    ) -> LLVMValueRef {
+        match word {
+            Some(word) => self.with_result(word, fn_),
+            None => fn_(LLVM_UNNAMED.as_ptr()),
+        }
     }
 }

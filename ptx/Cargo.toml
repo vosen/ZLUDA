@@ -9,9 +9,6 @@ edition = "2021"
 [dependencies]
 ptx_parser = { path = "../ptx_parser" }
 llvm_zluda = { path = "../llvm_zluda" }
-regex = "1"
-rspirv = "0.7"
-spirv_headers = "1.5" 
 quick-error = "1.2"
 thiserror = "1.0"
 bit-vec = "0.6"
@@ -21,18 +18,9 @@ rustc-hash = "2.0.0"
 strum = "0.26"
 strum_macros = "0.26"
 
-[dependencies.lalrpop-util]
-version = "0.19.12"
-features = ["lexer"]
-
-[build-dependencies.lalrpop]
-version = "0.19.12"
-features = ["lexer"]
-
 [dev-dependencies]
 hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
 comgr = { path = "../comgr" }
-spirv_tools-sys = { path = "../spirv_tools-sys" }
 tempfile = "3"
 paste = "1.0"
 cuda-driver-sys = "0.3.0"

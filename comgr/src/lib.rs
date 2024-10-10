@@ -1,5 +1,5 @@
 use amd_comgr_sys::*;
-use std::{ffi::CStr, mem, ptr};
+use std::{ffi::CStr, iter, mem, ptr};
 
 struct Data(amd_comgr_data_t);
 
@@ -79,6 +79,24 @@ impl ActionInfo {
         unsafe { amd_comgr_action_info_set_isa_name(self.get(), full_isa.as_ptr().cast()) }
     }
 
+    fn set_language(&self, language: amd_comgr_language_t) -> Result<(), amd_comgr_status_s> {
+        unsafe { amd_comgr_action_info_set_language(self.get(), language) }
+    }
+
+    fn set_options<'a>(
+        &self,
+        options: impl Iterator<Item = &'a CStr>,
+    ) -> Result<(), amd_comgr_status_s> {
+        let options = options.map(|x| x.as_ptr()).collect::<Vec<_>>();
+        unsafe {
+            amd_comgr_action_info_set_option_list(
+                self.get(),
+                options.as_ptr().cast_mut(),
+                options.len(),
+            )
+        }
+    }
+
     fn get(&self) -> amd_comgr_action_info_t {
         self.0
     }
@@ -90,36 +108,62 @@ impl Drop for ActionInfo {
     }
 }
 
-pub fn compile_bitcode(gcn_arch: &CStr, buffer: &[u8]) -> Result<Vec<u8>, amd_comgr_status_s> {
+pub fn compile_bitcode(
+    gcn_arch: &CStr,
+    main_buffer: &[u8],
+    ptx_impl: &[u8],
+) -> Result<Vec<u8>, amd_comgr_status_s> {
     use amd_comgr_sys::*;
     let bitcode_data_set = DataSet::new()?;
-    let bitcode_data = Data::new(
+    let main_bitcode_data = Data::new(
         amd_comgr_data_kind_t::AMD_COMGR_DATA_KIND_BC,
         c"zluda.bc",
-        buffer,
+        main_buffer,
     )?;
-    bitcode_data_set.add(&bitcode_data)?;
-    let reloc_data_set = DataSet::new()?;
-    let action_info = ActionInfo::new()?;
-    action_info.set_isa_name(gcn_arch)?;
-    unsafe {
-        amd_comgr_do_action(
-            amd_comgr_action_kind_t::AMD_COMGR_ACTION_CODEGEN_BC_TO_RELOCATABLE,
-            action_info.get(),
-            bitcode_data_set.get(),
-            reloc_data_set.get(),
-        )
-    }?;
-    let exec_data_set = DataSet::new()?;
-    unsafe {
-        amd_comgr_do_action(
-            amd_comgr_action_kind_t::AMD_COMGR_ACTION_LINK_RELOCATABLE_TO_EXECUTABLE,
-            action_info.get(),
-            reloc_data_set.get(),
-            exec_data_set.get(),
-        )
-    }?;
+    bitcode_data_set.add(&main_bitcode_data)?;
+    let stdlib_bitcode_data = Data::new(
+        amd_comgr_data_kind_t::AMD_COMGR_DATA_KIND_BC,
+        c"ptx_impl.bc",
+        ptx_impl,
+    )?;
+    bitcode_data_set.add(&stdlib_bitcode_data)?;
+    let lang_action_info = ActionInfo::new()?;
+    lang_action_info.set_isa_name(gcn_arch)?;
+    lang_action_info.set_language(amd_comgr_language_t::AMD_COMGR_LANGUAGE_LLVM_IR)?;
+    let with_device_libs = do_action(
+        &bitcode_data_set,
+        &lang_action_info,
+        amd_comgr_action_kind_t::AMD_COMGR_ACTION_COMPILE_SOURCE_WITH_DEVICE_LIBS_TO_BC,
+    )?;
+    let linked_data_set = do_action(
+        &with_device_libs,
+        &lang_action_info,
+        amd_comgr_action_kind_t::AMD_COMGR_ACTION_LINK_BC_TO_BC,
+    )?;
+    let compile_action_info = ActionInfo::new()?;
+    compile_action_info.set_isa_name(gcn_arch)?;
+    compile_action_info.set_options(iter::once(c"-O3"))?;
+    let reloc_data_set = do_action(
+        &linked_data_set,
+        &compile_action_info,
+        amd_comgr_action_kind_t::AMD_COMGR_ACTION_CODEGEN_BC_TO_RELOCATABLE,
+    )?;
+    let exec_data_set = do_action(
+        &reloc_data_set,
+        &compile_action_info,
+        amd_comgr_action_kind_t::AMD_COMGR_ACTION_LINK_RELOCATABLE_TO_EXECUTABLE,
+    )?;
     let executable =
         exec_data_set.get_data(amd_comgr_data_kind_t::AMD_COMGR_DATA_KIND_EXECUTABLE, 0)?;
     executable.copy_content()
+}
+
+fn do_action(
+    data_set: &DataSet,
+    action: &ActionInfo,
+    kind: amd_comgr_action_kind_t,
+) -> Result<DataSet, amd_comgr_status_s> {
+    let result = DataSet::new()?;
+    unsafe { amd_comgr_do_action(kind, action.get(), data_set.get(), result.get()) }?;
+    Ok(result)
 }

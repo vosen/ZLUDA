@@ -1349,10 +1349,10 @@ impl std::error::Error for TokenError {}
 // * After parsing, each instruction needs to do some early validation and generate a specific,
 //   strongly-typed object. We want strong-typing because we have a single PTX parser frontend, but
 //   there can be multiple different code emitter backends
-// * Most importantly, instruction modifiers  can come in aby order, so e.g. both 
+// * Most importantly, instruction modifiers  can come in aby order, so e.g. both
 //   `ld.relaxed.global.u32 a, b` and `ld.global.relaxed.u32 a, b` are equally valid. This makes
 //   classic parsing generators fail: if we tried to generate parsing rules that cover every possible
-//   ordering we'd need thousands of rules. This is not a purely theoretical problem. NVCC and Clang 
+//   ordering we'd need thousands of rules. This is not a purely theoretical problem. NVCC and Clang
 //   will always emit modifiers in the correct order, but people who write inline assembly usually
 //   get it wrong (even first party developers)
 //
@@ -1398,7 +1398,7 @@ impl std::error::Error for TokenError {}
 // * List of rules. They are associated with the preceding patterns (until different opcode or
 //   different rules). Rules are used to resolve modifiers. There are two types of rules:
 //   * Normal rule: `.foobar: FoobarEnum => { .a, .b, .c }`. This means that instead of `.foobar` we
-//     expecte one of `.a`, `.b`, `.c` and will emit value FoobarEnum::DotA, FoobarEnum::DotB, 
+//     expecte one of `.a`, `.b`, `.c` and will emit value FoobarEnum::DotA, FoobarEnum::DotB,
 //     FoobarEnum::DotC appropriately
 //   * Type-only rule: `FoobarEnum => { .a, .b, .c }` this means that all the occurences of `.a` will
 //     emit FoobarEnum::DotA to the code block. This helps to avoid copy-paste errors
@@ -3233,36 +3233,42 @@ mod tests {
     #[test]
     fn sm_11() {
         let tokens = Token::lexer(".target sm_11")
-            .collect::<Result<Vec<_>, ()>>()
+            .collect::<Result<Vec<_>, _>>()
             .unwrap();
+        let mut errors = Vec::new();
         let stream = super::PtxParser {
             input: &tokens[..],
-            state: PtxParserState::new(),
+            state: PtxParserState::new(&mut errors),
         };
         assert_eq!(target.parse(stream).unwrap(), (11, None));
+        assert_eq!(errors.len(), 0);
     }
 
     #[test]
     fn sm_90a() {
         let tokens = Token::lexer(".target sm_90a")
-            .collect::<Result<Vec<_>, ()>>()
+            .collect::<Result<Vec<_>, _>>()
             .unwrap();
+        let mut errors = Vec::new();
         let stream = super::PtxParser {
             input: &tokens[..],
-            state: PtxParserState::new(),
+            state: PtxParserState::new(&mut errors),
         };
         assert_eq!(target.parse(stream).unwrap(), (90, Some('a')));
+        assert_eq!(errors.len(), 0);
     }
 
     #[test]
     fn sm_90ab() {
         let tokens = Token::lexer(".target sm_90ab")
-            .collect::<Result<Vec<_>, ()>>()
+            .collect::<Result<Vec<_>, _>>()
             .unwrap();
+        let mut errors = Vec::new();
         let stream = super::PtxParser {
             input: &tokens[..],
-            state: PtxParserState::new(),
+            state: PtxParserState::new(&mut errors),
         };
         assert!(target.parse(stream).is_err());
+        assert_eq!(errors.len(), 0);
     }
 }
