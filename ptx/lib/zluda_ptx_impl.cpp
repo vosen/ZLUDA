@@ -13,10 +13,28 @@ extern "C"
         return __builtin_amdgcn_read_exec_lo();
     }
 
+    size_t __ockl_get_local_id(uint32_t) __device__;
+    uint32_t FUNC(sreg_tid)(uint8_t member)
+    {
+        return (uint32_t)__ockl_get_local_id(member);
+    }
+
     size_t __ockl_get_local_size(uint32_t) __device__;
     uint32_t FUNC(sreg_ntid)(uint8_t member)
     {
         return (uint32_t)__ockl_get_local_size(member);
+    }
+
+    size_t __ockl_get_global_id(uint32_t) __device__;
+    uint32_t FUNC(sreg_ctaid)(uint8_t member)
+    {
+        return (uint32_t)__ockl_get_global_id(member);
+    }
+
+    size_t __ockl_get_global_size(uint32_t) __device__;
+    uint32_t FUNC(sreg_nctaid)(uint8_t member)
+    {
+        return (uint32_t)__ockl_get_global_size(member);
     }
 
     uint32_t __ockl_bfe_u32(uint32_t, uint32_t, uint32_t) __attribute__((device));
