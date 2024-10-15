@@ -150,6 +150,16 @@ fn error_unreachable() -> TranslateError {
 }
 
 #[cfg(debug_assertions)]
+fn error_todo() -> TranslateError {
+    unreachable!()
+}
+
+#[cfg(not(debug_assertions))]
+fn error_todo() -> TranslateError {
+    TranslateError::Todo
+}
+
+#[cfg(debug_assertions)]
 fn error_unknown_symbol() -> TranslateError {
     panic!()
 }
