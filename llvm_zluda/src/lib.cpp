@@ -183,4 +183,13 @@ void LLVMZludaSetFastMathFlags(LLVMValueRef FPMathInst, LLVMFastMathFlags FMF)
     cast<Instruction>(P)->setFastMathFlags(mapFromLLVMFastMathFlags(FMF));
 }
 
+void LLVMZludaBuildFence(LLVMBuilderRef B, LLVMAtomicOrdering Ordering,
+                         char *scope, const char *Name)
+{
+    auto builder = llvm::unwrap(B);
+    LLVMContext &context = builder->getContext();
+    builder->CreateFence(mapFromLLVMOrdering(Ordering),
+                         context.getOrInsertSyncScopeID(scope));
+}
+
 LLVM_C_EXTERN_C_END

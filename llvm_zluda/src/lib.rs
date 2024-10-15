@@ -71,4 +71,11 @@ extern "C" {
     ) -> LLVMValueRef;
 
     pub fn LLVMZludaSetFastMathFlags(FPMathInst: LLVMValueRef, FMF: LLVMZludaFastMathFlags);
+
+    pub fn LLVMZludaBuildFence(
+        B: LLVMBuilderRef,
+        ordering: LLVMAtomicOrdering,
+        scope: *const i8,
+        Name: *const i8,
+    ) -> LLVMValueRef;
 }
