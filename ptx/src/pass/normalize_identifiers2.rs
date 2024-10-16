@@ -1,6 +1,5 @@
 use super::*;
 use ptx_parser as ast;
-use rustc_hash::FxHashMap;
 
 pub(crate) fn run<'input, 'b>(
     resolver: &mut ScopedResolver<'input, 'b>,
@@ -37,7 +36,7 @@ fn run_method<'input, 'b>(
     let name = match method.func_directive.name {
         ast::MethodName::Kernel(name) => ast::MethodName::Kernel(name),
         ast::MethodName::Func(text) => {
-            ast::MethodName::Func(resolver.add(Cow::Borrowed(text), None)?)
+            ast::MethodName::Func(resolver.add_or_get_in_current_scope_untyped(text)?)
         }
     };
     resolver.start_scope();

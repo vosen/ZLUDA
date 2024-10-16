@@ -31,10 +31,10 @@ pub(super) fn run<'a, 'input>(
         sreg_to_function,
         result: Vec::new(),
     };
-    directives
-        .into_iter()
-        .map(|directive| run_directive(&mut visitor, directive))
-        .collect::<Result<Vec<_>, _>>()
+    for directive in directives.into_iter() {
+        result.push(run_directive(&mut visitor, directive)?);
+    }
+    Ok(result)
 }
 
 fn run_directive<'a, 'input>(
@@ -112,7 +112,7 @@ impl<'a, 'b, 'input>
         is_dst: bool,
         _relaxed_type_check: bool,
     ) -> Result<SpirvWord, TranslateError> {
-        self.replace_sreg(args, None, is_dst)
+        Ok(self.replace_sreg(args, None, is_dst)?.unwrap_or(args))
     }
 }
 
@@ -122,7 +122,7 @@ impl<'a, 'b, 'input> SpecialRegisterResolver<'a, 'input> {
         name: SpirvWord,
         vector_index: Option<u8>,
         is_dst: bool,
-    ) -> Result<SpirvWord, TranslateError> {
+    ) -> Result<Option<SpirvWord>, TranslateError> {
         if let Some(sreg) = self.special_registers.get(name) {
             if is_dst {
                 return Err(error_mismatched_type());
@@ -179,30 +179,33 @@ impl<'a, 'b, 'input> SpecialRegisterResolver<'a, 'input> {
                     data,
                     arguments,
                 }));
-            Ok(fn_result)
+            Ok(Some(fn_result))
         } else {
-            Ok(name)
+            Ok(None)
         }
     }
 }
 
-pub fn map_operand<T, U, Err>(
+pub fn map_operand<T: Copy, Err>(
     this: ast::ParsedOperand<T>,
-    fn_: &mut impl FnMut(T, Option<u8>) -> Result<U, Err>,
-) -> Result<ast::ParsedOperand<U>, Err> {
+    fn_: &mut impl FnMut(T, Option<u8>) -> Result<Option<T>, Err>,
+) -> Result<ast::ParsedOperand<T>, Err> {
     Ok(match this {
-        ast::ParsedOperand::Reg(ident) => ast::ParsedOperand::Reg(fn_(ident, None)?),
+        ast::ParsedOperand::Reg(ident) => {
+            ast::ParsedOperand::Reg(fn_(ident, None)?.unwrap_or(ident))
+        }
         ast::ParsedOperand::RegOffset(ident, offset) => {
-            ast::ParsedOperand::RegOffset(fn_(ident, None)?, offset)
+            ast::ParsedOperand::RegOffset(fn_(ident, None)?.unwrap_or(ident), offset)
         }
         ast::ParsedOperand::Imm(imm) => ast::ParsedOperand::Imm(imm),
-        ast::ParsedOperand::VecMember(ident, member) => {
-            ast::ParsedOperand::Reg(fn_(ident, Some(member))?)
-        }
+        ast::ParsedOperand::VecMember(ident, member) => match fn_(ident, Some(member))? {
+            Some(ident) => ast::ParsedOperand::Reg(ident),
+            None => ast::ParsedOperand::VecMember(ident, member),
+        },
         ast::ParsedOperand::VecPack(idents) => ast::ParsedOperand::VecPack(
             idents
                 .into_iter()
-                .map(|ident| fn_(ident, None))
+                .map(|ident| Ok(fn_(ident, None)?.unwrap_or(ident)))
                 .collect::<Result<Vec<_>, _>>()?,
         ),
     })
