@@ -1,31 +1,11 @@
 use crate::pass;
-use crate::ptx;
-use crate::translate;
 use hip_runtime_sys::hipError_t;
-use rspirv::{
-    binary::{Assemble, Disassemble},
-    dr::{Block, Function, Instruction, Loader, Operand},
-};
-use spirv_headers::Word;
-use spirv_tools_sys::{
-    spv_binary, spv_endianness_t, spv_parsed_instruction_t, spv_result_t, spv_target_env,
-};
-use std::collections::hash_map::Entry;
 use std::error;
-use std::ffi::{c_void, CStr, CString};
+use std::ffi::{CStr, CString};
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
-use std::fs::File;
-use std::hash::Hash;
-use std::io;
-use std::io::Read;
-use std::io::Write;
 use std::mem;
-use std::path::Path;
-use std::process::Command;
-use std::slice;
-use std::{borrow::Cow, collections::HashMap, env, fs, path::PathBuf, ptr, str};
-use tempfile::NamedTempFile;
+use std::{ptr, str};
 
 macro_rules! test_ptx {
     ($fn_name:ident, $input:expr, $output:expr) => {
@@ -65,7 +45,6 @@ test_ptx!(setp_leu, [1f32, f32::NAN], [1f32]);
 test_ptx!(bra, [10u64], [11u64]);
 test_ptx!(not, [0u64], [u64::max_value()]);
 test_ptx!(shl, [11u64], [44u64]);
-test_ptx!(shl_link_hack, [11u64], [44u64]);
 test_ptx!(cvt_sat_s_u, [-1i32], [0i32]);
 test_ptx!(cvta, [3.0f32], [3.0f32]);
 test_ptx!(block, [1u64], [2u64]);
@@ -236,7 +215,7 @@ fn test_hip_assert<
     output: &mut [Output],
 ) -> Result<(), Box<dyn error::Error + 'a>> {
     let ast = ptx_parser::parse_module_checked(ptx_text).unwrap();
-    let llvm_ir = pass::to_llvm_module2(ast).unwrap();
+    let llvm_ir = pass::to_llvm_module(ast).unwrap();
     let name = CString::new(name)?;
     let result =
         run_hip(name.as_c_str(), llvm_ir, input, output).map_err(|err| DisplayError { err })?;
@@ -326,6 +305,7 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
         let elf_module = comgr::compile_bitcode(
             unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) },
             &*module.llvm_ir,
+            module.linked_bitcode(),
         )
         .unwrap();
         let mut module = ptr::null_mut();
@@ -380,227 +360,4 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
         unsafe { hipModuleUnload(module) }.unwrap();
     }
     Ok(result)
-}
-
-struct EqMap<T>
-where
-    T: Eq + Copy + Hash,
-{
-    m1: HashMap<T, T>,
-    m2: HashMap<T, T>,
-}
-
-impl<T: Copy + Eq + Hash> EqMap<T> {
-    fn new() -> Self {
-        EqMap {
-            m1: HashMap::new(),
-            m2: HashMap::new(),
-        }
-    }
-
-    fn is_equal(&mut self, t1: T, t2: T) -> bool {
-        match (self.m1.entry(t1), self.m2.entry(t2)) {
-            (Entry::Occupied(entry1), Entry::Occupied(entry2)) => {
-                *entry1.get() == t2 && *entry2.get() == t1
-            }
-            (Entry::Vacant(entry1), Entry::Vacant(entry2)) => {
-                entry1.insert(t2);
-                entry2.insert(t1);
-                true
-            }
-            _ => false,
-        }
-    }
-}
-
-fn is_spirv_fns_equal(fns1: &[Function], fns2: &[Function]) -> bool {
-    if fns1.len() != fns2.len() {
-        return false;
-    }
-    for (fn1, fn2) in fns1.iter().zip(fns2.iter()) {
-        if !is_spirv_fn_equal(fn1, fn2) {
-            return false;
-        }
-    }
-    true
-}
-
-fn is_spirv_fn_equal(fn1: &Function, fn2: &Function) -> bool {
-    let mut map = EqMap::new();
-    if !is_option_equal(&fn1.def, &fn2.def, &mut map, is_instr_equal) {
-        return false;
-    }
-    if !is_option_equal(&fn1.end, &fn2.end, &mut map, is_instr_equal) {
-        return false;
-    }
-    if fn1.parameters.len() != fn2.parameters.len() {
-        return false;
-    }
-    for (inst1, inst2) in fn1.parameters.iter().zip(fn2.parameters.iter()) {
-        if !is_instr_equal(inst1, inst2, &mut map) {
-            return false;
-        }
-    }
-    if fn1.blocks.len() != fn2.blocks.len() {
-        return false;
-    }
-    for (b1, b2) in fn1.blocks.iter().zip(fn2.blocks.iter()) {
-        if !is_block_equal(b1, b2, &mut map) {
-            return false;
-        }
-    }
-    true
-}
-
-fn is_block_equal(b1: &Block, b2: &Block, map: &mut EqMap<Word>) -> bool {
-    if !is_option_equal(&b1.label, &b2.label, map, is_instr_equal) {
-        return false;
-    }
-    if b1.instructions.len() != b2.instructions.len() {
-        return false;
-    }
-    for (inst1, inst2) in b1.instructions.iter().zip(b2.instructions.iter()) {
-        if !is_instr_equal(inst1, inst2, map) {
-            return false;
-        }
-    }
-    true
-}
-
-fn is_instr_equal(instr1: &Instruction, instr2: &Instruction, map: &mut EqMap<Word>) -> bool {
-    if instr1.class.opcode != instr2.class.opcode {
-        return false;
-    }
-    if !is_option_equal(&instr1.result_type, &instr2.result_type, map, is_word_equal) {
-        return false;
-    }
-    if !is_option_equal(&instr1.result_id, &instr2.result_id, map, is_word_equal) {
-        return false;
-    }
-    if instr1.operands.len() != instr2.operands.len() {
-        return false;
-    }
-    for (o1, o2) in instr1.operands.iter().zip(instr2.operands.iter()) {
-        match (o1, o2) {
-            (Operand::IdMemorySemantics(w1), Operand::IdMemorySemantics(w2)) => {
-                if !is_word_equal(w1, w2, map) {
-                    return false;
-                }
-            }
-            (Operand::IdScope(w1), Operand::IdScope(w2)) => {
-                if !is_word_equal(w1, w2, map) {
-                    return false;
-                }
-            }
-            (Operand::IdRef(w1), Operand::IdRef(w2)) => {
-                if !is_word_equal(w1, w2, map) {
-                    return false;
-                }
-            }
-            (o1, o2) => {
-                if o1 != o2 {
-                    return false;
-                }
-            }
-        }
-    }
-    true
-}
-
-fn is_word_equal(t1: &Word, t2: &Word, map: &mut EqMap<Word>) -> bool {
-    map.is_equal(*t1, *t2)
-}
-
-fn is_option_equal<T, F: FnOnce(&T, &T, &mut EqMap<Word>) -> bool>(
-    o1: &Option<T>,
-    o2: &Option<T>,
-    map: &mut EqMap<Word>,
-    f: F,
-) -> bool {
-    match (o1, o2) {
-        (Some(t1), Some(t2)) => f(t1, t2, map),
-        (None, None) => true,
-        _ => panic!(),
-    }
-}
-
-unsafe extern "C" fn parse_header_cb(
-    user_data: *mut c_void,
-    endian: spv_endianness_t,
-    magic: u32,
-    version: u32,
-    generator: u32,
-    id_bound: u32,
-    reserved: u32,
-) -> spv_result_t {
-    if endian == spv_endianness_t::SPV_ENDIANNESS_BIG {
-        return spv_result_t::SPV_UNSUPPORTED;
-    }
-    let result_vec: &mut Vec<u32> = std::mem::transmute(user_data);
-    result_vec.push(magic);
-    result_vec.push(version);
-    result_vec.push(generator);
-    result_vec.push(id_bound);
-    result_vec.push(reserved);
-    spv_result_t::SPV_SUCCESS
-}
-
-unsafe extern "C" fn parse_instruction_cb(
-    user_data: *mut c_void,
-    inst: *const spv_parsed_instruction_t,
-) -> spv_result_t {
-    let inst = &*inst;
-    let result_vec: &mut Vec<u32> = std::mem::transmute(user_data);
-    for i in 0..inst.num_words {
-        result_vec.push(*(inst.words.add(i as usize)));
-    }
-    spv_result_t::SPV_SUCCESS
-}
-
-const LLVM_SPIRV: &'static str = "/home/vosen/amd/llvm-project/build/bin/llvm-spirv";
-const AMDGPU: &'static str = "/opt/rocm/";
-const AMDGPU_TARGET: &'static str = "amdgcn-amd-amdhsa";
-const AMDGPU_BITCODE: [&'static str; 8] = [
-    "opencl.bc",
-    "ocml.bc",
-    "ockl.bc",
-    "oclc_correctly_rounded_sqrt_off.bc",
-    "oclc_daz_opt_on.bc",
-    "oclc_finite_only_off.bc",
-    "oclc_unsafe_math_off.bc",
-    "oclc_wavefrontsize64_off.bc",
-];
-const AMDGPU_BITCODE_DEVICE_PREFIX: &'static str = "oclc_isa_version_";
-
-fn persist_file(path: &Path) -> io::Result<()> {
-    let mut persistent = PathBuf::from("/tmp/zluda");
-    std::fs::create_dir_all(&persistent)?;
-    persistent.push(path.file_name().unwrap());
-    std::fs::copy(path, persistent)?;
-    Ok(())
-}
-
-fn get_bitcode_paths(device_name: &str) -> impl Iterator<Item = PathBuf> {
-    let generic_paths = AMDGPU_BITCODE.iter().map(|x| {
-        let mut path = PathBuf::from(AMDGPU);
-        path.push("amdgcn");
-        path.push("bitcode");
-        path.push(x);
-        path
-    });
-    let suffix = if let Some(suffix_idx) = device_name.find(':') {
-        suffix_idx
-    } else {
-        device_name.len()
-    };
-    let mut additional_path = PathBuf::from(AMDGPU);
-    additional_path.push("amdgcn");
-    additional_path.push("bitcode");
-    additional_path.push(format!(
-        "{}{}{}",
-        AMDGPU_BITCODE_DEVICE_PREFIX,
-        &device_name[3..suffix],
-        ".bc"
-    ));
-    generic_paths.chain(std::iter::once(additional_path))
 }

@@ -1,18 +1,15 @@
-use super::ptx;
-use super::TranslateError;
+use crate::pass::TranslateError;
+use ptx_parser as ast;
 
 mod spirv_run;
 
-fn parse_and_assert(s: &str) {
-    let mut errors = Vec::new();
-    ptx::ModuleParser::new().parse(&mut errors, s).unwrap();
-    assert!(errors.len() == 0);
+fn parse_and_assert(ptx_text: &str) {
+    ast::parse_module_checked(ptx_text).unwrap();
 }
 
-fn compile_and_assert(s: &str) -> Result<(), TranslateError> {
-    let mut errors = Vec::new();
-    let ast = ptx::ModuleParser::new().parse(&mut errors, s).unwrap();
-    crate::to_spirv_module(ast)?;
+fn compile_and_assert(ptx_text: &str) -> Result<(), TranslateError> {
+    let ast = ast::parse_module_checked(ptx_text).unwrap();
+    crate::to_llvm_module(ast)?;
     Ok(())
 }
 
