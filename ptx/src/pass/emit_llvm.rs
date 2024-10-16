@@ -1539,14 +1539,10 @@ impl<'a> MethodEmitContext<'a> {
             ptx_parser::CvtMode::SaturateSignedToUnsigned => {
                 return self.emit_cvt_signed_to_unsigned_sat(data.from, data.to, arguments)
             }
-            ptx_parser::CvtMode::FPExtend { flush_to_zero } => LLVMBuildFPExt,
-            ptx_parser::CvtMode::FPTruncate {
-                rounding,
-                flush_to_zero,
-            } => LLVMBuildFPTrunc,
+            ptx_parser::CvtMode::FPExtend { .. } => LLVMBuildFPExt,
+            ptx_parser::CvtMode::FPTruncate { .. } => LLVMBuildFPTrunc,
             ptx_parser::CvtMode::FPRound {
-                integer_rounding,
-                flush_to_zero,
+                integer_rounding, ..
             } => {
                 return self.emit_cvt_float_to_int(
                     data.from,
@@ -1556,10 +1552,7 @@ impl<'a> MethodEmitContext<'a> {
                     Some(LLVMBuildFPToSI),
                 )
             }
-            ptx_parser::CvtMode::SignedFromFP {
-                rounding,
-                flush_to_zero,
-            } => {
+            ptx_parser::CvtMode::SignedFromFP { rounding, .. } => {
                 return self.emit_cvt_float_to_int(
                     data.from,
                     data.to,
@@ -1568,10 +1561,7 @@ impl<'a> MethodEmitContext<'a> {
                     Some(LLVMBuildFPToSI),
                 )
             }
-            ptx_parser::CvtMode::UnsignedFromFP {
-                rounding,
-                flush_to_zero,
-            } => {
+            ptx_parser::CvtMode::UnsignedFromFP { rounding, .. } => {
                 return self.emit_cvt_float_to_int(
                     data.from,
                     data.to,
@@ -1580,8 +1570,8 @@ impl<'a> MethodEmitContext<'a> {
                     Some(LLVMBuildFPToUI),
                 )
             }
-            ptx_parser::CvtMode::FPFromSigned(rounding_mode) => todo!(),
-            ptx_parser::CvtMode::FPFromUnsigned(rounding_mode) => todo!(),
+            ptx_parser::CvtMode::FPFromSigned(_) => todo!(),
+            ptx_parser::CvtMode::FPFromUnsigned(_) => todo!(),
         };
         let src = self.resolver.value(arguments.src)?;
         self.resolver.with_result(arguments.dst, |dst| unsafe {
