@@ -283,8 +283,7 @@ fn immediate_value<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<as
 }
 
 pub fn parse_module_unchecked<'input>(text: &'input str) -> Option<ast::Module<'input>> {
-    let lexer = Token::lexer(text);
-    let mut input = lex_with_span(text).ok()?;
+    let input = lex_with_span(text).ok()?;
     let mut errors = Vec::new();
     let state = PtxParserState::new(&mut errors);
     let parser = PtxParser {
@@ -792,7 +791,7 @@ fn array_initializer<'a, 'input: 'a>(
         }
         delimited(
             Token::LBrace,
-            separated(
+            separated::<_, (), (), _, _, _, _>(
                 0..=array_dimensions[0] as usize,
                 single_value_append(&mut result, type_),
                 Token::Comma,
