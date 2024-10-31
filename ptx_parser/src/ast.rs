@@ -1264,9 +1264,9 @@ pub enum SetpCompareFloat {
 }
 
 impl TryFrom<(RawSetpCompareOp, ScalarKind)> for SetpCompareInt {
-    type Error = PtxError;
+    type Error = PtxError<'static>;
 
-    fn try_from((value, kind): (RawSetpCompareOp, ScalarKind)) -> Result<Self, PtxError> {
+    fn try_from((value, kind): (RawSetpCompareOp, ScalarKind)) -> Result<Self, PtxError<'static>> {
         match (value, kind) {
             (RawSetpCompareOp::Eq, _) => Ok(SetpCompareInt::Eq),
             (RawSetpCompareOp::Ne, _) => Ok(SetpCompareInt::NotEq),
