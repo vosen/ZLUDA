@@ -400,6 +400,7 @@ fn directive<'a, 'input>(
 ) -> PResult<Option<ast::Directive<'input, ast::ParsedOperand<&'input str>>>> {
     with_recovery(
         alt((
+            // When adding a new variant here remember to add its first token into recovery parser down below
             function.map(|(linking, func)| Some(ast::Directive::Method(linking, func))),
             file.map(|_| None),
             section.map(|_| None),
@@ -407,7 +408,14 @@ fn directive<'a, 'input>(
                 .map(|((linking, var), _)| Some(ast::Directive::Variable(linking, var))),
         )),
         take_till(1.., |(token, _)| match token {
-            Token::DotVisible | Token::DotFile | Token::DotSection => true,
+            // visibility
+            Token::DotExtern | Token::DotVisible | Token::DotWeak
+            // methods
+            | Token::DotFunc | Token::DotEntry
+            // module variables
+            | Token::DotGlobal | Token::DotConst | Token::DotShared
+            // other sections
+            | Token::DotFile | Token::DotSection => true,
             _ => false,
         }),
         PtxError::UnrecognizedDirective,
