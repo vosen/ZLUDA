@@ -9,7 +9,7 @@ use winnow::ascii::dec_uint;
 use winnow::combinator::*;
 use winnow::error::{ErrMode, ErrorKind};
 use winnow::stream::Accumulate;
-use winnow::token::any;
+use winnow::token::{any, take_till};
 use winnow::{
     error::{ContextError, ParserError},
     stream::{Offset, Stream, StreamIsPartial},
@@ -398,13 +398,21 @@ fn shader_model<'a>(stream: &mut &str) -> PResult<(u32, Option<char>)> {
 fn directive<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<Option<ast::Directive<'input, ast::ParsedOperand<&'input str>>>> {
-    alt((
-        function.map(|(linking, func)| Some(ast::Directive::Method(linking, func))),
-        file.map(|_| None),
-        section.map(|_| None),
-        (module_variable, Token::Semicolon)
-            .map(|((linking, var), _)| Some(ast::Directive::Variable(linking, var))),
-    ))
+    with_recovery(
+        alt((
+            function.map(|(linking, func)| Some(ast::Directive::Method(linking, func))),
+            file.map(|_| None),
+            section.map(|_| None),
+            (module_variable, Token::Semicolon)
+                .map(|((linking, var), _)| Some(ast::Directive::Variable(linking, var))),
+        )),
+        take_till(1.., |(token, _)| match token {
+            Token::DotVisible | Token::DotFile | Token::DotSection => true,
+            _ => false,
+        }),
+        PtxError::UnrecognizedDirective,
+    )
+    .map(Option::flatten)
     .parse_next(stream)
 }
 
@@ -649,12 +657,8 @@ fn statement<'a, 'input>(
                 Token::Semicolon | Token::Colon => true,
                 _ => false,
             },
-        ), /*
-           take_till(0.., |(t, _)| match t {
-               Token::Semicolon | Token::Colon => true,
-               _ => false,
-           })
-            */
+        ),
+        PtxError::UnrecognizedStatement,
     )
     .map(Option::flatten)
     .parse_next(stream)
@@ -702,9 +706,28 @@ fn take_till_inclusive<I: Stream, E: ParserError<I>>(
     }
 }
 
+/*
+pub fn take_till_or_backtrack_eof<Set, Input, Error>(
+    set: Set,
+) -> impl Parser<Input, <Input as Stream>::Slice, Error>
+where
+    Input: StreamIsPartial + Stream,
+    Set: winnow::stream::ContainsToken<<Input as Stream>::Token>,
+    Error: ParserError<Input>,
+{
+    move |stream: &mut Input| {
+        if stream.eof_offset() == 0 {
+            return ;
+        }
+        take_till(0.., set)
+    }
+}
+     */
+
 fn with_recovery<'a, 'input: 'a, T>(
     mut parser: impl Parser<PtxParser<'a, 'input>, T, ContextError>,
     mut recovery: impl Parser<PtxParser<'a, 'input>, &'a [(Token<'input>, logos::Span)], ContextError>,
+    mut error: impl FnMut(Option<&'input str>) -> PtxError<'input>,
 ) -> impl Parser<PtxParser<'a, 'input>, Option<T>, ContextError> {
     move |stream: &mut PtxParser<'a, 'input>| {
         let input_start = stream.input.first().map(|(_, s)| s).cloned();
@@ -722,10 +745,7 @@ fn with_recovery<'a, 'input: 'a, T>(
                     // recover from unknown instructions, so we don't care about early end of stream
                     _ => None,
                 };
-                stream
-                    .state
-                    .errors
-                    .push(PtxError::UnrecognizedStatement(range));
+                stream.state.errors.push(error(range));
                 Ok(None)
             }
             Err(err) => Err(err),
@@ -1250,6 +1270,8 @@ pub enum PtxError<'input> {
     NonExternPointer,
     #[error("{0:?}")]
     UnrecognizedStatement(Option<&'input str>),
+    #[error("{0:?}")]
+    UnrecognizedDirective(Option<&'input str>),
 }
 
 #[derive(Debug)]
@@ -3418,6 +3440,47 @@ mod tests {
         assert!(matches!(
             errors[1],
             PtxError::UnrecognizedStatement(Some("unknown_op2 temp2, temp;"))
+        ));
+    }
+
+    #[test]
+    fn report_unknown_directive() {
+        let text = "
+            .version 6.5
+            .target sm_30
+            .address_size 64
+
+            .broken_directive_fail; 34; {
+
+            .visible .entry add(
+                .param .u64 input,
+                .param .u64 output
+            )
+            {
+                .reg .u64 	    in_addr;
+                .reg .u64 	    out_addr;
+                .reg .u64 	    temp;
+                .reg .u64 	    temp2;
+
+                ld.param.u64 	in_addr, [input];
+                ld.param.u64 	out_addr, [output];
+
+                ld.u64          temp, [in_addr];
+                add.u64		    temp2, temp, 1;
+                st.u64          [out_addr], temp2;
+                ret;
+            }
+
+            section foobar }";
+        let errors = parse_module_checked(text).err().unwrap();
+        assert_eq!(errors.len(), 2);
+        assert!(matches!(
+            errors[0],
+            PtxError::UnrecognizedDirective(Some(".broken_directive_fail; 34; {"))
+        ));
+        assert!(matches!(
+            errors[1],
+            PtxError::UnrecognizedDirective(Some("section foobar }"))
         ));
     }
 }
