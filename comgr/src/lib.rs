@@ -127,24 +127,27 @@ pub fn compile_bitcode(
         ptx_impl,
     )?;
     bitcode_data_set.add(&stdlib_bitcode_data)?;
-    let lang_action_info = ActionInfo::new()?;
-    lang_action_info.set_isa_name(gcn_arch)?;
-    lang_action_info.set_language(amd_comgr_language_t::AMD_COMGR_LANGUAGE_LLVM_IR)?;
-    let with_device_libs = do_action(
-        &bitcode_data_set,
-        &lang_action_info,
-        amd_comgr_action_kind_t::AMD_COMGR_ACTION_COMPILE_SOURCE_WITH_DEVICE_LIBS_TO_BC,
-    )?;
+    let linking_info = ActionInfo::new()?;
     let linked_data_set = do_action(
-        &with_device_libs,
-        &lang_action_info,
+        &bitcode_data_set,
+        &linking_info,
         amd_comgr_action_kind_t::AMD_COMGR_ACTION_LINK_BC_TO_BC,
+    )?;
+    let link_with_device_libs_info = ActionInfo::new()?;
+    link_with_device_libs_info.set_isa_name(gcn_arch)?;
+    link_with_device_libs_info.set_language(amd_comgr_language_t::AMD_COMGR_LANGUAGE_LLVM_IR)?;
+    // This makes no sense, but it makes ockl linking work
+    link_with_device_libs_info.set_options([c"-Xclang", c"-mno-link-builtin-bitcode-postopt"].into_iter())?;
+    let with_device_libs = do_action(
+        &linked_data_set,
+        &link_with_device_libs_info,
+        amd_comgr_action_kind_t::AMD_COMGR_ACTION_COMPILE_SOURCE_WITH_DEVICE_LIBS_TO_BC,
     )?;
     let compile_action_info = ActionInfo::new()?;
     compile_action_info.set_isa_name(gcn_arch)?;
     compile_action_info.set_options(iter::once(c"-O3"))?;
     let reloc_data_set = do_action(
-        &linked_data_set,
+        &with_device_libs,
         &compile_action_info,
         amd_comgr_action_kind_t::AMD_COMGR_ACTION_CODEGEN_BC_TO_RELOCATABLE,
     )?;
