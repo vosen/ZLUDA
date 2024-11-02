@@ -1,7 +1,7 @@
 #include <llvm-c/Core.h>
-#include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/Type.h"
-#include "llvm/IR/Instructions.h"
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/Type.h>
+#include <llvm/IR/Instructions.h>
 
 using namespace llvm;
 
