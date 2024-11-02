@@ -479,7 +479,7 @@ fn emit_parse_function(
                     Some(selection_keys) => {
                         let selection_keys = selection_keys.iter().map(|k| k.dot_capitalized());
                         quote! {
-                            else if false #(|| modifiers.contains(& #type_name :: #selection_keys))* {
+                            else if false #(|| modifiers.iter().any(|(t, _)| *t == #type_name :: #selection_keys))* {
                                 #def_parser
                             }
                         }
@@ -508,7 +508,7 @@ fn emit_parse_function(
         quote! {
             #opcode_variant => {
                 let modifers_start = stream.checkpoint();
-                let modifiers = take_while(0.., Token::modifier).parse_next(stream)?;
+                let modifiers = take_while(0.., |(t,_)| Token::modifier(t)).parse_next(stream)?;
                 #selectors
             }
         }
@@ -556,7 +556,7 @@ fn emit_parse_function(
             use winnow::Parser;
             use winnow::token::*;
             use winnow::combinator::*;
-            let opcode = any.parse_next(stream)?;
+            let opcode = any.parse_next(stream)?.0;
             let modifiers_start = stream.checkpoint();
             Ok(match opcode {
                 #(
@@ -594,11 +594,11 @@ fn emit_definition_parser(
                 let variant = value.dot_capitalized();
                 if *optional {
                     quote! {
-                        #arg_name = opt(any.verify(|t| *t == #token_type :: #variant)).parse_next(&mut stream)?.is_some();
+                        #arg_name = opt(any.verify(|(t, _)| *t == #token_type :: #variant)).parse_next(&mut stream)?.is_some();
                     }
                 } else {
                     quote! {
-                        any.verify(|t| *t == #token_type :: #variant).parse_next(&mut stream)?;
+                        any.verify(|(t, _)| *t == #token_type :: #variant).parse_next(&mut stream)?;
                     }
                 }
             }
@@ -607,7 +607,7 @@ fn emit_definition_parser(
                 let variant = value.dot_capitalized();
                 let parsed_variant = value.variant_capitalized();
                 quote! {
-                    any.verify(|t| *t == #token_type :: #variant).parse_next(&mut stream)?;
+                    any.verify(|(t, _)| *t == #token_type :: #variant).parse_next(&mut stream)?;
                     #variable = #type_ :: #parsed_variant;
                 }
             }
@@ -623,7 +623,7 @@ fn emit_definition_parser(
                 });
                 if *optional {
                     quote! {
-                        #arg_name = opt(any.verify_map(|tok| {
+                        #arg_name = opt(any.verify_map(|(tok, _)| {
                             Some(match tok {
                                 #(#variants)*
                                 _ => return None
@@ -632,7 +632,7 @@ fn emit_definition_parser(
                     }
                 } else {
                     quote! {
-                        #arg_name = any.verify_map(|tok| {
+                        #arg_name = any.verify_map(|(tok, _)| {
                             Some(match tok {
                                 #(#variants)*
                                 _ => return None
@@ -761,11 +761,11 @@ fn emit_definition_parser(
         let comma = if idx == 0 || arg.pre_pipe {
             quote! { empty }
         } else {
-            quote! { any.verify(|t| *t == #token_type::Comma).void() }
+            quote! { any.verify(|(t, _)| *t == #token_type::Comma).void() }
         };
         let pre_bracket = if arg.pre_bracket {
             quote! {
-                any.verify(|t| *t == #token_type::LBracket).void()
+                any.verify(|(t, _)| *t == #token_type::LBracket).void()
             }
         } else {
             quote! {
@@ -774,7 +774,7 @@ fn emit_definition_parser(
         };
         let pre_pipe = if arg.pre_pipe {
             quote! {
-                any.verify(|t| *t == #token_type::Pipe).void()
+                any.verify(|(t, _)| *t == #token_type::Pipe).void()
             }
         } else {
             quote! {
@@ -783,7 +783,7 @@ fn emit_definition_parser(
         };
         let can_be_negated = if arg.can_be_negated {
             quote! {
-                opt(any.verify(|t| *t == #token_type::Not)).map(|o| o.is_some())
+                opt(any.verify(|(t, _)| *t == #token_type::Not)).map(|o| o.is_some())
             }
         } else {
             quote! {
@@ -797,7 +797,7 @@ fn emit_definition_parser(
         };
         let post_bracket = if arg.post_bracket {
             quote! {
-                any.verify(|t| *t == #token_type::RBracket).void()
+                any.verify(|(t, _)| *t == #token_type::RBracket).void()
             }
         } else {
             quote! {
@@ -806,7 +806,7 @@ fn emit_definition_parser(
         };
         let unified = if arg.unified {
             quote! {
-                opt(any.verify(|t| *t == #token_type::DotUnified).void()).map(|u| u.is_some())
+                opt(any.verify(|(t, _)| *t == #token_type::DotUnified).void()).map(|u| u.is_some())
             }
         } else {
             quote! {
@@ -854,8 +854,8 @@ fn emit_definition_parser(
         {
             let mut stream = ReverseStream(modifiers);
             #(#ordered_parse)*
-            let mut stream: &[#token_type] = stream.0;
-            for token in stream.iter().copied() {
+            let mut stream: &[_] = stream.0;
+            for (token, _) in stream.iter().cloned() {
                 match token {
                     #(#unordered_parse)*
                     _ => #return_error_ref

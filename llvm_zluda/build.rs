@@ -16,6 +16,8 @@ fn main() {
     let mut cmake = Config::new(r"../ext/llvm-project/llvm");
     try_use_ninja(&mut cmake);
     cmake
+        // It's not like we can do anything about the warnings
+        .define("LLVM_ENABLE_WARNINGS", "OFF")
         // For some reason Rust always links to release MSVCRT
         .define("CMAKE_MSVC_RUNTIME_LIBRARY", "MultiThreadedDLL")
         .define("LLVM_ENABLE_TERMINFO", "OFF")
