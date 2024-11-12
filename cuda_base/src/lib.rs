@@ -216,6 +216,8 @@ fn prepend_cuda_path_to_path(base_path: &Path, path: Path) -> Path {
         if ident.starts_with("CU")
             || ident.starts_with("cu")
             || ident.starts_with("GL")
+            || ident.starts_with("EGL")
+            || ident.starts_with("Vdp")
             || ident == "HGPUNV"
         {
             let mut base_path = base_path.clone();
@@ -343,11 +345,10 @@ fn cuda_derive_display_trait_for_item(
             None
         }
         Item::Struct(item_struct) => {
-            let item_struct_name = item_struct.ident.to_string();
             if state.ignore_types.contains(&item_struct.ident) {
                 return None;
             }
-            if item_struct_name.ends_with("_enum") {
+            if state.enums.contains_key(&item_struct.ident) {
                 let enum_ = &item_struct.ident;
                 let enum_iter = iter::repeat(&item_struct.ident);
                 let variants = state.enums.get(&item_struct.ident).unwrap().iter();

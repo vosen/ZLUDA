@@ -1,6 +1,4 @@
-use cuda_types::{
-    CUdevice, CUdevice_attribute, CUfunction, CUjit_option, CUmodule, CUresult, CUuuid,
-};
+use cuda_types::*;
 use paste::paste;
 use side_by_side::CudaDynamicFns;
 use std::io;
@@ -205,10 +203,10 @@ impl Settings {
             }
         };
         let libcuda_path = match env::var("ZLUDA_CUDA_LIB") {
-            Err(env::VarError::NotPresent) => os::LIBCUDA_DEFAULT_PATH.to_owned(),
+            Err(env::VarError::NotPresent) => os::LIBCUDA_DEFAULT_PATH.to_string(),
             Err(e) => {
                 logger.log(log::LogEntry::ErrorBox(Box::new(e) as _));
-                os::LIBCUDA_DEFAULT_PATH.to_owned()
+                os::LIBCUDA_DEFAULT_PATH.to_string()
             }
             Ok(env_string) => env_string,
         };

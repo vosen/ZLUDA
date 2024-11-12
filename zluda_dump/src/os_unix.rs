@@ -1,8 +1,8 @@
-use crate::cuda::CUuuid;
+use cuda_types::CUuuid;
 use std::ffi::{c_void, CStr, CString};
 use std::mem;
 
-pub(crate) const LIBCUDA_DEFAULT_PATH: &'static str = b"/usr/lib/x86_64-linux-gnu/libcuda.so.1\0";
+pub(crate) const LIBCUDA_DEFAULT_PATH: &str = "/usr/lib/x86_64-linux-gnu/libcuda.so.1";
 
 pub unsafe fn load_library(libcuda_path: &str) -> *mut c_void {
     let libcuda_path = CString::new(libcuda_path).unwrap();

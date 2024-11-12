@@ -1,10 +1,9 @@
+use cuda_base::cuda_derive_display_trait;
 use std::{
     ffi::{c_void, CStr},
     fmt::LowerHex,
     mem, ptr, slice,
 };
-
-use cuda_base::cuda_derive_display_trait;
 
 pub(crate) trait CudaDisplay {
     fn write(
@@ -494,6 +493,59 @@ impl CudaDisplay
     }
 }
 
+impl CudaDisplay for cuda_types::CUgraphNodeParams_st {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        _writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        todo!()
+    }
+}
+
+impl CudaDisplay for cuda_types::CUlaunchConfig_st {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        _writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        todo!()
+    }
+}
+
+impl CudaDisplay for cuda_types::CUeglFrame_st {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        _writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        todo!()
+    }
+}
+
+impl CudaDisplay for cuda_types::CUdevResource_st {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        _writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        todo!()
+    }
+}
+impl CudaDisplay for cuda_types::CUlaunchAttribute_st {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        _writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        todo!()
+    }
+}
 impl<T: CudaDisplay> CudaDisplay for *mut T {
     fn write(
         &self,
@@ -585,27 +637,7 @@ pub fn write_cuGraphKernelNodeGetAttribute(
     CudaDisplay::write(&hNode, "cuGraphKernelNodeGetAttribute", 0, writer)?;
     writer.write_all(b", attr: ")?;
     CudaDisplay::write(&attr, "cuGraphKernelNodeGetAttribute", 1, writer)?;
-    match attr {
-        cuda_types::CUkernelNodeAttrID::CU_KERNEL_NODE_ATTRIBUTE_ACCESS_POLICY_WINDOW => {
-            writer.write_all(b", value_out: ")?;
-            CudaDisplay::write(
-                unsafe { &(*value_out).accessPolicyWindow },
-                "cuGraphKernelNodeGetAttribute",
-                2,
-                writer,
-            )?;
-        }
-        cuda_types::CUkernelNodeAttrID::CU_KERNEL_NODE_ATTRIBUTE_COOPERATIVE => {
-            writer.write_all(b", value_out: ")?;
-            CudaDisplay::write(
-                unsafe { &(*value_out).cooperative },
-                "cuGraphKernelNodeGetAttribute",
-                2,
-                writer,
-            )?;
-        }
-        _ => return writer.write_all(b", ...) "),
-    }
+    write_launch_attribute(writer, "cuGraphKernelNodeGetAttribute", 2, attr, value_out)?;
     writer.write_all(b") ")
 }
 
@@ -630,28 +662,73 @@ pub fn write_cuStreamGetAttribute(
     CudaDisplay::write(&hStream, "cuStreamGetAttribute", 0, writer)?;
     writer.write_all(b", attr: ")?;
     CudaDisplay::write(&attr, "cuStreamGetAttribute", 1, writer)?;
-    match attr {
-        cuda_types::CUstreamAttrID::CU_STREAM_ATTRIBUTE_ACCESS_POLICY_WINDOW => {
+    write_launch_attribute(writer, "cuStreamGetAttribute", 2, attr, value_out)?;
+    writer.write_all(b") ")
+}
+
+fn write_launch_attribute(
+    writer: &mut (impl std::io::Write + ?Sized),
+    fn_name: &'static str,
+    index: usize,
+    attribute: cuda_types::CUlaunchAttributeID,
+    value_out: *mut cuda_types::CUstreamAttrValue,
+) -> std::io::Result<()> {
+    match attribute {
+        cuda_types::CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_ACCESS_POLICY_WINDOW => {
             writer.write_all(b", value_out: ")?;
             CudaDisplay::write(
                 unsafe { &(*value_out).accessPolicyWindow },
-                "cuStreamGetAttribute",
-                2,
+                fn_name,
+                index,
                 writer,
-            )?;
+            )
         }
-        cuda_types::CUstreamAttrID::CU_STREAM_ATTRIBUTE_SYNCHRONIZATION_POLICY => {
+        cuda_types::CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_COOPERATIVE => {
             writer.write_all(b", value_out: ")?;
-            CudaDisplay::write(
-                unsafe { &(*value_out).syncPolicy },
-                "cuStreamGetAttribute",
-                2,
-                writer,
-            )?;
+            CudaDisplay::write(unsafe { &(*value_out).cooperative }, fn_name, index, writer)
         }
-        _ => return writer.write_all(b", ...) "),
+        cuda_types::CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_SYNCHRONIZATION_POLICY => {
+            writer.write_all(b", value_out: ")?;
+            CudaDisplay::write(unsafe { &(*value_out).syncPolicy }, fn_name, index, writer)
+        }
+        cuda_types::CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_CLUSTER_DIMENSION => {
+            writer.write_all(b", value_out: ")?;
+            CudaDisplay::write(unsafe { &(*value_out).clusterDim }, fn_name, index, writer)
+        }
+        cuda_types::CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_CLUSTER_SCHEDULING_POLICY_PREFERENCE => {
+            writer.write_all(b", value_out: ")?;
+            CudaDisplay::write(unsafe { &(*value_out).clusterSchedulingPolicyPreference }, fn_name, index, writer)
+        }
+        cuda_types::CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_PROGRAMMATIC_STREAM_SERIALIZATION => {
+            writer.write_all(b", value_out: ")?;
+            CudaDisplay::write(unsafe { &(*value_out).programmaticStreamSerializationAllowed }, fn_name, index, writer)
+        }
+        cuda_types::CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_PROGRAMMATIC_EVENT => {
+            writer.write_all(b", value_out: ")?;
+            CudaDisplay::write(unsafe { &(*value_out).programmaticEvent }, fn_name, index, writer)
+        }
+        cuda_types::CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_PRIORITY => {
+            writer.write_all(b", value_out: ")?;
+            CudaDisplay::write(unsafe { &(*value_out).priority }, fn_name, index, writer)
+        }
+        cuda_types::CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_MEM_SYNC_DOMAIN_MAP => {
+            writer.write_all(b", value_out: ")?;
+            CudaDisplay::write(unsafe { &(*value_out).memSyncDomainMap }, fn_name, index, writer)
+        }
+        cuda_types::CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_MEM_SYNC_DOMAIN => {
+            writer.write_all(b", value_out: ")?;
+            CudaDisplay::write(unsafe { &(*value_out).memSyncDomain }, fn_name, index, writer)
+        }
+        cuda_types::CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_LAUNCH_COMPLETION_EVENT => {
+            writer.write_all(b", value_out: ")?;
+            CudaDisplay::write(unsafe { &(*value_out).launchCompletionEvent }, fn_name, index, writer)
+        }
+        cuda_types::CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_DEVICE_UPDATABLE_KERNEL_NODE => {
+            writer.write_all(b", value_out: ")?;
+            CudaDisplay::write(unsafe { &(*value_out).deviceUpdatableKernelNode }, fn_name, index, writer)
+        }
+        _ => writer.write_all(b", ... "),
     }
-    writer.write_all(b") ")
 }
 
 #[allow(non_snake_case)]
@@ -737,7 +814,17 @@ cuda_derive_display_trait!(
         CUstreamBatchMemOpParams_union_CUstreamMemOpWaitValueParams_st,
         CUstreamBatchMemOpParams_union_CUstreamMemOpWriteValueParams_st,
         CUuuid_st,
-        HGPUNV
+        HGPUNV,
+        EGLint,
+        EGLSyncKHR,
+        EGLImageKHR,
+        EGLStreamKHR,
+        CUasyncNotificationInfo_st,
+        CUgraphNodeParams_st,
+        CUeglFrame_st,
+        CUdevResource_st,
+        CUlaunchAttribute_st,
+        CUlaunchConfig_st
     ],
     [
         cuCtxCreate_v3,
