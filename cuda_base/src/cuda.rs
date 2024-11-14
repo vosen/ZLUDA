@@ -2399,301 +2399,105 @@ pub struct CUlibraryHostUniversalFunctionAndDataTable_st {
     pub dataWindowSize: usize,
 }
 pub type CUlibraryHostUniversalFunctionAndDataTable = CUlibraryHostUniversalFunctionAndDataTable_st;
-impl cudaError_enum {
-    pub const CUDA_SUCCESS: cudaError_enum = cudaError_enum(0);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_INVALID_VALUE: cudaError_enum = cudaError_enum(1);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_OUT_OF_MEMORY: cudaError_enum = cudaError_enum(2);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_NOT_INITIALIZED: cudaError_enum = cudaError_enum(3);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_DEINITIALIZED: cudaError_enum = cudaError_enum(4);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_PROFILER_DISABLED: cudaError_enum = cudaError_enum(5);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_PROFILER_NOT_INITIALIZED: cudaError_enum = cudaError_enum(6);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_PROFILER_ALREADY_STARTED: cudaError_enum = cudaError_enum(7);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_PROFILER_ALREADY_STOPPED: cudaError_enum = cudaError_enum(8);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_STUB_LIBRARY: cudaError_enum = cudaError_enum(34);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_DEVICE_UNAVAILABLE: cudaError_enum = cudaError_enum(46);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_NO_DEVICE: cudaError_enum = cudaError_enum(100);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_INVALID_DEVICE: cudaError_enum = cudaError_enum(101);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_DEVICE_NOT_LICENSED: cudaError_enum = cudaError_enum(102);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_INVALID_IMAGE: cudaError_enum = cudaError_enum(200);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_INVALID_CONTEXT: cudaError_enum = cudaError_enum(201);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_CONTEXT_ALREADY_CURRENT: cudaError_enum = cudaError_enum(202);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_MAP_FAILED: cudaError_enum = cudaError_enum(205);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_UNMAP_FAILED: cudaError_enum = cudaError_enum(206);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_ARRAY_IS_MAPPED: cudaError_enum = cudaError_enum(207);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_ALREADY_MAPPED: cudaError_enum = cudaError_enum(208);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_NO_BINARY_FOR_GPU: cudaError_enum = cudaError_enum(209);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_ALREADY_ACQUIRED: cudaError_enum = cudaError_enum(210);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_NOT_MAPPED: cudaError_enum = cudaError_enum(211);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_NOT_MAPPED_AS_ARRAY: cudaError_enum = cudaError_enum(212);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_NOT_MAPPED_AS_POINTER: cudaError_enum = cudaError_enum(213);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_ECC_UNCORRECTABLE: cudaError_enum = cudaError_enum(214);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_UNSUPPORTED_LIMIT: cudaError_enum = cudaError_enum(215);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_CONTEXT_ALREADY_IN_USE: cudaError_enum = cudaError_enum(216);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_PEER_ACCESS_UNSUPPORTED: cudaError_enum = cudaError_enum(217);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_INVALID_PTX: cudaError_enum = cudaError_enum(218);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_INVALID_GRAPHICS_CONTEXT: cudaError_enum = cudaError_enum(219);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_NVLINK_UNCORRECTABLE: cudaError_enum = cudaError_enum(220);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_JIT_COMPILER_NOT_FOUND: cudaError_enum = cudaError_enum(221);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_UNSUPPORTED_PTX_VERSION: cudaError_enum = cudaError_enum(222);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_JIT_COMPILATION_DISABLED: cudaError_enum = cudaError_enum(223);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_UNSUPPORTED_EXEC_AFFINITY: cudaError_enum = cudaError_enum(224);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_UNSUPPORTED_DEVSIDE_SYNC: cudaError_enum = cudaError_enum(225);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_INVALID_SOURCE: cudaError_enum = cudaError_enum(300);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_FILE_NOT_FOUND: cudaError_enum = cudaError_enum(301);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_SHARED_OBJECT_SYMBOL_NOT_FOUND: cudaError_enum = cudaError_enum(302);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_SHARED_OBJECT_INIT_FAILED: cudaError_enum = cudaError_enum(303);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_OPERATING_SYSTEM: cudaError_enum = cudaError_enum(304);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_INVALID_HANDLE: cudaError_enum = cudaError_enum(400);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_ILLEGAL_STATE: cudaError_enum = cudaError_enum(401);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_LOSSY_QUERY: cudaError_enum = cudaError_enum(402);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_NOT_FOUND: cudaError_enum = cudaError_enum(500);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_NOT_READY: cudaError_enum = cudaError_enum(600);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_ILLEGAL_ADDRESS: cudaError_enum = cudaError_enum(700);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_LAUNCH_OUT_OF_RESOURCES: cudaError_enum = cudaError_enum(701);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_LAUNCH_TIMEOUT: cudaError_enum = cudaError_enum(702);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_LAUNCH_INCOMPATIBLE_TEXTURING: cudaError_enum = cudaError_enum(703);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_PEER_ACCESS_ALREADY_ENABLED: cudaError_enum = cudaError_enum(704);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_PEER_ACCESS_NOT_ENABLED: cudaError_enum = cudaError_enum(705);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_PRIMARY_CONTEXT_ACTIVE: cudaError_enum = cudaError_enum(708);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_CONTEXT_IS_DESTROYED: cudaError_enum = cudaError_enum(709);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_ASSERT: cudaError_enum = cudaError_enum(710);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_TOO_MANY_PEERS: cudaError_enum = cudaError_enum(711);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_HOST_MEMORY_ALREADY_REGISTERED: cudaError_enum = cudaError_enum(712);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_HOST_MEMORY_NOT_REGISTERED: cudaError_enum = cudaError_enum(713);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_HARDWARE_STACK_ERROR: cudaError_enum = cudaError_enum(714);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_ILLEGAL_INSTRUCTION: cudaError_enum = cudaError_enum(715);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_MISALIGNED_ADDRESS: cudaError_enum = cudaError_enum(716);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_INVALID_ADDRESS_SPACE: cudaError_enum = cudaError_enum(717);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_INVALID_PC: cudaError_enum = cudaError_enum(718);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_LAUNCH_FAILED: cudaError_enum = cudaError_enum(719);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_COOPERATIVE_LAUNCH_TOO_LARGE: cudaError_enum = cudaError_enum(720);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_NOT_PERMITTED: cudaError_enum = cudaError_enum(800);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_NOT_SUPPORTED: cudaError_enum = cudaError_enum(801);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_SYSTEM_NOT_READY: cudaError_enum = cudaError_enum(802);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_SYSTEM_DRIVER_MISMATCH: cudaError_enum = cudaError_enum(803);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_COMPAT_NOT_SUPPORTED_ON_DEVICE: cudaError_enum = cudaError_enum(804);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_MPS_CONNECTION_FAILED: cudaError_enum = cudaError_enum(805);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_MPS_RPC_FAILURE: cudaError_enum = cudaError_enum(806);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_MPS_SERVER_NOT_READY: cudaError_enum = cudaError_enum(807);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_MPS_MAX_CLIENTS_REACHED: cudaError_enum = cudaError_enum(808);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_MPS_MAX_CONNECTIONS_REACHED: cudaError_enum = cudaError_enum(809);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_MPS_CLIENT_TERMINATED: cudaError_enum = cudaError_enum(810);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_CDP_NOT_SUPPORTED: cudaError_enum = cudaError_enum(811);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_CDP_VERSION_MISMATCH: cudaError_enum = cudaError_enum(812);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_STREAM_CAPTURE_UNSUPPORTED: cudaError_enum = cudaError_enum(900);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_STREAM_CAPTURE_INVALIDATED: cudaError_enum = cudaError_enum(901);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_STREAM_CAPTURE_MERGE: cudaError_enum = cudaError_enum(902);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_STREAM_CAPTURE_UNMATCHED: cudaError_enum = cudaError_enum(903);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_STREAM_CAPTURE_UNJOINED: cudaError_enum = cudaError_enum(904);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_STREAM_CAPTURE_ISOLATION: cudaError_enum = cudaError_enum(905);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_STREAM_CAPTURE_IMPLICIT: cudaError_enum = cudaError_enum(906);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_CAPTURED_EVENT: cudaError_enum = cudaError_enum(907);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_STREAM_CAPTURE_WRONG_THREAD: cudaError_enum = cudaError_enum(908);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_TIMEOUT: cudaError_enum = cudaError_enum(909);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_GRAPH_EXEC_UPDATE_FAILURE: cudaError_enum = cudaError_enum(910);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_EXTERNAL_DEVICE: cudaError_enum = cudaError_enum(911);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_INVALID_CLUSTER_SIZE: cudaError_enum = cudaError_enum(912);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_FUNCTION_NOT_LOADED: cudaError_enum = cudaError_enum(913);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_INVALID_RESOURCE_TYPE: cudaError_enum = cudaError_enum(914);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_INVALID_RESOURCE_CONFIGURATION: cudaError_enum = cudaError_enum(915);
-}
-impl cudaError_enum {
-    pub const CUDA_ERROR_UNKNOWN: cudaError_enum = cudaError_enum(999);
-}
-#[repr(transparent)]
+pub const cudaError_enum_CUDA_SUCCESS: cudaError_enum = 0;
+pub const cudaError_enum_CUDA_ERROR_INVALID_VALUE: cudaError_enum = 1;
+pub const cudaError_enum_CUDA_ERROR_OUT_OF_MEMORY: cudaError_enum = 2;
+pub const cudaError_enum_CUDA_ERROR_NOT_INITIALIZED: cudaError_enum = 3;
+pub const cudaError_enum_CUDA_ERROR_DEINITIALIZED: cudaError_enum = 4;
+pub const cudaError_enum_CUDA_ERROR_PROFILER_DISABLED: cudaError_enum = 5;
+pub const cudaError_enum_CUDA_ERROR_PROFILER_NOT_INITIALIZED: cudaError_enum = 6;
+pub const cudaError_enum_CUDA_ERROR_PROFILER_ALREADY_STARTED: cudaError_enum = 7;
+pub const cudaError_enum_CUDA_ERROR_PROFILER_ALREADY_STOPPED: cudaError_enum = 8;
+pub const cudaError_enum_CUDA_ERROR_STUB_LIBRARY: cudaError_enum = 34;
+pub const cudaError_enum_CUDA_ERROR_DEVICE_UNAVAILABLE: cudaError_enum = 46;
+pub const cudaError_enum_CUDA_ERROR_NO_DEVICE: cudaError_enum = 100;
+pub const cudaError_enum_CUDA_ERROR_INVALID_DEVICE: cudaError_enum = 101;
+pub const cudaError_enum_CUDA_ERROR_DEVICE_NOT_LICENSED: cudaError_enum = 102;
+pub const cudaError_enum_CUDA_ERROR_INVALID_IMAGE: cudaError_enum = 200;
+pub const cudaError_enum_CUDA_ERROR_INVALID_CONTEXT: cudaError_enum = 201;
+pub const cudaError_enum_CUDA_ERROR_CONTEXT_ALREADY_CURRENT: cudaError_enum = 202;
+pub const cudaError_enum_CUDA_ERROR_MAP_FAILED: cudaError_enum = 205;
+pub const cudaError_enum_CUDA_ERROR_UNMAP_FAILED: cudaError_enum = 206;
+pub const cudaError_enum_CUDA_ERROR_ARRAY_IS_MAPPED: cudaError_enum = 207;
+pub const cudaError_enum_CUDA_ERROR_ALREADY_MAPPED: cudaError_enum = 208;
+pub const cudaError_enum_CUDA_ERROR_NO_BINARY_FOR_GPU: cudaError_enum = 209;
+pub const cudaError_enum_CUDA_ERROR_ALREADY_ACQUIRED: cudaError_enum = 210;
+pub const cudaError_enum_CUDA_ERROR_NOT_MAPPED: cudaError_enum = 211;
+pub const cudaError_enum_CUDA_ERROR_NOT_MAPPED_AS_ARRAY: cudaError_enum = 212;
+pub const cudaError_enum_CUDA_ERROR_NOT_MAPPED_AS_POINTER: cudaError_enum = 213;
+pub const cudaError_enum_CUDA_ERROR_ECC_UNCORRECTABLE: cudaError_enum = 214;
+pub const cudaError_enum_CUDA_ERROR_UNSUPPORTED_LIMIT: cudaError_enum = 215;
+pub const cudaError_enum_CUDA_ERROR_CONTEXT_ALREADY_IN_USE: cudaError_enum = 216;
+pub const cudaError_enum_CUDA_ERROR_PEER_ACCESS_UNSUPPORTED: cudaError_enum = 217;
+pub const cudaError_enum_CUDA_ERROR_INVALID_PTX: cudaError_enum = 218;
+pub const cudaError_enum_CUDA_ERROR_INVALID_GRAPHICS_CONTEXT: cudaError_enum = 219;
+pub const cudaError_enum_CUDA_ERROR_NVLINK_UNCORRECTABLE: cudaError_enum = 220;
+pub const cudaError_enum_CUDA_ERROR_JIT_COMPILER_NOT_FOUND: cudaError_enum = 221;
+pub const cudaError_enum_CUDA_ERROR_UNSUPPORTED_PTX_VERSION: cudaError_enum = 222;
+pub const cudaError_enum_CUDA_ERROR_JIT_COMPILATION_DISABLED: cudaError_enum = 223;
+pub const cudaError_enum_CUDA_ERROR_UNSUPPORTED_EXEC_AFFINITY: cudaError_enum = 224;
+pub const cudaError_enum_CUDA_ERROR_UNSUPPORTED_DEVSIDE_SYNC: cudaError_enum = 225;
+pub const cudaError_enum_CUDA_ERROR_INVALID_SOURCE: cudaError_enum = 300;
+pub const cudaError_enum_CUDA_ERROR_FILE_NOT_FOUND: cudaError_enum = 301;
+pub const cudaError_enum_CUDA_ERROR_SHARED_OBJECT_SYMBOL_NOT_FOUND: cudaError_enum = 302;
+pub const cudaError_enum_CUDA_ERROR_SHARED_OBJECT_INIT_FAILED: cudaError_enum = 303;
+pub const cudaError_enum_CUDA_ERROR_OPERATING_SYSTEM: cudaError_enum = 304;
+pub const cudaError_enum_CUDA_ERROR_INVALID_HANDLE: cudaError_enum = 400;
+pub const cudaError_enum_CUDA_ERROR_ILLEGAL_STATE: cudaError_enum = 401;
+pub const cudaError_enum_CUDA_ERROR_LOSSY_QUERY: cudaError_enum = 402;
+pub const cudaError_enum_CUDA_ERROR_NOT_FOUND: cudaError_enum = 500;
+pub const cudaError_enum_CUDA_ERROR_NOT_READY: cudaError_enum = 600;
+pub const cudaError_enum_CUDA_ERROR_ILLEGAL_ADDRESS: cudaError_enum = 700;
+pub const cudaError_enum_CUDA_ERROR_LAUNCH_OUT_OF_RESOURCES: cudaError_enum = 701;
+pub const cudaError_enum_CUDA_ERROR_LAUNCH_TIMEOUT: cudaError_enum = 702;
+pub const cudaError_enum_CUDA_ERROR_LAUNCH_INCOMPATIBLE_TEXTURING: cudaError_enum = 703;
+pub const cudaError_enum_CUDA_ERROR_PEER_ACCESS_ALREADY_ENABLED: cudaError_enum = 704;
+pub const cudaError_enum_CUDA_ERROR_PEER_ACCESS_NOT_ENABLED: cudaError_enum = 705;
+pub const cudaError_enum_CUDA_ERROR_PRIMARY_CONTEXT_ACTIVE: cudaError_enum = 708;
+pub const cudaError_enum_CUDA_ERROR_CONTEXT_IS_DESTROYED: cudaError_enum = 709;
+pub const cudaError_enum_CUDA_ERROR_ASSERT: cudaError_enum = 710;
+pub const cudaError_enum_CUDA_ERROR_TOO_MANY_PEERS: cudaError_enum = 711;
+pub const cudaError_enum_CUDA_ERROR_HOST_MEMORY_ALREADY_REGISTERED: cudaError_enum = 712;
+pub const cudaError_enum_CUDA_ERROR_HOST_MEMORY_NOT_REGISTERED: cudaError_enum = 713;
+pub const cudaError_enum_CUDA_ERROR_HARDWARE_STACK_ERROR: cudaError_enum = 714;
+pub const cudaError_enum_CUDA_ERROR_ILLEGAL_INSTRUCTION: cudaError_enum = 715;
+pub const cudaError_enum_CUDA_ERROR_MISALIGNED_ADDRESS: cudaError_enum = 716;
+pub const cudaError_enum_CUDA_ERROR_INVALID_ADDRESS_SPACE: cudaError_enum = 717;
+pub const cudaError_enum_CUDA_ERROR_INVALID_PC: cudaError_enum = 718;
+pub const cudaError_enum_CUDA_ERROR_LAUNCH_FAILED: cudaError_enum = 719;
+pub const cudaError_enum_CUDA_ERROR_COOPERATIVE_LAUNCH_TOO_LARGE: cudaError_enum = 720;
+pub const cudaError_enum_CUDA_ERROR_NOT_PERMITTED: cudaError_enum = 800;
+pub const cudaError_enum_CUDA_ERROR_NOT_SUPPORTED: cudaError_enum = 801;
+pub const cudaError_enum_CUDA_ERROR_SYSTEM_NOT_READY: cudaError_enum = 802;
+pub const cudaError_enum_CUDA_ERROR_SYSTEM_DRIVER_MISMATCH: cudaError_enum = 803;
+pub const cudaError_enum_CUDA_ERROR_COMPAT_NOT_SUPPORTED_ON_DEVICE: cudaError_enum = 804;
+pub const cudaError_enum_CUDA_ERROR_MPS_CONNECTION_FAILED: cudaError_enum = 805;
+pub const cudaError_enum_CUDA_ERROR_MPS_RPC_FAILURE: cudaError_enum = 806;
+pub const cudaError_enum_CUDA_ERROR_MPS_SERVER_NOT_READY: cudaError_enum = 807;
+pub const cudaError_enum_CUDA_ERROR_MPS_MAX_CLIENTS_REACHED: cudaError_enum = 808;
+pub const cudaError_enum_CUDA_ERROR_MPS_MAX_CONNECTIONS_REACHED: cudaError_enum = 809;
+pub const cudaError_enum_CUDA_ERROR_MPS_CLIENT_TERMINATED: cudaError_enum = 810;
+pub const cudaError_enum_CUDA_ERROR_CDP_NOT_SUPPORTED: cudaError_enum = 811;
+pub const cudaError_enum_CUDA_ERROR_CDP_VERSION_MISMATCH: cudaError_enum = 812;
+pub const cudaError_enum_CUDA_ERROR_STREAM_CAPTURE_UNSUPPORTED: cudaError_enum = 900;
+pub const cudaError_enum_CUDA_ERROR_STREAM_CAPTURE_INVALIDATED: cudaError_enum = 901;
+pub const cudaError_enum_CUDA_ERROR_STREAM_CAPTURE_MERGE: cudaError_enum = 902;
+pub const cudaError_enum_CUDA_ERROR_STREAM_CAPTURE_UNMATCHED: cudaError_enum = 903;
+pub const cudaError_enum_CUDA_ERROR_STREAM_CAPTURE_UNJOINED: cudaError_enum = 904;
+pub const cudaError_enum_CUDA_ERROR_STREAM_CAPTURE_ISOLATION: cudaError_enum = 905;
+pub const cudaError_enum_CUDA_ERROR_STREAM_CAPTURE_IMPLICIT: cudaError_enum = 906;
+pub const cudaError_enum_CUDA_ERROR_CAPTURED_EVENT: cudaError_enum = 907;
+pub const cudaError_enum_CUDA_ERROR_STREAM_CAPTURE_WRONG_THREAD: cudaError_enum = 908;
+pub const cudaError_enum_CUDA_ERROR_TIMEOUT: cudaError_enum = 909;
+pub const cudaError_enum_CUDA_ERROR_GRAPH_EXEC_UPDATE_FAILURE: cudaError_enum = 910;
+pub const cudaError_enum_CUDA_ERROR_EXTERNAL_DEVICE: cudaError_enum = 911;
+pub const cudaError_enum_CUDA_ERROR_INVALID_CLUSTER_SIZE: cudaError_enum = 912;
+pub const cudaError_enum_CUDA_ERROR_FUNCTION_NOT_LOADED: cudaError_enum = 913;
+pub const cudaError_enum_CUDA_ERROR_INVALID_RESOURCE_TYPE: cudaError_enum = 914;
+pub const cudaError_enum_CUDA_ERROR_INVALID_RESOURCE_CONFIGURATION: cudaError_enum = 915;
+pub const cudaError_enum_CUDA_ERROR_UNKNOWN: cudaError_enum = 999;
 #[must_use]
-#[derive(Copy, Clone, Hash, PartialEq, Eq)]
-pub struct cudaError_enum(pub ::std::os::raw::c_uint);
+pub type cudaError_enum = ::std::os::raw::c_uint;
 pub use self::cudaError_enum as CUresult;
 impl CUdevice_P2PAttribute_enum {
     pub const CU_DEVICE_P2P_ATTRIBUTE_PERFORMANCE_RANK: CUdevice_P2PAttribute_enum =
