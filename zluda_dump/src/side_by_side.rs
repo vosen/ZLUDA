@@ -58,6 +58,8 @@ impl CudaDynamicFns {
 macro_rules! emit_cuda_fn_table {
     ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:path);*) => {
         #[derive(Default)]
+        #[allow(improper_ctypes)]
+        #[allow(improper_ctypes_definitions)]
         struct CudaFnTable {
             $($fn_name: DynamicFn<extern $abi fn ( $($arg_id : $arg_type),* ) -> $ret_type>),*
         }

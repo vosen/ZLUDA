@@ -2,10 +2,7 @@ use cuda_types::*;
 use paste::paste;
 use side_by_side::CudaDynamicFns;
 use std::io;
-use std::{
-    collections::HashMap, env, error::Error, ffi::c_void, fs, path::PathBuf, ptr::NonNull, rc::Rc,
-    sync::Mutex,
-};
+use std::{collections::HashMap, env, error::Error, fs, path::PathBuf, rc::Rc, sync::Mutex};
 
 #[macro_use]
 extern crate lazy_static;
@@ -15,6 +12,7 @@ macro_rules! extern_redirect {
     ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:path);*) => {
         $(
             #[no_mangle]
+            #[allow(improper_ctypes_definitions)]
             pub extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
                 let original_fn = |dynamic_fns: &mut crate::side_by_side::CudaDynamicFns| {
                     dynamic_fns.$fn_name($( $arg_id ),*)
@@ -35,7 +33,8 @@ macro_rules! extern_redirect_with_post {
     ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:path);*) => {
         $(
             #[no_mangle]
-            pub extern "system" fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
+            #[allow(improper_ctypes_definitions)]
+            pub extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
                 let original_fn = |dynamic_fns: &mut crate::side_by_side::CudaDynamicFns| {
                     dynamic_fns.$fn_name($( $arg_id ),*)
                 };
@@ -323,7 +322,7 @@ where
             logger.log(log::LogEntry::ErrorBox(
                 format!("No function {} in the underlying CUDA library", func).into(),
             ));
-            CUresult::CUDA_ERROR_UNKNOWN
+            CUresult::ERROR_UNKNOWN
         }
     };
     logger.result = maybe_cu_result;
@@ -357,7 +356,7 @@ pub(crate) fn cuModuleLoad_Post(
     state: &mut trace::StateTracker,
     result: CUresult,
 ) {
-    if result != CUresult::CUDA_SUCCESS {
+    if result.is_err() {
         return;
     }
     state.record_new_module_file(unsafe { *module }, fname, fn_logger)
@@ -371,7 +370,7 @@ pub(crate) fn cuModuleLoadData_Post(
     state: &mut trace::StateTracker,
     result: CUresult,
 ) {
-    if result != CUresult::CUDA_SUCCESS {
+    if result.is_err() {
         return;
     }
     state.record_new_module(unsafe { *module }, raw_image, fn_logger)
@@ -399,7 +398,7 @@ pub(crate) fn cuGetExportTable_Post(
     state: &mut trace::StateTracker,
     result: CUresult,
 ) {
-    if result != CUresult::CUDA_SUCCESS {
+    if result.is_err() {
         return;
     }
     dark_api::override_export_table(ppExportTable, pExportTableId, state)
@@ -449,7 +448,7 @@ pub(crate) fn cuModuleLoadFatBinary_Post(
     _state: &mut trace::StateTracker,
     result: CUresult,
 ) {
-    if result == CUresult::CUDA_SUCCESS {
+    if result.is_ok() {
         panic!()
     }
 }

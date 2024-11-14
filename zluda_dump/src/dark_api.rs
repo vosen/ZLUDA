@@ -28,6 +28,7 @@ impl Hash for CUuuidWrapper {
     }
 }
 
+#[allow(improper_ctypes_definitions)]
 pub(crate) struct OriginalExports {
     original_get_module_from_cubin: Option<
         unsafe extern "system" fn(
@@ -356,6 +357,7 @@ unsafe fn record_submodules_from_fatbin(
     );
 }
 
+#[allow(improper_ctypes_definitions)]
 unsafe extern "system" fn get_module_from_cubin(
     module: *mut CUmodule,
     fatbinc_wrapper: *const FatbincWrapper,
@@ -388,6 +390,7 @@ unsafe extern "system" fn get_module_from_cubin(
     )
 }
 
+#[allow(improper_ctypes_definitions)]
 unsafe extern "system" fn get_module_from_cubin_ext1(
     module: *mut CUmodule,
     fatbinc_wrapper: *const FatbincWrapper,
@@ -451,6 +454,7 @@ unsafe extern "system" fn get_module_from_cubin_ext1(
     )
 }
 
+#[allow(improper_ctypes_definitions)]
 unsafe extern "system" fn get_module_from_cubin_ext2(
     fatbin_header: *const FatbinHeader,
     module: *mut CUmodule,
@@ -508,7 +512,7 @@ unsafe extern "system" fn get_module_from_cubin_ext2(
         .original_get_module_from_cubin_ext2
         .unwrap()(fatbin_header, module, ptr1, ptr2, _unknown);
     fn_logger.result = Some(result);
-    if result != CUresult::CUDA_SUCCESS {
+    if result.is_err() {
         return result;
     }
     record_submodules_from_fatbin(
