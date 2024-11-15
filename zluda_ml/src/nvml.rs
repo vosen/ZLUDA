@@ -1131,27 +1131,27 @@ pub use self::nvmlPcieLinkState_enum as nvmlPcieLinkState_t;
 
 #[no_mangle]
 pub extern "C" fn nvmlInit_v2() -> nvmlReturn_t {
-    crate::r#impl::init().into()
+    crate::r#impl::unimplemented()
 }
 
 #[no_mangle]
 pub extern "C" fn nvmlInit() -> nvmlReturn_t {
-    crate::r#impl::init().into()
+    crate::r#impl::unimplemented()
 }
 
 #[no_mangle]
 pub extern "C" fn nvmlInitWithFlags(flags: ::std::os::raw::c_uint) -> nvmlReturn_t {
-    crate::r#impl::init_with_flags().into()
+    crate::r#impl::unimplemented()
 }
 
 #[no_mangle]
 pub extern "C" fn nvmlShutdown() -> nvmlReturn_t {
-    crate::r#impl::shutdown()
+    crate::r#impl::unimplemented()
 }
 
 #[no_mangle]
 pub extern "C" fn nvmlErrorString(result: nvmlReturn_t) -> *const ::std::os::raw::c_char {
-    crate::r#impl::error_string(result)
+    c"".as_ptr()
 }
 
 #[no_mangle]
@@ -1159,7 +1159,7 @@ pub unsafe extern "C" fn nvmlSystemGetDriverVersion(
     version: *mut ::std::os::raw::c_char,
     length: ::std::os::raw::c_uint,
 ) -> nvmlReturn_t {
-    crate::r#impl::system_get_driver_version(version, length).into()
+    crate::r#impl::unimplemented()
 }
 
 #[no_mangle]
