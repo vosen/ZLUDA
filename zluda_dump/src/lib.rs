@@ -299,7 +299,7 @@ where
     // alternatively we could return a CUDA error, but I think it's fine to
     // crash. This is a diagnostic utility, if the lock was poisoned we can't
     // extract any useful trace or logging anyway
-    let mut global_state = &mut *global_state_mutex.lock().unwrap();
+    let global_state = &mut *global_state_mutex.lock().unwrap();
     let (mut logger, delayed_state) = match global_state.delayed_state {
         LateInit::Success(ref mut delayed_state) => (
             global_state.log_factory.get_logger(func, arguments_writer),

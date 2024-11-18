@@ -1,4 +1,4 @@
-use cuda_base::cuda_derive_display_trait;
+use cuda_types::{CUGLDeviceList, CUdevice};
 use std::{
     ffi::{c_void, CStr},
     fmt::LowerHex,
@@ -596,34 +596,26 @@ impl<T: CudaDisplay, const N: usize> CudaDisplay for [T; N] {
     }
 }
 
-#[allow(non_snake_case)]
-pub fn write_cuStreamBatchMemOp(
-    writer: &mut (impl std::io::Write + ?Sized),
-    stream: cuda_types::CUstream,
-    count: ::std::os::raw::c_uint,
-    paramArray: *mut cuda_types::CUstreamBatchMemOpParams,
-    flags: ::std::os::raw::c_uint,
-) -> std::io::Result<()> {
-    writer.write_all(b"(stream: ")?;
-    CudaDisplay::write(&stream, "cuStreamBatchMemOp", 0, writer)?;
-    writer.write_all(b", ")?;
-    writer.write_all(b"count: ")?;
-    CudaDisplay::write(&count, "cuStreamBatchMemOp", 1, writer)?;
-    writer.write_all(b", paramArray: [")?;
-    for i in 0..count {
-        if i != 0 {
-            writer.write_all(b", ")?;
-        }
-        CudaDisplay::write(
-            &unsafe { paramArray.add(i as usize) },
-            "cuStreamBatchMemOp",
-            2,
-            writer,
-        )?;
+impl CudaDisplay for cuda_types::CUarrayMapInfo_st {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        _writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        todo!()
     }
-    writer.write_all(b"], flags: ")?;
-    CudaDisplay::write(&flags, "cuStreamBatchMemOp", 3, writer)?;
-    writer.write_all(b") ")
+}
+
+impl CudaDisplay for cuda_types::CUexecAffinityParam_st {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        _writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        todo!()
+    }
 }
 
 #[allow(non_snake_case)]
@@ -762,81 +754,27 @@ pub fn write_cuStreamSetAttribute_ptsz(
 }
 
 #[allow(non_snake_case)]
-pub fn write_cuCtxCreate_v3(
+pub fn write_cuGLGetDevices(
     _writer: &mut (impl std::io::Write + ?Sized),
-    _pctx: *mut cuda_types::CUcontext,
-    _paramsArray: *mut cuda_types::CUexecAffinityParam,
-    _numParams: ::std::os::raw::c_int,
-    _flags: ::std::os::raw::c_uint,
-    _dev: cuda_types::CUdevice,
+    _pCudaDeviceCount: *mut ::std::os::raw::c_uint,
+    _pCudaDevices: *mut CUdevice,
+    _cudaDeviceCount: ::std::os::raw::c_uint,
+    _deviceList: CUGLDeviceList,
 ) -> std::io::Result<()> {
     todo!()
 }
 
 #[allow(non_snake_case)]
-pub fn write_cuCtxGetExecAffinity(
+pub fn write_cuGLGetDevices_v2(
     _writer: &mut (impl std::io::Write + ?Sized),
-    _pExecAffinity: *mut cuda_types::CUexecAffinityParam,
-    _type_: cuda_types::CUexecAffinityType,
+    _pCudaDeviceCount: *mut ::std::os::raw::c_uint,
+    _pCudaDevices: *mut CUdevice,
+    _cudaDeviceCount: ::std::os::raw::c_uint,
+    _deviceList: CUGLDeviceList,
 ) -> std::io::Result<()> {
     todo!()
 }
 
-#[allow(non_snake_case)]
-pub fn write_cuMemMapArrayAsync(
-    _writer: &mut (impl std::io::Write + ?Sized),
-    _mapInfoList: *mut cuda_types::CUarrayMapInfo,
-    _count: ::std::os::raw::c_uint,
-    _hStream: cuda_types::CUstream,
-) -> std::io::Result<()> {
-    todo!()
-}
-
-#[allow(non_snake_case)]
-pub fn write_cuMemMapArrayAsync_ptsz(
-    writer: &mut (impl std::io::Write + ?Sized),
-    mapInfoList: *mut cuda_types::CUarrayMapInfo,
-    count: ::std::os::raw::c_uint,
-    hStream: cuda_types::CUstream,
-) -> std::io::Result<()> {
-    write_cuMemMapArrayAsync(writer, mapInfoList, count, hStream)
-}
-
-cuda_derive_display_trait!(
-    cuda_types,
-    CudaDisplay,
-    [
-        CUarrayMapInfo_st,
-        CUDA_RESOURCE_DESC_st,
-        CUDA_EXTERNAL_MEMORY_HANDLE_DESC_st,
-        CUDA_EXTERNAL_SEMAPHORE_HANDLE_DESC_st,
-        CUexecAffinityParam_st,
-        CUstreamBatchMemOpParams_union_CUstreamMemOpWaitValueParams_st,
-        CUstreamBatchMemOpParams_union_CUstreamMemOpWriteValueParams_st,
-        CUuuid_st,
-        HGPUNV,
-        EGLint,
-        EGLSyncKHR,
-        EGLImageKHR,
-        EGLStreamKHR,
-        CUasyncNotificationInfo_st,
-        CUgraphNodeParams_st,
-        CUeglFrame_st,
-        CUdevResource_st,
-        CUlaunchAttribute_st,
-        CUlaunchConfig_st
-    ],
-    [
-        cuCtxCreate_v3,
-        cuCtxGetExecAffinity,
-        cuGraphKernelNodeGetAttribute,
-        cuGraphKernelNodeSetAttribute,
-        cuMemMapArrayAsync,
-        cuMemMapArrayAsync_ptsz,
-        cuStreamBatchMemOp,
-        cuStreamGetAttribute,
-        cuStreamGetAttribute_ptsz,
-        cuStreamSetAttribute,
-        cuStreamSetAttribute_ptsz
-    ]
-);
+#[path = "format_generated.rs"]
+mod format_generated;
+pub(crate) use format_generated::*;

@@ -1,3 +1,5 @@
+// Generated automatically by zluda_bindgen
+// DO NOT EDIT MANUALLY
 #![allow(warnings)]
 pub const CUDA_VERSION: u32 = 12040;
 pub const CU_IPC_HANDLE_SIZE: u32 = 64;
@@ -47,7 +49,7 @@ pub type cuuint32_t = u32;
 pub type cuuint64_t = u64;
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct CUdeviceptr_v2(pub ::core::ffi::c_ulonglong);
+pub struct CUdeviceptr_v2(pub *mut ::core::ffi::c_void);
 pub type CUdeviceptr = CUdeviceptr_v2;
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -187,7 +189,7 @@ pub type CUasyncCallbackHandle = *mut CUasyncCallbackEntry_st;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct CUuuid_st {
-    pub bytes: [::core::ffi::c_char; 16usize],
+    pub bytes: [::core::ffi::c_uchar; 16usize],
 }
 pub type CUuuid = CUuuid_st;
 /** Fabric handle - An opaque handle representing a memory allocation
@@ -7868,7 +7870,7 @@ impl CUerror {
     });
 }
 #[repr(transparent)]
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct CUerror(pub ::core::num::NonZeroU32);
 pub trait CUresultConsts {
     const SUCCESS: CUresult = CUresult::Ok(());
