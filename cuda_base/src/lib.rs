@@ -1,6 +1,7 @@
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
+use proc_macro2::Span;
 use quote::{quote, ToTokens};
 use rustc_hash::FxHashMap;
 use std::iter;
@@ -146,5 +147,51 @@ struct FixFnSignatures;
 impl VisitMut for FixFnSignatures {
     fn visit_signature_mut(&mut self, s: &mut syn::Signature) {
         s.inputs.pop_punct();
+    }
+}
+
+#[proc_macro]
+pub fn cuda_normalize_fn(tokens: TokenStream) -> TokenStream {
+    let mut path = parse_macro_input!(tokens as syn::Path);
+    let fn_ = path
+        .segments
+        .pop()
+        .unwrap()
+        .into_tuple()
+        .0
+        .ident
+        .to_string();
+    let known_modules = [
+        "context", "device", "function", "link", "memory", "module", "pointer",
+    ];
+    let segments: Vec<String> = split(&fn_[2..]);
+    let fn_path = join(segments, &known_modules);
+    quote! {
+        #path #fn_path
+    }
+    .into()
+}
+
+fn split(fn_: &str) -> Vec<String> {
+    let mut result = Vec::new();
+    for c in fn_.chars() {
+        if c.is_ascii_uppercase() {
+            result.push(c.to_ascii_lowercase().to_string());
+        } else {
+            result.last_mut().unwrap().push(c);
+        }
+    }
+    result
+}
+
+fn join(fn_: Vec<String>, known_modules: &[&str]) -> Punctuated<Ident, Token![::]> {
+    let (prefix, suffix) = fn_.split_at(1);
+    if known_modules.contains(&&*prefix[0]) {
+        [&prefix[0], &suffix.join("_")]
+            .into_iter()
+            .map(|seg| Ident::new(seg, Span::call_site()))
+            .collect()
+    } else {
+        iter::once(Ident::new(&fn_.join("_"), Span::call_site())).collect()
     }
 }

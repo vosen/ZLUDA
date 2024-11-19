@@ -6,3 +6,4 @@ edition = "2018"
 
 [dependencies]
 cuda_base = { path = "../cuda_base" }
+hip_runtime-sys = { path = "../ext/hip_runtime-sys" }

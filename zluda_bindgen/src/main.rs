@@ -183,6 +183,7 @@ impl ConvertIntoRustResult {
             #[repr(transparent)]
             #[derive(Debug, Copy, Clone, PartialEq, Eq)]
             pub struct #new_error_type(pub ::core::num::NonZeroU32);
+
             pub trait #type_trait {
                 #(#result_variants)*
             }
@@ -192,6 +193,12 @@ impl ConvertIntoRustResult {
             const _: fn() = || {
                 let _ = std::mem::transmute::<#type_, u32>;
             };
+
+            impl From<hip_runtime_sys::hipErrorCode_t> for #new_error_type {
+                fn from(error: hip_runtime_sys::hipErrorCode_t) -> Self {
+                    Self(error.0)
+                }
+            }
         };
         items.extend(extra_items);
     }
