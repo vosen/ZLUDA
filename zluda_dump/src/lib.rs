@@ -9,7 +9,7 @@ extern crate lazy_static;
 extern crate cuda_types;
 
 macro_rules! extern_redirect {
-    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:path);*) => {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:path;)*) => {
         $(
             #[no_mangle]
             #[allow(improper_ctypes_definitions)]
@@ -30,7 +30,7 @@ macro_rules! extern_redirect {
 }
 
 macro_rules! extern_redirect_with_post {
-    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:path);*) => {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:path;)*) => {
         $(
             #[no_mangle]
             #[allow(improper_ctypes_definitions)]
@@ -57,10 +57,8 @@ macro_rules! extern_redirect_with_post {
 
 use cuda_base::cuda_function_declarations;
 cuda_function_declarations!(
-    cuda_types,
     extern_redirect,
-    extern_redirect_with_post,
-    [
+    extern_redirect_with_post <= [
         cuModuleLoad,
         cuModuleLoadData,
         cuModuleLoadDataEx,

@@ -56,7 +56,7 @@ impl CudaDynamicFns {
 }
 
 macro_rules! emit_cuda_fn_table {
-    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:path);*) => {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:path;)*) => {
         #[derive(Default)]
         #[allow(improper_ctypes)]
         #[allow(improper_ctypes_definitions)]
@@ -76,4 +76,4 @@ macro_rules! emit_cuda_fn_table {
     };
 }
 
-cuda_function_declarations!(cuda_types, emit_cuda_fn_table, emit_cuda_fn_table, []);
+cuda_function_declarations!(emit_cuda_fn_table);
