@@ -20,7 +20,7 @@ macro_rules! implemented {
             #[allow(improper_ctypes)]
             #[allow(improper_ctypes_definitions)]
             pub unsafe extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
-                cuda_base::cuda_normalize_fn!( crate::r#impl::$fn_name ) ($(crate::r#impl::FromCuda::from_cuda($arg_id)?),*)?;
+                cuda_base::cuda_normalize_fn!( crate::r#impl::$fn_name ) ($(crate::r#impl::FromCuda::from_cuda(&$arg_id)?),*)?;
                 Ok(())
             }
         )*
@@ -32,6 +32,15 @@ use cuda_base::cuda_function_declarations;
 cuda_function_declarations!(
     unimplemented,
     implemented <= [
-        cuInit
+        cuDeviceComputeCapability,
+        cuDeviceGet,
+        cuDeviceGetAttribute,
+        cuDeviceGetLuid,
+        cuDeviceGetName,
+        cuDeviceGetProperties,
+        cuDeviceGetUuid,
+        cuDeviceGetUuid_v2,
+        cuDeviceTotalMem_v2,
+        cuInit,
     ]
 );
