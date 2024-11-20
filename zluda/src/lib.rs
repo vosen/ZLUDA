@@ -32,6 +32,8 @@ use cuda_base::cuda_function_declarations;
 cuda_function_declarations!(
     unimplemented,
     implemented <= [
+        cuCtxGetLimit,
+        cuCtxSetLimit,
         cuDeviceComputeCapability,
         cuDeviceGet,
         cuDeviceGetAttribute,

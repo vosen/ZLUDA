@@ -1,6 +1,7 @@
 use cuda_types::*;
 use hip_runtime_sys::*;
 
+pub(super) mod context;
 pub(super) mod device;
 
 #[cfg(debug_assertions)]
@@ -17,7 +18,7 @@ pub(crate) trait FromCuda<'a, T>: Sized {
     fn from_cuda(t: &'a T) -> Result<Self, CUerror>;
 }
 
-macro_rules! from_cuda_noop {
+macro_rules! from_cuda_nop {
     ($($type_:ty),*) => {
         $(
             impl<'a> FromCuda<'a, $type_> for $type_ {
@@ -65,17 +66,30 @@ macro_rules! from_cuda_transmute {
     };
 }
 
-from_cuda_noop!(
+from_cuda_nop!(
     *mut i8,
     *mut usize,
     i32,
     u32,
-    cuda_types::CUdevprop, CUdevice_attribute
+    usize,
+    cuda_types::CUdevprop,
+    CUdevice_attribute
 );
 from_cuda_transmute!(
     CUdevice => hipDevice_t,
     CUuuid => hipUUID
 );
+
+impl<'a> FromCuda<'a, CUlimit> for hipLimit_t {
+    fn from_cuda(limit: &'a CUlimit) -> Result<Self, CUerror> {
+        Ok(match *limit {
+            CUlimit::CU_LIMIT_STACK_SIZE => hipLimit_t::hipLimitStackSize,
+            CUlimit::CU_LIMIT_PRINTF_FIFO_SIZE => hipLimit_t::hipLimitPrintfFifoSize,
+            CUlimit::CU_LIMIT_MALLOC_HEAP_SIZE => hipLimit_t::hipLimitMallocHeapSize,
+            _ => return Err(CUerror::NOT_SUPPORTED),
+        })
+    }
+}
 
 pub(crate) fn init(flags: ::core::ffi::c_uint) -> hipError_t {
     unsafe { hipInit(flags) }
