@@ -9,6 +9,8 @@ name = "nvcuda"
 crate-type = ["cdylib"]
 
 [dependencies]
+comgr = { path = "../comgr" }
+ptx_parser = { path = "../ptx_parser" }
 ptx = { path = "../ptx" }
 cuda_types = { path = "../cuda_types" }
 cuda_base = { path = "../cuda_base" }

@@ -27,16 +27,16 @@ macro_rules! implemented {
     };
 }
 
-
-use cuda_base::cuda_function_declarations;
-cuda_function_declarations!(
+cuda_base::cuda_function_declarations!(
     unimplemented,
     implemented <= [
         cuCtxGetLimit,
         cuCtxSetLimit,
+        cuCtxSynchronize,
         cuDeviceComputeCapability,
         cuDeviceGet,
         cuDeviceGetAttribute,
+        cuDeviceGetCount,
         cuDeviceGetLuid,
         cuDeviceGetName,
         cuDeviceGetProperties,
@@ -44,5 +44,8 @@ cuda_function_declarations!(
         cuDeviceGetUuid_v2,
         cuDeviceTotalMem_v2,
         cuInit,
+        cuModuleGetFunction,
+        cuModuleLoadData,
+        cuModuleUnload,
     ]
 );

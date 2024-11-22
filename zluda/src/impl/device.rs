@@ -300,6 +300,10 @@ pub(crate) fn get_properties(prop: &mut cuda_types::CUdevprop, dev: hipDevice_t)
     Ok(())
 }
 
+pub(crate) fn get_count(count: &mut ::core::ffi::c_int) -> hipError_t {
+    unsafe { hipGetDeviceCount(count) }
+}
+
 fn clamp_usize(x: usize) -> i32 {
     usize::min(x, i32::MAX as usize) as i32
 }

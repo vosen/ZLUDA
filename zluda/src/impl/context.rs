@@ -7,3 +7,7 @@ pub(crate) unsafe fn get_limit(pvalue: *mut usize, limit: hipLimit_t) -> hipErro
 pub(crate) fn set_limit(limit: hipLimit_t, value: usize) -> hipError_t {
     unsafe { hipDeviceSetLimit(limit, value) }
 }
+
+pub(crate) fn synchronize() -> hipError_t {
+    unsafe { hipDeviceSynchronize() }
+}

@@ -1,8 +1,10 @@
 use cuda_types::*;
 use hip_runtime_sys::*;
+use std::mem::{self, ManuallyDrop};
 
 pub(super) mod context;
 pub(super) mod device;
+pub(super) mod module;
 
 #[cfg(debug_assertions)]
 pub(crate) fn unimplemented() -> CUresult {
@@ -66,9 +68,38 @@ macro_rules! from_cuda_transmute {
     };
 }
 
+macro_rules! from_cuda_object {
+    ($($type_:ty),*) => {
+        $(
+            impl<'a> FromCuda<'a, <$type_ as ZludaObject>::CudaHandle> for <$type_ as ZludaObject>::CudaHandle {
+                fn from_cuda(handle: &'a <$type_ as ZludaObject>::CudaHandle) -> Result<<$type_ as ZludaObject>::CudaHandle, CUerror> {
+                    Ok(*handle)
+                }
+            }
+
+            impl<'a> FromCuda<'a, *mut <$type_ as ZludaObject>::CudaHandle> for &'a mut <$type_ as ZludaObject>::CudaHandle {
+                fn from_cuda(handle: &'a *mut <$type_ as ZludaObject>::CudaHandle) -> Result<&'a mut <$type_ as ZludaObject>::CudaHandle, CUerror> {
+                    match unsafe { handle.as_mut() } {
+                        Some(x) => Ok(x),
+                        None => Err(CUerror::INVALID_VALUE),
+                    }
+                }
+            }
+
+            impl<'a> FromCuda<'a, <$type_ as ZludaObject>::CudaHandle> for &'a $type_ {
+                fn from_cuda(handle: &'a <$type_ as ZludaObject>::CudaHandle) -> Result<&'a $type_, CUerror> {
+                    Ok(as_ref(handle).as_result()?)
+                }
+            }
+        )*
+    };
+}
+
 from_cuda_nop!(
     *mut i8,
     *mut usize,
+    *const std::ffi::c_void,
+    *const ::core::ffi::c_char,
     i32,
     u32,
     usize,
@@ -77,8 +108,10 @@ from_cuda_nop!(
 );
 from_cuda_transmute!(
     CUdevice => hipDevice_t,
-    CUuuid => hipUUID
+    CUuuid => hipUUID,
+    CUfunction => hipFunction_t
 );
+from_cuda_object!(module::Module);
 
 impl<'a> FromCuda<'a, CUlimit> for hipLimit_t {
     fn from_cuda(limit: &'a CUlimit) -> Result<Self, CUerror> {
@@ -89,6 +122,72 @@ impl<'a> FromCuda<'a, CUlimit> for hipLimit_t {
             _ => return Err(CUerror::NOT_SUPPORTED),
         })
     }
+}
+
+pub(crate) trait ZludaObject: Sized + Send + Sync {
+    const COOKIE: usize;
+    const LIVENESS_FAIL: CUerror = cuda_types::CUerror::INVALID_VALUE;
+
+    type CudaHandle: Sized;
+
+    fn drop_checked(&mut self) -> CUresult;
+
+    fn wrap(self) -> Self::CudaHandle {
+        unsafe { mem::transmute_copy(&LiveCheck::wrap(self)) }
+    }
+}
+
+#[repr(C)]
+pub(crate) struct LiveCheck<T: ZludaObject> {
+    cookie: usize,
+    data: ManuallyDrop<T>,
+}
+
+impl<T: ZludaObject> LiveCheck<T> {
+    fn wrap(data: T) -> *mut Self {
+        Box::into_raw(Box::new(LiveCheck {
+            cookie: T::COOKIE,
+            data: ManuallyDrop::new(data),
+        }))
+    }
+
+    fn as_result(&self) -> Result<&T, CUerror> {
+        if self.cookie == T::COOKIE {
+            Ok(&self.data)
+        } else {
+            Err(T::LIVENESS_FAIL)
+        }
+    }
+
+    // This looks like nonsense, but it's not. There are two cases:
+    // Err(CUerror) -> meaning that the object is invalid, this pointer does not point into valid memory
+    // Ok(maybe_error) -> meaning that the object is valid, we dropped everything, but there *might*
+    //                    an error in the underlying runtime that we want to propagate
+    #[must_use]
+    fn drop_checked(&mut self) -> Result<Result<(), CUerror>, CUerror> {
+        if self.cookie == T::COOKIE {
+            self.cookie = 0;
+            let result = self.data.drop_checked();
+            unsafe { ManuallyDrop::drop(&mut self.data) };
+            Ok(result)
+        } else {
+            Err(T::LIVENESS_FAIL)
+        }
+    }
+}
+
+pub fn as_ref<'a, T: ZludaObject>(
+    handle: &'a T::CudaHandle,
+) -> &'a ManuallyDrop<Box<LiveCheck<T>>> {
+    unsafe { mem::transmute(handle) }
+}
+
+pub fn drop_checked<T: ZludaObject>(handle: T::CudaHandle) -> Result<(), CUerror> {
+    let mut wrapped_object: ManuallyDrop<Box<LiveCheck<T>>> =
+        unsafe { mem::transmute_copy(&handle) };
+    let underlying_error = LiveCheck::drop_checked(&mut wrapped_object)?;
+    unsafe { ManuallyDrop::drop(&mut wrapped_object) };
+    underlying_error
 }
 
 pub(crate) fn init(flags: ::core::ffi::c_uint) -> hipError_t {
