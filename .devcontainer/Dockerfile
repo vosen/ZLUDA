@@ -28,7 +28,8 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && DEBIAN_FRONTEND=noninter
     nvidia-utils-${CUDA_DRIVER} \
     cuda-cudart-dev-${CUDA_PKG_VERSION} \
     cuda-cudart-${CUDA_PKG_VERSION} \
-    cuda-profiler-api-${CUDA_PKG_VERSION}
+    cuda-profiler-api-${CUDA_PKG_VERSION} \
+    cuda-nvcc-${CUDA_PKG_VERSION}
 
 ARG ROCM_VERSION=6.2.2
 RUN mkdir --parents --mode=0755 /etc/apt/keyrings && \
@@ -41,7 +42,8 @@ RUN mkdir --parents --mode=0755 /etc/apt/keyrings && \
     rocm-gdb \
     rocm-smi-lib \
     rocm-llvm-dev \
-    hip-runtime-amd &&  \
+    hip-runtime-amd && \
+    hip-dev && \
     echo '/opt/rocm/lib' > /etc/ld.so.conf.d/rocm.conf && \
     ldconfig
 

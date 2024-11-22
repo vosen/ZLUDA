@@ -58,7 +58,7 @@ macro_rules! remap_attribute {
                     paste::paste! { hipDeviceAttribute_t:: [< hipDeviceAttribute $($word:camel)* >] }
                 }
             )*
-            _ => return Err(hipErrorCode_t::hipErrorNotSupported)
+            _ => return Err(hipErrorCode_t::NotSupported)
         }
     }
 }
@@ -245,7 +245,7 @@ pub(crate) fn get_luid(
     let luid = unsafe {
         luid.cast::<[i8; 8]>()
             .as_mut()
-            .ok_or(hipErrorCode_t::hipErrorInvalidValue)
+            .ok_or(hipErrorCode_t::InvalidValue)
     }?;
     let mut properties = unsafe { mem::zeroed() };
     unsafe { hipGetDevicePropertiesR0600(&mut properties, dev) }?;
