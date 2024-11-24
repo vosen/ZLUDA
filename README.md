@@ -24,6 +24,10 @@ Run your application like this:
 LD_LIBRARY_PATH=<ZLUDA_DIRECTORY> <APPLICATION> <APPLICATIONS_ARGUMENTS>
 ```
 
+### MacOS
+
+Not supported
+
 ## Building
 **Warning**: ZLUDA is under heavy development (see news [here](https://vosen.github.io/ZLUDA/blog/zludas-third-life/)). Instructions below might not work.
 
