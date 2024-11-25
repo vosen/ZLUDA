@@ -150,6 +150,10 @@ impl VisitMut for FixFnSignatures {
     }
 }
 
+const MODULES: &[&str] = &[
+    "context", "device", "driver", "function", "link", "memory", "module", "pointer",
+];
+
 #[proc_macro]
 pub fn cuda_normalize_fn(tokens: TokenStream) -> TokenStream {
     let mut path = parse_macro_input!(tokens as syn::Path);
@@ -161,8 +165,9 @@ pub fn cuda_normalize_fn(tokens: TokenStream) -> TokenStream {
         .0
         .ident
         .to_string();
+    let already_has_module = MODULES.contains(&&*path.segments.last().unwrap().ident.to_string());
     let segments: Vec<String> = split(&fn_[2..]); // skip "cu"
-    let fn_path = join(segments);
+    let fn_path = join(segments, !already_has_module);
     quote! {
         #path #fn_path
     }
@@ -181,23 +186,16 @@ fn split(fn_: &str) -> Vec<String> {
     result
 }
 
-fn join(fn_: Vec<String>) -> Punctuated<Ident, Token![::]> {
+fn join(fn_: Vec<String>, find_module: bool) -> Punctuated<Ident, Token![::]> {
     fn full_form(segment: &str) -> Option<&[&str]> {
         Some(match segment {
             "ctx" => &["context"],
+            "func" => &["function"],
+            "mem" => &["memory"],
             "memcpy" => &["memory", "copy"],
             _ => return None,
         })
     }
-    const MODULES: &[&str] = &[
-        "context",
-        "device",
-        "function",
-        "link",
-        "memory",
-        "module",
-        "pointer"
-    ];
     let mut normalized: Vec<&str> = Vec::new();
     for segment in fn_.iter() {
         match full_form(segment) {
@@ -205,18 +203,20 @@ fn join(fn_: Vec<String>) -> Punctuated<Ident, Token![::]> {
             None => normalized.push(&*segment),
         }
     }
+    if !find_module {
+        return [Ident::new(&normalized.join("_"), Span::call_site())]
+            .into_iter()
+            .collect();
+    }
     if !MODULES.contains(&normalized[0]) {
-        let mut globalized = vec!["global"];
+        let mut globalized = vec!["driver"];
         globalized.extend(normalized);
         normalized = globalized;
     }
     let (module, path) = normalized.split_first().unwrap();
     let path = path.join("_");
-    let mut result = Punctuated::new();
-    result.extend(
-        [module, &&*path]
-            .into_iter()
-            .map(|s| Ident::new(s, Span::call_site())),
-    );
-    result
+    [module, &&*path]
+        .into_iter()
+        .map(|s| Ident::new(s, Span::call_site()))
+        .collect()
 }

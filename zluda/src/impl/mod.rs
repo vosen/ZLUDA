@@ -1,10 +1,14 @@
 use cuda_types::*;
 use hip_runtime_sys::*;
-use std::mem::{self, ManuallyDrop};
+use std::mem::{self, ManuallyDrop, MaybeUninit};
 
 pub(super) mod context;
 pub(super) mod device;
+pub(super) mod driver;
+pub(super) mod function;
+pub(super) mod memory;
 pub(super) mod module;
+pub(super) mod pointer;
 
 #[cfg(debug_assertions)]
 pub(crate) fn unimplemented() -> CUresult {
@@ -97,9 +101,12 @@ macro_rules! from_cuda_object {
 
 from_cuda_nop!(
     *mut i8,
+    *mut i32,
     *mut usize,
-    *const std::ffi::c_void,
+    *const ::core::ffi::c_void,
     *const ::core::ffi::c_char,
+    *mut ::core::ffi::c_void,
+    *mut *mut ::core::ffi::c_void,
     i32,
     u32,
     usize,
@@ -107,11 +114,14 @@ from_cuda_nop!(
     CUdevice_attribute
 );
 from_cuda_transmute!(
-    CUdevice => hipDevice_t,
     CUuuid => hipUUID,
-    CUfunction => hipFunction_t
+    CUfunction => hipFunction_t,
+    CUfunction_attribute => hipFunction_attribute,
+    CUstream => hipStream_t,
+    CUpointer_attribute => hipPointer_attribute,
+    CUdeviceptr_v2 => hipDeviceptr_t
 );
-from_cuda_object!(module::Module);
+from_cuda_object!(module::Module, context::Context);
 
 impl<'a> FromCuda<'a, CUlimit> for hipLimit_t {
     fn from_cuda(limit: &'a CUlimit) -> Result<Self, CUerror> {
@@ -140,20 +150,28 @@ pub(crate) trait ZludaObject: Sized + Send + Sync {
 #[repr(C)]
 pub(crate) struct LiveCheck<T: ZludaObject> {
     cookie: usize,
-    data: ManuallyDrop<T>,
+    data: MaybeUninit<T>,
 }
 
 impl<T: ZludaObject> LiveCheck<T> {
-    fn wrap(data: T) -> *mut Self {
-        Box::into_raw(Box::new(LiveCheck {
+    fn new(data: T) -> Self {
+        LiveCheck {
             cookie: T::COOKIE,
-            data: ManuallyDrop::new(data),
-        }))
+            data: MaybeUninit::new(data),
+        }
+    }
+
+    fn as_handle(&self) -> T::CudaHandle {
+        unsafe { mem::transmute_copy(self) }
+    }
+
+    fn wrap(data: T) -> *mut Self {
+        Box::into_raw(Box::new(Self::new(data)))
     }
 
     fn as_result(&self) -> Result<&T, CUerror> {
         if self.cookie == T::COOKIE {
-            Ok(&self.data)
+            Ok(unsafe { self.data.assume_init_ref() })
         } else {
             Err(T::LIVENESS_FAIL)
         }
@@ -167,8 +185,8 @@ impl<T: ZludaObject> LiveCheck<T> {
     fn drop_checked(&mut self) -> Result<Result<(), CUerror>, CUerror> {
         if self.cookie == T::COOKIE {
             self.cookie = 0;
-            let result = self.data.drop_checked();
-            unsafe { ManuallyDrop::drop(&mut self.data) };
+            let result = unsafe { self.data.assume_init_mut().drop_checked() };
+            unsafe { MaybeUninit::assume_init_drop(&mut self.data) };
             Ok(result)
         } else {
             Err(T::LIVENESS_FAIL)
@@ -188,8 +206,4 @@ pub fn drop_checked<T: ZludaObject>(handle: T::CudaHandle) -> Result<(), CUerror
     let underlying_error = LiveCheck::drop_checked(&mut wrapped_object)?;
     unsafe { ManuallyDrop::drop(&mut wrapped_object) };
     underlying_error
-}
-
-pub(crate) fn init(flags: ::core::ffi::c_uint) -> hipError_t {
-    unsafe { hipInit(flags) }
 }

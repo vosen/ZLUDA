@@ -2,6 +2,8 @@ use cuda_types::*;
 use hip_runtime_sys::*;
 use std::{mem, ptr};
 
+use super::context;
+
 const PROJECT_SUFFIX: &[u8] = b" [ZLUDA]\0";
 pub const COMPUTE_CAPABILITY_MAJOR: i32 = 8;
 pub const COMPUTE_CAPABILITY_MINOR: i32 = 8;
@@ -306,4 +308,32 @@ pub(crate) fn get_count(count: &mut ::core::ffi::c_int) -> hipError_t {
 
 fn clamp_usize(x: usize) -> i32 {
     usize::min(x, i32::MAX as usize) as i32
+}
+
+pub(crate) fn primary_context_retain(
+    pctx: &mut CUcontext,
+    hip_dev: hipDevice_t,
+) -> Result<(), CUerror> {
+    let (ctx, raw_ctx) = context::get_primary(hip_dev)?;
+    {
+        let mut mutable_ctx = ctx.mutable.lock().map_err(|_| CUerror::UNKNOWN)?;
+        mutable_ctx.ref_count += 1;
+    }
+    *pctx = raw_ctx;
+    Ok(())
+}
+
+pub(crate) fn primary_context_release(hip_dev: hipDevice_t) -> Result<(), CUerror> {
+    let (ctx, _) = context::get_primary(hip_dev)?;
+    {
+        let mut mutable_ctx = ctx.mutable.lock().map_err(|_| CUerror::UNKNOWN)?;
+        if mutable_ctx.ref_count == 0 {
+            return Err(CUerror::INVALID_CONTEXT);
+        }
+        mutable_ctx.ref_count -= 1;
+        if mutable_ctx.ref_count == 0 {
+            // TODO: drop all children
+        }
+    }
+    Ok(())
 }
