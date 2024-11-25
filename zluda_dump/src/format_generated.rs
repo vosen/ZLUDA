@@ -1,6 +1,16 @@
 // Generated automatically by zluda_bindgen
 // DO NOT EDIT MANUALLY
 #![allow(warnings)]
+impl crate::format::CudaDisplay for cuda_types::CUdeviceptr_v2 {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        write!(writer, "{:p}", self.0)
+    }
+}
 impl crate::format::CudaDisplay for cuda_types::CUcontext {
     fn write(
         &self,
@@ -8,7 +18,7 @@ impl crate::format::CudaDisplay for cuda_types::CUcontext {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        write!(writer, "{:p}", self.0)
     }
 }
 impl crate::format::CudaDisplay for cuda_types::CUmodule {
@@ -18,7 +28,7 @@ impl crate::format::CudaDisplay for cuda_types::CUmodule {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        write!(writer, "{:p}", self.0)
     }
 }
 impl crate::format::CudaDisplay for cuda_types::CUfunction {
@@ -28,7 +38,7 @@ impl crate::format::CudaDisplay for cuda_types::CUfunction {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        write!(writer, "{:p}", self.0)
     }
 }
 impl crate::format::CudaDisplay for cuda_types::CUlibrary {
@@ -38,7 +48,7 @@ impl crate::format::CudaDisplay for cuda_types::CUlibrary {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        write!(writer, "{:p}", self.0)
     }
 }
 impl crate::format::CudaDisplay for cuda_types::CUkernel {
@@ -108,7 +118,7 @@ impl crate::format::CudaDisplay for cuda_types::CUstream {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        write!(writer, "{:p}", self.0)
     }
 }
 impl crate::format::CudaDisplay for cuda_types::CUgraphicsResource {

@@ -48,37 +48,43 @@ pub const CUDA_EGL_INFINITE_TIMEOUT: u32 = 4294967295;
 pub type cuuint32_t = u32;
 pub type cuuint64_t = u64;
 #[repr(transparent)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUdeviceptr_v2(pub *mut ::core::ffi::c_void);
 pub type CUdeviceptr = CUdeviceptr_v2;
-#[repr(transparent)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct CUdevice_v1(pub ::core::ffi::c_int);
+pub type CUdevice_v1 = ::core::ffi::c_int;
 pub type CUdevice = CUdevice_v1;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct CUctx_st {
     _unused: [u8; 0],
 }
-pub type CUcontext = *mut CUctx_st;
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUcontext(pub *mut CUctx_st);
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct CUmod_st {
     _unused: [u8; 0],
 }
-pub type CUmodule = *mut CUmod_st;
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUmodule(pub *mut CUmod_st);
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct CUfunc_st {
     _unused: [u8; 0],
 }
-pub type CUfunction = *mut CUfunc_st;
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUfunction(pub *mut CUfunc_st);
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct CUlib_st {
     _unused: [u8; 0],
 }
-pub type CUlibrary = *mut CUlib_st;
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUlibrary(pub *mut CUlib_st);
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct CUkern_st {
@@ -120,7 +126,9 @@ pub type CUevent = *mut CUevent_st;
 pub struct CUstream_st {
     _unused: [u8; 0],
 }
-pub type CUstream = *mut CUstream_st;
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUstream(pub *mut CUstream_st);
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct CUgraphicsResource_st {
@@ -187,7 +195,7 @@ pub struct CUasyncCallbackEntry_st {
 }
 pub type CUasyncCallbackHandle = *mut CUasyncCallbackEntry_st;
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUuuid_st {
     pub bytes: [::core::ffi::c_uchar; 16usize],
 }
@@ -197,7 +205,7 @@ pub type CUuuid = CUuuid_st;
  between processes on different nodes they must be connected via the
  NVSwitch fabric.*/
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUmemFabricHandle_st {
     pub data: [::core::ffi::c_uchar; 64usize],
 }
@@ -213,7 +221,7 @@ pub type CUmemFabricHandle_v1 = CUmemFabricHandle_st;
 pub type CUmemFabricHandle = CUmemFabricHandle_v1;
 /// CUDA IPC event handle
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUipcEventHandle_st {
     pub reserved: [::core::ffi::c_char; 64usize],
 }
@@ -223,7 +231,7 @@ pub type CUipcEventHandle_v1 = CUipcEventHandle_st;
 pub type CUipcEventHandle = CUipcEventHandle_v1;
 /// CUDA IPC mem handle
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUipcMemHandle_st {
     pub reserved: [::core::ffi::c_char; 64usize],
 }
@@ -600,13 +608,13 @@ pub union CUstreamBatchMemOpParams_union_CUstreamMemOpWriteValueParams_st__bindg
     pub value64: cuuint64_t,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUstreamBatchMemOpParams_union_CUstreamMemOpFlushRemoteWritesParams_st {
     pub operation: CUstreamBatchMemOpType,
     pub flags: ::core::ffi::c_uint,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUstreamBatchMemOpParams_union_CUstreamMemOpMemoryBarrierParams_st {
     pub operation: CUstreamBatchMemOpType,
     pub flags: ::core::ffi::c_uint,
@@ -616,7 +624,7 @@ pub type CUstreamBatchMemOpParams_v1 = CUstreamBatchMemOpParams_union;
 /// Per-operation parameters for ::cuStreamBatchMemOp
 pub type CUstreamBatchMemOpParams = CUstreamBatchMemOpParams_v1;
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_BATCH_MEM_OP_NODE_PARAMS_v1_st {
     pub ctx: CUcontext,
     pub count: ::core::ffi::c_uint,
@@ -627,7 +635,7 @@ pub type CUDA_BATCH_MEM_OP_NODE_PARAMS_v1 = CUDA_BATCH_MEM_OP_NODE_PARAMS_v1_st;
 pub type CUDA_BATCH_MEM_OP_NODE_PARAMS = CUDA_BATCH_MEM_OP_NODE_PARAMS_v1;
 /// Batch memory operation node parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_BATCH_MEM_OP_NODE_PARAMS_v2_st {
     ///< Context to use for the operations.
     pub ctx: CUcontext,
@@ -698,7 +706,7 @@ pub union CUasyncNotificationInfo_st__bindgen_ty_1 {
     pub overBudget: CUasyncNotificationInfo_st__bindgen_ty_1__bindgen_ty_1,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUasyncNotificationInfo_st__bindgen_ty_1__bindgen_ty_1 {
     pub bytesOverBudget: ::core::ffi::c_ulonglong,
 }
@@ -1756,7 +1764,7 @@ pub struct CUdevice_attribute_enum(pub ::core::ffi::c_uint);
 pub use self::CUdevice_attribute_enum as CUdevice_attribute;
 /// Legacy device properties
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUdevprop_st {
     ///< Maximum number of threads per block
     pub maxThreadsPerBlock: ::core::ffi::c_int,
@@ -3015,7 +3023,7 @@ pub type CUaccessPolicyWindow_v1 = CUaccessPolicyWindow_st;
 pub type CUaccessPolicyWindow = CUaccessPolicyWindow_v1;
 /// GPU kernel node parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_KERNEL_NODE_PARAMS_st {
     ///< Kernel to launch
     pub func: CUfunction,
@@ -3042,7 +3050,7 @@ pub struct CUDA_KERNEL_NODE_PARAMS_st {
 pub type CUDA_KERNEL_NODE_PARAMS_v1 = CUDA_KERNEL_NODE_PARAMS_st;
 /// GPU kernel node parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_KERNEL_NODE_PARAMS_v2_st {
     ///< Kernel to launch
     pub func: CUfunction,
@@ -3075,7 +3083,7 @@ pub type CUDA_KERNEL_NODE_PARAMS_v2 = CUDA_KERNEL_NODE_PARAMS_v2_st;
 pub type CUDA_KERNEL_NODE_PARAMS = CUDA_KERNEL_NODE_PARAMS_v2;
 /// GPU kernel node parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_KERNEL_NODE_PARAMS_v3_st {
     ///< Kernel to launch
     pub func: CUfunction,
@@ -3106,7 +3114,7 @@ pub struct CUDA_KERNEL_NODE_PARAMS_v3_st {
 pub type CUDA_KERNEL_NODE_PARAMS_v3 = CUDA_KERNEL_NODE_PARAMS_v3_st;
 /// Memset node parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_MEMSET_NODE_PARAMS_st {
     ///< Destination device pointer
     pub dst: CUdeviceptr,
@@ -3127,7 +3135,7 @@ pub type CUDA_MEMSET_NODE_PARAMS_v1 = CUDA_MEMSET_NODE_PARAMS_st;
 pub type CUDA_MEMSET_NODE_PARAMS = CUDA_MEMSET_NODE_PARAMS_v1;
 /// Memset node parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_MEMSET_NODE_PARAMS_v2_st {
     ///< Destination device pointer
     pub dst: CUdeviceptr,
@@ -3148,7 +3156,7 @@ pub struct CUDA_MEMSET_NODE_PARAMS_v2_st {
 pub type CUDA_MEMSET_NODE_PARAMS_v2 = CUDA_MEMSET_NODE_PARAMS_v2_st;
 /// Host node parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash)]
 pub struct CUDA_HOST_NODE_PARAMS_st {
     ///< The function to call when the node executes
     pub fn_: CUhostFn,
@@ -3161,7 +3169,7 @@ pub type CUDA_HOST_NODE_PARAMS_v1 = CUDA_HOST_NODE_PARAMS_st;
 pub type CUDA_HOST_NODE_PARAMS = CUDA_HOST_NODE_PARAMS_v1;
 /// Host node parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_HOST_NODE_PARAMS_v2_st {
     ///< The function to call when the node executes
     pub fn_: CUhostFn,
@@ -3190,7 +3198,7 @@ pub struct CUgraphConditionalNodeType_enum(pub ::core::ffi::c_uint);
 pub use self::CUgraphConditionalNodeType_enum as CUgraphConditionalNodeType;
 /// Conditional node parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_CONDITIONAL_NODE_PARAMS {
     /**< Conditional node handle.
 Handles must be created in advance of creating the node
@@ -3334,7 +3342,7 @@ pub use self::CUgraphDependencyType_enum as CUgraphDependencyType;
  default to a zero-initialized value if not specified. A zero-initialized struct indicates a
  standard full serialization of two nodes with memory visibility.*/
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUgraphEdgeData_st {
     /**< This indicates when the dependency is triggered from the upstream
 node on the edge. The meaning is specfic to the node type. A value
@@ -3405,7 +3413,7 @@ pub struct CUgraphInstantiateResult_enum(pub ::core::ffi::c_uint);
 pub use self::CUgraphInstantiateResult_enum as CUgraphInstantiateResult;
 /// Graph instantiation parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_GRAPH_INSTANTIATE_PARAMS_st {
     ///< Instantiation flags
     pub flags: cuuint64_t,
@@ -3520,7 +3528,7 @@ pub use self::CUlaunchMemSyncDomain_enum as CUlaunchMemSyncDomain;
 
  Domain ID range is available through ::CU_DEVICE_ATTRIBUTE_MEM_SYNC_DOMAIN_COUNT.*/
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUlaunchMemSyncDomainMap_st {
     ///< The default domain ID to use for designated kernels
     pub default_: ::core::ffi::c_uchar,
@@ -3765,14 +3773,14 @@ scheduling policy preference for the kernel.*/
       - \p z - The Z dimension of the cluster, in blocks. Must be a divisor
                of the grid Z dimension.*/
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUlaunchAttributeValue_union__bindgen_ty_1 {
     pub x: ::core::ffi::c_uint,
     pub y: ::core::ffi::c_uint,
     pub z: ::core::ffi::c_uint,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUlaunchAttributeValue_union__bindgen_ty_2 {
     ///< Event to fire when all blocks trigger it
     pub event: CUevent,
@@ -3783,7 +3791,7 @@ pub struct CUlaunchAttributeValue_union__bindgen_ty_2 {
     pub triggerAtBlockStart: ::core::ffi::c_int,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUlaunchAttributeValue_union__bindgen_ty_3 {
     ///< Event to fire when the last block launches
     pub event: CUevent,
@@ -3791,7 +3799,7 @@ pub struct CUlaunchAttributeValue_union__bindgen_ty_3 {
     pub flags: ::core::ffi::c_int,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUlaunchAttributeValue_union__bindgen_ty_4 {
     ///< Whether or not the resulting kernel node should be device-updatable.
     pub deviceUpdatable: ::core::ffi::c_int,
@@ -3814,7 +3822,7 @@ pub struct CUlaunchAttribute_st {
 pub type CUlaunchAttribute = CUlaunchAttribute_st;
 /// CUDA extensible launch configuration
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUlaunchConfig_st {
     ///< Width of grid in blocks
     pub gridDimX: ::core::ffi::c_uint,
@@ -3966,7 +3974,7 @@ pub struct CUexecAffinityType_enum(pub ::core::ffi::c_uint);
 pub use self::CUexecAffinityType_enum as CUexecAffinityType;
 /// Value for ::CU_EXEC_AFFINITY_TYPE_SM_COUNT
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUexecAffinitySmCount_st {
     ///< The number of SMs the context is limited to use.
     pub val: ::core::ffi::c_uint,
@@ -4025,7 +4033,7 @@ pub struct CUlibraryOption_enum(pub ::core::ffi::c_uint);
 /// Library options to be specified with ::cuLibraryLoadData() or ::cuLibraryLoadFromFile()
 pub use self::CUlibraryOption_enum as CUlibraryOption;
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUlibraryHostUniversalFunctionAndDataTable_st {
     pub functionTable: *mut ::core::ffi::c_void,
     pub functionWindowSize: usize,
@@ -4092,7 +4100,7 @@ pub type CUoccupancyB2DSize = ::core::option::Option<
 >;
 /// 2D memory copy parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_MEMCPY2D_st {
     ///< Source X in bytes
     pub srcXInBytes: usize,
@@ -4133,7 +4141,7 @@ pub type CUDA_MEMCPY2D_v2 = CUDA_MEMCPY2D_st;
 pub type CUDA_MEMCPY2D = CUDA_MEMCPY2D_v2;
 /// 3D memory copy parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_MEMCPY3D_st {
     ///< Source X in bytes
     pub srcXInBytes: usize,
@@ -4192,7 +4200,7 @@ pub type CUDA_MEMCPY3D_v2 = CUDA_MEMCPY3D_st;
 pub type CUDA_MEMCPY3D = CUDA_MEMCPY3D_v2;
 /// 3D memory cross-context copy parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_MEMCPY3D_PEER_st {
     ///< Source X in bytes
     pub srcXInBytes: usize,
@@ -4251,7 +4259,7 @@ pub type CUDA_MEMCPY3D_PEER_v1 = CUDA_MEMCPY3D_PEER_st;
 pub type CUDA_MEMCPY3D_PEER = CUDA_MEMCPY3D_PEER_v1;
 /// Memcpy node parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_MEMCPY_NODE_PARAMS_st {
     ///< Must be zero
     pub flags: ::core::ffi::c_int,
@@ -4266,7 +4274,7 @@ pub struct CUDA_MEMCPY_NODE_PARAMS_st {
 pub type CUDA_MEMCPY_NODE_PARAMS = CUDA_MEMCPY_NODE_PARAMS_st;
 /// Array descriptor
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_ARRAY_DESCRIPTOR_st {
     ///< Width of array
     pub Width: usize,
@@ -4283,7 +4291,7 @@ pub type CUDA_ARRAY_DESCRIPTOR_v2 = CUDA_ARRAY_DESCRIPTOR_st;
 pub type CUDA_ARRAY_DESCRIPTOR = CUDA_ARRAY_DESCRIPTOR_v2;
 /// 3D array descriptor
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_ARRAY3D_DESCRIPTOR_st {
     ///< Width of 3D array
     pub Width: usize,
@@ -4304,7 +4312,7 @@ pub type CUDA_ARRAY3D_DESCRIPTOR_v2 = CUDA_ARRAY3D_DESCRIPTOR_st;
 pub type CUDA_ARRAY3D_DESCRIPTOR = CUDA_ARRAY3D_DESCRIPTOR_v2;
 /// CUDA array sparse properties
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_ARRAY_SPARSE_PROPERTIES_st {
     pub tileExtent: CUDA_ARRAY_SPARSE_PROPERTIES_st__bindgen_ty_1,
     /// First mip level at which the mip tail begins.
@@ -4316,7 +4324,7 @@ pub struct CUDA_ARRAY_SPARSE_PROPERTIES_st {
     pub reserved: [::core::ffi::c_uint; 4usize],
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_ARRAY_SPARSE_PROPERTIES_st__bindgen_ty_1 {
     ///< Width of sparse tile in elements
     pub width: ::core::ffi::c_uint,
@@ -4331,7 +4339,7 @@ pub type CUDA_ARRAY_SPARSE_PROPERTIES_v1 = CUDA_ARRAY_SPARSE_PROPERTIES_st;
 pub type CUDA_ARRAY_SPARSE_PROPERTIES = CUDA_ARRAY_SPARSE_PROPERTIES_v1;
 /// CUDA array memory requirements
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_ARRAY_MEMORY_REQUIREMENTS_st {
     ///< Total required memory size
     pub size: usize,
@@ -4363,19 +4371,19 @@ pub union CUDA_RESOURCE_DESC_st__bindgen_ty_1 {
     pub reserved: CUDA_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_5,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_1 {
     ///< CUDA array
     pub hArray: CUarray,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_2 {
     ///< CUDA mipmapped array
     pub hMipmappedArray: CUmipmappedArray,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_3 {
     ///< Device pointer
     pub devPtr: CUdeviceptr,
@@ -4387,7 +4395,7 @@ pub struct CUDA_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_3 {
     pub sizeInBytes: usize,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_4 {
     ///< Device pointer
     pub devPtr: CUdeviceptr,
@@ -4403,7 +4411,7 @@ pub struct CUDA_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_4 {
     pub pitchInBytes: usize,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_5 {
     pub reserved: [::core::ffi::c_int; 32usize],
 }
@@ -4657,7 +4665,7 @@ pub struct CUresourceViewFormat_enum(pub ::core::ffi::c_uint);
 pub use self::CUresourceViewFormat_enum as CUresourceViewFormat;
 /// Resource view descriptor
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_RESOURCE_VIEW_DESC_st {
     ///< Resource view format
     pub format: CUresourceViewFormat,
@@ -4684,7 +4692,7 @@ pub type CUDA_RESOURCE_VIEW_DESC = CUDA_RESOURCE_VIEW_DESC_v1;
 /// Tensor map descriptor. Requires compiler support for aligning to 64 bytes.
 #[repr(C)]
 #[repr(align(64))]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUtensorMap_st {
     pub opaque: [cuuint64_t; 16usize],
 }
@@ -4852,7 +4860,7 @@ pub struct CUtensorMapFloatOOBfill_enum(pub ::core::ffi::c_uint);
 pub use self::CUtensorMapFloatOOBfill_enum as CUtensorMapFloatOOBfill;
 /// GPU Direct v3 tokens
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_POINTER_ATTRIBUTE_P2P_TOKENS_st {
     pub p2pToken: ::core::ffi::c_ulonglong,
     pub vaSpaceToken: ::core::ffi::c_uint,
@@ -4889,7 +4897,7 @@ pub struct CUDA_POINTER_ATTRIBUTE_ACCESS_FLAGS_enum(pub ::core::ffi::c_uint);
 pub use self::CUDA_POINTER_ATTRIBUTE_ACCESS_FLAGS_enum as CUDA_POINTER_ATTRIBUTE_ACCESS_FLAGS;
 /// Kernel launch parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_LAUNCH_PARAMS_st {
     ///< Kernel to launch
     pub function: CUfunction,
@@ -5009,7 +5017,7 @@ pub union CUDA_EXTERNAL_MEMORY_HANDLE_DESC_st__bindgen_ty_1 {
  ::CU_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_RESOURCE_KMT
  then 'name' must be NULL.*/
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_EXTERNAL_MEMORY_HANDLE_DESC_st__bindgen_ty_1__bindgen_ty_1 {
     /// Valid NT handle. Must be NULL if 'name' is non-NULL
     pub handle: *mut ::core::ffi::c_void,
@@ -5023,7 +5031,7 @@ pub type CUDA_EXTERNAL_MEMORY_HANDLE_DESC_v1 = CUDA_EXTERNAL_MEMORY_HANDLE_DESC_
 pub type CUDA_EXTERNAL_MEMORY_HANDLE_DESC = CUDA_EXTERNAL_MEMORY_HANDLE_DESC_v1;
 /// External memory buffer descriptor
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_EXTERNAL_MEMORY_BUFFER_DESC_st {
     /// Offset into the memory object where the buffer's base is
     pub offset: ::core::ffi::c_ulonglong,
@@ -5039,7 +5047,7 @@ pub type CUDA_EXTERNAL_MEMORY_BUFFER_DESC_v1 = CUDA_EXTERNAL_MEMORY_BUFFER_DESC_
 pub type CUDA_EXTERNAL_MEMORY_BUFFER_DESC = CUDA_EXTERNAL_MEMORY_BUFFER_DESC_v1;
 /// External memory mipmap descriptor
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_EXTERNAL_MEMORY_MIPMAPPED_ARRAY_DESC_st {
     /** Offset into the memory object where the base level of the
  mipmap chain is.*/
@@ -5157,7 +5165,7 @@ pub union CUDA_EXTERNAL_SEMAPHORE_HANDLE_DESC_st__bindgen_ty_1 {
  - ::CU_EXTERNAL_SEMAPHORE_HANDLE_TYPE_D3D11_KEYED_MUTEX_KMT
  then 'name' must be NULL.*/
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_EXTERNAL_SEMAPHORE_HANDLE_DESC_st__bindgen_ty_1__bindgen_ty_1 {
     /// Valid NT handle. Must be NULL if 'name' is non-NULL
     pub handle: *mut ::core::ffi::c_void,
@@ -5195,7 +5203,7 @@ pub struct CUDA_EXTERNAL_SEMAPHORE_SIGNAL_PARAMS_st__bindgen_ty_1 {
 }
 /// Parameters for fence objects
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_EXTERNAL_SEMAPHORE_SIGNAL_PARAMS_st__bindgen_ty_1__bindgen_ty_1 {
     /// Value of fence to be signaled
     pub value: ::core::ffi::c_ulonglong,
@@ -5210,7 +5218,7 @@ pub union CUDA_EXTERNAL_SEMAPHORE_SIGNAL_PARAMS_st__bindgen_ty_1__bindgen_ty_2 {
 }
 /// Parameters for keyed mutex objects
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_EXTERNAL_SEMAPHORE_SIGNAL_PARAMS_st__bindgen_ty_1__bindgen_ty_3 {
     /// Value of key to release the mutex with
     pub key: ::core::ffi::c_ulonglong,
@@ -5244,7 +5252,7 @@ pub struct CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS_st__bindgen_ty_1 {
 }
 /// Parameters for fence objects
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS_st__bindgen_ty_1__bindgen_ty_1 {
     /// Value of fence to be waited on
     pub value: ::core::ffi::c_ulonglong,
@@ -5259,7 +5267,7 @@ pub union CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS_st__bindgen_ty_1__bindgen_ty_2 {
 }
 /// Parameters for keyed mutex objects
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS_st__bindgen_ty_1__bindgen_ty_3 {
     /// Value of key to acquire the mutex with
     pub key: ::core::ffi::c_ulonglong,
@@ -5272,7 +5280,7 @@ pub type CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS_v1 = CUDA_EXTERNAL_SEMAPHORE_WAIT_P
 pub type CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS = CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS_v1;
 /// Semaphore signal node parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_EXT_SEM_SIGNAL_NODE_PARAMS_st {
     ///< Array of external semaphore handles.
     pub extSemArray: *mut CUexternalSemaphore,
@@ -5287,7 +5295,7 @@ pub type CUDA_EXT_SEM_SIGNAL_NODE_PARAMS_v1 = CUDA_EXT_SEM_SIGNAL_NODE_PARAMS_st
 pub type CUDA_EXT_SEM_SIGNAL_NODE_PARAMS = CUDA_EXT_SEM_SIGNAL_NODE_PARAMS_v1;
 /// Semaphore signal node parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_EXT_SEM_SIGNAL_NODE_PARAMS_v2_st {
     ///< Array of external semaphore handles.
     pub extSemArray: *mut CUexternalSemaphore,
@@ -5300,7 +5308,7 @@ pub struct CUDA_EXT_SEM_SIGNAL_NODE_PARAMS_v2_st {
 pub type CUDA_EXT_SEM_SIGNAL_NODE_PARAMS_v2 = CUDA_EXT_SEM_SIGNAL_NODE_PARAMS_v2_st;
 /// Semaphore wait node parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_EXT_SEM_WAIT_NODE_PARAMS_st {
     ///< Array of external semaphore handles.
     pub extSemArray: *mut CUexternalSemaphore,
@@ -5315,7 +5323,7 @@ pub type CUDA_EXT_SEM_WAIT_NODE_PARAMS_v1 = CUDA_EXT_SEM_WAIT_NODE_PARAMS_st;
 pub type CUDA_EXT_SEM_WAIT_NODE_PARAMS = CUDA_EXT_SEM_WAIT_NODE_PARAMS_v1;
 /// Semaphore wait node parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_EXT_SEM_WAIT_NODE_PARAMS_v2_st {
     ///< Array of external semaphore handles.
     pub extSemArray: *mut CUexternalSemaphore,
@@ -5575,7 +5583,7 @@ pub union CUarrayMapInfo_st__bindgen_ty_2 {
     pub miptail: CUarrayMapInfo_st__bindgen_ty_2__bindgen_ty_2,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUarrayMapInfo_st__bindgen_ty_2__bindgen_ty_1 {
     ///< For CUDA mipmapped arrays must a valid mipmap level. For CUDA arrays must be zero
     pub level: ::core::ffi::c_uint,
@@ -5595,7 +5603,7 @@ pub struct CUarrayMapInfo_st__bindgen_ty_2__bindgen_ty_1 {
     pub extentDepth: ::core::ffi::c_uint,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUarrayMapInfo_st__bindgen_ty_2__bindgen_ty_2 {
     ///< For CUDA layered arrays must be a valid layer index. Otherwise, must be zero
     pub layer: ::core::ffi::c_uint,
@@ -5615,7 +5623,7 @@ pub type CUarrayMapInfo_v1 = CUarrayMapInfo_st;
 pub type CUarrayMapInfo = CUarrayMapInfo_v1;
 /// Specifies a memory location.
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUmemLocation_st {
     ///< Specifies the location type, which modifies the meaning of id.
     pub type_: CUmemLocationType,
@@ -5646,7 +5654,7 @@ pub struct CUmemAllocationCompType_enum(pub ::core::ffi::c_uint);
 pub use self::CUmemAllocationCompType_enum as CUmemAllocationCompType;
 /// Specifies the allocation properties for a allocation.
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUmemAllocationProp_st {
     /// Allocation type
     pub type_: CUmemAllocationType,
@@ -5663,7 +5671,7 @@ pub struct CUmemAllocationProp_st {
     pub allocFlags: CUmemAllocationProp_st__bindgen_ty_1,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUmemAllocationProp_st__bindgen_ty_1 {
     /** Allocation hint for requesting compressible memory.
  On devices that support Compute Data Compression, compressible
@@ -5703,7 +5711,7 @@ pub struct CUmulticastGranularity_flags_enum(pub ::core::ffi::c_uint);
 pub use self::CUmulticastGranularity_flags_enum as CUmulticastGranularity_flags;
 /// Specifies the properties for a multicast object.
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUmulticastObjectProp_st {
     /** The number of devices in the multicast team that will bind memory to this
  object*/
@@ -5723,7 +5731,7 @@ pub type CUmulticastObjectProp_v1 = CUmulticastObjectProp_st;
 pub type CUmulticastObjectProp = CUmulticastObjectProp_v1;
 /// Memory access descriptor
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUmemAccessDesc_st {
     ///< Location on which the request is to change it's accessibility
     pub location: CUmemLocation,
@@ -5796,7 +5804,7 @@ pub struct CUgraphExecUpdateResult_enum(pub ::core::ffi::c_uint);
 pub use self::CUgraphExecUpdateResult_enum as CUgraphExecUpdateResult;
 /// Result information returned by cuGraphExecUpdate
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUgraphExecUpdateResultInfo_st {
     /// Gives more specific detail when a cuda graph update fails.
     pub result: CUgraphExecUpdateResult,
@@ -5888,7 +5896,7 @@ pub struct CUmemPool_attribute_enum(pub ::core::ffi::c_uint);
 pub use self::CUmemPool_attribute_enum as CUmemPool_attribute;
 /// Specifies the properties of allocations made from the pool.
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUmemPoolProps_st {
     ///< Allocation type. Currently must be specified as CU_MEM_ALLOCATION_TYPE_PINNED
     pub allocType: CUmemAllocationType,
@@ -5912,7 +5920,7 @@ pub type CUmemPoolProps_v1 = CUmemPoolProps_st;
 pub type CUmemPoolProps = CUmemPoolProps_v1;
 /// Opaque data for exporting a pool allocation
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUmemPoolPtrExportData_st {
     pub reserved: [::core::ffi::c_uchar; 64usize],
 }
@@ -5922,7 +5930,7 @@ pub type CUmemPoolPtrExportData_v1 = CUmemPoolPtrExportData_st;
 pub type CUmemPoolPtrExportData = CUmemPoolPtrExportData_v1;
 /// Memory allocation node parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_MEM_ALLOC_NODE_PARAMS_v1_st {
     /** in: location where the allocation should reside (specified in ::location).
  ::handleTypes must be ::CU_MEM_HANDLE_TYPE_NONE. IPC is not supported.*/
@@ -5942,7 +5950,7 @@ pub type CUDA_MEM_ALLOC_NODE_PARAMS_v1 = CUDA_MEM_ALLOC_NODE_PARAMS_v1_st;
 pub type CUDA_MEM_ALLOC_NODE_PARAMS = CUDA_MEM_ALLOC_NODE_PARAMS_v1;
 /// Memory allocation node parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_MEM_ALLOC_NODE_PARAMS_v2_st {
     /** in: location where the allocation should reside (specified in ::location).
  ::handleTypes must be ::CU_MEM_HANDLE_TYPE_NONE. IPC is not supported.*/
@@ -5960,7 +5968,7 @@ pub struct CUDA_MEM_ALLOC_NODE_PARAMS_v2_st {
 pub type CUDA_MEM_ALLOC_NODE_PARAMS_v2 = CUDA_MEM_ALLOC_NODE_PARAMS_v2_st;
 /// Memory free node parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_MEM_FREE_NODE_PARAMS_st {
     ///< in: the pointer to free
     pub dptr: CUdeviceptr,
@@ -6004,7 +6012,7 @@ pub struct CUgraphMem_attribute_enum(pub ::core::ffi::c_uint);
 pub use self::CUgraphMem_attribute_enum as CUgraphMem_attribute;
 /// Child graph node parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_CHILD_GRAPH_NODE_PARAMS_st {
     /**< The child graph to clone into the node for node creation, or
 a handle to the graph owned by the node for node query*/
@@ -6014,7 +6022,7 @@ a handle to the graph owned by the node for node query*/
 pub type CUDA_CHILD_GRAPH_NODE_PARAMS = CUDA_CHILD_GRAPH_NODE_PARAMS_st;
 /// Event record node parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_EVENT_RECORD_NODE_PARAMS_st {
     ///< The event to record when the node executes
     pub event: CUevent,
@@ -6023,7 +6031,7 @@ pub struct CUDA_EVENT_RECORD_NODE_PARAMS_st {
 pub type CUDA_EVENT_RECORD_NODE_PARAMS = CUDA_EVENT_RECORD_NODE_PARAMS_st;
 /// Event wait node parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_EVENT_WAIT_NODE_PARAMS_st {
     ///< The event to wait on from the node
     pub event: CUevent,
@@ -6442,7 +6450,7 @@ pub struct CUdevResourceType(pub ::core::ffi::c_uint);
 /** \struct CUdevSmResource
  Data for SM-related resources*/
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUdevSmResource_st {
     ///< The amount of streaming multiprocessors available in this resource. This is an output parameter only, do not write to this field.
     pub smCount: ::core::ffi::c_uint,
@@ -6507,10 +6515,10 @@ pub type CUdevResource_v1 = CUdevResource_st;
  \p sm.smCount will reflect the amount of streaming multiprocessors available in this resource.*/
 pub type CUdevResource = CUdevResource_v1;
 #[repr(transparent)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUdeviceptr_v1(pub ::core::ffi::c_uint);
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_MEMCPY2D_v1_st {
     ///< Source X in bytes
     pub srcXInBytes: ::core::ffi::c_uint,
@@ -6547,7 +6555,7 @@ pub struct CUDA_MEMCPY2D_v1_st {
 }
 pub type CUDA_MEMCPY2D_v1 = CUDA_MEMCPY2D_v1_st;
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_MEMCPY3D_v1_st {
     ///< Source X in bytes
     pub srcXInBytes: ::core::ffi::c_uint,
@@ -6602,7 +6610,7 @@ pub struct CUDA_MEMCPY3D_v1_st {
 }
 pub type CUDA_MEMCPY3D_v1 = CUDA_MEMCPY3D_v1_st;
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_ARRAY_DESCRIPTOR_v1_st {
     ///< Width of array
     pub Width: ::core::ffi::c_uint,
@@ -6615,7 +6623,7 @@ pub struct CUDA_ARRAY_DESCRIPTOR_v1_st {
 }
 pub type CUDA_ARRAY_DESCRIPTOR_v1 = CUDA_ARRAY_DESCRIPTOR_v1_st;
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_ARRAY3D_DESCRIPTOR_v1_st {
     ///< Width of 3D array
     pub Width: ::core::ffi::c_uint,
@@ -7870,7 +7878,7 @@ impl CUerror {
     });
 }
 #[repr(transparent)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Hash, Copy, Clone, PartialEq, Eq)]
 pub struct CUerror(pub ::core::num::NonZeroU32);
 pub trait CUresultConsts {
     const SUCCESS: CUresult = CUresult::Ok(());
@@ -8088,3 +8096,15 @@ impl From<hip_runtime_sys::hipErrorCode_t> for CUerror {
         Self(error.0)
     }
 }
+unsafe impl Send for CUdeviceptr {}
+unsafe impl Sync for CUdeviceptr {}
+unsafe impl Send for CUcontext {}
+unsafe impl Sync for CUcontext {}
+unsafe impl Send for CUstream {}
+unsafe impl Sync for CUstream {}
+unsafe impl Send for CUmodule {}
+unsafe impl Sync for CUmodule {}
+unsafe impl Send for CUfunction {}
+unsafe impl Sync for CUfunction {}
+unsafe impl Send for CUlibrary {}
+unsafe impl Sync for CUlibrary {}

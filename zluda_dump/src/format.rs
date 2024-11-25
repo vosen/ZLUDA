@@ -26,28 +26,6 @@ impl CudaDisplay for cuda_types::CUuuid {
     }
 }
 
-impl CudaDisplay for cuda_types::CUdevice {
-    fn write(
-        &self,
-        _fn_name: &'static str,
-        _index: usize,
-        writer: &mut (impl std::io::Write + ?Sized),
-    ) -> std::io::Result<()> {
-        write!(writer, "{}", self.0)
-    }
-}
-
-impl CudaDisplay for cuda_types::CUdeviceptr {
-    fn write(
-        &self,
-        _fn_name: &'static str,
-        _index: usize,
-        writer: &mut (impl std::io::Write + ?Sized),
-    ) -> std::io::Result<()> {
-        write!(writer, "{:p}", self.0)
-    }
-}
-
 impl CudaDisplay for cuda_types::CUdeviceptr_v1 {
     fn write(
         &self,

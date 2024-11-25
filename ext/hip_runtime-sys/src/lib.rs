@@ -151,7 +151,7 @@ pub const hipGraphKernelNodePortProgrammatic: u32 = 1;
 #[doc = " @defgroup GlobalDefs Global enum and defines\n @{\n\n/\n/**\n hipDeviceArch_t\n"]
 #[repr(C)]
 #[repr(align(4))]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipDeviceArch_t {
     pub _bitfield_align_1: [u8; 0],
     pub _bitfield_1: __BindgenBitfieldUnit<[u8; 3usize]>,
@@ -553,7 +553,7 @@ impl hipDeviceArch_t {
     }
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipUUID_t {
     pub bytes: [::core::ffi::c_char; 16usize],
 }
@@ -561,7 +561,7 @@ pub type hipUUID = hipUUID_t;
 /** hipDeviceProp
 */
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipDeviceProp_tR0600 {
     ///< Device name.
     pub name: [::core::ffi::c_char; 256usize],
@@ -836,7 +836,7 @@ impl hipMemoryType {
 pub struct hipMemoryType(pub ::core::ffi::c_uint);
 /// Pointer attributes
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipPointerAttribute_t {
     pub type_: hipMemoryType,
     pub device: ::core::ffi::c_int,
@@ -1606,7 +1606,7 @@ impl hipGPUDirectRDMAWritesOrdering {
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipGPUDirectRDMAWritesOrdering(pub ::core::ffi::c_uint);
 #[repr(transparent)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipDeviceptr_t(pub *mut ::core::ffi::c_void);
 impl hipChannelFormatKind {
     pub const hipChannelFormatKindSigned: hipChannelFormatKind = hipChannelFormatKind(0);
@@ -1626,7 +1626,7 @@ impl hipChannelFormatKind {
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipChannelFormatKind(pub ::core::ffi::c_uint);
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipChannelFormatDesc {
     pub x: ::core::ffi::c_int,
     pub y: ::core::ffi::c_int,
@@ -1669,7 +1669,7 @@ impl hipArray_Format {
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipArray_Format(pub ::core::ffi::c_uint);
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct HIP_ARRAY_DESCRIPTOR {
     pub Width: usize,
     pub Height: usize,
@@ -1677,7 +1677,7 @@ pub struct HIP_ARRAY_DESCRIPTOR {
     pub NumChannels: ::core::ffi::c_uint,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct HIP_ARRAY3D_DESCRIPTOR {
     pub Width: usize,
     pub Height: usize,
@@ -1687,7 +1687,7 @@ pub struct HIP_ARRAY3D_DESCRIPTOR {
     pub Flags: ::core::ffi::c_uint,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hip_Memcpy2D {
     pub srcXInBytes: usize,
     pub srcY: usize,
@@ -1707,7 +1707,7 @@ pub struct hip_Memcpy2D {
     pub Height: usize,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipMipmappedArray {
     pub data: *mut ::core::ffi::c_void,
     pub desc: hipChannelFormatDesc,
@@ -2214,24 +2214,24 @@ pub union hipResourceDesc__bindgen_ty_1 {
     pub pitch2D: hipResourceDesc__bindgen_ty_1__bindgen_ty_4,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipResourceDesc__bindgen_ty_1__bindgen_ty_1 {
     pub array: hipArray_t,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipResourceDesc__bindgen_ty_1__bindgen_ty_2 {
     pub mipmap: hipMipmappedArray_t,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipResourceDesc__bindgen_ty_1__bindgen_ty_3 {
     pub devPtr: *mut ::core::ffi::c_void,
     pub desc: hipChannelFormatDesc,
     pub sizeInBytes: usize,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipResourceDesc__bindgen_ty_1__bindgen_ty_4 {
     pub devPtr: *mut ::core::ffi::c_void,
     pub desc: hipChannelFormatDesc,
@@ -2258,19 +2258,19 @@ pub union HIP_RESOURCE_DESC_st__bindgen_ty_1 {
     pub reserved: HIP_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_5,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct HIP_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_1 {
     ///< HIP array
     pub hArray: hipArray_t,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct HIP_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_2 {
     ///< HIP mipmapped array
     pub hMipmappedArray: hipMipmappedArray_t,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct HIP_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_3 {
     ///< Device pointer
     pub devPtr: hipDeviceptr_t,
@@ -2282,7 +2282,7 @@ pub struct HIP_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_3 {
     pub sizeInBytes: usize,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct HIP_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_4 {
     ///< Device pointer
     pub devPtr: hipDeviceptr_t,
@@ -2298,14 +2298,14 @@ pub struct HIP_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_4 {
     pub pitchInBytes: usize,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct HIP_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_5 {
     pub reserved: [::core::ffi::c_int; 32usize],
 }
 pub type HIP_RESOURCE_DESC = HIP_RESOURCE_DESC_st;
 /// hip resource view descriptor
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipResourceViewDesc {
     pub format: hipResourceViewFormat,
     pub width: usize,
@@ -2318,7 +2318,7 @@ pub struct hipResourceViewDesc {
 }
 /// Resource view descriptor
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct HIP_RESOURCE_VIEW_DESC_st {
     ///< Resource view format
     pub format: HIPresourceViewFormat,
@@ -2369,7 +2369,7 @@ impl hipMemcpyKind {
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipMemcpyKind(pub ::core::ffi::c_uint);
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipPitchedPtr {
     pub ptr: *mut ::core::ffi::c_void,
     pub pitch: usize,
@@ -2377,21 +2377,21 @@ pub struct hipPitchedPtr {
     pub ysize: usize,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipExtent {
     pub width: usize,
     pub height: usize,
     pub depth: usize,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipPos {
     pub x: usize,
     pub y: usize,
     pub z: usize,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipMemcpy3DParms {
     pub srcArray: hipArray_t,
     pub srcPos: hipPos,
@@ -2403,7 +2403,7 @@ pub struct hipMemcpy3DParms {
     pub kind: hipMemcpyKind,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct HIP_MEMCPY3D {
     pub srcXInBytes: usize,
     pub srcY: usize,
@@ -2739,15 +2739,17 @@ pub struct hipDeviceP2PAttr(pub ::core::ffi::c_uint);
 pub struct ihipStream_t {
     _unused: [u8; 0],
 }
-pub type hipStream_t = *mut ihipStream_t;
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct hipStream_t(pub *mut ihipStream_t);
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipIpcMemHandle_st {
     pub reserved: [::core::ffi::c_char; 64usize],
 }
 pub type hipIpcMemHandle_t = hipIpcMemHandle_st;
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipIpcEventHandle_st {
     pub reserved: [::core::ffi::c_char; 64usize],
 }
@@ -2758,14 +2760,16 @@ pub struct ihipModule_t {
     _unused: [u8; 0],
 }
 #[repr(transparent)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipModule_t(pub *mut ihipModule_t);
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ihipModuleSymbol_t {
     _unused: [u8; 0],
 }
-pub type hipFunction_t = *mut ihipModuleSymbol_t;
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct hipFunction_t(pub *mut ihipModuleSymbol_t);
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ihipMemPoolHandle_t {
@@ -2774,7 +2778,7 @@ pub struct ihipMemPoolHandle_t {
 /// HIP memory pool
 pub type hipMemPool_t = *mut ihipMemPoolHandle_t;
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipFuncAttributes {
     pub binaryVersion: ::core::ffi::c_int,
     pub cacheModeCA: ::core::ffi::c_int,
@@ -3004,7 +3008,7 @@ pub struct hipMemLocationType(pub ::core::ffi::c_uint);
 
  To specify a gpu, set type = @p hipMemLocationTypeDevice and set id = the gpu's device ID*/
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipMemLocation {
     ///< Specifies the location type, which describes the meaning of id
     pub type_: hipMemLocationType,
@@ -3030,7 +3034,7 @@ impl hipMemAccessFlags {
 pub struct hipMemAccessFlags(pub ::core::ffi::c_uint);
 /// Memory access descriptor
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipMemAccessDesc {
     ///< Location on which the accessibility has to change
     pub location: hipMemLocation,
@@ -3089,7 +3093,7 @@ impl hipMemAllocationHandleType {
 pub struct hipMemAllocationHandleType(pub ::core::ffi::c_uint);
 /// Specifies the properties of allocations made from the pool.
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipMemPoolProps {
     ///< Allocation type. Currently must be specified as @p hipMemAllocationTypePinned
     pub allocType: hipMemAllocationType,
@@ -3106,7 +3110,7 @@ pub struct hipMemPoolProps {
 }
 /// Opaque data structure for exporting a pool allocation
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipMemPoolPtrExportData {
     pub reserved: [::core::ffi::c_uchar; 64usize],
 }
@@ -3225,7 +3229,7 @@ impl hipSharedMemConfig {
 pub struct hipSharedMemConfig(pub ::core::ffi::c_uint);
 /// Struct for data in 3D
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct dim3 {
     ///< x
     pub x: u32,
@@ -3236,7 +3240,7 @@ pub struct dim3 {
 }
 /// struct hipLaunchParams_t
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipLaunchParams_t {
     ///< Device function symbol
     pub func: *mut ::core::ffi::c_void,
@@ -3255,7 +3259,7 @@ pub struct hipLaunchParams_t {
 pub type hipLaunchParams = hipLaunchParams_t;
 /// struct hipFunctionLaunchParams_t
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipFunctionLaunchParams_t {
     ///< Kernel to launch
     pub function: hipFunction_t,
@@ -3341,14 +3345,14 @@ pub union hipExternalMemoryHandleDesc_st__bindgen_ty_1 {
     pub nvSciBufObject: *const ::core::ffi::c_void,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipExternalMemoryHandleDesc_st__bindgen_ty_1__bindgen_ty_1 {
     pub handle: *mut ::core::ffi::c_void,
     pub name: *const ::core::ffi::c_void,
 }
 pub type hipExternalMemoryHandleDesc = hipExternalMemoryHandleDesc_st;
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipExternalMemoryBufferDesc_st {
     pub offset: ::core::ffi::c_ulonglong,
     pub size: ::core::ffi::c_ulonglong,
@@ -3357,7 +3361,7 @@ pub struct hipExternalMemoryBufferDesc_st {
 }
 pub type hipExternalMemoryBufferDesc = hipExternalMemoryBufferDesc_st;
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipExternalMemoryMipmappedArrayDesc_st {
     pub offset: ::core::ffi::c_ulonglong,
     pub formatDesc: hipChannelFormatDesc,
@@ -3437,7 +3441,7 @@ pub union hipExternalSemaphoreHandleDesc_st__bindgen_ty_1 {
     pub NvSciSyncObj: *const ::core::ffi::c_void,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipExternalSemaphoreHandleDesc_st__bindgen_ty_1__bindgen_ty_1 {
     pub handle: *mut ::core::ffi::c_void,
     pub name: *const ::core::ffi::c_void,
@@ -3460,7 +3464,7 @@ pub struct hipExternalSemaphoreSignalParams_st__bindgen_ty_1 {
     pub reserved: [::core::ffi::c_uint; 12usize],
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipExternalSemaphoreSignalParams_st__bindgen_ty_1__bindgen_ty_1 {
     pub value: ::core::ffi::c_ulonglong,
 }
@@ -3471,7 +3475,7 @@ pub union hipExternalSemaphoreSignalParams_st__bindgen_ty_1__bindgen_ty_2 {
     pub reserved: ::core::ffi::c_ulonglong,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipExternalSemaphoreSignalParams_st__bindgen_ty_1__bindgen_ty_3 {
     pub key: ::core::ffi::c_ulonglong,
 }
@@ -3493,7 +3497,7 @@ pub struct hipExternalSemaphoreWaitParams_st__bindgen_ty_1 {
     pub reserved: [::core::ffi::c_uint; 10usize],
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipExternalSemaphoreWaitParams_st__bindgen_ty_1__bindgen_ty_1 {
     pub value: ::core::ffi::c_ulonglong,
 }
@@ -3504,7 +3508,7 @@ pub union hipExternalSemaphoreWaitParams_st__bindgen_ty_1__bindgen_ty_2 {
     pub reserved: ::core::ffi::c_ulonglong,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipExternalSemaphoreWaitParams_st__bindgen_ty_1__bindgen_ty_3 {
     pub key: ::core::ffi::c_ulonglong,
     pub timeoutMs: ::core::ffi::c_uint,
@@ -3644,13 +3648,13 @@ pub type hipHostFn_t = ::core::option::Option<
     unsafe extern "C" fn(userData: *mut ::core::ffi::c_void),
 >;
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipHostNodeParams {
     pub fn_: hipHostFn_t,
     pub userData: *mut ::core::ffi::c_void,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipKernelNodeParams {
     pub blockDim: dim3,
     pub extra: *mut *mut ::core::ffi::c_void,
@@ -3660,7 +3664,7 @@ pub struct hipKernelNodeParams {
     pub sharedMemBytes: ::core::ffi::c_uint,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipMemsetParams {
     pub dst: *mut ::core::ffi::c_void,
     pub elementSize: ::core::ffi::c_uint,
@@ -3670,7 +3674,7 @@ pub struct hipMemsetParams {
     pub width: usize,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipMemAllocNodeParams {
     /**< Pool properties, which contain where
 < the location should reside*/
@@ -3741,7 +3745,7 @@ priority of kernel.*/
 }
 /// Memset node params
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct HIP_MEMSET_NODE_PARAMS {
     ///< Destination pointer on device
     pub dst: hipDeviceptr_t,
@@ -4021,7 +4025,7 @@ due to the nodes belonging to different contexts*/
 pub struct hipGraphInstantiateResult(pub ::core::ffi::c_uint);
 /// Graph Instantiation parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipGraphInstantiateParams {
     ///< The node which caused instantiation to fail, if any
     pub errNode_out: hipGraphNode_t,
@@ -4035,7 +4039,7 @@ If it failed, the reason why*/
 }
 /// Memory allocation properties
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipMemAllocationProp {
     ///< Memory allocation type
     pub type_: hipMemAllocationType,
@@ -4048,7 +4052,7 @@ pub struct hipMemAllocationProp {
     pub allocFlags: hipMemAllocationProp__bindgen_ty_1,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipMemAllocationProp__bindgen_ty_1 {
     ///< Compression type
     pub compressionType: ::core::ffi::c_uchar,
@@ -4059,7 +4063,7 @@ pub struct hipMemAllocationProp__bindgen_ty_1 {
 }
 /// External semaphore signal node parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipExternalSemaphoreSignalNodeParams {
     pub extSemArray: *mut hipExternalSemaphore_t,
     pub paramsArray: *const hipExternalSemaphoreSignalParams,
@@ -4067,7 +4071,7 @@ pub struct hipExternalSemaphoreSignalNodeParams {
 }
 /// External semaphore wait node parameters
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipExternalSemaphoreWaitNodeParams {
     pub extSemArray: *mut hipExternalSemaphore_t,
     pub paramsArray: *const hipExternalSemaphoreWaitParams,
@@ -4169,7 +4173,7 @@ pub union hipArrayMapInfo__bindgen_ty_2 {
     pub miptail: hipArrayMapInfo__bindgen_ty_2__bindgen_ty_2,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipArrayMapInfo__bindgen_ty_2__bindgen_ty_1 {
     ///< For mipmapped arrays must be a valid mipmap level. For arrays must be zero
     pub level: ::core::ffi::c_uint,
@@ -4189,7 +4193,7 @@ pub struct hipArrayMapInfo__bindgen_ty_2__bindgen_ty_1 {
     pub extentDepth: ::core::ffi::c_uint,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipArrayMapInfo__bindgen_ty_2__bindgen_ty_2 {
     ///< For layered arrays must be a valid layer index. Otherwise, must be zero
     pub layer: ::core::ffi::c_uint,
@@ -4205,7 +4209,7 @@ pub union hipArrayMapInfo__bindgen_ty_3 {
 }
 /// Memcpy node params
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipMemcpyNodeParams {
     ///< Must be zero.
     pub flags: ::core::ffi::c_int,
@@ -4216,7 +4220,7 @@ pub struct hipMemcpyNodeParams {
 }
 /// Child graph node params
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipChildGraphNodeParams {
     /**< Either the child graph to clone into the node, or
 < a handle to the graph possesed by the node used during query*/
@@ -4224,21 +4228,21 @@ pub struct hipChildGraphNodeParams {
 }
 /// Event record node params
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipEventWaitNodeParams {
     ///< Event to wait on
     pub event: hipEvent_t,
 }
 /// Event record node params
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipEventRecordNodeParams {
     ///< The event to be recorded when node executes
     pub event: hipEvent_t,
 }
 /// Memory free node params
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipMemFreeNodeParams {
     ///< the pointer to be freed
     pub dptr: *mut ::core::ffi::c_void,
@@ -4282,7 +4286,7 @@ impl hipGraphDependencyType {
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipGraphDependencyType(pub ::core::ffi::c_uint);
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipGraphEdgeData {
     /**< This indicates when the dependency is triggered from the upstream node on the
 < edge. The meaning is specfic to the node type. A value of 0 in all cases
@@ -12444,7 +12448,7 @@ impl hipErrorCode_t {
     });
 }
 #[repr(transparent)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Hash, Copy, Clone, PartialEq, Eq)]
 pub struct hipErrorCode_t(pub ::core::num::NonZeroU32);
 pub trait hipError_tConsts {
     const Success: hipError_t = hipError_t::Ok(());
@@ -12654,5 +12658,11 @@ pub type hipError_t = ::core::result::Result<(), hipErrorCode_t>;
 const _: fn() = || {
     let _ = std::mem::transmute::<hipError_t, u32>;
 };
+unsafe impl Send for hipDeviceptr_t {}
+unsafe impl Sync for hipDeviceptr_t {}
+unsafe impl Send for hipStream_t {}
+unsafe impl Sync for hipStream_t {}
 unsafe impl Send for hipModule_t {}
 unsafe impl Sync for hipModule_t {}
+unsafe impl Send for hipFunction_t {}
+unsafe impl Sync for hipFunction_t {}
