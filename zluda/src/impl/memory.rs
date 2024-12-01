@@ -1,7 +1,9 @@
 use hip_runtime_sys::*;
 
 pub(crate) fn alloc_v2(dptr: *mut hipDeviceptr_t, bytesize: usize) -> hipError_t {
-    unsafe { hipMalloc(dptr.cast(), bytesize) }
+    unsafe { hipMalloc(dptr.cast(), bytesize) }?;
+    // TODO: parametrize for non-Geekbench
+    unsafe { hipMemsetD8(*dptr, 0, bytesize) }
 }
 
 pub(crate) fn free_v2(dptr: hipDeviceptr_t) -> hipError_t {
@@ -22,4 +24,12 @@ pub(crate) fn copy_hto_d_v2(
     byte_count: usize,
 ) -> hipError_t {
     unsafe { hipMemcpyHtoD(dst_device, src_host.cast_mut(), byte_count) }
+}
+
+pub(crate) fn get_address_range_v2(
+    pbase: *mut hipDeviceptr_t,
+    psize: *mut usize,
+    dptr: hipDeviceptr_t,
+) -> hipError_t {
+    unsafe { hipMemGetAddressRange(pbase, psize, dptr) }
 }

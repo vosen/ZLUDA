@@ -162,7 +162,7 @@ impl<T: ZludaObject> LiveCheck<T> {
     }
 
     fn as_handle(&self) -> T::CudaHandle {
-        unsafe { mem::transmute_copy(self) }
+        unsafe { mem::transmute_copy(&self) }
     }
 
     fn wrap(data: T) -> *mut Self {

@@ -71,6 +71,7 @@ cuda_base::cuda_function_declarations!(
         cuModuleLoadData,
         cuModuleUnload,
         cuPointerGetAttribute,
+        cuMemGetAddressRange_v2,
     ],
     implemented_in_function <= [
         cuLaunchKernel,
