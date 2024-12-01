@@ -1,1 +1,0 @@
-This project exist solely as a workaround, to make sure that ZLUDA-created CUDA driver does not clash with real CUDA driver when running unit tests

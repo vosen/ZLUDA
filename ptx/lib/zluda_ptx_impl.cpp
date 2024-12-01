@@ -25,16 +25,16 @@ extern "C"
         return (uint32_t)__ockl_get_local_size(member);
     }
 
-    size_t __ockl_get_global_id(uint32_t) __device__;
+    size_t __ockl_get_group_id(uint32_t) __device__;
     uint32_t FUNC(sreg_ctaid)(uint8_t member)
     {
-        return (uint32_t)__ockl_get_global_id(member);
+        return (uint32_t)__ockl_get_group_id(member);
     }
 
-    size_t __ockl_get_global_size(uint32_t) __device__;
+    size_t __ockl_get_num_groups(uint32_t) __device__;
     uint32_t FUNC(sreg_nctaid)(uint8_t member)
     {
-        return (uint32_t)__ockl_get_global_size(member);
+        return (uint32_t)__ockl_get_num_groups(member);
     }
 
     uint32_t __ockl_bfe_u32(uint32_t, uint32_t, uint32_t) __attribute__((device));
