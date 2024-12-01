@@ -28,7 +28,7 @@
 	//"hostRequirements": { "gpu": "optional" }
 	"customizations": {
 		"vscode": {
-			"extensions": [ "mhutchie.git-graph" ],
+			"extensions": [ "mhutchie.git-graph" ]
 		}
-}
+	}
 }

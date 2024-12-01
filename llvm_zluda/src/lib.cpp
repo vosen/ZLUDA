@@ -1,7 +1,10 @@
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <llvm-c/Core.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Type.h>
 #include <llvm/IR/Instructions.h>
+#pragma GCC diagnostic pop
 
 using namespace llvm;
 
@@ -189,7 +192,8 @@ void LLVMZludaBuildFence(LLVMBuilderRef B, LLVMAtomicOrdering Ordering,
     auto builder = llvm::unwrap(B);
     LLVMContext &context = builder->getContext();
     builder->CreateFence(mapFromLLVMOrdering(Ordering),
-                         context.getOrInsertSyncScopeID(scope));
+                         context.getOrInsertSyncScopeID(scope),
+                         Name);
 }
 
 LLVM_C_EXTERN_C_END

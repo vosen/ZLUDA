@@ -9,12 +9,8 @@ members = [
     "cuda_base",
     "cuda_types",
     "detours-sys",
-    "level_zero-sys",
-    "level_zero",
-    "spirv_tools-sys",
     "zluda",
     "zluda_dump",
-    "zluda_lib",
     "zluda_inject",
     "zluda_redirect",
     "zluda_ml",
@@ -22,6 +18,7 @@ members = [
     "ptx_parser",
     "ptx_parser_macros",
     "ptx_parser_macros_impl",
+    "zluda_bindgen",
 ]
 
-default-members = ["zluda_lib", "zluda_ml", "zluda_inject", "zluda_redirect"]
+default-members = ["zluda", "zluda_ml", "zluda_inject", "zluda_redirect"]

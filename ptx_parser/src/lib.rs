@@ -284,20 +284,40 @@ fn immediate_value<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<as
     .parse_next(stream)
 }
 
-pub fn parse_module_unchecked<'input>(text: &'input str) -> Option<ast::Module<'input>> {
-    let input = lex_with_span(text).ok()?;
-    let mut errors = Vec::new();
-    let state = PtxParserState::new(text, &mut errors);
-    let parser = PtxParser {
-        state,
-        input: &input[..],
+pub fn parse_for_errors<'input>(text: &'input str) -> Vec<PtxError> {
+    let (tokens, mut errors) = lex_with_span_unchecked(text);
+    let parse_result = {
+        let state = PtxParserState::new(text, &mut errors);
+        let parser = PtxParser {
+            state,
+            input: &tokens[..],
+        };
+        module
+            .parse(parser)
+            .map_err(|err| PtxError::Parser(err.into_inner()))
     };
-    let parsing_result = module.parse(parser).ok();
-    if !errors.is_empty() {
-        None
-    } else {
-        parsing_result
+    match parse_result {
+        Ok(_) => {}
+        Err(err) => {
+            errors.push(err);
+        }
     }
+    errors
+}
+
+fn lex_with_span_unchecked<'input>(
+    text: &'input str,
+) -> (Vec<(Token<'input>, logos::Span)>, Vec<PtxError>) {
+    let lexer = Token::lexer(text);
+    let mut result = Vec::new();
+    let mut errors = Vec::new();
+    for (token, span) in lexer.spanned() {
+        match token {
+            Ok(t) => result.push((t, span)),
+            Err(err) => errors.push(PtxError::Lexer { source: err }),
+        }
+    }
+    (result, errors)
 }
 
 pub fn parse_module_checked<'input>(
@@ -340,17 +360,6 @@ pub fn parse_module_checked<'input>(
             Err(errors)
         }
     }
-}
-
-fn lex_with_span<'input>(
-    text: &'input str,
-) -> Result<Vec<(Token<'input>, logos::Span)>, TokenError> {
-    let lexer = Token::lexer(text);
-    let mut result = Vec::new();
-    for (token, span) in lexer.spanned() {
-        result.push((token?, span));
-    }
-    Ok(result)
 }
 
 fn module<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::Module<'input>> {

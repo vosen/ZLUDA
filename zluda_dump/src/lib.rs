@@ -1,22 +1,18 @@
-use cuda_types::{
-    CUdevice, CUdevice_attribute, CUfunction, CUjit_option, CUmodule, CUresult, CUuuid,
-};
+use cuda_types::*;
 use paste::paste;
 use side_by_side::CudaDynamicFns;
 use std::io;
-use std::{
-    collections::HashMap, env, error::Error, ffi::c_void, fs, path::PathBuf, ptr::NonNull, rc::Rc,
-    sync::Mutex,
-};
+use std::{collections::HashMap, env, error::Error, fs, path::PathBuf, rc::Rc, sync::Mutex};
 
 #[macro_use]
 extern crate lazy_static;
 extern crate cuda_types;
 
 macro_rules! extern_redirect {
-    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:path);*) => {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:path;)*) => {
         $(
             #[no_mangle]
+            #[allow(improper_ctypes_definitions)]
             pub extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
                 let original_fn = |dynamic_fns: &mut crate::side_by_side::CudaDynamicFns| {
                     dynamic_fns.$fn_name($( $arg_id ),*)
@@ -34,10 +30,11 @@ macro_rules! extern_redirect {
 }
 
 macro_rules! extern_redirect_with_post {
-    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:path);*) => {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:path;)*) => {
         $(
             #[no_mangle]
-            pub extern "system" fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
+            #[allow(improper_ctypes_definitions)]
+            pub extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
                 let original_fn = |dynamic_fns: &mut crate::side_by_side::CudaDynamicFns| {
                     dynamic_fns.$fn_name($( $arg_id ),*)
                 };
@@ -60,10 +57,8 @@ macro_rules! extern_redirect_with_post {
 
 use cuda_base::cuda_function_declarations;
 cuda_function_declarations!(
-    cuda_types,
     extern_redirect,
-    extern_redirect_with_post,
-    [
+    extern_redirect_with_post <= [
         cuModuleLoad,
         cuModuleLoadData,
         cuModuleLoadDataEx,
@@ -205,10 +200,10 @@ impl Settings {
             }
         };
         let libcuda_path = match env::var("ZLUDA_CUDA_LIB") {
-            Err(env::VarError::NotPresent) => os::LIBCUDA_DEFAULT_PATH.to_owned(),
+            Err(env::VarError::NotPresent) => os::LIBCUDA_DEFAULT_PATH.to_string(),
             Err(e) => {
                 logger.log(log::LogEntry::ErrorBox(Box::new(e) as _));
-                os::LIBCUDA_DEFAULT_PATH.to_owned()
+                os::LIBCUDA_DEFAULT_PATH.to_string()
             }
             Ok(env_string) => env_string,
         };
@@ -302,7 +297,7 @@ where
     // alternatively we could return a CUDA error, but I think it's fine to
     // crash. This is a diagnostic utility, if the lock was poisoned we can't
     // extract any useful trace or logging anyway
-    let mut global_state = &mut *global_state_mutex.lock().unwrap();
+    let global_state = &mut *global_state_mutex.lock().unwrap();
     let (mut logger, delayed_state) = match global_state.delayed_state {
         LateInit::Success(ref mut delayed_state) => (
             global_state.log_factory.get_logger(func, arguments_writer),
@@ -325,7 +320,7 @@ where
             logger.log(log::LogEntry::ErrorBox(
                 format!("No function {} in the underlying CUDA library", func).into(),
             ));
-            CUresult::CUDA_ERROR_UNKNOWN
+            CUresult::ERROR_UNKNOWN
         }
     };
     logger.result = maybe_cu_result;
@@ -359,7 +354,7 @@ pub(crate) fn cuModuleLoad_Post(
     state: &mut trace::StateTracker,
     result: CUresult,
 ) {
-    if result != CUresult::CUDA_SUCCESS {
+    if result.is_err() {
         return;
     }
     state.record_new_module_file(unsafe { *module }, fname, fn_logger)
@@ -373,7 +368,7 @@ pub(crate) fn cuModuleLoadData_Post(
     state: &mut trace::StateTracker,
     result: CUresult,
 ) {
-    if result != CUresult::CUDA_SUCCESS {
+    if result.is_err() {
         return;
     }
     state.record_new_module(unsafe { *module }, raw_image, fn_logger)
@@ -401,7 +396,7 @@ pub(crate) fn cuGetExportTable_Post(
     state: &mut trace::StateTracker,
     result: CUresult,
 ) {
-    if result != CUresult::CUDA_SUCCESS {
+    if result.is_err() {
         return;
     }
     dark_api::override_export_table(ppExportTable, pExportTableId, state)
@@ -451,7 +446,7 @@ pub(crate) fn cuModuleLoadFatBinary_Post(
     _state: &mut trace::StateTracker,
     result: CUresult,
 ) {
-    if result == CUresult::CUDA_SUCCESS {
+    if result.is_ok() {
         panic!()
     }
 }

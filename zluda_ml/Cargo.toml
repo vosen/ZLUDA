@@ -2,12 +2,8 @@
 name = "zluda_ml"
 version = "0.0.0"
 authors = ["Andrzej Janik <vosen@vosen.pl>"]
-edition = "2018"
+edition = "2021"
 
 [lib]
 name = "nvml"
 crate-type = ["cdylib"]
-
-[dependencies.ocl-core]
-version = "0.11"
-features = ["opencl_version_1_2", "opencl_version_2_0", "opencl_version_2_1"]
