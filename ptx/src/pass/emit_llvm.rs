@@ -96,10 +96,6 @@ impl Module {
         let memory_buffer = unsafe { LLVMWriteBitcodeToMemoryBuffer(self.get()) };
         MemoryBuffer(memory_buffer)
     }
-
-    fn write_to_stderr(&self) {
-        unsafe { LLVMDumpModule(self.get()) };
-    }
 }
 
 impl Drop for Module {
@@ -183,7 +179,6 @@ pub(super) fn run<'input>(
             Directive2::Method(method) => emit_ctx.emit_method(method)?,
         }
     }
-    module.write_to_stderr();
     if let Err(err) = module.verify() {
         panic!("{:?}", err);
     }
@@ -529,7 +524,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Shl { data, arguments } => self.emit_shl(data, arguments),
             ast::Instruction::Ret { data } => Ok(self.emit_ret(data)),
             ast::Instruction::Cvta { data, arguments } => self.emit_cvta(data, arguments),
-            ast::Instruction::Abs { .. } => todo!(),
+            ast::Instruction::Abs { data, arguments } => self.emit_abs(data, arguments),
             ast::Instruction::Mad { data, arguments } => self.emit_mad(data, arguments),
             ast::Instruction::Fma { data, arguments } => self.emit_fma(data, arguments),
             ast::Instruction::Sub { data, arguments } => self.emit_sub(data, arguments),
@@ -2146,6 +2141,30 @@ impl<'a> MethodEmitContext<'a> {
                 dst,
             )
         });
+        Ok(())
+    }
+
+    fn emit_abs(
+        &mut self,
+        data: ast::TypeFtz,
+        arguments: ptx_parser::AbsArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let llvm_type = get_scalar_type(self.context, data.type_);
+        let src = self.resolver.value(arguments.src)?;
+        let (prefix, intrinsic_arguments) = if data.type_.kind() == ast::ScalarKind::Float {
+            ("llvm.fabs", vec![(src, llvm_type)])
+        } else {
+            let pred = get_scalar_type(self.context, ast::ScalarType::Pred);
+            let zero = unsafe { LLVMConstInt(pred, 0, 0) };
+            ("llvm.abs", vec![(src, llvm_type), (zero, pred)])
+        };
+        let llvm_intrinsic = format!("{}.{}\0", prefix, LLVMTypeDisplay(data.type_));
+        self.emit_intrinsic(
+            unsafe { CStr::from_bytes_with_nul_unchecked(llvm_intrinsic.as_bytes()) },
+            Some(arguments.dst),
+            &data.type_.into(),
+            intrinsic_arguments,
+        )?;
         Ok(())
     }
 
