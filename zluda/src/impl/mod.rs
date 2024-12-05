@@ -107,6 +107,7 @@ from_cuda_nop!(
     *const ::core::ffi::c_char,
     *mut ::core::ffi::c_void,
     *mut *mut ::core::ffi::c_void,
+    u8,
     i32,
     u32,
     usize,

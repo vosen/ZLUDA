@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <hip/amd_detail/amd_device_functions.h>
 
 #define FUNC(NAME) __device__ __attribute__((retain)) __zluda_ptx_impl_##NAME
 
@@ -154,5 +155,15 @@ extern "C"
     {
         __builtin_amdgcn_fence(__ATOMIC_SEQ_CST, "workgroup");
         __builtin_amdgcn_s_barrier();
+    }
+
+    void FUNC(__assertfail)(uint64_t message,
+                            uint64_t file,
+                            uint32_t line,
+                            uint64_t function,
+                            uint64_t char_size)
+    {
+        (void)char_size;
+        __assert_fail((const char *)message, (const char *)file, line, (const char *)function);
     }
 }
