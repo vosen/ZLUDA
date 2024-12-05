@@ -241,6 +241,9 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                     .map(|v| get_input_argument_type(self.context, &v.v_type, v.state_space)),
             )?;
             fn_ = unsafe { LLVMAddFunction(self.module, name.as_ptr(), fn_type) };
+            self.emit_fn_attribute(fn_, "amdgpu-unsafe-fp-atomics", "true");
+            self.emit_fn_attribute(fn_, "uniform-work-group-size", "true");
+            self.emit_fn_attribute(fn_, "no-trapping-math", "true");
         }
         if let ast::MethodName::Func(name) = func_decl.name {
             self.resolver.register(name, fn_);
@@ -398,6 +401,19 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             ptx_parser::ScalarType::F16x2 => todo!(),
             ptx_parser::ScalarType::BF16x2 => todo!(),
         })
+    }
+
+    fn emit_fn_attribute(&self, llvm_object: LLVMValueRef, key: &str, value: &str) {
+        let attribute = unsafe {
+            LLVMCreateStringAttribute(
+                self.context,
+                key.as_ptr() as _,
+                key.len() as u32,
+                value.as_ptr() as _,
+                value.len() as u32,
+            )
+        };
+        unsafe { LLVMAddAttributeAtIndex(llvm_object, LLVMAttributeFunctionIndex, attribute) };
     }
 }
 
@@ -2012,7 +2028,7 @@ impl<'a> MethodEmitContext<'a> {
             ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { nan: true, .. }) => {
                 return Err(error_todo())
             }
-            ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { .. }) => "llvm.maxnum",
+            ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { .. }) => "llvm.minnum",
         };
         let intrinsic = format!("{}.{}\0", llvm_prefix, LLVMTypeDisplay(data.type_()));
         let llvm_type = get_scalar_type(self.context, data.type_());
@@ -2039,7 +2055,7 @@ impl<'a> MethodEmitContext<'a> {
             ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { nan: true, .. }) => {
                 return Err(error_todo())
             }
-            ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { .. }) => "llvm.minnum",
+            ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { .. }) => "llvm.maxnum",
         };
         let intrinsic = format!("{}.{}\0", llvm_prefix, LLVMTypeDisplay(data.type_()));
         let llvm_type = get_scalar_type(self.context, data.type_());
