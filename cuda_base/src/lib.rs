@@ -193,6 +193,7 @@ fn join(fn_: Vec<String>, find_module: bool) -> Punctuated<Ident, Token![::]> {
             "func" => &["function"],
             "mem" => &["memory"],
             "memcpy" => &["memory", "copy"],
+            "memset" => &["memory", "set"],
             _ => return None,
         })
     }

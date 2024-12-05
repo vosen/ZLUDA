@@ -1,5 +1,6 @@
-// Every time this file changes it must te rebuilt, you need `rocm-llvm-dev` and `llvm-17`:
-//  /opt/rocm/llvm/bin/clang -Wall -Wextra -Wsign-compare -Wconversion -x hip zluda_ptx_impl.cpp -nogpulib -O3 -mno-wavefrontsize64 -o zluda_ptx_impl.bc -emit-llvm -c --offload-device-only --offload-arch=gfx1010 && /opt/rocm/llvm/bin/llvm-dis zluda_ptx_impl.bc -o - | sed '/@llvm.used/d' | sed '/wchar_size/d' | sed '/llvm.module.flags/d' | sed 's/define hidden/define linkonce_odr/g' | sed 's/\"target-cpu\"=\"gfx1010\"//g' | sed -E 's/\"target-features\"=\"[^\"]+\"//g' | sed 's/ nneg / /g' | sed 's/ disjoint / /g' | llvm-as-17 - -o  zluda_ptx_impl.bc && /opt/rocm/llvm/bin/llvm-dis zluda_ptx_impl.bc
+// Every time this file changes it must te rebuilt, you need `rocm-llvm-dev` and `llvm-17`
+// `fdenormal-fp-math=dynamic` is required to make functions eligible for inlining
+//  /opt/rocm/llvm/bin/clang -Xclang -fdenormal-fp-math=dynamic  -Wall -Wextra -Wsign-compare -Wconversion -x hip zluda_ptx_impl.cpp -nogpulib -O3 -mno-wavefrontsize64 -o zluda_ptx_impl.bc -emit-llvm -c --offload-device-only --offload-arch=gfx1010 && /opt/rocm/llvm/bin/llvm-dis zluda_ptx_impl.bc -o - | sed '/@llvm.used/d' | sed '/wchar_size/d' | sed '/llvm.module.flags/d' | sed 's/define hidden/define linkonce_odr/g' | sed 's/\"target-cpu\"=\"gfx1010\"//g' | sed -E 's/\"target-features\"=\"[^\"]+\"//g' | sed 's/ nneg / /g' | sed 's/ disjoint / /g' | llvm-as-17 - -o  zluda_ptx_impl.bc && /opt/rocm/llvm/bin/llvm-dis zluda_ptx_impl.bc
 
 #include <cstddef>
 #include <cstdint>
@@ -37,7 +38,7 @@ extern "C"
         return (uint32_t)__ockl_get_num_groups(member);
     }
 
-    uint32_t __ockl_bfe_u32(uint32_t, uint32_t, uint32_t) __attribute__((device));
+    uint32_t __ockl_bfe_u32(uint32_t, uint32_t, uint32_t) __device__;
     uint32_t FUNC(bfe_u32)(uint32_t base, uint32_t pos_32, uint32_t len_32)
     {
         uint32_t pos = pos_32 & 0xFFU;
@@ -65,7 +66,7 @@ extern "C"
         return (base >> pos) & ((1UL << len) - 1UL);
     }
 
-    int32_t __ockl_bfe_i32(int32_t, uint32_t, uint32_t) __attribute__((device));
+    int32_t __ockl_bfe_i32(int32_t, uint32_t, uint32_t) __device__;
     int32_t FUNC(bfe_s32)(int32_t base, uint32_t pos_32, uint32_t len_32)
     {
         uint32_t pos = pos_32 & 0xFFU;
@@ -120,7 +121,7 @@ extern "C"
         return (base << (64U - pos - len)) >> (64U - len);
     }
 
-    uint32_t __ockl_bfm_u32(uint32_t count, uint32_t offset) __attribute__((device));
+    uint32_t __ockl_bfm_u32(uint32_t count, uint32_t offset) __device__;
     uint32_t FUNC(bfi_b32)(uint32_t insert, uint32_t base, uint32_t pos_32, uint32_t len_32)
     {
         uint32_t pos = pos_32 & 0xFFU;
@@ -147,5 +148,11 @@ extern "C"
         else
             mask = ((1UL << len) - 1UL) << (pos);
         return (~mask & base) | (mask & (insert << pos));
+    }
+
+    void FUNC(bar_sync)(uint32_t)
+    {
+        __builtin_amdgcn_fence(__ATOMIC_SEQ_CST, "workgroup");
+        __builtin_amdgcn_s_barrier();
     }
 }
