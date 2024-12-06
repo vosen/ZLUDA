@@ -70,6 +70,16 @@ pub(crate) fn get_attribute(
     attrib: CUdevice_attribute,
     dev_idx: hipDevice_t,
 ) -> hipError_t {
+    fn get_device_prop(
+        pi: &mut i32,
+        dev_idx: hipDevice_t,
+        f: impl FnOnce(&hipDeviceProp_tR0600) -> i32,
+    ) -> hipError_t {
+        let mut props = unsafe { mem::zeroed() };
+        unsafe { hipGetDevicePropertiesR0600(&mut props, dev_idx)? };
+        *pi = f(&props);
+        Ok(())
+    }
     match attrib {
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_WARP_SIZE => {
             *pi = 32;
@@ -79,6 +89,110 @@ pub(crate) fn get_attribute(
             *pi = 0;
             return Ok(());
         }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE2D_LAYERED_WIDTH => {
+            return get_device_prop(pi, dev_idx, |props| props.maxTexture2DLayered[0])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE2D_LAYERED_HEIGHT => {
+            return get_device_prop(pi, dev_idx, |props| props.maxTexture2DLayered[1])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE2D_LAYERED_LAYERS => {
+            return get_device_prop(pi, dev_idx, |props| props.maxTexture2DLayered[2])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE1D_LAYERED_WIDTH => {
+            return get_device_prop(pi, dev_idx, |props| props.maxTexture1DLayered[0])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE1D_LAYERED_LAYERS => {
+            return get_device_prop(pi, dev_idx, |props| props.maxTexture1DLayered[1])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_CAN_TEX2D_GATHER => {
+            return get_device_prop(pi, dev_idx, |props| {
+                (props.maxTexture2DGather[0] > 0 && props.maxTexture2DGather[1] > 0) as i32
+            })
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE2D_GATHER_WIDTH => {
+            return get_device_prop(pi, dev_idx, |props| props.maxTexture2DGather[0])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE2D_GATHER_HEIGHT => {
+            return get_device_prop(pi, dev_idx, |props| props.maxTexture2DGather[1])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE3D_WIDTH_ALTERNATE => {
+            return get_device_prop(pi, dev_idx, |props| props.maxTexture3DAlt[0])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE3D_HEIGHT_ALTERNATE => {
+            return get_device_prop(pi, dev_idx, |props| props.maxTexture3DAlt[1])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE3D_DEPTH_ALTERNATE => {
+            return get_device_prop(pi, dev_idx, |props| props.maxTexture3DAlt[2])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURECUBEMAP_WIDTH => {
+            return get_device_prop(pi, dev_idx, |props| props.maxTextureCubemap)
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURECUBEMAP_LAYERED_WIDTH => {
+            return get_device_prop(pi, dev_idx, |props| props.maxTextureCubemapLayered[0])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURECUBEMAP_LAYERED_LAYERS => {
+            return get_device_prop(pi, dev_idx, |props| props.maxTextureCubemapLayered[1])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_SURFACE1D_WIDTH => {
+            return get_device_prop(pi, dev_idx, |props| props.maxSurface1D)
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_SURFACE2D_WIDTH => {
+            return get_device_prop(pi, dev_idx, |props| props.maxSurface2D[0])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_SURFACE2D_HEIGHT => {
+            return get_device_prop(pi, dev_idx, |props| props.maxSurface2D[1])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_SURFACE3D_WIDTH => {
+            return get_device_prop(pi, dev_idx, |props| props.maxSurface3D[0])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_SURFACE3D_HEIGHT => {
+            return get_device_prop(pi, dev_idx, |props| props.maxSurface3D[1])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_SURFACE3D_DEPTH => {
+            return get_device_prop(pi, dev_idx, |props| props.maxSurface3D[2])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_SURFACE1D_LAYERED_WIDTH => {
+            return get_device_prop(pi, dev_idx, |props| props.maxSurface1DLayered[0])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_SURFACE1D_LAYERED_LAYERS => {
+            return get_device_prop(pi, dev_idx, |props| props.maxSurface1DLayered[1])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_SURFACE2D_LAYERED_WIDTH => {
+            return get_device_prop(pi, dev_idx, |props| props.maxSurface2DLayered[0])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_SURFACE2D_LAYERED_HEIGHT => {
+            return get_device_prop(pi, dev_idx, |props| props.maxSurface2DLayered[1])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_SURFACE2D_LAYERED_LAYERS => {
+            return get_device_prop(pi, dev_idx, |props| props.maxSurface2DLayered[2])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_SURFACECUBEMAP_WIDTH => {
+            return get_device_prop(pi, dev_idx, |props| props.maxSurfaceCubemap)
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_SURFACECUBEMAP_LAYERED_WIDTH => {
+            return get_device_prop(pi, dev_idx, |props| props.maxSurfaceCubemapLayered[0])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_SURFACECUBEMAP_LAYERED_LAYERS => {
+            return get_device_prop(pi, dev_idx, |props| props.maxSurfaceCubemapLayered[1])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE1D_LINEAR_WIDTH => {
+            return get_device_prop(pi, dev_idx, |props| props.maxTexture1DLinear)
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE2D_LINEAR_WIDTH => {
+            return get_device_prop(pi, dev_idx, |props| props.maxTexture2DLinear[0])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE2D_LINEAR_HEIGHT => {
+            return get_device_prop(pi, dev_idx, |props| props.maxTexture2DLinear[1])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE2D_LINEAR_PITCH => {
+            return get_device_prop(pi, dev_idx, |props| props.maxTexture2DLinear[2])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE2D_MIPMAPPED_WIDTH => {
+            return get_device_prop(pi, dev_idx, |props| props.maxTexture2DMipmap[0])
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE2D_MIPMAPPED_HEIGHT => {
+            return get_device_prop(pi, dev_idx, |props| props.maxTexture2DMipmap[1])
+        }
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR => {
             *pi = COMPUTE_CAPABILITY_MAJOR;
             return Ok(());
@@ -86,6 +200,9 @@ pub(crate) fn get_attribute(
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR => {
             *pi = COMPUTE_CAPABILITY_MINOR;
             return Ok(());
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE1D_MIPMAPPED_WIDTH => {
+            return get_device_prop(pi, dev_idx, |props| props.maxTexture1DMipmap)
         }
         _ => {}
     }
