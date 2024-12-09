@@ -1,7 +1,7 @@
 pub(crate) mod r#impl;
 
 macro_rules! unimplemented {
-    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:path;)*) => {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
         $(
             #[cfg_attr(not(test), no_mangle)]
             #[allow(improper_ctypes)]
@@ -14,7 +14,7 @@ macro_rules! unimplemented {
 }
 
 macro_rules! implemented {
-    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:path;)*) => {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
         $(
             #[cfg_attr(not(test), no_mangle)]
             #[allow(improper_ctypes)]
@@ -28,7 +28,7 @@ macro_rules! implemented {
 }
 
 macro_rules! implemented_in_function {
-    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:path;)*) => {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
         $(
             #[cfg_attr(not(test), no_mangle)]
             #[allow(improper_ctypes)]

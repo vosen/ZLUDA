@@ -9,7 +9,7 @@ extern crate lazy_static;
 extern crate cuda_types;
 
 macro_rules! extern_redirect {
-    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:path;)*) => {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
         $(
             #[no_mangle]
             #[allow(improper_ctypes_definitions)]
@@ -30,7 +30,7 @@ macro_rules! extern_redirect {
 }
 
 macro_rules! extern_redirect_with_post {
-    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:path;)*) => {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
         $(
             #[no_mangle]
             #[allow(improper_ctypes_definitions)]
