@@ -1,5 +1,5 @@
 use amd_comgr_sys::*;
-use std::{ffi::CStr, iter, mem, ptr};
+use std::{ffi::CStr, mem, ptr};
 
 struct Data(amd_comgr_data_t);
 

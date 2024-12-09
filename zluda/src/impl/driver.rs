@@ -1,4 +1,4 @@
-use cuda_types::*;
+use cuda_types::cuda::*;
 use hip_runtime_sys::*;
 use std::{
     ffi::{CStr, CString},
@@ -74,6 +74,6 @@ pub(crate) fn init(flags: ::core::ffi::c_uint) -> CUresult {
 }
 
 pub(crate) fn get_version(version: &mut ::core::ffi::c_int) -> CUresult {
-    *version = cuda_types::CUDA_VERSION as i32;
+    *version = cuda_types::cuda::CUDA_VERSION as i32;
     Ok(())
 }

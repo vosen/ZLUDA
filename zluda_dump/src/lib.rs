@@ -1,4 +1,4 @@
-use cuda_types::*;
+use cuda_types::cuda::*;
 use paste::paste;
 use side_by_side::CudaDynamicFns;
 use std::io;

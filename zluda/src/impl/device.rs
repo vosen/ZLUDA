@@ -1,4 +1,4 @@
-use cuda_types::*;
+use cuda_types::cuda::*;
 use hip_runtime_sys::*;
 use std::{mem, ptr};
 
@@ -377,7 +377,7 @@ pub(crate) fn get_name(
     name: *mut ::core::ffi::c_char,
     len: ::core::ffi::c_int,
     dev: hipDevice_t,
-) -> cuda_types::CUresult {
+) -> CUresult {
     unsafe { hipDeviceGetName(name, len, dev) }?;
     let len = len as usize;
     let buffer = unsafe { std::slice::from_raw_parts(name, len) };
@@ -404,7 +404,7 @@ pub(crate) fn total_mem_v2(bytes: *mut usize, dev: hipDevice_t) -> hipError_t {
     unsafe { hipDeviceTotalMem(bytes, dev) }
 }
 
-pub(crate) fn get_properties(prop: &mut cuda_types::CUdevprop, dev: hipDevice_t) -> hipError_t {
+pub(crate) fn get_properties(prop: &mut CUdevprop, dev: hipDevice_t) -> hipError_t {
     let mut hip_props = unsafe { mem::zeroed() };
     unsafe { hipGetDevicePropertiesR0600(&mut hip_props, dev) }?;
     prop.maxThreadsPerBlock = hip_props.maxThreadsPerBlock;
