@@ -1,5 +1,5 @@
 use crate::{dark_api, log, Settings};
-use cuda_types::CUmodule;
+use cuda_types::cuda::*;
 use std::{
     collections::HashMap,
     ffi::{c_void, CStr, CString},

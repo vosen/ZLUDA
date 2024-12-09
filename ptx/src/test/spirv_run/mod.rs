@@ -298,7 +298,7 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
     let mut result = vec![0u8.into(); output.len()];
     {
         let dev = 0;
-        let mut stream = ptr::null_mut();
+        let mut stream = unsafe { mem::zeroed() };
         unsafe { hipStreamCreate(&mut stream) }.unwrap();
         let mut dev_props = unsafe { mem::zeroed() };
         unsafe { hipGetDevicePropertiesR0600(&mut dev_props, dev) }.unwrap();
@@ -308,9 +308,9 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
             module.linked_bitcode(),
         )
         .unwrap();
-        let mut module = ptr::null_mut();
+        let mut module = unsafe { mem::zeroed() };
         unsafe { hipModuleLoadData(&mut module, elf_module.as_ptr() as _) }.unwrap();
-        let mut kernel = ptr::null_mut();
+        let mut kernel = unsafe { mem::zeroed() };
         unsafe { hipModuleGetFunction(&mut kernel, module, name.as_ptr()) }.unwrap();
         let mut inp_b = ptr::null_mut();
         unsafe { hipMalloc(&mut inp_b, input.len() * mem::size_of::<Input>()) }.unwrap();

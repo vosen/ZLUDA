@@ -1,4 +1,4 @@
-use cuda_types::CUuuid;
+use cuda_types::cuda::CUuuid;
 use std::ffi::{c_void, CStr, CString};
 use std::mem;
 

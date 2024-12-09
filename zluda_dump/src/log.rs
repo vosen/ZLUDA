@@ -1,8 +1,5 @@
 use crate::format;
-use cuda_types::CUmodule;
-use cuda_types::CUuuid;
-
-use super::CUresult;
+use cuda_types::cuda::*;
 use super::Settings;
 use std::error::Error;
 use std::ffi::c_void;

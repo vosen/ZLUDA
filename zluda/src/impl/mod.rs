@@ -1,4 +1,4 @@
-use cuda_types::*;
+use cuda_types::cuda::*;
 use hip_runtime_sys::*;
 use std::mem::{self, ManuallyDrop, MaybeUninit};
 
@@ -107,10 +107,11 @@ from_cuda_nop!(
     *const ::core::ffi::c_char,
     *mut ::core::ffi::c_void,
     *mut *mut ::core::ffi::c_void,
+    u8,
     i32,
     u32,
     usize,
-    cuda_types::CUdevprop,
+    cuda_types::cuda::CUdevprop,
     CUdevice_attribute
 );
 from_cuda_transmute!(
@@ -136,7 +137,7 @@ impl<'a> FromCuda<'a, CUlimit> for hipLimit_t {
 
 pub(crate) trait ZludaObject: Sized + Send + Sync {
     const COOKIE: usize;
-    const LIVENESS_FAIL: CUerror = cuda_types::CUerror::INVALID_VALUE;
+    const LIVENESS_FAIL: CUerror = cuda_types::cuda::CUerror::INVALID_VALUE;
 
     type CudaHandle: Sized;
 

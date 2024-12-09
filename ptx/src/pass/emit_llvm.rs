@@ -96,10 +96,6 @@ impl Module {
         let memory_buffer = unsafe { LLVMWriteBitcodeToMemoryBuffer(self.get()) };
         MemoryBuffer(memory_buffer)
     }
-
-    fn write_to_stderr(&self) {
-        unsafe { LLVMDumpModule(self.get()) };
-    }
 }
 
 impl Drop for Module {
@@ -183,7 +179,6 @@ pub(super) fn run<'input>(
             Directive2::Method(method) => emit_ctx.emit_method(method)?,
         }
     }
-    module.write_to_stderr();
     if let Err(err) = module.verify() {
         panic!("{:?}", err);
     }
@@ -246,6 +241,9 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                     .map(|v| get_input_argument_type(self.context, &v.v_type, v.state_space)),
             )?;
             fn_ = unsafe { LLVMAddFunction(self.module, name.as_ptr(), fn_type) };
+            self.emit_fn_attribute(fn_, "amdgpu-unsafe-fp-atomics", "true");
+            self.emit_fn_attribute(fn_, "uniform-work-group-size", "true");
+            self.emit_fn_attribute(fn_, "no-trapping-math", "true");
         }
         if let ast::MethodName::Func(name) = func_decl.name {
             self.resolver.register(name, fn_);
@@ -404,6 +402,19 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             ptx_parser::ScalarType::BF16x2 => todo!(),
         })
     }
+
+    fn emit_fn_attribute(&self, llvm_object: LLVMValueRef, key: &str, value: &str) {
+        let attribute = unsafe {
+            LLVMCreateStringAttribute(
+                self.context,
+                key.as_ptr() as _,
+                key.len() as u32,
+                value.as_ptr() as _,
+                value.len() as u32,
+            )
+        };
+        unsafe { LLVMAddAttributeAtIndex(llvm_object, LLVMAttributeFunctionIndex, attribute) };
+    }
 }
 
 fn get_input_argument_type(
@@ -529,7 +540,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Shl { data, arguments } => self.emit_shl(data, arguments),
             ast::Instruction::Ret { data } => Ok(self.emit_ret(data)),
             ast::Instruction::Cvta { data, arguments } => self.emit_cvta(data, arguments),
-            ast::Instruction::Abs { .. } => todo!(),
+            ast::Instruction::Abs { data, arguments } => self.emit_abs(data, arguments),
             ast::Instruction::Mad { data, arguments } => self.emit_mad(data, arguments),
             ast::Instruction::Fma { data, arguments } => self.emit_fma(data, arguments),
             ast::Instruction::Sub { data, arguments } => self.emit_sub(data, arguments),
@@ -539,7 +550,6 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Sqrt { data, arguments } => self.emit_sqrt(data, arguments),
             ast::Instruction::Rsqrt { data, arguments } => self.emit_rsqrt(data, arguments),
             ast::Instruction::Selp { data, arguments } => self.emit_selp(data, arguments),
-            ast::Instruction::Bar { .. } => todo!(),
             ast::Instruction::Atom { data, arguments } => self.emit_atom(data, arguments),
             ast::Instruction::AtomCas { data, arguments } => self.emit_atom_cas(data, arguments),
             ast::Instruction::Div { data, arguments } => self.emit_div(data, arguments),
@@ -559,6 +569,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Trap {} => todo!(),
             // replaced by a function call
             ast::Instruction::Bfe { .. }
+            | ast::Instruction::Bar { .. }
             | ast::Instruction::Bfi { .. }
             | ast::Instruction::Activemask { .. } => return Err(error_unreachable()),
         }
@@ -1570,8 +1581,12 @@ impl<'a> MethodEmitContext<'a> {
                     Some(LLVMBuildFPToUI),
                 )
             }
-            ptx_parser::CvtMode::FPFromSigned(_) => todo!(),
-            ptx_parser::CvtMode::FPFromUnsigned(_) => todo!(),
+            ptx_parser::CvtMode::FPFromSigned(_) => {
+                return self.emit_cvt_int_to_float(data.to, arguments, LLVMBuildSIToFP)
+            }
+            ptx_parser::CvtMode::FPFromUnsigned(_) => {
+                return self.emit_cvt_int_to_float(data.to, arguments, LLVMBuildUIToFP)
+            }
         };
         let src = self.resolver.value(arguments.src)?;
         self.resolver.with_result(arguments.dst, |dst| unsafe {
@@ -1723,6 +1738,25 @@ impl<'a> MethodEmitContext<'a> {
             vec![(rounded_float, get_scalar_type(self.context, from))],
         )?;
         */
+        Ok(())
+    }
+
+    fn emit_cvt_int_to_float(
+        &mut self,
+        to: ptx_parser::ScalarType,
+        arguments: ptx_parser::CvtArgs<SpirvWord>,
+        llvm_func: unsafe extern "C" fn(
+            arg1: LLVMBuilderRef,
+            Val: LLVMValueRef,
+            DestTy: LLVMTypeRef,
+            Name: *const i8,
+        ) -> LLVMValueRef,
+    ) -> Result<(), TranslateError> {
+        let type_ = get_scalar_type(self.context, to);
+        let src = self.resolver.value(arguments.src)?;
+        self.resolver.with_result(arguments.dst, |dst| unsafe {
+            llvm_func(self.builder, src, type_, dst)
+        });
         Ok(())
     }
 
@@ -1994,7 +2028,7 @@ impl<'a> MethodEmitContext<'a> {
             ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { nan: true, .. }) => {
                 return Err(error_todo())
             }
-            ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { .. }) => "llvm.maxnum",
+            ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { .. }) => "llvm.minnum",
         };
         let intrinsic = format!("{}.{}\0", llvm_prefix, LLVMTypeDisplay(data.type_()));
         let llvm_type = get_scalar_type(self.context, data.type_());
@@ -2021,7 +2055,7 @@ impl<'a> MethodEmitContext<'a> {
             ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { nan: true, .. }) => {
                 return Err(error_todo())
             }
-            ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { .. }) => "llvm.minnum",
+            ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { .. }) => "llvm.maxnum",
         };
         let intrinsic = format!("{}.{}\0", llvm_prefix, LLVMTypeDisplay(data.type_()));
         let llvm_type = get_scalar_type(self.context, data.type_());
@@ -2146,6 +2180,30 @@ impl<'a> MethodEmitContext<'a> {
                 dst,
             )
         });
+        Ok(())
+    }
+
+    fn emit_abs(
+        &mut self,
+        data: ast::TypeFtz,
+        arguments: ptx_parser::AbsArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let llvm_type = get_scalar_type(self.context, data.type_);
+        let src = self.resolver.value(arguments.src)?;
+        let (prefix, intrinsic_arguments) = if data.type_.kind() == ast::ScalarKind::Float {
+            ("llvm.fabs", vec![(src, llvm_type)])
+        } else {
+            let pred = get_scalar_type(self.context, ast::ScalarType::Pred);
+            let zero = unsafe { LLVMConstInt(pred, 0, 0) };
+            ("llvm.abs", vec![(src, llvm_type), (zero, pred)])
+        };
+        let llvm_intrinsic = format!("{}.{}\0", prefix, LLVMTypeDisplay(data.type_));
+        self.emit_intrinsic(
+            unsafe { CStr::from_bytes_with_nul_unchecked(llvm_intrinsic.as_bytes()) },
+            Some(arguments.dst),
+            &data.type_.into(),
+            intrinsic_arguments,
+        )?;
         Ok(())
     }
 
