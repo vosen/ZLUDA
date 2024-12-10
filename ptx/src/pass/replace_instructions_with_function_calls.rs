@@ -104,6 +104,9 @@ fn run_instruction<'input>(
             let name = ["bfi_", scalar_to_ptx_name(data)].concat();
             to_call(resolver, fn_declarations, name.into(), i)?
         }
+        i @ ptx_parser::Instruction::Bar { .. } => {
+            to_call(resolver, fn_declarations, "bar_sync".into(), i)?
+        }
         i => i,
     })
 }

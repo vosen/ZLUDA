@@ -22,6 +22,7 @@ mod normalize_identifiers2;
 mod normalize_predicates2;
 mod replace_instructions_with_function_calls;
 mod resolve_function_pointers;
+mod replace_known_functions;
 
 static ZLUDA_PTX_IMPL: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.bc");
 const ZLUDA_PTX_PREFIX: &'static str = "__zluda_ptx_impl_";
@@ -42,9 +43,10 @@ pub fn to_llvm_module<'input>(ast: ast::Module<'input>) -> Result<Module, Transl
     let mut scoped_resolver = ScopedResolver::new(&mut flat_resolver);
     let sreg_map = SpecialRegistersMap2::new(&mut scoped_resolver)?;
     let directives = normalize_identifiers2::run(&mut scoped_resolver, ast.directives)?;
+    let directives = replace_known_functions::run(&flat_resolver, directives);
     let directives = normalize_predicates2::run(&mut flat_resolver, directives)?;
     let directives = resolve_function_pointers::run(directives)?;
-    let directives = fix_special_registers2::run(&mut flat_resolver, &sreg_map, directives)?;
+    let directives: Vec<Directive2<'_, ptx_parser::Instruction<ptx_parser::ParsedOperand<SpirvWord>>, ptx_parser::ParsedOperand<SpirvWord>>> = fix_special_registers2::run(&mut flat_resolver, &sreg_map, directives)?;
     let directives = expand_operands::run(&mut flat_resolver, directives)?;
     let directives = deparamize_functions::run(&mut flat_resolver, directives)?;
     let directives = insert_explicit_load_store::run(&mut flat_resolver, directives)?;

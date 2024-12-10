@@ -1,4 +1,4 @@
-use cuda_types::*;
+use cuda_types::cuda::*;
 use hip_runtime_sys::*;
 use std::{ffi::c_void, ptr};
 
