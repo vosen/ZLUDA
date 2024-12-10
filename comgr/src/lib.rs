@@ -1,5 +1,5 @@
 use amd_comgr_sys::*;
-use std::{ffi::CStr, iter, mem, ptr};
+use std::{ffi::CStr, mem, ptr};
 
 struct Data(amd_comgr_data_t);
 
@@ -137,7 +137,8 @@ pub fn compile_bitcode(
     link_with_device_libs_info.set_isa_name(gcn_arch)?;
     link_with_device_libs_info.set_language(amd_comgr_language_t::AMD_COMGR_LANGUAGE_LLVM_IR)?;
     // This makes no sense, but it makes ockl linking work
-    link_with_device_libs_info.set_options([c"-Xclang", c"-mno-link-builtin-bitcode-postopt"].into_iter())?;
+    link_with_device_libs_info
+        .set_options([c"-Xclang", c"-mno-link-builtin-bitcode-postopt"].into_iter())?;
     let with_device_libs = do_action(
         &linked_data_set,
         &link_with_device_libs_info,
@@ -145,7 +146,20 @@ pub fn compile_bitcode(
     )?;
     let compile_action_info = ActionInfo::new()?;
     compile_action_info.set_isa_name(gcn_arch)?;
-    compile_action_info.set_options(iter::once(c"-O3"))?;
+    let common_options = [c"-O3", c"-mno-wavefrontsize64", c"-mcumode"].into_iter();
+    let opt_options = if cfg!(debug_assertions) {
+        [c"-g", c"", c"", c"", c""]
+    } else {
+        [
+            c"-g0",
+            // default inlining threshold times 10
+            c"-mllvm",
+            c"-inline-threshold=2250",
+            c"-mllvm",
+            c"-inlinehint-threshold=3250",
+        ]
+    };
+    compile_action_info.set_options(common_options.chain(opt_options))?;
     let reloc_data_set = do_action(
         &with_device_libs,
         &compile_action_info,

@@ -20,9 +20,9 @@ extern "system" {
  ::CUresult,
  ::cudaGetErrorString*/
     fn cuGetErrorString(
-        error: cuda_types::CUresult,
+        error: cuda_types::cuda::CUresult,
         pStr: *mut *const ::core::ffi::c_char,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Gets the string representation of an error code enum name
 
  Sets \p *pStr to the address of a NULL-terminated string representation
@@ -41,9 +41,9 @@ extern "system" {
  ::CUresult,
  ::cudaGetErrorName*/
     fn cuGetErrorName(
-        error: cuda_types::CUresult,
+        error: cuda_types::cuda::CUresult,
         pStr: *mut *const ::core::ffi::c_char,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Initialize the CUDA driver API
  Initializes the driver API and must be called before any other function from
  the driver API in the current process. Currently, the \p Flags parameter must be 0. If ::cuInit()
@@ -59,7 +59,7 @@ extern "system" {
  ::CUDA_ERROR_SYSTEM_DRIVER_MISMATCH,
  ::CUDA_ERROR_COMPAT_NOT_SUPPORTED_ON_DEVICE
  \notefnerr*/
-    fn cuInit(Flags: ::core::ffi::c_uint) -> cuda_types::CUresult;
+    fn cuInit(Flags: ::core::ffi::c_uint) -> cuda_types::cuda::CUresult;
     /** \brief Returns the latest CUDA version supported by driver
 
  Returns in \p *driverVersion the version of CUDA supported by
@@ -82,7 +82,7 @@ extern "system" {
  ::cudaRuntimeGetVersion*/
     fn cuDriverGetVersion(
         driverVersion: *mut ::core::ffi::c_int,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a handle to a compute device
 
  Returns in \p *device a device handle given an ordinal in the range <b>[0,
@@ -109,9 +109,9 @@ extern "system" {
  ::cuDeviceTotalMem,
  ::cuDeviceGetExecAffinitySupport*/
     fn cuDeviceGet(
-        device: *mut cuda_types::CUdevice,
+        device: *mut cuda_types::cuda::CUdevice,
         ordinal: ::core::ffi::c_int,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns the number of compute-capable devices
 
  Returns in \p *count the number of devices with compute capability greater
@@ -137,7 +137,7 @@ extern "system" {
  ::cuDeviceTotalMem,
  ::cuDeviceGetExecAffinitySupport,
  ::cudaGetDeviceCount*/
-    fn cuDeviceGetCount(count: *mut ::core::ffi::c_int) -> cuda_types::CUresult;
+    fn cuDeviceGetCount(count: *mut ::core::ffi::c_int) -> cuda_types::cuda::CUresult;
     /** \brief Returns an identifier string for the device
 
  Returns an ASCII string identifying the device \p dev in the NULL-terminated
@@ -169,8 +169,8 @@ extern "system" {
     fn cuDeviceGetName(
         name: *mut ::core::ffi::c_char,
         len: ::core::ffi::c_int,
-        dev: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Return an UUID for the device
 
  Note there is a later version of this API, ::cuDeviceGetUuid_v2. It will
@@ -201,9 +201,9 @@ extern "system" {
  ::cuDeviceGetExecAffinitySupport,
  ::cudaGetDeviceProperties*/
     fn cuDeviceGetUuid(
-        uuid: *mut cuda_types::CUuuid,
-        dev: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        uuid: *mut cuda_types::cuda::CUuuid,
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Return an UUID for the device (11.4+)
 
  Returns 16-octets identifying the device \p dev in the structure
@@ -230,9 +230,9 @@ extern "system" {
  ::cuDeviceTotalMem,
  ::cudaGetDeviceProperties*/
     fn cuDeviceGetUuid_v2(
-        uuid: *mut cuda_types::CUuuid,
-        dev: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        uuid: *mut cuda_types::cuda::CUuuid,
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Return an LUID and device node mask for the device
 
  Return identifying information (\p luid and \p deviceNodeMask) to allow
@@ -261,8 +261,8 @@ extern "system" {
     fn cuDeviceGetLuid(
         luid: *mut ::core::ffi::c_char,
         deviceNodeMask: *mut ::core::ffi::c_uint,
-        dev: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns the total amount of memory on the device
 
  Returns in \p *bytes the total amount of memory available on the device
@@ -290,8 +290,8 @@ extern "system" {
  ::cudaMemGetInfo*/
     fn cuDeviceTotalMem_v2(
         bytes: *mut usize,
-        dev: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns the maximum number of elements allocatable in a 1D linear texture for a given texture element size.
 
  Returns in \p maxWidthInElements the maximum number of texture elements allocatable in a 1D linear texture
@@ -321,10 +321,10 @@ extern "system" {
  ::cuDeviceTotalMem*/
     fn cuDeviceGetTexture1DLinearMaxWidth(
         maxWidthInElements: *mut usize,
-        format: cuda_types::CUarray_format,
+        format: cuda_types::cuda::CUarray_format,
         numChannels: ::core::ffi::c_uint,
-        dev: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns information about the device
 
  Returns in \p *pi the integer value of the attribute \p attrib on device
@@ -546,9 +546,9 @@ extern "system" {
  ::cudaGetDeviceProperties*/
     fn cuDeviceGetAttribute(
         pi: *mut ::core::ffi::c_int,
-        attrib: cuda_types::CUdevice_attribute,
-        dev: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        attrib: cuda_types::cuda::CUdevice_attribute,
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Return NvSciSync attributes that this device can support.
 
  Returns in \p nvSciSyncAttrList, the properties of NvSciSync that
@@ -610,9 +610,9 @@ extern "system" {
  ::cuWaitExternalSemaphoresAsync*/
     fn cuDeviceGetNvSciSyncAttributes(
         nvSciSyncAttrList: *mut ::core::ffi::c_void,
-        dev: cuda_types::CUdevice,
+        dev: cuda_types::cuda::CUdevice,
         flags: ::core::ffi::c_int,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the current memory pool of a device
 
  The memory pool must be local to the specified device.
@@ -628,9 +628,9 @@ extern "system" {
 
  \sa ::cuDeviceGetDefaultMemPool, ::cuDeviceGetMemPool, ::cuMemPoolCreate, ::cuMemPoolDestroy, ::cuMemAllocFromPoolAsync*/
     fn cuDeviceSetMemPool(
-        dev: cuda_types::CUdevice,
-        pool: cuda_types::CUmemoryPool,
-    ) -> cuda_types::CUresult;
+        dev: cuda_types::cuda::CUdevice,
+        pool: cuda_types::cuda::CUmemoryPool,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Gets the current mempool for a device
 
  Returns the last pool provided to ::cuDeviceSetMemPool for this device
@@ -644,9 +644,9 @@ extern "system" {
 
  \sa ::cuDeviceGetDefaultMemPool, ::cuMemPoolCreate, ::cuDeviceSetMemPool*/
     fn cuDeviceGetMemPool(
-        pool: *mut cuda_types::CUmemoryPool,
-        dev: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        pool: *mut cuda_types::cuda::CUmemoryPool,
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns the default mempool of a device
 
  The default mempool of a device contains device memory from that device.
@@ -662,9 +662,9 @@ extern "system" {
 
  \sa ::cuMemAllocAsync, ::cuMemPoolTrimTo, ::cuMemPoolGetAttribute, ::cuMemPoolSetAttribute, cuMemPoolSetAccess, ::cuDeviceGetMemPool, ::cuMemPoolCreate*/
     fn cuDeviceGetDefaultMemPool(
-        pool_out: *mut cuda_types::CUmemoryPool,
-        dev: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        pool_out: *mut cuda_types::cuda::CUmemoryPool,
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns information about the execution affinity support of the device.
 
  Returns in \p *pi whether execution affinity type \p type is supported by device \p dev.
@@ -694,9 +694,9 @@ extern "system" {
  ::cuDeviceTotalMem*/
     fn cuDeviceGetExecAffinitySupport(
         pi: *mut ::core::ffi::c_int,
-        type_: cuda_types::CUexecAffinityType,
-        dev: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        type_: cuda_types::cuda::CUexecAffinityType,
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Blocks until remote writes are visible to the specified scope
 
  Blocks until GPUDirect RDMA writes to the target context via mappings
@@ -725,9 +725,9 @@ extern "system" {
  \notefnerr
 */
     fn cuFlushGPUDirectRDMAWrites(
-        target: cuda_types::CUflushGPUDirectRDMAWritesTarget,
-        scope: cuda_types::CUflushGPUDirectRDMAWritesScope,
-    ) -> cuda_types::CUresult;
+        target: cuda_types::cuda::CUflushGPUDirectRDMAWritesTarget,
+        scope: cuda_types::cuda::CUflushGPUDirectRDMAWritesScope,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns properties for a selected device
 
  \deprecated
@@ -789,9 +789,9 @@ int textureAlign
  ::cuDeviceGet,
  ::cuDeviceTotalMem*/
     fn cuDeviceGetProperties(
-        prop: *mut cuda_types::CUdevprop,
-        dev: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        prop: *mut cuda_types::cuda::CUdevprop,
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns the compute capability of the device
 
  \deprecated
@@ -825,8 +825,8 @@ int textureAlign
     fn cuDeviceComputeCapability(
         major: *mut ::core::ffi::c_int,
         minor: *mut ::core::ffi::c_int,
-        dev: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Retain the primary context on the GPU
 
  Retains the primary context on the device.
@@ -874,9 +874,9 @@ int textureAlign
  ::cuCtxSetLimit,
  ::cuCtxSynchronize*/
     fn cuDevicePrimaryCtxRetain(
-        pctx: *mut cuda_types::CUcontext,
-        dev: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        pctx: *mut cuda_types::cuda::CUcontext,
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Release the primary context on the GPU
 
  Releases the primary context interop on the device.
@@ -914,7 +914,9 @@ int textureAlign
  ::cuCtxSetCacheConfig,
  ::cuCtxSetLimit,
  ::cuCtxSynchronize*/
-    fn cuDevicePrimaryCtxRelease_v2(dev: cuda_types::CUdevice) -> cuda_types::CUresult;
+    fn cuDevicePrimaryCtxRelease_v2(
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Set flags for the primary context
 
  Sets the flags for the primary context on the device overwriting perviously
@@ -1008,9 +1010,9 @@ int textureAlign
  ::cuCtxSetFlags,
  ::cudaSetDeviceFlags*/
     fn cuDevicePrimaryCtxSetFlags_v2(
-        dev: cuda_types::CUdevice,
+        dev: cuda_types::cuda::CUdevice,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Get the state of the primary context
 
  Returns in \p *flags the flags for the primary context of \p dev, and in
@@ -1035,10 +1037,10 @@ int textureAlign
  ::cuCtxSetFlags,
  ::cudaGetDeviceFlags*/
     fn cuDevicePrimaryCtxGetState(
-        dev: cuda_types::CUdevice,
+        dev: cuda_types::cuda::CUdevice,
         flags: *mut ::core::ffi::c_uint,
         active: *mut ::core::ffi::c_int,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Destroy all allocations and reset all state on the primary context
 
  Explicitly destroys and cleans up all resources associated with the current
@@ -1075,7 +1077,9 @@ int textureAlign
  ::cuCtxSetLimit,
  ::cuCtxSynchronize,
  ::cudaDeviceReset*/
-    fn cuDevicePrimaryCtxReset_v2(dev: cuda_types::CUdevice) -> cuda_types::CUresult;
+    fn cuDevicePrimaryCtxReset_v2(
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Create a CUDA context
 
  \note In most cases it is recommended to use ::cuDevicePrimaryCtxRetain.
@@ -1201,10 +1205,10 @@ int textureAlign
  ::cuCoredumpSetAttribute,
  ::cuCtxSynchronize*/
     fn cuCtxCreate_v2(
-        pctx: *mut cuda_types::CUcontext,
+        pctx: *mut cuda_types::cuda::CUcontext,
         flags: ::core::ffi::c_uint,
-        dev: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Create a CUDA context with execution affinity
 
  Creates a new CUDA context with execution affinity and associates it with
@@ -1338,12 +1342,12 @@ int textureAlign
  ::cuCoredumpSetAttribute,
  ::CUexecAffinityParam*/
     fn cuCtxCreate_v3(
-        pctx: *mut cuda_types::CUcontext,
-        paramsArray: *mut cuda_types::CUexecAffinityParam,
+        pctx: *mut cuda_types::cuda::CUcontext,
+        paramsArray: *mut cuda_types::cuda::CUexecAffinityParam,
         numParams: ::core::ffi::c_int,
         flags: ::core::ffi::c_uint,
-        dev: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Destroy a CUDA context
 
  Destroys the CUDA context specified by \p ctx.  The context \p ctx will be
@@ -1385,7 +1389,7 @@ int textureAlign
  ::cuCtxSetCacheConfig,
  ::cuCtxSetLimit,
  ::cuCtxSynchronize*/
-    fn cuCtxDestroy_v2(ctx: cuda_types::CUcontext) -> cuda_types::CUresult;
+    fn cuCtxDestroy_v2(ctx: cuda_types::cuda::CUcontext) -> cuda_types::cuda::CUresult;
     /** \brief Pushes a context on the current CPU thread
 
  Pushes the given context \p ctx onto the CPU thread's stack of current
@@ -1416,7 +1420,9 @@ int textureAlign
  ::cuCtxSetCacheConfig,
  ::cuCtxSetLimit,
  ::cuCtxSynchronize*/
-    fn cuCtxPushCurrent_v2(ctx: cuda_types::CUcontext) -> cuda_types::CUresult;
+    fn cuCtxPushCurrent_v2(
+        ctx: cuda_types::cuda::CUcontext,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Pops the current CUDA context from the current CPU thread.
 
  Pops the current CUDA context from the CPU thread and passes back the
@@ -1447,7 +1453,9 @@ int textureAlign
  ::cuCtxSetCacheConfig,
  ::cuCtxSetLimit,
  ::cuCtxSynchronize*/
-    fn cuCtxPopCurrent_v2(pctx: *mut cuda_types::CUcontext) -> cuda_types::CUresult;
+    fn cuCtxPopCurrent_v2(
+        pctx: *mut cuda_types::cuda::CUcontext,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Binds the specified CUDA context to the calling CPU thread
 
  Binds the specified CUDA context to the calling CPU thread.
@@ -1474,7 +1482,7 @@ int textureAlign
  ::cuCtxCreate,
  ::cuCtxDestroy,
  ::cudaSetDevice*/
-    fn cuCtxSetCurrent(ctx: cuda_types::CUcontext) -> cuda_types::CUresult;
+    fn cuCtxSetCurrent(ctx: cuda_types::cuda::CUcontext) -> cuda_types::cuda::CUresult;
     /** \brief Returns the CUDA context bound to the calling CPU thread.
 
  Returns in \p *pctx the CUDA context bound to the calling CPU thread.
@@ -1494,7 +1502,9 @@ int textureAlign
  ::cuCtxCreate,
  ::cuCtxDestroy,
  ::cudaGetDevice*/
-    fn cuCtxGetCurrent(pctx: *mut cuda_types::CUcontext) -> cuda_types::CUresult;
+    fn cuCtxGetCurrent(
+        pctx: *mut cuda_types::cuda::CUcontext,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns the device ID for the current context
 
  Returns in \p *device the ordinal of the current context's device.
@@ -1521,7 +1531,9 @@ int textureAlign
  ::cuCtxSetLimit,
  ::cuCtxSynchronize,
  ::cudaGetDevice*/
-    fn cuCtxGetDevice(device: *mut cuda_types::CUdevice) -> cuda_types::CUresult;
+    fn cuCtxGetDevice(
+        device: *mut cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns the flags for the current context
 
  Returns in \p *flags the flags of the current context. See ::cuCtxCreate
@@ -1547,7 +1559,7 @@ int textureAlign
  ::cuCtxGetStreamPriorityRange,
  ::cuCtxSetFlags,
  ::cudaGetDeviceFlags*/
-    fn cuCtxGetFlags(flags: *mut ::core::ffi::c_uint) -> cuda_types::CUresult;
+    fn cuCtxGetFlags(flags: *mut ::core::ffi::c_uint) -> cuda_types::cuda::CUresult;
     /** \brief Sets the flags for the current context
 
  Sets the flags for the current context overwriting previously set ones. See
@@ -1574,7 +1586,7 @@ int textureAlign
  ::cuCtxGetFlags,
  ::cudaGetDeviceFlags,
  ::cuDevicePrimaryCtxSetFlags,*/
-    fn cuCtxSetFlags(flags: ::core::ffi::c_uint) -> cuda_types::CUresult;
+    fn cuCtxSetFlags(flags: ::core::ffi::c_uint) -> cuda_types::cuda::CUresult;
     /** \brief Returns the unique Id associated with the context supplied
 
  Returns in \p ctxId the unique Id which is associated with a given context.
@@ -1603,9 +1615,9 @@ int textureAlign
  ::cuCtxGetLimit,
  ::cuCtxPushCurrent*/
     fn cuCtxGetId(
-        ctx: cuda_types::CUcontext,
+        ctx: cuda_types::cuda::CUcontext,
         ctxId: *mut ::core::ffi::c_ulonglong,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Block for a context's tasks to complete
 
  Blocks until the device has completed all preceding requested tasks.
@@ -1632,7 +1644,7 @@ int textureAlign
  ::cuCtxSetCacheConfig,
  ::cuCtxSetLimit,
  ::cudaDeviceSynchronize*/
-    fn cuCtxSynchronize() -> cuda_types::CUresult;
+    fn cuCtxSynchronize() -> cuda_types::cuda::CUresult;
     /** \brief Set resource limits
 
  Setting \p limit to \p value is a request by the application to update
@@ -1728,7 +1740,10 @@ int textureAlign
  ::cuCtxSetCacheConfig,
  ::cuCtxSynchronize,
  ::cudaDeviceSetLimit*/
-    fn cuCtxSetLimit(limit: cuda_types::CUlimit, value: usize) -> cuda_types::CUresult;
+    fn cuCtxSetLimit(
+        limit: cuda_types::cuda::CUlimit,
+        value: usize,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns resource limits
 
  Returns in \p *pvalue the current size of \p limit.  The supported
@@ -1769,8 +1784,8 @@ int textureAlign
  ::cudaDeviceGetLimit*/
     fn cuCtxGetLimit(
         pvalue: *mut usize,
-        limit: cuda_types::CUlimit,
-    ) -> cuda_types::CUresult;
+        limit: cuda_types::cuda::CUlimit,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns the preferred cache configuration for the current context.
 
  On devices where the L1 cache and shared memory use the same hardware
@@ -1812,8 +1827,8 @@ int textureAlign
  ::cuFuncSetCacheConfig,
  ::cudaDeviceGetCacheConfig*/
     fn cuCtxGetCacheConfig(
-        pconfig: *mut cuda_types::CUfunc_cache,
-    ) -> cuda_types::CUresult;
+        pconfig: *mut cuda_types::cuda::CUfunc_cache,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the preferred cache configuration for the current context.
 
  On devices where the L1 cache and shared memory use the same hardware
@@ -1862,7 +1877,9 @@ int textureAlign
  ::cuFuncSetCacheConfig,
  ::cudaDeviceSetCacheConfig,
  ::cuKernelSetCacheConfig*/
-    fn cuCtxSetCacheConfig(config: cuda_types::CUfunc_cache) -> cuda_types::CUresult;
+    fn cuCtxSetCacheConfig(
+        config: cuda_types::cuda::CUfunc_cache,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Gets the context's API version.
 
  Returns a version number in \p version corresponding to the capabilities of
@@ -1898,9 +1915,9 @@ int textureAlign
  ::cuCtxSetLimit,
  ::cuCtxSynchronize*/
     fn cuCtxGetApiVersion(
-        ctx: cuda_types::CUcontext,
+        ctx: cuda_types::cuda::CUcontext,
         version: *mut ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns numerical values that correspond to the least and
  greatest stream priorities.
 
@@ -1940,7 +1957,7 @@ int textureAlign
     fn cuCtxGetStreamPriorityRange(
         leastPriority: *mut ::core::ffi::c_int,
         greatestPriority: *mut ::core::ffi::c_int,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Resets all persisting lines in cache to normal status.
 
  ::cuCtxResetPersistingL2Cache Resets all persisting lines in cache to normal
@@ -1953,7 +1970,7 @@ int textureAlign
 
  \sa
  ::CUaccessPolicyWindow*/
-    fn cuCtxResetPersistingL2Cache() -> cuda_types::CUresult;
+    fn cuCtxResetPersistingL2Cache() -> cuda_types::cuda::CUresult;
     /** \brief Returns the execution affinity setting for the current context.
 
  Returns in \p *pExecAffinity the current value of \p type. The supported
@@ -1975,9 +1992,9 @@ int textureAlign
  \sa
  ::CUexecAffinityParam*/
     fn cuCtxGetExecAffinity(
-        pExecAffinity: *mut cuda_types::CUexecAffinityParam,
-        type_: cuda_types::CUexecAffinityType,
-    ) -> cuda_types::CUresult;
+        pExecAffinity: *mut cuda_types::cuda::CUexecAffinityParam,
+        type_: cuda_types::cuda::CUexecAffinityType,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Increment a context's usage-count
 
  \deprecated
@@ -2016,9 +2033,9 @@ int textureAlign
  ::cuCtxSetLimit,
  ::cuCtxSynchronize*/
     fn cuCtxAttach(
-        pctx: *mut cuda_types::CUcontext,
+        pctx: *mut cuda_types::cuda::CUcontext,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Decrement a context's usage-count
 
  \deprecated
@@ -2051,7 +2068,7 @@ int textureAlign
  ::cuCtxSetCacheConfig,
  ::cuCtxSetLimit,
  ::cuCtxSynchronize*/
-    fn cuCtxDetach(ctx: cuda_types::CUcontext) -> cuda_types::CUresult;
+    fn cuCtxDetach(ctx: cuda_types::cuda::CUcontext) -> cuda_types::cuda::CUresult;
     /** \brief Returns the current shared memory configuration for the current context.
 
  \deprecated
@@ -2093,8 +2110,8 @@ int textureAlign
  ::cuFuncSetCacheConfig,
  ::cudaDeviceGetSharedMemConfig*/
     fn cuCtxGetSharedMemConfig(
-        pConfig: *mut cuda_types::CUsharedconfig,
-    ) -> cuda_types::CUresult;
+        pConfig: *mut cuda_types::cuda::CUsharedconfig,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the shared memory configuration for the current context.
 
  \deprecated
@@ -2147,8 +2164,8 @@ int textureAlign
  ::cuFuncSetCacheConfig,
  ::cudaDeviceSetSharedMemConfig*/
     fn cuCtxSetSharedMemConfig(
-        config: cuda_types::CUsharedconfig,
-    ) -> cuda_types::CUresult;
+        config: cuda_types::cuda::CUsharedconfig,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Loads a compute module
 
  Takes a filename \p fname and loads the corresponding module \p module into
@@ -2187,9 +2204,9 @@ int textureAlign
  ::cuModuleLoadFatBinary,
  ::cuModuleUnload*/
     fn cuModuleLoad(
-        module: *mut cuda_types::CUmodule,
+        module: *mut cuda_types::cuda::CUmodule,
         fname: *const ::core::ffi::c_char,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Load a module's data
 
  Takes a pointer \p image and loads the corresponding module \p module into
@@ -2223,9 +2240,9 @@ int textureAlign
  ::cuModuleLoadFatBinary,
  ::cuModuleUnload*/
     fn cuModuleLoadData(
-        module: *mut cuda_types::CUmodule,
+        module: *mut cuda_types::cuda::CUmodule,
         image: *const ::core::ffi::c_void,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Load a module's data with options
 
  Takes a pointer \p image and loads the corresponding module \p module into
@@ -2262,12 +2279,12 @@ int textureAlign
  ::cuModuleLoadFatBinary,
  ::cuModuleUnload*/
     fn cuModuleLoadDataEx(
-        module: *mut cuda_types::CUmodule,
+        module: *mut cuda_types::cuda::CUmodule,
         image: *const ::core::ffi::c_void,
         numOptions: ::core::ffi::c_uint,
-        options: *mut cuda_types::CUjit_option,
+        options: *mut cuda_types::cuda::CUjit_option,
         optionValues: *mut *mut ::core::ffi::c_void,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Load a module's data
 
  Takes a pointer \p fatCubin and loads the corresponding module \p module
@@ -2308,9 +2325,9 @@ int textureAlign
  ::cuModuleLoadDataEx,
  ::cuModuleUnload*/
     fn cuModuleLoadFatBinary(
-        module: *mut cuda_types::CUmodule,
+        module: *mut cuda_types::cuda::CUmodule,
         fatCubin: *const ::core::ffi::c_void,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Unloads a module
 
  Unloads a module \p hmod from the current context. Attempting to unload
@@ -2336,7 +2353,7 @@ int textureAlign
  ::cuModuleLoadData,
  ::cuModuleLoadDataEx,
  ::cuModuleLoadFatBinary*/
-    fn cuModuleUnload(hmod: cuda_types::CUmodule) -> cuda_types::CUresult;
+    fn cuModuleUnload(hmod: cuda_types::cuda::CUmodule) -> cuda_types::cuda::CUresult;
     /** \brief Query lazy loading mode
 
  Returns lazy loading mode
@@ -2352,8 +2369,8 @@ int textureAlign
  \sa
  ::cuModuleLoad,*/
     fn cuModuleGetLoadingMode(
-        mode: *mut cuda_types::CUmoduleLoadingMode,
-    ) -> cuda_types::CUresult;
+        mode: *mut cuda_types::cuda::CUmoduleLoadingMode,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a function handle
 
  Returns in \p *hfunc the handle of the function of name \p name located in
@@ -2381,10 +2398,10 @@ int textureAlign
  ::cuModuleLoadFatBinary,
  ::cuModuleUnload*/
     fn cuModuleGetFunction(
-        hfunc: *mut cuda_types::CUfunction,
-        hmod: cuda_types::CUmodule,
+        hfunc: *mut cuda_types::cuda::CUfunction,
+        hmod: cuda_types::cuda::CUmodule,
         name: *const ::core::ffi::c_char,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns the number of functions within a module
 
  Returns in \p count the number of functions in \p mod.
@@ -2398,8 +2415,8 @@ int textureAlign
  ::CUDA_ERROR_INVALID_VALUE*/
     fn cuModuleGetFunctionCount(
         count: *mut ::core::ffi::c_uint,
-        mod_: cuda_types::CUmodule,
-    ) -> cuda_types::CUresult;
+        mod_: cuda_types::cuda::CUmodule,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns the function handles within a module.
 
  Returns in \p functions a maximum number of \p numFunctions function handles within \p mod. When
@@ -2424,10 +2441,10 @@ int textureAlign
  ::cuFuncIsLoaded,
  ::cuFuncLoad*/
     fn cuModuleEnumerateFunctions(
-        functions: *mut cuda_types::CUfunction,
+        functions: *mut cuda_types::cuda::CUfunction,
         numFunctions: ::core::ffi::c_uint,
-        mod_: cuda_types::CUmodule,
-    ) -> cuda_types::CUresult;
+        mod_: cuda_types::cuda::CUmodule,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a global pointer from a module
 
  Returns in \p *dptr and \p *bytes the base pointer and size of the
@@ -2460,11 +2477,11 @@ int textureAlign
  ::cudaGetSymbolAddress,
  ::cudaGetSymbolSize*/
     fn cuModuleGetGlobal_v2(
-        dptr: *mut cuda_types::CUdeviceptr,
+        dptr: *mut cuda_types::cuda::CUdeviceptr,
         bytes: *mut usize,
-        hmod: cuda_types::CUmodule,
+        hmod: cuda_types::cuda::CUmodule,
         name: *const ::core::ffi::c_char,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates a pending JIT linker invocation.
 
  If the call is successful, the caller owns the returned CUlinkState, which
@@ -2505,10 +2522,10 @@ int textureAlign
  ::cuLinkDestroy*/
     fn cuLinkCreate_v2(
         numOptions: ::core::ffi::c_uint,
-        options: *mut cuda_types::CUjit_option,
+        options: *mut cuda_types::cuda::CUjit_option,
         optionValues: *mut *mut ::core::ffi::c_void,
-        stateOut: *mut cuda_types::CUlinkState,
-    ) -> cuda_types::CUresult;
+        stateOut: *mut cuda_types::cuda::CUlinkState,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Add an input to a pending linker invocation
 
  Ownership of \p data is retained by the caller.  No reference is retained to any
@@ -2545,15 +2562,15 @@ int textureAlign
  ::cuLinkComplete,
  ::cuLinkDestroy*/
     fn cuLinkAddData_v2(
-        state: cuda_types::CUlinkState,
-        type_: cuda_types::CUjitInputType,
+        state: cuda_types::cuda::CUlinkState,
+        type_: cuda_types::cuda::CUjitInputType,
         data: *mut ::core::ffi::c_void,
         size: usize,
         name: *const ::core::ffi::c_char,
         numOptions: ::core::ffi::c_uint,
-        options: *mut cuda_types::CUjit_option,
+        options: *mut cuda_types::cuda::CUjit_option,
         optionValues: *mut *mut ::core::ffi::c_void,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Add a file input to a pending linker invocation
 
  No reference is retained to any inputs after this call returns.
@@ -2591,13 +2608,13 @@ int textureAlign
  ::cuLinkComplete,
  ::cuLinkDestroy*/
     fn cuLinkAddFile_v2(
-        state: cuda_types::CUlinkState,
-        type_: cuda_types::CUjitInputType,
+        state: cuda_types::cuda::CUlinkState,
+        type_: cuda_types::cuda::CUjitInputType,
         path: *const ::core::ffi::c_char,
         numOptions: ::core::ffi::c_uint,
-        options: *mut cuda_types::CUjit_option,
+        options: *mut cuda_types::cuda::CUjit_option,
         optionValues: *mut *mut ::core::ffi::c_void,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Complete a pending linker invocation
 
  Completes the pending linker action and returns the cubin image for the linked
@@ -2620,10 +2637,10 @@ int textureAlign
  ::cuLinkDestroy,
  ::cuModuleLoadData*/
     fn cuLinkComplete(
-        state: cuda_types::CUlinkState,
+        state: cuda_types::cuda::CUlinkState,
         cubinOut: *mut *mut ::core::ffi::c_void,
         sizeOut: *mut usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Destroys state for a JIT linker invocation.
 
  \param state State object for the linker invocation
@@ -2633,7 +2650,7 @@ int textureAlign
  ::CUDA_ERROR_INVALID_HANDLE
 
  \sa ::cuLinkCreate*/
-    fn cuLinkDestroy(state: cuda_types::CUlinkState) -> cuda_types::CUresult;
+    fn cuLinkDestroy(state: cuda_types::cuda::CUlinkState) -> cuda_types::cuda::CUresult;
     /** \brief Returns a handle to a texture reference
 
  \deprecated
@@ -2667,10 +2684,10 @@ int textureAlign
  ::cuModuleLoadFatBinary,
  ::cuModuleUnload*/
     fn cuModuleGetTexRef(
-        pTexRef: *mut cuda_types::CUtexref,
-        hmod: cuda_types::CUmodule,
+        pTexRef: *mut cuda_types::cuda::CUtexref,
+        hmod: cuda_types::cuda::CUmodule,
         name: *const ::core::ffi::c_char,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a handle to a surface reference
 
  \deprecated
@@ -2702,10 +2719,10 @@ int textureAlign
  ::cuModuleLoadFatBinary,
  ::cuModuleUnload*/
     fn cuModuleGetSurfRef(
-        pSurfRef: *mut cuda_types::CUsurfref,
-        hmod: cuda_types::CUmodule,
+        pSurfRef: *mut cuda_types::cuda::CUsurfref,
+        hmod: cuda_types::cuda::CUmodule,
         name: *const ::core::ffi::c_char,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Load a library with specified code and options
 
  Takes a pointer \p code and loads the corresponding library \p library based on
@@ -2758,15 +2775,15 @@ int textureAlign
  ::cuModuleLoadData,
  ::cuModuleLoadDataEx*/
     fn cuLibraryLoadData(
-        library: *mut cuda_types::CUlibrary,
+        library: *mut cuda_types::cuda::CUlibrary,
         code: *const ::core::ffi::c_void,
-        jitOptions: *mut cuda_types::CUjit_option,
+        jitOptions: *mut cuda_types::cuda::CUjit_option,
         jitOptionsValues: *mut *mut ::core::ffi::c_void,
         numJitOptions: ::core::ffi::c_uint,
-        libraryOptions: *mut cuda_types::CUlibraryOption,
+        libraryOptions: *mut cuda_types::cuda::CUlibraryOption,
         libraryOptionValues: *mut *mut ::core::ffi::c_void,
         numLibraryOptions: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Load a library with specified file and options
 
  Takes a pointer \p code and loads the corresponding library \p library based on
@@ -2819,15 +2836,15 @@ int textureAlign
  ::cuModuleLoadData,
  ::cuModuleLoadDataEx*/
     fn cuLibraryLoadFromFile(
-        library: *mut cuda_types::CUlibrary,
+        library: *mut cuda_types::cuda::CUlibrary,
         fileName: *const ::core::ffi::c_char,
-        jitOptions: *mut cuda_types::CUjit_option,
+        jitOptions: *mut cuda_types::cuda::CUjit_option,
         jitOptionsValues: *mut *mut ::core::ffi::c_void,
         numJitOptions: ::core::ffi::c_uint,
-        libraryOptions: *mut cuda_types::CUlibraryOption,
+        libraryOptions: *mut cuda_types::cuda::CUlibraryOption,
         libraryOptionValues: *mut *mut ::core::ffi::c_void,
         numLibraryOptions: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Unloads a library
 
  Unloads the library specified with \p library
@@ -2843,7 +2860,9 @@ int textureAlign
  \sa ::cuLibraryLoadData,
  ::cuLibraryLoadFromFile,
  ::cuModuleUnload*/
-    fn cuLibraryUnload(library: cuda_types::CUlibrary) -> cuda_types::CUresult;
+    fn cuLibraryUnload(
+        library: cuda_types::cuda::CUlibrary,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a kernel handle
 
  Returns in \p pKernel the handle of the kernel with name \p name located in library \p library.
@@ -2868,10 +2887,10 @@ int textureAlign
  ::cuLibraryGetModule,
  ::cuModuleGetFunction*/
     fn cuLibraryGetKernel(
-        pKernel: *mut cuda_types::CUkernel,
-        library: cuda_types::CUlibrary,
+        pKernel: *mut cuda_types::cuda::CUkernel,
+        library: cuda_types::cuda::CUlibrary,
         name: *const ::core::ffi::c_char,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns the number of kernels within a library
 
  Returns in \p count the number of kernels in \p lib.
@@ -2885,8 +2904,8 @@ int textureAlign
  ::CUDA_ERROR_INVALID_VALUE*/
     fn cuLibraryGetKernelCount(
         count: *mut ::core::ffi::c_uint,
-        lib: cuda_types::CUlibrary,
-    ) -> cuda_types::CUresult;
+        lib: cuda_types::cuda::CUlibrary,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Retrieve the kernel handles within a library.
 
  Returns in \p kernels a maximum number of \p numKernels kernel handles within \p lib.
@@ -2903,10 +2922,10 @@ int textureAlign
 
  \sa ::cuLibraryGetKernelCount*/
     fn cuLibraryEnumerateKernels(
-        kernels: *mut cuda_types::CUkernel,
+        kernels: *mut cuda_types::cuda::CUkernel,
         numKernels: ::core::ffi::c_uint,
-        lib: cuda_types::CUlibrary,
-    ) -> cuda_types::CUresult;
+        lib: cuda_types::cuda::CUlibrary,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a module handle
 
  Returns in \p pMod the module handle associated with the current context located in
@@ -2930,9 +2949,9 @@ int textureAlign
  ::cuLibraryUnload,
  ::cuModuleGetFunction*/
     fn cuLibraryGetModule(
-        pMod: *mut cuda_types::CUmodule,
-        library: cuda_types::CUlibrary,
-    ) -> cuda_types::CUresult;
+        pMod: *mut cuda_types::cuda::CUmodule,
+        library: cuda_types::cuda::CUlibrary,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a function handle
 
  Returns in \p pFunc the handle of the function for the requested kernel \p kernel and
@@ -2958,9 +2977,9 @@ int textureAlign
  ::cuLibraryGetModule,
  ::cuModuleGetFunction*/
     fn cuKernelGetFunction(
-        pFunc: *mut cuda_types::CUfunction,
-        kernel: cuda_types::CUkernel,
-    ) -> cuda_types::CUresult;
+        pFunc: *mut cuda_types::cuda::CUfunction,
+        kernel: cuda_types::cuda::CUkernel,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a global device pointer
 
  Returns in \p *dptr and \p *bytes the base pointer and size of the global with
@@ -2990,11 +3009,11 @@ int textureAlign
  ::cuLibraryGetModule,
  cuModuleGetGlobal*/
     fn cuLibraryGetGlobal(
-        dptr: *mut cuda_types::CUdeviceptr,
+        dptr: *mut cuda_types::cuda::CUdeviceptr,
         bytes: *mut usize,
-        library: cuda_types::CUlibrary,
+        library: cuda_types::cuda::CUlibrary,
         name: *const ::core::ffi::c_char,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a pointer to managed memory
 
  Returns in \p *dptr and \p *bytes the base pointer and size of the managed memory with
@@ -3024,11 +3043,11 @@ int textureAlign
  ::cuLibraryLoadFromFile,
  ::cuLibraryUnload*/
     fn cuLibraryGetManaged(
-        dptr: *mut cuda_types::CUdeviceptr,
+        dptr: *mut cuda_types::cuda::CUdeviceptr,
         bytes: *mut usize,
-        library: cuda_types::CUlibrary,
+        library: cuda_types::cuda::CUlibrary,
         name: *const ::core::ffi::c_char,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a pointer to a unified function
 
  Returns in \p *fptr the function pointer to a unified function denoted by \p symbol.
@@ -3053,9 +3072,9 @@ int textureAlign
  ::cuLibraryUnload*/
     fn cuLibraryGetUnifiedFunction(
         fptr: *mut *mut ::core::ffi::c_void,
-        library: cuda_types::CUlibrary,
+        library: cuda_types::cuda::CUlibrary,
         symbol: *const ::core::ffi::c_char,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns information about a kernel
 
  Returns in \p *pi the integer value of the attribute \p attrib for the kernel
@@ -3142,10 +3161,10 @@ int textureAlign
  ::cuFuncGetAttribute*/
     fn cuKernelGetAttribute(
         pi: *mut ::core::ffi::c_int,
-        attrib: cuda_types::CUfunction_attribute,
-        kernel: cuda_types::CUkernel,
-        dev: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        attrib: cuda_types::cuda::CUfunction_attribute,
+        kernel: cuda_types::cuda::CUkernel,
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets information about a kernel
 
  This call sets the value of a specified attribute \p attrib on the kernel \p kernel
@@ -3221,11 +3240,11 @@ int textureAlign
  ::cuModuleGetFunction,
  ::cuFuncSetAttribute*/
     fn cuKernelSetAttribute(
-        attrib: cuda_types::CUfunction_attribute,
+        attrib: cuda_types::cuda::CUfunction_attribute,
         val: ::core::ffi::c_int,
-        kernel: cuda_types::CUkernel,
-        dev: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        kernel: cuda_types::cuda::CUkernel,
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the preferred cache configuration for a device kernel.
 
  On devices where the L1 cache and shared memory use the same hardware
@@ -3282,10 +3301,10 @@ int textureAlign
  ::cuCtxSetCacheConfig,
  ::cuLaunchKernel*/
     fn cuKernelSetCacheConfig(
-        kernel: cuda_types::CUkernel,
-        config: cuda_types::CUfunc_cache,
-        dev: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        kernel: cuda_types::cuda::CUkernel,
+        config: cuda_types::cuda::CUfunc_cache,
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns the function name for a ::CUkernel handle
 
  Returns in \p **name the function name associated with the kernel handle \p hfunc .
@@ -3305,8 +3324,8 @@ int textureAlign
 */
     fn cuKernelGetName(
         name: *mut *const ::core::ffi::c_char,
-        hfunc: cuda_types::CUkernel,
-    ) -> cuda_types::CUresult;
+        hfunc: cuda_types::cuda::CUkernel,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns the offset and size of a kernel parameter in the device-side parameter layout
 
  Queries the kernel parameter at \p paramIndex into \p kernel's list of parameters, and returns
@@ -3328,11 +3347,11 @@ int textureAlign
 
  \sa ::cuFuncGetParamInfo*/
     fn cuKernelGetParamInfo(
-        kernel: cuda_types::CUkernel,
+        kernel: cuda_types::cuda::CUkernel,
         paramIndex: usize,
         paramOffset: *mut usize,
         paramSize: *mut usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Gets free and total memory
 
  Returns in \p *total the total amount of memory available to the the current context.
@@ -3372,7 +3391,10 @@ int textureAlign
  ::cuMemHostGetDevicePointer, ::cuMemsetD2D8, ::cuMemsetD2D16,
  ::cuMemsetD2D32, ::cuMemsetD8, ::cuMemsetD16, ::cuMemsetD32,
  ::cudaMemGetInfo*/
-    fn cuMemGetInfo_v2(free: *mut usize, total: *mut usize) -> cuda_types::CUresult;
+    fn cuMemGetInfo_v2(
+        free: *mut usize,
+        total: *mut usize,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Allocates device memory
 
  Allocates \p bytesize bytes of linear memory on the device and returns in
@@ -3404,9 +3426,9 @@ int textureAlign
  ::cuMemsetD2D32, ::cuMemsetD8, ::cuMemsetD16, ::cuMemsetD32,
  ::cudaMalloc*/
     fn cuMemAlloc_v2(
-        dptr: *mut cuda_types::CUdeviceptr,
+        dptr: *mut cuda_types::cuda::CUdeviceptr,
         bytesize: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Allocates pitched device memory
 
  Allocates at least \p WidthInBytes * \p Height bytes of linear memory on
@@ -3466,12 +3488,12 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  ::cuMemsetD2D32, ::cuMemsetD8, ::cuMemsetD16, ::cuMemsetD32,
  ::cudaMallocPitch*/
     fn cuMemAllocPitch_v2(
-        dptr: *mut cuda_types::CUdeviceptr,
+        dptr: *mut cuda_types::cuda::CUdeviceptr,
         pPitch: *mut usize,
         WidthInBytes: usize,
         Height: usize,
         ElementSizeBytes: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Frees device memory
 
  Frees the memory space pointed to by \p dptr, which must have been returned
@@ -3504,7 +3526,7 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  ::cuMemHostGetDevicePointer, ::cuMemsetD2D8, ::cuMemsetD2D16,
  ::cuMemsetD2D32, ::cuMemsetD8, ::cuMemsetD16, ::cuMemsetD32,
  ::cudaFree*/
-    fn cuMemFree_v2(dptr: cuda_types::CUdeviceptr) -> cuda_types::CUresult;
+    fn cuMemFree_v2(dptr: cuda_types::cuda::CUdeviceptr) -> cuda_types::cuda::CUresult;
     /** \brief Get information on memory allocations
 
  Returns the base address in \p *pbase and size in \p *psize of the
@@ -3536,10 +3558,10 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  ::cuMemHostGetDevicePointer, ::cuMemsetD2D8, ::cuMemsetD2D16,
  ::cuMemsetD2D32, ::cuMemsetD8, ::cuMemsetD16, ::cuMemsetD32*/
     fn cuMemGetAddressRange_v2(
-        pbase: *mut cuda_types::CUdeviceptr,
+        pbase: *mut cuda_types::cuda::CUdeviceptr,
         psize: *mut usize,
-        dptr: cuda_types::CUdeviceptr,
-    ) -> cuda_types::CUresult;
+        dptr: cuda_types::cuda::CUdeviceptr,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Allocates page-locked host memory
 
  Allocates \p bytesize bytes of host memory that is page-locked and
@@ -3590,7 +3612,7 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
     fn cuMemAllocHost_v2(
         pp: *mut *mut ::core::ffi::c_void,
         bytesize: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Frees page-locked host memory
 
  Frees the memory space pointed to by \p p, which must have been returned by
@@ -3617,7 +3639,7 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  ::cuMemHostGetDevicePointer, ::cuMemsetD2D8, ::cuMemsetD2D16,
  ::cuMemsetD2D32, ::cuMemsetD8, ::cuMemsetD16, ::cuMemsetD32,
  ::cudaFreeHost*/
-    fn cuMemFreeHost(p: *mut ::core::ffi::c_void) -> cuda_types::CUresult;
+    fn cuMemFreeHost(p: *mut ::core::ffi::c_void) -> cuda_types::cuda::CUresult;
     /** \brief Allocates page-locked host memory
 
  Allocates \p bytesize bytes of host memory that is page-locked and accessible
@@ -3701,7 +3723,7 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
         pp: *mut *mut ::core::ffi::c_void,
         bytesize: usize,
         Flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Passes back device pointer of mapped pinned memory
 
  Passes back the device pointer \p pdptr corresponding to the mapped, pinned
@@ -3752,10 +3774,10 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  ::cuMemsetD2D32, ::cuMemsetD8, ::cuMemsetD16, ::cuMemsetD32,
  ::cudaHostGetDevicePointer*/
     fn cuMemHostGetDevicePointer_v2(
-        pdptr: *mut cuda_types::CUdeviceptr,
+        pdptr: *mut cuda_types::cuda::CUdeviceptr,
         p: *mut ::core::ffi::c_void,
         Flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Passes back flags that were used for a pinned allocation
 
  Passes back the flags \p pFlags that were specified when allocating
@@ -3782,7 +3804,7 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
     fn cuMemHostGetFlags(
         pFlags: *mut ::core::ffi::c_uint,
         p: *mut ::core::ffi::c_void,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Allocates memory that will be automatically managed by the Unified Memory system
 
  Allocates \p bytesize bytes of managed memory on the device and returns in
@@ -3890,10 +3912,10 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  ::cuDeviceGetAttribute, ::cuStreamAttachMemAsync,
  ::cudaMallocManaged*/
     fn cuMemAllocManaged(
-        dptr: *mut cuda_types::CUdeviceptr,
+        dptr: *mut cuda_types::cuda::CUdeviceptr,
         bytesize: usize,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Registers a callback function to receive async notifications
 
  Registers \p callbackFunc to receive async notifications.
@@ -3928,11 +3950,11 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  \sa
  ::cuDeviceUnregisterAsyncNotification*/
     fn cuDeviceRegisterAsyncNotification(
-        device: cuda_types::CUdevice,
-        callbackFunc: cuda_types::CUasyncCallback,
+        device: cuda_types::cuda::CUdevice,
+        callbackFunc: cuda_types::cuda::CUasyncCallback,
         userData: *mut ::core::ffi::c_void,
-        callback: *mut cuda_types::CUasyncCallbackHandle,
-    ) -> cuda_types::CUresult;
+        callback: *mut cuda_types::cuda::CUasyncCallbackHandle,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Unregisters an async notification callback
 
  Unregisters \p callback so that the corresponding callback function will stop receiving
@@ -3953,9 +3975,9 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  \sa
  ::cuDeviceRegisterAsyncNotification*/
     fn cuDeviceUnregisterAsyncNotification(
-        device: cuda_types::CUdevice,
-        callback: cuda_types::CUasyncCallbackHandle,
-    ) -> cuda_types::CUresult;
+        device: cuda_types::cuda::CUdevice,
+        callback: cuda_types::cuda::CUasyncCallbackHandle,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a handle to a compute device
 
  Returns in \p *device a device handle given a PCI bus ID string.
@@ -3982,9 +4004,9 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  ::cuDeviceGetPCIBusId,
  ::cudaDeviceGetByPCIBusId*/
     fn cuDeviceGetByPCIBusId(
-        dev: *mut cuda_types::CUdevice,
+        dev: *mut cuda_types::cuda::CUdevice,
         pciBusId: *const ::core::ffi::c_char,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a PCI Bus Id string for the device
 
  Returns an ASCII string identifying the device \p dev in the NULL-terminated
@@ -4016,8 +4038,8 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
     fn cuDeviceGetPCIBusId(
         pciBusId: *mut ::core::ffi::c_char,
         len: ::core::ffi::c_int,
-        dev: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Gets an interprocess handle for a previously allocated event
 
  Takes as input a previously allocated event. This event must have been
@@ -4062,9 +4084,9 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  ::cuIpcCloseMemHandle,
  ::cudaIpcGetEventHandle*/
     fn cuIpcGetEventHandle(
-        pHandle: *mut cuda_types::CUipcEventHandle,
-        event: cuda_types::CUevent,
-    ) -> cuda_types::CUresult;
+        pHandle: *mut cuda_types::cuda::CUipcEventHandle,
+        event: cuda_types::cuda::CUevent,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Opens an interprocess event handle for use in the current process
 
  Opens an interprocess event handle exported from another process with
@@ -4104,9 +4126,9 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  ::cuIpcCloseMemHandle,
  ::cudaIpcOpenEventHandle*/
     fn cuIpcOpenEventHandle(
-        phEvent: *mut cuda_types::CUevent,
-        handle: cuda_types::CUipcEventHandle,
-    ) -> cuda_types::CUresult;
+        phEvent: *mut cuda_types::cuda::CUevent,
+        handle: cuda_types::cuda::CUipcEventHandle,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Gets an interprocess memory handle for an existing device memory
  allocation
 
@@ -4147,9 +4169,9 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  ::cuIpcCloseMemHandle,
  ::cudaIpcGetMemHandle*/
     fn cuIpcGetMemHandle(
-        pHandle: *mut cuda_types::CUipcMemHandle,
-        dptr: cuda_types::CUdeviceptr,
-    ) -> cuda_types::CUresult;
+        pHandle: *mut cuda_types::cuda::CUipcMemHandle,
+        dptr: cuda_types::cuda::CUdeviceptr,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Opens an interprocess memory handle exported from another process
  and returns a device pointer usable in the local process.
 
@@ -4207,10 +4229,10 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  ::cuDeviceCanAccessPeer,
  ::cudaIpcOpenMemHandle*/
     fn cuIpcOpenMemHandle_v2(
-        pdptr: *mut cuda_types::CUdeviceptr,
-        handle: cuda_types::CUipcMemHandle,
+        pdptr: *mut cuda_types::cuda::CUdeviceptr,
+        handle: cuda_types::cuda::CUipcMemHandle,
         Flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Attempts to close memory mapped with ::cuIpcOpenMemHandle
 
  Decrements the reference count of the memory returned by ::cuIpcOpenMemHandle by 1.
@@ -4243,7 +4265,9 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  ::cuIpcGetMemHandle,
  ::cuIpcOpenMemHandle,
  ::cudaIpcCloseMemHandle*/
-    fn cuIpcCloseMemHandle(dptr: cuda_types::CUdeviceptr) -> cuda_types::CUresult;
+    fn cuIpcCloseMemHandle(
+        dptr: cuda_types::cuda::CUdeviceptr,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Registers an existing host memory range for use by CUDA
 
  Page-locks the memory range specified by \p p and \p bytesize and maps it
@@ -4335,7 +4359,7 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
         p: *mut ::core::ffi::c_void,
         bytesize: usize,
         Flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Unregisters a memory range that was registered with cuMemHostRegister.
 
  Unmaps the memory range whose base address is specified by \p p, and makes
@@ -4358,7 +4382,7 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  \sa
  ::cuMemHostRegister,
  ::cudaHostUnregister*/
-    fn cuMemHostUnregister(p: *mut ::core::ffi::c_void) -> cuda_types::CUresult;
+    fn cuMemHostUnregister(p: *mut ::core::ffi::c_void) -> cuda_types::cuda::CUresult;
     /** \brief Copies memory
 
  Copies data between two pointers.
@@ -4396,10 +4420,10 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  ::cudaMemcpyToSymbol,
  ::cudaMemcpyFromSymbol*/
     fn cuMemcpy_ptds(
-        dst: cuda_types::CUdeviceptr,
-        src: cuda_types::CUdeviceptr,
+        dst: cuda_types::cuda::CUdeviceptr,
+        src: cuda_types::cuda::CUdeviceptr,
         ByteCount: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Copies device memory between two contexts
 
  Copies from device memory in one context to device memory in another
@@ -4427,12 +4451,12 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  ::cuMemcpy3DPeerAsync,
  ::cudaMemcpyPeer*/
     fn cuMemcpyPeer_ptds(
-        dstDevice: cuda_types::CUdeviceptr,
-        dstContext: cuda_types::CUcontext,
-        srcDevice: cuda_types::CUdeviceptr,
-        srcContext: cuda_types::CUcontext,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
+        dstContext: cuda_types::cuda::CUcontext,
+        srcDevice: cuda_types::cuda::CUdeviceptr,
+        srcContext: cuda_types::cuda::CUcontext,
         ByteCount: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Copies memory from Host to Device
 
  Copies from host memory to device memory. \p dstDevice and \p srcHost are
@@ -4466,10 +4490,10 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  ::cudaMemcpy,
  ::cudaMemcpyToSymbol*/
     fn cuMemcpyHtoD_v2_ptds(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         srcHost: *const ::core::ffi::c_void,
         ByteCount: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Copies memory from Device to Host
 
  Copies from device to host memory. \p dstHost and \p srcDevice specify the
@@ -4504,9 +4528,9 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  ::cudaMemcpyFromSymbol*/
     fn cuMemcpyDtoH_v2_ptds(
         dstHost: *mut ::core::ffi::c_void,
-        srcDevice: cuda_types::CUdeviceptr,
+        srcDevice: cuda_types::cuda::CUdeviceptr,
         ByteCount: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Copies memory from Device to Device
 
  Copies from device memory to device memory. \p dstDevice and \p srcDevice
@@ -4540,10 +4564,10 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  ::cudaMemcpyToSymbol,
  ::cudaMemcpyFromSymbol*/
     fn cuMemcpyDtoD_v2_ptds(
-        dstDevice: cuda_types::CUdeviceptr,
-        srcDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
+        srcDevice: cuda_types::cuda::CUdeviceptr,
         ByteCount: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Copies memory from Device to Array
 
  Copies from device memory to a 1D CUDA array. \p dstArray and \p dstOffset
@@ -4577,11 +4601,11 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  ::cuMemsetD2D32, ::cuMemsetD8, ::cuMemsetD16, ::cuMemsetD32,
  ::cudaMemcpyToArray*/
     fn cuMemcpyDtoA_v2_ptds(
-        dstArray: cuda_types::CUarray,
+        dstArray: cuda_types::cuda::CUarray,
         dstOffset: usize,
-        srcDevice: cuda_types::CUdeviceptr,
+        srcDevice: cuda_types::cuda::CUdeviceptr,
         ByteCount: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Copies memory from Array to Device
 
  Copies from one 1D CUDA array to device memory. \p dstDevice specifies the
@@ -4617,11 +4641,11 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  ::cuMemsetD2D32, ::cuMemsetD8, ::cuMemsetD16, ::cuMemsetD32,
  ::cudaMemcpyFromArray*/
     fn cuMemcpyAtoD_v2_ptds(
-        dstDevice: cuda_types::CUdeviceptr,
-        srcArray: cuda_types::CUarray,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
+        srcArray: cuda_types::cuda::CUarray,
         srcOffset: usize,
         ByteCount: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Copies memory from Host to Array
 
  Copies from host memory to a 1D CUDA array. \p dstArray and \p dstOffset
@@ -4656,11 +4680,11 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  ::cuMemsetD2D32, ::cuMemsetD8, ::cuMemsetD16, ::cuMemsetD32,
  ::cudaMemcpyToArray*/
     fn cuMemcpyHtoA_v2_ptds(
-        dstArray: cuda_types::CUarray,
+        dstArray: cuda_types::cuda::CUarray,
         dstOffset: usize,
         srcHost: *const ::core::ffi::c_void,
         ByteCount: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Copies memory from Array to Host
 
  Copies from one 1D CUDA array to host memory. \p dstHost specifies the base
@@ -4696,10 +4720,10 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  ::cudaMemcpyFromArray*/
     fn cuMemcpyAtoH_v2_ptds(
         dstHost: *mut ::core::ffi::c_void,
-        srcArray: cuda_types::CUarray,
+        srcArray: cuda_types::cuda::CUarray,
         srcOffset: usize,
         ByteCount: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Copies memory from Array to Array
 
  Copies from one 1D CUDA array to another. \p dstArray and \p srcArray
@@ -4737,12 +4761,12 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  ::cuMemsetD2D32, ::cuMemsetD8, ::cuMemsetD16, ::cuMemsetD32,
  ::cudaMemcpyArrayToArray*/
     fn cuMemcpyAtoA_v2_ptds(
-        dstArray: cuda_types::CUarray,
+        dstArray: cuda_types::cuda::CUarray,
         dstOffset: usize,
-        srcArray: cuda_types::CUarray,
+        srcArray: cuda_types::cuda::CUarray,
         srcOffset: usize,
         ByteCount: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Copies memory for 2D arrays
 
  Perform a 2D memory copy according to the parameters specified in \p pCopy.
@@ -4904,8 +4928,8 @@ CUdeviceptr dstStart = dstDevice+dstY*dstPitch+dstXInBytes;
  ::cudaMemcpy2DToArray,
  ::cudaMemcpy2DFromArray*/
     fn cuMemcpy2D_v2_ptds(
-        pCopy: *const cuda_types::CUDA_MEMCPY2D,
-    ) -> cuda_types::CUresult;
+        pCopy: *const cuda_types::cuda::CUDA_MEMCPY2D,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Copies memory for 2D arrays
 
  Perform a 2D memory copy according to the parameters specified in \p pCopy.
@@ -5065,8 +5089,8 @@ CUdeviceptr dstStart = dstDevice+dstY*dstPitch+dstXInBytes;
  ::cudaMemcpy2DToArray,
  ::cudaMemcpy2DFromArray*/
     fn cuMemcpy2DUnaligned_v2_ptds(
-        pCopy: *const cuda_types::CUDA_MEMCPY2D,
-    ) -> cuda_types::CUresult;
+        pCopy: *const cuda_types::cuda::CUDA_MEMCPY2D,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Copies memory for 3D arrays
 
  Perform a 3D memory copy according to the parameters specified in
@@ -5233,8 +5257,8 @@ CUdeviceptr dstStart = dstDevice+(dstZ*dstHeight+dstY)*dstPitch+dstXInBytes;
  ::cuMemsetD2D32, ::cuMemsetD8, ::cuMemsetD16, ::cuMemsetD32,
  ::cudaMemcpy3D*/
     fn cuMemcpy3D_v2_ptds(
-        pCopy: *const cuda_types::CUDA_MEMCPY3D,
-    ) -> cuda_types::CUresult;
+        pCopy: *const cuda_types::cuda::CUDA_MEMCPY3D,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Copies memory between contexts
 
  Perform a 3D memory copy according to the parameters specified in
@@ -5256,8 +5280,8 @@ CUdeviceptr dstStart = dstDevice+(dstZ*dstHeight+dstY)*dstPitch+dstXInBytes;
  ::cuMemcpy3DPeerAsync,
  ::cudaMemcpy3DPeer*/
     fn cuMemcpy3DPeer_ptds(
-        pCopy: *const cuda_types::CUDA_MEMCPY3D_PEER,
-    ) -> cuda_types::CUresult;
+        pCopy: *const cuda_types::cuda::CUDA_MEMCPY3D_PEER,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Copies memory asynchronously
 
  Copies data between two pointers.
@@ -5300,11 +5324,11 @@ CUdeviceptr dstStart = dstDevice+(dstZ*dstHeight+dstY)*dstPitch+dstXInBytes;
  ::cudaMemcpyToSymbolAsync,
  ::cudaMemcpyFromSymbolAsync*/
     fn cuMemcpyAsync_ptsz(
-        dst: cuda_types::CUdeviceptr,
-        src: cuda_types::CUdeviceptr,
+        dst: cuda_types::cuda::CUdeviceptr,
+        src: cuda_types::cuda::CUdeviceptr,
         ByteCount: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Copies device memory between two contexts asynchronously.
 
  Copies from device memory in one context to device memory in another
@@ -5335,13 +5359,13 @@ CUdeviceptr dstStart = dstDevice+(dstZ*dstHeight+dstY)*dstPitch+dstXInBytes;
  ::cuMemcpy3DPeerAsync,
  ::cudaMemcpyPeerAsync*/
     fn cuMemcpyPeerAsync_ptsz(
-        dstDevice: cuda_types::CUdeviceptr,
-        dstContext: cuda_types::CUcontext,
-        srcDevice: cuda_types::CUdeviceptr,
-        srcContext: cuda_types::CUcontext,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
+        dstContext: cuda_types::cuda::CUcontext,
+        srcDevice: cuda_types::cuda::CUdeviceptr,
+        srcContext: cuda_types::cuda::CUcontext,
         ByteCount: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Copies memory from Host to Device
 
  Copies from host memory to device memory. \p dstDevice and \p srcHost are
@@ -5380,11 +5404,11 @@ CUdeviceptr dstStart = dstDevice+(dstZ*dstHeight+dstY)*dstPitch+dstXInBytes;
  ::cudaMemcpyAsync,
  ::cudaMemcpyToSymbolAsync*/
     fn cuMemcpyHtoDAsync_v2_ptsz(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         srcHost: *const ::core::ffi::c_void,
         ByteCount: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Copies memory from Device to Host
 
  Copies from device to host memory. \p dstHost and \p srcDevice specify the
@@ -5424,10 +5448,10 @@ CUdeviceptr dstStart = dstDevice+(dstZ*dstHeight+dstY)*dstPitch+dstXInBytes;
  ::cudaMemcpyFromSymbolAsync*/
     fn cuMemcpyDtoHAsync_v2_ptsz(
         dstHost: *mut ::core::ffi::c_void,
-        srcDevice: cuda_types::CUdeviceptr,
+        srcDevice: cuda_types::cuda::CUdeviceptr,
         ByteCount: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Copies memory from Device to Device
 
  Copies from device memory to device memory. \p dstDevice and \p srcDevice
@@ -5466,11 +5490,11 @@ CUdeviceptr dstStart = dstDevice+(dstZ*dstHeight+dstY)*dstPitch+dstXInBytes;
  ::cudaMemcpyToSymbolAsync,
  ::cudaMemcpyFromSymbolAsync*/
     fn cuMemcpyDtoDAsync_v2_ptsz(
-        dstDevice: cuda_types::CUdeviceptr,
-        srcDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
+        srcDevice: cuda_types::cuda::CUdeviceptr,
         ByteCount: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Copies memory from Host to Array
 
  Copies from host memory to a 1D CUDA array. \p dstArray and \p dstOffset
@@ -5510,12 +5534,12 @@ CUdeviceptr dstStart = dstDevice+(dstZ*dstHeight+dstY)*dstPitch+dstXInBytes;
  ::cuMemsetD32, ::cuMemsetD32Async,
  ::cudaMemcpyToArrayAsync*/
     fn cuMemcpyHtoAAsync_v2_ptsz(
-        dstArray: cuda_types::CUarray,
+        dstArray: cuda_types::cuda::CUarray,
         dstOffset: usize,
         srcHost: *const ::core::ffi::c_void,
         ByteCount: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Copies memory from Array to Host
 
  Copies from one 1D CUDA array to host memory. \p dstHost specifies the base
@@ -5556,11 +5580,11 @@ CUdeviceptr dstStart = dstDevice+(dstZ*dstHeight+dstY)*dstPitch+dstXInBytes;
  ::cudaMemcpyFromArrayAsync*/
     fn cuMemcpyAtoHAsync_v2_ptsz(
         dstHost: *mut ::core::ffi::c_void,
-        srcArray: cuda_types::CUarray,
+        srcArray: cuda_types::cuda::CUarray,
         srcOffset: usize,
         ByteCount: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Copies memory for 2D arrays
 
  Perform a 2D memory copy according to the parameters specified in \p pCopy.
@@ -5727,9 +5751,9 @@ CUdeviceptr dstStart = dstDevice+dstY*dstPitch+dstXInBytes;
  ::cudaMemcpy2DToArrayAsync,
  ::cudaMemcpy2DFromArrayAsync*/
     fn cuMemcpy2DAsync_v2_ptsz(
-        pCopy: *const cuda_types::CUDA_MEMCPY2D,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        pCopy: *const cuda_types::cuda::CUDA_MEMCPY2D,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Copies memory for 3D arrays
 
  Perform a 3D memory copy according to the parameters specified in
@@ -5901,9 +5925,9 @@ CUdeviceptr dstStart = dstDevice+(dstZ*dstHeight+dstY)*dstPitch+dstXInBytes;
  ::cuMemsetD32, ::cuMemsetD32Async,
  ::cudaMemcpy3DAsync*/
     fn cuMemcpy3DAsync_v2_ptsz(
-        pCopy: *const cuda_types::CUDA_MEMCPY3D,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        pCopy: *const cuda_types::cuda::CUDA_MEMCPY3D,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Copies memory between contexts asynchronously.
 
  Perform a 3D memory copy according to the parameters specified in
@@ -5927,9 +5951,9 @@ CUdeviceptr dstStart = dstDevice+(dstZ*dstHeight+dstY)*dstPitch+dstXInBytes;
  ::cuMemcpy3DPeerAsync,
  ::cudaMemcpy3DPeerAsync*/
     fn cuMemcpy3DPeerAsync_ptsz(
-        pCopy: *const cuda_types::CUDA_MEMCPY3D_PEER,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        pCopy: *const cuda_types::cuda::CUDA_MEMCPY3D_PEER,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Initializes device memory
 
  Sets the memory range of \p N 8-bit values to the specified value
@@ -5962,10 +5986,10 @@ CUdeviceptr dstStart = dstDevice+(dstZ*dstHeight+dstY)*dstPitch+dstXInBytes;
  ::cuMemsetD32, ::cuMemsetD32Async,
  ::cudaMemset*/
     fn cuMemsetD8_v2_ptds(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         uc: ::core::ffi::c_uchar,
         N: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Initializes device memory
 
  Sets the memory range of \p N 16-bit values to the specified value
@@ -5998,10 +6022,10 @@ CUdeviceptr dstStart = dstDevice+(dstZ*dstHeight+dstY)*dstPitch+dstXInBytes;
  ::cuMemsetD32, ::cuMemsetD32Async,
  ::cudaMemset*/
     fn cuMemsetD16_v2_ptds(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         us: ::core::ffi::c_ushort,
         N: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Initializes device memory
 
  Sets the memory range of \p N 32-bit values to the specified value
@@ -6034,10 +6058,10 @@ CUdeviceptr dstStart = dstDevice+(dstZ*dstHeight+dstY)*dstPitch+dstXInBytes;
  ::cuMemsetD32Async,
  ::cudaMemset*/
     fn cuMemsetD32_v2_ptds(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         ui: ::core::ffi::c_uint,
         N: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Initializes device memory
 
  Sets the 2D memory range of \p Width 8-bit values to the specified value
@@ -6075,12 +6099,12 @@ CUdeviceptr dstStart = dstDevice+(dstZ*dstHeight+dstY)*dstPitch+dstXInBytes;
  ::cuMemsetD32, ::cuMemsetD32Async,
  ::cudaMemset2D*/
     fn cuMemsetD2D8_v2_ptds(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         dstPitch: usize,
         uc: ::core::ffi::c_uchar,
         Width: usize,
         Height: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Initializes device memory
 
  Sets the 2D memory range of \p Width 16-bit values to the specified value
@@ -6119,12 +6143,12 @@ CUdeviceptr dstStart = dstDevice+(dstZ*dstHeight+dstY)*dstPitch+dstXInBytes;
  ::cuMemsetD32, ::cuMemsetD32Async,
  ::cudaMemset2D*/
     fn cuMemsetD2D16_v2_ptds(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         dstPitch: usize,
         us: ::core::ffi::c_ushort,
         Width: usize,
         Height: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Initializes device memory
 
  Sets the 2D memory range of \p Width 32-bit values to the specified value
@@ -6163,12 +6187,12 @@ CUdeviceptr dstStart = dstDevice+(dstZ*dstHeight+dstY)*dstPitch+dstXInBytes;
  ::cuMemsetD32, ::cuMemsetD32Async,
  ::cudaMemset2D*/
     fn cuMemsetD2D32_v2_ptds(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         dstPitch: usize,
         ui: ::core::ffi::c_uint,
         Width: usize,
         Height: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets device memory
 
  Sets the memory range of \p N 8-bit values to the specified value
@@ -6203,11 +6227,11 @@ CUdeviceptr dstStart = dstDevice+(dstZ*dstHeight+dstY)*dstPitch+dstXInBytes;
  ::cuMemsetD32, ::cuMemsetD32Async,
  ::cudaMemsetAsync*/
     fn cuMemsetD8Async_ptsz(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         uc: ::core::ffi::c_uchar,
         N: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets device memory
 
  Sets the memory range of \p N 16-bit values to the specified value
@@ -6242,11 +6266,11 @@ CUdeviceptr dstStart = dstDevice+(dstZ*dstHeight+dstY)*dstPitch+dstXInBytes;
  ::cuMemsetD32, ::cuMemsetD32Async,
  ::cudaMemsetAsync*/
     fn cuMemsetD16Async_ptsz(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         us: ::core::ffi::c_ushort,
         N: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets device memory
 
  Sets the memory range of \p N 32-bit values to the specified value
@@ -6280,11 +6304,11 @@ CUdeviceptr dstStart = dstDevice+(dstZ*dstHeight+dstY)*dstPitch+dstXInBytes;
  ::cuMemsetD8, ::cuMemsetD8Async, ::cuMemsetD16, ::cuMemsetD16Async, ::cuMemsetD32,
  ::cudaMemsetAsync*/
     fn cuMemsetD32Async_ptsz(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         ui: ::core::ffi::c_uint,
         N: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets device memory
 
  Sets the 2D memory range of \p Width 8-bit values to the specified value
@@ -6324,13 +6348,13 @@ CUdeviceptr dstStart = dstDevice+(dstZ*dstHeight+dstY)*dstPitch+dstXInBytes;
  ::cuMemsetD32, ::cuMemsetD32Async,
  ::cudaMemset2DAsync*/
     fn cuMemsetD2D8Async_ptsz(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         dstPitch: usize,
         uc: ::core::ffi::c_uchar,
         Width: usize,
         Height: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets device memory
 
  Sets the 2D memory range of \p Width 16-bit values to the specified value
@@ -6371,13 +6395,13 @@ CUdeviceptr dstStart = dstDevice+(dstZ*dstHeight+dstY)*dstPitch+dstXInBytes;
  ::cuMemsetD32, ::cuMemsetD32Async,
  ::cudaMemset2DAsync*/
     fn cuMemsetD2D16Async_ptsz(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         dstPitch: usize,
         us: ::core::ffi::c_ushort,
         Width: usize,
         Height: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets device memory
 
  Sets the 2D memory range of \p Width 32-bit values to the specified value
@@ -6418,13 +6442,13 @@ CUdeviceptr dstStart = dstDevice+(dstZ*dstHeight+dstY)*dstPitch+dstXInBytes;
  ::cuMemsetD32, ::cuMemsetD32Async,
  ::cudaMemset2DAsync*/
     fn cuMemsetD2D32Async_ptsz(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         dstPitch: usize,
         ui: ::core::ffi::c_uint,
         Width: usize,
         Height: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates a 1D or 2D CUDA array
 
  Creates a CUDA array according to the ::CUDA_ARRAY_DESCRIPTOR structure
@@ -6526,9 +6550,9 @@ desc.Height = height;
  ::cuMemsetD2D32, ::cuMemsetD8, ::cuMemsetD16, ::cuMemsetD32,
  ::cudaMallocArray*/
     fn cuArrayCreate_v2(
-        pHandle: *mut cuda_types::CUarray,
-        pAllocateArray: *const cuda_types::CUDA_ARRAY_DESCRIPTOR,
-    ) -> cuda_types::CUresult;
+        pHandle: *mut cuda_types::cuda::CUarray,
+        pAllocateArray: *const cuda_types::cuda::CUDA_ARRAY_DESCRIPTOR,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Get a 1D or 2D CUDA array descriptor
 
  Returns in \p *pArrayDescriptor a descriptor containing information on the
@@ -6560,9 +6584,9 @@ desc.Height = height;
  ::cuMemsetD2D32, ::cuMemsetD8, ::cuMemsetD16, ::cuMemsetD32,
  ::cudaArrayGetInfo*/
     fn cuArrayGetDescriptor_v2(
-        pArrayDescriptor: *mut cuda_types::CUDA_ARRAY_DESCRIPTOR,
-        hArray: cuda_types::CUarray,
-    ) -> cuda_types::CUresult;
+        pArrayDescriptor: *mut cuda_types::cuda::CUDA_ARRAY_DESCRIPTOR,
+        hArray: cuda_types::cuda::CUarray,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns the layout properties of a sparse CUDA array
 
  Returns the layout properties of a sparse CUDA array in \p sparseProperties
@@ -6584,9 +6608,9 @@ desc.Height = height;
  \param[in] array - CUDA array to get the sparse properties of
  \sa ::cuMipmappedArrayGetSparseProperties, ::cuMemMapArrayAsync*/
     fn cuArrayGetSparseProperties(
-        sparseProperties: *mut cuda_types::CUDA_ARRAY_SPARSE_PROPERTIES,
-        array: cuda_types::CUarray,
-    ) -> cuda_types::CUresult;
+        sparseProperties: *mut cuda_types::cuda::CUDA_ARRAY_SPARSE_PROPERTIES,
+        array: cuda_types::cuda::CUarray,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns the layout properties of a sparse CUDA mipmapped array
 
  Returns the sparse array layout properties in \p sparseProperties
@@ -6609,9 +6633,9 @@ desc.Height = height;
  \param[in] mipmap - CUDA mipmapped array to get the sparse properties of
  \sa ::cuArrayGetSparseProperties, ::cuMemMapArrayAsync*/
     fn cuMipmappedArrayGetSparseProperties(
-        sparseProperties: *mut cuda_types::CUDA_ARRAY_SPARSE_PROPERTIES,
-        mipmap: cuda_types::CUmipmappedArray,
-    ) -> cuda_types::CUresult;
+        sparseProperties: *mut cuda_types::cuda::CUDA_ARRAY_SPARSE_PROPERTIES,
+        mipmap: cuda_types::cuda::CUmipmappedArray,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns the memory requirements of a CUDA array
 
  Returns the memory requirements of a CUDA array in \p memoryRequirements
@@ -6632,10 +6656,10 @@ desc.Height = height;
  \param[in] device - Device to get the memory requirements for
  \sa ::cuMipmappedArrayGetMemoryRequirements, ::cuMemMapArrayAsync*/
     fn cuArrayGetMemoryRequirements(
-        memoryRequirements: *mut cuda_types::CUDA_ARRAY_MEMORY_REQUIREMENTS,
-        array: cuda_types::CUarray,
-        device: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        memoryRequirements: *mut cuda_types::cuda::CUDA_ARRAY_MEMORY_REQUIREMENTS,
+        array: cuda_types::cuda::CUarray,
+        device: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns the memory requirements of a CUDA mipmapped array
 
  Returns the memory requirements of a CUDA mipmapped array in \p memoryRequirements
@@ -6657,10 +6681,10 @@ desc.Height = height;
  \param[in] device - Device to get the memory requirements for
  \sa ::cuArrayGetMemoryRequirements, ::cuMemMapArrayAsync*/
     fn cuMipmappedArrayGetMemoryRequirements(
-        memoryRequirements: *mut cuda_types::CUDA_ARRAY_MEMORY_REQUIREMENTS,
-        mipmap: cuda_types::CUmipmappedArray,
-        device: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        memoryRequirements: *mut cuda_types::cuda::CUDA_ARRAY_MEMORY_REQUIREMENTS,
+        mipmap: cuda_types::cuda::CUmipmappedArray,
+        device: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Gets a CUDA array plane from a CUDA array
 
  Returns in \p pPlaneArray a CUDA array that represents a single format plane
@@ -6691,10 +6715,10 @@ desc.Height = height;
  ::cuArrayCreate,
  ::cudaArrayGetPlane*/
     fn cuArrayGetPlane(
-        pPlaneArray: *mut cuda_types::CUarray,
-        hArray: cuda_types::CUarray,
+        pPlaneArray: *mut cuda_types::cuda::CUarray,
+        hArray: cuda_types::cuda::CUarray,
         planeIdx: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Destroys a CUDA array
 
  Destroys the CUDA array \p hArray.
@@ -6722,7 +6746,7 @@ desc.Height = height;
  ::cuMemHostGetDevicePointer, ::cuMemsetD2D8, ::cuMemsetD2D16,
  ::cuMemsetD2D32, ::cuMemsetD8, ::cuMemsetD16, ::cuMemsetD32,
  ::cudaFreeArray*/
-    fn cuArrayDestroy(hArray: cuda_types::CUarray) -> cuda_types::CUresult;
+    fn cuArrayDestroy(hArray: cuda_types::cuda::CUarray) -> cuda_types::cuda::CUresult;
     /** \brief Creates a 3D CUDA array
 
  Creates a CUDA array according to the ::CUDA_ARRAY3D_DESCRIPTOR structure
@@ -6900,9 +6924,9 @@ desc.Depth = depth;
  ::cuMemsetD2D32, ::cuMemsetD8, ::cuMemsetD16, ::cuMemsetD32,
  ::cudaMalloc3DArray*/
     fn cuArray3DCreate_v2(
-        pHandle: *mut cuda_types::CUarray,
-        pAllocateArray: *const cuda_types::CUDA_ARRAY3D_DESCRIPTOR,
-    ) -> cuda_types::CUresult;
+        pHandle: *mut cuda_types::cuda::CUarray,
+        pAllocateArray: *const cuda_types::cuda::CUDA_ARRAY3D_DESCRIPTOR,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Get a 3D CUDA array descriptor
 
  Returns in \p *pArrayDescriptor a descriptor containing information on the
@@ -6938,9 +6962,9 @@ desc.Depth = depth;
  ::cuMemsetD2D32, ::cuMemsetD8, ::cuMemsetD16, ::cuMemsetD32,
  ::cudaArrayGetInfo*/
     fn cuArray3DGetDescriptor_v2(
-        pArrayDescriptor: *mut cuda_types::CUDA_ARRAY3D_DESCRIPTOR,
-        hArray: cuda_types::CUarray,
-    ) -> cuda_types::CUresult;
+        pArrayDescriptor: *mut cuda_types::cuda::CUDA_ARRAY3D_DESCRIPTOR,
+        hArray: cuda_types::cuda::CUarray,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates a CUDA mipmapped array
 
  Creates a CUDA mipmapped array according to the ::CUDA_ARRAY3D_DESCRIPTOR structure
@@ -7080,10 +7104,10 @@ CU_AD_FORMAT_FLOAT = 0x20
  ::cuArrayCreate,
  ::cudaMallocMipmappedArray*/
     fn cuMipmappedArrayCreate(
-        pHandle: *mut cuda_types::CUmipmappedArray,
-        pMipmappedArrayDesc: *const cuda_types::CUDA_ARRAY3D_DESCRIPTOR,
+        pHandle: *mut cuda_types::cuda::CUmipmappedArray,
+        pMipmappedArrayDesc: *const cuda_types::cuda::CUDA_ARRAY3D_DESCRIPTOR,
         numMipmapLevels: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Gets a mipmap level of a CUDA mipmapped array
 
  Returns in \p *pLevelArray a CUDA array that represents a single mipmap level
@@ -7111,10 +7135,10 @@ CU_AD_FORMAT_FLOAT = 0x20
  ::cuArrayCreate,
  ::cudaGetMipmappedArrayLevel*/
     fn cuMipmappedArrayGetLevel(
-        pLevelArray: *mut cuda_types::CUarray,
-        hMipmappedArray: cuda_types::CUmipmappedArray,
+        pLevelArray: *mut cuda_types::cuda::CUarray,
+        hMipmappedArray: cuda_types::cuda::CUmipmappedArray,
         level: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Destroys a CUDA mipmapped array
 
  Destroys the CUDA mipmapped array \p hMipmappedArray.
@@ -7137,8 +7161,8 @@ CU_AD_FORMAT_FLOAT = 0x20
  ::cuArrayCreate,
  ::cudaFreeMipmappedArray*/
     fn cuMipmappedArrayDestroy(
-        hMipmappedArray: cuda_types::CUmipmappedArray,
-    ) -> cuda_types::CUresult;
+        hMipmappedArray: cuda_types::cuda::CUmipmappedArray,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Retrieve handle for an address range
 
  Get a handle of the specified type to an address range. The address range
@@ -7172,11 +7196,11 @@ CU_AD_FORMAT_FLOAT = 0x20
  CUDA_ERROR_NOT_SUPPORTED*/
     fn cuMemGetHandleForAddressRange(
         handle: *mut ::core::ffi::c_void,
-        dptr: cuda_types::CUdeviceptr,
+        dptr: cuda_types::cuda::CUdeviceptr,
         size: usize,
-        handleType: cuda_types::CUmemRangeHandleType,
+        handleType: cuda_types::cuda::CUmemRangeHandleType,
         flags: ::core::ffi::c_ulonglong,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Allocate an address range reservation.
 
  Reserves a virtual address range based on the given parameters, giving
@@ -7201,12 +7225,12 @@ CU_AD_FORMAT_FLOAT = 0x20
 
  \sa ::cuMemAddressFree*/
     fn cuMemAddressReserve(
-        ptr: *mut cuda_types::CUdeviceptr,
+        ptr: *mut cuda_types::cuda::CUdeviceptr,
         size: usize,
         alignment: usize,
-        addr: cuda_types::CUdeviceptr,
+        addr: cuda_types::cuda::CUdeviceptr,
         flags: ::core::ffi::c_ulonglong,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Free an address range reservation.
 
  Frees a virtual address range reserved by cuMemAddressReserve.  The size
@@ -7225,9 +7249,9 @@ CU_AD_FORMAT_FLOAT = 0x20
 
  \sa ::cuMemAddressReserve*/
     fn cuMemAddressFree(
-        ptr: cuda_types::CUdeviceptr,
+        ptr: cuda_types::cuda::CUdeviceptr,
         size: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Create a CUDA memory handle representing a memory allocation of a given size described by the given properties
 
  This creates a memory allocation on the target device specified through the
@@ -7280,11 +7304,11 @@ CU_AD_FORMAT_FLOAT = 0x20
 
  \sa ::cuMemRelease, ::cuMemExportToShareableHandle, ::cuMemImportFromShareableHandle*/
     fn cuMemCreate(
-        handle: *mut cuda_types::CUmemGenericAllocationHandle,
+        handle: *mut cuda_types::cuda::CUmemGenericAllocationHandle,
         size: usize,
-        prop: *const cuda_types::CUmemAllocationProp,
+        prop: *const cuda_types::cuda::CUmemAllocationProp,
         flags: ::core::ffi::c_ulonglong,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Release a memory handle representing a memory allocation which was previously allocated through cuMemCreate.
 
  Frees the memory that was allocated on a device through cuMemCreate.
@@ -7309,8 +7333,8 @@ CU_AD_FORMAT_FLOAT = 0x20
 
  \sa ::cuMemCreate*/
     fn cuMemRelease(
-        handle: cuda_types::CUmemGenericAllocationHandle,
-    ) -> cuda_types::CUresult;
+        handle: cuda_types::cuda::CUmemGenericAllocationHandle,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Maps an allocation handle to a reserved virtual address range.
 
  Maps bytes of memory represented by \p handle starting from byte \p offset to
@@ -7358,12 +7382,12 @@ CU_AD_FORMAT_FLOAT = 0x20
 
  \sa ::cuMemUnmap, ::cuMemSetAccess, ::cuMemCreate, ::cuMemAddressReserve, ::cuMemImportFromShareableHandle*/
     fn cuMemMap(
-        ptr: cuda_types::CUdeviceptr,
+        ptr: cuda_types::cuda::CUdeviceptr,
         size: usize,
         offset: usize,
-        handle: cuda_types::CUmemGenericAllocationHandle,
+        handle: cuda_types::cuda::CUmemGenericAllocationHandle,
         flags: ::core::ffi::c_ulonglong,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Maps or unmaps subregions of sparse CUDA arrays and sparse CUDA mipmapped arrays
 
  Performs map or unmap operations on subregions of sparse CUDA arrays and sparse CUDA mipmapped arrays.
@@ -7496,10 +7520,10 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
 
  \sa ::cuMipmappedArrayCreate, ::cuArrayCreate, ::cuArray3DCreate, ::cuMemCreate, ::cuArrayGetSparseProperties, ::cuMipmappedArrayGetSparseProperties*/
     fn cuMemMapArrayAsync_ptsz(
-        mapInfoList: *mut cuda_types::CUarrayMapInfo,
+        mapInfoList: *mut cuda_types::cuda::CUarrayMapInfo,
         count: ::core::ffi::c_uint,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Unmap the backing memory of a given address range.
 
  The range must be the entire contiguous address range that was mapped to.  In
@@ -7525,7 +7549,10 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  \note_sync
 
  \sa ::cuMemCreate, ::cuMemAddressReserve*/
-    fn cuMemUnmap(ptr: cuda_types::CUdeviceptr, size: usize) -> cuda_types::CUresult;
+    fn cuMemUnmap(
+        ptr: cuda_types::cuda::CUdeviceptr,
+        size: usize,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Set the access flags for each location specified in \p desc for the given virtual address range
 
  Given the virtual address range via \p ptr and \p size, and the locations
@@ -7557,11 +7584,11 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
 
  \sa ::cuMemSetAccess, ::cuMemCreate, :cuMemMap*/
     fn cuMemSetAccess(
-        ptr: cuda_types::CUdeviceptr,
+        ptr: cuda_types::cuda::CUdeviceptr,
         size: usize,
-        desc: *const cuda_types::CUmemAccessDesc,
+        desc: *const cuda_types::cuda::CUmemAccessDesc,
         count: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Get the access \p flags set for the given \p location and \p ptr
 
  \param[out] flags   - Flags set for this location
@@ -7579,9 +7606,9 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  \sa ::cuMemSetAccess*/
     fn cuMemGetAccess(
         flags: *mut ::core::ffi::c_ulonglong,
-        location: *const cuda_types::CUmemLocation,
-        ptr: cuda_types::CUdeviceptr,
-    ) -> cuda_types::CUresult;
+        location: *const cuda_types::cuda::CUmemLocation,
+        ptr: cuda_types::cuda::CUdeviceptr,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Exports an allocation to a requested shareable handle type
 
  Given a CUDA memory handle, create a shareable memory
@@ -7613,10 +7640,10 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  \sa ::cuMemImportFromShareableHandle*/
     fn cuMemExportToShareableHandle(
         shareableHandle: *mut ::core::ffi::c_void,
-        handle: cuda_types::CUmemGenericAllocationHandle,
-        handleType: cuda_types::CUmemAllocationHandleType,
+        handle: cuda_types::cuda::CUmemGenericAllocationHandle,
+        handleType: cuda_types::cuda::CUmemAllocationHandleType,
         flags: ::core::ffi::c_ulonglong,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Imports an allocation from a requested shareable handle type.
 
  If the current process cannot support the memory described by this shareable
@@ -7645,10 +7672,10 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
 
  \sa ::cuMemExportToShareableHandle, ::cuMemMap, ::cuMemRelease*/
     fn cuMemImportFromShareableHandle(
-        handle: *mut cuda_types::CUmemGenericAllocationHandle,
+        handle: *mut cuda_types::cuda::CUmemGenericAllocationHandle,
         osHandle: *mut ::core::ffi::c_void,
-        shHandleType: cuda_types::CUmemAllocationHandleType,
-    ) -> cuda_types::CUresult;
+        shHandleType: cuda_types::cuda::CUmemAllocationHandleType,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Calculates either the minimal or recommended granularity
 
  Calculates either the minimal or recommended granularity
@@ -7669,9 +7696,9 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  \sa ::cuMemCreate, ::cuMemMap*/
     fn cuMemGetAllocationGranularity(
         granularity: *mut usize,
-        prop: *const cuda_types::CUmemAllocationProp,
-        option: cuda_types::CUmemAllocationGranularity_flags,
-    ) -> cuda_types::CUresult;
+        prop: *const cuda_types::cuda::CUmemAllocationProp,
+        option: cuda_types::cuda::CUmemAllocationGranularity_flags,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Retrieve the contents of the property structure defining properties for this handle
 
  \param[out] prop  - Pointer to a properties structure which will hold the information about this handle
@@ -7686,9 +7713,9 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
 
  \sa ::cuMemCreate, ::cuMemImportFromShareableHandle*/
     fn cuMemGetAllocationPropertiesFromHandle(
-        prop: *mut cuda_types::CUmemAllocationProp,
-        handle: cuda_types::CUmemGenericAllocationHandle,
-    ) -> cuda_types::CUresult;
+        prop: *mut cuda_types::cuda::CUmemAllocationProp,
+        handle: cuda_types::cuda::CUmemGenericAllocationHandle,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Given an address \p addr, returns the allocation handle of the backing memory allocation.
 
  The handle is guaranteed to be the same handle value used to map the memory. If the address
@@ -7710,9 +7737,9 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
 
  \sa ::cuMemCreate, ::cuMemRelease, ::cuMemMap*/
     fn cuMemRetainAllocationHandle(
-        handle: *mut cuda_types::CUmemGenericAllocationHandle,
+        handle: *mut cuda_types::cuda::CUmemGenericAllocationHandle,
         addr: *mut ::core::ffi::c_void,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Frees memory with stream ordered semantics
 
  Inserts a free operation into \p hStream.
@@ -7732,9 +7759,9 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::CUDA_ERROR_INVALID_CONTEXT (default stream specified with no current context),
  ::CUDA_ERROR_NOT_SUPPORTED*/
     fn cuMemFreeAsync_ptsz(
-        dptr: cuda_types::CUdeviceptr,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        dptr: cuda_types::cuda::CUdeviceptr,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Allocates memory with stream ordered semantics
 
  Inserts an allocation operation into \p hStream.
@@ -7765,10 +7792,10 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
      ::cuDeviceGetDefaultMemPool, ::cuDeviceGetMemPool, ::cuMemPoolCreate,
      ::cuMemPoolSetAccess, ::cuMemPoolSetAttribute*/
     fn cuMemAllocAsync_ptsz(
-        dptr: *mut cuda_types::CUdeviceptr,
+        dptr: *mut cuda_types::cuda::CUdeviceptr,
         bytesize: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Tries to release memory back to the OS
 
  Releases memory back to the OS until the pool contains fewer than minBytesToKeep
@@ -7792,9 +7819,9 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  \sa ::cuMemAllocAsync, ::cuMemFreeAsync, ::cuDeviceGetDefaultMemPool,
      ::cuDeviceGetMemPool, ::cuMemPoolCreate*/
     fn cuMemPoolTrimTo(
-        pool: cuda_types::CUmemoryPool,
+        pool: cuda_types::cuda::CUmemoryPool,
         minBytesToKeep: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets attributes of a memory pool
 
  Supported attributes are:
@@ -7835,10 +7862,10 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  \sa ::cuMemAllocAsync, ::cuMemFreeAsync, ::cuDeviceGetDefaultMemPool,
      ::cuDeviceGetMemPool, ::cuMemPoolCreate*/
     fn cuMemPoolSetAttribute(
-        pool: cuda_types::CUmemoryPool,
-        attr: cuda_types::CUmemPool_attribute,
+        pool: cuda_types::cuda::CUmemoryPool,
+        attr: cuda_types::cuda::CUmemPool_attribute,
         value: *mut ::core::ffi::c_void,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Gets attributes of a memory pool
 
  Supported attributes are:
@@ -7883,10 +7910,10 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  \sa ::cuMemAllocAsync, ::cuMemFreeAsync, ::cuDeviceGetDefaultMemPool,
      ::cuDeviceGetMemPool, ::cuMemPoolCreate*/
     fn cuMemPoolGetAttribute(
-        pool: cuda_types::CUmemoryPool,
-        attr: cuda_types::CUmemPool_attribute,
+        pool: cuda_types::cuda::CUmemoryPool,
+        attr: cuda_types::cuda::CUmemPool_attribute,
         value: *mut ::core::ffi::c_void,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Controls visibility of pools between devices
 
  \param[in] pool  - The pool being modified
@@ -7901,10 +7928,10 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  \sa ::cuMemAllocAsync, ::cuMemFreeAsync, ::cuDeviceGetDefaultMemPool,
      ::cuDeviceGetMemPool, ::cuMemPoolCreate*/
     fn cuMemPoolSetAccess(
-        pool: cuda_types::CUmemoryPool,
-        map: *const cuda_types::CUmemAccessDesc,
+        pool: cuda_types::cuda::CUmemoryPool,
+        map: *const cuda_types::cuda::CUmemAccessDesc,
         count: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns the accessibility of a pool from a device
 
  Returns the accessibility of the pool's memory from the specified location.
@@ -7916,10 +7943,10 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  \sa ::cuMemAllocAsync, ::cuMemFreeAsync, ::cuDeviceGetDefaultMemPool,
      ::cuDeviceGetMemPool, ::cuMemPoolCreate*/
     fn cuMemPoolGetAccess(
-        flags: *mut cuda_types::CUmemAccess_flags,
-        memPool: cuda_types::CUmemoryPool,
-        location: *mut cuda_types::CUmemLocation,
-    ) -> cuda_types::CUresult;
+        flags: *mut cuda_types::cuda::CUmemAccess_flags,
+        memPool: cuda_types::cuda::CUmemoryPool,
+        location: *mut cuda_types::cuda::CUmemLocation,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates a memory pool
 
  Creates a CUDA memory pool and returns the handle in \p pool.  The \p poolProps determines
@@ -7958,9 +7985,9 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  \sa ::cuDeviceSetMemPool, ::cuDeviceGetMemPool, ::cuDeviceGetDefaultMemPool,
      ::cuMemAllocFromPoolAsync, ::cuMemPoolExportToShareableHandle*/
     fn cuMemPoolCreate(
-        pool: *mut cuda_types::CUmemoryPool,
-        poolProps: *const cuda_types::CUmemPoolProps,
-    ) -> cuda_types::CUresult;
+        pool: *mut cuda_types::cuda::CUmemoryPool,
+        poolProps: *const cuda_types::cuda::CUmemPoolProps,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Destroys the specified memory pool
 
  If any pointers obtained from this pool haven't been freed or
@@ -7980,7 +8007,9 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
 
  \sa ::cuMemFreeAsync, ::cuDeviceSetMemPool, ::cuDeviceGetMemPool,
      ::cuDeviceGetDefaultMemPool, ::cuMemPoolCreate*/
-    fn cuMemPoolDestroy(pool: cuda_types::CUmemoryPool) -> cuda_types::CUresult;
+    fn cuMemPoolDestroy(
+        pool: cuda_types::cuda::CUmemoryPool,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Allocates memory from a specified pool with stream ordered semantics.
 
  Inserts an allocation operation into \p hStream.
@@ -8016,11 +8045,11 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
      ::cuDeviceGetMemPool, ::cuMemPoolCreate, ::cuMemPoolSetAccess,
      ::cuMemPoolSetAttribute*/
     fn cuMemAllocFromPoolAsync_ptsz(
-        dptr: *mut cuda_types::CUdeviceptr,
+        dptr: *mut cuda_types::cuda::CUdeviceptr,
         bytesize: usize,
-        pool: cuda_types::CUmemoryPool,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        pool: cuda_types::cuda::CUmemoryPool,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Exports a memory pool to the requested handle type.
 
  Given an IPC capable mempool, create an OS handle to share the pool with another process.
@@ -8048,10 +8077,10 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
      ::cuMemPoolSetAccess, ::cuMemPoolSetAttribute*/
     fn cuMemPoolExportToShareableHandle(
         handle_out: *mut ::core::ffi::c_void,
-        pool: cuda_types::CUmemoryPool,
-        handleType: cuda_types::CUmemAllocationHandleType,
+        pool: cuda_types::cuda::CUmemoryPool,
+        handleType: cuda_types::cuda::CUmemAllocationHandleType,
         flags: ::core::ffi::c_ulonglong,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief imports a memory pool from a shared handle.
 
  Specific allocations can be imported from the imported pool with cuMemPoolImportPointer.
@@ -8078,11 +8107,11 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
 
  \sa ::cuMemPoolExportToShareableHandle, ::cuMemPoolExportPointer, ::cuMemPoolImportPointer*/
     fn cuMemPoolImportFromShareableHandle(
-        pool_out: *mut cuda_types::CUmemoryPool,
+        pool_out: *mut cuda_types::cuda::CUmemoryPool,
         handle: *mut ::core::ffi::c_void,
-        handleType: cuda_types::CUmemAllocationHandleType,
+        handleType: cuda_types::cuda::CUmemAllocationHandleType,
         flags: ::core::ffi::c_ulonglong,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Export data to share a memory pool allocation between processes.
 
  Constructs \p shareData_out for sharing a specific allocation from an already shared memory pool.
@@ -8100,9 +8129,9 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
 
  \sa ::cuMemPoolExportToShareableHandle, ::cuMemPoolImportFromShareableHandle, ::cuMemPoolImportPointer*/
     fn cuMemPoolExportPointer(
-        shareData_out: *mut cuda_types::CUmemPoolPtrExportData,
-        ptr: cuda_types::CUdeviceptr,
-    ) -> cuda_types::CUresult;
+        shareData_out: *mut cuda_types::cuda::CUmemPoolPtrExportData,
+        ptr: cuda_types::cuda::CUdeviceptr,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Import a memory pool allocation from another process.
 
  Returns in \p ptr_out a pointer to the imported memory.
@@ -8129,10 +8158,10 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
 
  \sa ::cuMemPoolExportToShareableHandle, ::cuMemPoolImportFromShareableHandle, ::cuMemPoolExportPointer*/
     fn cuMemPoolImportPointer(
-        ptr_out: *mut cuda_types::CUdeviceptr,
-        pool: cuda_types::CUmemoryPool,
-        shareData: *mut cuda_types::CUmemPoolPtrExportData,
-    ) -> cuda_types::CUresult;
+        ptr_out: *mut cuda_types::cuda::CUdeviceptr,
+        pool: cuda_types::cuda::CUmemoryPool,
+        shareData: *mut cuda_types::cuda::CUmemPoolPtrExportData,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Create a generic allocation handle representing a multicast object described by the given properties.
 
  This creates a multicast object as described by \p prop. The number of
@@ -8173,9 +8202,9 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  \sa ::cuMulticastAddDevice, ::cuMulticastBindMem, ::cuMulticastBindAddr, ::cuMulticastUnbind
  \sa ::cuMemCreate, ::cuMemRelease, ::cuMemExportToShareableHandle, ::cuMemImportFromShareableHandle*/
     fn cuMulticastCreate(
-        mcHandle: *mut cuda_types::CUmemGenericAllocationHandle,
-        prop: *const cuda_types::CUmulticastObjectProp,
-    ) -> cuda_types::CUresult;
+        mcHandle: *mut cuda_types::cuda::CUmemGenericAllocationHandle,
+        prop: *const cuda_types::cuda::CUmulticastObjectProp,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Associate a device to a multicast object.
 
  Associates a device to a multicast object. The added device will be a part of
@@ -8206,9 +8235,9 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
 
  \sa ::cuMulticastCreate, ::cuMulticastBindMem, ::cuMulticastBindAddr*/
     fn cuMulticastAddDevice(
-        mcHandle: cuda_types::CUmemGenericAllocationHandle,
-        dev: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        mcHandle: cuda_types::cuda::CUmemGenericAllocationHandle,
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Bind a memory allocation represented by a handle to a multicast object.
 
  Binds a memory allocation specified by \p memHandle and created via
@@ -8255,13 +8284,13 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
 
  \sa ::cuMulticastCreate, ::cuMulticastAddDevice, ::cuMemCreate*/
     fn cuMulticastBindMem(
-        mcHandle: cuda_types::CUmemGenericAllocationHandle,
+        mcHandle: cuda_types::cuda::CUmemGenericAllocationHandle,
         mcOffset: usize,
-        memHandle: cuda_types::CUmemGenericAllocationHandle,
+        memHandle: cuda_types::cuda::CUmemGenericAllocationHandle,
         memOffset: usize,
         size: usize,
         flags: ::core::ffi::c_ulonglong,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Bind a memory allocation represented by a virtual address to a multicast object.
 
  Binds a memory allocation specified by its mapped address \p memptr to a
@@ -8306,12 +8335,12 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
 
  \sa ::cuMulticastCreate, ::cuMulticastAddDevice, ::cuMemCreate*/
     fn cuMulticastBindAddr(
-        mcHandle: cuda_types::CUmemGenericAllocationHandle,
+        mcHandle: cuda_types::cuda::CUmemGenericAllocationHandle,
         mcOffset: usize,
-        memptr: cuda_types::CUdeviceptr,
+        memptr: cuda_types::cuda::CUdeviceptr,
         size: usize,
         flags: ::core::ffi::c_ulonglong,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Unbind any memory allocations bound to a multicast object at a given offset and upto a given size.
 
  Unbinds any memory allocations hosted on \p dev and bound to a multicast
@@ -8343,11 +8372,11 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
 
  \sa ::cuMulticastBindMem, ::cuMulticastBindAddr*/
     fn cuMulticastUnbind(
-        mcHandle: cuda_types::CUmemGenericAllocationHandle,
-        dev: cuda_types::CUdevice,
+        mcHandle: cuda_types::cuda::CUmemGenericAllocationHandle,
+        dev: cuda_types::cuda::CUdevice,
         mcOffset: usize,
         size: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Calculates either the minimal or recommended granularity for multicast object
 
  Calculates either the minimal or recommended granularity for a given set of
@@ -8370,9 +8399,9 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  \sa ::cuMulticastCreate, ::cuMulticastBindMem, ::cuMulticastBindAddr, ::cuMulticastUnbind*/
     fn cuMulticastGetGranularity(
         granularity: *mut usize,
-        prop: *const cuda_types::CUmulticastObjectProp,
-        option: cuda_types::CUmulticastGranularity_flags,
-    ) -> cuda_types::CUresult;
+        prop: *const cuda_types::cuda::CUmulticastObjectProp,
+        option: cuda_types::cuda::CUmulticastGranularity_flags,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns information about a pointer
 
  The supported attributes are:
@@ -8561,9 +8590,9 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::cudaPointerGetAttributes*/
     fn cuPointerGetAttribute(
         data: *mut ::core::ffi::c_void,
-        attribute: cuda_types::CUpointer_attribute,
-        ptr: cuda_types::CUdeviceptr,
-    ) -> cuda_types::CUresult;
+        attribute: cuda_types::cuda::CUpointer_attribute,
+        ptr: cuda_types::cuda::CUdeviceptr,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Prefetches memory to the specified destination device
 
  Note there is a later version of this API, ::cuMemPrefetchAsync_v2. It will
@@ -8632,11 +8661,11 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::cuMemcpy3DPeerAsync, ::cuMemAdvise, ::cuMemPrefetchAsync
  ::cudaMemPrefetchAsync_v2*/
     fn cuMemPrefetchAsync_ptsz(
-        devPtr: cuda_types::CUdeviceptr,
+        devPtr: cuda_types::cuda::CUdeviceptr,
         count: usize,
-        dstDevice: cuda_types::CUdevice,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        dstDevice: cuda_types::cuda::CUdevice,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Prefetches memory to the specified destination location
 
  Prefetches memory to the specified destination location.  \p devPtr is the
@@ -8711,12 +8740,12 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::cuMemcpy3DPeerAsync, ::cuMemAdvise, ::cuMemPrefetchAsync
  ::cudaMemPrefetchAsync_v2*/
     fn cuMemPrefetchAsync_v2_ptsz(
-        devPtr: cuda_types::CUdeviceptr,
+        devPtr: cuda_types::cuda::CUdeviceptr,
         count: usize,
-        location: cuda_types::CUmemLocation,
+        location: cuda_types::cuda::CUmemLocation,
         flags: ::core::ffi::c_uint,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Advise about the usage of a given memory range
 
  Note there is a later version of this API, ::cuMemAdvise_v2. It will
@@ -8829,11 +8858,11 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::cuMemcpy3DPeerAsync, ::cuMemPrefetchAsync, ::cuMemAdvise_v2
  ::cudaMemAdvise*/
     fn cuMemAdvise(
-        devPtr: cuda_types::CUdeviceptr,
+        devPtr: cuda_types::cuda::CUdeviceptr,
         count: usize,
-        advice: cuda_types::CUmem_advise,
-        device: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        advice: cuda_types::cuda::CUmem_advise,
+        device: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Advise about the usage of a given memory range
 
  Advise the Unified Memory subsystem about the usage pattern for the memory range
@@ -8952,11 +8981,11 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::cuMemcpy3DPeerAsync, ::cuMemPrefetchAsync, ::cuMemAdvise
  ::cudaMemAdvise*/
     fn cuMemAdvise_v2(
-        devPtr: cuda_types::CUdeviceptr,
+        devPtr: cuda_types::cuda::CUdeviceptr,
         count: usize,
-        advice: cuda_types::CUmem_advise,
-        location: cuda_types::CUmemLocation,
-    ) -> cuda_types::CUresult;
+        advice: cuda_types::cuda::CUmem_advise,
+        location: cuda_types::cuda::CUmemLocation,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Query an attribute of a given memory range
 
  Query an attribute about the memory range starting at \p devPtr with a size of \p count bytes. The
@@ -9037,10 +9066,10 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
     fn cuMemRangeGetAttribute(
         data: *mut ::core::ffi::c_void,
         dataSize: usize,
-        attribute: cuda_types::CUmem_range_attribute,
-        devPtr: cuda_types::CUdeviceptr,
+        attribute: cuda_types::cuda::CUmem_range_attribute,
+        devPtr: cuda_types::cuda::CUdeviceptr,
         count: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Query attributes of a given memory range.
 
  Query attributes of the memory range starting at \p devPtr with a size of \p count bytes. The
@@ -9084,11 +9113,11 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
     fn cuMemRangeGetAttributes(
         data: *mut *mut ::core::ffi::c_void,
         dataSizes: *mut usize,
-        attributes: *mut cuda_types::CUmem_range_attribute,
+        attributes: *mut cuda_types::cuda::CUmem_range_attribute,
         numAttributes: usize,
-        devPtr: cuda_types::CUdeviceptr,
+        devPtr: cuda_types::cuda::CUdeviceptr,
         count: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Set attributes on a previously allocated memory region
 
  The supported attributes are:
@@ -9129,9 +9158,9 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::cuMemHostUnregister*/
     fn cuPointerSetAttribute(
         value: *const ::core::ffi::c_void,
-        attribute: cuda_types::CUpointer_attribute,
-        ptr: cuda_types::CUdeviceptr,
-    ) -> cuda_types::CUresult;
+        attribute: cuda_types::cuda::CUpointer_attribute,
+        ptr: cuda_types::cuda::CUdeviceptr,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns information about a pointer.
 
  The supported attributes are (refer to ::cuPointerGetAttribute for attribute descriptions and restrictions):
@@ -9179,10 +9208,10 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::cudaPointerGetAttributes*/
     fn cuPointerGetAttributes(
         numAttributes: ::core::ffi::c_uint,
-        attributes: *mut cuda_types::CUpointer_attribute,
+        attributes: *mut cuda_types::cuda::CUpointer_attribute,
         data: *mut *mut ::core::ffi::c_void,
-        ptr: cuda_types::CUdeviceptr,
-    ) -> cuda_types::CUresult;
+        ptr: cuda_types::cuda::CUdeviceptr,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Create a stream
 
  Creates a stream and returns a handle in \p phStream.  The \p Flags argument
@@ -9217,9 +9246,9 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::cudaStreamCreate,
  ::cudaStreamCreateWithFlags*/
     fn cuStreamCreate(
-        phStream: *mut cuda_types::CUstream,
+        phStream: *mut cuda_types::cuda::CUstream,
         Flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Create a stream with the given priority
 
  Creates a stream with the specified priority and returns a handle in \p phStream.
@@ -9268,10 +9297,10 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::cuStreamAddCallback,
  ::cudaStreamCreateWithPriority*/
     fn cuStreamCreateWithPriority(
-        phStream: *mut cuda_types::CUstream,
+        phStream: *mut cuda_types::cuda::CUstream,
         flags: ::core::ffi::c_uint,
         priority: ::core::ffi::c_int,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Query the priority of a given stream
 
  Query the priority of a stream created using ::cuStreamCreate or ::cuStreamCreateWithPriority
@@ -9299,9 +9328,9 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::cuStreamGetFlags,
  ::cudaStreamGetPriority*/
     fn cuStreamGetPriority_ptsz(
-        hStream: cuda_types::CUstream,
+        hStream: cuda_types::cuda::CUstream,
         priority: *mut ::core::ffi::c_int,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Query the flags of a given stream
 
  Query the flags of a stream created using ::cuStreamCreate or ::cuStreamCreateWithPriority
@@ -9327,9 +9356,9 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::cuStreamGetPriority,
  ::cudaStreamGetFlags*/
     fn cuStreamGetFlags_ptsz(
-        hStream: cuda_types::CUstream,
+        hStream: cuda_types::cuda::CUstream,
         flags: *mut ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns the unique Id associated with the stream handle supplied
 
  Returns in \p streamId the unique Id which is associated with the given stream handle.
@@ -9360,9 +9389,9 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::cuStreamGetPriority,
  ::cudaStreamGetId*/
     fn cuStreamGetId_ptsz(
-        hStream: cuda_types::CUstream,
+        hStream: cuda_types::cuda::CUstream,
         streamId: *mut ::core::ffi::c_ulonglong,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Query the context associated with a stream
 
  Returns the CUDA context that the stream is associated with.
@@ -9404,9 +9433,9 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::cudaStreamCreate,
  ::cudaStreamCreateWithFlags*/
     fn cuStreamGetCtx_ptsz(
-        hStream: cuda_types::CUstream,
-        pctx: *mut cuda_types::CUcontext,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+        pctx: *mut cuda_types::cuda::CUcontext,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Make a compute stream wait on an event
 
  Makes all future work submitted to \p hStream wait for all work captured in
@@ -9441,10 +9470,10 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::cuStreamDestroy,
  ::cudaStreamWaitEvent*/
     fn cuStreamWaitEvent_ptsz(
-        hStream: cuda_types::CUstream,
-        hEvent: cuda_types::CUevent,
+        hStream: cuda_types::cuda::CUstream,
+        hEvent: cuda_types::cuda::CUevent,
         Flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Add a callback to a compute stream
 
  \note This function is slated for eventual deprecation and removal. If
@@ -9517,11 +9546,11 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::cuLaunchHostFunc,
  ::cudaStreamAddCallback*/
     fn cuStreamAddCallback_ptsz(
-        hStream: cuda_types::CUstream,
-        callback: cuda_types::CUstreamCallback,
+        hStream: cuda_types::cuda::CUstream,
+        callback: cuda_types::cuda::CUstreamCallback,
         userData: *mut ::core::ffi::c_void,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Begins graph capture on a stream
 
  Begin graph capture on \p hStream. When a stream is in capture mode, all operations
@@ -9557,9 +9586,9 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::cuStreamEndCapture,
  ::cuThreadExchangeStreamCaptureMode*/
     fn cuStreamBeginCapture_v2_ptsz(
-        hStream: cuda_types::CUstream,
-        mode: cuda_types::CUstreamCaptureMode,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+        mode: cuda_types::cuda::CUstreamCaptureMode,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Begins graph capture on a stream to an existing graph
 
  Begin graph capture on \p hStream, placing new nodes into an existing graph. When a stream is
@@ -9603,13 +9632,13 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::cuThreadExchangeStreamCaptureMode,
  ::cuGraphAddNode,*/
     fn cuStreamBeginCaptureToGraph_ptsz(
-        hStream: cuda_types::CUstream,
-        hGraph: cuda_types::CUgraph,
-        dependencies: *const cuda_types::CUgraphNode,
-        dependencyData: *const cuda_types::CUgraphEdgeData,
+        hStream: cuda_types::cuda::CUstream,
+        hGraph: cuda_types::cuda::CUgraph,
+        dependencies: *const cuda_types::cuda::CUgraphNode,
+        dependencyData: *const cuda_types::cuda::CUgraphEdgeData,
         numDependencies: usize,
-        mode: cuda_types::CUstreamCaptureMode,
-    ) -> cuda_types::CUresult;
+        mode: cuda_types::cuda::CUstreamCaptureMode,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Swaps the stream capture interaction mode for a thread
 
  Sets the calling thread's stream capture interaction mode to the value contained
@@ -9660,8 +9689,8 @@ cuThreadExchangeStreamCaptureMode(&mode); // restore previous mode
  \sa
  ::cuStreamBeginCapture*/
     fn cuThreadExchangeStreamCaptureMode(
-        mode: *mut cuda_types::CUstreamCaptureMode,
-    ) -> cuda_types::CUresult;
+        mode: *mut cuda_types::cuda::CUstreamCaptureMode,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Ends capture on a stream, returning the captured graph
 
  End capture on \p hStream, returning the captured graph via \p phGraph.
@@ -9690,9 +9719,9 @@ cuThreadExchangeStreamCaptureMode(&mode); // restore previous mode
  ::cuStreamIsCapturing,
  ::cuGraphDestroy*/
     fn cuStreamEndCapture_ptsz(
-        hStream: cuda_types::CUstream,
-        phGraph: *mut cuda_types::CUgraph,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+        phGraph: *mut cuda_types::cuda::CUgraph,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a stream's capture status
 
  Return the capture status of \p hStream via \p captureStatus. After a successful
@@ -9730,9 +9759,9 @@ cuThreadExchangeStreamCaptureMode(&mode); // restore previous mode
  ::cuStreamBeginCapture,
  ::cuStreamEndCapture*/
     fn cuStreamIsCapturing_ptsz(
-        hStream: cuda_types::CUstream,
-        captureStatus: *mut cuda_types::CUstreamCaptureStatus,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+        captureStatus: *mut cuda_types::cuda::CUstreamCaptureStatus,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Query a stream's capture state
 
  Query stream state related to stream capture.
@@ -9779,13 +9808,13 @@ cuThreadExchangeStreamCaptureMode(&mode); // restore previous mode
  ::cuStreamIsCapturing,
  ::cuStreamUpdateCaptureDependencies*/
     fn cuStreamGetCaptureInfo_v2_ptsz(
-        hStream: cuda_types::CUstream,
-        captureStatus_out: *mut cuda_types::CUstreamCaptureStatus,
-        id_out: *mut cuda_types::cuuint64_t,
-        graph_out: *mut cuda_types::CUgraph,
-        dependencies_out: *mut *const cuda_types::CUgraphNode,
+        hStream: cuda_types::cuda::CUstream,
+        captureStatus_out: *mut cuda_types::cuda::CUstreamCaptureStatus,
+        id_out: *mut cuda_types::cuda::cuuint64_t,
+        graph_out: *mut cuda_types::cuda::CUgraph,
+        dependencies_out: *mut *const cuda_types::cuda::CUgraphNode,
         numDependencies_out: *mut usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Query a stream's capture state (12.3+)
 
  Query stream state related to stream capture.
@@ -9843,14 +9872,14 @@ cuThreadExchangeStreamCaptureMode(&mode); // restore previous mode
  ::cuStreamIsCapturing,
  ::cuStreamUpdateCaptureDependencies*/
     fn cuStreamGetCaptureInfo_v3_ptsz(
-        hStream: cuda_types::CUstream,
-        captureStatus_out: *mut cuda_types::CUstreamCaptureStatus,
-        id_out: *mut cuda_types::cuuint64_t,
-        graph_out: *mut cuda_types::CUgraph,
-        dependencies_out: *mut *const cuda_types::CUgraphNode,
-        edgeData_out: *mut *const cuda_types::CUgraphEdgeData,
+        hStream: cuda_types::cuda::CUstream,
+        captureStatus_out: *mut cuda_types::cuda::CUstreamCaptureStatus,
+        id_out: *mut cuda_types::cuda::cuuint64_t,
+        graph_out: *mut cuda_types::cuda::CUgraph,
+        dependencies_out: *mut *const cuda_types::cuda::CUgraphNode,
+        edgeData_out: *mut *const cuda_types::cuda::CUgraphEdgeData,
         numDependencies_out: *mut usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Update the set of dependencies in a capturing stream (11.3+)
 
  Modifies the dependency set of a capturing stream. The dependency set is the set
@@ -9884,11 +9913,11 @@ cuThreadExchangeStreamCaptureMode(&mode); // restore previous mode
  ::cuStreamBeginCapture,
  ::cuStreamGetCaptureInfo,*/
     fn cuStreamUpdateCaptureDependencies_ptsz(
-        hStream: cuda_types::CUstream,
-        dependencies: *mut cuda_types::CUgraphNode,
+        hStream: cuda_types::cuda::CUstream,
+        dependencies: *mut cuda_types::cuda::CUgraphNode,
         numDependencies: usize,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Update the set of dependencies in a capturing stream (12.3+)
 
  Modifies the dependency set of a capturing stream. The dependency set is the set
@@ -9921,12 +9950,12 @@ cuThreadExchangeStreamCaptureMode(&mode); // restore previous mode
  ::cuStreamBeginCapture,
  ::cuStreamGetCaptureInfo,*/
     fn cuStreamUpdateCaptureDependencies_v2_ptsz(
-        hStream: cuda_types::CUstream,
-        dependencies: *mut cuda_types::CUgraphNode,
-        dependencyData: *const cuda_types::CUgraphEdgeData,
+        hStream: cuda_types::cuda::CUstream,
+        dependencies: *mut cuda_types::cuda::CUgraphNode,
+        dependencyData: *const cuda_types::cuda::CUgraphEdgeData,
         numDependencies: usize,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Attach memory to a stream asynchronously
 
  Enqueues an operation in \p hStream to specify stream association of
@@ -10012,11 +10041,11 @@ cuThreadExchangeStreamCaptureMode(&mode); // restore previous mode
  ::cuMemAllocManaged,
  ::cudaStreamAttachMemAsync*/
     fn cuStreamAttachMemAsync_ptsz(
-        hStream: cuda_types::CUstream,
-        dptr: cuda_types::CUdeviceptr,
+        hStream: cuda_types::cuda::CUstream,
+        dptr: cuda_types::cuda::CUdeviceptr,
         length: usize,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Determine status of a compute stream
 
  Returns ::CUDA_SUCCESS if all operations in the stream specified by
@@ -10043,7 +10072,9 @@ cuThreadExchangeStreamCaptureMode(&mode); // restore previous mode
  ::cuStreamSynchronize,
  ::cuStreamAddCallback,
  ::cudaStreamQuery*/
-    fn cuStreamQuery_ptsz(hStream: cuda_types::CUstream) -> cuda_types::CUresult;
+    fn cuStreamQuery_ptsz(
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Wait until a stream's tasks are completed
 
  Waits until the device has completed all operations in the stream specified
@@ -10069,7 +10100,9 @@ cuThreadExchangeStreamCaptureMode(&mode); // restore previous mode
  ::cuStreamQuery,
  ::cuStreamAddCallback,
  ::cudaStreamSynchronize*/
-    fn cuStreamSynchronize_ptsz(hStream: cuda_types::CUstream) -> cuda_types::CUresult;
+    fn cuStreamSynchronize_ptsz(
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Destroys a stream
 
  Destroys the stream specified by \p hStream.
@@ -10096,7 +10129,9 @@ cuThreadExchangeStreamCaptureMode(&mode); // restore previous mode
  ::cuStreamSynchronize,
  ::cuStreamAddCallback,
  ::cudaStreamDestroy*/
-    fn cuStreamDestroy_v2(hStream: cuda_types::CUstream) -> cuda_types::CUresult;
+    fn cuStreamDestroy_v2(
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Copies attributes from source stream to destination stream.
 
  Copies attributes from source stream \p src to destination stream \p dst.
@@ -10114,9 +10149,9 @@ cuThreadExchangeStreamCaptureMode(&mode); // restore previous mode
  \sa
  ::CUaccessPolicyWindow*/
     fn cuStreamCopyAttributes_ptsz(
-        dst: cuda_types::CUstream,
-        src: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        dst: cuda_types::cuda::CUstream,
+        src: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Queries stream attribute.
 
  Queries attribute \p attr from \p hStream and stores it in corresponding
@@ -10135,10 +10170,10 @@ cuThreadExchangeStreamCaptureMode(&mode); // restore previous mode
  \sa
  ::CUaccessPolicyWindow*/
     fn cuStreamGetAttribute_ptsz(
-        hStream: cuda_types::CUstream,
-        attr: cuda_types::CUstreamAttrID,
-        value_out: *mut cuda_types::CUstreamAttrValue,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+        attr: cuda_types::cuda::CUstreamAttrID,
+        value_out: *mut cuda_types::cuda::CUstreamAttrValue,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets stream attribute.
 
  Sets attribute \p attr on \p hStream from corresponding attribute of
@@ -10158,10 +10193,10 @@ cuThreadExchangeStreamCaptureMode(&mode); // restore previous mode
  \sa
  ::CUaccessPolicyWindow*/
     fn cuStreamSetAttribute_ptsz(
-        hStream: cuda_types::CUstream,
-        attr: cuda_types::CUstreamAttrID,
-        value: *const cuda_types::CUstreamAttrValue,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+        attr: cuda_types::cuda::CUstreamAttrID,
+        value: *const cuda_types::cuda::CUstreamAttrValue,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates an event
 
  Creates an event *phEvent for the current context with the flags specified via
@@ -10200,9 +10235,9 @@ cuThreadExchangeStreamCaptureMode(&mode); // restore previous mode
  ::cudaEventCreate,
  ::cudaEventCreateWithFlags*/
     fn cuEventCreate(
-        phEvent: *mut cuda_types::CUevent,
+        phEvent: *mut cuda_types::cuda::CUevent,
         Flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Records an event
 
  Captures in \p hEvent the contents of \p hStream at the time of this call.
@@ -10242,9 +10277,9 @@ cuThreadExchangeStreamCaptureMode(&mode); // restore previous mode
  ::cudaEventRecord,
  ::cuEventRecordWithFlags*/
     fn cuEventRecord_ptsz(
-        hEvent: cuda_types::CUevent,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hEvent: cuda_types::cuda::CUevent,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Records an event
 
  Captures in \p hEvent the contents of \p hStream at the time of this call.
@@ -10291,10 +10326,10 @@ cuThreadExchangeStreamCaptureMode(&mode); // restore previous mode
  ::cuEventRecord,
  ::cudaEventRecord*/
     fn cuEventRecordWithFlags_ptsz(
-        hEvent: cuda_types::CUevent,
-        hStream: cuda_types::CUstream,
+        hEvent: cuda_types::cuda::CUevent,
+        hStream: cuda_types::cuda::CUstream,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Queries an event's status
 
  Queries the status of all work currently captured by \p hEvent. See
@@ -10323,7 +10358,7 @@ cuThreadExchangeStreamCaptureMode(&mode); // restore previous mode
  ::cuEventDestroy,
  ::cuEventElapsedTime,
  ::cudaEventQuery*/
-    fn cuEventQuery(hEvent: cuda_types::CUevent) -> cuda_types::CUresult;
+    fn cuEventQuery(hEvent: cuda_types::cuda::CUevent) -> cuda_types::cuda::CUresult;
     /** \brief Waits for an event to complete
 
  Waits until the completion of all work currently captured in \p hEvent.
@@ -10351,7 +10386,9 @@ cuThreadExchangeStreamCaptureMode(&mode); // restore previous mode
  ::cuEventDestroy,
  ::cuEventElapsedTime,
  ::cudaEventSynchronize*/
-    fn cuEventSynchronize(hEvent: cuda_types::CUevent) -> cuda_types::CUresult;
+    fn cuEventSynchronize(
+        hEvent: cuda_types::cuda::CUevent,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Destroys an event
 
  Destroys the event specified by \p hEvent.
@@ -10377,7 +10414,9 @@ cuThreadExchangeStreamCaptureMode(&mode); // restore previous mode
  ::cuEventSynchronize,
  ::cuEventElapsedTime,
  ::cudaEventDestroy*/
-    fn cuEventDestroy_v2(hEvent: cuda_types::CUevent) -> cuda_types::CUresult;
+    fn cuEventDestroy_v2(
+        hEvent: cuda_types::cuda::CUevent,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Computes the elapsed time between two events
 
  Computes the elapsed time between two events (in milliseconds with a
@@ -10421,9 +10460,9 @@ cuThreadExchangeStreamCaptureMode(&mode); // restore previous mode
  ::cudaEventElapsedTime*/
     fn cuEventElapsedTime(
         pMilliseconds: *mut f32,
-        hStart: cuda_types::CUevent,
-        hEnd: cuda_types::CUevent,
-    ) -> cuda_types::CUresult;
+        hStart: cuda_types::cuda::CUevent,
+        hEnd: cuda_types::cuda::CUevent,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Imports an external memory object
 
  Imports an externally allocated memory object and returns
@@ -10586,9 +10625,9 @@ CU_EXTERNAL_MEMORY_HANDLE_TYPE_NVSCIBUF           = 8
  ::cuExternalMemoryGetMappedBuffer,
  ::cuExternalMemoryGetMappedMipmappedArray*/
     fn cuImportExternalMemory(
-        extMem_out: *mut cuda_types::CUexternalMemory,
-        memHandleDesc: *const cuda_types::CUDA_EXTERNAL_MEMORY_HANDLE_DESC,
-    ) -> cuda_types::CUresult;
+        extMem_out: *mut cuda_types::cuda::CUexternalMemory,
+        memHandleDesc: *const cuda_types::cuda::CUDA_EXTERNAL_MEMORY_HANDLE_DESC,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Maps a buffer onto an imported memory object
 
  Maps a buffer onto an imported memory object and returns a device
@@ -10640,10 +10679,10 @@ unsigned int flags;
  ::cuDestroyExternalMemory,
  ::cuExternalMemoryGetMappedMipmappedArray*/
     fn cuExternalMemoryGetMappedBuffer(
-        devPtr: *mut cuda_types::CUdeviceptr,
-        extMem: cuda_types::CUexternalMemory,
-        bufferDesc: *const cuda_types::CUDA_EXTERNAL_MEMORY_BUFFER_DESC,
-    ) -> cuda_types::CUresult;
+        devPtr: *mut cuda_types::cuda::CUdeviceptr,
+        extMem: cuda_types::cuda::CUexternalMemory,
+        bufferDesc: *const cuda_types::cuda::CUDA_EXTERNAL_MEMORY_BUFFER_DESC,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Maps a CUDA mipmapped array onto an external memory object
 
  Maps a CUDA mipmapped array onto an external object and returns a
@@ -10694,10 +10733,10 @@ unsigned int numLevels;
  ::cuDestroyExternalMemory,
  ::cuExternalMemoryGetMappedBuffer*/
     fn cuExternalMemoryGetMappedMipmappedArray(
-        mipmap: *mut cuda_types::CUmipmappedArray,
-        extMem: cuda_types::CUexternalMemory,
-        mipmapDesc: *const cuda_types::CUDA_EXTERNAL_MEMORY_MIPMAPPED_ARRAY_DESC,
-    ) -> cuda_types::CUresult;
+        mipmap: *mut cuda_types::cuda::CUmipmappedArray,
+        extMem: cuda_types::cuda::CUexternalMemory,
+        mipmapDesc: *const cuda_types::cuda::CUDA_EXTERNAL_MEMORY_MIPMAPPED_ARRAY_DESC,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Destroys an external memory object.
 
  Destroys the specified external memory object. Any existing buffers
@@ -10717,8 +10756,8 @@ unsigned int numLevels;
  ::cuExternalMemoryGetMappedBuffer,
  ::cuExternalMemoryGetMappedMipmappedArray*/
     fn cuDestroyExternalMemory(
-        extMem: cuda_types::CUexternalMemory,
-    ) -> cuda_types::CUresult;
+        extMem: cuda_types::cuda::CUexternalMemory,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Imports an external semaphore
 
  Imports an externally allocated synchronization object and returns
@@ -10874,9 +10913,9 @@ CU_EXTERNAL_SEMAPHORE_HANDLE_TYPE_TIMELINE_SEMAPHORE_WIN32 = 10
  ::cuSignalExternalSemaphoresAsync,
  ::cuWaitExternalSemaphoresAsync*/
     fn cuImportExternalSemaphore(
-        extSem_out: *mut cuda_types::CUexternalSemaphore,
-        semHandleDesc: *const cuda_types::CUDA_EXTERNAL_SEMAPHORE_HANDLE_DESC,
-    ) -> cuda_types::CUresult;
+        extSem_out: *mut cuda_types::cuda::CUexternalSemaphore,
+        semHandleDesc: *const cuda_types::cuda::CUDA_EXTERNAL_SEMAPHORE_HANDLE_DESC,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Signals a set of external semaphore objects
 
  Enqueues a signal operation on a set of externally allocated
@@ -10956,11 +10995,11 @@ CU_EXTERNAL_SEMAPHORE_HANDLE_TYPE_TIMELINE_SEMAPHORE_WIN32 = 10
  ::cuDestroyExternalSemaphore,
  ::cuWaitExternalSemaphoresAsync*/
     fn cuSignalExternalSemaphoresAsync_ptsz(
-        extSemArray: *const cuda_types::CUexternalSemaphore,
-        paramsArray: *const cuda_types::CUDA_EXTERNAL_SEMAPHORE_SIGNAL_PARAMS,
+        extSemArray: *const cuda_types::cuda::CUexternalSemaphore,
+        paramsArray: *const cuda_types::cuda::CUDA_EXTERNAL_SEMAPHORE_SIGNAL_PARAMS,
         numExtSems: ::core::ffi::c_uint,
-        stream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        stream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Waits on a set of external semaphore objects
 
  Enqueues a wait operation on a set of externally allocated
@@ -11034,11 +11073,11 @@ CU_EXTERNAL_SEMAPHORE_HANDLE_TYPE_TIMELINE_SEMAPHORE_WIN32 = 10
  ::cuDestroyExternalSemaphore,
  ::cuSignalExternalSemaphoresAsync*/
     fn cuWaitExternalSemaphoresAsync_ptsz(
-        extSemArray: *const cuda_types::CUexternalSemaphore,
-        paramsArray: *const cuda_types::CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS,
+        extSemArray: *const cuda_types::cuda::CUexternalSemaphore,
+        paramsArray: *const cuda_types::cuda::CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS,
         numExtSems: ::core::ffi::c_uint,
-        stream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        stream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Destroys an external semaphore
 
  Destroys an external semaphore object and releases any references
@@ -11057,8 +11096,8 @@ CU_EXTERNAL_SEMAPHORE_HANDLE_TYPE_TIMELINE_SEMAPHORE_WIN32 = 10
  ::cuSignalExternalSemaphoresAsync,
  ::cuWaitExternalSemaphoresAsync*/
     fn cuDestroyExternalSemaphore(
-        extSem: cuda_types::CUexternalSemaphore,
-    ) -> cuda_types::CUresult;
+        extSem: cuda_types::cuda::CUexternalSemaphore,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Wait on a memory location
 
  Enqueues a synchronization of the stream on the given memory location. Work
@@ -11100,11 +11139,11 @@ CU_EXTERNAL_SEMAPHORE_HANDLE_TYPE_TIMELINE_SEMAPHORE_WIN32 = 10
  ::cuMemHostRegister,
  ::cuStreamWaitEvent*/
     fn cuStreamWaitValue32_v2_ptsz(
-        stream: cuda_types::CUstream,
-        addr: cuda_types::CUdeviceptr,
-        value: cuda_types::cuuint32_t,
+        stream: cuda_types::cuda::CUstream,
+        addr: cuda_types::cuda::CUdeviceptr,
+        value: cuda_types::cuda::cuuint32_t,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Wait on a memory location
 
  Enqueues a synchronization of the stream on the given memory location. Work
@@ -11145,11 +11184,11 @@ CU_EXTERNAL_SEMAPHORE_HANDLE_TYPE_TIMELINE_SEMAPHORE_WIN32 = 10
  ::cuMemHostRegister,
  ::cuStreamWaitEvent*/
     fn cuStreamWaitValue64_v2_ptsz(
-        stream: cuda_types::CUstream,
-        addr: cuda_types::CUdeviceptr,
-        value: cuda_types::cuuint64_t,
+        stream: cuda_types::cuda::CUstream,
+        addr: cuda_types::cuda::CUdeviceptr,
+        value: cuda_types::cuda::cuuint64_t,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Write a value to memory
 
  Write a value to memory.
@@ -11176,11 +11215,11 @@ CU_EXTERNAL_SEMAPHORE_HANDLE_TYPE_TIMELINE_SEMAPHORE_WIN32 = 10
  ::cuMemHostRegister,
  ::cuEventRecord*/
     fn cuStreamWriteValue32_v2_ptsz(
-        stream: cuda_types::CUstream,
-        addr: cuda_types::CUdeviceptr,
-        value: cuda_types::cuuint32_t,
+        stream: cuda_types::cuda::CUstream,
+        addr: cuda_types::cuda::CUdeviceptr,
+        value: cuda_types::cuda::cuuint32_t,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Write a value to memory
 
  Write a value to memory.
@@ -11209,11 +11248,11 @@ CU_EXTERNAL_SEMAPHORE_HANDLE_TYPE_TIMELINE_SEMAPHORE_WIN32 = 10
  ::cuMemHostRegister,
  ::cuEventRecord*/
     fn cuStreamWriteValue64_v2_ptsz(
-        stream: cuda_types::CUstream,
-        addr: cuda_types::CUdeviceptr,
-        value: cuda_types::cuuint64_t,
+        stream: cuda_types::cuda::CUstream,
+        addr: cuda_types::cuda::CUdeviceptr,
+        value: cuda_types::cuda::cuuint64_t,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Batch operations to synchronize the stream via memory operations
 
  This is a batch version of ::cuStreamWaitValue32() and ::cuStreamWriteValue32().
@@ -11254,11 +11293,11 @@ CU_EXTERNAL_SEMAPHORE_HANDLE_TYPE_TIMELINE_SEMAPHORE_WIN32 = 10
  ::cuStreamWriteValue64,
  ::cuMemHostRegister*/
     fn cuStreamBatchMemOp_v2_ptsz(
-        stream: cuda_types::CUstream,
+        stream: cuda_types::cuda::CUstream,
         count: ::core::ffi::c_uint,
-        paramArray: *mut cuda_types::CUstreamBatchMemOpParams,
+        paramArray: *mut cuda_types::cuda::CUstreamBatchMemOpParams,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns information about a function
 
  Returns in \p *pi the integer value of the attribute \p attrib on the kernel
@@ -11353,9 +11392,9 @@ CU_EXTERNAL_SEMAPHORE_HANDLE_TYPE_TIMELINE_SEMAPHORE_WIN32 = 10
  ::cuKernelGetAttribute*/
     fn cuFuncGetAttribute(
         pi: *mut ::core::ffi::c_int,
-        attrib: cuda_types::CUfunction_attribute,
-        hfunc: cuda_types::CUfunction,
-    ) -> cuda_types::CUresult;
+        attrib: cuda_types::cuda::CUfunction_attribute,
+        hfunc: cuda_types::cuda::CUfunction,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets information about a function
 
  This call sets the value of a specified attribute \p attrib on the kernel given
@@ -11417,10 +11456,10 @@ CU_EXTERNAL_SEMAPHORE_HANDLE_TYPE_TIMELINE_SEMAPHORE_WIN32 = 10
  ::cudaFuncSetAttribute,
  ::cuKernelSetAttribute*/
     fn cuFuncSetAttribute(
-        hfunc: cuda_types::CUfunction,
-        attrib: cuda_types::CUfunction_attribute,
+        hfunc: cuda_types::cuda::CUfunction,
+        attrib: cuda_types::cuda::CUfunction_attribute,
         value: ::core::ffi::c_int,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the preferred cache configuration for a device function
 
  On devices where the L1 cache and shared memory use the same hardware
@@ -11463,9 +11502,9 @@ CU_EXTERNAL_SEMAPHORE_HANDLE_TYPE_TIMELINE_SEMAPHORE_WIN32 = 10
  ::cudaFuncSetCacheConfig,
  ::cuKernelSetCacheConfig*/
     fn cuFuncSetCacheConfig(
-        hfunc: cuda_types::CUfunction,
-        config: cuda_types::CUfunc_cache,
-    ) -> cuda_types::CUresult;
+        hfunc: cuda_types::cuda::CUfunction,
+        config: cuda_types::cuda::CUfunc_cache,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a module handle
 
  Returns in \p *hmod the handle of the module that function \p hfunc
@@ -11489,9 +11528,9 @@ CU_EXTERNAL_SEMAPHORE_HANDLE_TYPE_TIMELINE_SEMAPHORE_WIN32 = 10
  \notefnerr
 */
     fn cuFuncGetModule(
-        hmod: *mut cuda_types::CUmodule,
-        hfunc: cuda_types::CUfunction,
-    ) -> cuda_types::CUresult;
+        hmod: *mut cuda_types::cuda::CUmodule,
+        hfunc: cuda_types::cuda::CUfunction,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns the function name for a ::CUfunction handle
 
  Returns in \p **name the function name associated with the function handle \p hfunc .
@@ -11511,8 +11550,8 @@ CU_EXTERNAL_SEMAPHORE_HANDLE_TYPE_TIMELINE_SEMAPHORE_WIN32 = 10
 */
     fn cuFuncGetName(
         name: *mut *const ::core::ffi::c_char,
-        hfunc: cuda_types::CUfunction,
-    ) -> cuda_types::CUresult;
+        hfunc: cuda_types::cuda::CUfunction,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns the offset and size of a kernel parameter in the device-side parameter layout
 
  Queries the kernel parameter at \p paramIndex into \p func's list of parameters, and returns
@@ -11534,11 +11573,11 @@ CU_EXTERNAL_SEMAPHORE_HANDLE_TYPE_TIMELINE_SEMAPHORE_WIN32 = 10
 
  \sa ::cuKernelGetParamInfo*/
     fn cuFuncGetParamInfo(
-        func: cuda_types::CUfunction,
+        func: cuda_types::cuda::CUfunction,
         paramIndex: usize,
         paramOffset: *mut usize,
         paramSize: *mut usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns if the function is loaded
 
  Returns in \p state the loading state of \p function.
@@ -11554,9 +11593,9 @@ CU_EXTERNAL_SEMAPHORE_HANDLE_TYPE_TIMELINE_SEMAPHORE_WIN32 = 10
  \sa ::cuFuncLoad,
  ::cuModuleEnumerateFunctions*/
     fn cuFuncIsLoaded(
-        state: *mut cuda_types::CUfunctionLoadingState,
-        function: cuda_types::CUfunction,
-    ) -> cuda_types::CUresult;
+        state: *mut cuda_types::cuda::CUfunctionLoadingState,
+        function: cuda_types::cuda::CUfunction,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Loads a function
 
  Finalizes function loading for \p function. Calling this API with a
@@ -11571,7 +11610,7 @@ CU_EXTERNAL_SEMAPHORE_HANDLE_TYPE_TIMELINE_SEMAPHORE_WIN32 = 10
 
  \sa ::cuModuleEnumerateFunctions,
  ::cuFuncIsLoaded*/
-    fn cuFuncLoad(function: cuda_types::CUfunction) -> cuda_types::CUresult;
+    fn cuFuncLoad(function: cuda_types::cuda::CUfunction) -> cuda_types::cuda::CUresult;
     /** \brief Launches a CUDA function ::CUfunction or a CUDA kernel ::CUkernel
 
  Invokes the function ::CUfunction or the kernel ::CUkernel \p f
@@ -11690,7 +11729,7 @@ status = cuLaunchKernel(f, gx, gy, gz, bx, by, bz, sh, s, NULL, config);
  ::cuKernelGetAttribute,
  ::cuKernelSetAttribute*/
     fn cuLaunchKernel_ptsz(
-        f: cuda_types::CUfunction,
+        f: cuda_types::cuda::CUfunction,
         gridDimX: ::core::ffi::c_uint,
         gridDimY: ::core::ffi::c_uint,
         gridDimZ: ::core::ffi::c_uint,
@@ -11698,10 +11737,10 @@ status = cuLaunchKernel(f, gx, gy, gz, bx, by, bz, sh, s, NULL, config);
         blockDimY: ::core::ffi::c_uint,
         blockDimZ: ::core::ffi::c_uint,
         sharedMemBytes: ::core::ffi::c_uint,
-        hStream: cuda_types::CUstream,
+        hStream: cuda_types::cuda::CUstream,
         kernelParams: *mut *mut ::core::ffi::c_void,
         extra: *mut *mut ::core::ffi::c_void,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Launches a CUDA function ::CUfunction or a CUDA kernel ::CUkernel with launch-time configuration
 
  Invokes the function ::CUfunction or the kernel ::CUkernel \p f with the specified launch-time configuration
@@ -11936,11 +11975,11 @@ status = cuLaunchKernel(f, gx, gy, gz, bx, by, bz, sh, s, NULL, config);
  ::cuKernelGetAttribute,
  ::cuKernelSetAttribute*/
     fn cuLaunchKernelEx_ptsz(
-        config: *const cuda_types::CUlaunchConfig,
-        f: cuda_types::CUfunction,
+        config: *const cuda_types::cuda::CUlaunchConfig,
+        f: cuda_types::cuda::CUfunction,
         kernelParams: *mut *mut ::core::ffi::c_void,
         extra: *mut *mut ::core::ffi::c_void,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Launches a CUDA function ::CUfunction or a CUDA kernel ::CUkernel where thread blocks
  can cooperate and synchronize as they execute
 
@@ -12034,7 +12073,7 @@ status = cuLaunchKernel(f, gx, gy, gz, bx, by, bz, sh, s, NULL, config);
  ::cuKernelGetAttribute,
  ::cuKernelSetAttribute*/
     fn cuLaunchCooperativeKernel_ptsz(
-        f: cuda_types::CUfunction,
+        f: cuda_types::cuda::CUfunction,
         gridDimX: ::core::ffi::c_uint,
         gridDimY: ::core::ffi::c_uint,
         gridDimZ: ::core::ffi::c_uint,
@@ -12042,9 +12081,9 @@ status = cuLaunchKernel(f, gx, gy, gz, bx, by, bz, sh, s, NULL, config);
         blockDimY: ::core::ffi::c_uint,
         blockDimZ: ::core::ffi::c_uint,
         sharedMemBytes: ::core::ffi::c_uint,
-        hStream: cuda_types::CUstream,
+        hStream: cuda_types::cuda::CUstream,
         kernelParams: *mut *mut ::core::ffi::c_void,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Launches CUDA functions on multiple devices where thread blocks can cooperate and synchronize as they execute
 
  \deprecated This function is deprecated as of CUDA 11.3.
@@ -12182,10 +12221,10 @@ void **kernelParams;
  ::cuLaunchCooperativeKernel,
  ::cudaLaunchCooperativeKernelMultiDevice*/
     fn cuLaunchCooperativeKernelMultiDevice(
-        launchParamsList: *mut cuda_types::CUDA_LAUNCH_PARAMS,
+        launchParamsList: *mut cuda_types::cuda::CUDA_LAUNCH_PARAMS,
         numDevices: ::core::ffi::c_uint,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Enqueues a host function call in a stream
 
  Enqueues a host function to run in a stream.  The function will be called
@@ -12248,10 +12287,10 @@ void **kernelParams;
  ::cuStreamAttachMemAsync,
  ::cuStreamAddCallback*/
     fn cuLaunchHostFunc_ptsz(
-        hStream: cuda_types::CUstream,
-        fn_: cuda_types::CUhostFn,
+        hStream: cuda_types::cuda::CUstream,
+        fn_: cuda_types::cuda::CUhostFn,
         userData: *mut ::core::ffi::c_void,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the block-dimensions for the function
 
  \deprecated
@@ -12285,11 +12324,11 @@ void **kernelParams;
  ::cuLaunchGridAsync,
  ::cuLaunchKernel*/
     fn cuFuncSetBlockShape(
-        hfunc: cuda_types::CUfunction,
+        hfunc: cuda_types::cuda::CUfunction,
         x: ::core::ffi::c_int,
         y: ::core::ffi::c_int,
         z: ::core::ffi::c_int,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the dynamic shared-memory size for the function
 
  \deprecated
@@ -12321,9 +12360,9 @@ void **kernelParams;
  ::cuLaunchGridAsync,
  ::cuLaunchKernel*/
     fn cuFuncSetSharedSize(
-        hfunc: cuda_types::CUfunction,
+        hfunc: cuda_types::cuda::CUfunction,
         bytes: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the parameter size for the function
 
  \deprecated
@@ -12353,9 +12392,9 @@ void **kernelParams;
  ::cuLaunchGridAsync,
  ::cuLaunchKernel*/
     fn cuParamSetSize(
-        hfunc: cuda_types::CUfunction,
+        hfunc: cuda_types::cuda::CUfunction,
         numbytes: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Adds an integer parameter to the function's argument list
 
  \deprecated
@@ -12386,10 +12425,10 @@ void **kernelParams;
  ::cuLaunchGridAsync,
  ::cuLaunchKernel*/
     fn cuParamSeti(
-        hfunc: cuda_types::CUfunction,
+        hfunc: cuda_types::cuda::CUfunction,
         offset: ::core::ffi::c_int,
         value: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Adds a floating-point parameter to the function's argument list
 
  \deprecated
@@ -12420,10 +12459,10 @@ void **kernelParams;
  ::cuLaunchGridAsync,
  ::cuLaunchKernel*/
     fn cuParamSetf(
-        hfunc: cuda_types::CUfunction,
+        hfunc: cuda_types::cuda::CUfunction,
         offset: ::core::ffi::c_int,
         value: f32,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Adds arbitrary data to the function's argument list
 
  \deprecated
@@ -12456,11 +12495,11 @@ void **kernelParams;
  ::cuLaunchGridAsync,
  ::cuLaunchKernel*/
     fn cuParamSetv(
-        hfunc: cuda_types::CUfunction,
+        hfunc: cuda_types::cuda::CUfunction,
         offset: ::core::ffi::c_int,
         ptr: *mut ::core::ffi::c_void,
         numbytes: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Launches a CUDA function
 
  \deprecated
@@ -12509,7 +12548,7 @@ void **kernelParams;
  ::cuLaunchGrid,
  ::cuLaunchGridAsync,
  ::cuLaunchKernel*/
-    fn cuLaunch(f: cuda_types::CUfunction) -> cuda_types::CUresult;
+    fn cuLaunch(f: cuda_types::cuda::CUfunction) -> cuda_types::cuda::CUresult;
     /** \brief Launches a CUDA function
 
  \deprecated
@@ -12561,10 +12600,10 @@ void **kernelParams;
  ::cuLaunchGridAsync,
  ::cuLaunchKernel*/
     fn cuLaunchGrid(
-        f: cuda_types::CUfunction,
+        f: cuda_types::cuda::CUfunction,
         grid_width: ::core::ffi::c_int,
         grid_height: ::core::ffi::c_int,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Launches a CUDA function
 
  \deprecated
@@ -12624,11 +12663,11 @@ void **kernelParams;
  ::cuLaunchGrid,
  ::cuLaunchKernel*/
     fn cuLaunchGridAsync(
-        f: cuda_types::CUfunction,
+        f: cuda_types::cuda::CUfunction,
         grid_width: ::core::ffi::c_int,
         grid_height: ::core::ffi::c_int,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Adds a texture-reference to the function's argument list
 
  \deprecated
@@ -12650,10 +12689,10 @@ void **kernelParams;
  ::CUDA_ERROR_INVALID_VALUE
  \notefnerr*/
     fn cuParamSetTexRef(
-        hfunc: cuda_types::CUfunction,
+        hfunc: cuda_types::cuda::CUfunction,
         texunit: ::core::ffi::c_int,
-        hTexRef: cuda_types::CUtexref,
-    ) -> cuda_types::CUresult;
+        hTexRef: cuda_types::cuda::CUtexref,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the shared memory configuration for a device function.
 
  \deprecated
@@ -12705,9 +12744,9 @@ void **kernelParams;
  ::cuLaunchKernel,
  ::cudaFuncSetSharedMemConfig*/
     fn cuFuncSetSharedMemConfig(
-        hfunc: cuda_types::CUfunction,
-        config: cuda_types::CUsharedconfig,
-    ) -> cuda_types::CUresult;
+        hfunc: cuda_types::cuda::CUfunction,
+        config: cuda_types::cuda::CUsharedconfig,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates a graph
 
  Creates an empty graph, which is returned via \p phGraph.
@@ -12738,9 +12777,9 @@ void **kernelParams;
  ::cuGraphGetEdges,
  ::cuGraphClone*/
     fn cuGraphCreate(
-        phGraph: *mut cuda_types::CUgraph,
+        phGraph: *mut cuda_types::cuda::CUgraph,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates a kernel execution node and adds it to a graph
 
  Creates a new kernel execution node and adds it to \p hGraph with \p numDependencies
@@ -12841,12 +12880,12 @@ void **kernelParams;
  ::cuGraphAddMemcpyNode,
  ::cuGraphAddMemsetNode*/
     fn cuGraphAddKernelNode_v2(
-        phGraphNode: *mut cuda_types::CUgraphNode,
-        hGraph: cuda_types::CUgraph,
-        dependencies: *const cuda_types::CUgraphNode,
+        phGraphNode: *mut cuda_types::cuda::CUgraphNode,
+        hGraph: cuda_types::cuda::CUgraph,
+        dependencies: *const cuda_types::cuda::CUgraphNode,
         numDependencies: usize,
-        nodeParams: *const cuda_types::CUDA_KERNEL_NODE_PARAMS,
-    ) -> cuda_types::CUresult;
+        nodeParams: *const cuda_types::cuda::CUDA_KERNEL_NODE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a kernel node's parameters
 
  Returns the parameters of kernel node \p hNode in \p nodeParams.
@@ -12876,9 +12915,9 @@ void **kernelParams;
  ::cuGraphAddKernelNode,
  ::cuGraphKernelNodeSetParams*/
     fn cuGraphKernelNodeGetParams_v2(
-        hNode: cuda_types::CUgraphNode,
-        nodeParams: *mut cuda_types::CUDA_KERNEL_NODE_PARAMS,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        nodeParams: *mut cuda_types::cuda::CUDA_KERNEL_NODE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets a kernel node's parameters
 
  Sets the parameters of kernel node \p hNode to \p nodeParams.
@@ -12900,9 +12939,9 @@ void **kernelParams;
  ::cuGraphAddKernelNode,
  ::cuGraphKernelNodeGetParams*/
     fn cuGraphKernelNodeSetParams_v2(
-        hNode: cuda_types::CUgraphNode,
-        nodeParams: *const cuda_types::CUDA_KERNEL_NODE_PARAMS,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        nodeParams: *const cuda_types::cuda::CUDA_KERNEL_NODE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates a memcpy node and adds it to a graph
 
  Creates a new memcpy node and adds it to \p hGraph with \p numDependencies
@@ -12949,13 +12988,13 @@ void **kernelParams;
  ::cuGraphAddHostNode,
  ::cuGraphAddMemsetNode*/
     fn cuGraphAddMemcpyNode(
-        phGraphNode: *mut cuda_types::CUgraphNode,
-        hGraph: cuda_types::CUgraph,
-        dependencies: *const cuda_types::CUgraphNode,
+        phGraphNode: *mut cuda_types::cuda::CUgraphNode,
+        hGraph: cuda_types::cuda::CUgraph,
+        dependencies: *const cuda_types::cuda::CUgraphNode,
         numDependencies: usize,
-        copyParams: *const cuda_types::CUDA_MEMCPY3D,
-        ctx: cuda_types::CUcontext,
-    ) -> cuda_types::CUresult;
+        copyParams: *const cuda_types::cuda::CUDA_MEMCPY3D,
+        ctx: cuda_types::cuda::CUcontext,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a memcpy node's parameters
 
  Returns the parameters of memcpy node \p hNode in \p nodeParams.
@@ -12976,9 +13015,9 @@ void **kernelParams;
  ::cuGraphAddMemcpyNode,
  ::cuGraphMemcpyNodeSetParams*/
     fn cuGraphMemcpyNodeGetParams(
-        hNode: cuda_types::CUgraphNode,
-        nodeParams: *mut cuda_types::CUDA_MEMCPY3D,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        nodeParams: *mut cuda_types::cuda::CUDA_MEMCPY3D,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets a memcpy node's parameters
 
  Sets the parameters of memcpy node \p hNode to \p nodeParams.
@@ -13000,9 +13039,9 @@ void **kernelParams;
  ::cuGraphAddMemcpyNode,
  ::cuGraphMemcpyNodeGetParams*/
     fn cuGraphMemcpyNodeSetParams(
-        hNode: cuda_types::CUgraphNode,
-        nodeParams: *const cuda_types::CUDA_MEMCPY3D,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        nodeParams: *const cuda_types::cuda::CUDA_MEMCPY3D,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates a memset node and adds it to a graph
 
  Creates a new memset node and adds it to \p hGraph with \p numDependencies
@@ -13043,13 +13082,13 @@ void **kernelParams;
  ::cuGraphAddHostNode,
  ::cuGraphAddMemcpyNode*/
     fn cuGraphAddMemsetNode(
-        phGraphNode: *mut cuda_types::CUgraphNode,
-        hGraph: cuda_types::CUgraph,
-        dependencies: *const cuda_types::CUgraphNode,
+        phGraphNode: *mut cuda_types::cuda::CUgraphNode,
+        hGraph: cuda_types::cuda::CUgraph,
+        dependencies: *const cuda_types::cuda::CUgraphNode,
         numDependencies: usize,
-        memsetParams: *const cuda_types::CUDA_MEMSET_NODE_PARAMS,
-        ctx: cuda_types::CUcontext,
-    ) -> cuda_types::CUresult;
+        memsetParams: *const cuda_types::cuda::CUDA_MEMSET_NODE_PARAMS,
+        ctx: cuda_types::cuda::CUcontext,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a memset node's parameters
 
  Returns the parameters of memset node \p hNode in \p nodeParams.
@@ -13070,9 +13109,9 @@ void **kernelParams;
  ::cuGraphAddMemsetNode,
  ::cuGraphMemsetNodeSetParams*/
     fn cuGraphMemsetNodeGetParams(
-        hNode: cuda_types::CUgraphNode,
-        nodeParams: *mut cuda_types::CUDA_MEMSET_NODE_PARAMS,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        nodeParams: *mut cuda_types::cuda::CUDA_MEMSET_NODE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets a memset node's parameters
 
  Sets the parameters of memset node \p hNode to \p nodeParams.
@@ -13094,9 +13133,9 @@ void **kernelParams;
  ::cuGraphAddMemsetNode,
  ::cuGraphMemsetNodeGetParams*/
     fn cuGraphMemsetNodeSetParams(
-        hNode: cuda_types::CUgraphNode,
-        nodeParams: *const cuda_types::CUDA_MEMSET_NODE_PARAMS,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        nodeParams: *const cuda_types::cuda::CUDA_MEMSET_NODE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates a host execution node and adds it to a graph
 
  Creates a new CPU execution node and adds it to \p hGraph with \p numDependencies
@@ -13136,12 +13175,12 @@ void **kernelParams;
  ::cuGraphAddMemcpyNode,
  ::cuGraphAddMemsetNode*/
     fn cuGraphAddHostNode(
-        phGraphNode: *mut cuda_types::CUgraphNode,
-        hGraph: cuda_types::CUgraph,
-        dependencies: *const cuda_types::CUgraphNode,
+        phGraphNode: *mut cuda_types::cuda::CUgraphNode,
+        hGraph: cuda_types::cuda::CUgraph,
+        dependencies: *const cuda_types::cuda::CUgraphNode,
         numDependencies: usize,
-        nodeParams: *const cuda_types::CUDA_HOST_NODE_PARAMS,
-    ) -> cuda_types::CUresult;
+        nodeParams: *const cuda_types::cuda::CUDA_HOST_NODE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a host node's parameters
 
  Returns the parameters of host node \p hNode in \p nodeParams.
@@ -13162,9 +13201,9 @@ void **kernelParams;
  ::cuGraphAddHostNode,
  ::cuGraphHostNodeSetParams*/
     fn cuGraphHostNodeGetParams(
-        hNode: cuda_types::CUgraphNode,
-        nodeParams: *mut cuda_types::CUDA_HOST_NODE_PARAMS,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        nodeParams: *mut cuda_types::cuda::CUDA_HOST_NODE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets a host node's parameters
 
  Sets the parameters of host node \p hNode to \p nodeParams.
@@ -13186,9 +13225,9 @@ void **kernelParams;
  ::cuGraphAddHostNode,
  ::cuGraphHostNodeGetParams*/
     fn cuGraphHostNodeSetParams(
-        hNode: cuda_types::CUgraphNode,
-        nodeParams: *const cuda_types::CUDA_HOST_NODE_PARAMS,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        nodeParams: *const cuda_types::cuda::CUDA_HOST_NODE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates a child graph node and adds it to a graph
 
  Creates a new node which executes an embedded graph, and adds it to \p hGraph with
@@ -13227,12 +13266,12 @@ void **kernelParams;
  ::cuGraphAddMemsetNode,
  ::cuGraphClone*/
     fn cuGraphAddChildGraphNode(
-        phGraphNode: *mut cuda_types::CUgraphNode,
-        hGraph: cuda_types::CUgraph,
-        dependencies: *const cuda_types::CUgraphNode,
+        phGraphNode: *mut cuda_types::cuda::CUgraphNode,
+        hGraph: cuda_types::cuda::CUgraph,
+        dependencies: *const cuda_types::cuda::CUgraphNode,
         numDependencies: usize,
-        childGraph: cuda_types::CUgraph,
-    ) -> cuda_types::CUresult;
+        childGraph: cuda_types::cuda::CUgraph,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Gets a handle to the embedded graph of a child graph node
 
  Gets a handle to the embedded graph in a child graph node. This call
@@ -13257,9 +13296,9 @@ void **kernelParams;
  ::cuGraphAddChildGraphNode,
  ::cuGraphNodeFindInClone*/
     fn cuGraphChildGraphNodeGetGraph(
-        hNode: cuda_types::CUgraphNode,
-        phGraph: *mut cuda_types::CUgraph,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        phGraph: *mut cuda_types::cuda::CUgraph,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates an empty node and adds it to a graph
 
  Creates a new node which performs no operation, and adds it to \p hGraph with
@@ -13296,11 +13335,11 @@ void **kernelParams;
  ::cuGraphAddMemcpyNode,
  ::cuGraphAddMemsetNode*/
     fn cuGraphAddEmptyNode(
-        phGraphNode: *mut cuda_types::CUgraphNode,
-        hGraph: cuda_types::CUgraph,
-        dependencies: *const cuda_types::CUgraphNode,
+        phGraphNode: *mut cuda_types::cuda::CUgraphNode,
+        hGraph: cuda_types::cuda::CUgraph,
+        dependencies: *const cuda_types::cuda::CUgraphNode,
         numDependencies: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates an event record node and adds it to a graph
 
  Creates a new event record node and adds it to \p hGraph with \p numDependencies
@@ -13340,12 +13379,12 @@ void **kernelParams;
  ::cuGraphAddMemcpyNode,
  ::cuGraphAddMemsetNode*/
     fn cuGraphAddEventRecordNode(
-        phGraphNode: *mut cuda_types::CUgraphNode,
-        hGraph: cuda_types::CUgraph,
-        dependencies: *const cuda_types::CUgraphNode,
+        phGraphNode: *mut cuda_types::cuda::CUgraphNode,
+        hGraph: cuda_types::cuda::CUgraph,
+        dependencies: *const cuda_types::cuda::CUgraphNode,
         numDependencies: usize,
-        event: cuda_types::CUevent,
-    ) -> cuda_types::CUresult;
+        event: cuda_types::cuda::CUevent,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns the event associated with an event record node
 
  Returns the event of event record node \p hNode in \p event_out.
@@ -13368,9 +13407,9 @@ void **kernelParams;
  ::cuEventRecordWithFlags,
  ::cuStreamWaitEvent*/
     fn cuGraphEventRecordNodeGetEvent(
-        hNode: cuda_types::CUgraphNode,
-        event_out: *mut cuda_types::CUevent,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        event_out: *mut cuda_types::cuda::CUevent,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets an event record node's event
 
  Sets the event of event record node \p hNode to \p event.
@@ -13394,9 +13433,9 @@ void **kernelParams;
  ::cuEventRecordWithFlags,
  ::cuStreamWaitEvent*/
     fn cuGraphEventRecordNodeSetEvent(
-        hNode: cuda_types::CUgraphNode,
-        event: cuda_types::CUevent,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        event: cuda_types::cuda::CUevent,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates an event wait node and adds it to a graph
 
  Creates a new event wait node and adds it to \p hGraph with \p numDependencies
@@ -13437,12 +13476,12 @@ void **kernelParams;
  ::cuGraphAddMemcpyNode,
  ::cuGraphAddMemsetNode*/
     fn cuGraphAddEventWaitNode(
-        phGraphNode: *mut cuda_types::CUgraphNode,
-        hGraph: cuda_types::CUgraph,
-        dependencies: *const cuda_types::CUgraphNode,
+        phGraphNode: *mut cuda_types::cuda::CUgraphNode,
+        hGraph: cuda_types::cuda::CUgraph,
+        dependencies: *const cuda_types::cuda::CUgraphNode,
         numDependencies: usize,
-        event: cuda_types::CUevent,
-    ) -> cuda_types::CUresult;
+        event: cuda_types::cuda::CUevent,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns the event associated with an event wait node
 
  Returns the event of event wait node \p hNode in \p event_out.
@@ -13465,9 +13504,9 @@ void **kernelParams;
  ::cuEventRecordWithFlags,
  ::cuStreamWaitEvent*/
     fn cuGraphEventWaitNodeGetEvent(
-        hNode: cuda_types::CUgraphNode,
-        event_out: *mut cuda_types::CUevent,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        event_out: *mut cuda_types::cuda::CUevent,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets an event wait node's event
 
  Sets the event of event wait node \p hNode to \p event.
@@ -13491,9 +13530,9 @@ void **kernelParams;
  ::cuEventRecordWithFlags,
  ::cuStreamWaitEvent*/
     fn cuGraphEventWaitNodeSetEvent(
-        hNode: cuda_types::CUgraphNode,
-        event: cuda_types::CUevent,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        event: cuda_types::cuda::CUevent,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates an external semaphore signal node and adds it to a graph
 
  Creates a new external semaphore signal node and adds it to \p hGraph with \p
@@ -13540,12 +13579,12 @@ void **kernelParams;
  ::cuGraphAddMemcpyNode,
  ::cuGraphAddMemsetNode*/
     fn cuGraphAddExternalSemaphoresSignalNode(
-        phGraphNode: *mut cuda_types::CUgraphNode,
-        hGraph: cuda_types::CUgraph,
-        dependencies: *const cuda_types::CUgraphNode,
+        phGraphNode: *mut cuda_types::cuda::CUgraphNode,
+        hGraph: cuda_types::cuda::CUgraph,
+        dependencies: *const cuda_types::cuda::CUgraphNode,
         numDependencies: usize,
-        nodeParams: *const cuda_types::CUDA_EXT_SEM_SIGNAL_NODE_PARAMS,
-    ) -> cuda_types::CUresult;
+        nodeParams: *const cuda_types::cuda::CUDA_EXT_SEM_SIGNAL_NODE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns an external semaphore signal node's parameters
 
  Returns the parameters of an external semaphore signal node \p hNode in \p params_out.
@@ -13574,9 +13613,9 @@ void **kernelParams;
  ::cuSignalExternalSemaphoresAsync,
  ::cuWaitExternalSemaphoresAsync*/
     fn cuGraphExternalSemaphoresSignalNodeGetParams(
-        hNode: cuda_types::CUgraphNode,
-        params_out: *mut cuda_types::CUDA_EXT_SEM_SIGNAL_NODE_PARAMS,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        params_out: *mut cuda_types::cuda::CUDA_EXT_SEM_SIGNAL_NODE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets an external semaphore signal node's parameters
 
  Sets the parameters of an external semaphore signal node \p hNode to \p nodeParams.
@@ -13600,9 +13639,9 @@ void **kernelParams;
  ::cuSignalExternalSemaphoresAsync,
  ::cuWaitExternalSemaphoresAsync*/
     fn cuGraphExternalSemaphoresSignalNodeSetParams(
-        hNode: cuda_types::CUgraphNode,
-        nodeParams: *const cuda_types::CUDA_EXT_SEM_SIGNAL_NODE_PARAMS,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        nodeParams: *const cuda_types::cuda::CUDA_EXT_SEM_SIGNAL_NODE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates an external semaphore wait node and adds it to a graph
 
  Creates a new external semaphore wait node and adds it to \p hGraph with \p numDependencies
@@ -13649,12 +13688,12 @@ void **kernelParams;
  ::cuGraphAddMemcpyNode,
  ::cuGraphAddMemsetNode*/
     fn cuGraphAddExternalSemaphoresWaitNode(
-        phGraphNode: *mut cuda_types::CUgraphNode,
-        hGraph: cuda_types::CUgraph,
-        dependencies: *const cuda_types::CUgraphNode,
+        phGraphNode: *mut cuda_types::cuda::CUgraphNode,
+        hGraph: cuda_types::cuda::CUgraph,
+        dependencies: *const cuda_types::cuda::CUgraphNode,
         numDependencies: usize,
-        nodeParams: *const cuda_types::CUDA_EXT_SEM_WAIT_NODE_PARAMS,
-    ) -> cuda_types::CUresult;
+        nodeParams: *const cuda_types::cuda::CUDA_EXT_SEM_WAIT_NODE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns an external semaphore wait node's parameters
 
  Returns the parameters of an external semaphore wait node \p hNode in \p params_out.
@@ -13683,9 +13722,9 @@ void **kernelParams;
  ::cuSignalExternalSemaphoresAsync,
  ::cuWaitExternalSemaphoresAsync*/
     fn cuGraphExternalSemaphoresWaitNodeGetParams(
-        hNode: cuda_types::CUgraphNode,
-        params_out: *mut cuda_types::CUDA_EXT_SEM_WAIT_NODE_PARAMS,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        params_out: *mut cuda_types::cuda::CUDA_EXT_SEM_WAIT_NODE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets an external semaphore wait node's parameters
 
  Sets the parameters of an external semaphore wait node \p hNode to \p nodeParams.
@@ -13709,9 +13748,9 @@ void **kernelParams;
  ::cuSignalExternalSemaphoresAsync,
  ::cuWaitExternalSemaphoresAsync*/
     fn cuGraphExternalSemaphoresWaitNodeSetParams(
-        hNode: cuda_types::CUgraphNode,
-        nodeParams: *const cuda_types::CUDA_EXT_SEM_WAIT_NODE_PARAMS,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        nodeParams: *const cuda_types::cuda::CUDA_EXT_SEM_WAIT_NODE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates a batch memory operation node and adds it to a graph
 
  Creates a new batch memory operation node and adds it to \p hGraph with \p
@@ -13765,12 +13804,12 @@ void **kernelParams;
  ::cuGraphAddMemcpyNode,
  ::cuGraphAddMemsetNode*/
     fn cuGraphAddBatchMemOpNode(
-        phGraphNode: *mut cuda_types::CUgraphNode,
-        hGraph: cuda_types::CUgraph,
-        dependencies: *const cuda_types::CUgraphNode,
+        phGraphNode: *mut cuda_types::cuda::CUgraphNode,
+        hGraph: cuda_types::cuda::CUgraph,
+        dependencies: *const cuda_types::cuda::CUgraphNode,
         numDependencies: usize,
-        nodeParams: *const cuda_types::CUDA_BATCH_MEM_OP_NODE_PARAMS,
-    ) -> cuda_types::CUresult;
+        nodeParams: *const cuda_types::cuda::CUDA_BATCH_MEM_OP_NODE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a batch mem op node's parameters
 
  Returns the parameters of batch mem op node \p hNode in \p nodeParams_out.
@@ -13796,9 +13835,9 @@ void **kernelParams;
  ::cuGraphAddBatchMemOpNode,
  ::cuGraphBatchMemOpNodeSetParams*/
     fn cuGraphBatchMemOpNodeGetParams(
-        hNode: cuda_types::CUgraphNode,
-        nodeParams_out: *mut cuda_types::CUDA_BATCH_MEM_OP_NODE_PARAMS,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        nodeParams_out: *mut cuda_types::cuda::CUDA_BATCH_MEM_OP_NODE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets a batch mem op node's parameters
 
  Sets the parameters of batch mem op node \p hNode to \p nodeParams.
@@ -13823,9 +13862,9 @@ void **kernelParams;
  ::cuGraphAddBatchMemOpNode,
  ::cuGraphBatchMemOpNodeGetParams*/
     fn cuGraphBatchMemOpNodeSetParams(
-        hNode: cuda_types::CUgraphNode,
-        nodeParams: *const cuda_types::CUDA_BATCH_MEM_OP_NODE_PARAMS,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        nodeParams: *const cuda_types::cuda::CUDA_BATCH_MEM_OP_NODE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the parameters for a batch mem op node in the given graphExec
 
  Sets the parameters of a batch mem op node in an executable graph \p hGraphExec.
@@ -13870,10 +13909,10 @@ void **kernelParams;
  ::cuGraphBatchMemOpNodeSetParams,
  ::cuGraphInstantiate*/
     fn cuGraphExecBatchMemOpNodeSetParams(
-        hGraphExec: cuda_types::CUgraphExec,
-        hNode: cuda_types::CUgraphNode,
-        nodeParams: *const cuda_types::CUDA_BATCH_MEM_OP_NODE_PARAMS,
-    ) -> cuda_types::CUresult;
+        hGraphExec: cuda_types::cuda::CUgraphExec,
+        hNode: cuda_types::cuda::CUgraphNode,
+        nodeParams: *const cuda_types::cuda::CUDA_BATCH_MEM_OP_NODE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates an allocation node and adds it to a graph
 
  Creates a new allocation node and adds it to \p hGraph with \p numDependencies
@@ -13946,12 +13985,12 @@ void **kernelParams;
  ::cuGraphAddMemcpyNode,
  ::cuGraphAddMemsetNode*/
     fn cuGraphAddMemAllocNode(
-        phGraphNode: *mut cuda_types::CUgraphNode,
-        hGraph: cuda_types::CUgraph,
-        dependencies: *const cuda_types::CUgraphNode,
+        phGraphNode: *mut cuda_types::cuda::CUgraphNode,
+        hGraph: cuda_types::cuda::CUgraph,
+        dependencies: *const cuda_types::cuda::CUgraphNode,
         numDependencies: usize,
-        nodeParams: *mut cuda_types::CUDA_MEM_ALLOC_NODE_PARAMS,
-    ) -> cuda_types::CUresult;
+        nodeParams: *mut cuda_types::cuda::CUDA_MEM_ALLOC_NODE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a memory alloc node's parameters
 
  Returns the parameters of a memory alloc node \p hNode in \p params_out.
@@ -13974,9 +14013,9 @@ void **kernelParams;
  ::cuGraphAddMemAllocNode,
  ::cuGraphMemFreeNodeGetParams*/
     fn cuGraphMemAllocNodeGetParams(
-        hNode: cuda_types::CUgraphNode,
-        params_out: *mut cuda_types::CUDA_MEM_ALLOC_NODE_PARAMS,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        params_out: *mut cuda_types::cuda::CUDA_MEM_ALLOC_NODE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates a memory free node and adds it to a graph
 
  Creates a new memory free node and adds it to \p hGraph with \p numDependencies
@@ -14032,12 +14071,12 @@ void **kernelParams;
  ::cuGraphAddMemcpyNode,
  ::cuGraphAddMemsetNode*/
     fn cuGraphAddMemFreeNode(
-        phGraphNode: *mut cuda_types::CUgraphNode,
-        hGraph: cuda_types::CUgraph,
-        dependencies: *const cuda_types::CUgraphNode,
+        phGraphNode: *mut cuda_types::cuda::CUgraphNode,
+        hGraph: cuda_types::cuda::CUgraph,
+        dependencies: *const cuda_types::cuda::CUgraphNode,
         numDependencies: usize,
-        dptr: cuda_types::CUdeviceptr,
-    ) -> cuda_types::CUresult;
+        dptr: cuda_types::cuda::CUdeviceptr,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a memory free node's parameters
 
  Returns the address of a memory free node \p hNode in \p dptr_out.
@@ -14057,9 +14096,9 @@ void **kernelParams;
  ::cuGraphAddMemFreeNode,
  ::cuGraphMemAllocNodeGetParams*/
     fn cuGraphMemFreeNodeGetParams(
-        hNode: cuda_types::CUgraphNode,
-        dptr_out: *mut cuda_types::CUdeviceptr,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        dptr_out: *mut cuda_types::cuda::CUdeviceptr,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Free unused memory that was cached on the specified device for use with graphs back to the OS.
 
  Blocks which are not in use by a graph that is either currently executing or scheduled to execute are
@@ -14076,7 +14115,9 @@ void **kernelParams;
  ::cuGraphAddMemFreeNode,
  ::cuDeviceSetGraphMemAttribute,
  ::cuDeviceGetGraphMemAttribute*/
-    fn cuDeviceGraphMemTrim(device: cuda_types::CUdevice) -> cuda_types::CUresult;
+    fn cuDeviceGraphMemTrim(
+        device: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Query asynchronous allocation attributes related to graphs
 
  Valid attributes are:
@@ -14102,10 +14143,10 @@ void **kernelParams;
  ::cuGraphAddMemAllocNode,
  ::cuGraphAddMemFreeNode*/
     fn cuDeviceGetGraphMemAttribute(
-        device: cuda_types::CUdevice,
-        attr: cuda_types::CUgraphMem_attribute,
+        device: cuda_types::cuda::CUdevice,
+        attr: cuda_types::cuda::CUgraphMem_attribute,
         value: *mut ::core::ffi::c_void,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Set asynchronous allocation attributes related to graphs
 
  Valid attributes are:
@@ -14128,10 +14169,10 @@ void **kernelParams;
  ::cuGraphAddMemAllocNode,
  ::cuGraphAddMemFreeNode*/
     fn cuDeviceSetGraphMemAttribute(
-        device: cuda_types::CUdevice,
-        attr: cuda_types::CUgraphMem_attribute,
+        device: cuda_types::cuda::CUdevice,
+        attr: cuda_types::cuda::CUgraphMem_attribute,
         value: *mut ::core::ffi::c_void,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Clones a graph
 
  This function creates a copy of \p originalGraph and returns it in \p phGraphClone.
@@ -14154,9 +14195,9 @@ void **kernelParams;
  ::cuGraphCreate,
  ::cuGraphNodeFindInClone*/
     fn cuGraphClone(
-        phGraphClone: *mut cuda_types::CUgraph,
-        originalGraph: cuda_types::CUgraph,
-    ) -> cuda_types::CUresult;
+        phGraphClone: *mut cuda_types::cuda::CUgraph,
+        originalGraph: cuda_types::cuda::CUgraph,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Finds a cloned version of a node
 
  This function returns the node in \p hClonedGraph corresponding to \p hOriginalNode
@@ -14180,10 +14221,10 @@ void **kernelParams;
  \sa
  ::cuGraphClone*/
     fn cuGraphNodeFindInClone(
-        phNode: *mut cuda_types::CUgraphNode,
-        hOriginalNode: cuda_types::CUgraphNode,
-        hClonedGraph: cuda_types::CUgraph,
-    ) -> cuda_types::CUresult;
+        phNode: *mut cuda_types::cuda::CUgraphNode,
+        hOriginalNode: cuda_types::cuda::CUgraphNode,
+        hClonedGraph: cuda_types::cuda::CUgraph,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a node's type
 
  Returns the node type of \p hNode in \p type.
@@ -14212,9 +14253,9 @@ void **kernelParams;
  ::cuGraphMemsetNodeGetParams,
  ::cuGraphMemsetNodeSetParams*/
     fn cuGraphNodeGetType(
-        hNode: cuda_types::CUgraphNode,
-        type_: *mut cuda_types::CUgraphNodeType,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        type_: *mut cuda_types::cuda::CUgraphNodeType,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a graph's nodes
 
  Returns a list of \p hGraph's nodes. \p nodes may be NULL, in which case this
@@ -14243,10 +14284,10 @@ void **kernelParams;
  ::cuGraphNodeGetDependencies,
  ::cuGraphNodeGetDependentNodes*/
     fn cuGraphGetNodes(
-        hGraph: cuda_types::CUgraph,
-        nodes: *mut cuda_types::CUgraphNode,
+        hGraph: cuda_types::cuda::CUgraph,
+        nodes: *mut cuda_types::cuda::CUgraphNode,
         numNodes: *mut usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a graph's root nodes
 
  Returns a list of \p hGraph's root nodes. \p rootNodes may be NULL, in which case this
@@ -14275,10 +14316,10 @@ void **kernelParams;
  ::cuGraphNodeGetDependencies,
  ::cuGraphNodeGetDependentNodes*/
     fn cuGraphGetRootNodes(
-        hGraph: cuda_types::CUgraph,
-        rootNodes: *mut cuda_types::CUgraphNode,
+        hGraph: cuda_types::cuda::CUgraph,
+        rootNodes: *mut cuda_types::cuda::CUgraphNode,
         numRootNodes: *mut usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a graph's dependency edges
 
  Returns a list of \p hGraph's dependency edges. Edges are returned via corresponding
@@ -14310,11 +14351,11 @@ void **kernelParams;
  ::cuGraphNodeGetDependencies,
  ::cuGraphNodeGetDependentNodes*/
     fn cuGraphGetEdges(
-        hGraph: cuda_types::CUgraph,
-        from: *mut cuda_types::CUgraphNode,
-        to: *mut cuda_types::CUgraphNode,
+        hGraph: cuda_types::cuda::CUgraph,
+        from: *mut cuda_types::cuda::CUgraphNode,
+        to: *mut cuda_types::cuda::CUgraphNode,
         numEdges: *mut usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a graph's dependency edges (12.3+)
 
  Returns a list of \p hGraph's dependency edges. Edges are returned via corresponding
@@ -14352,12 +14393,12 @@ void **kernelParams;
  ::cuGraphNodeGetDependencies,
  ::cuGraphNodeGetDependentNodes*/
     fn cuGraphGetEdges_v2(
-        hGraph: cuda_types::CUgraph,
-        from: *mut cuda_types::CUgraphNode,
-        to: *mut cuda_types::CUgraphNode,
-        edgeData: *mut cuda_types::CUgraphEdgeData,
+        hGraph: cuda_types::cuda::CUgraph,
+        from: *mut cuda_types::cuda::CUgraphNode,
+        to: *mut cuda_types::cuda::CUgraphNode,
+        edgeData: *mut cuda_types::cuda::CUgraphEdgeData,
         numEdges: *mut usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a node's dependencies
 
  Returns a list of \p node's dependencies. \p dependencies may be NULL, in which case this
@@ -14386,10 +14427,10 @@ void **kernelParams;
  ::cuGraphAddDependencies,
  ::cuGraphRemoveDependencies*/
     fn cuGraphNodeGetDependencies(
-        hNode: cuda_types::CUgraphNode,
-        dependencies: *mut cuda_types::CUgraphNode,
+        hNode: cuda_types::cuda::CUgraphNode,
+        dependencies: *mut cuda_types::cuda::CUgraphNode,
         numDependencies: *mut usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a node's dependencies (12.3+)
 
  Returns a list of \p node's dependencies. \p dependencies may be NULL, in which case this
@@ -14424,11 +14465,11 @@ void **kernelParams;
  ::cuGraphAddDependencies,
  ::cuGraphRemoveDependencies*/
     fn cuGraphNodeGetDependencies_v2(
-        hNode: cuda_types::CUgraphNode,
-        dependencies: *mut cuda_types::CUgraphNode,
-        edgeData: *mut cuda_types::CUgraphEdgeData,
+        hNode: cuda_types::cuda::CUgraphNode,
+        dependencies: *mut cuda_types::cuda::CUgraphNode,
+        edgeData: *mut cuda_types::cuda::CUgraphEdgeData,
         numDependencies: *mut usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a node's dependent nodes
 
  Returns a list of \p node's dependent nodes. \p dependentNodes may be NULL, in which
@@ -14458,10 +14499,10 @@ void **kernelParams;
  ::cuGraphAddDependencies,
  ::cuGraphRemoveDependencies*/
     fn cuGraphNodeGetDependentNodes(
-        hNode: cuda_types::CUgraphNode,
-        dependentNodes: *mut cuda_types::CUgraphNode,
+        hNode: cuda_types::cuda::CUgraphNode,
+        dependentNodes: *mut cuda_types::cuda::CUgraphNode,
         numDependentNodes: *mut usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a node's dependent nodes (12.3+)
 
  Returns a list of \p node's dependent nodes. \p dependentNodes may be NULL, in which
@@ -14497,11 +14538,11 @@ void **kernelParams;
  ::cuGraphAddDependencies,
  ::cuGraphRemoveDependencies*/
     fn cuGraphNodeGetDependentNodes_v2(
-        hNode: cuda_types::CUgraphNode,
-        dependentNodes: *mut cuda_types::CUgraphNode,
-        edgeData: *mut cuda_types::CUgraphEdgeData,
+        hNode: cuda_types::cuda::CUgraphNode,
+        dependentNodes: *mut cuda_types::cuda::CUgraphNode,
+        edgeData: *mut cuda_types::cuda::CUgraphEdgeData,
         numDependentNodes: *mut usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Adds dependency edges to a graph
 
  The number of dependencies to be added is defined by \p numDependencies
@@ -14528,11 +14569,11 @@ void **kernelParams;
  ::cuGraphNodeGetDependencies,
  ::cuGraphNodeGetDependentNodes*/
     fn cuGraphAddDependencies(
-        hGraph: cuda_types::CUgraph,
-        from: *const cuda_types::CUgraphNode,
-        to: *const cuda_types::CUgraphNode,
+        hGraph: cuda_types::cuda::CUgraph,
+        from: *const cuda_types::cuda::CUgraphNode,
+        to: *const cuda_types::cuda::CUgraphNode,
         numDependencies: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Adds dependency edges to a graph (12.3+)
 
  The number of dependencies to be added is defined by \p numDependencies
@@ -14560,12 +14601,12 @@ void **kernelParams;
  ::cuGraphNodeGetDependencies,
  ::cuGraphNodeGetDependentNodes*/
     fn cuGraphAddDependencies_v2(
-        hGraph: cuda_types::CUgraph,
-        from: *const cuda_types::CUgraphNode,
-        to: *const cuda_types::CUgraphNode,
-        edgeData: *const cuda_types::CUgraphEdgeData,
+        hGraph: cuda_types::cuda::CUgraph,
+        from: *const cuda_types::cuda::CUgraphNode,
+        to: *const cuda_types::cuda::CUgraphNode,
+        edgeData: *const cuda_types::cuda::CUgraphEdgeData,
         numDependencies: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Removes dependency edges from a graph
 
  The number of \p dependencies to be removed is defined by \p numDependencies.
@@ -14595,11 +14636,11 @@ void **kernelParams;
  ::cuGraphNodeGetDependencies,
  ::cuGraphNodeGetDependentNodes*/
     fn cuGraphRemoveDependencies(
-        hGraph: cuda_types::CUgraph,
-        from: *const cuda_types::CUgraphNode,
-        to: *const cuda_types::CUgraphNode,
+        hGraph: cuda_types::cuda::CUgraph,
+        from: *const cuda_types::cuda::CUgraphNode,
+        to: *const cuda_types::cuda::CUgraphNode,
         numDependencies: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Removes dependency edges from a graph (12.3+)
 
  The number of \p dependencies to be removed is defined by \p numDependencies.
@@ -14633,12 +14674,12 @@ void **kernelParams;
  ::cuGraphNodeGetDependencies,
  ::cuGraphNodeGetDependentNodes*/
     fn cuGraphRemoveDependencies_v2(
-        hGraph: cuda_types::CUgraph,
-        from: *const cuda_types::CUgraphNode,
-        to: *const cuda_types::CUgraphNode,
-        edgeData: *const cuda_types::CUgraphEdgeData,
+        hGraph: cuda_types::cuda::CUgraph,
+        from: *const cuda_types::cuda::CUgraphNode,
+        to: *const cuda_types::cuda::CUgraphNode,
+        edgeData: *const cuda_types::cuda::CUgraphEdgeData,
         numDependencies: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Remove a node from the graph
 
  Removes \p hNode from its graph. This operation also severs any dependencies of other nodes
@@ -14662,7 +14703,9 @@ void **kernelParams;
  ::cuGraphAddHostNode,
  ::cuGraphAddMemcpyNode,
  ::cuGraphAddMemsetNode*/
-    fn cuGraphDestroyNode(hNode: cuda_types::CUgraphNode) -> cuda_types::CUresult;
+    fn cuGraphDestroyNode(
+        hNode: cuda_types::cuda::CUgraphNode,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates an executable graph from a graph
 
  Instantiates \p hGraph as an executable graph. The graph is validated for any
@@ -14732,10 +14775,10 @@ void **kernelParams;
  ::cuGraphLaunch,
  ::cuGraphExecDestroy*/
     fn cuGraphInstantiateWithFlags(
-        phGraphExec: *mut cuda_types::CUgraphExec,
-        hGraph: cuda_types::CUgraph,
+        phGraphExec: *mut cuda_types::cuda::CUgraphExec,
+        hGraph: cuda_types::cuda::CUgraph,
         flags: ::core::ffi::c_ulonglong,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates an executable graph from a graph
 
  Instantiates \p hGraph as an executable graph according to the \p instantiateParams structure.
@@ -14836,10 +14879,10 @@ CUgraphInstantiateResult result_out;
  ::cuGraphInstantiate,
  ::cuGraphExecDestroy*/
     fn cuGraphInstantiateWithParams_ptsz(
-        phGraphExec: *mut cuda_types::CUgraphExec,
-        hGraph: cuda_types::CUgraph,
-        instantiateParams: *mut cuda_types::CUDA_GRAPH_INSTANTIATE_PARAMS,
-    ) -> cuda_types::CUresult;
+        phGraphExec: *mut cuda_types::cuda::CUgraphExec,
+        hGraph: cuda_types::cuda::CUgraph,
+        instantiateParams: *mut cuda_types::cuda::CUDA_GRAPH_INSTANTIATE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Query the instantiation flags of an executable graph
 
  Returns the flags that were passed to instantiation for the given executable graph.
@@ -14859,9 +14902,9 @@ CUgraphInstantiateResult result_out;
  ::cuGraphInstantiate,
  ::cuGraphInstantiateWithParams*/
     fn cuGraphExecGetFlags(
-        hGraphExec: cuda_types::CUgraphExec,
-        flags: *mut cuda_types::cuuint64_t,
-    ) -> cuda_types::CUresult;
+        hGraphExec: cuda_types::cuda::CUgraphExec,
+        flags: *mut cuda_types::cuda::cuuint64_t,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the parameters for a kernel node in the given graphExec
 
  Sets the parameters of a kernel node in an executable graph \p hGraphExec.
@@ -14916,10 +14959,10 @@ CUgraphInstantiateResult result_out;
  ::cuGraphExecUpdate,
  ::cuGraphInstantiate*/
     fn cuGraphExecKernelNodeSetParams_v2(
-        hGraphExec: cuda_types::CUgraphExec,
-        hNode: cuda_types::CUgraphNode,
-        nodeParams: *const cuda_types::CUDA_KERNEL_NODE_PARAMS,
-    ) -> cuda_types::CUresult;
+        hGraphExec: cuda_types::cuda::CUgraphExec,
+        hNode: cuda_types::cuda::CUgraphNode,
+        nodeParams: *const cuda_types::cuda::CUDA_KERNEL_NODE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the parameters for a memcpy node in the given graphExec.
 
  Updates the work represented by \p hNode in \p hGraphExec as though \p hNode had
@@ -14964,11 +15007,11 @@ CUgraphInstantiateResult result_out;
  ::cuGraphExecUpdate,
  ::cuGraphInstantiate*/
     fn cuGraphExecMemcpyNodeSetParams(
-        hGraphExec: cuda_types::CUgraphExec,
-        hNode: cuda_types::CUgraphNode,
-        copyParams: *const cuda_types::CUDA_MEMCPY3D,
-        ctx: cuda_types::CUcontext,
-    ) -> cuda_types::CUresult;
+        hGraphExec: cuda_types::cuda::CUgraphExec,
+        hNode: cuda_types::cuda::CUgraphNode,
+        copyParams: *const cuda_types::cuda::CUDA_MEMCPY3D,
+        ctx: cuda_types::cuda::CUcontext,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the parameters for a memset node in the given graphExec.
 
  Updates the work represented by \p hNode in \p hGraphExec as though \p hNode had
@@ -15013,11 +15056,11 @@ CUgraphInstantiateResult result_out;
  ::cuGraphExecUpdate,
  ::cuGraphInstantiate*/
     fn cuGraphExecMemsetNodeSetParams(
-        hGraphExec: cuda_types::CUgraphExec,
-        hNode: cuda_types::CUgraphNode,
-        memsetParams: *const cuda_types::CUDA_MEMSET_NODE_PARAMS,
-        ctx: cuda_types::CUcontext,
-    ) -> cuda_types::CUresult;
+        hGraphExec: cuda_types::cuda::CUgraphExec,
+        hNode: cuda_types::cuda::CUgraphNode,
+        memsetParams: *const cuda_types::cuda::CUDA_MEMSET_NODE_PARAMS,
+        ctx: cuda_types::cuda::CUcontext,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the parameters for a host node in the given graphExec.
 
  Updates the work represented by \p hNode in \p hGraphExec as though \p hNode had
@@ -15053,10 +15096,10 @@ CUgraphInstantiateResult result_out;
  ::cuGraphExecUpdate,
  ::cuGraphInstantiate*/
     fn cuGraphExecHostNodeSetParams(
-        hGraphExec: cuda_types::CUgraphExec,
-        hNode: cuda_types::CUgraphNode,
-        nodeParams: *const cuda_types::CUDA_HOST_NODE_PARAMS,
-    ) -> cuda_types::CUresult;
+        hGraphExec: cuda_types::cuda::CUgraphExec,
+        hNode: cuda_types::cuda::CUgraphNode,
+        nodeParams: *const cuda_types::cuda::CUDA_HOST_NODE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Updates node parameters in the child graph node in the given graphExec.
 
  Updates the work represented by \p hNode in \p hGraphExec as though the nodes contained
@@ -15098,10 +15141,10 @@ CUgraphInstantiateResult result_out;
  ::cuGraphExecUpdate,
  ::cuGraphInstantiate*/
     fn cuGraphExecChildGraphNodeSetParams(
-        hGraphExec: cuda_types::CUgraphExec,
-        hNode: cuda_types::CUgraphNode,
-        childGraph: cuda_types::CUgraph,
-    ) -> cuda_types::CUresult;
+        hGraphExec: cuda_types::cuda::CUgraphExec,
+        hNode: cuda_types::cuda::CUgraphNode,
+        childGraph: cuda_types::cuda::CUgraph,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the event for an event record node in the given graphExec
 
  Sets the event of an event record node in an executable graph \p hGraphExec.
@@ -15140,10 +15183,10 @@ CUgraphInstantiateResult result_out;
  ::cuGraphExecUpdate,
  ::cuGraphInstantiate*/
     fn cuGraphExecEventRecordNodeSetEvent(
-        hGraphExec: cuda_types::CUgraphExec,
-        hNode: cuda_types::CUgraphNode,
-        event: cuda_types::CUevent,
-    ) -> cuda_types::CUresult;
+        hGraphExec: cuda_types::cuda::CUgraphExec,
+        hNode: cuda_types::cuda::CUgraphNode,
+        event: cuda_types::cuda::CUevent,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the event for an event wait node in the given graphExec
 
  Sets the event of an event wait node in an executable graph \p hGraphExec.
@@ -15182,10 +15225,10 @@ CUgraphInstantiateResult result_out;
  ::cuGraphExecUpdate,
  ::cuGraphInstantiate*/
     fn cuGraphExecEventWaitNodeSetEvent(
-        hGraphExec: cuda_types::CUgraphExec,
-        hNode: cuda_types::CUgraphNode,
-        event: cuda_types::CUevent,
-    ) -> cuda_types::CUresult;
+        hGraphExec: cuda_types::cuda::CUgraphExec,
+        hNode: cuda_types::cuda::CUgraphNode,
+        event: cuda_types::cuda::CUevent,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the parameters for an external semaphore signal node in the given graphExec
 
  Sets the parameters of an external semaphore signal node in an executable graph \p hGraphExec.
@@ -15227,10 +15270,10 @@ CUgraphInstantiateResult result_out;
  ::cuGraphExecUpdate,
  ::cuGraphInstantiate*/
     fn cuGraphExecExternalSemaphoresSignalNodeSetParams(
-        hGraphExec: cuda_types::CUgraphExec,
-        hNode: cuda_types::CUgraphNode,
-        nodeParams: *const cuda_types::CUDA_EXT_SEM_SIGNAL_NODE_PARAMS,
-    ) -> cuda_types::CUresult;
+        hGraphExec: cuda_types::cuda::CUgraphExec,
+        hNode: cuda_types::cuda::CUgraphNode,
+        nodeParams: *const cuda_types::cuda::CUDA_EXT_SEM_SIGNAL_NODE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the parameters for an external semaphore wait node in the given graphExec
 
  Sets the parameters of an external semaphore wait node in an executable graph \p hGraphExec.
@@ -15272,10 +15315,10 @@ CUgraphInstantiateResult result_out;
  ::cuGraphExecUpdate,
  ::cuGraphInstantiate*/
     fn cuGraphExecExternalSemaphoresWaitNodeSetParams(
-        hGraphExec: cuda_types::CUgraphExec,
-        hNode: cuda_types::CUgraphNode,
-        nodeParams: *const cuda_types::CUDA_EXT_SEM_WAIT_NODE_PARAMS,
-    ) -> cuda_types::CUresult;
+        hGraphExec: cuda_types::cuda::CUgraphExec,
+        hNode: cuda_types::cuda::CUgraphNode,
+        nodeParams: *const cuda_types::cuda::CUDA_EXT_SEM_WAIT_NODE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Enables or disables the specified node in the given graphExec
 
  Sets \p hNode to be either enabled or disabled. Disabled nodes are functionally equivalent
@@ -15314,10 +15357,10 @@ CUgraphInstantiateResult result_out;
  ::cuGraphInstantiate
  ::cuGraphLaunch*/
     fn cuGraphNodeSetEnabled(
-        hGraphExec: cuda_types::CUgraphExec,
-        hNode: cuda_types::CUgraphNode,
+        hGraphExec: cuda_types::cuda::CUgraphExec,
+        hNode: cuda_types::cuda::CUgraphNode,
         isEnabled: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Query whether a node in the given graphExec is enabled
 
  Sets isEnabled to 1 if \p hNode is enabled, or 0 if \p hNode is disabled.
@@ -15346,10 +15389,10 @@ CUgraphInstantiateResult result_out;
  ::cuGraphInstantiate
  ::cuGraphLaunch*/
     fn cuGraphNodeGetEnabled(
-        hGraphExec: cuda_types::CUgraphExec,
-        hNode: cuda_types::CUgraphNode,
+        hGraphExec: cuda_types::cuda::CUgraphExec,
+        hNode: cuda_types::cuda::CUgraphNode,
         isEnabled: *mut ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Uploads an executable graph in a stream
 
  Uploads \p hGraphExec to the device in \p hStream without executing it. Uploads of
@@ -15373,9 +15416,9 @@ CUgraphInstantiateResult result_out;
  ::cuGraphLaunch,
  ::cuGraphExecDestroy*/
     fn cuGraphUpload_ptsz(
-        hGraphExec: cuda_types::CUgraphExec,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hGraphExec: cuda_types::cuda::CUgraphExec,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Launches an executable graph in a stream
 
  Executes \p hGraphExec in \p hStream. Only one instance of \p hGraphExec may be executing
@@ -15403,9 +15446,9 @@ CUgraphInstantiateResult result_out;
  ::cuGraphUpload,
  ::cuGraphExecDestroy*/
     fn cuGraphLaunch_ptsz(
-        hGraphExec: cuda_types::CUgraphExec,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hGraphExec: cuda_types::cuda::CUgraphExec,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Destroys an executable graph
 
  Destroys the executable graph specified by \p hGraphExec, as well
@@ -15427,7 +15470,9 @@ CUgraphInstantiateResult result_out;
  ::cuGraphInstantiate,
  ::cuGraphUpload,
  ::cuGraphLaunch*/
-    fn cuGraphExecDestroy(hGraphExec: cuda_types::CUgraphExec) -> cuda_types::CUresult;
+    fn cuGraphExecDestroy(
+        hGraphExec: cuda_types::cuda::CUgraphExec,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Destroys a graph
 
  Destroys the graph specified by \p hGraph, as well as all of its nodes.
@@ -15444,7 +15489,7 @@ CUgraphInstantiateResult result_out;
 
  \sa
  ::cuGraphCreate*/
-    fn cuGraphDestroy(hGraph: cuda_types::CUgraph) -> cuda_types::CUresult;
+    fn cuGraphDestroy(hGraph: cuda_types::cuda::CUgraph) -> cuda_types::cuda::CUresult;
     /** \brief Check whether an executable graph can be updated with a graph and perform the update if possible
 
  Updates the node parameters in the instantiated graph specified by \p hGraphExec with the
@@ -15532,10 +15577,10 @@ CUgraphInstantiateResult result_out;
  \sa
  ::cuGraphInstantiate*/
     fn cuGraphExecUpdate_v2(
-        hGraphExec: cuda_types::CUgraphExec,
-        hGraph: cuda_types::CUgraph,
-        resultInfo: *mut cuda_types::CUgraphExecUpdateResultInfo,
-    ) -> cuda_types::CUresult;
+        hGraphExec: cuda_types::cuda::CUgraphExec,
+        hGraph: cuda_types::cuda::CUgraph,
+        resultInfo: *mut cuda_types::cuda::CUgraphExecUpdateResultInfo,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Copies attributes from source node to destination node.
 
  Copies attributes from source node \p src to destination node \p dst.
@@ -15553,9 +15598,9 @@ CUgraphInstantiateResult result_out;
  \sa
  ::CUaccessPolicyWindow*/
     fn cuGraphKernelNodeCopyAttributes(
-        dst: cuda_types::CUgraphNode,
-        src: cuda_types::CUgraphNode,
-    ) -> cuda_types::CUresult;
+        dst: cuda_types::cuda::CUgraphNode,
+        src: cuda_types::cuda::CUgraphNode,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Queries node attribute.
 
  Queries attribute \p attr from node \p hNode and stores it in corresponding
@@ -15574,10 +15619,10 @@ CUgraphInstantiateResult result_out;
  \sa
  ::CUaccessPolicyWindow*/
     fn cuGraphKernelNodeGetAttribute(
-        hNode: cuda_types::CUgraphNode,
-        attr: cuda_types::CUkernelNodeAttrID,
-        value_out: *mut cuda_types::CUkernelNodeAttrValue,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        attr: cuda_types::cuda::CUkernelNodeAttrID,
+        value_out: *mut cuda_types::cuda::CUkernelNodeAttrValue,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets node attribute.
 
  Sets attribute \p attr on node \p hNode from corresponding attribute of
@@ -15596,10 +15641,10 @@ CUgraphInstantiateResult result_out;
  \sa
  ::CUaccessPolicyWindow*/
     fn cuGraphKernelNodeSetAttribute(
-        hNode: cuda_types::CUgraphNode,
-        attr: cuda_types::CUkernelNodeAttrID,
-        value: *const cuda_types::CUkernelNodeAttrValue,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        attr: cuda_types::cuda::CUkernelNodeAttrID,
+        value: *const cuda_types::cuda::CUkernelNodeAttrValue,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Write a DOT file describing graph structure
 
  Using the provided \p hGraph, write to \p path a DOT formatted description of the graph.
@@ -15616,10 +15661,10 @@ CUgraphInstantiateResult result_out;
  ::CUDA_ERROR_INVALID_VALUE,
  ::CUDA_ERROR_OPERATING_SYSTEM*/
     fn cuGraphDebugDotPrint(
-        hGraph: cuda_types::CUgraph,
+        hGraph: cuda_types::cuda::CUgraph,
         path: *const ::core::ffi::c_char,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Create a user object
 
  Create a user object with the specified destructor callback and initial reference count. The
@@ -15653,12 +15698,12 @@ CUgraphInstantiateResult result_out;
  ::cuGraphReleaseUserObject,
  ::cuGraphCreate*/
     fn cuUserObjectCreate(
-        object_out: *mut cuda_types::CUuserObject,
+        object_out: *mut cuda_types::cuda::CUuserObject,
         ptr: *mut ::core::ffi::c_void,
-        destroy: cuda_types::CUhostFn,
+        destroy: cuda_types::cuda::CUhostFn,
         initialRefcount: ::core::ffi::c_uint,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Retain a reference to a user object
 
  Retains new references to a user object. The new references are owned by the caller.
@@ -15680,9 +15725,9 @@ CUgraphInstantiateResult result_out;
  ::cuGraphReleaseUserObject,
  ::cuGraphCreate*/
     fn cuUserObjectRetain(
-        object: cuda_types::CUuserObject,
+        object: cuda_types::cuda::CUuserObject,
         count: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Release a reference to a user object
 
  Releases user object references owned by the caller. The object's destructor is invoked if
@@ -15708,9 +15753,9 @@ CUgraphInstantiateResult result_out;
  ::cuGraphReleaseUserObject,
  ::cuGraphCreate*/
     fn cuUserObjectRelease(
-        object: cuda_types::CUuserObject,
+        object: cuda_types::cuda::CUuserObject,
         count: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Retain a reference to a user object from a graph
 
  Creates or moves user object references that will be owned by a CUDA graph.
@@ -15736,11 +15781,11 @@ CUgraphInstantiateResult result_out;
  ::cuGraphReleaseUserObject,
  ::cuGraphCreate*/
     fn cuGraphRetainUserObject(
-        graph: cuda_types::CUgraph,
-        object: cuda_types::CUuserObject,
+        graph: cuda_types::cuda::CUgraph,
+        object: cuda_types::cuda::CUuserObject,
         count: ::core::ffi::c_uint,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Release a user object reference from a graph
 
  Releases user object references owned by a graph.
@@ -15763,10 +15808,10 @@ CUgraphInstantiateResult result_out;
  ::cuGraphRetainUserObject,
  ::cuGraphCreate*/
     fn cuGraphReleaseUserObject(
-        graph: cuda_types::CUgraph,
-        object: cuda_types::CUuserObject,
+        graph: cuda_types::cuda::CUgraph,
+        object: cuda_types::cuda::CUuserObject,
         count: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Adds a node of arbitrary type to a graph
 
  Creates a new node in \p hGraph described by \p nodeParams with \p numDependencies
@@ -15804,12 +15849,12 @@ CUgraphInstantiateResult result_out;
  ::cuGraphNodeSetParams,
  ::cuGraphExecNodeSetParams*/
     fn cuGraphAddNode(
-        phGraphNode: *mut cuda_types::CUgraphNode,
-        hGraph: cuda_types::CUgraph,
-        dependencies: *const cuda_types::CUgraphNode,
+        phGraphNode: *mut cuda_types::cuda::CUgraphNode,
+        hGraph: cuda_types::cuda::CUgraph,
+        dependencies: *const cuda_types::cuda::CUgraphNode,
         numDependencies: usize,
-        nodeParams: *mut cuda_types::CUgraphNodeParams,
-    ) -> cuda_types::CUresult;
+        nodeParams: *mut cuda_types::cuda::CUgraphNodeParams,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Adds a node of arbitrary type to a graph (12.3+)
 
  Creates a new node in \p hGraph described by \p nodeParams with \p numDependencies
@@ -15849,13 +15894,13 @@ CUgraphInstantiateResult result_out;
  ::cuGraphNodeSetParams,
  ::cuGraphExecNodeSetParams*/
     fn cuGraphAddNode_v2(
-        phGraphNode: *mut cuda_types::CUgraphNode,
-        hGraph: cuda_types::CUgraph,
-        dependencies: *const cuda_types::CUgraphNode,
-        dependencyData: *const cuda_types::CUgraphEdgeData,
+        phGraphNode: *mut cuda_types::cuda::CUgraphNode,
+        hGraph: cuda_types::cuda::CUgraph,
+        dependencies: *const cuda_types::cuda::CUgraphNode,
+        dependencyData: *const cuda_types::cuda::CUgraphEdgeData,
         numDependencies: usize,
-        nodeParams: *mut cuda_types::CUgraphNodeParams,
-    ) -> cuda_types::CUresult;
+        nodeParams: *mut cuda_types::cuda::CUgraphNodeParams,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Update's a graph node's parameters
 
  Sets the parameters of graph node \p hNode to \p nodeParams. The node type specified by
@@ -15879,9 +15924,9 @@ CUgraphInstantiateResult result_out;
  ::cuGraphAddNode,
  ::cuGraphExecNodeSetParams*/
     fn cuGraphNodeSetParams(
-        hNode: cuda_types::CUgraphNode,
-        nodeParams: *mut cuda_types::CUgraphNodeParams,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        nodeParams: *mut cuda_types::cuda::CUgraphNodeParams,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Update's a graph node's parameters in an instantiated graph
 
  Sets the parameters of a node in an executable graph \p hGraphExec. The node is identified
@@ -15926,10 +15971,10 @@ CUgraphInstantiateResult result_out;
  ::cuGraphExecUpdate,
  ::cuGraphInstantiate*/
     fn cuGraphExecNodeSetParams(
-        hGraphExec: cuda_types::CUgraphExec,
-        hNode: cuda_types::CUgraphNode,
-        nodeParams: *mut cuda_types::CUgraphNodeParams,
-    ) -> cuda_types::CUresult;
+        hGraphExec: cuda_types::cuda::CUgraphExec,
+        hNode: cuda_types::cuda::CUgraphNode,
+        nodeParams: *mut cuda_types::cuda::CUgraphNodeParams,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Create a conditional handle
 
  Creates a conditional handle associated with \p hGraph.
@@ -15956,12 +16001,12 @@ CUgraphInstantiateResult result_out;
  \sa
  ::cuGraphAddNode*/
     fn cuGraphConditionalHandleCreate(
-        pHandle_out: *mut cuda_types::CUgraphConditionalHandle,
-        hGraph: cuda_types::CUgraph,
-        ctx: cuda_types::CUcontext,
+        pHandle_out: *mut cuda_types::cuda::CUgraphConditionalHandle,
+        hGraph: cuda_types::cuda::CUgraph,
+        ctx: cuda_types::cuda::CUcontext,
         defaultLaunchValue: ::core::ffi::c_uint,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns occupancy of a function
 
  Returns in \p *numBlocks the number of the maximum active blocks per
@@ -15985,10 +16030,10 @@ CUgraphInstantiateResult result_out;
  ::cudaOccupancyMaxActiveBlocksPerMultiprocessor*/
     fn cuOccupancyMaxActiveBlocksPerMultiprocessor(
         numBlocks: *mut ::core::ffi::c_int,
-        func: cuda_types::CUfunction,
+        func: cuda_types::cuda::CUfunction,
         blockSize: ::core::ffi::c_int,
         dynamicSMemSize: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns occupancy of a function
 
  Returns in \p *numBlocks the number of the maximum active blocks per
@@ -16029,11 +16074,11 @@ CUgraphInstantiateResult result_out;
  ::cudaOccupancyMaxActiveBlocksPerMultiprocessorWithFlags*/
     fn cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
         numBlocks: *mut ::core::ffi::c_int,
-        func: cuda_types::CUfunction,
+        func: cuda_types::cuda::CUfunction,
         blockSize: ::core::ffi::c_int,
         dynamicSMemSize: usize,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Suggest a launch configuration with reasonable occupancy
 
  Returns in \p *blockSize a reasonable block size that can achieve
@@ -16085,11 +16130,11 @@ CUgraphInstantiateResult result_out;
     fn cuOccupancyMaxPotentialBlockSize(
         minGridSize: *mut ::core::ffi::c_int,
         blockSize: *mut ::core::ffi::c_int,
-        func: cuda_types::CUfunction,
-        blockSizeToDynamicSMemSize: cuda_types::CUoccupancyB2DSize,
+        func: cuda_types::cuda::CUfunction,
+        blockSizeToDynamicSMemSize: cuda_types::cuda::CUoccupancyB2DSize,
         dynamicSMemSize: usize,
         blockSizeLimit: ::core::ffi::c_int,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Suggest a launch configuration with reasonable occupancy
 
  An extended version of ::cuOccupancyMaxPotentialBlockSize. In
@@ -16135,12 +16180,12 @@ CUgraphInstantiateResult result_out;
     fn cuOccupancyMaxPotentialBlockSizeWithFlags(
         minGridSize: *mut ::core::ffi::c_int,
         blockSize: *mut ::core::ffi::c_int,
-        func: cuda_types::CUfunction,
-        blockSizeToDynamicSMemSize: cuda_types::CUoccupancyB2DSize,
+        func: cuda_types::cuda::CUfunction,
+        blockSizeToDynamicSMemSize: cuda_types::cuda::CUoccupancyB2DSize,
         dynamicSMemSize: usize,
         blockSizeLimit: ::core::ffi::c_int,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns dynamic shared memory available per block when launching \p numBlocks blocks on SM
 
  Returns in \p *dynamicSmemSize the maximum size of dynamic shared memory to allow \p numBlocks blocks per SM.
@@ -16160,10 +16205,10 @@ CUgraphInstantiateResult result_out;
  \notefnerr*/
     fn cuOccupancyAvailableDynamicSMemPerBlock(
         dynamicSmemSize: *mut usize,
-        func: cuda_types::CUfunction,
+        func: cuda_types::cuda::CUfunction,
         numBlocks: ::core::ffi::c_int,
         blockSize: ::core::ffi::c_int,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Given the kernel function (\p func) and launch configuration
  (\p config), return the maximum cluster size in \p *clusterSize.
 
@@ -16197,9 +16242,9 @@ CUgraphInstantiateResult result_out;
  ::cuFuncGetAttribute*/
     fn cuOccupancyMaxPotentialClusterSize(
         clusterSize: *mut ::core::ffi::c_int,
-        func: cuda_types::CUfunction,
-        config: *const cuda_types::CUlaunchConfig,
-    ) -> cuda_types::CUresult;
+        func: cuda_types::cuda::CUfunction,
+        config: *const cuda_types::cuda::CUlaunchConfig,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Given the kernel function (\p func) and launch configuration
  (\p config), return the maximum number of clusters that could co-exist
  on the target device in \p *numClusters.
@@ -16235,9 +16280,9 @@ CUgraphInstantiateResult result_out;
  ::cuFuncGetAttribute*/
     fn cuOccupancyMaxActiveClusters(
         numClusters: *mut ::core::ffi::c_int,
-        func: cuda_types::CUfunction,
-        config: *const cuda_types::CUlaunchConfig,
-    ) -> cuda_types::CUresult;
+        func: cuda_types::cuda::CUfunction,
+        config: *const cuda_types::cuda::CUlaunchConfig,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Binds an array as a texture reference
 
  \deprecated
@@ -16266,10 +16311,10 @@ CUgraphInstantiateResult result_out;
  ::cuTexRefGetAddress, ::cuTexRefGetAddressMode, ::cuTexRefGetArray,
  ::cuTexRefGetFilterMode, ::cuTexRefGetFlags, ::cuTexRefGetFormat*/
     fn cuTexRefSetArray(
-        hTexRef: cuda_types::CUtexref,
-        hArray: cuda_types::CUarray,
+        hTexRef: cuda_types::cuda::CUtexref,
+        hArray: cuda_types::cuda::CUarray,
         Flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Binds a mipmapped array to a texture reference
 
  \deprecated
@@ -16297,10 +16342,10 @@ CUgraphInstantiateResult result_out;
  ::cuTexRefGetAddress, ::cuTexRefGetAddressMode, ::cuTexRefGetArray,
  ::cuTexRefGetFilterMode, ::cuTexRefGetFlags, ::cuTexRefGetFormat*/
     fn cuTexRefSetMipmappedArray(
-        hTexRef: cuda_types::CUtexref,
-        hMipmappedArray: cuda_types::CUmipmappedArray,
+        hTexRef: cuda_types::cuda::CUtexref,
+        hMipmappedArray: cuda_types::cuda::CUmipmappedArray,
         Flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Binds an address as a texture reference
 
  \deprecated
@@ -16345,10 +16390,10 @@ CUgraphInstantiateResult result_out;
  ::cuTexRefGetFilterMode, ::cuTexRefGetFlags, ::cuTexRefGetFormat*/
     fn cuTexRefSetAddress_v2(
         ByteOffset: *mut usize,
-        hTexRef: cuda_types::CUtexref,
-        dptr: cuda_types::CUdeviceptr,
+        hTexRef: cuda_types::cuda::CUtexref,
+        dptr: cuda_types::cuda::CUdeviceptr,
         bytes: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Binds an address as a 2D texture reference
 
  \deprecated
@@ -16401,11 +16446,11 @@ CUgraphInstantiateResult result_out;
  ::cuTexRefGetAddress, ::cuTexRefGetAddressMode, ::cuTexRefGetArray,
  ::cuTexRefGetFilterMode, ::cuTexRefGetFlags, ::cuTexRefGetFormat*/
     fn cuTexRefSetAddress2D_v3(
-        hTexRef: cuda_types::CUtexref,
-        desc: *const cuda_types::CUDA_ARRAY_DESCRIPTOR,
-        dptr: cuda_types::CUdeviceptr,
+        hTexRef: cuda_types::cuda::CUtexref,
+        desc: *const cuda_types::cuda::CUDA_ARRAY_DESCRIPTOR,
+        dptr: cuda_types::cuda::CUdeviceptr,
         Pitch: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the format for a texture reference
 
  \deprecated
@@ -16435,10 +16480,10 @@ CUgraphInstantiateResult result_out;
  ::cuTexRefGetFilterMode, ::cuTexRefGetFlags, ::cuTexRefGetFormat,
  ::cudaCreateChannelDesc*/
     fn cuTexRefSetFormat(
-        hTexRef: cuda_types::CUtexref,
-        fmt: cuda_types::CUarray_format,
+        hTexRef: cuda_types::cuda::CUtexref,
+        fmt: cuda_types::cuda::CUarray_format,
         NumPackedComponents: ::core::ffi::c_int,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the addressing mode for a texture reference
 
  \deprecated
@@ -16479,10 +16524,10 @@ CU_TR_ADDRESS_MODE_BORDER = 3
  ::cuTexRefGetAddress, ::cuTexRefGetAddressMode, ::cuTexRefGetArray,
  ::cuTexRefGetFilterMode, ::cuTexRefGetFlags, ::cuTexRefGetFormat*/
     fn cuTexRefSetAddressMode(
-        hTexRef: cuda_types::CUtexref,
+        hTexRef: cuda_types::cuda::CUtexref,
         dim: ::core::ffi::c_int,
-        am: cuda_types::CUaddress_mode,
-    ) -> cuda_types::CUresult;
+        am: cuda_types::cuda::CUaddress_mode,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the filtering mode for a texture reference
 
  \deprecated
@@ -16516,9 +16561,9 @@ CU_TR_FILTER_MODE_LINEAR = 1
  ::cuTexRefGetAddress, ::cuTexRefGetAddressMode, ::cuTexRefGetArray,
  ::cuTexRefGetFilterMode, ::cuTexRefGetFlags, ::cuTexRefGetFormat*/
     fn cuTexRefSetFilterMode(
-        hTexRef: cuda_types::CUtexref,
-        fm: cuda_types::CUfilter_mode,
-    ) -> cuda_types::CUresult;
+        hTexRef: cuda_types::cuda::CUtexref,
+        fm: cuda_types::cuda::CUfilter_mode,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the mipmap filtering mode for a texture reference
 
  \deprecated
@@ -16552,9 +16597,9 @@ CU_TR_FILTER_MODE_LINEAR = 1
  ::cuTexRefGetAddress, ::cuTexRefGetAddressMode, ::cuTexRefGetArray,
  ::cuTexRefGetFilterMode, ::cuTexRefGetFlags, ::cuTexRefGetFormat*/
     fn cuTexRefSetMipmapFilterMode(
-        hTexRef: cuda_types::CUtexref,
-        fm: cuda_types::CUfilter_mode,
-    ) -> cuda_types::CUresult;
+        hTexRef: cuda_types::cuda::CUtexref,
+        fm: cuda_types::cuda::CUfilter_mode,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the mipmap level bias for a texture reference
 
  \deprecated
@@ -16581,9 +16626,9 @@ CU_TR_FILTER_MODE_LINEAR = 1
  ::cuTexRefGetAddress, ::cuTexRefGetAddressMode, ::cuTexRefGetArray,
  ::cuTexRefGetFilterMode, ::cuTexRefGetFlags, ::cuTexRefGetFormat*/
     fn cuTexRefSetMipmapLevelBias(
-        hTexRef: cuda_types::CUtexref,
+        hTexRef: cuda_types::cuda::CUtexref,
         bias: f32,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the mipmap min/max mipmap level clamps for a texture reference
 
  \deprecated
@@ -16612,10 +16657,10 @@ CU_TR_FILTER_MODE_LINEAR = 1
  ::cuTexRefGetAddress, ::cuTexRefGetAddressMode, ::cuTexRefGetArray,
  ::cuTexRefGetFilterMode, ::cuTexRefGetFlags, ::cuTexRefGetFormat*/
     fn cuTexRefSetMipmapLevelClamp(
-        hTexRef: cuda_types::CUtexref,
+        hTexRef: cuda_types::cuda::CUtexref,
         minMipmapLevelClamp: f32,
         maxMipmapLevelClamp: f32,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the maximum anisotropy for a texture reference
 
  \deprecated
@@ -16642,9 +16687,9 @@ CU_TR_FILTER_MODE_LINEAR = 1
  ::cuTexRefGetAddress, ::cuTexRefGetAddressMode, ::cuTexRefGetArray,
  ::cuTexRefGetFilterMode, ::cuTexRefGetFlags, ::cuTexRefGetFormat*/
     fn cuTexRefSetMaxAnisotropy(
-        hTexRef: cuda_types::CUtexref,
+        hTexRef: cuda_types::cuda::CUtexref,
         maxAniso: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the border color for a texture reference
 
  \deprecated
@@ -16675,9 +16720,9 @@ CU_TR_FILTER_MODE_LINEAR = 1
  ::cuTexRefSetAddressMode,
  ::cuTexRefGetAddressMode, ::cuTexRefGetBorderColor*/
     fn cuTexRefSetBorderColor(
-        hTexRef: cuda_types::CUtexref,
+        hTexRef: cuda_types::cuda::CUtexref,
         pBorderColor: *mut f32,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the flags for a texture reference
 
  \deprecated
@@ -16717,9 +16762,9 @@ CU_TR_FILTER_MODE_LINEAR = 1
  ::cuTexRefGetAddress, ::cuTexRefGetAddressMode, ::cuTexRefGetArray,
  ::cuTexRefGetFilterMode, ::cuTexRefGetFlags, ::cuTexRefGetFormat*/
     fn cuTexRefSetFlags(
-        hTexRef: cuda_types::CUtexref,
+        hTexRef: cuda_types::cuda::CUtexref,
         Flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Gets the address associated with a texture reference
 
  \deprecated
@@ -16744,9 +16789,9 @@ CU_TR_FILTER_MODE_LINEAR = 1
  ::cuTexRefGetAddressMode, ::cuTexRefGetArray,
  ::cuTexRefGetFilterMode, ::cuTexRefGetFlags, ::cuTexRefGetFormat*/
     fn cuTexRefGetAddress_v2(
-        pdptr: *mut cuda_types::CUdeviceptr,
-        hTexRef: cuda_types::CUtexref,
-    ) -> cuda_types::CUresult;
+        pdptr: *mut cuda_types::cuda::CUdeviceptr,
+        hTexRef: cuda_types::cuda::CUtexref,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Gets the array bound to a texture reference
 
  \deprecated
@@ -16771,9 +16816,9 @@ CU_TR_FILTER_MODE_LINEAR = 1
  ::cuTexRefGetAddress, ::cuTexRefGetAddressMode,
  ::cuTexRefGetFilterMode, ::cuTexRefGetFlags, ::cuTexRefGetFormat*/
     fn cuTexRefGetArray(
-        phArray: *mut cuda_types::CUarray,
-        hTexRef: cuda_types::CUtexref,
-    ) -> cuda_types::CUresult;
+        phArray: *mut cuda_types::cuda::CUarray,
+        hTexRef: cuda_types::cuda::CUtexref,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Gets the mipmapped array bound to a texture reference
 
  \deprecated
@@ -16798,9 +16843,9 @@ CU_TR_FILTER_MODE_LINEAR = 1
  ::cuTexRefGetAddress, ::cuTexRefGetAddressMode,
  ::cuTexRefGetFilterMode, ::cuTexRefGetFlags, ::cuTexRefGetFormat*/
     fn cuTexRefGetMipmappedArray(
-        phMipmappedArray: *mut cuda_types::CUmipmappedArray,
-        hTexRef: cuda_types::CUtexref,
-    ) -> cuda_types::CUresult;
+        phMipmappedArray: *mut cuda_types::cuda::CUmipmappedArray,
+        hTexRef: cuda_types::cuda::CUtexref,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Gets the addressing mode used by a texture reference
 
  \deprecated
@@ -16826,10 +16871,10 @@ CU_TR_FILTER_MODE_LINEAR = 1
  ::cuTexRefGetAddress, ::cuTexRefGetArray,
  ::cuTexRefGetFilterMode, ::cuTexRefGetFlags, ::cuTexRefGetFormat*/
     fn cuTexRefGetAddressMode(
-        pam: *mut cuda_types::CUaddress_mode,
-        hTexRef: cuda_types::CUtexref,
+        pam: *mut cuda_types::cuda::CUaddress_mode,
+        hTexRef: cuda_types::cuda::CUtexref,
         dim: ::core::ffi::c_int,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Gets the filter-mode used by a texture reference
 
  \deprecated
@@ -16853,9 +16898,9 @@ CU_TR_FILTER_MODE_LINEAR = 1
  ::cuTexRefGetAddress, ::cuTexRefGetAddressMode, ::cuTexRefGetArray,
  ::cuTexRefGetFlags, ::cuTexRefGetFormat*/
     fn cuTexRefGetFilterMode(
-        pfm: *mut cuda_types::CUfilter_mode,
-        hTexRef: cuda_types::CUtexref,
-    ) -> cuda_types::CUresult;
+        pfm: *mut cuda_types::cuda::CUfilter_mode,
+        hTexRef: cuda_types::cuda::CUtexref,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Gets the format used by a texture reference
 
  \deprecated
@@ -16881,10 +16926,10 @@ CU_TR_FILTER_MODE_LINEAR = 1
  ::cuTexRefGetAddress, ::cuTexRefGetAddressMode, ::cuTexRefGetArray,
  ::cuTexRefGetFilterMode, ::cuTexRefGetFlags*/
     fn cuTexRefGetFormat(
-        pFormat: *mut cuda_types::CUarray_format,
+        pFormat: *mut cuda_types::cuda::CUarray_format,
         pNumChannels: *mut ::core::ffi::c_int,
-        hTexRef: cuda_types::CUtexref,
-    ) -> cuda_types::CUresult;
+        hTexRef: cuda_types::cuda::CUtexref,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Gets the mipmap filtering mode for a texture reference
 
  \deprecated
@@ -16908,9 +16953,9 @@ CU_TR_FILTER_MODE_LINEAR = 1
  ::cuTexRefGetAddress, ::cuTexRefGetAddressMode, ::cuTexRefGetArray,
  ::cuTexRefGetFilterMode, ::cuTexRefGetFlags, ::cuTexRefGetFormat*/
     fn cuTexRefGetMipmapFilterMode(
-        pfm: *mut cuda_types::CUfilter_mode,
-        hTexRef: cuda_types::CUtexref,
-    ) -> cuda_types::CUresult;
+        pfm: *mut cuda_types::cuda::CUfilter_mode,
+        hTexRef: cuda_types::cuda::CUtexref,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Gets the mipmap level bias for a texture reference
 
  \deprecated
@@ -16935,8 +16980,8 @@ CU_TR_FILTER_MODE_LINEAR = 1
  ::cuTexRefGetFilterMode, ::cuTexRefGetFlags, ::cuTexRefGetFormat*/
     fn cuTexRefGetMipmapLevelBias(
         pbias: *mut f32,
-        hTexRef: cuda_types::CUtexref,
-    ) -> cuda_types::CUresult;
+        hTexRef: cuda_types::cuda::CUtexref,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Gets the min/max mipmap level clamps for a texture reference
 
  \deprecated
@@ -16963,8 +17008,8 @@ CU_TR_FILTER_MODE_LINEAR = 1
     fn cuTexRefGetMipmapLevelClamp(
         pminMipmapLevelClamp: *mut f32,
         pmaxMipmapLevelClamp: *mut f32,
-        hTexRef: cuda_types::CUtexref,
-    ) -> cuda_types::CUresult;
+        hTexRef: cuda_types::cuda::CUtexref,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Gets the maximum anisotropy for a texture reference
 
  \deprecated
@@ -16989,8 +17034,8 @@ CU_TR_FILTER_MODE_LINEAR = 1
  ::cuTexRefGetFilterMode, ::cuTexRefGetFlags, ::cuTexRefGetFormat*/
     fn cuTexRefGetMaxAnisotropy(
         pmaxAniso: *mut ::core::ffi::c_int,
-        hTexRef: cuda_types::CUtexref,
-    ) -> cuda_types::CUresult;
+        hTexRef: cuda_types::cuda::CUtexref,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Gets the border color used by a texture reference
 
  \deprecated
@@ -17018,8 +17063,8 @@ CU_TR_FILTER_MODE_LINEAR = 1
  ::cuTexRefSetAddressMode, ::cuTexRefSetBorderColor*/
     fn cuTexRefGetBorderColor(
         pBorderColor: *mut f32,
-        hTexRef: cuda_types::CUtexref,
-    ) -> cuda_types::CUresult;
+        hTexRef: cuda_types::cuda::CUtexref,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Gets the flags used by a texture reference
 
  \deprecated
@@ -17043,8 +17088,8 @@ CU_TR_FILTER_MODE_LINEAR = 1
  ::cuTexRefGetFilterMode, ::cuTexRefGetFormat*/
     fn cuTexRefGetFlags(
         pFlags: *mut ::core::ffi::c_uint,
-        hTexRef: cuda_types::CUtexref,
-    ) -> cuda_types::CUresult;
+        hTexRef: cuda_types::cuda::CUtexref,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates a texture reference
 
  \deprecated
@@ -17066,7 +17111,9 @@ CU_TR_FILTER_MODE_LINEAR = 1
  ::CUDA_ERROR_INVALID_VALUE
 
  \sa ::cuTexRefDestroy*/
-    fn cuTexRefCreate(pTexRef: *mut cuda_types::CUtexref) -> cuda_types::CUresult;
+    fn cuTexRefCreate(
+        pTexRef: *mut cuda_types::cuda::CUtexref,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Destroys a texture reference
 
  \deprecated
@@ -17083,7 +17130,9 @@ CU_TR_FILTER_MODE_LINEAR = 1
  ::CUDA_ERROR_INVALID_VALUE
 
  \sa ::cuTexRefCreate*/
-    fn cuTexRefDestroy(hTexRef: cuda_types::CUtexref) -> cuda_types::CUresult;
+    fn cuTexRefDestroy(
+        hTexRef: cuda_types::cuda::CUtexref,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Sets the CUDA array for a surface reference.
 
  \deprecated
@@ -17109,10 +17158,10 @@ CU_TR_FILTER_MODE_LINEAR = 1
  ::cuModuleGetSurfRef,
  ::cuSurfRefGetArray*/
     fn cuSurfRefSetArray(
-        hSurfRef: cuda_types::CUsurfref,
-        hArray: cuda_types::CUarray,
+        hSurfRef: cuda_types::cuda::CUsurfref,
+        hArray: cuda_types::cuda::CUarray,
         Flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Passes back the CUDA array bound to a surface reference.
 
  \deprecated
@@ -17133,9 +17182,9 @@ CU_TR_FILTER_MODE_LINEAR = 1
 
  \sa ::cuModuleGetSurfRef, ::cuSurfRefSetArray*/
     fn cuSurfRefGetArray(
-        phArray: *mut cuda_types::CUarray,
-        hSurfRef: cuda_types::CUsurfref,
-    ) -> cuda_types::CUresult;
+        phArray: *mut cuda_types::cuda::CUarray,
+        hSurfRef: cuda_types::cuda::CUsurfref,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates a texture object
 
  Creates a texture object and returns it in \p pTexObject. \p pResDesc describes
@@ -17358,11 +17407,11 @@ unsigned int lastLayer;
  ::cuTexObjectDestroy,
  ::cudaCreateTextureObject*/
     fn cuTexObjectCreate(
-        pTexObject: *mut cuda_types::CUtexObject,
-        pResDesc: *const cuda_types::CUDA_RESOURCE_DESC,
-        pTexDesc: *const cuda_types::CUDA_TEXTURE_DESC,
-        pResViewDesc: *const cuda_types::CUDA_RESOURCE_VIEW_DESC,
-    ) -> cuda_types::CUresult;
+        pTexObject: *mut cuda_types::cuda::CUtexObject,
+        pResDesc: *const cuda_types::cuda::CUDA_RESOURCE_DESC,
+        pTexDesc: *const cuda_types::cuda::CUDA_TEXTURE_DESC,
+        pResViewDesc: *const cuda_types::cuda::CUDA_RESOURCE_VIEW_DESC,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Destroys a texture object
 
  Destroys the texture object specified by \p texObject.
@@ -17379,7 +17428,9 @@ unsigned int lastLayer;
  \sa
  ::cuTexObjectCreate,
  ::cudaDestroyTextureObject*/
-    fn cuTexObjectDestroy(texObject: cuda_types::CUtexObject) -> cuda_types::CUresult;
+    fn cuTexObjectDestroy(
+        texObject: cuda_types::cuda::CUtexObject,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a texture object's resource descriptor
 
  Returns the resource descriptor for the texture object specified by \p texObject.
@@ -17398,9 +17449,9 @@ unsigned int lastLayer;
  ::cuTexObjectCreate,
  ::cudaGetTextureObjectResourceDesc,*/
     fn cuTexObjectGetResourceDesc(
-        pResDesc: *mut cuda_types::CUDA_RESOURCE_DESC,
-        texObject: cuda_types::CUtexObject,
-    ) -> cuda_types::CUresult;
+        pResDesc: *mut cuda_types::cuda::CUDA_RESOURCE_DESC,
+        texObject: cuda_types::cuda::CUtexObject,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a texture object's texture descriptor
 
  Returns the texture descriptor for the texture object specified by \p texObject.
@@ -17419,9 +17470,9 @@ unsigned int lastLayer;
  ::cuTexObjectCreate,
  ::cudaGetTextureObjectTextureDesc*/
     fn cuTexObjectGetTextureDesc(
-        pTexDesc: *mut cuda_types::CUDA_TEXTURE_DESC,
-        texObject: cuda_types::CUtexObject,
-    ) -> cuda_types::CUresult;
+        pTexDesc: *mut cuda_types::cuda::CUDA_TEXTURE_DESC,
+        texObject: cuda_types::cuda::CUtexObject,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a texture object's resource view descriptor
 
  Returns the resource view descriptor for the texture object specified by \p texObject.
@@ -17441,9 +17492,9 @@ unsigned int lastLayer;
  ::cuTexObjectCreate,
  ::cudaGetTextureObjectResourceViewDesc*/
     fn cuTexObjectGetResourceViewDesc(
-        pResViewDesc: *mut cuda_types::CUDA_RESOURCE_VIEW_DESC,
-        texObject: cuda_types::CUtexObject,
-    ) -> cuda_types::CUresult;
+        pResViewDesc: *mut cuda_types::cuda::CUDA_RESOURCE_VIEW_DESC,
+        texObject: cuda_types::cuda::CUtexObject,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates a surface object
 
  Creates a surface object and returns it in \p pSurfObject. \p pResDesc describes
@@ -17469,9 +17520,9 @@ unsigned int lastLayer;
  ::cuSurfObjectDestroy,
  ::cudaCreateSurfaceObject*/
     fn cuSurfObjectCreate(
-        pSurfObject: *mut cuda_types::CUsurfObject,
-        pResDesc: *const cuda_types::CUDA_RESOURCE_DESC,
-    ) -> cuda_types::CUresult;
+        pSurfObject: *mut cuda_types::cuda::CUsurfObject,
+        pResDesc: *const cuda_types::cuda::CUDA_RESOURCE_DESC,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Destroys a surface object
 
  Destroys the surface object specified by \p surfObject.
@@ -17488,7 +17539,9 @@ unsigned int lastLayer;
  \sa
  ::cuSurfObjectCreate,
  ::cudaDestroySurfaceObject*/
-    fn cuSurfObjectDestroy(surfObject: cuda_types::CUsurfObject) -> cuda_types::CUresult;
+    fn cuSurfObjectDestroy(
+        surfObject: cuda_types::cuda::CUsurfObject,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns a surface object's resource descriptor
 
  Returns the resource descriptor for the surface object specified by \p surfObject.
@@ -17507,9 +17560,9 @@ unsigned int lastLayer;
  ::cuSurfObjectCreate,
  ::cudaGetSurfaceObjectResourceDesc*/
     fn cuSurfObjectGetResourceDesc(
-        pResDesc: *mut cuda_types::CUDA_RESOURCE_DESC,
-        surfObject: cuda_types::CUsurfObject,
-    ) -> cuda_types::CUresult;
+        pResDesc: *mut cuda_types::cuda::CUDA_RESOURCE_DESC,
+        surfObject: cuda_types::cuda::CUsurfObject,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Create a tensor map descriptor object representing tiled memory region
 
  Creates a descriptor for Tensor Memory Access (TMA) object specified
@@ -17649,19 +17702,19 @@ CU_TENSOR_MAP_FLOAT_OOB_FILL_NAN_REQUEST_ZERO_FMA
  ::cuTensorMapEncodeIm2col,
  ::cuTensorMapReplaceAddress*/
     fn cuTensorMapEncodeTiled(
-        tensorMap: *mut cuda_types::CUtensorMap,
-        tensorDataType: cuda_types::CUtensorMapDataType,
-        tensorRank: cuda_types::cuuint32_t,
+        tensorMap: *mut cuda_types::cuda::CUtensorMap,
+        tensorDataType: cuda_types::cuda::CUtensorMapDataType,
+        tensorRank: cuda_types::cuda::cuuint32_t,
         globalAddress: *mut ::core::ffi::c_void,
-        globalDim: *const cuda_types::cuuint64_t,
-        globalStrides: *const cuda_types::cuuint64_t,
-        boxDim: *const cuda_types::cuuint32_t,
-        elementStrides: *const cuda_types::cuuint32_t,
-        interleave: cuda_types::CUtensorMapInterleave,
-        swizzle: cuda_types::CUtensorMapSwizzle,
-        l2Promotion: cuda_types::CUtensorMapL2promotion,
-        oobFill: cuda_types::CUtensorMapFloatOOBfill,
-    ) -> cuda_types::CUresult;
+        globalDim: *const cuda_types::cuda::cuuint64_t,
+        globalStrides: *const cuda_types::cuda::cuuint64_t,
+        boxDim: *const cuda_types::cuda::cuuint32_t,
+        elementStrides: *const cuda_types::cuda::cuuint32_t,
+        interleave: cuda_types::cuda::CUtensorMapInterleave,
+        swizzle: cuda_types::cuda::CUtensorMapSwizzle,
+        l2Promotion: cuda_types::cuda::CUtensorMapL2promotion,
+        oobFill: cuda_types::cuda::CUtensorMapFloatOOBfill,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Create a tensor map descriptor object representing im2col memory region
 
  Creates a descriptor for Tensor Memory Access (TMA) object specified
@@ -17816,22 +17869,22 @@ CU_TENSOR_MAP_FLOAT_OOB_FILL_NAN_REQUEST_ZERO_FMA
  ::cuTensorMapEncodeTiled,
  ::cuTensorMapReplaceAddress*/
     fn cuTensorMapEncodeIm2col(
-        tensorMap: *mut cuda_types::CUtensorMap,
-        tensorDataType: cuda_types::CUtensorMapDataType,
-        tensorRank: cuda_types::cuuint32_t,
+        tensorMap: *mut cuda_types::cuda::CUtensorMap,
+        tensorDataType: cuda_types::cuda::CUtensorMapDataType,
+        tensorRank: cuda_types::cuda::cuuint32_t,
         globalAddress: *mut ::core::ffi::c_void,
-        globalDim: *const cuda_types::cuuint64_t,
-        globalStrides: *const cuda_types::cuuint64_t,
+        globalDim: *const cuda_types::cuda::cuuint64_t,
+        globalStrides: *const cuda_types::cuda::cuuint64_t,
         pixelBoxLowerCorner: *const ::core::ffi::c_int,
         pixelBoxUpperCorner: *const ::core::ffi::c_int,
-        channelsPerPixel: cuda_types::cuuint32_t,
-        pixelsPerColumn: cuda_types::cuuint32_t,
-        elementStrides: *const cuda_types::cuuint32_t,
-        interleave: cuda_types::CUtensorMapInterleave,
-        swizzle: cuda_types::CUtensorMapSwizzle,
-        l2Promotion: cuda_types::CUtensorMapL2promotion,
-        oobFill: cuda_types::CUtensorMapFloatOOBfill,
-    ) -> cuda_types::CUresult;
+        channelsPerPixel: cuda_types::cuda::cuuint32_t,
+        pixelsPerColumn: cuda_types::cuda::cuuint32_t,
+        elementStrides: *const cuda_types::cuda::cuuint32_t,
+        interleave: cuda_types::cuda::CUtensorMapInterleave,
+        swizzle: cuda_types::cuda::CUtensorMapSwizzle,
+        l2Promotion: cuda_types::cuda::CUtensorMapL2promotion,
+        oobFill: cuda_types::cuda::CUtensorMapFloatOOBfill,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Modify an existing tensor map descriptor with an updated global address
 
  Modifies the descriptor for Tensor Memory Access (TMA) object passed in \p tensorMap with
@@ -17855,9 +17908,9 @@ CU_TENSOR_MAP_FLOAT_OOB_FILL_NAN_REQUEST_ZERO_FMA
  ::cuTensorMapEncodeTiled,
  ::cuTensorMapEncodeIm2col*/
     fn cuTensorMapReplaceAddress(
-        tensorMap: *mut cuda_types::CUtensorMap,
+        tensorMap: *mut cuda_types::cuda::CUtensorMap,
         globalAddress: *mut ::core::ffi::c_void,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Queries if a device may directly access a peer device's memory.
 
  Returns in \p *canAccessPeer a value of 1 if contexts on \p dev are capable of
@@ -17884,9 +17937,9 @@ CU_TENSOR_MAP_FLOAT_OOB_FILL_NAN_REQUEST_ZERO_FMA
  ::cudaDeviceCanAccessPeer*/
     fn cuDeviceCanAccessPeer(
         canAccessPeer: *mut ::core::ffi::c_int,
-        dev: cuda_types::CUdevice,
-        peerDev: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        dev: cuda_types::cuda::CUdevice,
+        peerDev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Enables direct access to memory allocations in a peer context.
 
  If both the current context and \p peerContext are on devices which support unified
@@ -17937,9 +17990,9 @@ CU_TENSOR_MAP_FLOAT_OOB_FILL_NAN_REQUEST_ZERO_FMA
  ::cuCtxDisablePeerAccess,
  ::cudaDeviceEnablePeerAccess*/
     fn cuCtxEnablePeerAccess(
-        peerContext: cuda_types::CUcontext,
+        peerContext: cuda_types::cuda::CUcontext,
         Flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Disables direct access to memory allocations in a peer context and
  unregisters any registered allocations.
 
@@ -17964,8 +18017,8 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuCtxEnablePeerAccess,
  ::cudaDeviceDisablePeerAccess*/
     fn cuCtxDisablePeerAccess(
-        peerContext: cuda_types::CUcontext,
-    ) -> cuda_types::CUresult;
+        peerContext: cuda_types::cuda::CUcontext,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Queries attributes of the link between two devices.
 
  Returns in \p *value the value of the requested attribute \p attrib of the
@@ -18004,10 +18057,10 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cudaDeviceGetP2PAttribute*/
     fn cuDeviceGetP2PAttribute(
         value: *mut ::core::ffi::c_int,
-        attrib: cuda_types::CUdevice_P2PAttribute,
-        srcDevice: cuda_types::CUdevice,
-        dstDevice: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        attrib: cuda_types::cuda::CUdevice_P2PAttribute,
+        srcDevice: cuda_types::cuda::CUdevice,
+        dstDevice: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Unregisters a graphics resource for access by CUDA
 
  Unregisters the graphics resource \p resource so it is not accessible by
@@ -18035,8 +18088,8 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuGraphicsGLRegisterImage,
  ::cudaGraphicsUnregisterResource*/
     fn cuGraphicsUnregisterResource(
-        resource: cuda_types::CUgraphicsResource,
-    ) -> cuda_types::CUresult;
+        resource: cuda_types::cuda::CUgraphicsResource,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Get an array through which to access a subresource of a mapped graphics resource.
 
  Returns in \p *pArray an array through which the subresource of the mapped
@@ -18074,11 +18127,11 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuGraphicsResourceGetMappedPointer,
  ::cudaGraphicsSubResourceGetMappedArray*/
     fn cuGraphicsSubResourceGetMappedArray(
-        pArray: *mut cuda_types::CUarray,
-        resource: cuda_types::CUgraphicsResource,
+        pArray: *mut cuda_types::cuda::CUarray,
+        resource: cuda_types::cuda::CUgraphicsResource,
         arrayIndex: ::core::ffi::c_uint,
         mipLevel: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Get a mipmapped array through which to access a mapped graphics resource.
 
  Returns in \p *pMipmappedArray a mipmapped array through which the mapped graphics
@@ -18107,9 +18160,9 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuGraphicsResourceGetMappedPointer,
  ::cudaGraphicsResourceGetMappedMipmappedArray*/
     fn cuGraphicsResourceGetMappedMipmappedArray(
-        pMipmappedArray: *mut cuda_types::CUmipmappedArray,
-        resource: cuda_types::CUgraphicsResource,
-    ) -> cuda_types::CUresult;
+        pMipmappedArray: *mut cuda_types::cuda::CUmipmappedArray,
+        resource: cuda_types::cuda::CUgraphicsResource,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Get a device pointer through which to access a mapped graphics resource.
 
  Returns in \p *pDevPtr a pointer through which the mapped graphics resource
@@ -18141,10 +18194,10 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuGraphicsSubResourceGetMappedArray,
  ::cudaGraphicsResourceGetMappedPointer*/
     fn cuGraphicsResourceGetMappedPointer_v2(
-        pDevPtr: *mut cuda_types::CUdeviceptr,
+        pDevPtr: *mut cuda_types::cuda::CUdeviceptr,
         pSize: *mut usize,
-        resource: cuda_types::CUgraphicsResource,
-    ) -> cuda_types::CUresult;
+        resource: cuda_types::cuda::CUgraphicsResource,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Set usage flags for mapping a graphics resource
 
  Set \p flags for mapping the graphics resource \p resource.
@@ -18183,9 +18236,9 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuGraphicsMapResources,
  ::cudaGraphicsResourceSetMapFlags*/
     fn cuGraphicsResourceSetMapFlags_v2(
-        resource: cuda_types::CUgraphicsResource,
+        resource: cuda_types::cuda::CUgraphicsResource,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Map graphics resources for access by CUDA
 
  Maps the \p count graphics resources in \p resources for access by CUDA.
@@ -18224,9 +18277,9 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cudaGraphicsMapResources*/
     fn cuGraphicsMapResources_ptsz(
         count: ::core::ffi::c_uint,
-        resources: *mut cuda_types::CUgraphicsResource,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        resources: *mut cuda_types::cuda::CUgraphicsResource,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Unmap graphics resources.
 
  Unmaps the \p count graphics resources in \p resources.
@@ -18262,9 +18315,9 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cudaGraphicsUnmapResources*/
     fn cuGraphicsUnmapResources_ptsz(
         count: ::core::ffi::c_uint,
-        resources: *mut cuda_types::CUgraphicsResource,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        resources: *mut cuda_types::cuda::CUgraphicsResource,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Returns the requested driver API function pointer
 
  Returns in \p **pfn the address of the CUDA driver function for the requested
@@ -18328,9 +18381,9 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
         symbol: *const ::core::ffi::c_char,
         pfn: *mut *mut ::core::ffi::c_void,
         cudaVersion: ::core::ffi::c_int,
-        flags: cuda_types::cuuint64_t,
-        symbolStatus: *mut cuda_types::CUdriverProcAddressQueryResult,
-    ) -> cuda_types::CUresult;
+        flags: cuda_types::cuda::cuuint64_t,
+        symbolStatus: *mut cuda_types::cuda::CUdriverProcAddressQueryResult,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Allows caller to fetch a coredump attribute value for the current context
 
  Returns in \p *value the requested value specified by \p attrib. It is up to the caller
@@ -18380,10 +18433,10 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuCoredumpSetAttribute,
  ::cuCoredumpSetAttributeGlobal*/
     fn cuCoredumpGetAttribute(
-        attrib: cuda_types::CUcoredumpSettings,
+        attrib: cuda_types::cuda::CUcoredumpSettings,
         value: *mut ::core::ffi::c_void,
         size: *mut usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Allows caller to fetch a coredump attribute value for the entire application
 
  Returns in \p *value the requested value specified by \p attrib. It is up to the caller
@@ -18426,10 +18479,10 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuCoredumpSetAttribute,
  ::cuCoredumpSetAttributeGlobal*/
     fn cuCoredumpGetAttributeGlobal(
-        attrib: cuda_types::CUcoredumpSettings,
+        attrib: cuda_types::cuda::CUcoredumpSettings,
         value: *mut ::core::ffi::c_void,
         size: *mut usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Allows caller to set a coredump attribute value for the current context
 
  This function should be considered an alternate interface to the CUDA-GDB environment
@@ -18485,10 +18538,10 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuCoredumpGetAttribute,
  ::cuCoredumpSetAttributeGlobal*/
     fn cuCoredumpSetAttribute(
-        attrib: cuda_types::CUcoredumpSettings,
+        attrib: cuda_types::cuda::CUcoredumpSettings,
         value: *mut ::core::ffi::c_void,
         size: *mut usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Allows caller to set a coredump attribute value globally
 
  This function should be considered an alternate interface to the CUDA-GDB environment
@@ -18541,15 +18594,15 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuCoredumpGetAttributeGlobal,
  ::cuCoredumpSetAttribute*/
     fn cuCoredumpSetAttributeGlobal(
-        attrib: cuda_types::CUcoredumpSettings,
+        attrib: cuda_types::cuda::CUcoredumpSettings,
         value: *mut ::core::ffi::c_void,
         size: *mut usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /// @}
     fn cuGetExportTable(
         ppExportTable: *mut *const ::core::ffi::c_void,
-        pExportTableId: *const cuda_types::CUuuid,
-    ) -> cuda_types::CUresult;
+        pExportTableId: *const cuda_types::cuda::CUuuid,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates a green context with a specified set of resources.
 
  This API creates a green context with the resources specified in the descriptor \p desc and
@@ -18593,11 +18646,11 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuCtxCreate,
  ::cuCtxCreate_v3*/
     fn cuGreenCtxCreate(
-        phCtx: *mut cuda_types::CUgreenCtx,
-        desc: cuda_types::CUdevResourceDesc,
-        dev: cuda_types::CUdevice,
+        phCtx: *mut cuda_types::cuda::CUgreenCtx,
+        desc: cuda_types::cuda::CUdevResourceDesc,
+        dev: cuda_types::cuda::CUdevice,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Destroys a green context
 
  Destroys the green context, releasing the primary context of the device that this green context was created for.
@@ -18615,7 +18668,9 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  \sa
  ::cuGreenCtxCreate,
  ::cuCtxDestroy*/
-    fn cuGreenCtxDestroy(hCtx: cuda_types::CUgreenCtx) -> cuda_types::CUresult;
+    fn cuGreenCtxDestroy(
+        hCtx: cuda_types::cuda::CUgreenCtx,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Converts a green context into the primary context
 
  The API converts a green context into the primary context returned in \p pContext. It is important
@@ -18640,9 +18695,9 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  \sa
  ::cuGreenCtxCreate*/
     fn cuCtxFromGreenCtx(
-        pContext: *mut cuda_types::CUcontext,
-        hCtx: cuda_types::CUgreenCtx,
-    ) -> cuda_types::CUresult;
+        pContext: *mut cuda_types::cuda::CUcontext,
+        hCtx: cuda_types::cuda::CUgreenCtx,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Get device resources
 
  Get the \p type resources available to the \p device.
@@ -18665,10 +18720,10 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  \sa
  ::cuDevResourceGenerateDesc*/
     fn cuDeviceGetDevResource(
-        device: cuda_types::CUdevice,
-        resource: *mut cuda_types::CUdevResource,
-        type_: cuda_types::CUdevResourceType,
-    ) -> cuda_types::CUresult;
+        device: cuda_types::cuda::CUdevice,
+        resource: *mut cuda_types::cuda::CUdevResource,
+        type_: cuda_types::cuda::CUdevResourceType,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Get context resources
 
  Get the \p type resources available to the context represented by \p hCtx
@@ -18690,10 +18745,10 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  \sa
  ::cuDevResourceGenerateDesc*/
     fn cuCtxGetDevResource(
-        hCtx: cuda_types::CUcontext,
-        resource: *mut cuda_types::CUdevResource,
-        type_: cuda_types::CUdevResourceType,
-    ) -> cuda_types::CUresult;
+        hCtx: cuda_types::cuda::CUcontext,
+        resource: *mut cuda_types::cuda::CUdevResource,
+        type_: cuda_types::cuda::CUdevResourceType,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Get green context resources
 
  Get the \p type resources available to the green context represented by \p hCtx
@@ -18712,10 +18767,10 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  \sa
  ::cuDevResourceGenerateDesc*/
     fn cuGreenCtxGetDevResource(
-        hCtx: cuda_types::CUgreenCtx,
-        resource: *mut cuda_types::CUdevResource,
-        type_: cuda_types::CUdevResourceType,
-    ) -> cuda_types::CUresult;
+        hCtx: cuda_types::cuda::CUgreenCtx,
+        resource: *mut cuda_types::cuda::CUdevResource,
+        type_: cuda_types::cuda::CUdevResourceType,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Splits \p CU_DEV_RESOURCE_TYPE_SM resources.
 
  Splits \p CU_DEV_RESOURCE_TYPE_SM resources into \p nbGroups, adhering to the minimum SM count specified in \p minCount
@@ -18768,13 +18823,13 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuCtxGetDevResource,
  ::cuDeviceGetDevResource*/
     fn cuDevSmResourceSplitByCount(
-        result: *mut cuda_types::CUdevResource,
+        result: *mut cuda_types::cuda::CUdevResource,
         nbGroups: *mut ::core::ffi::c_uint,
-        input: *const cuda_types::CUdevResource,
-        remaining: *mut cuda_types::CUdevResource,
+        input: *const cuda_types::cuda::CUdevResource,
+        remaining: *mut cuda_types::cuda::CUdevResource,
         useFlags: ::core::ffi::c_uint,
         minCount: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Generate a resource descriptor
 
  Generates a resource descriptor with the set of resources specified in \p resources.
@@ -18799,10 +18854,10 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  \sa
  ::cuDevSmResourceSplitByCount*/
     fn cuDevResourceGenerateDesc(
-        phDesc: *mut cuda_types::CUdevResourceDesc,
-        resources: *mut cuda_types::CUdevResource,
+        phDesc: *mut cuda_types::cuda::CUdevResourceDesc,
+        resources: *mut cuda_types::cuda::CUdevResource,
         nbResources: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Records an event.
 
  Captures in \phEvent all the activities of the green context of \phCtx
@@ -18829,9 +18884,9 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuGreenCtxWaitEvent,
  ::cuEventRecord*/
     fn cuGreenCtxRecordEvent(
-        hCtx: cuda_types::CUgreenCtx,
-        hEvent: cuda_types::CUevent,
-    ) -> cuda_types::CUresult;
+        hCtx: cuda_types::cuda::CUgreenCtx,
+        hEvent: cuda_types::cuda::CUevent,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Make a green context wait on an event
 
  Makes all future work submitted to green context \phCtx wait for all work
@@ -18856,9 +18911,9 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuGreenCtxRecordEvent,
  ::cuStreamWaitEvent*/
     fn cuGreenCtxWaitEvent(
-        hCtx: cuda_types::CUgreenCtx,
-        hEvent: cuda_types::CUevent,
-    ) -> cuda_types::CUresult;
+        hCtx: cuda_types::cuda::CUgreenCtx,
+        hEvent: cuda_types::cuda::CUevent,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Query the green context associated with a stream
 
  Returns the CUDA green context that the stream is associated with, or NULL if the stream
@@ -18903,516 +18958,534 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cudaStreamCreate,
  ::cudaStreamCreateWithFlags*/
     fn cuStreamGetGreenCtx(
-        hStream: cuda_types::CUstream,
-        phCtx: *mut cuda_types::CUgreenCtx,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+        phCtx: *mut cuda_types::cuda::CUgreenCtx,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemHostRegister(
         p: *mut ::core::ffi::c_void,
         bytesize: usize,
         Flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuGraphicsResourceSetMapFlags(
-        resource: cuda_types::CUgraphicsResource,
+        resource: cuda_types::cuda::CUgraphicsResource,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuLinkCreate(
         numOptions: ::core::ffi::c_uint,
-        options: *mut cuda_types::CUjit_option,
+        options: *mut cuda_types::cuda::CUjit_option,
         optionValues: *mut *mut ::core::ffi::c_void,
-        stateOut: *mut cuda_types::CUlinkState,
-    ) -> cuda_types::CUresult;
+        stateOut: *mut cuda_types::cuda::CUlinkState,
+    ) -> cuda_types::cuda::CUresult;
     fn cuLinkAddData(
-        state: cuda_types::CUlinkState,
-        type_: cuda_types::CUjitInputType,
+        state: cuda_types::cuda::CUlinkState,
+        type_: cuda_types::cuda::CUjitInputType,
         data: *mut ::core::ffi::c_void,
         size: usize,
         name: *const ::core::ffi::c_char,
         numOptions: ::core::ffi::c_uint,
-        options: *mut cuda_types::CUjit_option,
+        options: *mut cuda_types::cuda::CUjit_option,
         optionValues: *mut *mut ::core::ffi::c_void,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuLinkAddFile(
-        state: cuda_types::CUlinkState,
-        type_: cuda_types::CUjitInputType,
+        state: cuda_types::cuda::CUlinkState,
+        type_: cuda_types::cuda::CUjitInputType,
         path: *const ::core::ffi::c_char,
         numOptions: ::core::ffi::c_uint,
-        options: *mut cuda_types::CUjit_option,
+        options: *mut cuda_types::cuda::CUjit_option,
         optionValues: *mut *mut ::core::ffi::c_void,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuTexRefSetAddress2D_v2(
-        hTexRef: cuda_types::CUtexref,
-        desc: *const cuda_types::CUDA_ARRAY_DESCRIPTOR,
-        dptr: cuda_types::CUdeviceptr,
+        hTexRef: cuda_types::cuda::CUtexref,
+        desc: *const cuda_types::cuda::CUDA_ARRAY_DESCRIPTOR,
+        dptr: cuda_types::cuda::CUdeviceptr,
         Pitch: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuDeviceTotalMem(
         bytes: *mut ::core::ffi::c_uint,
-        dev: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     fn cuCtxCreate(
-        pctx: *mut cuda_types::CUcontext,
+        pctx: *mut cuda_types::cuda::CUcontext,
         flags: ::core::ffi::c_uint,
-        dev: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     fn cuModuleGetGlobal(
-        dptr: *mut cuda_types::CUdeviceptr_v1,
+        dptr: *mut cuda_types::cuda::CUdeviceptr_v1,
         bytes: *mut ::core::ffi::c_uint,
-        hmod: cuda_types::CUmodule,
+        hmod: cuda_types::cuda::CUmodule,
         name: *const ::core::ffi::c_char,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemGetInfo(
         free: *mut ::core::ffi::c_uint,
         total: *mut ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemAlloc(
-        dptr: *mut cuda_types::CUdeviceptr_v1,
+        dptr: *mut cuda_types::cuda::CUdeviceptr_v1,
         bytesize: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemAllocPitch(
-        dptr: *mut cuda_types::CUdeviceptr_v1,
+        dptr: *mut cuda_types::cuda::CUdeviceptr_v1,
         pPitch: *mut ::core::ffi::c_uint,
         WidthInBytes: ::core::ffi::c_uint,
         Height: ::core::ffi::c_uint,
         ElementSizeBytes: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
-    fn cuMemFree(dptr: cuda_types::CUdeviceptr_v1) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
+    fn cuMemFree(dptr: cuda_types::cuda::CUdeviceptr_v1) -> cuda_types::cuda::CUresult;
     fn cuMemGetAddressRange(
-        pbase: *mut cuda_types::CUdeviceptr_v1,
+        pbase: *mut cuda_types::cuda::CUdeviceptr_v1,
         psize: *mut ::core::ffi::c_uint,
-        dptr: cuda_types::CUdeviceptr_v1,
-    ) -> cuda_types::CUresult;
+        dptr: cuda_types::cuda::CUdeviceptr_v1,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemAllocHost(
         pp: *mut *mut ::core::ffi::c_void,
         bytesize: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemHostGetDevicePointer(
-        pdptr: *mut cuda_types::CUdeviceptr_v1,
+        pdptr: *mut cuda_types::cuda::CUdeviceptr_v1,
         p: *mut ::core::ffi::c_void,
         Flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyHtoD(
-        dstDevice: cuda_types::CUdeviceptr_v1,
+        dstDevice: cuda_types::cuda::CUdeviceptr_v1,
         srcHost: *const ::core::ffi::c_void,
         ByteCount: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyDtoH(
         dstHost: *mut ::core::ffi::c_void,
-        srcDevice: cuda_types::CUdeviceptr_v1,
+        srcDevice: cuda_types::cuda::CUdeviceptr_v1,
         ByteCount: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyDtoD(
-        dstDevice: cuda_types::CUdeviceptr_v1,
-        srcDevice: cuda_types::CUdeviceptr_v1,
+        dstDevice: cuda_types::cuda::CUdeviceptr_v1,
+        srcDevice: cuda_types::cuda::CUdeviceptr_v1,
         ByteCount: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyDtoA(
-        dstArray: cuda_types::CUarray,
+        dstArray: cuda_types::cuda::CUarray,
         dstOffset: ::core::ffi::c_uint,
-        srcDevice: cuda_types::CUdeviceptr_v1,
+        srcDevice: cuda_types::cuda::CUdeviceptr_v1,
         ByteCount: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyAtoD(
-        dstDevice: cuda_types::CUdeviceptr_v1,
-        srcArray: cuda_types::CUarray,
+        dstDevice: cuda_types::cuda::CUdeviceptr_v1,
+        srcArray: cuda_types::cuda::CUarray,
         srcOffset: ::core::ffi::c_uint,
         ByteCount: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyHtoA(
-        dstArray: cuda_types::CUarray,
+        dstArray: cuda_types::cuda::CUarray,
         dstOffset: ::core::ffi::c_uint,
         srcHost: *const ::core::ffi::c_void,
         ByteCount: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyAtoH(
         dstHost: *mut ::core::ffi::c_void,
-        srcArray: cuda_types::CUarray,
+        srcArray: cuda_types::cuda::CUarray,
         srcOffset: ::core::ffi::c_uint,
         ByteCount: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyAtoA(
-        dstArray: cuda_types::CUarray,
+        dstArray: cuda_types::cuda::CUarray,
         dstOffset: ::core::ffi::c_uint,
-        srcArray: cuda_types::CUarray,
+        srcArray: cuda_types::cuda::CUarray,
         srcOffset: ::core::ffi::c_uint,
         ByteCount: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyHtoAAsync(
-        dstArray: cuda_types::CUarray,
+        dstArray: cuda_types::cuda::CUarray,
         dstOffset: ::core::ffi::c_uint,
         srcHost: *const ::core::ffi::c_void,
         ByteCount: ::core::ffi::c_uint,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyAtoHAsync(
         dstHost: *mut ::core::ffi::c_void,
-        srcArray: cuda_types::CUarray,
+        srcArray: cuda_types::cuda::CUarray,
         srcOffset: ::core::ffi::c_uint,
         ByteCount: ::core::ffi::c_uint,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
-    fn cuMemcpy2D(pCopy: *const cuda_types::CUDA_MEMCPY2D_v1) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuMemcpy2D(
+        pCopy: *const cuda_types::cuda::CUDA_MEMCPY2D_v1,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpy2DUnaligned(
-        pCopy: *const cuda_types::CUDA_MEMCPY2D_v1,
-    ) -> cuda_types::CUresult;
-    fn cuMemcpy3D(pCopy: *const cuda_types::CUDA_MEMCPY3D_v1) -> cuda_types::CUresult;
+        pCopy: *const cuda_types::cuda::CUDA_MEMCPY2D_v1,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuMemcpy3D(
+        pCopy: *const cuda_types::cuda::CUDA_MEMCPY3D_v1,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyHtoDAsync(
-        dstDevice: cuda_types::CUdeviceptr_v1,
+        dstDevice: cuda_types::cuda::CUdeviceptr_v1,
         srcHost: *const ::core::ffi::c_void,
         ByteCount: ::core::ffi::c_uint,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyDtoHAsync(
         dstHost: *mut ::core::ffi::c_void,
-        srcDevice: cuda_types::CUdeviceptr_v1,
+        srcDevice: cuda_types::cuda::CUdeviceptr_v1,
         ByteCount: ::core::ffi::c_uint,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyDtoDAsync(
-        dstDevice: cuda_types::CUdeviceptr_v1,
-        srcDevice: cuda_types::CUdeviceptr_v1,
+        dstDevice: cuda_types::cuda::CUdeviceptr_v1,
+        srcDevice: cuda_types::cuda::CUdeviceptr_v1,
         ByteCount: ::core::ffi::c_uint,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpy2DAsync(
-        pCopy: *const cuda_types::CUDA_MEMCPY2D_v1,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        pCopy: *const cuda_types::cuda::CUDA_MEMCPY2D_v1,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpy3DAsync(
-        pCopy: *const cuda_types::CUDA_MEMCPY3D_v1,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        pCopy: *const cuda_types::cuda::CUDA_MEMCPY3D_v1,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemsetD8(
-        dstDevice: cuda_types::CUdeviceptr_v1,
+        dstDevice: cuda_types::cuda::CUdeviceptr_v1,
         uc: ::core::ffi::c_uchar,
         N: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemsetD16(
-        dstDevice: cuda_types::CUdeviceptr_v1,
+        dstDevice: cuda_types::cuda::CUdeviceptr_v1,
         us: ::core::ffi::c_ushort,
         N: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemsetD32(
-        dstDevice: cuda_types::CUdeviceptr_v1,
+        dstDevice: cuda_types::cuda::CUdeviceptr_v1,
         ui: ::core::ffi::c_uint,
         N: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemsetD2D8(
-        dstDevice: cuda_types::CUdeviceptr_v1,
+        dstDevice: cuda_types::cuda::CUdeviceptr_v1,
         dstPitch: ::core::ffi::c_uint,
         uc: ::core::ffi::c_uchar,
         Width: ::core::ffi::c_uint,
         Height: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemsetD2D16(
-        dstDevice: cuda_types::CUdeviceptr_v1,
+        dstDevice: cuda_types::cuda::CUdeviceptr_v1,
         dstPitch: ::core::ffi::c_uint,
         us: ::core::ffi::c_ushort,
         Width: ::core::ffi::c_uint,
         Height: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemsetD2D32(
-        dstDevice: cuda_types::CUdeviceptr_v1,
+        dstDevice: cuda_types::cuda::CUdeviceptr_v1,
         dstPitch: ::core::ffi::c_uint,
         ui: ::core::ffi::c_uint,
         Width: ::core::ffi::c_uint,
         Height: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuArrayCreate(
-        pHandle: *mut cuda_types::CUarray,
-        pAllocateArray: *const cuda_types::CUDA_ARRAY_DESCRIPTOR_v1,
-    ) -> cuda_types::CUresult;
+        pHandle: *mut cuda_types::cuda::CUarray,
+        pAllocateArray: *const cuda_types::cuda::CUDA_ARRAY_DESCRIPTOR_v1,
+    ) -> cuda_types::cuda::CUresult;
     fn cuArrayGetDescriptor(
-        pArrayDescriptor: *mut cuda_types::CUDA_ARRAY_DESCRIPTOR_v1,
-        hArray: cuda_types::CUarray,
-    ) -> cuda_types::CUresult;
+        pArrayDescriptor: *mut cuda_types::cuda::CUDA_ARRAY_DESCRIPTOR_v1,
+        hArray: cuda_types::cuda::CUarray,
+    ) -> cuda_types::cuda::CUresult;
     fn cuArray3DCreate(
-        pHandle: *mut cuda_types::CUarray,
-        pAllocateArray: *const cuda_types::CUDA_ARRAY3D_DESCRIPTOR_v1,
-    ) -> cuda_types::CUresult;
+        pHandle: *mut cuda_types::cuda::CUarray,
+        pAllocateArray: *const cuda_types::cuda::CUDA_ARRAY3D_DESCRIPTOR_v1,
+    ) -> cuda_types::cuda::CUresult;
     fn cuArray3DGetDescriptor(
-        pArrayDescriptor: *mut cuda_types::CUDA_ARRAY3D_DESCRIPTOR_v1,
-        hArray: cuda_types::CUarray,
-    ) -> cuda_types::CUresult;
+        pArrayDescriptor: *mut cuda_types::cuda::CUDA_ARRAY3D_DESCRIPTOR_v1,
+        hArray: cuda_types::cuda::CUarray,
+    ) -> cuda_types::cuda::CUresult;
     fn cuTexRefSetAddress(
         ByteOffset: *mut ::core::ffi::c_uint,
-        hTexRef: cuda_types::CUtexref,
-        dptr: cuda_types::CUdeviceptr_v1,
+        hTexRef: cuda_types::cuda::CUtexref,
+        dptr: cuda_types::cuda::CUdeviceptr_v1,
         bytes: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuTexRefSetAddress2D(
-        hTexRef: cuda_types::CUtexref,
-        desc: *const cuda_types::CUDA_ARRAY_DESCRIPTOR_v1,
-        dptr: cuda_types::CUdeviceptr_v1,
+        hTexRef: cuda_types::cuda::CUtexref,
+        desc: *const cuda_types::cuda::CUDA_ARRAY_DESCRIPTOR_v1,
+        dptr: cuda_types::cuda::CUdeviceptr_v1,
         Pitch: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuTexRefGetAddress(
-        pdptr: *mut cuda_types::CUdeviceptr_v1,
-        hTexRef: cuda_types::CUtexref,
-    ) -> cuda_types::CUresult;
+        pdptr: *mut cuda_types::cuda::CUdeviceptr_v1,
+        hTexRef: cuda_types::cuda::CUtexref,
+    ) -> cuda_types::cuda::CUresult;
     fn cuGraphicsResourceGetMappedPointer(
-        pDevPtr: *mut cuda_types::CUdeviceptr_v1,
+        pDevPtr: *mut cuda_types::cuda::CUdeviceptr_v1,
         pSize: *mut ::core::ffi::c_uint,
-        resource: cuda_types::CUgraphicsResource,
-    ) -> cuda_types::CUresult;
-    fn cuCtxDestroy(ctx: cuda_types::CUcontext) -> cuda_types::CUresult;
-    fn cuCtxPopCurrent(pctx: *mut cuda_types::CUcontext) -> cuda_types::CUresult;
-    fn cuCtxPushCurrent(ctx: cuda_types::CUcontext) -> cuda_types::CUresult;
-    fn cuStreamDestroy(hStream: cuda_types::CUstream) -> cuda_types::CUresult;
-    fn cuEventDestroy(hEvent: cuda_types::CUevent) -> cuda_types::CUresult;
-    fn cuDevicePrimaryCtxRelease(dev: cuda_types::CUdevice) -> cuda_types::CUresult;
-    fn cuDevicePrimaryCtxReset(dev: cuda_types::CUdevice) -> cuda_types::CUresult;
+        resource: cuda_types::cuda::CUgraphicsResource,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuCtxDestroy(ctx: cuda_types::cuda::CUcontext) -> cuda_types::cuda::CUresult;
+    fn cuCtxPopCurrent(
+        pctx: *mut cuda_types::cuda::CUcontext,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuCtxPushCurrent(ctx: cuda_types::cuda::CUcontext) -> cuda_types::cuda::CUresult;
+    fn cuStreamDestroy(
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuEventDestroy(hEvent: cuda_types::cuda::CUevent) -> cuda_types::cuda::CUresult;
+    fn cuDevicePrimaryCtxRelease(
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuDevicePrimaryCtxReset(
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     fn cuDevicePrimaryCtxSetFlags(
-        dev: cuda_types::CUdevice,
+        dev: cuda_types::cuda::CUdevice,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyHtoD_v2(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         srcHost: *const ::core::ffi::c_void,
         ByteCount: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyDtoH_v2(
         dstHost: *mut ::core::ffi::c_void,
-        srcDevice: cuda_types::CUdeviceptr,
+        srcDevice: cuda_types::cuda::CUdeviceptr,
         ByteCount: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyDtoD_v2(
-        dstDevice: cuda_types::CUdeviceptr,
-        srcDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
+        srcDevice: cuda_types::cuda::CUdeviceptr,
         ByteCount: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyDtoA_v2(
-        dstArray: cuda_types::CUarray,
+        dstArray: cuda_types::cuda::CUarray,
         dstOffset: usize,
-        srcDevice: cuda_types::CUdeviceptr,
+        srcDevice: cuda_types::cuda::CUdeviceptr,
         ByteCount: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyAtoD_v2(
-        dstDevice: cuda_types::CUdeviceptr,
-        srcArray: cuda_types::CUarray,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
+        srcArray: cuda_types::cuda::CUarray,
         srcOffset: usize,
         ByteCount: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyHtoA_v2(
-        dstArray: cuda_types::CUarray,
+        dstArray: cuda_types::cuda::CUarray,
         dstOffset: usize,
         srcHost: *const ::core::ffi::c_void,
         ByteCount: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyAtoH_v2(
         dstHost: *mut ::core::ffi::c_void,
-        srcArray: cuda_types::CUarray,
+        srcArray: cuda_types::cuda::CUarray,
         srcOffset: usize,
         ByteCount: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyAtoA_v2(
-        dstArray: cuda_types::CUarray,
+        dstArray: cuda_types::cuda::CUarray,
         dstOffset: usize,
-        srcArray: cuda_types::CUarray,
+        srcArray: cuda_types::cuda::CUarray,
         srcOffset: usize,
         ByteCount: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyHtoAAsync_v2(
-        dstArray: cuda_types::CUarray,
+        dstArray: cuda_types::cuda::CUarray,
         dstOffset: usize,
         srcHost: *const ::core::ffi::c_void,
         ByteCount: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyAtoHAsync_v2(
         dstHost: *mut ::core::ffi::c_void,
-        srcArray: cuda_types::CUarray,
+        srcArray: cuda_types::cuda::CUarray,
         srcOffset: usize,
         ByteCount: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
-    fn cuMemcpy2D_v2(pCopy: *const cuda_types::CUDA_MEMCPY2D) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuMemcpy2D_v2(
+        pCopy: *const cuda_types::cuda::CUDA_MEMCPY2D,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpy2DUnaligned_v2(
-        pCopy: *const cuda_types::CUDA_MEMCPY2D,
-    ) -> cuda_types::CUresult;
-    fn cuMemcpy3D_v2(pCopy: *const cuda_types::CUDA_MEMCPY3D) -> cuda_types::CUresult;
+        pCopy: *const cuda_types::cuda::CUDA_MEMCPY2D,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuMemcpy3D_v2(
+        pCopy: *const cuda_types::cuda::CUDA_MEMCPY3D,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyHtoDAsync_v2(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         srcHost: *const ::core::ffi::c_void,
         ByteCount: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyDtoHAsync_v2(
         dstHost: *mut ::core::ffi::c_void,
-        srcDevice: cuda_types::CUdeviceptr,
+        srcDevice: cuda_types::cuda::CUdeviceptr,
         ByteCount: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyDtoDAsync_v2(
-        dstDevice: cuda_types::CUdeviceptr,
-        srcDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
+        srcDevice: cuda_types::cuda::CUdeviceptr,
         ByteCount: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpy2DAsync_v2(
-        pCopy: *const cuda_types::CUDA_MEMCPY2D,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        pCopy: *const cuda_types::cuda::CUDA_MEMCPY2D,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpy3DAsync_v2(
-        pCopy: *const cuda_types::CUDA_MEMCPY3D,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        pCopy: *const cuda_types::cuda::CUDA_MEMCPY3D,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemsetD8_v2(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         uc: ::core::ffi::c_uchar,
         N: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemsetD16_v2(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         us: ::core::ffi::c_ushort,
         N: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemsetD32_v2(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         ui: ::core::ffi::c_uint,
         N: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemsetD2D8_v2(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         dstPitch: usize,
         uc: ::core::ffi::c_uchar,
         Width: usize,
         Height: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemsetD2D16_v2(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         dstPitch: usize,
         us: ::core::ffi::c_ushort,
         Width: usize,
         Height: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemsetD2D32_v2(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         dstPitch: usize,
         ui: ::core::ffi::c_uint,
         Width: usize,
         Height: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpy(
-        dst: cuda_types::CUdeviceptr,
-        src: cuda_types::CUdeviceptr,
+        dst: cuda_types::cuda::CUdeviceptr,
+        src: cuda_types::cuda::CUdeviceptr,
         ByteCount: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyAsync(
-        dst: cuda_types::CUdeviceptr,
-        src: cuda_types::CUdeviceptr,
+        dst: cuda_types::cuda::CUdeviceptr,
+        src: cuda_types::cuda::CUdeviceptr,
         ByteCount: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyPeer(
-        dstDevice: cuda_types::CUdeviceptr,
-        dstContext: cuda_types::CUcontext,
-        srcDevice: cuda_types::CUdeviceptr,
-        srcContext: cuda_types::CUcontext,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
+        dstContext: cuda_types::cuda::CUcontext,
+        srcDevice: cuda_types::cuda::CUdeviceptr,
+        srcContext: cuda_types::cuda::CUcontext,
         ByteCount: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpyPeerAsync(
-        dstDevice: cuda_types::CUdeviceptr,
-        dstContext: cuda_types::CUcontext,
-        srcDevice: cuda_types::CUdeviceptr,
-        srcContext: cuda_types::CUcontext,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
+        dstContext: cuda_types::cuda::CUcontext,
+        srcDevice: cuda_types::cuda::CUdeviceptr,
+        srcContext: cuda_types::cuda::CUcontext,
         ByteCount: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpy3DPeer(
-        pCopy: *const cuda_types::CUDA_MEMCPY3D_PEER,
-    ) -> cuda_types::CUresult;
+        pCopy: *const cuda_types::cuda::CUDA_MEMCPY3D_PEER,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemcpy3DPeerAsync(
-        pCopy: *const cuda_types::CUDA_MEMCPY3D_PEER,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        pCopy: *const cuda_types::cuda::CUDA_MEMCPY3D_PEER,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemsetD8Async(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         uc: ::core::ffi::c_uchar,
         N: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemsetD16Async(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         us: ::core::ffi::c_ushort,
         N: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemsetD32Async(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         ui: ::core::ffi::c_uint,
         N: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemsetD2D8Async(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         dstPitch: usize,
         uc: ::core::ffi::c_uchar,
         Width: usize,
         Height: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemsetD2D16Async(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         dstPitch: usize,
         us: ::core::ffi::c_ushort,
         Width: usize,
         Height: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemsetD2D32Async(
-        dstDevice: cuda_types::CUdeviceptr,
+        dstDevice: cuda_types::cuda::CUdeviceptr,
         dstPitch: usize,
         ui: ::core::ffi::c_uint,
         Width: usize,
         Height: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamGetPriority(
-        hStream: cuda_types::CUstream,
+        hStream: cuda_types::cuda::CUstream,
         priority: *mut ::core::ffi::c_int,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamGetId(
-        hStream: cuda_types::CUstream,
+        hStream: cuda_types::cuda::CUstream,
         streamId: *mut ::core::ffi::c_ulonglong,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamGetFlags(
-        hStream: cuda_types::CUstream,
+        hStream: cuda_types::cuda::CUstream,
         flags: *mut ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamGetCtx(
-        hStream: cuda_types::CUstream,
-        pctx: *mut cuda_types::CUcontext,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+        pctx: *mut cuda_types::cuda::CUcontext,
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamWaitEvent(
-        hStream: cuda_types::CUstream,
-        hEvent: cuda_types::CUevent,
+        hStream: cuda_types::cuda::CUstream,
+        hEvent: cuda_types::cuda::CUevent,
         Flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamAddCallback(
-        hStream: cuda_types::CUstream,
-        callback: cuda_types::CUstreamCallback,
+        hStream: cuda_types::cuda::CUstream,
+        callback: cuda_types::cuda::CUstreamCallback,
         userData: *mut ::core::ffi::c_void,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamAttachMemAsync(
-        hStream: cuda_types::CUstream,
-        dptr: cuda_types::CUdeviceptr,
+        hStream: cuda_types::cuda::CUstream,
+        dptr: cuda_types::cuda::CUdeviceptr,
         length: usize,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
-    fn cuStreamQuery(hStream: cuda_types::CUstream) -> cuda_types::CUresult;
-    fn cuStreamSynchronize(hStream: cuda_types::CUstream) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
+    fn cuStreamQuery(hStream: cuda_types::cuda::CUstream) -> cuda_types::cuda::CUresult;
+    fn cuStreamSynchronize(
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuEventRecord(
-        hEvent: cuda_types::CUevent,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hEvent: cuda_types::cuda::CUevent,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuEventRecordWithFlags(
-        hEvent: cuda_types::CUevent,
-        hStream: cuda_types::CUstream,
+        hEvent: cuda_types::cuda::CUevent,
+        hStream: cuda_types::cuda::CUstream,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuLaunchKernel(
-        f: cuda_types::CUfunction,
+        f: cuda_types::cuda::CUfunction,
         gridDimX: ::core::ffi::c_uint,
         gridDimY: ::core::ffi::c_uint,
         gridDimZ: ::core::ffi::c_uint,
@@ -19420,136 +19493,136 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
         blockDimY: ::core::ffi::c_uint,
         blockDimZ: ::core::ffi::c_uint,
         sharedMemBytes: ::core::ffi::c_uint,
-        hStream: cuda_types::CUstream,
+        hStream: cuda_types::cuda::CUstream,
         kernelParams: *mut *mut ::core::ffi::c_void,
         extra: *mut *mut ::core::ffi::c_void,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuLaunchKernelEx(
-        config: *const cuda_types::CUlaunchConfig,
-        f: cuda_types::CUfunction,
+        config: *const cuda_types::cuda::CUlaunchConfig,
+        f: cuda_types::cuda::CUfunction,
         kernelParams: *mut *mut ::core::ffi::c_void,
         extra: *mut *mut ::core::ffi::c_void,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuLaunchHostFunc(
-        hStream: cuda_types::CUstream,
-        fn_: cuda_types::CUhostFn,
+        hStream: cuda_types::cuda::CUstream,
+        fn_: cuda_types::cuda::CUhostFn,
         userData: *mut ::core::ffi::c_void,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuGraphicsMapResources(
         count: ::core::ffi::c_uint,
-        resources: *mut cuda_types::CUgraphicsResource,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        resources: *mut cuda_types::cuda::CUgraphicsResource,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuGraphicsUnmapResources(
         count: ::core::ffi::c_uint,
-        resources: *mut cuda_types::CUgraphicsResource,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        resources: *mut cuda_types::cuda::CUgraphicsResource,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamWriteValue32(
-        stream: cuda_types::CUstream,
-        addr: cuda_types::CUdeviceptr,
-        value: cuda_types::cuuint32_t,
+        stream: cuda_types::cuda::CUstream,
+        addr: cuda_types::cuda::CUdeviceptr,
+        value: cuda_types::cuda::cuuint32_t,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamWaitValue32(
-        stream: cuda_types::CUstream,
-        addr: cuda_types::CUdeviceptr,
-        value: cuda_types::cuuint32_t,
+        stream: cuda_types::cuda::CUstream,
+        addr: cuda_types::cuda::CUdeviceptr,
+        value: cuda_types::cuda::cuuint32_t,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamWriteValue64(
-        stream: cuda_types::CUstream,
-        addr: cuda_types::CUdeviceptr,
-        value: cuda_types::cuuint64_t,
+        stream: cuda_types::cuda::CUstream,
+        addr: cuda_types::cuda::CUdeviceptr,
+        value: cuda_types::cuda::cuuint64_t,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamWaitValue64(
-        stream: cuda_types::CUstream,
-        addr: cuda_types::CUdeviceptr,
-        value: cuda_types::cuuint64_t,
+        stream: cuda_types::cuda::CUstream,
+        addr: cuda_types::cuda::CUdeviceptr,
+        value: cuda_types::cuda::cuuint64_t,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamBatchMemOp(
-        stream: cuda_types::CUstream,
+        stream: cuda_types::cuda::CUstream,
         count: ::core::ffi::c_uint,
-        paramArray: *mut cuda_types::CUstreamBatchMemOpParams,
+        paramArray: *mut cuda_types::cuda::CUstreamBatchMemOpParams,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamWriteValue32_ptsz(
-        stream: cuda_types::CUstream,
-        addr: cuda_types::CUdeviceptr,
-        value: cuda_types::cuuint32_t,
+        stream: cuda_types::cuda::CUstream,
+        addr: cuda_types::cuda::CUdeviceptr,
+        value: cuda_types::cuda::cuuint32_t,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamWaitValue32_ptsz(
-        stream: cuda_types::CUstream,
-        addr: cuda_types::CUdeviceptr,
-        value: cuda_types::cuuint32_t,
+        stream: cuda_types::cuda::CUstream,
+        addr: cuda_types::cuda::CUdeviceptr,
+        value: cuda_types::cuda::cuuint32_t,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamWriteValue64_ptsz(
-        stream: cuda_types::CUstream,
-        addr: cuda_types::CUdeviceptr,
-        value: cuda_types::cuuint64_t,
+        stream: cuda_types::cuda::CUstream,
+        addr: cuda_types::cuda::CUdeviceptr,
+        value: cuda_types::cuda::cuuint64_t,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamWaitValue64_ptsz(
-        stream: cuda_types::CUstream,
-        addr: cuda_types::CUdeviceptr,
-        value: cuda_types::cuuint64_t,
+        stream: cuda_types::cuda::CUstream,
+        addr: cuda_types::cuda::CUdeviceptr,
+        value: cuda_types::cuda::cuuint64_t,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamBatchMemOp_ptsz(
-        stream: cuda_types::CUstream,
+        stream: cuda_types::cuda::CUstream,
         count: ::core::ffi::c_uint,
-        paramArray: *mut cuda_types::CUstreamBatchMemOpParams,
+        paramArray: *mut cuda_types::cuda::CUstreamBatchMemOpParams,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamWriteValue32_v2(
-        stream: cuda_types::CUstream,
-        addr: cuda_types::CUdeviceptr,
-        value: cuda_types::cuuint32_t,
+        stream: cuda_types::cuda::CUstream,
+        addr: cuda_types::cuda::CUdeviceptr,
+        value: cuda_types::cuda::cuuint32_t,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamWaitValue32_v2(
-        stream: cuda_types::CUstream,
-        addr: cuda_types::CUdeviceptr,
-        value: cuda_types::cuuint32_t,
+        stream: cuda_types::cuda::CUstream,
+        addr: cuda_types::cuda::CUdeviceptr,
+        value: cuda_types::cuda::cuuint32_t,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamWriteValue64_v2(
-        stream: cuda_types::CUstream,
-        addr: cuda_types::CUdeviceptr,
-        value: cuda_types::cuuint64_t,
+        stream: cuda_types::cuda::CUstream,
+        addr: cuda_types::cuda::CUdeviceptr,
+        value: cuda_types::cuda::cuuint64_t,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamWaitValue64_v2(
-        stream: cuda_types::CUstream,
-        addr: cuda_types::CUdeviceptr,
-        value: cuda_types::cuuint64_t,
+        stream: cuda_types::cuda::CUstream,
+        addr: cuda_types::cuda::CUdeviceptr,
+        value: cuda_types::cuda::cuuint64_t,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamBatchMemOp_v2(
-        stream: cuda_types::CUstream,
+        stream: cuda_types::cuda::CUstream,
         count: ::core::ffi::c_uint,
-        paramArray: *mut cuda_types::CUstreamBatchMemOpParams,
+        paramArray: *mut cuda_types::cuda::CUstreamBatchMemOpParams,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemPrefetchAsync(
-        devPtr: cuda_types::CUdeviceptr,
+        devPtr: cuda_types::cuda::CUdeviceptr,
         count: usize,
-        dstDevice: cuda_types::CUdevice,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        dstDevice: cuda_types::cuda::CUdevice,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemPrefetchAsync_v2(
-        devPtr: cuda_types::CUdeviceptr,
+        devPtr: cuda_types::cuda::CUdeviceptr,
         count: usize,
-        location: cuda_types::CUmemLocation,
+        location: cuda_types::cuda::CUmemLocation,
         flags: ::core::ffi::c_uint,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuLaunchCooperativeKernel(
-        f: cuda_types::CUfunction,
+        f: cuda_types::cuda::CUfunction,
         gridDimX: ::core::ffi::c_uint,
         gridDimY: ::core::ffi::c_uint,
         gridDimZ: ::core::ffi::c_uint,
@@ -19557,181 +19630,185 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
         blockDimY: ::core::ffi::c_uint,
         blockDimZ: ::core::ffi::c_uint,
         sharedMemBytes: ::core::ffi::c_uint,
-        hStream: cuda_types::CUstream,
+        hStream: cuda_types::cuda::CUstream,
         kernelParams: *mut *mut ::core::ffi::c_void,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuSignalExternalSemaphoresAsync(
-        extSemArray: *const cuda_types::CUexternalSemaphore,
-        paramsArray: *const cuda_types::CUDA_EXTERNAL_SEMAPHORE_SIGNAL_PARAMS,
+        extSemArray: *const cuda_types::cuda::CUexternalSemaphore,
+        paramsArray: *const cuda_types::cuda::CUDA_EXTERNAL_SEMAPHORE_SIGNAL_PARAMS,
         numExtSems: ::core::ffi::c_uint,
-        stream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        stream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuWaitExternalSemaphoresAsync(
-        extSemArray: *const cuda_types::CUexternalSemaphore,
-        paramsArray: *const cuda_types::CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS,
+        extSemArray: *const cuda_types::cuda::CUexternalSemaphore,
+        paramsArray: *const cuda_types::cuda::CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS,
         numExtSems: ::core::ffi::c_uint,
-        stream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
-    fn cuStreamBeginCapture(hStream: cuda_types::CUstream) -> cuda_types::CUresult;
-    fn cuStreamBeginCapture_ptsz(hStream: cuda_types::CUstream) -> cuda_types::CUresult;
+        stream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuStreamBeginCapture(
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuStreamBeginCapture_ptsz(
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamBeginCapture_v2(
-        hStream: cuda_types::CUstream,
-        mode: cuda_types::CUstreamCaptureMode,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+        mode: cuda_types::cuda::CUstreamCaptureMode,
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamBeginCaptureToGraph(
-        hStream: cuda_types::CUstream,
-        hGraph: cuda_types::CUgraph,
-        dependencies: *const cuda_types::CUgraphNode,
-        dependencyData: *const cuda_types::CUgraphEdgeData,
+        hStream: cuda_types::cuda::CUstream,
+        hGraph: cuda_types::cuda::CUgraph,
+        dependencies: *const cuda_types::cuda::CUgraphNode,
+        dependencyData: *const cuda_types::cuda::CUgraphEdgeData,
         numDependencies: usize,
-        mode: cuda_types::CUstreamCaptureMode,
-    ) -> cuda_types::CUresult;
+        mode: cuda_types::cuda::CUstreamCaptureMode,
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamEndCapture(
-        hStream: cuda_types::CUstream,
-        phGraph: *mut cuda_types::CUgraph,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+        phGraph: *mut cuda_types::cuda::CUgraph,
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamIsCapturing(
-        hStream: cuda_types::CUstream,
-        captureStatus: *mut cuda_types::CUstreamCaptureStatus,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+        captureStatus: *mut cuda_types::cuda::CUstreamCaptureStatus,
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamGetCaptureInfo(
-        hStream: cuda_types::CUstream,
-        captureStatus_out: *mut cuda_types::CUstreamCaptureStatus,
-        id_out: *mut cuda_types::cuuint64_t,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+        captureStatus_out: *mut cuda_types::cuda::CUstreamCaptureStatus,
+        id_out: *mut cuda_types::cuda::cuuint64_t,
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamGetCaptureInfo_ptsz(
-        hStream: cuda_types::CUstream,
-        captureStatus_out: *mut cuda_types::CUstreamCaptureStatus,
-        id_out: *mut cuda_types::cuuint64_t,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+        captureStatus_out: *mut cuda_types::cuda::CUstreamCaptureStatus,
+        id_out: *mut cuda_types::cuda::cuuint64_t,
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamGetCaptureInfo_v2(
-        hStream: cuda_types::CUstream,
-        captureStatus_out: *mut cuda_types::CUstreamCaptureStatus,
-        id_out: *mut cuda_types::cuuint64_t,
-        graph_out: *mut cuda_types::CUgraph,
-        dependencies_out: *mut *const cuda_types::CUgraphNode,
+        hStream: cuda_types::cuda::CUstream,
+        captureStatus_out: *mut cuda_types::cuda::CUstreamCaptureStatus,
+        id_out: *mut cuda_types::cuda::cuuint64_t,
+        graph_out: *mut cuda_types::cuda::CUgraph,
+        dependencies_out: *mut *const cuda_types::cuda::CUgraphNode,
         numDependencies_out: *mut usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamGetCaptureInfo_v3(
-        hStream: cuda_types::CUstream,
-        captureStatus_out: *mut cuda_types::CUstreamCaptureStatus,
-        id_out: *mut cuda_types::cuuint64_t,
-        graph_out: *mut cuda_types::CUgraph,
-        dependencies_out: *mut *const cuda_types::CUgraphNode,
-        edgeData_out: *mut *const cuda_types::CUgraphEdgeData,
+        hStream: cuda_types::cuda::CUstream,
+        captureStatus_out: *mut cuda_types::cuda::CUstreamCaptureStatus,
+        id_out: *mut cuda_types::cuda::cuuint64_t,
+        graph_out: *mut cuda_types::cuda::CUgraph,
+        dependencies_out: *mut *const cuda_types::cuda::CUgraphNode,
+        edgeData_out: *mut *const cuda_types::cuda::CUgraphEdgeData,
         numDependencies_out: *mut usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuGraphAddKernelNode(
-        phGraphNode: *mut cuda_types::CUgraphNode,
-        hGraph: cuda_types::CUgraph,
-        dependencies: *const cuda_types::CUgraphNode,
+        phGraphNode: *mut cuda_types::cuda::CUgraphNode,
+        hGraph: cuda_types::cuda::CUgraph,
+        dependencies: *const cuda_types::cuda::CUgraphNode,
         numDependencies: usize,
-        nodeParams: *const cuda_types::CUDA_KERNEL_NODE_PARAMS_v1,
-    ) -> cuda_types::CUresult;
+        nodeParams: *const cuda_types::cuda::CUDA_KERNEL_NODE_PARAMS_v1,
+    ) -> cuda_types::cuda::CUresult;
     fn cuGraphKernelNodeGetParams(
-        hNode: cuda_types::CUgraphNode,
-        nodeParams: *mut cuda_types::CUDA_KERNEL_NODE_PARAMS_v1,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        nodeParams: *mut cuda_types::cuda::CUDA_KERNEL_NODE_PARAMS_v1,
+    ) -> cuda_types::cuda::CUresult;
     fn cuGraphKernelNodeSetParams(
-        hNode: cuda_types::CUgraphNode,
-        nodeParams: *const cuda_types::CUDA_KERNEL_NODE_PARAMS_v1,
-    ) -> cuda_types::CUresult;
+        hNode: cuda_types::cuda::CUgraphNode,
+        nodeParams: *const cuda_types::cuda::CUDA_KERNEL_NODE_PARAMS_v1,
+    ) -> cuda_types::cuda::CUresult;
     fn cuGraphExecKernelNodeSetParams(
-        hGraphExec: cuda_types::CUgraphExec,
-        hNode: cuda_types::CUgraphNode,
-        nodeParams: *const cuda_types::CUDA_KERNEL_NODE_PARAMS_v1,
-    ) -> cuda_types::CUresult;
+        hGraphExec: cuda_types::cuda::CUgraphExec,
+        hNode: cuda_types::cuda::CUgraphNode,
+        nodeParams: *const cuda_types::cuda::CUDA_KERNEL_NODE_PARAMS_v1,
+    ) -> cuda_types::cuda::CUresult;
     fn cuGraphInstantiateWithParams(
-        phGraphExec: *mut cuda_types::CUgraphExec,
-        hGraph: cuda_types::CUgraph,
-        instantiateParams: *mut cuda_types::CUDA_GRAPH_INSTANTIATE_PARAMS,
-    ) -> cuda_types::CUresult;
+        phGraphExec: *mut cuda_types::cuda::CUgraphExec,
+        hGraph: cuda_types::cuda::CUgraph,
+        instantiateParams: *mut cuda_types::cuda::CUDA_GRAPH_INSTANTIATE_PARAMS,
+    ) -> cuda_types::cuda::CUresult;
     fn cuGraphExecUpdate(
-        hGraphExec: cuda_types::CUgraphExec,
-        hGraph: cuda_types::CUgraph,
-        hErrorNode_out: *mut cuda_types::CUgraphNode,
-        updateResult_out: *mut cuda_types::CUgraphExecUpdateResult,
-    ) -> cuda_types::CUresult;
+        hGraphExec: cuda_types::cuda::CUgraphExec,
+        hGraph: cuda_types::cuda::CUgraph,
+        hErrorNode_out: *mut cuda_types::cuda::CUgraphNode,
+        updateResult_out: *mut cuda_types::cuda::CUgraphExecUpdateResult,
+    ) -> cuda_types::cuda::CUresult;
     fn cuGraphUpload(
-        hGraph: cuda_types::CUgraphExec,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hGraph: cuda_types::cuda::CUgraphExec,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuGraphLaunch(
-        hGraph: cuda_types::CUgraphExec,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hGraph: cuda_types::cuda::CUgraphExec,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamCopyAttributes(
-        dstStream: cuda_types::CUstream,
-        srcStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        dstStream: cuda_types::cuda::CUstream,
+        srcStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamGetAttribute(
-        hStream: cuda_types::CUstream,
-        attr: cuda_types::CUstreamAttrID,
-        value: *mut cuda_types::CUstreamAttrValue,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+        attr: cuda_types::cuda::CUstreamAttrID,
+        value: *mut cuda_types::cuda::CUstreamAttrValue,
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamSetAttribute(
-        hStream: cuda_types::CUstream,
-        attr: cuda_types::CUstreamAttrID,
-        param: *const cuda_types::CUstreamAttrValue,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+        attr: cuda_types::cuda::CUstreamAttrID,
+        param: *const cuda_types::cuda::CUstreamAttrValue,
+    ) -> cuda_types::cuda::CUresult;
     fn cuIpcOpenMemHandle(
-        pdptr: *mut cuda_types::CUdeviceptr,
-        handle: cuda_types::CUipcMemHandle,
+        pdptr: *mut cuda_types::cuda::CUdeviceptr,
+        handle: cuda_types::cuda::CUipcMemHandle,
         Flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuGraphInstantiate(
-        phGraphExec: *mut cuda_types::CUgraphExec,
-        hGraph: cuda_types::CUgraph,
-        phErrorNode: *mut cuda_types::CUgraphNode,
+        phGraphExec: *mut cuda_types::cuda::CUgraphExec,
+        hGraph: cuda_types::cuda::CUgraph,
+        phErrorNode: *mut cuda_types::cuda::CUgraphNode,
         logBuffer: *mut ::core::ffi::c_char,
         bufferSize: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuGraphInstantiate_v2(
-        phGraphExec: *mut cuda_types::CUgraphExec,
-        hGraph: cuda_types::CUgraph,
-        phErrorNode: *mut cuda_types::CUgraphNode,
+        phGraphExec: *mut cuda_types::cuda::CUgraphExec,
+        hGraph: cuda_types::cuda::CUgraph,
+        phErrorNode: *mut cuda_types::cuda::CUgraphNode,
         logBuffer: *mut ::core::ffi::c_char,
         bufferSize: usize,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemMapArrayAsync(
-        mapInfoList: *mut cuda_types::CUarrayMapInfo,
+        mapInfoList: *mut cuda_types::cuda::CUarrayMapInfo,
         count: ::core::ffi::c_uint,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemFreeAsync(
-        dptr: cuda_types::CUdeviceptr,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        dptr: cuda_types::cuda::CUdeviceptr,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemAllocAsync(
-        dptr: *mut cuda_types::CUdeviceptr,
+        dptr: *mut cuda_types::cuda::CUdeviceptr,
         bytesize: usize,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuMemAllocFromPoolAsync(
-        dptr: *mut cuda_types::CUdeviceptr,
+        dptr: *mut cuda_types::cuda::CUdeviceptr,
         bytesize: usize,
-        pool: cuda_types::CUmemoryPool,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        pool: cuda_types::cuda::CUmemoryPool,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamUpdateCaptureDependencies(
-        hStream: cuda_types::CUstream,
-        dependencies: *mut cuda_types::CUgraphNode,
+        hStream: cuda_types::cuda::CUstream,
+        dependencies: *mut cuda_types::cuda::CUgraphNode,
         numDependencies: usize,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuStreamUpdateCaptureDependencies_v2(
-        hStream: cuda_types::CUstream,
-        dependencies: *mut cuda_types::CUgraphNode,
-        dependencyData: *const cuda_types::CUgraphEdgeData,
+        hStream: cuda_types::cuda::CUstream,
+        dependencies: *mut cuda_types::cuda::CUgraphNode,
+        dependencyData: *const cuda_types::cuda::CUgraphEdgeData,
         numDependencies: usize,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuGetProcAddress(
         symbol: *const ::core::ffi::c_char,
         pfn: *mut *mut ::core::ffi::c_void,
         cudaVersion: ::core::ffi::c_int,
-        flags: cuda_types::cuuint64_t,
-    ) -> cuda_types::CUresult;
+        flags: cuda_types::cuda::cuuint64_t,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Initialize the profiling.
 
  \deprecated
@@ -19783,8 +19860,8 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
     fn cuProfilerInitialize(
         configFile: *const ::core::ffi::c_char,
         outputFile: *const ::core::ffi::c_char,
-        outputMode: cuda_types::CUoutput_mode,
-    ) -> cuda_types::CUresult;
+        outputMode: cuda_types::cuda::CUoutput_mode,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Enable profiling.
 
  Enables profile collection by the active profiling tool for the
@@ -19805,7 +19882,7 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuProfilerInitialize,
  ::cuProfilerStop,
  ::cudaProfilerStart*/
-    fn cuProfilerStart() -> cuda_types::CUresult;
+    fn cuProfilerStart() -> cuda_types::cuda::CUresult;
     /** \brief Disable profiling.
 
  Disables profile collection by the active profiling tool for the
@@ -19825,7 +19902,7 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuProfilerInitialize,
  ::cuProfilerStart,
  ::cudaProfilerStop*/
-    fn cuProfilerStop() -> cuda_types::CUresult;
+    fn cuProfilerStop() -> cuda_types::cuda::CUresult;
     /** \brief Registers an OpenGL buffer object
 
  Registers the buffer object specified by \p buffer for access by
@@ -19861,10 +19938,10 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuGraphicsResourceGetMappedPointer,
  ::cudaGraphicsGLRegisterBuffer*/
     fn cuGraphicsGLRegisterBuffer(
-        pCudaResource: *mut cuda_types::CUgraphicsResource,
-        buffer: cuda_types::GLuint,
+        pCudaResource: *mut cuda_types::cuda::CUgraphicsResource,
+        buffer: cuda_types::cuda::GLuint,
         Flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Register an OpenGL texture or renderbuffer object
 
  Registers the texture or renderbuffer object specified by \p image for access by CUDA.
@@ -19921,11 +19998,11 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuGraphicsSubResourceGetMappedArray,
  ::cudaGraphicsGLRegisterImage*/
     fn cuGraphicsGLRegisterImage(
-        pCudaResource: *mut cuda_types::CUgraphicsResource,
-        image: cuda_types::GLuint,
-        target: cuda_types::GLenum,
+        pCudaResource: *mut cuda_types::cuda::CUgraphicsResource,
+        image: cuda_types::cuda::GLuint,
+        target: cuda_types::cuda::GLenum,
         Flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Gets the CUDA devices associated with the current OpenGL context
 
  Returns in \p *pCudaDeviceCount the number of CUDA-compatible devices
@@ -19962,10 +20039,10 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cudaGLGetDevices*/
     fn cuGLGetDevices_v2(
         pCudaDeviceCount: *mut ::core::ffi::c_uint,
-        pCudaDevices: *mut cuda_types::CUdevice,
+        pCudaDevices: *mut cuda_types::cuda::CUdevice,
         cudaDeviceCount: ::core::ffi::c_uint,
-        deviceList: cuda_types::CUGLDeviceList,
-    ) -> cuda_types::CUresult;
+        deviceList: cuda_types::cuda::CUGLDeviceList,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Create a CUDA context for interoperability with OpenGL
 
  \deprecated This function is deprecated as of Cuda 5.0.
@@ -19993,10 +20070,10 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuGLUnmapBufferObjectAsync, ::cuGLSetBufferObjectMapFlags,
  ::cuWGLGetDevice*/
     fn cuGLCtxCreate_v2(
-        pCtx: *mut cuda_types::CUcontext,
+        pCtx: *mut cuda_types::cuda::CUcontext,
         Flags: ::core::ffi::c_uint,
-        device: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        device: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Initializes OpenGL interoperability
 
  \deprecated This function is deprecated as of Cuda 3.0.
@@ -20018,7 +20095,7 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuGLUnregisterBufferObject, ::cuGLMapBufferObjectAsync,
  ::cuGLUnmapBufferObjectAsync, ::cuGLSetBufferObjectMapFlags,
  ::cuWGLGetDevice*/
-    fn cuGLInit() -> cuda_types::CUresult;
+    fn cuGLInit() -> cuda_types::cuda::CUresult;
     /** \brief Registers an OpenGL buffer object
 
  \deprecated This function is deprecated as of Cuda 3.0.
@@ -20040,7 +20117,9 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  \notefnerr
 
  \sa ::cuGraphicsGLRegisterBuffer*/
-    fn cuGLRegisterBufferObject(buffer: cuda_types::GLuint) -> cuda_types::CUresult;
+    fn cuGLRegisterBufferObject(
+        buffer: cuda_types::cuda::GLuint,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Maps an OpenGL buffer object
 
  \deprecated This function is deprecated as of Cuda 3.0.
@@ -20072,10 +20151,10 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
 
  \sa ::cuGraphicsMapResources*/
     fn cuGLMapBufferObject_v2_ptds(
-        dptr: *mut cuda_types::CUdeviceptr,
+        dptr: *mut cuda_types::cuda::CUdeviceptr,
         size: *mut usize,
-        buffer: cuda_types::GLuint,
-    ) -> cuda_types::CUresult;
+        buffer: cuda_types::cuda::GLuint,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Unmaps an OpenGL buffer object
 
  \deprecated This function is deprecated as of Cuda 3.0.
@@ -20101,7 +20180,9 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  \notefnerr
 
  \sa ::cuGraphicsUnmapResources*/
-    fn cuGLUnmapBufferObject(buffer: cuda_types::GLuint) -> cuda_types::CUresult;
+    fn cuGLUnmapBufferObject(
+        buffer: cuda_types::cuda::GLuint,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Unregister an OpenGL buffer object
 
  \deprecated This function is deprecated as of Cuda 3.0.
@@ -20127,7 +20208,9 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  \notefnerr
 
  \sa ::cuGraphicsUnregisterResource*/
-    fn cuGLUnregisterBufferObject(buffer: cuda_types::GLuint) -> cuda_types::CUresult;
+    fn cuGLUnregisterBufferObject(
+        buffer: cuda_types::cuda::GLuint,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Set the map flags for an OpenGL buffer object
 
  \deprecated This function is deprecated as of Cuda 3.0.
@@ -20168,9 +20251,9 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
 
  \sa ::cuGraphicsResourceSetMapFlags*/
     fn cuGLSetBufferObjectMapFlags(
-        buffer: cuda_types::GLuint,
+        buffer: cuda_types::cuda::GLuint,
         Flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Maps an OpenGL buffer object
 
  \deprecated This function is deprecated as of Cuda 3.0.
@@ -20203,11 +20286,11 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
 
  \sa ::cuGraphicsMapResources*/
     fn cuGLMapBufferObjectAsync_v2_ptsz(
-        dptr: *mut cuda_types::CUdeviceptr,
+        dptr: *mut cuda_types::cuda::CUdeviceptr,
         size: *mut usize,
-        buffer: cuda_types::GLuint,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        buffer: cuda_types::cuda::GLuint,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Unmaps an OpenGL buffer object
 
  \deprecated This function is deprecated as of Cuda 3.0.
@@ -20235,42 +20318,42 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
 
  \sa ::cuGraphicsUnmapResources*/
     fn cuGLUnmapBufferObjectAsync(
-        buffer: cuda_types::GLuint,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        buffer: cuda_types::cuda::GLuint,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuGLGetDevices(
         pCudaDeviceCount: *mut ::core::ffi::c_uint,
-        pCudaDevices: *mut cuda_types::CUdevice,
+        pCudaDevices: *mut cuda_types::cuda::CUdevice,
         cudaDeviceCount: ::core::ffi::c_uint,
-        deviceList: cuda_types::CUGLDeviceList,
-    ) -> cuda_types::CUresult;
+        deviceList: cuda_types::cuda::CUGLDeviceList,
+    ) -> cuda_types::cuda::CUresult;
     fn cuGLMapBufferObject_v2(
-        dptr: *mut cuda_types::CUdeviceptr,
+        dptr: *mut cuda_types::cuda::CUdeviceptr,
         size: *mut usize,
-        buffer: cuda_types::GLuint,
-    ) -> cuda_types::CUresult;
+        buffer: cuda_types::cuda::GLuint,
+    ) -> cuda_types::cuda::CUresult;
     fn cuGLMapBufferObjectAsync_v2(
-        dptr: *mut cuda_types::CUdeviceptr,
+        dptr: *mut cuda_types::cuda::CUdeviceptr,
         size: *mut usize,
-        buffer: cuda_types::GLuint,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        buffer: cuda_types::cuda::GLuint,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     fn cuGLCtxCreate(
-        pCtx: *mut cuda_types::CUcontext,
+        pCtx: *mut cuda_types::cuda::CUcontext,
         Flags: ::core::ffi::c_uint,
-        device: cuda_types::CUdevice,
-    ) -> cuda_types::CUresult;
+        device: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
     fn cuGLMapBufferObject(
-        dptr: *mut cuda_types::CUdeviceptr_v1,
+        dptr: *mut cuda_types::cuda::CUdeviceptr_v1,
         size: *mut ::core::ffi::c_uint,
-        buffer: cuda_types::GLuint,
-    ) -> cuda_types::CUresult;
+        buffer: cuda_types::cuda::GLuint,
+    ) -> cuda_types::cuda::CUresult;
     fn cuGLMapBufferObjectAsync(
-        dptr: *mut cuda_types::CUdeviceptr_v1,
+        dptr: *mut cuda_types::cuda::CUdeviceptr_v1,
         size: *mut ::core::ffi::c_uint,
-        buffer: cuda_types::GLuint,
-        hStream: cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        buffer: cuda_types::cuda::GLuint,
+        hStream: cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Registers an EGL image
 
  Registers the EGLImageKHR specified by \p image for access by
@@ -20317,10 +20400,10 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuGraphicsUnmapResources,
  ::cudaGraphicsEGLRegisterImage*/
     fn cuGraphicsEGLRegisterImage(
-        pCudaResource: *mut cuda_types::CUgraphicsResource,
-        image: cuda_types::EGLImageKHR,
+        pCudaResource: *mut cuda_types::cuda::CUgraphicsResource,
+        image: cuda_types::cuda::EGLImageKHR,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Connect CUDA to EGLStream as a consumer.
 
  Connect CUDA as a consumer to EGLStreamKHR specified by \p stream.
@@ -20340,9 +20423,9 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuEGLStreamConsumerAcquireFrame, ::cuEGLStreamConsumerReleaseFrame,
  ::cudaEGLStreamConsumerConnect*/
     fn cuEGLStreamConsumerConnect(
-        conn: *mut cuda_types::CUeglStreamConnection,
-        stream: cuda_types::EGLStreamKHR,
-    ) -> cuda_types::CUresult;
+        conn: *mut cuda_types::cuda::CUeglStreamConnection,
+        stream: cuda_types::cuda::EGLStreamKHR,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Connect CUDA to EGLStream as a consumer with given flags.
 
  Connect CUDA as a consumer to EGLStreamKHR specified by \p stream with specified \p flags defined by CUeglResourceLocationFlags.
@@ -20363,10 +20446,10 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuEGLStreamConsumerAcquireFrame, ::cuEGLStreamConsumerReleaseFrame,
  ::cudaEGLStreamConsumerConnectWithFlags*/
     fn cuEGLStreamConsumerConnectWithFlags(
-        conn: *mut cuda_types::CUeglStreamConnection,
-        stream: cuda_types::EGLStreamKHR,
+        conn: *mut cuda_types::cuda::CUeglStreamConnection,
+        stream: cuda_types::cuda::EGLStreamKHR,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Disconnect CUDA as a consumer to EGLStream .
 
  Disconnect CUDA as a consumer to EGLStreamKHR.
@@ -20382,8 +20465,8 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuEGLStreamConsumerAcquireFrame, ::cuEGLStreamConsumerReleaseFrame,
  ::cudaEGLStreamConsumerDisconnect*/
     fn cuEGLStreamConsumerDisconnect(
-        conn: *mut cuda_types::CUeglStreamConnection,
-    ) -> cuda_types::CUresult;
+        conn: *mut cuda_types::cuda::CUeglStreamConnection,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Acquire an image frame from the EGLStream with CUDA as a consumer.
 
  Acquire an image frame from EGLStreamKHR. This API can also acquire an old frame presented
@@ -20410,11 +20493,11 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuEGLStreamConsumerAcquireFrame, ::cuEGLStreamConsumerReleaseFrame,
  ::cudaEGLStreamConsumerAcquireFrame*/
     fn cuEGLStreamConsumerAcquireFrame(
-        conn: *mut cuda_types::CUeglStreamConnection,
-        pCudaResource: *mut cuda_types::CUgraphicsResource,
-        pStream: *mut cuda_types::CUstream,
+        conn: *mut cuda_types::cuda::CUeglStreamConnection,
+        pCudaResource: *mut cuda_types::cuda::CUgraphicsResource,
+        pStream: *mut cuda_types::cuda::CUstream,
         timeout: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Releases the last frame acquired from the EGLStream.
 
  Release the acquired image frame specified by \p pCudaResource to EGLStreamKHR.
@@ -20434,10 +20517,10 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuEGLStreamConsumerAcquireFrame, ::cuEGLStreamConsumerReleaseFrame,
  ::cudaEGLStreamConsumerReleaseFrame*/
     fn cuEGLStreamConsumerReleaseFrame(
-        conn: *mut cuda_types::CUeglStreamConnection,
-        pCudaResource: cuda_types::CUgraphicsResource,
-        pStream: *mut cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        conn: *mut cuda_types::cuda::CUeglStreamConnection,
+        pCudaResource: cuda_types::cuda::CUgraphicsResource,
+        pStream: *mut cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Connect CUDA to EGLStream as a producer.
 
  Connect CUDA as a producer to EGLStreamKHR specified by \p stream.
@@ -20459,11 +20542,11 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuEGLStreamProducerPresentFrame,
  ::cudaEGLStreamProducerConnect*/
     fn cuEGLStreamProducerConnect(
-        conn: *mut cuda_types::CUeglStreamConnection,
-        stream: cuda_types::EGLStreamKHR,
-        width: cuda_types::EGLint,
-        height: cuda_types::EGLint,
-    ) -> cuda_types::CUresult;
+        conn: *mut cuda_types::cuda::CUeglStreamConnection,
+        stream: cuda_types::cuda::EGLStreamKHR,
+        width: cuda_types::cuda::EGLint,
+        height: cuda_types::cuda::EGLint,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Disconnect CUDA as a producer  to EGLStream .
 
  Disconnect CUDA as a producer to EGLStreamKHR.
@@ -20479,8 +20562,8 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuEGLStreamProducerPresentFrame,
  ::cudaEGLStreamProducerDisconnect*/
     fn cuEGLStreamProducerDisconnect(
-        conn: *mut cuda_types::CUeglStreamConnection,
-    ) -> cuda_types::CUresult;
+        conn: *mut cuda_types::cuda::CUeglStreamConnection,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Present a CUDA eglFrame to the EGLStream with CUDA as a producer.
 
  When a frame is presented by the producer, it gets associated with the EGLStream
@@ -20526,10 +20609,10 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuEGLStreamProducerReturnFrame,
  ::cudaEGLStreamProducerPresentFrame*/
     fn cuEGLStreamProducerPresentFrame(
-        conn: *mut cuda_types::CUeglStreamConnection,
-        eglframe: cuda_types::CUeglFrame,
-        pStream: *mut cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        conn: *mut cuda_types::cuda::CUeglStreamConnection,
+        eglframe: cuda_types::cuda::CUeglFrame,
+        pStream: *mut cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Return the CUDA eglFrame to the EGLStream released by the consumer.
 
  This API can potentially return CUDA_ERROR_LAUNCH_TIMEOUT if the consumer has not
@@ -20548,10 +20631,10 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuEGLStreamProducerPresentFrame,
  ::cudaEGLStreamProducerReturnFrame*/
     fn cuEGLStreamProducerReturnFrame(
-        conn: *mut cuda_types::CUeglStreamConnection,
-        eglframe: *mut cuda_types::CUeglFrame,
-        pStream: *mut cuda_types::CUstream,
-    ) -> cuda_types::CUresult;
+        conn: *mut cuda_types::cuda::CUeglStreamConnection,
+        eglframe: *mut cuda_types::cuda::CUeglFrame,
+        pStream: *mut cuda_types::cuda::CUstream,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Get an eglFrame through which to access a registered EGL graphics resource.
 
  Returns in \p *eglFrame an eglFrame pointer through which the registered graphics resource
@@ -20599,11 +20682,11 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuGraphicsResourceGetMappedPointer,
  ::cudaGraphicsResourceGetMappedEglFrame*/
     fn cuGraphicsResourceGetMappedEglFrame(
-        eglFrame: *mut cuda_types::CUeglFrame,
-        resource: cuda_types::CUgraphicsResource,
+        eglFrame: *mut cuda_types::cuda::CUeglFrame,
+        resource: cuda_types::cuda::CUgraphicsResource,
         index: ::core::ffi::c_uint,
         mipLevel: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Creates an event from EGLSync object
 
  Creates an event *phEvent from an EGLSyncKHR eglSync with the flags specified
@@ -20639,10 +20722,10 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuEventSynchronize,
  ::cuEventDestroy*/
     fn cuEventCreateFromEGLSync(
-        phEvent: *mut cuda_types::CUevent,
-        eglSync: cuda_types::EGLSyncKHR,
+        phEvent: *mut cuda_types::cuda::CUevent,
+        eglSync: cuda_types::cuda::EGLSyncKHR,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Gets the CUDA device associated with a VDPAU device
 
  Returns in \p *pDevice the CUDA device associated with a \p vdpDevice, if
@@ -20666,10 +20749,10 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuGraphicsUnmapResources, ::cuGraphicsSubResourceGetMappedArray,
  ::cudaVDPAUGetDevice*/
     fn cuVDPAUGetDevice(
-        pDevice: *mut cuda_types::CUdevice,
-        vdpDevice: cuda_types::VdpDevice,
-        vdpGetProcAddress: cuda_types::VdpGetProcAddress,
-    ) -> cuda_types::CUresult;
+        pDevice: *mut cuda_types::cuda::CUdevice,
+        vdpDevice: cuda_types::cuda::VdpDevice,
+        vdpGetProcAddress: cuda_types::cuda::VdpGetProcAddress,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Create a CUDA context for interoperability with VDPAU
 
  Creates a new CUDA context, initializes VDPAU interoperability, and
@@ -20699,12 +20782,12 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuGraphicsUnmapResources, ::cuGraphicsSubResourceGetMappedArray,
  ::cuVDPAUGetDevice*/
     fn cuVDPAUCtxCreate_v2(
-        pCtx: *mut cuda_types::CUcontext,
+        pCtx: *mut cuda_types::cuda::CUcontext,
         flags: ::core::ffi::c_uint,
-        device: cuda_types::CUdevice,
-        vdpDevice: cuda_types::VdpDevice,
-        vdpGetProcAddress: cuda_types::VdpGetProcAddress,
-    ) -> cuda_types::CUresult;
+        device: cuda_types::cuda::CUdevice,
+        vdpDevice: cuda_types::cuda::VdpDevice,
+        vdpGetProcAddress: cuda_types::cuda::VdpGetProcAddress,
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Registers a VDPAU VdpVideoSurface object
 
  Registers the VdpVideoSurface specified by \p vdpSurface for access by
@@ -20776,10 +20859,10 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuVDPAUGetDevice,
  ::cudaGraphicsVDPAURegisterVideoSurface*/
     fn cuGraphicsVDPAURegisterVideoSurface(
-        pCudaResource: *mut cuda_types::CUgraphicsResource,
-        vdpSurface: cuda_types::VdpVideoSurface,
+        pCudaResource: *mut cuda_types::cuda::CUgraphicsResource,
+        vdpSurface: cuda_types::cuda::VdpVideoSurface,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     /** \brief Registers a VDPAU VdpOutputSurface object
 
  Registers the VdpOutputSurface specified by \p vdpSurface for access by
@@ -20838,15 +20921,15 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuVDPAUGetDevice,
  ::cudaGraphicsVDPAURegisterOutputSurface*/
     fn cuGraphicsVDPAURegisterOutputSurface(
-        pCudaResource: *mut cuda_types::CUgraphicsResource,
-        vdpSurface: cuda_types::VdpOutputSurface,
+        pCudaResource: *mut cuda_types::cuda::CUgraphicsResource,
+        vdpSurface: cuda_types::cuda::VdpOutputSurface,
         flags: ::core::ffi::c_uint,
-    ) -> cuda_types::CUresult;
+    ) -> cuda_types::cuda::CUresult;
     fn cuVDPAUCtxCreate(
-        pCtx: *mut cuda_types::CUcontext,
+        pCtx: *mut cuda_types::cuda::CUcontext,
         flags: ::core::ffi::c_uint,
-        device: cuda_types::CUdevice,
-        vdpDevice: cuda_types::VdpDevice,
-        vdpGetProcAddress: cuda_types::VdpGetProcAddress,
-    ) -> cuda_types::CUresult;
+        device: cuda_types::cuda::CUdevice,
+        vdpDevice: cuda_types::cuda::VdpDevice,
+        vdpGetProcAddress: cuda_types::cuda::VdpGetProcAddress,
+    ) -> cuda_types::cuda::CUresult;
 }

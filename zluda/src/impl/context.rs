@@ -1,5 +1,5 @@
 use super::{driver, FromCuda, ZludaObject};
-use cuda_types::*;
+use cuda_types::cuda::*;
 use hip_runtime_sys::*;
 use rustc_hash::FxHashSet;
 use std::{cell::RefCell, ptr, sync::Mutex};

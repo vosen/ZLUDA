@@ -6,7 +6,7 @@ edition = "2021"
 
 [dependencies]
 quote = "1.0"
-syn = { version = "2.0", features = ["full", "visit-mut"] }
+syn = { version = "2.0", features = ["full", "visit-mut", "extra-traits"] }
 proc-macro2 = "1.0"
 rustc-hash = "1.1.0"
 

@@ -14,6 +14,7 @@ use syn::{
 };
 
 const CUDA_RS: &'static str = include_str! {"cuda.rs"};
+const NVML_RS: &'static str = include_str! {"nvml.rs"};
 
 // This macro accepts following arguments:
 // * `normal_macro`: ident for a normal macro
@@ -31,9 +32,13 @@ const CUDA_RS: &'static str = include_str! {"cuda.rs"};
 // Additionally, it does a fixup of CUDA types so they get prefixed with `type_path`
 #[proc_macro]
 pub fn cuda_function_declarations(tokens: TokenStream) -> TokenStream {
+    function_declarations(tokens, CUDA_RS)
+}
+
+fn function_declarations(tokens: TokenStream, module: &str) -> TokenStream {
     let input = parse_macro_input!(tokens as FnDeclInput);
+    let mut cuda_module = syn::parse_str::<File>(module).unwrap();
     let mut choose_macro = ChooseMacro::new(input);
-    let mut cuda_module = syn::parse_str::<File>(CUDA_RS).unwrap();
     syn::visit_mut::visit_file_mut(&mut FixFnSignatures, &mut cuda_module);
     let extern_ = if let Item::ForeignMod(extern_) = cuda_module.items.pop().unwrap() {
         extern_
@@ -67,6 +72,11 @@ pub fn cuda_function_declarations(tokens: TokenStream) -> TokenStream {
         .to_tokens(&mut result);
     }
     result.into()
+}
+
+#[proc_macro]
+pub fn nvml_function_declarations(tokens: TokenStream) -> TokenStream {
+    function_declarations(tokens, NVML_RS)
 }
 struct FnDeclInput {
     normal_macro: Path,
@@ -193,6 +203,7 @@ fn join(fn_: Vec<String>, find_module: bool) -> Punctuated<Ident, Token![::]> {
             "func" => &["function"],
             "mem" => &["memory"],
             "memcpy" => &["memory", "copy"],
+            "memset" => &["memory", "set"],
             _ => return None,
         })
     }

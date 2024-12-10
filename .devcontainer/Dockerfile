@@ -27,6 +27,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && DEBIAN_FRONTEND=noninter
     libgl-dev libegl-dev libvdpau-dev \
     nvidia-utils-${CUDA_DRIVER} \
     cuda-cudart-dev-${CUDA_PKG_VERSION} \
+    cuda-nvml-dev-${CUDA_PKG_VERSION} \
     cuda-cudart-${CUDA_PKG_VERSION} \
     cuda-profiler-api-${CUDA_PKG_VERSION} \
     cuda-nvcc-${CUDA_PKG_VERSION}

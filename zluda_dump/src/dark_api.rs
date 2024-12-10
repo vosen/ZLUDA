@@ -1,7 +1,7 @@
 use crate::format;
 use crate::{log, os, trace::StateTracker};
 use crate::{log::UInt, GlobalDelayedState};
-use cuda_types::{CUmodule, CUresult, CUuuid};
+use cuda_types::cuda::*;
 use std::borrow::Cow;
 use std::hash::Hash;
 use std::{
