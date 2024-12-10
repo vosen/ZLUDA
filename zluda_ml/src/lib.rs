@@ -27,6 +27,8 @@ macro_rules! implemented_fn {
 cuda_base::nvml_function_declarations!(
     unimplemented_fn,
     implemented_fn <= [
-        nvmlErrorString
+        nvmlErrorString,
+        nvmlInit_v2,
+        nvmlSystemGetDriverVersion
     ]
 );
