@@ -8,7 +8,7 @@ pub(crate) fn unimplemented() -> nvmlReturn_t {
 
 #[cfg(not(debug_assertions))]
 pub(crate) fn unimplemented() -> nvmlReturn_t {
-    nvmlReturn_t::NVML_ERROR_NOT_SUPPORTED
+    nvmlReturn_t::ERROR_NOT_SUPPORTED
 }
 
 #[allow(non_snake_case)]
