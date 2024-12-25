@@ -4,6 +4,8 @@
 
 ZLUDA is a drop-in replacement for CUDA on non-NVIDIA GPU. ZLUDA allows to run unmodified CUDA applications using non-NVIDIA GPUs with near-native performance.
 
+ZLUDA supports AMD Radeon RX 5000 series and newer GPUs (both desktop and integrated).
+
 ![GeekBench 5.5.1 chart](geekbench.svg)
 
 ZLUDA is work in progress. Follow development here and say hi on [Discord](https://discord.gg/sg6BNzXuc7). For more details see the announcement: https://vosen.github.io/ZLUDA/blog/zludas-third-life/
