@@ -22,3 +22,7 @@ members = [
 ]
 
 default-members = ["zluda", "zluda_ml", "zluda_inject", "zluda_redirect"]
+
+[profile.release-lto]
+codegen-units = 1
+lto = true
