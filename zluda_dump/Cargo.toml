@@ -29,3 +29,6 @@ detours-sys = { path = "../detours-sys" }
 
 [target.'cfg(not(windows))'.dependencies]
 libc = "0.2"
+
+[package.metadata.zluda]
+debug_only = true

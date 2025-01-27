@@ -11,3 +11,5 @@ crate-type = ["cdylib"]
 [dependencies]
 cuda_base = { path = "../cuda_base" }
 cuda_types = { path = "../cuda_types" }
+
+[package.metadata.zluda]
