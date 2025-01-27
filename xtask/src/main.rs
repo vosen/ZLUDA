@@ -43,15 +43,25 @@ struct Cargo {
 
 struct Project {
     name: String,
+    clib_name: Option<String>,
     meta: ZludaMetadata,
 }
 
 impl Project {
     fn try_new(p: Package) -> Option<Project> {
+        let name = p.name;
+        let clib_name = p.targets.into_iter().find_map(|target| {
+            if target.is_cdylib() {
+                Some(target.name)
+            } else {
+                None
+            }
+        });
         serde_json::from_value::<Option<Metadata>>(p.metadata)
             .unwrap()
             .map(|m| Self {
-                name: p.name,
+                name,
+                clib_name,
                 meta: m.zluda,
             })
     }
@@ -139,6 +149,8 @@ fn zip() {
 
 #[cfg(unix)]
 mod os {
+    use std::path::PathBuf;
+
     pub fn make_symlinks(
         target_directory: std::path::PathBuf,
         projects: Vec<super::Project>,
@@ -147,15 +159,28 @@ mod os {
         use std::fs;
         use std::os::unix::fs as unix_fs;
         for project in projects.iter() {
-            let mut target = target_directory.clone();
-            target.extend([&*profile, &format!("lib{}.so", project.name)]);
+            let clib_name = match project.clib_name {
+                Some(ref l) => l,
+                None => continue,
+            };
+            let libname = format!("lib{}.so", clib_name);
             for source in project.meta.linux_symlinks.iter() {
+                let relative_link = PathBuf::from(source);
+                let ancestors = relative_link.as_path().ancestors().count();
+                let mut target = std::iter::repeat_with(|| "../").take(ancestors - 2).fold(
+                    PathBuf::new(),
+                    |mut buff, segment| {
+                        buff.push(segment);
+                        buff
+                    },
+                );
                 let mut link = target_directory.clone();
                 link.extend([&*profile, source]);
                 let mut dir = link.clone();
                 assert!(dir.pop());
                 fs::create_dir_all(dir).unwrap();
                 fs::remove_file(&link).ok();
+                target.push(&*libname);
                 unix_fs::symlink(&target, link).unwrap();
             }
         }
