@@ -29,3 +29,11 @@ detours-sys = { path = "../detours-sys" }
 
 [target.'cfg(not(windows))'.dependencies]
 libc = "0.2"
+
+[package.metadata.zluda]
+linux_symlinks = [
+    "dump/libcuda.so",
+    "dump/libcuda.so.1",
+    "dump_nvidia/libcuda.so",
+    "dump_nvidia/libcuda.so.1",
+]

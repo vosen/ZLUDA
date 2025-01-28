@@ -10,7 +10,7 @@ use winapi::{
     um::libloaderapi::{GetProcAddress, LoadLibraryW},
 };
 
-use cuda_types::CUuuid;
+use cuda_types::cuda::CUuuid;
 
 pub(crate) const LIBCUDA_DEFAULT_PATH: &'static str = "C:\\Windows\\System32\\nvcuda.dll";
 const LOAD_LIBRARY_NO_REDIRECT: &'static [u8] = b"ZludaLoadLibraryW_NoRedirect\0";

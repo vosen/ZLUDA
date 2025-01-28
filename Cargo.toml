@@ -18,6 +18,7 @@ members = [
     "ptx_parser",
     "ptx_parser_macros",
     "ptx_parser_macros_impl",
+    "xtask",
     "zluda_bindgen",
 ]
 
@@ -27,3 +28,6 @@ default-members = ["zluda", "zluda_ml", "zluda_inject", "zluda_redirect"]
 inherits = "release"
 codegen-units = 1
 lto = true
+
+[profile.dev.package.xtask]
+opt-level = 2
