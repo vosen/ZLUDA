@@ -51,18 +51,7 @@ Not supported
 * Git clone the repo (make sure to use `--recursive` option to fetch submodules):  
 `git clone --recursive https://github.com/vosen/ZLUDA.git`  
 * Enter freshly cloned `ZLUDA` directory and build with cargo (this takes a while):  
-`cargo build --release`
-
-### Linux
-
-If you are building on Linux you must also symlink the ZLUDA output binaries after ZLUDA build finishes:
-```
-cd target/release
-ln -s libnvcuda.so libcuda.so
-ln -s libnvcuda.so libcuda.so.1
-ln -s libnvml.so libnvidia-ml.so
-ln -s libnvml.so libnvidia-ml.so.1
-```
+`cargo xtask --release`
 
 ## Contributing
 

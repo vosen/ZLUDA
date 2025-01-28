@@ -19,3 +19,6 @@ detours-sys = { path = "../detours-sys" }
 zluda_redirect = { path = "../zluda_redirect" }
 zluda_dump = { path = "../zluda_dump" }
 zluda_ml = { path = "../zluda_ml" }
+
+[package.metadata.zluda]
+windows_only = true

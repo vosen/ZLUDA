@@ -32,7 +32,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && DEBIAN_FRONTEND=noninter
     cuda-profiler-api-${CUDA_PKG_VERSION} \
     cuda-nvcc-${CUDA_PKG_VERSION}
 
-ARG ROCM_VERSION=6.2.2
+ARG ROCM_VERSION=6.3.1
 RUN mkdir --parents --mode=0755 /etc/apt/keyrings && \
     wget https://repo.radeon.com/rocm/rocm.gpg.key -O - | \
     gpg --dearmor | tee /etc/apt/keyrings/rocm.gpg > /dev/null && \
@@ -43,7 +43,7 @@ RUN mkdir --parents --mode=0755 /etc/apt/keyrings && \
     rocm-gdb \
     rocm-smi-lib \
     rocm-llvm-dev \
-    hip-runtime-amd && \
+    hip-runtime-amd \
     hip-dev && \
     echo '/opt/rocm/lib' > /etc/ld.so.conf.d/rocm.conf && \
     ldconfig
