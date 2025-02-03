@@ -17,12 +17,13 @@ mod expand_operands;
 mod fix_special_registers2;
 mod hoist_globals;
 mod insert_explicit_load_store;
+mod insert_ftz_control;
 mod insert_implicit_conversions2;
 mod normalize_identifiers2;
 mod normalize_predicates2;
 mod replace_instructions_with_function_calls;
-mod resolve_function_pointers;
 mod replace_known_functions;
+mod resolve_function_pointers;
 
 static ZLUDA_PTX_IMPL: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.bc");
 const ZLUDA_PTX_PREFIX: &'static str = "__zluda_ptx_impl_";
@@ -46,11 +47,12 @@ pub fn to_llvm_module<'input>(ast: ast::Module<'input>) -> Result<Module, Transl
     let directives = replace_known_functions::run(&flat_resolver, directives);
     let directives = normalize_predicates2::run(&mut flat_resolver, directives)?;
     let directives = resolve_function_pointers::run(directives)?;
-    let directives: Vec<Directive2<'_, ptx_parser::Instruction<ptx_parser::ParsedOperand<SpirvWord>>, ptx_parser::ParsedOperand<SpirvWord>>> = fix_special_registers2::run(&mut flat_resolver, &sreg_map, directives)?;
+    let directives = fix_special_registers2::run(&mut flat_resolver, &sreg_map, directives)?;
     let directives = expand_operands::run(&mut flat_resolver, directives)?;
     let directives = deparamize_functions::run(&mut flat_resolver, directives)?;
     let directives = insert_explicit_load_store::run(&mut flat_resolver, directives)?;
     let directives = insert_implicit_conversions2::run(&mut flat_resolver, directives)?;
+    let directives = insert_ftz_control::run(&mut flat_resolver, directives)?;
     let directives = replace_instructions_with_function_calls::run(&mut flat_resolver, directives)?;
     let directives = hoist_globals::run(directives)?;
     let llvm_ir = emit_llvm::run(flat_resolver, directives)?;
@@ -525,7 +527,7 @@ struct FunctionPointerDetails {
     src: SpirvWord,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 pub struct SpirvWord(u32);
 
 impl From<u32> for SpirvWord {
