@@ -24,6 +24,7 @@
 // shows it fails inside amdgpu-isel. You can get a little bit furthr with "-mllvm -global-isel",
 // but it will too fail similarly, but with "unable to legalize instruction"
 
+use std::alloc::{alloc, dealloc, handle_alloc_error, Layout};
 use std::array::TryFromSliceError;
 use std::convert::TryInto;
 use std::ffi::{CStr, NulError};
@@ -32,6 +33,7 @@ use std::{i8, ptr};
 
 use super::*;
 use llvm_zluda::analysis::{LLVMVerifierFailureAction, LLVMVerifyModule};
+use llvm_zluda::bit_reader::LLVMParseBitcode2;
 use llvm_zluda::bit_writer::LLVMWriteBitcodeToMemoryBuffer;
 use llvm_zluda::{core::*, *};
 use llvm_zluda::{prelude::*, LLVMZludaBuildAtomicRMW};
@@ -147,6 +149,24 @@ impl std::fmt::Debug for Message {
 }
 
 pub struct MemoryBuffer(LLVMMemoryBufferRef);
+
+impl MemoryBuffer {
+    pub fn print_as_asm(&self) -> &str {
+        unsafe {
+            let layout = Layout::new::<LLVMModuleRef>();
+            let p_module = alloc(layout);
+            if p_module.is_null() {
+                handle_alloc_error(layout);
+            }
+            LLVMParseBitcode2(self.0, p_module as *mut LLVMModuleRef);
+            let asm = LLVMPrintModuleToString(*(p_module as *mut LLVMModuleRef));
+            LLVMDisposeModule(*(p_module as *mut LLVMModuleRef));
+            dealloc(p_module, layout);
+            let asm = CStr::from_ptr(asm);
+            asm.to_str().unwrap().trim()
+        }
+    }
+}
 
 impl Drop for MemoryBuffer {
     fn drop(&mut self) {

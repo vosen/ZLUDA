@@ -28,6 +28,17 @@ macro_rules! test_ptx {
                 test_cuda_assert(stringify!($fn_name), ptx, &input, &mut output)
             }
         }
+
+        paste::item! {
+            #[test]
+            fn [<$fn_name _llvm>]() -> Result<(), Box<dyn std::error::Error>> {
+                let fn_name = stringify!($fn_name);
+                println!("{}", fn_name);
+                let ptx = include_str!(concat!(stringify!($fn_name), ".ptx"));
+                let ll = include_str!(concat!("../ll/", stringify!($fn_name), ".ll")).trim();
+                test_llvm_assert(ptx, &ll)
+            }
+        }
     };
 
     ($fn_name:ident) => {};
@@ -220,6 +231,19 @@ fn test_hip_assert<
     let result =
         run_hip(name.as_c_str(), llvm_ir, input, output).map_err(|err| DisplayError { err })?;
     assert_eq!(result.as_slice(), output);
+    Ok(())
+}
+
+fn test_llvm_assert<
+    'a,
+>(
+    ptx_text: &'a str,
+    expected_ll: &str
+) -> Result<(), Box<dyn error::Error + 'a>> {
+    let ast = ptx_parser::parse_module_checked(ptx_text).unwrap();
+    let llvm_ir = pass::to_llvm_module(ast).unwrap();
+    let actual_ll = llvm_ir.llvm_ir.print_as_asm();
+    assert_eq!(actual_ll, expected_ll);
     Ok(())
 }
 
