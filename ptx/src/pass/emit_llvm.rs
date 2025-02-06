@@ -33,7 +33,7 @@ use std::{i8, ptr};
 
 use super::*;
 use llvm_zluda::analysis::{LLVMVerifierFailureAction, LLVMVerifyModule};
-use llvm_zluda::bit_reader::LLVMParseBitcode2;
+use llvm_zluda::bit_reader::LLVMParseBitcodeInContext2;
 use llvm_zluda::bit_writer::LLVMWriteBitcodeToMemoryBuffer;
 use llvm_zluda::{core::*, *};
 use llvm_zluda::{prelude::*, LLVMZludaBuildAtomicRMW};
@@ -158,7 +158,8 @@ impl MemoryBuffer {
             if p_module.is_null() {
                 handle_alloc_error(layout);
             }
-            LLVMParseBitcode2(self.0, p_module as *mut LLVMModuleRef);
+            let context = Context::new();
+            LLVMParseBitcodeInContext2(context.0, self.0, p_module as *mut LLVMModuleRef);
             let asm = LLVMPrintModuleToString(*(p_module as *mut LLVMModuleRef));
             LLVMDisposeModule(*(p_module as *mut LLVMModuleRef));
             dealloc(p_module, layout);

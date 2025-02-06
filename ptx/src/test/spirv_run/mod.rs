@@ -33,7 +33,6 @@ macro_rules! test_ptx {
             #[test]
             fn [<$fn_name _llvm>]() -> Result<(), Box<dyn std::error::Error>> {
                 let fn_name = stringify!($fn_name);
-                println!("{}", fn_name);
                 let ptx = include_str!(concat!(stringify!($fn_name), ".ptx"));
                 let ll = include_str!(concat!("../ll/", stringify!($fn_name), ".ll")).trim();
                 test_llvm_assert(ptx, &ll)
