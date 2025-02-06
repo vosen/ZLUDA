@@ -6,6 +6,7 @@ use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::mem;
 use std::{ptr, str};
+use pretty_assertions;
 
 macro_rules! test_ptx {
     ($fn_name:ident, $input:expr, $output:expr) => {
@@ -242,7 +243,7 @@ fn test_llvm_assert<
     let ast = ptx_parser::parse_module_checked(ptx_text).unwrap();
     let llvm_ir = pass::to_llvm_module(ast).unwrap();
     let actual_ll = llvm_ir.llvm_ir.print_as_asm();
-    assert_eq!(actual_ll, expected_ll);
+    pretty_assertions::assert_eq!(actual_ll, expected_ll);
     Ok(())
 }
 
