@@ -39,6 +39,7 @@ test_ptx!(mov, [1u64], [1u64]);
 test_ptx!(mul_lo, [1u64], [2u64]);
 test_ptx!(mul_hi, [u64::max_value()], [1u64]);
 test_ptx!(add, [1u64], [2u64]);
+test_ptx!(mul24, [10u32], [20u32]);
 test_ptx!(setp, [10u64, 11u64], [1u64, 0u64]);
 test_ptx!(setp_gt, [f32::NAN, 1f32], [1f32]);
 test_ptx!(setp_leu, [1f32, f32::NAN], [1f32]);
