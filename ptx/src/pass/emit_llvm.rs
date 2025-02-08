@@ -27,11 +27,13 @@
 use std::array::TryFromSliceError;
 use std::convert::TryInto;
 use std::ffi::{CStr, NulError};
+use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::{i8, ptr};
 
 use super::*;
 use llvm_zluda::analysis::{LLVMVerifierFailureAction, LLVMVerifyModule};
+use llvm_zluda::bit_reader::LLVMParseBitcodeInContext2;
 use llvm_zluda::bit_writer::LLVMWriteBitcodeToMemoryBuffer;
 use llvm_zluda::{core::*, *};
 use llvm_zluda::{prelude::*, LLVMZludaBuildAtomicRMW};
@@ -147,6 +149,21 @@ impl std::fmt::Debug for Message {
 }
 
 pub struct MemoryBuffer(LLVMMemoryBufferRef);
+
+impl MemoryBuffer {
+    pub fn print_as_asm(&self) -> &str {
+        unsafe {
+            let context = Context::new();
+            let mut module = MaybeUninit::uninit();
+            LLVMParseBitcodeInContext2(context.0, self.0, module.as_mut_ptr());
+            let module = module.assume_init();
+            let asm = LLVMPrintModuleToString(module);
+            LLVMDisposeModule(module);
+            let asm = CStr::from_ptr(asm);
+            asm.to_str().unwrap().trim()
+        }
+    }
+}
 
 impl Drop for MemoryBuffer {
     fn drop(&mut self) {
