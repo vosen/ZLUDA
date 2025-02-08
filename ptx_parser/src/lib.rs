@@ -1652,6 +1652,9 @@ derive_parser!(
     #[derive(Copy, Clone, PartialEq, Eq, Hash)]
     pub enum AtomSemantics { }
 
+    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    pub enum Mul24Control { }
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
     mov{.vec}.type  d, a => {
         Instruction::Mov {
@@ -3358,6 +3361,19 @@ derive_parser!(
     ret{.uni} => {
         Instruction::Ret { data: RetData { uniform: uni } }
     }
+
+    mul24.mode.type  d, a, b => {
+        ast::Instruction::Mul24 {
+            data: ast::Mul24Details {
+                control: mode,
+                type_
+            },
+            arguments: Mul24Args { dst: d, src1: a, src2: b }
+        }
+    }
+
+    .mode: Mul24Control = { .hi, .lo };
+    .type: ScalarType = { .u32, .s32 };
 
 );
 

@@ -545,6 +545,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Add { data, arguments } => self.emit_add(data, arguments),
             ast::Instruction::St { data, arguments } => self.emit_st(data, arguments),
             ast::Instruction::Mul { data, arguments } => self.emit_mul(data, arguments),
+            ast::Instruction::Mul24 { data, arguments } => self.emit_mul24(data, arguments),
             ast::Instruction::Setp { data, arguments } => self.emit_setp(data, arguments),
             ast::Instruction::SetpBool { .. } => todo!(),
             ast::Instruction::Not { data, arguments } => self.emit_not(data, arguments),
@@ -2224,6 +2225,20 @@ impl<'a> MethodEmitContext<'a> {
         Ok(())
     }
 
+    fn emit_mul24(
+        &mut self,
+        data: ast::Mul24Details,
+        arguments: ast::Mul24Args<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let src1 = self.resolver.value(arguments.src1)?;
+        let src2 = self.resolver.value(arguments.src2)?;
+        self.emit_intrinsic(c"llvm.amdgcn.mul.u24", Some(arguments.dst), &ast::Type::Scalar(data.type_), vec![
+            (src1, get_scalar_type(self.context, data.type_)),
+            (src2, get_scalar_type(self.context, data.type_)),
+        ])?;
+        Ok(())
+    }
+    
     /*
     // Currently unused, LLVM 18 (ROCm 6.2) does not support `llvm.set.rounding`
     // Should be available in LLVM 19

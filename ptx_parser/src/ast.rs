@@ -2,7 +2,7 @@ use super::{
     AtomSemantics, MemScope, RawRoundingMode, RawSetpCompareOp, ScalarType, SetpBoolPostOp,
     StateSpace, VectorPrefix,
 };
-use crate::{PtxError, PtxParserState};
+use crate::{PtxError, PtxParserState, Mul24Control};
 use bitflags::bitflags;
 use std::{alloc::Layout, cmp::Ordering, num::NonZeroU8};
 
@@ -83,6 +83,15 @@ ptx_parser_macros::generate_instruction_type!(
                     repr: T,
                     type: { Type::from(data.dst_type()) },
                 },
+                src1: T,
+                src2: T,
+            }
+        },
+        Mul24 {
+            type: { Type::from(data.type_) },
+            data: Mul24Details,
+            arguments<T>: {
+                dst: T,
                 src1: T,
                 src2: T,
             }
@@ -1176,6 +1185,13 @@ pub enum MulIntControl {
     Low,
     High,
     Wide,
+}
+
+
+#[derive(Copy, Clone)]
+pub struct Mul24Details {
+    pub type_: ScalarType,
+    pub control: Mul24Control,
 }
 
 pub struct SetpData {
