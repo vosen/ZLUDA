@@ -24,10 +24,10 @@
 // shows it fails inside amdgpu-isel. You can get a little bit furthr with "-mllvm -global-isel",
 // but it will too fail similarly, but with "unable to legalize instruction"
 
-use std::alloc::{alloc, dealloc, handle_alloc_error, Layout};
 use std::array::TryFromSliceError;
 use std::convert::TryInto;
 use std::ffi::{CStr, NulError};
+use std::mem;
 use std::ops::Deref;
 use std::{i8, ptr};
 
@@ -153,16 +153,11 @@ pub struct MemoryBuffer(LLVMMemoryBufferRef);
 impl MemoryBuffer {
     pub fn print_as_asm(&self) -> &str {
         unsafe {
-            let layout = Layout::new::<LLVMModuleRef>();
-            let p_module = alloc(layout);
-            if p_module.is_null() {
-                handle_alloc_error(layout);
-            }
+            let mut module: LLVMModuleRef = mem::zeroed();
             let context = Context::new();
-            LLVMParseBitcodeInContext2(context.0, self.0, p_module as *mut LLVMModuleRef);
-            let asm = LLVMPrintModuleToString(*(p_module as *mut LLVMModuleRef));
-            LLVMDisposeModule(*(p_module as *mut LLVMModuleRef));
-            dealloc(p_module, layout);
+            LLVMParseBitcodeInContext2(context.0, self.0, &mut module);
+            let asm = LLVMPrintModuleToString(module);
+            LLVMDisposeModule(module);
             let asm = CStr::from_ptr(asm);
             asm.to_str().unwrap().trim()
         }
