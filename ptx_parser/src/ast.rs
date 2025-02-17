@@ -1019,9 +1019,16 @@ pub struct ArithInteger {
 #[derive(Copy, Clone)]
 pub struct ArithFloat {
     pub type_: ScalarType,
-    pub rounding: Option<RoundingMode>,
+    pub rounding: RoundingMode,
     pub flush_to_zero: Option<bool>,
     pub saturate: bool,
+    // From PTX documentation: https://docs.nvidia.com/cuda/parallel-thread-execution/#mixed-precision-floating-point-instructions-add
+    // Note that an add instruction with an explicit rounding modifier is treated conservatively by
+    // the code optimizer. An add instruction with no rounding modifier defaults to
+    // round-to-nearest-even and may be optimized aggressively by the code optimizer. In particular,
+    // mul/add sequences with no rounding modifiers may be optimized to use fused-multiply-add
+    // instructions on the target device.
+    pub is_fusable: bool
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
