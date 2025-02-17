@@ -4,12 +4,12 @@ use std::env;
 use std::error;
 use std::ffi::{CStr, CString};
 use std::fmt::{self, Debug, Display, Formatter};
-use std::fs::{create_dir_all, File};
+use std::fs::{self, File};
 use std::io::Write;
-use std::panic::{catch_unwind, resume_unwind};
 use std::mem;
 use std::path::Path;
-use std::{ptr, str};
+use std::ptr;
+use std::str;
 use pretty_assertions;
 
 macro_rules! test_ptx {
@@ -247,21 +247,19 @@ fn test_llvm_assert<
 ) -> Result<(), Box<dyn error::Error + 'a>> {
     let ast = ptx_parser::parse_module_checked(ptx_text).unwrap();
     let llvm_ir = pass::to_llvm_module(ast).unwrap();
-    let actual_ll = llvm_ir.llvm_ir.print_as_asm();
-    let result = catch_unwind(||
-        pretty_assertions::assert_eq!(actual_ll, expected_ll));
-    if let Err(cause) = result {
-        // Write actual generated LLVM IR to directory specified by environment variable
-        // TEST_PTX_LLVM_FAIL_DIR if test fails
+    let actual_ll = llvm_ir.llvm_ir.print_module_to_string();
+    let actual_ll = actual_ll.to_str();
+    if actual_ll != expected_ll {
         let output_dir = env::var("TEST_PTX_LLVM_FAIL_DIR");
         if let Ok(output_dir) = output_dir {
             let output_dir = Path::new(&output_dir);
-            create_dir_all(&output_dir).unwrap();
+            fs::create_dir_all(&output_dir).unwrap();
             let output_file = output_dir.join(format!("{}.ll", name));
             let mut output_file = File::create(output_file).unwrap();
             output_file.write_all(actual_ll.as_bytes()).unwrap();
         }
-        resume_unwind(cause);
+        let comparison = pretty_assertions::StrComparison::new(actual_ll, expected_ll);
+        panic!("assertion failed: `(left == right)`\n\n{}", comparison);
     }
     Ok(())
 }
@@ -347,7 +345,7 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
         unsafe { hipGetDevicePropertiesR0600(&mut dev_props, dev) }.unwrap();
         let elf_module = comgr::compile_bitcode(
             unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) },
-            &*module.llvm_ir,
+            &*module.llvm_ir.write_bitcode_to_memory(),
             module.linked_bitcode(),
         )
         .unwrap();

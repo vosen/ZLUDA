@@ -27,13 +27,11 @@
 use std::array::TryFromSliceError;
 use std::convert::TryInto;
 use std::ffi::{CStr, NulError};
-use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::{i8, ptr};
 
 use super::*;
 use llvm_zluda::analysis::{LLVMVerifierFailureAction, LLVMVerifyModule};
-use llvm_zluda::bit_reader::LLVMParseBitcodeInContext2;
 use llvm_zluda::bit_writer::LLVMWriteBitcodeToMemoryBuffer;
 use llvm_zluda::{core::*, *};
 use llvm_zluda::{prelude::*, LLVMZludaBuildAtomicRMW};
@@ -47,7 +45,7 @@ const SHARED_ADDRESS_SPACE: u32 = 3;
 const CONSTANT_ADDRESS_SPACE: u32 = 4;
 const PRIVATE_ADDRESS_SPACE: u32 = 5;
 
-struct Context(LLVMContextRef);
+pub struct Context(LLVMContextRef);
 
 impl Context {
     fn new() -> Self {
@@ -67,7 +65,7 @@ impl Drop for Context {
     }
 }
 
-struct Module(LLVMModuleRef);
+pub struct Module(LLVMModuleRef);
 
 impl Module {
     fn new(ctx: &Context, name: &CStr) -> Self {
@@ -94,9 +92,14 @@ impl Module {
         }
     }
 
-    fn write_bitcode_to_memory(&self) -> MemoryBuffer {
+    pub fn write_bitcode_to_memory(&self) -> MemoryBuffer {
         let memory_buffer = unsafe { LLVMWriteBitcodeToMemoryBuffer(self.get()) };
         MemoryBuffer(memory_buffer)
+    }
+
+    pub fn print_module_to_string(&self) -> Message {
+        let asm = unsafe { LLVMPrintModuleToString(self.get()) };
+        Message(unsafe { CStr::from_ptr(asm) })
     }
 }
 
@@ -132,7 +135,7 @@ impl Drop for Builder {
     }
 }
 
-struct Message(&'static CStr);
+pub struct Message(&'static CStr);
 
 impl Drop for Message {
     fn drop(&mut self) {
@@ -148,22 +151,13 @@ impl std::fmt::Debug for Message {
     }
 }
 
-pub struct MemoryBuffer(LLVMMemoryBufferRef);
-
-impl MemoryBuffer {
-    pub fn print_as_asm(&self) -> &str {
-        unsafe {
-            let context = Context::new();
-            let mut module = MaybeUninit::uninit();
-            LLVMParseBitcodeInContext2(context.0, self.0, module.as_mut_ptr());
-            let module = module.assume_init();
-            let asm = LLVMPrintModuleToString(module);
-            LLVMDisposeModule(module);
-            let asm = CStr::from_ptr(asm);
-            asm.to_str().unwrap().trim()
-        }
+impl Message {
+    pub fn to_str(&self) -> &str {
+        self.0.to_str().unwrap().trim()
     }
 }
+
+pub struct MemoryBuffer(LLVMMemoryBufferRef);
 
 impl Drop for MemoryBuffer {
     fn drop(&mut self) {
@@ -186,7 +180,7 @@ impl Deref for MemoryBuffer {
 pub(super) fn run<'input>(
     id_defs: GlobalStringIdentResolver2<'input>,
     directives: Vec<Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>>,
-) -> Result<MemoryBuffer, TranslateError> {
+) -> Result<(Module, Context), TranslateError> {
     let context = Context::new();
     let module = Module::new(&context, LLVM_UNNAMED);
     let mut emit_ctx = ModuleEmitContext::new(&context, &module, &id_defs);
@@ -199,7 +193,7 @@ pub(super) fn run<'input>(
     if let Err(err) = module.verify() {
         panic!("{:?}", err);
     }
-    Ok(module.write_bitcode_to_memory())
+    Ok((module, context))
 }
 
 struct ModuleEmitContext<'a, 'input> {

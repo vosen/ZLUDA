@@ -30,7 +30,7 @@ pub(crate) fn load_data(module: &mut CUmodule, image: *const std::ffi::c_void) -
     unsafe { hipGetDevicePropertiesR0600(&mut props, dev) }?;
     let elf_module = comgr::compile_bitcode(
         unsafe { CStr::from_ptr(props.gcnArchName.as_ptr()) },
-        &*llvm_module.llvm_ir,
+        &*llvm_module.llvm_ir.write_bitcode_to_memory(),
         llvm_module.linked_bitcode(),
     )
     .map_err(|_| CUerror::UNKNOWN)?;
