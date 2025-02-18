@@ -45,7 +45,7 @@ const SHARED_ADDRESS_SPACE: u32 = 3;
 const CONSTANT_ADDRESS_SPACE: u32 = 4;
 const PRIVATE_ADDRESS_SPACE: u32 = 5;
 
-pub struct Context(LLVMContextRef);
+struct Context(LLVMContextRef);
 
 impl Context {
     fn new() -> Self {
