@@ -53,17 +53,15 @@ pub fn to_llvm_module<'input>(ast: ast::Module<'input>) -> Result<Module, Transl
     let directives = insert_implicit_conversions2::run(&mut flat_resolver, directives)?;
     let directives = replace_instructions_with_function_calls::run(&mut flat_resolver, directives)?;
     let directives = hoist_globals::run(directives)?;
-    let (llvm_ir, llvm_context) = emit_llvm::run(flat_resolver, directives)?;
+    let llvm_ir = emit_llvm::run(flat_resolver, directives)?;
     Ok(Module {
         llvm_ir,
-        _llvm_context: llvm_context,
         kernel_info: HashMap::new(),
     })
 }
 
 pub struct Module {
     pub llvm_ir: emit_llvm::Module,
-    _llvm_context: emit_llvm::Context,
     pub kernel_info: HashMap<String, KernelInfo>,
 }
 
