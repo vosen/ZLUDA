@@ -212,7 +212,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         module: &Module,
         id_defs: &'a GlobalStringIdentResolver2<'input>,
     ) -> Self {
-        let context=  module.context();
+        let context = module.context();
         ModuleEmitContext {
             context: context.get(),
             module: module.get(),
