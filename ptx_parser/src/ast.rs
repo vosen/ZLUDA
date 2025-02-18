@@ -1028,7 +1028,7 @@ pub struct ArithFloat {
     // round-to-nearest-even and may be optimized aggressively by the code optimizer. In particular,
     // mul/add sequences with no rounding modifiers may be optimized to use fused-multiply-add
     // instructions on the target device.
-    pub is_fusable: bool
+    pub is_fusable: bool,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -1447,6 +1447,7 @@ pub struct CvtDetails {
     pub mode: CvtMode,
 }
 
+#[derive(Clone, Copy)]
 pub enum CvtMode {
     // int from int
     ZeroExtend,
@@ -1465,7 +1466,7 @@ pub enum CvtMode {
         flush_to_zero: Option<bool>,
     },
     FPRound {
-        integer_rounding: Option<RoundingMode>,
+        integer_rounding: RoundingMode,
         flush_to_zero: Option<bool>,
     },
     // int from float
@@ -1519,7 +1520,7 @@ impl CvtDetails {
                     flush_to_zero,
                 },
                 Ordering::Equal => CvtMode::FPRound {
-                    integer_rounding: rounding,
+                    integer_rounding: rounding.unwrap_or(RoundingMode::NearestEven),
                     flush_to_zero,
                 },
                 Ordering::Greater => {

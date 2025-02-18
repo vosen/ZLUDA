@@ -1,3 +1,5 @@
+use crate::pass::error_unreachable;
+
 use super::BrachCondition;
 use super::Directive2;
 use super::Function2;
@@ -16,6 +18,178 @@ use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 use std::hash::Hash;
 use std::iter;
+
+#[derive(Default)]
+enum DenormalMode {
+    #[default]
+    FlushToZero,
+    Preserve,
+}
+
+impl DenormalMode {
+    fn from_ftz(ftz: bool) -> Self {
+        if ftz {
+            DenormalMode::FlushToZero
+        } else {
+            DenormalMode::Preserve
+        }
+    }
+}
+
+#[derive(Default)]
+enum RoundingMode {
+    #[default]
+    NearestEven,
+    Zero,
+    NegativeInf,
+    PositiveInf,
+}
+
+impl RoundingMode {
+    fn to_ast(self) -> ast::RoundingMode {
+        match self {
+            RoundingMode::NearestEven => ast::RoundingMode::NearestEven,
+            RoundingMode::Zero => ast::RoundingMode::Zero,
+            RoundingMode::NegativeInf => ast::RoundingMode::NegativeInf,
+            RoundingMode::PositiveInf => ast::RoundingMode::PositiveInf,
+        }
+    }
+
+    fn from_ast(rnd: ast::RoundingMode) -> Self {
+        match rnd {
+            ast::RoundingMode::NearestEven => RoundingMode::NearestEven,
+            ast::RoundingMode::Zero => RoundingMode::Zero,
+            ast::RoundingMode::NegativeInf => RoundingMode::NegativeInf,
+            ast::RoundingMode::PositiveInf => RoundingMode::PositiveInf,
+        }
+    }
+}
+
+struct InstructionModes {
+    denormal_f32: Option<DenormalMode>,
+    denormal_f16_f64: Option<DenormalMode>,
+    rounding_f32: Option<RoundingMode>,
+    rounding_f16_f64: Option<RoundingMode>,
+}
+
+impl InstructionModes {
+    fn none() -> Self {
+        Self {
+            denormal_f32: None,
+            denormal_f16_f64: None,
+            rounding_f32: None,
+            rounding_f16_f64: None,
+        }
+    }
+
+    fn new(
+        type_: ast::ScalarType,
+        denormal: Option<DenormalMode>,
+        rounding: Option<RoundingMode>,
+    ) -> Self {
+        if type_ != ast::ScalarType::F32 {
+            Self {
+                denormal_f16_f64: denormal,
+                rounding_f16_f64: rounding,
+                ..Self::none()
+            }
+        } else {
+            Self {
+                denormal_f32: denormal,
+                rounding_f32: rounding,
+                ..Self::none()
+            }
+        }
+    }
+
+    fn mixed_ftz_f32(
+        type_: ast::ScalarType,
+        denormal: Option<DenormalMode>,
+        rounding: Option<RoundingMode>,
+    ) -> Self {
+        if type_ != ast::ScalarType::F32 {
+            Self {
+                denormal_f16_f64: denormal,
+                rounding_f32: rounding,
+                ..Self::none()
+            }
+        } else {
+            Self {
+                denormal_f32: denormal,
+                rounding_f32: rounding,
+                ..Self::none()
+            }
+        }
+    }
+
+    fn from_arith_float(arith: &ast::ArithFloat) -> InstructionModes {
+        let denormal = arith.flush_to_zero.map(DenormalMode::from_ftz);
+        let rounding = Some(RoundingMode::from_ast(arith.rounding));
+        InstructionModes::new(arith.type_, denormal, rounding)
+    }
+
+    fn from_ftz(type_: ast::ScalarType, ftz: Option<bool>) -> Self {
+        Self::new(type_, ftz.map(DenormalMode::from_ftz), None)
+    }
+
+    fn from_ftz_f32(ftz: bool) -> Self {
+        Self::new(
+            ast::ScalarType::F32,
+            Some(DenormalMode::from_ftz(ftz)),
+            None,
+        )
+    }
+
+    fn from_rcp(data: ast::RcpData) -> InstructionModes {
+        let rounding = match data.kind {
+            ast::RcpKind::Approx => None,
+            ast::RcpKind::Compliant(rnd) => Some(RoundingMode::from_ast(rnd)),
+        };
+        let denormal = data.flush_to_zero.map(DenormalMode::from_ftz);
+        InstructionModes::new(data.type_, denormal, rounding)
+    }
+
+    fn from_cvt(cvt: &ast::CvtDetails) -> InstructionModes {
+        match cvt.mode {
+            ast::CvtMode::ZeroExtend
+            | ast::CvtMode::SignExtend
+            | ast::CvtMode::Truncate
+            | ast::CvtMode::Bitcast
+            | ast::CvtMode::SaturateUnsignedToSigned
+            | ast::CvtMode::SaturateSignedToUnsigned => Self::none(),
+            ast::CvtMode::FPExtend { flush_to_zero } => {
+                Self::from_ftz(ast::ScalarType::F32, flush_to_zero)
+            }
+            ast::CvtMode::FPTruncate {
+                rounding,
+                flush_to_zero,
+            }
+            | ast::CvtMode::FPRound {
+                integer_rounding: rounding,
+                flush_to_zero,
+            } => Self::mixed_ftz_f32(
+                cvt.to,
+                flush_to_zero.map(DenormalMode::from_ftz),
+                Some(RoundingMode::from_ast(rounding)),
+            ),
+            ast::CvtMode::SignedFromFP {
+                flush_to_zero,
+                rounding,
+            }
+            | ast::CvtMode::UnsignedFromFP {
+                flush_to_zero,
+                rounding,
+            } => Self::new(
+                cvt.from,
+                flush_to_zero.map(DenormalMode::from_ftz),
+                Some(RoundingMode::from_ast(rounding)),
+            ),
+            ast::CvtMode::FPFromSigned(rnd) | ast::CvtMode::FPFromUnsigned(rnd) => {
+                Self::new(cvt.to, None, Some(RoundingMode::from_ast(rnd)))
+            }
+        }
+    }
+}
 
 struct ControlFlowGraph<T: Eq + PartialEq> {
     entry_points: FxHashMap<SpirvWord, NodeIndex>,
@@ -74,19 +248,40 @@ struct Node<T> {
 
 pub(crate) fn run<'input>(
     flat_resolver: &mut super::GlobalStringIdentResolver2<'input>,
-    directives: Vec<super::Directive2<'input, ast::Instruction<SpirvWord>, super::SpirvWord>>,
-) -> Result<Vec<Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
+    directives: Vec<super::Directive2<ast::Instruction<SpirvWord>, super::SpirvWord>>,
+) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
     let mut cfg = ControlFlowGraph::<bool>::new();
-    let mut node_idx_to_name = FxHashMap::<NodeIndex<u32>, SpirvWord>::default();
     for directive in directives.iter() {
         match directive {
             super::Directive2::Method(Function2 {
-                func_decl: ast::MethodDeclaration { name, .. },
-                body,
+                name,
+                body: Some(body),
                 ..
             }) => {
+                let mut basic_block = Some(cfg.add_entry_basic_block(*name));
                 for statement in body.iter() {
-                    todo!()
+                    match statement {
+                        Statement::Instruction(ast::Instruction::Bra { arguments }) => {
+                            let bb_index = basic_block.ok_or_else(error_unreachable)?;
+                            cfg.add_jump(bb_index, arguments.src);
+                            basic_block = None;
+                        }
+                        Statement::Label(label) => {
+                            basic_block = Some(cfg.get_or_add_basic_block(*label));
+                        }
+                        Statement::Conditional(BrachCondition {
+                            if_true, if_false, ..
+                        }) => {
+                            let bb_index = basic_block.ok_or_else(error_unreachable)?;
+                            cfg.add_jump(bb_index, *if_true);
+                            cfg.add_jump(bb_index, *if_false);
+                            basic_block = None;
+                        }
+                        Statement::Instruction(instruction) => {
+                            let modes = get_modes(instruction);
+                        }
+                        _ => continue,
+                    }
                 }
             }
             _ => continue,
@@ -277,6 +472,169 @@ impl<T: Copy + Eq + Hash> UniqueVec<T> {
         } else {
             false
         }
+    }
+}
+
+fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
+    match inst {
+        // TODO: review it when implementing virtual calls
+        ast::Instruction::Call { .. }
+        | ast::Instruction::Mov { .. }
+        | ast::Instruction::Ld { .. }
+        | ast::Instruction::St { .. }
+        | ast::Instruction::PrmtSlow { .. }
+        | ast::Instruction::Prmt { .. }
+        | ast::Instruction::Activemask { .. }
+        | ast::Instruction::Membar { .. }
+        | ast::Instruction::Trap {}
+        | ast::Instruction::Not { .. }
+        | ast::Instruction::Or { .. }
+        | ast::Instruction::And { .. }
+        | ast::Instruction::Bra { .. }
+        | ast::Instruction::Clz { .. }
+        | ast::Instruction::Brev { .. }
+        | ast::Instruction::Popc { .. }
+        | ast::Instruction::Xor { .. }
+        | ast::Instruction::Rem { .. }
+        | ast::Instruction::Bfe { .. }
+        | ast::Instruction::Bfi { .. }
+        | ast::Instruction::Shr { .. }
+        | ast::Instruction::Shl { .. }
+        | ast::Instruction::Selp { .. }
+        | ast::Instruction::Ret { .. }
+        | ast::Instruction::Bar { .. }
+        | ast::Instruction::Cvta { .. }
+        | ast::Instruction::Atom { .. }
+        | ast::Instruction::AtomCas { .. } => InstructionModes::none(),
+        ast::Instruction::Add {
+            data: ast::ArithDetails::Integer(_),
+            ..
+        }
+        | ast::Instruction::Sub {
+            data: ast::ArithDetails::Integer(..),
+            ..
+        }
+        | ast::Instruction::Mul {
+            data: ast::MulDetails::Integer { .. },
+            ..
+        }
+        | ast::Instruction::Mad {
+            data: ast::MadDetails::Integer { .. },
+            ..
+        }
+        | ast::Instruction::Min {
+            data: ast::MinMaxDetails::Signed(..) | ast::MinMaxDetails::Unsigned(..),
+            ..
+        }
+        | ast::Instruction::Max {
+            data: ast::MinMaxDetails::Signed(..) | ast::MinMaxDetails::Unsigned(..),
+            ..
+        }
+        | ast::Instruction::Div {
+            data: ast::DivDetails::Signed(..) | ast::DivDetails::Unsigned(..),
+            ..
+        } => InstructionModes::none(),
+        ast::Instruction::Fma { data, .. }
+        | ast::Instruction::Sub {
+            data: ast::ArithDetails::Float(data),
+            ..
+        }
+        | ast::Instruction::Mul {
+            data: ast::MulDetails::Float(data),
+            ..
+        }
+        | ast::Instruction::Mad {
+            data: ast::MadDetails::Float(data),
+            ..
+        }
+        | ast::Instruction::Add {
+            data: ast::ArithDetails::Float(data),
+            ..
+        } => InstructionModes::from_arith_float(data),
+        ast::Instruction::Setp {
+            data:
+                ast::SetpData {
+                    type_,
+                    flush_to_zero,
+                    ..
+                },
+            ..
+        }
+        | ast::Instruction::SetpBool {
+            data:
+                ast::SetpBoolData {
+                    base:
+                        ast::SetpData {
+                            type_,
+                            flush_to_zero,
+                            ..
+                        },
+                    ..
+                },
+            ..
+        }
+        | ast::Instruction::Neg {
+            data: ast::TypeFtz {
+                type_,
+                flush_to_zero,
+            },
+            ..
+        }
+        | ast::Instruction::Ex2 {
+            data: ast::TypeFtz {
+                type_,
+                flush_to_zero,
+            },
+            ..
+        }
+        | ast::Instruction::Rsqrt {
+            data: ast::TypeFtz {
+                type_,
+                flush_to_zero,
+            },
+            ..
+        }
+        | ast::Instruction::Abs {
+            data: ast::TypeFtz {
+                type_,
+                flush_to_zero,
+            },
+            ..
+        }
+        | ast::Instruction::Min {
+            data:
+                ast::MinMaxDetails::Float(ast::MinMaxFloat {
+                    type_,
+                    flush_to_zero,
+                    ..
+                }),
+            ..
+        }
+        | ast::Instruction::Max {
+            data:
+                ast::MinMaxDetails::Float(ast::MinMaxFloat {
+                    type_,
+                    flush_to_zero,
+                    ..
+                }),
+            ..
+        }
+        | ast::Instruction::Div {
+            data:
+                ast::DivDetails::Float(ast::DivFloatDetails {
+                    type_,
+                    flush_to_zero,
+                    ..
+                }),
+            ..
+        } => InstructionModes::from_ftz(*type_, *flush_to_zero),
+        ast::Instruction::Sin { data, .. }
+        | ast::Instruction::Cos { data, .. }
+        | ast::Instruction::Lg2 { data, .. } => InstructionModes::from_ftz_f32(data.flush_to_zero),
+        ast::Instruction::Rcp { data, .. } | ast::Instruction::Sqrt { data, .. } => {
+            InstructionModes::from_rcp(*data)
+        }
+        ast::Instruction::Cvt { data, .. } => InstructionModes::from_cvt(data),
     }
 }
 

@@ -1,30 +1,29 @@
 use super::*;
 
 pub(super) fn run<'a, 'input>(
-    resolver: &mut GlobalStringIdentResolver2<'input>,
+    resolver: &'a mut GlobalStringIdentResolver2<'input>,
     special_registers: &'a SpecialRegistersMap2,
-    directives: Vec<UnconditionalDirective<'input>>,
-) -> Result<Vec<UnconditionalDirective<'input>>, TranslateError> {
-    let declarations = SpecialRegistersMap2::generate_declarations(resolver);
-    let mut result = Vec::with_capacity(declarations.len() + directives.len());
+    directives: Vec<UnconditionalDirective>,
+) -> Result<Vec<UnconditionalDirective>, TranslateError> {
+    let mut result = Vec::with_capacity(SpecialRegistersMap2::len() + directives.len());
     let mut sreg_to_function =
-        FxHashMap::with_capacity_and_hasher(declarations.len(), Default::default());
-    for (sreg, declaration) in declarations {
-        let name = if let ast::MethodName::Func(name) = declaration.name {
-            name
-        } else {
-            return Err(error_unreachable());
-        };
-        result.push(UnconditionalDirective::Method(UnconditionalFunction {
-            func_decl: declaration,
-            globals: Vec::new(),
-            body: None,
-            import_as: None,
-            tuning: Vec::new(),
-            linkage: ast::LinkingDirective::EXTERN,
-        }));
-        sreg_to_function.insert(sreg, name);
-    }
+        FxHashMap::with_capacity_and_hasher(SpecialRegistersMap2::len(), Default::default());
+    SpecialRegistersMap2::foreach_declaration(
+        resolver,
+        |sreg, (return_arguments, name, input_arguments)| {
+            result.push(UnconditionalDirective::Method(UnconditionalFunction {
+                return_arguments,
+                name,
+                input_arguments,
+                body: None,
+                import_as: None,
+                tuning: Vec::new(),
+                linkage: ast::LinkingDirective::EXTERN,
+                is_kernel: false,
+            }));
+            sreg_to_function.insert(sreg, name);
+        },
+    );
     let mut visitor = SpecialRegisterResolver {
         resolver,
         special_registers,
@@ -39,8 +38,8 @@ pub(super) fn run<'a, 'input>(
 
 fn run_directive<'a, 'input>(
     visitor: &mut SpecialRegisterResolver<'a, 'input>,
-    directive: UnconditionalDirective<'input>,
-) -> Result<UnconditionalDirective<'input>, TranslateError> {
+    directive: UnconditionalDirective,
+) -> Result<UnconditionalDirective, TranslateError> {
     Ok(match directive {
         var @ Directive2::Variable(..) => var,
         Directive2::Method(method) => Directive2::Method(run_method(visitor, method)?),
@@ -49,8 +48,8 @@ fn run_directive<'a, 'input>(
 
 fn run_method<'a, 'input>(
     visitor: &mut SpecialRegisterResolver<'a, 'input>,
-    method: UnconditionalFunction<'input>,
-) -> Result<UnconditionalFunction<'input>, TranslateError> {
+    method: UnconditionalFunction,
+) -> Result<UnconditionalFunction, TranslateError> {
     let body = method
         .body
         .map(|statements| {
@@ -62,12 +61,14 @@ fn run_method<'a, 'input>(
         })
         .transpose()?;
     Ok(Function2 {
-        func_decl: method.func_decl,
-        globals: method.globals,
+        return_arguments: method.return_arguments,
+        name: method.name,
+        input_arguments: method.input_arguments,
         body,
         import_as: method.import_as,
         tuning: method.tuning,
         linkage: method.linkage,
+        is_kernel: method.is_kernel,
     })
 }
 

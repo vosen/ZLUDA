@@ -2,8 +2,8 @@ use super::*;
 
 pub(super) fn run<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
-    directives: Vec<Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>>,
-) -> Result<Vec<Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
+    directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
+) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
     let mut fn_declarations = FxHashMap::default();
     let remapped_directives = directives
         .into_iter()
@@ -13,17 +13,14 @@ pub(super) fn run<'input>(
         .into_iter()
         .map(|(_, (return_arguments, name, input_arguments))| {
             Directive2::Method(Function2 {
-                func_decl: ast::MethodDeclaration {
-                    return_arguments,
-                    name: ast::MethodName::Func(name),
-                    input_arguments,
-                    shared_mem: None,
-                },
-                globals: Vec::new(),
+                return_arguments,
+                name: name,
+                input_arguments,
                 body: None,
                 import_as: None,
                 tuning: Vec::new(),
                 linkage: ast::LinkingDirective::EXTERN,
+                is_kernel: false,
             })
         })
         .collect::<Vec<_>>();
@@ -41,8 +38,8 @@ fn run_directive<'input>(
             Vec<ast::Variable<SpirvWord>>,
         ),
     >,
-    directive: Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>,
-) -> Result<Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
+    directive: Directive2<ast::Instruction<SpirvWord>, SpirvWord>,
+) -> Result<Directive2<ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
     Ok(match directive {
         var @ Directive2::Variable(..) => var,
         Directive2::Method(mut method) => {

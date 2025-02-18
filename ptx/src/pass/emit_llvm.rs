@@ -168,7 +168,7 @@ impl Deref for MemoryBuffer {
 
 pub(super) fn run<'input>(
     id_defs: GlobalStringIdentResolver2<'input>,
-    directives: Vec<Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>>,
+    directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
 ) -> Result<MemoryBuffer, TranslateError> {
     let context = Context::new();
     let module = Module::new(&context, LLVM_UNNAMED);
@@ -218,24 +218,20 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
 
     fn emit_method(
         &mut self,
-        method: Function2<'input, ast::Instruction<SpirvWord>, SpirvWord>,
+        method: Function2<ast::Instruction<SpirvWord>, SpirvWord>,
     ) -> Result<(), TranslateError> {
-        let func_decl = method.func_decl;
         let name = method
             .import_as
             .as_deref()
-            .or_else(|| match func_decl.name {
-                ast::MethodName::Kernel(name) => Some(name),
-                ast::MethodName::Func(id) => self.id_defs.ident_map[&id].name.as_deref(),
-            })
+            .or_else(|| self.id_defs.ident_map[&method.name].name.as_deref())
             .ok_or_else(|| error_unreachable())?;
         let name = CString::new(name).map_err(|_| error_unreachable())?;
         let mut fn_ = unsafe { LLVMGetNamedFunction(self.module, name.as_ptr()) };
         if fn_ == ptr::null_mut() {
             let fn_type = get_function_type(
                 self.context,
-                func_decl.return_arguments.iter().map(|v| &v.v_type),
-                func_decl
+                method.return_arguments.iter().map(|v| &v.v_type),
+                method
                     .input_arguments
                     .iter()
                     .map(|v| get_input_argument_type(self.context, &v.v_type, v.state_space)),
@@ -245,15 +241,15 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             self.emit_fn_attribute(fn_, "uniform-work-group-size", "true");
             self.emit_fn_attribute(fn_, "no-trapping-math", "true");
         }
-        if let ast::MethodName::Func(name) = func_decl.name {
-            self.resolver.register(name, fn_);
+        if !method.is_kernel {
+            self.resolver.register(method.name, fn_);
         }
-        for (i, param) in func_decl.input_arguments.iter().enumerate() {
+        for (i, param) in method.input_arguments.iter().enumerate() {
             let value = unsafe { LLVMGetParam(fn_, i as u32) };
             let name = self.resolver.get_or_add(param.name);
             unsafe { LLVMSetValueName2(value, name.as_ptr().cast(), name.len()) };
             self.resolver.register(param.name, value);
-            if func_decl.name.is_kernel() {
+            if method.is_kernel {
                 let attr_kind = unsafe {
                     LLVMGetEnumAttributeKindForName(b"byref".as_ptr().cast(), b"byref".len())
                 };
@@ -267,7 +263,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                 unsafe { LLVMAddAttributeAtIndex(fn_, i as u32 + 1, attr) };
             }
         }
-        let call_conv = if func_decl.name.is_kernel() {
+        let call_conv = if method.is_kernel {
             Self::kernel_call_convention()
         } else {
             Self::func_call_convention()
@@ -282,7 +278,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                 unsafe { LLVMAppendBasicBlockInContext(self.context, fn_, LLVM_UNNAMED.as_ptr()) };
             unsafe { LLVMPositionBuilderAtEnd(self.builder.get(), real_bb) };
             let mut method_emitter = MethodEmitContext::new(self, fn_, variables_builder);
-            for var in func_decl.return_arguments {
+            for var in method.return_arguments {
                 method_emitter.emit_variable(var)?;
             }
             for statement in statements.iter() {
@@ -1558,7 +1554,7 @@ impl<'a> MethodEmitContext<'a> {
                 return self.emit_cvt_float_to_int(
                     data.from,
                     data.to,
-                    integer_rounding.unwrap_or(ast::RoundingMode::NearestEven),
+                    integer_rounding,
                     arguments,
                     Some(LLVMBuildFPToSI),
                 )
