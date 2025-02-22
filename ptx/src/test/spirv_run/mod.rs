@@ -186,6 +186,8 @@ test_ptx!(
     [0x800000u32, 0xFFFFFF]
 );
 
+test_ptx!(malformed_label, [2u64], [3u64]);
+
 test_ptx!(assertfail);
 test_ptx!(func_ptr);
 test_ptx!(lanemask_lt);

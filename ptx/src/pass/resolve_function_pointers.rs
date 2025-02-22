@@ -40,16 +40,7 @@ fn run_method<'input>(
                 .collect::<Result<Vec<_>, _>>()
         })
         .transpose()?;
-    Ok(Function2 {
-        return_arguments: method.return_arguments,
-        name: method.name,
-        input_arguments: method.input_arguments,
-        body,
-        import_as: method.import_as,
-        tuning: method.tuning,
-        linkage: method.linkage,
-        is_kernel: method.is_kernel,
-    })
+    Ok(Function2 { body, ..method })
 }
 
 fn run_statement<'input>(

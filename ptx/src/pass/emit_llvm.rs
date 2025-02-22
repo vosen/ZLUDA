@@ -243,6 +243,19 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         }
         if !method.is_kernel {
             self.resolver.register(method.name, fn_);
+            self.emit_fn_attribute(fn_, "denormal-fp-math-f32", "dynamic");
+            self.emit_fn_attribute(fn_, "denormal-fp-math", "dynamic");
+        } else {
+            self.emit_fn_attribute(
+                fn_,
+                "denormal-fp-math-f32",
+                llvm_ftz(method.flush_to_zero_f32),
+            );
+            self.emit_fn_attribute(
+                fn_,
+                "denormal-fp-math",
+                llvm_ftz(method.flush_to_zero_f16f64),
+            );
         }
         for (i, param) in method.input_arguments.iter().enumerate() {
             let value = unsafe { LLVMGetParam(fn_, i as u32) };
@@ -413,6 +426,14 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
     }
 }
 
+fn llvm_ftz(ftz: bool) -> &'static str {
+    if ftz {
+        "preserve-sign"
+    } else {
+        "ieee"
+    }
+}
+
 fn get_input_argument_type(
     context: LLVMContextRef,
     v_type: &ast::Type,
@@ -469,6 +490,7 @@ impl<'a> MethodEmitContext<'a> {
             Statement::FunctionPointer(_) => todo!(),
             Statement::VectorRead(vector_read) => self.emit_vector_read(vector_read)?,
             Statement::VectorWrite(vector_write) => self.emit_vector_write(vector_write)?,
+            Statement::SetMode(mode_reg) => self.emit_set_mode(mode_reg)?,
         })
     }
 
@@ -1124,7 +1146,7 @@ impl<'a> MethodEmitContext<'a> {
         let cos = self.emit_intrinsic(
             c"llvm.cos.f32",
             Some(arguments.dst),
-            &ast::ScalarType::F32.into(),
+            Some(&ast::ScalarType::F32.into()),
             vec![(self.resolver.value(arguments.src)?, llvm_f32)],
         )?;
         unsafe { LLVMZludaSetFastMathFlags(cos, LLVMZludaFastMathApproxFunc) }
@@ -1377,7 +1399,7 @@ impl<'a> MethodEmitContext<'a> {
         let sin = self.emit_intrinsic(
             c"llvm.sin.f32",
             Some(arguments.dst),
-            &ast::ScalarType::F32.into(),
+            Some(&ast::ScalarType::F32.into()),
             vec![(self.resolver.value(arguments.src)?, llvm_f32)],
         )?;
         unsafe { LLVMZludaSetFastMathFlags(sin, LLVMZludaFastMathApproxFunc) }
@@ -1388,12 +1410,12 @@ impl<'a> MethodEmitContext<'a> {
         &mut self,
         name: &CStr,
         dst: Option<SpirvWord>,
-        return_type: &ast::Type,
+        return_type: Option<&ast::Type>,
         arguments: Vec<(LLVMValueRef, LLVMTypeRef)>,
     ) -> Result<LLVMValueRef, TranslateError> {
         let fn_type = get_function_type(
             self.context,
-            iter::once(return_type),
+            return_type.into_iter(),
             arguments.iter().map(|(_, type_)| Ok(*type_)),
         )?;
         let mut fn_ = unsafe { LLVMGetNamedFunction(self.module, name.as_ptr()) };
@@ -1612,7 +1634,7 @@ impl<'a> MethodEmitContext<'a> {
         let clamped = self.emit_intrinsic(
             c"llvm.umin",
             None,
-            &from.into(),
+            Some(&from.into()),
             vec![
                 (self.resolver.value(arguments.src)?, from_llvm),
                 (max, from_llvm),
@@ -1642,7 +1664,7 @@ impl<'a> MethodEmitContext<'a> {
         let zero_clamped = self.emit_intrinsic(
             unsafe { CStr::from_bytes_with_nul_unchecked(zero_clamp_intrinsic.as_bytes()) },
             None,
-            &from.into(),
+            Some(&from.into()),
             vec![
                 (self.resolver.value(arguments.src)?, from_llvm),
                 (zero, from_llvm),
@@ -1661,7 +1683,7 @@ impl<'a> MethodEmitContext<'a> {
         let fully_clamped = self.emit_intrinsic(
             unsafe { CStr::from_bytes_with_nul_unchecked(max_clamp_intrinsic.as_bytes()) },
             None,
-            &from.into(),
+            Some(&from.into()),
             vec![(zero_clamped, from_llvm), (max, from_llvm)],
         )?;
         let resize_fn = if to.layout().size() >= from.layout().size() {
@@ -1701,7 +1723,7 @@ impl<'a> MethodEmitContext<'a> {
         let rounded_float = self.emit_intrinsic(
             unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
             None,
-            &from.into(),
+            Some(&from.into()),
             vec![(
                 self.resolver.value(arguments.src)?,
                 get_scalar_type(self.context, from),
@@ -1770,7 +1792,7 @@ impl<'a> MethodEmitContext<'a> {
         self.emit_intrinsic(
             intrinsic,
             Some(arguments.dst),
-            &data.type_.into(),
+            Some(&data.type_.into()),
             vec![(self.resolver.value(arguments.src)?, type_)],
         )?;
         Ok(())
@@ -1791,7 +1813,7 @@ impl<'a> MethodEmitContext<'a> {
         self.emit_intrinsic(
             intrinsic,
             Some(arguments.dst),
-            &data.type_.into(),
+            Some(&data.type_.into()),
             vec![(self.resolver.value(arguments.src)?, type_)],
         )?;
         Ok(())
@@ -1813,7 +1835,7 @@ impl<'a> MethodEmitContext<'a> {
         self.emit_intrinsic(
             intrinsic,
             Some(arguments.dst),
-            &data.type_.into(),
+            Some(&data.type_.into()),
             vec![(self.resolver.value(arguments.src)?, type_)],
         )?;
         Ok(())
@@ -1935,7 +1957,7 @@ impl<'a> MethodEmitContext<'a> {
         self.emit_intrinsic(
             intrinsic,
             Some(arguments.dst),
-            &data.type_.into(),
+            Some(&data.type_.into()),
             vec![(
                 self.resolver.value(arguments.src)?,
                 get_scalar_type(self.context, data.type_),
@@ -1952,7 +1974,7 @@ impl<'a> MethodEmitContext<'a> {
         self.emit_intrinsic(
             c"llvm.amdgcn.log.f32",
             Some(arguments.dst),
-            &ast::ScalarType::F32.into(),
+            Some(&ast::ScalarType::F32.into()),
             vec![(
                 self.resolver.value(arguments.src)?,
                 get_scalar_type(self.context, ast::ScalarType::F32.into()),
@@ -2007,7 +2029,7 @@ impl<'a> MethodEmitContext<'a> {
         self.emit_intrinsic(
             intrinsic,
             Some(arguments.dst),
-            &type_.into(),
+            Some(&type_.into()),
             vec![(self.resolver.value(arguments.src)?, llvm_type)],
         )?;
         Ok(())
@@ -2031,7 +2053,7 @@ impl<'a> MethodEmitContext<'a> {
         self.emit_intrinsic(
             unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
             Some(arguments.dst),
-            &data.type_().into(),
+            Some(&data.type_().into()),
             vec![
                 (self.resolver.value(arguments.src1)?, llvm_type),
                 (self.resolver.value(arguments.src2)?, llvm_type),
@@ -2058,7 +2080,7 @@ impl<'a> MethodEmitContext<'a> {
         self.emit_intrinsic(
             unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
             Some(arguments.dst),
-            &data.type_().into(),
+            Some(&data.type_().into()),
             vec![
                 (self.resolver.value(arguments.src1)?, llvm_type),
                 (self.resolver.value(arguments.src2)?, llvm_type),
@@ -2076,7 +2098,7 @@ impl<'a> MethodEmitContext<'a> {
         self.emit_intrinsic(
             unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
             Some(arguments.dst),
-            &data.type_.into(),
+            Some(&data.type_.into()),
             vec![
                 (
                     self.resolver.value(arguments.src1)?,
@@ -2197,8 +2219,45 @@ impl<'a> MethodEmitContext<'a> {
         self.emit_intrinsic(
             unsafe { CStr::from_bytes_with_nul_unchecked(llvm_intrinsic.as_bytes()) },
             Some(arguments.dst),
-            &data.type_.into(),
+            Some(&data.type_.into()),
             intrinsic_arguments,
+        )?;
+        Ok(())
+    }
+
+    fn emit_set_mode(&mut self, mode_reg: ModeRegister) -> Result<(), TranslateError> {
+        let intrinsic = c"llvm.amdgcn.s.setreg";
+        let llvm_i32 = get_scalar_type(self.context, ast::ScalarType::B32);
+        let (hwreg, value) = match mode_reg {
+            ModeRegister::DenormalF32(ftz) => {
+                let (reg, offset, size) = (1, 4, 2u32);
+                let hwreg = reg | (offset << 6) | ((size - 1) << 11);
+                (hwreg, if ftz { 0u32 } else { 3 })
+            }
+            ModeRegister::DenormalF16F64(ftz) => {
+                let (reg, offset, size) = (1, 6, 2u32);
+                let hwreg = reg | (offset << 6) | ((size - 1) << 11);
+                (hwreg, if ftz { 0 } else { 3 })
+            }
+            ModeRegister::DenormalBoth { f32, f16f64 } => {
+                let (reg, offset, size) = (1, 4, 4u32);
+                let hwreg = reg | (offset << 6) | ((size - 1) << 11);
+                let f32 = if f32 { 0 } else { 3 };
+                let f16f64 = if f16f64 { 0 } else { 3 };
+                let value = f32 | f16f64 << 2;
+                (hwreg, value)
+            }
+            ModeRegister::RoundingF32(rounding_mode) => todo!(),
+            ModeRegister::RoundingF16F64(rounding_mode) => todo!(),
+            ModeRegister::RoundingBoth { f32, f16f64 } => todo!(),
+        };
+        let hwreg_llvm = unsafe { LLVMConstInt(llvm_i32, hwreg as _, 0) };
+        let value_llvm = unsafe { LLVMConstInt(llvm_i32, value as _, 0) };
+        self.emit_intrinsic(
+            intrinsic,
+            None,
+            None,
+            vec![(hwreg_llvm, llvm_i32), (value_llvm, llvm_i32)],
         )?;
         Ok(())
     }

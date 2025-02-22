@@ -1,6 +1,7 @@
 use super::BrachCondition;
 use super::Directive2;
 use super::Function2;
+use super::ModeRegister;
 use super::SpirvWord;
 use super::Statement;
 use super::TranslateError;
@@ -18,6 +19,7 @@ use rustc_hash::FxHashSet;
 use std::hash::Hash;
 use std::iter;
 use std::mem;
+use std::u32;
 use strum::EnumCount;
 use strum_macros::{EnumCount, VariantArray};
 
@@ -34,6 +36,13 @@ impl DenormalMode {
             DenormalMode::FlushToZero
         } else {
             DenormalMode::Preserve
+        }
+    }
+
+    fn to_ftz(self) -> bool {
+        match self {
+            DenormalMode::FlushToZero => true,
+            DenormalMode::Preserve => false,
         }
     }
 }
@@ -94,20 +103,19 @@ impl InstructionModes {
                 _ => {}
             }
         }
-        fn set_if_some<T: Copy>(source: &mut Option<T>, value: Option<T>) {
-            match (source, value) {
-                (Some(ref mut x), Some(y)) => *x = y,
-                _ => {}
+        fn set_if_any<T: Copy>(source: &mut Option<T>, value: Option<T>) {
+            if let Some(x) = value {
+                *source = Some(x);
             }
         }
         set_if_none(&mut entry.denormal_f32, self.denormal_f32);
         set_if_none(&mut entry.denormal_f16f64, self.denormal_f16f64);
         set_if_none(&mut entry.rounding_f32, self.rounding_f32);
         set_if_none(&mut entry.rounding_f16f64, self.rounding_f16f64);
-        set_if_some(&mut exit.denormal_f32, self.denormal_f32);
-        set_if_some(&mut exit.denormal_f16f64, self.denormal_f16f64);
-        set_if_some(&mut exit.rounding_f32, self.rounding_f32);
-        set_if_some(&mut exit.rounding_f16f64, self.rounding_f16f64);
+        set_if_any(&mut exit.denormal_f32, self.denormal_f32);
+        set_if_any(&mut exit.denormal_f16f64, self.denormal_f16f64);
+        set_if_any(&mut exit.rounding_f32, self.rounding_f32);
+        set_if_any(&mut exit.rounding_f16f64, self.rounding_f16f64);
     }
 
     fn none() -> Self {
@@ -209,18 +217,12 @@ impl InstructionModes {
                 flush_to_zero.map(DenormalMode::from_ftz),
                 Some(RoundingMode::from_ast(rounding)),
             ),
-            ast::CvtMode::SignedFromFP {
-                flush_to_zero,
-                rounding,
+            // float to int contains rounding field, but it's not a rounding
+            // mode but rather round-to-int operation that will be applied
+            ast::CvtMode::SignedFromFP { flush_to_zero, .. }
+            | ast::CvtMode::UnsignedFromFP { flush_to_zero, .. } => {
+                Self::new(cvt.from, flush_to_zero.map(DenormalMode::from_ftz), None)
             }
-            | ast::CvtMode::UnsignedFromFP {
-                flush_to_zero,
-                rounding,
-            } => Self::new(
-                cvt.from,
-                flush_to_zero.map(DenormalMode::from_ftz),
-                Some(RoundingMode::from_ast(rounding)),
-            ),
             ast::CvtMode::FPFromSigned(rnd) | ast::CvtMode::FPFromUnsigned(rnd) => {
                 Self::new(cvt.to, None, Some(RoundingMode::from_ast(rnd)))
             }
@@ -263,22 +265,15 @@ impl ControlFlowGraph {
     }
 
     fn set_modes(&mut self, node: NodeIndex, entry: InstructionModes, exit: InstructionModes) {
-        self.graph[node].denormal_f32 = Mode {
-            entry: entry.denormal_f32.map(ExtendedMode::BasicBlock),
-            exit: exit.denormal_f32.map(ExtendedMode::BasicBlock),
-        };
-        self.graph[node].denormal_f16f64 = Mode {
-            entry: entry.denormal_f16f64.map(ExtendedMode::BasicBlock),
-            exit: exit.denormal_f16f64.map(ExtendedMode::BasicBlock),
-        };
-        self.graph[node].rounding_f32 = Mode {
-            entry: entry.rounding_f32.map(ExtendedMode::BasicBlock),
-            exit: exit.rounding_f32.map(ExtendedMode::BasicBlock),
-        };
-        self.graph[node].rounding_f16f64 = Mode {
-            entry: entry.rounding_f16f64.map(ExtendedMode::BasicBlock),
-            exit: exit.rounding_f16f64.map(ExtendedMode::BasicBlock),
-        };
+        let node = &mut self.graph[node];
+        node.denormal_f32.entry = entry.denormal_f32.map(ExtendedMode::BasicBlock);
+        node.denormal_f16f64.entry = entry.denormal_f16f64.map(ExtendedMode::BasicBlock);
+        node.rounding_f32.entry = entry.rounding_f32.map(ExtendedMode::BasicBlock);
+        node.rounding_f16f64.entry = entry.rounding_f16f64.map(ExtendedMode::BasicBlock);
+        node.denormal_f32.exit = exit.denormal_f32.map(ExtendedMode::BasicBlock);
+        node.denormal_f16f64.exit = exit.denormal_f16f64.map(ExtendedMode::BasicBlock);
+        node.rounding_f32.exit = exit.rounding_f32.map(ExtendedMode::BasicBlock);
+        node.rounding_f16f64.exit = exit.rounding_f16f64.map(ExtendedMode::BasicBlock);
     }
 }
 
@@ -343,7 +338,7 @@ trait EnumTuple {
 
 pub(crate) fn run<'input>(
     flat_resolver: &mut super::GlobalStringIdentResolver2<'input>,
-    directives: Vec<super::Directive2<ast::Instruction<SpirvWord>, super::SpirvWord>>,
+    mut directives: Vec<super::Directive2<ast::Instruction<SpirvWord>, super::SpirvWord>>,
 ) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
     let mut cfg = ControlFlowGraph::new();
     for directive in directives.iter() {
@@ -351,42 +346,39 @@ pub(crate) fn run<'input>(
             super::Directive2::Method(Function2 {
                 name,
                 body: Some(body),
+                is_kernel,
                 ..
             }) => {
-                let mut basic_block = Some(cfg.add_entry_basic_block(*name));
-                let mut entry = InstructionModes::none();
-                let mut exit = InstructionModes::none();
+                // TODO: implement for non-kernels
+                if !*is_kernel {
+                    todo!()
+                }
+                let entry_index = cfg.add_entry_basic_block(*name);
+                let mut bb_state = BasicBlockState::new(&mut cfg);
+                let mut body_iter = body.iter();
+                match body_iter.next() {
+                    Some(Statement::Label(label)) => {
+                        bb_state.cfg.add_jump(entry_index, *label);
+                        bb_state.start(*label);
+                    }
+                    _ => return Err(error_unreachable()),
+                };
                 for statement in body.iter() {
                     match statement {
                         Statement::Instruction(ast::Instruction::Bra { arguments }) => {
-                            let bb_index = basic_block.ok_or_else(error_unreachable)?;
-                            cfg.add_jump(bb_index, arguments.src);
-                            cfg.set_modes(
-                                bb_index,
-                                mem::replace(&mut entry, InstructionModes::none()),
-                                mem::replace(&mut exit, InstructionModes::none()),
-                            );
-                            basic_block = None;
+                            bb_state.end(&[arguments.src]);
                         }
                         Statement::Label(label) => {
-                            basic_block = Some(cfg.get_or_add_basic_block(*label));
+                            bb_state.start(*label);
                         }
                         Statement::Conditional(BrachCondition {
                             if_true, if_false, ..
                         }) => {
-                            let bb_index = basic_block.ok_or_else(error_unreachable)?;
-                            cfg.add_jump(bb_index, *if_true);
-                            cfg.add_jump(bb_index, *if_false);
-                            cfg.set_modes(
-                                bb_index,
-                                mem::replace(&mut entry, InstructionModes::none()),
-                                mem::replace(&mut exit, InstructionModes::none()),
-                            );
-                            basic_block = None;
+                            bb_state.end(&[*if_true, *if_false]);
                         }
                         Statement::Instruction(instruction) => {
                             let modes = get_modes(instruction);
-                            modes.fold_into(&mut entry, &mut exit);
+                            bb_state.append(modes);
                         }
                         _ => {}
                     }
@@ -395,7 +387,370 @@ pub(crate) fn run<'input>(
             _ => {}
         }
     }
-    todo!()
+    let denormal_f32 = compute_single_mode(&cfg, |node| node.denormal_f32);
+    let denormal_f16f64 = compute_single_mode(&cfg, |node| node.denormal_f16f64);
+    let rounding_f32 = compute_single_mode(&cfg, |node| node.rounding_f32);
+    let rounding_f16f64 = compute_single_mode(&cfg, |node| node.rounding_f16f64);
+    let denormal_f32 = optimize::<DenormalMode, { DenormalMode::COUNT }>(denormal_f32);
+    let denormal_f16f64 = optimize::<DenormalMode, { DenormalMode::COUNT }>(denormal_f16f64);
+    let rounding_f32 = optimize::<RoundingMode, { RoundingMode::COUNT }>(rounding_f32);
+    let rounding_f16f64 = optimize::<RoundingMode, { RoundingMode::COUNT }>(rounding_f16f64);
+    insert_mode_control(
+        flat_resolver,
+        &mut directives,
+        &cfg,
+        denormal_f32,
+        denormal_f16f64,
+        rounding_f32,
+        rounding_f16f64,
+    )?;
+    Ok(directives)
+}
+
+fn insert_mode_control<'input>(
+    flat_resolver: &mut super::GlobalStringIdentResolver2<'input>,
+    directives: &mut [Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
+    cfg: &ControlFlowGraph,
+    denormal_f32: ModeInsertions<DenormalMode>,
+    denormal_f16f64: ModeInsertions<DenormalMode>,
+    rounding_f32: ModeInsertions<RoundingMode>,
+    rounding_f16f64: ModeInsertions<RoundingMode>,
+) -> Result<(), TranslateError> {
+    for directive in directives.iter_mut() {
+        let body_ptr = match directive {
+            Directive2::Variable(..) | Directive2::Method(Function2 { body: None, .. }) => continue,
+            Directive2::Method(Function2 {
+                name,
+                body: Some(body),
+                flush_to_zero_f32,
+                flush_to_zero_f16f64,
+                roundind_mode_f32: rounding_mode_f32,
+                roundind_mode_f16f64: rounding_mode_f16f64,
+                ..
+            }) => {
+                *flush_to_zero_f32 = denormal_f32
+                    .kernels
+                    .get(name)
+                    .copied()
+                    .unwrap_or(DenormalMode::default())
+                    .to_ftz();
+                *flush_to_zero_f16f64 = denormal_f16f64
+                    .kernels
+                    .get(name)
+                    .copied()
+                    .unwrap_or(DenormalMode::default())
+                    .to_ftz();
+                *rounding_mode_f32 = rounding_f32
+                    .kernels
+                    .get(name)
+                    .copied()
+                    .unwrap_or(RoundingMode::default())
+                    .to_ast();
+                *rounding_mode_f16f64 = rounding_f16f64
+                    .kernels
+                    .get(name)
+                    .copied()
+                    .unwrap_or(RoundingMode::default())
+                    .to_ast();
+                body
+            }
+        };
+        let mut old_body = mem::replace(body_ptr, Vec::new());
+        let mut result = Vec::with_capacity(old_body.len());
+        let mut bb_state = BasicBlockControlState::new(
+            &denormal_f32,
+            &denormal_f16f64,
+            &rounding_f32,
+            &rounding_f16f64,
+        );
+        for statement in old_body.into_iter() {
+            match &statement {
+                Statement::Label(label) => {
+                    bb_state.start(*label);
+                }
+                Statement::Instruction(instruction) => {
+                    let modes = get_modes(&instruction);
+                    bb_state.insert(&mut result, modes)?;
+                }
+                _ => {}
+            }
+            result.push(statement);
+        }
+        *body_ptr = result;
+    }
+    Ok(())
+}
+
+struct BasicBlockControlState<'a> {
+    global_denormal_f32: &'a ModeInsertions<DenormalMode>,
+    global_denormal_f16f64: &'a ModeInsertions<DenormalMode>,
+    global_rounding_f32: &'a ModeInsertions<RoundingMode>,
+    global_rounding_f16f64: &'a ModeInsertions<RoundingMode>,
+    basic_block: SpirvWord,
+    denormal_f32: RegisterState<bool>,
+    denormal_f16f64: RegisterState<bool>,
+    foldable_rounding_f32: Option<usize>,
+    foldable_rounding_f16f64: Option<usize>,
+}
+
+#[derive(Clone, Copy)]
+enum RegisterState<T> {
+    Inherited,
+    Unknown,
+    Value(Option<usize>, T),
+}
+
+impl<T> RegisterState<T> {
+    fn empty() -> Self {
+        Self::Unknown
+    }
+
+    fn new(must_insert: bool) -> Self {
+        if must_insert {
+            Self::Unknown
+        } else {
+            Self::Inherited
+        }
+    }
+}
+
+impl<'a> BasicBlockControlState<'a> {
+    fn new(
+        global_denormal_f32: &'a ModeInsertions<DenormalMode>,
+        global_denormal_f16f64: &'a ModeInsertions<DenormalMode>,
+        global_rounding_f32: &'a ModeInsertions<RoundingMode>,
+        global_rounding_f16f64: &'a ModeInsertions<RoundingMode>,
+    ) -> Self {
+        BasicBlockControlState {
+            global_denormal_f32,
+            global_denormal_f16f64,
+            global_rounding_f32,
+            global_rounding_f16f64,
+            basic_block: SpirvWord(u32::MAX),
+            denormal_f32: RegisterState::empty(),
+            denormal_f16f64: RegisterState::empty(),
+            foldable_rounding_f32: None,
+            foldable_rounding_f16f64: None,
+        }
+    }
+
+    fn start(&mut self, label: SpirvWord) {
+        self.denormal_f32 =
+            RegisterState::new(self.global_denormal_f32.basic_blocks.contains(&label));
+        self.denormal_f32 =
+            RegisterState::new(self.global_denormal_f16f64.basic_blocks.contains(&label));
+        self.foldable_rounding_f32 = None;
+        self.foldable_rounding_f16f64 = None;
+        self.basic_block = label;
+    }
+
+    fn add_or_fold_mode_set(
+        &mut self,
+        result: &mut Vec<Statement<ast::Instruction<SpirvWord>, SpirvWord>>,
+        new_mode: bool,
+    ) -> Option<usize> {
+        // try and fold into the other mode set
+        if let RegisterState::Value(Some(other_index), other_value) = self.denormal_f16f64 {
+            if let Some(Statement::SetMode(ModeRegister::DenormalF16F64(_))) =
+                result.get_mut(other_index)
+            {
+                result[other_index] = Statement::SetMode(ModeRegister::DenormalBoth {
+                    f32: new_mode,
+                    f16f64: other_value,
+                });
+                return None;
+            }
+        }
+        result.push(Statement::SetMode(ModeRegister::DenormalF32(new_mode)));
+        Some(result.len() - 1)
+    }
+
+    fn insert(
+        &mut self,
+        result: &mut Vec<Statement<ast::Instruction<SpirvWord>, SpirvWord>>,
+        modes: InstructionModes,
+    ) -> Result<(), TranslateError> {
+        self.insert_one::<DenormalF32View>(result, modes.denormal_f32.map(DenormalMode::to_ftz))?;
+        self.insert_one::<DenormalF16F64View>(
+            result,
+            modes.denormal_f16f64.map(DenormalMode::to_ftz),
+        )?;
+        Ok(())
+    }
+
+    fn insert_one<View: ModeView>(
+        &mut self,
+        result: &mut Vec<Statement<ast::Instruction<SpirvWord>, SpirvWord>>,
+        mode: Option<View::Value>,
+    ) -> Result<(), TranslateError> {
+        if let Some(new_mode) = mode {
+            let register_state = View::get_register(self);
+            match register_state {
+                RegisterState::Inherited => {
+                    View::set_register(self, RegisterState::Value(None, new_mode));
+                }
+                RegisterState::Unknown => {
+                    View::set_register(
+                        self,
+                        RegisterState::Value(
+                            Some(self.add_or_fold_mode_set2::<View>(result, new_mode)),
+                            new_mode,
+                        ),
+                    );
+                }
+                RegisterState::Value(_, old_value) => {
+                    if new_mode == old_value {
+                        return Ok(());
+                    }
+                    View::set_register(
+                        self,
+                        RegisterState::Value(
+                            Some(self.add_or_fold_mode_set2::<View>(result, new_mode)),
+                            new_mode,
+                        ),
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+
+    // Return the index of the last insertion of SetMode with this mode
+    fn add_or_fold_mode_set2<View: ModeView>(
+        &self,
+        result: &mut Vec<Statement<ast::Instruction<SpirvWord>, SpirvWord>>,
+        new_mode: View::Value,
+    ) -> usize {
+        // try and fold into the other mode set in struction
+        if let RegisterState::Value(Some(twin_index), _) = View::TwinView::get_register(self) {
+            if let Some(Statement::SetMode(register_mode)) = result.get_mut(twin_index) {
+                if let Some(twin_mode) = View::TwinView::get_single_mode(register_mode) {
+                    *register_mode = View::new_mode(new_mode, Some(twin_mode));
+                    return twin_index;
+                }
+            }
+        }
+        result.push(Statement::SetMode(View::new_mode(new_mode, None)));
+        result.len() - 1
+    }
+}
+
+trait ModeView {
+    type Value: PartialEq + Eq + Copy + Clone;
+    type TwinView: ModeView<Value = Self::Value>;
+
+    fn get_register(bb: &BasicBlockControlState) -> RegisterState<Self::Value>;
+    fn set_register(bb: &mut BasicBlockControlState, reg: RegisterState<Self::Value>);
+    fn new_mode(t: Self::Value, other: Option<Self::Value>) -> ModeRegister;
+    fn get_single_mode(reg: &ModeRegister) -> Option<Self::Value>;
+}
+
+struct DenormalF32View;
+
+impl ModeView for DenormalF32View {
+    type Value = bool;
+    type TwinView = DenormalF16F64View;
+
+    fn get_register(bb: &BasicBlockControlState) -> RegisterState<Self::Value> {
+        bb.denormal_f32
+    }
+
+    fn set_register(bb: &mut BasicBlockControlState, reg: RegisterState<Self::Value>) {
+        bb.denormal_f32 = reg;
+    }
+
+    fn new_mode(f32: Self::Value, f16f64: Option<Self::Value>) -> ModeRegister {
+        match f16f64 {
+            Some(f16f64) => ModeRegister::DenormalBoth { f32, f16f64 },
+            None => ModeRegister::DenormalF32(f32),
+        }
+    }
+
+    fn get_single_mode(reg: &ModeRegister) -> Option<Self::Value> {
+        match reg {
+            ModeRegister::DenormalF32(value) => Some(*value),
+            _ => None,
+        }
+    }
+}
+
+struct DenormalF16F64View;
+
+impl ModeView for DenormalF16F64View {
+    type Value = bool;
+    type TwinView = DenormalF32View;
+
+    fn get_register(bb: &BasicBlockControlState) -> RegisterState<Self::Value> {
+        bb.denormal_f16f64
+    }
+
+    fn set_register(bb: &mut BasicBlockControlState, reg: RegisterState<Self::Value>) {
+        bb.denormal_f16f64 = reg;
+    }
+
+    fn new_mode(f16f64: Self::Value, f32: Option<Self::Value>) -> ModeRegister {
+        match f32 {
+            Some(f32) => ModeRegister::DenormalBoth { f16f64, f32 },
+            None => ModeRegister::DenormalF16F64(f16f64),
+        }
+    }
+
+    fn get_single_mode(reg: &ModeRegister) -> Option<Self::Value> {
+        match reg {
+            ModeRegister::DenormalF16F64(value) => Some(*value),
+            _ => None,
+        }
+    }
+}
+
+struct BasicBlockState<'a> {
+    cfg: &'a mut ControlFlowGraph,
+    node_index: Option<NodeIndex>,
+    // If it's a kernel basic block then we don't track entry instruction mode
+    entry: InstructionModes,
+    exit: InstructionModes,
+}
+
+impl<'a> BasicBlockState<'a> {
+    fn new(cfg: &'a mut ControlFlowGraph) -> BasicBlockState<'a> {
+        Self {
+            cfg,
+            node_index: None,
+            entry: InstructionModes::none(),
+            exit: InstructionModes::none(),
+        }
+    }
+
+    fn start(&mut self, label: SpirvWord) {
+        self.end(&[]);
+        self.node_index = Some(self.cfg.get_or_add_basic_block(label));
+    }
+
+    fn end(&mut self, jumps: &[SpirvWord]) {
+        let node_index = self.node_index.take();
+        let node_index = match node_index {
+            Some(x) => x,
+            None => return,
+        };
+        for target in jumps {
+            self.cfg.add_jump(node_index, *target);
+        }
+        self.cfg.set_modes(
+            node_index,
+            mem::replace(&mut self.entry, InstructionModes::none()),
+            mem::replace(&mut self.exit, InstructionModes::none()),
+        );
+    }
+
+    fn append(&mut self, modes: InstructionModes) {
+        modes.fold_into(&mut self.entry, &mut self.exit);
+    }
+}
+
+impl<'a> Drop for BasicBlockState<'a> {
+    fn drop(&mut self) {
+        self.end(&[]);
+    }
 }
 
 fn compute_single_mode<T: Copy + Eq>(
@@ -424,10 +779,9 @@ fn compute_single_mode<T: Copy + Eq>(
             UniqueVec::new(graph.graph.neighbors_directed(index, Direction::Incoming));
         let mut visited = FxHashSet::default();
         while let Some(current) = to_visit.pop() {
-            if visited.contains(&current) {
+            if !visited.insert(current) {
                 continue;
             }
-            visited.insert(current);
             let exit_mode = getter(graph.graph.node_weight(current).unwrap()).exit;
             match exit_mode {
                 None => {
@@ -462,6 +816,7 @@ fn compute_single_mode<T: Copy + Eq>(
     }
 }
 
+#[derive(Debug)]
 struct PartialModeInsertion<T> {
     bb_must_insert_mode: FxHashSet<SpirvWord>,
     bb_maybe_insert_mode: FxHashMap<SpirvWord, (T, FxHashSet<SpirvWord>)>,
@@ -498,10 +853,11 @@ fn optimize<T: Copy + Into<usize> + strum::VariantArray + std::fmt::Debug, const
         }
     }
     let mut kernels = FxHashMap::default();
-    for (kernel, modes) in kernel_modes {
+    'iterate_kernels: for (kernel, modes) in kernel_modes {
         for (mode, var) in modes.into_iter().enumerate() {
             if solution[var] > 0.5 {
                 kernels.insert(kernel, T::VARIANTS[mode]);
+                continue 'iterate_kernels;
             }
         }
     }

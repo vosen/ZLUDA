@@ -41,14 +41,18 @@ fn run_method<'input>(
         })
         .transpose()?;
     Ok(Function2 {
+        body,
         return_arguments: method.return_arguments,
         name: method.name,
         input_arguments: method.input_arguments,
-        body,
         import_as: method.import_as,
         tuning: method.tuning,
         linkage: method.linkage,
         is_kernel: method.is_kernel,
+        flush_to_zero_f32: method.flush_to_zero_f32,
+        flush_to_zero_f16f64: method.flush_to_zero_f16f64,
+        roundind_mode_f32: method.roundind_mode_f32,
+        roundind_mode_f16f64: method.roundind_mode_f16f64,
     })
 }
 

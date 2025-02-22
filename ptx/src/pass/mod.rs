@@ -19,6 +19,7 @@ mod hoist_globals;
 mod insert_explicit_load_store;
 mod insert_ftz_control;
 mod insert_implicit_conversions2;
+mod normalize_basic_blocks;
 mod normalize_identifiers2;
 mod normalize_predicates2;
 mod replace_instructions_with_function_calls;
@@ -52,6 +53,7 @@ pub fn to_llvm_module<'input>(ast: ast::Module<'input>) -> Result<Module, Transl
     let directives = deparamize_functions::run(&mut flat_resolver, directives)?;
     let directives = insert_explicit_load_store::run(&mut flat_resolver, directives)?;
     let directives = insert_implicit_conversions2::run(&mut flat_resolver, directives)?;
+    let directives = normalize_basic_blocks::run(&mut flat_resolver, directives);
     let directives = insert_ftz_control::run(&mut flat_resolver, directives)?;
     let directives = replace_instructions_with_function_calls::run(&mut flat_resolver, directives)?;
     let directives = hoist_globals::run(directives)?;
@@ -197,6 +199,22 @@ enum Statement<I, P: ast::Operand> {
     FunctionPointer(FunctionPointerDetails),
     VectorRead(VectorRead),
     VectorWrite(VectorWrite),
+    SetMode(ModeRegister),
+}
+
+enum ModeRegister {
+    DenormalF32(bool),
+    DenormalF16F64(bool),
+    DenormalBoth {
+        f32: bool,
+        f16f64: bool,
+    },
+    RoundingF32(ast::RoundingMode),
+    RoundingF16F64(ast::RoundingMode),
+    RoundingBoth {
+        f32: ast::RoundingMode,
+        f16f64: ast::RoundingMode,
+    },
 }
 
 impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
@@ -469,6 +487,7 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                 let src = visitor.visit_ident(src, None, false, false)?;
                 Statement::FunctionPointer(FunctionPointerDetails { dst, src })
             }
+            Statement::SetMode(mode_register) => Statement::SetMode(mode_register),
         })
     }
 }
@@ -573,6 +592,10 @@ struct Function2<Instruction, Operand: ast::Operand> {
     import_as: Option<String>,
     tuning: Vec<ast::TuningDirective>,
     linkage: ast::LinkingDirective,
+    flush_to_zero_f32: bool,
+    flush_to_zero_f16f64: bool,
+    roundind_mode_f32: ast::RoundingMode,
+    roundind_mode_f16f64: ast::RoundingMode,
 }
 
 type NormalizedDirective2 = Directive2<
