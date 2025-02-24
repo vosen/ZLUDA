@@ -65,7 +65,7 @@ pub fn to_llvm_module<'input>(ast: ast::Module<'input>) -> Result<Module, Transl
 }
 
 pub struct Module {
-    pub llvm_ir: emit_llvm::MemoryBuffer,
+    pub llvm_ir: emit_llvm::Module,
     pub kernel_info: HashMap<String, KernelInfo>,
 }
 

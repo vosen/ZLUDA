@@ -1,11 +1,16 @@
 use crate::pass;
 use hip_runtime_sys::hipError_t;
+use std::env;
 use std::error;
 use std::ffi::{CStr, CString};
-use std::fmt;
-use std::fmt::{Debug, Display, Formatter};
+use std::fmt::{self, Debug, Display, Formatter};
+use std::fs::{self, File};
+use std::io::Write;
 use std::mem;
-use std::{ptr, str};
+use std::path::Path;
+use std::ptr;
+use std::str;
+use pretty_assertions;
 
 macro_rules! test_ptx {
     ($fn_name:ident, $input:expr, $output:expr) => {
@@ -28,6 +33,15 @@ macro_rules! test_ptx {
                 test_cuda_assert(stringify!($fn_name), ptx, &input, &mut output)
             }
         }
+
+        paste::item! {
+            #[test]
+            fn [<$fn_name _llvm>]() -> Result<(), Box<dyn std::error::Error>> {
+                let ptx = include_str!(concat!(stringify!($fn_name), ".ptx"));
+                let ll = include_str!(concat!("../ll/", stringify!($fn_name), ".ll")).trim();
+                test_llvm_assert(stringify!($fn_name), ptx, &ll)
+            }
+        }
     };
 
     ($fn_name:ident) => {};
@@ -39,6 +53,7 @@ test_ptx!(mov, [1u64], [1u64]);
 test_ptx!(mul_lo, [1u64], [2u64]);
 test_ptx!(mul_hi, [u64::max_value()], [1u64]);
 test_ptx!(add, [1u64], [2u64]);
+test_ptx!(mul24, [10u32], [20u32]);
 test_ptx!(setp, [10u64, 11u64], [1u64, 0u64]);
 test_ptx!(setp_gt, [f32::NAN, 1f32], [1f32]);
 test_ptx!(setp_leu, [1f32, f32::NAN], [1f32]);
@@ -230,6 +245,32 @@ fn test_hip_assert<
     Ok(())
 }
 
+fn test_llvm_assert<
+    'a,
+>(
+    name: &str,
+    ptx_text: &'a str,
+    expected_ll: &str
+) -> Result<(), Box<dyn error::Error + 'a>> {
+    let ast = ptx_parser::parse_module_checked(ptx_text).unwrap();
+    let llvm_ir = pass::to_llvm_module(ast).unwrap();
+    let actual_ll = llvm_ir.llvm_ir.print_module_to_string();
+    let actual_ll = actual_ll.to_str();
+    if actual_ll != expected_ll {
+        let output_dir = env::var("TEST_PTX_LLVM_FAIL_DIR");
+        if let Ok(output_dir) = output_dir {
+            let output_dir = Path::new(&output_dir);
+            fs::create_dir_all(&output_dir).unwrap();
+            let output_file = output_dir.join(format!("{}.ll", name));
+            let mut output_file = File::create(output_file).unwrap();
+            output_file.write_all(actual_ll.as_bytes()).unwrap();
+        }
+        let comparison = pretty_assertions::StrComparison::new(actual_ll, expected_ll);
+        panic!("assertion failed: `(left == right)`\n\n{}", comparison);
+    }
+    Ok(())
+}
+
 fn test_cuda_assert<
     'a,
     Input: From<u8> + Debug + Copy + PartialEq,
@@ -311,7 +352,7 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
         unsafe { hipGetDevicePropertiesR0600(&mut dev_props, dev) }.unwrap();
         let elf_module = comgr::compile_bitcode(
             unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) },
-            &*module.llvm_ir,
+            &*module.llvm_ir.write_bitcode_to_memory(),
             module.linked_bitcode(),
         )
         .unwrap();
