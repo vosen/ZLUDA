@@ -525,7 +525,7 @@ impl<'a> BasicBlockControlState<'a> {
     fn start(&mut self, label: SpirvWord) {
         self.denormal_f32 =
             RegisterState::new(self.global_denormal_f32.basic_blocks.contains(&label));
-        self.denormal_f32 =
+        self.denormal_f16f64 =
             RegisterState::new(self.global_denormal_f16f64.basic_blocks.contains(&label));
         self.foldable_rounding_f32 = None;
         self.foldable_rounding_f16f64 = None;
