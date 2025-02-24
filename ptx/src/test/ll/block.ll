@@ -10,34 +10,38 @@ declare i32 @__zluda_ptx_impl_sreg_clock() #0
 
 declare i32 @__zluda_ptx_impl_sreg_lanemask_lt() #0
 
-define amdgpu_kernel void @block(ptr addrspace(4) byref(i64) %"38", ptr addrspace(4) byref(i64) %"39") #0 {
-  %"40" = alloca i64, align 8, addrspace(5)
+define amdgpu_kernel void @block(ptr addrspace(4) byref(i64) %"39", ptr addrspace(4) byref(i64) %"40") #1 {
   %"41" = alloca i64, align 8, addrspace(5)
   %"42" = alloca i64, align 8, addrspace(5)
   %"43" = alloca i64, align 8, addrspace(5)
-  %"50" = alloca i64, align 8, addrspace(5)
+  %"44" = alloca i64, align 8, addrspace(5)
+  %"51" = alloca i64, align 8, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
-  %"44" = load i64, ptr addrspace(4) %"38", align 4
-  store i64 %"44", ptr addrspace(5) %"40", align 4
+  br label %"58"
+
+"58":                                             ; preds = %1
   %"45" = load i64, ptr addrspace(4) %"39", align 4
   store i64 %"45", ptr addrspace(5) %"41", align 4
-  %"47" = load i64, ptr addrspace(5) %"40", align 4
-  %"55" = inttoptr i64 %"47" to ptr
-  %"46" = load i64, ptr %"55", align 4
+  %"46" = load i64, ptr addrspace(4) %"40", align 4
   store i64 %"46", ptr addrspace(5) %"42", align 4
-  %"49" = load i64, ptr addrspace(5) %"42", align 4
-  %"48" = add i64 %"49", 1
-  store i64 %"48", ptr addrspace(5) %"43", align 4
-  %"52" = load i64, ptr addrspace(5) %"50", align 4
-  %"51" = add i64 %"52", 1
-  store i64 %"51", ptr addrspace(5) %"50", align 4
-  %"53" = load i64, ptr addrspace(5) %"41", align 4
-  %"54" = load i64, ptr addrspace(5) %"43", align 4
-  %"56" = inttoptr i64 %"53" to ptr
-  store i64 %"54", ptr %"56", align 4
+  %"48" = load i64, ptr addrspace(5) %"41", align 4
+  %"56" = inttoptr i64 %"48" to ptr
+  %"47" = load i64, ptr %"56", align 4
+  store i64 %"47", ptr addrspace(5) %"43", align 4
+  %"50" = load i64, ptr addrspace(5) %"43", align 4
+  %"49" = add i64 %"50", 1
+  store i64 %"49", ptr addrspace(5) %"44", align 4
+  %"53" = load i64, ptr addrspace(5) %"51", align 4
+  %"52" = add i64 %"53", 1
+  store i64 %"52", ptr addrspace(5) %"51", align 4
+  %"54" = load i64, ptr addrspace(5) %"42", align 4
+  %"55" = load i64, ptr addrspace(5) %"44", align 4
+  %"57" = inttoptr i64 %"54" to ptr
+  store i64 %"55", ptr %"57", align 4
   ret void
 }
 
-attributes #0 = { "amdgpu-unsafe-fp-atomics"="true" "no-trapping-math"="true" "uniform-work-group-size"="true" }
+attributes #0 = { "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="dynamic" "denormal-fp-math-f32"="dynamic" "no-trapping-math"="true" "uniform-work-group-size"="true" }
+attributes #1 = { "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="preserve-sign" "denormal-fp-math-f32"="preserve-sign" "no-trapping-math"="true" "uniform-work-group-size"="true" }
