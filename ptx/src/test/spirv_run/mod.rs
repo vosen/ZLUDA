@@ -195,6 +195,13 @@ test_ptx!(activemask, [0u32], [1u32]);
 test_ptx!(membar, [152731u32], [152731u32]);
 test_ptx!(shared_unify_extern, [7681u64, 7682u64], [15363u64]);
 test_ptx!(shared_unify_local, [16752u64, 714u64], [17466u64]);
+test_ptx!(
+    add_ftz,
+    [f32::from_bits(0x800000), f32::from_bits(0x007FFFFF)],
+    [0x800000u32, 0xFFFFFF]
+);
+
+test_ptx!(malformed_label, [2u64], [3u64]);
 
 test_ptx!(assertfail);
 test_ptx!(func_ptr);
