@@ -2,7 +2,7 @@ use std::error::Error;
 use std::ffi::CStr;
 use std::fs::{self, File};
 use std::io::{self, Write};
-use std::mem;
+use std::mem::MaybeUninit;
 use std::path::Path;
 use std::str;
 
@@ -54,12 +54,10 @@ fn ptx_to_llvm(ptx: &str) -> Result<LLVMArtifacts, Box<dyn Error>> {
 
 fn llvm_to_elf(module: &LLVMArtifacts) -> Result<Vec<u8>, ElfError> {
     use hip_runtime_sys::*;
-    unsafe { hipInit(0) }?;
-    let dev = 0;
-    let mut stream = unsafe { mem::zeroed() };
-    unsafe { hipStreamCreate(&mut stream) }?;
-    let mut dev_props = unsafe { mem::zeroed() };
-    unsafe { hipGetDevicePropertiesR0600(&mut dev_props, dev) }?;
+    let mut dev_props: MaybeUninit<hipDeviceProp_tR0600> = MaybeUninit::uninit();
+    unsafe { hipGetDevicePropertiesR0600(dev_props.as_mut_ptr(), 0) }?;
+    let dev_props = unsafe { dev_props.assume_init() };
+
     comgr::compile_bitcode(
         unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) },
         &module.bitcode,

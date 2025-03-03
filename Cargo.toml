@@ -23,7 +23,7 @@ members = [
     "zoc",
 ]
 
-default-members = ["zluda", "zluda_ml", "zluda_inject", "zluda_redirect"]
+default-members = ["zluda", "zluda_ml", "zluda_inject", "zluda_redirect", "zoc"]
 
 [profile.release-lto]
 inherits = "release"
