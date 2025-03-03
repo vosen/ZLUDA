@@ -52,7 +52,7 @@ fn ptx_to_llvm(ptx: &str) -> Result<LLVMArtifacts, Box<dyn Error>> {
     Ok(LLVMArtifacts { bitcode, linked_bitcode, llvm_ir })
 }
 
-fn llvm_to_elf(module: &LLVMArtifacts) -> Result<Vec<u8>, ElfError> {
+fn llvm_to_elf(llvm: &LLVMArtifacts) -> Result<Vec<u8>, ElfError> {
     use hip_runtime_sys::*;
     unsafe { hipInit(0) }?;
     let mut dev_props: MaybeUninit<hipDeviceProp_tR0600> = MaybeUninit::uninit();
@@ -60,11 +60,7 @@ fn llvm_to_elf(module: &LLVMArtifacts) -> Result<Vec<u8>, ElfError> {
     let dev_props = unsafe { dev_props.assume_init() };
     let gcn_arch = unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) };
 
-    comgr::compile_bitcode(
-        gcn_arch,
-        &module.bitcode,
-        &module.linked_bitcode,
-    ).map_err(ElfError::from)
+    comgr::compile_bitcode(gcn_arch, &llvm.bitcode, &llvm.linked_bitcode).map_err(ElfError::from)
 }
 
 fn write_to_file(content: &[u8], path: &Path) -> io::Result<()> {
