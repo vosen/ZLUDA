@@ -26,14 +26,14 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let ptx = fs::read(ptx_path)?;
     let ptx = str::from_utf8(&ptx)?;
-    let llvm_artifacts = ptx_to_llvm(ptx)?;
+    let llvm = ptx_to_llvm(ptx)?;
     
     let ll_path = ptx_path.with_extension("ll");
-    write_to_file(&llvm_artifacts.ll, &ll_path)?;
+    write_to_file(&llvm.llvm_ir, &ll_path)?;
 
-    let elf_module = llvm_to_elf(&llvm_artifacts)?;
+    let elf = llvm_to_elf(&llvm)?;
     let elf_path = ptx_path.with_extension("elf");
-    write_to_file(&elf_module, &elf_path)?;
+    write_to_file(&elf, &elf_path)?;
 
     Ok(())
 }
@@ -48,18 +48,20 @@ fn ptx_to_llvm(ptx: &str) -> Result<LLVMArtifacts, Box<dyn Error>> {
     let module = ptx::to_llvm_module(ast)?;
     let bitcode = module.llvm_ir.write_bitcode_to_memory().to_vec();
     let linked_bitcode = module.linked_bitcode().to_vec();
-    let ll = module.llvm_ir.print_module_to_string().to_bytes().to_vec();
-    Ok(LLVMArtifacts { bitcode, linked_bitcode, ll })
+    let llvm_ir = module.llvm_ir.print_module_to_string().to_bytes().to_vec();
+    Ok(LLVMArtifacts { bitcode, linked_bitcode, llvm_ir })
 }
 
 fn llvm_to_elf(module: &LLVMArtifacts) -> Result<Vec<u8>, ElfError> {
     use hip_runtime_sys::*;
+    unsafe { hipInit(0) }?;
     let mut dev_props: MaybeUninit<hipDeviceProp_tR0600> = MaybeUninit::uninit();
     unsafe { hipGetDevicePropertiesR0600(dev_props.as_mut_ptr(), 0) }?;
     let dev_props = unsafe { dev_props.assume_init() };
+    let gcn_arch = unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) };
 
     comgr::compile_bitcode(
-        unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) },
+        gcn_arch,
         &module.bitcode,
         &module.linked_bitcode,
     ).map_err(ElfError::from)
@@ -76,7 +78,7 @@ fn write_to_file(content: &[u8], path: &Path) -> io::Result<()> {
 struct LLVMArtifacts {
     bitcode: Vec<u8>,
     linked_bitcode: Vec<u8>,
-    ll: Vec<u8>,
+    llvm_ir: Vec<u8>,
 }
 
 #[derive(Debug, thiserror::Error)]
