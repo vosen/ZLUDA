@@ -20,6 +20,7 @@ members = [
     "ptx_parser_macros_impl",
     "xtask",
     "zluda_bindgen",
+    "zoc",
 ]
 
 default-members = ["zluda", "zluda_ml", "zluda_inject", "zluda_redirect"]
