@@ -1,0 +1,21 @@
+.version 6.5
+.target sm_50
+.address_size 64
+
+.func use_modes();
+
+.visible .entry kernel()
+{
+	.reg .f32 	    temp;
+
+    add.rz.ftz.f32     temp, temp, temp;
+    call use_modes;
+	ret;
+}
+
+.func use_modes()
+{
+	.reg .f32   temp;
+    add.rm.f32     temp, temp, temp;
+    ret;
+}

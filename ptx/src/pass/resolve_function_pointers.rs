@@ -3,8 +3,8 @@ use ptx_parser as ast;
 use rustc_hash::FxHashSet;
 
 pub(crate) fn run<'input>(
-    directives: Vec<UnconditionalDirective<'input>>,
-) -> Result<Vec<UnconditionalDirective<'input>>, TranslateError> {
+    directives: Vec<UnconditionalDirective>,
+) -> Result<Vec<UnconditionalDirective>, TranslateError> {
     let mut functions = FxHashSet::default();
     directives
         .into_iter()
@@ -14,19 +14,13 @@ pub(crate) fn run<'input>(
 
 fn run_directive<'input>(
     functions: &mut FxHashSet<SpirvWord>,
-    directive: UnconditionalDirective<'input>,
-) -> Result<UnconditionalDirective<'input>, TranslateError> {
+    directive: UnconditionalDirective,
+) -> Result<UnconditionalDirective, TranslateError> {
     Ok(match directive {
         var @ Directive2::Variable(..) => var,
         Directive2::Method(method) => {
-            {
-                let func_decl = &method.func_decl;
-                match func_decl.name {
-                    ptx_parser::MethodName::Kernel(_) => {}
-                    ptx_parser::MethodName::Func(name) => {
-                        functions.insert(name);
-                    }
-                }
+            if !method.is_kernel {
+                functions.insert(method.name);
             }
             Directive2::Method(run_method(functions, method)?)
         }
@@ -35,8 +29,8 @@ fn run_directive<'input>(
 
 fn run_method<'input>(
     functions: &mut FxHashSet<SpirvWord>,
-    method: UnconditionalFunction<'input>,
-) -> Result<UnconditionalFunction<'input>, TranslateError> {
+    method: UnconditionalFunction,
+) -> Result<UnconditionalFunction, TranslateError> {
     let body = method
         .body
         .map(|statements| {
@@ -46,14 +40,7 @@ fn run_method<'input>(
                 .collect::<Result<Vec<_>, _>>()
         })
         .transpose()?;
-    Ok(Function2 {
-        func_decl: method.func_decl,
-        globals: method.globals,
-        body,
-        import_as: method.import_as,
-        tuning: method.tuning,
-        linkage: method.linkage,
-    })
+    Ok(Function2 { body, ..method })
 }
 
 fn run_statement<'input>(

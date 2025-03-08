@@ -2,8 +2,8 @@ use super::*;
 
 pub(super) fn run<'a, 'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
-    directives: Vec<Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>>,
-) -> Result<Vec<Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
+    directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
+) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
     directives
         .into_iter()
         .map(|directive| run_directive(resolver, directive))
@@ -12,8 +12,8 @@ pub(super) fn run<'a, 'input>(
 
 fn run_directive<'input>(
     resolver: &mut GlobalStringIdentResolver2,
-    directive: Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>,
-) -> Result<Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
+    directive: Directive2<ast::Instruction<SpirvWord>, SpirvWord>,
+) -> Result<Directive2<ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
     Ok(match directive {
         var @ Directive2::Variable(..) => var,
         Directive2::Method(method) => Directive2::Method(run_method(resolver, method)?),
@@ -22,13 +22,13 @@ fn run_directive<'input>(
 
 fn run_method<'input>(
     resolver: &mut GlobalStringIdentResolver2,
-    mut method: Function2<'input, ast::Instruction<SpirvWord>, SpirvWord>,
-) -> Result<Function2<'input, ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
+    mut method: Function2<ast::Instruction<SpirvWord>, SpirvWord>,
+) -> Result<Function2<ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
     let is_declaration = method.body.is_none();
     let mut body = Vec::new();
     let mut remap_returns = Vec::new();
-    if !method.func_decl.name.is_kernel() {
-        for arg in method.func_decl.return_arguments.iter_mut() {
+    if !method.is_kernel {
+        for arg in method.return_arguments.iter_mut() {
             match arg.state_space {
                 ptx_parser::StateSpace::Param => {
                     arg.state_space = ptx_parser::StateSpace::Reg;
@@ -51,7 +51,7 @@ fn run_method<'input>(
                 _ => return Err(error_unreachable()),
             }
         }
-        for arg in method.func_decl.input_arguments.iter_mut() {
+        for arg in method.input_arguments.iter_mut() {
             match arg.state_space {
                 ptx_parser::StateSpace::Param => {
                     arg.state_space = ptx_parser::StateSpace::Reg;
@@ -95,14 +95,7 @@ fn run_method<'input>(
             Ok::<_, TranslateError>(body)
         })
         .transpose()?;
-    Ok(Function2 {
-        func_decl: method.func_decl,
-        globals: method.globals,
-        body,
-        import_as: method.import_as,
-        tuning: method.tuning,
-        linkage: method.linkage,
-    })
+    Ok(Function2 { body, ..method })
 }
 
 fn run_statement<'input>(
