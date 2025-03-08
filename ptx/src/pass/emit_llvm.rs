@@ -2264,17 +2264,7 @@ impl<'a> MethodEmitContext<'a> {
         let intrinsic = c"llvm.amdgcn.s.setreg";
         let llvm_i32 = get_scalar_type(self.context, ast::ScalarType::B32);
         let (hwreg, value) = match mode_reg {
-            ModeRegister::DenormalF32(ftz) => {
-                let (reg, offset, size) = (1, 4, 2u32);
-                let hwreg = reg | (offset << 6) | ((size - 1) << 11);
-                (hwreg, if ftz { 0u32 } else { 3 })
-            }
-            ModeRegister::DenormalF16F64(ftz) => {
-                let (reg, offset, size) = (1, 6, 2u32);
-                let hwreg = reg | (offset << 6) | ((size - 1) << 11);
-                (hwreg, if ftz { 0 } else { 3 })
-            }
-            ModeRegister::DenormalBoth { f32, f16f64 } => {
+            ModeRegister::Denormal { f32, f16f64 } => {
                 let (reg, offset, size) = (1, 4, 4u32);
                 let hwreg = reg | (offset << 6) | ((size - 1) << 11);
                 let f32 = if f32 { 0 } else { 3 };
@@ -2282,9 +2272,7 @@ impl<'a> MethodEmitContext<'a> {
                 let value = f32 | f16f64 << 2;
                 (hwreg, value)
             }
-            ModeRegister::RoundingF32(rounding_mode) => todo!(),
-            ModeRegister::RoundingF16F64(rounding_mode) => todo!(),
-            ModeRegister::RoundingBoth { f32, f16f64 } => todo!(),
+            ModeRegister::Rounding { .. } => todo!(),
         };
         let hwreg_llvm = unsafe { LLVMConstInt(llvm_i32, hwreg as _, 0) };
         let value_llvm = unsafe { LLVMConstInt(llvm_i32, value as _, 0) };

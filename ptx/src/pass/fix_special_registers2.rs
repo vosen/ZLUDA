@@ -22,8 +22,8 @@ pub(super) fn run<'a, 'input>(
                 is_kernel: false,
                 flush_to_zero_f32: false,
                 flush_to_zero_f16f64: false,
-                roundind_mode_f32: ptx_parser::RoundingMode::NearestEven,
-                roundind_mode_f16f64: ptx_parser::RoundingMode::NearestEven,
+                rounding_mode_f32: ptx_parser::RoundingMode::NearestEven,
+                rounding_mode_f16f64: ptx_parser::RoundingMode::NearestEven,
             }));
             sreg_to_function.insert(sreg, name);
         },

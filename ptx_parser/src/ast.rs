@@ -1049,7 +1049,7 @@ pub enum LdStQualifier {
     Release(MemScope),
 }
 
-#[derive(PartialEq, Eq, Copy, Clone)]
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub enum RoundingMode {
     NearestEven,
     Zero,

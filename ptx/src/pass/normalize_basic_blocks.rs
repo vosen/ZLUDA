@@ -1,7 +1,7 @@
 use super::*;
 
 // This pass normalized ptx modules in two ways that makes mode computation pass
-// and code emissions passes much simpler: 
+// and code emissions passes much simpler:
 // * Inserts label at the start of every function
 //   This makes control flow graph simpler in mode computation block: we can
 //   represent kernels as separate nodes with its own separate entry/exit mode
@@ -46,6 +46,9 @@ fn is_block_terminator(instruction: &Statement<ast::Instruction<SpirvWord>, Spir
     match instruction {
         Statement::Conditional(..)
         | Statement::Instruction(ast::Instruction::Bra { .. })
+        // Normally call is not a terminator, but we treat it as such because it
+        // makes the instruction modes to global modes pass possible
+        | Statement::Instruction(ast::Instruction::Call { .. })
         | Statement::Instruction(ast::Instruction::Ret { .. }) => true,
         _ => false,
     }

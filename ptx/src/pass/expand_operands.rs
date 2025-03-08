@@ -51,8 +51,8 @@ fn run_method<'input>(
         is_kernel: method.is_kernel,
         flush_to_zero_f32: method.flush_to_zero_f32,
         flush_to_zero_f16f64: method.flush_to_zero_f16f64,
-        roundind_mode_f32: method.roundind_mode_f32,
-        roundind_mode_f16f64: method.roundind_mode_f16f64,
+        rounding_mode_f32: method.rounding_mode_f32,
+        rounding_mode_f16f64: method.rounding_mode_f16f64,
     })
 }
 

@@ -202,16 +202,14 @@ enum Statement<I, P: ast::Operand> {
     SetMode(ModeRegister),
 }
 
+#[derive(Eq, PartialEq, Clone, Copy)]
+#[cfg_attr(test, derive(Debug))]
 enum ModeRegister {
-    DenormalF32(bool),
-    DenormalF16F64(bool),
-    DenormalBoth {
+    Denormal {
         f32: bool,
         f16f64: bool,
     },
-    RoundingF32(ast::RoundingMode),
-    RoundingF16F64(ast::RoundingMode),
-    RoundingBoth {
+    Rounding {
         f32: ast::RoundingMode,
         f16f64: ast::RoundingMode,
     },
@@ -594,8 +592,8 @@ struct Function2<Instruction, Operand: ast::Operand> {
     linkage: ast::LinkingDirective,
     flush_to_zero_f32: bool,
     flush_to_zero_f16f64: bool,
-    roundind_mode_f32: ast::RoundingMode,
-    roundind_mode_f16f64: ast::RoundingMode,
+    rounding_mode_f32: ast::RoundingMode,
+    rounding_mode_f16f64: ast::RoundingMode,
 }
 
 type NormalizedDirective2 = Directive2<

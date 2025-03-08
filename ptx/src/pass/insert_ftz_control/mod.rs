@@ -16,12 +16,14 @@ use petgraph::Graph;
 use ptx_parser as ast;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
+use smallvec::SmallVec;
 use std::hash::Hash;
 use std::iter;
 use std::mem;
 use std::u32;
 use strum::EnumCount;
 use strum_macros::{EnumCount, VariantArray};
+use unwrap_or::unwrap_some_or;
 
 #[derive(Default, PartialEq, Eq, Clone, Copy, Debug, VariantArray, EnumCount)]
 enum DenormalMode {
@@ -44,6 +46,12 @@ impl DenormalMode {
             DenormalMode::FlushToZero => true,
             DenormalMode::Preserve => false,
         }
+    }
+}
+
+impl Into<bool> for DenormalMode {
+    fn into(self) -> bool {
+        self.to_ftz()
     }
 }
 
@@ -79,6 +87,12 @@ impl RoundingMode {
             ast::RoundingMode::NegativeInf => RoundingMode::NegativeInf,
             ast::RoundingMode::PositiveInf => RoundingMode::PositiveInf,
         }
+    }
+}
+
+impl Into<ast::RoundingMode> for RoundingMode {
+    fn into(self) -> ast::RoundingMode {
+        self.to_ast()
     }
 }
 
@@ -233,6 +247,10 @@ impl InstructionModes {
 struct ControlFlowGraph {
     entry_points: FxHashMap<SpirvWord, NodeIndex>,
     basic_blocks: FxHashMap<SpirvWord, NodeIndex>,
+    // map function -> return label
+    call_returns: FxHashMap<SpirvWord, Vec<NodeIndex>>,
+    // map function -> return basic blocks
+    function_rets: FxHashMap<SpirvWord, Vec<NodeIndex>>,
     graph: Graph<Node, ()>,
 }
 
@@ -241,6 +259,8 @@ impl ControlFlowGraph {
         Self {
             entry_points: FxHashMap::default(),
             basic_blocks: FxHashMap::default(),
+            call_returns: FxHashMap::default(),
+            function_rets: FxHashMap::default(),
             graph: Graph::new(),
         }
     }
@@ -259,9 +279,10 @@ impl ControlFlowGraph {
         })
     }
 
-    fn add_jump(&mut self, from: NodeIndex, to: SpirvWord) {
+    fn add_jump(&mut self, from: NodeIndex, to: SpirvWord) -> NodeIndex {
         let to = self.get_or_add_basic_block(to);
         self.graph.add_edge(from, to, ());
+        to
     }
 
     fn set_modes(&mut self, node: NodeIndex, entry: InstructionModes, exit: InstructionModes) {
@@ -274,6 +295,23 @@ impl ControlFlowGraph {
         node.denormal_f16f64.exit = exit.denormal_f16f64.map(ExtendedMode::BasicBlock);
         node.rounding_f32.exit = exit.rounding_f32.map(ExtendedMode::BasicBlock);
         node.rounding_f16f64.exit = exit.rounding_f16f64.map(ExtendedMode::BasicBlock);
+    }
+
+    fn fixup_function_calls(&mut self) {
+        for (function, sources) in self.function_rets.iter() {
+            for target in self
+                .call_returns
+                .get(function)
+                .iter()
+                .map(|vec| vec.iter())
+                .flatten()
+                .copied()
+            {
+                for source in sources {
+                    self.graph.add_edge(*source, target, ());
+                }
+            }
+        }
     }
 }
 
@@ -349,12 +387,25 @@ pub(crate) fn run<'input>(
                 is_kernel,
                 ..
             }) => {
-                let (mut bb_state, body_iter) =
+                let (mut bb_state, mut body_iter) =
                     BasicBlockState::new(&mut cfg, *name, body, *is_kernel)?;
-                for statement in body_iter {
+                while let Some(statement) = body_iter.next() {
                     match statement {
                         Statement::Instruction(ast::Instruction::Bra { arguments }) => {
                             bb_state.end(&[arguments.src]);
+                        }
+                        Statement::Instruction(ast::Instruction::Call {
+                            arguments: ast::CallArgs { func, .. },
+                            ..
+                        }) => {
+                            let after_call_label = match body_iter.peek() {
+                                Some(Statement::Label(l)) => *l,
+                                _ => return Err(error_unreachable()),
+                            };
+                            bb_state.record_call(*func, after_call_label)?;
+                        }
+                        Statement::Instruction(ast::Instruction::Ret { .. }) => {
+                            bb_state.record_ret(*name)?;
                         }
                         Statement::Label(label) => {
                             bb_state.start(*label);
@@ -375,6 +426,7 @@ pub(crate) fn run<'input>(
             _ => {}
         }
     }
+    cfg.fixup_function_calls();
     let denormal_f32 = compute_single_mode(&cfg, |node| node.denormal_f32);
     let denormal_f16f64 = compute_single_mode(&cfg, |node| node.denormal_f16f64);
     let rounding_f32 = compute_single_mode(&cfg, |node| node.rounding_f32);
@@ -383,155 +435,447 @@ pub(crate) fn run<'input>(
     let denormal_f16f64 = optimize::<DenormalMode, { DenormalMode::COUNT }>(denormal_f16f64);
     let rounding_f32 = optimize::<RoundingMode, { RoundingMode::COUNT }>(rounding_f32);
     let rounding_f16f64 = optimize::<RoundingMode, { RoundingMode::COUNT }>(rounding_f16f64);
-    insert_mode_control(
+    let denormal = join_modes(
         flat_resolver,
-        &mut directives,
         &cfg,
         denormal_f32,
+        |node| node.denormal_f32.entry,
+        |node| node.denormal_f32.exit,
         denormal_f16f64,
-        rounding_f32,
-        rounding_f16f64,
+        |node| node.denormal_f16f64.entry,
+        |node| node.denormal_f16f64.exit,
     )?;
+    let rounding = join_modes(
+        flat_resolver,
+        &cfg,
+        rounding_f32,
+        |node| node.rounding_f32.entry,
+        |node| node.rounding_f32.exit,
+        rounding_f16f64,
+        |node| node.rounding_f16f64.entry,
+        |node| node.rounding_f16f64.exit,
+    )?;
+    let all_modes = FullModeInsertion::new(flat_resolver, denormal, rounding)?;
+    let directives = insert_mode_control(directives, all_modes)?;
     Ok(directives)
 }
 
-fn insert_mode_control<'input>(
+// For every basic block this pass computes:
+// - Name of mode prologue basic block. Mode prologue is a basic block which
+//   contains single instruction that sets mode to the desired value. It will
+//   be later inserted just before the basic block and all jumps that require
+//   mode change will go through this basic block
+// - Entry mode: what is the mode for both f32 and f16f64 at the first instruction.
+//   This will be used when emiting instructions in the basic block. When we
+//   emit an instruction we get its modes, check if they are different and if so
+//   decide: do we emit new mode set statement or we fold into previous mode set.
+// We don't need to compute exit mode because this will be computed naturally
+// when emitting instructions in a basic block. We need exit mode to know if we
+// jump directly to the next bb or jump to mode prologue
+fn join_modes<'input, T: Eq + PartialEq + Copy + Default>(
     flat_resolver: &mut super::GlobalStringIdentResolver2<'input>,
-    directives: &mut [Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
     cfg: &ControlFlowGraph,
-    denormal_f32: ModeInsertions<DenormalMode>,
-    denormal_f16f64: ModeInsertions<DenormalMode>,
-    rounding_f32: ModeInsertions<RoundingMode>,
-    rounding_f16f64: ModeInsertions<RoundingMode>,
-) -> Result<(), TranslateError> {
-    for directive in directives.iter_mut() {
-        let body_ptr = match directive {
-            Directive2::Variable(..) | Directive2::Method(Function2 { body: None, .. }) => continue,
-            Directive2::Method(Function2 {
-                name,
-                body: Some(body),
-                flush_to_zero_f32,
-                flush_to_zero_f16f64,
-                roundind_mode_f32: rounding_mode_f32,
-                roundind_mode_f16f64: rounding_mode_f16f64,
-                ..
-            }) => {
-                *flush_to_zero_f32 = denormal_f32
-                    .kernels
-                    .get(name)
-                    .copied()
-                    .unwrap_or(DenormalMode::default())
-                    .to_ftz();
-                *flush_to_zero_f16f64 = denormal_f16f64
-                    .kernels
-                    .get(name)
-                    .copied()
-                    .unwrap_or(DenormalMode::default())
-                    .to_ftz();
-                *rounding_mode_f32 = rounding_f32
-                    .kernels
-                    .get(name)
-                    .copied()
-                    .unwrap_or(RoundingMode::default())
-                    .to_ast();
-                *rounding_mode_f16f64 = rounding_f16f64
-                    .kernels
-                    .get(name)
-                    .copied()
-                    .unwrap_or(RoundingMode::default())
-                    .to_ast();
-                body
+    f32_insertions: MandatoryModeInsertions<T>,
+    mut f32_enter_view: impl FnMut(&Node) -> Option<ExtendedMode<T>>,
+    mut f32_exit_view: impl FnMut(&Node) -> Option<ExtendedMode<T>>,
+    f16f64_insertions: MandatoryModeInsertions<T>,
+    mut f16f64_enter_view: impl FnMut(&Node) -> Option<ExtendedMode<T>>,
+    mut f16f64_exit_view: impl FnMut(&Node) -> Option<ExtendedMode<T>>,
+) -> Result<TwinModeInsertions<T>, TranslateError> {
+    // Returns None if there are multiple conflicting modes
+    fn get_incoming_mode<T: Eq + PartialEq + Copy>(
+        cfg: &ControlFlowGraph,
+        kernels: &FxHashMap<SpirvWord, T>,
+        node: NodeIndex,
+        mut exit_getter: impl FnMut(&Node) -> Option<ExtendedMode<T>>,
+    ) -> Result<Option<T>, TranslateError> {
+        let mut mode: Option<T> = None;
+        let mut visited = iter::once(node).collect::<FxHashSet<_>>();
+        let mut to_visit = cfg
+            .graph
+            .neighbors_directed(node, Direction::Incoming)
+            .map(|x| x)
+            .collect::<Vec<_>>();
+        while let Some(node) = to_visit.pop() {
+            if !visited.insert(node) {
+                continue;
             }
-        };
-        let mut old_body = mem::replace(body_ptr, Vec::new());
-        let mut result = Vec::with_capacity(old_body.len());
-        let mut bb_state = BasicBlockControlState::new(
-            &denormal_f32,
-            &denormal_f16f64,
-            &rounding_f32,
-            &rounding_f16f64,
-        );
-        for statement in old_body.into_iter() {
-            match &statement {
-                Statement::Label(label) => {
-                    bb_state.start(*label);
+            let x = &cfg.graph[node];
+            match (mode, exit_getter(x)) {
+                (_, None) => {
+                    for next in cfg.graph.neighbors_directed(node, Direction::Incoming) {
+                        if !visited.insert(next) {
+                            to_visit.push(next);
+                        }
+                    }
                 }
-                Statement::Instruction(instruction) => {
-                    let modes = get_modes(&instruction);
-                    bb_state.insert(&mut result, modes)?;
+                (existing_mode, Some(new_mode)) => {
+                    let new_mode = match new_mode {
+                        ExtendedMode::BasicBlock(new_mode) => new_mode,
+                        ExtendedMode::Entry(kernel) => {
+                            *kernels.get(&kernel).ok_or_else(error_unreachable)?
+                        }
+                    };
+                    if let Some(existing_mode) = existing_mode {
+                        if existing_mode != new_mode {
+                            return Ok(None);
+                        }
+                    }
+                    mode = Some(new_mode);
                 }
-                _ => {}
             }
-            result.push(statement);
         }
-        *body_ptr = result;
+        mode.map(Some).ok_or_else(error_unreachable)
     }
-    Ok(())
+    let basic_blocks = cfg
+        .graph
+        .node_references()
+        .into_iter()
+        .map(|(node, basic_block)| {
+            let requires_prologue = f32_insertions.basic_blocks.contains(&basic_block.label)
+                || f16f64_insertions.basic_blocks.contains(&basic_block.label);
+            let prologue: Option<SpirvWord> = if requires_prologue {
+                Some(flat_resolver.register_unnamed(None))
+            } else {
+                None
+            };
+            let f32 = match f32_enter_view(&basic_block) {
+                Some(ExtendedMode::BasicBlock(mode)) => Some(mode),
+                Some(ExtendedMode::Entry(kernel)) => Some(
+                    f32_insertions
+                        .kernels
+                        .get(&kernel)
+                        .copied()
+                        .ok_or_else(error_unreachable)?,
+                ),
+                // None means that no instruction in the basic block sets mode, but
+                // another basic block might rely on this instruction transitively
+                // passing a mode
+                None => None,
+            };
+            let f16f64 = match f16f64_enter_view(&basic_block) {
+                Some(ExtendedMode::BasicBlock(mode)) => Some(mode),
+                Some(ExtendedMode::Entry(kernel)) => Some(
+                    f16f64_insertions
+                        .kernels
+                        .get(&kernel)
+                        .copied()
+                        .ok_or_else(error_unreachable)?,
+                ),
+                None => None,
+            };
+            let twin_mode = match (f32, f16f64) {
+                (Some(f32), Some(f16f64)) => Some(TwinMode { f32, f16f64 }),
+                (None, Some(f16f64)) => {
+                    let f32 = get_incoming_mode(cfg, &f32_insertions.kernels, node, |node| {
+                        f32_exit_view(node)
+                    })?;
+                    let f32 = f32.unwrap_or_default();
+                    Some(TwinMode { f32, f16f64 })
+                }
+                (Some(f32), None) => {
+                    let f16f64 =
+                        get_incoming_mode(cfg, &f16f64_insertions.kernels, node, |node| {
+                            f16f64_exit_view(node)
+                        })?;
+                    let f16f64 = f16f64.unwrap_or_default();
+                    Some(TwinMode { f32, f16f64 })
+                }
+                (None, None) => None,
+            };
+            Ok((
+                basic_block.label,
+                BasicBlockEntryState {
+                    prologue,
+                    twin_mode,
+                },
+            ))
+        })
+        .collect::<Result<FxHashMap<_, _>, _>>()?;
+    Ok(TwinModeInsertions { basic_blocks })
 }
 
-struct BasicBlockControlState<'a> {
-    global_denormal_f32: &'a ModeInsertions<DenormalMode>,
-    global_denormal_f16f64: &'a ModeInsertions<DenormalMode>,
-    global_rounding_f32: &'a ModeInsertions<RoundingMode>,
-    global_rounding_f16f64: &'a ModeInsertions<RoundingMode>,
-    basic_block: SpirvWord,
-    denormal_f32: RegisterState<bool>,
-    denormal_f16f64: RegisterState<bool>,
-    foldable_rounding_f32: Option<usize>,
-    foldable_rounding_f16f64: Option<usize>,
+struct TwinModeInsertions<T> {
+    basic_blocks: FxHashMap<SpirvWord, BasicBlockEntryState<T>>,
+}
+
+struct FullModeInsertion {
+    basic_blocks: FxHashMap<SpirvWord, FullBasicBlockEntryState>,
+}
+
+impl FullModeInsertion {
+    fn new(
+        flat_resolver: &mut super::GlobalStringIdentResolver2,
+        denormal: TwinModeInsertions<DenormalMode>,
+        rounding: TwinModeInsertions<RoundingMode>,
+    ) -> Result<Self, TranslateError> {
+        let denormal = denormal.basic_blocks;
+        let rounding = rounding.basic_blocks;
+        if denormal.len() != rounding.len() {
+            return Err(error_unreachable());
+        }
+        let basic_blocks = denormal
+            .into_iter()
+            .map(|(bb, denormal)| {
+                let rounding = rounding.get(&bb).copied().ok_or_else(error_unreachable)?;
+                let dual_prologue = if denormal.prologue.is_some() && rounding.prologue.is_some() {
+                    Some(flat_resolver.register_unnamed(None))
+                } else {
+                    None
+                };
+                Ok((
+                    bb,
+                    FullBasicBlockEntryState {
+                        dual_prologue,
+                        denormal,
+                        rounding,
+                    },
+                ))
+            })
+            .collect::<Result<FxHashMap<_, _>, _>>()?;
+        Ok(Self { basic_blocks })
+    }
+}
+
+struct FullBasicBlockEntryState {
+    dual_prologue: Option<SpirvWord>,
+    denormal: BasicBlockEntryState<DenormalMode>,
+    rounding: BasicBlockEntryState<RoundingMode>,
 }
 
 #[derive(Clone, Copy)]
-enum RegisterState<T> {
-    Inherited,
-    Unknown,
-    Value(Option<usize>, T),
+struct BasicBlockEntryState<T> {
+    prologue: Option<SpirvWord>,
+    // It is None in case where no instructions in the basic block uses mode
+    twin_mode: Option<TwinMode<T>>,
+}
+
+#[derive(Clone, Copy, Default)]
+struct TwinMode<T> {
+    f32: T,
+    f16f64: T,
+}
+
+fn insert_mode_control<'input>(
+    directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
+    global_modes: FullModeInsertion,
+) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
+    let directives_len = directives.len();
+    directives
+        .into_iter()
+        .map(|mut directive| {
+            let mut new_directives = SmallVec::<[_; 4]>::new();
+            let (fn_name, initial_mode, body_ptr) = match directive {
+                Directive2::Variable(..) | Directive2::Method(Function2 { body: None, .. }) => {
+                    new_directives.push(directive);
+                    return Ok(new_directives);
+                }
+                Directive2::Method(Function2 {
+                    name,
+                    body: Some(ref mut body),
+                    ref mut flush_to_zero_f32,
+                    ref mut flush_to_zero_f16f64,
+                    ref mut rounding_mode_f32,
+                    ref mut rounding_mode_f16f64,
+                    ..
+                }) => {
+                    let initial_mode = global_modes
+                        .basic_blocks
+                        .get(&name)
+                        .ok_or_else(error_unreachable)?;
+                    *flush_to_zero_f32 = initial_mode
+                        .denormal
+                        .twin_mode
+                        .unwrap_or_default()
+                        .f32
+                        .to_ftz();
+                    *flush_to_zero_f16f64 = initial_mode
+                        .denormal
+                        .twin_mode
+                        .unwrap_or_default()
+                        .f16f64
+                        .to_ftz();
+                    *rounding_mode_f32 = initial_mode
+                        .rounding
+                        .twin_mode
+                        .unwrap_or_default()
+                        .f32
+                        .to_ast();
+                    *rounding_mode_f16f64 = initial_mode
+                        .rounding
+                        .twin_mode
+                        .unwrap_or_default()
+                        .f16f64
+                        .to_ast();
+                    (name, initial_mode, body)
+                }
+            };
+            let old_body = mem::replace(body_ptr, Vec::new());
+            let mut result = Vec::with_capacity(old_body.len());
+            let mut bb_state = BasicBlockControlState::new(&global_modes, fn_name, initial_mode);
+            for mut statement in old_body.into_iter() {
+                match &mut statement {
+                    Statement::Label(label) => {
+                        bb_state.start(*label, &mut result)?;
+                    }
+                    Statement::Instruction(ast::Instruction::Call {
+                        arguments: ast::CallArgs { func, .. },
+                        ..
+                    }) => {
+                        bb_state.redirect_jump(func)?;
+                    }
+                    Statement::Conditional(BrachCondition {
+                        if_true, if_false, ..
+                    }) => {
+                        bb_state.redirect_jump(if_true)?;
+                        bb_state.redirect_jump(if_false)?;
+                    }
+                    Statement::Instruction(ast::Instruction::Bra {
+                        arguments: ptx_parser::BraArgs { src },
+                    }) => {
+                        bb_state.redirect_jump(src)?;
+                    }
+                    Statement::Instruction(instruction) => {
+                        let modes = get_modes(&instruction);
+                        bb_state.insert(&mut result, modes)?;
+                    }
+                    _ => {}
+                }
+                result.push(statement);
+            }
+            *body_ptr = result;
+            new_directives.push(directive);
+            Ok(new_directives)
+        })
+        .try_fold(Vec::with_capacity(directives_len), |mut acc, d| {
+            acc.extend(d?);
+            Ok(acc)
+        })
+}
+
+struct BasicBlockControlState<'a> {
+    global_modes: &'a FullModeInsertion,
+    denormal_f32: RegisterState<bool>,
+    denormal_f16f64: RegisterState<bool>,
+    rounding_f32: RegisterState<ast::RoundingMode>,
+    rounding_f16f64: RegisterState<ast::RoundingMode>,
+    current_bb: SpirvWord,
+}
+
+#[derive(Clone, Copy)]
+struct RegisterState<T> {
+    current_value: Option<T>,
+    // This is slightly subtle: this value is Some iff there's a SetMode in this
+    // basic block setting this mode, but on which no instruciton relies
+    last_foldable: Option<usize>,
 }
 
 impl<T> RegisterState<T> {
-    fn empty() -> Self {
-        Self::Unknown
+    fn single(t: T) -> Self {
+        RegisterState {
+            last_foldable: None,
+            current_value: Some(t),
+        }
     }
 
-    fn new(must_insert: bool) -> Self {
-        if must_insert {
-            Self::Unknown
-        } else {
-            Self::Inherited
+    fn empty() -> Self {
+        RegisterState {
+            last_foldable: None,
+            current_value: None,
+        }
+    }
+
+    fn new<U: Copy>(computed: &BasicBlockEntryState<U>) -> (RegisterState<T>, RegisterState<T>)
+    where
+        U: Into<T>,
+    {
+        match computed.twin_mode {
+            Some(ref mode) => (
+                RegisterState::single(mode.f32.into()),
+                RegisterState::single(mode.f16f64.into()),
+            ),
+            None => (RegisterState::empty(), RegisterState::empty()),
         }
     }
 }
 
 impl<'a> BasicBlockControlState<'a> {
     fn new(
-        global_denormal_f32: &'a ModeInsertions<DenormalMode>,
-        global_denormal_f16f64: &'a ModeInsertions<DenormalMode>,
-        global_rounding_f32: &'a ModeInsertions<RoundingMode>,
-        global_rounding_f16f64: &'a ModeInsertions<RoundingMode>,
+        global_modes: &'a FullModeInsertion,
+        current_bb: SpirvWord,
+        initial_mode: &FullBasicBlockEntryState,
     ) -> Self {
+        let (denormal_f32, denormal_f16f64) = RegisterState::new(&initial_mode.denormal);
+        let (rounding_f32, rounding_f16f64) = RegisterState::new(&initial_mode.rounding);
         BasicBlockControlState {
-            global_denormal_f32,
-            global_denormal_f16f64,
-            global_rounding_f32,
-            global_rounding_f16f64,
-            basic_block: SpirvWord(u32::MAX),
-            denormal_f32: RegisterState::empty(),
-            denormal_f16f64: RegisterState::empty(),
-            foldable_rounding_f32: None,
-            foldable_rounding_f16f64: None,
+            global_modes,
+            denormal_f32,
+            denormal_f16f64,
+            rounding_f32,
+            rounding_f16f64,
+            current_bb,
         }
     }
 
-    fn start(&mut self, label: SpirvWord) {
-        self.denormal_f32 =
-            RegisterState::new(self.global_denormal_f32.basic_blocks.contains(&label));
-        self.denormal_f16f64 =
-            RegisterState::new(self.global_denormal_f16f64.basic_blocks.contains(&label));
-        self.foldable_rounding_f32 = None;
-        self.foldable_rounding_f16f64 = None;
-        self.basic_block = label;
+    fn start(
+        &mut self,
+        basic_block: SpirvWord,
+        statements: &mut Vec<Statement<ast::Instruction<SpirvWord>, SpirvWord>>,
+    ) -> Result<(), TranslateError> {
+        let bb_state = self
+            .global_modes
+            .basic_blocks
+            .get(&basic_block)
+            .ok_or_else(error_unreachable)?;
+
+        let (denormal_f32, denormal_f16f64) = RegisterState::new(&bb_state.denormal);
+        self.denormal_f32 = denormal_f32;
+        self.denormal_f16f64 = denormal_f16f64;
+        let (rounding_f32, rounding_f16f64) = RegisterState::new(&bb_state.rounding);
+        self.rounding_f32 = rounding_f32;
+        self.rounding_f16f64 = rounding_f16f64;
+        if let Some(prologue) = bb_state.dual_prologue {
+            statements.push(Statement::Label(prologue));
+            let denormal = bb_state.denormal.twin_mode.ok_or_else(error_unreachable)?;
+            statements.push(Statement::SetMode(ModeRegister::Denormal {
+                f32: denormal.f32.to_ftz(),
+                f16f64: denormal.f16f64.to_ftz(),
+            }));
+            let rounding = bb_state.rounding.twin_mode.ok_or_else(error_unreachable)?;
+            statements.push(Statement::SetMode(ModeRegister::Rounding {
+                f32: rounding.f32.to_ast(),
+                f16f64: rounding.f16f64.to_ast(),
+            }));
+            statements.push(Statement::Instruction(ast::Instruction::Bra {
+                arguments: ast::BraArgs { src: basic_block },
+            }));
+        }
+        if let Some(prologue) = bb_state.denormal.prologue {
+            statements.push(Statement::Label(prologue));
+            let denormal = bb_state.denormal.twin_mode.ok_or_else(error_unreachable)?;
+            statements.push(Statement::SetMode(ModeRegister::Denormal {
+                f32: denormal.f32.to_ftz(),
+                f16f64: denormal.f16f64.to_ftz(),
+            }));
+            statements.push(Statement::Instruction(ast::Instruction::Bra {
+                arguments: ast::BraArgs { src: basic_block },
+            }));
+        }
+        if let Some(prologue) = bb_state.rounding.prologue {
+            statements.push(Statement::Label(prologue));
+            let rounding = bb_state.rounding.twin_mode.ok_or_else(error_unreachable)?;
+            statements.push(Statement::SetMode(ModeRegister::Rounding {
+                f32: rounding.f32.to_ast(),
+                f16f64: rounding.f16f64.to_ast(),
+            }));
+            statements.push(Statement::Instruction(ast::Instruction::Bra {
+                arguments: ast::BraArgs { src: basic_block },
+            }));
+        }
+        Ok(())
     }
 
+    /*
     fn add_or_fold_mode_set(
         &mut self,
         result: &mut Vec<Statement<ast::Instruction<SpirvWord>, SpirvWord>>,
@@ -552,6 +896,7 @@ impl<'a> BasicBlockControlState<'a> {
         result.push(Statement::SetMode(ModeRegister::DenormalF32(new_mode)));
         Some(result.len() - 1)
     }
+     */
 
     fn insert(
         &mut self,
@@ -571,46 +916,54 @@ impl<'a> BasicBlockControlState<'a> {
         result: &mut Vec<Statement<ast::Instruction<SpirvWord>, SpirvWord>>,
         mode: Option<View::Value>,
     ) -> Result<(), TranslateError> {
-        if let Some(new_mode) = mode {
-            let register_state = View::get_register(self);
-            match register_state {
-                RegisterState::Inherited => {
-                    View::set_register(self, RegisterState::Value(None, new_mode));
-                }
-                RegisterState::Unknown => {
-                    View::set_register(
-                        self,
-                        RegisterState::Value(
-                            Some(self.add_or_fold_mode_set2::<View>(result, new_mode)),
-                            new_mode,
-                        ),
-                    );
-                }
-                RegisterState::Value(_, old_value) => {
-                    if new_mode == old_value {
-                        return Ok(());
-                    }
-                    View::set_register(
-                        self,
-                        RegisterState::Value(
-                            Some(self.add_or_fold_mode_set2::<View>(result, new_mode)),
-                            new_mode,
-                        ),
-                    );
-                }
-            }
+        fn set_fold_index<View: ModeView>(bb: &mut BasicBlockControlState, index: Option<usize>) {
+            let mut reg = View::get_register(bb);
+            reg.last_foldable = index;
+            View::set_register(bb, reg);
         }
+        let new_mode = unwrap_some_or!(mode, return Ok(()));
+        //        if let Some(new_mode) = mode {
+        let register_state = View::get_register(self);
+        match register_state.current_value {
+            Some(old) if old == new_mode => {
+                set_fold_index::<View>(self, None);
+            }
+            _ => match register_state.last_foldable {
+                // fold successful
+                Some(index) => {
+                    if let Some(Statement::SetMode(mode_set)) = result.get_mut(index) {
+                        View::set_single_mode(mode_set, new_mode)?;
+                        set_fold_index::<View>(self, None);
+                    } else {
+                        return Err(error_unreachable());
+                    }
+                }
+                // fold failed, insert new instruction
+                None => {
+                    result.push(Statement::SetMode(View::new_mode(
+                        new_mode,
+                        View::TwinView::get_register(self)
+                            .current_value
+                            .ok_or_else(error_unreachable)?,
+                    )));
+                    set_fold_index::<View::TwinView>(self, Some(result.len() - 1));
+                }
+            },
+        }
+        //}
         Ok(())
     }
 
     // Return the index of the last insertion of SetMode with this mode
+    /*
     fn add_or_fold_mode_set2<View: ModeView>(
         &self,
         result: &mut Vec<Statement<ast::Instruction<SpirvWord>, SpirvWord>>,
         new_mode: View::Value,
-    ) -> usize {
-        // try and fold into the other mode set in struction
-        if let RegisterState::Value(Some(twin_index), _) = View::TwinView::get_register(self) {
+    ) -> Result<(), TranslateError> {
+        // try and fold into the other mode set instruction
+        View::get_register(bb)
+        if let RegisterState { last_foldable:   } = View::TwinView::get_register(self) {
             if let Some(Statement::SetMode(register_mode)) = result.get_mut(twin_index) {
                 if let Some(twin_mode) = View::TwinView::get_single_mode(register_mode) {
                     *register_mode = View::new_mode(new_mode, Some(twin_mode));
@@ -621,6 +974,58 @@ impl<'a> BasicBlockControlState<'a> {
         result.push(Statement::SetMode(View::new_mode(new_mode, None)));
         result.len() - 1
     }
+     */
+
+    fn redirect_jump(&self, jump_target: &mut SpirvWord) -> Result<(), TranslateError> {
+        let target = self
+            .global_modes
+            .basic_blocks
+            .get(jump_target)
+            .ok_or_else(error_unreachable)?;
+        let jump_to_denormal = match (
+            self.denormal_f32.current_value,
+            self.denormal_f16f64.current_value,
+        ) {
+            (None, None) => false,
+            (Some(current_f32), Some(current_f16f64)) => {
+                if let Some(target_mode) = target.denormal.twin_mode {
+                    target_mode.f32.to_ftz() != current_f32
+                        || target_mode.f16f64.to_ftz() != current_f16f64
+                } else {
+                    false
+                }
+            }
+            _ => return Err(error_unreachable()),
+        };
+        let jump_to_rounding = match (
+            self.rounding_f32.current_value,
+            self.rounding_f16f64.current_value,
+        ) {
+            (None, None) => false,
+            (Some(current_f32), Some(current_f16f64)) => {
+                if let Some(target_mode) = target.rounding.twin_mode {
+                    target_mode.f32.to_ast() != current_f32
+                        || target_mode.f16f64.to_ast() != current_f16f64
+                } else {
+                    false
+                }
+            }
+            _ => return Err(error_unreachable()),
+        };
+        match (jump_to_denormal, jump_to_rounding) {
+            (true, false) => {
+                *jump_target = target.denormal.prologue.ok_or_else(error_unreachable)?;
+            }
+            (false, true) => {
+                *jump_target = target.rounding.prologue.ok_or_else(error_unreachable)?;
+            }
+            (true, true) => {
+                *jump_target = target.dual_prologue.ok_or_else(error_unreachable)?;
+            }
+            (false, false) => {}
+        }
+        Ok(())
+    }
 }
 
 trait ModeView {
@@ -629,8 +1034,8 @@ trait ModeView {
 
     fn get_register(bb: &BasicBlockControlState) -> RegisterState<Self::Value>;
     fn set_register(bb: &mut BasicBlockControlState, reg: RegisterState<Self::Value>);
-    fn new_mode(t: Self::Value, other: Option<Self::Value>) -> ModeRegister;
-    fn get_single_mode(reg: &ModeRegister) -> Option<Self::Value>;
+    fn new_mode(t: Self::Value, other: Self::Value) -> ModeRegister;
+    fn set_single_mode(reg: &mut ModeRegister, x: Self::Value) -> Result<(), TranslateError>;
 }
 
 struct DenormalF32View;
@@ -647,18 +1052,16 @@ impl ModeView for DenormalF32View {
         bb.denormal_f32 = reg;
     }
 
-    fn new_mode(f32: Self::Value, f16f64: Option<Self::Value>) -> ModeRegister {
-        match f16f64 {
-            Some(f16f64) => ModeRegister::DenormalBoth { f32, f16f64 },
-            None => ModeRegister::DenormalF32(f32),
-        }
+    fn new_mode(f32: Self::Value, f16f64: Self::Value) -> ModeRegister {
+        ModeRegister::Denormal { f32, f16f64 }
     }
 
-    fn get_single_mode(reg: &ModeRegister) -> Option<Self::Value> {
+    fn set_single_mode(reg: &mut ModeRegister, x: Self::Value) -> Result<(), TranslateError> {
         match reg {
-            ModeRegister::DenormalF32(value) => Some(*value),
-            _ => None,
+            ModeRegister::Denormal { f32, f16f64: _ } => *f32 = x,
+            ModeRegister::Rounding { .. } => return Err(error_unreachable()),
         }
+        Ok(())
     }
 }
 
@@ -676,18 +1079,16 @@ impl ModeView for DenormalF16F64View {
         bb.denormal_f16f64 = reg;
     }
 
-    fn new_mode(f16f64: Self::Value, f32: Option<Self::Value>) -> ModeRegister {
-        match f32 {
-            Some(f32) => ModeRegister::DenormalBoth { f16f64, f32 },
-            None => ModeRegister::DenormalF16F64(f16f64),
-        }
+    fn new_mode(f16f64: Self::Value, f32: Self::Value) -> ModeRegister {
+        ModeRegister::Denormal { f32, f16f64 }
     }
 
-    fn get_single_mode(reg: &ModeRegister) -> Option<Self::Value> {
+    fn set_single_mode(reg: &mut ModeRegister, x: Self::Value) -> Result<(), TranslateError> {
         match reg {
-            ModeRegister::DenormalF16F64(value) => Some(*value),
-            _ => None,
+            ModeRegister::Denormal { f32: _, f16f64 } => *f16f64 = x,
+            ModeRegister::Rounding { .. } => return Err(error_unreachable()),
         }
+        Ok(())
     }
 }
 
@@ -709,7 +1110,9 @@ impl<'a> BasicBlockState<'a> {
     ) -> Result<
         (
             BasicBlockState<'a>,
-            impl Iterator<Item = &'x Statement<ast::Instruction<SpirvWord>, SpirvWord>>,
+            std::iter::Peekable<
+                impl Iterator<Item = &'x Statement<ast::Instruction<SpirvWord>, SpirvWord>>,
+            >,
         ),
         TranslateError,
     > {
@@ -732,7 +1135,7 @@ impl<'a> BasicBlockState<'a> {
             }
             _ => return Err(error_unreachable()),
         };
-        Ok((bb_state, body_iter))
+        Ok((bb_state, body_iter.peekable()))
     }
 
     fn start(&mut self, label: SpirvWord) {
@@ -740,11 +1143,11 @@ impl<'a> BasicBlockState<'a> {
         self.node_index = Some(self.cfg.get_or_add_basic_block(label));
     }
 
-    fn end(&mut self, jumps: &[SpirvWord]) {
+    fn end(&mut self, jumps: &[SpirvWord]) -> Option<NodeIndex> {
         let node_index = self.node_index.take();
         let node_index = match node_index {
             Some(x) => x,
-            None => return,
+            None => return None,
         };
         for target in jumps {
             self.cfg.add_jump(node_index, *target);
@@ -754,6 +1157,30 @@ impl<'a> BasicBlockState<'a> {
             mem::replace(&mut self.entry, InstructionModes::none()),
             mem::replace(&mut self.exit, InstructionModes::none()),
         );
+        Some(node_index)
+    }
+
+    fn record_call(
+        &mut self,
+        fn_call: SpirvWord,
+        after_call_label: SpirvWord,
+    ) -> Result<(), TranslateError> {
+        let node_index = self.node_index.ok_or_else(error_unreachable)?;
+        let after_call_label = self.cfg.add_jump(node_index, after_call_label);
+        let call_returns = self
+            .cfg
+            .call_returns
+            .entry(fn_call)
+            .or_insert_with(|| Vec::new());
+        call_returns.push(after_call_label);
+        Ok(())
+    }
+
+    fn record_ret(&mut self, fn_name: SpirvWord) -> Result<(), TranslateError> {
+        let node_index = self.node_index.ok_or_else(error_unreachable)?;
+        let function_rets = self.cfg.function_rets.entry(fn_name).or_insert(Vec::new());
+        function_rets.push(node_index);
+        Ok(())
     }
 
     fn append(&mut self, modes: InstructionModes) {
@@ -838,7 +1265,7 @@ struct PartialModeInsertion<T> {
 
 fn optimize<T: Copy + Into<usize> + strum::VariantArray + std::fmt::Debug, const N: usize>(
     partial: PartialModeInsertion<T>,
-) -> ModeInsertions<T> {
+) -> MandatoryModeInsertions<T> {
     let mut problem = Problem::new(OptimizationDirection::Maximize);
     let mut kernel_modes = FxHashMap::default();
     let basic_block_variables = partial
@@ -875,7 +1302,7 @@ fn optimize<T: Copy + Into<usize> + strum::VariantArray + std::fmt::Debug, const
             }
         }
     }
-    ModeInsertions {
+    MandatoryModeInsertions {
         basic_blocks,
         kernels,
     }
@@ -908,7 +1335,7 @@ fn one_of<const N: usize>(problem: &mut Problem) -> [Variable; N] {
     result
 }
 
-struct ModeInsertions<T> {
+struct MandatoryModeInsertions<T> {
     basic_blocks: FxHashSet<SpirvWord>,
     kernels: FxHashMap<SpirvWord, T>,
 }
@@ -1122,167 +1549,4 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use int_enum::IntEnum;
-    use strum::EnumCount;
-
-    #[repr(usize)]
-    #[derive(IntEnum, Eq, PartialEq, Copy, Clone, Debug)]
-    enum Bool {
-        False = 0,
-        True = 1,
-    }
-
-    fn ftz() -> InstructionModes {
-        InstructionModes {
-            denormal_f32: Some(DenormalMode::FlushToZero),
-            denormal_f16f64: None,
-            rounding_f32: None,
-            rounding_f16f64: None,
-        }
-    }
-
-    fn preserve() -> InstructionModes {
-        InstructionModes {
-            denormal_f32: Some(DenormalMode::Preserve),
-            denormal_f16f64: None,
-            rounding_f32: None,
-            rounding_f16f64: None,
-        }
-    }
-
-    #[test]
-    fn transitive_mixed() {
-        let mut graph = ControlFlowGraph::new();
-        let entry_id = SpirvWord(1);
-        let false_id = SpirvWord(2);
-        let empty_id = SpirvWord(3);
-        let false2_id = SpirvWord(4);
-        let entry = graph.add_entry_basic_block(entry_id);
-        graph.add_jump(entry, false_id);
-        let false_ = graph.get_or_add_basic_block(false_id);
-        graph.set_modes(false_, ftz(), ftz());
-        graph.add_jump(false_, empty_id);
-        let empty = graph.get_or_add_basic_block(empty_id);
-        graph.add_jump(empty, false2_id);
-        let false2_ = graph.get_or_add_basic_block(false2_id);
-        graph.set_modes(false2_, ftz(), ftz());
-        let partial_result = super::compute_single_mode(&graph, |node| node.denormal_f32);
-        assert_eq!(partial_result.bb_must_insert_mode.len(), 0);
-        assert_eq!(partial_result.bb_maybe_insert_mode.len(), 1);
-        assert_eq!(
-            partial_result.bb_maybe_insert_mode[&false_id],
-            (DenormalMode::FlushToZero, iter::once(entry_id).collect())
-        );
-
-        let result = optimize::<DenormalMode, { DenormalMode::COUNT }>(partial_result);
-        assert_eq!(result.basic_blocks.len(), 0);
-        assert_eq!(result.kernels.len(), 1);
-        assert_eq!(result.kernels[&entry_id], DenormalMode::FlushToZero);
-    }
-
-    #[test]
-    fn transitive_change_twice() {
-        let mut graph = ControlFlowGraph::new();
-        let entry_id = SpirvWord(1);
-        let false_id = SpirvWord(2);
-        let empty_id = SpirvWord(3);
-        let true_id = SpirvWord(4);
-        let entry = graph.add_entry_basic_block(entry_id);
-        graph.add_jump(entry, false_id);
-        let false_ = graph.get_or_add_basic_block(false_id);
-        graph.set_modes(false_, ftz(), ftz());
-        graph.add_jump(false_, empty_id);
-        let empty = graph.get_or_add_basic_block(empty_id);
-        graph.add_jump(empty, true_id);
-        let true_ = graph.get_or_add_basic_block(true_id);
-        graph.set_modes(true_, preserve(), preserve());
-        let partial_result = super::compute_single_mode(&graph, |node| node.denormal_f32);
-        assert_eq!(partial_result.bb_must_insert_mode.len(), 1);
-        assert!(partial_result.bb_must_insert_mode.contains(&true_id));
-        assert_eq!(partial_result.bb_maybe_insert_mode.len(), 1);
-        assert_eq!(
-            partial_result.bb_maybe_insert_mode[&false_id],
-            (DenormalMode::FlushToZero, iter::once(entry_id).collect())
-        );
-
-        let result = optimize::<DenormalMode, { DenormalMode::COUNT }>(partial_result);
-        assert_eq!(result.basic_blocks, iter::once(true_id).collect());
-        assert_eq!(result.kernels.len(), 1);
-        assert_eq!(result.kernels[&entry_id], DenormalMode::FlushToZero);
-    }
-
-    #[test]
-    fn transitive_change() {
-        let mut graph = ControlFlowGraph::new();
-        let entry_id = SpirvWord(1);
-        let empty_id = SpirvWord(2);
-        let true_id = SpirvWord(3);
-        let entry = graph.add_entry_basic_block(entry_id);
-        graph.add_jump(entry, empty_id);
-        let empty = graph.get_or_add_basic_block(empty_id);
-        graph.add_jump(empty, true_id);
-        let true_ = graph.get_or_add_basic_block(true_id);
-        graph.set_modes(true_, preserve(), preserve());
-        let partial_result = super::compute_single_mode(&graph, |node| node.denormal_f32);
-        assert_eq!(partial_result.bb_must_insert_mode.len(), 0);
-        assert_eq!(partial_result.bb_maybe_insert_mode.len(), 1);
-        assert_eq!(
-            partial_result.bb_maybe_insert_mode[&true_id],
-            (DenormalMode::Preserve, iter::once(entry_id).collect())
-        );
-
-        let result = optimize::<DenormalMode, { DenormalMode::COUNT }>(partial_result);
-        assert_eq!(result.basic_blocks.len(), 0);
-        assert_eq!(result.kernels.len(), 1);
-        assert_eq!(result.kernels[&entry_id], DenormalMode::Preserve);
-    }
-
-    #[test]
-    fn codependency() {
-        let mut graph = ControlFlowGraph::new();
-        let entry_id = SpirvWord(1);
-        let left_f_id = SpirvWord(2);
-        let right_f_id = SpirvWord(3);
-        let left_none_id = SpirvWord(4);
-        let mid_none_id = SpirvWord(5);
-        let right_none_id = SpirvWord(6);
-        let entry = graph.add_entry_basic_block(entry_id);
-        graph.add_jump(entry, left_f_id);
-        graph.add_jump(entry, right_f_id);
-        let left_f = graph.get_or_add_basic_block(left_f_id);
-        graph.set_modes(left_f, ftz(), ftz());
-        let right_f = graph.get_or_add_basic_block(right_f_id);
-        graph.set_modes(right_f, ftz(), ftz());
-        graph.add_jump(left_f, left_none_id);
-        let left_none = graph.get_or_add_basic_block(left_none_id);
-        graph.add_jump(right_f, right_none_id);
-        let right_none = graph.get_or_add_basic_block(right_none_id);
-        graph.add_jump(left_none, mid_none_id);
-        graph.add_jump(right_none, mid_none_id);
-        let mid_none = graph.get_or_add_basic_block(mid_none_id);
-        graph.add_jump(mid_none, left_none_id);
-        graph.add_jump(mid_none, right_none_id);
-        //println!(
-        //    "{:?}",
-        //    petgraph::dot::Dot::with_config(&graph.graph, &[petgraph::dot::Config::EdgeNoLabel])
-        //);
-        let partial_result = super::compute_single_mode(&graph, |node| node.denormal_f32);
-        assert_eq!(partial_result.bb_must_insert_mode.len(), 0);
-        assert_eq!(partial_result.bb_maybe_insert_mode.len(), 2);
-        assert_eq!(
-            partial_result.bb_maybe_insert_mode[&left_f_id],
-            (DenormalMode::FlushToZero, iter::once(entry_id).collect())
-        );
-        assert_eq!(
-            partial_result.bb_maybe_insert_mode[&right_f_id],
-            (DenormalMode::FlushToZero, iter::once(entry_id).collect())
-        );
-
-        let result = optimize::<DenormalMode, { DenormalMode::COUNT }>(partial_result);
-        assert_eq!(result.basic_blocks.len(), 0);
-        assert_eq!(result.kernels.len(), 1);
-        assert_eq!(result.kernels[&entry_id], DenormalMode::FlushToZero);
-    }
-}
+mod test;
