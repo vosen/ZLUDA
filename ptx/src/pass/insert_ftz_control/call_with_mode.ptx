@@ -10,12 +10,20 @@
 
     add.rz.ftz.f32     temp, temp, temp;
     call use_modes;
+    add.rp.ftz.f32     temp, temp, temp;
 	ret;
 }
 
 .func use_modes()
 {
 	.reg .f32   temp;
+    .reg .pred  pred;
+    @pred bra SET_RM;
+    @!pred bra SET_RZ;
+SET_RM:
     add.rm.f32     temp, temp, temp;
+    ret;
+SET_RZ:
+    add.rz.f32     temp, temp, temp;
     ret;
 }

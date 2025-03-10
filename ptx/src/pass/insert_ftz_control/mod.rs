@@ -20,7 +20,6 @@ use smallvec::SmallVec;
 use std::hash::Hash;
 use std::iter;
 use std::mem;
-use std::u32;
 use strum::EnumCount;
 use strum_macros::{EnumCount, VariantArray};
 use unwrap_or::unwrap_some_or;
@@ -250,7 +249,7 @@ struct ControlFlowGraph {
     // map function -> return label
     call_returns: FxHashMap<SpirvWord, Vec<NodeIndex>>,
     // map function -> return basic blocks
-    function_rets: FxHashMap<SpirvWord, Vec<NodeIndex>>,
+    functions_rets: FxHashMap<SpirvWord, NodeIndex>,
     graph: Graph<Node, ()>,
 }
 
@@ -260,7 +259,7 @@ impl ControlFlowGraph {
             entry_points: FxHashMap::default(),
             basic_blocks: FxHashMap::default(),
             call_returns: FxHashMap::default(),
-            function_rets: FxHashMap::default(),
+            functions_rets: FxHashMap::default(),
             graph: Graph::new(),
         }
     }
@@ -298,7 +297,7 @@ impl ControlFlowGraph {
     }
 
     fn fixup_function_calls(&mut self) {
-        for (function, sources) in self.function_rets.iter() {
+        for (function, source) in self.functions_rets.iter() {
             for target in self
                 .call_returns
                 .get(function)
@@ -307,15 +306,15 @@ impl ControlFlowGraph {
                 .flatten()
                 .copied()
             {
-                for source in sources {
-                    self.graph.add_edge(*source, target, ());
-                }
+                self.graph.add_edge(*source, target, ());
             }
         }
     }
 }
 
 #[derive(Clone, Copy)]
+//#[cfg_attr(test, derive(Debug))]
+#[derive(Debug)]
 struct Mode<T: Eq + PartialEq> {
     entry: Option<ExtendedMode<T>>,
     exit: Option<ExtendedMode<T>>,
@@ -337,6 +336,8 @@ impl<T: Eq + PartialEq> Mode<T> {
     }
 }
 
+//#[cfg_attr(test, derive(Debug))]
+#[derive(Debug)]
 struct Node {
     label: SpirvWord,
     denormal_f32: Mode<DenormalMode>,
@@ -376,7 +377,7 @@ trait EnumTuple {
 
 pub(crate) fn run<'input>(
     flat_resolver: &mut super::GlobalStringIdentResolver2<'input>,
-    mut directives: Vec<super::Directive2<ast::Instruction<SpirvWord>, super::SpirvWord>>,
+    directives: Vec<super::Directive2<ast::Instruction<SpirvWord>, super::SpirvWord>>,
 ) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
     let mut cfg = ControlFlowGraph::new();
     for directive in directives.iter() {
@@ -398,13 +399,17 @@ pub(crate) fn run<'input>(
                             arguments: ast::CallArgs { func, .. },
                             ..
                         }) => {
-                            let after_call_label = match body_iter.peek() {
-                                Some(Statement::Label(l)) => *l,
+                            let after_call_label = match body_iter.next() {
+                                Some(Statement::Instruction(ast::Instruction::Bra {
+                                    arguments: ast::BraArgs { src },
+                                })) => *src,
                                 _ => return Err(error_unreachable()),
                             };
                             bb_state.record_call(*func, after_call_label)?;
+                            //body_iter.next();
                         }
-                        Statement::Instruction(ast::Instruction::Ret { .. }) => {
+                        Statement::RetValue(..)
+                        | Statement::Instruction(ast::Instruction::Ret { .. }) => {
                             bb_state.record_ret(*name)?;
                         }
                         Statement::Label(label) => {
@@ -426,7 +431,15 @@ pub(crate) fn run<'input>(
             _ => {}
         }
     }
+    println!(
+        "{:?}",
+        petgraph::dot::Dot::with_config(&cfg.graph, &[petgraph::dot::Config::EdgeNoLabel])
+    );
     cfg.fixup_function_calls();
+    println!(
+        "{:?}",
+        petgraph::dot::Dot::with_config(&cfg.graph, &[petgraph::dot::Config::EdgeNoLabel])
+    );
     let denormal_f32 = compute_single_mode(&cfg, |node| node.denormal_f32);
     let denormal_f16f64 = compute_single_mode(&cfg, |node| node.denormal_f16f64);
     let rounding_f32 = compute_single_mode(&cfg, |node| node.rounding_f32);
@@ -434,7 +447,8 @@ pub(crate) fn run<'input>(
     let denormal_f32 = optimize::<DenormalMode, { DenormalMode::COUNT }>(denormal_f32);
     let denormal_f16f64 = optimize::<DenormalMode, { DenormalMode::COUNT }>(denormal_f16f64);
     let rounding_f32 = optimize::<RoundingMode, { RoundingMode::COUNT }>(rounding_f32);
-    let rounding_f16f64 = optimize::<RoundingMode, { RoundingMode::COUNT }>(rounding_f16f64);
+    let rounding_f16f64: MandatoryModeInsertions<RoundingMode> =
+        optimize::<RoundingMode, { RoundingMode::COUNT }>(rounding_f16f64);
     let denormal = join_modes(
         flat_resolver,
         &cfg,
@@ -483,7 +497,7 @@ fn join_modes<'input, T: Eq + PartialEq + Copy + Default>(
     mut f16f64_exit_view: impl FnMut(&Node) -> Option<ExtendedMode<T>>,
 ) -> Result<TwinModeInsertions<T>, TranslateError> {
     // Returns None if there are multiple conflicting modes
-    fn get_incoming_mode<T: Eq + PartialEq + Copy>(
+    fn get_incoming_mode<T: Eq + PartialEq + Copy + Default>(
         cfg: &ControlFlowGraph,
         kernels: &FxHashMap<SpirvWord, T>,
         node: NodeIndex,
@@ -500,11 +514,11 @@ fn join_modes<'input, T: Eq + PartialEq + Copy + Default>(
             if !visited.insert(node) {
                 continue;
             }
-            let x = &cfg.graph[node];
-            match (mode, exit_getter(x)) {
+            let node_data = &cfg.graph[node];
+            match (mode, exit_getter(node_data)) {
                 (_, None) => {
                     for next in cfg.graph.neighbors_directed(node, Direction::Incoming) {
-                        if !visited.insert(next) {
+                        if !visited.contains(&next) {
                             to_visit.push(next);
                         }
                     }
@@ -513,7 +527,7 @@ fn join_modes<'input, T: Eq + PartialEq + Copy + Default>(
                     let new_mode = match new_mode {
                         ExtendedMode::BasicBlock(new_mode) => new_mode,
                         ExtendedMode::Entry(kernel) => {
-                            *kernels.get(&kernel).ok_or_else(error_unreachable)?
+                            kernels.get(&kernel).copied().unwrap_or_default()
                         }
                     };
                     if let Some(existing_mode) = existing_mode {
@@ -546,7 +560,7 @@ fn join_modes<'input, T: Eq + PartialEq + Copy + Default>(
                         .kernels
                         .get(&kernel)
                         .copied()
-                        .ok_or_else(error_unreachable)?,
+                        .unwrap_or_default(),
                 ),
                 // None means that no instruction in the basic block sets mode, but
                 // another basic block might rely on this instruction transitively
@@ -560,7 +574,7 @@ fn join_modes<'input, T: Eq + PartialEq + Copy + Default>(
                         .kernels
                         .get(&kernel)
                         .copied()
-                        .ok_or_else(error_unreachable)?,
+                        .unwrap_or_default(),
                 ),
                 None => None,
             };
@@ -713,7 +727,9 @@ fn insert_mode_control<'input>(
             let old_body = mem::replace(body_ptr, Vec::new());
             let mut result = Vec::with_capacity(old_body.len());
             let mut bb_state = BasicBlockControlState::new(&global_modes, fn_name, initial_mode);
-            for mut statement in old_body.into_iter() {
+            let mut old_body = old_body.into_iter();
+            while let Some(mut statement) = old_body.next() {
+                let mut call_target = None;
                 match &mut statement {
                     Statement::Label(label) => {
                         bb_state.start(*label, &mut result)?;
@@ -723,6 +739,7 @@ fn insert_mode_control<'input>(
                         ..
                     }) => {
                         bb_state.redirect_jump(func)?;
+                        call_target = Some(*func);
                     }
                     Statement::Conditional(BrachCondition {
                         if_true, if_false, ..
@@ -742,6 +759,16 @@ fn insert_mode_control<'input>(
                     _ => {}
                 }
                 result.push(statement);
+                if let Some(call_target) = call_target {
+                    if let Some(Statement::Instruction(ast::Instruction::Bra {
+                        arguments: ast::BraArgs { src: post_call_label },
+                    })) = old_body.next()
+                    {
+                        // get return block for the function, if there is a mode
+                        // change between caller and callee then apply it here
+                        todo!()
+                    }
+                }
             }
             *body_ptr = result;
             new_directives.push(directive);
@@ -1165,8 +1192,8 @@ impl<'a> BasicBlockState<'a> {
         fn_call: SpirvWord,
         after_call_label: SpirvWord,
     ) -> Result<(), TranslateError> {
-        let node_index = self.node_index.ok_or_else(error_unreachable)?;
-        let after_call_label = self.cfg.add_jump(node_index, after_call_label);
+        self.end(&[fn_call]).ok_or_else(error_unreachable)?;
+        let after_call_label = self.cfg.get_or_add_basic_block(after_call_label);
         let call_returns = self
             .cfg
             .call_returns
@@ -1178,8 +1205,11 @@ impl<'a> BasicBlockState<'a> {
 
     fn record_ret(&mut self, fn_name: SpirvWord) -> Result<(), TranslateError> {
         let node_index = self.node_index.ok_or_else(error_unreachable)?;
-        let function_rets = self.cfg.function_rets.entry(fn_name).or_insert(Vec::new());
-        function_rets.push(node_index);
+        let previous_function_ret = self.cfg.functions_rets.insert(fn_name, node_index);
+        // This pass relies on there being only a single `ret;` in a function
+        if previous_function_ret.is_some() {
+            return Err(error_unreachable());
+        }
         Ok(())
     }
 
@@ -1263,7 +1293,11 @@ struct PartialModeInsertion<T> {
     bb_maybe_insert_mode: FxHashMap<SpirvWord, (T, FxHashSet<SpirvWord>)>,
 }
 
-fn optimize<T: Copy + Into<usize> + strum::VariantArray + std::fmt::Debug, const N: usize>(
+// Only returns kernel mode insertions if a kernel is relevant to the optimization problem
+fn optimize<
+    T: Copy + Into<usize> + strum::VariantArray + std::fmt::Debug + Default,
+    const N: usize,
+>(
     partial: PartialModeInsertion<T>,
 ) -> MandatoryModeInsertions<T> {
     let mut problem = Problem::new(OptimizationDirection::Maximize);
@@ -1341,6 +1375,8 @@ struct MandatoryModeInsertions<T> {
 }
 
 #[derive(Eq, PartialEq, Clone, Copy)]
+//#[cfg_attr(test, derive(Debug))]
+#[derive(Debug)]
 enum ExtendedMode<T: Eq + PartialEq> {
     BasicBlock(T),
     Entry(SpirvWord),

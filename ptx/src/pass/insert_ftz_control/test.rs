@@ -198,7 +198,7 @@ fn compile_methods(ptx: &str) -> Vec<Function2<ast::Instruction<SpirvWord>, Spir
     let directives = normalize_identifiers2::run(&mut scoped_resolver, module.directives).unwrap();
     let directives = normalize_predicates2::run(&mut flat_resolver, directives).unwrap();
     let directives = expand_operands::run(&mut flat_resolver, directives).unwrap();
-    let directives = normalize_basic_blocks::run(&mut flat_resolver, directives);
+    let directives = normalize_basic_blocks::run(&mut flat_resolver, directives).unwrap();
     let directives = super::run(&mut flat_resolver, directives).unwrap();
     directives
         .into_iter()
@@ -220,10 +220,37 @@ fn call_with_mode() {
         &**methods[1].body.as_ref().unwrap(),
         [
             Statement::Label(..),
+            Statement::Variable(..),
+            Statement::Instruction(ast::Instruction::Add { .. }),
+            Statement::Instruction(ast::Instruction::Call { .. }),
+            Statement::Instruction(ast::Instruction::Bra { .. }),
+            Statement::Label(..),
+            // Dual prelude
             Statement::SetMode(ModeRegister::Denormal {
-                f32: false,
-                f16f64: false
+                f32: true,
+                f16f64: true
             }),
+            Statement::SetMode(ModeRegister::Rounding {
+                f32: ast::RoundingMode::PositiveInf,
+                f16f64: ast::RoundingMode::NearestEven
+            }),
+            Statement::Instruction(ast::Instruction::Bra { .. }),
+            // Denormal prelude
+            Statement::Label(..),
+            Statement::SetMode(ModeRegister::Denormal {
+                f32: true,
+                f16f64: true
+            }),
+            Statement::Instruction(ast::Instruction::Bra { .. }),
+            // Rounding prelude
+            Statement::Label(..),
+            Statement::SetMode(ModeRegister::Rounding {
+                f32: ast::RoundingMode::PositiveInf,
+                f16f64: ast::RoundingMode::NearestEven
+            }),
+            Statement::Instruction(ast::Instruction::Bra { .. }),
+            Statement::Label(..),
+            Statement::Instruction(ast::Instruction::Add { .. }),
             Statement::Instruction(ast::Instruction::Ret { .. }),
         ]
     ));
