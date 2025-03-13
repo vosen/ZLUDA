@@ -52,9 +52,9 @@ pub fn to_llvm_module<'input>(ast: ast::Module<'input>) -> Result<Module, Transl
     let directives = expand_operands::run(&mut flat_resolver, directives)?;
     let directives = deparamize_functions::run(&mut flat_resolver, directives)?;
     let directives = normalize_basic_blocks::run(&mut flat_resolver, directives)?;
+    let directives = insert_ftz_control::run(&mut flat_resolver, directives)?;
     let directives = insert_explicit_load_store::run(&mut flat_resolver, directives)?;
     let directives = insert_implicit_conversions2::run(&mut flat_resolver, directives)?;
-    let directives = insert_ftz_control::run(&mut flat_resolver, directives)?;
     let directives = replace_instructions_with_function_calls::run(&mut flat_resolver, directives)?;
     let directives = hoist_globals::run(directives)?;
     let llvm_ir = emit_llvm::run(flat_resolver, directives)?;

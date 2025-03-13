@@ -54,7 +54,7 @@ pub(crate) fn run(
                     }
                 }
                 TerminatorKind::Fake => match statement {
-                    // if it happens that there is a label after a call just reuse it
+                    // If there's a label after a call just reuse it
                     Statement::Label(label) => {
                         result.push(Statement::Instruction(ast::Instruction::Bra {
                             arguments: ast::BraArgs { src: label },
