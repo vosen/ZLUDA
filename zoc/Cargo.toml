@@ -7,9 +7,9 @@ edition = "2021"
 
 [dependencies]
 amd_comgr-sys = { path = "../ext/amd_comgr-sys" }
-bpaf = { version = "0.9.17", features = ["derive"] }
+bpaf = { version = "0.9.18", features = ["derive"] }
 comgr = { path = "../comgr" }
 hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
 ptx = { path = "../ptx" }
 ptx_parser = { path = "../ptx_parser" }
-thiserror = "1.0"
+thiserror = "2.0.12"
