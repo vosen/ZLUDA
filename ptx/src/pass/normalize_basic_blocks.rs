@@ -7,7 +7,7 @@ use super::*;
 //   represent kernels as separate nodes with its own separate entry/exit mode
 // * Inserts label at the start of every basic block
 // * Insert explicit jumps before labels
-// * Functions get a single `ret;` exit point - this is because mode computation
+// * Non-.entry methods get a single `ret;` exit point - this is because mode computation
 //   logic requires it. Control flow graph constructed by mode computation
 //   models function calls as jumps into and then from another function.
 //   If this cfg allowed multiple return basic blocks then there would be cases
@@ -19,10 +19,10 @@ pub(crate) fn run(
     mut directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
 ) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
     for directive in directives.iter_mut() {
-        let body_ref = match directive {
+        let (body_ref, is_kernel) = match directive {
             Directive2::Method(Function2 {
-                body: Some(body), ..
-            }) => body,
+                body: Some(body), is_kernel, ..
+            }) => (body, *is_kernel),
             _ => continue,
         };
         let body = std::mem::replace(body_ref, Vec::new());
@@ -74,7 +74,9 @@ pub(crate) fn run(
                     return Err(error_unreachable());
                 }
                 Statement::Instruction(ast::Instruction::Ret { .. }) => {
-                    return_statements.push(result.len())
+                    if !is_kernel {
+                        return_statements.push(result.len());
+                    }
                 }
                 _ => {}
             }

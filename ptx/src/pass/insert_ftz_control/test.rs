@@ -258,30 +258,83 @@ fn call_with_mode() {
     ));
     let [to_fn0] = calls(method_1);
     let [_, dual_prelude, _, _, add] = labels(method_1);
-    let [post_call, post_prelude_0, post_prelude_1, post_prelude_2] = branches(method_1);
+    let [post_call, post_prelude_dual, post_prelude_denormal, post_prelude_rounding] =
+        branches(method_1);
     assert_eq!(methods[0].name, to_fn0);
     assert_eq!(post_call, dual_prelude);
-    assert_eq!(post_prelude_0, add);
-    assert_eq!(post_prelude_1, add);
-    assert_eq!(post_prelude_2, add);
+    assert_eq!(post_prelude_dual, add);
+    assert_eq!(post_prelude_denormal, add);
+    assert_eq!(post_prelude_rounding, add);
 
     let method_2 = methods[2].body.as_ref().unwrap();
     assert!(matches!(
         &**method_2,
         [
             Statement::Label(..),
+            Statement::Variable(..),
+            Statement::Variable(..),
+            Statement::Conditional(..),
+            Statement::Label(..),
+            Statement::Conditional(..),
+            Statement::Label(..),
+            Statement::Instruction(ast::Instruction::Bra { .. }),
+            Statement::Label(..),
+            // Dual prelude
             Statement::SetMode(ModeRegister::Denormal {
-                f32: true,
+                f32: false,
                 f16f64: true
             }),
             Statement::SetMode(ModeRegister::Rounding {
-                f32: ast::RoundingMode::PositiveInf,
+                f32: ast::RoundingMode::NegativeInf,
                 f16f64: ast::RoundingMode::NearestEven
             }),
-            Statement::Instruction(ast::Instruction::Call { .. }),
+            Statement::Instruction(ast::Instruction::Bra { .. }),
+            // Denormal prelude
+            Statement::Label(..),
+            Statement::SetMode(ModeRegister::Denormal {
+                f32: false,
+                f16f64: true
+            }),
+            Statement::Instruction(ast::Instruction::Bra { .. }),
+            // Rounding prelude
+            Statement::Label(..),
+            Statement::SetMode(ModeRegister::Rounding {
+                f32: ast::RoundingMode::NegativeInf,
+                f16f64: ast::RoundingMode::NearestEven
+            }),
+            Statement::Instruction(ast::Instruction::Bra { .. }),
+            Statement::Label(..),
+            Statement::Instruction(ast::Instruction::Add { .. }),
+            Statement::Instruction(ast::Instruction::Bra { .. }),
+            Statement::Label(..),
+            Statement::SetMode(ModeRegister::Denormal {
+                f32: false,
+                f16f64: true
+            }),
+            Statement::Instruction(ast::Instruction::Bra { .. }),
+            Statement::Label(..),
+            Statement::Instruction(ast::Instruction::Add { .. }),
+            Statement::Instruction(ast::Instruction::Bra { .. }),
+            Statement::Label(..),
             Statement::Instruction(ast::Instruction::Ret { .. }),
         ]
     ));
+    let [(if_rm_true, if_rm_false), (if_rz_true, if_rz_false)] = conditionals(method_2);
+    let [_, conditional2, post_conditional2, prelude_dual, _, _, add1, add2_set_denormal, add2, ret] =
+        labels(method_2);
+    let [post_conditional2_jump, post_prelude_dual, post_prelude_denormal, post_prelude_rounding, post_add1, post_add2_set_denormal, post_add2] =
+        branches(method_2);
+    assert_eq!(if_rm_true, prelude_dual);
+    assert_eq!(if_rm_false, conditional2);
+    assert_eq!(if_rz_true, post_conditional2);
+    assert_eq!(if_rz_false, add2_set_denormal);
+    assert_eq!(post_conditional2_jump, prelude_dual);
+    assert_eq!(post_prelude_dual, add1);
+    assert_eq!(post_prelude_denormal, add1);
+    assert_eq!(post_prelude_rounding, add1);
+    assert_eq!(post_add1, ret);
+    assert_eq!(post_add2_set_denormal, add2);
+    assert_eq!(post_add2, ret);
 }
 
 fn branches<const N: usize>(
@@ -303,10 +356,12 @@ fn labels<const N: usize>(
     fn_: &Vec<Statement<ast::Instruction<SpirvWord>, SpirvWord>>,
 ) -> [SpirvWord; N] {
     fn_.iter()
-        .filter_map(|s: &Statement<ptx_parser::Instruction<SpirvWord>, SpirvWord>| match s {
-            Statement::Label(label) => Some(*label),
-            _ => None,
-        })
+        .filter_map(
+            |s: &Statement<ptx_parser::Instruction<SpirvWord>, SpirvWord>| match s {
+                Statement::Label(label) => Some(*label),
+                _ => None,
+            },
+        )
         .collect::<Vec<_>>()
         .try_into()
         .unwrap()
@@ -317,7 +372,25 @@ fn calls<const N: usize>(
 ) -> [SpirvWord; N] {
     fn_.iter()
         .filter_map(|s| match s {
-            Statement::Instruction(ast::Instruction::Call {  arguments: ast::CallArgs { func,.. }, .. }) => Some(*func),
+            Statement::Instruction(ast::Instruction::Call {
+                arguments: ast::CallArgs { func, .. },
+                ..
+            }) => Some(*func),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap()
+}
+
+fn conditionals<const N: usize>(
+    fn_: &Vec<Statement<ast::Instruction<SpirvWord>, SpirvWord>>,
+) -> [(SpirvWord, SpirvWord); N] {
+    fn_.iter()
+        .filter_map(|s| match s {
+            Statement::Conditional(BrachCondition {
+                if_true, if_false, ..
+            }) => Some((*if_true, *if_false)),
             _ => None,
         })
         .collect::<Vec<_>>()
