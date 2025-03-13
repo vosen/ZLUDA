@@ -26,10 +26,7 @@ pub struct Options {
 fn main() -> Result<(), Box<dyn Error>> {
     let opts = options().run();
 
-    let output_type = match opts.output_type {
-        Some(t) => t,
-        None => OutputType::Elf,
-    };
+    let output_type = opts.output_type.unwrap_or_default();
 
     match output_type {
         OutputType::LlvmIrLinked | OutputType::Assembly => todo!(),
@@ -125,7 +122,7 @@ fn write_to_file(content: &[u8], path: &Path) -> io::Result<()> {
     Ok(())
 }
 
-#[derive(Bpaf, Clone, Copy, Debug, PartialEq)]
+#[derive(Bpaf, Clone, Copy, Debug, Default, PartialEq)]
 enum OutputType {
     /// Produce pre-linked LLVM IR
     #[bpaf(long("ll"))]
@@ -134,6 +131,7 @@ enum OutputType {
     #[bpaf(long("linked-ll"))]
     LlvmIrLinked,
     /// Produce ELF binary (default)
+    #[default]
     Elf,
     /// Produce assembly
     #[bpaf(long("asm"))]
