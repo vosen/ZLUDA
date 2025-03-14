@@ -770,15 +770,15 @@ pub(crate) fn run<'input>(
             _ => {}
         }
     }
-    println!(
-        "{:?}",
-        petgraph::dot::Dot::with_config(&cfg.graph, &[petgraph::dot::Config::EdgeNoLabel])
-    );
+    //println!(
+    //    "{:?}",
+    //    petgraph::dot::Dot::with_config(&cfg.graph, &[petgraph::dot::Config::EdgeNoLabel])
+    //);
     cfg.fixup_function_calls()?;
-    println!(
-        "{:?}",
-        petgraph::dot::Dot::with_config(&cfg.graph, &[petgraph::dot::Config::EdgeNoLabel])
-    );
+    //println!(
+    //    "{:?}",
+    //    petgraph::dot::Dot::with_config(&cfg.graph, &[petgraph::dot::Config::EdgeNoLabel])
+    //);
     let rounding_f32 = compute_single_mode(&cfg, |node| node.rounding_f32);
     let denormal_f32 = compute_single_mode(&cfg, |node| node.denormal_f32);
     let denormal_f16f64 = compute_single_mode(&cfg, |node| node.denormal_f16f64);
