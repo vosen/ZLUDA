@@ -13,50 +13,53 @@ declare i32 @__zluda_ptx_impl_sreg_clock() #0
 declare i32 @__zluda_ptx_impl_sreg_lanemask_lt() #0
 
 define void @incr_shared_2_global() #0 {
-  %"39" = alloca i64, align 8, addrspace(5)
+  %"42" = alloca i64, align 8, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
-  br label %"63"
+  br label %"33"
 
-"63":                                             ; preds = %1
-  %"40" = load i64, ptr addrspace(3) @shared_mem, align 4
-  store i64 %"40", ptr addrspace(5) %"39", align 4
-  %"42" = load i64, ptr addrspace(5) %"39", align 4
-  %"41" = add i64 %"42", 2
-  store i64 %"41", ptr addrspace(5) %"39", align 4
-  %"43" = load i64, ptr addrspace(5) %"39", align 4
-  store i64 %"43", ptr addrspace(3) @shared_mem, align 4
+"33":                                             ; preds = %1
+  %"43" = load i64, ptr addrspace(3) @shared_mem, align 4
+  store i64 %"43", ptr addrspace(5) %"42", align 4
+  %"45" = load i64, ptr addrspace(5) %"42", align 4
+  %"44" = add i64 %"45", 2
+  store i64 %"44", ptr addrspace(5) %"42", align 4
+  %"46" = load i64, ptr addrspace(5) %"42", align 4
+  store i64 %"46", ptr addrspace(3) @shared_mem, align 4
   ret void
 }
 
-define amdgpu_kernel void @extern_shared_call(ptr addrspace(4) byref(i64) %"44", ptr addrspace(4) byref(i64) %"45") #1 {
-  %"46" = alloca i64, align 8, addrspace(5)
-  %"47" = alloca i64, align 8, addrspace(5)
-  %"48" = alloca i64, align 8, addrspace(5)
+define amdgpu_kernel void @extern_shared_call(ptr addrspace(4) byref(i64) %"47", ptr addrspace(4) byref(i64) %"48") #1 {
+  %"49" = alloca i64, align 8, addrspace(5)
+  %"50" = alloca i64, align 8, addrspace(5)
+  %"51" = alloca i64, align 8, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
-  br label %"64"
+  br label %"34"
 
-"64":                                             ; preds = %1
-  %"49" = load i64, ptr addrspace(4) %"44", align 4
-  store i64 %"49", ptr addrspace(5) %"46", align 4
-  %"50" = load i64, ptr addrspace(4) %"45", align 4
-  store i64 %"50", ptr addrspace(5) %"47", align 4
-  %"52" = load i64, ptr addrspace(5) %"46", align 4
-  %"59" = inttoptr i64 %"52" to ptr addrspace(1)
-  %"51" = load i64, ptr addrspace(1) %"59", align 4
-  store i64 %"51", ptr addrspace(5) %"48", align 4
-  %"53" = load i64, ptr addrspace(5) %"48", align 4
-  store i64 %"53", ptr addrspace(3) @shared_mem, align 4
-  call void @incr_shared_2_global()
-  %"54" = load i64, ptr addrspace(3) @shared_mem, align 4
-  store i64 %"54", ptr addrspace(5) %"48", align 4
-  %"55" = load i64, ptr addrspace(5) %"47", align 4
-  %"56" = load i64, ptr addrspace(5) %"48", align 4
+"34":                                             ; preds = %1
+  %"52" = load i64, ptr addrspace(4) %"47", align 4
+  store i64 %"52", ptr addrspace(5) %"49", align 4
+  %"53" = load i64, ptr addrspace(4) %"48", align 4
+  store i64 %"53", ptr addrspace(5) %"50", align 4
+  %"55" = load i64, ptr addrspace(5) %"49", align 4
   %"62" = inttoptr i64 %"55" to ptr addrspace(1)
-  store i64 %"56", ptr addrspace(1) %"62", align 4
+  %"54" = load i64, ptr addrspace(1) %"62", align 4
+  store i64 %"54", ptr addrspace(5) %"51", align 4
+  %"56" = load i64, ptr addrspace(5) %"51", align 4
+  store i64 %"56", ptr addrspace(3) @shared_mem, align 4
+  call void @incr_shared_2_global()
+  br label %"35"
+
+"35":                                             ; preds = %"34"
+  %"57" = load i64, ptr addrspace(3) @shared_mem, align 4
+  store i64 %"57", ptr addrspace(5) %"51", align 4
+  %"58" = load i64, ptr addrspace(5) %"50", align 4
+  %"59" = load i64, ptr addrspace(5) %"51", align 4
+  %"65" = inttoptr i64 %"58" to ptr addrspace(1)
+  store i64 %"59", ptr addrspace(1) %"65", align 4
   ret void
 }
 

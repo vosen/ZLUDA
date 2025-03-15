@@ -10,17 +10,17 @@ declare i32 @__zluda_ptx_impl_sreg_clock() #0
 
 declare i32 @__zluda_ptx_impl_sreg_lanemask_lt() #0
 
-define amdgpu_kernel void @mov_address(ptr addrspace(4) byref(i64) %"34", ptr addrspace(4) byref(i64) %"35") #1 {
+define amdgpu_kernel void @mov_address(ptr addrspace(4) byref(i64) %"35", ptr addrspace(4) byref(i64) %"36") #1 {
   %"10" = alloca [8 x i8], align 1, addrspace(5)
-  %"36" = alloca i64, align 8, addrspace(5)
+  %"37" = alloca i64, align 8, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
-  br label %"39"
+  br label %"28"
 
-"39":                                             ; preds = %1
-  %"38" = ptrtoint ptr addrspace(5) %"10" to i64
-  store i64 %"38", ptr addrspace(5) %"36", align 4
+"28":                                             ; preds = %1
+  %"39" = ptrtoint ptr addrspace(5) %"10" to i64
+  store i64 %"39", ptr addrspace(5) %"37", align 4
   ret void
 }
 
