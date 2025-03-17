@@ -1,5 +1,6 @@
 use crate::pass;
 use hip_runtime_sys::hipError_t;
+use pretty_assertions;
 use std::env;
 use std::error;
 use std::ffi::{CStr, CString};
@@ -10,7 +11,6 @@ use std::mem;
 use std::path::Path;
 use std::ptr;
 use std::str;
-use pretty_assertions;
 
 macro_rules! test_ptx {
     ($fn_name:ident, $input:expr, $output:expr) => {
@@ -195,6 +195,26 @@ test_ptx!(activemask, [0u32], [1u32]);
 test_ptx!(membar, [152731u32], [152731u32]);
 test_ptx!(shared_unify_extern, [7681u64, 7682u64], [15363u64]);
 test_ptx!(shared_unify_local, [16752u64, 714u64], [17466u64]);
+// This test currently fails for reasons outside of ZLUDA's control.
+// One of the LLVM passes does not understand that setreg instruction changes
+// global floating point state and assumes that both floating point
+// additions are the exact same expressions and optimizes second addition away.
+test_ptx!(
+    add_ftz,
+    [f32::from_bits(0x800000), f32::from_bits(0x007FFFFF)],
+    [0x800000u32, 0xFFFFFF]
+);
+test_ptx!(malformed_label, [2u64], [3u64]);
+test_ptx!(
+    call_rnd,
+    [
+        1.0f32,
+        f32::from_bits(0x33800000),
+        1.0f32,
+        f32::from_bits(0x33800000)
+    ],
+    [1.0000001, 1.0f32]
+);
 
 test_ptx!(assertfail);
 test_ptx!(func_ptr);
@@ -238,12 +258,10 @@ fn test_hip_assert<
     Ok(())
 }
 
-fn test_llvm_assert<
-    'a,
->(
+fn test_llvm_assert<'a>(
     name: &str,
     ptx_text: &'a str,
-    expected_ll: &str
+    expected_ll: &str,
 ) -> Result<(), Box<dyn error::Error + 'a>> {
     let ast = ptx_parser::parse_module_checked(ptx_text).unwrap();
     let llvm_ir = pass::to_llvm_module(ast).unwrap();
@@ -258,7 +276,7 @@ fn test_llvm_assert<
             let mut output_file = File::create(output_file).unwrap();
             output_file.write_all(actual_ll.as_bytes()).unwrap();
         }
-        let comparison = pretty_assertions::StrComparison::new(actual_ll, expected_ll);
+        let comparison = pretty_assertions::StrComparison::new(expected_ll, actual_ll);
         panic!("assertion failed: `(left == right)`\n\n{}", comparison);
     }
     Ok(())

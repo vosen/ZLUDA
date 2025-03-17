@@ -1,0 +1,72 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.func (.param.f32 output) add_rm (.param.f32 x, .param.f32 y);
+.func (.param.f32 output) add_rp (.param.f32 x, .param.f32 y);
+
+.visible .entry call_rnd(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .f32 	    x_1;
+    .reg .f32 	    y_1;
+    .reg .f32 	    x_2;
+    .reg .f32 	    y_2;
+    .reg .f32 	    z_1;
+    .reg .f32 	    z_2;
+    .param .f32     x_1_p;
+    .param .f32     y_1_p;
+    .param .f32     result_1;
+    .param .f32     x_2_p;
+    .param .f32     y_2_p;
+    .param .f32     result_2;
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.f32          x_1, [in_addr];
+    ld.f32          y_1, [in_addr+4];
+    ld.f32          x_2, [in_addr+8];
+    ld.f32          y_2, [in_addr+12];
+    st.param.f32    [x_1_p], x_1;
+    st.param.f32    [y_1_p], y_1;
+	call (result_1), add_rp, (x_1_p, y_1_p);
+    ld.param.f32    z_1, [result_1];
+    //add.rp.f32      z_1, x_1, y_1;
+    st.f32          [out_addr], z_1;
+    st.param.f32    [x_2_p], x_2;
+    st.param.f32    [y_2_p], y_2;
+    call (result_2), add_rm, (x_2_p, y_2_p);
+    ld.param.f32    z_2, [result_2];
+    //add.rm.f32      z_2, x_2, y_2;
+    st.f32          [out_addr+4], z_2;
+	ret;
+}
+
+.func (.param.f32 output) add_rm (.param.f32 x, .param.f32 y) {
+    .reg .f32 x_value;
+    .reg .f32 y_value;
+
+	ld.param.f32 	x_value, [x];
+    ld.param.f32 	y_value, [y];
+    add.rm.f32      x_value, x_value, y_value;
+    st.param.f32    [output], x_value;
+
+    ret;
+}
+
+.func (.param.f32 output) add_rp (.param.f32 x, .param.f32 y) {
+    .reg .f32 x_value;
+    .reg .f32 y_value;
+
+	ld.param.f32 	x_value, [x];
+    ld.param.f32 	y_value, [y];
+    add.rp.f32      x_value, x_value, y_value;
+    st.param.f32    [output], x_value;
+
+    ret;
+}

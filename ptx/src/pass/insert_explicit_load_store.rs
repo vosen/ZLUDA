@@ -11,8 +11,8 @@ use super::*;
 //   pass, so we do nothing there
 pub(super) fn run<'a, 'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
-    directives: Vec<Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>>,
-) -> Result<Vec<Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
+    directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
+) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
     directives
         .into_iter()
         .map(|directive| run_directive(resolver, directive))
@@ -21,8 +21,8 @@ pub(super) fn run<'a, 'input>(
 
 fn run_directive<'a, 'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
-    directive: Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>,
-) -> Result<Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
+    directive: Directive2<ast::Instruction<SpirvWord>, SpirvWord>,
+) -> Result<Directive2<ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
     Ok(match directive {
         var @ Directive2::Variable(..) => var,
         Directive2::Method(method) => {
@@ -34,12 +34,11 @@ fn run_directive<'a, 'input>(
 
 fn run_method<'a, 'input>(
     mut visitor: InsertMemSSAVisitor<'a, 'input>,
-    method: Function2<'input, ast::Instruction<SpirvWord>, SpirvWord>,
-) -> Result<Function2<'input, ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
-    let mut func_decl = method.func_decl;
-    let is_kernel = func_decl.name.is_kernel();
+    mut method: Function2<ast::Instruction<SpirvWord>, SpirvWord>,
+) -> Result<Function2<ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
+    let is_kernel = method.is_kernel;
     if is_kernel {
-        for arg in func_decl.input_arguments.iter_mut() {
+        for arg in method.input_arguments.iter_mut() {
             let old_name = arg.name;
             let old_space = arg.state_space;
             let new_space = ast::StateSpace::ParamEntry;
@@ -51,10 +50,10 @@ fn run_method<'a, 'input>(
             arg.state_space = new_space;
         }
     };
-    for arg in func_decl.return_arguments.iter_mut() {
+    for arg in method.return_arguments.iter_mut() {
         visitor.visit_variable(arg)?;
     }
-    let return_arguments = &func_decl.return_arguments[..];
+    let return_arguments = &method.return_arguments[..];
     let body = method
         .body
         .map(move |statements| {
@@ -65,14 +64,7 @@ fn run_method<'a, 'input>(
             Ok::<_, TranslateError>(result)
         })
         .transpose()?;
-    Ok(Function2 {
-        func_decl: func_decl,
-        globals: method.globals,
-        body,
-        import_as: method.import_as,
-        tuning: method.tuning,
-        linkage: method.linkage,
-    })
+    Ok(Function2 { body, ..method })
 }
 
 fn run_statement<'a, 'input>(

@@ -1,0 +1,15 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry add()
+{
+	.reg .f32 	    temp<3>;
+
+    add.ftz.f16     temp2, temp1, temp0;
+    add.ftz.f32     temp2, temp1, temp0;
+    
+    add.f16     temp2, temp1, temp0;
+    add.f32     temp2, temp1, temp0;
+	ret;
+}

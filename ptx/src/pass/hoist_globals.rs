@@ -1,8 +1,8 @@
 use super::*;
 
 pub(super) fn run<'input>(
-    directives: Vec<Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>>,
-) -> Result<Vec<Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
+    directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
+) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
     let mut result = Vec::with_capacity(directives.len());
     for mut directive in directives.into_iter() {
         run_directive(&mut result, &mut directive)?;
@@ -12,8 +12,8 @@ pub(super) fn run<'input>(
 }
 
 fn run_directive<'input>(
-    result: &mut Vec<Directive2<'input, ptx_parser::Instruction<SpirvWord>, SpirvWord>>,
-    directive: &mut Directive2<'input, ptx_parser::Instruction<SpirvWord>, SpirvWord>,
+    result: &mut Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
+    directive: &mut Directive2<ast::Instruction<SpirvWord>, SpirvWord>,
 ) -> Result<(), TranslateError> {
     match directive {
         Directive2::Variable(..) => {}
@@ -23,8 +23,8 @@ fn run_directive<'input>(
 }
 
 fn run_function<'input>(
-    result: &mut Vec<Directive2<'input, ptx_parser::Instruction<SpirvWord>, SpirvWord>>,
-    function: &mut Function2<'input, ptx_parser::Instruction<SpirvWord>, SpirvWord>,
+    result: &mut Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
+    function: &mut Function2<ast::Instruction<SpirvWord>, SpirvWord>,
 ) {
     function.body = function.body.take().map(|statements| {
         statements
