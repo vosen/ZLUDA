@@ -807,10 +807,12 @@ dependencies = [
  "ptx_parser",
  "quick-error",
  "rustc-hash 2.0.0",
+ "smallvec",
  "strum",
  "strum_macros",
  "tempfile",
  "thiserror 1.0.64",
+ "unwrap_or",
 ]
 
 [[package]]
@@ -1147,6 +1149,12 @@ name = "unicode-xid"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
+
+[[package]]
+name = "unwrap_or"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f2fe1f049979528ce97d8a4672f984f8846fc9975be0cf14ca798116d724c4a"
 
 [[package]]
 name = "version_check"

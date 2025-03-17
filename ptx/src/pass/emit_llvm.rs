@@ -314,6 +314,17 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                     method_emitter.emit_label_initial(*label);
                 }
             }
+            let mut statements = statements.into_iter();
+            if let Some(Statement::Label(label)) = statements.next() {
+                method_emitter.emit_label_delayed(label)?;
+            } else {
+                return Err(error_unreachable());
+            }
+            method_emitter.emit_kernel_rounding_prelude(
+                method.is_kernel,
+                method.rounding_mode_f32,
+                method.rounding_mode_f16f64,
+            )?;
             for statement in statements {
                 method_emitter.emit_statement(statement)?;
             }
@@ -441,6 +452,22 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
     }
 }
 
+fn fun_name(
+    method: Function2<ptx_parser::Instruction<SpirvWord>, SpirvWord>,
+    method_emitter: &mut MethodEmitContext<'_>,
+) -> Result<(), TranslateError> {
+    Ok(if method.is_kernel {
+        if method.rounding_mode_f32 != ast::RoundingMode::NearestEven
+            || method.rounding_mode_f16f64 != ast::RoundingMode::NearestEven
+        {
+            method_emitter.emit_set_mode(ModeRegister::Rounding {
+                f32: method.rounding_mode_f32,
+                f16f64: method.rounding_mode_f16f64,
+            })?;
+        }
+    })
+}
+
 fn llvm_ftz(ftz: bool) -> &'static str {
     if ftz {
         "preserve-sign"
@@ -507,6 +534,28 @@ impl<'a> MethodEmitContext<'a> {
             Statement::VectorWrite(vector_write) => self.emit_vector_write(vector_write)?,
             Statement::SetMode(mode_reg) => self.emit_set_mode(mode_reg)?,
         })
+    }
+
+    // This should be a kernel attribute, but sadly AMDGPU LLVM target does
+    // not support attribute for it. So we have to set it as the first
+    // instruction in the body of a kernel
+    fn emit_kernel_rounding_prelude(
+        &mut self,
+        is_kernel: bool,
+        rounding_mode_f32: ast::RoundingMode,
+        rounding_mode_f16f64: ast::RoundingMode,
+    ) -> Result<(), TranslateError> {
+        if is_kernel {
+            if rounding_mode_f32 != ast::RoundingMode::NearestEven
+                || rounding_mode_f16f64 != ast::RoundingMode::NearestEven
+            {
+                self.emit_set_mode(ModeRegister::Rounding {
+                    f32: rounding_mode_f32,
+                    f16f64: rounding_mode_f16f64,
+                })?;
+            }
+        }
+        Ok(())
     }
 
     fn emit_variable(&mut self, var: ast::Variable<SpirvWord>) -> Result<(), TranslateError> {

@@ -1,5 +1,6 @@
 use crate::pass;
 use hip_runtime_sys::hipError_t;
+use pretty_assertions;
 use std::env;
 use std::error;
 use std::ffi::{CStr, CString};
@@ -10,7 +11,6 @@ use std::mem;
 use std::path::Path;
 use std::ptr;
 use std::str;
-use pretty_assertions;
 
 macro_rules! test_ptx {
     ($fn_name:ident, $input:expr, $output:expr) => {
@@ -200,8 +200,17 @@ test_ptx!(
     [f32::from_bits(0x800000), f32::from_bits(0x007FFFFF)],
     [0x800000u32, 0xFFFFFF]
 );
-
 test_ptx!(malformed_label, [2u64], [3u64]);
+test_ptx!(
+    call_rnd,
+    [
+        1.0f32,
+        f32::from_bits(0x33800000),
+        1.0f32,
+        f32::from_bits(0x33800000)
+    ],
+    [1.0000001, 1.0f32]
+);
 
 test_ptx!(assertfail);
 test_ptx!(func_ptr);
@@ -245,12 +254,10 @@ fn test_hip_assert<
     Ok(())
 }
 
-fn test_llvm_assert<
-    'a,
->(
+fn test_llvm_assert<'a>(
     name: &str,
     ptx_text: &'a str,
-    expected_ll: &str
+    expected_ll: &str,
 ) -> Result<(), Box<dyn error::Error + 'a>> {
     let ast = ptx_parser::parse_module_checked(ptx_text).unwrap();
     let llvm_ir = pass::to_llvm_module(ast).unwrap();

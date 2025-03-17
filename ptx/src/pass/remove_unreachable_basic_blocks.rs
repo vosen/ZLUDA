@@ -4,10 +4,12 @@ use petgraph::{
     visit::{Bfs, VisitMap},
     Graph,
 };
+use rustc_hash::FxHashSet;
 
 pub(crate) fn run(
     mut directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
 ) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
+    let mut reachable_funcs = FxHashSet::default();
     for directive in directives.iter_mut() {
         match directive {
             Directive2::Method(Function2 {
@@ -35,6 +37,17 @@ pub(crate) fn run(
                         }) => {
                             cfg.add_branch(current_bb, *src);
                         }
+                        Statement::FunctionPointer(FunctionPointerDetails {
+                            src: _func, ..
+                        }) => {
+                            return Err(error_todo());
+                        }
+                        Statement::Instruction(ast::Instruction::Call {
+                            arguments: ast::CallArgs { func, .. },
+                            ..
+                        }) => {
+                            reachable_funcs.insert(*func);
+                        }
                         _ => {}
                     }
                 }
@@ -56,7 +69,15 @@ pub(crate) fn run(
             _ => {}
         }
     }
-    Ok(directives)
+    Ok(directives
+        .into_iter()
+        .filter(|directive| match directive {
+            Directive2::Variable(..) => true,
+            Directive2::Method(Function2 {
+                name, is_kernel, ..
+            }) => *is_kernel || reachable_funcs.contains(name),
+        })
+        .collect::<Vec<_>>())
 }
 
 fn try_filter_to_vec<T, E>(
