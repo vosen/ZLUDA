@@ -452,22 +452,6 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
     }
 }
 
-fn fun_name(
-    method: Function2<ptx_parser::Instruction<SpirvWord>, SpirvWord>,
-    method_emitter: &mut MethodEmitContext<'_>,
-) -> Result<(), TranslateError> {
-    Ok(if method.is_kernel {
-        if method.rounding_mode_f32 != ast::RoundingMode::NearestEven
-            || method.rounding_mode_f16f64 != ast::RoundingMode::NearestEven
-        {
-            method_emitter.emit_set_mode(ModeRegister::Rounding {
-                f32: method.rounding_mode_f32,
-                f16f64: method.rounding_mode_f16f64,
-            })?;
-        }
-    })
-}
-
 fn llvm_ftz(ftz: bool) -> &'static str {
     if ftz {
         "preserve-sign"

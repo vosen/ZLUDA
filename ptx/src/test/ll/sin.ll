@@ -1,46 +1,33 @@
-declare i32 @__zluda_ptx_impl_sreg_tid(i8) #0
-
-declare i32 @__zluda_ptx_impl_sreg_ntid(i8) #0
-
-declare i32 @__zluda_ptx_impl_sreg_ctaid(i8) #0
-
-declare i32 @__zluda_ptx_impl_sreg_nctaid(i8) #0
-
-declare i32 @__zluda_ptx_impl_sreg_clock() #0
-
-declare i32 @__zluda_ptx_impl_sreg_lanemask_lt() #0
-
-define amdgpu_kernel void @sin(ptr addrspace(4) byref(i64) %"36", ptr addrspace(4) byref(i64) %"37") #1 {
-  %"38" = alloca i64, align 8, addrspace(5)
-  %"39" = alloca i64, align 8, addrspace(5)
-  %"40" = alloca float, align 4, addrspace(5)
+define amdgpu_kernel void @sin(ptr addrspace(4) byref(i64) %"30", ptr addrspace(4) byref(i64) %"31") #0 {
+  %"32" = alloca i64, align 8, addrspace(5)
+  %"33" = alloca i64, align 8, addrspace(5)
+  %"34" = alloca float, align 4, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
   br label %"29"
 
 "29":                                             ; preds = %1
-  %"41" = load i64, ptr addrspace(4) %"36", align 4
-  store i64 %"41", ptr addrspace(5) %"38", align 4
-  %"42" = load i64, ptr addrspace(4) %"37", align 4
-  store i64 %"42", ptr addrspace(5) %"39", align 4
-  %"44" = load i64, ptr addrspace(5) %"38", align 4
-  %"49" = inttoptr i64 %"44" to ptr
-  %"43" = load float, ptr %"49", align 4
-  store float %"43", ptr addrspace(5) %"40", align 4
-  %"46" = load float, ptr addrspace(5) %"40", align 4
-  %"45" = call afn float @llvm.sin.f32(float %"46")
-  store float %"45", ptr addrspace(5) %"40", align 4
-  %"47" = load i64, ptr addrspace(5) %"39", align 4
-  %"48" = load float, ptr addrspace(5) %"40", align 4
-  %"50" = inttoptr i64 %"47" to ptr
-  store float %"48", ptr %"50", align 4
+  %"35" = load i64, ptr addrspace(4) %"30", align 4
+  store i64 %"35", ptr addrspace(5) %"32", align 4
+  %"36" = load i64, ptr addrspace(4) %"31", align 4
+  store i64 %"36", ptr addrspace(5) %"33", align 4
+  %"38" = load i64, ptr addrspace(5) %"32", align 4
+  %"43" = inttoptr i64 %"38" to ptr
+  %"37" = load float, ptr %"43", align 4
+  store float %"37", ptr addrspace(5) %"34", align 4
+  %"40" = load float, ptr addrspace(5) %"34", align 4
+  %"39" = call afn float @llvm.sin.f32(float %"40")
+  store float %"39", ptr addrspace(5) %"34", align 4
+  %"41" = load i64, ptr addrspace(5) %"33", align 4
+  %"42" = load float, ptr addrspace(5) %"34", align 4
+  %"44" = inttoptr i64 %"41" to ptr
+  store float %"42", ptr %"44", align 4
   ret void
 }
 
 ; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
-declare float @llvm.sin.f32(float) #2
+declare float @llvm.sin.f32(float) #1
 
-attributes #0 = { "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="dynamic" "denormal-fp-math-f32"="dynamic" "no-trapping-math"="true" "uniform-work-group-size"="true" }
-attributes #1 = { "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="preserve-sign" "denormal-fp-math-f32"="ieee" "no-trapping-math"="true" "uniform-work-group-size"="true" }
-attributes #2 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
+attributes #0 = { "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="preserve-sign" "denormal-fp-math-f32"="ieee" "no-trapping-math"="true" "uniform-work-group-size"="true" }
+attributes #1 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }

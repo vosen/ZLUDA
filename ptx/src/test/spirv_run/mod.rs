@@ -195,6 +195,10 @@ test_ptx!(activemask, [0u32], [1u32]);
 test_ptx!(membar, [152731u32], [152731u32]);
 test_ptx!(shared_unify_extern, [7681u64, 7682u64], [15363u64]);
 test_ptx!(shared_unify_local, [16752u64, 714u64], [17466u64]);
+// This test currently fails for reasons outside of ZLUDA's control.
+// One of the LLVM passes does not understand that setreg instruction changes
+// global floating point state and assumes that both floating point
+// additions are the exact same expressions and optimizes second addition away.
 test_ptx!(
     add_ftz,
     [f32::from_bits(0x800000), f32::from_bits(0x007FFFFF)],
@@ -272,7 +276,7 @@ fn test_llvm_assert<'a>(
             let mut output_file = File::create(output_file).unwrap();
             output_file.write_all(actual_ll.as_bytes()).unwrap();
         }
-        let comparison = pretty_assertions::StrComparison::new(actual_ll, expected_ll);
+        let comparison = pretty_assertions::StrComparison::new(expected_ll, actual_ll);
         panic!("assertion failed: `(left == right)`\n\n{}", comparison);
     }
     Ok(())

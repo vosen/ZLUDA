@@ -1,59 +1,46 @@
 @shared_mem = external addrspace(3) global [1024 x i8], align 4
 
-declare i32 @__zluda_ptx_impl_sreg_tid(i8) #0
-
-declare i32 @__zluda_ptx_impl_sreg_ntid(i8) #0
-
-declare i32 @__zluda_ptx_impl_sreg_ctaid(i8) #0
-
-declare i32 @__zluda_ptx_impl_sreg_nctaid(i8) #0
-
-declare i32 @__zluda_ptx_impl_sreg_clock() #0
-
-declare i32 @__zluda_ptx_impl_sreg_lanemask_lt() #0
-
-define amdgpu_kernel void @atom_add_float(ptr addrspace(4) byref(i64) %"42", ptr addrspace(4) byref(i64) %"43") #1 {
-  %"44" = alloca i64, align 8, addrspace(5)
-  %"45" = alloca i64, align 8, addrspace(5)
-  %"46" = alloca float, align 4, addrspace(5)
-  %"47" = alloca float, align 4, addrspace(5)
+define amdgpu_kernel void @atom_add_float(ptr addrspace(4) byref(i64) %"36", ptr addrspace(4) byref(i64) %"37") #0 {
+  %"38" = alloca i64, align 8, addrspace(5)
+  %"39" = alloca i64, align 8, addrspace(5)
+  %"40" = alloca float, align 4, addrspace(5)
+  %"41" = alloca float, align 4, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
   br label %"35"
 
 "35":                                             ; preds = %1
-  %"48" = load i64, ptr addrspace(4) %"42", align 4
-  store i64 %"48", ptr addrspace(5) %"44", align 4
-  %"49" = load i64, ptr addrspace(4) %"43", align 4
-  store i64 %"49", ptr addrspace(5) %"45", align 4
-  %"51" = load i64, ptr addrspace(5) %"44", align 4
-  %"62" = inttoptr i64 %"51" to ptr
-  %"50" = load float, ptr %"62", align 4
-  store float %"50", ptr addrspace(5) %"46", align 4
-  %"52" = load i64, ptr addrspace(5) %"44", align 4
-  %"63" = inttoptr i64 %"52" to ptr
-  %"32" = getelementptr inbounds i8, ptr %"63", i64 4
-  %"53" = load float, ptr %"32", align 4
-  store float %"53", ptr addrspace(5) %"47", align 4
-  %"54" = load float, ptr addrspace(5) %"46", align 4
-  store float %"54", ptr addrspace(3) @shared_mem, align 4
-  %"56" = load float, ptr addrspace(5) %"47", align 4
-  %2 = atomicrmw fadd ptr addrspace(3) @shared_mem, float %"56" syncscope("agent-one-as") monotonic, align 4
-  store float %2, ptr addrspace(5) %"46", align 4
-  %"57" = load float, ptr addrspace(3) @shared_mem, align 4
-  store float %"57", ptr addrspace(5) %"47", align 4
-  %"58" = load i64, ptr addrspace(5) %"45", align 4
-  %"59" = load float, ptr addrspace(5) %"46", align 4
-  %"67" = inttoptr i64 %"58" to ptr
-  store float %"59", ptr %"67", align 4
-  %"60" = load i64, ptr addrspace(5) %"45", align 4
-  %"68" = inttoptr i64 %"60" to ptr
-  %"34" = getelementptr inbounds i8, ptr %"68", i64 4
-  %"61" = load float, ptr addrspace(5) %"47", align 4
-  store float %"61", ptr %"34", align 4
+  %"42" = load i64, ptr addrspace(4) %"36", align 4
+  store i64 %"42", ptr addrspace(5) %"38", align 4
+  %"43" = load i64, ptr addrspace(4) %"37", align 4
+  store i64 %"43", ptr addrspace(5) %"39", align 4
+  %"45" = load i64, ptr addrspace(5) %"38", align 4
+  %"56" = inttoptr i64 %"45" to ptr
+  %"44" = load float, ptr %"56", align 4
+  store float %"44", ptr addrspace(5) %"40", align 4
+  %"46" = load i64, ptr addrspace(5) %"38", align 4
+  %"57" = inttoptr i64 %"46" to ptr
+  %"32" = getelementptr inbounds i8, ptr %"57", i64 4
+  %"47" = load float, ptr %"32", align 4
+  store float %"47", ptr addrspace(5) %"41", align 4
+  %"48" = load float, ptr addrspace(5) %"40", align 4
+  store float %"48", ptr addrspace(3) @shared_mem, align 4
+  %"50" = load float, ptr addrspace(5) %"41", align 4
+  %2 = atomicrmw fadd ptr addrspace(3) @shared_mem, float %"50" syncscope("agent-one-as") monotonic, align 4
+  store float %2, ptr addrspace(5) %"40", align 4
+  %"51" = load float, ptr addrspace(3) @shared_mem, align 4
+  store float %"51", ptr addrspace(5) %"41", align 4
+  %"52" = load i64, ptr addrspace(5) %"39", align 4
+  %"53" = load float, ptr addrspace(5) %"40", align 4
+  %"61" = inttoptr i64 %"52" to ptr
+  store float %"53", ptr %"61", align 4
+  %"54" = load i64, ptr addrspace(5) %"39", align 4
+  %"62" = inttoptr i64 %"54" to ptr
+  %"34" = getelementptr inbounds i8, ptr %"62", i64 4
+  %"55" = load float, ptr addrspace(5) %"41", align 4
+  store float %"55", ptr %"34", align 4
   ret void
 }
 
-attributes #0 = { "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="dynamic" "denormal-fp-math-f32"="dynamic" "no-trapping-math"="true" "uniform-work-group-size"="true" }
-attributes #1 = { "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="preserve-sign" "denormal-fp-math-f32"="preserve-sign" "no-trapping-math"="true" "uniform-work-group-size"="true" }
+attributes #0 = { "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="preserve-sign" "denormal-fp-math-f32"="preserve-sign" "no-trapping-math"="true" "uniform-work-group-size"="true" }

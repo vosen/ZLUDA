@@ -1,63 +1,51 @@
 declare i32 @__zluda_ptx_impl_bfi_b32(i32, i32, i32, i32) #0
 
-declare i32 @__zluda_ptx_impl_sreg_tid(i8) #0
-
-declare i32 @__zluda_ptx_impl_sreg_ntid(i8) #0
-
-declare i32 @__zluda_ptx_impl_sreg_ctaid(i8) #0
-
-declare i32 @__zluda_ptx_impl_sreg_nctaid(i8) #0
-
-declare i32 @__zluda_ptx_impl_sreg_clock() #0
-
-declare i32 @__zluda_ptx_impl_sreg_lanemask_lt() #0
-
-define amdgpu_kernel void @bfi(ptr addrspace(4) byref(i64) %"45", ptr addrspace(4) byref(i64) %"46") #1 {
-  %"47" = alloca i64, align 8, addrspace(5)
-  %"48" = alloca i64, align 8, addrspace(5)
-  %"49" = alloca i32, align 4, addrspace(5)
-  %"50" = alloca i32, align 4, addrspace(5)
-  %"51" = alloca i32, align 4, addrspace(5)
-  %"52" = alloca i32, align 4, addrspace(5)
+define amdgpu_kernel void @bfi(ptr addrspace(4) byref(i64) %"39", ptr addrspace(4) byref(i64) %"40") #1 {
+  %"41" = alloca i64, align 8, addrspace(5)
+  %"42" = alloca i64, align 8, addrspace(5)
+  %"43" = alloca i32, align 4, addrspace(5)
+  %"44" = alloca i32, align 4, addrspace(5)
+  %"45" = alloca i32, align 4, addrspace(5)
+  %"46" = alloca i32, align 4, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
   br label %"38"
 
 "38":                                             ; preds = %1
-  %"53" = load i64, ptr addrspace(4) %"45", align 4
-  store i64 %"53", ptr addrspace(5) %"47", align 4
-  %"54" = load i64, ptr addrspace(4) %"46", align 4
-  store i64 %"54", ptr addrspace(5) %"48", align 4
-  %"56" = load i64, ptr addrspace(5) %"47", align 4
-  %"70" = inttoptr i64 %"56" to ptr
-  %"55" = load i32, ptr %"70", align 4
-  store i32 %"55", ptr addrspace(5) %"49", align 4
-  %"57" = load i64, ptr addrspace(5) %"47", align 4
-  %"71" = inttoptr i64 %"57" to ptr
-  %"33" = getelementptr inbounds i8, ptr %"71", i64 4
-  %"58" = load i32, ptr %"33", align 4
-  store i32 %"58", ptr addrspace(5) %"50", align 4
-  %"59" = load i64, ptr addrspace(5) %"47", align 4
-  %"72" = inttoptr i64 %"59" to ptr
-  %"35" = getelementptr inbounds i8, ptr %"72", i64 8
-  %"60" = load i32, ptr %"35", align 4
-  store i32 %"60", ptr addrspace(5) %"51", align 4
-  %"61" = load i64, ptr addrspace(5) %"47", align 4
-  %"73" = inttoptr i64 %"61" to ptr
-  %"37" = getelementptr inbounds i8, ptr %"73", i64 12
-  %"62" = load i32, ptr %"37", align 4
-  store i32 %"62", ptr addrspace(5) %"52", align 4
-  %"64" = load i32, ptr addrspace(5) %"49", align 4
-  %"65" = load i32, ptr addrspace(5) %"50", align 4
-  %"66" = load i32, ptr addrspace(5) %"51", align 4
-  %"67" = load i32, ptr addrspace(5) %"52", align 4
-  %"74" = call i32 @__zluda_ptx_impl_bfi_b32(i32 %"64", i32 %"65", i32 %"66", i32 %"67")
-  store i32 %"74", ptr addrspace(5) %"49", align 4
-  %"68" = load i64, ptr addrspace(5) %"48", align 4
-  %"69" = load i32, ptr addrspace(5) %"49", align 4
-  %"77" = inttoptr i64 %"68" to ptr
-  store i32 %"69", ptr %"77", align 4
+  %"47" = load i64, ptr addrspace(4) %"39", align 4
+  store i64 %"47", ptr addrspace(5) %"41", align 4
+  %"48" = load i64, ptr addrspace(4) %"40", align 4
+  store i64 %"48", ptr addrspace(5) %"42", align 4
+  %"50" = load i64, ptr addrspace(5) %"41", align 4
+  %"64" = inttoptr i64 %"50" to ptr
+  %"49" = load i32, ptr %"64", align 4
+  store i32 %"49", ptr addrspace(5) %"43", align 4
+  %"51" = load i64, ptr addrspace(5) %"41", align 4
+  %"65" = inttoptr i64 %"51" to ptr
+  %"33" = getelementptr inbounds i8, ptr %"65", i64 4
+  %"52" = load i32, ptr %"33", align 4
+  store i32 %"52", ptr addrspace(5) %"44", align 4
+  %"53" = load i64, ptr addrspace(5) %"41", align 4
+  %"66" = inttoptr i64 %"53" to ptr
+  %"35" = getelementptr inbounds i8, ptr %"66", i64 8
+  %"54" = load i32, ptr %"35", align 4
+  store i32 %"54", ptr addrspace(5) %"45", align 4
+  %"55" = load i64, ptr addrspace(5) %"41", align 4
+  %"67" = inttoptr i64 %"55" to ptr
+  %"37" = getelementptr inbounds i8, ptr %"67", i64 12
+  %"56" = load i32, ptr %"37", align 4
+  store i32 %"56", ptr addrspace(5) %"46", align 4
+  %"58" = load i32, ptr addrspace(5) %"43", align 4
+  %"59" = load i32, ptr addrspace(5) %"44", align 4
+  %"60" = load i32, ptr addrspace(5) %"45", align 4
+  %"61" = load i32, ptr addrspace(5) %"46", align 4
+  %"68" = call i32 @__zluda_ptx_impl_bfi_b32(i32 %"58", i32 %"59", i32 %"60", i32 %"61")
+  store i32 %"68", ptr addrspace(5) %"43", align 4
+  %"62" = load i64, ptr addrspace(5) %"42", align 4
+  %"63" = load i32, ptr addrspace(5) %"43", align 4
+  %"71" = inttoptr i64 %"62" to ptr
+  store i32 %"63", ptr %"71", align 4
   ret void
 }
 
