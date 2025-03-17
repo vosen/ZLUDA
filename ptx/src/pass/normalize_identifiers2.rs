@@ -4,7 +4,7 @@ use ptx_parser as ast;
 pub(crate) fn run<'input, 'b>(
     resolver: &mut ScopedResolver<'input, 'b>,
     directives: Vec<ast::Directive<'input, ast::ParsedOperand<&'input str>>>,
-) -> Result<Vec<NormalizedDirective2<'input>>, TranslateError> {
+) -> Result<Vec<NormalizedDirective2>, TranslateError> {
     resolver.start_scope();
     let result = directives
         .into_iter()
@@ -17,7 +17,7 @@ pub(crate) fn run<'input, 'b>(
 fn run_directive<'input, 'b>(
     resolver: &mut ScopedResolver<'input, 'b>,
     directive: ast::Directive<'input, ast::ParsedOperand<&'input str>>,
-) -> Result<NormalizedDirective2<'input>, TranslateError> {
+) -> Result<NormalizedDirective2, TranslateError> {
     Ok(match directive {
         ast::Directive::Variable(linking, var) => {
             NormalizedDirective2::Variable(linking, run_variable(resolver, var)?)
@@ -32,15 +32,11 @@ fn run_method<'input, 'b>(
     resolver: &mut ScopedResolver<'input, 'b>,
     linkage: ast::LinkingDirective,
     method: ast::Function<'input, &'input str, ast::Statement<ast::ParsedOperand<&'input str>>>,
-) -> Result<NormalizedFunction2<'input>, TranslateError> {
-    let name = match method.func_directive.name {
-        ast::MethodName::Kernel(name) => ast::MethodName::Kernel(name),
-        ast::MethodName::Func(text) => {
-            ast::MethodName::Func(resolver.add_or_get_in_current_scope_untyped(text)?)
-        }
-    };
+) -> Result<NormalizedFunction2, TranslateError> {
+    let is_kernel = method.func_directive.name.is_kernel();
+    let name = resolver.add_or_get_in_current_scope_untyped(method.func_directive.name.text())?;
     resolver.start_scope();
-    let func_decl = run_function_decl(resolver, method.func_directive, name)?;
+    let (return_arguments, input_arguments) = run_function_decl(resolver, method.func_directive)?;
     let body = method
         .body
         .map(|statements| {
@@ -51,20 +47,25 @@ fn run_method<'input, 'b>(
         .transpose()?;
     resolver.end_scope();
     Ok(Function2 {
-        func_decl,
-        globals: Vec::new(),
+        return_arguments,
+        name,
+        input_arguments,
         body,
         import_as: None,
-        tuning: method.tuning,
         linkage,
+        is_kernel,
+        tuning: method.tuning,
+        flush_to_zero_f32: false,
+        flush_to_zero_f16f64: false,
+        rounding_mode_f32: ptx_parser::RoundingMode::NearestEven,
+        rounding_mode_f16f64: ptx_parser::RoundingMode::NearestEven,
     })
 }
 
 fn run_function_decl<'input, 'b>(
     resolver: &mut ScopedResolver<'input, 'b>,
     func_directive: ast::MethodDeclaration<'input, &'input str>,
-    name: ast::MethodName<'input, SpirvWord>,
-) -> Result<ast::MethodDeclaration<'input, SpirvWord>, TranslateError> {
+) -> Result<(Vec<ast::Variable<SpirvWord>>, Vec<ast::Variable<SpirvWord>>), TranslateError> {
     assert!(func_directive.shared_mem.is_none());
     let return_arguments = func_directive
         .return_arguments
@@ -76,12 +77,7 @@ fn run_function_decl<'input, 'b>(
         .into_iter()
         .map(|var| run_variable(resolver, var))
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(ast::MethodDeclaration {
-        return_arguments,
-        name,
-        input_arguments,
-        shared_mem: None,
-    })
+    Ok((return_arguments, input_arguments))
 }
 
 fn run_variable<'input, 'b>(

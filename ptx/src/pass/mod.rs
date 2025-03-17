@@ -17,12 +17,15 @@ mod expand_operands;
 mod fix_special_registers2;
 mod hoist_globals;
 mod insert_explicit_load_store;
+mod instruction_mode_to_global_mode;
 mod insert_implicit_conversions2;
+mod normalize_basic_blocks;
 mod normalize_identifiers2;
 mod normalize_predicates2;
+mod remove_unreachable_basic_blocks;
 mod replace_instructions_with_function_calls;
-mod resolve_function_pointers;
 mod replace_known_functions;
+mod resolve_function_pointers;
 
 static ZLUDA_PTX_IMPL: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.bc");
 const ZLUDA_PTX_PREFIX: &'static str = "__zluda_ptx_impl_";
@@ -43,12 +46,15 @@ pub fn to_llvm_module<'input>(ast: ast::Module<'input>) -> Result<Module, Transl
     let mut scoped_resolver = ScopedResolver::new(&mut flat_resolver);
     let sreg_map = SpecialRegistersMap2::new(&mut scoped_resolver)?;
     let directives = normalize_identifiers2::run(&mut scoped_resolver, ast.directives)?;
-    let directives = replace_known_functions::run(&flat_resolver, directives);
+    let directives = replace_known_functions::run(&mut flat_resolver, directives);
     let directives = normalize_predicates2::run(&mut flat_resolver, directives)?;
     let directives = resolve_function_pointers::run(directives)?;
-    let directives: Vec<Directive2<'_, ptx_parser::Instruction<ptx_parser::ParsedOperand<SpirvWord>>, ptx_parser::ParsedOperand<SpirvWord>>> = fix_special_registers2::run(&mut flat_resolver, &sreg_map, directives)?;
+    let directives = fix_special_registers2::run(&mut flat_resolver, &sreg_map, directives)?;
     let directives = expand_operands::run(&mut flat_resolver, directives)?;
     let directives = deparamize_functions::run(&mut flat_resolver, directives)?;
+    let directives = normalize_basic_blocks::run(&mut flat_resolver, directives)?;
+    let directives = remove_unreachable_basic_blocks::run(directives)?;
+    let directives = instruction_mode_to_global_mode::run(&mut flat_resolver, directives)?;
     let directives = insert_explicit_load_store::run(&mut flat_resolver, directives)?;
     let directives = insert_implicit_conversions2::run(&mut flat_resolver, directives)?;
     let directives = replace_instructions_with_function_calls::run(&mut flat_resolver, directives)?;
@@ -195,6 +201,20 @@ enum Statement<I, P: ast::Operand> {
     FunctionPointer(FunctionPointerDetails),
     VectorRead(VectorRead),
     VectorWrite(VectorWrite),
+    SetMode(ModeRegister),
+}
+
+#[derive(Eq, PartialEq, Clone, Copy)]
+#[cfg_attr(test, derive(Debug))]
+enum ModeRegister {
+    Denormal {
+        f32: bool,
+        f16f64: bool,
+    },
+    Rounding {
+        f32: ast::RoundingMode,
+        f16f64: ast::RoundingMode,
+    },
 }
 
 impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
@@ -467,6 +487,7 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                 let src = visitor.visit_ident(src, None, false, false)?;
                 Statement::FunctionPointer(FunctionPointerDetails { dst, src })
             }
+            Statement::SetMode(mode_register) => Statement::SetMode(mode_register),
         })
     }
 }
@@ -525,7 +546,7 @@ struct FunctionPointerDetails {
     src: SpirvWord,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 pub struct SpirvWord(u32);
 
 impl From<u32> for SpirvWord {
@@ -557,22 +578,27 @@ type NormalizedStatement = Statement<
     ast::ParsedOperand<SpirvWord>,
 >;
 
-enum Directive2<'input, Instruction, Operand: ast::Operand> {
+enum Directive2<Instruction, Operand: ast::Operand> {
     Variable(ast::LinkingDirective, ast::Variable<SpirvWord>),
-    Method(Function2<'input, Instruction, Operand>),
+    Method(Function2<Instruction, Operand>),
 }
 
-struct Function2<'input, Instruction, Operand: ast::Operand> {
-    pub func_decl: ast::MethodDeclaration<'input, SpirvWord>,
-    pub globals: Vec<ast::Variable<SpirvWord>>,
+struct Function2<Instruction, Operand: ast::Operand> {
+    pub return_arguments: Vec<ast::Variable<Operand::Ident>>,
+    pub name: Operand::Ident,
+    pub input_arguments: Vec<ast::Variable<Operand::Ident>>,
     pub body: Option<Vec<Statement<Instruction, Operand>>>,
+    is_kernel: bool,
     import_as: Option<String>,
     tuning: Vec<ast::TuningDirective>,
     linkage: ast::LinkingDirective,
+    flush_to_zero_f32: bool,
+    flush_to_zero_f16f64: bool,
+    rounding_mode_f32: ast::RoundingMode,
+    rounding_mode_f16f64: ast::RoundingMode,
 }
 
-type NormalizedDirective2<'input> = Directive2<
-    'input,
+type NormalizedDirective2 = Directive2<
     (
         Option<ast::PredAt<SpirvWord>>,
         ast::Instruction<ast::ParsedOperand<SpirvWord>>,
@@ -580,8 +606,7 @@ type NormalizedDirective2<'input> = Directive2<
     ast::ParsedOperand<SpirvWord>,
 >;
 
-type NormalizedFunction2<'input> = Function2<
-    'input,
+type NormalizedFunction2 = Function2<
     (
         Option<ast::PredAt<SpirvWord>>,
         ast::Instruction<ast::ParsedOperand<SpirvWord>>,
@@ -589,17 +614,11 @@ type NormalizedFunction2<'input> = Function2<
     ast::ParsedOperand<SpirvWord>,
 >;
 
-type UnconditionalDirective<'input> = Directive2<
-    'input,
-    ast::Instruction<ast::ParsedOperand<SpirvWord>>,
-    ast::ParsedOperand<SpirvWord>,
->;
+type UnconditionalDirective =
+    Directive2<ast::Instruction<ast::ParsedOperand<SpirvWord>>, ast::ParsedOperand<SpirvWord>>;
 
-type UnconditionalFunction<'input> = Function2<
-    'input,
-    ast::Instruction<ast::ParsedOperand<SpirvWord>>,
-    ast::ParsedOperand<SpirvWord>,
->;
+type UnconditionalFunction =
+    Function2<ast::Instruction<ast::ParsedOperand<SpirvWord>>, ast::ParsedOperand<SpirvWord>>;
 
 struct GlobalStringIdentResolver2<'input> {
     pub(crate) current_id: SpirvWord,
@@ -805,47 +824,45 @@ impl SpecialRegistersMap2 {
         self.id_to_reg.get(&id).copied()
     }
 
-    fn generate_declarations<'a, 'input>(
+    fn len() -> usize {
+        PtxSpecialRegister::iter().len()
+    }
+
+    fn foreach_declaration<'a, 'input>(
         resolver: &'a mut GlobalStringIdentResolver2<'input>,
-    ) -> impl ExactSizeIterator<
-        Item = (
+        mut fn_: impl FnMut(
             PtxSpecialRegister,
-            ast::MethodDeclaration<'input, SpirvWord>,
+            (
+                Vec<ast::Variable<SpirvWord>>,
+                SpirvWord,
+                Vec<ast::Variable<SpirvWord>>,
+            ),
         ),
-    > + 'a {
-        PtxSpecialRegister::iter().map(|sreg| {
+    ) {
+        for sreg in PtxSpecialRegister::iter() {
             let external_fn_name = [ZLUDA_PTX_PREFIX, sreg.get_unprefixed_function_name()].concat();
-            let name =
-                ast::MethodName::Func(resolver.register_named(Cow::Owned(external_fn_name), None));
+            let name = resolver.register_named(Cow::Owned(external_fn_name), None);
             let return_type = sreg.get_function_return_type();
             let input_type = sreg.get_function_input_type();
-            (
-                sreg,
-                ast::MethodDeclaration {
-                    return_arguments: vec![ast::Variable {
-                        align: None,
-                        v_type: return_type.into(),
-                        state_space: ast::StateSpace::Reg,
-                        name: resolver
-                            .register_unnamed(Some((return_type.into(), ast::StateSpace::Reg))),
-                        array_init: Vec::new(),
-                    }],
-                    name: name,
-                    input_arguments: input_type
-                        .into_iter()
-                        .map(|type_| ast::Variable {
-                            align: None,
-                            v_type: type_.into(),
-                            state_space: ast::StateSpace::Reg,
-                            name: resolver
-                                .register_unnamed(Some((type_.into(), ast::StateSpace::Reg))),
-                            array_init: Vec::new(),
-                        })
-                        .collect::<Vec<_>>(),
-                    shared_mem: None,
-                },
-            )
-        })
+            let return_arguments = vec![ast::Variable {
+                align: None,
+                v_type: return_type.into(),
+                state_space: ast::StateSpace::Reg,
+                name: resolver.register_unnamed(Some((return_type.into(), ast::StateSpace::Reg))),
+                array_init: Vec::new(),
+            }];
+            let input_arguments = input_type
+                .into_iter()
+                .map(|type_| ast::Variable {
+                    align: None,
+                    v_type: type_.into(),
+                    state_space: ast::StateSpace::Reg,
+                    name: resolver.register_unnamed(Some((type_.into(), ast::StateSpace::Reg))),
+                    array_init: Vec::new(),
+                })
+                .collect::<Vec<_>>();
+            fn_(sreg, (return_arguments, name, input_arguments));
+        }
     }
 }
 
