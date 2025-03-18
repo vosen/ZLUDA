@@ -159,6 +159,10 @@ impl std::fmt::Debug for Message {
 }
 
 impl Message {
+    pub fn to_bytes(&self) -> &[u8] {
+        self.0.to_bytes()
+    }
+
     pub fn to_str(&self) -> &str {
         self.0.to_str().unwrap().trim()
     }
