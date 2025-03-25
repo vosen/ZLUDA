@@ -1,66 +1,57 @@
-declare i32 @__zluda_ptx_impl_sreg_tid(i8) #0
-
-declare i32 @__zluda_ptx_impl_sreg_ntid(i8) #0
-
-declare i32 @__zluda_ptx_impl_sreg_ctaid(i8) #0
-
-declare i32 @__zluda_ptx_impl_sreg_nctaid(i8) #0
-
-declare i32 @__zluda_ptx_impl_sreg_clock() #0
-
-declare i32 @__zluda_ptx_impl_sreg_lanemask_lt() #0
-
-define amdgpu_kernel void @pred_not(ptr addrspace(4) byref(i64) %"45", ptr addrspace(4) byref(i64) %"46") #0 {
+define amdgpu_kernel void @pred_not(ptr addrspace(4) byref(i64) %"41", ptr addrspace(4) byref(i64) %"42") #0 {
+  %"43" = alloca i64, align 8, addrspace(5)
+  %"44" = alloca i64, align 8, addrspace(5)
+  %"45" = alloca i64, align 8, addrspace(5)
+  %"46" = alloca i64, align 8, addrspace(5)
   %"47" = alloca i64, align 8, addrspace(5)
-  %"48" = alloca i64, align 8, addrspace(5)
-  %"49" = alloca i64, align 8, addrspace(5)
-  %"50" = alloca i64, align 8, addrspace(5)
-  %"51" = alloca i64, align 8, addrspace(5)
-  %"52" = alloca i1, align 1, addrspace(5)
+  %"48" = alloca i1, align 1, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
-  %"53" = load i64, ptr addrspace(4) %"45", align 4
-  store i64 %"53", ptr addrspace(5) %"47", align 4
-  %"54" = load i64, ptr addrspace(4) %"46", align 4
-  store i64 %"54", ptr addrspace(5) %"48", align 4
-  %"56" = load i64, ptr addrspace(5) %"47", align 4
-  %"70" = inttoptr i64 %"56" to ptr
-  %"55" = load i64, ptr %"70", align 4
-  store i64 %"55", ptr addrspace(5) %"49", align 4
-  %"57" = load i64, ptr addrspace(5) %"47", align 4
-  %"71" = inttoptr i64 %"57" to ptr
-  %"36" = getelementptr inbounds i8, ptr %"71", i64 8
-  %"58" = load i64, ptr %"36", align 4
-  store i64 %"58", ptr addrspace(5) %"50", align 4
-  %"60" = load i64, ptr addrspace(5) %"49", align 4
-  %"61" = load i64, ptr addrspace(5) %"50", align 4
-  %"59" = icmp ult i64 %"60", %"61"
-  store i1 %"59", ptr addrspace(5) %"52", align 1
-  %"63" = load i1, ptr addrspace(5) %"52", align 1
-  %"62" = xor i1 %"63", true
-  store i1 %"62", ptr addrspace(5) %"52", align 1
-  %"64" = load i1, ptr addrspace(5) %"52", align 1
-  br i1 %"64", label %"15", label %"16"
+  br label %"40"
 
-"15":                                             ; preds = %1
-  store i64 1, ptr addrspace(5) %"51", align 4
-  br label %"16"
+"40":                                             ; preds = %1
+  %"49" = load i64, ptr addrspace(4) %"41", align 4
+  store i64 %"49", ptr addrspace(5) %"43", align 4
+  %"50" = load i64, ptr addrspace(4) %"42", align 4
+  store i64 %"50", ptr addrspace(5) %"44", align 4
+  %"52" = load i64, ptr addrspace(5) %"43", align 4
+  %"66" = inttoptr i64 %"52" to ptr
+  %"51" = load i64, ptr %"66", align 4
+  store i64 %"51", ptr addrspace(5) %"45", align 4
+  %"53" = load i64, ptr addrspace(5) %"43", align 4
+  %"67" = inttoptr i64 %"53" to ptr
+  %"37" = getelementptr inbounds i8, ptr %"67", i64 8
+  %"54" = load i64, ptr %"37", align 4
+  store i64 %"54", ptr addrspace(5) %"46", align 4
+  %"56" = load i64, ptr addrspace(5) %"45", align 4
+  %"57" = load i64, ptr addrspace(5) %"46", align 4
+  %"55" = icmp ult i64 %"56", %"57"
+  store i1 %"55", ptr addrspace(5) %"48", align 1
+  %"59" = load i1, ptr addrspace(5) %"48", align 1
+  %"58" = xor i1 %"59", true
+  store i1 %"58", ptr addrspace(5) %"48", align 1
+  %"60" = load i1, ptr addrspace(5) %"48", align 1
+  br i1 %"60", label %"16", label %"17"
 
-"16":                                             ; preds = %"15", %1
-  %"66" = load i1, ptr addrspace(5) %"52", align 1
-  br i1 %"66", label %"18", label %"17"
+"16":                                             ; preds = %"40"
+  store i64 1, ptr addrspace(5) %"47", align 4
+  br label %"17"
 
-"17":                                             ; preds = %"16"
-  store i64 2, ptr addrspace(5) %"51", align 4
-  br label %"18"
+"17":                                             ; preds = %"16", %"40"
+  %"62" = load i1, ptr addrspace(5) %"48", align 1
+  br i1 %"62", label %"19", label %"18"
 
-"18":                                             ; preds = %"17", %"16"
-  %"68" = load i64, ptr addrspace(5) %"48", align 4
-  %"69" = load i64, ptr addrspace(5) %"51", align 4
-  %"72" = inttoptr i64 %"68" to ptr
-  store i64 %"69", ptr %"72", align 4
+"18":                                             ; preds = %"17"
+  store i64 2, ptr addrspace(5) %"47", align 4
+  br label %"19"
+
+"19":                                             ; preds = %"18", %"17"
+  %"64" = load i64, ptr addrspace(5) %"44", align 4
+  %"65" = load i64, ptr addrspace(5) %"47", align 4
+  %"68" = inttoptr i64 %"64" to ptr
+  store i64 %"65", ptr %"68", align 4
   ret void
 }
 
-attributes #0 = { "amdgpu-unsafe-fp-atomics"="true" "no-trapping-math"="true" "uniform-work-group-size"="true" }
+attributes #0 = { "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="preserve-sign" "denormal-fp-math-f32"="preserve-sign" "no-trapping-math"="true" "uniform-work-group-size"="true" }

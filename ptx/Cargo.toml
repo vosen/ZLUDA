@@ -17,6 +17,10 @@ bitflags = "1.2"
 rustc-hash = "2.0.0"
 strum = "0.26"
 strum_macros = "0.26"
+petgraph = "0.7.1"
+microlp = "0.2.10"
+int-enum = "1.1"
+unwrap_or = "1.0.1"
 
 [dev-dependencies]
 hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
