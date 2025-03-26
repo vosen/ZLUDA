@@ -3,7 +3,7 @@ use std::ffi::CStr;
 use std::mem;
 use std::ptr;
 
-pub struct Data(amd_comgr_data_t);
+struct Data(amd_comgr_data_t);
 
 impl Data {
     fn new(
@@ -22,7 +22,7 @@ impl Data {
         self.0
     }
 
-    pub fn copy_content(&self) -> Result<Vec<u8>, amd_comgr_status_s> {
+    fn copy_content(&self) -> Result<Vec<u8>, amd_comgr_status_s> {
         let mut size = unsafe { mem::zeroed() };
         unsafe { amd_comgr_get_data(self.get(), &mut size, ptr::null_mut()) }?;
         let mut result: Vec<u8> = Vec::with_capacity(size);
@@ -32,7 +32,7 @@ impl Data {
     }
 }
 
-pub struct DataSet(amd_comgr_data_set_t);
+struct DataSet(amd_comgr_data_set_t);
 
 impl DataSet {
     fn new() -> Result<Self, amd_comgr_status_s> {
@@ -49,7 +49,7 @@ impl DataSet {
         self.0
     }
 
-    pub fn get_data(
+    fn get_data(
         &self,
         kind: amd_comgr_data_kind_t,
         index: usize,
