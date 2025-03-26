@@ -1,5 +1,4 @@
 use std::env;
-use std::error::Error;
 use std::ffi::{CStr, OsStr};
 use std::fs::{self, File};
 use std::io::{self, Write};
@@ -7,10 +6,11 @@ use std::mem::MaybeUninit;
 use std::path::{Path, PathBuf};
 use std::str::{self, FromStr};
 
-use amd_comgr_sys::amd_comgr_status_s;
+use amd_comgr_sys::amd_comgr_data_kind_s;
 use bpaf::Bpaf;
-use hip_runtime_sys::hipErrorCode_t;
-use ptx_parser::PtxError;
+
+mod error;
+use error::CompilerError;
 
 #[derive(Debug, Clone, Bpaf)]
 #[bpaf(options, version)]
@@ -23,13 +23,13 @@ pub struct Options {
     ptx_path: String,
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), CompilerError> {
     let opts = options().run();
 
     let output_type = opts.output_type.unwrap_or_default();
 
     match output_type {
-        OutputType::LlvmIrLinked | OutputType::Assembly => todo!(),
+        OutputType::Assembly => todo!(),
         _ => {}
     }
 
@@ -39,24 +39,30 @@ fn main() -> Result<(), Box<dyn Error>> {
     let output_path = get_output_path(&ptx_path, &output_type)?;
     check_path(&output_path)?;
 
-    let ptx = fs::read(&ptx_path)?;
-    let ptx = str::from_utf8(&ptx)?;
-    let llvm = ptx_to_llvm(ptx)?;
+    let ptx = fs::read(&ptx_path).map_err(CompilerError::from)?;
+    let ptx = str::from_utf8(&ptx).map_err(CompilerError::from)?;
+    let llvm = ptx_to_llvm(ptx).map_err(CompilerError::from)?;
 
     if output_type == OutputType::LlvmIrPreLinked {
-        write_to_file(&llvm.llvm_ir, &output_path)?;
+        write_to_file(&llvm.llvm_ir, &output_path).map_err(CompilerError::from)?;
+        return Ok(());
+    }
+
+    if output_type == OutputType::LlvmIrLinked {
+        let linked_llvm = link_llvm(&llvm)?;
+        write_to_file(&linked_llvm, &output_path).map_err(CompilerError::from)?;
         return Ok(());
     }
 
     let elf = llvm_to_elf(&llvm)?;
-    write_to_file(&elf, &output_path)?;
+    write_to_file(&elf, &output_path).map_err(CompilerError::from)?;
 
     Ok(())
 }
 
-fn ptx_to_llvm(ptx: &str) -> Result<LLVMArtifacts, Box<dyn Error>> {
-    let ast = ptx_parser::parse_module_checked(ptx).map_err(join_ptx_errors)?;
-    let module = ptx::to_llvm_module(ast)?;
+fn ptx_to_llvm(ptx: &str) -> Result<LLVMArtifacts, CompilerError> {
+    let ast = ptx_parser::parse_module_checked(ptx).map_err(CompilerError::from).map_err(CompilerError::from)?;
+    let module = ptx::to_llvm_module(ast).map_err(CompilerError::from)?;
     let bitcode = module.llvm_ir.write_bitcode_to_memory().to_vec();
     let linked_bitcode = module.linked_bitcode().to_vec();
     let llvm_ir = module.llvm_ir.print_module_to_string().to_bytes().to_vec();
@@ -74,12 +80,14 @@ struct LLVMArtifacts {
     llvm_ir: Vec<u8>,
 }
 
-fn join_ptx_errors(vector: Vec<PtxError>) -> String {
-    let errors: Vec<String> = vector.iter().map(PtxError::to_string).collect();
-    errors.join("\n")
+fn link_llvm(llvm: &LLVMArtifacts) -> Result<Vec<u8>, CompilerError> {
+    let linked_bitcode = comgr::link_bitcode(&llvm.bitcode, &llvm.linked_bitcode)?;
+    let data = linked_bitcode.get_data(amd_comgr_data_kind_s::AMD_COMGR_DATA_KIND_BC, 0)?;
+    let linked_llvm = data.copy_content().map_err(CompilerError::from)?;
+    Ok(ptx::bitcode_to_ir(linked_llvm))
 }
 
-fn llvm_to_elf(llvm: &LLVMArtifacts) -> Result<Vec<u8>, ElfError> {
+fn llvm_to_elf(llvm: &LLVMArtifacts) -> Result<Vec<u8>, CompilerError> {
     use hip_runtime_sys::*;
     unsafe { hipInit(0) }?;
     let mut dev_props: MaybeUninit<hipDeviceProp_tR0600> = MaybeUninit::uninit();
@@ -87,13 +95,12 @@ fn llvm_to_elf(llvm: &LLVMArtifacts) -> Result<Vec<u8>, ElfError> {
     let dev_props = unsafe { dev_props.assume_init() };
     let gcn_arch = unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) };
 
-    comgr::compile_bitcode(gcn_arch, &llvm.bitcode, &llvm.linked_bitcode).map_err(ElfError::from)
+    comgr::compile_bitcode(gcn_arch, &llvm.bitcode, &llvm.linked_bitcode).map_err(CompilerError::from)
 }
 
-fn check_path(path: &Path) -> Result<(), Box<dyn Error>> {
-    if path.try_exists()? && !path.is_file() {
-        let error = CheckPathError(path.to_path_buf());
-        let error = Box::new(error);
+fn check_path(path: &Path) -> Result<(), CompilerError> {
+    if path.try_exists().map_err(CompilerError::from)? && !path.is_file() {
+        let error = CompilerError::CheckPathError(path.to_path_buf());
         return Err(error);
     }
     Ok(())
@@ -102,8 +109,8 @@ fn check_path(path: &Path) -> Result<(), Box<dyn Error>> {
 fn get_output_path(
     ptx_path: &PathBuf,
     output_type: &OutputType,
-) -> Result<PathBuf, Box<dyn Error>> {
-    let current_dir = env::current_dir()?;
+) -> Result<PathBuf, CompilerError> {
+    let current_dir = env::current_dir().map_err(CompilerError::from)?;
     let output_path = current_dir.join(
         ptx_path
             .as_path()
@@ -150,7 +157,7 @@ impl OutputType {
 }
 
 impl FromStr for OutputType {
-    type Err = ParseOutputTypeError;
+    type Err = CompilerError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -158,35 +165,7 @@ impl FromStr for OutputType {
             "ll_linked" => Ok(Self::LlvmIrLinked),
             "elf" => Ok(Self::Elf),
             "asm" => Ok(Self::Assembly),
-            _ => Err(ParseOutputTypeError(s.into())),
+            _ => Err(CompilerError::ParseOutputTypeError(s.into())),
         }
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-#[error("Not a regular file: {0}")]
-struct CheckPathError(PathBuf);
-
-#[derive(Debug, thiserror::Error)]
-#[error("Invalid output type: {0}")]
-struct ParseOutputTypeError(String);
-
-#[derive(Debug, thiserror::Error)]
-enum ElfError {
-    #[error("HIP error: {0:?}")]
-    HipError(hipErrorCode_t),
-    #[error("amd_comgr error: {0:?}")]
-    AmdComgrError(amd_comgr_status_s),
-}
-
-impl From<hipErrorCode_t> for ElfError {
-    fn from(value: hipErrorCode_t) -> Self {
-        ElfError::HipError(value)
-    }
-}
-
-impl From<amd_comgr_status_s> for ElfError {
-    fn from(value: amd_comgr_status_s) -> Self {
-        ElfError::AmdComgrError(value)
     }
 }

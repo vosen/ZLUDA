@@ -1,7 +1,9 @@
 use amd_comgr_sys::*;
-use std::{ffi::CStr, mem, ptr};
+use std::ffi::CStr;
+use std::mem;
+use std::ptr;
 
-struct Data(amd_comgr_data_t);
+pub struct Data(amd_comgr_data_t);
 
 impl Data {
     fn new(
@@ -20,7 +22,7 @@ impl Data {
         self.0
     }
 
-    fn copy_content(&self) -> Result<Vec<u8>, amd_comgr_status_s> {
+    pub fn copy_content(&self) -> Result<Vec<u8>, amd_comgr_status_s> {
         let mut size = unsafe { mem::zeroed() };
         unsafe { amd_comgr_get_data(self.get(), &mut size, ptr::null_mut()) }?;
         let mut result: Vec<u8> = Vec::with_capacity(size);
@@ -30,7 +32,7 @@ impl Data {
     }
 }
 
-struct DataSet(amd_comgr_data_set_t);
+pub struct DataSet(amd_comgr_data_set_t);
 
 impl DataSet {
     fn new() -> Result<Self, amd_comgr_status_s> {
@@ -47,7 +49,7 @@ impl DataSet {
         self.0
     }
 
-    fn get_data(
+    pub fn get_data(
         &self,
         kind: amd_comgr_data_kind_t,
         index: usize,
@@ -108,11 +110,10 @@ impl Drop for ActionInfo {
     }
 }
 
-pub fn compile_bitcode(
-    gcn_arch: &CStr,
+pub fn link_bitcode(
     main_buffer: &[u8],
     ptx_impl: &[u8],
-) -> Result<Vec<u8>, amd_comgr_status_s> {
+) -> Result<DataSet, amd_comgr_status_s> {
     use amd_comgr_sys::*;
     let bitcode_data_set = DataSet::new()?;
     let main_bitcode_data = Data::new(
@@ -128,11 +129,21 @@ pub fn compile_bitcode(
     )?;
     bitcode_data_set.add(&stdlib_bitcode_data)?;
     let linking_info = ActionInfo::new()?;
-    let linked_data_set = do_action(
+    do_action(
         &bitcode_data_set,
         &linking_info,
         amd_comgr_action_kind_t::AMD_COMGR_ACTION_LINK_BC_TO_BC,
-    )?;
+    )
+}
+
+pub fn compile_bitcode(
+    gcn_arch: &CStr,
+    main_buffer: &[u8],
+    ptx_impl: &[u8],
+) -> Result<Vec<u8>, amd_comgr_status_s> {
+    use amd_comgr_sys::*;
+
+    let linked_data_set = link_bitcode(main_buffer, ptx_impl)?;
     let compile_to_exec = ActionInfo::new()?;
     compile_to_exec.set_isa_name(gcn_arch)?;
     compile_to_exec.set_language(amd_comgr_language_t::AMD_COMGR_LANGUAGE_LLVM_IR)?;
