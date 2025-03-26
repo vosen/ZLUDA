@@ -1,3 +1,4 @@
+use std::ffi::FromBytesUntilNulError;
 use std::io;
 use std::path::PathBuf;
 use std::str::Utf8Error;
@@ -17,14 +18,14 @@ pub enum CompilerError {
     CheckPathError(PathBuf),
     #[error("Invalid output type: {0}")]
     ParseOutputTypeError(String),
-    #[error("Error parsing PTX: {0}")]
-    PtxParserError(String),
     #[error("Error translating PTX: {0:?}")]
     PtxTranslateError(TranslateError),
     #[error("IO error: {0:?}")]
     IoError(io::Error),
     #[error("Error parsing file: {0:?}")]
     ParseFileError(Utf8Error),
+    #[error("Error: {0}")]
+    GenericError(String)
 }
 
 impl From<hipErrorCode_t> for CompilerError {
@@ -43,7 +44,7 @@ impl From<Vec<PtxError<'_>>> for CompilerError {
     fn from(causes: Vec<PtxError>) -> Self {
         let errors: Vec<String> = causes.iter().map(PtxError::to_string).collect();
         let msg = errors.join("\n");
-        CompilerError::PtxParserError(msg)
+        CompilerError::GenericError(msg)
     }
 }
 
@@ -62,5 +63,11 @@ impl From<Utf8Error> for CompilerError {
 impl From<TranslateError> for CompilerError {
     fn from(cause: TranslateError) -> Self {
         CompilerError::PtxTranslateError(cause)
+    }
+}
+
+impl From<FromBytesUntilNulError> for CompilerError {
+    fn from(cause: FromBytesUntilNulError) -> Self {
+        CompilerError::GenericError(format!("{}", cause))
     }
 }

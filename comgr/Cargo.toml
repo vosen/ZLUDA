@@ -1,7 +1,7 @@
 [package]
 name = "comgr"
 version = "0.0.0"
-authors = ["Andrzej Janik <vosen@vosen.pl>"]
+authors = ["Andrzej Janik <vosen@vosen.pl>", "Joëlle van Essen <joelle@v-essen.nl>"]
 edition = "2021"
 
 [lib]

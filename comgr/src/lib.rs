@@ -110,10 +110,7 @@ impl Drop for ActionInfo {
     }
 }
 
-pub fn link_bitcode(
-    main_buffer: &[u8],
-    ptx_impl: &[u8],
-) -> Result<DataSet, amd_comgr_status_s> {
+fn link_bitcode(main_buffer: &[u8], ptx_impl: &[u8]) -> Result<DataSet, amd_comgr_status_s> {
     use amd_comgr_sys::*;
     let bitcode_data_set = DataSet::new()?;
     let main_bitcode_data = Data::new(
@@ -136,14 +133,12 @@ pub fn link_bitcode(
     )
 }
 
-pub fn compile_bitcode(
+fn compile_bitcode(
+    linked_data_set: &DataSet,
     gcn_arch: &CStr,
-    main_buffer: &[u8],
-    ptx_impl: &[u8],
-) -> Result<Vec<u8>, amd_comgr_status_s> {
+) -> Result<DataSet, amd_comgr_status_s> {
     use amd_comgr_sys::*;
 
-    let linked_data_set = link_bitcode(main_buffer, ptx_impl)?;
     let compile_to_exec = ActionInfo::new()?;
     compile_to_exec.set_isa_name(gcn_arch)?;
     compile_to_exec.set_language(amd_comgr_language_t::AMD_COMGR_LANGUAGE_LLVM_IR)?;
@@ -176,14 +171,67 @@ pub fn compile_bitcode(
         ]
     };
     compile_to_exec.set_options(common_options.chain(opt_options))?;
-    let exec_data_set = do_action(
+    do_action(
         &linked_data_set,
         &compile_to_exec,
         amd_comgr_action_kind_t::AMD_COMGR_ACTION_COMPILE_SOURCE_TO_EXECUTABLE,
-    )?;
+    )
+}
+
+fn disassemble_exec(
+    exec_data_set: &DataSet,
+    gcn_arch: &CStr,
+) -> Result<DataSet, amd_comgr_status_s> {
+    let action_info = ActionInfo::new()?;
+    action_info.set_isa_name(gcn_arch)?;
+    do_action(
+        &exec_data_set,
+        &action_info,
+        amd_comgr_action_kind_t::AMD_COMGR_ACTION_DISASSEMBLE_EXECUTABLE_TO_SOURCE,
+    )
+}
+
+pub fn get_linked_bitcode_as_bytes(
+    main_buffer: &[u8],
+    ptx_impl: &[u8],
+) -> Result<Vec<u8>, amd_comgr_status_s> {
+    let linked_data_set = link_bitcode(main_buffer, ptx_impl)?;
+    let linked_bitcode =
+        linked_data_set.get_data(amd_comgr_data_kind_t::AMD_COMGR_DATA_KIND_BC, 0)?;
+    linked_bitcode.copy_content()
+}
+
+fn get_executable(
+    gcn_arch: &CStr,
+    main_buffer: &[u8],
+    ptx_impl: &[u8],
+) -> Result<DataSet, amd_comgr_status_s> {
+    let linked_data_set = link_bitcode(main_buffer, ptx_impl)?;
+    let exec_data_set = compile_bitcode(&linked_data_set, gcn_arch)?;
+    Ok(exec_data_set)
+}
+
+pub fn get_executable_as_bytes(
+    gcn_arch: &CStr,
+    main_buffer: &[u8],
+    ptx_impl: &[u8],
+) -> Result<Vec<u8>, amd_comgr_status_s> {
+    let exec_data_set = get_executable(gcn_arch, main_buffer, ptx_impl)?;
     let executable =
-    exec_data_set.get_data(amd_comgr_data_kind_t::AMD_COMGR_DATA_KIND_EXECUTABLE, 0)?;
+        exec_data_set.get_data(amd_comgr_data_kind_t::AMD_COMGR_DATA_KIND_EXECUTABLE, 0)?;
     executable.copy_content()
+}
+
+pub fn get_assembly_as_bytes(
+    gcn_arch: &CStr,
+    main_buffer: &[u8],
+    ptx_impl: &[u8],
+) -> Result<Vec<u8>, amd_comgr_status_s> {
+    let exec_data_set = get_executable(gcn_arch, main_buffer, ptx_impl)?;
+    let disassembled_data_set = disassemble_exec(&exec_data_set, gcn_arch)?;
+    let assembly =
+        disassembled_data_set.get_data(amd_comgr_data_kind_t::AMD_COMGR_DATA_KIND_SOURCE, 0)?;
+    assembly.copy_content()
 }
 
 fn do_action(
