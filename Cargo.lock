@@ -212,6 +212,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "compiler"
+version = "0.0.0"
+dependencies = [
+ "amd_comgr-sys",
+ "bpaf",
+ "comgr",
+ "hip_runtime-sys",
+ "ptx",
+ "ptx_parser",
+ "thiserror 2.0.12",
+]
+
+[[package]]
 name = "convert_case"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1392,17 +1405,4 @@ dependencies = [
  "detours-sys",
  "wchar",
  "winapi",
-]
-
-[[package]]
-name = "zoc"
-version = "0.0.0"
-dependencies = [
- "amd_comgr-sys",
- "bpaf",
- "comgr",
- "hip_runtime-sys",
- "ptx",
- "ptx_parser",
- "thiserror 2.0.12",
 ]

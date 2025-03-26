@@ -20,10 +20,10 @@ members = [
     "ptx_parser_macros_impl",
     "xtask",
     "zluda_bindgen",
-    "zoc",
+    "compiler",
 ]
 
-default-members = ["zluda", "zluda_ml", "zluda_inject", "zluda_redirect", "zoc"]
+default-members = ["zluda", "zluda_ml", "zluda_inject", "zluda_redirect", "compiler"]
 
 [profile.release-lto]
 inherits = "release"
