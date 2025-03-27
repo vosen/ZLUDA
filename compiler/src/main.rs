@@ -19,6 +19,10 @@ pub struct Options {
     #[bpaf(external(output_type), optional)]
     output_type: Option<OutputType>,
 
+    #[bpaf(long("linked"))]
+    /// Produce linked LLVM IR (in combination with --ll)
+    linked: bool,
+
     #[bpaf(short('o'), argument("file"))]
     /// Output path
     output_path: Option<PathBuf>,
@@ -43,6 +47,10 @@ fn main_core() -> Result<(), CompilerError> {
 
     let output_type = opts.output_type.unwrap_or_default();
 
+    if opts.linked && output_type != OutputType::LlvmIr {
+        println!("Warning: option --linked only makes sense when combined with --ll. Ignoring.");
+    }
+
     let ptx_path = Path::new(&opts.ptx_path).to_path_buf();
     check_path(&ptx_path)?;
 
@@ -57,8 +65,13 @@ fn main_core() -> Result<(), CompilerError> {
     let llvm = ptx_to_llvm(ptx).map_err(CompilerError::from)?;
 
     let output = match output_type {
-        OutputType::LlvmIrPreLinked => llvm.llvm_ir,
-        OutputType::LlvmIrLinked => get_linked_bitcode(&llvm)?,
+        OutputType::LlvmIr => {
+            if opts.linked {
+                get_linked_bitcode(&llvm)?
+            } else {
+                llvm.llvm_ir
+            }
+        }
         OutputType::Elf => get_elf(&llvm)?,
         OutputType::Assembly => get_assembly(&llvm)?,
     };
@@ -154,12 +167,9 @@ fn write_to_file(content: &[u8], path: &Path) -> io::Result<()> {
 
 #[derive(Bpaf, Clone, Copy, Debug, Default, PartialEq)]
 enum OutputType {
-    /// Produce pre-linked LLVM IR
+    /// Produce LLVM IR
     #[bpaf(long("ll"))]
-    LlvmIrPreLinked,
-    /// Produce linked LLVM IR
-    #[bpaf(long("linked-ll"))]
-    LlvmIrLinked,
+    LlvmIr,
     /// Produce ELF binary (default)
     #[default]
     Elf,
@@ -171,7 +181,7 @@ enum OutputType {
 impl OutputType {
     fn extension(self) -> String {
         match self {
-            OutputType::LlvmIrPreLinked | OutputType::LlvmIrLinked => "ll",
+            OutputType::LlvmIr => "ll",
             OutputType::Assembly => "asm",
             OutputType::Elf => "elf",
         }
@@ -184,8 +194,7 @@ impl FromStr for OutputType {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "ll" => Ok(Self::LlvmIrPreLinked),
-            "ll_linked" => Ok(Self::LlvmIrLinked),
+            "ll" => Ok(Self::LlvmIr),
             "elf" => Ok(Self::Elf),
             "asm" => Ok(Self::Assembly),
             _ => {
