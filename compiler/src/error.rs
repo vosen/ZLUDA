@@ -17,6 +17,8 @@ pub enum CompilerError {
     IoError(#[from] io::Error),
     #[error(transparent)]
     Utf8Error(#[from] Utf8Error),
+    #[error(transparent)]
+    FromBytesUntilNulError(#[from] FromBytesUntilNulError),
     #[error("{message}")]
     GenericError {
         #[source]
@@ -61,14 +63,6 @@ impl From<Vec<PtxError<'_>>> for CompilerError {
 impl From<TranslateError> for CompilerError {
     fn from(cause: TranslateError) -> Self {
         let message = format!("PTX TranslateError::{}", cause.as_ref());
-        let cause = Some(Box::new(cause) as Box<dyn std::error::Error>);
-        CompilerError::GenericError { cause, message }
-    }
-}
-
-impl From<FromBytesUntilNulError> for CompilerError {
-    fn from(cause: FromBytesUntilNulError) -> Self {
-        let message = format!("{}", cause);
         let cause = Some(Box::new(cause) as Box<dyn std::error::Error>);
         CompilerError::GenericError { cause, message }
     }
