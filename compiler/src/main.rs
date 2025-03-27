@@ -1,9 +1,11 @@
 use std::env;
+use std::error::Error;
 use std::ffi::{CStr, CString, OsStr};
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::mem::MaybeUninit;
 use std::path::{Path, PathBuf};
+use std::process::ExitCode;
 use std::str::{self, FromStr};
 
 use bpaf::Bpaf;
@@ -26,7 +28,17 @@ pub struct Options {
     ptx_path: String,
 }
 
-fn main() -> Result<(), CompilerError> {
+fn main() -> ExitCode {
+    main_core().map_or_else(
+        |e| {
+            eprintln!("Error: {}", e);
+            ExitCode::FAILURE
+        },
+        |_| ExitCode::SUCCESS,
+    )
+}
+
+fn main_core() -> Result<(), CompilerError> {
     let opts = options().run();
 
     let output_type = opts.output_type.unwrap_or_default();
@@ -36,7 +48,7 @@ fn main() -> Result<(), CompilerError> {
 
     let output_path = match opts.output_path {
         Some(value) => value,
-        None => get_output_path(&ptx_path, &output_type)?
+        None => get_output_path(&ptx_path, &output_type)?,
     };
     check_path(&output_path)?;
 
@@ -48,7 +60,7 @@ fn main() -> Result<(), CompilerError> {
         OutputType::LlvmIrPreLinked => llvm.llvm_ir,
         OutputType::LlvmIrLinked => get_linked_bitcode(&llvm)?,
         OutputType::Elf => get_elf(&llvm)?,
-        OutputType::Assembly => get_assembly(&llvm)?
+        OutputType::Assembly => get_assembly(&llvm)?,
     };
 
     write_to_file(&output, &output_path).map_err(CompilerError::from)?;
@@ -56,7 +68,7 @@ fn main() -> Result<(), CompilerError> {
 }
 
 fn ptx_to_llvm(ptx: &str) -> Result<LLVMArtifacts, CompilerError> {
-    let ast = ptx_parser::parse_module_checked(ptx).map_err(CompilerError::from).map_err(CompilerError::from)?;
+    let ast = ptx_parser::parse_module_checked(ptx).map_err(CompilerError::from)?;
     let module = ptx::to_llvm_module(ast).map_err(CompilerError::from)?;
     let bitcode = module.llvm_ir.write_bitcode_to_memory().to_vec();
     let linked_bitcode = module.linked_bitcode().to_vec();
@@ -82,7 +94,11 @@ fn get_arch() -> Result<CString, CompilerError> {
     unsafe { hipGetDevicePropertiesR0600(dev_props.as_mut_ptr(), 0) }?;
     let dev_props = unsafe { dev_props.assume_init() };
     let arch = dev_props.gcnArchName;
-    let arch: Vec<u8> = arch.to_vec().iter().map(|&v| i8::to_ne_bytes(v)[0]).collect();
+    let arch: Vec<u8> = arch
+        .to_vec()
+        .iter()
+        .map(|&v| i8::to_ne_bytes(v)[0])
+        .collect();
     let arch = CStr::from_bytes_until_nul(arch.as_slice())?;
     Ok(CString::from(arch))
 }
@@ -94,26 +110,29 @@ fn get_linked_bitcode(llvm: &LLVMArtifacts) -> Result<Vec<u8>, CompilerError> {
 
 fn get_elf(llvm: &LLVMArtifacts) -> Result<Vec<u8>, CompilerError> {
     let arch = get_arch()?;
-    comgr::get_executable_as_bytes(&arch, &llvm.bitcode, &llvm.linked_bitcode).map_err(CompilerError::from)
+    comgr::get_executable_as_bytes(&arch, &llvm.bitcode, &llvm.linked_bitcode)
+        .map_err(CompilerError::from)
 }
 
 fn get_assembly(llvm: &LLVMArtifacts) -> Result<Vec<u8>, CompilerError> {
     let arch = get_arch()?;
-    comgr::get_assembly_as_bytes(&arch, &llvm.bitcode, &llvm.linked_bitcode).map_err(CompilerError::from)
+    comgr::get_assembly_as_bytes(&arch, &llvm.bitcode, &llvm.linked_bitcode)
+        .map_err(CompilerError::from)
 }
 
 fn check_path(path: &Path) -> Result<(), CompilerError> {
     if path.try_exists().map_err(CompilerError::from)? && !path.is_file() {
-        let error = CompilerError::CheckPathError(path.to_path_buf());
+        let message = format!("Not a regular file: {:?}", path.to_path_buf());
+        let error = CompilerError::GenericError {
+            cause: None,
+            message,
+        };
         return Err(error);
     }
     Ok(())
 }
 
-fn get_output_path(
-    ptx_path: &PathBuf,
-    output_type: &OutputType,
-) -> Result<PathBuf, CompilerError> {
+fn get_output_path(ptx_path: &PathBuf, output_type: &OutputType) -> Result<PathBuf, CompilerError> {
     let current_dir = env::current_dir().map_err(CompilerError::from)?;
     let output_path = current_dir.join(
         ptx_path
@@ -169,7 +188,13 @@ impl FromStr for OutputType {
             "ll_linked" => Ok(Self::LlvmIrLinked),
             "elf" => Ok(Self::Elf),
             "asm" => Ok(Self::Assembly),
-            _ => Err(CompilerError::ParseOutputTypeError(s.into())),
+            _ => {
+                let message = format!("Not a valid output type: {}", s);
+                Err(CompilerError::GenericError {
+                    cause: None,
+                    message,
+                })
+            }
         }
     }
 }

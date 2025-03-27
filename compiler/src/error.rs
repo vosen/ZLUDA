@@ -1,6 +1,5 @@
 use std::ffi::FromBytesUntilNulError;
 use std::io;
-use std::path::PathBuf;
 use std::str::Utf8Error;
 
 use amd_comgr_sys::amd_comgr_status_s;
@@ -10,22 +9,20 @@ use ptx_parser::PtxError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CompilerError {
-    #[error("HIP error: {0:?}")]
+    #[error("HIP error code: {0:?}")]
     HipError(hipErrorCode_t),
-    #[error("amd_comgr error: {0:?}")]
+    #[error("amd_comgr status code: {0:?}")]
     ComgrError(amd_comgr_status_s),
-    #[error("Not a regular file: {0}")]
-    CheckPathError(PathBuf),
-    #[error("Invalid output type: {0}")]
-    ParseOutputTypeError(String),
-    #[error("Error translating PTX: {0:?}")]
-    PtxTranslateError(TranslateError),
-    #[error("IO error: {0:?}")]
-    IoError(io::Error),
-    #[error("Error parsing file: {0:?}")]
-    ParseFileError(Utf8Error),
-    #[error("Error: {0}")]
-    GenericError(String)
+    #[error(transparent)]
+    IoError(#[from] io::Error),
+    #[error(transparent)]
+    Utf8Error(#[from] Utf8Error),
+    #[error("{message}")]
+    GenericError {
+        #[source]
+        cause: Option<Box<dyn std::error::Error>>,
+        message: String,
+    },
 }
 
 impl From<hipErrorCode_t> for CompilerError {
@@ -42,32 +39,37 @@ impl From<amd_comgr_status_s> for CompilerError {
 
 impl From<Vec<PtxError<'_>>> for CompilerError {
     fn from(causes: Vec<PtxError>) -> Self {
-        let errors: Vec<String> = causes.iter().map(PtxError::to_string).collect();
-        let msg = errors.join("\n");
-        CompilerError::GenericError(msg)
-    }
-}
-
-impl From<io::Error> for CompilerError {
-    fn from(cause: io::Error) -> Self {
-        CompilerError::IoError(cause)
-    }
-}
-
-impl From<Utf8Error> for CompilerError {
-    fn from(cause: Utf8Error) -> Self {
-        CompilerError::ParseFileError(cause)
+        let errors: Vec<String> = causes
+            .iter()
+            .map(|e| {
+                let msg = match e {
+                    PtxError::UnrecognizedStatement(value)
+                    | PtxError::UnrecognizedDirective(value) => value.unwrap_or("").to_string(),
+                    other => other.to_string(),
+                };
+                format!("PtxError::{}: {}", e.as_ref(), msg)
+            })
+            .collect();
+        let message = errors.join("\n");
+        CompilerError::GenericError {
+            cause: None,
+            message,
+        }
     }
 }
 
 impl From<TranslateError> for CompilerError {
     fn from(cause: TranslateError) -> Self {
-        CompilerError::PtxTranslateError(cause)
+        let message = format!("PTX TranslateError::{}", cause.as_ref());
+        let cause = Some(Box::new(cause) as Box<dyn std::error::Error>);
+        CompilerError::GenericError { cause, message }
     }
 }
 
 impl From<FromBytesUntilNulError> for CompilerError {
     fn from(cause: FromBytesUntilNulError) -> Self {
-        CompilerError::GenericError(format!("{}", cause))
+        let message = format!("{}", cause);
+        let cause = Some(Box::new(cause) as Box<dyn std::error::Error>);
+        CompilerError::GenericError { cause, message }
     }
 }
