@@ -1,8 +1,5 @@
 use crate::format;
-use cuda_types::CUmodule;
-use cuda_types::CUuuid;
-
-use super::CUresult;
+use cuda_types::cuda::*;
 use super::Settings;
 use std::error::Error;
 use std::ffi::c_void;
@@ -518,8 +515,10 @@ mod os {
 mod tests {
     use std::{borrow::Cow, cell::RefCell, io, rc::Rc, str};
 
+    use cuda_types::cuda::CUresultConsts;
+
     use super::{FunctionLogger, LogEntry, WriteTrailingZeroAware};
-    use crate::{log::WriteBuffer, CUresult};
+    use crate::{log::{CudaFunctionName, WriteBuffer}, CUresult};
 
     struct FailOnNthWrite {
         fail_on: usize,
@@ -577,12 +576,13 @@ mod tests {
         write_buffer.unprefixed_buffer = Some(Vec::new());
         let mut log_queue = Vec::new();
         let mut func_logger = FunctionLogger {
-            result: Some(CUresult::CUDA_SUCCESS),
-            name: Cow::Borrowed("cuInit"),
+            result: Some(CUresult::SUCCESS),
+            name: CudaFunctionName::Normal("cuInit"),
             infallible_emitter: &mut infallible_emitter,
             fallible_emitter: &mut fallible_emitter,
             write_buffer: &mut write_buffer,
             log_queue: &mut log_queue,
+            arguments_writer: None,
         };
 
         func_logger.log(LogEntry::IoError(io::Error::from_raw_os_error(1)));
@@ -595,7 +595,7 @@ mod tests {
         let result_str = str::from_utf8(&*result).unwrap();
         let result_lines = result_str.lines().collect::<Vec<_>>();
         assert_eq!(result_lines.len(), 5);
-        assert_eq!(result_lines[0], "cuInit(...) -> 0x0");
+        assert_eq!(result_lines[0], "cuInit(...) -> CUDA_SUCCESS");
         assert!(result_lines[1].starts_with("    "));
         assert!(result_lines[2].starts_with("    "));
         assert!(result_lines[3].starts_with("    "));

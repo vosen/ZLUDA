@@ -2,7 +2,7 @@ use super::{
     AtomSemantics, MemScope, RawRoundingMode, RawSetpCompareOp, ScalarType, SetpBoolPostOp,
     StateSpace, VectorPrefix,
 };
-use crate::{PtxError, PtxParserState};
+use crate::{PtxError, PtxParserState, Mul24Control};
 use bitflags::bitflags;
 use std::{alloc::Layout, cmp::Ordering, num::NonZeroU8};
 
@@ -83,6 +83,15 @@ ptx_parser_macros::generate_instruction_type!(
                     repr: T,
                     type: { Type::from(data.dst_type()) },
                 },
+                src1: T,
+                src2: T,
+            }
+        },
+        Mul24 {
+            type: { Type::from(data.type_) },
+            data: Mul24Details,
+            arguments<T>: {
+                dst: T,
                 src1: T,
                 src2: T,
             }
@@ -1019,9 +1028,16 @@ pub struct ArithInteger {
 #[derive(Copy, Clone)]
 pub struct ArithFloat {
     pub type_: ScalarType,
-    pub rounding: Option<RoundingMode>,
+    pub rounding: RoundingMode,
     pub flush_to_zero: Option<bool>,
     pub saturate: bool,
+    // From PTX documentation: https://docs.nvidia.com/cuda/parallel-thread-execution/#mixed-precision-floating-point-instructions-add
+    // Note that an add instruction with an explicit rounding modifier is treated conservatively by
+    // the code optimizer. An add instruction with no rounding modifier defaults to
+    // round-to-nearest-even and may be optimized aggressively by the code optimizer. In particular,
+    // mul/add sequences with no rounding modifiers may be optimized to use fused-multiply-add
+    // instructions on the target device.
+    pub is_fusable: bool,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -1033,7 +1049,7 @@ pub enum LdStQualifier {
     Release(MemScope),
 }
 
-#[derive(PartialEq, Eq, Copy, Clone)]
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub enum RoundingMode {
     NearestEven,
     Zero,
@@ -1176,6 +1192,13 @@ pub enum MulIntControl {
     Low,
     High,
     Wide,
+}
+
+
+#[derive(Copy, Clone)]
+pub struct Mul24Details {
+    pub type_: ScalarType,
+    pub control: Mul24Control,
 }
 
 pub struct SetpData {
@@ -1440,6 +1463,7 @@ pub struct CvtDetails {
     pub mode: CvtMode,
 }
 
+#[derive(Clone, Copy)]
 pub enum CvtMode {
     // int from int
     ZeroExtend,
@@ -1458,7 +1482,7 @@ pub enum CvtMode {
         flush_to_zero: Option<bool>,
     },
     FPRound {
-        integer_rounding: Option<RoundingMode>,
+        integer_rounding: RoundingMode,
         flush_to_zero: Option<bool>,
     },
     // int from float
@@ -1512,7 +1536,7 @@ impl CvtDetails {
                     flush_to_zero,
                 },
                 Ordering::Equal => CvtMode::FPRound {
-                    integer_rounding: rounding,
+                    integer_rounding: rounding.unwrap_or(RoundingMode::NearestEven),
                     flush_to_zero,
                 },
                 Ordering::Greater => {

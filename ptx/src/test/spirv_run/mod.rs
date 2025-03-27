@@ -1,11 +1,16 @@
 use crate::pass;
 use hip_runtime_sys::hipError_t;
+use pretty_assertions;
+use std::env;
 use std::error;
 use std::ffi::{CStr, CString};
-use std::fmt;
-use std::fmt::{Debug, Display, Formatter};
+use std::fmt::{self, Debug, Display, Formatter};
+use std::fs::{self, File};
+use std::io::Write;
 use std::mem;
-use std::{ptr, str};
+use std::path::Path;
+use std::ptr;
+use std::str;
 
 macro_rules! test_ptx {
     ($fn_name:ident, $input:expr, $output:expr) => {
@@ -28,6 +33,15 @@ macro_rules! test_ptx {
                 test_cuda_assert(stringify!($fn_name), ptx, &input, &mut output)
             }
         }
+
+        paste::item! {
+            #[test]
+            fn [<$fn_name _llvm>]() -> Result<(), Box<dyn std::error::Error>> {
+                let ptx = include_str!(concat!(stringify!($fn_name), ".ptx"));
+                let ll = include_str!(concat!("../ll/", stringify!($fn_name), ".ll")).trim();
+                test_llvm_assert(stringify!($fn_name), ptx, &ll)
+            }
+        }
     };
 
     ($fn_name:ident) => {};
@@ -39,6 +53,7 @@ test_ptx!(mov, [1u64], [1u64]);
 test_ptx!(mul_lo, [1u64], [2u64]);
 test_ptx!(mul_hi, [u64::max_value()], [1u64]);
 test_ptx!(add, [1u64], [2u64]);
+test_ptx!(mul24, [10u32], [20u32]);
 test_ptx!(setp, [10u64, 11u64], [1u64, 0u64]);
 test_ptx!(setp_gt, [f32::NAN, 1f32], [1f32]);
 test_ptx!(setp_leu, [1f32, f32::NAN], [1f32]);
@@ -180,6 +195,26 @@ test_ptx!(activemask, [0u32], [1u32]);
 test_ptx!(membar, [152731u32], [152731u32]);
 test_ptx!(shared_unify_extern, [7681u64, 7682u64], [15363u64]);
 test_ptx!(shared_unify_local, [16752u64, 714u64], [17466u64]);
+// This test currently fails for reasons outside of ZLUDA's control.
+// One of the LLVM passes does not understand that setreg instruction changes
+// global floating point state and assumes that both floating point
+// additions are the exact same expressions and optimizes second addition away.
+test_ptx!(
+    add_ftz,
+    [f32::from_bits(0x800000), f32::from_bits(0x007FFFFF)],
+    [0x800000u32, 0xFFFFFF]
+);
+test_ptx!(malformed_label, [2u64], [3u64]);
+test_ptx!(
+    call_rnd,
+    [
+        1.0f32,
+        f32::from_bits(0x33800000),
+        1.0f32,
+        f32::from_bits(0x33800000)
+    ],
+    [1.0000001, 1.0f32]
+);
 
 test_ptx!(assertfail);
 test_ptx!(func_ptr);
@@ -220,6 +255,30 @@ fn test_hip_assert<
     let result =
         run_hip(name.as_c_str(), llvm_ir, input, output).map_err(|err| DisplayError { err })?;
     assert_eq!(result.as_slice(), output);
+    Ok(())
+}
+
+fn test_llvm_assert<'a>(
+    name: &str,
+    ptx_text: &'a str,
+    expected_ll: &str,
+) -> Result<(), Box<dyn error::Error + 'a>> {
+    let ast = ptx_parser::parse_module_checked(ptx_text).unwrap();
+    let llvm_ir = pass::to_llvm_module(ast).unwrap();
+    let actual_ll = llvm_ir.llvm_ir.print_module_to_string();
+    let actual_ll = actual_ll.to_str();
+    if actual_ll != expected_ll {
+        let output_dir = env::var("TEST_PTX_LLVM_FAIL_DIR");
+        if let Ok(output_dir) = output_dir {
+            let output_dir = Path::new(&output_dir);
+            fs::create_dir_all(&output_dir).unwrap();
+            let output_file = output_dir.join(format!("{}.ll", name));
+            let mut output_file = File::create(output_file).unwrap();
+            output_file.write_all(actual_ll.as_bytes()).unwrap();
+        }
+        let comparison = pretty_assertions::StrComparison::new(expected_ll, actual_ll);
+        panic!("assertion failed: `(left == right)`\n\n{}", comparison);
+    }
     Ok(())
 }
 
@@ -298,19 +357,19 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
     let mut result = vec![0u8.into(); output.len()];
     {
         let dev = 0;
-        let mut stream = ptr::null_mut();
+        let mut stream = unsafe { mem::zeroed() };
         unsafe { hipStreamCreate(&mut stream) }.unwrap();
         let mut dev_props = unsafe { mem::zeroed() };
         unsafe { hipGetDevicePropertiesR0600(&mut dev_props, dev) }.unwrap();
         let elf_module = comgr::compile_bitcode(
             unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) },
-            &*module.llvm_ir,
+            &*module.llvm_ir.write_bitcode_to_memory(),
             module.linked_bitcode(),
         )
         .unwrap();
-        let mut module = ptr::null_mut();
+        let mut module = unsafe { mem::zeroed() };
         unsafe { hipModuleLoadData(&mut module, elf_module.as_ptr() as _) }.unwrap();
-        let mut kernel = ptr::null_mut();
+        let mut kernel = unsafe { mem::zeroed() };
         unsafe { hipModuleGetFunction(&mut kernel, module, name.as_ptr()) }.unwrap();
         let mut inp_b = ptr::null_mut();
         unsafe { hipMalloc(&mut inp_b, input.len() * mem::size_of::<Input>()) }.unwrap();

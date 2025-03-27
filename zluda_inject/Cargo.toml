@@ -9,7 +9,7 @@ name = "zluda_with"
 path = "src/main.rs"
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["jobapi2", "processthreadsapi", "synchapi", "winbase", "std"] }
+winapi = { version = "0.3", features = ["jobapi2", "processthreadsapi", "synchapi", "winbase", "std", "processenv"] }
 tempfile = "3"
 argh = "0.1"
 detours-sys = { path = "../detours-sys" }
@@ -19,3 +19,6 @@ detours-sys = { path = "../detours-sys" }
 zluda_redirect = { path = "../zluda_redirect" }
 zluda_dump = { path = "../zluda_dump" }
 zluda_ml = { path = "../zluda_ml" }
+
+[package.metadata.zluda]
+windows_only = true

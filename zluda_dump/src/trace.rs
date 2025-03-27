@@ -1,8 +1,5 @@
-use ptx::{ast::PtxError, Token};
-use ptx::{DisplayParseError, ModuleParserExt};
-
 use crate::{dark_api, log, Settings};
-use cuda_types::CUmodule;
+use cuda_types::cuda::*;
 use std::{
     collections::HashMap,
     ffi::{c_void, CStr, CString},
@@ -172,7 +169,7 @@ impl StateTracker {
         submodule_index: Option<usize>,
         module_text: &str,
     ) {
-        let (_ast, errors) = ptx::ModuleParser::parse_unchecked(module_text);
+        let errors = ptx_parser::parse_for_errors(module_text);
         if !errors.is_empty() {
             fn_logger.log(log::LogEntry::ModuleParsingError(
                 DumpWriter::get_file_name(module_index, version, submodule_index, "log"),
@@ -232,7 +229,7 @@ impl DumpWriter {
         module_index: usize,
         version: Option<usize>,
         submodule_index: Option<usize>,
-        errors: &[ptx::ParseError<usize, Token<'input>, PtxError>],
+        errors: &[ptx_parser::PtxError<'input>],
     ) -> io::Result<()> {
         let mut log_file = match &self.dump_dir {
             None => return Ok(()),
@@ -246,8 +243,7 @@ impl DumpWriter {
         ));
         let mut file = File::create(log_file)?;
         for error in errors {
-            let pretty_print_error = unsafe { DisplayParseError::new(error, module_text) };
-            writeln!(file, "{}", pretty_print_error)?;
+            writeln!(file, "{}", error)?;
         }
         Ok(())
     }

@@ -1,5 +1,5 @@
 use amd_comgr_sys::*;
-use std::{ffi::CStr, iter, mem, ptr};
+use std::{ffi::CStr, mem, ptr};
 
 struct Data(amd_comgr_data_t);
 
@@ -133,31 +133,45 @@ pub fn compile_bitcode(
         &linking_info,
         amd_comgr_action_kind_t::AMD_COMGR_ACTION_LINK_BC_TO_BC,
     )?;
-    let link_with_device_libs_info = ActionInfo::new()?;
-    link_with_device_libs_info.set_isa_name(gcn_arch)?;
-    link_with_device_libs_info.set_language(amd_comgr_language_t::AMD_COMGR_LANGUAGE_LLVM_IR)?;
-    // This makes no sense, but it makes ockl linking work
-    link_with_device_libs_info.set_options([c"-Xclang", c"-mno-link-builtin-bitcode-postopt"].into_iter())?;
-    let with_device_libs = do_action(
-        &linked_data_set,
-        &link_with_device_libs_info,
-        amd_comgr_action_kind_t::AMD_COMGR_ACTION_COMPILE_SOURCE_WITH_DEVICE_LIBS_TO_BC,
-    )?;
-    let compile_action_info = ActionInfo::new()?;
-    compile_action_info.set_isa_name(gcn_arch)?;
-    compile_action_info.set_options(iter::once(c"-O3"))?;
-    let reloc_data_set = do_action(
-        &with_device_libs,
-        &compile_action_info,
-        amd_comgr_action_kind_t::AMD_COMGR_ACTION_CODEGEN_BC_TO_RELOCATABLE,
-    )?;
+    let compile_to_exec = ActionInfo::new()?;
+    compile_to_exec.set_isa_name(gcn_arch)?;
+    compile_to_exec.set_language(amd_comgr_language_t::AMD_COMGR_LANGUAGE_LLVM_IR)?;
+    let common_options = [
+        // This makes no sense, but it makes ockl linking work
+        c"-Xclang",
+        c"-mno-link-builtin-bitcode-postopt",
+        // Otherwise LLVM omits dynamic fp mode for ockl functions during linking
+        // and then fails to inline them
+        c"-Xclang",
+        c"-fdenormal-fp-math=dynamic",
+        c"-O3",
+        c"-mno-wavefrontsize64",
+        c"-mcumode",
+        // Useful for inlining reports, combined with AMD_COMGR_SAVE_TEMPS=1 AMD_COMGR_EMIT_VERBOSE_LOGS=1 AMD_COMGR_REDIRECT_LOGS=stderr
+        // c"-fsave-optimization-record=yaml",
+    ]
+    .into_iter();
+    let opt_options = if cfg!(debug_assertions) {
+        //[c"-g", c"-mllvm", c"-print-before-all", c"", c""]
+        [c"-g", c"", c"", c"", c""]
+    } else {
+        [
+            c"-g0",
+            // default inlining threshold times 10
+            c"-mllvm",
+            c"-inline-threshold=2250",
+            c"-mllvm",
+            c"-inlinehint-threshold=3250",
+        ]
+    };
+    compile_to_exec.set_options(common_options.chain(opt_options))?;
     let exec_data_set = do_action(
-        &reloc_data_set,
-        &compile_action_info,
-        amd_comgr_action_kind_t::AMD_COMGR_ACTION_LINK_RELOCATABLE_TO_EXECUTABLE,
+        &linked_data_set,
+        &compile_to_exec,
+        amd_comgr_action_kind_t::AMD_COMGR_ACTION_COMPILE_SOURCE_TO_EXECUTABLE,
     )?;
     let executable =
-        exec_data_set.get_data(amd_comgr_data_kind_t::AMD_COMGR_DATA_KIND_EXECUTABLE, 0)?;
+    exec_data_set.get_data(amd_comgr_data_kind_t::AMD_COMGR_DATA_KIND_EXECUTABLE, 0)?;
     executable.copy_content()
 }
 

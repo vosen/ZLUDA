@@ -2,8 +2,8 @@ use super::*;
 
 pub(super) fn run<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
-    directives: Vec<Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>>,
-) -> Result<Vec<Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
+    directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
+) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
     let mut fn_declarations = FxHashMap::default();
     let remapped_directives = directives
         .into_iter()
@@ -13,17 +13,18 @@ pub(super) fn run<'input>(
         .into_iter()
         .map(|(_, (return_arguments, name, input_arguments))| {
             Directive2::Method(Function2 {
-                func_decl: ast::MethodDeclaration {
-                    return_arguments,
-                    name: ast::MethodName::Func(name),
-                    input_arguments,
-                    shared_mem: None,
-                },
-                globals: Vec::new(),
+                return_arguments,
+                name: name,
+                input_arguments,
                 body: None,
                 import_as: None,
                 tuning: Vec::new(),
                 linkage: ast::LinkingDirective::EXTERN,
+                is_kernel: false,
+                flush_to_zero_f32: false,
+                flush_to_zero_f16f64: false,
+                rounding_mode_f32: ptx_parser::RoundingMode::NearestEven,
+                rounding_mode_f16f64: ptx_parser::RoundingMode::NearestEven,
             })
         })
         .collect::<Vec<_>>();
@@ -41,8 +42,8 @@ fn run_directive<'input>(
             Vec<ast::Variable<SpirvWord>>,
         ),
     >,
-    directive: Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>,
-) -> Result<Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
+    directive: Directive2<ast::Instruction<SpirvWord>, SpirvWord>,
+) -> Result<Directive2<ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
     Ok(match directive {
         var @ Directive2::Variable(..) => var,
         Directive2::Method(mut method) => {
@@ -103,6 +104,9 @@ fn run_instruction<'input>(
         i @ ptx_parser::Instruction::Bfi { data, .. } => {
             let name = ["bfi_", scalar_to_ptx_name(data)].concat();
             to_call(resolver, fn_declarations, name.into(), i)?
+        }
+        i @ ptx_parser::Instruction::Bar { .. } => {
+            to_call(resolver, fn_declarations, "bar_sync".into(), i)?
         }
         i => i,
     })

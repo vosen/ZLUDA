@@ -284,20 +284,40 @@ fn immediate_value<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<as
     .parse_next(stream)
 }
 
-pub fn parse_module_unchecked<'input>(text: &'input str) -> Option<ast::Module<'input>> {
-    let input = lex_with_span(text).ok()?;
-    let mut errors = Vec::new();
-    let state = PtxParserState::new(text, &mut errors);
-    let parser = PtxParser {
-        state,
-        input: &input[..],
+pub fn parse_for_errors<'input>(text: &'input str) -> Vec<PtxError> {
+    let (tokens, mut errors) = lex_with_span_unchecked(text);
+    let parse_result = {
+        let state = PtxParserState::new(text, &mut errors);
+        let parser = PtxParser {
+            state,
+            input: &tokens[..],
+        };
+        module
+            .parse(parser)
+            .map_err(|err| PtxError::Parser(err.into_inner()))
     };
-    let parsing_result = module.parse(parser).ok();
-    if !errors.is_empty() {
-        None
-    } else {
-        parsing_result
+    match parse_result {
+        Ok(_) => {}
+        Err(err) => {
+            errors.push(err);
+        }
     }
+    errors
+}
+
+fn lex_with_span_unchecked<'input>(
+    text: &'input str,
+) -> (Vec<(Token<'input>, logos::Span)>, Vec<PtxError>) {
+    let lexer = Token::lexer(text);
+    let mut result = Vec::new();
+    let mut errors = Vec::new();
+    for (token, span) in lexer.spanned() {
+        match token {
+            Ok(t) => result.push((t, span)),
+            Err(err) => errors.push(PtxError::Lexer { source: err }),
+        }
+    }
+    (result, errors)
 }
 
 pub fn parse_module_checked<'input>(
@@ -340,17 +360,6 @@ pub fn parse_module_checked<'input>(
             Err(errors)
         }
     }
-}
-
-fn lex_with_span<'input>(
-    text: &'input str,
-) -> Result<Vec<(Token<'input>, logos::Span)>, TokenError> {
-    let lexer = Token::lexer(text);
-    let mut result = Vec::new();
-    for (token, span) in lexer.spanned() {
-        result.push((token?, span));
-    }
-    Ok(result)
 }
 
 fn module<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::Module<'input>> {
@@ -1643,6 +1652,9 @@ derive_parser!(
     #[derive(Copy, Clone, PartialEq, Eq, Hash)]
     pub enum AtomSemantics { }
 
+    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    pub enum Mul24Control { }
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
     mov{.vec}.type  d, a => {
         Instruction::Mov {
@@ -1897,9 +1909,10 @@ derive_parser!(
             data: ast::ArithDetails::Float(
                 ast::ArithFloat {
                     type_: f32,
-                    rounding: rnd.map(Into::into),
+                    rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
-                    saturate: sat
+                    saturate: sat,
+                    is_fusable: rnd.is_none()
                 }
             ),
             arguments: AddArgs {
@@ -1912,9 +1925,10 @@ derive_parser!(
             data: ast::ArithDetails::Float(
                 ast::ArithFloat {
                     type_: f64,
-                    rounding: rnd.map(Into::into),
+                    rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: None,
-                    saturate: false
+                    saturate: false,
+                    is_fusable: rnd.is_none()
                 }
             ),
             arguments: AddArgs {
@@ -1931,9 +1945,10 @@ derive_parser!(
             data: ast::ArithDetails::Float(
                 ast::ArithFloat {
                     type_: f16,
-                    rounding: rnd.map(Into::into),
+                    rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
-                    saturate: sat
+                    saturate: sat,
+                    is_fusable: rnd.is_none()
                 }
             ),
             arguments: AddArgs {
@@ -1946,9 +1961,10 @@ derive_parser!(
             data: ast::ArithDetails::Float(
                 ast::ArithFloat {
                     type_: f16x2,
-                    rounding: rnd.map(Into::into),
+                    rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
-                    saturate: sat
+                    saturate: sat,
+                    is_fusable: rnd.is_none()
                 }
             ),
             arguments: AddArgs {
@@ -1961,9 +1977,10 @@ derive_parser!(
             data: ast::ArithDetails::Float(
                 ast::ArithFloat {
                     type_: bf16,
-                    rounding: rnd.map(Into::into),
+                    rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: None,
-                    saturate: false
+                    saturate: false,
+                    is_fusable: rnd.is_none()
                 }
             ),
             arguments: AddArgs {
@@ -1976,9 +1993,10 @@ derive_parser!(
             data: ast::ArithDetails::Float(
                 ast::ArithFloat {
                     type_: bf16x2,
-                    rounding: rnd.map(Into::into),
+                    rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: None,
-                    saturate: false
+                    saturate: false,
+                    is_fusable: rnd.is_none()
                 }
             ),
             arguments: AddArgs {
@@ -2023,9 +2041,10 @@ derive_parser!(
             data: ast::MulDetails::Float (
                 ast::ArithFloat {
                     type_: f32,
-                    rounding: rnd.map(Into::into),
+                    rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
+                    is_fusable: rnd.is_none()
                 }
             ),
             arguments: MulArgs { dst: d, src1: a, src2: b }
@@ -2036,9 +2055,10 @@ derive_parser!(
             data: ast::MulDetails::Float (
                 ast::ArithFloat {
                     type_: f64,
-                    rounding: rnd.map(Into::into),
+                    rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: None,
                     saturate: false,
+                    is_fusable: rnd.is_none()
                 }
             ),
             arguments: MulArgs { dst: d, src1: a, src2: b }
@@ -2052,9 +2072,10 @@ derive_parser!(
             data: ast::MulDetails::Float (
                 ast::ArithFloat {
                     type_: f16,
-                    rounding: rnd.map(Into::into),
+                    rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
+                    is_fusable: rnd.is_none()
                 }
             ),
             arguments: MulArgs { dst: d, src1: a, src2: b }
@@ -2065,9 +2086,10 @@ derive_parser!(
             data: ast::MulDetails::Float (
                 ast::ArithFloat {
                     type_: f16x2,
-                    rounding: rnd.map(Into::into),
+                    rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
+                    is_fusable: rnd.is_none()
                 }
             ),
             arguments: MulArgs { dst: d, src1: a, src2: b }
@@ -2078,9 +2100,10 @@ derive_parser!(
             data: ast::MulDetails::Float (
                 ast::ArithFloat {
                     type_: bf16,
-                    rounding: rnd.map(Into::into),
+                    rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: None,
                     saturate: false,
+                    is_fusable: rnd.is_none()
                 }
             ),
             arguments: MulArgs { dst: d, src1: a, src2: b }
@@ -2091,9 +2114,10 @@ derive_parser!(
             data: ast::MulDetails::Float (
                 ast::ArithFloat {
                     type_: bf16x2,
-                    rounding: rnd.map(Into::into),
+                    rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: None,
                     saturate: false,
+                    is_fusable: rnd.is_none()
                 }
             ),
             arguments: MulArgs { dst: d, src1: a, src2: b }
@@ -2377,9 +2401,10 @@ derive_parser!(
             data: ast::MadDetails::Float(
                 ast::ArithFloat {
                     type_: f32,
-                    rounding: None,
+                    rounding: ast::RoundingMode::NearestEven,
                     flush_to_zero: Some(ftz),
-                    saturate: sat
+                    saturate: sat,
+                    is_fusable: false
                 }
             ),
             arguments: MadArgs { dst: d, src1: a, src2: b, src3: c  }
@@ -2390,9 +2415,10 @@ derive_parser!(
             data: ast::MadDetails::Float(
                 ast::ArithFloat {
                     type_: f32,
-                    rounding: Some(rnd.into()),
+                    rounding: rnd.into(),
                     flush_to_zero: Some(ftz),
-                    saturate: sat
+                    saturate: sat,
+                    is_fusable: false
                 }
             ),
             arguments: MadArgs { dst: d, src1: a, src2: b, src3: c  }
@@ -2403,9 +2429,10 @@ derive_parser!(
             data: ast::MadDetails::Float(
                 ast::ArithFloat {
                     type_: f64,
-                    rounding: Some(rnd.into()),
+                    rounding: rnd.into(),
                     flush_to_zero: None,
-                    saturate: false
+                    saturate: false,
+                    is_fusable: false
                 }
             ),
             arguments: MadArgs { dst: d, src1: a, src2: b, src3: c  }
@@ -2420,9 +2447,10 @@ derive_parser!(
         ast::Instruction::Fma {
             data: ast::ArithFloat {
                 type_: f32,
-                rounding: Some(rnd.into()),
+                rounding: rnd.into(),
                 flush_to_zero: Some(ftz),
-                saturate: sat
+                saturate: sat,
+                is_fusable: false
             },
             arguments: FmaArgs { dst: d, src1: a, src2: b, src3: c  }
         }
@@ -2431,9 +2459,10 @@ derive_parser!(
         ast::Instruction::Fma {
             data: ast::ArithFloat {
                 type_: f64,
-                rounding: Some(rnd.into()),
+                rounding: rnd.into(),
                 flush_to_zero: None,
-                saturate: false
+                saturate: false,
+                is_fusable: false
             },
             arguments: FmaArgs { dst: d, src1: a, src2: b, src3: c  }
         }
@@ -2445,9 +2474,10 @@ derive_parser!(
         ast::Instruction::Fma {
             data: ast::ArithFloat {
                 type_: f16,
-                rounding: Some(rnd.into()),
+                rounding: rnd.into(),
                 flush_to_zero: Some(ftz),
-                saturate: sat
+                saturate: sat,
+                is_fusable: false
             },
             arguments: FmaArgs { dst: d, src1: a, src2: b, src3: c  }
         }
@@ -2495,9 +2525,10 @@ derive_parser!(
             data: ast::ArithDetails::Float(
                 ast::ArithFloat {
                     type_: f32,
-                    rounding: rnd.map(Into::into),
+                    rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
-                    saturate: sat
+                    saturate: sat,
+                    is_fusable: rnd.is_none()
                 }
             ),
             arguments: SubArgs { dst: d, src1: a, src2: b  }
@@ -2508,9 +2539,10 @@ derive_parser!(
             data: ast::ArithDetails::Float(
                 ast::ArithFloat {
                     type_: f64,
-                    rounding: rnd.map(Into::into),
+                    rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: None,
-                    saturate: false
+                    saturate: false,
+                    is_fusable: rnd.is_none()
                 }
             ),
             arguments: SubArgs { dst: d, src1: a, src2: b  }
@@ -2524,9 +2556,10 @@ derive_parser!(
             data: ast::ArithDetails::Float(
                 ast::ArithFloat {
                     type_: f16,
-                    rounding: rnd.map(Into::into),
+                    rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
-                    saturate: sat
+                    saturate: sat,
+                    is_fusable: rnd.is_none()
                 }
             ),
             arguments: SubArgs { dst: d, src1: a, src2: b  }
@@ -2537,9 +2570,10 @@ derive_parser!(
             data: ast::ArithDetails::Float(
                 ast::ArithFloat {
                     type_: f16x2,
-                    rounding: rnd.map(Into::into),
+                    rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
-                    saturate: sat
+                    saturate: sat,
+                    is_fusable: rnd.is_none()
                 }
             ),
             arguments: SubArgs { dst: d, src1: a, src2: b  }
@@ -2550,9 +2584,10 @@ derive_parser!(
             data: ast::ArithDetails::Float(
                 ast::ArithFloat {
                     type_: bf16,
-                    rounding: rnd.map(Into::into),
+                    rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: None,
-                    saturate: false
+                    saturate: false,
+                    is_fusable: rnd.is_none()
                 }
             ),
             arguments: SubArgs { dst: d, src1: a, src2: b  }
@@ -2563,9 +2598,10 @@ derive_parser!(
             data: ast::ArithDetails::Float(
                 ast::ArithFloat {
                     type_: bf16x2,
-                    rounding: rnd.map(Into::into),
+                    rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: None,
-                    saturate: false
+                    saturate: false,
+                    is_fusable: rnd.is_none()
                 }
             ),
             arguments: SubArgs { dst: d, src1: a, src2: b  }
@@ -2868,7 +2904,7 @@ derive_parser!(
     rsqrt.approx.f64        d, a => {
         ast::Instruction::Rsqrt {
             data: ast::TypeFtz {
-                flush_to_zero: None,
+                flush_to_zero: Some(false),
                 type_: f64
             },
             arguments: RsqrtArgs { dst: d, src: a  }
@@ -2877,7 +2913,7 @@ derive_parser!(
     rsqrt.approx.ftz.f64 d, a => {
         ast::Instruction::Rsqrt {
             data: ast::TypeFtz {
-                flush_to_zero: None,
+                flush_to_zero: Some(true),
                 type_: f64
             },
             arguments: RsqrtArgs { dst: d, src: a  }
@@ -3349,6 +3385,19 @@ derive_parser!(
     ret{.uni} => {
         Instruction::Ret { data: RetData { uniform: uni } }
     }
+
+    mul24.mode.type  d, a, b => {
+        ast::Instruction::Mul24 {
+            data: ast::Mul24Details {
+                control: mode,
+                type_
+            },
+            arguments: Mul24Args { dst: d, src1: a, src2: b }
+        }
+    }
+
+    .mode: Mul24Control = { .hi, .lo };
+    .type: ScalarType = { .u32, .s32 };
 
 );
 

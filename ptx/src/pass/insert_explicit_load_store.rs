@@ -11,8 +11,8 @@ use super::*;
 //   pass, so we do nothing there
 pub(super) fn run<'a, 'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
-    directives: Vec<Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>>,
-) -> Result<Vec<Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
+    directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
+) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
     directives
         .into_iter()
         .map(|directive| run_directive(resolver, directive))
@@ -21,8 +21,8 @@ pub(super) fn run<'a, 'input>(
 
 fn run_directive<'a, 'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
-    directive: Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>,
-) -> Result<Directive2<'input, ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
+    directive: Directive2<ast::Instruction<SpirvWord>, SpirvWord>,
+) -> Result<Directive2<ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
     Ok(match directive {
         var @ Directive2::Variable(..) => var,
         Directive2::Method(method) => {
@@ -34,12 +34,11 @@ fn run_directive<'a, 'input>(
 
 fn run_method<'a, 'input>(
     mut visitor: InsertMemSSAVisitor<'a, 'input>,
-    method: Function2<'input, ast::Instruction<SpirvWord>, SpirvWord>,
-) -> Result<Function2<'input, ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
-    let mut func_decl = method.func_decl;
-    let is_kernel = func_decl.name.is_kernel();
+    mut method: Function2<ast::Instruction<SpirvWord>, SpirvWord>,
+) -> Result<Function2<ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
+    let is_kernel = method.is_kernel;
     if is_kernel {
-        for arg in func_decl.input_arguments.iter_mut() {
+        for arg in method.input_arguments.iter_mut() {
             let old_name = arg.name;
             let old_space = arg.state_space;
             let new_space = ast::StateSpace::ParamEntry;
@@ -51,10 +50,10 @@ fn run_method<'a, 'input>(
             arg.state_space = new_space;
         }
     };
-    for arg in func_decl.return_arguments.iter_mut() {
+    for arg in method.return_arguments.iter_mut() {
         visitor.visit_variable(arg)?;
     }
-    let return_arguments = &func_decl.return_arguments[..];
+    let return_arguments = &method.return_arguments[..];
     let body = method
         .body
         .map(move |statements| {
@@ -65,14 +64,7 @@ fn run_method<'a, 'input>(
             Ok::<_, TranslateError>(result)
         })
         .transpose()?;
-    Ok(Function2 {
-        func_decl: func_decl,
-        globals: method.globals,
-        body,
-        import_as: method.import_as,
-        tuning: method.tuning,
-        linkage: method.linkage,
-    })
+    Ok(Function2 { body, ..method })
 }
 
 fn run_statement<'a, 'input>(
@@ -120,6 +112,13 @@ fn run_statement<'a, 'input>(
             let instruction = ast::visit_map(instruction, visitor)?;
             result.extend(visitor.pre.drain(..).map(Statement::Instruction));
             result.push(Statement::Instruction(instruction));
+            result.extend(visitor.post.drain(..).map(Statement::Instruction));
+        }
+        Statement::PtrAccess(ptr_access) => {
+            let statement = Statement::PtrAccess(visitor.visit_ptr_access(ptr_access)?);
+            let statement = statement.visit_map(visitor)?;
+            result.extend(visitor.pre.drain(..).map(Statement::Instruction));
+            result.push(statement);
             result.extend(visitor.post.drain(..).map(Statement::Instruction));
         }
         s => {
@@ -257,6 +256,41 @@ impl<'a, 'input> InsertMemSSAVisitor<'a, 'input> {
             }
         }
         Ok(ast::Instruction::Ld { data, arguments })
+    }
+
+    fn visit_ptr_access(
+        &mut self,
+        ptr_access: PtrAccess<SpirvWord>,
+    ) -> Result<PtrAccess<SpirvWord>, TranslateError> {
+        let (old_space, new_space, name) = match self.variables.get(&ptr_access.ptr_src) {
+            Some(RemapAction::LDStSpaceChange {
+                old_space,
+                new_space,
+                name,
+            }) => (*old_space, *new_space, *name),
+            Some(RemapAction::PreLdPostSt { .. }) | None => return Ok(ptr_access),
+        };
+        if ptr_access.state_space != old_space {
+            return Err(error_mismatched_type());
+        }
+        // Propagate space changes in dst
+        let new_dst = self
+            .resolver
+            .register_unnamed(Some((ptr_access.underlying_type.clone(), new_space)));
+        self.variables.insert(
+            ptr_access.dst,
+            RemapAction::LDStSpaceChange {
+                old_space,
+                new_space,
+                name: new_dst,
+            },
+        );
+        Ok(PtrAccess {
+            ptr_src: name,
+            dst: new_dst,
+            state_space: new_space,
+            ..ptr_access
+        })
     }
 
     fn visit_variable(&mut self, var: &mut ast::Variable<SpirvWord>) -> Result<(), TranslateError> {

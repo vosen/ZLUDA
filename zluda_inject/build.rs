@@ -7,6 +7,9 @@ use std::{
 };
 
 fn main() -> Result<(), VarError> {
+    if std::env::var_os("CARGO_CFG_WINDOWS").is_none() {
+        return Ok(());
+    }
     println!("cargo:rerun-if-changed=build.rs");
     if env::var("PROFILE")? != "debug" {
         return Ok(());

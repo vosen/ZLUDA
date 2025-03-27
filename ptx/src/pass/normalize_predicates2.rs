@@ -3,8 +3,8 @@ use ptx_parser as ast;
 
 pub(crate) fn run<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
-    directives: Vec<NormalizedDirective2<'input>>,
-) -> Result<Vec<UnconditionalDirective<'input>>, TranslateError> {
+    directives: Vec<NormalizedDirective2>,
+) -> Result<Vec<UnconditionalDirective>, TranslateError> {
     directives
         .into_iter()
         .map(|directive| run_directive(resolver, directive))
@@ -13,8 +13,8 @@ pub(crate) fn run<'input>(
 
 fn run_directive<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
-    directive: NormalizedDirective2<'input>,
-) -> Result<UnconditionalDirective<'input>, TranslateError> {
+    directive: NormalizedDirective2,
+) -> Result<UnconditionalDirective, TranslateError> {
     Ok(match directive {
         Directive2::Variable(linking, var) => Directive2::Variable(linking, var),
         Directive2::Method(method) => Directive2::Method(run_method(resolver, method)?),
@@ -23,8 +23,8 @@ fn run_directive<'input>(
 
 fn run_method<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
-    method: NormalizedFunction2<'input>,
-) -> Result<UnconditionalFunction<'input>, TranslateError> {
+    method: NormalizedFunction2,
+) -> Result<UnconditionalFunction, TranslateError> {
     let body = method
         .body
         .map(|statements| {
@@ -36,12 +36,18 @@ fn run_method<'input>(
         })
         .transpose()?;
     Ok(Function2 {
-        func_decl: method.func_decl,
-        globals: method.globals,
         body,
+        return_arguments: method.return_arguments,
+        name: method.name,
+        input_arguments: method.input_arguments,
         import_as: method.import_as,
         tuning: method.tuning,
         linkage: method.linkage,
+        is_kernel: method.is_kernel,
+        flush_to_zero_f32: method.flush_to_zero_f32,
+        flush_to_zero_f16f64: method.flush_to_zero_f16f64,
+        rounding_mode_f32: method.rounding_mode_f32,
+        rounding_mode_f16f64: method.rounding_mode_f16f64,
     })
 }
 
