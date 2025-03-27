@@ -17,6 +17,10 @@ pub struct Options {
     #[bpaf(external(output_type), optional)]
     output_type: Option<OutputType>,
 
+    #[bpaf(short('o'), argument("file"))]
+    /// Output path
+    output_path: Option<PathBuf>,
+
     #[bpaf(positional("filename"))]
     /// PTX file
     ptx_path: String,
@@ -30,7 +34,10 @@ fn main() -> Result<(), CompilerError> {
     let ptx_path = Path::new(&opts.ptx_path).to_path_buf();
     check_path(&ptx_path)?;
 
-    let output_path = get_output_path(&ptx_path, &output_type)?;
+    let output_path = match opts.output_path {
+        Some(value) => value,
+        None => get_output_path(&ptx_path, &output_type)?
+    };
     check_path(&output_path)?;
 
     let ptx = fs::read(&ptx_path).map_err(CompilerError::from)?;

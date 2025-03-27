@@ -11,7 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 amd_comgr-sys = { path = "../ext/amd_comgr-sys" }
-bpaf = { version = "0.9.18", features = ["derive"] }
+bpaf = { version = "0.9.19", features = ["derive"] }
 comgr = { path = "../comgr" }
 hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
 ptx = { path = "../ptx" }
