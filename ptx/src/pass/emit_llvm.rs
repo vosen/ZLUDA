@@ -2297,7 +2297,7 @@ impl<'a> MethodEmitContext<'a> {
             ],
         )?;
         if data.control == Mul24Control::Hi {
-            // There is an important difference between NVIDIA's mul24 and AMD's mulhi.[ui]24.
+            // There is an important difference between NVIDIA's mul24.hi and AMD's mulhi.[ui]24.
             // NVIDIA: Returns bits 47..16 of the 64-bit result
             // AMD: Returns bits 63..32 of the 64-bit result
             // Hence we need to compute both hi and lo, shift the results and add them together to replicate NVIDIA's mul24
