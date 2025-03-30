@@ -1,5 +1,4 @@
 use std::env;
-use std::error::Error;
 use std::ffi::{CStr, CString, OsStr};
 use std::fs::{self, File};
 use std::io::{self, Write};
