@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <!-- Courtesy of https://github.com/LeoColomb/perfectmotherfuckingwebsite -->
+  <style>
+    body {
+      max-width: 650px;
+      margin: 40px auto;
+      padding: 0 10px;
+      font: 18px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+      color: #444;
+    }
+
+    h1,
+    h2,
+    h3 {
+      line-height: 1.2;
+    }
+
+    h1 small, h2 small {
+      font-size:16px;
+      font-weight:normal;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body {
+        color: #c9d1d9;
+        background: #0d1117;
+      }
+
+      a:link {
+        color: #58a6ff;
+      }
+
+      a:visited {
+        color: #8e96f0;
+      }
+    }
+    
+    
+    /* Recommended code block styling (https://www.getzola.org/documentation/content/syntax-highlighting/#styling-codeblocks) */
+    pre {
+      padding: 1rem;
+      overflow: auto;
+    }
+    /* The line numbers already provide some kind of left/right padding */
+    pre[data-linenos] {
+      padding: 1rem 0;
+    }
+    pre table td {
+      padding: 0;
+    }
+    /* The line number cells */
+    pre table td:nth-of-type(1) {
+      text-align: center;
+      vertical-align: top;
+      user-select: none;
+    }
+    pre mark {
+      /* If you want your highlights to take the full width */
+      display: block;
+      /* The default background colour of a mark is bright yellow */
+      background-color: rgba(254, 252, 232, 0.9);
+    }
+    pre table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+  </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZLUDA - ZLUDA update Q4 2024</title>
+</head>
+
+<body>
+  <section class="section">
+    <div class="container">
+    <h1>
+      <div>
+        <a style="color: #0d1117 !important; text-decoration:none;" href="https://vosen.github.io/ZLUDA">ZLUDA</a>
+        <div style="float: right;">
+          <a href="https://github.com/vosen/ZLUDA"><img src="https://img.shields.io/badge/github-%23121011.svg?style=for-the-badge&logo=github&logoColor=white"/></a> <a href="https://discord.gg/sg6BNzXuc7"><img src="https://img.shields.io/badge/Discord-%235865F2.svg?style=for-the-badge&logo=discord&logoColor=white"/></a>
+        </div>
+      </div>
+      <small>
+        <p style="margin-top: 0.25em">ZLUDA allows to run unmodified CUDA applications on non-NVIDIA GPUs</p>
+      </small>
+    </h1>
+      
+<h2 class="title">
+  ZLUDA update Q4 2024
+  <small><div>2024-12-31</div></small>
+</h2>
+<p>Hello everyone, it's the first of many ZLUDA updates. I've been working hard and I'm happy to announce that we reached the first milestone: we have a new version of ZLUDA with an actual working application. ZLUDA can run Geekbench 5.</p>
+<p>This update also includes a few words on how to contribute (<a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q4-2024/#contributing-to-zluda">Contributing to ZLUDA</a>) and changes in the internals of the &quot;new&quot; ZLUDA (<a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q4-2024/#new-parser">New parser</a>, <a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q4-2024/#atomics-modulo">Atomics modulo</a>).</p>
+<h3 id="geekbench-5">Geekbench 5</h3>
+<p>While Geekbench is far from being the most requested application, it's important for ZLUDA's development: </p>
+<ul>
+<li>It uses a relatively small CUDA API surface, which makes it easy for ZLUDA to support (at least easy when compared to Blender or PyTorch).</li>
+<li>It's closed-source, so it's not possible to port it to HIP (via HIPIFY or other means).</li>
+<li>It has both a generic OpenCL backend and an NVIDIA-specific CUDA backend, so we can measure the performance gain when using ZLUDA.</li>
+</ul>
+<p>The &quot;old&quot; ZLUDA was about 1% faster than the native OpenCL. I was worried that the fresh new code would be slow, but the &quot;new&quot; ZLUDA turned out to be even better than the &quot;old&quot; one and is approximately 10% faster than the native OpenCL. Note that <u>this performance improvement is Geekbench specific and not generalizable</u>. Still, I'm happy with how things turned out. If you are interested in the technical details read the <a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q4-2024/#atomics-modulo">Atomics modulo</a> section down below.</p>
+<p>(The graphs below show slightly inconsistent results because the top graph uses previously collected numbers for OpenCL and ZLUDA 3, the bottom graph uses freshly collected numbers for OpenCL)</p>
+<p>Next on the roadmap is llm.c.</p>
+<p><img src="https://vosen.github.io/ZLUDA/blog/zluda-update-q4-2024/geekbench.svg" alt="" />
+<img src="https://vosen.github.io/ZLUDA/blog/zluda-update-q4-2024/geekbench_detail.svg" alt="" /></p>
+<h3 id="contributing-to-zluda">Contributing to ZLUDA</h3>
+<p>I regularly get questions about how to contribute to ZLUDA, here's how (this information is now also in the project's README):</p>
+<p>ZLUDA project has a commercial backing and does not accept donations.
+ZLUDA project accepts pull requests and other non-monetary contributions.</p>
+<p>If you want to contribute a code fix or documentation update feel free to open a Pull Request.</p>
+<p>There's no architecture document (yet). Two most important crates in ZLUDA are <code>ptx</code> (PTX compiler) and <code>zluda</code> (AMD GPU runtime). A good starting point to tinkering the project is to run one of the ptx unit tests under a debugger and understand what it is doing. <code>cargo test -p ptx -- ::add_hip</code> is a simple test that adds two numbers.</p>
+<p>Github issues tagged with <a href="https://github.com/vosen/ZLUDA/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22">&quot;help wanted&quot;</a> are tasks that are self-containted. Their level of difficulty varies, they are not always good beginner tasks, but they defined unambiguously.</p>
+<p>If you have questions feel free to ask on <a href="https://discord.com/channels/1273316903783497778/1303329281409159270">#devtalk channel on Discord</a>.</p>
+<h3 id="new-parser">New parser</h3>
+<p>This is the first time I've written an extensive write-up about an issue like this and I'm curious to know what do you think. Is this too detailed? Not detailed enough? Should all issues be broken down like this? Leave a comment.</p>
+<p><a href="https://github.com/vosen/ZLUDA/commit/193eb29">Commit 193eb29</a> finally brought a major feature that solves one of the least visible and hardest to fix problems in ZLUDA. </p>
+<p>First, you need to understand what PTX is. PTX is the NVIDIA GPU intermediate language. Intermediate languages work like this: </p>
+<ul>
+<li>Programmer writes source code</li>
+<li>Programmer compiles their source code into an intermediate language X and sends it to the user</li>
+<li>User runs the application. At some point, the intermediate code X is compiled (finalized) into binary for his particular hardware</li>
+</ul>
+<p>Intermediate languages are a fairly common solution: Java has JVM bytecode .NET has CIL, gaming GPUs have SPIR-V, LLVM has LLVM IR. They all solve slightly different problems, but in the GPU context they are used to to avoid the forward compatibility problem. That's why GPU code written ten years ago works just fine on modern GPUs even though your GPU vendor has made major changes to his GPU architecture.</p>
+<p>What if your software stack does not have an intermediate language? Then either:</p>
+<ul>
+<li>You declare your hardware to be strictly forward-compatible. All changes are strictly additive: code compiled for older hardware will work on the newer hardware, but will not be able to take advantage of the hardware features. This is what the x86 CPU family does</li>
+<li>You simply ignore the forward compatibility and compile from scratch for each new hardware target. This is the AMD GPU way </li>
+</ul>
+<p>The CUDA driver ships with a compiler that compiles (finalizes) from PTX to the particular NVIDIA GPU architecture and of course ZLUDA does the same, but for AMD GPUs.</p>
+<p>The compilation itself is divided into several steps and the first step is parsing: converting from textual representation (PTX is a text format) to in-memory representation.</p>
+<p>PTX, being a language, follows certain grammatical rules. For example, this line:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>ld.global.cs.b32  r1, [addr1];
+</span></code></pre>
+<p>means &quot;load (<code>ld</code>) from global address space (<code>.global</code>) with streaming cache behavior (<code>cs</code>) 32-bit integer (<code>.b32</code>) into variable <code>r1</code> from address stored in variable <code>addr1</code>&quot;. You don't need to understand what all this means, just that there is an order to words in an instruction: operand, operands, registers. If the same instruction were written this way, it would violate grammar rules and result in an error:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>ld r1, [addr1] .global.cs.b32;
+</span></code></pre>
+<p>Writing a PTX parser is not hard. As long as you are familiar with a parser generator you can get a high quality parser working relatively quickly and painlessly. ZLUDA used <a href="https://github.com/lalrpop/lalrpop">lalrpop</a> for this task</p>
+<p>It turns out that there is an important undocumented &quot;feature&quot; of the PTX language. Although the documentation lays out a certain language grammar and the NVIDIA PTX-generating compiler follows it, the NVIDIA PTX-consuming (finalizing) compiler is more permissive. NVIDIA PTX-consuming (fnalizing) compiler allows some (but not all) words in an instruction to be passed out-of-order, so both <code>ld.global.cs.b32  r1, [addr1];</code> and <code>ld.cs.global.b32  r1, [addr1];</code> are accepted. For 99.99% of the code out there, it's not a problem: the compiler will correctly generate all the instructions in the documented form. The problem is &quot;inline assembly&quot;. The CUDA the programming language (dialect of C++) allows programmers to write PTX instructions directly. And programmers get the PTX grammar wrong all the time. NVIDIA's PTX parser is tolerant of the mistakes, but ZLUDA's old parser was strict and was special cased for every new project that got its PTX instructions out-of-order.</p>
+<p>ZLUDA's parser is strict because we want to have a strongly-typed representation of instructions as soon as possible and carry the same representation through all stages of compilation. Strongly-typed means that invalid combinations of operands are not only rejected by the parser but impossible to even express in the code.</p>
+<p>I can only speculate about NVIDIA's PTX parser, but its tolerance for out-of-order operands is probably an artifact of a more weakly typed internal representation or a two-stage parsing strategy (first do a simple parse to a weakly-typed representation and then validate and convert weakly-typed to strongly-typed).</p>
+<p>Back to ZLUDA's parser: it's easy enough to support the previous example: just have one rule for <code>ld.&lt;address_space&gt;.&lt;cache_hint&gt;.&lt;type&gt;</code> and one for <code>ld.&lt;cache_hint&gt;.&lt;address_space&gt;.&lt;type&gt;</code>. The problem is that ld operation can be very long. Its full form is:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>ld{.weak}{.ss}{.cop}{.level::cache_hint}{.level::prefetch_size}{.vec}.type
+</span></code></pre>
+<p>With 5 possible operands (<code>ld</code> is always at the start, <code>.vec</code> and <code>.type</code> are always at the end), there are up to 120 separate rules. And this does not even take into account optionality (every segment  in <code>{</code> <code>}</code> brackets is optional).</p>
+<p>&quot;Out-of-orderness&quot; is difficult to express well in a lalrpop-style parser (very few grammars want this &quot;feature&quot;). I replaced our old parser with the one based on <a href="https://github.com/winnow-rs/winnow">winnow</a>. Since ZLUDA tries to be strongly-typed this had a knock-on changes across all the compiler passes. But we now support all the broken PTX in the wild (which funnily enough comes mostly from NVIDIA's own libraries).</p>
+<h3 id="atomics-modulo">Atomics modulo</h3>
+<p>NVIDIA hardware supports a weird little atomic modulo increment/decrement instruction (<code>atom.inc</code>/<code>atom.dec</code>) with semantics like this:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>unsigned atomic_inc(unsigned volatile* p, unsigned modulo) {
+</span><span>  unsigned result;
+</span><span>  atomic {
+</span><span>    result = *p;
+</span><span>    *p = (result &gt;= modulo) ? 0 : result+1;
+</span><span>  }
+</span><span>  return result;
+</span><span>}
+</span></code></pre>
+<p>For the longest time, I simply did not realize that AMD hardware natively supports this instruction and ZLUDA emulated it with a <code>cmpxchg</code> loop. Now that it is natively supported in ZLUDA, code using it is much faster. Unfortunately, other than GeekBench, there really aren't that many users of this instruction, so it won't have much performance impact overall.</p>
+<p>To my knowledge, this instruction is not commonly available on CPUs. Do you know of any algorithms or data structures that benefit from this instruction? If so, let us know in the comments, I've been wondering about this for a few years now.</p>
+<h3 id="bonus-content-interview">Bonus content: interview</h3>
+<p>I was interviewed about ZLUDA for Youtube channel &quot;Tech over Tea&quot;. Watch it <a href="https://www.youtube.com/watch?v=ze25Sie2gVQ">here</a>.</p>
+
+
+<script src="https://giscus.app/client.js"
+        data-repo="vosen/zluda_website"
+        data-repo-id="R_kgDOM5Co2g"
+        data-category="Announcements"
+        data-category-id="DIC_kwDOM5Co2s4Ci6Tj"
+        data-mapping="pathname"
+        data-strict="0"
+        data-reactions-enabled="1"
+        data-emit-metadata="0"
+        data-input-position="top"
+        data-theme="light"
+        data-lang="en"
+        crossorigin="anonymous"
+        async>
+</script>
+
+    </div>
+  </section>
+</body>
+
+</html>
