@@ -10,13 +10,116 @@ import psutil
 import time
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                             QHBoxLayout, QPushButton, QLineEdit, QLabel, 
                             QFileDialog, QMessageBox, QTextEdit, QFrame,
                             QTabWidget, QProgressBar, QGroupBox, QGridLayout,
                             QCheckBox)
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize
-from PyQt6.QtGui import QPalette, QColor, QScreen
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QSize
+from PyQt5.QtGui import QPalette, QColor, QScreen
+from pathlib import Path
+import json
+import shutil
+
+def check_admin():
+    """Check if the program is running with admin privileges."""
+    try:
+        return os.geteuid() == 0
+    except AttributeError:
+        # Windows platform
+        try:
+            return bool(os.getuid() & 0x4000)  # Check for admin bit
+        except AttributeError:
+            return False
+
+def restart_as_admin():
+    """Restart the application with admin privileges."""
+    if platform.system() == "Windows":
+        import ctypes
+        if not ctypes.windll.shell32.IsUserAnAdmin():
+            ctypes.windll.shell32.ShellExecuteW(
+                None, "runas", sys.executable, " ".join(sys.argv), None, 1
+            )
+            return True
+    else:
+        if os.geteuid() != 0:
+            os.execvp('sudo', ['sudo', 'python3'] + sys.argv)
+            return True
+    return False
+
+def get_linux_distro():
+    """Detect the Linux distribution."""
+    try:
+        with open('/etc/os-release', 'r') as f:
+            lines = f.readlines()
+            info = {}
+            for line in lines:
+                if '=' in line:
+                    key, value = line.strip().split('=', 1)
+                    info[key] = value.strip('"')
+            
+            # Get the ID and ID_LIKE fields
+            distro_id = info.get('ID', '').lower()
+            distro_like = info.get('ID_LIKE', '').lower()
+            
+            # Handle special cases
+            if 'cachyos' in distro_id:
+                return 'cachyos'
+            elif 'pikaos' in distro_id:
+                return 'pikaos'
+            elif 'nobara' in distro_id:
+                return 'nobara'
+            
+            return distro_id
+    except:
+        return ''
+
+def get_package_manager_commands():
+    """Get the appropriate package manager commands for the detected distro."""
+    distro = get_linux_distro()
+    commands = {
+        'ubuntu': {
+            'update': 'sudo apt update',
+            'install': 'sudo apt install -y build-essential curl git cmake pkg-config libvulkan-dev vulkan-tools spirv-tools libclang-dev clang llvm-dev python3-pip ninja-build',
+            'rust': 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y'
+        },
+        'debian': {
+            'update': 'sudo apt update',
+            'install': 'sudo apt install -y build-essential curl git cmake pkg-config libvulkan-dev vulkan-tools spirv-tools libclang-dev clang llvm-dev python3-pip ninja-build',
+            'rust': 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y'
+        },
+        'pikaos': {
+            'update': 'sudo apt update',
+            'install': 'sudo apt install -y build-essential curl git cmake pkg-config libvulkan-dev vulkan-tools spirv-tools libclang-dev clang llvm-dev python3-pip ninja-build',
+            'rust': 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y'
+        },
+        'arch': {
+            'update': 'sudo pacman -S --noconfirm base-devel git cmake vulkan-devel vulkan-tools spirv-tools clang llvm python-pip ninja rust',
+            'install': '',  # Empty since we do it all in the update command
+            'rust': ''  # Empty since rust is included in the update command
+        },
+        'cachyos': {
+            'update': 'sudo pacman -S --noconfirm base-devel git cmake vulkan-devel vulkan-tools spirv-tools clang llvm python-pip ninja rust',
+            'install': '',  # Empty since we do it all in the update command
+            'rust': ''  # Empty since rust is included in the update command
+        },
+        'manjaro': {
+            'update': 'sudo pacman -S --noconfirm base-devel git cmake vulkan-devel vulkan-tools spirv-tools clang llvm python-pip ninja rust',
+            'install': '',  # Empty since we do it all in the update command
+            'rust': ''  # Empty since rust is included in the update command
+        },
+        'fedora': {
+            'update': 'sudo dnf update -y',
+            'install': 'sudo dnf install -y gcc gcc-c++ git cmake pkgconfig vulkan-devel vulkan-tools spirv-tools clang-devel llvm-devel python3-pip ninja-build',
+            'rust': 'sudo dnf install -y rust cargo'
+        },
+        'nobara': {
+            'update': 'sudo dnf update -y',
+            'install': 'sudo dnf install -y gcc gcc-c++ git cmake pkgconfig vulkan-devel vulkan-tools spirv-tools clang-devel llvm-devel python3-pip ninja-build',
+            'rust': 'sudo dnf install -y rust cargo'
+        }
+    }
+    return commands.get(distro, {})
 
 class DownloadThread(QThread):
     """Thread for downloading ZLUDA with progress tracking"""
@@ -119,6 +222,219 @@ class ProcessMonitor(QThread):
     def stop(self):
         self.running = False
 
+class BuildWorker(QThread):
+    progress = pyqtSignal(str)
+    finished = pyqtSignal(bool, str)
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.process = None
+        
+    def run_command(self, command, env=None, timeout=None):
+        """Run a command and stream its output to the progress signal."""
+        try:
+            process = subprocess.Popen(
+                command,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=env,
+                text=True,
+                bufsize=1,
+                universal_newlines=True
+            )
+            
+            # Create threads to read stdout and stderr
+            def read_output(pipe, prefix):
+                for line in pipe:
+                    line = line.strip()
+                    if line:  # Only emit non-empty lines
+                        if "Cloning into" in line:
+                            self.progress.emit(f"\n{prefix}Starting clone: {line}")
+                        elif any(x in line for x in ["Receiving objects:", "Resolving deltas:", "Updating files:", "remote: Counting", "remote: Compressing"]):
+                            self.progress.emit(f"\r{prefix}{line}")  # Use \r for progress updates
+                        else:
+                            self.progress.emit(f"{prefix}{line}")
+            
+            # Start threads for reading output
+            stdout_thread = threading.Thread(target=read_output, args=(process.stdout, ""))
+            stderr_thread = threading.Thread(target=read_output, args=(process.stderr, "[Info] "))
+            
+            stdout_thread.start()
+            stderr_thread.start()
+            
+            # Wait for process to complete
+            returncode = process.wait()
+            
+            # Wait for output threads to finish
+            stdout_thread.join()
+            stderr_thread.join()
+            
+            return returncode == 0
+            
+        except Exception as e:
+            self.progress.emit(f"[Error] Failed to run command: {str(e)}")
+            return False
+        
+    def run(self):
+        try:
+            # Get distro-specific commands
+            commands = get_package_manager_commands()
+            if not commands:
+                self.finished.emit(False, "Unsupported Linux distribution")
+                return
+                
+            # Update package manager
+            self.progress.emit("=== Updating package manager ===")
+            if not self.run_command(commands['update']):
+                self.finished.emit(False, "Failed to update package manager")
+                return
+                
+            # Install dependencies
+            self.progress.emit("\n=== Installing dependencies ===")
+            if not self.run_command(commands['install']):
+                self.finished.emit(False, "Failed to install dependencies")
+                return
+                
+            # Install Rust if needed
+            self.progress.emit("\n=== Installing Rust ===")
+            if not self.run_command(commands['rust']):
+                self.finished.emit(False, "Failed to install Rust")
+                return
+                
+            # Source cargo environment
+            self.progress.emit("\n=== Setting up Rust environment ===")
+            os.environ["PATH"] = f"{str(Path.home())}/.cargo/bin:{os.environ['PATH']}"
+            
+            # Set up build directory in the GUI folder
+            gui_dir = os.path.dirname(os.path.abspath(__file__))
+            build_dir = os.path.join(gui_dir, "zluda_build")
+            
+            # Clean up any existing build directory
+            if os.path.exists(build_dir):
+                self.progress.emit("\n=== Cleaning up previous build ===")
+                try:
+                    shutil.rmtree(build_dir)
+                except Exception as e:
+                    self.progress.emit(f"[Warning] Failed to clean up previous build: {str(e)}")
+            
+            # Create build directory
+            os.makedirs(build_dir, exist_ok=True)
+            
+            # Clone ZLUDA into the build directory
+            self.progress.emit("\n=== Cloning ZLUDA repository ===")
+            if not self.run_command(f"git clone --progress https://github.com/vosen/ZLUDA.git {build_dir}"):
+                self.progress.emit("\n=== Cleaning up failed clone ===")
+                try:
+                    shutil.rmtree(build_dir)
+                except:
+                    pass
+                self.finished.emit(False, "Failed to clone ZLUDA")
+                return
+            
+            # Initialize and update git submodules
+            self.progress.emit("\n=== Initializing git submodules ===")
+            os.chdir(build_dir)
+            
+            # Clone LLVM submodule with progress
+            self.progress.emit("\n=== Cloning LLVM (this may take a while) ===")
+            if not self.run_command("git submodule init ext/llvm-project && git submodule update --progress --depth 1 ext/llvm-project"):
+                self.progress.emit("\n=== Cleaning up failed LLVM clone ===")
+                try:
+                    os.chdir(gui_dir)
+                    shutil.rmtree(build_dir)
+                except:
+                    pass
+                self.finished.emit(False, "Failed to clone LLVM")
+                return
+            
+            # Update other submodules
+            self.progress.emit("\n=== Updating other submodules ===")
+            if not self.run_command("git submodule update --init --recursive --progress --depth 1 -- $(ls -d ext/* | grep -v llvm-project)"):
+                self.progress.emit("\n=== Cleaning up failed submodule initialization ===")
+                try:
+                    os.chdir(gui_dir)
+                    shutil.rmtree(build_dir)
+                except:
+                    pass
+                self.finished.emit(False, "Failed to initialize other submodules")
+                return
+            
+            # Build ZLUDA
+            self.progress.emit("\n=== Building ZLUDA ===")
+            build_env = os.environ.copy()
+            build_env["RUST_LOG"] = "debug"
+            build_env["RUST_BACKTRACE"] = "1"
+            
+            if not self.run_command("cargo build --release", env=build_env):
+                self.progress.emit("\n=== Cleaning up failed build ===")
+                try:
+                    os.chdir(gui_dir)
+                    shutil.rmtree(build_dir)
+                except:
+                    pass
+                self.finished.emit(False, "Failed to build ZLUDA")
+                return
+                
+            # Find the built library
+            self.progress.emit("\n=== Locating built library ===")
+            lib_path = None
+            for path in Path(build_dir).rglob("*.so"):
+                if "target/release" in str(path) and "libzluda" in str(path):
+                    lib_path = str(path)
+                    self.progress.emit(f"Found library at: {lib_path}")
+                    break
+                    
+            if not lib_path:
+                self.progress.emit("\n=== Cleaning up failed build ===")
+                try:
+                    os.chdir(gui_dir)
+                    shutil.rmtree(build_dir)
+                except:
+                    pass
+                self.finished.emit(False, "Could not find built ZLUDA library")
+                return
+                
+            # Copy the built library to the GUI directory
+            target_lib = os.path.join(gui_dir, "libzluda.so")
+            try:
+                shutil.copy2(lib_path, target_lib)
+                self.progress.emit(f"\nCopied library to: {target_lib}")
+            except Exception as e:
+                self.progress.emit("\n=== Cleaning up failed copy ===")
+                try:
+                    os.chdir(gui_dir)
+                    shutil.rmtree(build_dir)
+                except:
+                    pass
+                self.finished.emit(False, f"Failed to copy library: {str(e)}")
+                return
+            
+            # Clean up build directory
+            self.progress.emit("\n=== Cleaning up build directory ===")
+            try:
+                os.chdir(gui_dir)
+                shutil.rmtree(build_dir)
+            except Exception as e:
+                self.progress.emit(f"[Warning] Failed to clean up build directory: {str(e)}")
+            
+            self.progress.emit("\n=== Build completed successfully! ===")
+            self.finished.emit(True, target_lib)
+            
+        except Exception as e:
+            self.progress.emit(f"\n[Error] Build failed: {str(e)}")
+            # Try to clean up on any unexpected error
+            try:
+                gui_dir = os.path.dirname(os.path.abspath(__file__))
+                build_dir = os.path.join(gui_dir, "zluda_build")
+                os.chdir(gui_dir)
+                if os.path.exists(build_dir):
+                    self.progress.emit("\n=== Cleaning up after error ===")
+                    shutil.rmtree(build_dir)
+            except:
+                pass
+            self.finished.emit(False, str(e))
+
 class ZLUDA_GUI(QMainWindow):
     def __init__(self):
         # Enable high DPI scaling
@@ -129,484 +445,343 @@ class ZLUDA_GUI(QMainWindow):
         super().__init__()
         self.setWindowTitle("ZLUDA GUI")
         
-        # Get the primary screen
-        screen = QApplication.primaryScreen()
-        if screen:
-            # Get the screen's geometry and scale factor
-            geometry = screen.geometry()
-            scale_factor = screen.devicePixelRatio()
-            
-            # Adjust scale factor to be more reasonable
-            scale_factor = min(scale_factor, 1.5)  # Cap the scaling
-            
-            # Set minimum size scaled according to DPI
-            self.setMinimumSize(900, 700)
-            
-            # Calculate the window size based on screen size and scale factor
-            width = int(geometry.width() * 0.7)  # 70% of screen width
-            height = int(geometry.height() * 0.7)  # 70% of screen height
-            
-            # Set the window size
-            self.resize(width, height)
-            
-            # Center the window on screen
-            self.move(
-                int((geometry.width() - width) / 2),
-                int((geometry.height() - height) / 2)
-            )
-            
-            # Initialize widgets
-            self.zluda_path = QLineEdit()
-            self.app_path = QLineEdit()
-            self.libs_path = QLineEdit()
-            self.download_button = QPushButton("Download ZLUDA")
-            self.run_button = QPushButton("Run Application")
-            self.download_button.clicked.connect(self.download_zluda)
-            self.run_button.clicked.connect(self.run_application)
-            
-            # Adjust font sizes based on DPI
-            base_font_size = int(11 * scale_factor)
-            title_font_size = int(18 * scale_factor)
-            button_font_size = int(12 * scale_factor)
-            
-            # Update the style sheet with adjusted sizes
-            self.setStyleSheet(f"""
-                /* Main window and widget backgrounds */
-                QMainWindow {{
-                    background-color: #1a1a1a;
-                }}
-                QWidget {{
-                    background-color: transparent;
-                    color: #ffffff;
-                }}
-                
-                /* Labels */
-                QLabel {{
-                    color: #ffffff;
-                    font-size: {base_font_size}px;
-                }}
-                
-                /* Group boxes */
-                QGroupBox {{
-                    background-color: #212121;
-                    border: 1px solid #2a2a2a;
-                    border-radius: 6px;
-                    margin-top: 12px;
-                    padding: 15px;
-                    font-size: {base_font_size}px;
-                }}
-                QGroupBox::title {{
-                    subcontrol-origin: margin;
-                    left: 10px;
-                    padding: 3px 6px;
-                    color: #00e5ff;
-                    font-weight: bold;
-                    background-color: #212121;
-                }}
-                
-                /* Frames */
-                QFrame {{
-                    background-color: #212121;
-                    border: 1px solid #2a2a2a;
-                    border-radius: 6px;
-                    margin: 2px 0;
-                }}
-                
-                /* Line edits */
-                QLineEdit {{
-                    background-color: #2a2a2a;
-                    color: #ffffff;
-                    border: 1px solid #333333;
-                    border-radius: 4px;
-                    padding: 6px 10px;
-                    font-size: {base_font_size}px;
-                    selection-background-color: #006064;
-                    min-height: 24px;
-                }}
-                QLineEdit:focus {{
-                    border: 2px solid #00e5ff;
-                    background-color: #2d2d2d;
-                }}
-                QLineEdit:hover {{
-                    background-color: #2d2d2d;
-                    border: 1px solid #404040;
-                }}
-                
-                /* Buttons */
-                QPushButton {{
-                    border: none;
-                    border-radius: 4px;
-                    padding: 6px 16px;
-                    font-size: {button_font_size}px;
-                    font-weight: bold;
-                    color: white;
-                    background-color: #424242;
-                    min-height: 28px;
-                }}
-                QPushButton:hover {{
-                    background-color: #4a4a4a;
-                }}
-                QPushButton:pressed {{
-                    background-color: #383838;
-                }}
-                QPushButton[cssClass="browse"] {{
-                    background-color: #333333;
-                    padding: 6px 12px;
-                    min-width: 70px;
-                }}
-                QPushButton[cssClass="browse"]:hover {{
-                    background-color: #3d3d3d;
-                }}
-                QPushButton[cssClass="browse"]:pressed {{
-                    background-color: #2a2a2a;
-                }}
-                
-                /* Checkboxes */
-                QCheckBox {{
-                    spacing: 6px;
-                    color: #ffffff;
-                    font-size: {base_font_size}px;
-                    min-height: 20px;
-                    padding: 2px;
-                }}
-                QCheckBox::indicator {{
-                    width: 16px;
-                    height: 16px;
-                    border-radius: 3px;
-                    border: 1px solid #404040;
-                    background-color: #2a2a2a;
-                }}
-                QCheckBox::indicator:hover {{
-                    border-color: #00e5ff;
-                    background-color: #2d2d2d;
-                }}
-                QCheckBox::indicator:checked {{
-                    background-color: #00e5ff;
-                    border-color: #00e5ff;
-                }}
-                
-                /* Tab widget */
-                QTabWidget::pane {{
-                    border: 1px solid #2a2a2a;
-                    border-radius: 6px;
-                    background-color: #212121;
-                    top: -1px;
-                }}
-                QTabBar::tab {{
-                    background-color: #2a2a2a;
-                    color: #b0b0b0;
-                    padding: 8px 16px;
-                    border-top-left-radius: 4px;
-                    border-top-right-radius: 4px;
-                    margin-right: 2px;
-                    font-size: {base_font_size}px;
-                    min-height: 24px;
-                    min-width: 80px;
-                }}
-                QTabBar::tab:selected {{
-                    background-color: #212121;
-                    color: #00e5ff;
-                    border: 1px solid #2a2a2a;
-                    border-bottom: 2px solid #00e5ff;
-                }}
-                QTabBar::tab:hover:!selected {{
-                    background-color: #333333;
-                    color: #ffffff;
-                }}
-                
-                /* Progress bar */
-                QProgressBar {{
-                    border: 1px solid #2a2a2a;
-                    border-radius: 4px;
-                    background-color: #2a2a2a;
-                    text-align: center;
-                    font-size: {int(10 * scale_factor)}px;
-                    color: white;
-                    min-height: 20px;
-                }}
-                QProgressBar::chunk {{
-                    background-color: #00e5ff;
-                    border-radius: 3px;
-                }}
-                
-                /* Text edit */
-                QTextEdit {{
-                    background-color: #2a2a2a;
-                    color: #ffffff;
-                    border: 1px solid #333333;
-                    border-radius: 4px;
-                    padding: 8px;
-                    font-size: {base_font_size}px;
-                    line-height: 1.4;
-                    selection-background-color: #006064;
-                }}
-                QTextEdit:focus {{
-                    border: 2px solid #00e5ff;
-                }}
-                
-                /* Scrollbars */
-                QScrollBar:vertical {{
-                    border: none;
-                    background: #2a2a2a;
-                    width: 10px;
-                    margin: 2px;
-                    border-radius: 5px;
-                }}
-                QScrollBar::handle:vertical {{
-                    background: #404040;
-                    min-height: 20px;
-                    border-radius: 5px;
-                }}
-                QScrollBar::handle:vertical:hover {{
-                    background: #4a4a4a;
-                }}
-                QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-                    height: 0;
-                }}
-                QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
-                    background: none;
-                }}
-            """)
-            
-            # Create main widget and layout
-            main_widget = QWidget()
-            self.setCentralWidget(main_widget)
-            layout = QVBoxLayout(main_widget)
-            layout.setSpacing(12)
-            layout.setContentsMargins(15, 15, 15, 15)
-            
-            # Header with title and version
-            header = QHBoxLayout()
-            header.setSpacing(6)
-            
-            title = QLabel("ZLUDA GUI")
-            title.setStyleSheet(f"""
-                font-size: {title_font_size}px;
-                font-weight: bold;
-                color: #00e5ff;
-            """)
-            
-            version = QLabel("v4.0")
-            version.setStyleSheet(f"""
-                font-size: {button_font_size}px;
-                color: #808080;
-                padding-top: 4px;
-                padding-left: 6px;
-            """)
-            
-            header.addWidget(title)
-            header.addWidget(version)
-            header.addStretch()
-            layout.addLayout(header)
-            
-            # Create tab widget
-            tabs = QTabWidget()
-            layout.addWidget(tabs)
-            
-            # Main tab
-            main_tab = QWidget()
-            main_layout = QVBoxLayout(main_tab)
-            main_layout.setSpacing(12)
-            main_layout.setContentsMargins(15, 15, 15, 15)
-            
-            # Debug settings group
-            debug_group = QGroupBox("Debug Settings")
-            debug_layout = QGridLayout(debug_group)
-            debug_layout.setSpacing(10)
-            debug_layout.setContentsMargins(12, 20, 12, 12)
-            
-            # Debug checkboxes with tooltips
-            self.zluda_debug = QCheckBox("Enable ZLUDA Debug")
-            self.zluda_debug.setChecked(True)
-            self.zluda_debug.setToolTip("Enable detailed ZLUDA debugging output")
-            
-            self.lib_debug = QCheckBox("Enable Library Debug")
-            self.lib_debug.setChecked(True)
-            self.lib_debug.setToolTip("Enable library loading debug information")
-            
-            self.gpu_monitor = QCheckBox("Enable GPU Monitoring")
-            self.gpu_monitor.setChecked(True)
-            self.gpu_monitor.setToolTip("Monitor GPU usage while application is running")
-            
-            debug_layout.addWidget(self.zluda_debug, 0, 0)
-            debug_layout.addWidget(self.lib_debug, 0, 1)
-            debug_layout.addWidget(self.gpu_monitor, 1, 0)
-            
-            # Debug file path
-            debug_file_layout = QHBoxLayout()
-            debug_file_layout.setSpacing(6)
-            
-            debug_file_label = QLabel("Debug File:")
-            debug_file_label.setStyleSheet("""
-                color: #ffffff;
-                font-weight: bold;
-            """)
-            
-            self.debug_file = QLineEdit("/tmp/zluda_debug.log")
-            self.debug_file.setPlaceholderText("Debug log file path")
-            
-            debug_file_layout.addWidget(debug_file_label)
-            debug_file_layout.addWidget(self.debug_file)
-            debug_layout.addLayout(debug_file_layout, 1, 1)
-            
-            main_layout.addWidget(debug_group)
-            
-            # Path input frames
-            path_frames = [
-                ("ZLUDA Library Path", self.zluda_path, "Select ZLUDA library file", self.browse_zluda),
-                ("Application Path", self.app_path, "Select application executable", self.browse_application),
-                ("Additional Libraries Path", self.libs_path, "Select additional libraries directory (optional)", self.browse_libs)
-            ]
-            
-            for label_text, line_edit, placeholder, browse_handler in path_frames:
-                frame = QFrame()
-                frame_layout = QVBoxLayout(frame)
-                frame_layout.setSpacing(6)
-                frame_layout.setContentsMargins(12, 12, 12, 12)
-                
-                label = QLabel(label_text)
-                label.setStyleSheet("""
-                    color: #00e5ff;
-                    font-weight: bold;
-                    font-size: 12px;
-                    margin-bottom: 3px;
-                """)
-                frame_layout.addWidget(label)
-                
-                path_layout = QHBoxLayout()
-                path_layout.setSpacing(6)
-                
-                line_edit.setPlaceholderText(placeholder)
-                path_layout.addWidget(line_edit)
-                
-                browse_btn = QPushButton("Browse")
-                browse_btn.setProperty("cssClass", "browse")
-                browse_btn.clicked.connect(browse_handler)
-                path_layout.addWidget(browse_btn)
-                
-                frame_layout.addLayout(path_layout)
-                main_layout.addWidget(frame)
-            
-            # Action buttons
-            buttons_layout = QHBoxLayout()
-            buttons_layout.setSpacing(10)
-            
-            self.download_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #00796b;
-                    min-width: 150px;
-                }
-                QPushButton:hover {
-                    background-color: #00897b;
-                }
-                QPushButton:pressed {
-                    background-color: #00695c;
-                }
-                QPushButton:disabled {
-                    background-color: #2d3436;
-                    color: #666666;
-                }
-            """)
-            
-            self.run_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #006064;
-                    min-width: 150px;
-                }
-                QPushButton:hover {
-                    background-color: #00838f;
-                }
-                QPushButton:pressed {
-                    background-color: #005662;
-                }
-                QPushButton:disabled {
-                    background-color: #2d3436;
-                    color: #666666;
-                }
-            """)
-            
-            buttons_layout.addWidget(self.download_button)
-            buttons_layout.addWidget(self.run_button)
-            main_layout.addLayout(buttons_layout)
-            
-            # Progress bar
-            self.progress_bar = QProgressBar()
-            main_layout.addWidget(self.progress_bar)
-            
-            # Log areas
-            log_frame = QFrame()
-            log_layout = QVBoxLayout(log_frame)
-            log_layout.setSpacing(6)
-            log_layout.setContentsMargins(12, 12, 12, 12)
-            
-            log_header = QHBoxLayout()
-            log_label = QLabel("Log Output")
-            log_label.setStyleSheet("""
-                color: #00e5ff;
-                font-weight: bold;
-                font-size: 12px;
-                margin-bottom: 3px;
-            """)
-            log_header.addWidget(log_label)
-            log_layout.addLayout(log_header)
-            
-            self.log_area = QTextEdit()
-            self.log_area.setReadOnly(True)
-            self.log_area.setMinimumHeight(150)
-            log_layout.addWidget(self.log_area)
-            
-            main_layout.addWidget(log_frame)
-            
-            # Debug tab
-            debug_tab = QWidget()
-            debug_layout = QVBoxLayout(debug_tab)
-            debug_layout.setSpacing(12)
-            debug_layout.setContentsMargins(15, 15, 15, 15)
-            
-            debug_log_frame = QFrame()
-            debug_log_layout = QVBoxLayout(debug_log_frame)
-            debug_log_layout.setSpacing(6)
-            debug_log_layout.setContentsMargins(12, 12, 12, 12)
-            
-            debug_log_header = QHBoxLayout()
-            debug_log_label = QLabel("Debug Output")
-            debug_log_label.setStyleSheet("""
-                color: #00e5ff;
-                font-weight: bold;
-                font-size: 12px;
-                margin-bottom: 3px;
-            """)
-            debug_log_header.addWidget(debug_log_label)
-            debug_log_layout.addLayout(debug_log_header)
-            
-            self.debug_log_area = QTextEdit()
-            self.debug_log_area.setReadOnly(True)
-            self.debug_log_area.setMinimumHeight(300)
-            debug_log_layout.addWidget(self.debug_log_area)
-            
-            debug_layout.addWidget(debug_log_frame)
-            
-            # Add tabs
-            tabs.addTab(main_tab, "Main")
-            tabs.addTab(debug_tab, "Debug")
-            
-            # Set window flags for proper window controls
-            self.setWindowFlags(
-                Qt.WindowType.Window |
-                Qt.WindowType.CustomizeWindowHint |
-                Qt.WindowType.WindowCloseButtonHint |
-                Qt.WindowType.WindowMinimizeButtonHint |
-                Qt.WindowType.WindowMaximizeButtonHint
-            )
-            
-            # Maximize the window by default
-            self.setWindowState(Qt.WindowState.WindowMaximized)
-            
-        # Initialize variables
+        # Initialize variables first
         self.current_process = None
         self.process_monitor = None
         self.download_thread = None
         self.download_progress = None
+        self.build_worker = None
+        
+        # Initialize widgets
+        self.zluda_path = QLineEdit()
+        self.app_path = QLineEdit()
+        self.libs_path = QLineEdit()
+        self.download_button = QPushButton("Download ZLUDA")
+        self.run_button = QPushButton("Run Application")
+        self.build_button = QPushButton("Build ZLUDA")
+        
+        # Connect signals
+        self.download_button.clicked.connect(self.download_zluda)
+        self.run_button.clicked.connect(self.run_application)
+        self.build_button.clicked.connect(self.build_zluda)
+        
+        # Create main widget and layout
+        main_widget = QWidget()
+        self.setCentralWidget(main_widget)
+        layout = QVBoxLayout(main_widget)
+        layout.setSpacing(12)
+        layout.setContentsMargins(15, 15, 15, 15)
+        
+        # Header with title and version
+        header = QHBoxLayout()
+        header.setSpacing(6)
+        
+        title = QLabel("ZLUDA GUI")
+        title.setStyleSheet("""
+            font-size: 18px;
+            font-weight: bold;
+            color: #00e5ff;
+        """)
+        
+        version = QLabel("v4.0")
+        version.setStyleSheet("""
+            font-size: 12px;
+            color: #808080;
+            padding-top: 4px;
+            padding-left: 6px;
+        """)
+        
+        header.addWidget(title)
+        header.addWidget(version)
+        header.addStretch()
+        layout.addLayout(header)
+        
+        # Create tab widget
+        tabs = QTabWidget()
+        layout.addWidget(tabs)
+        
+        # Main tab
+        main_tab = QWidget()
+        main_layout = QVBoxLayout(main_tab)
+        main_layout.setSpacing(12)
+        main_layout.setContentsMargins(15, 15, 15, 15)
+        
+        # Debug settings group
+        debug_group = QGroupBox("Debug Settings")
+        debug_layout = QGridLayout(debug_group)
+        debug_layout.setSpacing(10)
+        debug_layout.setContentsMargins(12, 20, 12, 12)
+        
+        # Debug checkboxes with tooltips
+        self.zluda_debug = QCheckBox("Enable ZLUDA Debug")
+        self.zluda_debug.setChecked(True)
+        self.zluda_debug.setToolTip("Enable detailed ZLUDA debugging output")
+        
+        self.lib_debug = QCheckBox("Enable Library Debug")
+        self.lib_debug.setChecked(True)
+        self.lib_debug.setToolTip("Enable library loading debug information")
+        
+        self.gpu_monitor = QCheckBox("Enable GPU Monitoring")
+        self.gpu_monitor.setChecked(True)
+        self.gpu_monitor.setToolTip("Monitor GPU usage while application is running")
+        
+        debug_layout.addWidget(self.zluda_debug, 0, 0)
+        debug_layout.addWidget(self.lib_debug, 0, 1)
+        debug_layout.addWidget(self.gpu_monitor, 1, 0)
+        
+        # Debug file path
+        debug_file_layout = QHBoxLayout()
+        debug_file_layout.setSpacing(6)
+        
+        debug_file_label = QLabel("Debug File:")
+        debug_file_label.setStyleSheet("""
+            color: #ffffff;
+            font-weight: bold;
+        """)
+        
+        self.debug_file = QLineEdit("/tmp/zluda_debug.log")
+        self.debug_file.setPlaceholderText("Debug log file path")
+        
+        debug_file_layout.addWidget(debug_file_label)
+        debug_file_layout.addWidget(self.debug_file)
+        debug_layout.addLayout(debug_file_layout, 1, 1)
+        
+        main_layout.addWidget(debug_group)
+        
+        # Path input frames
+        path_frames = [
+            ("ZLUDA Library Path", self.zluda_path, "Select ZLUDA library file", self.browse_zluda),
+            ("Application Path", self.app_path, "Select application executable", self.browse_application),
+            ("Additional Libraries Path", self.libs_path, "Select additional libraries directory (optional)", self.browse_libs)
+        ]
+        
+        for label_text, line_edit, placeholder, browse_handler in path_frames:
+            frame = QFrame()
+            frame_layout = QVBoxLayout(frame)
+            frame_layout.setSpacing(6)
+            frame_layout.setContentsMargins(12, 12, 12, 12)
+            
+            label = QLabel(label_text)
+            label.setStyleSheet("""
+                color: #00e5ff;
+                font-weight: bold;
+                font-size: 12px;
+                margin-bottom: 3px;
+            """)
+            frame_layout.addWidget(label)
+            
+            path_layout = QHBoxLayout()
+            path_layout.setSpacing(6)
+            
+            line_edit.setPlaceholderText(placeholder)
+            path_layout.addWidget(line_edit)
+            
+            browse_btn = QPushButton("Browse")
+            browse_btn.setProperty("cssClass", "browse")
+            browse_btn.clicked.connect(browse_handler)
+            path_layout.addWidget(browse_btn)
+            
+            frame_layout.addLayout(path_layout)
+            main_layout.addWidget(frame)
+        
+        # Action buttons
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(10)
+        
+        # Set button styles
+        self.download_button.setStyleSheet("""
+            QPushButton {
+                background-color: #00796b;
+                min-width: 150px;
+            }
+            QPushButton:hover {
+                background-color: #00897b;
+            }
+            QPushButton:pressed {
+                background-color: #00695c;
+            }
+            QPushButton:disabled {
+                background-color: #2d3436;
+                color: #666666;
+            }
+        """)
+        
+        self.run_button.setStyleSheet("""
+            QPushButton {
+                background-color: #006064;
+                min-width: 150px;
+            }
+            QPushButton:hover {
+                background-color: #00838f;
+            }
+            QPushButton:pressed {
+                background-color: #005662;
+            }
+            QPushButton:disabled {
+                background-color: #2d3436;
+                color: #666666;
+            }
+        """)
+        
+        self.build_button.setStyleSheet("""
+            QPushButton {
+                background-color: #2196f3;
+                min-width: 150px;
+            }
+            QPushButton:hover {
+                background-color: #42a5f5;
+            }
+            QPushButton:pressed {
+                background-color: #1976d2;
+            }
+            QPushButton:disabled {
+                background-color: #2d3436;
+                color: #666666;
+            }
+        """)
+        
+        buttons_layout.addWidget(self.download_button)
+        buttons_layout.addWidget(self.run_button)
+        buttons_layout.addWidget(self.build_button)
+        buttons_layout.addStretch()
+        
+        main_layout.addLayout(buttons_layout)
+        
+        # Progress bars
+        self.progress_bar = QProgressBar()
+        main_layout.addWidget(self.progress_bar)
+        
+        self.build_progress = QProgressBar()
+        self.build_progress.setTextVisible(False)
+        self.build_progress.hide()
+        main_layout.addWidget(self.build_progress)
+        
+        # Log areas
+        log_frame = QFrame()
+        log_layout = QVBoxLayout(log_frame)
+        log_layout.setSpacing(6)
+        log_layout.setContentsMargins(12, 12, 12, 12)
+        
+        log_header = QHBoxLayout()
+        log_label = QLabel("Log Output")
+        log_label.setStyleSheet("""
+            color: #00e5ff;
+            font-weight: bold;
+            font-size: 12px;
+            margin-bottom: 3px;
+        """)
+        log_header.addWidget(log_label)
+        log_layout.addLayout(log_header)
+        
+        self.log_area = QTextEdit()
+        self.log_area.setReadOnly(True)
+        self.log_area.setMinimumHeight(150)
+        log_layout.addWidget(self.log_area)
+        
+        main_layout.addWidget(log_frame)
+        
+        # Add main tab
+        tabs.addTab(main_tab, "Main")
+        
+        # Debug tab
+        debug_tab = QWidget()
+        debug_layout = QVBoxLayout(debug_tab)
+        debug_layout.setSpacing(12)
+        debug_layout.setContentsMargins(15, 15, 15, 15)
+        
+        debug_log_frame = QFrame()
+        debug_log_layout = QVBoxLayout(debug_log_frame)
+        debug_log_layout.setSpacing(6)
+        debug_log_layout.setContentsMargins(12, 12, 12, 12)
+        
+        debug_log_header = QHBoxLayout()
+        debug_log_label = QLabel("Debug Output")
+        debug_log_label.setStyleSheet("""
+            color: #00e5ff;
+            font-weight: bold;
+            font-size: 12px;
+            margin-bottom: 3px;
+        """)
+        debug_log_header.addWidget(debug_log_label)
+        debug_log_layout.addLayout(debug_log_header)
+        
+        self.debug_log_area = QTextEdit()
+        self.debug_log_area.setReadOnly(True)
+        self.debug_log_area.setMinimumHeight(300)
+        debug_log_layout.addWidget(self.debug_log_area)
+        
+        debug_layout.addWidget(debug_log_frame)
+        
+        # Add debug tab
+        tabs.addTab(debug_tab, "Debug")
+        
+        # Set window flags for proper window controls
+        self.setWindowFlags(
+            Qt.Window |
+            Qt.CustomizeWindowHint |
+            Qt.WindowCloseButtonHint |
+            Qt.WindowMinimizeButtonHint |
+            Qt.WindowMaximizeButtonHint
+        )
+        
+        # Apply dark theme stylesheet
+        self.setStyleSheet("""
+            QMainWindow, QWidget {
+                background-color: #1a1a1a;
+                color: #ffffff;
+            }
+            QGroupBox {
+                background-color: #212121;
+                border: 1px solid #2a2a2a;
+                border-radius: 6px;
+                margin-top: 12px;
+                padding: 15px;
+            }
+            QFrame {
+                background-color: #212121;
+                border: 1px solid #2a2a2a;
+                border-radius: 6px;
+            }
+            QLineEdit {
+                background-color: #2a2a2a;
+                border: 1px solid #333333;
+                border-radius: 4px;
+                padding: 6px 10px;
+                color: white;
+            }
+            QTextEdit {
+                background-color: #2a2a2a;
+                border: 1px solid #333333;
+                border-radius: 4px;
+                padding: 8px;
+                color: white;
+            }
+            QPushButton[cssClass="browse"] {
+                background-color: #333333;
+                padding: 6px 12px;
+                min-width: 70px;
+            }
+            QTabWidget::pane {
+                border: 1px solid #2a2a2a;
+                border-radius: 6px;
+                background-color: #212121;
+            }
+            QTabBar::tab {
+                background-color: #2a2a2a;
+                color: #b0b0b0;
+                padding: 8px 16px;
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
+            }
+            QTabBar::tab:selected {
+                background-color: #212121;
+                color: #00e5ff;
+                border-bottom: 2px solid #00e5ff;
+            }
+        """)
+        
+        # Maximize the window by default
+        self.setWindowState(Qt.WindowMaximized)
 
     def log(self, message):
         """Add a message to the main log area"""
@@ -891,6 +1066,77 @@ class ZLUDA_GUI(QMainWindow):
         
         # Reset process reference
         self.current_process = None
+
+    def build_zluda(self):
+        """Build ZLUDA from source."""
+        if not sys.platform.startswith('linux'):
+            QMessageBox.warning(self, "Error", "ZLUDA building is only supported on Linux")
+            return
+            
+        # Check for admin privileges
+        if not check_admin():
+            reply = QMessageBox.question(
+                self,
+                "Admin Privileges Required",
+                "Installing dependencies requires administrator privileges. Would you like to restart the application as admin?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            
+            if reply == QMessageBox.StandardButton.Yes:
+                self.log("Restarting with admin privileges...")
+                if restart_as_admin():
+                    sys.exit(0)  # Exit current instance
+                else:
+                    QMessageBox.critical(self, "Error", "Failed to restart with admin privileges")
+                    return
+            else:
+                return
+            
+        reply = QMessageBox.question(
+            self,
+            "Build ZLUDA",
+            "This will install required dependencies and build ZLUDA from source. Continue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.No:
+            return
+            
+        # Disable buttons during build
+        self.build_button.setEnabled(False)
+        self.download_button.setEnabled(False)
+        self.run_button.setEnabled(False)
+        
+        # Show and start progress bar
+        self.build_progress.setRange(0, 0)  # Indeterminate mode
+        self.build_progress.show()
+        
+        # Start build process
+        self.build_worker = BuildWorker()
+        self.build_worker.progress.connect(self.update_build_progress)
+        self.build_worker.finished.connect(self.build_finished)
+        self.build_worker.start()
+        
+    def update_build_progress(self, message):
+        """Update build progress in log area."""
+        self.log_area.append(f"[Build] {message}")
+        
+    def build_finished(self, success, result):
+        """Handle build completion."""
+        # Re-enable buttons
+        self.build_button.setEnabled(True)
+        self.download_button.setEnabled(True)
+        self.run_button.setEnabled(True)
+        
+        # Hide progress bar
+        self.build_progress.hide()
+        
+        if success:
+            self.log_area.append("[Build] ZLUDA built successfully!")
+            self.zluda_path.setText(result)
+        else:
+            self.log_area.append(f"[Build] Error: {result}")
+            QMessageBox.warning(self, "Build Error", f"Failed to build ZLUDA: {result}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
