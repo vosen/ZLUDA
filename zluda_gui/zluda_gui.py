@@ -205,11 +205,9 @@ class ProcessMonitor(QThread):
                 # Check GPU usage
                 if self.gpu_monitor:
                     try:
-                        if platform.system() == "Windows":
-                            gpu_info = subprocess.check_output(['nvidia-smi', '--query-gpu=utilization.gpu,memory.used', '--format=csv,noheader,nounits'], stderr=subprocess.DEVNULL)
-                        else:
-                            gpu_info = subprocess.check_output(['nvidia-smi', '--query-gpu=utilization.gpu,memory.used', '--format=csv,noheader,nounits'], stderr=subprocess.DEVNULL)
-                        self.log_signal.emit(f"GPU Usage: {gpu_info.decode().strip()}")
+                        self.log_signal.emit("GPU monitoring is not yet implemented for AMD GPUs")
+                        # Disable GPU monitoring after first message to avoid spam
+                        self.gpu_monitor = False
                     except:
                         pass
                 
