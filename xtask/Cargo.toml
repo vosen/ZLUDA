@@ -10,6 +10,10 @@ cargo_metadata = "0.19.1"
 serde = "1.0.217"
 serde_json = "1.0.137"
 
+[target.'cfg(unix)'.dependencies]
+flate2 = { version = "1.1.1", features = ["zlib-rs"], default-features = false }
+tar = "0.4.44"
+
 [target.'cfg(windows)'.dependencies]
 zip = { version = "2.6.1", features = ["deflate", "time"], default-features = false }
 time = "0.3.41"

@@ -1,8 +1,7 @@
 use bpaf::{Args, Bpaf, Parser};
 use cargo_metadata::{MetadataCommand, Package};
 use serde::Deserialize;
-use std::{env, ffi::OsString, fs::File, path::PathBuf, process::Command};
-use zip::{write::SimpleFileOptions, ZipWriter};
+use std::{env, ffi::OsString, path::PathBuf, process::Command};
 
 #[derive(Debug, Clone, Bpaf)]
 #[bpaf(options)]
@@ -79,9 +78,9 @@ impl Project {
 
     #[cfg(unix)]
     fn prefix(&self) -> &'static str {
-        match self.clib_name {
-            None => "",
-            Some(_) => "lib",
+        match self.target_kind {
+            ProjectTarget::Bin => "",
+            ProjectTarget::Cdylib => "lib",
         }
     }
 
@@ -99,6 +98,40 @@ impl Project {
             ProjectTarget::Bin => ".exe",
             ProjectTarget::Cdylib => ".dll",
         }
+    }
+
+    // Returns tuple:
+    // * symlink file path (relative to the root of build dir)
+    // * symlink absolute file path
+    // * target actual file (relative to symlink file)
+    fn symlinks<'a>(
+        &'a self,
+        target_dir: &'a PathBuf,
+        profile: &'a str,
+        libname: &'a str,
+    ) -> impl Iterator<Item = (&'a str, PathBuf, PathBuf)> + 'a {
+        self.meta.linux_symlinks.iter().map(move |source| {
+            let mut link = target_dir.clone();
+            link.extend([profile, source]);
+            let relative_link = PathBuf::from(source);
+            let ancestors = relative_link.as_path().ancestors().count();
+            let mut target = std::iter::repeat_with(|| "../").take(ancestors - 2).fold(
+                PathBuf::new(),
+                |mut buff, segment| {
+                    buff.push(segment);
+                    buff
+                },
+            );
+            target.push(libname);
+            (&**source, link, target)
+        })
+    }
+
+    fn file_name(&self) -> String {
+        let target_name = &self.target_name;
+        let prefix = self.prefix();
+        let suffix = self.suffix();
+        format!("{prefix}{target_name}{suffix}")
     }
 }
 
@@ -152,18 +185,21 @@ fn compile(b: Build) -> (PathBuf, String, Vec<Project>) {
         .packages
         .into_iter()
         .filter_map(Project::try_new)
+        .filter(|project| {
+            if project.meta.windows_only && cfg!(not(windows)) {
+                return false;
+            }
+            if project.meta.debug_only && profile != "debug" {
+                return false;
+            }
+            true
+        })
         .collect::<Vec<_>>();
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let mut command = Command::new(&cargo);
     command.arg("build");
     command.arg("--locked");
     for project in projects.iter() {
-        if project.meta.windows_only && cfg!(not(windows)) {
-            continue;
-        }
-        if project.meta.debug_only && profile != "debug" {
-            continue;
-        }
         command.arg("--package");
         command.arg(&project.name);
     }
@@ -189,6 +225,92 @@ fn sniff_out_profile_name(b: &[OsString]) -> String {
 }
 
 fn zip(zip: Build) {
+    let (target_dir, profile, projects) = compile(zip);
+    os::zip(target_dir, profile, projects)
+}
+
+#[cfg(unix)]
+mod os {
+    use flate2::write::GzEncoder;
+    use flate2::Compression;
+    use std::{
+        fs::{self, File},
+        path::PathBuf,
+    };
+    use tar::Header;
+
+    pub fn make_symlinks(
+        target_directory: &std::path::PathBuf,
+        projects: &[super::Project],
+        profile: &str,
+    ) {
+        use std::os::unix::fs as unix_fs;
+        for project in projects.iter() {
+            let libname = project.file_name();
+            for (_, full_path, target) in project.symlinks(target_directory, profile, &libname) {
+                let mut dir = full_path.clone();
+                assert!(dir.pop());
+                fs::create_dir_all(dir).unwrap();
+                fs::remove_file(&full_path).ok();
+                unix_fs::symlink(&target, full_path).unwrap();
+            }
+        }
+    }
+
+    pub(crate) fn zip(target_dir: PathBuf, profile: String, projects: Vec<crate::Project>) {
+        let tar_gz =
+            File::create(format!("{}/{profile}/zluda.tar.gz", target_dir.display())).unwrap();
+        let enc = GzEncoder::new(tar_gz, Compression::default());
+        let mut tar = tar::Builder::new(enc);
+        for project in projects.iter() {
+            let file_name = project.file_name();
+            let mut file =
+                File::open(format!("{}/{profile}/{file_name}", target_dir.display())).unwrap();
+            tar.append_file(format!("zluda/{file_name}"), &mut file)
+                .unwrap();
+            for (source, full_path, target) in project.symlinks(&target_dir, &profile, &file_name) {
+                let mut header = Header::new_gnu();
+                let meta = fs::symlink_metadata(&full_path).unwrap();
+                header.set_metadata(&meta);
+                tar.append_link(&mut header, format!("zluda/{source}"), target)
+                    .unwrap();
+            }
+        }
+        tar.finish().unwrap();
+    }
+}
+
+#[cfg(not(unix))]
+mod os {
+    use zip::{write::SimpleFileOptions, ZipWriter};
+
+    pub fn make_symlinks(
+        _target_directory: &std::path::PathBuf,
+        _projects: &[super::Project],
+        _profile: &str,
+    ) {
+    }
+
+    pub(crate) fn zip(target_dir: PathBuf, profile: String, projects: Vec<crate::Project>) {
+        let zip_file =
+            File::create(format!("{}/{profile}/zluda.zip", target_dir.display())).unwrap();
+        let mut zip = ZipWriter::new(zip_file);
+        zip.add_directory("zluda", SimpleFileOptions::default())
+            .unwrap();
+        for project in projects.iter() {
+            let name = &project.target_name;
+            let ext = project.suffix();
+            let mut file =
+                std::fs::File::open(format!("{}/{profile}/{name}{ext}", target_dir.display()))
+                    .unwrap();
+            let file_options = file_options_from_time(&file).unwrap_or_default();
+            zip.start_file(format!("zluda/{name}{ext}"), file_options)
+                .unwrap();
+            std::io::copy(&mut file, &mut zip).unwrap();
+        }
+        zip.finish().unwrap();
+    }
+
     fn file_options_from_time(from: &File) -> std::io::Result<SimpleFileOptions> {
         let metadata = from.metadata()?;
         let modified = metadata.modified()?;
@@ -196,72 +318,5 @@ fn zip(zip: Build) {
         Ok(SimpleFileOptions::default().last_modified_time(
             zip::DateTime::try_from(modified).map_err(|err| std::io::Error::other(err))?,
         ))
-    }
-
-    let (target_dir, profile, projects) = compile(zip);
-    let zip_file = File::create(format!("{}/{profile}/zluda.zip", target_dir.display())).unwrap();
-    let mut zip = ZipWriter::new(zip_file);
-    zip.add_directory("zluda", SimpleFileOptions::default())
-        .unwrap();
-    for project in projects.iter() {
-        let name = &project.target_name;
-        let ext = project.suffix();
-        let mut file =
-            std::fs::File::open(format!("{}/{profile}/{name}{ext}", target_dir.display())).unwrap();
-        let file_options = file_options_from_time(&file).unwrap_or_default();
-        zip.start_file(format!("zluda/{name}{ext}"), file_options)
-            .unwrap();
-        std::io::copy(&mut file, &mut zip).unwrap();
-    }
-    zip.finish().unwrap();
-}
-
-#[cfg(unix)]
-mod os {
-    use std::path::PathBuf;
-
-    pub fn make_symlinks(
-        target_directory: &std::path::PathBuf,
-        _projects: &[super::Project],
-        profile: &str,
-    ) {
-        use std::fs;
-        use std::os::unix::fs as unix_fs;
-        for project in projects.iter() {
-            let clib_name = match project.clib_name {
-                Some(ref l) => l,
-                None => continue,
-            };
-            let libname = format!("lib{}.so", clib_name);
-            for source in project.meta.linux_symlinks.iter() {
-                let relative_link = PathBuf::from(source);
-                let ancestors = relative_link.as_path().ancestors().count();
-                let mut target = std::iter::repeat_with(|| "../").take(ancestors - 2).fold(
-                    PathBuf::new(),
-                    |mut buff, segment| {
-                        buff.push(segment);
-                        buff
-                    },
-                );
-                let mut link = target_directory.clone();
-                link.extend([profile, source]);
-                let mut dir = link.clone();
-                assert!(dir.pop());
-                fs::create_dir_all(dir).unwrap();
-                fs::remove_file(&link).ok();
-                target.push(&*libname);
-                unix_fs::symlink(&target, link).unwrap();
-            }
-        }
-    }
-}
-
-#[cfg(not(unix))]
-mod os {
-    pub fn make_symlinks(
-        _target_directory: &std::path::PathBuf,
-        _projects: &[super::Project],
-        _profile: &str,
-    ) {
     }
 }
