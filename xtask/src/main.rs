@@ -84,6 +84,11 @@ impl Project {
         }
     }
 
+    #[cfg(not(unix))]
+    fn prefix(&self) -> &'static str {
+        ""
+    }
+
     #[cfg(unix)]
     fn suffix(&self) -> &'static str {
         match self.target_kind {
@@ -104,6 +109,7 @@ impl Project {
     // * symlink file path (relative to the root of build dir)
     // * symlink absolute file path
     // * target actual file (relative to symlink file)
+    #[cfg_attr(not(unix), allow(unused))]
     fn symlinks<'a>(
         &'a self,
         target_dir: &'a PathBuf,
@@ -282,6 +288,7 @@ mod os {
 
 #[cfg(not(unix))]
 mod os {
+    use std::{fs::File, io, path::PathBuf};
     use zip::{write::SimpleFileOptions, ZipWriter};
 
     pub fn make_symlinks(
@@ -298,25 +305,23 @@ mod os {
         zip.add_directory("zluda", SimpleFileOptions::default())
             .unwrap();
         for project in projects.iter() {
-            let name = &project.target_name;
-            let ext = project.suffix();
+            let file_name = project.file_name();
             let mut file =
-                std::fs::File::open(format!("{}/{profile}/{name}{ext}", target_dir.display()))
-                    .unwrap();
+                File::open(format!("{}/{profile}/{file_name}", target_dir.display())).unwrap();
             let file_options = file_options_from_time(&file).unwrap_or_default();
-            zip.start_file(format!("zluda/{name}{ext}"), file_options)
+            zip.start_file(format!("zluda/{file_name}"), file_options)
                 .unwrap();
-            std::io::copy(&mut file, &mut zip).unwrap();
+            io::copy(&mut file, &mut zip).unwrap();
         }
         zip.finish().unwrap();
     }
 
-    fn file_options_from_time(from: &File) -> std::io::Result<SimpleFileOptions> {
+    fn file_options_from_time(from: &File) -> io::Result<SimpleFileOptions> {
         let metadata = from.metadata()?;
         let modified = metadata.modified()?;
         let modified = time::OffsetDateTime::from(modified);
         Ok(SimpleFileOptions::default().last_modified_time(
-            zip::DateTime::try_from(modified).map_err(|err| std::io::Error::other(err))?,
+            zip::DateTime::try_from(modified).map_err(|err| io::Error::other(err))?,
         ))
     }
 }
