@@ -45,7 +45,7 @@ jobs:
       with:
         name: zluda-linux-${{ env.SHORT_SHA }}
         path: target/release-lto/zluda
-build_windows:
+  build_windows:
     name: Build (Windows)
     runs-on: windows-2019
     steps:
