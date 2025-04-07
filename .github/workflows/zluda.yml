@@ -14,7 +14,7 @@ jobs:
     name: Build (Linux)
     runs-on: ubuntu-22.04
     steps:
-    #- uses: jlumbroso/free-disk-space@main
+    - uses: jlumbroso/free-disk-space@main
     - name: Install ROCm
       run: |
         sudo mkdir --parents --mode=0755 /etc/apt/keyrings
