@@ -36,7 +36,8 @@ jobs:
       # https://github.com/actions/upload-artifact/issues/39
       run: |
         cargo xtask zip --profile release-lto
-        tar -xzf target/release-lto/zluda.tar.gz -C target/release-lto
+        mkdir target/release-lto/zluda
+        tar -xzf target/release-lto/zluda.tar.gz -C target/release-lto/zluda
     - name: Set revision hash
       run: echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
     - name: Upload
@@ -55,7 +56,7 @@ build_windows:
     - name: Build
       run: |
         cargo xtask zip --profile release-lto
-        Expand-Archive -Path target/release-lto/zluda.zip -DestinationPath target/release-lto
+        Expand-Archive -Path target/release-lto/zluda.zip -DestinationPath target/release-lto/zluda
     - name: Set revision hash
       run: echo "SHORT_SHA=$("${{ github.sha }}".SubString(0, 7))" >> $env:GITHUB_ENV
     - name: Upload
@@ -63,4 +64,3 @@ build_windows:
       with:
         name: zluda-windows-${{ env.SHORT_SHA }}
         path: target/release-lto/zluda
-
