@@ -21,8 +21,8 @@ jobs:
         sudo sh -c 'wget https://repo.radeon.com/rocm/rocm.gpg.key -O - |  gpg --dearmor | tee /etc/apt/keyrings/rocm.gpg > /dev/null'
         sudo sh -c 'echo deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/${{ env.ROCM_VERSION }} jammy main > /etc/apt/sources.list.d/rocm.list'
         sudo sh -c 'echo Package: * > /etc/apt/preferences.d/rocm-pin-600'
-        sudo sh -c 'echo Pin: release o=repo.radeon.com' >> /etc/apt/preferences.d/rocm-pin-600'
-        sudo sh -c 'echo Pin-Priority: 600' >> /etc/apt/preferences.d/rocm-pin-600'
+        sudo sh -c 'echo Pin: release o=repo.radeon.com >> /etc/apt/preferences.d/rocm-pin-600'
+        sudo sh -c 'echo Pin-Priority: 600 >> /etc/apt/preferences.d/rocm-pin-600'
         sudo apt-get update
         sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends rocm-smi-lib rocm-llvm-dev hip-runtime-amd hip-dev
         echo 'export PATH="$PATH:/opt/rocm/bin"' | sudo tee /etc/profile.d/rocm.sh  
