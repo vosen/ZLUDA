@@ -2,11 +2,10 @@ name: ZLUDA
 on:
   push:
     branches: [ master ]
-  pull_request:
-    branches: [ master ]
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_PROFILE: release-lto
   ROCM_VERSION: "6.3.1"
 
 jobs:
@@ -35,16 +34,16 @@ jobs:
     - name: Build
       # https://github.com/actions/upload-artifact/issues/39
       run: |
-        cargo xtask zip --profile release-lto
-        mkdir target/release-lto/zluda
-        tar -xzf target/release-lto/zluda.tar.gz -C target/release-lto/zluda
+        cargo xtask zip --profile {{ env.CARGO_PROFILE }}
+        mkdir target/{{ env.CARGO_PROFILE }}/zluda
+        tar -xzf target/{{ env.CARGO_PROFILE }}/zluda.tar.gz -C target/{{ env.CARGO_PROFILE }}/zluda
     - name: Set revision hash
       run: echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
     - name: Upload
       uses: actions/upload-artifact@v4
       with:
         name: zluda-linux-${{ env.SHORT_SHA }}
-        path: target/release-lto/zluda
+        path: target/{{ env.CARGO_PROFILE }}/zluda
   build_windows:
     name: Build (Windows)
     runs-on: windows-2022
@@ -55,12 +54,12 @@ jobs:
     - uses: Swatinem/rust-cache@v2
     - name: Build
       run: |
-        cargo xtask zip --profile release-lto
-        Expand-Archive -Path target/release-lto/zluda.zip -DestinationPath target/release-lto/zluda
+        cargo xtask zip --profile {{ env.CARGO_PROFILE }}
+        Expand-Archive -Path target/{{ env.CARGO_PROFILE }}/zluda.zip -DestinationPath target/{{ env.CARGO_PROFILE }}/zluda
     - name: Set revision hash
       run: echo "SHORT_SHA=$("${{ github.sha }}".SubString(0, 7))" >> $env:GITHUB_ENV
     - name: Upload
       uses: actions/upload-artifact@v4
       with:
         name: zluda-windows-${{ env.SHORT_SHA }}
-        path: target/release-lto/zluda
+        path: target/{{ env.CARGO_PROFILE }}/zluda
