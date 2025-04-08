@@ -19,12 +19,12 @@ define amdgpu_kernel void @mul24_hi_u32(ptr addrspace(4) byref(i64) %"31", ptr a
   store i32 %"39", ptr addrspace(5) %"35", align 4
   %"42" = load i32, ptr addrspace(5) %"35", align 4
   %"43" = load i32, ptr addrspace(5) %"35", align 4
-  %"41" = call i32 @llvm.amdgcn.mul.u24(i32 %"42", i32 %"43")
-  %2 = call i32 @llvm.amdgcn.mulhi.u24(i32 %"42", i32 %"43")
-  %res_lo_shr = lshr i32 %"41", 16
-  %res_hi_shl = shl i32 %2, 16
-  %"411" = add i32 %res_lo_shr, %res_hi_shl
-  store i32 %"411", ptr addrspace(5) %"36", align 4
+  %2 = call i32 @llvm.amdgcn.mul.u24(i32 %"42", i32 %"43")
+  %3 = call i32 @llvm.amdgcn.mulhi.u24(i32 %"42", i32 %"43")
+  %4 = lshr i32 %2, 16
+  %5 = shl i32 %3, 16
+  %"41" = or i32 %4, %5
+  store i32 %"41", ptr addrspace(5) %"36", align 4
   %"44" = load i64, ptr addrspace(5) %"34", align 4
   %"45" = load i32, ptr addrspace(5) %"36", align 4
   %"47" = inttoptr i64 %"44" to ptr

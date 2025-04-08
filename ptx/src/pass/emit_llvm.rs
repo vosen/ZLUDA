@@ -2289,7 +2289,7 @@ impl<'a> MethodEmitContext<'a> {
         };
         let res_lo = self.emit_intrinsic(
             name_lo,
-            Some(arguments.dst),
+            if data.control == Mul24Control::Lo { Some(arguments.dst) } else { None },
             Some(&ast::Type::Scalar(data.type_)),
             vec![
                 (src1, get_scalar_type(self.context, data.type_)),
@@ -2317,14 +2317,14 @@ impl<'a> MethodEmitContext<'a> {
             )?;
             let shift_number = unsafe { LLVMConstInt(LLVMInt32TypeInContext(self.context), 16, 0) };
             let res_lo_shr = unsafe {
-                LLVMBuildLShr(self.builder, res_lo, shift_number, c"res_lo_shr".as_ptr())
+                LLVMBuildLShr(self.builder, res_lo, shift_number, LLVM_UNNAMED.as_ptr())
             };
             let res_hi_shl =
-                unsafe { LLVMBuildShl(self.builder, res_hi, shift_number, c"res_hi_shl".as_ptr()) };
+                unsafe { LLVMBuildShl(self.builder, res_hi, shift_number, LLVM_UNNAMED.as_ptr()) };
 
             self.resolver
                 .with_result(arguments.dst, |dst: *const i8| unsafe {
-                    LLVMBuildAdd(self.builder, res_lo_shr, res_hi_shl, dst)
+                    LLVMBuildOr(self.builder, res_lo_shr, res_hi_shl, dst)
                 });
         }
         Ok(())
