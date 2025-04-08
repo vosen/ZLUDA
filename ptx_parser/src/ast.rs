@@ -30,12 +30,193 @@ pub enum Statement<P: Operand> {
 // This information is then available to a visitor.
 ptx_parser_macros::generate_instruction_type!(
     pub enum Instruction<T: Operand> {
-        Mov {
-            type: { &data.typ },
-            data: MovDetails,
+        Abs {
+            data: TypeFtz,
+            type: { Type::Scalar(data.type_) },
+            arguments<T>: {
+                dst: T,
+                src: T,
+            }
+        },
+        Activemask {
+            type: Type::Scalar(ScalarType::B32),
+            arguments<T>: {
+                dst: T
+            }
+        },
+        Add {
+            type: { Type::from(data.type_()) },
+            data: ArithDetails,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+            }
+        },
+        And {
+            data: ScalarType,
+            type: { Type::Scalar(data.clone()) },
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+            }
+        },
+        Atom {
+            type: &data.type_,
+            data: AtomDetails,
+            arguments<T>: {
+                dst: T,
+                src1: {
+                    repr: T,
+                    space: { data.space },
+                },
+                src2: T,
+            }
+        },
+        AtomCas {
+            type: Type::Scalar(data.type_),
+            data: AtomCasDetails,
+            arguments<T>: {
+                dst: T,
+                src1: {
+                    repr: T,
+                    space: { data.space },
+                },
+                src2: T,
+                src3: T,
+            }
+        },
+        Bar {
+            type: Type::Scalar(ScalarType::U32),
+            data: BarData,
+            arguments<T>: {
+                src1: T,
+                src2: Option<T>,
+            }
+        },
+        Bfe {
+            type: Type::Scalar(data.clone()),
+            data: ScalarType,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32)
+                },
+                src3: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32)
+                },
+            }
+        },
+        Bfi {
+            type: Type::Scalar(data.clone()),
+            data: ScalarType,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32)
+                },
+                src4: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32)
+                },
+            }
+        },
+        Bra {
+            type: !,
+            arguments<T::Ident>: {
+                src: T
+            }
+        },
+        Brev {
+            type: Type::Scalar(data.clone()),
+            data: ScalarType,
             arguments<T>: {
                 dst: T,
                 src: T
+            }
+        },
+        Call {
+            data: CallDetails,
+            arguments: CallArgs<T>,
+            visit: arguments.visit(data, visitor)?,
+            visit_mut: arguments.visit_mut(data, visitor)?,
+            map: Instruction::Call{ arguments: arguments.map(&data, visitor)?, data }
+        },
+        Clz {
+            type: Type::Scalar(data.clone()),
+            data: ScalarType,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32)
+                },
+                src: T
+            }
+        },
+        Cos {
+            type: Type::Scalar(ScalarType::F32),
+            data: FlushToZero,
+            arguments<T>: {
+                dst: T,
+                src: T
+            }
+        },
+        Cvt {
+            data: CvtDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { Type::Scalar(data.to) },
+                    // TODO: double check
+                    relaxed_type_check: true,
+                },
+                src: {
+                    repr: T,
+                    type: { Type::Scalar(data.from) },
+                    relaxed_type_check: true,
+                },
+            }
+        },
+        Cvta {
+            data: CvtaDetails,
+            type: { Type::Scalar(ScalarType::B64) },
+            arguments<T>: {
+                dst: T,
+                src: T,
+            }
+        },
+        Div {
+            type: Type::Scalar(data.type_()),
+            data: DivDetails,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+            }
+        },
+        Ex2 {
+            type: Type::Scalar(ScalarType::F32),
+            data: TypeFtz,
+            arguments<T>: {
+                dst: T,
+                src: T
+            }
+        },
+        Fma {
+            type: { Type::from(data.type_) },
+            data: ArithFloat,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: T,
             }
         },
         Ld {
@@ -52,27 +233,54 @@ ptx_parser_macros::generate_instruction_type!(
                 }
             }
         },
-        Add {
+        Lg2 {
+            type: Type::Scalar(ScalarType::F32),
+            data: FlushToZero,
+            arguments<T>: {
+                dst: T,
+                src: T
+            }
+        },
+        Mad {
             type: { Type::from(data.type_()) },
-            data: ArithDetails,
+            data: MadDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { Type::from(data.dst_type()) },
+                },
+                src1: T,
+                src2: T,
+                src3: T,
+            }
+        },
+        Max {
+            type: { Type::from(data.type_()) },
+            data: MinMaxDetails,
             arguments<T>: {
                 dst: T,
                 src1: T,
                 src2: T,
             }
         },
-        St {
-            type: { &data.typ },
-            data: StData,
+        Membar {
+            data: MemScope
+        },
+        Min {
+            type: { Type::from(data.type_()) },
+            data: MinMaxDetails,
             arguments<T>: {
-                src1: {
-                    repr: T,
-                    space: { data.state_space },
-                },
-                src2: {
-                    repr: T,
-                    relaxed_type_check: true,
-                }
+                dst: T,
+                src1: T,
+                src2: T,
+            }
+        },
+        Mov {
+            type: { &data.typ },
+            data: MovDetails,
+            arguments<T>: {
+                dst: T,
+                src: T
             }
         },
         Mul {
@@ -94,6 +302,101 @@ ptx_parser_macros::generate_instruction_type!(
                 dst: T,
                 src1: T,
                 src2: T,
+            }
+        },
+        Neg {
+            type: Type::Scalar(data.type_),
+            data: TypeFtz,
+            arguments<T>: {
+                dst: T,
+                src: T
+            }
+        },
+        Not {
+            data: ScalarType,
+            type: { Type::Scalar(data.clone()) },
+            arguments<T>: {
+                dst: T,
+                src: T,
+            }
+        },
+        Or {
+            data: ScalarType,
+            type: { Type::Scalar(data.clone()) },
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+            }
+        },
+        Popc {
+            type: Type::Scalar(data.clone()),
+            data: ScalarType,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32)
+                },
+                src: T
+            }
+        },
+        Prmt {
+            type: Type::Scalar(ScalarType::B32),
+            data: u16,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T
+            }
+        },
+        PrmtSlow {
+            type: Type::Scalar(ScalarType::U32),
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: T
+            }
+        },
+        Rcp {
+            type: { Type::from(data.type_) },
+            data: RcpData,
+            arguments<T>: {
+                dst: T,
+                src: T,
+            }
+        },
+        Rem {
+            type: Type::Scalar(data.clone()),
+            data: ScalarType,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T
+            }
+        },
+        Ret {
+            data: RetData
+        },
+        Rsqrt {
+            type: { Type::from(data.type_) },
+            data: TypeFtz,
+            arguments<T>: {
+                dst: T,
+                src: T,
+            }
+        },
+        Selp {
+            type: { Type::Scalar(data.clone()) },
+            data: ScalarType,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::Pred)
+                },
             }
         },
         Setp {
@@ -142,58 +445,15 @@ ptx_parser_macros::generate_instruction_type!(
                 }
             }
         },
-        Not {
-            data: ScalarType,
-            type: { Type::Scalar(data.clone()) },
-            arguments<T>: {
-                dst: T,
-                src: T,
-            }
-        },
-        Or {
+        Shl {
             data: ScalarType,
             type: { Type::Scalar(data.clone()) },
             arguments<T>: {
                 dst: T,
                 src1: T,
-                src2: T,
-            }
-        },
-        And {
-            data: ScalarType,
-            type: { Type::Scalar(data.clone()) },
-            arguments<T>: {
-                dst: T,
-                src1: T,
-                src2: T,
-            }
-        },
-        Bra {
-            type: !,
-            arguments<T::Ident>: {
-                src: T
-            }
-        },
-        Call {
-            data: CallDetails,
-            arguments: CallArgs<T>,
-            visit: arguments.visit(data, visitor)?,
-            visit_mut: arguments.visit_mut(data, visitor)?,
-            map: Instruction::Call{ arguments: arguments.map(&data, visitor)?, data }
-        },
-        Cvt {
-            data: CvtDetails,
-            arguments<T>: {
-                dst: {
+                src2: {
                     repr: T,
-                    type: { Type::Scalar(data.to) },
-                    // TODO: double check
-                    relaxed_type_check: true,
-                },
-                src: {
-                    repr: T,
-                    type: { Type::Scalar(data.from) },
-                    relaxed_type_check: true,
+                    type: { Type::Scalar(ScalarType::U32) },
                 },
             }
         },
@@ -209,58 +469,34 @@ ptx_parser_macros::generate_instruction_type!(
                 },
             }
         },
-        Shl {
-            data: ScalarType,
-            type: { Type::Scalar(data.clone()) },
+        Sin {
+            type: Type::Scalar(ScalarType::F32),
+            data: FlushToZero,
             arguments<T>: {
                 dst: T,
-                src1: T,
+                src: T
+            }
+        },
+        Sqrt {
+            type: { Type::from(data.type_) },
+            data: RcpData,
+            arguments<T>: {
+                dst: T,
+                src: T,
+            }
+        },
+        St {
+            type: { &data.typ },
+            data: StData,
+            arguments<T>: {
+                src1: {
+                    repr: T,
+                    space: { data.state_space },
+                },
                 src2: {
                     repr: T,
-                    type: { Type::Scalar(ScalarType::U32) },
-                },
-            }
-        },
-        Ret {
-            data: RetData
-        },
-        Cvta {
-            data: CvtaDetails,
-            type: { Type::Scalar(ScalarType::B64) },
-            arguments<T>: {
-                dst: T,
-                src: T,
-            }
-        },
-        Abs {
-            data: TypeFtz,
-            type: { Type::Scalar(data.type_) },
-            arguments<T>: {
-                dst: T,
-                src: T,
-            }
-        },
-        Mad {
-            type: { Type::from(data.type_()) },
-            data: MadDetails,
-            arguments<T>: {
-                dst: {
-                    repr: T,
-                    type: { Type::from(data.dst_type()) },
-                },
-                src1: T,
-                src2: T,
-                src3: T,
-            }
-        },
-        Fma {
-            type: { Type::from(data.type_) },
-            data: ArithFloat,
-            arguments<T>: {
-                dst: T,
-                src1: T,
-                src2: T,
-                src3: T,
+                    relaxed_type_check: true,
+                }
             }
         },
         Sub {
@@ -272,173 +508,7 @@ ptx_parser_macros::generate_instruction_type!(
                 src2: T,
             }
         },
-        Min {
-            type: { Type::from(data.type_()) },
-            data: MinMaxDetails,
-            arguments<T>: {
-                dst: T,
-                src1: T,
-                src2: T,
-            }
-        },
-        Max {
-            type: { Type::from(data.type_()) },
-            data: MinMaxDetails,
-            arguments<T>: {
-                dst: T,
-                src1: T,
-                src2: T,
-            }
-        },
-        Rcp {
-            type: { Type::from(data.type_) },
-            data: RcpData,
-            arguments<T>: {
-                dst: T,
-                src: T,
-            }
-        },
-        Sqrt {
-            type: { Type::from(data.type_) },
-            data: RcpData,
-            arguments<T>: {
-                dst: T,
-                src: T,
-            }
-        },
-        Rsqrt {
-            type: { Type::from(data.type_) },
-            data: TypeFtz,
-            arguments<T>: {
-                dst: T,
-                src: T,
-            }
-        },
-        Selp {
-            type: { Type::Scalar(data.clone()) },
-            data: ScalarType,
-            arguments<T>: {
-                dst: T,
-                src1: T,
-                src2: T,
-                src3: {
-                    repr: T,
-                    type: Type::Scalar(ScalarType::Pred)
-                },
-            }
-        },
-        Bar {
-            type: Type::Scalar(ScalarType::U32),
-            data: BarData,
-            arguments<T>: {
-                src1: T,
-                src2: Option<T>,
-            }
-        },
-        Atom {
-            type: &data.type_,
-            data: AtomDetails,
-            arguments<T>: {
-                dst: T,
-                src1: {
-                    repr: T,
-                    space: { data.space },
-                },
-                src2: T,
-            }
-        },
-        AtomCas {
-            type: Type::Scalar(data.type_),
-            data: AtomCasDetails,
-            arguments<T>: {
-                dst: T,
-                src1: {
-                    repr: T,
-                    space: { data.space },
-                },
-                src2: T,
-                src3: T,
-            }
-        },
-        Div {
-            type: Type::Scalar(data.type_()),
-            data: DivDetails,
-            arguments<T>: {
-                dst: T,
-                src1: T,
-                src2: T,
-            }
-        },
-        Neg {
-            type: Type::Scalar(data.type_),
-            data: TypeFtz,
-            arguments<T>: {
-                dst: T,
-                src: T
-            }
-        },
-        Sin {
-            type: Type::Scalar(ScalarType::F32),
-            data: FlushToZero,
-            arguments<T>: {
-                dst: T,
-                src: T
-            }
-        },
-        Cos {
-            type: Type::Scalar(ScalarType::F32),
-            data: FlushToZero,
-            arguments<T>: {
-                dst: T,
-                src: T
-            }
-        },
-        Lg2 {
-            type: Type::Scalar(ScalarType::F32),
-            data: FlushToZero,
-            arguments<T>: {
-                dst: T,
-                src: T
-            }
-        },
-        Ex2 {
-            type: Type::Scalar(ScalarType::F32),
-            data: TypeFtz,
-            arguments<T>: {
-                dst: T,
-                src: T
-            }
-        },
-        Clz {
-            type: Type::Scalar(data.clone()),
-            data: ScalarType,
-            arguments<T>: {
-                dst: {
-                    repr: T,
-                    type: Type::Scalar(ScalarType::U32)
-                },
-                src: T
-            }
-        },
-        Brev {
-            type: Type::Scalar(data.clone()),
-            data: ScalarType,
-            arguments<T>: {
-                dst: T,
-                src: T
-            }
-        },
-        Popc {
-            type: Type::Scalar(data.clone()),
-            data: ScalarType,
-            arguments<T>: {
-                dst: {
-                    repr: T,
-                    type: Type::Scalar(ScalarType::U32)
-                },
-                src: T
-            }
-        },
+        Trap { },
         Xor {
             type: Type::Scalar(data.clone()),
             data: ScalarType,
@@ -448,76 +518,6 @@ ptx_parser_macros::generate_instruction_type!(
                 src2: T
             }
         },
-        Rem {
-            type: Type::Scalar(data.clone()),
-            data: ScalarType,
-            arguments<T>: {
-                dst: T,
-                src1: T,
-                src2: T
-            }
-        },
-        Bfe {
-            type: Type::Scalar(data.clone()),
-            data: ScalarType,
-            arguments<T>: {
-                dst: T,
-                src1: T,
-                src2: {
-                    repr: T,
-                    type: Type::Scalar(ScalarType::U32)
-                },
-                src3: {
-                    repr: T,
-                    type: Type::Scalar(ScalarType::U32)
-                },
-            }
-        },
-        Bfi {
-            type: Type::Scalar(data.clone()),
-            data: ScalarType,
-            arguments<T>: {
-                dst: T,
-                src1: T,
-                src2: T,
-                src3: {
-                    repr: T,
-                    type: Type::Scalar(ScalarType::U32)
-                },
-                src4: {
-                    repr: T,
-                    type: Type::Scalar(ScalarType::U32)
-                },
-            }
-        },
-        PrmtSlow {
-            type: Type::Scalar(ScalarType::U32),
-            arguments<T>: {
-                dst: T,
-                src1: T,
-                src2: T,
-                src3: T
-            }
-        },
-        Prmt {
-            type: Type::Scalar(ScalarType::B32),
-            data: u16,
-            arguments<T>: {
-                dst: T,
-                src1: T,
-                src2: T
-            }
-        },
-        Activemask {
-            type: Type::Scalar(ScalarType::B32),
-            arguments<T>: {
-                dst: T
-            }
-        },
-        Membar {
-            data: MemScope
-        },
-        Trap { }
     }
 );
 
