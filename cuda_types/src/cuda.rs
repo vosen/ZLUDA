@@ -7587,6 +7587,100 @@ pub type VdpGetProcAddress = ::core::option::Option<
         function_pointer: *mut *mut ::core::ffi::c_void,
     ) -> VdpStatus,
 >;
+impl cudaDataType_t {
+    pub const CUDA_R_16F: cudaDataType_t = cudaDataType_t(2);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_16F: cudaDataType_t = cudaDataType_t(6);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_16BF: cudaDataType_t = cudaDataType_t(14);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_16BF: cudaDataType_t = cudaDataType_t(15);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_32F: cudaDataType_t = cudaDataType_t(0);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_32F: cudaDataType_t = cudaDataType_t(4);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_64F: cudaDataType_t = cudaDataType_t(1);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_64F: cudaDataType_t = cudaDataType_t(5);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_4I: cudaDataType_t = cudaDataType_t(16);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_4I: cudaDataType_t = cudaDataType_t(17);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_4U: cudaDataType_t = cudaDataType_t(18);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_4U: cudaDataType_t = cudaDataType_t(19);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_8I: cudaDataType_t = cudaDataType_t(3);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_8I: cudaDataType_t = cudaDataType_t(7);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_8U: cudaDataType_t = cudaDataType_t(8);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_8U: cudaDataType_t = cudaDataType_t(9);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_16I: cudaDataType_t = cudaDataType_t(20);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_16I: cudaDataType_t = cudaDataType_t(21);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_16U: cudaDataType_t = cudaDataType_t(22);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_16U: cudaDataType_t = cudaDataType_t(23);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_32I: cudaDataType_t = cudaDataType_t(10);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_32I: cudaDataType_t = cudaDataType_t(11);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_32U: cudaDataType_t = cudaDataType_t(12);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_32U: cudaDataType_t = cudaDataType_t(13);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_64I: cudaDataType_t = cudaDataType_t(24);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_64I: cudaDataType_t = cudaDataType_t(25);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_64U: cudaDataType_t = cudaDataType_t(26);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_64U: cudaDataType_t = cudaDataType_t(27);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_8F_E4M3: cudaDataType_t = cudaDataType_t(28);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_8F_E5M2: cudaDataType_t = cudaDataType_t(29);
+}
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct cudaDataType_t(pub ::core::ffi::c_uint);
+pub use self::cudaDataType_t as cudaDataType;
 impl CUerror {
     pub const INVALID_VALUE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(1)

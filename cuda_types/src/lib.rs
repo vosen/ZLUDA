@@ -1,4 +1,7 @@
-pub mod cuda;
-pub mod nvml;
 pub mod cublas;
 pub mod cublaslt;
+pub mod cuda;
+pub mod cudnn;
+pub mod cudnn8;
+pub mod cudnn9;
+pub mod nvml;
