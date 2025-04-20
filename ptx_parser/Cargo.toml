@@ -7,11 +7,12 @@ edition = "2021"
 [lib]
 
 [dependencies]
+bitflags = "1.2"
+derive_more = { version = "1", features = ["display"] }
 logos = "0.14"
+ptx_parser_macros = { path = "../ptx_parser_macros" }
+rustc-hash = "2.0.0"
+strum = { version = "0.27.1", features = ["derive"] }
+thiserror = "1.0"
 winnow = { version =  "0.6.18" }
 #winnow = { version =  "0.6.18", features = ["debug"] }
-ptx_parser_macros = { path = "../ptx_parser_macros" }
-thiserror = "1.0"
-bitflags = "1.2"
-rustc-hash = "2.0.0"
-derive_more = { version = "1", features = ["display"] }
