@@ -208,6 +208,27 @@ extern "system" {
         deviceArray: *mut cuda_types::nvml::nvmlDevice_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
+    /** Retrieves the driver branch of the NVIDIA driver installed on the system.
+
+ For all products.
+
+ The branch identifier is an alphanumeric string.  It will not exceed 80 characters in length
+ (including the NULL terminator).  See \ref nvmlConstants::NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE.
+
+ @param branchInfo                            Pointer to the driver branch information structure \a nvmlSystemDriverBranchInfo_t
+ @param length                                The maximum allowed length of the driver branch string
+
+ @return
+         - \ref NVML_SUCCESS                 successful completion
+         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a branchInfo is NULL
+         - \ref NVML_ERROR_INSUFFICIENT_SIZE if \a length is too small
+         - \ref NVML_ERROR_UNKNOWN           on any unexpected error*/
+    fn nvmlSystemGetDriverBranch(
+        branchInfo: *mut cuda_types::nvml::nvmlSystemDriverBranchInfo_t,
+        length: ::core::ffi::c_uint,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
     /** Retrieves the number of units in the system.
 
  For S-class products.
@@ -664,6 +685,19 @@ extern "system" {
         length: ::core::ffi::c_uint,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
+    /** Get a unique identifier for the device module on the baseboard
+
+ This API retrieves a unique identifier for each GPU module that exists on a given baseboard.
+ For non-baseboard products, this ID would always be 0.
+
+ @param device                               The identifier of the target device
+ @param moduleId                             Unique identifier for the GPU module
+
+ @return
+         - \ref NVML_SUCCESS                 if \a moduleId has been successfully retrieved
+         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device or \a moduleId is invalid
+         - \ref NVML_ERROR_UNKNOWN           on any unexpected error*/
     fn nvmlDeviceGetModuleId(
         device: cuda_types::nvml::nvmlDevice_t,
         moduleId: *mut ::core::ffi::c_uint,
@@ -1153,7 +1187,7 @@ extern "system" {
 
  For all products.
 
- See \ref nvmlPciInfoExt_t for details on the available PCI info.
+ See \ref nvmlPciInfoExt_v1_t for details on the available PCI info.
 
  @param device                               The identifier of the target device
  @param pci                                  Reference in which to return the PCI info
@@ -1626,6 +1660,31 @@ extern "system" {
         speed: *mut ::core::ffi::c_uint,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
+    /** Retrieves the intended operating speed in rotations per minute (RPM) of the device's specified fan.
+
+ For Maxwell &tm; or newer fully supported devices.
+
+ For all discrete products with dedicated fans.
+
+ Note: The reported speed is the intended fan speed. If the fan is physically blocked and unable to spin, the
+ output will not match the actual fan speed.
+
+ @param device                               The identifier of the target device
+ @param fanSpeed                             Structure specifying the index of the target fan (input) and
+                                             retrieved fan speed value (output)
+
+ @return
+         - \ref NVML_SUCCESS                         If everything worked
+         - \ref NVML_ERROR_UNINITIALIZED             If the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT          If \a device is invalid, \a fan is not an acceptable
+                                                          index, or \a speed is NULL
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH If the provided version is invalid/unsupported
+         - \ref NVML_ERROR_NOT_SUPPORTED             If the \a device does not support this feature*/
+    fn nvmlDeviceGetFanSpeedRPM(
+        device: cuda_types::nvml::nvmlDevice_t,
+        fanSpeed: *mut cuda_types::nvml::nvmlFanSpeedInfo_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
     /** Retrieves the intended target speed of the device's specified fan.
 
  Normally, the driver dynamically adjusts the fan based on
@@ -1718,27 +1777,56 @@ extern "system" {
         numFans: *mut ::core::ffi::c_uint,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** Retrieves the current temperature readings for the device, in degrees C.
-
- For all products.
-
- See \ref nvmlTemperatureSensors_t for details on available temperature sensors.
-
- @param device                               The identifier of the target device
- @param sensorType                           Flag that indicates which sensor reading to retrieve
- @param temp                                 Reference in which to return the temperature reading
-
- @return
-         - \ref NVML_SUCCESS                 if \a temp has been set
-         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
-         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid, \a sensorType is invalid or \a temp is NULL
-         - \ref NVML_ERROR_NOT_SUPPORTED     if the device does not have the specified sensor
-         - \ref NVML_ERROR_GPU_IS_LOST       if the target GPU has fallen off the bus or is otherwise inaccessible
-         - \ref NVML_ERROR_UNKNOWN           on any unexpected error*/
+    /// @deprecated Use \ref nvmlDeviceGetTemperatureV instead
     fn nvmlDeviceGetTemperature(
         device: cuda_types::nvml::nvmlDevice_t,
         sensorType: cuda_types::nvml::nvmlTemperatureSensors_t,
         temp: *mut ::core::ffi::c_uint,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Retrieves the cooler's information.
+ Returns a cooler's control signal characteristics.  The possible types are restricted, Variable and Toggle.
+ See \ref nvmlCoolerControl_t for details on available signal types.
+ Returns objects that cooler cools. Targets may be GPU, Memory, Power Supply or All of these.
+ See \ref nvmlCoolerTarget_t for details on available targets.
+
+ For Maxwell &tm; or newer fully supported devices.
+
+ For all discrete products with dedicated fans.
+
+ @param[in]  device                               The identifier of the target device
+ @param[out] coolerInfo                           Structure specifying the cooler's control signal characteristics (out)
+                                                  and the target that cooler cools (out)
+
+ @return
+         - \ref NVML_SUCCESS                         If everything worked
+         - \ref NVML_ERROR_UNINITIALIZED             If the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT          If \a device is invalid, \a signalType or \a target is NULL
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH If the provided version is invalid/unsupported
+         - \ref NVML_ERROR_NOT_SUPPORTED             If the \a device does not support this feature*/
+    fn nvmlDeviceGetCoolerInfo(
+        device: cuda_types::nvml::nvmlDevice_t,
+        coolerInfo: *mut cuda_types::nvml::nvmlCoolerInfo_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Retrieves the current temperature readings (in degrees C) for the given device.
+
+ For all products.
+
+ @param[in]       device                      Target device identifier.
+ @param[in,out]   temperature                 Structure specifying the sensor type (input) and retrieved
+                                              temperature value (output).
+
+ @return
+         - \ref NVML_SUCCESS                  if \a temp has been set
+         - \ref NVML_ERROR_UNINITIALIZED      if the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT   if \a device is invalid, \a sensorType is invalid or \a temp is NULL
+         - \ref NVML_ERROR_NOT_SUPPORTED      if the device does not have the specified sensor
+         - \ref NVML_ERROR_GPU_IS_LOST        if the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_UNKNOWN            on any unexpected error*/
+    fn nvmlDeviceGetTemperatureV(
+        device: cuda_types::nvml::nvmlDevice_t,
+        temperature: *mut cuda_types::nvml::nvmlTemperature_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
     /** Retrieves the temperature threshold for the GPU with the specified threshold type in degrees C.
@@ -1769,6 +1857,23 @@ extern "system" {
         device: cuda_types::nvml::nvmlDevice_t,
         thresholdType: cuda_types::nvml::nvmlTemperatureThresholds_t,
         temp: *mut ::core::ffi::c_uint,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Retrieves the thermal margin temperature (distance to nearest slowdown threshold).
+
+ @param[in]     device                                The identifier of the target device
+ @param[in,out] marginTempInfo                        Versioned structure in which to return the temperature reading
+
+ @returns
+         - \ref NVML_SUCCESS                           if the margin temperature was retrieved successfully
+         - \ref NVML_ERROR_NOT_SUPPORTED               if request is not supported on the current platform
+         - \ref NVML_ERROR_INVALID_ARGUMENT            if \a device is invalid or \a temperature is NULL
+         - \ref NVML_ERROR_GPU_IS_LOST                 if the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH   if the right versioned structure is not used
+         - \ref NVML_ERROR_UNKNOWN                     on any unexpected error*/
+    fn nvmlDeviceGetMarginTemperature(
+        device: cuda_types::nvml::nvmlDevice_t,
+        marginTempInfo: *mut cuda_types::nvml::nvmlMarginTemperature_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
     /** Used to execute a list of thermal system instructions.
@@ -2011,6 +2116,163 @@ extern "system" {
         maxOffset: *mut ::core::ffi::c_int,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
+    /** Retrieve min, max and current clock offset of some clock domain for a given PState
+
+ For Maxwell &tm; or newer fully supported devices.
+
+ Note: \ref nvmlDeviceGetGpcClkVfOffset, \ref nvmlDeviceGetMemClkVfOffset, \ref nvmlDeviceGetGpcClkMinMaxVfOffset and
+       \ref nvmlDeviceGetMemClkMinMaxVfOffset will be deprecated in a future release.
+Use \ref nvmlDeviceGetClockOffsets instead.
+
+ @param device                               The identifier of the target device
+ @param info                                 Structure specifying the clock type (input) and the pstate (input)
+                                             retrieved clock offset value (output), min clock offset (output)
+                                             and max clock offset (output)
+
+ @return
+         - \ref NVML_SUCCESS                         If everything worked
+         - \ref NVML_ERROR_UNINITIALIZED             If the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT          If \a device, \a type or \a pstate are invalid or both
+                                                             \a minClockOffsetMHz and \a maxClockOffsetMHz are NULL
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH If the provided version is invalid/unsupported
+         - \ref NVML_ERROR_NOT_SUPPORTED             If the device does not support this feature*/
+    fn nvmlDeviceGetClockOffsets(
+        device: cuda_types::nvml::nvmlDevice_t,
+        info: *mut cuda_types::nvml::nvmlClockOffset_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Control current clock offset of some clock domain for a given PState
+
+ For Maxwell &tm; or newer fully supported devices.
+
+ Requires privileged user.
+
+ @param device                               The identifier of the target device
+ @param info                                 Structure specifying the clock type (input), the pstate (input)
+                                             and clock offset value (input)
+
+ @return
+         - \ref NVML_SUCCESS                         If everything worked
+         - \ref NVML_ERROR_UNINITIALIZED             If the library has not been successfully initialized
+         - \ref NVML_ERROR_NO_PERMISSION             If the user doesn't have permission to perform this operation
+         - \ref NVML_ERROR_INVALID_ARGUMENT          If \a device, \a type or \a pstate are invalid or both
+                                                             \a clockOffsetMHz is out of allowed range.
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH If the provided version is invalid/unsupported
+         - \ref NVML_ERROR_NOT_SUPPORTED             If the device does not support this feature*/
+    fn nvmlDeviceSetClockOffsets(
+        device: cuda_types::nvml::nvmlDevice_t,
+        info: *mut cuda_types::nvml::nvmlClockOffset_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Retrieves a performance mode string with all the
+ performance modes defined for this device along with their associated
+ GPU Clock and Memory Clock values.
+ Not all tokens will be reported on all GPUs, and additional tokens
+ may be added in the future.
+ For backwards compatibility we still provide nvclock and memclock;
+ those are the same as nvclockmin and memclockmin.
+
+ Note: These clock values take into account the offset
+ set by clients through /ref nvmlDeviceSetClockOffsets.
+
+ Maximum available Pstate (P15) shows the minimum performance level (0) and vice versa.
+
+ Each performance modes are returned as a comma-separated list of
+ "token=value" pairs.  Each set of performance mode tokens are separated
+ by a ";".  Valid tokens:
+
+    Token                    Value
+   "perf"                    unsigned int   - the Performance level
+   "nvclock"                 unsigned int   - the GPU clocks (in MHz) for the perf level
+   "nvclockmin"              unsigned int   - the GPU clocks min (in MHz) for the perf level
+   "nvclockmax"              unsigned int   - the GPU clocks max (in MHz) for the perf level
+   "nvclockeditable"         unsigned int   - if the GPU clock domain is editable for the perf level
+   "memclock"                unsigned int   - the memory clocks (in MHz) for the perf level
+   "memclockmin"             unsigned int   - the memory clocks min (in MHz) for the perf level
+   "memclockmax"             unsigned int   - the memory clocks max (in MHz) for the perf level
+   "memclockeditable"        unsigned int   - if the memory clock domain is editable for the perf level
+   "memtransferrate"         unsigned int   - the memory transfer rate (in MHz) for the perf level
+   "memtransferratemin"      unsigned int   - the memory transfer rate min (in MHz) for the perf level
+   "memtransferratemax"      unsigned int   - the memory transfer rate max (in MHz) for the perf level
+   "memtransferrateeditable" unsigned int   - if the memory transfer rate is editable for the perf level
+
+ Example:
+
+ perf=0, nvclock=324, nvclockmin=324, nvclockmax=324, nvclockeditable=0,
+ memclock=324, memclockmin=324, memclockmax=324, memclockeditable=0,
+ memtransferrate=648, memtransferratemin=648, memtransferratemax=648,
+ memtransferrateeditable=0 ;
+ perf=1, nvclock=324, nvclockmin=324, nvclockmax=640, nvclockeditable=0,
+ memclock=810, memclockmin=810, memclockmax=810, memclockeditable=0,
+ memtransferrate=1620, memtransferrate=1620, memtransferrate=1620,
+ memtransferrateeditable=0 ;
+
+
+ @param device                               The identifier of the target device
+ @param perfModes                            Reference in which to return the performance level string
+
+ @return
+         - \ref NVML_SUCCESS                 if \a perfModes has been set
+         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid, or \a name is NULL
+         - \ref NVML_ERROR_INSUFFICIENT_SIZE if \a length is too small
+         - \ref NVML_ERROR_GPU_IS_LOST       if the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_UNKNOWN           on any unexpected error*/
+    fn nvmlDeviceGetPerformanceModes(
+        device: cuda_types::nvml::nvmlDevice_t,
+        perfModes: *mut cuda_types::nvml::nvmlDevicePerfModes_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Retrieves a string with the associated current GPU Clock and Memory Clock values.
+
+ Not all tokens will be reported on all GPUs, and additional tokens
+ may be added in the future.
+
+ Note: These clock values take into account the offset
+ set by clients through /ref nvmlDeviceSetClockOffsets.
+
+ Clock values are returned as a comma-separated list of
+ "token=value" pairs.
+ Valid tokens:
+
+    Token                    Value
+   "perf"                    unsigned int   - the Performance level
+   "nvclock"                 unsigned int   - the GPU clocks (in MHz) for the perf level
+   "nvclockmin"              unsigned int   - the GPU clocks min (in MHz) for the perf level
+   "nvclockmax"              unsigned int   - the GPU clocks max (in MHz) for the perf level
+   "nvclockeditable"         unsigned int   - if the GPU clock domain is editable for the perf level
+   "memclock"                unsigned int   - the memory clocks (in MHz) for the perf level
+   "memclockmin"             unsigned int   - the memory clocks min (in MHz) for the perf level
+   "memclockmax"             unsigned int   - the memory clocks max (in MHz) for the perf level
+   "memclockeditable"        unsigned int   - if the memory clock domain is editable for the perf level
+   "memtransferrate"         unsigned int   - the memory transfer rate (in MHz) for the perf level
+   "memtransferratemin"      unsigned int   - the memory transfer rate min (in MHz) for the perf level
+   "memtransferratemax"      unsigned int   - the memory transfer rate max (in MHz) for the perf level
+   "memtransferrateeditable" unsigned int   - if the memory transfer rate is editable for the perf level
+
+ Example:
+
+ nvclock=324, nvclockmin=324, nvclockmax=324, nvclockeditable=0,
+ memclock=324, memclockmin=324, memclockmax=324, memclockeditable=0,
+ memtransferrate=648, memtransferratemin=648, memtransferratemax=648,
+ memtransferrateeditable=0 ;
+
+
+ @param device                               The identifier of the target device
+ @param currentClockFreqs                    Reference in which to return the performance level string
+
+ @return
+         - \ref NVML_SUCCESS                 if \a currentClockFreqs has been set
+         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid, or \a name is NULL
+         - \ref NVML_ERROR_INSUFFICIENT_SIZE if \a length is too small
+         - \ref NVML_ERROR_GPU_IS_LOST       if the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_UNKNOWN           on any unexpected error*/
+    fn nvmlDeviceGetCurrentClockFreqs(
+        device: cuda_types::nvml::nvmlDevice_t,
+        currentClockFreqs: *mut cuda_types::nvml::nvmlDeviceCurrentClockFreqs_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
     /** This API has been deprecated.
 
  Retrieves the power management mode associated with this device.
@@ -2247,6 +2509,7 @@ extern "system" {
         memory: *mut cuda_types::nvml::nvmlMemory_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
+    /// nvmlDeviceGetMemoryInfo_v2 accounts separately for reserved memory and includes it in the used memory amount.
     fn nvmlDeviceGetMemoryInfo_v2(
         device: cuda_types::nvml::nvmlDevice_t,
         memory: *mut cuda_types::nvml::nvmlMemory_v2_t,
@@ -2299,6 +2562,69 @@ extern "system" {
         device: cuda_types::nvml::nvmlDevice_t,
         major: *mut ::core::ffi::c_int,
         minor: *mut ::core::ffi::c_int,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Retrieves the current and pending DRAM Encryption modes for the device.
+
+ %BLACKWELL_OR_NEWER%
+ Only applicable to devices that support DRAM Encryption
+ Requires \a NVML_INFOROM_DEN version 1.0 or higher.
+
+ Changing DRAM Encryption modes requires a reboot. The "pending" DRAM Encryption mode refers to the target mode following
+ the next reboot.
+
+ See \ref nvmlEnableState_t for details on allowed modes.
+
+ @param device                               The identifier of the target device
+ @param current                              Reference in which to return the current DRAM Encryption mode
+ @param pending                              Reference in which to return the pending DRAM Encryption mode
+
+ @return
+         - \ref NVML_SUCCESS                         if \a current and \a pending have been set
+         - \ref NVML_ERROR_UNINITIALIZED             if the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT          if \a device is invalid or either \a current or \a pending is NULL
+         - \ref NVML_ERROR_NOT_SUPPORTED             if the device does not support this feature
+         - \ref NVML_ERROR_GPU_IS_LOST               if the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH if the argument version is not supported
+         - \ref NVML_ERROR_UNKNOWN                   on any unexpected error
+
+ @see nvmlDeviceSetDramEncryptionMode()*/
+    fn nvmlDeviceGetDramEncryptionMode(
+        device: cuda_types::nvml::nvmlDevice_t,
+        current: *mut cuda_types::nvml::nvmlDramEncryptionInfo_t,
+        pending: *mut cuda_types::nvml::nvmlDramEncryptionInfo_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Set the DRAM Encryption mode for the device.
+
+ For Kepler &tm; or newer fully supported devices.
+ Only applicable to devices that support DRAM Encryption.
+ Requires \a NVML_INFOROM_DEN version 1.0 or higher.
+ Requires root/admin permissions.
+
+ The DRAM Encryption mode determines whether the GPU enables its DRAM Encryption support.
+
+ This operation takes effect after the next reboot.
+
+ See \ref nvmlEnableState_t for details on available modes.
+
+ @param device                               The identifier of the target device
+ @param dramEncryption                       The target DRAM Encryption mode
+
+ @return
+         - \ref NVML_SUCCESS                         if the DRAM Encryption mode was set
+         - \ref NVML_ERROR_UNINITIALIZED             if the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT          if \a device is invalid or \a DRAM Encryption is invalid
+         - \ref NVML_ERROR_NOT_SUPPORTED             if the device does not support this feature
+         - \ref NVML_ERROR_NO_PERMISSION             if the user doesn't have permission to perform this operation
+         - \ref NVML_ERROR_GPU_IS_LOST               if the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH if the argument version is not supported
+         - \ref NVML_ERROR_UNKNOWN                   on any unexpected error
+
+ @see nvmlDeviceGetDramEncryptionMode()*/
+    fn nvmlDeviceSetDramEncryptionMode(
+        device: cuda_types::nvml::nvmlDevice_t,
+        dramEncryption: *const cuda_types::nvml::nvmlDramEncryptionInfo_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
     /** Retrieves the current and pending ECC modes for the device.
@@ -2766,11 +3092,11 @@ extern "system" {
     #[must_use]
     /** Retrieves the current and pending driver model for the device.
 
- For Fermi &tm; or newer fully supported devices.
+ For Kepler &tm; or newer fully supported devices.
  For windows only.
 
- On Windows platforms the device driver can run in either WDDM or WDM (TCC) mode. If a display is attached
- to the device it must run in WDDM mode. TCC mode is preferred if a display is not attached.
+ On Windows platforms the device driver can run in either WDDM, MCDM or WDM (TCC) modes. If a display is attached
+ to the device it must run in WDDM mode. MCDM mode is preferred if a display is not attached. TCC mode is deprecated.
 
  See \ref nvmlDriverModel_t for details on available driver models.
 
@@ -2786,8 +3112,8 @@ extern "system" {
          - \ref NVML_ERROR_GPU_IS_LOST       if the target GPU has fallen off the bus or is otherwise inaccessible
          - \ref NVML_ERROR_UNKNOWN           on any unexpected error
 
- @see nvmlDeviceSetDriverModel()*/
-    fn nvmlDeviceGetDriverModel(
+ @see nvmlDeviceSetDriverModel_v2()*/
+    fn nvmlDeviceGetDriverModel_v2(
         device: cuda_types::nvml::nvmlDevice_t,
         current: *mut cuda_types::nvml::nvmlDriverModel_t,
         pending: *mut cuda_types::nvml::nvmlDriverModel_t,
@@ -2928,7 +3254,7 @@ extern "system" {
         infos: *mut cuda_types::nvml::nvmlProcessInfo_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** Get information about processes with a MPS compute context on a device
+    /** Get information about processes with a Multi-Process Service (MPS) compute context on a device
 
  For Volta &tm; or newer fully supported devices.
 
@@ -2975,17 +3301,17 @@ extern "system" {
     #[must_use]
     /** Get information about running processes on a device for input context
 
- %HOPPER_OR_NEWER%
+ For Hopper &tm; or newer fully supported devices.
 
  This function returns information only about running processes (e.g. CUDA application which have
  active context).
 
- To determine the size of the @ref plist->procArray array to allocate, call the function with
- @ref plist->numProcArrayEntries set to zero and @ref plist->procArray set to NULL. The return
+ To determine the size of the \a plist->procArray array to allocate, call the function with
+ \a plist->numProcArrayEntries set to zero and \a plist->procArray set to NULL. The return
  code will be either NVML_ERROR_INSUFFICIENT_SIZE (if there are valid processes of type
- @ref plist->mode to report on, in which case the @ref plist->numProcArrayEntries field will
+ \a plist->mode to report on, in which case the \a plist->numProcArrayEntries field will
  indicate the required number of entries in the array) or NVML_SUCCESS (if no processes of type
- @ref plist->mode exist).
+ \a plist->mode exist).
 
  The usedGpuMemory field returned is all of the memory used by the application.
  The usedGpuCcProtectedMemory field returned is all of the protected memory used by the application.
@@ -3002,10 +3328,10 @@ extern "system" {
 
  @param device                               The device handle or MIG device handle
  @param plist                                Reference in which to process detail list
- @param plist->version                       The api version
- @param plist->mode                          The process mode
- @param plist->procArray                     Reference in which to return the process information
- @param plist->numProcArrayEntries           Proc array size of returned entries
+ \a plist->version                       The api version
+ \a plist->mode                          The process mode
+ \a plist->procArray                     Reference in which to return the process information
+ \a plist->numProcArrayEntries           Proc array size of returned entries
 
  @return
          - \ref NVML_SUCCESS                 if \a plist->numprocArrayEntries and \a plist->procArray have been populated
@@ -3203,7 +3529,7 @@ extern "system" {
  @param numCores                             The number of cores for the specified device
 
  @return
-         - \ref NVML_SUCCESS                 if Gpu core count is successfully retrieved
+         - \ref NVML_SUCCESS                 if GPU core count is successfully retrieved
          - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
          - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid, or \a numCores is NULL
          - \ref NVML_ERROR_NOT_SUPPORTED     if this query is not supported by the device
@@ -3254,7 +3580,7 @@ extern "system" {
  @param maxSpeed                             The devices's PCIE Max Link speed in MBPS
 
  @return
-         - \ref NVML_SUCCESS                 if Pcie Max Link Speed is successfully retrieved
+         - \ref NVML_SUCCESS                 if PCIe Max Link Speed is successfully retrieved
          - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
          - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid, or \a maxSpeed is NULL
          - \ref NVML_ERROR_NOT_SUPPORTED     if this query is not supported by the device
@@ -3285,8 +3611,8 @@ extern "system" {
 
  @param device                               The identifier of the target device
  @param adaptiveClockStatus                  The current adaptive clocking status, either
-                                             @ref NVML_ADAPTIVE_CLOCKING_INFO_STATUS_DISABLED
-                                             or @ref NVML_ADAPTIVE_CLOCKING_INFO_STATUS_ENABLED
+                                             NVML_ADAPTIVE_CLOCKING_INFO_STATUS_DISABLED
+                                             or NVML_ADAPTIVE_CLOCKING_INFO_STATUS_ENABLED
 
  @return
          - \ref NVML_SUCCESS                 if the current adaptive clocking status is successfully retrieved
@@ -3308,7 +3634,7 @@ extern "system" {
  return
          - \ref NVML_SUCCESS                 if the bus \a type is successfully retreived
          - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
-         - \ref NVML_ERROR_INVALID_ARGUMENT  if \device is invalid or \type is NULL
+         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid or \a type is NULL
          - \ref NVML_ERROR_UNKNOWN           on any unexpected error*/
     fn nvmlDeviceGetBusType(
         device: cuda_types::nvml::nvmlDevice_t,
@@ -3319,7 +3645,7 @@ extern "system" {
 
  Get fabric information associated with the device.
 
- %HOPPER_OR_NEWER%
+ For Hopper &tm; or newer fully supported devices.
 
  On Hopper + NVSwitch systems, GPU is registered with the NVIDIA Fabric Manager
  Upon successful registration, the GPU is added to the NVLink fabric to enable
@@ -3350,7 +3676,7 @@ extern "system" {
      nvmlReturn_t result = nvmlDeviceGetGpuFabricInfoV(device,&fabricInfo);
  \endcode
 
- %HOPPER_OR_NEWER%
+ For Hopper &tm; or newer fully supported devices.
 
  @param device                               The identifier of the target device
  @param gpuFabricInfo                        Information about GPU fabric state
@@ -3450,7 +3776,7 @@ extern "system" {
         memory: *mut cuda_types::nvml::nvmlMemory_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** Get Conf Computing Gpu certificate details.
+    /** Get Conf Computing GPU certificate details.
 
  For Ampere &tm; or newer fully supported devices.
  Supported on Linux, Windows TCC.
@@ -3469,7 +3795,7 @@ extern "system" {
         gpuCert: *mut cuda_types::nvml::nvmlConfComputeGpuCertificate_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** Get Conf Computing Gpu attestation report.
+    /** Get Conf Computing GPU attestation report.
 
  For Ampere &tm; or newer fully supported devices.
  Supported on Linux, Windows TCC.
@@ -3490,7 +3816,7 @@ extern "system" {
     #[must_use]
     /** Get Conf Computing key rotation threshold detail.
 
- %HOPPER_OR_NEWER%
+ For Hopper &tm; or newer fully supported devices.
  Supported on Linux, Windows TCC.
 
  @param pKeyRotationThrInfo                  Reference in which to return the key rotation threshold data
@@ -3505,21 +3831,79 @@ extern "system" {
         pKeyRotationThrInfo: *mut cuda_types::nvml::nvmlConfComputeGetKeyRotationThresholdInfo_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
+    /** Set Conf Computing Unprotected Memory Size.
+
+ For Ampere &tm; or newer fully supported devices.
+ Supported on Linux, Windows TCC.
+
+ @param device                               Device Handle
+ @param sizeKiB                              Unprotected Memory size to be set in KiB
+
+ @return
+         - \ref NVML_SUCCESS                 if \a sizeKiB successfully set
+         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid
+         - \ref NVML_ERROR_NOT_SUPPORTED     if this query is not supported by the device*/
+    fn nvmlDeviceSetConfComputeUnprotectedMemSize(
+        device: cuda_types::nvml::nvmlDevice_t,
+        sizeKiB: ::core::ffi::c_ulonglong,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Set Conf Computing GPUs ready state.
+
+ For Ampere &tm; or newer fully supported devices.
+ Supported on Linux, Windows TCC.
+
+ @param isAcceptingWork                      GPU accepting new work, NVML_CC_ACCEPTING_CLIENT_REQUESTS_TRUE or
+                                             NVML_CC_ACCEPTING_CLIENT_REQUESTS_FALSE
+
+ return
+         - \ref NVML_SUCCESS                 if \a current GPUs ready state is successfully set
+         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a isAcceptingWork is invalid
+         - \ref NVML_ERROR_NOT_SUPPORTED     if this query is not supported by the device*/
+    fn nvmlSystemSetConfComputeGpusReadyState(
+        isAcceptingWork: ::core::ffi::c_uint,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Set Conf Computing key rotation threshold.
+
+ For Hopper &tm; or newer fully supported devices.
+ Supported on Linux, Windows TCC.
+
+ This function is to set the confidential compute key rotation threshold parameters.
+ \a pKeyRotationThrInfo->maxAttackerAdvantage should be in the range from
+ NVML_CC_KEY_ROTATION_THRESHOLD_ATTACKER_ADVANTAGE_MIN to NVML_CC_KEY_ROTATION_THRESHOLD_ATTACKER_ADVANTAGE_MAX.
+ Default value is 60.
+
+ @param pKeyRotationThrInfo                  Reference to the key rotation threshold data
+
+ @return
+         - \ref NVML_SUCCESS                 if \a key rotation threashold max attacker advantage has been set
+         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid or \a memory is NULL
+         - \ref NVML_ERROR_INVALID_STATE     if confidential compute GPU ready state is enabled
+         - \ref NVML_ERROR_NOT_SUPPORTED     if this query is not supported by the device
+         - \ref NVML_ERROR_UNKNOWN           on any unexpected error*/
+    fn nvmlSystemSetConfComputeKeyRotationThresholdInfo(
+        pKeyRotationThrInfo: *mut cuda_types::nvml::nvmlConfComputeSetKeyRotationThresholdInfo_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
     /** Get Conf Computing System Settings.
 
- %HOPPER_OR_NEWER%
+ For Hopper &tm; or newer fully supported devices.
  Supported on Linux, Windows TCC.
 
  @param settings                                     System CC settings
 
  @return
-         - \ref NVML_SUCCESS                         if the query is success
-         - \ref NVML_ERROR_UNINITIALIZED             if the library has not been successfully initialized
-         - \ref NVML_ERROR_INVALID_ARGUMENT          if \a device is invalid or \a counters is NULL
-         - \ref NVML_ERROR_NOT_SUPPORTED             if the device does not support this feature
-         - \ref NVML_ERROR_GPU_IS_LOST               if the target GPU has fallen off the bus or is otherwise inaccessible
-         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH if the provided version is invalid/unsupported
-         - \ref NVML_ERROR_UNKNOWN                   on any unexpected error*/
+         - \ref NVML_SUCCESS                         If the query is success
+         - \ref NVML_ERROR_UNINITIALIZED             If the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT          If \a device is invalid or \a counters is NULL
+         - \ref NVML_ERROR_NOT_SUPPORTED             If the device does not support this feature
+         - \ref NVML_ERROR_GPU_IS_LOST               If the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH If the provided version is invalid/unsupported
+         - \ref NVML_ERROR_UNKNOWN                   On any unexpected error*/
     fn nvmlSystemGetConfComputeSettings(
         settings: *mut cuda_types::nvml::nvmlSystemConfComputeSettings_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
@@ -3554,11 +3938,35 @@ extern "system" {
  @return
          - \ref NVML_SUCCESS                 if GSP firmware mode is sucessfully retrieved
          - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid or any of \a isEnabled or \a defaultMode is NULL
+         - \ref NVML_ERROR_NOT_SUPPORTED     if GSP firmware is not enabled for GPU
          - \ref NVML_ERROR_UNKNOWN           on any unexpected error*/
     fn nvmlDeviceGetGspFirmwareMode(
         device: cuda_types::nvml::nvmlDevice_t,
         isEnabled: *mut ::core::ffi::c_uint,
         defaultMode: *mut ::core::ffi::c_uint,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Get SRAM ECC error status of this device.
+
+ For Ampere &tm; or newer fully supported devices.
+ Requires root/admin permissions.
+
+ See \ref nvmlEccSramErrorStatus_v1_t for more information on the struct.
+
+ @param device                               The identifier of the target device
+ @param status                               Returns SRAM ECC error status
+
+ @return
+         - \ref NVML_SUCCESS                          If \a limit has been set
+         - \ref NVML_ERROR_UNINITIALIZED              If the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT           If \a device is invalid or \a counters is NULL
+         - \ref NVML_ERROR_NOT_SUPPORTED              If the device does not support this feature
+         - \ref NVML_ERROR_GPU_IS_LOST                If the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH  If the version of \a nvmlEccSramErrorStatus_t is invalid
+         - \ref NVML_ERROR_UNKNOWN                    On any unexpected error*/
+    fn nvmlDeviceGetSramEccErrorStatus(
+        device: cuda_types::nvml::nvmlDevice_t,
+        status: *mut cuda_types::nvml::nvmlEccSramErrorStatus_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
     /** Queries the state of per process accounting mode.
@@ -3628,8 +4036,8 @@ extern "system" {
 
  For Kepler &tm; or newer fully supported devices.
 
- To just query the number of processes ready to be queried, call this function with *count = 0 and
- pids=NULL. The return code will be NVML_ERROR_INSUFFICIENT_SIZE, or NVML_SUCCESS if list is empty.
+ To query the number of processes under Accounting Mode, call this function with *count = 0 and pids=NULL.
+ The return code will be NVML_ERROR_INSUFFICIENT_SIZE with an updated count value indicating the number of processes.
 
  For more details see \ref nvmlDeviceGetAccountingStats.
 
@@ -3684,7 +4092,7 @@ extern "system" {
     #[must_use]
     /** Returns the list of retired pages by source, including pages that are pending retirement
  The address information provided from this API is the hardware address of the page that was retired.  Note
- that this does not match the virtual address used in CUDA, but will match the address information in XID 63
+ that this does not match the virtual address used in CUDA, but will match the address information in Xid 63
 
  For Kepler &tm; or newer fully supported devices.
 
@@ -3714,7 +4122,7 @@ extern "system" {
     #[must_use]
     /** Returns the list of retired pages by source, including pages that are pending retirement
  The address information provided from this API is the hardware address of the page that was retired.  Note
- that this does not match the virtual address used in CUDA, but will match the address information in XID 63
+ that this does not match the virtual address used in CUDA, but will match the address information in Xid 63
 
  \note nvmlDeviceGetRetiredPages_v2 adds an additional timestamps parameter to return the time of each page's
        retirement.
@@ -3927,20 +4335,41 @@ extern "system" {
  @param procesesUtilInfo          Pointer to the caller-provided structure of nvmlProcessesUtilizationInfo_t.
 
  @return
-         - \ref NVML_SUCCESS                  if \a procesesUtilInfo->procUtilArray has been populated
-         - \ref NVML_ERROR_UNINITIALIZED      if the library has not been successfully initialized
-         - \ref NVML_ERROR_INVALID_ARGUMENT   if \a device is invalid, or \a procesesUtilInfo is NULL
-         - \ref NVML_ERROR_NOT_SUPPORTED      if the device does not support this feature
-         - \ref NVML_ERROR_NOT_FOUND          if sample entries are not found
-         - \ref NVML_ERROR_GPU_IS_LOST        if the target GPU has fallen off the bus or is otherwise inaccessible
-         - \ref NVML_ERROR_VERSION_MISMATCH   if the version of \a procesesUtilInfo is invalid
-         - \ref NVML_ERROR_INSUFFICIENT_SIZE  if \a procesesUtilInfo->procUtilArray is NULL, or the buffer size of procesesUtilInfo->procUtilArray is too small.
-                                              The caller should check the minimul array size from the returned procesesUtilInfo->processSamplesCount, and call
-                                              the function again with a buffer no smaller than procesesUtilInfo->processSamplesCount * sizeof(nvmlProcessUtilizationInfo_t)
-         - \ref NVML_ERROR_UNKNOWN            on any unexpected error*/
+         - \ref NVML_SUCCESS                          If \a procesesUtilInfo->procUtilArray has been populated
+         - \ref NVML_ERROR_UNINITIALIZED              If the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT           If \a device is invalid, or \a procesesUtilInfo is NULL
+         - \ref NVML_ERROR_NOT_SUPPORTED              If the device does not support this feature
+         - \ref NVML_ERROR_NOT_FOUND                  If sample entries are not found
+         - \ref NVML_ERROR_GPU_IS_LOST                If the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH  If the version of \a procesesUtilInfo is invalid
+         - \ref NVML_ERROR_INSUFFICIENT_SIZE          If \a procesesUtilInfo->procUtilArray is NULL, or the buffer size of procesesUtilInfo->procUtilArray is too small.
+                                                      The caller should check the minimul array size from the returned procesesUtilInfo->processSamplesCount, and call
+                                                      the function again with a buffer no smaller than procesesUtilInfo->processSamplesCount * sizeof(nvmlProcessUtilizationInfo_t)
+         - \ref NVML_ERROR_UNKNOWN                    On any unexpected error*/
     fn nvmlDeviceGetProcessesUtilizationInfo(
         device: cuda_types::nvml::nvmlDevice_t,
         procesesUtilInfo: *mut cuda_types::nvml::nvmlProcessesUtilizationInfo_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Get platform information of this device.
+
+ %BLACKWELL_OR_NEWER%
+
+ See \ref nvmlPlatformInfo_v1_t for more information on the struct.
+
+ @param device                               The identifier of the target device
+ @param platformInfo                         Pointer to the caller-provided structure of nvmlPlatformInfo_t.
+
+ @return
+         - \ref NVML_SUCCESS                          If \a platformInfo has been retrieved
+         - \ref NVML_ERROR_INVALID_ARGUMENT           If \a device is invalid or \a platformInfo is NULL
+         - \ref NVML_ERROR_NOT_SUPPORTED              If the device does not support this feature
+         - \ref NVML_ERROR_MEMORY                     if system memory is insufficient
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH  If the version of \a nvmlPlatformInfo_t is invalid
+         - \ref NVML_ERROR_UNKNOWN                    On any unexpected error*/
+    fn nvmlDeviceGetPlatformInfo(
+        device: cuda_types::nvml::nvmlDevice_t,
+        platformInfo: *mut cuda_types::nvml::nvmlPlatformInfo_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
     /** Set the LED state for the unit. The LED can be either green (0) or amber (1).
@@ -4596,7 +5025,10 @@ extern "system" {
         speed: ::core::ffi::c_uint,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** Set the GPCCLK VF offset value
+    /** Deprecated: Will be deprecated in a future release. Use \ref nvmlDeviceSetClockOffsets instead. It works
+             on Maxwell onwards GPU architectures.
+
+ Set the GPCCLK VF offset value
  @param[in]   device                         The identifier of the target device
  @param[in]   offset                         The GPCCLK VF offset value to set
 
@@ -4612,7 +5044,10 @@ extern "system" {
         offset: ::core::ffi::c_int,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** Set the MemClk (Memory Clock) VF offset value. It requires elevated privileges.
+    /** Deprecated: Will be deprecated in a future release. Use \ref nvmlDeviceSetClockOffsets instead. It works
+             on Maxwell onwards GPU architectures.
+
+ Set the MemClk (Memory Clock) VF offset value. It requires elevated privileges.
  @param[in]   device                         The identifier of the target device
  @param[in]   offset                         The MemClk VF offset value to set
 
@@ -4626,64 +5061,6 @@ extern "system" {
     fn nvmlDeviceSetMemClkVfOffset(
         device: cuda_types::nvml::nvmlDevice_t,
         offset: ::core::ffi::c_int,
-    ) -> cuda_types::nvml::nvmlReturn_t;
-    #[must_use]
-    /** Set Conf Computing Unprotected Memory Size.
-
- For Ampere &tm; or newer fully supported devices.
- Supported on Linux, Windows TCC.
-
- @param device                               Device Handle
- @param sizeKiB                              Unprotected Memory size to be set in KiB
-
- @return
-         - \ref NVML_SUCCESS                 if \a sizeKiB successfully set
-         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
-         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid
-         - \ref NVML_ERROR_NOT_SUPPORTED     if this query is not supported by the device*/
-    fn nvmlDeviceSetConfComputeUnprotectedMemSize(
-        device: cuda_types::nvml::nvmlDevice_t,
-        sizeKiB: ::core::ffi::c_ulonglong,
-    ) -> cuda_types::nvml::nvmlReturn_t;
-    #[must_use]
-    /** Set Conf Computing GPUs ready state.
-
- For Ampere &tm; or newer fully supported devices.
- Supported on Linux, Windows TCC.
-
- @param isAcceptingWork                      GPU accepting new work, NVML_CC_ACCEPTING_CLIENT_REQUESTS_TRUE or
-                                             NVML_CC_ACCEPTING_CLIENT_REQUESTS_FALSE
-
- return
-         - \ref NVML_SUCCESS                 if \a current GPUs ready state is successfully set
-         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
-         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a isAcceptingWork is invalid
-         - \ref NVML_ERROR_NOT_SUPPORTED     if this query is not supported by the device*/
-    fn nvmlSystemSetConfComputeGpusReadyState(
-        isAcceptingWork: ::core::ffi::c_uint,
-    ) -> cuda_types::nvml::nvmlReturn_t;
-    #[must_use]
-    /** Set Conf Computing key rotation threshold.
-
- %HOPPER_OR_NEWER%
- Supported on Linux, Windows TCC.
-
- This function is to set the confidential compute key rotation threshold parameters.
- @ref pKeyRotationThrInfo->maxAttackerAdvantage should be in the range from
- NVML_CC_KEY_ROTATION_THRESHOLD_ATTACKER_ADVANTAGE_MIN to NVML_CC_KEY_ROTATION_THRESHOLD_ATTACKER_ADVANTAGE_MAX.
- Default value is 60.
-
- @param pKeyRotationThrInfo                  Reference to the key rotation threshold data
-
- @return
-         - \ref NVML_SUCCESS                 if \a key rotation threashold max attacker advantage has been set
-         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
-         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid or \a memory is NULL
-         - \ref NVML_ERROR_INVALID_STATE     if confidential compute GPU ready state is enabled
-         - \ref NVML_ERROR_NOT_SUPPORTED     if this query is not supported by the device
-         - \ref NVML_ERROR_UNKNOWN           on any unexpected error*/
-    fn nvmlSystemSetConfComputeKeyRotationThresholdInfo(
-        pKeyRotationThrInfo: *mut cuda_types::nvml::nvmlConfComputeSetKeyRotationThresholdInfo_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
     /** Enables or disables per process accounting.
@@ -4741,6 +5118,41 @@ extern "system" {
         device: cuda_types::nvml::nvmlDevice_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
+    /** Set new power limit of this device.
+
+ For Kepler &tm; or newer fully supported devices.
+ Requires root/admin permissions.
+
+ See \ref nvmlDeviceGetPowerManagementLimitConstraints to check the allowed ranges of values.
+
+ See \ref nvmlPowerValue_v2_t for more information on the struct.
+
+ \note Limit is not persistent across reboots or driver unloads.
+ Enable persistent mode to prevent driver from unloading when no application is using the device.
+
+ This API replaces nvmlDeviceSetPowerManagementLimit. It can be used as a drop-in replacement for the older version.
+
+ @param device                               The identifier of the target device
+ @param powerValue                           Power management limit in milliwatts to set
+
+ @return
+         - \ref NVML_SUCCESS                 if \a limit has been set
+         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid or \a powerValue is NULL or contains invalid values
+         - \ref NVML_ERROR_NOT_SUPPORTED     if the device does not support this feature
+         - \ref NVML_ERROR_GPU_IS_LOST       if the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_UNKNOWN           on any unexpected error
+
+ @see NVML_FI_DEV_POWER_AVERAGE
+ @see NVML_FI_DEV_POWER_INSTANT
+ @see NVML_FI_DEV_POWER_MIN_LIMIT
+ @see NVML_FI_DEV_POWER_MAX_LIMIT
+ @see NVML_FI_DEV_POWER_CURRENT_LIMIT*/
+    fn nvmlDeviceSetPowerManagementLimit_v2(
+        device: cuda_types::nvml::nvmlDevice_t,
+        powerValue: *mut cuda_types::nvml::nvmlPowerValue_v2_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
     /** Retrieves the state of the device's NvLink for the link specified
 
  For Pascal &tm; or newer fully supported devices.
@@ -4769,7 +5181,7 @@ extern "system" {
 
  @param device                               The identifier of the target device
  @param link                                 Specifies the NvLink link to be queried
- @param version                              Requested NvLink version
+ @param version                              Requested NvLink version from nvmlNvlinkVersion_t
 
  @return
          - \ref NVML_SUCCESS                 if \a version has been set
@@ -5021,6 +5433,103 @@ extern "system" {
         pNvLinkDeviceType: *mut cuda_types::nvml::nvmlIntNvLinkDeviceType_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
+    /** Set NvLink Low Power Threshold for device.
+
+ For Hopper &tm; or newer fully supported devices.
+
+ @param device                               The identifier of the target device
+ @param info                                 Reference to \a nvmlNvLinkPowerThres_t struct
+                                             input parameters
+
+ @return
+        - \ref NVML_SUCCESS                 if the \a Threshold is successfully set
+        - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
+        - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid or \a Threshold is not within range
+        - \ref NVML_ERROR_NOT_READY         if an internal driver setting prevents the threshold from being used
+        - \ref NVML_ERROR_NOT_SUPPORTED     if this query is not supported by the device
+*/
+    fn nvmlDeviceSetNvLinkDeviceLowPowerThreshold(
+        device: cuda_types::nvml::nvmlDevice_t,
+        info: *mut cuda_types::nvml::nvmlNvLinkPowerThres_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Set the global nvlink bandwith mode
+
+ @param nvlinkBwMode             nvlink bandwidth mode
+ @return
+         - \ref NVML_SUCCESS                on success
+         - \ref NVML_ERROR_INVALID_ARGUMENT if an invalid argument is provided
+         - \ref NVML_ERROR_IN_USE           if P2P object exists
+         - \ref NVML_ERROR_NOT_SUPPORTED    if GPU is not Hopper or newer architecture.
+         - \ref NVML_ERROR_NO_PERMISSION    if not root user*/
+    fn nvmlSystemSetNvlinkBwMode(
+        nvlinkBwMode: ::core::ffi::c_uint,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Get the global nvlink bandwith mode
+
+ @param nvlinkBwMode             reference of nvlink bandwidth mode
+ @return
+         - \ref NVML_SUCCESS                on success
+         - \ref NVML_ERROR_INVALID_ARGUMENT if an invalid pointer is provided
+         - \ref NVML_ERROR_NOT_SUPPORTED    if GPU is not Hopper or newer architecture.
+         - \ref NVML_ERROR_NO_PERMISSION    if not root user*/
+    fn nvmlSystemGetNvlinkBwMode(
+        nvlinkBwMode: *mut ::core::ffi::c_uint,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Get the supported NvLink Reduced Bandwidth Modes of the device
+
+ %BLACKWELL_OR_NEWER%
+
+ @param device                                      The identifier of the target device
+ @param supportedBwMode                             Reference to \a nvmlNvlinkSupportedBwModes_t
+
+ @return
+        - \ref NVML_SUCCESS                         if the query was successful
+        - \ref NVML_ERROR_INVALID_ARGUMENT          if device is invalid or supportedBwMode is NULL
+        - \ref NVML_ERROR_NOT_SUPPORTED             if this feature is not supported by the device
+        - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH if the version specified is not supported*/
+    fn nvmlDeviceGetNvlinkSupportedBwModes(
+        device: cuda_types::nvml::nvmlDevice_t,
+        supportedBwMode: *mut cuda_types::nvml::nvmlNvlinkSupportedBwModes_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Get the NvLink Reduced Bandwidth Mode for the device
+
+ %BLACKWELL_OR_NEWER%
+
+ @param device                                      The identifier of the target device
+ @param getBwMode                                   Reference to \a nvmlNvlinkGetBwMode_t
+
+ @return
+        - \ref NVML_SUCCESS                         if the query was successful
+        - \ref NVML_ERROR_INVALID_ARGUMENT          if device is invalid or getBwMode is NULL
+        - \ref NVML_ERROR_NOT_SUPPORTED             if this feature is not supported by the device
+        - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH if the version specified is not supported*/
+    fn nvmlDeviceGetNvlinkBwMode(
+        device: cuda_types::nvml::nvmlDevice_t,
+        getBwMode: *mut cuda_types::nvml::nvmlNvlinkGetBwMode_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Set the NvLink Reduced Bandwidth Mode for the device
+
+ %BLACKWELL_OR_NEWER%
+
+ @param device                                      The identifier of the target device
+ @param setBwMode                                   Reference to \a nvmlNvlinkSetBwMode_t
+
+ @return
+        - \ref NVML_SUCCESS                         if the Bandwidth mode was successfully set
+        - \ref NVML_ERROR_INVALID_ARGUMENT          if device is invalid or setBwMode is NULL
+        - \ref NVML_ERROR_NO_PERMISSION             if user does not have permission to change Bandwidth mode
+        - \ref NVML_ERROR_NOT_SUPPORTED             if this feature is not supported by the device
+        - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH if the version specified is not supported*/
+    fn nvmlDeviceSetNvlinkBwMode(
+        device: cuda_types::nvml::nvmlDevice_t,
+        setBwMode: *mut cuda_types::nvml::nvmlNvlinkSetBwMode_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
     /** Create an empty set of events.
  Event set should be freed by \ref nvmlEventSetFree
 
@@ -5041,7 +5550,7 @@ extern "system" {
     /** Starts recording of events on a specified devices and add the events to specified \ref nvmlEventSet_t
 
  For Fermi &tm; or newer fully supported devices.
- Ecc events are available only on ECC enabled devices (see \ref nvmlDeviceGetTotalEccErrors)
+ ECC events are available only on ECC-enabled devices (see \ref nvmlDeviceGetTotalEccErrors)
  Power capping events are available only on Power Management enabled devices (see \ref nvmlDeviceGetPowerManagementMode)
 
  For Linux only.
@@ -5110,11 +5619,11 @@ extern "system" {
  but not longer than specified timeout. This function in certain conditions can return before
  specified timeout passes (e.g. when interrupt arrives)
 
- On Windows, in case of xid error, the function returns the most recent xid error type seen by the system.
- If there are multiple xid errors generated before nvmlEventSetWait is invoked then the last seen xid error
- type is returned for all xid error events.
+ On Windows, in case of Xid error, the function returns the most recent Xid error type seen by the system.
+ If there are multiple Xid errors generated before nvmlEventSetWait is invoked then the last seen Xid error
+ type is returned for all Xid error events.
 
- On Linux, every xid error event would return the associated event data and other information if applicable.
+ On Linux, every Xid error event would return the associated event data and other information if applicable.
 
  In MIG mode, if device handle is provided, the API reports all the events for the available instances,
  only if the caller has appropriate privileges. In absence of required privileges, only the events which
@@ -5374,12 +5883,12 @@ extern "system" {
  @param pHeterogeneousMode                   Pointer to the caller-provided structure of nvmlVgpuHeterogeneousMode_t
 
  @return
-         - \ref NVML_SUCCESS                 Upon success
-         - \ref NVML_ERROR_UNINITIALIZED     If library has not been successfully initialized
-         - \ref NVML_ERROR_INVALID_ARGUMENT  If \a device is invalid or \a pHeterogeneousMode is NULL
-         - \ref NVML_ERROR_NOT_SUPPORTED     If \a device doesn't support this feature
-         - \ref NVML_ERROR_VERSION_MISMATCH  If the version of \a pHeterogeneousMode is invalid
-         - \ref NVML_ERROR_UNKNOWN           On any unexpected error*/
+         - \ref NVML_SUCCESS                          Upon success
+         - \ref NVML_ERROR_UNINITIALIZED              If library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT           If \a device is invalid or \a pHeterogeneousMode is NULL
+         - \ref NVML_ERROR_NOT_SUPPORTED              If \a device doesn't support this feature
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH  If the version of \a pHeterogeneousMode is invalid
+         - \ref NVML_ERROR_UNKNOWN                    On any unexpected error*/
     fn nvmlDeviceGetVgpuHeterogeneousMode(
         device: cuda_types::nvml::nvmlDevice_t,
         pHeterogeneousMode: *mut cuda_types::nvml::nvmlVgpuHeterogeneousMode_t,
@@ -5392,6 +5901,8 @@ extern "system" {
  API would return an appropriate error code upon unsuccessful activation. For example, the heterogeneous mode
  set will fail with error \ref NVML_ERROR_IN_USE if any vGPU instance is active on the device. The caller of this API
  is expected to shutdown the vGPU VMs and retry setting the \a mode.
+ On KVM platform, setting heterogeneous mode is allowed, if no MDEV device is created on the device, else will fail
+ with same error \ref NVML_ERROR_IN_USE.
  On successful return, the function updates the vGPU heterogeneous mode with the user provided \a pHeterogeneousMode->mode.
  \a pHeterogeneousMode->version is the version number of the structure nvmlVgpuHeterogeneousMode_t, the caller should
  set the correct version number to set the vGPU heterogeneous mode.
@@ -5400,14 +5911,14 @@ extern "system" {
  @param pHeterogeneousMode                   Pointer to the caller-provided structure of nvmlVgpuHeterogeneousMode_t
 
  @return
-         - \ref NVML_SUCCESS                 Upon success
-         - \ref NVML_ERROR_UNINITIALIZED     If library has not been successfully initialized
-         - \ref NVML_ERROR_INVALID_ARGUMENT  If \a device or \a pHeterogeneousMode is NULL or \a pHeterogeneousMode->mode is invalid
-         - \ref NVML_ERROR_IN_USE            If the \a device is in use
-         - \ref NVML_ERROR_NO_PERMISSION     If user doesn't have permission to perform the operation
-         - \ref NVML_ERROR_NOT_SUPPORTED     If MIG is enabled or \a device doesn't support this feature
-         - \ref NVML_ERROR_VERSION_MISMATCH  If the version of \a pHeterogeneousMode is invalid
-         - \ref NVML_ERROR_UNKNOWN           On any unexpected error*/
+         - \ref NVML_SUCCESS                          Upon success
+         - \ref NVML_ERROR_UNINITIALIZED              If library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT           If \a device or \a pHeterogeneousMode is NULL or \a pHeterogeneousMode->mode is invalid
+         - \ref NVML_ERROR_IN_USE                     If the \a device is in use
+         - \ref NVML_ERROR_NO_PERMISSION              If user doesn't have permission to perform the operation
+         - \ref NVML_ERROR_NOT_SUPPORTED              If MIG is enabled or \a device doesn't support this feature
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH  If the version of \a pHeterogeneousMode is invalid
+         - \ref NVML_ERROR_UNKNOWN                    On any unexpected error*/
     fn nvmlDeviceSetVgpuHeterogeneousMode(
         device: cuda_types::nvml::nvmlDevice_t,
         pHeterogeneousMode: *const cuda_types::nvml::nvmlVgpuHeterogeneousMode_t,
@@ -5424,11 +5935,11 @@ extern "system" {
  @param pPlacement                           Pointer to vGPU placement ID structure \a nvmlVgpuPlacementId_t
 
  @return
-         - \ref NVML_SUCCESS                 If information is successfully retrieved
-         - \ref NVML_ERROR_NOT_FOUND         If \a vgpuInstance does not match a valid active vGPU instance
-         - \ref NVML_ERROR_INVALID_ARGUMENT  If \a vgpuInstance is invalid or \a pPlacement is NULL
-         - \ref NVML_ERROR_VERSION_MISMATCH  If the version of \a pPlacement is invalid
-         - \ref NVML_ERROR_UNKNOWN           On any unexpected error*/
+         - \ref NVML_SUCCESS                          If information is successfully retrieved
+         - \ref NVML_ERROR_NOT_FOUND                  If \a vgpuInstance does not match a valid active vGPU instance
+         - \ref NVML_ERROR_INVALID_ARGUMENT           If \a vgpuInstance is invalid or \a pPlacement is NULL
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH  If the version of \a pPlacement is invalid
+         - \ref NVML_ERROR_UNKNOWN                    On any unexpected error*/
     fn nvmlVgpuInstanceGetPlacementId(
         vgpuInstance: cuda_types::nvml::nvmlVgpuInstance_t,
         pPlacement: *mut cuda_types::nvml::nvmlVgpuPlacementId_t,
@@ -5436,24 +5947,30 @@ extern "system" {
     #[must_use]
     /** Query the supported vGPU placement ID of the vGPU type.
 
- An array of supported vGPU placement IDs for the vGPU type ID indicated by \a vgpuTypeId is returned in the
- caller-supplied buffer of \a pPlacementList->placementIds. Memory needed for the placementIds array should be
- allocated based on maximum instances of a vGPU type which can be queried via \ref nvmlVgpuTypeGetMaxInstances().
+ The function returns an array of supported vGPU placement IDs for the specified vGPU type ID in the buffer provided
+ by the caller at \a pPlacementList->placementIds. The required memory for the placementIds array must be allocated
+ based on the maximum number of vGPU type instances, which is retrievable through \ref nvmlVgpuTypeGetMaxInstances().
+ If the provided count by the caller is insufficient, the function will return NVML_ERROR_INSUFFICIENT_SIZE along with
+ the number of required entries in \a pPlacementList->count. The caller should then reallocate a buffer with the size
+ of pPlacementList->count * sizeof(pPlacementList->placementIds) and invoke the function again.
 
- This function will return supported placement IDs even if GPU is not in vGPU heterogeneous mode.
+ To obtain a list of homogeneous placement IDs, the caller needs to set \a pPlacementList->mode to NVML_VGPU_PGPU_HOMOGENEOUS_MODE.
+ For heterogeneous placement IDs, \a pPlacementList->mode should be set to NVML_VGPU_PGPU_HETEROGENEOUS_MODE.
+ By default, a list of heterogeneous placement IDs is returned.
 
  @param device                               Identifier of the target device
  @param vgpuTypeId                           Handle to vGPU type. The vGPU type ID
  @param pPlacementList                       Pointer to the vGPU placement structure \a nvmlVgpuPlacementList_t
 
  @return
-         - \ref NVML_SUCCESS                 Upon success
-         - \ref NVML_ERROR_UNINITIALIZED     If library has not been successfully initialized
-         - \ref NVML_ERROR_INVALID_ARGUMENT  If \a device or \a vgpuTypeId is invalid or \a pPlacementList is NULL
-         - \ref NVML_ERROR_NOT_SUPPORTED     If \a device or \a vgpuTypeId isn't supported
-         - \ref NVML_ERROR_NO_PERMISSION     If user doesn't have permission to perform the operation
-         - \ref NVML_ERROR_VERSION_MISMATCH  If the version of \a pPlacementList is invalid
-         - \ref NVML_ERROR_UNKNOWN           On any unexpected error*/
+         - \ref NVML_SUCCESS                          Upon success
+         - \ref NVML_ERROR_UNINITIALIZED              If library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT           If \a device or \a vgpuTypeId is invalid or \a pPlacementList is NULL
+         - \ref NVML_ERROR_NOT_SUPPORTED              If \a device or \a vgpuTypeId isn't supported
+         - \ref NVML_ERROR_NO_PERMISSION              If user doesn't have permission to perform the operation
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH  If the version of \a pPlacementList is invalid
+         - \ref NVML_ERROR_INSUFFICIENT_SIZE          If the buffer is small, element count is returned in \a pPlacementList->count
+         - \ref NVML_ERROR_UNKNOWN                    On any unexpected error*/
     fn nvmlDeviceGetVgpuTypeSupportedPlacements(
         device: cuda_types::nvml::nvmlDevice_t,
         vgpuTypeId: cuda_types::nvml::nvmlVgpuTypeId_t,
@@ -5465,23 +5982,25 @@ extern "system" {
  An array of creatable vGPU placement IDs for the vGPU type ID indicated by \a vgpuTypeId is returned in the
  caller-supplied buffer of \a pPlacementList->placementIds. Memory needed for the placementIds array should be
  allocated based on maximum instances of a vGPU type which can be queried via \ref nvmlVgpuTypeGetMaxInstances().
+ If the provided count by the caller is insufficient, the function will return NVML_ERROR_INSUFFICIENT_SIZE along with
+ the number of required entries in \a pPlacementList->count. The caller should then reallocate a buffer with the size
+ of pPlacementList->count * sizeof(pPlacementList->placementIds) and invoke the function again.
+
  The creatable vGPU placement IDs may differ over time, as there may be restrictions on what type of vGPU the
  vGPU instance is running.
-
- The function will return \ref NVML_ERROR_NOT_SUPPORTED if the \a device is not in vGPU heterogeneous mode.
 
  @param device                               The identifier of the target device
  @param vgpuTypeId                           Handle to vGPU type. The vGPU type ID
  @param pPlacementList                       Pointer to the list of vGPU placement structure \a nvmlVgpuPlacementList_t
 
  @return
-         - \ref NVML_SUCCESS                 Upon success
-         - \ref NVML_ERROR_UNINITIALIZED     If library has not been successfully initialized
-         - \ref NVML_ERROR_INVALID_ARGUMENT  If \a device or \a vgpuTypeId is invalid or \a pPlacementList is NULL
-         - \ref NVML_ERROR_NOT_SUPPORTED     If \a device or \a vgpuTypeId isn't supported
-         - \ref NVML_ERROR_NO_PERMISSION     If user doesn't have permission to perform the operation
-         - \ref NVML_ERROR_VERSION_MISMATCH  If the version of \a pPlacementList is invalid
-         - \ref NVML_ERROR_UNKNOWN           On any unexpected error*/
+         - \ref NVML_SUCCESS                          Upon success
+         - \ref NVML_ERROR_UNINITIALIZED              If library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT           If \a device or \a vgpuTypeId is invalid or \a pPlacementList is NULL
+         - \ref NVML_ERROR_NOT_SUPPORTED              If \a device or \a vgpuTypeId isn't supported
+         - \ref NVML_ERROR_NO_PERMISSION              If user doesn't have permission to perform the operation
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH  If the version of \a pPlacementList is invalid
+         - \ref NVML_ERROR_UNKNOWN                    On any unexpected error*/
     fn nvmlDeviceGetVgpuTypeCreatablePlacements(
         device: cuda_types::nvml::nvmlDevice_t,
         vgpuTypeId: cuda_types::nvml::nvmlVgpuTypeId_t,
@@ -5514,6 +6033,28 @@ extern "system" {
     fn nvmlVgpuTypeGetFbReservation(
         vgpuTypeId: cuda_types::nvml::nvmlVgpuTypeId_t,
         fbReservation: *mut ::core::ffi::c_ulonglong,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Retrieve the currently used runtime state size of the vGPU instance
+
+ This size represents the maximum in-memory data size utilized by a vGPU instance during standard operation.
+ This measurement is exclusive of frame buffer (FB) data size assigned to the vGPU instance.
+
+ For Maxwell &tm; or newer fully supported devices.
+
+ @param vgpuInstance                         Identifier of the target vGPU instance
+ @param pState                               Pointer to the vGPU runtime state's structure \a nvmlVgpuRuntimeState_t
+
+ @return
+         - \ref NVML_SUCCESS                          If information is successfully retrieved
+         - \ref NVML_ERROR_UNINITIALIZED              If the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT           If \a vgpuInstance is invalid, or \a pState is NULL
+         - \ref NVML_ERROR_NOT_FOUND                  If \a vgpuInstance does not match a valid active vGPU instance on the system
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH  If the version of \a pState is invalid
+         - \ref NVML_ERROR_UNKNOWN                    On any unexpected error*/
+    fn nvmlVgpuInstanceGetRuntimeStateSize(
+        vgpuInstance: cuda_types::nvml::nvmlVgpuInstance_t,
+        pState: *mut cuda_types::nvml::nvmlVgpuRuntimeState_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
     /** Set the desirable vGPU capability of a device
@@ -5873,6 +6414,23 @@ extern "system" {
     fn nvmlVgpuTypeGetMaxInstancesPerVm(
         vgpuTypeId: cuda_types::nvml::nvmlVgpuTypeId_t,
         vgpuInstanceCountPerVm: *mut ::core::ffi::c_uint,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Retrieve the BAR1 info for given vGPU type.
+
+ For Maxwell &tm; or newer fully supported devices.
+
+ @param vgpuTypeId               Handle to vGPU type
+ @param bar1Info                 Pointer to the vGPU type BAR1 information structure \a nvmlVgpuTypeBar1Info_t
+
+ @return
+         - \ref NVML_SUCCESS                 successful completion
+         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a vgpuTypeId is invalid, or \a bar1Info is NULL
+         - \ref NVML_ERROR_UNKNOWN           on any unexpected error*/
+    fn nvmlVgpuTypeGetBAR1Info(
+        vgpuTypeId: cuda_types::nvml::nvmlVgpuTypeId_t,
+        bar1Info: *mut cuda_types::nvml::nvmlVgpuTypeBar1Info_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
     /** Retrieve the active vGPU instances on a device.
@@ -6642,17 +7200,17 @@ returned in \a sessionCount
  @param vgpuUtilInfo                  Pointer to the caller-provided structure of nvmlVgpuInstancesUtilizationInfo_t
 
  @return
-         - \ref NVML_SUCCESS                 if utilization samples are successfully retrieved
-         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
-         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid, \a vgpuUtilInfo is NULL, or \a vgpuUtilInfo->vgpuInstanceCount is 0
-         - \ref NVML_ERROR_NOT_SUPPORTED     if vGPU is not supported by the device
-         - \ref NVML_ERROR_GPU_IS_LOST       if the target GPU has fallen off the bus or is otherwise inaccessible
-         - \ref NVML_ERROR_VERSION_MISMATCH  if the version of \a vgpuUtilInfo is invalid
-         - \ref NVML_ERROR_INSUFFICIENT_SIZE if \a vgpuUtilInfo->vgpuUtilArray is NULL, or the buffer size of vgpuUtilInfo->vgpuInstanceCount is too small.
-                                             The caller should check the current vGPU instance count from the returned vgpuUtilInfo->vgpuInstanceCount, and call
-                                             the function again with a buffer of size vgpuUtilInfo->vgpuInstanceCount * sizeof(nvmlVgpuInstanceUtilizationInfo_t)
-         - \ref NVML_ERROR_NOT_FOUND         if sample entries are not found
-         - \ref NVML_ERROR_UNKNOWN           on any unexpected error*/
+         - \ref NVML_SUCCESS                          If utilization samples are successfully retrieved
+         - \ref NVML_ERROR_UNINITIALIZED              If the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT           If \a device is invalid, \a vgpuUtilInfo is NULL, or \a vgpuUtilInfo->vgpuInstanceCount is 0
+         - \ref NVML_ERROR_NOT_SUPPORTED              If vGPU is not supported by the device
+         - \ref NVML_ERROR_GPU_IS_LOST                If the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH  If the version of \a vgpuUtilInfo is invalid
+         - \ref NVML_ERROR_INSUFFICIENT_SIZE          If \a vgpuUtilInfo->vgpuUtilArray is NULL, or the buffer size of vgpuUtilInfo->vgpuInstanceCount is too small.
+                                                      The caller should check the current vGPU instance count from the returned vgpuUtilInfo->vgpuInstanceCount, and call
+                                                      the function again with a buffer of size vgpuUtilInfo->vgpuInstanceCount * sizeof(nvmlVgpuInstanceUtilizationInfo_t)
+         - \ref NVML_ERROR_NOT_FOUND                  If sample entries are not found
+         - \ref NVML_ERROR_UNKNOWN                    On any unexpected error*/
     fn nvmlDeviceGetVgpuInstancesUtilizationInfo(
         device: cuda_types::nvml::nvmlDevice_t,
         vgpuUtilInfo: *mut cuda_types::nvml::nvmlVgpuInstancesUtilizationInfo_t,
@@ -6734,19 +7292,19 @@ returned in \a sessionCount
  @param vgpuProcUtilInfo              Pointer to the caller-provided structure of nvmlVgpuProcessesUtilizationInfo_t
 
  @return
-         - \ref NVML_SUCCESS                 if utilization samples are successfully retrieved
-         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
-         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid, or \a vgpuProcUtilInfo is null
-         - \ref NVML_ERROR_VERSION_MISMATCH  if the version of \a vgpuProcUtilInfo is invalid
-         - \ref NVML_ERROR_INSUFFICIENT_SIZE if \a vgpuProcUtilInfo->vgpuProcUtilArray is null, or supplied \a vgpuProcUtilInfo->vgpuProcessCount
-                                             is too small to return samples for all processes on vGPU instances currently executing on the device.
-                                             The caller should check the current processes count from the returned \a vgpuProcUtilInfo->vgpuProcessCount,
-                                             and call the function again with a buffer of size
-                                             vgpuProcUtilInfo->vgpuProcessCount * sizeof(nvmlVgpuProcessUtilizationSample_t)
-         - \ref NVML_ERROR_NOT_SUPPORTED     if vGPU is not supported by the device
-         - \ref NVML_ERROR_GPU_IS_LOST       if the target GPU has fallen off the bus or is otherwise inaccessible
-         - \ref NVML_ERROR_NOT_FOUND         if sample entries are not found
-         - \ref NVML_ERROR_UNKNOWN           on any unexpected error*/
+         - \ref NVML_SUCCESS                          If utilization samples are successfully retrieved
+         - \ref NVML_ERROR_UNINITIALIZED              If the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT           If \a device is invalid, or \a vgpuProcUtilInfo is null
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH  If the version of \a vgpuProcUtilInfo is invalid
+         - \ref NVML_ERROR_INSUFFICIENT_SIZE          If \a vgpuProcUtilInfo->vgpuProcUtilArray is null, or supplied \a vgpuProcUtilInfo->vgpuProcessCount
+                                                      is too small to return samples for all processes on vGPU instances currently executing on the device.
+                                                      The caller should check the current processes count from the returned \a vgpuProcUtilInfo->vgpuProcessCount,
+                                                      and call the function again with a buffer of size
+                                                      vgpuProcUtilInfo->vgpuProcessCount * sizeof(nvmlVgpuProcessUtilizationSample_t)
+         - \ref NVML_ERROR_NOT_SUPPORTED              If vGPU is not supported by the device
+         - \ref NVML_ERROR_GPU_IS_LOST                If the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_NOT_FOUND                  If sample entries are not found
+         - \ref NVML_ERROR_UNKNOWN                    On any unexpected error*/
     fn nvmlDeviceGetVgpuProcessesUtilizationInfo(
         device: cuda_types::nvml::nvmlDevice_t,
         vgpuProcUtilInfo: *mut cuda_types::nvml::nvmlVgpuProcessesUtilizationInfo_t,
@@ -7717,7 +8275,7 @@ returned in \a sessionCount
     #[must_use]
     /** Get GPM stream state.
 
- %HOPPER_OR_NEWER%
+ For Hopper &tm; or newer fully supported devices.
  Supported on Linux, Windows TCC.
 
  @param device                               The identifier of the target device
@@ -7736,7 +8294,7 @@ returned in \a sessionCount
     #[must_use]
     /** Set GPM stream state.
 
- %HOPPER_OR_NEWER%
+ For Hopper &tm; or newer fully supported devices.
  Supported on Linux, Windows TCC.
 
  @param device                               The identifier of the target device
@@ -7753,105 +8311,191 @@ returned in \a sessionCount
         state: ::core::ffi::c_uint,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** Set NvLink Low Power Threshold for device.
+    /** Get device capabilities
 
- %HOPPER_OR_NEWER%
+ See \ref  nvmlDeviceCapabilities_v1_t for more information on the struct.
 
  @param device                               The identifier of the target device
- @param info                                 Reference to \a nvmlNvLinkPowerThres_t struct
-                                             input parameters
+ @param caps                                 Returns GPU's capabilities
 
  @return
-        - \ref NVML_SUCCESS                 if the \a Threshold is successfully set
-        - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
-        - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid or \a Threshold is not within range
-        - \ref NVML_ERROR_NOT_SUPPORTED     if this query is not supported by the device
+         - \ref NVML_SUCCESS                         If the query is success
+         - \ref NVML_ERROR_UNINITIALIZED             If the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT          If \a device is invalid or \a counters is NULL
+         - \ref NVML_ERROR_NOT_SUPPORTED             If the device does not support this feature
+         - \ref NVML_ERROR_GPU_IS_LOST               If the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH If the provided version is invalid/unsupported
+         - \ref NVML_ERROR_UNKNOWN                   On any unexpected error*/
+    fn nvmlDeviceGetCapabilities(
+        device: cuda_types::nvml::nvmlDevice_t,
+        caps: *mut cuda_types::nvml::nvmlDeviceCapabilities_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Get Performance Profiles Information
+
+ %BLACKWELL_OR_NEWER%
+ See \ref nvmlWorkloadPowerProfileProfilesInfo_v1_t for more information on the struct.
+ The mask \a perfProfilesMask is bitmask of all supported mode indices where the
+ mode is supported if the index is 1. Each supported mode will have a corresponding
+ entry in the \a perfProfile array which will contain the \a profileId, the
+ \a priority of this mode, where the lower the value, the higher the priority,
+ and a \a conflictingMask, where each bit set in the mask corresponds to a different
+ profile which cannot be used in conjunction with the given profile.
+
+ @param device                               The identifier of the target device
+ @param profilesInfo                         Reference to struct \a nvmlWorkloadPowerProfileProfilesInfo_t
+
+ @return
+         - \ref NVML_SUCCESS                         If the query is successful
+         - \ref NVML_ERROR_INSUFFICIENT_SIZE         If struct is fully allocated
+         - \ref NVML_ERROR_UNINITIALIZED             If the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT          If \a device is invalid or \a pointer to struct is NULL
+         - \ref NVML_ERROR_NOT_SUPPORTED             If the device does not support this feature
+         - \ref NVML_ERROR_GPU_IS_LOST               If the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH If the provided version is invalid/unsupported
+         - \ref NVML_ERROR_UNKNOWN                   On any unexpected error*/
+    fn nvmlDeviceWorkloadPowerProfileGetProfilesInfo(
+        device: cuda_types::nvml::nvmlDevice_t,
+        profilesInfo: *mut cuda_types::nvml::nvmlWorkloadPowerProfileProfilesInfo_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Get Current Performance Profiles
+
+ %BLACKWELL_OR_NEWER%
+ See \ref nvmlWorkloadPowerProfileCurrentProfiles_v1_t for more information on the struct.
+ This API returns a stuct which contains the current \a perfProfilesMask,
+ \a requestedProfilesMask and \a enforcedProfilesMask. Each bit set in each
+ bitmasks indicates the profile is supported, currently requested or currently
+ engaged, respectively.
+
+ @param device                The identifier of the target device
+ @param currentProfiles       Reference to struct \a nvmlWorkloadPowerProfileCurrentProfiles_v1_t
+
+ @return
+         - \ref NVML_SUCCESS                         If the query is successful
+         - \ref NVML_ERROR_UNINITIALIZED             If the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT          If \a device is invalid or the pointer to struct is NULL
+         - \ref NVML_ERROR_NOT_SUPPORTED             If the device does not support this feature
+         - \ref NVML_ERROR_GPU_IS_LOST               If the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH If the provided version is invalid/unsupported
+         - \ref NVML_ERROR_UNKNOWN                   On any unexpected error*/
+    fn nvmlDeviceWorkloadPowerProfileGetCurrentProfiles(
+        device: cuda_types::nvml::nvmlDevice_t,
+        currentProfiles: *mut cuda_types::nvml::nvmlWorkloadPowerProfileCurrentProfiles_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Set Requested Performance Profiles
+
+ %BLACKWELL_OR_NEWER%
+ See \ref nvmlWorkloadPowerProfileRequestedProfiles_v1_t for more information on the struct.
+ Reuqest one or more performance profiles be activated using the input bitmask
+ \a requestedProfilesMask, where each bit set corresponds to a supported bit from
+ the \a perfProfilesMask. These profiles will be added to existing list of
+ currently requested profiles.
+
+ @param device                The identifier of the target device
+ @param requestedProfiles     Reference to struct \a nvmlWorkloadPowerProfileRequestedProfiles_v1_t
+
+ @return
+         - \ref NVML_SUCCESS                         If the query is successful
+         - \ref NVML_ERROR_UNINITIALIZED             If the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT          If \a device is invalid or \a pointer to struct is NULL
+         - \ref NVML_ERROR_NOT_SUPPORTED             If the device does not support this feature
+         - \ref NVML_ERROR_GPU_IS_LOST               If the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH If the provided version is invalid/unsupported
+         - \ref NVML_ERROR_UNKNOWN                   On any unexpected error*/
+    fn nvmlDeviceWorkloadPowerProfileSetRequestedProfiles(
+        device: cuda_types::nvml::nvmlDevice_t,
+        requestedProfiles: *mut cuda_types::nvml::nvmlWorkloadPowerProfileRequestedProfiles_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Clear Requested Performance Profiles
+
+ %BLACKWELL_OR_NEWER%
+ See \ref nvmlWorkloadPowerProfileRequestedProfiles_v1_t for more information on the struct.
+ Clear one or more performance profiles be using the input bitmask
+ \a requestedProfilesMask, where each bit set corresponds to a supported bit from
+ the \a perfProfilesMask. These profiles will be removed from the existing list of
+ currently requested profiles.
+
+ @param device                The identifier of the target device
+ @param requestedProfiles     Reference to struct \a nvmlWorkloadPowerProfileRequestedProfiles_v1_t
+
+ @return
+         - \ref NVML_SUCCESS                         If the query is successful
+         - \ref NVML_ERROR_UNINITIALIZED             If the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT          If \a device is invalid or \a pointer to struct is NULL
+         - \ref NVML_ERROR_NOT_SUPPORTED             If the device does not support this feature
+         - \ref NVML_ERROR_GPU_IS_LOST               If the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH If the provided version is invalid/unsupported
+         - \ref NVML_ERROR_UNKNOWN                   On any unexpected error*/
+    fn nvmlDeviceWorkloadPowerProfileClearRequestedProfiles(
+        device: cuda_types::nvml::nvmlDevice_t,
+        requestedProfiles: *mut cuda_types::nvml::nvmlWorkloadPowerProfileRequestedProfiles_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Activiate a specific preset profile for datacenter power smoothing
+ The API only sets the active preset profile based on the input profileId,
+ and ignores the other parameters of the structure.
+
+ %BLACKWELL_OR_NEWER%
+
+ @param device                                The identifier of the target device
+ @param profile                               Reference to \ref nvmlPowerSmoothingProfile_t.
+                                              Note that only \a profile->profileId is used and
+                                              the rest of the structure is ignored.
+
+ @return
+        - \ref NVML_SUCCESS                   if the Desired Profile was successfully set
+        - \ref NVML_ERROR_INVALID_ARGUMENT    if device is invalid or structure was NULL
+        - \ref NVML_ERROR_NO_PERMISSION       if user does not have permission to change the profile number
+        - \ref NVML_ERROR_NOT_SUPPORTED       if this feature is not supported by the device
 */
-    fn nvmlDeviceSetNvLinkDeviceLowPowerThreshold(
+    fn nvmlDevicePowerSmoothingActivatePresetProfile(
         device: cuda_types::nvml::nvmlDevice_t,
-        info: *mut cuda_types::nvml::nvmlNvLinkPowerThres_t,
+        profile: *mut cuda_types::nvml::nvmlPowerSmoothingProfile_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** Set the global nvlink bandwith mode
+    /** Update the value of a specific profile parameter contained within \ref nvmlPowerSmoothingProfile_t
 
- @param nvlinkBwMode             nvlink bandwidth mode
- @return
-         - \ref NVML_SUCCESS                on success
-         - \ref NVML_ERROR_INVALID_ARGUMENT if an invalid argument is provided
-         - \ref NVML_ERROR_IN_USE           if P2P object exists
-         - \ref NVML_ERROR_NOT_SUPPORTED    if GPU is not Hopper or newer architecture.
-         - \ref NVML_ERROR_NO_PERMISSION    if not root user*/
-    fn nvmlSystemSetNvlinkBwMode(
-        nvlinkBwMode: ::core::ffi::c_uint,
-    ) -> cuda_types::nvml::nvmlReturn_t;
-    #[must_use]
-    /** Get the global nvlink bandwith mode
+ %BLACKWELL_OR_NEWER%
 
- @param nvlinkBwMode             reference of nvlink bandwidth mode
- @return
-         - \ref NVML_SUCCESS                on success
-         - \ref NVML_ERROR_INVALID_ARGUMENT if an invalid pointer is provided
-         - \ref NVML_ERROR_NOT_SUPPORTED    if GPU is not Hopper or newer architecture.
-         - \ref NVML_ERROR_NO_PERMISSION    if not root user*/
-    fn nvmlSystemGetNvlinkBwMode(
-        nvlinkBwMode: *mut ::core::ffi::c_uint,
-    ) -> cuda_types::nvml::nvmlReturn_t;
-    #[must_use]
-    /** Set new power limit of this device.
+ NVML_POWER_SMOOTHING_PROFILE_PARAM_PERCENT_TMP_FLOOR expects a value as a percentage from 00.00-100.00%
+ NVML_POWER_SMOOTHING_PROFILE_PARAM_RAMP_UP_RATE expects a value in W/s
+ NVML_POWER_SMOOTHING_PROFILE_PARAM_RAMP_DOWN_RATE expects a value in W/s
+ NVML_POWER_SMOOTHING_PROFILE_PARAM_RAMP_DOWN_HYSTERESIS expects a value in ms
 
- For Kepler &tm; or newer fully supported devices.
- Requires root/admin permissions.
-
- See \ref nvmlDeviceGetPowerManagementLimitConstraints to check the allowed ranges of values.
-
- See \ref nvmlPowerValue_v2_t for more information on the struct.
-
- \note Limit is not persistent across reboots or driver unloads.
- Enable persistent mode to prevent driver from unloading when no application is using the device.
-
- This API replaces nvmlDeviceSetPowerManagementLimit. It can be used as a drop-in replacement for the older version.
-
- @param device                               The identifier of the target device
- @param powerValue                           Power management limit in milliwatts to set
+ @param device                                      The identifier of the target device
+ @param profile                                     Reference to \ref nvmlPowerSmoothingProfile_t struct
 
  @return
-         - \ref NVML_SUCCESS                 if \a limit has been set
-         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
-         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid or \a powerValue is NULL or contains invalid values
-         - \ref NVML_ERROR_NOT_SUPPORTED     if the device does not support this feature
-         - \ref NVML_ERROR_GPU_IS_LOST       if the target GPU has fallen off the bus or is otherwise inaccessible
-         - \ref NVML_ERROR_UNKNOWN           on any unexpected error
-
- @see NVML_FI_DEV_POWER_AVERAGE
- @see NVML_FI_DEV_POWER_INSTANT
- @see NVML_FI_DEV_POWER_MIN_LIMIT
- @see NVML_FI_DEV_POWER_MAX_LIMIT
- @see NVML_FI_DEV_POWER_CURRENT_LIMIT*/
-    fn nvmlDeviceSetPowerManagementLimit_v2(
+        - \ref NVML_SUCCESS                         if the Active Profile was successfully set
+        - \ref NVML_ERROR_INVALID_ARGUMENT          if device is invalid or profile parameter/value was invalid
+        - \ref NVML_ERROR_NO_PERMISSION             if user does not have permission to change any profile parameters
+        - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH if the structure version is not supported
+*/
+    fn nvmlDevicePowerSmoothingUpdatePresetProfileParam(
         device: cuda_types::nvml::nvmlDevice_t,
-        powerValue: *mut cuda_types::nvml::nvmlPowerValue_v2_t,
+        profile: *mut cuda_types::nvml::nvmlPowerSmoothingProfile_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** Get SRAM ECC error status of this device.
+    /** Enable or disable the Power Smoothing Feature
 
- For Ampere &tm; or newer fully supported devices.
- Requires root/admin permissions.
+ %BLACKWELL_OR_NEWER%
 
- See \ref nvmlEccSramErrorStatus_v1_t for more information on the struct.
+ See \ref nvmlEnableState_t for details on allowed states
 
- @param device                               The identifier of the target device
- @param status                               Returns SRAM ECC error status
+ @param device                                      The identifier of the target device
+ @param state                                       Reference to \ref nvmlPowerSmoothingState_t
 
  @return
-         - \ref NVML_SUCCESS                 if \a limit has been set
-         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
-         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid or \a counters is NULL
-         - \ref NVML_ERROR_NOT_SUPPORTED     if the device does not support this feature
-         - \ref NVML_ERROR_GPU_IS_LOST       if the target GPU has fallen off the bus or is otherwise inaccessible
-         - \ref NVML_ERROR_VERSION_MISMATCH  if the version of \a nvmlEccSramErrorStatus_t is invalid
-         - \ref NVML_ERROR_UNKNOWN           on any unexpected error*/
-    fn nvmlDeviceGetSramEccErrorStatus(
+        - \ref NVML_SUCCESS                         if the feature state was successfully set
+        - \ref NVML_ERROR_INVALID_ARGUMENT          if device is invalid or state is NULL
+        - \ref NVML_ERROR_NO_PERMISSION             if user does not have permission to change feature state
+        - \ref NVML_ERROR_NOT_SUPPORTED             if this feature is not supported by the device
+*/
+    fn nvmlDevicePowerSmoothingSetState(
         device: cuda_types::nvml::nvmlDevice_t,
-        status: *mut cuda_types::nvml::nvmlEccSramErrorStatus_t,
+        state: *mut cuda_types::nvml::nvmlPowerSmoothingState_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
 }

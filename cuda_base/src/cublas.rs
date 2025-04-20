@@ -6068,6 +6068,52 @@ extern "system" {
         group_size: *const cuda_types::cublas::i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
+    fn cublasGemmGroupedBatchedEx(
+        handle: cuda_types::cublas::cublasHandle_t,
+        transa_array: *const cuda_types::cublas::cublasOperation_t,
+        transb_array: *const cuda_types::cublas::cublasOperation_t,
+        m_array: *const ::core::ffi::c_int,
+        n_array: *const ::core::ffi::c_int,
+        k_array: *const ::core::ffi::c_int,
+        alpha_array: *const ::core::ffi::c_void,
+        Aarray: *const *const ::core::ffi::c_void,
+        Atype: cuda_types::cublas::cudaDataType_t,
+        lda_array: *const ::core::ffi::c_int,
+        Barray: *const *const ::core::ffi::c_void,
+        Btype: cuda_types::cublas::cudaDataType_t,
+        ldb_array: *const ::core::ffi::c_int,
+        beta_array: *const ::core::ffi::c_void,
+        Carray: *const *mut ::core::ffi::c_void,
+        Ctype: cuda_types::cublas::cudaDataType_t,
+        ldc_array: *const ::core::ffi::c_int,
+        group_count: ::core::ffi::c_int,
+        group_size: *const ::core::ffi::c_int,
+        computeType: cuda_types::cublas::cublasComputeType_t,
+    ) -> cuda_types::cublas::cublasStatus_t;
+    #[must_use]
+    fn cublasGemmGroupedBatchedEx_64(
+        handle: cuda_types::cublas::cublasHandle_t,
+        transa_array: *const cuda_types::cublas::cublasOperation_t,
+        transb_array: *const cuda_types::cublas::cublasOperation_t,
+        m_array: *const cuda_types::cublas::i64,
+        n_array: *const cuda_types::cublas::i64,
+        k_array: *const cuda_types::cublas::i64,
+        alpha_array: *const ::core::ffi::c_void,
+        Aarray: *const *const ::core::ffi::c_void,
+        Atype: cuda_types::cublas::cudaDataType_t,
+        lda_array: *const cuda_types::cublas::i64,
+        Barray: *const *const ::core::ffi::c_void,
+        Btype: cuda_types::cublas::cudaDataType_t,
+        ldb_array: *const cuda_types::cublas::i64,
+        beta_array: *const ::core::ffi::c_void,
+        Carray: *const *mut ::core::ffi::c_void,
+        Ctype: cuda_types::cublas::cudaDataType_t,
+        ldc_array: *const cuda_types::cublas::i64,
+        group_count: cuda_types::cublas::i64,
+        group_size: *const cuda_types::cublas::i64,
+        computeType: cuda_types::cublas::cublasComputeType_t,
+    ) -> cuda_types::cublas::cublasStatus_t;
+    #[must_use]
     fn cublasSgeam(
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,

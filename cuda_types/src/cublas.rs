@@ -2,10 +2,10 @@
 // DO NOT EDIT MANUALLY
 #![allow(warnings)]
 pub const CUBLAS_VER_MAJOR: u32 = 12;
-pub const CUBLAS_VER_MINOR: u32 = 4;
-pub const CUBLAS_VER_PATCH: u32 = 5;
-pub const CUBLAS_VER_BUILD: u32 = 8;
-pub const CUBLAS_VERSION: u32 = 120405;
+pub const CUBLAS_VER_MINOR: u32 = 8;
+pub const CUBLAS_VER_PATCH: u32 = 4;
+pub const CUBLAS_VER_BUILD: u32 = 1;
+pub const CUBLAS_VERSION: u32 = 120804;
 impl cublasStatus_t {
     pub const CUBLAS_STATUS_SUCCESS: cublasStatus_t = cublasStatus_t(0);
 }

@@ -12,34 +12,7 @@ pub const NVML_NVLINK_MAX_LINKS: u32 = 18;
 pub const NVML_MAX_PHYSICAL_BRIDGE: u32 = 128;
 pub const NVML_MAX_THERMAL_SENSORS_PER_GPU: u32 = 3;
 pub const NVML_MAX_GPU_PERF_PSTATES: u32 = 16;
-pub const NVML_GRID_LICENSE_EXPIRY_NOT_AVAILABLE: u32 = 0;
-pub const NVML_GRID_LICENSE_EXPIRY_INVALID: u32 = 1;
-pub const NVML_GRID_LICENSE_EXPIRY_VALID: u32 = 2;
-pub const NVML_GRID_LICENSE_EXPIRY_NOT_APPLICABLE: u32 = 3;
-pub const NVML_GRID_LICENSE_EXPIRY_PERMANENT: u32 = 4;
-pub const NVML_GRID_LICENSE_BUFFER_SIZE: u32 = 128;
-pub const NVML_VGPU_NAME_BUFFER_SIZE: u32 = 64;
-pub const NVML_GRID_LICENSE_FEATURE_MAX_COUNT: u32 = 3;
-pub const NVML_INVALID_VGPU_PLACEMENT_ID: u32 = 65535;
-pub const NVML_VGPU_VIRTUALIZATION_CAP_MIGRATION_NO: u32 = 0;
-pub const NVML_VGPU_VIRTUALIZATION_CAP_MIGRATION_YES: u32 = 1;
-pub const NVML_VGPU_PGPU_VIRTUALIZATION_CAP_MIGRATION_NO: u32 = 0;
-pub const NVML_VGPU_PGPU_VIRTUALIZATION_CAP_MIGRATION_YES: u32 = 1;
-pub const NVML_VGPU_SCHEDULER_POLICY_UNKNOWN: u32 = 0;
-pub const NVML_VGPU_SCHEDULER_POLICY_BEST_EFFORT: u32 = 1;
-pub const NVML_VGPU_SCHEDULER_POLICY_EQUAL_SHARE: u32 = 2;
-pub const NVML_VGPU_SCHEDULER_POLICY_FIXED_SHARE: u32 = 3;
-pub const NVML_SUPPORTED_VGPU_SCHEDULER_POLICY_COUNT: u32 = 3;
-pub const NVML_SCHEDULER_SW_MAX_LOG_ENTRIES: u32 = 200;
-pub const NVML_VGPU_SCHEDULER_ARR_DEFAULT: u32 = 0;
-pub const NVML_VGPU_SCHEDULER_ARR_DISABLE: u32 = 1;
-pub const NVML_VGPU_SCHEDULER_ARR_ENABLE: u32 = 2;
-pub const NVML_GRID_LICENSE_STATE_UNKNOWN: u32 = 0;
-pub const NVML_GRID_LICENSE_STATE_UNINITIALIZED: u32 = 1;
-pub const NVML_GRID_LICENSE_STATE_UNLICENSED_UNRESTRICTED: u32 = 2;
-pub const NVML_GRID_LICENSE_STATE_UNLICENSED_RESTRICTED: u32 = 3;
-pub const NVML_GRID_LICENSE_STATE_UNLICENSED: u32 = 4;
-pub const NVML_GRID_LICENSE_STATE_LICENSED: u32 = 5;
+pub const NVML_PERF_MODES_BUFFER_SIZE: u32 = 2048;
 pub const NVML_GSP_FIRMWARE_VERSION_BUF_SIZE: u32 = 64;
 pub const NVML_DEVICE_ARCH_KEPLER: u32 = 2;
 pub const NVML_DEVICE_ARCH_MAXWELL: u32 = 3;
@@ -49,6 +22,8 @@ pub const NVML_DEVICE_ARCH_TURING: u32 = 6;
 pub const NVML_DEVICE_ARCH_AMPERE: u32 = 7;
 pub const NVML_DEVICE_ARCH_ADA: u32 = 8;
 pub const NVML_DEVICE_ARCH_HOPPER: u32 = 9;
+pub const NVML_DEVICE_ARCH_BLACKWELL: u32 = 10;
+pub const NVML_DEVICE_ARCH_T23X: u32 = 11;
 pub const NVML_DEVICE_ARCH_UNKNOWN: u32 = 4294967295;
 pub const NVML_BUS_TYPE_UNKNOWN: u32 = 0;
 pub const NVML_BUS_TYPE_PCI: u32 = 1;
@@ -70,6 +45,47 @@ pub const NVML_PCIE_LINK_MAX_SPEED_64000MBPS: u32 = 6;
 pub const NVML_ADAPTIVE_CLOCKING_INFO_STATUS_DISABLED: u32 = 0;
 pub const NVML_ADAPTIVE_CLOCKING_INFO_STATUS_ENABLED: u32 = 1;
 pub const NVML_MAX_GPU_UTILIZATIONS: u32 = 8;
+pub const NVML_PCIE_ATOMICS_CAP_FETCHADD32: u32 = 1;
+pub const NVML_PCIE_ATOMICS_CAP_FETCHADD64: u32 = 2;
+pub const NVML_PCIE_ATOMICS_CAP_SWAP32: u32 = 4;
+pub const NVML_PCIE_ATOMICS_CAP_SWAP64: u32 = 8;
+pub const NVML_PCIE_ATOMICS_CAP_CAS32: u32 = 16;
+pub const NVML_PCIE_ATOMICS_CAP_CAS64: u32 = 32;
+pub const NVML_PCIE_ATOMICS_CAP_CAS128: u32 = 64;
+pub const NVML_PCIE_ATOMICS_OPS_MAX: u32 = 7;
+pub const NVML_POWER_SCOPE_GPU: u32 = 0;
+pub const NVML_POWER_SCOPE_MODULE: u32 = 1;
+pub const NVML_POWER_SCOPE_MEMORY: u32 = 2;
+pub const NVML_GRID_LICENSE_EXPIRY_NOT_AVAILABLE: u32 = 0;
+pub const NVML_GRID_LICENSE_EXPIRY_INVALID: u32 = 1;
+pub const NVML_GRID_LICENSE_EXPIRY_VALID: u32 = 2;
+pub const NVML_GRID_LICENSE_EXPIRY_NOT_APPLICABLE: u32 = 3;
+pub const NVML_GRID_LICENSE_EXPIRY_PERMANENT: u32 = 4;
+pub const NVML_GRID_LICENSE_BUFFER_SIZE: u32 = 128;
+pub const NVML_VGPU_NAME_BUFFER_SIZE: u32 = 64;
+pub const NVML_GRID_LICENSE_FEATURE_MAX_COUNT: u32 = 3;
+pub const NVML_INVALID_VGPU_PLACEMENT_ID: u32 = 65535;
+pub const NVML_VGPU_VIRTUALIZATION_CAP_MIGRATION_NO: u32 = 0;
+pub const NVML_VGPU_VIRTUALIZATION_CAP_MIGRATION_YES: u32 = 1;
+pub const NVML_VGPU_PGPU_VIRTUALIZATION_CAP_MIGRATION_NO: u32 = 0;
+pub const NVML_VGPU_PGPU_VIRTUALIZATION_CAP_MIGRATION_YES: u32 = 1;
+pub const NVML_VGPU_PGPU_HETEROGENEOUS_MODE: u32 = 0;
+pub const NVML_VGPU_PGPU_HOMOGENEOUS_MODE: u32 = 1;
+pub const NVML_VGPU_SCHEDULER_POLICY_UNKNOWN: u32 = 0;
+pub const NVML_VGPU_SCHEDULER_POLICY_BEST_EFFORT: u32 = 1;
+pub const NVML_VGPU_SCHEDULER_POLICY_EQUAL_SHARE: u32 = 2;
+pub const NVML_VGPU_SCHEDULER_POLICY_FIXED_SHARE: u32 = 3;
+pub const NVML_SUPPORTED_VGPU_SCHEDULER_POLICY_COUNT: u32 = 3;
+pub const NVML_SCHEDULER_SW_MAX_LOG_ENTRIES: u32 = 200;
+pub const NVML_VGPU_SCHEDULER_ARR_DEFAULT: u32 = 0;
+pub const NVML_VGPU_SCHEDULER_ARR_DISABLE: u32 = 1;
+pub const NVML_VGPU_SCHEDULER_ARR_ENABLE: u32 = 2;
+pub const NVML_GRID_LICENSE_STATE_UNKNOWN: u32 = 0;
+pub const NVML_GRID_LICENSE_STATE_UNINITIALIZED: u32 = 1;
+pub const NVML_GRID_LICENSE_STATE_UNLICENSED_UNRESTRICTED: u32 = 2;
+pub const NVML_GRID_LICENSE_STATE_UNLICENSED_RESTRICTED: u32 = 3;
+pub const NVML_GRID_LICENSE_STATE_UNLICENSED: u32 = 4;
+pub const NVML_GRID_LICENSE_STATE_LICENSED: u32 = 5;
 pub const NVML_FI_DEV_ECC_CURRENT: u32 = 1;
 pub const NVML_FI_DEV_ECC_PENDING: u32 = 2;
 pub const NVML_FI_DEV_ECC_SBE_VOL_TOTAL: u32 = 3;
@@ -266,8 +282,83 @@ pub const NVML_FI_DEV_TEMPERATURE_SHUTDOWN_TLIMIT: u32 = 193;
 pub const NVML_FI_DEV_TEMPERATURE_SLOWDOWN_TLIMIT: u32 = 194;
 pub const NVML_FI_DEV_TEMPERATURE_MEM_MAX_TLIMIT: u32 = 195;
 pub const NVML_FI_DEV_TEMPERATURE_GPU_MAX_TLIMIT: u32 = 196;
+pub const NVML_FI_DEV_PCIE_COUNT_TX_BYTES: u32 = 197;
+pub const NVML_FI_DEV_PCIE_COUNT_RX_BYTES: u32 = 198;
 pub const NVML_FI_DEV_IS_MIG_MODE_INDEPENDENT_MIG_QUERY_CAPABLE: u32 = 199;
-pub const NVML_FI_MAX: u32 = 200;
+pub const NVML_FI_DEV_NVLINK_GET_POWER_THRESHOLD_MAX: u32 = 200;
+pub const NVML_FI_DEV_NVLINK_COUNT_XMIT_PACKETS: u32 = 201;
+pub const NVML_FI_DEV_NVLINK_COUNT_XMIT_BYTES: u32 = 202;
+pub const NVML_FI_DEV_NVLINK_COUNT_RCV_PACKETS: u32 = 203;
+pub const NVML_FI_DEV_NVLINK_COUNT_RCV_BYTES: u32 = 204;
+pub const NVML_FI_DEV_NVLINK_COUNT_VL15_DROPPED: u32 = 205;
+pub const NVML_FI_DEV_NVLINK_COUNT_MALFORMED_PACKET_ERRORS: u32 = 206;
+pub const NVML_FI_DEV_NVLINK_COUNT_BUFFER_OVERRUN_ERRORS: u32 = 207;
+pub const NVML_FI_DEV_NVLINK_COUNT_RCV_ERRORS: u32 = 208;
+pub const NVML_FI_DEV_NVLINK_COUNT_RCV_REMOTE_ERRORS: u32 = 209;
+pub const NVML_FI_DEV_NVLINK_COUNT_RCV_GENERAL_ERRORS: u32 = 210;
+pub const NVML_FI_DEV_NVLINK_COUNT_LOCAL_LINK_INTEGRITY_ERRORS: u32 = 211;
+pub const NVML_FI_DEV_NVLINK_COUNT_XMIT_DISCARDS: u32 = 212;
+pub const NVML_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_SUCCESSFUL_EVENTS: u32 = 213;
+pub const NVML_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_FAILED_EVENTS: u32 = 214;
+pub const NVML_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_EVENTS: u32 = 215;
+pub const NVML_FI_DEV_NVLINK_COUNT_RAW_BER_LANE0: u32 = 216;
+pub const NVML_FI_DEV_NVLINK_COUNT_RAW_BER_LANE1: u32 = 217;
+pub const NVML_FI_DEV_NVLINK_COUNT_RAW_BER: u32 = 218;
+pub const NVML_FI_DEV_NVLINK_COUNT_EFFECTIVE_ERRORS: u32 = 219;
+pub const NVML_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER: u32 = 220;
+pub const NVML_FI_DEV_NVLINK_COUNT_SYMBOL_ERRORS: u32 = 221;
+pub const NVML_FI_DEV_NVLINK_COUNT_SYMBOL_BER: u32 = 222;
+pub const NVML_FI_DEV_NVLINK_GET_POWER_THRESHOLD_MIN: u32 = 223;
+pub const NVML_FI_DEV_NVLINK_GET_POWER_THRESHOLD_UNITS: u32 = 224;
+pub const NVML_FI_DEV_NVLINK_GET_POWER_THRESHOLD_SUPPORTED: u32 = 225;
+pub const NVML_FI_DEV_RESET_STATUS: u32 = 226;
+pub const NVML_FI_DEV_DRAIN_AND_RESET_STATUS: u32 = 227;
+pub const NVML_FI_DEV_PCIE_OUTBOUND_ATOMICS_MASK: u32 = 228;
+pub const NVML_FI_DEV_PCIE_INBOUND_ATOMICS_MASK: u32 = 229;
+pub const NVML_FI_DEV_GET_GPU_RECOVERY_ACTION: u32 = 230;
+pub const NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_0: u32 = 235;
+pub const NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_1: u32 = 236;
+pub const NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_2: u32 = 237;
+pub const NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_3: u32 = 238;
+pub const NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_4: u32 = 239;
+pub const NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_5: u32 = 240;
+pub const NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_6: u32 = 241;
+pub const NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_7: u32 = 242;
+pub const NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_8: u32 = 243;
+pub const NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_9: u32 = 244;
+pub const NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_10: u32 = 245;
+pub const NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_11: u32 = 246;
+pub const NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_12: u32 = 247;
+pub const NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_13: u32 = 248;
+pub const NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_14: u32 = 249;
+pub const NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_15: u32 = 250;
+pub const NVML_FI_PWR_SMOOTHING_ENABLED: u32 = 251;
+pub const NVML_FI_PWR_SMOOTHING_PRIV_LVL: u32 = 252;
+pub const NVML_FI_PWR_SMOOTHING_IMM_RAMP_DOWN_ENABLED: u32 = 253;
+pub const NVML_FI_PWR_SMOOTHING_APPLIED_TMP_CEIL: u32 = 254;
+pub const NVML_FI_PWR_SMOOTHING_APPLIED_TMP_FLOOR: u32 = 255;
+pub const NVML_FI_PWR_SMOOTHING_MAX_PERCENT_TMP_FLOOR_SETTING: u32 = 256;
+pub const NVML_FI_PWR_SMOOTHING_MIN_PERCENT_TMP_FLOOR_SETTING: u32 = 257;
+pub const NVML_FI_PWR_SMOOTHING_HW_CIRCUITRY_PERCENT_LIFETIME_REMAINING: u32 = 258;
+pub const NVML_FI_PWR_SMOOTHING_MAX_NUM_PRESET_PROFILES: u32 = 259;
+pub const NVML_FI_PWR_SMOOTHING_PROFILE_PERCENT_TMP_FLOOR: u32 = 260;
+pub const NVML_FI_PWR_SMOOTHING_PROFILE_RAMP_UP_RATE: u32 = 261;
+pub const NVML_FI_PWR_SMOOTHING_PROFILE_RAMP_DOWN_RATE: u32 = 262;
+pub const NVML_FI_PWR_SMOOTHING_PROFILE_RAMP_DOWN_HYST_VAL: u32 = 263;
+pub const NVML_FI_PWR_SMOOTHING_ACTIVE_PRESET_PROFILE: u32 = 264;
+pub const NVML_FI_PWR_SMOOTHING_ADMIN_OVERRIDE_PERCENT_TMP_FLOOR: u32 = 265;
+pub const NVML_FI_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_UP_RATE: u32 = 266;
+pub const NVML_FI_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_DOWN_RATE: u32 = 267;
+pub const NVML_FI_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_DOWN_HYST_VAL: u32 = 268;
+pub const NVML_FI_MAX: u32 = 269;
+pub const NVML_NVLINK_LOW_POWER_THRESHOLD_UNIT_100US: u32 = 0;
+pub const NVML_NVLINK_LOW_POWER_THRESHOLD_UNIT_50US: u32 = 1;
+pub const NVML_NVLINK_POWER_STATE_HIGH_SPEED: u32 = 0;
+pub const NVML_NVLINK_POWER_STATE_LOW: u32 = 1;
+pub const NVML_NVLINK_LOW_POWER_THRESHOLD_MIN: u32 = 1;
+pub const NVML_NVLINK_LOW_POWER_THRESHOLD_MAX: u32 = 8191;
+pub const NVML_NVLINK_LOW_POWER_THRESHOLD_RESET: u32 = 4294967295;
+pub const NVML_NVLINK_LOW_POWER_THRESHOLD_DEFAULT: u32 = 4294967295;
 pub const NVML_NVFBC_SESSION_FLAG_DIFFMAP_ENABLED: u32 = 1;
 pub const NVML_NVFBC_SESSION_FLAG_CLASSIFICATIONMAP_ENABLED: u32 = 2;
 pub const NVML_NVFBC_SESSION_FLAG_CAPTURE_WITH_WAIT_NO_WAIT: u32 = 4;
@@ -276,6 +367,8 @@ pub const NVML_NVFBC_SESSION_FLAG_CAPTURE_WITH_WAIT_TIMEOUT: u32 = 16;
 pub const NVML_CC_SYSTEM_CPU_CAPS_NONE: u32 = 0;
 pub const NVML_CC_SYSTEM_CPU_CAPS_AMD_SEV: u32 = 1;
 pub const NVML_CC_SYSTEM_CPU_CAPS_INTEL_TDX: u32 = 2;
+pub const NVML_CC_SYSTEM_CPU_CAPS_AMD_SEV_SNP: u32 = 3;
+pub const NVML_CC_SYSTEM_CPU_CAPS_AMD_SNP_VTOM: u32 = 4;
 pub const NVML_CC_SYSTEM_GPUS_CC_NOT_CAPABLE: u32 = 0;
 pub const NVML_CC_SYSTEM_GPUS_CC_CAPABLE: u32 = 1;
 pub const NVML_CC_SYSTEM_DEVTOOLS_MODE_OFF: u32 = 0;
@@ -297,7 +390,7 @@ pub const NVML_CC_GPU_CEC_ATTESTATION_REPORT_SIZE: u32 = 4096;
 pub const NVML_CC_CEC_ATTESTATION_REPORT_NOT_PRESENT: u32 = 0;
 pub const NVML_CC_CEC_ATTESTATION_REPORT_PRESENT: u32 = 1;
 pub const NVML_CC_KEY_ROTATION_THRESHOLD_ATTACKER_ADVANTAGE_MIN: u32 = 50;
-pub const NVML_CC_KEY_ROTATION_THRESHOLD_ATTACKER_ADVANTAGE_MAX: u32 = 75;
+pub const NVML_CC_KEY_ROTATION_THRESHOLD_ATTACKER_ADVANTAGE_MAX: u32 = 65;
 pub const NVML_GPU_FABRIC_UUID_LEN: u32 = 16;
 pub const NVML_GPU_FABRIC_STATE_NOT_SUPPORTED: u32 = 0;
 pub const NVML_GPU_FABRIC_STATE_NOT_STARTED: u32 = 1;
@@ -307,10 +400,22 @@ pub const NVML_GPU_FABRIC_HEALTH_MASK_DEGRADED_BW_NOT_SUPPORTED: u32 = 0;
 pub const NVML_GPU_FABRIC_HEALTH_MASK_DEGRADED_BW_TRUE: u32 = 1;
 pub const NVML_GPU_FABRIC_HEALTH_MASK_DEGRADED_BW_FALSE: u32 = 2;
 pub const NVML_GPU_FABRIC_HEALTH_MASK_SHIFT_DEGRADED_BW: u32 = 0;
-pub const NVML_GPU_FABRIC_HEALTH_MASK_WIDTH_DEGRADED_BW: u32 = 17;
-pub const NVML_POWER_SCOPE_GPU: u32 = 0;
-pub const NVML_POWER_SCOPE_MODULE: u32 = 1;
-pub const NVML_POWER_SCOPE_MEMORY: u32 = 2;
+pub const NVML_GPU_FABRIC_HEALTH_MASK_WIDTH_DEGRADED_BW: u32 = 3;
+pub const NVML_GPU_FABRIC_HEALTH_MASK_ROUTE_RECOVERY_NOT_SUPPORTED: u32 = 0;
+pub const NVML_GPU_FABRIC_HEALTH_MASK_ROUTE_RECOVERY_TRUE: u32 = 1;
+pub const NVML_GPU_FABRIC_HEALTH_MASK_ROUTE_RECOVERY_FALSE: u32 = 2;
+pub const NVML_GPU_FABRIC_HEALTH_MASK_SHIFT_ROUTE_RECOVERY: u32 = 2;
+pub const NVML_GPU_FABRIC_HEALTH_MASK_WIDTH_ROUTE_RECOVERY: u32 = 3;
+pub const NVML_GPU_FABRIC_HEALTH_MASK_ROUTE_UNHEALTHY_NOT_SUPPORTED: u32 = 0;
+pub const NVML_GPU_FABRIC_HEALTH_MASK_ROUTE_UNHEALTHY_TRUE: u32 = 1;
+pub const NVML_GPU_FABRIC_HEALTH_MASK_ROUTE_UNHEALTHY_FALSE: u32 = 2;
+pub const NVML_GPU_FABRIC_HEALTH_MASK_SHIFT_ROUTE_UNHEALTHY: u32 = 4;
+pub const NVML_GPU_FABRIC_HEALTH_MASK_WIDTH_ROUTE_UNHEALTHY: u32 = 3;
+pub const NVML_GPU_FABRIC_HEALTH_MASK_ACCESS_TIMEOUT_RECOVERY_NOT_SUPPORTED: u32 = 0;
+pub const NVML_GPU_FABRIC_HEALTH_MASK_ACCESS_TIMEOUT_RECOVERY_TRUE: u32 = 1;
+pub const NVML_GPU_FABRIC_HEALTH_MASK_ACCESS_TIMEOUT_RECOVERY_FALSE: u32 = 2;
+pub const NVML_GPU_FABRIC_HEALTH_MASK_SHIFT_ACCESS_TIMEOUT_RECOVERY: u32 = 6;
+pub const NVML_GPU_FABRIC_HEALTH_MASK_WIDTH_ACCESS_TIMEOUT_RECOVERY: u32 = 3;
 pub const NVML_INIT_FLAG_NO_GPUS: u32 = 1;
 pub const NVML_INIT_FLAG_NO_ATTACH: u32 = 2;
 pub const NVML_DEVICE_INFOROM_VERSION_BUFFER_SIZE: u32 = 16;
@@ -325,6 +430,14 @@ pub const NVML_DEVICE_SERIAL_BUFFER_SIZE: u32 = 30;
 pub const NVML_DEVICE_VBIOS_VERSION_BUFFER_SIZE: u32 = 32;
 pub const NVML_AFFINITY_SCOPE_NODE: u32 = 0;
 pub const NVML_AFFINITY_SCOPE_SOCKET: u32 = 1;
+pub const NVML_NVLINK_BER_MANTISSA_SHIFT: u32 = 8;
+pub const NVML_NVLINK_BER_MANTISSA_WIDTH: u32 = 15;
+pub const NVML_NVLINK_BER_EXP_SHIFT: u32 = 0;
+pub const NVML_NVLINK_BER_EXP_WIDTH: u32 = 255;
+pub const NVML_NVLINK_STATE_INACTIVE: u32 = 0;
+pub const NVML_NVLINK_STATE_ACTIVE: u32 = 1;
+pub const NVML_NVLINK_STATE_SLEEP: u32 = 2;
+pub const NVML_NVLINK_TOTAL_SUPPORTED_BW_MODES: u32 = 23;
 pub const NVML_DEVICE_MIG_DISABLE: u32 = 0;
 pub const NVML_DEVICE_MIG_ENABLE: u32 = 1;
 pub const NVML_GPU_INSTANCE_PROFILE_1_SLICE: u32 = 0;
@@ -337,8 +450,14 @@ pub const NVML_GPU_INSTANCE_PROFILE_6_SLICE: u32 = 6;
 pub const NVML_GPU_INSTANCE_PROFILE_1_SLICE_REV1: u32 = 7;
 pub const NVML_GPU_INSTANCE_PROFILE_2_SLICE_REV1: u32 = 8;
 pub const NVML_GPU_INSTANCE_PROFILE_1_SLICE_REV2: u32 = 9;
-pub const NVML_GPU_INSTANCE_PROFILE_COUNT: u32 = 10;
+pub const NVML_GPU_INSTANCE_PROFILE_1_SLICE_GFX: u32 = 10;
+pub const NVML_GPU_INSTANCE_PROFILE_2_SLICE_GFX: u32 = 11;
+pub const NVML_GPU_INSTANCE_PROFILE_4_SLICE_GFX: u32 = 12;
+pub const NVML_GPU_INSTANCE_PROFILE_COUNT: u32 = 13;
+pub const NVML_GPU_INSTANCE_PROFILE_CAPS_P2P: u32 = 1;
 pub const NVML_GPU_INTSTANCE_PROFILE_CAPS_P2P: u32 = 1;
+pub const NVML_GPU_INSTANCE_PROFILE_CAPS_GFX: u32 = 2;
+pub const NVML_COMPUTE_INSTANCE_PROFILE_CAPS_GFX: u32 = 1;
 pub const NVML_COMPUTE_INSTANCE_PROFILE_1_SLICE: u32 = 0;
 pub const NVML_COMPUTE_INSTANCE_PROFILE_2_SLICE: u32 = 1;
 pub const NVML_COMPUTE_INSTANCE_PROFILE_3_SLICE: u32 = 2;
@@ -352,11 +471,17 @@ pub const NVML_COMPUTE_INSTANCE_ENGINE_PROFILE_SHARED: u32 = 0;
 pub const NVML_COMPUTE_INSTANCE_ENGINE_PROFILE_COUNT: u32 = 1;
 pub const NVML_GPM_METRICS_GET_VERSION: u32 = 1;
 pub const NVML_GPM_SUPPORT_VERSION: u32 = 1;
-pub const NVML_NVLINK_POWER_STATE_HIGH_SPEED: u32 = 0;
-pub const NVML_NVLINK_POWER_STATE_LOW: u32 = 1;
-pub const NVML_NVLINK_LOW_POWER_THRESHOLD_MIN: u32 = 1;
-pub const NVML_NVLINK_LOW_POWER_THRESHOLD_MAX: u32 = 8191;
-pub const NVML_NVLINK_LOW_POWER_THRESHOLD_RESET: u32 = 4294967295;
+pub const NVML_DEV_CAP_EGM: u32 = 1;
+pub const NVML_255_MASK_BITS_PER_ELEM: u32 = 32;
+pub const NVML_255_MASK_NUM_ELEMS: u32 = 8;
+pub const NVML_WORKLOAD_POWER_MAX_PROFILES: u32 = 255;
+pub const NVML_POWER_SMOOTHING_MAX_NUM_PROFILES: u32 = 5;
+pub const NVML_POWER_SMOOTHING_NUM_PROFILE_PARAMS: u32 = 4;
+pub const NVML_POWER_SMOOTHING_ADMIN_OVERRIDE_NOT_SET: u32 = 4294967295;
+pub const NVML_POWER_SMOOTHING_PROFILE_PARAM_PERCENT_TMP_FLOOR: u32 = 0;
+pub const NVML_POWER_SMOOTHING_PROFILE_PARAM_RAMP_UP_RATE: u32 = 1;
+pub const NVML_POWER_SMOOTHING_PROFILE_PARAM_RAMP_DOWN_RATE: u32 = 2;
+pub const NVML_POWER_SMOOTHING_PROFILE_PARAM_RAMP_DOWN_HYSTERESIS: u32 = 3;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct nvmlDevice_st {
@@ -1054,7 +1179,10 @@ impl nvmlValueType_enum {
     pub const NVML_VALUE_TYPE_SIGNED_INT: nvmlValueType_enum = nvmlValueType_enum(5);
 }
 impl nvmlValueType_enum {
-    pub const NVML_VALUE_TYPE_COUNT: nvmlValueType_enum = nvmlValueType_enum(6);
+    pub const NVML_VALUE_TYPE_UNSIGNED_SHORT: nvmlValueType_enum = nvmlValueType_enum(6);
+}
+impl nvmlValueType_enum {
+    pub const NVML_VALUE_TYPE_COUNT: nvmlValueType_enum = nvmlValueType_enum(7);
 }
 #[repr(transparent)]
 /// Represents the type for sample value returned
@@ -1078,6 +1206,8 @@ pub union nvmlValue_st {
     pub ullVal: ::core::ffi::c_ulonglong,
     ///!< If the value is signed long long
     pub sllVal: ::core::ffi::c_longlong,
+    ///!< If the value is unsigned short
+    pub usVal: ::core::ffi::c_ushort,
 }
 /// Union to represent different types of Value
 pub type nvmlValue_t = nvmlValue_st;
@@ -1208,6 +1338,7 @@ impl nvmlThermalTarget_t {
     pub const NVML_THERMAL_TARGET_UNKNOWN: nvmlThermalTarget_t = nvmlThermalTarget_t(-1);
 }
 #[repr(transparent)]
+/// Represents the thermal sensor targets
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct nvmlThermalTarget_t(pub ::core::ffi::c_int);
 impl nvmlThermalController_t {
@@ -1306,8 +1437,10 @@ impl nvmlThermalController_t {
     );
 }
 #[repr(transparent)]
+/// Represents the thermal sensor controllers
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct nvmlThermalController_t(pub ::core::ffi::c_int);
+/// Struct to hold the thermal sensor settings
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct nvmlGpuThermalSettings_t {
@@ -1323,6 +1456,84 @@ pub struct nvmlGpuThermalSettings_t__bindgen_ty_1 {
     pub currentTemp: ::core::ffi::c_int,
     pub target: nvmlThermalTarget_t,
 }
+impl nvmlCoolerControl_enum {
+    ///!< This cooler has no control signal.
+    pub const NVML_THERMAL_COOLER_SIGNAL_NONE: nvmlCoolerControl_enum = nvmlCoolerControl_enum(
+        0,
+    );
+}
+impl nvmlCoolerControl_enum {
+    ///!< This cooler can only be toggled either ON or OFF (eg a switch).
+    pub const NVML_THERMAL_COOLER_SIGNAL_TOGGLE: nvmlCoolerControl_enum = nvmlCoolerControl_enum(
+        1,
+    );
+}
+impl nvmlCoolerControl_enum {
+    ///!< This cooler's level can be adjusted from some minimum to some maximum (eg a knob).
+    pub const NVML_THERMAL_COOLER_SIGNAL_VARIABLE: nvmlCoolerControl_enum = nvmlCoolerControl_enum(
+        2,
+    );
+}
+impl nvmlCoolerControl_enum {
+    pub const NVML_THERMAL_COOLER_SIGNAL_COUNT: nvmlCoolerControl_enum = nvmlCoolerControl_enum(
+        3,
+    );
+}
+#[repr(transparent)]
+/// Cooler control type
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlCoolerControl_enum(pub ::core::ffi::c_uint);
+/// Cooler control type
+pub use self::nvmlCoolerControl_enum as nvmlCoolerControl_t;
+impl nvmlCoolerTarget_enum {
+    ///!< This cooler cools nothing.
+    pub const NVML_THERMAL_COOLER_TARGET_NONE: nvmlCoolerTarget_enum = nvmlCoolerTarget_enum(
+        1,
+    );
+}
+impl nvmlCoolerTarget_enum {
+    ///!< This cooler can cool the GPU.
+    pub const NVML_THERMAL_COOLER_TARGET_GPU: nvmlCoolerTarget_enum = nvmlCoolerTarget_enum(
+        2,
+    );
+}
+impl nvmlCoolerTarget_enum {
+    ///!< This cooler can cool the memory.
+    pub const NVML_THERMAL_COOLER_TARGET_MEMORY: nvmlCoolerTarget_enum = nvmlCoolerTarget_enum(
+        4,
+    );
+}
+impl nvmlCoolerTarget_enum {
+    ///!< This cooler can cool the power supply.
+    pub const NVML_THERMAL_COOLER_TARGET_POWER_SUPPLY: nvmlCoolerTarget_enum = nvmlCoolerTarget_enum(
+        8,
+    );
+}
+impl nvmlCoolerTarget_enum {
+    ///!< This cooler cools all of the components related to its target gpu. GPU_RELATED = GPU | MEMORY | POWER_SUPPLY
+    pub const NVML_THERMAL_COOLER_TARGET_GPU_RELATED: nvmlCoolerTarget_enum = nvmlCoolerTarget_enum(
+        14,
+    );
+}
+#[repr(transparent)]
+/// Cooler's target
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlCoolerTarget_enum(pub ::core::ffi::c_uint);
+/// Cooler's target
+pub use self::nvmlCoolerTarget_enum as nvmlCoolerTarget_t;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlCoolerInfo_v1_t {
+    ///!< the API version number
+    pub version: ::core::ffi::c_uint,
+    ///!< the cooler index
+    pub index: ::core::ffi::c_uint,
+    ///!< OUT: the cooler's control signal characteristics
+    pub signalType: nvmlCoolerControl_t,
+    ///!< OUT: the target that cooler cools
+    pub target: nvmlCoolerTarget_t,
+}
+pub type nvmlCoolerInfo_t = nvmlCoolerInfo_v1_t;
 impl nvmlEnableState_enum {
     ///!< Feature disabled
     pub const NVML_FEATURE_DISABLED: nvmlEnableState_enum = nvmlEnableState_enum(0);
@@ -1337,6 +1548,17 @@ impl nvmlEnableState_enum {
 pub struct nvmlEnableState_enum(pub ::core::ffi::c_uint);
 /// Generic enable/disable enum.
 pub use self::nvmlEnableState_enum as nvmlEnableState_t;
+/// DRAM Encryption Info
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlDramEncryptionInfo_v1_t {
+    ///!< IN - the API version number
+    pub version: ::core::ffi::c_uint,
+    ///!< IN/OUT - DRAM Encryption state
+    pub encryptionState: nvmlEnableState_t,
+}
+/// DRAM Encryption Info
+pub type nvmlDramEncryptionInfo_t = nvmlDramEncryptionInfo_v1_t;
 impl nvmlBrandType_enum {
     pub const NVML_BRAND_UNKNOWN: nvmlBrandType_enum = nvmlBrandType_enum(0);
 }
@@ -1438,8 +1660,13 @@ impl nvmlTemperatureThresholds_enum {
     );
 }
 impl nvmlTemperatureThresholds_enum {
-    pub const NVML_TEMPERATURE_THRESHOLD_COUNT: nvmlTemperatureThresholds_enum = nvmlTemperatureThresholds_enum(
+    pub const NVML_TEMPERATURE_THRESHOLD_GPS_CURR: nvmlTemperatureThresholds_enum = nvmlTemperatureThresholds_enum(
         7,
+    );
+}
+impl nvmlTemperatureThresholds_enum {
+    pub const NVML_TEMPERATURE_THRESHOLD_COUNT: nvmlTemperatureThresholds_enum = nvmlTemperatureThresholds_enum(
+        8,
     );
 }
 #[repr(transparent)]
@@ -1465,6 +1692,17 @@ impl nvmlTemperatureSensors_enum {
 pub struct nvmlTemperatureSensors_enum(pub ::core::ffi::c_uint);
 /// Temperature sensors.
 pub use self::nvmlTemperatureSensors_enum as nvmlTemperatureSensors_t;
+/// Margin temperature values
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlMarginTemperature_v1_t {
+    ///!< The version number of this struct
+    pub version: ::core::ffi::c_uint,
+    ///!< The margin temperature value
+    pub marginTemperature: ::core::ffi::c_int,
+}
+/// Margin temperature values
+pub type nvmlMarginTemperature_t = nvmlMarginTemperature_v1_t;
 impl nvmlComputeMode_enum {
     ///!< Default compute mode -- multiple contexts per device
     pub const NVML_COMPUTEMODE_DEFAULT: nvmlComputeMode_enum = nvmlComputeMode_enum(0);
@@ -1558,6 +1796,52 @@ impl nvmlMemoryErrorType_enum {
 pub struct nvmlMemoryErrorType_enum(pub ::core::ffi::c_uint);
 /// Memory error types
 pub use self::nvmlMemoryErrorType_enum as nvmlMemoryErrorType_t;
+impl nvmlNvlinkVersion_enum {
+    pub const NVML_NVLINK_VERSION_INVALID: nvmlNvlinkVersion_enum = nvmlNvlinkVersion_enum(
+        0,
+    );
+}
+impl nvmlNvlinkVersion_enum {
+    pub const NVML_NVLINK_VERSION_1_0: nvmlNvlinkVersion_enum = nvmlNvlinkVersion_enum(
+        1,
+    );
+}
+impl nvmlNvlinkVersion_enum {
+    pub const NVML_NVLINK_VERSION_2_0: nvmlNvlinkVersion_enum = nvmlNvlinkVersion_enum(
+        2,
+    );
+}
+impl nvmlNvlinkVersion_enum {
+    pub const NVML_NVLINK_VERSION_2_2: nvmlNvlinkVersion_enum = nvmlNvlinkVersion_enum(
+        3,
+    );
+}
+impl nvmlNvlinkVersion_enum {
+    pub const NVML_NVLINK_VERSION_3_0: nvmlNvlinkVersion_enum = nvmlNvlinkVersion_enum(
+        4,
+    );
+}
+impl nvmlNvlinkVersion_enum {
+    pub const NVML_NVLINK_VERSION_3_1: nvmlNvlinkVersion_enum = nvmlNvlinkVersion_enum(
+        5,
+    );
+}
+impl nvmlNvlinkVersion_enum {
+    pub const NVML_NVLINK_VERSION_4_0: nvmlNvlinkVersion_enum = nvmlNvlinkVersion_enum(
+        6,
+    );
+}
+impl nvmlNvlinkVersion_enum {
+    pub const NVML_NVLINK_VERSION_5_0: nvmlNvlinkVersion_enum = nvmlNvlinkVersion_enum(
+        7,
+    );
+}
+#[repr(transparent)]
+/// Represents Nvlink Version
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlNvlinkVersion_enum(pub ::core::ffi::c_uint);
+/// Represents Nvlink Version
+pub use self::nvmlNvlinkVersion_enum as nvmlNvlinkVersion_t;
 impl nvmlEccCounterType_enum {
     ///!< Volatile counts are reset each time the driver loads.
     pub const NVML_VOLATILE_ECC: nvmlEccCounterType_enum = nvmlEccCounterType_enum(0);
@@ -1651,8 +1935,12 @@ impl nvmlDriverModel_enum {
     pub const NVML_DRIVER_WDDM: nvmlDriverModel_enum = nvmlDriverModel_enum(0);
 }
 impl nvmlDriverModel_enum {
-    ///!< WDM (TCC) model (recommended) -- GPU treated as a generic device
+    ///!< WDM (TCC) model (deprecated) -- GPU treated as a generic compute device
     pub const NVML_DRIVER_WDM: nvmlDriverModel_enum = nvmlDriverModel_enum(1);
+}
+impl nvmlDriverModel_enum {
+    ///!< MCDM driver model -- GPU treated as a Microsoft compute device
+    pub const NVML_DRIVER_MCDM: nvmlDriverModel_enum = nvmlDriverModel_enum(2);
 }
 #[repr(transparent)]
 /** Driver models.
@@ -1738,6 +2026,55 @@ impl nvmlPStates_enum {
 pub struct nvmlPStates_enum(pub ::core::ffi::c_uint);
 /// Allowed PStates.
 pub use self::nvmlPStates_enum as nvmlPstates_t;
+/// Clock offset info.
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlClockOffset_v1_t {
+    ///!< The version number of this struct
+    pub version: ::core::ffi::c_uint,
+    pub type_: nvmlClockType_t,
+    pub pstate: nvmlPstates_t,
+    pub clockOffsetMHz: ::core::ffi::c_int,
+    pub minClockOffsetMHz: ::core::ffi::c_int,
+    pub maxClockOffsetMHz: ::core::ffi::c_int,
+}
+/// Clock offset info.
+pub type nvmlClockOffset_t = nvmlClockOffset_v1_t;
+/// Fan speed info.
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlFanSpeedInfo_v1_t {
+    ///!< the API version number
+    pub version: ::core::ffi::c_uint,
+    ///!< the fan index
+    pub fan: ::core::ffi::c_uint,
+    ///!< OUT: the fan speed in RPM
+    pub speed: ::core::ffi::c_uint,
+}
+/// Fan speed info.
+pub type nvmlFanSpeedInfo_t = nvmlFanSpeedInfo_v1_t;
+/// Device performance modes string
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlDevicePerfModes_v1_t {
+    ///!< the API version number
+    pub version: ::core::ffi::c_uint,
+    ///!< OUT: the performance modes string.
+    pub str_: [::core::ffi::c_char; 2048usize],
+}
+/// Device performance modes string
+pub type nvmlDevicePerfModes_t = nvmlDevicePerfModes_v1_t;
+/// Device current clocks string
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlDeviceCurrentClockFreqs_v1_t {
+    ///!< the API version number
+    pub version: ::core::ffi::c_uint,
+    ///!< OUT: the current clock frequency string.
+    pub str_: [::core::ffi::c_char; 2048usize],
+}
+/// Device current clocks string
+pub type nvmlDeviceCurrentClockFreqs_t = nvmlDeviceCurrentClockFreqs_v1_t;
 impl nvmlGom_enum {
     ///!< Everything is enabled and running at full speed
     pub const NVML_GOM_ALL_ON: nvmlGom_enum = nvmlGom_enum(0);
@@ -1779,8 +2116,12 @@ impl nvmlInforomObject_enum {
     pub const NVML_INFOROM_POWER: nvmlInforomObject_enum = nvmlInforomObject_enum(2);
 }
 impl nvmlInforomObject_enum {
+    ///!< DRAM Encryption object
+    pub const NVML_INFOROM_DEN: nvmlInforomObject_enum = nvmlInforomObject_enum(3);
+}
+impl nvmlInforomObject_enum {
     ///!< This counts the number of infoROM objects the driver knows about
-    pub const NVML_INFOROM_COUNT: nvmlInforomObject_enum = nvmlInforomObject_enum(3);
+    pub const NVML_INFOROM_COUNT: nvmlInforomObject_enum = nvmlInforomObject_enum(4);
 }
 #[repr(transparent)]
 /// Available infoROM objects.
@@ -1904,6 +2245,203 @@ impl nvmlRestrictedAPI_enum {
 pub struct nvmlRestrictedAPI_enum(pub ::core::ffi::c_uint);
 /// API types that allow changes to default permission restrictions
 pub use self::nvmlRestrictedAPI_enum as nvmlRestrictedAPI_t;
+/// Structure to store utilization value and process Id
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlProcessUtilizationSample_st {
+    ///!< PID of process
+    pub pid: ::core::ffi::c_uint,
+    ///!< CPU Timestamp in microseconds
+    pub timeStamp: ::core::ffi::c_ulonglong,
+    ///!< SM (3D/Compute) Util Value
+    pub smUtil: ::core::ffi::c_uint,
+    ///!< Frame Buffer Memory Util Value
+    pub memUtil: ::core::ffi::c_uint,
+    ///!< Encoder Util Value
+    pub encUtil: ::core::ffi::c_uint,
+    ///!< Decoder Util Value
+    pub decUtil: ::core::ffi::c_uint,
+}
+/// Structure to store utilization value and process Id
+pub type nvmlProcessUtilizationSample_t = nvmlProcessUtilizationSample_st;
+/// Structure to store utilization value and process Id -- version 1
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlProcessUtilizationInfo_v1_t {
+    ///!< CPU Timestamp in microseconds
+    pub timeStamp: ::core::ffi::c_ulonglong,
+    ///!< PID of process
+    pub pid: ::core::ffi::c_uint,
+    ///!< SM (3D/Compute) Util Value
+    pub smUtil: ::core::ffi::c_uint,
+    ///!< Frame Buffer Memory Util Value
+    pub memUtil: ::core::ffi::c_uint,
+    ///!< Encoder Util Value
+    pub encUtil: ::core::ffi::c_uint,
+    ///!< Decoder Util Value
+    pub decUtil: ::core::ffi::c_uint,
+    ///!< Jpeg Util Value
+    pub jpgUtil: ::core::ffi::c_uint,
+    ///!< Ofa Util Value
+    pub ofaUtil: ::core::ffi::c_uint,
+}
+/// Structure to store utilization and process ID for each running process -- version 1
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlProcessesUtilizationInfo_v1_t {
+    ///!< The version number of this struct
+    pub version: ::core::ffi::c_uint,
+    ///!< Caller-supplied array size, and returns number of processes running
+    pub processSamplesCount: ::core::ffi::c_uint,
+    ///!< Return only samples with timestamp greater than lastSeenTimeStamp
+    pub lastSeenTimeStamp: ::core::ffi::c_ulonglong,
+    ///!< The array (allocated by caller) of the utilization of GPU SM, framebuffer, video encoder, video decoder, JPEG, and OFA
+    pub procUtilArray: *mut nvmlProcessUtilizationInfo_v1_t,
+}
+/// Structure to store utilization and process ID for each running process -- version 1
+pub type nvmlProcessesUtilizationInfo_t = nvmlProcessesUtilizationInfo_v1_t;
+/// Structure to store SRAM uncorrectable error counters
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlEccSramErrorStatus_v1_t {
+    ///!< the API version number
+    pub version: ::core::ffi::c_uint,
+    ///!< aggregate uncorrectable parity error count
+    pub aggregateUncParity: ::core::ffi::c_ulonglong,
+    ///!< aggregate uncorrectable SEC-DED error count
+    pub aggregateUncSecDed: ::core::ffi::c_ulonglong,
+    ///!< aggregate correctable error count
+    pub aggregateCor: ::core::ffi::c_ulonglong,
+    ///!< volatile uncorrectable parity error count
+    pub volatileUncParity: ::core::ffi::c_ulonglong,
+    ///!< volatile uncorrectable SEC-DED error count
+    pub volatileUncSecDed: ::core::ffi::c_ulonglong,
+    ///!< volatile correctable error count
+    pub volatileCor: ::core::ffi::c_ulonglong,
+    ///!< aggregate uncorrectable error count for L2 cache bucket
+    pub aggregateUncBucketL2: ::core::ffi::c_ulonglong,
+    ///!< aggregate uncorrectable error count for SM bucket
+    pub aggregateUncBucketSm: ::core::ffi::c_ulonglong,
+    ///!< aggregate uncorrectable error count for PCIE bucket
+    pub aggregateUncBucketPcie: ::core::ffi::c_ulonglong,
+    ///!< aggregate uncorrectable error count for Microcontroller bucket
+    pub aggregateUncBucketMcu: ::core::ffi::c_ulonglong,
+    ///!< aggregate uncorrectable error count for Other bucket
+    pub aggregateUncBucketOther: ::core::ffi::c_ulonglong,
+    ///!< if the error threshold of field diag is exceeded
+    pub bThresholdExceeded: ::core::ffi::c_uint,
+}
+/// Structure to store SRAM uncorrectable error counters
+pub type nvmlEccSramErrorStatus_t = nvmlEccSramErrorStatus_v1_t;
+/** Structure to store platform information
+
+ @deprecated  The nvmlPlatformInfo_v1_t will be deprecated in the subsequent releases.
+              Use nvmlPlatformInfo_v2_t*/
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlPlatformInfo_v1_t {
+    ///!< the API version number
+    pub version: ::core::ffi::c_uint,
+    ///!< Infiniband GUID reported by platform (for Blackwell, ibGuid is 8 bytes so indices 8-15 are zero)
+    pub ibGuid: [::core::ffi::c_uchar; 16usize],
+    ///!< GUID of the rack containing this GPU (for Blackwell rackGuid is 13 bytes so indices 13-15 are zero)
+    pub rackGuid: [::core::ffi::c_uchar; 16usize],
+    ///!< The slot number in the rack containing this GPU (includes switches)
+    pub chassisPhysicalSlotNumber: ::core::ffi::c_uchar,
+    ///!< The index within the compute slots in the rack containing this GPU (does not include switches)
+    pub computeSlotIndex: ::core::ffi::c_uchar,
+    ///!< Index of the node within the slot containing this GPU
+    pub nodeIndex: ::core::ffi::c_uchar,
+    ///!< Platform indicated NVLink-peer type (e.g. switch present or not)
+    pub peerType: ::core::ffi::c_uchar,
+    ///!< ID of this GPU within the node
+    pub moduleId: ::core::ffi::c_uchar,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlPlatformInfo_v2_t {
+    ///!< the API version number
+    pub version: ::core::ffi::c_uint,
+    ///!< Infiniband GUID reported by platform (for Blackwell, ibGuid is 8 bytes so indices 8-15 are zero)
+    pub ibGuid: [::core::ffi::c_uchar; 16usize],
+    ///!< Serial number of the chassis containing this GPU (for Blackwell it is 13 bytes so indices 13-15 are zero)
+    pub chassisSerialNumber: [::core::ffi::c_uchar; 16usize],
+    ///!< The slot number in the chassis containing this GPU (includes switches)
+    pub slotNumber: ::core::ffi::c_uchar,
+    ///!< The tray index within the compute slots in the chassis containing this GPU (does not include switches)
+    pub trayIndex: ::core::ffi::c_uchar,
+    ///!< Index of the node within the slot containing this GPU
+    pub hostId: ::core::ffi::c_uchar,
+    ///!< Platform indicated NVLink-peer type (e.g. switch present or not)
+    pub peerType: ::core::ffi::c_uchar,
+    ///!< ID of this GPU within the node
+    pub moduleId: ::core::ffi::c_uchar,
+}
+pub type nvmlPlatformInfo_t = nvmlPlatformInfo_v2_t;
+pub type nvmlDeviceArchitecture_t = ::core::ffi::c_uint;
+pub type nvmlBusType_t = ::core::ffi::c_uint;
+pub type nvmlFanControlPolicy_t = ::core::ffi::c_uint;
+pub type nvmlPowerSource_t = ::core::ffi::c_uint;
+impl nvmlGpuUtilizationDomainId_t {
+    ///!< Graphics engine domain
+    pub const NVML_GPU_UTILIZATION_DOMAIN_GPU: nvmlGpuUtilizationDomainId_t = nvmlGpuUtilizationDomainId_t(
+        0,
+    );
+}
+impl nvmlGpuUtilizationDomainId_t {
+    ///!< Frame buffer domain
+    pub const NVML_GPU_UTILIZATION_DOMAIN_FB: nvmlGpuUtilizationDomainId_t = nvmlGpuUtilizationDomainId_t(
+        1,
+    );
+}
+impl nvmlGpuUtilizationDomainId_t {
+    ///!< Video engine domain
+    pub const NVML_GPU_UTILIZATION_DOMAIN_VID: nvmlGpuUtilizationDomainId_t = nvmlGpuUtilizationDomainId_t(
+        2,
+    );
+}
+impl nvmlGpuUtilizationDomainId_t {
+    ///!< Bus interface domain
+    pub const NVML_GPU_UTILIZATION_DOMAIN_BUS: nvmlGpuUtilizationDomainId_t = nvmlGpuUtilizationDomainId_t(
+        3,
+    );
+}
+#[repr(transparent)]
+/// Represents the GPU utilization domains
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlGpuUtilizationDomainId_t(pub ::core::ffi::c_uint);
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlGpuDynamicPstatesInfo_st {
+    ///!< Reserved for future use
+    pub flags: ::core::ffi::c_uint,
+    pub utilization: [nvmlGpuDynamicPstatesInfo_st__bindgen_ty_1; 8usize],
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlGpuDynamicPstatesInfo_st__bindgen_ty_1 {
+    ///!< Set if this utilization domain is present on this GPU
+    pub bIsPresent: ::core::ffi::c_uint,
+    ///!< Percentage of time where the domain is considered busy in the last 1-second interval
+    pub percentage: ::core::ffi::c_uint,
+    ///!< Utilization threshold that can trigger a perf-increasing P-State change when crossed
+    pub incThreshold: ::core::ffi::c_uint,
+    ///!< Utilization threshold that can trigger a perf-decreasing P-State change when crossed
+    pub decThreshold: ::core::ffi::c_uint,
+}
+pub type nvmlGpuDynamicPstatesInfo_t = nvmlGpuDynamicPstatesInfo_st;
+pub type nvmlPowerScopeType_t = ::core::ffi::c_uchar;
+/// Contains the power management limit
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlPowerValue_v2_t {
+    ///!< Structure format version (must be 1)
+    pub version: ::core::ffi::c_uint,
+    ///!< [in]  Device type: GPU or Total Module
+    pub powerScope: nvmlPowerScopeType_t,
+    ///!< [out] Power value to retrieve or set in milliwatts
+    pub powerValueMw: ::core::ffi::c_uint,
+}
 impl nvmlGpuVirtualizationMode {
     ///!< Represents Bare Metal GPU
     pub const NVML_GPU_VIRTUALIZATION_MODE_NONE: nvmlGpuVirtualizationMode = nvmlGpuVirtualizationMode(
@@ -2076,8 +2614,14 @@ impl nvmlVgpuDriverCapability_enum {
     );
 }
 impl nvmlVgpuDriverCapability_enum {
-    pub const NVML_VGPU_DRIVER_CAP_COUNT: nvmlVgpuDriverCapability_enum = nvmlVgpuDriverCapability_enum(
+    ///!< Supports FSR and warm update of vGPU host driver without terminating the running guest VM
+    pub const NVML_VGPU_DRIVER_CAP_WARM_UPDATE: nvmlVgpuDriverCapability_enum = nvmlVgpuDriverCapability_enum(
         1,
+    );
+}
+impl nvmlVgpuDriverCapability_enum {
+    pub const NVML_VGPU_DRIVER_CAP_COUNT: nvmlVgpuDriverCapability_enum = nvmlVgpuDriverCapability_enum(
+        2,
     );
 }
 #[repr(transparent)]
@@ -2087,19 +2631,19 @@ pub struct nvmlVgpuDriverCapability_enum(pub ::core::ffi::c_uint);
 /// vGPU driver queryable capabilities
 pub use self::nvmlVgpuDriverCapability_enum as nvmlVgpuDriverCapability_t;
 impl nvmlDeviceVgpuCapability_enum {
-    ///!< Query if the fractional vGPU profiles on this GPU can be used in multi-vGPU configurations
+    ///!< Query whether the fractional vGPU profiles on this GPU can be used in multi-vGPU configurations
     pub const NVML_DEVICE_VGPU_CAP_FRACTIONAL_MULTI_VGPU: nvmlDeviceVgpuCapability_enum = nvmlDeviceVgpuCapability_enum(
         0,
     );
 }
 impl nvmlDeviceVgpuCapability_enum {
-    ///!< Query if the GPU support concurrent execution of timesliced vGPU profiles of differing types
+    ///!< Query whether the GPU support concurrent execution of timesliced vGPU profiles of differing types
     pub const NVML_DEVICE_VGPU_CAP_HETEROGENEOUS_TIMESLICE_PROFILES: nvmlDeviceVgpuCapability_enum = nvmlDeviceVgpuCapability_enum(
         1,
     );
 }
 impl nvmlDeviceVgpuCapability_enum {
-    ///!< Query if the GPU support concurrent execution of timesliced vGPU profiles of differing framebuffer sizes
+    ///!< Query whether the GPU support concurrent execution of timesliced vGPU profiles of differing framebuffer sizes
     pub const NVML_DEVICE_VGPU_CAP_HETEROGENEOUS_TIMESLICE_SIZES: nvmlDeviceVgpuCapability_enum = nvmlDeviceVgpuCapability_enum(
         2,
     );
@@ -2117,7 +2661,7 @@ impl nvmlDeviceVgpuCapability_enum {
     );
 }
 impl nvmlDeviceVgpuCapability_enum {
-    ///!< Query if vGPU profiles on the GPU supports migration data streaming
+    ///!< Query whether the vGPU profiles on the GPU supports migration data streaming
     pub const NVML_DEVICE_VGPU_CAP_DEVICE_STREAMING: nvmlDeviceVgpuCapability_enum = nvmlDeviceVgpuCapability_enum(
         5,
     );
@@ -2135,8 +2679,20 @@ impl nvmlDeviceVgpuCapability_enum {
     );
 }
 impl nvmlDeviceVgpuCapability_enum {
-    pub const NVML_DEVICE_VGPU_CAP_COUNT: nvmlDeviceVgpuCapability_enum = nvmlDeviceVgpuCapability_enum(
+    ///!< Query whether the GPU supports FSR and warm update
+    pub const NVML_DEVICE_VGPU_CAP_WARM_UPDATE: nvmlDeviceVgpuCapability_enum = nvmlDeviceVgpuCapability_enum(
         8,
+    );
+}
+impl nvmlDeviceVgpuCapability_enum {
+    ///!< Query whether the GPU supports reporting of placements of timesliced vGPU profiles with identical framebuffer sizes
+    pub const NVML_DEVICE_VGPU_CAP_HOMOGENEOUS_PLACEMENTS: nvmlDeviceVgpuCapability_enum = nvmlDeviceVgpuCapability_enum(
+        9,
+    );
+}
+impl nvmlDeviceVgpuCapability_enum {
+    pub const NVML_DEVICE_VGPU_CAP_COUNT: nvmlDeviceVgpuCapability_enum = nvmlDeviceVgpuCapability_enum(
+        10,
     );
 }
 #[repr(transparent)]
@@ -2183,8 +2739,34 @@ pub struct nvmlVgpuPlacementList_v1_t {
     ///!< Placement IDs for the vGPU type
     pub placementIds: *mut ::core::ffi::c_uint,
 }
-/// Structure to store the list of vGPU placements -- version 1
-pub type nvmlVgpuPlacementList_t = nvmlVgpuPlacementList_v1_t;
+/// Structure to store the list of vGPU placements -- version 2
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlVgpuPlacementList_v2_t {
+    ///!< IN: The version number of this struct
+    pub version: ::core::ffi::c_uint,
+    ///!< OUT: The number of slots occupied by the vGPU type
+    pub placementSize: ::core::ffi::c_uint,
+    ///!< IN/OUT: Count of the placement IDs
+    pub count: ::core::ffi::c_uint,
+    ///!< IN/OUT: Placement IDs for the vGPU type
+    pub placementIds: *mut ::core::ffi::c_uint,
+    ///!< IN: The vGPU mode. Either NVML_VGPU_PGPU_HETEROGENEOUS_MODE or NVML_VGPU_PGPU_HOMOGENEOUS_MODE
+    pub mode: ::core::ffi::c_uint,
+}
+/// Structure to store the list of vGPU placements -- version 2
+pub type nvmlVgpuPlacementList_t = nvmlVgpuPlacementList_v2_t;
+/// Structure to store BAR1 size information of vGPU type -- Version 1
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlVgpuTypeBar1Info_v1_t {
+    ///!< The version number of this struct
+    pub version: ::core::ffi::c_uint,
+    ///!< BAR1 size in megabytes
+    pub bar1Size: ::core::ffi::c_ulonglong,
+}
+/// Structure to store BAR1 size information of vGPU type -- Version 1
+pub type nvmlVgpuTypeBar1Info_t = nvmlVgpuTypeBar1Info_v1_t;
 /// Structure to store Utilization Value and vgpuInstance
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -2305,6 +2887,17 @@ pub struct nvmlVgpuProcessesUtilizationInfo_v1_t {
 }
 /// Structure to store recent utilization, vgpuInstance and subprocess information for processes running on vGPU instances active on a device -- version 1
 pub type nvmlVgpuProcessesUtilizationInfo_t = nvmlVgpuProcessesUtilizationInfo_v1_t;
+/// Structure to store the information of vGPU runtime state -- version 1
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlVgpuRuntimeState_v1_t {
+    ///!< IN:  The version number of this struct
+    pub version: ::core::ffi::c_uint,
+    ///!< OUT: The runtime state size of the vGPU instance
+    pub size: ::core::ffi::c_ulonglong,
+}
+/// Structure to store the information of vGPU runtime state -- version 1
+pub type nvmlVgpuRuntimeState_t = nvmlVgpuRuntimeState_v1_t;
 /// Union to represent the vGPU Scheduler Parameters
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -2462,61 +3055,6 @@ pub struct nvmlVgpuLicenseInfo_st {
     pub currentState: ::core::ffi::c_uint,
 }
 pub type nvmlVgpuLicenseInfo_t = nvmlVgpuLicenseInfo_st;
-/// Structure to store utilization value and process Id
-#[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct nvmlProcessUtilizationSample_st {
-    ///!< PID of process
-    pub pid: ::core::ffi::c_uint,
-    ///!< CPU Timestamp in microseconds
-    pub timeStamp: ::core::ffi::c_ulonglong,
-    ///!< SM (3D/Compute) Util Value
-    pub smUtil: ::core::ffi::c_uint,
-    ///!< Frame Buffer Memory Util Value
-    pub memUtil: ::core::ffi::c_uint,
-    ///!< Encoder Util Value
-    pub encUtil: ::core::ffi::c_uint,
-    ///!< Decoder Util Value
-    pub decUtil: ::core::ffi::c_uint,
-}
-/// Structure to store utilization value and process Id
-pub type nvmlProcessUtilizationSample_t = nvmlProcessUtilizationSample_st;
-/// Structure to store utilization value and process Id -- version 1
-#[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct nvmlProcessUtilizationInfo_v1_t {
-    ///!< CPU Timestamp in microseconds
-    pub timeStamp: ::core::ffi::c_ulonglong,
-    ///!< PID of process
-    pub pid: ::core::ffi::c_uint,
-    ///!< SM (3D/Compute) Util Value
-    pub smUtil: ::core::ffi::c_uint,
-    ///!< Frame Buffer Memory Util Value
-    pub memUtil: ::core::ffi::c_uint,
-    ///!< Encoder Util Value
-    pub encUtil: ::core::ffi::c_uint,
-    ///!< Decoder Util Value
-    pub decUtil: ::core::ffi::c_uint,
-    ///!< Jpeg Util Value
-    pub jpgUtil: ::core::ffi::c_uint,
-    ///!< Ofa Util Value
-    pub ofaUtil: ::core::ffi::c_uint,
-}
-/// Structure to store utilization and process ID for each running process -- version 1
-#[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct nvmlProcessesUtilizationInfo_v1_t {
-    ///!< The version number of this struct
-    pub version: ::core::ffi::c_uint,
-    ///!< Caller-supplied array size, and returns number of processes running
-    pub processSamplesCount: ::core::ffi::c_uint,
-    ///!< Return only samples with timestamp greater than lastSeenTimeStamp
-    pub lastSeenTimeStamp: ::core::ffi::c_ulonglong,
-    ///!< The array (allocated by caller) of the utilization of GPU SM, framebuffer, video encoder, video decoder, JPEG, and OFA
-    pub procUtilArray: *mut nvmlProcessUtilizationInfo_v1_t,
-}
-/// Structure to store utilization and process ID for each running process -- version 1
-pub type nvmlProcessesUtilizationInfo_t = nvmlProcessesUtilizationInfo_v1_t;
 /// Structure to store license expiry date and time values
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -2570,90 +3108,44 @@ pub struct nvmlGridLicensableFeatures_st {
 }
 /// Structure to store vGPU software licensable features
 pub type nvmlGridLicensableFeatures_t = nvmlGridLicensableFeatures_st;
-/// Structure to store SRAM uncorrectable error counters
-#[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct nvmlEccSramErrorStatus_v1_t {
-    ///!< the API version number
-    pub version: ::core::ffi::c_uint,
-    ///!< aggregate uncorrectable parity error count
-    pub aggregateUncParity: ::core::ffi::c_ulonglong,
-    ///!< aggregate uncorrectable SEC-DED error count
-    pub aggregateUncSecDed: ::core::ffi::c_ulonglong,
-    ///!< aggregate correctable error count
-    pub aggregateCor: ::core::ffi::c_ulonglong,
-    ///!< volatile uncorrectable parity error count
-    pub volatileUncParity: ::core::ffi::c_ulonglong,
-    ///!< volatile uncorrectable SEC-DED error count
-    pub volatileUncSecDed: ::core::ffi::c_ulonglong,
-    ///!< volatile correctable error count
-    pub volatileCor: ::core::ffi::c_ulonglong,
-    ///!< aggregate uncorrectable error count for L2 cache bucket
-    pub aggregateUncBucketL2: ::core::ffi::c_ulonglong,
-    ///!< aggregate uncorrectable error count for SM bucket
-    pub aggregateUncBucketSm: ::core::ffi::c_ulonglong,
-    ///!< aggregate uncorrectable error count for PCIE bucket
-    pub aggregateUncBucketPcie: ::core::ffi::c_ulonglong,
-    ///!< aggregate uncorrectable error count for Microcontroller bucket
-    pub aggregateUncBucketMcu: ::core::ffi::c_ulonglong,
-    ///!< aggregate uncorrectable error count for Other bucket
-    pub aggregateUncBucketOther: ::core::ffi::c_ulonglong,
-    ///!< if the error threshold of field diag is exceeded
-    pub bThresholdExceeded: ::core::ffi::c_uint,
-}
-/// Structure to store SRAM uncorrectable error counters
-pub type nvmlEccSramErrorStatus_t = nvmlEccSramErrorStatus_v1_t;
-pub type nvmlDeviceArchitecture_t = ::core::ffi::c_uint;
-pub type nvmlBusType_t = ::core::ffi::c_uint;
-pub type nvmlFanControlPolicy_t = ::core::ffi::c_uint;
-pub type nvmlPowerSource_t = ::core::ffi::c_uint;
-impl nvmlGpuUtilizationDomainId_t {
-    ///!< Graphics engine domain
-    pub const NVML_GPU_UTILIZATION_DOMAIN_GPU: nvmlGpuUtilizationDomainId_t = nvmlGpuUtilizationDomainId_t(
+impl nvmlDeviceGpuRecoveryAction_s {
+    pub const NVML_GPU_RECOVERY_ACTION_NONE: nvmlDeviceGpuRecoveryAction_s = nvmlDeviceGpuRecoveryAction_s(
         0,
     );
 }
-impl nvmlGpuUtilizationDomainId_t {
-    ///!< Frame buffer domain
-    pub const NVML_GPU_UTILIZATION_DOMAIN_FB: nvmlGpuUtilizationDomainId_t = nvmlGpuUtilizationDomainId_t(
+impl nvmlDeviceGpuRecoveryAction_s {
+    pub const NVML_GPU_RECOVERY_ACTION_GPU_RESET: nvmlDeviceGpuRecoveryAction_s = nvmlDeviceGpuRecoveryAction_s(
         1,
     );
 }
-impl nvmlGpuUtilizationDomainId_t {
-    ///!< Video engine domain
-    pub const NVML_GPU_UTILIZATION_DOMAIN_VID: nvmlGpuUtilizationDomainId_t = nvmlGpuUtilizationDomainId_t(
+impl nvmlDeviceGpuRecoveryAction_s {
+    pub const NVML_GPU_RECOVERY_ACTION_NODE_REBOOT: nvmlDeviceGpuRecoveryAction_s = nvmlDeviceGpuRecoveryAction_s(
         2,
     );
 }
-impl nvmlGpuUtilizationDomainId_t {
-    ///!< Bus interface domain
-    pub const NVML_GPU_UTILIZATION_DOMAIN_BUS: nvmlGpuUtilizationDomainId_t = nvmlGpuUtilizationDomainId_t(
+impl nvmlDeviceGpuRecoveryAction_s {
+    pub const NVML_GPU_RECOVERY_ACTION_DRAIN_P2P: nvmlDeviceGpuRecoveryAction_s = nvmlDeviceGpuRecoveryAction_s(
         3,
     );
 }
+impl nvmlDeviceGpuRecoveryAction_s {
+    pub const NVML_GPU_RECOVERY_ACTION_DRAIN_AND_RESET: nvmlDeviceGpuRecoveryAction_s = nvmlDeviceGpuRecoveryAction_s(
+        4,
+    );
+}
 #[repr(transparent)]
+/// Enum describing the GPU Recovery Action
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct nvmlGpuUtilizationDomainId_t(pub ::core::ffi::c_uint);
+pub struct nvmlDeviceGpuRecoveryAction_s(pub ::core::ffi::c_uint);
+/// Enum describing the GPU Recovery Action
+pub use self::nvmlDeviceGpuRecoveryAction_s as nvmlDeviceGpuRecoveryAction_t;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct nvmlGpuDynamicPstatesInfo_st {
-    ///!< Reserved for future use
-    pub flags: ::core::ffi::c_uint,
-    pub utilization: [nvmlGpuDynamicPstatesInfo_st__bindgen_ty_1; 8usize],
+pub struct nvmlNvLinkPowerThres_st {
+    ///!< Low power threshold
+    pub lowPwrThreshold: ::core::ffi::c_uint,
 }
-#[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct nvmlGpuDynamicPstatesInfo_st__bindgen_ty_1 {
-    ///!< Set if this utilization domain is present on this GPU
-    pub bIsPresent: ::core::ffi::c_uint,
-    ///!< Percentage of time where the domain is considered busy in the last 1-second interval
-    pub percentage: ::core::ffi::c_uint,
-    ///!< Utilization threshold that can trigger a perf-increasing P-State change when crossed
-    pub incThreshold: ::core::ffi::c_uint,
-    ///!< Utilization threshold that can trigger a perf-decreasing P-State change when crossed
-    pub decThreshold: ::core::ffi::c_uint,
-}
-pub type nvmlGpuDynamicPstatesInfo_t = nvmlGpuDynamicPstatesInfo_st;
+pub type nvmlNvLinkPowerThres_t = nvmlNvLinkPowerThres_st;
 /// Information for a Field Value Sample
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -2821,7 +3313,7 @@ pub struct nvmlEventData_st {
     pub device: nvmlDevice_t,
     ///!< Information about what specific event occurred
     pub eventType: ::core::ffi::c_ulonglong,
-    ///!< Stores XID error for the device in the event of nvmlEventTypeXidCriticalError,
+    ///!< Stores Xid error for the device in the event of nvmlEventTypeXidCriticalError,
     pub eventData: ::core::ffi::c_ulonglong,
     ///!< If MIG is enabled and nvmlEventTypeXidCriticalError event is attributable to a GPU
     pub gpuInstanceId: ::core::ffi::c_uint,
@@ -3086,6 +3578,7 @@ pub struct nvmlConfComputeGetKeyRotationThresholdInfo_st {
 pub type nvmlConfComputeGetKeyRotationThresholdInfo_v1_t = nvmlConfComputeGetKeyRotationThresholdInfo_st;
 pub type nvmlConfComputeGetKeyRotationThresholdInfo_t = nvmlConfComputeGetKeyRotationThresholdInfo_v1_t;
 pub type nvmlGpuFabricState_t = ::core::ffi::c_uchar;
+/// Contains the device fabric information
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct nvmlGpuFabricInfo_t {
@@ -3107,7 +3600,7 @@ pub struct nvmlGpuFabricInfo_t {
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct nvmlGpuFabricInfo_v2_t {
-    ///!< Structure version identifier (set to \ref nvmlGpuFabricInfo_v2)
+    ///!< Structure version identifier (set to nvmlGpuFabricInfo_v2)
     pub version: ::core::ffi::c_uint,
     ///!< Uuid of the cluster to which this GPU belongs
     pub clusterUuid: [::core::ffi::c_uchar; 16usize],
@@ -3127,18 +3620,28 @@ pub struct nvmlGpuFabricInfo_v2_t {
  field to the end. This structure is not backwards-compatible with
  \ref nvmlGpuFabricInfo_t.*/
 pub type nvmlGpuFabricInfoV_t = nvmlGpuFabricInfo_v2_t;
-pub type nvmlPowerScopeType_t = ::core::ffi::c_uchar;
+/// Structure to store Driver branch information
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct nvmlPowerValue_v2_t {
-    ///!< Structure format version (must be 1)
+pub struct nvmlSystemDriverBranchInfo_v1_t {
+    ///!< The version number of this struct
     pub version: ::core::ffi::c_uint,
-    ///!< [in]  Device type: GPU or Total Module
-    pub powerScope: nvmlPowerScopeType_t,
-    ///!< [out] Power value to retrieve or set in milliwatts
-    pub powerValueMw: ::core::ffi::c_uint,
+    ///!< driver branch
+    pub branch: [::core::ffi::c_char; 80usize],
 }
+/// Structure to store Driver branch information
+pub type nvmlSystemDriverBranchInfo_t = nvmlSystemDriverBranchInfo_v1_t;
 pub type nvmlAffinityScope_t = ::core::ffi::c_uint;
+/// Structure used to encapsulate temperature info
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlTemperature_v1_t {
+    pub version: ::core::ffi::c_uint,
+    pub sensorType: nvmlTemperatureSensors_t,
+    pub temperature: ::core::ffi::c_int,
+}
+/// Structure used to encapsulate temperature info
+pub type nvmlTemperature_t = nvmlTemperature_v1_t;
 impl nvmlClockLimitId_enum {
     pub const NVML_CLOCK_LIMIT_ID_RANGE_START: nvmlClockLimitId_enum = nvmlClockLimitId_enum(
         4294967040,
@@ -3158,6 +3661,30 @@ impl nvmlClockLimitId_enum {
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct nvmlClockLimitId_enum(pub ::core::ffi::c_uint);
 pub use self::nvmlClockLimitId_enum as nvmlClockLimitId_t;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlNvlinkSupportedBwModes_v1_t {
+    pub version: ::core::ffi::c_uint,
+    pub bwModes: [::core::ffi::c_uchar; 23usize],
+    pub totalBwModes: ::core::ffi::c_uchar,
+}
+pub type nvmlNvlinkSupportedBwModes_t = nvmlNvlinkSupportedBwModes_v1_t;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlNvlinkGetBwMode_v1_t {
+    pub version: ::core::ffi::c_uint,
+    pub bIsBest: ::core::ffi::c_uint,
+    pub bwMode: ::core::ffi::c_uchar,
+}
+pub type nvmlNvlinkGetBwMode_t = nvmlNvlinkGetBwMode_v1_t;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlNvlinkSetBwMode_v1_t {
+    pub version: ::core::ffi::c_uint,
+    pub bSetBest: ::core::ffi::c_uint,
+    pub bwMode: ::core::ffi::c_uchar,
+}
+pub type nvmlNvlinkSetBwMode_t = nvmlNvlinkSetBwMode_v1_t;
 /// Structure representing range of vGPU versions.
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -3313,10 +3840,6 @@ pub struct nvmlExcludedDeviceInfo_st {
 }
 /// Excluded GPU device information
 pub type nvmlExcludedDeviceInfo_t = nvmlExcludedDeviceInfo_st;
-/** MIG compute instance profile capability.
-
- Bit field values representing MIG profile capabilities
- \ref nvmlComputeInstanceProfileInfo_v3_t.capabilities*/
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct nvmlGpuInstancePlacement_st {
@@ -3325,10 +3848,6 @@ pub struct nvmlGpuInstancePlacement_st {
     ///!< Number of memory slices occupied
     pub size: ::core::ffi::c_uint,
 }
-/** MIG compute instance profile capability.
-
- Bit field values representing MIG profile capabilities
- \ref nvmlComputeInstanceProfileInfo_v3_t.capabilities*/
 pub type nvmlGpuInstancePlacement_t = nvmlGpuInstancePlacement_st;
 /// GPU instance profile information.
 #[repr(C)]
@@ -3716,6 +4235,10 @@ impl nvmlGpmMetricId_t {
     pub const NVML_GPM_METRIC_NVOFA_0_UTIL: nvmlGpmMetricId_t = nvmlGpmMetricId_t(50);
 }
 impl nvmlGpmMetricId_t {
+    ///!< Percent utilization of NVOFA 1. 0.0 - 100.0
+    pub const NVML_GPM_METRIC_NVOFA_1_UTIL: nvmlGpmMetricId_t = nvmlGpmMetricId_t(51);
+}
+impl nvmlGpmMetricId_t {
     ///!< NvLink read bandwidth for all links in MiB/sec
     pub const NVML_GPM_METRIC_NVLINK_TOTAL_RX_PER_SEC: nvmlGpmMetricId_t = nvmlGpmMetricId_t(
         60,
@@ -3962,7 +4485,7 @@ pub type nvmlGpmSample_t = *mut nvmlGpmSample_st;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct nvmlGpmMetric_t {
-    ///!<  IN: NVML_GPM_METRIC_? #define of which metric to retrieve
+    ///!<  IN: NVML_GPM_METRIC_? define of which metric to retrieve
     pub metricId: ::core::ffi::c_uint,
     ///!<  OUT: Status of this metric. If this is nonzero, then value is not valid
     pub nvmlReturn: nvmlReturn_t,
@@ -4002,13 +4525,175 @@ pub struct nvmlGpmSupport_t {
     ///!< OUT: Indicates device support
     pub isSupportedDevice: ::core::ffi::c_uint,
 }
+/// Device capabilities
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct nvmlNvLinkPowerThres_st {
-    ///!< Low power threshold (in units of 100us)
-    pub lowPwrThreshold: ::core::ffi::c_uint,
+pub struct nvmlDeviceCapabilities_v1_t {
+    ///!< the API version number
+    pub version: ::core::ffi::c_uint,
+    ///!< OUT: Bit mask of capabilities.
+    pub capMask: ::core::ffi::c_uint,
 }
-pub type nvmlNvLinkPowerThres_t = nvmlNvLinkPowerThres_st;
+/// Device capabilities
+pub type nvmlDeviceCapabilities_t = nvmlDeviceCapabilities_v1_t;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlMask255_t {
+    pub mask: [::core::ffi::c_uint; 8usize],
+}
+impl nvmlPowerProfileType_t {
+    pub const NVML_POWER_PROFILE_MAX_P: nvmlPowerProfileType_t = nvmlPowerProfileType_t(
+        0,
+    );
+}
+impl nvmlPowerProfileType_t {
+    pub const NVML_POWER_PROFILE_MAX_Q: nvmlPowerProfileType_t = nvmlPowerProfileType_t(
+        1,
+    );
+}
+impl nvmlPowerProfileType_t {
+    pub const NVML_POWER_PROFILE_COMPUTE: nvmlPowerProfileType_t = nvmlPowerProfileType_t(
+        2,
+    );
+}
+impl nvmlPowerProfileType_t {
+    pub const NVML_POWER_PROFILE_MEMORY_BOUND: nvmlPowerProfileType_t = nvmlPowerProfileType_t(
+        3,
+    );
+}
+impl nvmlPowerProfileType_t {
+    pub const NVML_POWER_PROFILE_NETWORK: nvmlPowerProfileType_t = nvmlPowerProfileType_t(
+        4,
+    );
+}
+impl nvmlPowerProfileType_t {
+    pub const NVML_POWER_PROFILE_BALANCED: nvmlPowerProfileType_t = nvmlPowerProfileType_t(
+        5,
+    );
+}
+impl nvmlPowerProfileType_t {
+    pub const NVML_POWER_PROFILE_LLM_INFERENCE: nvmlPowerProfileType_t = nvmlPowerProfileType_t(
+        6,
+    );
+}
+impl nvmlPowerProfileType_t {
+    pub const NVML_POWER_PROFILE_LLM_TRAINING: nvmlPowerProfileType_t = nvmlPowerProfileType_t(
+        7,
+    );
+}
+impl nvmlPowerProfileType_t {
+    pub const NVML_POWER_PROFILE_RBM: nvmlPowerProfileType_t = nvmlPowerProfileType_t(8);
+}
+impl nvmlPowerProfileType_t {
+    pub const NVML_POWER_PROFILE_DCPCIE: nvmlPowerProfileType_t = nvmlPowerProfileType_t(
+        9,
+    );
+}
+impl nvmlPowerProfileType_t {
+    pub const NVML_POWER_PROFILE_HMMA_SPARSE: nvmlPowerProfileType_t = nvmlPowerProfileType_t(
+        10,
+    );
+}
+impl nvmlPowerProfileType_t {
+    pub const NVML_POWER_PROFILE_HMMA_DENSE: nvmlPowerProfileType_t = nvmlPowerProfileType_t(
+        11,
+    );
+}
+impl nvmlPowerProfileType_t {
+    pub const NVML_POWER_PROFILE_SYNC_BALANCED: nvmlPowerProfileType_t = nvmlPowerProfileType_t(
+        12,
+    );
+}
+impl nvmlPowerProfileType_t {
+    pub const NVML_POWER_PROFILE_HPC: nvmlPowerProfileType_t = nvmlPowerProfileType_t(
+        13,
+    );
+}
+impl nvmlPowerProfileType_t {
+    pub const NVML_POWER_PROFILE_MIG: nvmlPowerProfileType_t = nvmlPowerProfileType_t(
+        14,
+    );
+}
+impl nvmlPowerProfileType_t {
+    pub const NVML_POWER_PROFILE_MAX: nvmlPowerProfileType_t = nvmlPowerProfileType_t(
+        15,
+    );
+}
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlPowerProfileType_t(pub ::core::ffi::c_uint);
+/// Profile Metadata
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlWorkloadPowerProfileInfo_v1_t {
+    ///!< the API version number
+    pub version: ::core::ffi::c_uint,
+    pub profileId: ::core::ffi::c_uint,
+    pub priority: ::core::ffi::c_uint,
+    pub conflictingMask: nvmlMask255_t,
+}
+/// Profile Metadata
+pub type nvmlWorkloadPowerProfileInfo_t = nvmlWorkloadPowerProfileInfo_v1_t;
+/// Profiles Info
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlWorkloadPowerProfileProfilesInfo_v1_t {
+    ///!< the API version number
+    pub version: ::core::ffi::c_uint,
+    ///!< Mask bit set to true for each valid performance profile
+    pub perfProfilesMask: nvmlMask255_t,
+    ///!< Array of performance profile info parameters
+    pub perfProfile: [nvmlWorkloadPowerProfileInfo_t; 255usize],
+}
+/// Profiles Info
+pub type nvmlWorkloadPowerProfileProfilesInfo_t = nvmlWorkloadPowerProfileProfilesInfo_v1_t;
+/// Current Profiles
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlWorkloadPowerProfileCurrentProfiles_v1_t {
+    pub version: ::core::ffi::c_uint,
+    ///!< Mask bit set to true for each valid performance profile
+    pub perfProfilesMask: nvmlMask255_t,
+    ///!< Mask of currently requested performance profiles
+    pub requestedProfilesMask: nvmlMask255_t,
+    ///!< Mask of currently enforced performance profiles post all arbitrations among the requested profiles.
+    pub enforcedProfilesMask: nvmlMask255_t,
+}
+/// Current Profiles
+pub type nvmlWorkloadPowerProfileCurrentProfiles_t = nvmlWorkloadPowerProfileCurrentProfiles_v1_t;
+/// Requested Profiles
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlWorkloadPowerProfileRequestedProfiles_v1_t {
+    ///!< the API version number
+    pub version: ::core::ffi::c_uint,
+    ///!< Mask of 255 bits, each bit representing index of respective perf profile
+    pub requestedProfilesMask: nvmlMask255_t,
+}
+/// Requested Profiles
+pub type nvmlWorkloadPowerProfileRequestedProfiles_t = nvmlWorkloadPowerProfileRequestedProfiles_v1_t;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct nvmlPowerSmoothingProfile_v1_t {
+    ///!< the API version number
+    pub version: ::core::ffi::c_uint,
+    ///!< The requested profile ID
+    pub profileId: ::core::ffi::c_uint,
+    ///!< The requested paramater ID
+    pub paramId: ::core::ffi::c_uint,
+    ///!< The requested value for the given parameter
+    pub value: f64,
+}
+pub type nvmlPowerSmoothingProfile_t = nvmlPowerSmoothingProfile_v1_t;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct nvmlPowerSmoothingState_v1_t {
+    ///!< the API version number
+    pub version: ::core::ffi::c_uint,
+    ///!< 0/Disabled or 1/Enabled
+    pub state: nvmlEnableState_t,
+}
+pub type nvmlPowerSmoothingState_t = nvmlPowerSmoothingState_v1_t;
 impl nvmlError_t {
     pub const UNINITIALIZED: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(1)

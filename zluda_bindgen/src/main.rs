@@ -5,9 +5,9 @@ use std::{
     borrow::Cow, collections::hash_map, fs::File, io::Write, iter, path::PathBuf, str::FromStr,
 };
 use syn::{
-    parse, parse_quote, punctuated::Punctuated, visit_mut::VisitMut, Abi, Fields, FieldsUnnamed,
-    FnArg, ForeignItem, ForeignItemFn, Ident, Item, ItemConst, ItemForeignMod, ItemUse, LitStr,
-    Path, PathArguments, PathSegment, Signature, Type, TypePath, UseTree,
+    parse_quote, punctuated::Punctuated, visit_mut::VisitMut, Abi, Fields, FieldsUnnamed, FnArg,
+    ForeignItem, ForeignItemFn, Ident, Item, ItemConst, ItemForeignMod, ItemUse, LitStr, Path,
+    PathArguments, PathSegment, Signature, Type, TypePath, UseTree,
 };
 
 fn main() {
@@ -36,13 +36,13 @@ fn generate_cudnn(crate_root: &PathBuf) {
         .unwrap()
         .to_string();
     let module: syn::File = syn::parse_str(&cudnn9).unwrap();
-    generate_functions(
-        &crate_root,
-        "cudnn9",
-        &["..", "cuda_base", "src", "cudnn9.rs"],
-        &module,
-    );
     let cudnn9_types = generate_types_library_impl(&module);
+    //generate_functions(
+    //    &crate_root,
+    //    "cudnn9",
+    //    &["..", "cuda_base", "src", "cudnn9.rs"],
+    //    &module,
+    //);
     let mut current_dir = PathBuf::from(file!());
     current_dir.pop();
     let cudnn8 = new_builder()
@@ -60,13 +60,13 @@ fn generate_cudnn(crate_root: &PathBuf) {
         .unwrap()
         .to_string();
     let module: syn::File = syn::parse_str(&cudnn8).unwrap();
-    generate_functions(
-        &crate_root,
-        "cudnn8",
-        &["..", "cuda_base", "src", "cudnn8.rs"],
-        &module,
-    );
     let cudnn8_types = generate_types_library_impl(&module);
+    //generate_functions(
+    //    &crate_root,
+    //    "cudnn8",
+    //    &["..", "cuda_base", "src", "cudnn8.rs"],
+    //    &module,
+    //);
     merge_types(
         &crate_root,
         &["..", "cuda_types", "src", "cudnn.rs"],
@@ -82,10 +82,10 @@ fn generate_cudnn(crate_root: &PathBuf) {
 // - cudnn9-specific
 // - cudnn shared
 // With the rules being:
-// - constants go to the specific files
-// - if there's conflict between types they go to specific files
+// - constants go to the version-specific files
+// - if there's conflict between types they go to version-specific files
 // - if the cudnn9 type is purely additive over cudnn8 then it goes into the
-//   shared (and is re-exported)
+//   shared (and is re-exported by both)
 fn merge_types(
     output: &PathBuf,
     cudnn_path: &[&str],
@@ -96,6 +96,134 @@ fn merge_types(
 ) {
     let cudnn_enums = merge_enums(&cudnn9_types, &cudnn8_types);
     let conflicting_types = get_conflicting_structs(&cudnn9_types, &cudnn8_types, cudnn_enums);
+    write_common_cudnn_types(output, cudnn_path, &cudnn9_types, &conflicting_types);
+    write_cudnn8_types(output, cudnn8_path, &cudnn8_types, &conflicting_types);
+    write_cudnn9_types(output, cudnn9_path, &cudnn9_types, &conflicting_types);
+}
+
+fn write_cudnn9_types(
+    output: &PathBuf,
+    cudnn9_path: &[&str],
+    cudnn9_types: &syn::File,
+    conflicting_types: &FxHashMap<&Ident, CudnnEnumMergeResult>,
+) {
+    let items = cudnn9_types.items.iter().filter_map(|item| match item {
+        Item::Impl(impl_) => match conflicting_types.get(type_to_ident(&*impl_.self_ty)) {
+            Some(CudnnEnumMergeResult::Conflict) | Some(CudnnEnumMergeResult::Cudnn9) | None => {
+                Option::<syn::Item>::Some(parse_quote!( #impl_))
+            }
+            Some(CudnnEnumMergeResult::Same) => None,
+        },
+        Item::Struct(struct_) => match conflicting_types.get(&struct_.ident) {
+            Some(CudnnEnumMergeResult::Conflict) | Some(CudnnEnumMergeResult::Cudnn9) | None => {
+                Some(parse_quote!( #struct_))
+            }
+            Some(CudnnEnumMergeResult::Same) => {
+                let type_ = &struct_.ident;
+                Some(parse_quote!( pub use super::cudnn:: #type_; ))
+            }
+        },
+        Item::Enum(enum_) => match conflicting_types.get(&enum_.ident) {
+            Some(CudnnEnumMergeResult::Conflict) | Some(CudnnEnumMergeResult::Cudnn9) | None => {
+                Some(parse_quote!( #enum_))
+            }
+            Some(CudnnEnumMergeResult::Same) => {
+                let type_ = &enum_.ident;
+                Some(parse_quote!( pub use super::cudnn:: #type_; ))
+            }
+        },
+        Item::ForeignMod(ItemForeignMod { .. }) => None,
+        Item::Const(const_) => Some(parse_quote!(#const_)),
+        Item::Union(union_) => match conflicting_types.get(&union_.ident) {
+            Some(CudnnEnumMergeResult::Conflict) | Some(CudnnEnumMergeResult::Cudnn9) | None => {
+                Some(parse_quote!( #union_))
+            }
+            Some(CudnnEnumMergeResult::Same) => {
+                let type_ = &union_.ident;
+                Some(parse_quote!( pub use super::cudnn:: #type_; ))
+            }
+        },
+        Item::Use(use_) => Some(parse_quote!(#use_)),
+        Item::Type(type_) => Some(parse_quote!(#type_)),
+        _ => unimplemented!(),
+    });
+    let module: syn::File = parse_quote! {
+        #(#items)*
+    };
+    let mut output = output.clone();
+    output.extend(cudnn9_path);
+    let text = prettyplease::unparse(&module).replace("cudaStream_t", "super::cuda::CUstream");
+    write_rust_to_file(output, &text)
+}
+
+fn write_cudnn8_types(
+    output: &PathBuf,
+    cudnn8_path: &[&str],
+    cudnn8_types: &syn::File,
+    conflicting_types: &FxHashMap<&Ident, CudnnEnumMergeResult>,
+) {
+    let items = cudnn8_types.items.iter().filter_map(|item| match item {
+        Item::Impl(impl_) => match conflicting_types.get(type_to_ident(&*impl_.self_ty)) {
+            Some(CudnnEnumMergeResult::Conflict) | None => {
+                Option::<syn::Item>::Some(parse_quote!( #impl_))
+            }
+            Some(CudnnEnumMergeResult::Same) => None,
+            Some(CudnnEnumMergeResult::Cudnn9) => None,
+        },
+        Item::Struct(struct_) => match conflicting_types.get(&struct_.ident) {
+            Some(CudnnEnumMergeResult::Conflict) | None => Some(parse_quote!( #struct_)),
+            Some(CudnnEnumMergeResult::Same) => {
+                let type_ = &struct_.ident;
+                Some(parse_quote!( pub use super::cudnn:: #type_; ))
+            }
+            Some(CudnnEnumMergeResult::Cudnn9) => {
+                let type_ = &struct_.ident;
+                Some(parse_quote!( pub use super::cudnn9:: #type_; ))
+            }
+        },
+        Item::Enum(enum_) => match conflicting_types.get(&enum_.ident) {
+            Some(CudnnEnumMergeResult::Conflict) | None => Some(parse_quote!( #enum_)),
+            Some(CudnnEnumMergeResult::Same) => {
+                let type_ = &enum_.ident;
+                Some(parse_quote!( pub use super::cudnn:: #type_; ))
+            }
+            Some(CudnnEnumMergeResult::Cudnn9) => {
+                let type_ = &enum_.ident;
+                Some(parse_quote!( pub use super::cudnn9:: #type_; ))
+            }
+        },
+        Item::ForeignMod(ItemForeignMod { .. }) => None,
+        Item::Const(const_) => Some(parse_quote!(#const_)),
+        Item::Union(union_) => match conflicting_types.get(&union_.ident) {
+            Some(CudnnEnumMergeResult::Conflict) | None => Some(parse_quote!( #union_)),
+            Some(CudnnEnumMergeResult::Same) => {
+                let type_ = &union_.ident;
+                Some(parse_quote!( pub use super::cudnn:: #type_; ))
+            }
+            Some(CudnnEnumMergeResult::Cudnn9) => {
+                let type_ = &union_.ident;
+                Some(parse_quote!( pub use super::cudnn9:: #type_; ))
+            }
+        },
+        Item::Use(use_) => Some(parse_quote!(#use_)),
+        Item::Type(type_) => Some(parse_quote!(#type_)),
+        _ => unimplemented!(),
+    });
+    let module: syn::File = parse_quote! {
+        #(#items)*
+    };
+    let mut output = output.clone();
+    output.extend(cudnn8_path);
+    let text = prettyplease::unparse(&module).replace("cudaStream_t", "super::cuda::CUstream");
+    write_rust_to_file(output, &text)
+}
+
+fn write_common_cudnn_types(
+    output: &PathBuf,
+    cudnn_path: &[&str],
+    cudnn9_types: &syn::File,
+    conflicting_types: &FxHashMap<&Ident, CudnnEnumMergeResult>,
+) {
     let common_items = cudnn9_types.items.iter().filter_map(|item| match item {
         Item::Impl(ref impl_) => match conflicting_types.get(type_to_ident(&*impl_.self_ty)) {
             Some(CudnnEnumMergeResult::Conflict) => None,
@@ -134,16 +262,13 @@ fn merge_types(
         _ => None,
         //_ => unimplemented!(),
     });
-
-    let file: syn::File = parse_quote! {
+    let cudnn_common: syn::File = parse_quote! {
         #(#common_items)*
     };
-    {
-        let mut output = output.clone();
-        output.extend(cudnn_path);
-        let text = prettyplease::unparse(&file);
-        write_rust_to_file(output, &text)
-    }
+    let mut output = output.clone();
+    output.extend(cudnn_path);
+    let text = prettyplease::unparse(&cudnn_common);
+    write_rust_to_file(output, &text)
 }
 
 fn get_conflicting_structs<'a>(
