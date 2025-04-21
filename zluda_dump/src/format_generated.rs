@@ -26370,6 +26370,34 @@ impl crate::format::CudaDisplay for cuda_types::cuda::cudaDataType_t {
         }
     }
 }
+impl crate::format::CudaDisplay for cuda_types::cuda::float2 {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(x), ": ").as_bytes())?;
+        crate::format::CudaDisplay::write(&self.x, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(y), ": ").as_bytes())?;
+        crate::format::CudaDisplay::write(&self.y, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
+impl crate::format::CudaDisplay for cuda_types::cuda::double2 {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(x), ": ").as_bytes())?;
+        crate::format::CudaDisplay::write(&self.x, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(y), ": ").as_bytes())?;
+        crate::format::CudaDisplay::write(&self.y, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
 impl crate::format::CudaDisplay for cuda_types::cuda::CUresult {
     fn write(
         &self,

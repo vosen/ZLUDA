@@ -21,6 +21,33 @@ fn main() {
     generate_cublas(&crate_root);
     generate_cublaslt(&crate_root);
     generate_cudnn(&crate_root);
+    generate_cufft(&crate_root);
+}
+
+fn generate_cufft(crate_root: &PathBuf) {
+    let cufft_header = new_builder()
+        .header("/usr/local/cuda/include/cufftXt.h")
+        .allowlist_type("^cufft.*")
+        .allowlist_function("^cufft.*")
+        .allowlist_var("^CUFFT_.*")
+        .must_use_type("cufftResult_t")
+        .allowlist_recursively(false)
+        .clang_args(["-I/usr/local/cuda/include"])
+        .generate()
+        .unwrap()
+        .to_string();
+    let module: syn::File = syn::parse_str(&cufft_header).unwrap();
+    generate_functions(
+        &crate_root,
+        "cufft",
+        &["..", "cuda_base", "src", "cufft.rs"],
+        &module,
+    );
+    generate_types_library(
+        &crate_root,
+        &["..", "cuda_types", "src", "cufft.rs"],
+        &module,
+    )
 }
 
 fn generate_cudnn(crate_root: &PathBuf) {
@@ -35,14 +62,8 @@ fn generate_cudnn(crate_root: &PathBuf) {
         .generate()
         .unwrap()
         .to_string();
-    let module: syn::File = syn::parse_str(&cudnn9).unwrap();
-    let cudnn9_types = generate_types_library_impl(&module);
-    //generate_functions(
-    //    &crate_root,
-    //    "cudnn9",
-    //    &["..", "cuda_base", "src", "cudnn9.rs"],
-    //    &module,
-    //);
+    let cudnn9_module: syn::File = syn::parse_str(&cudnn9).unwrap();
+    let cudnn9_types = generate_types_library_impl(&cudnn9_module);
     let mut current_dir = PathBuf::from(file!());
     current_dir.pop();
     let cudnn8 = new_builder()
@@ -59,14 +80,8 @@ fn generate_cudnn(crate_root: &PathBuf) {
         .generate()
         .unwrap()
         .to_string();
-    let module: syn::File = syn::parse_str(&cudnn8).unwrap();
-    let cudnn8_types = generate_types_library_impl(&module);
-    //generate_functions(
-    //    &crate_root,
-    //    "cudnn8",
-    //    &["..", "cuda_base", "src", "cudnn8.rs"],
-    //    &module,
-    //);
+    let cudnn8_module: syn::File = syn::parse_str(&cudnn8).unwrap();
+    let cudnn8_types = generate_types_library_impl(&cudnn8_module);
     merge_types(
         &crate_root,
         &["..", "cuda_types", "src", "cudnn.rs"],
@@ -74,6 +89,18 @@ fn generate_cudnn(crate_root: &PathBuf) {
         &["..", "cuda_types", "src", "cudnn9.rs"],
         cudnn8_types,
         &["..", "cuda_types", "src", "cudnn8.rs"],
+    );
+    generate_functions(
+        &crate_root,
+        "cudnn8",
+        &["..", "cuda_base", "src", "cudnn8.rs"],
+        &cudnn8_module,
+    );
+    generate_functions(
+        &crate_root,
+        "cudnn9",
+        &["..", "cuda_base", "src", "cudnn9.rs"],
+        &cudnn9_module,
     );
 }
 
@@ -459,6 +486,7 @@ fn generate_cuda(crate_root: &PathBuf) {
         .header_contents("cuda_wrapper.h", include_str!("../build/cuda_wrapper.h"))
         .allowlist_type("^CU.*")
         .allowlist_type("^cuda.*")
+        .allowlist_type("^cu.*Complex.*")
         .allowlist_function("^cu.*")
         .allowlist_var("^CU.*")
         .must_use_type("cudaError_enum")
@@ -543,8 +571,11 @@ fn generate_types_library(crate_root: &PathBuf, path: &[&str], module: &syn::Fil
     let module = generate_types_library_impl(module);
     let mut output = crate_root.clone();
     output.extend(path);
-    let text =
-        prettyplease::unparse(&module).replace("self::cudaDataType", "super::cuda::cudaDataType");
+    let text = prettyplease::unparse(&module)
+        .replace("self::cudaDataType", "super::cuda::cudaDataType")
+        // complex as used by cuFFT
+        .replace("cuComplex", "super::cuda::cuComplex")
+        .replace("cuDoubleComplex", "super::cuda::cuDoubleComplex");
     write_rust_to_file(output, &text)
 }
 

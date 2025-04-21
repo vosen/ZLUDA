@@ -8423,6 +8423,23 @@ impl cudaDataType_t {
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct cudaDataType_t(pub ::core::ffi::c_uint);
 pub use self::cudaDataType_t as cudaDataType;
+#[repr(C)]
+#[repr(align(8))]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct float2 {
+    pub x: f32,
+    pub y: f32,
+}
+#[repr(C)]
+#[repr(align(16))]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct double2 {
+    pub x: f64,
+    pub y: f64,
+}
+pub type cuFloatComplex = float2;
+pub type cuDoubleComplex = double2;
+pub type cuComplex = cuFloatComplex;
 impl CUerror {
     pub const INVALID_VALUE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(1)
