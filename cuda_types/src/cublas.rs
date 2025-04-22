@@ -1,6 +1,14 @@
 // Generated automatically by zluda_bindgen
 // DO NOT EDIT MANUALLY
 #![allow(warnings)]
+pub type __half = u16;
+pub type __nv_bfloat16 = u16;
+pub use super::cuda::cuComplex;
+pub use super::cuda::cuDoubleComplex;
+pub use super::cuda::cudaDataType;
+pub use super::cuda::cudaDataType_t;
+pub type cudaStream_t = super::cuda::CUstream;
+pub use super::cuda::libraryPropertyType;
 pub const CUBLAS_VER_MAJOR: u32 = 12;
 pub const CUBLAS_VER_MINOR: u32 = 8;
 pub const CUBLAS_VER_PATCH: u32 = 4;

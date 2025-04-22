@@ -1344,6 +1344,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "zluda_blas"
+version = "0.0.0"
+dependencies = [
+ "cuda_base",
+ "cuda_types",
+]
+
+[[package]]
+name = "zluda_blaslt"
+version = "0.0.0"
+
+[[package]]
+name = "zluda_dnn"
+version = "0.0.0"
+
+[[package]]
 name = "zluda_dump"
 version = "0.0.0"
 dependencies = [
@@ -1363,6 +1379,10 @@ dependencies = [
  "wchar",
  "winapi",
 ]
+
+[[package]]
+name = "zluda_fft"
+version = "0.0.0"
 
 [[package]]
 name = "zluda_inject"

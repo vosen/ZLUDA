@@ -15,6 +15,8 @@ use syn::{
 
 const CUDA_RS: &'static str = include_str! {"cuda.rs"};
 const NVML_RS: &'static str = include_str! {"nvml.rs"};
+const CUBLAS_RS: &'static str = include_str! {"cublas.rs"};
+const CUBLASLT_RS: &'static str = include_str! {"cublaslt.rs"};
 
 // This macro accepts following arguments:
 // * `normal_macro`: ident for a normal macro
@@ -33,6 +35,16 @@ const NVML_RS: &'static str = include_str! {"nvml.rs"};
 #[proc_macro]
 pub fn cuda_function_declarations(tokens: TokenStream) -> TokenStream {
     function_declarations(tokens, CUDA_RS)
+}
+
+#[proc_macro]
+pub fn cublas_function_declarations(tokens: TokenStream) -> TokenStream {
+    function_declarations(tokens, CUBLAS_RS)
+}
+
+#[proc_macro]
+pub fn cublaslt_function_declarations(tokens: TokenStream) -> TokenStream {
+    function_declarations(tokens, CUBLASLT_RS)
 }
 
 fn function_declarations(tokens: TokenStream, module: &str) -> TokenStream {

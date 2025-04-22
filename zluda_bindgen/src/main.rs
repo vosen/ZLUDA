@@ -179,7 +179,7 @@ fn write_cudnn9_types(
     };
     let mut output = output.clone();
     output.extend(cudnn9_path);
-    let text = prettyplease::unparse(&module).replace("cudaStream_t", "super::cuda::CUstream");
+    let text = prettyplease::unparse(&module);
     write_rust_to_file(output, &text)
 }
 
@@ -241,7 +241,7 @@ fn write_cudnn8_types(
     };
     let mut output = output.clone();
     output.extend(cudnn8_path);
-    let text = prettyplease::unparse(&module).replace("cudaStream_t", "super::cuda::CUstream");
+    let text = prettyplease::unparse(&module);
     write_rust_to_file(output, &text)
 }
 
@@ -487,6 +487,7 @@ fn generate_cuda(crate_root: &PathBuf) {
         .allowlist_type("^CU.*")
         .allowlist_type("^cuda.*")
         .allowlist_type("^cu.*Complex.*")
+        .allowlist_type("^libraryPropertyType.*")
         .allowlist_function("^cu.*")
         .allowlist_var("^CU.*")
         .must_use_type("cudaError_enum")
@@ -574,18 +575,29 @@ fn generate_types_library(crate_root: &PathBuf, path: &[&str], module: &syn::Fil
     let text = prettyplease::unparse(&module)
         .replace("self::cudaDataType", "super::cuda::cudaDataType")
         // complex as used by cuFFT
-        .replace("cuComplex", "super::cuda::cuComplex")
-        .replace("cuDoubleComplex", "super::cuda::cuDoubleComplex");
+        .replace(" cuComplex", " super::cuda::cuComplex")
+        .replace(" cuDoubleComplex", " super::cuda::cuDoubleComplex");
     write_rust_to_file(output, &text)
 }
 
 fn generate_types_library_impl(module: &syn::File) -> syn::File {
+    let known_reexports: Punctuated<syn::Item, syn::parse::Nothing> = parse_quote! {
+        pub type __half = u16;
+        pub type __nv_bfloat16 = u16;
+        pub use super::cuda::cuComplex;
+        pub use super::cuda::cuDoubleComplex;
+        pub use super::cuda::cudaDataType;
+        pub use super::cuda::cudaDataType_t;
+        pub type cudaStream_t = super::cuda::CUstream;
+        pub use super::cuda::libraryPropertyType;
+    };
     let non_fn = module.items.iter().filter_map(|item| match item {
         Item::ForeignMod(_) => None,
         _ => Some(item),
     });
+    let items = known_reexports.iter().chain(non_fn);
     parse_quote! {
-            #(#non_fn)*
+        #(#items)*
     }
 }
 
@@ -851,7 +863,7 @@ impl VisitMut for PrependCudaPath {
     fn visit_type_path_mut(&mut self, type_: &mut TypePath) {
         if type_.path.segments.len() == 1 {
             match &*type_.path.segments[0].ident.to_string() {
-                "usize" | "f64" | "f32" => {}
+                "usize" | "i64" | "f64" | "f32" => {}
                 _ => {
                     let module = &self.module;
                     *type_ = parse_quote! { cuda_types :: #module :: #type_ };
@@ -907,6 +919,7 @@ fn generate_display(
         "CUdevResource_st",
         "CUlaunchAttribute_st",
         "CUlaunchConfig_st",
+        "CUmemcpy3DOperand_st",
     ];
     let ignore_functions = [
         "cuGLGetDevices",

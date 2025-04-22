@@ -1,6 +1,14 @@
 // Generated automatically by zluda_bindgen
 // DO NOT EDIT MANUALLY
 #![allow(warnings)]
+pub type __half = u16;
+pub type __nv_bfloat16 = u16;
+pub use super::cuda::cuComplex;
+pub use super::cuda::cuDoubleComplex;
+pub use super::cuda::cudaDataType;
+pub use super::cuda::cudaDataType_t;
+pub type cudaStream_t = super::cuda::CUstream;
+pub use super::cuda::libraryPropertyType;
 pub const CUDNN_MAJOR: u32 = 8;
 pub const CUDNN_MINOR: u32 = 9;
 pub const CUDNN_PATCHLEVEL: u32 = 7;
@@ -196,7 +204,7 @@ pub struct cudnnDebugStruct {
     pub time_usec: ::core::ffi::c_uint,
     pub time_delta: ::core::ffi::c_uint,
     pub handle: cudnnHandle_t,
-    pub stream: super::cuda::CUstream,
+    pub stream: cudaStream_t,
     pub pid: ::core::ffi::c_ulonglong,
     pub tid: ::core::ffi::c_ulonglong,
     pub cudaDeviceId: ::core::ffi::c_int,

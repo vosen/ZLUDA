@@ -1,6 +1,14 @@
 // Generated automatically by zluda_bindgen
 // DO NOT EDIT MANUALLY
 #![allow(warnings)]
+pub type __half = u16;
+pub type __nv_bfloat16 = u16;
+pub use super::cuda::cuComplex;
+pub use super::cuda::cuDoubleComplex;
+pub use super::cuda::cudaDataType;
+pub use super::cuda::cudaDataType_t;
+pub type cudaStream_t = super::cuda::CUstream;
+pub use super::cuda::libraryPropertyType;
 pub const CUBLASLT_NUMERICAL_IMPL_FLAGS_FMA: u32 = 1;
 pub const CUBLASLT_NUMERICAL_IMPL_FLAGS_HMMA: u32 = 2;
 pub const CUBLASLT_NUMERICAL_IMPL_FLAGS_IMMA: u32 = 4;

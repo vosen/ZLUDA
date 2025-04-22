@@ -1,0 +1,15 @@
+[package]
+name = "zluda_fft"
+version = "0.0.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+name = "cufft"
+
+[dependencies]
+
+[package.metadata.zluda]
+linux_symlinks = [
+    "libcufft.so.11",
+]

@@ -75,7 +75,7 @@ extern "system" {
         descriptor: cuda_types::cudnn9::cudnnBackendDescriptor_t,
         attributeName: cuda_types::cudnn9::cudnnBackendAttributeName_t,
         attributeType: cuda_types::cudnn9::cudnnBackendAttributeType_t,
-        elementCount: cuda_types::cudnn9::i64,
+        elementCount: i64,
         arrayOfElements: *const ::core::ffi::c_void,
     ) -> cuda_types::cudnn9::cudnnStatus_t;
     #[must_use]
@@ -83,8 +83,8 @@ extern "system" {
         descriptor: cuda_types::cudnn9::cudnnBackendDescriptor_t,
         attributeName: cuda_types::cudnn9::cudnnBackendAttributeName_t,
         attributeType: cuda_types::cudnn9::cudnnBackendAttributeType_t,
-        requestedElementCount: cuda_types::cudnn9::i64,
-        elementCount: *mut cuda_types::cudnn9::i64,
+        requestedElementCount: i64,
+        elementCount: *mut i64,
         arrayOfElements: *mut ::core::ffi::c_void,
     ) -> cuda_types::cudnn9::cudnnStatus_t;
     #[must_use]

@@ -6177,20 +6177,6 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUextent3D_st {
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmemcpy3DOperand_st {
-    fn write(
-        &self,
-        _fn_name: &'static str,
-        _index: usize,
-        writer: &mut (impl std::io::Write + ?Sized),
-    ) -> std::io::Result<()> {
-        writer.write_all(concat!("{ ", stringify!(type_), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.type_, "", 0, writer)?;
-        writer.write_all(concat!(", ", stringify!(op), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.op, "", 0, writer)?;
-        writer.write_all(b" }")
-    }
-}
 impl crate::format::CudaDisplay
 for cuda_types::cuda::CUmemcpy3DOperand_st__bindgen_ty_1__bindgen_ty_1 {
     fn write(
@@ -26365,6 +26351,27 @@ impl crate::format::CudaDisplay for cuda_types::cuda::cudaDataType_t {
             }
             &cuda_types::cuda::cudaDataType_t::CUDA_R_4F_E2M1 => {
                 writer.write_all(stringify!(CUDA_R_4F_E2M1).as_bytes())
+            }
+            _ => write!(writer, "{}", self.0),
+        }
+    }
+}
+impl crate::format::CudaDisplay for cuda_types::cuda::libraryPropertyType_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        match self {
+            &cuda_types::cuda::libraryPropertyType_t::MAJOR_VERSION => {
+                writer.write_all(stringify!(MAJOR_VERSION).as_bytes())
+            }
+            &cuda_types::cuda::libraryPropertyType_t::MINOR_VERSION => {
+                writer.write_all(stringify!(MINOR_VERSION).as_bytes())
+            }
+            &cuda_types::cuda::libraryPropertyType_t::PATCH_LEVEL => {
+                writer.write_all(stringify!(PATCH_LEVEL).as_bytes())
             }
             _ => write!(writer, "{}", self.0),
         }

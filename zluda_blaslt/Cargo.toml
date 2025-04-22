@@ -1,0 +1,16 @@
+[package]
+name = "zluda_blaslt"
+version = "0.0.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+name = "cublaslt"
+
+[dependencies]
+
+[package.metadata.zluda]
+linux_symlinks = [
+    "libcublasLt.so",
+    "libcublasLt.so.12",
+]

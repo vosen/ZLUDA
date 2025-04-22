@@ -8423,6 +8423,19 @@ impl cudaDataType_t {
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct cudaDataType_t(pub ::core::ffi::c_uint);
 pub use self::cudaDataType_t as cudaDataType;
+impl libraryPropertyType_t {
+    pub const MAJOR_VERSION: libraryPropertyType_t = libraryPropertyType_t(0);
+}
+impl libraryPropertyType_t {
+    pub const MINOR_VERSION: libraryPropertyType_t = libraryPropertyType_t(1);
+}
+impl libraryPropertyType_t {
+    pub const PATCH_LEVEL: libraryPropertyType_t = libraryPropertyType_t(2);
+}
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct libraryPropertyType_t(pub ::core::ffi::c_uint);
+pub use self::libraryPropertyType_t as libraryPropertyType;
 #[repr(C)]
 #[repr(align(8))]
 #[derive(Debug, Copy, Clone, PartialEq)]

@@ -107,7 +107,7 @@ extern "system" {
         type_: cuda_types::cublaslt::cudaDataType,
         rows: cuda_types::cublaslt::u64,
         cols: cuda_types::cublaslt::u64,
-        ld: cuda_types::cublaslt::i64,
+        ld: i64,
     ) -> cuda_types::cublaslt::cublasStatus_t;
     #[must_use]
     /** Create new matrix layout descriptor.
@@ -119,7 +119,7 @@ extern "system" {
         type_: cuda_types::cublaslt::cudaDataType,
         rows: cuda_types::cublaslt::u64,
         cols: cuda_types::cublaslt::u64,
-        ld: cuda_types::cublaslt::i64,
+        ld: i64,
     ) -> cuda_types::cublaslt::cublasStatus_t;
     #[must_use]
     /** Destroy matrix layout descriptor.

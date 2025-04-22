@@ -1,6 +1,14 @@
 // Generated automatically by zluda_bindgen
 // DO NOT EDIT MANUALLY
 #![allow(warnings)]
+pub type __half = u16;
+pub type __nv_bfloat16 = u16;
+pub use super::cuda::cuComplex;
+pub use super::cuda::cuDoubleComplex;
+pub use super::cuda::cudaDataType;
+pub use super::cuda::cudaDataType_t;
+pub type cudaStream_t = super::cuda::CUstream;
+pub use super::cuda::libraryPropertyType;
 pub const NVML_API_VERSION: u32 = 12;
 pub const NVML_API_VERSION_STR: &[u8; 3] = b"12\0";
 pub const NVML_VALUE_NOT_AVAILABLE: i32 = -1;

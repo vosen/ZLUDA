@@ -109,12 +109,12 @@ extern "system" {
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSetVector_64(
-        n: cuda_types::cublas::i64,
-        elemSize: cuda_types::cublas::i64,
+        n: i64,
+        elemSize: i64,
         x: *const ::core::ffi::c_void,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         devicePtr: *mut ::core::ffi::c_void,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasGetVector(
@@ -127,12 +127,12 @@ extern "system" {
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasGetVector_64(
-        n: cuda_types::cublas::i64,
-        elemSize: cuda_types::cublas::i64,
+        n: i64,
+        elemSize: i64,
         x: *const ::core::ffi::c_void,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut ::core::ffi::c_void,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSetMatrix(
@@ -146,13 +146,13 @@ extern "system" {
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSetMatrix_64(
-        rows: cuda_types::cublas::i64,
-        cols: cuda_types::cublas::i64,
-        elemSize: cuda_types::cublas::i64,
+        rows: i64,
+        cols: i64,
+        elemSize: i64,
         A: *const ::core::ffi::c_void,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *mut ::core::ffi::c_void,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasGetMatrix(
@@ -166,13 +166,13 @@ extern "system" {
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasGetMatrix_64(
-        rows: cuda_types::cublas::i64,
-        cols: cuda_types::cublas::i64,
-        elemSize: cuda_types::cublas::i64,
+        rows: i64,
+        cols: i64,
+        elemSize: i64,
         A: *const ::core::ffi::c_void,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *mut ::core::ffi::c_void,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSetVectorAsync(
@@ -186,12 +186,12 @@ extern "system" {
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSetVectorAsync_64(
-        n: cuda_types::cublas::i64,
-        elemSize: cuda_types::cublas::i64,
+        n: i64,
+        elemSize: i64,
         hostPtr: *const ::core::ffi::c_void,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         devicePtr: *mut ::core::ffi::c_void,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         stream: cuda_types::cublas::cudaStream_t,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -206,12 +206,12 @@ extern "system" {
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasGetVectorAsync_64(
-        n: cuda_types::cublas::i64,
-        elemSize: cuda_types::cublas::i64,
+        n: i64,
+        elemSize: i64,
         devicePtr: *const ::core::ffi::c_void,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         hostPtr: *mut ::core::ffi::c_void,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         stream: cuda_types::cublas::cudaStream_t,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -227,13 +227,13 @@ extern "system" {
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSetMatrixAsync_64(
-        rows: cuda_types::cublas::i64,
-        cols: cuda_types::cublas::i64,
-        elemSize: cuda_types::cublas::i64,
+        rows: i64,
+        cols: i64,
+        elemSize: i64,
         A: *const ::core::ffi::c_void,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *mut ::core::ffi::c_void,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         stream: cuda_types::cublas::cudaStream_t,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -249,13 +249,13 @@ extern "system" {
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasGetMatrixAsync_64(
-        rows: cuda_types::cublas::i64,
-        cols: cuda_types::cublas::i64,
-        elemSize: cuda_types::cublas::i64,
+        rows: i64,
+        cols: i64,
+        elemSize: i64,
         A: *const ::core::ffi::c_void,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *mut ::core::ffi::c_void,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         stream: cuda_types::cublas::cudaStream_t,
     ) -> cuda_types::cublas::cublasStatus_t;
     fn cublasXerbla(srName: *const ::core::ffi::c_char, info: ::core::ffi::c_int) -> ();
@@ -273,10 +273,10 @@ extern "system" {
     #[must_use]
     fn cublasNrm2Ex_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const ::core::ffi::c_void,
         xType: cuda_types::cublas::cudaDataType,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         result: *mut ::core::ffi::c_void,
         resultType: cuda_types::cublas::cudaDataType,
         executionType: cuda_types::cublas::cudaDataType,
@@ -292,9 +292,9 @@ extern "system" {
     #[must_use]
     fn cublasSnrm2_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         result: *mut f32,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -308,9 +308,9 @@ extern "system" {
     #[must_use]
     fn cublasDnrm2_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         result: *mut f64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -324,9 +324,9 @@ extern "system" {
     #[must_use]
     fn cublasScnrm2_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         result: *mut f32,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -340,9 +340,9 @@ extern "system" {
     #[must_use]
     fn cublasDznrm2_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         result: *mut f64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -362,13 +362,13 @@ extern "system" {
     #[must_use]
     fn cublasDotEx_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const ::core::ffi::c_void,
         xType: cuda_types::cublas::cudaDataType,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *const ::core::ffi::c_void,
         yType: cuda_types::cublas::cudaDataType,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         result: *mut ::core::ffi::c_void,
         resultType: cuda_types::cublas::cudaDataType,
         executionType: cuda_types::cublas::cudaDataType,
@@ -390,13 +390,13 @@ extern "system" {
     #[must_use]
     fn cublasDotcEx_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const ::core::ffi::c_void,
         xType: cuda_types::cublas::cudaDataType,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *const ::core::ffi::c_void,
         yType: cuda_types::cublas::cudaDataType,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         result: *mut ::core::ffi::c_void,
         resultType: cuda_types::cublas::cudaDataType,
         executionType: cuda_types::cublas::cudaDataType,
@@ -414,11 +414,11 @@ extern "system" {
     #[must_use]
     fn cublasSdot_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *const f32,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         result: *mut f32,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -434,11 +434,11 @@ extern "system" {
     #[must_use]
     fn cublasDdot_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *const f64,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         result: *mut f64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -454,11 +454,11 @@ extern "system" {
     #[must_use]
     fn cublasCdotu_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *const cuda_types::cublas::cuComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         result: *mut cuda_types::cublas::cuComplex,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -474,11 +474,11 @@ extern "system" {
     #[must_use]
     fn cublasCdotc_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *const cuda_types::cublas::cuComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         result: *mut cuda_types::cublas::cuComplex,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -494,11 +494,11 @@ extern "system" {
     #[must_use]
     fn cublasZdotu_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *const cuda_types::cublas::cuDoubleComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         result: *mut cuda_types::cublas::cuDoubleComplex,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -514,11 +514,11 @@ extern "system" {
     #[must_use]
     fn cublasZdotc_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *const cuda_types::cublas::cuDoubleComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         result: *mut cuda_types::cublas::cuDoubleComplex,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -535,12 +535,12 @@ extern "system" {
     #[must_use]
     fn cublasScalEx_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const ::core::ffi::c_void,
         alphaType: cuda_types::cublas::cudaDataType,
         x: *mut ::core::ffi::c_void,
         xType: cuda_types::cublas::cudaDataType,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         executionType: cuda_types::cublas::cudaDataType,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -554,10 +554,10 @@ extern "system" {
     #[must_use]
     fn cublasSscal_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const f32,
         x: *mut f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDscal_v2(
@@ -570,10 +570,10 @@ extern "system" {
     #[must_use]
     fn cublasDscal_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const f64,
         x: *mut f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCscal_v2(
@@ -586,10 +586,10 @@ extern "system" {
     #[must_use]
     fn cublasCscal_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         x: *mut cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCsscal_v2(
@@ -602,10 +602,10 @@ extern "system" {
     #[must_use]
     fn cublasCsscal_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const f32,
         x: *mut cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZscal_v2(
@@ -618,10 +618,10 @@ extern "system" {
     #[must_use]
     fn cublasZscal_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         x: *mut cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZdscal_v2(
@@ -634,10 +634,10 @@ extern "system" {
     #[must_use]
     fn cublasZdscal_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const f64,
         x: *mut cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasAxpyEx(
@@ -656,15 +656,15 @@ extern "system" {
     #[must_use]
     fn cublasAxpyEx_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const ::core::ffi::c_void,
         alphaType: cuda_types::cublas::cudaDataType,
         x: *const ::core::ffi::c_void,
         xType: cuda_types::cublas::cudaDataType,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut ::core::ffi::c_void,
         yType: cuda_types::cublas::cudaDataType,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         executiontype: cuda_types::cublas::cudaDataType,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -680,12 +680,12 @@ extern "system" {
     #[must_use]
     fn cublasSaxpy_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const f32,
         x: *const f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut f32,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDaxpy_v2(
@@ -700,12 +700,12 @@ extern "system" {
     #[must_use]
     fn cublasDaxpy_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const f64,
         x: *const f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut f64,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCaxpy_v2(
@@ -720,12 +720,12 @@ extern "system" {
     #[must_use]
     fn cublasCaxpy_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         x: *const cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut cuda_types::cublas::cuComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZaxpy_v2(
@@ -740,12 +740,12 @@ extern "system" {
     #[must_use]
     fn cublasZaxpy_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         x: *const cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut cuda_types::cublas::cuDoubleComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCopyEx(
@@ -761,13 +761,13 @@ extern "system" {
     #[must_use]
     fn cublasCopyEx_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const ::core::ffi::c_void,
         xType: cuda_types::cublas::cudaDataType,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut ::core::ffi::c_void,
         yType: cuda_types::cublas::cudaDataType,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasScopy_v2(
@@ -781,11 +781,11 @@ extern "system" {
     #[must_use]
     fn cublasScopy_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut f32,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDcopy_v2(
@@ -799,11 +799,11 @@ extern "system" {
     #[must_use]
     fn cublasDcopy_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut f64,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCcopy_v2(
@@ -817,11 +817,11 @@ extern "system" {
     #[must_use]
     fn cublasCcopy_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut cuda_types::cublas::cuComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZcopy_v2(
@@ -835,11 +835,11 @@ extern "system" {
     #[must_use]
     fn cublasZcopy_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut cuda_types::cublas::cuDoubleComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSswap_v2(
@@ -853,11 +853,11 @@ extern "system" {
     #[must_use]
     fn cublasSswap_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *mut f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut f32,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDswap_v2(
@@ -871,11 +871,11 @@ extern "system" {
     #[must_use]
     fn cublasDswap_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *mut f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut f64,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCswap_v2(
@@ -889,11 +889,11 @@ extern "system" {
     #[must_use]
     fn cublasCswap_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *mut cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut cuda_types::cublas::cuComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZswap_v2(
@@ -907,11 +907,11 @@ extern "system" {
     #[must_use]
     fn cublasZswap_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *mut cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut cuda_types::cublas::cuDoubleComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSwapEx(
@@ -927,13 +927,13 @@ extern "system" {
     #[must_use]
     fn cublasSwapEx_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *mut ::core::ffi::c_void,
         xType: cuda_types::cublas::cudaDataType,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut ::core::ffi::c_void,
         yType: cuda_types::cublas::cudaDataType,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasIsamax_v2(
@@ -946,10 +946,10 @@ extern "system" {
     #[must_use]
     fn cublasIsamax_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const f32,
-        incx: cuda_types::cublas::i64,
-        result: *mut cuda_types::cublas::i64,
+        incx: i64,
+        result: *mut i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasIdamax_v2(
@@ -962,10 +962,10 @@ extern "system" {
     #[must_use]
     fn cublasIdamax_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const f64,
-        incx: cuda_types::cublas::i64,
-        result: *mut cuda_types::cublas::i64,
+        incx: i64,
+        result: *mut i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasIcamax_v2(
@@ -978,10 +978,10 @@ extern "system" {
     #[must_use]
     fn cublasIcamax_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
-        result: *mut cuda_types::cublas::i64,
+        incx: i64,
+        result: *mut i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasIzamax_v2(
@@ -994,10 +994,10 @@ extern "system" {
     #[must_use]
     fn cublasIzamax_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
-        result: *mut cuda_types::cublas::i64,
+        incx: i64,
+        result: *mut i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasIamaxEx(
@@ -1011,11 +1011,11 @@ extern "system" {
     #[must_use]
     fn cublasIamaxEx_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const ::core::ffi::c_void,
         xType: cuda_types::cublas::cudaDataType,
-        incx: cuda_types::cublas::i64,
-        result: *mut cuda_types::cublas::i64,
+        incx: i64,
+        result: *mut i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasIsamin_v2(
@@ -1028,10 +1028,10 @@ extern "system" {
     #[must_use]
     fn cublasIsamin_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const f32,
-        incx: cuda_types::cublas::i64,
-        result: *mut cuda_types::cublas::i64,
+        incx: i64,
+        result: *mut i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasIdamin_v2(
@@ -1044,10 +1044,10 @@ extern "system" {
     #[must_use]
     fn cublasIdamin_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const f64,
-        incx: cuda_types::cublas::i64,
-        result: *mut cuda_types::cublas::i64,
+        incx: i64,
+        result: *mut i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasIcamin_v2(
@@ -1060,10 +1060,10 @@ extern "system" {
     #[must_use]
     fn cublasIcamin_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
-        result: *mut cuda_types::cublas::i64,
+        incx: i64,
+        result: *mut i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasIzamin_v2(
@@ -1076,10 +1076,10 @@ extern "system" {
     #[must_use]
     fn cublasIzamin_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
-        result: *mut cuda_types::cublas::i64,
+        incx: i64,
+        result: *mut i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasIaminEx(
@@ -1093,11 +1093,11 @@ extern "system" {
     #[must_use]
     fn cublasIaminEx_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const ::core::ffi::c_void,
         xType: cuda_types::cublas::cudaDataType,
-        incx: cuda_types::cublas::i64,
-        result: *mut cuda_types::cublas::i64,
+        incx: i64,
+        result: *mut i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasAsumEx(
@@ -1113,10 +1113,10 @@ extern "system" {
     #[must_use]
     fn cublasAsumEx_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const ::core::ffi::c_void,
         xType: cuda_types::cublas::cudaDataType,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         result: *mut ::core::ffi::c_void,
         resultType: cuda_types::cublas::cudaDataType,
         executiontype: cuda_types::cublas::cudaDataType,
@@ -1132,9 +1132,9 @@ extern "system" {
     #[must_use]
     fn cublasSasum_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         result: *mut f32,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -1148,9 +1148,9 @@ extern "system" {
     #[must_use]
     fn cublasDasum_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         result: *mut f64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -1164,9 +1164,9 @@ extern "system" {
     #[must_use]
     fn cublasScasum_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         result: *mut f32,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -1180,9 +1180,9 @@ extern "system" {
     #[must_use]
     fn cublasDzasum_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *const cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         result: *mut f64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -1199,11 +1199,11 @@ extern "system" {
     #[must_use]
     fn cublasSrot_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *mut f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut f32,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         c: *const f32,
         s: *const f32,
     ) -> cuda_types::cublas::cublasStatus_t;
@@ -1221,11 +1221,11 @@ extern "system" {
     #[must_use]
     fn cublasDrot_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *mut f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut f64,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         c: *const f64,
         s: *const f64,
     ) -> cuda_types::cublas::cublasStatus_t;
@@ -1243,11 +1243,11 @@ extern "system" {
     #[must_use]
     fn cublasCrot_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *mut cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut cuda_types::cublas::cuComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         c: *const f32,
         s: *const cuda_types::cublas::cuComplex,
     ) -> cuda_types::cublas::cublasStatus_t;
@@ -1265,11 +1265,11 @@ extern "system" {
     #[must_use]
     fn cublasCsrot_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *mut cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut cuda_types::cublas::cuComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         c: *const f32,
         s: *const f32,
     ) -> cuda_types::cublas::cublasStatus_t;
@@ -1287,11 +1287,11 @@ extern "system" {
     #[must_use]
     fn cublasZrot_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *mut cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut cuda_types::cublas::cuDoubleComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         c: *const f64,
         s: *const cuda_types::cublas::cuDoubleComplex,
     ) -> cuda_types::cublas::cublasStatus_t;
@@ -1309,11 +1309,11 @@ extern "system" {
     #[must_use]
     fn cublasZdrot_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *mut cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut cuda_types::cublas::cuDoubleComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         c: *const f64,
         s: *const f64,
     ) -> cuda_types::cublas::cublasStatus_t;
@@ -1335,13 +1335,13 @@ extern "system" {
     #[must_use]
     fn cublasRotEx_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *mut ::core::ffi::c_void,
         xType: cuda_types::cublas::cudaDataType,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut ::core::ffi::c_void,
         yType: cuda_types::cublas::cudaDataType,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         c: *const ::core::ffi::c_void,
         s: *const ::core::ffi::c_void,
         csType: cuda_types::cublas::cudaDataType,
@@ -1403,11 +1403,11 @@ extern "system" {
     #[must_use]
     fn cublasSrotm_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *mut f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut f32,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         param: *const f32,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -1423,11 +1423,11 @@ extern "system" {
     #[must_use]
     fn cublasDrotm_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *mut f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut f64,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         param: *const f64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -1447,13 +1447,13 @@ extern "system" {
     #[must_use]
     fn cublasRotmEx_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         x: *mut ::core::ffi::c_void,
         xType: cuda_types::cublas::cudaDataType,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *mut ::core::ffi::c_void,
         yType: cuda_types::cublas::cudaDataType,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         param: *const ::core::ffi::c_void,
         paramType: cuda_types::cublas::cudaDataType,
         executiontype: cuda_types::cublas::cudaDataType,
@@ -1510,16 +1510,16 @@ extern "system" {
     fn cublasSgemv_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f32,
         A: *const f32,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *const f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const f32,
         y: *mut f32,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDgemv_v2(
@@ -1540,16 +1540,16 @@ extern "system" {
     fn cublasDgemv_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f64,
         A: *const f64,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *const f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const f64,
         y: *mut f64,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCgemv_v2(
@@ -1570,16 +1570,16 @@ extern "system" {
     fn cublasCgemv_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *const cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const cuda_types::cublas::cuComplex,
         y: *mut cuda_types::cublas::cuComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZgemv_v2(
@@ -1600,16 +1600,16 @@ extern "system" {
     fn cublasZgemv_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         A: *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *const cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const cuda_types::cublas::cuDoubleComplex,
         y: *mut cuda_types::cublas::cuDoubleComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSgbmv_v2(
@@ -1632,18 +1632,18 @@ extern "system" {
     fn cublasSgbmv_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        kl: cuda_types::cublas::i64,
-        ku: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        kl: i64,
+        ku: i64,
         alpha: *const f32,
         A: *const f32,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *const f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const f32,
         y: *mut f32,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDgbmv_v2(
@@ -1666,18 +1666,18 @@ extern "system" {
     fn cublasDgbmv_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        kl: cuda_types::cublas::i64,
-        ku: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        kl: i64,
+        ku: i64,
         alpha: *const f64,
         A: *const f64,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *const f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const f64,
         y: *mut f64,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCgbmv_v2(
@@ -1700,18 +1700,18 @@ extern "system" {
     fn cublasCgbmv_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        kl: cuda_types::cublas::i64,
-        ku: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        kl: i64,
+        ku: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *const cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const cuda_types::cublas::cuComplex,
         y: *mut cuda_types::cublas::cuComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZgbmv_v2(
@@ -1734,18 +1734,18 @@ extern "system" {
     fn cublasZgbmv_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        kl: cuda_types::cublas::i64,
-        ku: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        kl: i64,
+        ku: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         A: *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *const cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const cuda_types::cublas::cuDoubleComplex,
         y: *mut cuda_types::cublas::cuDoubleComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasStrmv_v2(
@@ -1765,11 +1765,11 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         A: *const f32,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *mut f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDtrmv_v2(
@@ -1789,11 +1789,11 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         A: *const f64,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *mut f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCtrmv_v2(
@@ -1813,11 +1813,11 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *mut cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZtrmv_v2(
@@ -1837,11 +1837,11 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         A: *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *mut cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasStbmv_v2(
@@ -1862,12 +1862,12 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         A: *const f32,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *mut f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDtbmv_v2(
@@ -1888,12 +1888,12 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         A: *const f64,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *mut f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCtbmv_v2(
@@ -1914,12 +1914,12 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *mut cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZtbmv_v2(
@@ -1940,12 +1940,12 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         A: *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *mut cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasStpmv_v2(
@@ -1964,10 +1964,10 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         AP: *const f32,
         x: *mut f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDtpmv_v2(
@@ -1986,10 +1986,10 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         AP: *const f64,
         x: *mut f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCtpmv_v2(
@@ -2008,10 +2008,10 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         AP: *const cuda_types::cublas::cuComplex,
         x: *mut cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZtpmv_v2(
@@ -2030,10 +2030,10 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         AP: *const cuda_types::cublas::cuDoubleComplex,
         x: *mut cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasStrsv_v2(
@@ -2053,11 +2053,11 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         A: *const f32,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *mut f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDtrsv_v2(
@@ -2077,11 +2077,11 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         A: *const f64,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *mut f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCtrsv_v2(
@@ -2101,11 +2101,11 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *mut cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZtrsv_v2(
@@ -2125,11 +2125,11 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         A: *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *mut cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasStpsv_v2(
@@ -2148,10 +2148,10 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         AP: *const f32,
         x: *mut f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDtpsv_v2(
@@ -2170,10 +2170,10 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         AP: *const f64,
         x: *mut f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCtpsv_v2(
@@ -2192,10 +2192,10 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         AP: *const cuda_types::cublas::cuComplex,
         x: *mut cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZtpsv_v2(
@@ -2214,10 +2214,10 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         AP: *const cuda_types::cublas::cuDoubleComplex,
         x: *mut cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasStbsv_v2(
@@ -2238,12 +2238,12 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         A: *const f32,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *mut f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDtbsv_v2(
@@ -2264,12 +2264,12 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         A: *const f64,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *mut f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCtbsv_v2(
@@ -2290,12 +2290,12 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *mut cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZtbsv_v2(
@@ -2316,12 +2316,12 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         A: *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *mut cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSsymv_v2(
@@ -2341,15 +2341,15 @@ extern "system" {
     fn cublasSsymv_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const f32,
         A: *const f32,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *const f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const f32,
         y: *mut f32,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDsymv_v2(
@@ -2369,15 +2369,15 @@ extern "system" {
     fn cublasDsymv_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const f64,
         A: *const f64,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *const f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const f64,
         y: *mut f64,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCsymv_v2(
@@ -2397,15 +2397,15 @@ extern "system" {
     fn cublasCsymv_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *const cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const cuda_types::cublas::cuComplex,
         y: *mut cuda_types::cublas::cuComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZsymv_v2(
@@ -2425,15 +2425,15 @@ extern "system" {
     fn cublasZsymv_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         A: *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *const cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const cuda_types::cublas::cuDoubleComplex,
         y: *mut cuda_types::cublas::cuDoubleComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasChemv_v2(
@@ -2453,15 +2453,15 @@ extern "system" {
     fn cublasChemv_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *const cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const cuda_types::cublas::cuComplex,
         y: *mut cuda_types::cublas::cuComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZhemv_v2(
@@ -2481,15 +2481,15 @@ extern "system" {
     fn cublasZhemv_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         A: *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *const cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const cuda_types::cublas::cuDoubleComplex,
         y: *mut cuda_types::cublas::cuDoubleComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSsbmv_v2(
@@ -2510,16 +2510,16 @@ extern "system" {
     fn cublasSsbmv_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const f32,
         A: *const f32,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *const f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const f32,
         y: *mut f32,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDsbmv_v2(
@@ -2540,16 +2540,16 @@ extern "system" {
     fn cublasDsbmv_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const f64,
         A: *const f64,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *const f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const f64,
         y: *mut f64,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasChbmv_v2(
@@ -2570,16 +2570,16 @@ extern "system" {
     fn cublasChbmv_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *const cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const cuda_types::cublas::cuComplex,
         y: *mut cuda_types::cublas::cuComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZhbmv_v2(
@@ -2600,16 +2600,16 @@ extern "system" {
     fn cublasZhbmv_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         A: *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *const cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const cuda_types::cublas::cuDoubleComplex,
         y: *mut cuda_types::cublas::cuDoubleComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSspmv_v2(
@@ -2628,14 +2628,14 @@ extern "system" {
     fn cublasSspmv_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const f32,
         AP: *const f32,
         x: *const f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const f32,
         y: *mut f32,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDspmv_v2(
@@ -2654,14 +2654,14 @@ extern "system" {
     fn cublasDspmv_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const f64,
         AP: *const f64,
         x: *const f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const f64,
         y: *mut f64,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasChpmv_v2(
@@ -2680,14 +2680,14 @@ extern "system" {
     fn cublasChpmv_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         AP: *const cuda_types::cublas::cuComplex,
         x: *const cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const cuda_types::cublas::cuComplex,
         y: *mut cuda_types::cublas::cuComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZhpmv_v2(
@@ -2706,14 +2706,14 @@ extern "system" {
     fn cublasZhpmv_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         AP: *const cuda_types::cublas::cuDoubleComplex,
         x: *const cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const cuda_types::cublas::cuDoubleComplex,
         y: *mut cuda_types::cublas::cuDoubleComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSger_v2(
@@ -2731,15 +2731,15 @@ extern "system" {
     #[must_use]
     fn cublasSger_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f32,
         x: *const f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *const f32,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         A: *mut f32,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDger_v2(
@@ -2757,15 +2757,15 @@ extern "system" {
     #[must_use]
     fn cublasDger_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f64,
         x: *const f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *const f64,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         A: *mut f64,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCgeru_v2(
@@ -2783,15 +2783,15 @@ extern "system" {
     #[must_use]
     fn cublasCgeru_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         x: *const cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *const cuda_types::cublas::cuComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         A: *mut cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCgerc_v2(
@@ -2809,15 +2809,15 @@ extern "system" {
     #[must_use]
     fn cublasCgerc_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         x: *const cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *const cuda_types::cublas::cuComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         A: *mut cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZgeru_v2(
@@ -2835,15 +2835,15 @@ extern "system" {
     #[must_use]
     fn cublasZgeru_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         x: *const cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *const cuda_types::cublas::cuDoubleComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         A: *mut cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZgerc_v2(
@@ -2861,15 +2861,15 @@ extern "system" {
     #[must_use]
     fn cublasZgerc_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         x: *const cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *const cuda_types::cublas::cuDoubleComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         A: *mut cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSsyr_v2(
@@ -2886,12 +2886,12 @@ extern "system" {
     fn cublasSsyr_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const f32,
         x: *const f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         A: *mut f32,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDsyr_v2(
@@ -2908,12 +2908,12 @@ extern "system" {
     fn cublasDsyr_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const f64,
         x: *const f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         A: *mut f64,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCsyr_v2(
@@ -2930,12 +2930,12 @@ extern "system" {
     fn cublasCsyr_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         x: *const cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         A: *mut cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZsyr_v2(
@@ -2952,12 +2952,12 @@ extern "system" {
     fn cublasZsyr_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         x: *const cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         A: *mut cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCher_v2(
@@ -2974,12 +2974,12 @@ extern "system" {
     fn cublasCher_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const f32,
         x: *const cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         A: *mut cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZher_v2(
@@ -2996,12 +2996,12 @@ extern "system" {
     fn cublasZher_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const f64,
         x: *const cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         A: *mut cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSspr_v2(
@@ -3017,10 +3017,10 @@ extern "system" {
     fn cublasSspr_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const f32,
         x: *const f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         AP: *mut f32,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -3037,10 +3037,10 @@ extern "system" {
     fn cublasDspr_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const f64,
         x: *const f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         AP: *mut f64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -3057,10 +3057,10 @@ extern "system" {
     fn cublasChpr_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const f32,
         x: *const cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         AP: *mut cuda_types::cublas::cuComplex,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -3077,10 +3077,10 @@ extern "system" {
     fn cublasZhpr_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const f64,
         x: *const cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         AP: *mut cuda_types::cublas::cuDoubleComplex,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -3100,14 +3100,14 @@ extern "system" {
     fn cublasSsyr2_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const f32,
         x: *const f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *const f32,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         A: *mut f32,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDsyr2_v2(
@@ -3126,14 +3126,14 @@ extern "system" {
     fn cublasDsyr2_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const f64,
         x: *const f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *const f64,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         A: *mut f64,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCsyr2_v2(
@@ -3152,14 +3152,14 @@ extern "system" {
     fn cublasCsyr2_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         x: *const cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *const cuda_types::cublas::cuComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         A: *mut cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZsyr2_v2(
@@ -3178,14 +3178,14 @@ extern "system" {
     fn cublasZsyr2_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         x: *const cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *const cuda_types::cublas::cuDoubleComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         A: *mut cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCher2_v2(
@@ -3204,14 +3204,14 @@ extern "system" {
     fn cublasCher2_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         x: *const cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *const cuda_types::cublas::cuComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         A: *mut cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZher2_v2(
@@ -3230,14 +3230,14 @@ extern "system" {
     fn cublasZher2_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         x: *const cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *const cuda_types::cublas::cuDoubleComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         A: *mut cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSspr2_v2(
@@ -3255,12 +3255,12 @@ extern "system" {
     fn cublasSspr2_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const f32,
         x: *const f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *const f32,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         AP: *mut f32,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -3279,12 +3279,12 @@ extern "system" {
     fn cublasDspr2_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const f64,
         x: *const f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *const f64,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         AP: *mut f64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -3303,12 +3303,12 @@ extern "system" {
     fn cublasChpr2_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         x: *const cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *const cuda_types::cublas::cuComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         AP: *mut cuda_types::cublas::cuComplex,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -3327,12 +3327,12 @@ extern "system" {
     fn cublasZhpr2_v2_64(
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        n: cuda_types::cublas::i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         x: *const cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         y: *const cuda_types::cublas::cuDoubleComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         AP: *mut cuda_types::cublas::cuDoubleComplex,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -3355,17 +3355,17 @@ extern "system" {
     fn cublasSgemvBatched_64(
         handle: cuda_types::cublas::cublasHandle_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f32,
         Aarray: *const *const f32,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         xarray: *const *const f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const f32,
         yarray: *const *mut f32,
-        incy: cuda_types::cublas::i64,
-        batchCount: cuda_types::cublas::i64,
+        incy: i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDgemvBatched(
@@ -3387,17 +3387,17 @@ extern "system" {
     fn cublasDgemvBatched_64(
         handle: cuda_types::cublas::cublasHandle_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f64,
         Aarray: *const *const f64,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         xarray: *const *const f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const f64,
         yarray: *const *mut f64,
-        incy: cuda_types::cublas::i64,
-        batchCount: cuda_types::cublas::i64,
+        incy: i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCgemvBatched(
@@ -3419,17 +3419,17 @@ extern "system" {
     fn cublasCgemvBatched_64(
         handle: cuda_types::cublas::cublasHandle_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         Aarray: *const *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         xarray: *const *const cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const cuda_types::cublas::cuComplex,
         yarray: *const *mut cuda_types::cublas::cuComplex,
-        incy: cuda_types::cublas::i64,
-        batchCount: cuda_types::cublas::i64,
+        incy: i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZgemvBatched(
@@ -3451,17 +3451,17 @@ extern "system" {
     fn cublasZgemvBatched_64(
         handle: cuda_types::cublas::cublasHandle_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         Aarray: *const *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         xarray: *const *const cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const cuda_types::cublas::cuDoubleComplex,
         yarray: *const *mut cuda_types::cublas::cuDoubleComplex,
-        incy: cuda_types::cublas::i64,
-        batchCount: cuda_types::cublas::i64,
+        incy: i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasHSHgemvBatched(
@@ -3483,17 +3483,17 @@ extern "system" {
     fn cublasHSHgemvBatched_64(
         handle: cuda_types::cublas::cublasHandle_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f32,
         Aarray: *const *const cuda_types::cublas::__half,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         xarray: *const *const cuda_types::cublas::__half,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const f32,
         yarray: *const *mut cuda_types::cublas::__half,
-        incy: cuda_types::cublas::i64,
-        batchCount: cuda_types::cublas::i64,
+        incy: i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasHSSgemvBatched(
@@ -3515,17 +3515,17 @@ extern "system" {
     fn cublasHSSgemvBatched_64(
         handle: cuda_types::cublas::cublasHandle_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f32,
         Aarray: *const *const cuda_types::cublas::__half,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         xarray: *const *const cuda_types::cublas::__half,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const f32,
         yarray: *const *mut f32,
-        incy: cuda_types::cublas::i64,
-        batchCount: cuda_types::cublas::i64,
+        incy: i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasTSTgemvBatched(
@@ -3547,17 +3547,17 @@ extern "system" {
     fn cublasTSTgemvBatched_64(
         handle: cuda_types::cublas::cublasHandle_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f32,
         Aarray: *const *const cuda_types::cublas::__nv_bfloat16,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         xarray: *const *const cuda_types::cublas::__nv_bfloat16,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const f32,
         yarray: *const *mut cuda_types::cublas::__nv_bfloat16,
-        incy: cuda_types::cublas::i64,
-        batchCount: cuda_types::cublas::i64,
+        incy: i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasTSSgemvBatched(
@@ -3579,17 +3579,17 @@ extern "system" {
     fn cublasTSSgemvBatched_64(
         handle: cuda_types::cublas::cublasHandle_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f32,
         Aarray: *const *const cuda_types::cublas::__nv_bfloat16,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         xarray: *const *const cuda_types::cublas::__nv_bfloat16,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         beta: *const f32,
         yarray: *const *mut f32,
-        incy: cuda_types::cublas::i64,
-        batchCount: cuda_types::cublas::i64,
+        incy: i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSgemvStridedBatched(
@@ -3614,20 +3614,20 @@ extern "system" {
     fn cublasSgemvStridedBatched_64(
         handle: cuda_types::cublas::cublasHandle_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f32,
         A: *const f32,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         strideA: ::core::ffi::c_longlong,
         x: *const f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         stridex: ::core::ffi::c_longlong,
         beta: *const f32,
         y: *mut f32,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         stridey: ::core::ffi::c_longlong,
-        batchCount: cuda_types::cublas::i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDgemvStridedBatched(
@@ -3652,20 +3652,20 @@ extern "system" {
     fn cublasDgemvStridedBatched_64(
         handle: cuda_types::cublas::cublasHandle_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f64,
         A: *const f64,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         strideA: ::core::ffi::c_longlong,
         x: *const f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         stridex: ::core::ffi::c_longlong,
         beta: *const f64,
         y: *mut f64,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         stridey: ::core::ffi::c_longlong,
-        batchCount: cuda_types::cublas::i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCgemvStridedBatched(
@@ -3690,20 +3690,20 @@ extern "system" {
     fn cublasCgemvStridedBatched_64(
         handle: cuda_types::cublas::cublasHandle_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         strideA: ::core::ffi::c_longlong,
         x: *const cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         stridex: ::core::ffi::c_longlong,
         beta: *const cuda_types::cublas::cuComplex,
         y: *mut cuda_types::cublas::cuComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         stridey: ::core::ffi::c_longlong,
-        batchCount: cuda_types::cublas::i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZgemvStridedBatched(
@@ -3728,20 +3728,20 @@ extern "system" {
     fn cublasZgemvStridedBatched_64(
         handle: cuda_types::cublas::cublasHandle_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         A: *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         strideA: ::core::ffi::c_longlong,
         x: *const cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         stridex: ::core::ffi::c_longlong,
         beta: *const cuda_types::cublas::cuDoubleComplex,
         y: *mut cuda_types::cublas::cuDoubleComplex,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         stridey: ::core::ffi::c_longlong,
-        batchCount: cuda_types::cublas::i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasHSHgemvStridedBatched(
@@ -3766,20 +3766,20 @@ extern "system" {
     fn cublasHSHgemvStridedBatched_64(
         handle: cuda_types::cublas::cublasHandle_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f32,
         A: *const cuda_types::cublas::__half,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         strideA: ::core::ffi::c_longlong,
         x: *const cuda_types::cublas::__half,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         stridex: ::core::ffi::c_longlong,
         beta: *const f32,
         y: *mut cuda_types::cublas::__half,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         stridey: ::core::ffi::c_longlong,
-        batchCount: cuda_types::cublas::i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasHSSgemvStridedBatched(
@@ -3804,20 +3804,20 @@ extern "system" {
     fn cublasHSSgemvStridedBatched_64(
         handle: cuda_types::cublas::cublasHandle_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f32,
         A: *const cuda_types::cublas::__half,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         strideA: ::core::ffi::c_longlong,
         x: *const cuda_types::cublas::__half,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         stridex: ::core::ffi::c_longlong,
         beta: *const f32,
         y: *mut f32,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         stridey: ::core::ffi::c_longlong,
-        batchCount: cuda_types::cublas::i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasTSTgemvStridedBatched(
@@ -3842,20 +3842,20 @@ extern "system" {
     fn cublasTSTgemvStridedBatched_64(
         handle: cuda_types::cublas::cublasHandle_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f32,
         A: *const cuda_types::cublas::__nv_bfloat16,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         strideA: ::core::ffi::c_longlong,
         x: *const cuda_types::cublas::__nv_bfloat16,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         stridex: ::core::ffi::c_longlong,
         beta: *const f32,
         y: *mut cuda_types::cublas::__nv_bfloat16,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         stridey: ::core::ffi::c_longlong,
-        batchCount: cuda_types::cublas::i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasTSSgemvStridedBatched(
@@ -3880,20 +3880,20 @@ extern "system" {
     fn cublasTSSgemvStridedBatched_64(
         handle: cuda_types::cublas::cublasHandle_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f32,
         A: *const cuda_types::cublas::__nv_bfloat16,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         strideA: ::core::ffi::c_longlong,
         x: *const cuda_types::cublas::__nv_bfloat16,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         stridex: ::core::ffi::c_longlong,
         beta: *const f32,
         y: *mut f32,
-        incy: cuda_types::cublas::i64,
+        incy: i64,
         stridey: ::core::ffi::c_longlong,
-        batchCount: cuda_types::cublas::i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSgemm_v2(
@@ -3917,17 +3917,17 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        k: i64,
         alpha: *const f32,
         A: *const f32,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const f32,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const f32,
         C: *mut f32,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDgemm_v2(
@@ -3951,17 +3951,17 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        k: i64,
         alpha: *const f64,
         A: *const f64,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const f64,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const f64,
         C: *mut f64,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCgemm_v2(
@@ -3985,17 +3985,17 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const cuda_types::cublas::cuComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const cuda_types::cublas::cuComplex,
         C: *mut cuda_types::cublas::cuComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCgemm3m(
@@ -4019,17 +4019,17 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const cuda_types::cublas::cuComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const cuda_types::cublas::cuComplex,
         C: *mut cuda_types::cublas::cuComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCgemm3mEx(
@@ -4056,20 +4056,20 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         A: *const ::core::ffi::c_void,
         Atype: cuda_types::cublas::cudaDataType,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const ::core::ffi::c_void,
         Btype: cuda_types::cublas::cudaDataType,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const cuda_types::cublas::cuComplex,
         C: *mut ::core::ffi::c_void,
         Ctype: cuda_types::cublas::cudaDataType,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZgemm_v2(
@@ -4093,17 +4093,17 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         A: *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const cuda_types::cublas::cuDoubleComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const cuda_types::cublas::cuDoubleComplex,
         C: *mut cuda_types::cublas::cuDoubleComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZgemm3m(
@@ -4127,17 +4127,17 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         A: *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const cuda_types::cublas::cuDoubleComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const cuda_types::cublas::cuDoubleComplex,
         C: *mut cuda_types::cublas::cuDoubleComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasHgemm(
@@ -4161,17 +4161,17 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::__half,
         A: *const cuda_types::cublas::__half,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const cuda_types::cublas::__half,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const cuda_types::cublas::__half,
         C: *mut cuda_types::cublas::__half,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSgemmEx(
@@ -4198,20 +4198,20 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        k: i64,
         alpha: *const f32,
         A: *const ::core::ffi::c_void,
         Atype: cuda_types::cublas::cudaDataType,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const ::core::ffi::c_void,
         Btype: cuda_types::cublas::cudaDataType,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const f32,
         C: *mut ::core::ffi::c_void,
         Ctype: cuda_types::cublas::cudaDataType,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasGemmEx(
@@ -4240,20 +4240,20 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        k: i64,
         alpha: *const ::core::ffi::c_void,
         A: *const ::core::ffi::c_void,
         Atype: cuda_types::cublas::cudaDataType,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const ::core::ffi::c_void,
         Btype: cuda_types::cublas::cudaDataType,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const ::core::ffi::c_void,
         C: *mut ::core::ffi::c_void,
         Ctype: cuda_types::cublas::cudaDataType,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
         computeType: cuda_types::cublas::cublasComputeType_t,
         algo: cuda_types::cublas::cublasGemmAlgo_t,
     ) -> cuda_types::cublas::cublasStatus_t;
@@ -4282,20 +4282,20 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         A: *const ::core::ffi::c_void,
         Atype: cuda_types::cublas::cudaDataType,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const ::core::ffi::c_void,
         Btype: cuda_types::cublas::cudaDataType,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const cuda_types::cublas::cuComplex,
         C: *mut ::core::ffi::c_void,
         Ctype: cuda_types::cublas::cudaDataType,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSsyrk_v2(
@@ -4316,14 +4316,14 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const f32,
         A: *const f32,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         beta: *const f32,
         C: *mut f32,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDsyrk_v2(
@@ -4344,14 +4344,14 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const f64,
         A: *const f64,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         beta: *const f64,
         C: *mut f64,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCsyrk_v2(
@@ -4372,14 +4372,14 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         beta: *const cuda_types::cublas::cuComplex,
         C: *mut cuda_types::cublas::cuComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZsyrk_v2(
@@ -4400,14 +4400,14 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         A: *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         beta: *const cuda_types::cublas::cuDoubleComplex,
         C: *mut cuda_types::cublas::cuDoubleComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCsyrkEx(
@@ -4430,16 +4430,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         A: *const ::core::ffi::c_void,
         Atype: cuda_types::cublas::cudaDataType,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         beta: *const cuda_types::cublas::cuComplex,
         C: *mut ::core::ffi::c_void,
         Ctype: cuda_types::cublas::cudaDataType,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCsyrk3mEx(
@@ -4462,16 +4462,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         A: *const ::core::ffi::c_void,
         Atype: cuda_types::cublas::cudaDataType,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         beta: *const cuda_types::cublas::cuComplex,
         C: *mut ::core::ffi::c_void,
         Ctype: cuda_types::cublas::cudaDataType,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCherk_v2(
@@ -4492,14 +4492,14 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const f32,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         beta: *const f32,
         C: *mut cuda_types::cublas::cuComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZherk_v2(
@@ -4520,14 +4520,14 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const f64,
         A: *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         beta: *const f64,
         C: *mut cuda_types::cublas::cuDoubleComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCherkEx(
@@ -4550,16 +4550,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const f32,
         A: *const ::core::ffi::c_void,
         Atype: cuda_types::cublas::cudaDataType,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         beta: *const f32,
         C: *mut ::core::ffi::c_void,
         Ctype: cuda_types::cublas::cudaDataType,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCherk3mEx(
@@ -4582,16 +4582,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const f32,
         A: *const ::core::ffi::c_void,
         Atype: cuda_types::cublas::cudaDataType,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         beta: *const f32,
         C: *mut ::core::ffi::c_void,
         Ctype: cuda_types::cublas::cudaDataType,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSsyr2k_v2(
@@ -4614,16 +4614,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const f32,
         A: *const f32,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const f32,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const f32,
         C: *mut f32,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDsyr2k_v2(
@@ -4646,16 +4646,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const f64,
         A: *const f64,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const f64,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const f64,
         C: *mut f64,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCsyr2k_v2(
@@ -4678,16 +4678,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const cuda_types::cublas::cuComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const cuda_types::cublas::cuComplex,
         C: *mut cuda_types::cublas::cuComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZsyr2k_v2(
@@ -4710,16 +4710,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         A: *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const cuda_types::cublas::cuDoubleComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const cuda_types::cublas::cuDoubleComplex,
         C: *mut cuda_types::cublas::cuDoubleComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCher2k_v2(
@@ -4742,16 +4742,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const cuda_types::cublas::cuComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const f32,
         C: *mut cuda_types::cublas::cuComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZher2k_v2(
@@ -4774,16 +4774,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         A: *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const cuda_types::cublas::cuDoubleComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const f64,
         C: *mut cuda_types::cublas::cuDoubleComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSsyrkx(
@@ -4806,16 +4806,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const f32,
         A: *const f32,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const f32,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const f32,
         C: *mut f32,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDsyrkx(
@@ -4838,16 +4838,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const f64,
         A: *const f64,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const f64,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const f64,
         C: *mut f64,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCsyrkx(
@@ -4870,16 +4870,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const cuda_types::cublas::cuComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const cuda_types::cublas::cuComplex,
         C: *mut cuda_types::cublas::cuComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZsyrkx(
@@ -4902,16 +4902,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         A: *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const cuda_types::cublas::cuDoubleComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const cuda_types::cublas::cuDoubleComplex,
         C: *mut cuda_types::cublas::cuDoubleComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCherkx(
@@ -4934,16 +4934,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const cuda_types::cublas::cuComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const f32,
         C: *mut cuda_types::cublas::cuComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZherkx(
@@ -4966,16 +4966,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         A: *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const cuda_types::cublas::cuDoubleComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const f64,
         C: *mut cuda_types::cublas::cuDoubleComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSsymm_v2(
@@ -4998,16 +4998,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         side: cuda_types::cublas::cublasSideMode_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f32,
         A: *const f32,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const f32,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const f32,
         C: *mut f32,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDsymm_v2(
@@ -5030,16 +5030,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         side: cuda_types::cublas::cublasSideMode_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f64,
         A: *const f64,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const f64,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const f64,
         C: *mut f64,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCsymm_v2(
@@ -5062,16 +5062,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         side: cuda_types::cublas::cublasSideMode_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const cuda_types::cublas::cuComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const cuda_types::cublas::cuComplex,
         C: *mut cuda_types::cublas::cuComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZsymm_v2(
@@ -5094,16 +5094,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         side: cuda_types::cublas::cublasSideMode_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         A: *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const cuda_types::cublas::cuDoubleComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const cuda_types::cublas::cuDoubleComplex,
         C: *mut cuda_types::cublas::cuDoubleComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasChemm_v2(
@@ -5126,16 +5126,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         side: cuda_types::cublas::cublasSideMode_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const cuda_types::cublas::cuComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const cuda_types::cublas::cuComplex,
         C: *mut cuda_types::cublas::cuComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZhemm_v2(
@@ -5158,16 +5158,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         side: cuda_types::cublas::cublasSideMode_t,
         uplo: cuda_types::cublas::cublasFillMode_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         A: *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const cuda_types::cublas::cuDoubleComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const cuda_types::cublas::cuDoubleComplex,
         C: *mut cuda_types::cublas::cuDoubleComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasStrsm_v2(
@@ -5191,13 +5191,13 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f32,
         A: *const f32,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *mut f32,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDtrsm_v2(
@@ -5221,13 +5221,13 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f64,
         A: *const f64,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *mut f64,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCtrsm_v2(
@@ -5251,13 +5251,13 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *mut cuda_types::cublas::cuComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZtrsm_v2(
@@ -5281,13 +5281,13 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         A: *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *mut cuda_types::cublas::cuDoubleComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasStrmm_v2(
@@ -5313,15 +5313,15 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f32,
         A: *const f32,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const f32,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         C: *mut f32,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDtrmm_v2(
@@ -5347,15 +5347,15 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f64,
         A: *const f64,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const f64,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         C: *mut f64,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCtrmm_v2(
@@ -5381,15 +5381,15 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const cuda_types::cublas::cuComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         C: *mut cuda_types::cublas::cuComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZtrmm_v2(
@@ -5415,15 +5415,15 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         A: *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const cuda_types::cublas::cuDoubleComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         C: *mut cuda_types::cublas::cuDoubleComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasHgemmBatched(
@@ -5448,18 +5448,18 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::__half,
         Aarray: *const *const cuda_types::cublas::__half,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         Barray: *const *const cuda_types::cublas::__half,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const cuda_types::cublas::__half,
         Carray: *const *mut cuda_types::cublas::__half,
-        ldc: cuda_types::cublas::i64,
-        batchCount: cuda_types::cublas::i64,
+        ldc: i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSgemmBatched(
@@ -5484,18 +5484,18 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        k: i64,
         alpha: *const f32,
         Aarray: *const *const f32,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         Barray: *const *const f32,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const f32,
         Carray: *const *mut f32,
-        ldc: cuda_types::cublas::i64,
-        batchCount: cuda_types::cublas::i64,
+        ldc: i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDgemmBatched(
@@ -5520,18 +5520,18 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        k: i64,
         alpha: *const f64,
         Aarray: *const *const f64,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         Barray: *const *const f64,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const f64,
         Carray: *const *mut f64,
-        ldc: cuda_types::cublas::i64,
-        batchCount: cuda_types::cublas::i64,
+        ldc: i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCgemmBatched(
@@ -5556,18 +5556,18 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         Aarray: *const *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         Barray: *const *const cuda_types::cublas::cuComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const cuda_types::cublas::cuComplex,
         Carray: *const *mut cuda_types::cublas::cuComplex,
-        ldc: cuda_types::cublas::i64,
-        batchCount: cuda_types::cublas::i64,
+        ldc: i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCgemm3mBatched(
@@ -5592,18 +5592,18 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         Aarray: *const *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         Barray: *const *const cuda_types::cublas::cuComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const cuda_types::cublas::cuComplex,
         Carray: *const *mut cuda_types::cublas::cuComplex,
-        ldc: cuda_types::cublas::i64,
-        batchCount: cuda_types::cublas::i64,
+        ldc: i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZgemmBatched(
@@ -5628,18 +5628,18 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         Aarray: *const *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         Barray: *const *const cuda_types::cublas::cuDoubleComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const cuda_types::cublas::cuDoubleComplex,
         Carray: *const *mut cuda_types::cublas::cuDoubleComplex,
-        ldc: cuda_types::cublas::i64,
-        batchCount: cuda_types::cublas::i64,
+        ldc: i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasHgemmStridedBatched(
@@ -5667,21 +5667,21 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::__half,
         A: *const cuda_types::cublas::__half,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         strideA: ::core::ffi::c_longlong,
         B: *const cuda_types::cublas::__half,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         strideB: ::core::ffi::c_longlong,
         beta: *const cuda_types::cublas::__half,
         C: *mut cuda_types::cublas::__half,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
         strideC: ::core::ffi::c_longlong,
-        batchCount: cuda_types::cublas::i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSgemmStridedBatched(
@@ -5709,21 +5709,21 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        k: i64,
         alpha: *const f32,
         A: *const f32,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         strideA: ::core::ffi::c_longlong,
         B: *const f32,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         strideB: ::core::ffi::c_longlong,
         beta: *const f32,
         C: *mut f32,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
         strideC: ::core::ffi::c_longlong,
-        batchCount: cuda_types::cublas::i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDgemmStridedBatched(
@@ -5751,21 +5751,21 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        k: i64,
         alpha: *const f64,
         A: *const f64,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         strideA: ::core::ffi::c_longlong,
         B: *const f64,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         strideB: ::core::ffi::c_longlong,
         beta: *const f64,
         C: *mut f64,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
         strideC: ::core::ffi::c_longlong,
-        batchCount: cuda_types::cublas::i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCgemmStridedBatched(
@@ -5793,21 +5793,21 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         strideA: ::core::ffi::c_longlong,
         B: *const cuda_types::cublas::cuComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         strideB: ::core::ffi::c_longlong,
         beta: *const cuda_types::cublas::cuComplex,
         C: *mut cuda_types::cublas::cuComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
         strideC: ::core::ffi::c_longlong,
-        batchCount: cuda_types::cublas::i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCgemm3mStridedBatched(
@@ -5835,21 +5835,21 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         strideA: ::core::ffi::c_longlong,
         B: *const cuda_types::cublas::cuComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         strideB: ::core::ffi::c_longlong,
         beta: *const cuda_types::cublas::cuComplex,
         C: *mut cuda_types::cublas::cuComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
         strideC: ::core::ffi::c_longlong,
-        batchCount: cuda_types::cublas::i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZgemmStridedBatched(
@@ -5877,21 +5877,21 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        k: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         A: *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         strideA: ::core::ffi::c_longlong,
         B: *const cuda_types::cublas::cuDoubleComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         strideB: ::core::ffi::c_longlong,
         beta: *const cuda_types::cublas::cuDoubleComplex,
         C: *mut cuda_types::cublas::cuDoubleComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
         strideC: ::core::ffi::c_longlong,
-        batchCount: cuda_types::cublas::i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasGemmBatchedEx(
@@ -5921,21 +5921,21 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        k: i64,
         alpha: *const ::core::ffi::c_void,
         Aarray: *const *const ::core::ffi::c_void,
         Atype: cuda_types::cublas::cudaDataType,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         Barray: *const *const ::core::ffi::c_void,
         Btype: cuda_types::cublas::cudaDataType,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         beta: *const ::core::ffi::c_void,
         Carray: *const *mut ::core::ffi::c_void,
         Ctype: cuda_types::cublas::cudaDataType,
-        ldc: cuda_types::cublas::i64,
-        batchCount: cuda_types::cublas::i64,
+        ldc: i64,
+        batchCount: i64,
         computeType: cuda_types::cublas::cublasComputeType_t,
         algo: cuda_types::cublas::cublasGemmAlgo_t,
     ) -> cuda_types::cublas::cublasStatus_t;
@@ -5970,24 +5970,24 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
-        k: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
+        k: i64,
         alpha: *const ::core::ffi::c_void,
         A: *const ::core::ffi::c_void,
         Atype: cuda_types::cublas::cudaDataType,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         strideA: ::core::ffi::c_longlong,
         B: *const ::core::ffi::c_void,
         Btype: cuda_types::cublas::cudaDataType,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         strideB: ::core::ffi::c_longlong,
         beta: *const ::core::ffi::c_void,
         C: *mut ::core::ffi::c_void,
         Ctype: cuda_types::cublas::cudaDataType,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
         strideC: ::core::ffi::c_longlong,
-        batchCount: cuda_types::cublas::i64,
+        batchCount: i64,
         computeType: cuda_types::cublas::cublasComputeType_t,
         algo: cuda_types::cublas::cublasGemmAlgo_t,
     ) -> cuda_types::cublas::cublasStatus_t;
@@ -6015,19 +6015,19 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa_array: *const cuda_types::cublas::cublasOperation_t,
         transb_array: *const cuda_types::cublas::cublasOperation_t,
-        m_array: *const cuda_types::cublas::i64,
-        n_array: *const cuda_types::cublas::i64,
-        k_array: *const cuda_types::cublas::i64,
+        m_array: *const i64,
+        n_array: *const i64,
+        k_array: *const i64,
         alpha_array: *const f32,
         Aarray: *const *const f32,
-        lda_array: *const cuda_types::cublas::i64,
+        lda_array: *const i64,
         Barray: *const *const f32,
-        ldb_array: *const cuda_types::cublas::i64,
+        ldb_array: *const i64,
         beta_array: *const f32,
         Carray: *const *mut f32,
-        ldc_array: *const cuda_types::cublas::i64,
-        group_count: cuda_types::cublas::i64,
-        group_size: *const cuda_types::cublas::i64,
+        ldc_array: *const i64,
+        group_count: i64,
+        group_size: *const i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDgemmGroupedBatched(
@@ -6053,19 +6053,19 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa_array: *const cuda_types::cublas::cublasOperation_t,
         transb_array: *const cuda_types::cublas::cublasOperation_t,
-        m_array: *const cuda_types::cublas::i64,
-        n_array: *const cuda_types::cublas::i64,
-        k_array: *const cuda_types::cublas::i64,
+        m_array: *const i64,
+        n_array: *const i64,
+        k_array: *const i64,
         alpha_array: *const f64,
         Aarray: *const *const f64,
-        lda_array: *const cuda_types::cublas::i64,
+        lda_array: *const i64,
         Barray: *const *const f64,
-        ldb_array: *const cuda_types::cublas::i64,
+        ldb_array: *const i64,
         beta_array: *const f64,
         Carray: *const *mut f64,
-        ldc_array: *const cuda_types::cublas::i64,
-        group_count: cuda_types::cublas::i64,
-        group_size: *const cuda_types::cublas::i64,
+        ldc_array: *const i64,
+        group_count: i64,
+        group_size: *const i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasGemmGroupedBatchedEx(
@@ -6095,22 +6095,22 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa_array: *const cuda_types::cublas::cublasOperation_t,
         transb_array: *const cuda_types::cublas::cublasOperation_t,
-        m_array: *const cuda_types::cublas::i64,
-        n_array: *const cuda_types::cublas::i64,
-        k_array: *const cuda_types::cublas::i64,
+        m_array: *const i64,
+        n_array: *const i64,
+        k_array: *const i64,
         alpha_array: *const ::core::ffi::c_void,
         Aarray: *const *const ::core::ffi::c_void,
         Atype: cuda_types::cublas::cudaDataType_t,
-        lda_array: *const cuda_types::cublas::i64,
+        lda_array: *const i64,
         Barray: *const *const ::core::ffi::c_void,
         Btype: cuda_types::cublas::cudaDataType_t,
-        ldb_array: *const cuda_types::cublas::i64,
+        ldb_array: *const i64,
         beta_array: *const ::core::ffi::c_void,
         Carray: *const *mut ::core::ffi::c_void,
         Ctype: cuda_types::cublas::cudaDataType_t,
-        ldc_array: *const cuda_types::cublas::i64,
-        group_count: cuda_types::cublas::i64,
-        group_size: *const cuda_types::cublas::i64,
+        ldc_array: *const i64,
+        group_count: i64,
+        group_size: *const i64,
         computeType: cuda_types::cublas::cublasComputeType_t,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -6134,16 +6134,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f32,
         A: *const f32,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         beta: *const f32,
         B: *const f32,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         C: *mut f32,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDgeam(
@@ -6166,16 +6166,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f64,
         A: *const f64,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         beta: *const f64,
         B: *const f64,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         C: *mut f64,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCgeam(
@@ -6198,16 +6198,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         beta: *const cuda_types::cublas::cuComplex,
         B: *const cuda_types::cublas::cuComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         C: *mut cuda_types::cublas::cuComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZgeam(
@@ -6230,16 +6230,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         transa: cuda_types::cublas::cublasOperation_t,
         transb: cuda_types::cublas::cublasOperation_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         A: *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         beta: *const cuda_types::cublas::cuDoubleComplex,
         B: *const cuda_types::cublas::cuDoubleComplex,
-        ldb: cuda_types::cublas::i64,
+        ldb: i64,
         C: *mut cuda_types::cublas::cuDoubleComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasStrsmBatched(
@@ -6264,14 +6264,14 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f32,
         A: *const *const f32,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const *mut f32,
-        ldb: cuda_types::cublas::i64,
-        batchCount: cuda_types::cublas::i64,
+        ldb: i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDtrsmBatched(
@@ -6296,14 +6296,14 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const f64,
         A: *const *const f64,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const *mut f64,
-        ldb: cuda_types::cublas::i64,
-        batchCount: cuda_types::cublas::i64,
+        ldb: i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCtrsmBatched(
@@ -6328,14 +6328,14 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuComplex,
         A: *const *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const *mut cuda_types::cublas::cuComplex,
-        ldb: cuda_types::cublas::i64,
-        batchCount: cuda_types::cublas::i64,
+        ldb: i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZtrsmBatched(
@@ -6360,14 +6360,14 @@ extern "system" {
         uplo: cuda_types::cublas::cublasFillMode_t,
         trans: cuda_types::cublas::cublasOperation_t,
         diag: cuda_types::cublas::cublasDiagType_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         alpha: *const cuda_types::cublas::cuDoubleComplex,
         A: *const *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         B: *const *mut cuda_types::cublas::cuDoubleComplex,
-        ldb: cuda_types::cublas::i64,
-        batchCount: cuda_types::cublas::i64,
+        ldb: i64,
+        batchCount: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSdgmm(
@@ -6386,14 +6386,14 @@ extern "system" {
     fn cublasSdgmm_64(
         handle: cuda_types::cublas::cublasHandle_t,
         mode: cuda_types::cublas::cublasSideMode_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         A: *const f32,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *const f32,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         C: *mut f32,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasDdgmm(
@@ -6412,14 +6412,14 @@ extern "system" {
     fn cublasDdgmm_64(
         handle: cuda_types::cublas::cublasHandle_t,
         mode: cuda_types::cublas::cublasSideMode_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         A: *const f64,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *const f64,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         C: *mut f64,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasCdgmm(
@@ -6438,14 +6438,14 @@ extern "system" {
     fn cublasCdgmm_64(
         handle: cuda_types::cublas::cublasHandle_t,
         mode: cuda_types::cublas::cublasSideMode_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         A: *const cuda_types::cublas::cuComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *const cuda_types::cublas::cuComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         C: *mut cuda_types::cublas::cuComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasZdgmm(
@@ -6464,14 +6464,14 @@ extern "system" {
     fn cublasZdgmm_64(
         handle: cuda_types::cublas::cublasHandle_t,
         mode: cuda_types::cublas::cublasSideMode_t,
-        m: cuda_types::cublas::i64,
-        n: cuda_types::cublas::i64,
+        m: i64,
+        n: i64,
         A: *const cuda_types::cublas::cuDoubleComplex,
-        lda: cuda_types::cublas::i64,
+        lda: i64,
         x: *const cuda_types::cublas::cuDoubleComplex,
-        incx: cuda_types::cublas::i64,
+        incx: i64,
         C: *mut cuda_types::cublas::cuDoubleComplex,
-        ldc: cuda_types::cublas::i64,
+        ldc: i64,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasSmatinvBatched(
