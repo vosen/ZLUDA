@@ -9,6 +9,9 @@ pub use super::cuda::cudaDataType;
 pub use super::cuda::cudaDataType_t;
 pub type cudaStream_t = super::cuda::CUstream;
 pub use super::cuda::libraryPropertyType;
+pub type cudaGraphExecUpdateResultInfo_st = super::cuda::CUgraphExecUpdateResultInfo_st;
+pub type cudaAsyncNotificationType = super::cuda::CUasyncNotificationType_enum;
+pub type cudaGraph_t = super::cuda::CUgraph;
 pub const CUFFT_VER_MAJOR: u32 = 11;
 pub const CUFFT_VER_MINOR: u32 = 3;
 pub const CUFFT_VER_PATCH: u32 = 3;
@@ -16,6 +19,37 @@ pub const CUFFT_VER_BUILD: u32 = 83;
 pub const CUFFT_VERSION: u32 = 11303;
 pub const CUFFT_FORWARD: i32 = -1;
 pub const CUFFT_INVERSE: u32 = 1;
+impl libFormat_t {
+    pub const LIB_FORMAT_CUFFT: libFormat_t = libFormat_t(0);
+}
+impl libFormat_t {
+    pub const LIB_FORMAT_UNDEFINED: libFormat_t = libFormat_t(1);
+}
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct libFormat_t(pub ::core::ffi::c_uint);
+pub use self::libFormat_t as libFormat;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct cudaXtDesc_t {
+    pub version: ::core::ffi::c_int,
+    pub nGPUs: ::core::ffi::c_int,
+    pub GPUs: [::core::ffi::c_int; 64usize],
+    pub data: [*mut ::core::ffi::c_void; 64usize],
+    pub size: [usize; 64usize],
+    pub cudaXtState: *mut ::core::ffi::c_void,
+}
+pub type cudaXtDesc = cudaXtDesc_t;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct cudaLibXtDesc_t {
+    pub version: ::core::ffi::c_int,
+    pub descriptor: *mut cudaXtDesc,
+    pub library: libFormat,
+    pub subFormat: ::core::ffi::c_int,
+    pub libDescriptor: *mut ::core::ffi::c_void,
+}
+pub type cudaLibXtDesc = cudaLibXtDesc_t;
 impl cufftResult_t {
     pub const CUFFT_SUCCESS: cufftResult_t = cufftResult_t(0);
 }

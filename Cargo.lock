@@ -1354,10 +1354,18 @@ dependencies = [
 [[package]]
 name = "zluda_blaslt"
 version = "0.0.0"
+dependencies = [
+ "cuda_base",
+ "cuda_types",
+]
 
 [[package]]
 name = "zluda_dnn"
 version = "0.0.0"
+dependencies = [
+ "cuda_base",
+ "cuda_types",
+]
 
 [[package]]
 name = "zluda_dump"
@@ -1383,6 +1391,10 @@ dependencies = [
 [[package]]
 name = "zluda_fft"
 version = "0.0.0"
+dependencies = [
+ "cuda_base",
+ "cuda_types",
+]
 
 [[package]]
 name = "zluda_inject"
@@ -1412,4 +1424,12 @@ dependencies = [
  "detours-sys",
  "wchar",
  "winapi",
+]
+
+[[package]]
+name = "zluda_sparse"
+version = "0.0.0"
+dependencies = [
+ "cuda_base",
+ "cuda_types",
 ]

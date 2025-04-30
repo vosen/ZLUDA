@@ -126,21 +126,21 @@ extern "system" {
     #[must_use]
     fn cudnnSetTensorTransformDescriptor(
         transformDesc: cuda_types::cudnn8::cudnnTensorTransformDescriptor_t,
-        nbDims: cuda_types::cudnn8::u32,
+        nbDims: u32,
         destFormat: cuda_types::cudnn8::cudnnTensorFormat_t,
-        padBeforeA: *const cuda_types::cudnn8::i32,
-        padAfterA: *const cuda_types::cudnn8::i32,
-        foldA: *const cuda_types::cudnn8::u32,
+        padBeforeA: *const i32,
+        padAfterA: *const i32,
+        foldA: *const u32,
         direction: cuda_types::cudnn8::cudnnFoldingDirection_t,
     ) -> cuda_types::cudnn8::cudnnStatus_t;
     #[must_use]
     fn cudnnGetTensorTransformDescriptor(
         transformDesc: cuda_types::cudnn8::cudnnTensorTransformDescriptor_t,
-        nbDimsRequested: cuda_types::cudnn8::u32,
+        nbDimsRequested: u32,
         destFormat: *mut cuda_types::cudnn8::cudnnTensorFormat_t,
-        padBeforeA: *mut cuda_types::cudnn8::i32,
-        padAfterA: *mut cuda_types::cudnn8::i32,
-        foldA: *mut cuda_types::cudnn8::u32,
+        padBeforeA: *mut i32,
+        padAfterA: *mut i32,
+        foldA: *mut u32,
         direction: *mut cuda_types::cudnn8::cudnnFoldingDirection_t,
     ) -> cuda_types::cudnn8::cudnnStatus_t;
     #[must_use]
@@ -1141,12 +1141,12 @@ extern "system" {
         dataType: cuda_types::cudnn8::cudnnDataType_t,
         mathPrec: cuda_types::cudnn8::cudnnDataType_t,
         mathType: cuda_types::cudnn8::cudnnMathType_t,
-        inputSize: cuda_types::cudnn8::i32,
-        hiddenSize: cuda_types::cudnn8::i32,
-        projSize: cuda_types::cudnn8::i32,
-        numLayers: cuda_types::cudnn8::i32,
+        inputSize: i32,
+        hiddenSize: i32,
+        projSize: i32,
+        numLayers: i32,
         dropoutDesc: cuda_types::cudnn8::cudnnDropoutDescriptor_t,
-        auxFlags: cuda_types::cudnn8::u32,
+        auxFlags: u32,
     ) -> cuda_types::cudnn8::cudnnStatus_t;
     #[must_use]
     fn cudnnGetRNNDescriptor_v8(
@@ -1159,12 +1159,12 @@ extern "system" {
         dataType: *mut cuda_types::cudnn8::cudnnDataType_t,
         mathPrec: *mut cuda_types::cudnn8::cudnnDataType_t,
         mathType: *mut cuda_types::cudnn8::cudnnMathType_t,
-        inputSize: *mut cuda_types::cudnn8::i32,
-        hiddenSize: *mut cuda_types::cudnn8::i32,
-        projSize: *mut cuda_types::cudnn8::i32,
-        numLayers: *mut cuda_types::cudnn8::i32,
+        inputSize: *mut i32,
+        hiddenSize: *mut i32,
+        projSize: *mut i32,
+        numLayers: *mut i32,
         dropoutDesc: *mut cuda_types::cudnn8::cudnnDropoutDescriptor_t,
-        auxFlags: *mut cuda_types::cudnn8::u32,
+        auxFlags: *mut u32,
     ) -> cuda_types::cudnn8::cudnnStatus_t;
     #[must_use]
     fn cudnnSetRNNDescriptor_v6(
@@ -1349,10 +1349,10 @@ extern "system" {
     fn cudnnGetRNNWeightParams(
         handle: cuda_types::cudnn8::cudnnHandle_t,
         rnnDesc: cuda_types::cudnn8::cudnnRNNDescriptor_t,
-        pseudoLayer: cuda_types::cudnn8::i32,
+        pseudoLayer: i32,
         weightSpaceSize: usize,
         weightSpace: *const ::core::ffi::c_void,
-        linLayerID: cuda_types::cudnn8::i32,
+        linLayerID: i32,
         mDesc: cuda_types::cudnn8::cudnnTensorDescriptor_t,
         mAddr: *mut *mut ::core::ffi::c_void,
         bDesc: cuda_types::cudnn8::cudnnTensorDescriptor_t,
@@ -1455,7 +1455,7 @@ extern "system" {
         handle: cuda_types::cudnn8::cudnnHandle_t,
         rnnDesc: cuda_types::cudnn8::cudnnRNNDescriptor_t,
         fwdMode: cuda_types::cudnn8::cudnnForwardMode_t,
-        devSeqLengths: *const cuda_types::cudnn8::i32,
+        devSeqLengths: *const i32,
         xDesc: cuda_types::cudnn8::cudnnRNNDataDescriptor_t,
         x: *const ::core::ffi::c_void,
         yDesc: cuda_types::cudnn8::cudnnRNNDataDescriptor_t,
@@ -1700,7 +1700,7 @@ extern "system" {
     fn cudnnRNNBackwardData_v8(
         handle: cuda_types::cudnn8::cudnnHandle_t,
         rnnDesc: cuda_types::cudnn8::cudnnRNNDescriptor_t,
-        devSeqLengths: *const cuda_types::cudnn8::i32,
+        devSeqLengths: *const i32,
         yDesc: cuda_types::cudnn8::cudnnRNNDataDescriptor_t,
         y: *const ::core::ffi::c_void,
         dy: *const ::core::ffi::c_void,
@@ -1744,7 +1744,7 @@ extern "system" {
         handle: cuda_types::cudnn8::cudnnHandle_t,
         rnnDesc: cuda_types::cudnn8::cudnnRNNDescriptor_t,
         addGrad: cuda_types::cudnn8::cudnnWgradMode_t,
-        devSeqLengths: *const cuda_types::cudnn8::i32,
+        devSeqLengths: *const i32,
         xDesc: cuda_types::cudnn8::cudnnRNNDataDescriptor_t,
         x: *const ::core::ffi::c_void,
         hDesc: cuda_types::cudnn8::cudnnTensorDescriptor_t,

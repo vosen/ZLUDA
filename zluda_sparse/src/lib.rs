@@ -2,6 +2,7 @@ mod r#impl;
 
 pub enum FILE { }
 
+
 macro_rules! unimplemented {
     ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
         $(
@@ -28,13 +29,14 @@ macro_rules! implemented {
     };
 }
 
-cuda_base::cublaslt_function_declarations!(
+cuda_base::cusparse_function_declarations!(
     unimplemented,
     implemented <= [
-        cublasLtGetStatusName,
-        cublasLtGetStatusString,
-        cublasLtDisableCpuInstructionsSetMask,
-        cublasLtGetVersion,
-        cublasLtGetCudartVersion
+        cusparseGetErrorName,
+        cusparseGetErrorString,
+        cusparseGetMatIndexBase,
+        cusparseGetMatDiagType,
+        cusparseGetMatFillMode,
+        cusparseGetMatType
     ]
 );

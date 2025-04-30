@@ -5,4 +5,5 @@ pub mod cudnn;
 pub mod cudnn8;
 pub mod cudnn9;
 pub mod cufft;
+pub mod cusparse;
 pub mod nvml;

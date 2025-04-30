@@ -22,12 +22,17 @@ fn main() {
     generate_cublaslt(&crate_root);
     generate_cudnn(&crate_root);
     generate_cufft(&crate_root);
+    generate_cusparse(&crate_root);
 }
 
 fn generate_cufft(crate_root: &PathBuf) {
     let cufft_header = new_builder()
+        .header_contents("cufft_wraper.h", include_str!("../build/cufft_wraper.h"))
         .header("/usr/local/cuda/include/cufftXt.h")
         .allowlist_type("^cufft.*")
+        .allowlist_type("^cudaLibXtDesc.*")
+        .allowlist_type("^cudaXtDesc.*")
+        .allowlist_type("^libFormat.*")
         .allowlist_function("^cufft.*")
         .allowlist_var("^CUFFT_.*")
         .must_use_type("cufftResult_t")
@@ -46,6 +51,34 @@ fn generate_cufft(crate_root: &PathBuf) {
     generate_types_library(
         &crate_root,
         &["..", "cuda_types", "src", "cufft.rs"],
+        &module,
+    )
+}
+
+fn generate_cusparse(crate_root: &PathBuf) {
+    let cufft_header = new_builder()
+        .header("/usr/local/cuda/include/cusparse_v2.h")
+        .allowlist_type("^cusparse.*")
+        .allowlist_type(".*Info_t$")
+        .allowlist_type(".*Info$")
+        .allowlist_function("^cusparse.*")
+        .allowlist_var("^CUSPARSE_.*")
+        .must_use_type("cusparseStatus_t")
+        .allowlist_recursively(false)
+        .clang_args(["-I/usr/local/cuda/include"])
+        .generate()
+        .unwrap()
+        .to_string();
+    let module: syn::File = syn::parse_str(&cufft_header).unwrap();
+    generate_functions(
+        &crate_root,
+        "cusparse",
+        &["..", "cuda_base", "src", "cusparse.rs"],
+        &module,
+    );
+    generate_types_library(
+        &crate_root,
+        &["..", "cuda_types", "src", "cusparse.rs"],
         &module,
     )
 }
@@ -590,6 +623,9 @@ fn generate_types_library_impl(module: &syn::File) -> syn::File {
         pub use super::cuda::cudaDataType_t;
         pub type cudaStream_t = super::cuda::CUstream;
         pub use super::cuda::libraryPropertyType;
+        pub type cudaGraphExecUpdateResultInfo_st = super::cuda::CUgraphExecUpdateResultInfo_st;
+        pub type cudaAsyncNotificationType = super::cuda::CUasyncNotificationType_enum;
+        pub type cudaGraph_t = super::cuda::CUgraph;
     };
     let non_fn = module.items.iter().filter_map(|item| match item {
         Item::ForeignMod(_) => None,
@@ -863,7 +899,7 @@ impl VisitMut for PrependCudaPath {
     fn visit_type_path_mut(&mut self, type_: &mut TypePath) {
         if type_.path.segments.len() == 1 {
             match &*type_.path.segments[0].ident.to_string() {
-                "usize" | "i64" | "f64" | "f32" => {}
+                "usize" | "u32" | "i32" | "u64" | "i64" | "f64" | "f32" | "FILE" => {}
                 _ => {
                     let module = &self.module;
                     *type_ = parse_quote! { cuda_types :: #module :: #type_ };

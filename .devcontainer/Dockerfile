@@ -38,7 +38,8 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && DEBIAN_FRONTEND=noninter
     libcudnn8-dev \
     cudnn9-cuda-${CUDA_PKG_VERSION} \
     libcufft-dev-${CUDA_PKG_VERSION} \
-    libcublas-dev-${CUDA_PKG_VERSION}
+    libcublas-dev-${CUDA_PKG_VERSION} \
+    libcusparse-dev-${CUDA_PKG_VERSION}
 
 ARG ROCM_VERSION=6.4
 RUN mkdir --parents --mode=0755 /etc/apt/keyrings && \

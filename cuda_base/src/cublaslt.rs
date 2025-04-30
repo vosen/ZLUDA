@@ -105,8 +105,8 @@ extern "system" {
         matLayout: cuda_types::cublaslt::cublasLtMatrixLayout_t,
         size: usize,
         type_: cuda_types::cublaslt::cudaDataType,
-        rows: cuda_types::cublaslt::u64,
-        cols: cuda_types::cublaslt::u64,
+        rows: u64,
+        cols: u64,
         ld: i64,
     ) -> cuda_types::cublaslt::cublasStatus_t;
     #[must_use]
@@ -117,8 +117,8 @@ extern "system" {
     fn cublasLtMatrixLayoutCreate(
         matLayout: *mut cuda_types::cublaslt::cublasLtMatrixLayout_t,
         type_: cuda_types::cublaslt::cudaDataType,
-        rows: cuda_types::cublaslt::u64,
-        cols: cuda_types::cublaslt::u64,
+        rows: u64,
+        cols: u64,
         ld: i64,
     ) -> cuda_types::cublaslt::cublasStatus_t;
     #[must_use]
@@ -531,9 +531,7 @@ extern "system" {
  \param[in]  file                         an open file with write permissions
 
  \retval     CUBLAS_STATUS_SUCCESS        if log file was set successfully*/
-    fn cublasLtLoggerSetFile(
-        file: *mut cuda_types::cublaslt::FILE,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    fn cublasLtLoggerSetFile(file: *mut FILE) -> cuda_types::cublaslt::cublasStatus_t;
     #[must_use]
     /** Experimental: Open log file.
 

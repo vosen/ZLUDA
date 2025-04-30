@@ -24,6 +24,7 @@ members = [
     "zluda_blas",
     "zluda_blaslt",
     "zluda_fft",
+    "zluda_sparse",
 ]
 
 default-members = ["zluda", "zluda_ml", "zluda_inject", "zluda_redirect"]

@@ -7,18 +7,26 @@ pub(crate) fn unimplemented() -> cublasStatus_t {
 
 #[cfg(not(debug_assertions))]
 pub(crate) fn unimplemented() -> cublasStatus_t {
-    CUresult::ERROR_NOT_SUPPORTED
+    cublasStatus_t::CUBLAS_STATUS_NOT_SUPPORTED
 }
 
-pub fn cublasGetStatusName(status: cuda_types::cublas::cublasStatus_t) -> *const ::core::ffi::c_char {
+#[allow(non_snake_case)]
+pub fn cublasGetStatusName(_status: cuda_types::cublas::cublasStatus_t) -> *const ::core::ffi::c_char {
     todo!()
 }
-pub fn cublasGetStatusString(status: cuda_types::cublas::cublasStatus_t) -> *const ::core::ffi::c_char {
+
+#[allow(non_snake_case)]
+pub fn cublasGetStatusString(_status: cuda_types::cublas::cublasStatus_t) -> *const ::core::ffi::c_char {
     todo!()
 }
-pub fn cublasXerbla(srName: *const ::core::ffi::c_char, info: ::core::ffi::c_int) -> () {
+
+#[allow(non_snake_case)]
+pub fn cublasXerbla(_srName: *const ::core::ffi::c_char, _info: ::core::ffi::c_int) -> () {
     todo!()
 }
+
+
+#[allow(non_snake_case)]
 pub fn cublasGetCudartVersion() -> usize {
     todo!()
 }

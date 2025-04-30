@@ -8,6 +8,8 @@ crate-type = ["cdylib"]
 name = "cufft"
 
 [dependencies]
+cuda_base = { path = "../cuda_base" }
+cuda_types = { path = "../cuda_types" }
 
 [package.metadata.zluda]
 linux_symlinks = [
