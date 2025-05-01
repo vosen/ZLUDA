@@ -3,6 +3,8 @@ name = "amd_comgr-sys"
 version = "0.0.0"
 authors = ["Andrzej Janik <vosen@vosen.pl>"]
 edition = "2021"
-links = "amd_comgr"
 
 [lib]
+
+[dependencies]
+libloading = "0.8"

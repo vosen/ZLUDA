@@ -1,4 +1,5 @@
 use crate::pass;
+use comgr::Comgr;
 use hip_runtime_sys::hipError_t;
 use pretty_assertions;
 use std::env;
@@ -365,6 +366,8 @@ fn run_cuda<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + De
     Ok(result)
 }
 
+static COMGR: std::sync::LazyLock<Comgr> = std::sync::LazyLock::new(|| Comgr::new().unwrap());
+
 fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Default>(
     name: &CStr,
     module: pass::Module,
@@ -373,6 +376,7 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
 ) -> Result<Vec<Output>, hipError_t> {
     use hip_runtime_sys::*;
     unsafe { hipInit(0) }.unwrap();
+    let comgr = &*COMGR;
     let mut result = vec![0u8.into(); output.len()];
     {
         let dev = 0;
@@ -381,6 +385,7 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
         let mut dev_props = unsafe { mem::zeroed() };
         unsafe { hipGetDevicePropertiesR0600(&mut dev_props, dev) }.unwrap();
         let elf_module = comgr::compile_bitcode(
+            &comgr,
             unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) },
             &*module.llvm_ir.write_bitcode_to_memory(),
             module.linked_bitcode(),

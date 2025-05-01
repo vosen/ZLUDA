@@ -1,3 +1,6 @@
+use super::LiveCheck;
+use crate::r#impl::context;
+use comgr::Comgr;
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
 use std::{
@@ -6,12 +9,9 @@ use std::{
     sync::OnceLock,
 };
 
-use crate::r#impl::context;
-
-use super::LiveCheck;
-
 pub(crate) struct GlobalState {
     pub devices: Vec<Device>,
+    pub comgr: Comgr,
 }
 
 pub(crate) struct Device {
@@ -46,7 +46,9 @@ pub(crate) fn global_state() -> Result<&'static GlobalState, CUerror> {
         .get_or_init(|| {
             let mut device_count = 0;
             unsafe { hipGetDeviceCount(&mut device_count) }?;
+            let comgr = Comgr::new().map_err(|_| CUerror::UNKNOWN)?;
             Ok(GlobalState {
+                comgr,
                 devices: (0..device_count)
                     .map(|i| {
                         let mut props = unsafe { mem::zeroed() };
