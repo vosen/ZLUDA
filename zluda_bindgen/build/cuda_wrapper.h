@@ -5,3 +5,5 @@
 #include <cudaEGL.h>
 #include <vdpau/vdpau.h>
 #include <cudaVDPAU.h>
+#include <library_types.h>
+#include <cuComplex.h>
