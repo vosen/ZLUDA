@@ -1,0 +1,18 @@
+[package]
+name = "zluda_dnn"
+version = "0.0.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+name = "cudnn64_9"
+
+[dependencies]
+cuda_base = { path = "../cuda_base" }
+cuda_types = { path = "../cuda_types" }
+
+[package.metadata.zluda]
+linux_symlinks = [
+    "libcudnn.so",
+    "libcudnn.so.9",
+]

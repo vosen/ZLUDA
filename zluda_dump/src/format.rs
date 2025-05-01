@@ -114,6 +114,17 @@ impl CudaDisplay for f32 {
     }
 }
 
+impl CudaDisplay for f64 {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        write!(writer, "{}", *self)
+    }
+}
+
 pub fn write_handle<T: LowerHex>(
     this: &[T; 64],
     writer: &mut (impl std::io::Write + ?Sized),
@@ -257,6 +268,69 @@ impl CudaDisplay for CUstreamBatchMemOpParams {
     }
 }
 
+impl CudaDisplay for CUcheckpointRestoreArgs_st {
+    fn write(
+        &self,
+        fn_name: &'static str,
+        index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        CudaDisplay::write(&self.reserved, fn_name, index, writer)
+    }
+}
+
+impl CudaDisplay for CUcheckpointUnlockArgs_st {
+    fn write(
+        &self,
+        fn_name: &'static str,
+        index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        CudaDisplay::write(&self.reserved, fn_name, index, writer)
+    }
+}
+
+impl CudaDisplay for CUcheckpointCheckpointArgs_st {
+    fn write(
+        &self,
+        fn_name: &'static str,
+        index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        CudaDisplay::write(&self.reserved, fn_name, index, writer)
+    }
+}
+
+impl CudaDisplay for CUmemcpy3DOperand_st {
+    fn write(
+        &self,
+        fn_name: &'static str,
+        index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(b"{ type_: ")?;
+        CudaDisplay::write(&self.type_, "", 0, writer)?;
+        writer.write_all(b", op: ")?;
+        match self.type_ {
+            CUmemcpy3DOperandType::CU_MEMCPY_OPERAND_TYPE_ARRAY => {
+                CudaDisplay::write(unsafe { &self.op.array }, fn_name, index, writer)?;
+            }
+            CUmemcpy3DOperandType::CU_MEMCPY_OPERAND_TYPE_POINTER => {
+                CudaDisplay::write(unsafe { &self.op.ptr }, fn_name, index, writer)?;
+            }
+            _ => {
+                CudaDisplay::write(
+                    &unsafe { mem::transmute::<_, [u8; 32]>(self.op) },
+                    fn_name,
+                    index,
+                    writer,
+                )?;
+            }
+        }
+        writer.write_all(b" }")
+    }
+}
+
 pub fn write_wait_value(
     this: &CUstreamBatchMemOpParams_union_CUstreamMemOpWaitValueParams_st,
     writer: &mut (impl std::io::Write + ?Sized),
@@ -347,29 +421,29 @@ impl CudaDisplay for CUDA_EXTERNAL_MEMORY_HANDLE_DESC_st {
         match self.type_ {
             CUexternalMemoryHandleType::CU_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD => {
                 writer.write_all(b", handle: ")?;
-                CudaDisplay::write(unsafe { &self.handle.fd }, "", 0,writer)?;
+                CudaDisplay::write(unsafe { &self.handle.fd }, "", 0, writer)?;
             }
             CUexternalMemoryHandleType::CU_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32
             | CUexternalMemoryHandleType::CU_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_HEAP
             | CUexternalMemoryHandleType::CU_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE
-            |CUexternalMemoryHandleType::CU_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_RESOURCE => {
+            | CUexternalMemoryHandleType::CU_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_RESOURCE => {
                 write_win32_handle(unsafe { self.handle.win32 }, writer)?;
             }
             CUexternalMemoryHandleType::CU_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_KMT
             | CUexternalMemoryHandleType::CU_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_RESOURCE_KMT => {
                 writer.write_all(b", handle: ")?;
-                CudaDisplay::write(unsafe { &self.handle.win32.handle }, "", 0,writer)?;
+                CudaDisplay::write(unsafe { &self.handle.win32.handle }, "", 0, writer)?;
             }
             CUexternalMemoryHandleType::CU_EXTERNAL_MEMORY_HANDLE_TYPE_NVSCIBUF => {
                 writer.write_all(b", handle: ")?;
-                CudaDisplay::write(unsafe { &self.handle.nvSciBufObject }, "", 0,writer)?;
+                CudaDisplay::write(unsafe { &self.handle.nvSciBufObject }, "", 0, writer)?;
             }
             _ => {
                 writer.write_all(b", size: ")?;
-                CudaDisplay::write(&self.size, "", 0,writer)?;
+                CudaDisplay::write(&self.size, "", 0, writer)?;
                 writer.write_all(b", flags: ")?;
-                CudaDisplay::write(&self.flags, "", 0,writer)?;
-                return writer.write_all(b", ... }")
+                CudaDisplay::write(&self.flags, "", 0, writer)?;
+                return writer.write_all(b", ... }");
             }
         }
         writer.write_all(b", size: ")?;
@@ -441,9 +515,7 @@ impl CudaDisplay for CUDA_EXTERNAL_SEMAPHORE_HANDLE_DESC_st {
     }
 }
 
-impl CudaDisplay
-    for CUDA_EXTERNAL_SEMAPHORE_SIGNAL_PARAMS_st__bindgen_ty_1__bindgen_ty_2
-{
+impl CudaDisplay for CUDA_EXTERNAL_SEMAPHORE_SIGNAL_PARAMS_st__bindgen_ty_1__bindgen_ty_2 {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -456,9 +528,7 @@ impl CudaDisplay
     }
 }
 
-impl CudaDisplay
-    for CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS_st__bindgen_ty_1__bindgen_ty_2
-{
+impl CudaDisplay for CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS_st__bindgen_ty_1__bindgen_ty_2 {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -667,15 +737,30 @@ fn write_launch_attribute(
         }
         CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_CLUSTER_SCHEDULING_POLICY_PREFERENCE => {
             writer.write_all(b", value_out: ")?;
-            CudaDisplay::write(unsafe { &(*value_out).clusterSchedulingPolicyPreference }, fn_name, index, writer)
+            CudaDisplay::write(
+                unsafe { &(*value_out).clusterSchedulingPolicyPreference },
+                fn_name,
+                index,
+                writer,
+            )
         }
         CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_PROGRAMMATIC_STREAM_SERIALIZATION => {
             writer.write_all(b", value_out: ")?;
-            CudaDisplay::write(unsafe { &(*value_out).programmaticStreamSerializationAllowed }, fn_name, index, writer)
+            CudaDisplay::write(
+                unsafe { &(*value_out).programmaticStreamSerializationAllowed },
+                fn_name,
+                index,
+                writer,
+            )
         }
         CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_PROGRAMMATIC_EVENT => {
             writer.write_all(b", value_out: ")?;
-            CudaDisplay::write(unsafe { &(*value_out).programmaticEvent }, fn_name, index, writer)
+            CudaDisplay::write(
+                unsafe { &(*value_out).programmaticEvent },
+                fn_name,
+                index,
+                writer,
+            )
         }
         CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_PRIORITY => {
             writer.write_all(b", value_out: ")?;
@@ -683,19 +768,39 @@ fn write_launch_attribute(
         }
         CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_MEM_SYNC_DOMAIN_MAP => {
             writer.write_all(b", value_out: ")?;
-            CudaDisplay::write(unsafe { &(*value_out).memSyncDomainMap }, fn_name, index, writer)
+            CudaDisplay::write(
+                unsafe { &(*value_out).memSyncDomainMap },
+                fn_name,
+                index,
+                writer,
+            )
         }
         CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_MEM_SYNC_DOMAIN => {
             writer.write_all(b", value_out: ")?;
-            CudaDisplay::write(unsafe { &(*value_out).memSyncDomain }, fn_name, index, writer)
+            CudaDisplay::write(
+                unsafe { &(*value_out).memSyncDomain },
+                fn_name,
+                index,
+                writer,
+            )
         }
         CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_LAUNCH_COMPLETION_EVENT => {
             writer.write_all(b", value_out: ")?;
-            CudaDisplay::write(unsafe { &(*value_out).launchCompletionEvent }, fn_name, index, writer)
+            CudaDisplay::write(
+                unsafe { &(*value_out).launchCompletionEvent },
+                fn_name,
+                index,
+                writer,
+            )
         }
         CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_DEVICE_UPDATABLE_KERNEL_NODE => {
             writer.write_all(b", value_out: ")?;
-            CudaDisplay::write(unsafe { &(*value_out).deviceUpdatableKernelNode }, fn_name, index, writer)
+            CudaDisplay::write(
+                unsafe { &(*value_out).deviceUpdatableKernelNode },
+                fn_name,
+                index,
+                writer,
+            )
         }
         _ => writer.write_all(b", ... "),
     }
