@@ -8,3 +8,4 @@ edition = "2021"
 
 [dependencies]
 amd_comgr-sys = { path = "../ext/amd_comgr-sys" }
+libloading = "0.8"
