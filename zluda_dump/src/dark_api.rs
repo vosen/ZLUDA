@@ -19,6 +19,9 @@ pub(crate) struct DarkApiState {
     original: OriginalExports,
 }
 
+unsafe impl Send for DarkApiState {}
+unsafe impl Sync for DarkApiState {}
+
 #[derive(Eq, PartialEq)]
 pub(crate) struct CUuuidWrapper(pub CUuuid);
 
@@ -134,7 +137,7 @@ unsafe extern "system" fn report_unknown_export_table_call(
         let mut logger = global_state
             .log_factory
             .get_logger_dark_api(*export_table, idx, None);
-        logger.log(log::LogEntry::UnknownExportTableFn)
+        logger.log(log::ErrorEntry::UnknownExportTableFn)
     }
 }
 
@@ -280,7 +283,7 @@ unsafe fn record_submodules_from_wrapped_fatbin(
     fn_logger.result = Some(result);
     let magic = (*fatbinc_wrapper).magic;
     if magic != FATBINC_MAGIC {
-        fn_logger.log(log::LogEntry::UnexpectedBinaryField {
+        fn_logger.log(log::ErrorEntry::UnexpectedBinaryField {
             field_name: "FATBINC_MAGIC",
             expected: vec![UInt::U32(FATBINC_MAGIC)],
             observed: UInt::U32(magic),
@@ -289,7 +292,7 @@ unsafe fn record_submodules_from_wrapped_fatbin(
     if (*fatbinc_wrapper).version != FATBINC_VERSION_V1
         && (*fatbinc_wrapper).version != FATBINC_VERSION_V2
     {
-        fn_logger.log(log::LogEntry::UnexpectedBinaryField {
+        fn_logger.log(log::ErrorEntry::UnexpectedBinaryField {
             field_name: "FATBINC_VERSION",
             expected: vec![UInt::U32(FATBINC_VERSION_V1), UInt::U32(FATBINC_VERSION_V2)],
             observed: UInt::U32(magic),
@@ -328,7 +331,7 @@ unsafe fn record_submodules_from_fatbin(
 ) {
     let magic = (*fatbin_header).magic;
     if magic != FATBIN_MAGIC {
-        logger.log(log::LogEntry::UnexpectedBinaryField {
+        logger.log(log::ErrorEntry::UnexpectedBinaryField {
             field_name: "FATBIN_MAGIC",
             expected: vec![UInt::U32(FATBIN_MAGIC)],
             observed: UInt::U32(magic),
@@ -337,7 +340,7 @@ unsafe fn record_submodules_from_fatbin(
     }
     let version = (*fatbin_header).version;
     if version != FATBIN_VERSION {
-        logger.log(log::LogEntry::UnexpectedBinaryField {
+        logger.log(log::ErrorEntry::UnexpectedBinaryField {
             field_name: "FATBIN_VERSION",
             expected: vec![UInt::U16(FATBIN_VERSION)],
             observed: UInt::U16(version),
@@ -420,21 +423,21 @@ unsafe extern "system" fn get_module_from_cubin_ext1(
         Some(arguments_writer),
     );
     if ptr1 != ptr::null_mut() {
-        fn_logger.log(log::LogEntry::UnexpectedArgument {
+        fn_logger.log(log::ErrorEntry::UnexpectedArgument {
             arg_name: stringify!(ptr1),
             expected: vec![UInt::USize(0)],
             observed: UInt::USize(ptr1 as usize),
         });
     }
     if ptr2 != ptr::null_mut() {
-        fn_logger.log(log::LogEntry::UnexpectedArgument {
+        fn_logger.log(log::ErrorEntry::UnexpectedArgument {
             arg_name: stringify!(ptr2),
             expected: vec![UInt::USize(0)],
             observed: UInt::USize(ptr2 as usize),
         });
     }
     if _unknown != 0 {
-        fn_logger.log(log::LogEntry::UnexpectedArgument {
+        fn_logger.log(log::ErrorEntry::UnexpectedArgument {
             arg_name: stringify!(_unknown),
             expected: vec![UInt::USize(0)],
             observed: UInt::USize(_unknown),
@@ -484,21 +487,21 @@ unsafe extern "system" fn get_module_from_cubin_ext2(
         Some(arguments_writer),
     );
     if ptr1 != ptr::null_mut() {
-        fn_logger.log(log::LogEntry::UnexpectedArgument {
+        fn_logger.log(log::ErrorEntry::UnexpectedArgument {
             arg_name: stringify!(ptr1),
             expected: vec![UInt::USize(0)],
             observed: UInt::USize(ptr1 as usize),
         });
     }
     if ptr2 != ptr::null_mut() {
-        fn_logger.log(log::LogEntry::UnexpectedArgument {
+        fn_logger.log(log::ErrorEntry::UnexpectedArgument {
             arg_name: stringify!(ptr2),
             expected: vec![UInt::USize(0)],
             observed: UInt::USize(ptr2 as usize),
         });
     }
     if _unknown != 0 {
-        fn_logger.log(log::LogEntry::UnexpectedArgument {
+        fn_logger.log(log::ErrorEntry::UnexpectedArgument {
             arg_name: stringify!(_unknown),
             expected: vec![UInt::USize(0)],
             observed: UInt::USize(_unknown),
@@ -539,7 +542,7 @@ unsafe fn record_submodules(
         let fatbin_file = index as *const FatbinFileHeader;
         let fatbin_file_version = (*fatbin_file).version;
         if fatbin_file_version != FATBIN_FILE_HEADER_VERSION_CURRENT {
-            fn_logger.log(log::LogEntry::UnexpectedBinaryField {
+            fn_logger.log(log::ErrorEntry::UnexpectedBinaryField {
                 field_name: stringify!(fatbin_file_version),
                 expected: vec![UInt::U16(FATBIN_FILE_HEADER_VERSION_CURRENT)],
                 observed: UInt::U16(fatbin_file_version),
@@ -553,7 +556,7 @@ unsafe fn record_submodules(
                     decompressed.pop(); // remove trailing zero
                     state.record_new_submodule(module, version, &*decompressed, fn_logger, "ptx")
                 }
-                None => fn_logger.log(log::LogEntry::Lz4DecompressionFailure),
+                None => fn_logger.log(log::ErrorEntry::Lz4DecompressionFailure),
             }
         } else if fatbin_file_kind == FATBIN_FILE_HEADER_KIND_ELF {
             let source_buffer = if should_decompress_elf {
@@ -561,7 +564,7 @@ unsafe fn record_submodules(
                 match decompressed {
                     Some(decompressed) => Cow::Owned(decompressed),
                     None => {
-                        fn_logger.log(log::LogEntry::Lz4DecompressionFailure);
+                        fn_logger.log(log::ErrorEntry::Lz4DecompressionFailure);
                         continue;
                     }
                 }
@@ -573,7 +576,7 @@ unsafe fn record_submodules(
             };
             state.record_new_submodule(module, version, &*source_buffer, fn_logger, "elf")
         } else {
-            fn_logger.log(log::LogEntry::UnexpectedBinaryField {
+            fn_logger.log(log::ErrorEntry::UnexpectedBinaryField {
                 field_name: stringify!(fatbin_file_kind),
                 expected: vec![
                     UInt::U16(FATBIN_FILE_HEADER_KIND_PTX),

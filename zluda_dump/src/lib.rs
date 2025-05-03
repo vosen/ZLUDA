@@ -1,12 +1,94 @@
 use cuda_types::cuda::*;
+use log::{CudaFunctionName, ErrorEntry};
+use parking_lot::ReentrantMutex;
 use paste::paste;
-use side_by_side::CudaDynamicFns;
-use std::io;
-use std::{collections::HashMap, env, error::Error, fs, path::PathBuf, rc::Rc, sync::Mutex};
+use regex::Regex;
+use std::cell::{RefCell, RefMut};
+use std::ffi::{c_void, CStr};
+use std::marker::PhantomData;
+use std::ops::{Deref, DerefMut};
+use std::ptr::NonNull;
+use std::sync::LazyLock;
+use std::{collections::HashMap, env, error::Error, fs, path::PathBuf, sync::Mutex};
+use std::{io, mem, ptr};
 
 #[macro_use]
 extern crate lazy_static;
 extern crate cuda_types;
+
+struct DynamicFn<T> {
+    pointer: usize,
+    _marker: PhantomData<T>,
+}
+
+impl<T> Default for DynamicFn<T> {
+    fn default() -> Self {
+        DynamicFn {
+            pointer: 0,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<T> DynamicFn<T> {
+    unsafe fn get(&mut self, lib: *mut c_void, name: &[u8]) -> Option<T> {
+        match self.pointer {
+            0 => {
+                let addr = os::get_proc_address(lib, CStr::from_bytes_with_nul_unchecked(name));
+                if addr == ptr::null_mut() {
+                    self.pointer = 1;
+                    return None;
+                } else {
+                    self.pointer = addr as _;
+                }
+            }
+            1 => return None,
+            _ => {}
+        }
+        Some(mem::transmute_copy(&self.pointer))
+    }
+}
+
+pub(crate) struct CudaDynamicFns {
+    lib_handle: NonNull<::std::ffi::c_void>,
+    fn_table: CudaFnTable,
+}
+
+impl CudaDynamicFns {
+    pub(crate) unsafe fn load_library(path: &str) -> Option<Self> {
+        let lib_handle = NonNull::new(os::load_library(path));
+        lib_handle.map(|lib_handle| CudaDynamicFns {
+            lib_handle,
+            fn_table: CudaFnTable::default(),
+        })
+    }
+}
+
+unsafe impl Send for CudaDynamicFns {}
+unsafe impl Sync for CudaDynamicFns {}
+
+macro_rules! emit_cuda_fn_table {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
+        #[derive(Default)]
+        #[allow(improper_ctypes)]
+        #[allow(improper_ctypes_definitions)]
+        struct CudaFnTable {
+            $($fn_name: DynamicFn<extern $abi fn ( $($arg_id : $arg_type),* ) -> $ret_type>),*
+        }
+
+        impl CudaDynamicFns {
+            $(
+                #[allow(dead_code)]
+                pub(crate) fn $fn_name(&mut self, $($arg_id : $arg_type),*) -> Option<$ret_type> {
+                    let func = unsafe { self.fn_table.$fn_name.get(self.lib_handle.as_ptr(), concat!(stringify!($fn_name), "\0").as_bytes()) };
+                    func.map(|f| f($($arg_id),*) )
+                }
+            )*
+        }
+    };
+}
+
+cuda_function_declarations!(emit_cuda_fn_table);
 
 macro_rules! extern_redirect {
     ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
@@ -14,7 +96,7 @@ macro_rules! extern_redirect {
             #[no_mangle]
             #[allow(improper_ctypes_definitions)]
             pub extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
-                let original_fn = |dynamic_fns: &mut crate::side_by_side::CudaDynamicFns| {
+                let original_fn = |dynamic_fns: &mut crate::CudaDynamicFns| {
                     dynamic_fns.$fn_name($( $arg_id ),*)
                 };
                 let get_formatted_args = Box::new(move |writer: &mut dyn std::io::Write| {
@@ -35,7 +117,7 @@ macro_rules! extern_redirect_with_post {
             #[no_mangle]
             #[allow(improper_ctypes_definitions)]
             pub extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
-                let original_fn = |dynamic_fns: &mut crate::side_by_side::CudaDynamicFns| {
+                let original_fn = |dynamic_fns: &mut crate::CudaDynamicFns| {
                     dynamic_fns.$fn_name($( $arg_id ),*)
                 };
                 let get_formatted_args = Box::new(move |writer: &mut dyn std::io::Write| {
@@ -58,16 +140,17 @@ macro_rules! extern_redirect_with_post {
 use cuda_base::cuda_function_declarations;
 cuda_function_declarations!(
     extern_redirect,
-    extern_redirect_with_post <= [
-        cuModuleLoad,
-        cuModuleLoadData,
-        cuModuleLoadDataEx,
-        cuGetExportTable,
-        cuModuleGetFunction,
-        cuDeviceGetAttribute,
-        cuDeviceComputeCapability,
-        cuModuleLoadFatBinary
-    ]
+    extern_redirect_with_post
+        <= [
+            cuModuleLoad,
+            cuModuleLoadData,
+            cuModuleLoadDataEx,
+            cuGetExportTable,
+            cuModuleGetFunction,
+            cuDeviceGetAttribute,
+            cuDeviceComputeCapability,
+            cuModuleLoadFatBinary
+        ]
 );
 
 mod dark_api;
@@ -76,18 +159,245 @@ mod log;
 #[cfg_attr(windows, path = "os_win.rs")]
 #[cfg_attr(not(windows), path = "os_unix.rs")]
 mod os;
-mod side_by_side;
 mod trace;
 
 lazy_static! {
     static ref GLOBAL_STATE: Mutex<GlobalState> = Mutex::new(GlobalState::new());
 }
 
+struct GlobalState2 {
+    log_writer: log::Writer,
+    log_stack: RefCell<FnCallLogStack>,
+    // We split off fields that require a mutable reference to log factory to be
+    // created, additionally creation of some fields in this struct can fail
+    // initalization (e.g. we passed a non-existant path to libcuda)
+    delayed_state: LateInit<GlobalDelayedState>,
+}
+
+impl GlobalState2 {
+    fn new() -> Self {
+        Self {
+            log_writer: log::Writer::new(),
+            delayed_state: LateInit::Unitialized,
+            log_stack: RefCell::new(FnCallLogStack::new()),
+        }
+    }
+
+    fn under_lock<'a, PreValue, InnerResult: ToString>(
+        name: CudaFunctionName,
+        args: Option<String>,
+        pre_call: impl FnOnce(&mut GlobalDelayedState, &mut FnCallLog) -> PreValue,
+        inner_call: impl FnOnce() -> InnerResult,
+        post_call: impl FnOnce(&mut GlobalDelayedState, &mut FnCallLog, PreValue, InnerResult),
+    ) {
+        static GLOBAL_STATE2: LazyLock<ReentrantMutex<RefCell<GlobalState2>>> =
+            LazyLock::new(|| ReentrantMutex::new(RefCell::new(GlobalState2::new())));
+        let global_state = GLOBAL_STATE2.lock();
+        let global_state_ref_cell = &*global_state;
+        let pre_value = {
+            let mut global_state_ref_mut = global_state_ref_cell.borrow_mut();
+            let global_state = &mut *global_state_ref_mut;
+            let panic_guard = OuterCallGuard {
+                writer: &mut global_state.log_writer,
+                log_root: &global_state.log_stack,
+            };
+            let mut logger = RefMut::map(global_state.log_stack.borrow_mut(), |log_stack| {
+                log_stack.enter()
+            });
+            logger.name = name;
+            logger.args = args;
+            let delayed_state = match global_state.delayed_state {
+                LateInit::Success(ref mut delayed_state) => delayed_state,
+                // There's no libcuda to load, so we might as well panic
+                LateInit::Error => panic!(),
+                LateInit::Unitialized => {
+                    global_state.delayed_state =
+                        GlobalDelayedState::new2(panic_guard.writer, &mut logger);
+                    // `global_state.delayed_state` could be LateInit::Error,
+                    // we can crash in this case since there's no libcuda
+                    global_state.delayed_state.as_mut().unwrap()
+                }
+            };
+            let result = pre_call(delayed_state, &mut logger);
+            mem::forget(panic_guard);
+            result
+        };
+        let panic_guard = InnerCallGuard(global_state_ref_cell);
+        let inner_result = inner_call();
+        let global_state = &mut *global_state_ref_cell.borrow_mut();
+        mem::forget(panic_guard);
+        let _drop_guard = OuterCallGuard {
+            writer: &mut global_state.log_writer,
+            log_root: &global_state.log_stack,
+        };
+        let mut logger = RefMut::map(global_state.log_stack.borrow_mut(), |log_stack| {
+            log_stack.resume()
+        });
+        post_call(
+            global_state.delayed_state.as_mut().unwrap(),
+            &mut logger,
+            pre_value,
+            inner_result,
+        );
+    }
+}
+
+struct GlobalState2DropGuard<'a, Fn: FnOnce() -> String> {
+    mut_ref: &'a mut GlobalState2,
+    cell: &'a RefCell<GlobalState2>,
+    fn_: Fn,
+}
+
+impl<'a, Fn: FnOnce() -> String> Deref for GlobalState2DropGuard<'a, Fn> {
+    type Target = GlobalState2;
+
+    fn deref(&self) -> &GlobalState2 {
+        &*self.mut_ref
+    }
+}
+
+impl<'a, Fn: FnOnce() -> String> DerefMut for GlobalState2DropGuard<'a, Fn> {
+    fn deref_mut(&mut self) -> &mut GlobalState2 {
+        self.mut_ref
+    }
+}
+
+struct FnCallLogStack {
+    depth: usize,
+    log_root: FnCallLog,
+}
+
+impl FnCallLogStack {
+    fn new() -> Self {
+        Self {
+            depth: 0,
+            log_root: FnCallLog::new(),
+        }
+    }
+
+    fn enter<'a>(&'a mut self) -> &'a mut FnCallLog {
+        let depth = self.depth;
+        self.depth += 1;
+        let mut current = &mut self.log_root;
+        match depth {
+            0 => {}
+            depth => {
+                for _ in 0..(depth - 1) {
+                    current = current
+                        .subcalls
+                        .iter_mut()
+                        .rev()
+                        .find_map(|entry| match entry {
+                            LogEntry::FnCall(fn_call_log) => Some(fn_call_log),
+                            LogEntry::Error(_) => None,
+                        })
+                        .unwrap();
+                }
+                current.subcalls.push(LogEntry::FnCall(FnCallLog::new()));
+                match current.subcalls.last_mut().unwrap() {
+                    LogEntry::FnCall(call) => {
+                        current = call;
+                    }
+                    &mut LogEntry::Error(_) => unreachable!(),
+                }
+            }
+        };
+        current
+    }
+
+    fn resume<'a>(&'a mut self) -> &'a mut FnCallLog {
+        let mut current = &mut self.log_root;
+        match self.depth {
+            0 | 1 => {}
+            depth => {
+                for _ in 0..(depth - 1) {
+                    current = current
+                        .subcalls
+                        .iter_mut()
+                        .rev()
+                        .find_map(|entry| match entry {
+                            LogEntry::FnCall(fn_call_log) => Some(fn_call_log),
+                            LogEntry::Error(_) => None,
+                        })
+                        .unwrap();
+                }
+            }
+        };
+        current
+    }
+}
+
+struct FnCallLog {
+    name: CudaFunctionName,
+    args: Option<String>,
+    output: Option<&'static str>,
+    subcalls: Vec<LogEntry>,
+}
+
+impl FnCallLog {
+    fn new() -> Self {
+        Self {
+            name: CudaFunctionName::Normal(""),
+            args: None,
+            output: None,
+            subcalls: Vec::new(),
+        }
+    }
+
+    fn try_return<T>(&mut self, fn_: impl FnOnce() -> Result<T, ErrorEntry>) -> Option<T> {
+        match fn_() {
+            Err(err) => {
+                self.subcalls.push(LogEntry::Error(err));
+                None
+            }
+            Ok(x) => Some(x),
+        }
+    }
+
+    fn log(&mut self, err: ErrorEntry) {
+        self.subcalls.push(LogEntry::Error(err));
+    }
+}
+
+struct OuterCallGuard<'a> {
+    writer: &'a mut log::Writer,
+    log_root: &'a RefCell<FnCallLogStack>,
+}
+
+impl<'a> Drop for OuterCallGuard<'a> {
+    fn drop(&mut self) {
+        let mut log_root = self.log_root.borrow_mut();
+        log_root.depth -= 1;
+        if log_root.depth == 0 {
+            self.writer.write_all(&log_root.log_root);
+        }
+    }
+}
+
+struct InnerCallGuard<'a>(&'a RefCell<GlobalState2>);
+
+impl<'a> Drop for InnerCallGuard<'a> {
+    fn drop(&mut self) {
+        let mut global_state = self.0.borrow_mut();
+        let global_state = &mut *global_state;
+        let mut log_root = global_state.log_stack.borrow_mut();
+        log_root.depth -= 1;
+        if log_root.depth == 0 {
+            global_state.log_writer.write_all(&log_root.log_root);
+        }
+    }
+}
+
+enum LogEntry {
+    FnCall(FnCallLog),
+    Error(ErrorEntry),
+}
+
 struct GlobalState {
     log_factory: log::Factory,
     // We split off fields that require a mutable reference to log factory to be
     // created, additionally creation of some fields in this struct can fail
-    // initalization (e.g. we passed path a non-existant path to libcuda)
+    // initalization (e.g. we passed a non-existant path to libcuda)
     delayed_state: LateInit<GlobalDelayedState>,
 }
 
@@ -126,9 +436,7 @@ impl<T> LateInit<T> {
 }
 
 struct GlobalDelayedState {
-    settings: Settings,
     libcuda: CudaDynamicFns,
-    side_by_side_lib: Option<CudaDynamicFns>,
     cuda_state: trace::StateTracker,
 }
 
@@ -143,97 +451,149 @@ impl GlobalDelayedState {
         let libcuda = match unsafe { CudaDynamicFns::load_library(&settings.libcuda_path) } {
             Some(libcuda) => libcuda,
             None => {
-                fn_logger.log(log::LogEntry::ErrorBox(
+                fn_logger.log(log::ErrorEntry::ErrorBox(
                     format!("Invalid CUDA library at path {}", &settings.libcuda_path).into(),
                 ));
                 return (LateInit::Error, fn_logger);
             }
         };
-        let side_by_side_lib = settings
-            .side_by_side_path
-            .as_ref()
-            .and_then(|side_by_side_path| {
-                match unsafe { CudaDynamicFns::load_library(&*side_by_side_path) } {
-                    Some(fns) => Some(fns),
-                    None => {
-                        fn_logger.log(log::LogEntry::ErrorBox(
-                            format!(
-                                "Invalid side-by-side CUDA library at path {}",
-                                &side_by_side_path
-                            )
-                            .into(),
-                        ));
-                        None
-                    }
-                }
-            });
         let cuda_state = trace::StateTracker::new(&settings);
         let delayed_state = GlobalDelayedState {
-            settings,
             libcuda,
             cuda_state,
-            side_by_side_lib,
         };
         (LateInit::Success(delayed_state), fn_logger)
+    }
+
+    fn new2<'a>(log_writer: &mut log::Writer, logger: &mut FnCallLog) -> LateInit<Self> {
+        let settings = Settings::read_and_init2(logger);
+        logger.try_return(|| log_writer.late_init(&settings));
+        let libcuda = match unsafe { CudaDynamicFns::load_library(&settings.libcuda_path) } {
+            Some(libcuda) => libcuda,
+            None => {
+                logger.log(log::ErrorEntry::ErrorBox(
+                    format!("Invalid CUDA library at path {}", &settings.libcuda_path).into(),
+                ));
+                return LateInit::Error;
+            }
+        };
+        let cuda_state = trace::StateTracker::new(&settings);
+        let delayed_state = GlobalDelayedState {
+            libcuda,
+            cuda_state,
+        };
+        LateInit::Success(delayed_state)
     }
 }
 
 struct Settings {
     dump_dir: Option<PathBuf>,
     libcuda_path: String,
-    override_cc_major: Option<u32>,
-    side_by_side_path: Option<String>,
+    override_cc: Option<(u32, u32)>,
 }
 
 impl Settings {
-    fn read_and_init(logger: &mut log::FunctionLogger) -> Self {
+    fn read_and_init2(logger: &mut FnCallLog) -> Self {
+        fn parse_compute_capability(env_string: &str) -> Option<(u32, u32)> {
+            let regex = Regex::new(r"(\d+)\.(\d+)").unwrap();
+            let captures = regex.captures(&env_string)?;
+            let major = captures.get(0)?;
+            let major = str::parse::<u32>(major.as_str()).ok()?;
+            let minor = captures.get(1)?;
+            let minor = str::parse::<u32>(minor.as_str()).ok()?;
+            Some((major, minor))
+        }
+
         let maybe_dump_dir = Self::read_and_init_dump_dir();
         let dump_dir = match maybe_dump_dir {
             Ok(Some(dir)) => {
-                logger.log(log::LogEntry::CreatedDumpDirectory(dir.clone()));
+                logger.log(log::ErrorEntry::CreatedDumpDirectory(dir.clone()));
                 Some(dir)
             }
             Ok(None) => None,
             Err(err) => {
-                logger.log(log::LogEntry::ErrorBox(err));
+                logger.log(log::ErrorEntry::ErrorBox(err));
                 None
             }
         };
         let libcuda_path = match env::var("ZLUDA_CUDA_LIB") {
             Err(env::VarError::NotPresent) => os::LIBCUDA_DEFAULT_PATH.to_string(),
             Err(e) => {
-                logger.log(log::LogEntry::ErrorBox(Box::new(e) as _));
+                logger.log(log::ErrorEntry::ErrorBox(Box::new(e) as _));
                 os::LIBCUDA_DEFAULT_PATH.to_string()
             }
             Ok(env_string) => env_string,
         };
-        let override_cc_major = match env::var("ZLUDA_OVERRIDE_COMPUTE_CAPABILITY_MAJOR") {
+        let override_cc = match env::var("ZLUDA_OVERRIDE_COMPUTE_CAPABILITY") {
             Err(env::VarError::NotPresent) => None,
             Err(e) => {
-                logger.log(log::LogEntry::ErrorBox(Box::new(e) as _));
+                logger.log(log::ErrorEntry::ErrorBox(Box::new(e) as _));
                 None
             }
-            Ok(env_string) => match str::parse::<u32>(&*env_string) {
-                Err(e) => {
-                    logger.log(log::LogEntry::ErrorBox(Box::new(e) as _));
-                    None
-                }
-                Ok(cc) => Some(cc),
-            },
-        };
-        let side_by_side_path = match env::var("ZLUDA_SIDE_BY_SIDE_LIB") {
-            Err(env::VarError::NotPresent) => None,
-            Err(e) => {
-                logger.log(log::LogEntry::ErrorBox(Box::new(e) as _));
-                None
-            }
-            Ok(env_string) => Some(env_string),
+            Ok(env_string) => logger.try_return(|| {
+                parse_compute_capability(&env_string).ok_or_else(|| ErrorEntry::InvalidEnvVar {
+                    var: "ZLUDA_OVERRIDE_COMPUTE_CAPABILITY",
+                    pattern: "MAJOR.MINOR",
+                    value: env_string,
+                })
+            }),
         };
         Settings {
             dump_dir,
             libcuda_path,
-            override_cc_major,
-            side_by_side_path,
+            override_cc,
+        }
+    }
+
+    fn read_and_init(logger: &mut log::FunctionLogger) -> Self {
+        fn parse_compute_capability(env_string: &str) -> Option<(u32, u32)> {
+            let regex = Regex::new(r"(\d+)\.(\d+)").unwrap();
+            let captures = regex.captures(&env_string)?;
+            let major = captures.get(0)?;
+            let major = str::parse::<u32>(major.as_str()).ok()?;
+            let minor = captures.get(1)?;
+            let minor = str::parse::<u32>(minor.as_str()).ok()?;
+            Some((major, minor))
+        }
+
+        let maybe_dump_dir = Self::read_and_init_dump_dir();
+        let dump_dir = match maybe_dump_dir {
+            Ok(Some(dir)) => {
+                logger.log(log::ErrorEntry::CreatedDumpDirectory(dir.clone()));
+                Some(dir)
+            }
+            Ok(None) => None,
+            Err(err) => {
+                logger.log(log::ErrorEntry::ErrorBox(err));
+                None
+            }
+        };
+        let libcuda_path = match env::var("ZLUDA_CUDA_LIB") {
+            Err(env::VarError::NotPresent) => os::LIBCUDA_DEFAULT_PATH.to_string(),
+            Err(e) => {
+                logger.log(log::ErrorEntry::ErrorBox(Box::new(e) as _));
+                os::LIBCUDA_DEFAULT_PATH.to_string()
+            }
+            Ok(env_string) => env_string,
+        };
+        let override_cc = match env::var("ZLUDA_OVERRIDE_COMPUTE_CAPABILITY") {
+            Err(env::VarError::NotPresent) => None,
+            Err(e) => {
+                logger.log(log::ErrorEntry::ErrorBox(Box::new(e) as _));
+                None
+            }
+            Ok(env_string) => logger.try_(|_| {
+                parse_compute_capability(&env_string).ok_or_else(|| ErrorEntry::InvalidEnvVar {
+                    var: "ZLUDA_OVERRIDE_COMPUTE_CAPABILITY",
+                    pattern: "MAJOR.MINOR",
+                    value: env_string,
+                })
+            }),
+        };
+        Settings {
+            dump_dir,
+            libcuda_path,
+            override_cc,
         }
     }
 
@@ -252,9 +612,7 @@ impl Settings {
         let file_name_base = current_exe.file_name().unwrap().to_string_lossy();
         main_dir.push(&*file_name_base);
         let mut suffix = 1;
-        // This can get into infinite loop. Unfortunately try_exists is unstable:
-        // https://doc.rust-lang.org/std/path/struct.Path.html#method.try_exists
-        while main_dir.exists() {
+        while main_dir.try_exists()? {
             main_dir.set_file_name(format!("{}_{}", file_name_base, suffix));
             suffix += 1;
         }
@@ -264,7 +622,6 @@ impl Settings {
 }
 
 pub struct ModuleDump {
-    content: Rc<String>,
     kernels_args: Option<HashMap<String, Vec<usize>>>,
 }
 
@@ -317,7 +674,7 @@ where
     let cu_result = match maybe_cu_result {
         Some(result) => result,
         None => {
-            logger.log(log::LogEntry::ErrorBox(
+            logger.log(log::ErrorEntry::ErrorBox(
                 format!("No function {} in the underlying CUDA library", func).into(),
             ));
             CUresult::ERROR_UNKNOWN
@@ -341,7 +698,6 @@ enum AllocLocation {
 }
 
 pub struct KernelDump {
-    module_content: Rc<String>,
     name: String,
     arguments: Option<Vec<usize>>,
 }
@@ -427,14 +783,17 @@ pub(crate) fn cuDeviceGetAttribute_Post(
 #[allow(non_snake_case)]
 pub(crate) fn cuDeviceComputeCapability_Post(
     major: *mut ::std::os::raw::c_int,
-    _minor: *mut ::std::os::raw::c_int,
+    minor: *mut ::std::os::raw::c_int,
     _dev: CUdevice,
     _fn_logger: &mut log::FunctionLogger,
     state: &mut trace::StateTracker,
     _result: CUresult,
 ) {
-    if let Some(major_ver_override) = state.override_cc_major {
-        unsafe { *major = major_ver_override as i32 };
+    if let Some((major_override, minor_override)) = state.override_cc {
+        unsafe {
+            *major = major_override as i32;
+            *minor = minor_override as i32;
+        };
     }
 }
 
