@@ -1,4 +1,4 @@
-use crate::{dark_api, log, Settings};
+use crate::{dark_api, log, FnCallLog, Settings};
 use cuda_types::cuda::*;
 use std::{
     collections::HashMap,
@@ -39,7 +39,7 @@ impl StateTracker {
         &mut self,
         module: CUmodule,
         file_name: *const i8,
-        fn_logger: &mut log::FunctionLogger,
+        fn_logger: &mut FnCallLog,
     ) {
         let file_name = match unsafe { CStr::from_ptr(file_name) }.to_str() {
             Ok(f) => f,
@@ -55,7 +55,7 @@ impl StateTracker {
     fn try_record_new_module_file(
         &mut self,
         module: CUmodule,
-        fn_logger: &mut log::FunctionLogger,
+        fn_logger: &mut FnCallLog,
         file_name: &str,
     ) -> io::Result<()> {
         let mut module_file = fs::File::open(file_name)?;
@@ -70,7 +70,7 @@ impl StateTracker {
         module: CUmodule,
         version: Option<usize>,
         submodule: &[u8],
-        fn_logger: &mut log::FunctionLogger,
+        fn_logger: &mut FnCallLog,
         type_: &'static str,
     ) {
         if !self.modules.contains_key(&module) {
@@ -111,7 +111,7 @@ impl StateTracker {
         &mut self,
         module: CUmodule,
         raw_image: *const c_void,
-        fn_logger: &mut log::FunctionLogger,
+        fn_logger: &mut FnCallLog,
     ) {
         self.module_counter += 1;
         if unsafe { *(raw_image as *const [u8; 4]) } == *goblin::elf64::header::ELFMAG {
@@ -139,7 +139,7 @@ impl StateTracker {
         &mut self,
         module: CUmodule,
         raw_image: *const c_void,
-        fn_logger: &mut log::FunctionLogger,
+        fn_logger: &mut FnCallLog,
     ) {
         self.modules.insert(module, None);
         let module_text = unsafe { CStr::from_ptr(raw_image as *const _) }.to_str();
@@ -162,7 +162,7 @@ impl StateTracker {
 
     fn try_parse_and_record_kernels(
         &mut self,
-        fn_logger: &mut log::FunctionLogger,
+        fn_logger: &mut FnCallLog,
         module_index: usize,
         version: Option<usize>,
         submodule_index: Option<usize>,

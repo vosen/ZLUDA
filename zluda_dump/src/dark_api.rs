@@ -1,4 +1,4 @@
-use crate::format;
+use crate::{format, FnCallLog};
 use crate::{log, os, trace::StateTracker};
 use crate::{log::UInt, GlobalDelayedState};
 use cuda_types::cuda::*;
@@ -275,7 +275,18 @@ struct FatbinFileHeader {
 unsafe fn record_submodules_from_wrapped_fatbin(
     module: *mut CUmodule,
     fatbinc_wrapper: *const FatbincWrapper,
-    fn_logger: &mut log::FunctionLogger,
+    fn_logger: &mut FnCallLog,
+    delayed_state: &mut GlobalDelayedState,
+    original_fn: impl FnOnce(&OriginalExports) -> CUresult,
+) -> CUresult {
+    todo!()
+}
+
+/*
+unsafe fn record_submodules_from_wrapped_fatbin(
+    module: *mut CUmodule,
+    fatbinc_wrapper: *const FatbincWrapper,
+    fn_logger: &mut FnCallLog,
     delayed_state: &mut GlobalDelayedState,
     original_fn: impl FnOnce(&OriginalExports) -> CUresult,
 ) -> CUresult {
@@ -321,12 +332,13 @@ unsafe fn record_submodules_from_wrapped_fatbin(
     }
     result
 }
+     */
 
 unsafe fn record_submodules_from_fatbin(
     module: CUmodule,
     fatbin_header: *const FatbinHeader,
     fatbin_version: Option<usize>,
-    logger: &mut log::FunctionLogger,
+    logger: &mut FnCallLog,
     state: &mut StateTracker,
 ) {
     let magic = (*fatbin_header).magic;
@@ -365,6 +377,15 @@ unsafe extern "system" fn get_module_from_cubin(
     module: *mut CUmodule,
     fatbinc_wrapper: *const FatbincWrapper,
 ) -> CUresult {
+    todo!()
+}
+
+/*
+#[allow(improper_ctypes_definitions)]
+unsafe extern "system" fn get_module_from_cubin(
+    module: *mut CUmodule,
+    fatbinc_wrapper: *const FatbincWrapper,
+) -> CUresult {
     let arguments_writer = Box::new(move |writer: &mut dyn std::io::Write| {
         writer.write_all(b"(")?;
         writer.write_all(stringify!(module).as_bytes())?;
@@ -392,7 +413,20 @@ unsafe extern "system" fn get_module_from_cubin(
         },
     )
 }
+    */
 
+#[allow(improper_ctypes_definitions)]
+unsafe extern "system" fn get_module_from_cubin_ext1(
+    module: *mut CUmodule,
+    fatbinc_wrapper: *const FatbincWrapper,
+    ptr1: *mut c_void,
+    ptr2: *mut c_void,
+    _unknown: usize,
+) -> CUresult {
+    todo!()
+}
+
+/*
 #[allow(improper_ctypes_definitions)]
 unsafe extern "system" fn get_module_from_cubin_ext1(
     module: *mut CUmodule,
@@ -456,7 +490,20 @@ unsafe extern "system" fn get_module_from_cubin_ext1(
         },
     )
 }
+    */
 
+    #[allow(improper_ctypes_definitions)]
+    unsafe extern "system" fn get_module_from_cubin_ext2(
+        fatbin_header: *const FatbinHeader,
+        module: *mut CUmodule,
+        ptr1: *mut c_void,
+        ptr2: *mut c_void,
+        _unknown: usize,
+    ) -> CUresult {
+        todo!()
+    }
+
+    /*
 #[allow(improper_ctypes_definitions)]
 unsafe extern "system" fn get_module_from_cubin_ext2(
     fatbin_header: *const FatbinHeader,
@@ -527,12 +574,13 @@ unsafe extern "system" fn get_module_from_cubin_ext2(
     );
     result
 }
+     */
 
 unsafe fn record_submodules(
     should_decompress_elf: bool,
     module: CUmodule,
     version: Option<usize>,
-    fn_logger: &mut log::FunctionLogger,
+    fn_logger: &mut FnCallLog,
     state: &mut StateTracker,
     start: *const u8,
     end: *const u8,
