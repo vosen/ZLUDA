@@ -53,15 +53,26 @@ impl Writer {
         Ok(())
     }
 
-    pub(crate) fn write_all(&mut self, call: &FnCallLog) {
-        self.write_all_impl(0, call);
+    pub(crate) fn write_and_flush(&mut self, log_root: &mut FnCallLog) {
+        self.write_all_from_depth(0, log_root);
+        self.write_buffer.finish();
+        let error_from_writing_to_fallible_emitter = match self.fallible_emitter {
+            Some(ref mut emitter) => self.write_buffer.send_to(emitter),
+            None => Ok(()),
+        };
+        if let Err(e) = error_from_writing_to_fallible_emitter {
+            self.hack_squeeze_in_additional_error(ErrorEntry::IoError(e))
+        }
+        self.write_buffer.send_to(&mut self.infallible_emitter).ok();
+        self.write_buffer.reset();
+        log_root.reset();
     }
 
-    fn write_all_impl(&mut self, depth: usize, fn_call: &FnCallLog) {
+    fn write_all_from_depth(&mut self, depth: usize, fn_call: &FnCallLog) {
         self.write_call(depth, fn_call);
         for sub in fn_call.subcalls.iter() {
             match sub {
-                LogEntry::FnCall(fn_call) => self.write_all_impl(depth + 1, fn_call),
+                LogEntry::FnCall(fn_call) => self.write_all_from_depth(depth + 1, fn_call),
                 LogEntry::Error(err) => self.write_error(depth + 1, err),
             }
         }
@@ -85,8 +96,8 @@ impl Writer {
             }
         }
         self.write_buffer.write_all(b" -> ").ok();
-        if let Some(result) = call.output {
-            self.write_buffer.write_all(result.as_bytes()).ok();
+        if let Some(ref result) = call.output {
+            self.write_buffer.write_all(result).ok();
         } else {
             self.write_buffer.write_all(b"UNKNOWN").ok();
         };
@@ -99,7 +110,10 @@ impl Writer {
         self.write_buffer.end_line();
     }
 
-    pub(crate) fn flush(&mut self) {
+    fn hack_squeeze_in_additional_error(&mut self, entry: ErrorEntry) {
+        self.write_buffer.undo_finish();
+        write!(self.write_buffer, "    {}", entry).ok();
+        self.write_buffer.end_line();
         self.write_buffer.finish();
     }
 }

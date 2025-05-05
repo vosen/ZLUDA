@@ -10,7 +10,7 @@ use std::ops::{Deref, DerefMut};
 use std::ptr::NonNull;
 use std::sync::LazyLock;
 use std::{collections::HashMap, env, error::Error, fs, path::PathBuf, sync::Mutex};
-use std::{io, mem, ptr};
+use std::{io, mem, ptr, usize};
 
 #[macro_use]
 extern crate lazy_static;
@@ -105,16 +105,26 @@ macro_rules! extern_redirect {
             #[no_mangle]
             #[allow(improper_ctypes_definitions)]
             pub extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
-                let original_fn = |dynamic_fns: &mut crate::CudaDynamicFns| {
-                    dynamic_fns.$fn_name($( $arg_id ),*)
-                };
-                let get_formatted_args = Box::new(move |writer: &mut dyn std::io::Write| {
-                    (paste! { format :: [<write_ $fn_name>] }) (
-                        writer
+                let mut formatted_args = Vec::new();
+                (paste! { format :: [<write_ $fn_name>] }) (
+                        &mut formatted_args
                         $(,$arg_id)*
-                    )
-                });
-                crate::handle_cuda_function_call(stringify!($fn_name), original_fn, get_formatted_args)
+                ).ok();
+                let extract_fn_ptr = |state: &mut GlobalDelayedState, log: &mut FnCallLog| {
+                    paste::paste! {
+                        state.libcuda. [<get_ $fn_name>]()
+                    }
+                };
+                let cuda_call = |fn_ptr: extern $abi fn ( $($arg_type),* ) -> $ret_type | {
+                    fn_ptr( $( $arg_id ),* )
+                };
+                GlobalState2::under_lock(
+                    CudaFunctionName::Normal(stringify!($fn_name)),
+                    Some(formatted_args),
+                    extract_fn_ptr,
+                    cuda_call,
+                    move |_, _, _, _| {}
+                )
             }
         )*
     };
@@ -196,6 +206,31 @@ impl GlobalState2 {
         }
     }
 
+    // This function is at the core of the logging mechanism.
+    // How it works:
+    // When user calls a CUDA function, we want to log the call and its arguments. So in a dump
+    // library every public CUDA function will call this function like so:
+    //     cuMemAlloc_v2(args) -> under_lock("cuMemAlloc_v2", Some(args), ...)
+    // That sounds simple enough, but there are some exotic requirements we have to fulfill:
+    // * Reentrancy: CUDA library functions can call other CUDA libary functions and CUDA driver
+    //               functions. We need to be able to log all of these calls hierarchically
+    // * Thread-safety: CUDA functions can be called from multiple threads
+    // * Error-handling: If we fail internally for whatever reason (e.g. we can't load the CUDA
+    //                   library, the dump directory is not writable, etc.), we need to log this
+    //                   error no matter what
+    // Because of that the function is split into three phases:
+    // * Pre-call:
+    //   We need to load the settings (location of the CUDA libary, dump directory, etc.), write the
+    //   function name and its arguments to logging buffer. This whole phase is covered by a drop
+    //   guard which will flush the log buffer in case of panic
+    // * Call:
+    //   We call the actual CUDA function from the actual library. This phase is covered by 
+    //   a (different) drop guard. We also make sure to drop any &mut and RefMuts we created in the
+    //   pre-call phase - this is done to ensure reentrancy. Our CUDA function could call another
+    //   CUDA function which would try to acquire the same RefCell
+    // * Post-call:
+    //   We log the output of the CUDA function and any errors that may have occurred. This phase
+    //   is also covered by a drop guard which will flush the log buffer in case of panic
     fn under_lock<'a, FnPtr: Copy, InnerResult: CudaResult>(
         name: CudaFunctionName,
         args: Option<Vec<u8>>,
@@ -254,6 +289,9 @@ impl GlobalState2 {
         let mut logger = RefMut::map(global_state.log_stack.borrow_mut(), |log_stack| {
             log_stack.resume()
         });
+        let mut output_string = Vec::new();
+        inner_result.write("", usize::MAX, &mut output_string).ok();
+        logger.output = Some(output_string);
         post_call(
             global_state.delayed_state.as_mut().unwrap(),
             &mut logger,
@@ -360,7 +398,7 @@ impl FnCallLogStack {
 struct FnCallLog {
     name: CudaFunctionName,
     args: Option<Vec<u8>>,
-    output: Option<&'static str>,
+    output: Option<Vec<u8>>,
     subcalls: Vec<LogEntry>,
 }
 
@@ -393,6 +431,13 @@ impl FnCallLog {
             self.subcalls.push(LogEntry::Error(ErrorEntry::IoError(e)));
         }
     }
+
+    fn reset(&mut self) {
+        self.name = CudaFunctionName::Normal("");
+        self.args = None;
+        self.output = None;
+        self.subcalls.clear();
+    }
 }
 
 struct OuterCallGuard<'a> {
@@ -405,7 +450,7 @@ impl<'a> Drop for OuterCallGuard<'a> {
         let mut log_root = self.log_root.borrow_mut();
         log_root.depth -= 1;
         if log_root.depth == 0 {
-            self.writer.write_all(&log_root.log_root);
+            self.writer.write_and_flush(&mut log_root.log_root);
         }
     }
 }
@@ -419,7 +464,7 @@ impl<'a> Drop for InnerCallGuard<'a> {
         let mut log_root = global_state.log_stack.borrow_mut();
         log_root.depth -= 1;
         if log_root.depth == 0 {
-            global_state.log_writer.write_all(&log_root.log_root);
+            global_state.log_writer.write_and_flush(&mut log_root.log_root);
         }
     }
 }
