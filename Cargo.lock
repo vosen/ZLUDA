@@ -261,6 +261,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "dark_api"
+version = "0.0.0"
+dependencies = [
+ "uuid",
+]
+
+[[package]]
 name = "derivative"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -371,6 +378,13 @@ name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
+
+[[package]]
+name = "format"
+version = "0.0.0"
+dependencies = [
+ "cuda_types",
+]
 
 [[package]]
 name = "glob"
@@ -1208,6 +1222,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f2fe1f049979528ce97d8a4672f984f8846fc9975be0cf14ca798116d724c4a"
 
 [[package]]
+name = "uuid"
+version = "1.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "458f7a779bf54acc9f347480ac654f68407d3aab21269a6e3c9f922acd9e2da9"
+
+[[package]]
 name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1444,6 +1464,19 @@ dependencies = [
 [[package]]
 name = "zluda_dump_blas"
 version = "0.0.0"
+dependencies = [
+ "cuda_base",
+ "cuda_types",
+ "libloading",
+]
+
+[[package]]
+name = "zluda_dump_common"
+version = "0.1.0"
+dependencies = [
+ "cuda_types",
+ "libloading",
+]
 
 [[package]]
 name = "zluda_fft"

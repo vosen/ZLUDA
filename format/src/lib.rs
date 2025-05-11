@@ -858,6 +858,5 @@ pub fn write_cuGLGetDevices_v2(
     todo!()
 }
 
-#[path = "format_generated.rs"]
 mod format_generated;
-pub(crate) use format_generated::*;
+pub use format_generated::*;

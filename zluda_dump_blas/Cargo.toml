@@ -9,6 +9,9 @@ name = "zluda_dump_blas"
 crate-type = ["cdylib"]
 
 [dependencies]
+cuda_base = { path = "../cuda_base" }
+cuda_types = { path = "../cuda_types" }
+libloading = "0.8"
 
 [package.metadata.zluda]
 linux_symlinks = [

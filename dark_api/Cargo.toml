@@ -1,0 +1,7 @@
+[package]
+name = "dark_api"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+uuid = "1.16"

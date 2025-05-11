@@ -1,7 +1,7 @@
 // Generated automatically by zluda_bindgen
 // DO NOT EDIT MANUALLY
 #![allow(warnings)]
-impl crate::format::CudaDisplay for cuda_types::cuda::CUdeviceptr_v2 {
+impl crate::CudaDisplay for cuda_types::cuda::CUdeviceptr_v2 {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -11,7 +11,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUdeviceptr_v2 {
         write!(writer, "{:p}", self.0)
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUcontext {
+impl crate::CudaDisplay for cuda_types::cuda::CUcontext {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -21,7 +21,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUcontext {
         write!(writer, "{:p}", self.0)
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmodule {
+impl crate::CudaDisplay for cuda_types::cuda::CUmodule {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -31,7 +31,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmodule {
         write!(writer, "{:p}", self.0)
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUfunction {
+impl crate::CudaDisplay for cuda_types::cuda::CUfunction {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -41,7 +41,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUfunction {
         write!(writer, "{:p}", self.0)
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUlibrary {
+impl crate::CudaDisplay for cuda_types::cuda::CUlibrary {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -51,7 +51,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUlibrary {
         write!(writer, "{:p}", self.0)
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUkernel {
+impl crate::CudaDisplay for cuda_types::cuda::CUkernel {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -61,7 +61,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUkernel {
         write!(writer, "{:p}", *self)
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUarray {
+impl crate::CudaDisplay for cuda_types::cuda::CUarray {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -71,7 +71,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUarray {
         write!(writer, "{:p}", *self)
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmipmappedArray {
+impl crate::CudaDisplay for cuda_types::cuda::CUmipmappedArray {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -81,7 +81,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmipmappedArray {
         write!(writer, "{:p}", *self)
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUtexref {
+impl crate::CudaDisplay for cuda_types::cuda::CUtexref {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -91,7 +91,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUtexref {
         write!(writer, "{:p}", *self)
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUsurfref {
+impl crate::CudaDisplay for cuda_types::cuda::CUsurfref {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -101,7 +101,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUsurfref {
         write!(writer, "{:p}", *self)
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUevent {
+impl crate::CudaDisplay for cuda_types::cuda::CUevent {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -111,7 +111,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUevent {
         write!(writer, "{:p}", *self)
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUstream {
+impl crate::CudaDisplay for cuda_types::cuda::CUstream {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -121,7 +121,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUstream {
         write!(writer, "{:p}", self.0)
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphicsResource {
+impl crate::CudaDisplay for cuda_types::cuda::CUgraphicsResource {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -131,7 +131,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphicsResource {
         write!(writer, "{:p}", *self)
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUexternalMemory {
+impl crate::CudaDisplay for cuda_types::cuda::CUexternalMemory {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -141,7 +141,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUexternalMemory {
         write!(writer, "{:p}", *self)
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUexternalSemaphore {
+impl crate::CudaDisplay for cuda_types::cuda::CUexternalSemaphore {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -151,7 +151,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUexternalSemaphore {
         write!(writer, "{:p}", *self)
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUgraph {
+impl crate::CudaDisplay for cuda_types::cuda::CUgraph {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -161,7 +161,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUgraph {
         write!(writer, "{:p}", *self)
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphNode {
+impl crate::CudaDisplay for cuda_types::cuda::CUgraphNode {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -171,7 +171,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphNode {
         write!(writer, "{:p}", *self)
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphExec {
+impl crate::CudaDisplay for cuda_types::cuda::CUgraphExec {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -181,7 +181,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphExec {
         write!(writer, "{:p}", *self)
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmemoryPool {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemoryPool {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -191,7 +191,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmemoryPool {
         write!(writer, "{:p}", *self)
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUuserObject {
+impl crate::CudaDisplay for cuda_types::cuda::CUuserObject {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -201,7 +201,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUuserObject {
         write!(writer, "{:p}", *self)
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphDeviceNode {
+impl crate::CudaDisplay for cuda_types::cuda::CUgraphDeviceNode {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -211,7 +211,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphDeviceNode {
         write!(writer, "{:p}", *self)
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUasyncCallbackHandle {
+impl crate::CudaDisplay for cuda_types::cuda::CUasyncCallbackHandle {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -221,7 +221,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUasyncCallbackHandle {
         write!(writer, "{:p}", *self)
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUgreenCtx {
+impl crate::CudaDisplay for cuda_types::cuda::CUgreenCtx {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -231,7 +231,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUgreenCtx {
         write!(writer, "{:p}", *self)
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmemFabricHandle_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemFabricHandle_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -239,11 +239,11 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmemFabricHandle_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(data), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.data, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.data, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUipcMem_flags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUipcMem_flags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -259,7 +259,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUipcMem_flags_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmemAttach_flags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemAttach_flags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -280,7 +280,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmemAttach_flags_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUctx_flags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUctx_flags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -328,7 +328,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUctx_flags_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUevent_sched_flags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUevent_sched_flags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -352,7 +352,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUevent_sched_flags_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUstream_flags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUstream_flags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -370,7 +370,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUstream_flags_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUevent_flags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUevent_flags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -394,7 +394,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUevent_flags_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUevent_record_flags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUevent_record_flags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -412,7 +412,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUevent_record_flags_enum 
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUevent_wait_flags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUevent_wait_flags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -430,7 +430,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUevent_wait_flags_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUstreamWaitValue_flags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUstreamWaitValue_flags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -457,7 +457,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUstreamWaitValue_flags_en
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUstreamWriteValue_flags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUstreamWriteValue_flags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -478,7 +478,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUstreamWriteValue_flags_e
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUstreamBatchMemOpType_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUstreamBatchMemOpType_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -511,7 +511,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUstreamBatchMemOpType_enu
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUstreamMemoryBarrier_flags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUstreamMemoryBarrier_flags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -531,7 +531,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUstreamMemoryBarrier_flag
         }
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUstreamBatchMemOpParams_union_CUstreamMemOpFlushRemoteWritesParams_st {
     fn write(
         &self,
@@ -540,13 +540,13 @@ for cuda_types::cuda::CUstreamBatchMemOpParams_union_CUstreamMemOpFlushRemoteWri
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(operation), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.operation, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.operation, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(flags), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.flags, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.flags, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUstreamBatchMemOpParams_union_CUstreamMemOpMemoryBarrierParams_st {
     fn write(
         &self,
@@ -555,14 +555,13 @@ for cuda_types::cuda::CUstreamBatchMemOpParams_union_CUstreamMemOpMemoryBarrierP
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(operation), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.operation, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.operation, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(flags), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.flags, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.flags, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
-for cuda_types::cuda::CUDA_BATCH_MEM_OP_NODE_PARAMS_v1_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_BATCH_MEM_OP_NODE_PARAMS_v1_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -570,18 +569,17 @@ for cuda_types::cuda::CUDA_BATCH_MEM_OP_NODE_PARAMS_v1_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(ctx), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.ctx, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.ctx, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(count), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.count, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.count, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(paramArray), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.paramArray, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.paramArray, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(flags), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.flags, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.flags, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
-for cuda_types::cuda::CUDA_BATCH_MEM_OP_NODE_PARAMS_v2_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_BATCH_MEM_OP_NODE_PARAMS_v2_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -589,17 +587,17 @@ for cuda_types::cuda::CUDA_BATCH_MEM_OP_NODE_PARAMS_v2_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(ctx), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.ctx, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.ctx, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(count), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.count, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.count, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(paramArray), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.paramArray, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.paramArray, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(flags), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.flags, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.flags, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUoccupancy_flags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUoccupancy_flags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -620,7 +618,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUoccupancy_flags_enum {
         }
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUstreamUpdateCaptureDependencies_flags_enum {
     fn write(
         &self,
@@ -641,7 +639,7 @@ for cuda_types::cuda::CUstreamUpdateCaptureDependencies_flags_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUasyncNotificationType_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUasyncNotificationType_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -659,7 +657,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUasyncNotificationType_en
         }
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUasyncNotificationInfo_st__bindgen_ty_1__bindgen_ty_1 {
     fn write(
         &self,
@@ -668,11 +666,11 @@ for cuda_types::cuda::CUasyncNotificationInfo_st__bindgen_ty_1__bindgen_ty_1 {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(bytesOverBudget), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.bytesOverBudget, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.bytesOverBudget, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUasyncCallback {
+impl crate::CudaDisplay for cuda_types::cuda::CUasyncCallback {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -691,7 +689,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUasyncCallback {
         )
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUarray_format_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUarray_format_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -865,7 +863,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUarray_format_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUaddress_mode_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUaddress_mode_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -889,7 +887,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUaddress_mode_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUfilter_mode_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUfilter_mode_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -907,7 +905,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUfilter_mode_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUdevice_attribute_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUdevice_attribute_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -1881,7 +1879,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUdevice_attribute_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUdevprop_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUdevprop_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -1890,30 +1888,30 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUdevprop_st {
     ) -> std::io::Result<()> {
         writer
             .write_all(concat!("{ ", stringify!(maxThreadsPerBlock), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.maxThreadsPerBlock, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.maxThreadsPerBlock, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(maxThreadsDim), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.maxThreadsDim, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.maxThreadsDim, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(maxGridSize), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.maxGridSize, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.maxGridSize, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(sharedMemPerBlock), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.sharedMemPerBlock, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.sharedMemPerBlock, "", 0, writer)?;
         writer
             .write_all(concat!(", ", stringify!(totalConstantMemory), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.totalConstantMemory, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.totalConstantMemory, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(SIMDWidth), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.SIMDWidth, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.SIMDWidth, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(memPitch), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.memPitch, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.memPitch, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(regsPerBlock), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.regsPerBlock, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.regsPerBlock, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(clockRate), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.clockRate, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.clockRate, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(textureAlign), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.textureAlign, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.textureAlign, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUpointer_attribute_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUpointer_attribute_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2024,7 +2022,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUpointer_attribute_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUfunction_attribute_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUfunction_attribute_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2125,7 +2123,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUfunction_attribute_enum 
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUfunc_cache_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUfunc_cache_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2149,7 +2147,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUfunc_cache_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUsharedconfig_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUsharedconfig_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2179,7 +2177,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUsharedconfig_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUshared_carveout_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUshared_carveout_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2200,7 +2198,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUshared_carveout_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmemorytype_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemorytype_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2224,7 +2222,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmemorytype_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUcomputemode_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUcomputemode_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2245,7 +2243,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUcomputemode_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmem_advise_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUmem_advise_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2281,7 +2279,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmem_advise_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmem_range_attribute_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUmem_range_attribute_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2342,7 +2340,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmem_range_attribute_enum
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUjit_option_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUjit_option_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2464,7 +2462,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUjit_option_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUjit_target_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUjit_target_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2551,7 +2549,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUjit_target_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUjit_fallback_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUjit_fallback_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2569,7 +2567,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUjit_fallback_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUjit_cacheMode_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUjit_cacheMode_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2590,7 +2588,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUjit_cacheMode_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUjitInputType_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUjitInputType_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2623,7 +2621,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUjitInputType_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUlinkState {
+impl crate::CudaDisplay for cuda_types::cuda::CUlinkState {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2633,7 +2631,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUlinkState {
         write!(writer, "{:p}", *self)
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphicsRegisterFlags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUgraphicsRegisterFlags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2672,7 +2670,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphicsRegisterFlags_en
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphicsMapResourceFlags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUgraphicsMapResourceFlags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2703,7 +2701,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphicsMapResourceFlags
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUarray_cubemap_face_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUarray_cubemap_face_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2733,7 +2731,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUarray_cubemap_face_enum 
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUlimit_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUlimit_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2786,7 +2784,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUlimit_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUresourcetype_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUresourcetype_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2810,7 +2808,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUresourcetype_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUhostFn {
+impl crate::CudaDisplay for cuda_types::cuda::CUhostFn {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2829,7 +2827,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUhostFn {
         )
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUaccessProperty_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUaccessProperty_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2850,7 +2848,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUaccessProperty_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUaccessPolicyWindow_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUaccessPolicyWindow_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2858,19 +2856,19 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUaccessPolicyWindow_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(base_ptr), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.base_ptr, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.base_ptr, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(num_bytes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.num_bytes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.num_bytes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(hitRatio), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.hitRatio, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.hitRatio, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(hitProp), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.hitProp, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.hitProp, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(missProp), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.missProp, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.missProp, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_KERNEL_NODE_PARAMS_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_KERNEL_NODE_PARAMS_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2878,29 +2876,29 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_KERNEL_NODE_PARAMS_st
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(func), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.func, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.func, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(gridDimX), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.gridDimX, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.gridDimX, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(gridDimY), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.gridDimY, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.gridDimY, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(gridDimZ), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.gridDimZ, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.gridDimZ, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(blockDimX), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.blockDimX, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.blockDimX, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(blockDimY), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.blockDimY, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.blockDimY, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(blockDimZ), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.blockDimZ, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.blockDimZ, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(sharedMemBytes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.sharedMemBytes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.sharedMemBytes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(kernelParams), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.kernelParams, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.kernelParams, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(extra), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.extra, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.extra, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_KERNEL_NODE_PARAMS_v2_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_KERNEL_NODE_PARAMS_v2_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2908,33 +2906,33 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_KERNEL_NODE_PARAMS_v2
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(func), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.func, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.func, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(gridDimX), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.gridDimX, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.gridDimX, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(gridDimY), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.gridDimY, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.gridDimY, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(gridDimZ), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.gridDimZ, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.gridDimZ, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(blockDimX), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.blockDimX, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.blockDimX, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(blockDimY), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.blockDimY, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.blockDimY, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(blockDimZ), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.blockDimZ, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.blockDimZ, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(sharedMemBytes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.sharedMemBytes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.sharedMemBytes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(kernelParams), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.kernelParams, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.kernelParams, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(extra), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.extra, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.extra, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(kern), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.kern, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.kern, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(ctx), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.ctx, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.ctx, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_KERNEL_NODE_PARAMS_v3_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_KERNEL_NODE_PARAMS_v3_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2942,33 +2940,33 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_KERNEL_NODE_PARAMS_v3
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(func), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.func, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.func, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(gridDimX), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.gridDimX, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.gridDimX, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(gridDimY), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.gridDimY, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.gridDimY, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(gridDimZ), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.gridDimZ, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.gridDimZ, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(blockDimX), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.blockDimX, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.blockDimX, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(blockDimY), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.blockDimY, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.blockDimY, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(blockDimZ), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.blockDimZ, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.blockDimZ, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(sharedMemBytes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.sharedMemBytes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.sharedMemBytes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(kernelParams), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.kernelParams, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.kernelParams, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(extra), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.extra, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.extra, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(kern), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.kern, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.kern, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(ctx), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.ctx, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.ctx, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_MEMSET_NODE_PARAMS_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_MEMSET_NODE_PARAMS_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2976,21 +2974,21 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_MEMSET_NODE_PARAMS_st
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(dst), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dst, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dst, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(pitch), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.pitch, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.pitch, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(value), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.value, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.value, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(elementSize), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.elementSize, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.elementSize, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(width), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.width, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.width, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(height), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.height, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.height, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_MEMSET_NODE_PARAMS_v2_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_MEMSET_NODE_PARAMS_v2_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -2998,23 +2996,23 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_MEMSET_NODE_PARAMS_v2
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(dst), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dst, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dst, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(pitch), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.pitch, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.pitch, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(value), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.value, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.value, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(elementSize), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.elementSize, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.elementSize, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(width), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.width, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.width, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(height), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.height, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.height, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(ctx), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.ctx, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.ctx, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_HOST_NODE_PARAMS_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_HOST_NODE_PARAMS_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3022,13 +3020,13 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_HOST_NODE_PARAMS_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(fn_), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.fn_, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.fn_, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(userData), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.userData, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.userData, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_HOST_NODE_PARAMS_v2_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_HOST_NODE_PARAMS_v2_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3036,13 +3034,13 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_HOST_NODE_PARAMS_v2_s
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(fn_), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.fn_, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.fn_, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(userData), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.userData, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.userData, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphConditionalNodeType_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUgraphConditionalNodeType_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3063,7 +3061,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphConditionalNodeType
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_CONDITIONAL_NODE_PARAMS {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_CONDITIONAL_NODE_PARAMS {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3071,19 +3069,19 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_CONDITIONAL_NODE_PARA
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(handle), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.handle, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.handle, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(type_), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.type_, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.type_, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(size), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.size, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.size, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(phGraph_out), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.phGraph_out, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.phGraph_out, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(ctx), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.ctx, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.ctx, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphNodeType_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUgraphNodeType_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3141,7 +3139,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphNodeType_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphDependencyType_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUgraphDependencyType_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3162,7 +3160,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphDependencyType_enum
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphEdgeData_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUgraphEdgeData_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3170,15 +3168,15 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphEdgeData_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(from_port), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.from_port, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.from_port, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(to_port), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.to_port, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.to_port, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(type_), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.type_, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.type_, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphInstantiateResult_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUgraphInstantiateResult_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3223,7 +3221,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphInstantiateResult_e
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_GRAPH_INSTANTIATE_PARAMS_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_GRAPH_INSTANTIATE_PARAMS_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3231,17 +3229,17 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_GRAPH_INSTANTIATE_PAR
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(flags), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.flags, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.flags, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(hUploadStream), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.hUploadStream, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.hUploadStream, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(hErrNode_out), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.hErrNode_out, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.hErrNode_out, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(result_out), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.result_out, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.result_out, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUsynchronizationPolicy_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUsynchronizationPolicy_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3265,7 +3263,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUsynchronizationPolicy_en
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUclusterSchedulingPolicy_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUclusterSchedulingPolicy_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3296,7 +3294,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUclusterSchedulingPolicy_
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUlaunchMemSyncDomain_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUlaunchMemSyncDomain_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3315,7 +3313,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUlaunchMemSyncDomain_enum
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUlaunchMemSyncDomainMap_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUlaunchMemSyncDomainMap_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3323,13 +3321,13 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUlaunchMemSyncDomainMap_s
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(default_), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.default_, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.default_, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(remote), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.remote, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.remote, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUlaunchAttributeID_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUlaunchAttributeID_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3433,7 +3431,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUlaunchAttributeID_enum {
         }
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUlaunchAttributeValue_union__bindgen_ty_1 {
     fn write(
         &self,
@@ -3442,15 +3440,15 @@ for cuda_types::cuda::CUlaunchAttributeValue_union__bindgen_ty_1 {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(x), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.x, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.x, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(y), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.y, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.y, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(z), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.z, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.z, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUlaunchAttributeValue_union__bindgen_ty_2 {
     fn write(
         &self,
@@ -3459,16 +3457,16 @@ for cuda_types::cuda::CUlaunchAttributeValue_union__bindgen_ty_2 {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(event), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.event, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.event, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(flags), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.flags, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.flags, "", 0, writer)?;
         writer
             .write_all(concat!(", ", stringify!(triggerAtBlockStart), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.triggerAtBlockStart, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.triggerAtBlockStart, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUlaunchAttributeValue_union__bindgen_ty_3 {
     fn write(
         &self,
@@ -3477,13 +3475,13 @@ for cuda_types::cuda::CUlaunchAttributeValue_union__bindgen_ty_3 {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(event), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.event, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.event, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(flags), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.flags, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.flags, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUlaunchAttributeValue_union__bindgen_ty_4 {
     fn write(
         &self,
@@ -3492,15 +3490,15 @@ for cuda_types::cuda::CUlaunchAttributeValue_union__bindgen_ty_4 {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(x), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.x, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.x, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(y), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.y, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.y, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(z), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.z, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.z, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUlaunchAttributeValue_union__bindgen_ty_5 {
     fn write(
         &self,
@@ -3509,13 +3507,13 @@ for cuda_types::cuda::CUlaunchAttributeValue_union__bindgen_ty_5 {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(deviceUpdatable), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.deviceUpdatable, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.deviceUpdatable, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(devNode), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.devNode, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.devNode, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUstreamCaptureStatus_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUstreamCaptureStatus_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3539,7 +3537,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUstreamCaptureStatus_enum
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUstreamCaptureMode_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUstreamCaptureMode_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3563,7 +3561,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUstreamCaptureMode_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUdriverProcAddress_flags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUdriverProcAddress_flags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3589,8 +3587,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUdriverProcAddress_flags_
         }
     }
 }
-impl crate::format::CudaDisplay
-for cuda_types::cuda::CUdriverProcAddressQueryResult_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUdriverProcAddressQueryResult_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3617,7 +3614,7 @@ for cuda_types::cuda::CUdriverProcAddressQueryResult_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUexecAffinityType_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUexecAffinityType_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3635,7 +3632,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUexecAffinityType_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUexecAffinitySmCount_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUexecAffinitySmCount_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3643,11 +3640,11 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUexecAffinitySmCount_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(val), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.val, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.val, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUcigDataType_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUcigDataType_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3663,7 +3660,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUcigDataType_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUctxCigParam_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUctxCigParam_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3671,13 +3668,13 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUctxCigParam_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(sharedDataType), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.sharedDataType, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.sharedDataType, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(sharedData), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.sharedData, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.sharedData, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUctxCreateParams_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUctxCreateParams_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3686,18 +3683,18 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUctxCreateParams_st {
     ) -> std::io::Result<()> {
         writer
             .write_all(concat!("{ ", stringify!(execAffinityParams), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.execAffinityParams, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.execAffinityParams, "", 0, writer)?;
         writer
             .write_all(
                 concat!(", ", stringify!(numExecAffinityParams), ": ").as_bytes(),
             )?;
-        crate::format::CudaDisplay::write(&self.numExecAffinityParams, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.numExecAffinityParams, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(cigParams), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.cigParams, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.cigParams, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUlibraryOption_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUlibraryOption_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3722,7 +3719,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUlibraryOption_enum {
         }
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUlibraryHostUniversalFunctionAndDataTable_st {
     fn write(
         &self,
@@ -3731,18 +3728,18 @@ for cuda_types::cuda::CUlibraryHostUniversalFunctionAndDataTable_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(functionTable), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.functionTable, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.functionTable, "", 0, writer)?;
         writer
             .write_all(concat!(", ", stringify!(functionWindowSize), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.functionWindowSize, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.functionWindowSize, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dataTable), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dataTable, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dataTable, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dataWindowSize), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dataWindowSize, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dataWindowSize, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUdevice_P2PAttribute_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUdevice_P2PAttribute_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3787,7 +3784,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUdevice_P2PAttribute_enum
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUstreamCallback {
+impl crate::CudaDisplay for cuda_types::cuda::CUstreamCallback {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3806,7 +3803,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUstreamCallback {
         )
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUoccupancyB2DSize {
+impl crate::CudaDisplay for cuda_types::cuda::CUoccupancyB2DSize {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3825,7 +3822,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUoccupancyB2DSize {
         )
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_MEMCPY2D_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_MEMCPY2D_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3833,41 +3830,41 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_MEMCPY2D_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(srcXInBytes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcXInBytes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcXInBytes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcY), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcY, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcY, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcMemoryType), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcMemoryType, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcMemoryType, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcHost), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcHost, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcHost, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcDevice), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcDevice, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcDevice, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcArray), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcArray, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcArray, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcPitch), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcPitch, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcPitch, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstXInBytes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstXInBytes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstXInBytes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstY), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstY, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstY, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstMemoryType), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstMemoryType, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstMemoryType, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstHost), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstHost, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstHost, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstDevice), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstDevice, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstDevice, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstArray), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstArray, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstArray, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstPitch), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstPitch, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstPitch, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(WidthInBytes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.WidthInBytes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.WidthInBytes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(Height), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.Height, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.Height, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_MEMCPY3D_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_MEMCPY3D_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3875,55 +3872,55 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_MEMCPY3D_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(srcXInBytes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcXInBytes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcXInBytes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcY), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcY, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcY, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcZ), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcZ, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcZ, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcLOD), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcLOD, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcLOD, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcMemoryType), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcMemoryType, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcMemoryType, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcHost), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcHost, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcHost, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcDevice), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcDevice, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcDevice, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcArray), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcArray, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcArray, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcPitch), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcPitch, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcPitch, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcHeight), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcHeight, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcHeight, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstXInBytes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstXInBytes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstXInBytes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstY), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstY, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstY, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstZ), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstZ, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstZ, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstLOD), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstLOD, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstLOD, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstMemoryType), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstMemoryType, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstMemoryType, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstHost), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstHost, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstHost, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstDevice), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstDevice, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstDevice, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstArray), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstArray, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstArray, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstPitch), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstPitch, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstPitch, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstHeight), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstHeight, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstHeight, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(WidthInBytes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.WidthInBytes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.WidthInBytes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(Height), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.Height, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.Height, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(Depth), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.Depth, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.Depth, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_MEMCPY3D_PEER_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_MEMCPY3D_PEER_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3931,59 +3928,59 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_MEMCPY3D_PEER_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(srcXInBytes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcXInBytes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcXInBytes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcY), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcY, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcY, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcZ), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcZ, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcZ, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcLOD), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcLOD, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcLOD, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcMemoryType), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcMemoryType, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcMemoryType, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcHost), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcHost, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcHost, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcDevice), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcDevice, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcDevice, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcArray), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcArray, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcArray, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcContext), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcContext, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcContext, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcPitch), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcPitch, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcPitch, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcHeight), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcHeight, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcHeight, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstXInBytes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstXInBytes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstXInBytes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstY), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstY, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstY, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstZ), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstZ, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstZ, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstLOD), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstLOD, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstLOD, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstMemoryType), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstMemoryType, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstMemoryType, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstHost), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstHost, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstHost, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstDevice), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstDevice, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstDevice, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstArray), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstArray, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstArray, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstContext), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstContext, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstContext, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstPitch), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstPitch, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstPitch, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstHeight), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstHeight, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstHeight, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(WidthInBytes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.WidthInBytes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.WidthInBytes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(Height), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.Height, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.Height, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(Depth), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.Depth, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.Depth, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_MEMCPY_NODE_PARAMS_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_MEMCPY_NODE_PARAMS_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -3991,15 +3988,15 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_MEMCPY_NODE_PARAMS_st
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(flags), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.flags, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.flags, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(copyCtx), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.copyCtx, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.copyCtx, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(copyParams), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.copyParams, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.copyParams, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_ARRAY_DESCRIPTOR_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_ARRAY_DESCRIPTOR_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -4007,17 +4004,17 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_ARRAY_DESCRIPTOR_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(Width), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.Width, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.Width, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(Height), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.Height, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.Height, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(Format), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.Format, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.Format, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(NumChannels), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.NumChannels, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.NumChannels, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_ARRAY3D_DESCRIPTOR_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_ARRAY3D_DESCRIPTOR_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -4025,21 +4022,21 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_ARRAY3D_DESCRIPTOR_st
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(Width), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.Width, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.Width, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(Height), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.Height, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.Height, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(Depth), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.Depth, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.Depth, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(Format), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.Format, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.Format, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(NumChannels), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.NumChannels, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.NumChannels, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(Flags), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.Flags, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.Flags, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_ARRAY_SPARSE_PROPERTIES_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_ARRAY_SPARSE_PROPERTIES_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -4047,17 +4044,17 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_ARRAY_SPARSE_PROPERTI
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(tileExtent), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.tileExtent, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.tileExtent, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(miptailFirstLevel), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.miptailFirstLevel, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.miptailFirstLevel, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(miptailSize), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.miptailSize, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.miptailSize, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(flags), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.flags, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.flags, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUDA_ARRAY_SPARSE_PROPERTIES_st__bindgen_ty_1 {
     fn write(
         &self,
@@ -4066,15 +4063,15 @@ for cuda_types::cuda::CUDA_ARRAY_SPARSE_PROPERTIES_st__bindgen_ty_1 {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(width), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.width, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.width, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(height), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.height, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.height, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(depth), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.depth, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.depth, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_ARRAY_MEMORY_REQUIREMENTS_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_ARRAY_MEMORY_REQUIREMENTS_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -4082,13 +4079,13 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_ARRAY_MEMORY_REQUIREM
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(size), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.size, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.size, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(alignment), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.alignment, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.alignment, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUDA_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_1 {
     fn write(
         &self,
@@ -4097,11 +4094,11 @@ for cuda_types::cuda::CUDA_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_1 {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(hArray), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.hArray, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.hArray, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUDA_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_2 {
     fn write(
         &self,
@@ -4110,11 +4107,11 @@ for cuda_types::cuda::CUDA_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_2 {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(hMipmappedArray), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.hMipmappedArray, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.hMipmappedArray, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUDA_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_3 {
     fn write(
         &self,
@@ -4123,17 +4120,17 @@ for cuda_types::cuda::CUDA_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_3 {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(devPtr), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.devPtr, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.devPtr, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(format), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.format, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.format, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(numChannels), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.numChannels, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.numChannels, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(sizeInBytes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.sizeInBytes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.sizeInBytes, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUDA_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_4 {
     fn write(
         &self,
@@ -4142,21 +4139,21 @@ for cuda_types::cuda::CUDA_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_4 {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(devPtr), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.devPtr, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.devPtr, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(format), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.format, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.format, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(numChannels), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.numChannels, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.numChannels, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(width), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.width, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.width, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(height), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.height, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.height, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(pitchInBytes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.pitchInBytes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.pitchInBytes, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_TEXTURE_DESC_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_TEXTURE_DESC_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -4164,29 +4161,29 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_TEXTURE_DESC_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(addressMode), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.addressMode, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.addressMode, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(filterMode), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.filterMode, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.filterMode, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(flags), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.flags, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.flags, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(maxAnisotropy), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.maxAnisotropy, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.maxAnisotropy, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(mipmapFilterMode), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.mipmapFilterMode, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.mipmapFilterMode, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(mipmapLevelBias), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.mipmapLevelBias, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.mipmapLevelBias, "", 0, writer)?;
         writer
             .write_all(concat!(", ", stringify!(minMipmapLevelClamp), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.minMipmapLevelClamp, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.minMipmapLevelClamp, "", 0, writer)?;
         writer
             .write_all(concat!(", ", stringify!(maxMipmapLevelClamp), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.maxMipmapLevelClamp, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.maxMipmapLevelClamp, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(borderColor), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.borderColor, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.borderColor, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUresourceViewFormat_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUresourceViewFormat_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -4303,7 +4300,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUresourceViewFormat_enum 
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_RESOURCE_VIEW_DESC_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_RESOURCE_VIEW_DESC_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -4311,25 +4308,25 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_RESOURCE_VIEW_DESC_st
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(format), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.format, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.format, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(width), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.width, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.width, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(height), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.height, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.height, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(depth), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.depth, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.depth, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(firstMipmapLevel), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.firstMipmapLevel, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.firstMipmapLevel, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(lastMipmapLevel), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.lastMipmapLevel, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.lastMipmapLevel, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(firstLayer), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.firstLayer, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.firstLayer, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(lastLayer), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.lastLayer, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.lastLayer, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUtensorMap_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUtensorMap_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -4337,11 +4334,11 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUtensorMap_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(opaque), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.opaque, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.opaque, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUtensorMapDataType_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUtensorMapDataType_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -4416,7 +4413,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUtensorMapDataType_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUtensorMapInterleave_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUtensorMapInterleave_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -4437,7 +4434,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUtensorMapInterleave_enum
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUtensorMapSwizzle_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUtensorMapSwizzle_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -4480,7 +4477,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUtensorMapSwizzle_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUtensorMapL2promotion_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUtensorMapL2promotion_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -4507,7 +4504,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUtensorMapL2promotion_enu
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUtensorMapFloatOOBfill_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUtensorMapFloatOOBfill_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -4530,7 +4527,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUtensorMapFloatOOBfill_en
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUtensorMapIm2ColWideMode_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUtensorMapIm2ColWideMode_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -4551,8 +4548,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUtensorMapIm2ColWideMode_
         }
     }
 }
-impl crate::format::CudaDisplay
-for cuda_types::cuda::CUDA_POINTER_ATTRIBUTE_P2P_TOKENS_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_POINTER_ATTRIBUTE_P2P_TOKENS_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -4560,14 +4556,13 @@ for cuda_types::cuda::CUDA_POINTER_ATTRIBUTE_P2P_TOKENS_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(p2pToken), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.p2pToken, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.p2pToken, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(vaSpaceToken), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.vaSpaceToken, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.vaSpaceToken, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
-for cuda_types::cuda::CUDA_POINTER_ATTRIBUTE_ACCESS_FLAGS_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_POINTER_ATTRIBUTE_ACCESS_FLAGS_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -4597,7 +4592,7 @@ for cuda_types::cuda::CUDA_POINTER_ATTRIBUTE_ACCESS_FLAGS_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_LAUNCH_PARAMS_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_LAUNCH_PARAMS_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -4605,29 +4600,29 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_LAUNCH_PARAMS_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(function), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.function, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.function, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(gridDimX), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.gridDimX, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.gridDimX, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(gridDimY), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.gridDimY, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.gridDimY, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(gridDimZ), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.gridDimZ, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.gridDimZ, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(blockDimX), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.blockDimX, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.blockDimX, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(blockDimY), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.blockDimY, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.blockDimY, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(blockDimZ), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.blockDimZ, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.blockDimZ, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(sharedMemBytes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.sharedMemBytes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.sharedMemBytes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(hStream), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.hStream, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.hStream, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(kernelParams), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.kernelParams, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.kernelParams, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUexternalMemoryHandleType_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUexternalMemoryHandleType_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -4692,7 +4687,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUexternalMemoryHandleType
         }
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUDA_EXTERNAL_MEMORY_HANDLE_DESC_st__bindgen_ty_1__bindgen_ty_1 {
     fn write(
         &self,
@@ -4701,14 +4696,13 @@ for cuda_types::cuda::CUDA_EXTERNAL_MEMORY_HANDLE_DESC_st__bindgen_ty_1__bindgen
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(handle), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.handle, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.handle, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(name), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.name, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.name, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
-for cuda_types::cuda::CUDA_EXTERNAL_MEMORY_BUFFER_DESC_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_EXTERNAL_MEMORY_BUFFER_DESC_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -4716,15 +4710,15 @@ for cuda_types::cuda::CUDA_EXTERNAL_MEMORY_BUFFER_DESC_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(offset), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.offset, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.offset, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(size), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.size, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.size, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(flags), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.flags, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.flags, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUDA_EXTERNAL_MEMORY_MIPMAPPED_ARRAY_DESC_st {
     fn write(
         &self,
@@ -4733,16 +4727,15 @@ for cuda_types::cuda::CUDA_EXTERNAL_MEMORY_MIPMAPPED_ARRAY_DESC_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(offset), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.offset, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.offset, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(arrayDesc), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.arrayDesc, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.arrayDesc, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(numLevels), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.numLevels, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.numLevels, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
-for cuda_types::cuda::CUexternalSemaphoreHandleType_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUexternalSemaphoreHandleType_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -4830,7 +4823,7 @@ for cuda_types::cuda::CUexternalSemaphoreHandleType_enum {
         }
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUDA_EXTERNAL_SEMAPHORE_HANDLE_DESC_st__bindgen_ty_1__bindgen_ty_1 {
     fn write(
         &self,
@@ -4839,14 +4832,13 @@ for cuda_types::cuda::CUDA_EXTERNAL_SEMAPHORE_HANDLE_DESC_st__bindgen_ty_1__bind
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(handle), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.handle, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.handle, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(name), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.name, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.name, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
-for cuda_types::cuda::CUDA_EXTERNAL_SEMAPHORE_SIGNAL_PARAMS_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_EXTERNAL_SEMAPHORE_SIGNAL_PARAMS_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -4854,13 +4846,13 @@ for cuda_types::cuda::CUDA_EXTERNAL_SEMAPHORE_SIGNAL_PARAMS_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(params), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.params, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.params, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(flags), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.flags, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.flags, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUDA_EXTERNAL_SEMAPHORE_SIGNAL_PARAMS_st__bindgen_ty_1 {
     fn write(
         &self,
@@ -4869,15 +4861,15 @@ for cuda_types::cuda::CUDA_EXTERNAL_SEMAPHORE_SIGNAL_PARAMS_st__bindgen_ty_1 {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(fence), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.fence, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.fence, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(nvSciSync), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.nvSciSync, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.nvSciSync, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(keyedMutex), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.keyedMutex, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.keyedMutex, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUDA_EXTERNAL_SEMAPHORE_SIGNAL_PARAMS_st__bindgen_ty_1__bindgen_ty_1 {
     fn write(
         &self,
@@ -4886,11 +4878,11 @@ for cuda_types::cuda::CUDA_EXTERNAL_SEMAPHORE_SIGNAL_PARAMS_st__bindgen_ty_1__bi
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(value), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.value, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.value, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUDA_EXTERNAL_SEMAPHORE_SIGNAL_PARAMS_st__bindgen_ty_1__bindgen_ty_3 {
     fn write(
         &self,
@@ -4899,12 +4891,11 @@ for cuda_types::cuda::CUDA_EXTERNAL_SEMAPHORE_SIGNAL_PARAMS_st__bindgen_ty_1__bi
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(key), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.key, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.key, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
-for cuda_types::cuda::CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -4912,13 +4903,13 @@ for cuda_types::cuda::CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(params), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.params, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.params, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(flags), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.flags, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.flags, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS_st__bindgen_ty_1 {
     fn write(
         &self,
@@ -4927,15 +4918,15 @@ for cuda_types::cuda::CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS_st__bindgen_ty_1 {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(fence), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.fence, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.fence, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(nvSciSync), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.nvSciSync, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.nvSciSync, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(keyedMutex), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.keyedMutex, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.keyedMutex, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS_st__bindgen_ty_1__bindgen_ty_1 {
     fn write(
         &self,
@@ -4944,11 +4935,11 @@ for cuda_types::cuda::CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS_st__bindgen_ty_1__bind
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(value), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.value, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.value, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS_st__bindgen_ty_1__bindgen_ty_3 {
     fn write(
         &self,
@@ -4957,14 +4948,13 @@ for cuda_types::cuda::CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS_st__bindgen_ty_1__bind
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(key), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.key, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.key, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(timeoutMs), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.timeoutMs, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.timeoutMs, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
-for cuda_types::cuda::CUDA_EXT_SEM_SIGNAL_NODE_PARAMS_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_EXT_SEM_SIGNAL_NODE_PARAMS_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -4972,16 +4962,15 @@ for cuda_types::cuda::CUDA_EXT_SEM_SIGNAL_NODE_PARAMS_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(extSemArray), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.extSemArray, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.extSemArray, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(paramsArray), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.paramsArray, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.paramsArray, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(numExtSems), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.numExtSems, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.numExtSems, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
-for cuda_types::cuda::CUDA_EXT_SEM_SIGNAL_NODE_PARAMS_v2_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_EXT_SEM_SIGNAL_NODE_PARAMS_v2_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -4989,15 +4978,15 @@ for cuda_types::cuda::CUDA_EXT_SEM_SIGNAL_NODE_PARAMS_v2_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(extSemArray), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.extSemArray, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.extSemArray, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(paramsArray), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.paramsArray, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.paramsArray, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(numExtSems), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.numExtSems, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.numExtSems, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_EXT_SEM_WAIT_NODE_PARAMS_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_EXT_SEM_WAIT_NODE_PARAMS_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5005,16 +4994,15 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_EXT_SEM_WAIT_NODE_PAR
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(extSemArray), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.extSemArray, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.extSemArray, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(paramsArray), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.paramsArray, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.paramsArray, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(numExtSems), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.numExtSems, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.numExtSems, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
-for cuda_types::cuda::CUDA_EXT_SEM_WAIT_NODE_PARAMS_v2_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_EXT_SEM_WAIT_NODE_PARAMS_v2_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5022,15 +5010,15 @@ for cuda_types::cuda::CUDA_EXT_SEM_WAIT_NODE_PARAMS_v2_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(extSemArray), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.extSemArray, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.extSemArray, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(paramsArray), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.paramsArray, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.paramsArray, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(numExtSems), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.numExtSems, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.numExtSems, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmemAllocationHandleType_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemAllocationHandleType_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5063,7 +5051,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmemAllocationHandleType_
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmemAccess_flags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemAccess_flags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5088,7 +5076,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmemAccess_flags_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmemLocationType_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemLocationType_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5121,7 +5109,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmemLocationType_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmemAllocationType_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemAllocationType_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5142,8 +5130,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmemAllocationType_enum {
         }
     }
 }
-impl crate::format::CudaDisplay
-for cuda_types::cuda::CUmemAllocationGranularity_flags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemAllocationGranularity_flags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5164,7 +5151,7 @@ for cuda_types::cuda::CUmemAllocationGranularity_flags_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmemRangeHandleType_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemRangeHandleType_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5185,7 +5172,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmemRangeHandleType_enum 
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmemRangeFlags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemRangeFlags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5204,7 +5191,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmemRangeFlags_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUarraySparseSubresourceType_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUarraySparseSubresourceType_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5229,7 +5216,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUarraySparseSubresourceTy
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmemOperationType_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemOperationType_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5247,7 +5234,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmemOperationType_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmemHandleType_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemHandleType_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5262,7 +5249,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmemHandleType_enum {
         }
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUarrayMapInfo_st__bindgen_ty_2__bindgen_ty_1 {
     fn write(
         &self,
@@ -5271,25 +5258,25 @@ for cuda_types::cuda::CUarrayMapInfo_st__bindgen_ty_2__bindgen_ty_1 {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(level), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.level, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.level, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(layer), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.layer, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.layer, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(offsetX), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.offsetX, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.offsetX, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(offsetY), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.offsetY, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.offsetY, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(offsetZ), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.offsetZ, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.offsetZ, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(extentWidth), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.extentWidth, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.extentWidth, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(extentHeight), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.extentHeight, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.extentHeight, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(extentDepth), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.extentDepth, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.extentDepth, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUarrayMapInfo_st__bindgen_ty_2__bindgen_ty_2 {
     fn write(
         &self,
@@ -5298,15 +5285,15 @@ for cuda_types::cuda::CUarrayMapInfo_st__bindgen_ty_2__bindgen_ty_2 {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(layer), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.layer, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.layer, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(offset), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.offset, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.offset, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(size), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.size, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.size, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmemLocation_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemLocation_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5314,13 +5301,13 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmemLocation_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(type_), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.type_, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.type_, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(id), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.id, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.id, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmemAllocationCompType_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemAllocationCompType_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5338,7 +5325,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmemAllocationCompType_en
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmemAllocationProp_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemAllocationProp_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5346,24 +5333,23 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmemAllocationProp_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(type_), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.type_, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.type_, "", 0, writer)?;
         writer
             .write_all(
                 concat!(", ", stringify!(requestedHandleTypes), ": ").as_bytes(),
             )?;
-        crate::format::CudaDisplay::write(&self.requestedHandleTypes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.requestedHandleTypes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(location), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.location, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.location, "", 0, writer)?;
         writer
             .write_all(concat!(", ", stringify!(win32HandleMetaData), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.win32HandleMetaData, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.win32HandleMetaData, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(allocFlags), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.allocFlags, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.allocFlags, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
-for cuda_types::cuda::CUmemAllocationProp_st__bindgen_ty_1 {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemAllocationProp_st__bindgen_ty_1 {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5371,18 +5357,18 @@ for cuda_types::cuda::CUmemAllocationProp_st__bindgen_ty_1 {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(compressionType), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.compressionType, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.compressionType, "", 0, writer)?;
         writer
             .write_all(
                 concat!(", ", stringify!(gpuDirectRDMACapable), ": ").as_bytes(),
             )?;
-        crate::format::CudaDisplay::write(&self.gpuDirectRDMACapable, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.gpuDirectRDMACapable, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(usage), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.usage, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.usage, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmulticastGranularity_flags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUmulticastGranularity_flags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5403,7 +5389,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmulticastGranularity_fla
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmulticastObjectProp_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUmulticastObjectProp_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5411,17 +5397,17 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmulticastObjectProp_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(numDevices), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.numDevices, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.numDevices, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(size), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.size, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.size, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(handleTypes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.handleTypes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.handleTypes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(flags), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.flags, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.flags, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmemAccessDesc_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemAccessDesc_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5429,13 +5415,13 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmemAccessDesc_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(location), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.location, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.location, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(flags), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.flags, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.flags, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphExecUpdateResult_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUgraphExecUpdateResult_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5503,7 +5489,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphExecUpdateResult_en
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphExecUpdateResultInfo_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUgraphExecUpdateResultInfo_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5511,15 +5497,15 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphExecUpdateResultInf
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(result), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.result, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.result, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(errorNode), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.errorNode, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.errorNode, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(errorFromNode), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.errorFromNode, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.errorFromNode, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmemPool_attribute_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemPool_attribute_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5571,7 +5557,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmemPool_attribute_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmemPoolProps_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemPoolProps_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5579,24 +5565,24 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmemPoolProps_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(allocType), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.allocType, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.allocType, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(handleTypes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.handleTypes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.handleTypes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(location), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.location, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.location, "", 0, writer)?;
         writer
             .write_all(
                 concat!(", ", stringify!(win32SecurityAttributes), ": ").as_bytes(),
             )?;
-        crate::format::CudaDisplay::write(&self.win32SecurityAttributes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.win32SecurityAttributes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(maxSize), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.maxSize, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.maxSize, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(usage), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.usage, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.usage, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_MEM_ALLOC_NODE_PARAMS_v1_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_MEM_ALLOC_NODE_PARAMS_v1_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5604,19 +5590,19 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_MEM_ALLOC_NODE_PARAMS
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(poolProps), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.poolProps, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.poolProps, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(accessDescs), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.accessDescs, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.accessDescs, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(accessDescCount), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.accessDescCount, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.accessDescCount, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(bytesize), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.bytesize, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.bytesize, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dptr), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dptr, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dptr, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_MEM_ALLOC_NODE_PARAMS_v2_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_MEM_ALLOC_NODE_PARAMS_v2_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5624,19 +5610,19 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_MEM_ALLOC_NODE_PARAMS
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(poolProps), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.poolProps, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.poolProps, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(accessDescs), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.accessDescs, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.accessDescs, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(accessDescCount), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.accessDescCount, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.accessDescCount, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(bytesize), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.bytesize, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.bytesize, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dptr), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dptr, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dptr, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_MEM_FREE_NODE_PARAMS_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_MEM_FREE_NODE_PARAMS_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5644,11 +5630,11 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_MEM_FREE_NODE_PARAMS_
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(dptr), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dptr, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dptr, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphMem_attribute_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUgraphMem_attribute_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5679,7 +5665,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphMem_attribute_enum 
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_CHILD_GRAPH_NODE_PARAMS_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_CHILD_GRAPH_NODE_PARAMS_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5687,11 +5673,11 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_CHILD_GRAPH_NODE_PARA
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(graph), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.graph, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.graph, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_EVENT_RECORD_NODE_PARAMS_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_EVENT_RECORD_NODE_PARAMS_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5699,11 +5685,11 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_EVENT_RECORD_NODE_PAR
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(event), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.event, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.event, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_EVENT_WAIT_NODE_PARAMS_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_EVENT_WAIT_NODE_PARAMS_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5711,12 +5697,11 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_EVENT_WAIT_NODE_PARAM
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(event), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.event, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.event, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
-for cuda_types::cuda::CUflushGPUDirectRDMAWritesOptions_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUflushGPUDirectRDMAWritesOptions_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5742,8 +5727,7 @@ for cuda_types::cuda::CUflushGPUDirectRDMAWritesOptions_enum {
         }
     }
 }
-impl crate::format::CudaDisplay
-for cuda_types::cuda::CUGPUDirectRDMAWritesOrdering_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUGPUDirectRDMAWritesOrdering_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5774,8 +5758,7 @@ for cuda_types::cuda::CUGPUDirectRDMAWritesOrdering_enum {
         }
     }
 }
-impl crate::format::CudaDisplay
-for cuda_types::cuda::CUflushGPUDirectRDMAWritesScope_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUflushGPUDirectRDMAWritesScope_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5800,8 +5783,7 @@ for cuda_types::cuda::CUflushGPUDirectRDMAWritesScope_enum {
         }
     }
 }
-impl crate::format::CudaDisplay
-for cuda_types::cuda::CUflushGPUDirectRDMAWritesTarget_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUflushGPUDirectRDMAWritesTarget_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5820,7 +5802,7 @@ for cuda_types::cuda::CUflushGPUDirectRDMAWritesTarget_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphDebugDot_flags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUgraphDebugDot_flags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5932,7 +5914,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphDebugDot_flags_enum
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUuserObject_flags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUuserObject_flags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5948,7 +5930,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUuserObject_flags_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUuserObjectRetain_flags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUuserObjectRetain_flags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5963,7 +5945,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUuserObjectRetain_flags_e
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphInstantiate_flags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUgraphInstantiate_flags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -5999,7 +5981,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUgraphInstantiate_flags_e
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUdeviceNumaConfig_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUdeviceNumaConfig_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -6017,7 +5999,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUdeviceNumaConfig_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUprocessState_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUprocessState_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -6041,7 +6023,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUprocessState_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUcheckpointLockArgs_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUcheckpointLockArgs_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -6049,11 +6031,11 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUcheckpointLockArgs_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(timeoutMs), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.timeoutMs, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.timeoutMs, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmemcpyFlags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemcpyFlags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -6074,7 +6056,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmemcpyFlags_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmemcpySrcAccessOrder_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemcpySrcAccessOrder_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -6106,7 +6088,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmemcpySrcAccessOrder_enu
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmemcpyAttributes_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemcpyAttributes_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -6114,17 +6096,17 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmemcpyAttributes_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(srcAccessOrder), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcAccessOrder, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcAccessOrder, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcLocHint), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcLocHint, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcLocHint, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstLocHint), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstLocHint, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstLocHint, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(flags), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.flags, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.flags, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmemcpy3DOperandType_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemcpy3DOperandType_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -6145,7 +6127,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmemcpy3DOperandType_enum
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUoffset3D_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUoffset3D_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -6153,15 +6135,15 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUoffset3D_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(x), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.x, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.x, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(y), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.y, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.y, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(z), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.z, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.z, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUextent3D_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUextent3D_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -6169,15 +6151,15 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUextent3D_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(width), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.width, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.width, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(height), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.height, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.height, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(depth), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.depth, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.depth, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUmemcpy3DOperand_st__bindgen_ty_1__bindgen_ty_1 {
     fn write(
         &self,
@@ -6186,17 +6168,17 @@ for cuda_types::cuda::CUmemcpy3DOperand_st__bindgen_ty_1__bindgen_ty_1 {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(ptr), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.ptr, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.ptr, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(rowLength), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.rowLength, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.rowLength, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(layerHeight), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.layerHeight, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.layerHeight, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(locHint), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.locHint, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.locHint, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay
+impl crate::CudaDisplay
 for cuda_types::cuda::CUmemcpy3DOperand_st__bindgen_ty_1__bindgen_ty_2 {
     fn write(
         &self,
@@ -6205,13 +6187,13 @@ for cuda_types::cuda::CUmemcpy3DOperand_st__bindgen_ty_1__bindgen_ty_2 {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(array), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.array, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.array, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(offset), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.offset, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.offset, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_MEMCPY3D_BATCH_OP_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_MEMCPY3D_BATCH_OP_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -6219,15 +6201,15 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_MEMCPY3D_BATCH_OP_st 
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(src), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.src, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.src, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dst), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dst, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dst, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(extent), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.extent, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.extent, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcAccessOrder), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcAccessOrder, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcAccessOrder, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(flags), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.flags, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.flags, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
@@ -6239,11 +6221,11 @@ pub fn write_cuGetErrorString(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(error), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&error, "cuGetErrorString", arg_idx, writer)?;
+    crate::CudaDisplay::write(&error, "cuGetErrorString", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pStr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pStr, "cuGetErrorString", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pStr, "cuGetErrorString", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGetErrorName(
@@ -6254,11 +6236,11 @@ pub fn write_cuGetErrorName(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(error), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&error, "cuGetErrorName", arg_idx, writer)?;
+    crate::CudaDisplay::write(&error, "cuGetErrorName", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pStr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pStr, "cuGetErrorName", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pStr, "cuGetErrorName", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuInit(
@@ -6268,7 +6250,7 @@ pub fn write_cuInit(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Flags, "cuInit", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Flags, "cuInit", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDriverGetVersion(
@@ -6278,12 +6260,7 @@ pub fn write_cuDriverGetVersion(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(driverVersion), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &driverVersion,
-        "cuDriverGetVersion",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&driverVersion, "cuDriverGetVersion", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDeviceGet(
@@ -6294,11 +6271,11 @@ pub fn write_cuDeviceGet(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&device, "cuDeviceGet", arg_idx, writer)?;
+    crate::CudaDisplay::write(&device, "cuDeviceGet", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ordinal), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ordinal, "cuDeviceGet", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ordinal, "cuDeviceGet", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDeviceGetCount(
@@ -6308,7 +6285,7 @@ pub fn write_cuDeviceGetCount(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&count, "cuDeviceGetCount", arg_idx, writer)?;
+    crate::CudaDisplay::write(&count, "cuDeviceGetCount", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDeviceGetName(
@@ -6320,15 +6297,15 @@ pub fn write_cuDeviceGetName(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(name), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&name, "cuDeviceGetName", arg_idx, writer)?;
+    crate::CudaDisplay::write(&name, "cuDeviceGetName", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(len), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&len, "cuDeviceGetName", arg_idx, writer)?;
+    crate::CudaDisplay::write(&len, "cuDeviceGetName", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dev, "cuDeviceGetName", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dev, "cuDeviceGetName", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDeviceGetUuid(
@@ -6339,11 +6316,11 @@ pub fn write_cuDeviceGetUuid(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(uuid), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&uuid, "cuDeviceGetUuid", arg_idx, writer)?;
+    crate::CudaDisplay::write(&uuid, "cuDeviceGetUuid", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dev, "cuDeviceGetUuid", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dev, "cuDeviceGetUuid", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDeviceGetUuid_v2(
@@ -6354,11 +6331,11 @@ pub fn write_cuDeviceGetUuid_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(uuid), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&uuid, "cuDeviceGetUuid_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&uuid, "cuDeviceGetUuid_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dev, "cuDeviceGetUuid_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dev, "cuDeviceGetUuid_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDeviceGetLuid(
@@ -6370,20 +6347,15 @@ pub fn write_cuDeviceGetLuid(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(luid), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&luid, "cuDeviceGetLuid", arg_idx, writer)?;
+    crate::CudaDisplay::write(&luid, "cuDeviceGetLuid", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(deviceNodeMask), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &deviceNodeMask,
-        "cuDeviceGetLuid",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&deviceNodeMask, "cuDeviceGetLuid", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dev, "cuDeviceGetLuid", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dev, "cuDeviceGetLuid", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDeviceTotalMem_v2(
@@ -6394,11 +6366,11 @@ pub fn write_cuDeviceTotalMem_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(bytes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&bytes, "cuDeviceTotalMem_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&bytes, "cuDeviceTotalMem_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dev, "cuDeviceTotalMem_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dev, "cuDeviceTotalMem_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDeviceGetTexture1DLinearMaxWidth(
@@ -6411,7 +6383,7 @@ pub fn write_cuDeviceGetTexture1DLinearMaxWidth(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(maxWidthInElements), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &maxWidthInElements,
         "cuDeviceGetTexture1DLinearMaxWidth",
         arg_idx,
@@ -6420,7 +6392,7 @@ pub fn write_cuDeviceGetTexture1DLinearMaxWidth(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(format), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &format,
         "cuDeviceGetTexture1DLinearMaxWidth",
         arg_idx,
@@ -6429,7 +6401,7 @@ pub fn write_cuDeviceGetTexture1DLinearMaxWidth(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numChannels), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numChannels,
         "cuDeviceGetTexture1DLinearMaxWidth",
         arg_idx,
@@ -6438,7 +6410,7 @@ pub fn write_cuDeviceGetTexture1DLinearMaxWidth(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dev,
         "cuDeviceGetTexture1DLinearMaxWidth",
         arg_idx,
@@ -6455,15 +6427,15 @@ pub fn write_cuDeviceGetAttribute(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pi), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pi, "cuDeviceGetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pi, "cuDeviceGetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(attrib), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&attrib, "cuDeviceGetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&attrib, "cuDeviceGetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dev, "cuDeviceGetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dev, "cuDeviceGetAttribute", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDeviceGetNvSciSyncAttributes(
@@ -6475,7 +6447,7 @@ pub fn write_cuDeviceGetNvSciSyncAttributes(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(nvSciSyncAttrList), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &nvSciSyncAttrList,
         "cuDeviceGetNvSciSyncAttributes",
         arg_idx,
@@ -6484,16 +6456,11 @@ pub fn write_cuDeviceGetNvSciSyncAttributes(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dev,
-        "cuDeviceGetNvSciSyncAttributes",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dev, "cuDeviceGetNvSciSyncAttributes", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &flags,
         "cuDeviceGetNvSciSyncAttributes",
         arg_idx,
@@ -6509,11 +6476,11 @@ pub fn write_cuDeviceSetMemPool(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dev, "cuDeviceSetMemPool", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dev, "cuDeviceSetMemPool", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pool), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pool, "cuDeviceSetMemPool", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pool, "cuDeviceSetMemPool", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDeviceGetMemPool(
@@ -6524,11 +6491,11 @@ pub fn write_cuDeviceGetMemPool(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pool), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pool, "cuDeviceGetMemPool", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pool, "cuDeviceGetMemPool", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dev, "cuDeviceGetMemPool", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dev, "cuDeviceGetMemPool", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDeviceGetDefaultMemPool(
@@ -6539,21 +6506,11 @@ pub fn write_cuDeviceGetDefaultMemPool(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pool_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pool_out,
-        "cuDeviceGetDefaultMemPool",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pool_out, "cuDeviceGetDefaultMemPool", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dev,
-        "cuDeviceGetDefaultMemPool",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dev, "cuDeviceGetDefaultMemPool", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDeviceGetExecAffinitySupport(
@@ -6565,16 +6522,11 @@ pub fn write_cuDeviceGetExecAffinitySupport(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pi), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pi,
-        "cuDeviceGetExecAffinitySupport",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pi, "cuDeviceGetExecAffinitySupport", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(type_), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &type_,
         "cuDeviceGetExecAffinitySupport",
         arg_idx,
@@ -6583,12 +6535,7 @@ pub fn write_cuDeviceGetExecAffinitySupport(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dev,
-        "cuDeviceGetExecAffinitySupport",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dev, "cuDeviceGetExecAffinitySupport", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuFlushGPUDirectRDMAWrites(
@@ -6599,21 +6546,11 @@ pub fn write_cuFlushGPUDirectRDMAWrites(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(target), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &target,
-        "cuFlushGPUDirectRDMAWrites",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&target, "cuFlushGPUDirectRDMAWrites", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(scope), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &scope,
-        "cuFlushGPUDirectRDMAWrites",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&scope, "cuFlushGPUDirectRDMAWrites", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDeviceGetProperties(
@@ -6624,11 +6561,11 @@ pub fn write_cuDeviceGetProperties(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(prop), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&prop, "cuDeviceGetProperties", arg_idx, writer)?;
+    crate::CudaDisplay::write(&prop, "cuDeviceGetProperties", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dev, "cuDeviceGetProperties", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dev, "cuDeviceGetProperties", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDeviceComputeCapability(
@@ -6640,30 +6577,15 @@ pub fn write_cuDeviceComputeCapability(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(major), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &major,
-        "cuDeviceComputeCapability",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&major, "cuDeviceComputeCapability", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(minor), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &minor,
-        "cuDeviceComputeCapability",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&minor, "cuDeviceComputeCapability", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dev,
-        "cuDeviceComputeCapability",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dev, "cuDeviceComputeCapability", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDevicePrimaryCtxRetain(
@@ -6674,21 +6596,11 @@ pub fn write_cuDevicePrimaryCtxRetain(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pctx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pctx,
-        "cuDevicePrimaryCtxRetain",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pctx, "cuDevicePrimaryCtxRetain", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dev,
-        "cuDevicePrimaryCtxRetain",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dev, "cuDevicePrimaryCtxRetain", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDevicePrimaryCtxRelease_v2(
@@ -6698,12 +6610,7 @@ pub fn write_cuDevicePrimaryCtxRelease_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dev,
-        "cuDevicePrimaryCtxRelease_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dev, "cuDevicePrimaryCtxRelease_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDevicePrimaryCtxSetFlags_v2(
@@ -6714,21 +6621,11 @@ pub fn write_cuDevicePrimaryCtxSetFlags_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dev,
-        "cuDevicePrimaryCtxSetFlags_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dev, "cuDevicePrimaryCtxSetFlags_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuDevicePrimaryCtxSetFlags_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuDevicePrimaryCtxSetFlags_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDevicePrimaryCtxGetState(
@@ -6740,30 +6637,15 @@ pub fn write_cuDevicePrimaryCtxGetState(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dev,
-        "cuDevicePrimaryCtxGetState",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dev, "cuDevicePrimaryCtxGetState", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuDevicePrimaryCtxGetState",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuDevicePrimaryCtxGetState", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(active), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &active,
-        "cuDevicePrimaryCtxGetState",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&active, "cuDevicePrimaryCtxGetState", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDevicePrimaryCtxReset_v2(
@@ -6773,12 +6655,7 @@ pub fn write_cuDevicePrimaryCtxReset_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dev,
-        "cuDevicePrimaryCtxReset_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dev, "cuDevicePrimaryCtxReset_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxCreate_v2(
@@ -6790,15 +6667,15 @@ pub fn write_cuCtxCreate_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pctx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pctx, "cuCtxCreate_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pctx, "cuCtxCreate_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuCtxCreate_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuCtxCreate_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dev, "cuCtxCreate_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dev, "cuCtxCreate_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxCreate_v3(
@@ -6812,7 +6689,7 @@ pub fn write_cuCtxCreate_v3(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pctx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pctx, "cuCtxCreate_v3", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pctx, "cuCtxCreate_v3", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(paramsArray), ": ").as_bytes())?;
@@ -6821,7 +6698,7 @@ pub fn write_cuCtxCreate_v3(
         if i != 0 {
             writer.write_all(b", ")?;
         }
-        crate::format::CudaDisplay::write(
+        crate::CudaDisplay::write(
             unsafe { &*paramsArray.add(i as usize) },
             "cuCtxCreate_v3",
             arg_idx,
@@ -6832,15 +6709,15 @@ pub fn write_cuCtxCreate_v3(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&numParams, "cuCtxCreate_v3", arg_idx, writer)?;
+    crate::CudaDisplay::write(&numParams, "cuCtxCreate_v3", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuCtxCreate_v3", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuCtxCreate_v3", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dev, "cuCtxCreate_v3", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dev, "cuCtxCreate_v3", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxCreate_v4(
@@ -6853,24 +6730,19 @@ pub fn write_cuCtxCreate_v4(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pctx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pctx, "cuCtxCreate_v4", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pctx, "cuCtxCreate_v4", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ctxCreateParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ctxCreateParams,
-        "cuCtxCreate_v4",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ctxCreateParams, "cuCtxCreate_v4", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuCtxCreate_v4", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuCtxCreate_v4", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dev, "cuCtxCreate_v4", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dev, "cuCtxCreate_v4", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxDestroy_v2(
@@ -6880,7 +6752,7 @@ pub fn write_cuCtxDestroy_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(ctx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ctx, "cuCtxDestroy_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ctx, "cuCtxDestroy_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxPushCurrent_v2(
@@ -6890,7 +6762,7 @@ pub fn write_cuCtxPushCurrent_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(ctx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ctx, "cuCtxPushCurrent_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ctx, "cuCtxPushCurrent_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxPopCurrent_v2(
@@ -6900,7 +6772,7 @@ pub fn write_cuCtxPopCurrent_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pctx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pctx, "cuCtxPopCurrent_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pctx, "cuCtxPopCurrent_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxSetCurrent(
@@ -6910,7 +6782,7 @@ pub fn write_cuCtxSetCurrent(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(ctx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ctx, "cuCtxSetCurrent", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ctx, "cuCtxSetCurrent", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxGetCurrent(
@@ -6920,7 +6792,7 @@ pub fn write_cuCtxGetCurrent(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pctx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pctx, "cuCtxGetCurrent", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pctx, "cuCtxGetCurrent", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxGetDevice(
@@ -6930,7 +6802,7 @@ pub fn write_cuCtxGetDevice(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&device, "cuCtxGetDevice", arg_idx, writer)?;
+    crate::CudaDisplay::write(&device, "cuCtxGetDevice", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxGetFlags(
@@ -6940,7 +6812,7 @@ pub fn write_cuCtxGetFlags(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuCtxGetFlags", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuCtxGetFlags", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxSetFlags(
@@ -6950,7 +6822,7 @@ pub fn write_cuCtxSetFlags(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuCtxSetFlags", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuCtxSetFlags", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxGetId(
@@ -6961,11 +6833,11 @@ pub fn write_cuCtxGetId(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(ctx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ctx, "cuCtxGetId", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ctx, "cuCtxGetId", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ctxId), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ctxId, "cuCtxGetId", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ctxId, "cuCtxGetId", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxSynchronize(
@@ -6981,11 +6853,11 @@ pub fn write_cuCtxSetLimit(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(limit), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&limit, "cuCtxSetLimit", arg_idx, writer)?;
+    crate::CudaDisplay::write(&limit, "cuCtxSetLimit", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&value, "cuCtxSetLimit", arg_idx, writer)?;
+    crate::CudaDisplay::write(&value, "cuCtxSetLimit", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxGetLimit(
@@ -6996,11 +6868,11 @@ pub fn write_cuCtxGetLimit(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pvalue), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pvalue, "cuCtxGetLimit", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pvalue, "cuCtxGetLimit", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(limit), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&limit, "cuCtxGetLimit", arg_idx, writer)?;
+    crate::CudaDisplay::write(&limit, "cuCtxGetLimit", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxGetCacheConfig(
@@ -7010,7 +6882,7 @@ pub fn write_cuCtxGetCacheConfig(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pconfig), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pconfig, "cuCtxGetCacheConfig", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pconfig, "cuCtxGetCacheConfig", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxSetCacheConfig(
@@ -7020,7 +6892,7 @@ pub fn write_cuCtxSetCacheConfig(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(config), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&config, "cuCtxSetCacheConfig", arg_idx, writer)?;
+    crate::CudaDisplay::write(&config, "cuCtxSetCacheConfig", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxGetApiVersion(
@@ -7031,11 +6903,11 @@ pub fn write_cuCtxGetApiVersion(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(ctx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ctx, "cuCtxGetApiVersion", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ctx, "cuCtxGetApiVersion", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(version), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&version, "cuCtxGetApiVersion", arg_idx, writer)?;
+    crate::CudaDisplay::write(&version, "cuCtxGetApiVersion", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxGetStreamPriorityRange(
@@ -7046,7 +6918,7 @@ pub fn write_cuCtxGetStreamPriorityRange(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(leastPriority), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &leastPriority,
         "cuCtxGetStreamPriorityRange",
         arg_idx,
@@ -7055,7 +6927,7 @@ pub fn write_cuCtxGetStreamPriorityRange(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(greatestPriority), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &greatestPriority,
         "cuCtxGetStreamPriorityRange",
         arg_idx,
@@ -7076,16 +6948,11 @@ pub fn write_cuCtxGetExecAffinity(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pExecAffinity), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pExecAffinity,
-        "cuCtxGetExecAffinity",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pExecAffinity, "cuCtxGetExecAffinity", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(type_), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&type_, "cuCtxGetExecAffinity", arg_idx, writer)?;
+    crate::CudaDisplay::write(&type_, "cuCtxGetExecAffinity", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxRecordEvent(
@@ -7096,11 +6963,11 @@ pub fn write_cuCtxRecordEvent(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hCtx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hCtx, "cuCtxRecordEvent", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hCtx, "cuCtxRecordEvent", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hEvent), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hEvent, "cuCtxRecordEvent", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hEvent, "cuCtxRecordEvent", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxWaitEvent(
@@ -7111,11 +6978,11 @@ pub fn write_cuCtxWaitEvent(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hCtx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hCtx, "cuCtxWaitEvent", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hCtx, "cuCtxWaitEvent", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hEvent), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hEvent, "cuCtxWaitEvent", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hEvent, "cuCtxWaitEvent", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxAttach(
@@ -7126,11 +6993,11 @@ pub fn write_cuCtxAttach(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pctx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pctx, "cuCtxAttach", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pctx, "cuCtxAttach", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuCtxAttach", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuCtxAttach", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxDetach(
@@ -7140,7 +7007,7 @@ pub fn write_cuCtxDetach(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(ctx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ctx, "cuCtxDetach", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ctx, "cuCtxDetach", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxGetSharedMemConfig(
@@ -7150,12 +7017,7 @@ pub fn write_cuCtxGetSharedMemConfig(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pConfig), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pConfig,
-        "cuCtxGetSharedMemConfig",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pConfig, "cuCtxGetSharedMemConfig", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxSetSharedMemConfig(
@@ -7165,12 +7027,7 @@ pub fn write_cuCtxSetSharedMemConfig(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(config), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &config,
-        "cuCtxSetSharedMemConfig",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&config, "cuCtxSetSharedMemConfig", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuModuleLoad(
@@ -7181,11 +7038,11 @@ pub fn write_cuModuleLoad(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(module), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&module, "cuModuleLoad", arg_idx, writer)?;
+    crate::CudaDisplay::write(&module, "cuModuleLoad", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(fname), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&fname, "cuModuleLoad", arg_idx, writer)?;
+    crate::CudaDisplay::write(&fname, "cuModuleLoad", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuModuleLoadData(
@@ -7196,11 +7053,11 @@ pub fn write_cuModuleLoadData(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(module), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&module, "cuModuleLoadData", arg_idx, writer)?;
+    crate::CudaDisplay::write(&module, "cuModuleLoadData", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(image), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&image, "cuModuleLoadData", arg_idx, writer)?;
+    crate::CudaDisplay::write(&image, "cuModuleLoadData", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuModuleLoadDataEx(
@@ -7214,33 +7071,23 @@ pub fn write_cuModuleLoadDataEx(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(module), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&module, "cuModuleLoadDataEx", arg_idx, writer)?;
+    crate::CudaDisplay::write(&module, "cuModuleLoadDataEx", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(image), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&image, "cuModuleLoadDataEx", arg_idx, writer)?;
+    crate::CudaDisplay::write(&image, "cuModuleLoadDataEx", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numOptions), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &numOptions,
-        "cuModuleLoadDataEx",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&numOptions, "cuModuleLoadDataEx", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(options), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&options, "cuModuleLoadDataEx", arg_idx, writer)?;
+    crate::CudaDisplay::write(&options, "cuModuleLoadDataEx", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(optionValues), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &optionValues,
-        "cuModuleLoadDataEx",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&optionValues, "cuModuleLoadDataEx", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuModuleLoadFatBinary(
@@ -7251,21 +7098,11 @@ pub fn write_cuModuleLoadFatBinary(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(module), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &module,
-        "cuModuleLoadFatBinary",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&module, "cuModuleLoadFatBinary", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(fatCubin), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &fatCubin,
-        "cuModuleLoadFatBinary",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&fatCubin, "cuModuleLoadFatBinary", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuModuleUnload(
@@ -7275,10 +7112,10 @@ pub fn write_cuModuleUnload(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hmod), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hmod, "cuModuleUnload", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hmod, "cuModuleUnload", arg_idx, writer)?;
     writer.write_all(b")")
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmoduleLoadingMode_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUmoduleLoadingMode_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -7303,7 +7140,7 @@ pub fn write_cuModuleGetLoadingMode(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(mode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&mode, "cuModuleGetLoadingMode", arg_idx, writer)?;
+    crate::CudaDisplay::write(&mode, "cuModuleGetLoadingMode", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuModuleGetFunction(
@@ -7315,15 +7152,15 @@ pub fn write_cuModuleGetFunction(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hfunc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hfunc, "cuModuleGetFunction", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hfunc, "cuModuleGetFunction", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hmod), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hmod, "cuModuleGetFunction", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hmod, "cuModuleGetFunction", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(name), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&name, "cuModuleGetFunction", arg_idx, writer)?;
+    crate::CudaDisplay::write(&name, "cuModuleGetFunction", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuModuleGetFunctionCount(
@@ -7334,21 +7171,11 @@ pub fn write_cuModuleGetFunctionCount(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &count,
-        "cuModuleGetFunctionCount",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&count, "cuModuleGetFunctionCount", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(mod_), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &mod_,
-        "cuModuleGetFunctionCount",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&mod_, "cuModuleGetFunctionCount", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuModuleEnumerateFunctions(
@@ -7360,7 +7187,7 @@ pub fn write_cuModuleEnumerateFunctions(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(functions), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &functions,
         "cuModuleEnumerateFunctions",
         arg_idx,
@@ -7369,7 +7196,7 @@ pub fn write_cuModuleEnumerateFunctions(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numFunctions), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numFunctions,
         "cuModuleEnumerateFunctions",
         arg_idx,
@@ -7378,12 +7205,7 @@ pub fn write_cuModuleEnumerateFunctions(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(mod_), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &mod_,
-        "cuModuleEnumerateFunctions",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&mod_, "cuModuleEnumerateFunctions", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuModuleGetGlobal_v2(
@@ -7396,19 +7218,19 @@ pub fn write_cuModuleGetGlobal_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dptr, "cuModuleGetGlobal_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dptr, "cuModuleGetGlobal_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(bytes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&bytes, "cuModuleGetGlobal_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&bytes, "cuModuleGetGlobal_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hmod), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hmod, "cuModuleGetGlobal_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hmod, "cuModuleGetGlobal_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(name), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&name, "cuModuleGetGlobal_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&name, "cuModuleGetGlobal_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLinkCreate_v2(
@@ -7421,24 +7243,19 @@ pub fn write_cuLinkCreate_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(numOptions), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&numOptions, "cuLinkCreate_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&numOptions, "cuLinkCreate_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(options), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&options, "cuLinkCreate_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&options, "cuLinkCreate_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(optionValues), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &optionValues,
-        "cuLinkCreate_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&optionValues, "cuLinkCreate_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(stateOut), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&stateOut, "cuLinkCreate_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&stateOut, "cuLinkCreate_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLinkAddData_v2(
@@ -7455,40 +7272,35 @@ pub fn write_cuLinkAddData_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(state), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&state, "cuLinkAddData_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&state, "cuLinkAddData_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(type_), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&type_, "cuLinkAddData_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&type_, "cuLinkAddData_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(data), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&data, "cuLinkAddData_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&data, "cuLinkAddData_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(size), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&size, "cuLinkAddData_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&size, "cuLinkAddData_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(name), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&name, "cuLinkAddData_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&name, "cuLinkAddData_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numOptions), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&numOptions, "cuLinkAddData_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&numOptions, "cuLinkAddData_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(options), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&options, "cuLinkAddData_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&options, "cuLinkAddData_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(optionValues), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &optionValues,
-        "cuLinkAddData_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&optionValues, "cuLinkAddData_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLinkAddFile_v2(
@@ -7503,32 +7315,27 @@ pub fn write_cuLinkAddFile_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(state), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&state, "cuLinkAddFile_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&state, "cuLinkAddFile_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(type_), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&type_, "cuLinkAddFile_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&type_, "cuLinkAddFile_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(path), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&path, "cuLinkAddFile_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&path, "cuLinkAddFile_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numOptions), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&numOptions, "cuLinkAddFile_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&numOptions, "cuLinkAddFile_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(options), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&options, "cuLinkAddFile_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&options, "cuLinkAddFile_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(optionValues), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &optionValues,
-        "cuLinkAddFile_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&optionValues, "cuLinkAddFile_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLinkComplete(
@@ -7540,15 +7347,15 @@ pub fn write_cuLinkComplete(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(state), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&state, "cuLinkComplete", arg_idx, writer)?;
+    crate::CudaDisplay::write(&state, "cuLinkComplete", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(cubinOut), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&cubinOut, "cuLinkComplete", arg_idx, writer)?;
+    crate::CudaDisplay::write(&cubinOut, "cuLinkComplete", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(sizeOut), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&sizeOut, "cuLinkComplete", arg_idx, writer)?;
+    crate::CudaDisplay::write(&sizeOut, "cuLinkComplete", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLinkDestroy(
@@ -7558,7 +7365,7 @@ pub fn write_cuLinkDestroy(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(state), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&state, "cuLinkDestroy", arg_idx, writer)?;
+    crate::CudaDisplay::write(&state, "cuLinkDestroy", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuModuleGetTexRef(
@@ -7570,15 +7377,15 @@ pub fn write_cuModuleGetTexRef(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pTexRef, "cuModuleGetTexRef", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pTexRef, "cuModuleGetTexRef", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hmod), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hmod, "cuModuleGetTexRef", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hmod, "cuModuleGetTexRef", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(name), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&name, "cuModuleGetTexRef", arg_idx, writer)?;
+    crate::CudaDisplay::write(&name, "cuModuleGetTexRef", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuModuleGetSurfRef(
@@ -7590,15 +7397,15 @@ pub fn write_cuModuleGetSurfRef(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pSurfRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pSurfRef, "cuModuleGetSurfRef", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pSurfRef, "cuModuleGetSurfRef", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hmod), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hmod, "cuModuleGetSurfRef", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hmod, "cuModuleGetSurfRef", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(name), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&name, "cuModuleGetSurfRef", arg_idx, writer)?;
+    crate::CudaDisplay::write(&name, "cuModuleGetSurfRef", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLibraryLoadData(
@@ -7615,51 +7422,31 @@ pub fn write_cuLibraryLoadData(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(library), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&library, "cuLibraryLoadData", arg_idx, writer)?;
+    crate::CudaDisplay::write(&library, "cuLibraryLoadData", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(code), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&code, "cuLibraryLoadData", arg_idx, writer)?;
+    crate::CudaDisplay::write(&code, "cuLibraryLoadData", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(jitOptions), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &jitOptions,
-        "cuLibraryLoadData",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&jitOptions, "cuLibraryLoadData", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(jitOptionsValues), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &jitOptionsValues,
-        "cuLibraryLoadData",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&jitOptionsValues, "cuLibraryLoadData", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numJitOptions), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &numJitOptions,
-        "cuLibraryLoadData",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&numJitOptions, "cuLibraryLoadData", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(libraryOptions), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &libraryOptions,
-        "cuLibraryLoadData",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&libraryOptions, "cuLibraryLoadData", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(libraryOptionValues), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &libraryOptionValues,
         "cuLibraryLoadData",
         arg_idx,
@@ -7668,12 +7455,7 @@ pub fn write_cuLibraryLoadData(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numLibraryOptions), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &numLibraryOptions,
-        "cuLibraryLoadData",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&numLibraryOptions, "cuLibraryLoadData", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLibraryLoadFromFile(
@@ -7690,34 +7472,19 @@ pub fn write_cuLibraryLoadFromFile(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(library), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &library,
-        "cuLibraryLoadFromFile",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&library, "cuLibraryLoadFromFile", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(fileName), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &fileName,
-        "cuLibraryLoadFromFile",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&fileName, "cuLibraryLoadFromFile", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(jitOptions), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &jitOptions,
-        "cuLibraryLoadFromFile",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&jitOptions, "cuLibraryLoadFromFile", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(jitOptionsValues), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &jitOptionsValues,
         "cuLibraryLoadFromFile",
         arg_idx,
@@ -7726,16 +7493,11 @@ pub fn write_cuLibraryLoadFromFile(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numJitOptions), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &numJitOptions,
-        "cuLibraryLoadFromFile",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&numJitOptions, "cuLibraryLoadFromFile", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(libraryOptions), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &libraryOptions,
         "cuLibraryLoadFromFile",
         arg_idx,
@@ -7744,7 +7506,7 @@ pub fn write_cuLibraryLoadFromFile(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(libraryOptionValues), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &libraryOptionValues,
         "cuLibraryLoadFromFile",
         arg_idx,
@@ -7753,7 +7515,7 @@ pub fn write_cuLibraryLoadFromFile(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numLibraryOptions), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numLibraryOptions,
         "cuLibraryLoadFromFile",
         arg_idx,
@@ -7768,7 +7530,7 @@ pub fn write_cuLibraryUnload(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(library), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&library, "cuLibraryUnload", arg_idx, writer)?;
+    crate::CudaDisplay::write(&library, "cuLibraryUnload", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLibraryGetKernel(
@@ -7780,15 +7542,15 @@ pub fn write_cuLibraryGetKernel(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pKernel), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pKernel, "cuLibraryGetKernel", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pKernel, "cuLibraryGetKernel", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(library), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&library, "cuLibraryGetKernel", arg_idx, writer)?;
+    crate::CudaDisplay::write(&library, "cuLibraryGetKernel", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(name), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&name, "cuLibraryGetKernel", arg_idx, writer)?;
+    crate::CudaDisplay::write(&name, "cuLibraryGetKernel", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLibraryGetKernelCount(
@@ -7799,16 +7561,11 @@ pub fn write_cuLibraryGetKernelCount(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &count,
-        "cuLibraryGetKernelCount",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&count, "cuLibraryGetKernelCount", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(lib), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&lib, "cuLibraryGetKernelCount", arg_idx, writer)?;
+    crate::CudaDisplay::write(&lib, "cuLibraryGetKernelCount", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLibraryEnumerateKernels(
@@ -7820,16 +7577,11 @@ pub fn write_cuLibraryEnumerateKernels(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(kernels), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &kernels,
-        "cuLibraryEnumerateKernels",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&kernels, "cuLibraryEnumerateKernels", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numKernels), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numKernels,
         "cuLibraryEnumerateKernels",
         arg_idx,
@@ -7838,12 +7590,7 @@ pub fn write_cuLibraryEnumerateKernels(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(lib), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &lib,
-        "cuLibraryEnumerateKernels",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&lib, "cuLibraryEnumerateKernels", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLibraryGetModule(
@@ -7854,11 +7601,11 @@ pub fn write_cuLibraryGetModule(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pMod), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pMod, "cuLibraryGetModule", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pMod, "cuLibraryGetModule", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(library), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&library, "cuLibraryGetModule", arg_idx, writer)?;
+    crate::CudaDisplay::write(&library, "cuLibraryGetModule", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuKernelGetFunction(
@@ -7869,11 +7616,11 @@ pub fn write_cuKernelGetFunction(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pFunc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pFunc, "cuKernelGetFunction", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pFunc, "cuKernelGetFunction", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(kernel), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&kernel, "cuKernelGetFunction", arg_idx, writer)?;
+    crate::CudaDisplay::write(&kernel, "cuKernelGetFunction", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuKernelGetLibrary(
@@ -7884,11 +7631,11 @@ pub fn write_cuKernelGetLibrary(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pLib), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pLib, "cuKernelGetLibrary", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pLib, "cuKernelGetLibrary", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(kernel), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&kernel, "cuKernelGetLibrary", arg_idx, writer)?;
+    crate::CudaDisplay::write(&kernel, "cuKernelGetLibrary", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLibraryGetGlobal(
@@ -7901,19 +7648,19 @@ pub fn write_cuLibraryGetGlobal(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dptr, "cuLibraryGetGlobal", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dptr, "cuLibraryGetGlobal", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(bytes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&bytes, "cuLibraryGetGlobal", arg_idx, writer)?;
+    crate::CudaDisplay::write(&bytes, "cuLibraryGetGlobal", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(library), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&library, "cuLibraryGetGlobal", arg_idx, writer)?;
+    crate::CudaDisplay::write(&library, "cuLibraryGetGlobal", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(name), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&name, "cuLibraryGetGlobal", arg_idx, writer)?;
+    crate::CudaDisplay::write(&name, "cuLibraryGetGlobal", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLibraryGetManaged(
@@ -7926,19 +7673,19 @@ pub fn write_cuLibraryGetManaged(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dptr, "cuLibraryGetManaged", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dptr, "cuLibraryGetManaged", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(bytes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&bytes, "cuLibraryGetManaged", arg_idx, writer)?;
+    crate::CudaDisplay::write(&bytes, "cuLibraryGetManaged", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(library), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&library, "cuLibraryGetManaged", arg_idx, writer)?;
+    crate::CudaDisplay::write(&library, "cuLibraryGetManaged", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(name), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&name, "cuLibraryGetManaged", arg_idx, writer)?;
+    crate::CudaDisplay::write(&name, "cuLibraryGetManaged", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLibraryGetUnifiedFunction(
@@ -7950,30 +7697,15 @@ pub fn write_cuLibraryGetUnifiedFunction(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(fptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &fptr,
-        "cuLibraryGetUnifiedFunction",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&fptr, "cuLibraryGetUnifiedFunction", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(library), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &library,
-        "cuLibraryGetUnifiedFunction",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&library, "cuLibraryGetUnifiedFunction", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(symbol), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &symbol,
-        "cuLibraryGetUnifiedFunction",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&symbol, "cuLibraryGetUnifiedFunction", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuKernelGetAttribute(
@@ -7986,19 +7718,19 @@ pub fn write_cuKernelGetAttribute(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pi), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pi, "cuKernelGetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pi, "cuKernelGetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(attrib), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&attrib, "cuKernelGetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&attrib, "cuKernelGetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(kernel), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&kernel, "cuKernelGetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&kernel, "cuKernelGetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dev, "cuKernelGetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dev, "cuKernelGetAttribute", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuKernelSetAttribute(
@@ -8011,19 +7743,19 @@ pub fn write_cuKernelSetAttribute(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(attrib), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&attrib, "cuKernelSetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&attrib, "cuKernelSetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(val), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&val, "cuKernelSetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&val, "cuKernelSetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(kernel), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&kernel, "cuKernelSetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&kernel, "cuKernelSetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dev, "cuKernelSetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dev, "cuKernelSetAttribute", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuKernelSetCacheConfig(
@@ -8035,25 +7767,15 @@ pub fn write_cuKernelSetCacheConfig(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(kernel), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &kernel,
-        "cuKernelSetCacheConfig",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&kernel, "cuKernelSetCacheConfig", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(config), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &config,
-        "cuKernelSetCacheConfig",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&config, "cuKernelSetCacheConfig", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dev, "cuKernelSetCacheConfig", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dev, "cuKernelSetCacheConfig", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuKernelGetName(
@@ -8064,11 +7786,11 @@ pub fn write_cuKernelGetName(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(name), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&name, "cuKernelGetName", arg_idx, writer)?;
+    crate::CudaDisplay::write(&name, "cuKernelGetName", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hfunc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hfunc, "cuKernelGetName", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hfunc, "cuKernelGetName", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuKernelGetParamInfo(
@@ -8081,34 +7803,19 @@ pub fn write_cuKernelGetParamInfo(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(kernel), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&kernel, "cuKernelGetParamInfo", arg_idx, writer)?;
+    crate::CudaDisplay::write(&kernel, "cuKernelGetParamInfo", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(paramIndex), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &paramIndex,
-        "cuKernelGetParamInfo",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&paramIndex, "cuKernelGetParamInfo", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(paramOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &paramOffset,
-        "cuKernelGetParamInfo",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&paramOffset, "cuKernelGetParamInfo", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(paramSize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &paramSize,
-        "cuKernelGetParamInfo",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&paramSize, "cuKernelGetParamInfo", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemGetInfo_v2(
@@ -8119,11 +7826,11 @@ pub fn write_cuMemGetInfo_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(free), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&free, "cuMemGetInfo_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&free, "cuMemGetInfo_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(total), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&total, "cuMemGetInfo_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&total, "cuMemGetInfo_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemAlloc_v2(
@@ -8134,11 +7841,11 @@ pub fn write_cuMemAlloc_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dptr, "cuMemAlloc_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dptr, "cuMemAlloc_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(bytesize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&bytesize, "cuMemAlloc_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&bytesize, "cuMemAlloc_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemAllocPitch_v2(
@@ -8152,33 +7859,23 @@ pub fn write_cuMemAllocPitch_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dptr, "cuMemAllocPitch_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dptr, "cuMemAllocPitch_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pPitch), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pPitch, "cuMemAllocPitch_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pPitch, "cuMemAllocPitch_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(WidthInBytes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &WidthInBytes,
-        "cuMemAllocPitch_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&WidthInBytes, "cuMemAllocPitch_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Height), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Height, "cuMemAllocPitch_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Height, "cuMemAllocPitch_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ElementSizeBytes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ElementSizeBytes,
-        "cuMemAllocPitch_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ElementSizeBytes, "cuMemAllocPitch_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemFree_v2(
@@ -8188,7 +7885,7 @@ pub fn write_cuMemFree_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dptr, "cuMemFree_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dptr, "cuMemFree_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemGetAddressRange_v2(
@@ -8200,30 +7897,15 @@ pub fn write_cuMemGetAddressRange_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pbase), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pbase,
-        "cuMemGetAddressRange_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pbase, "cuMemGetAddressRange_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(psize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &psize,
-        "cuMemGetAddressRange_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&psize, "cuMemGetAddressRange_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dptr,
-        "cuMemGetAddressRange_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dptr, "cuMemGetAddressRange_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemAllocHost_v2(
@@ -8234,11 +7916,11 @@ pub fn write_cuMemAllocHost_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pp), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pp, "cuMemAllocHost_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pp, "cuMemAllocHost_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(bytesize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&bytesize, "cuMemAllocHost_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&bytesize, "cuMemAllocHost_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemFreeHost(
@@ -8248,7 +7930,7 @@ pub fn write_cuMemFreeHost(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(p), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&p, "cuMemFreeHost", arg_idx, writer)?;
+    crate::CudaDisplay::write(&p, "cuMemFreeHost", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemHostAlloc(
@@ -8260,15 +7942,15 @@ pub fn write_cuMemHostAlloc(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pp), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pp, "cuMemHostAlloc", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pp, "cuMemHostAlloc", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(bytesize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&bytesize, "cuMemHostAlloc", arg_idx, writer)?;
+    crate::CudaDisplay::write(&bytesize, "cuMemHostAlloc", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Flags, "cuMemHostAlloc", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Flags, "cuMemHostAlloc", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemHostGetDevicePointer_v2(
@@ -8280,30 +7962,15 @@ pub fn write_cuMemHostGetDevicePointer_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pdptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pdptr,
-        "cuMemHostGetDevicePointer_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pdptr, "cuMemHostGetDevicePointer_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(p), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &p,
-        "cuMemHostGetDevicePointer_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&p, "cuMemHostGetDevicePointer_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &Flags,
-        "cuMemHostGetDevicePointer_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&Flags, "cuMemHostGetDevicePointer_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemHostGetFlags(
@@ -8314,11 +7981,11 @@ pub fn write_cuMemHostGetFlags(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pFlags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pFlags, "cuMemHostGetFlags", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pFlags, "cuMemHostGetFlags", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(p), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&p, "cuMemHostGetFlags", arg_idx, writer)?;
+    crate::CudaDisplay::write(&p, "cuMemHostGetFlags", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemAllocManaged(
@@ -8330,15 +7997,15 @@ pub fn write_cuMemAllocManaged(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dptr, "cuMemAllocManaged", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dptr, "cuMemAllocManaged", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(bytesize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&bytesize, "cuMemAllocManaged", arg_idx, writer)?;
+    crate::CudaDisplay::write(&bytesize, "cuMemAllocManaged", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuMemAllocManaged", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuMemAllocManaged", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDeviceRegisterAsyncNotification(
@@ -8351,7 +8018,7 @@ pub fn write_cuDeviceRegisterAsyncNotification(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &device,
         "cuDeviceRegisterAsyncNotification",
         arg_idx,
@@ -8360,7 +8027,7 @@ pub fn write_cuDeviceRegisterAsyncNotification(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(callbackFunc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &callbackFunc,
         "cuDeviceRegisterAsyncNotification",
         arg_idx,
@@ -8369,7 +8036,7 @@ pub fn write_cuDeviceRegisterAsyncNotification(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(userData), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &userData,
         "cuDeviceRegisterAsyncNotification",
         arg_idx,
@@ -8378,7 +8045,7 @@ pub fn write_cuDeviceRegisterAsyncNotification(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(callback), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &callback,
         "cuDeviceRegisterAsyncNotification",
         arg_idx,
@@ -8394,7 +8061,7 @@ pub fn write_cuDeviceUnregisterAsyncNotification(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &device,
         "cuDeviceUnregisterAsyncNotification",
         arg_idx,
@@ -8403,7 +8070,7 @@ pub fn write_cuDeviceUnregisterAsyncNotification(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(callback), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &callback,
         "cuDeviceUnregisterAsyncNotification",
         arg_idx,
@@ -8419,16 +8086,11 @@ pub fn write_cuDeviceGetByPCIBusId(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dev, "cuDeviceGetByPCIBusId", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dev, "cuDeviceGetByPCIBusId", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pciBusId), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pciBusId,
-        "cuDeviceGetByPCIBusId",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pciBusId, "cuDeviceGetByPCIBusId", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDeviceGetPCIBusId(
@@ -8440,20 +8102,15 @@ pub fn write_cuDeviceGetPCIBusId(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pciBusId), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pciBusId,
-        "cuDeviceGetPCIBusId",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pciBusId, "cuDeviceGetPCIBusId", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(len), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&len, "cuDeviceGetPCIBusId", arg_idx, writer)?;
+    crate::CudaDisplay::write(&len, "cuDeviceGetPCIBusId", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dev, "cuDeviceGetPCIBusId", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dev, "cuDeviceGetPCIBusId", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuIpcGetEventHandle(
@@ -8464,11 +8121,11 @@ pub fn write_cuIpcGetEventHandle(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pHandle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pHandle, "cuIpcGetEventHandle", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pHandle, "cuIpcGetEventHandle", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(event), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&event, "cuIpcGetEventHandle", arg_idx, writer)?;
+    crate::CudaDisplay::write(&event, "cuIpcGetEventHandle", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuIpcOpenEventHandle(
@@ -8479,16 +8136,11 @@ pub fn write_cuIpcOpenEventHandle(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phEvent), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &phEvent,
-        "cuIpcOpenEventHandle",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&phEvent, "cuIpcOpenEventHandle", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(handle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&handle, "cuIpcOpenEventHandle", arg_idx, writer)?;
+    crate::CudaDisplay::write(&handle, "cuIpcOpenEventHandle", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuIpcGetMemHandle(
@@ -8499,11 +8151,11 @@ pub fn write_cuIpcGetMemHandle(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pHandle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pHandle, "cuIpcGetMemHandle", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pHandle, "cuIpcGetMemHandle", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dptr, "cuIpcGetMemHandle", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dptr, "cuIpcGetMemHandle", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuIpcOpenMemHandle_v2(
@@ -8515,20 +8167,15 @@ pub fn write_cuIpcOpenMemHandle_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pdptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pdptr, "cuIpcOpenMemHandle_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pdptr, "cuIpcOpenMemHandle_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(handle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &handle,
-        "cuIpcOpenMemHandle_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&handle, "cuIpcOpenMemHandle_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Flags, "cuIpcOpenMemHandle_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Flags, "cuIpcOpenMemHandle_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuIpcCloseMemHandle(
@@ -8538,7 +8185,7 @@ pub fn write_cuIpcCloseMemHandle(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dptr, "cuIpcCloseMemHandle", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dptr, "cuIpcCloseMemHandle", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemHostRegister_v2(
@@ -8550,20 +8197,15 @@ pub fn write_cuMemHostRegister_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(p), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&p, "cuMemHostRegister_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&p, "cuMemHostRegister_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(bytesize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &bytesize,
-        "cuMemHostRegister_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&bytesize, "cuMemHostRegister_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Flags, "cuMemHostRegister_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Flags, "cuMemHostRegister_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemHostUnregister(
@@ -8573,7 +8215,7 @@ pub fn write_cuMemHostUnregister(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(p), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&p, "cuMemHostUnregister", arg_idx, writer)?;
+    crate::CudaDisplay::write(&p, "cuMemHostUnregister", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpy_ptds(
@@ -8585,15 +8227,15 @@ pub fn write_cuMemcpy_ptds(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dst), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dst, "cuMemcpy_ptds", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dst, "cuMemcpy_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(src), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&src, "cuMemcpy_ptds", arg_idx, writer)?;
+    crate::CudaDisplay::write(&src, "cuMemcpy_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpy_ptds", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpy_ptds", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyPeer_ptds(
@@ -8607,33 +8249,23 @@ pub fn write_cuMemcpyPeer_ptds(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemcpyPeer_ptds", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemcpyPeer_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstContext), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstContext,
-        "cuMemcpyPeer_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstContext, "cuMemcpyPeer_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcDevice, "cuMemcpyPeer_ptds", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcDevice, "cuMemcpyPeer_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcContext), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcContext,
-        "cuMemcpyPeer_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcContext, "cuMemcpyPeer_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpyPeer_ptds", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyPeer_ptds", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyHtoD_v2_ptds(
@@ -8645,30 +8277,15 @@ pub fn write_cuMemcpyHtoD_v2_ptds(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstDevice,
-        "cuMemcpyHtoD_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemcpyHtoD_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcHost), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcHost,
-        "cuMemcpyHtoD_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcHost, "cuMemcpyHtoD_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ByteCount,
-        "cuMemcpyHtoD_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyHtoD_v2_ptds", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyDtoH_v2_ptds(
@@ -8680,30 +8297,15 @@ pub fn write_cuMemcpyDtoH_v2_ptds(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstHost), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstHost,
-        "cuMemcpyDtoH_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstHost, "cuMemcpyDtoH_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcDevice,
-        "cuMemcpyDtoH_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcDevice, "cuMemcpyDtoH_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ByteCount,
-        "cuMemcpyDtoH_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyDtoH_v2_ptds", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyDtoD_v2_ptds(
@@ -8715,30 +8317,15 @@ pub fn write_cuMemcpyDtoD_v2_ptds(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstDevice,
-        "cuMemcpyDtoD_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemcpyDtoD_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcDevice,
-        "cuMemcpyDtoD_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcDevice, "cuMemcpyDtoD_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ByteCount,
-        "cuMemcpyDtoD_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyDtoD_v2_ptds", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyDtoA_v2_ptds(
@@ -8751,39 +8338,19 @@ pub fn write_cuMemcpyDtoA_v2_ptds(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstArray,
-        "cuMemcpyDtoA_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstArray, "cuMemcpyDtoA_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstOffset,
-        "cuMemcpyDtoA_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstOffset, "cuMemcpyDtoA_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcDevice,
-        "cuMemcpyDtoA_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcDevice, "cuMemcpyDtoA_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ByteCount,
-        "cuMemcpyDtoA_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyDtoA_v2_ptds", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyAtoD_v2_ptds(
@@ -8796,39 +8363,19 @@ pub fn write_cuMemcpyAtoD_v2_ptds(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstDevice,
-        "cuMemcpyAtoD_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemcpyAtoD_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcArray,
-        "cuMemcpyAtoD_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcArray, "cuMemcpyAtoD_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcOffset,
-        "cuMemcpyAtoD_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcOffset, "cuMemcpyAtoD_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ByteCount,
-        "cuMemcpyAtoD_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyAtoD_v2_ptds", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyHtoA_v2_ptds(
@@ -8841,39 +8388,19 @@ pub fn write_cuMemcpyHtoA_v2_ptds(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstArray,
-        "cuMemcpyHtoA_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstArray, "cuMemcpyHtoA_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstOffset,
-        "cuMemcpyHtoA_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstOffset, "cuMemcpyHtoA_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcHost), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcHost,
-        "cuMemcpyHtoA_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcHost, "cuMemcpyHtoA_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ByteCount,
-        "cuMemcpyHtoA_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyHtoA_v2_ptds", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyAtoH_v2_ptds(
@@ -8886,39 +8413,19 @@ pub fn write_cuMemcpyAtoH_v2_ptds(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstHost), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstHost,
-        "cuMemcpyAtoH_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstHost, "cuMemcpyAtoH_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcArray,
-        "cuMemcpyAtoH_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcArray, "cuMemcpyAtoH_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcOffset,
-        "cuMemcpyAtoH_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcOffset, "cuMemcpyAtoH_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ByteCount,
-        "cuMemcpyAtoH_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyAtoH_v2_ptds", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyAtoA_v2_ptds(
@@ -8932,48 +8439,23 @@ pub fn write_cuMemcpyAtoA_v2_ptds(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstArray,
-        "cuMemcpyAtoA_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstArray, "cuMemcpyAtoA_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstOffset,
-        "cuMemcpyAtoA_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstOffset, "cuMemcpyAtoA_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcArray,
-        "cuMemcpyAtoA_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcArray, "cuMemcpyAtoA_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcOffset,
-        "cuMemcpyAtoA_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcOffset, "cuMemcpyAtoA_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ByteCount,
-        "cuMemcpyAtoA_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyAtoA_v2_ptds", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpy2D_v2_ptds(
@@ -8983,7 +8465,7 @@ pub fn write_cuMemcpy2D_v2_ptds(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCopy), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pCopy, "cuMemcpy2D_v2_ptds", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pCopy, "cuMemcpy2D_v2_ptds", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpy2DUnaligned_v2_ptds(
@@ -8993,12 +8475,7 @@ pub fn write_cuMemcpy2DUnaligned_v2_ptds(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCopy), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pCopy,
-        "cuMemcpy2DUnaligned_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pCopy, "cuMemcpy2DUnaligned_v2_ptds", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpy3D_v2_ptds(
@@ -9008,7 +8485,7 @@ pub fn write_cuMemcpy3D_v2_ptds(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCopy), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pCopy, "cuMemcpy3D_v2_ptds", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pCopy, "cuMemcpy3D_v2_ptds", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpy3DPeer_ptds(
@@ -9018,7 +8495,7 @@ pub fn write_cuMemcpy3DPeer_ptds(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCopy), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pCopy, "cuMemcpy3DPeer_ptds", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pCopy, "cuMemcpy3DPeer_ptds", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyAsync_ptsz(
@@ -9031,24 +8508,19 @@ pub fn write_cuMemcpyAsync_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dst), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dst, "cuMemcpyAsync_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dst, "cuMemcpyAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(src), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&src, "cuMemcpyAsync_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&src, "cuMemcpyAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ByteCount,
-        "cuMemcpyAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuMemcpyAsync_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpyAsync_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyPeerAsync_ptsz(
@@ -9063,57 +8535,27 @@ pub fn write_cuMemcpyPeerAsync_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstDevice,
-        "cuMemcpyPeerAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemcpyPeerAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstContext), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstContext,
-        "cuMemcpyPeerAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstContext, "cuMemcpyPeerAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcDevice,
-        "cuMemcpyPeerAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcDevice, "cuMemcpyPeerAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcContext), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcContext,
-        "cuMemcpyPeerAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcContext, "cuMemcpyPeerAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ByteCount,
-        "cuMemcpyPeerAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyPeerAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemcpyPeerAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpyPeerAsync_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyHtoDAsync_v2_ptsz(
@@ -9126,39 +8568,19 @@ pub fn write_cuMemcpyHtoDAsync_v2_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstDevice,
-        "cuMemcpyHtoDAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemcpyHtoDAsync_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcHost), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcHost,
-        "cuMemcpyHtoDAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcHost, "cuMemcpyHtoDAsync_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ByteCount,
-        "cuMemcpyHtoDAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyHtoDAsync_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemcpyHtoDAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpyHtoDAsync_v2_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyDtoHAsync_v2_ptsz(
@@ -9171,39 +8593,19 @@ pub fn write_cuMemcpyDtoHAsync_v2_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstHost), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstHost,
-        "cuMemcpyDtoHAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstHost, "cuMemcpyDtoHAsync_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcDevice,
-        "cuMemcpyDtoHAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcDevice, "cuMemcpyDtoHAsync_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ByteCount,
-        "cuMemcpyDtoHAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyDtoHAsync_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemcpyDtoHAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpyDtoHAsync_v2_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyDtoDAsync_v2_ptsz(
@@ -9216,39 +8618,19 @@ pub fn write_cuMemcpyDtoDAsync_v2_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstDevice,
-        "cuMemcpyDtoDAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemcpyDtoDAsync_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcDevice,
-        "cuMemcpyDtoDAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcDevice, "cuMemcpyDtoDAsync_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ByteCount,
-        "cuMemcpyDtoDAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyDtoDAsync_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemcpyDtoDAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpyDtoDAsync_v2_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyHtoAAsync_v2_ptsz(
@@ -9262,48 +8644,23 @@ pub fn write_cuMemcpyHtoAAsync_v2_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstArray,
-        "cuMemcpyHtoAAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstArray, "cuMemcpyHtoAAsync_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstOffset,
-        "cuMemcpyHtoAAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstOffset, "cuMemcpyHtoAAsync_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcHost), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcHost,
-        "cuMemcpyHtoAAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcHost, "cuMemcpyHtoAAsync_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ByteCount,
-        "cuMemcpyHtoAAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyHtoAAsync_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemcpyHtoAAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpyHtoAAsync_v2_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyAtoHAsync_v2_ptsz(
@@ -9317,48 +8674,23 @@ pub fn write_cuMemcpyAtoHAsync_v2_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstHost), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstHost,
-        "cuMemcpyAtoHAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstHost, "cuMemcpyAtoHAsync_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcArray,
-        "cuMemcpyAtoHAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcArray, "cuMemcpyAtoHAsync_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcOffset,
-        "cuMemcpyAtoHAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcOffset, "cuMemcpyAtoHAsync_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ByteCount,
-        "cuMemcpyAtoHAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyAtoHAsync_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemcpyAtoHAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpyAtoHAsync_v2_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpy2DAsync_v2_ptsz(
@@ -9369,21 +8701,11 @@ pub fn write_cuMemcpy2DAsync_v2_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCopy), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pCopy,
-        "cuMemcpy2DAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pCopy, "cuMemcpy2DAsync_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemcpy2DAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpy2DAsync_v2_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpy3DAsync_v2_ptsz(
@@ -9394,21 +8716,11 @@ pub fn write_cuMemcpy3DAsync_v2_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCopy), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pCopy,
-        "cuMemcpy3DAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pCopy, "cuMemcpy3DAsync_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemcpy3DAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpy3DAsync_v2_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpy3DPeerAsync_ptsz(
@@ -9419,21 +8731,11 @@ pub fn write_cuMemcpy3DPeerAsync_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCopy), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pCopy,
-        "cuMemcpy3DPeerAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pCopy, "cuMemcpy3DPeerAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemcpy3DPeerAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpy3DPeerAsync_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyBatchAsync_ptsz(
@@ -9451,84 +8753,39 @@ pub fn write_cuMemcpyBatchAsync_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dsts), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dsts,
-        "cuMemcpyBatchAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dsts, "cuMemcpyBatchAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcs), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcs,
-        "cuMemcpyBatchAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcs, "cuMemcpyBatchAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(sizes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &sizes,
-        "cuMemcpyBatchAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&sizes, "cuMemcpyBatchAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &count,
-        "cuMemcpyBatchAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&count, "cuMemcpyBatchAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(attrs), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &attrs,
-        "cuMemcpyBatchAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&attrs, "cuMemcpyBatchAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(attrsIdxs), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &attrsIdxs,
-        "cuMemcpyBatchAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&attrsIdxs, "cuMemcpyBatchAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numAttrs), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &numAttrs,
-        "cuMemcpyBatchAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&numAttrs, "cuMemcpyBatchAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(failIdx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &failIdx,
-        "cuMemcpyBatchAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&failIdx, "cuMemcpyBatchAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemcpyBatchAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpyBatchAsync_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpy3DBatchAsync_ptsz(
@@ -9542,48 +8799,23 @@ pub fn write_cuMemcpy3DBatchAsync_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(numOps), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &numOps,
-        "cuMemcpy3DBatchAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&numOps, "cuMemcpy3DBatchAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(opList), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &opList,
-        "cuMemcpy3DBatchAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&opList, "cuMemcpy3DBatchAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(failIdx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &failIdx,
-        "cuMemcpy3DBatchAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&failIdx, "cuMemcpy3DBatchAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuMemcpy3DBatchAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuMemcpy3DBatchAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemcpy3DBatchAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpy3DBatchAsync_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD8_v2_ptds(
@@ -9595,20 +8827,15 @@ pub fn write_cuMemsetD8_v2_ptds(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstDevice,
-        "cuMemsetD8_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD8_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(uc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&uc, "cuMemsetD8_v2_ptds", arg_idx, writer)?;
+    crate::CudaDisplay::write(&uc, "cuMemsetD8_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(N), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&N, "cuMemsetD8_v2_ptds", arg_idx, writer)?;
+    crate::CudaDisplay::write(&N, "cuMemsetD8_v2_ptds", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD16_v2_ptds(
@@ -9620,20 +8847,15 @@ pub fn write_cuMemsetD16_v2_ptds(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstDevice,
-        "cuMemsetD16_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD16_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(us), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&us, "cuMemsetD16_v2_ptds", arg_idx, writer)?;
+    crate::CudaDisplay::write(&us, "cuMemsetD16_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(N), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&N, "cuMemsetD16_v2_ptds", arg_idx, writer)?;
+    crate::CudaDisplay::write(&N, "cuMemsetD16_v2_ptds", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD32_v2_ptds(
@@ -9645,20 +8867,15 @@ pub fn write_cuMemsetD32_v2_ptds(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstDevice,
-        "cuMemsetD32_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD32_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ui), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ui, "cuMemsetD32_v2_ptds", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ui, "cuMemsetD32_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(N), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&N, "cuMemsetD32_v2_ptds", arg_idx, writer)?;
+    crate::CudaDisplay::write(&N, "cuMemsetD32_v2_ptds", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD2D8_v2_ptds(
@@ -9672,33 +8889,23 @@ pub fn write_cuMemsetD2D8_v2_ptds(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstDevice,
-        "cuMemsetD2D8_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD2D8_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstPitch), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstPitch,
-        "cuMemsetD2D8_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstPitch, "cuMemsetD2D8_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(uc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&uc, "cuMemsetD2D8_v2_ptds", arg_idx, writer)?;
+    crate::CudaDisplay::write(&uc, "cuMemsetD2D8_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Width), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Width, "cuMemsetD2D8_v2_ptds", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Width, "cuMemsetD2D8_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Height), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Height, "cuMemsetD2D8_v2_ptds", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Height, "cuMemsetD2D8_v2_ptds", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD2D16_v2_ptds(
@@ -9712,38 +8919,23 @@ pub fn write_cuMemsetD2D16_v2_ptds(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstDevice,
-        "cuMemsetD2D16_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD2D16_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstPitch), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstPitch,
-        "cuMemsetD2D16_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstPitch, "cuMemsetD2D16_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(us), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&us, "cuMemsetD2D16_v2_ptds", arg_idx, writer)?;
+    crate::CudaDisplay::write(&us, "cuMemsetD2D16_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Width), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Width, "cuMemsetD2D16_v2_ptds", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Width, "cuMemsetD2D16_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Height), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &Height,
-        "cuMemsetD2D16_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&Height, "cuMemsetD2D16_v2_ptds", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD2D32_v2_ptds(
@@ -9757,38 +8949,23 @@ pub fn write_cuMemsetD2D32_v2_ptds(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstDevice,
-        "cuMemsetD2D32_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD2D32_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstPitch), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstPitch,
-        "cuMemsetD2D32_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstPitch, "cuMemsetD2D32_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ui), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ui, "cuMemsetD2D32_v2_ptds", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ui, "cuMemsetD2D32_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Width), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Width, "cuMemsetD2D32_v2_ptds", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Width, "cuMemsetD2D32_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Height), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &Height,
-        "cuMemsetD2D32_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&Height, "cuMemsetD2D32_v2_ptds", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD8Async_ptsz(
@@ -9801,29 +8978,19 @@ pub fn write_cuMemsetD8Async_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstDevice,
-        "cuMemsetD8Async_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD8Async_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(uc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&uc, "cuMemsetD8Async_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&uc, "cuMemsetD8Async_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(N), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&N, "cuMemsetD8Async_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&N, "cuMemsetD8Async_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemsetD8Async_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemsetD8Async_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD16Async_ptsz(
@@ -9836,29 +9003,19 @@ pub fn write_cuMemsetD16Async_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstDevice,
-        "cuMemsetD16Async_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD16Async_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(us), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&us, "cuMemsetD16Async_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&us, "cuMemsetD16Async_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(N), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&N, "cuMemsetD16Async_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&N, "cuMemsetD16Async_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemsetD16Async_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemsetD16Async_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD32Async_ptsz(
@@ -9871,29 +9028,19 @@ pub fn write_cuMemsetD32Async_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstDevice,
-        "cuMemsetD32Async_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD32Async_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ui), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ui, "cuMemsetD32Async_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ui, "cuMemsetD32Async_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(N), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&N, "cuMemsetD32Async_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&N, "cuMemsetD32Async_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemsetD32Async_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemsetD32Async_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD2D8Async_ptsz(
@@ -9908,52 +9055,27 @@ pub fn write_cuMemsetD2D8Async_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstDevice,
-        "cuMemsetD2D8Async_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD2D8Async_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstPitch), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstPitch,
-        "cuMemsetD2D8Async_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstPitch, "cuMemsetD2D8Async_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(uc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&uc, "cuMemsetD2D8Async_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&uc, "cuMemsetD2D8Async_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Width), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &Width,
-        "cuMemsetD2D8Async_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&Width, "cuMemsetD2D8Async_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Height), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &Height,
-        "cuMemsetD2D8Async_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&Height, "cuMemsetD2D8Async_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemsetD2D8Async_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemsetD2D8Async_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD2D16Async_ptsz(
@@ -9968,52 +9090,27 @@ pub fn write_cuMemsetD2D16Async_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstDevice,
-        "cuMemsetD2D16Async_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD2D16Async_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstPitch), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstPitch,
-        "cuMemsetD2D16Async_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstPitch, "cuMemsetD2D16Async_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(us), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&us, "cuMemsetD2D16Async_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&us, "cuMemsetD2D16Async_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Width), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &Width,
-        "cuMemsetD2D16Async_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&Width, "cuMemsetD2D16Async_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Height), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &Height,
-        "cuMemsetD2D16Async_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&Height, "cuMemsetD2D16Async_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemsetD2D16Async_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemsetD2D16Async_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD2D32Async_ptsz(
@@ -10028,52 +9125,27 @@ pub fn write_cuMemsetD2D32Async_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstDevice,
-        "cuMemsetD2D32Async_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD2D32Async_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstPitch), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstPitch,
-        "cuMemsetD2D32Async_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstPitch, "cuMemsetD2D32Async_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ui), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ui, "cuMemsetD2D32Async_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ui, "cuMemsetD2D32Async_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Width), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &Width,
-        "cuMemsetD2D32Async_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&Width, "cuMemsetD2D32Async_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Height), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &Height,
-        "cuMemsetD2D32Async_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&Height, "cuMemsetD2D32Async_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemsetD2D32Async_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemsetD2D32Async_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuArrayCreate_v2(
@@ -10084,16 +9156,11 @@ pub fn write_cuArrayCreate_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pHandle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pHandle, "cuArrayCreate_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pHandle, "cuArrayCreate_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pAllocateArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pAllocateArray,
-        "cuArrayCreate_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pAllocateArray, "cuArrayCreate_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuArrayGetDescriptor_v2(
@@ -10104,7 +9171,7 @@ pub fn write_cuArrayGetDescriptor_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pArrayDescriptor), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pArrayDescriptor,
         "cuArrayGetDescriptor_v2",
         arg_idx,
@@ -10113,12 +9180,7 @@ pub fn write_cuArrayGetDescriptor_v2(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hArray,
-        "cuArrayGetDescriptor_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hArray, "cuArrayGetDescriptor_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuArrayGetSparseProperties(
@@ -10129,7 +9191,7 @@ pub fn write_cuArrayGetSparseProperties(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(sparseProperties), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &sparseProperties,
         "cuArrayGetSparseProperties",
         arg_idx,
@@ -10138,12 +9200,7 @@ pub fn write_cuArrayGetSparseProperties(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(array), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &array,
-        "cuArrayGetSparseProperties",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&array, "cuArrayGetSparseProperties", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMipmappedArrayGetSparseProperties(
@@ -10154,7 +9211,7 @@ pub fn write_cuMipmappedArrayGetSparseProperties(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(sparseProperties), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &sparseProperties,
         "cuMipmappedArrayGetSparseProperties",
         arg_idx,
@@ -10163,7 +9220,7 @@ pub fn write_cuMipmappedArrayGetSparseProperties(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(mipmap), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &mipmap,
         "cuMipmappedArrayGetSparseProperties",
         arg_idx,
@@ -10180,7 +9237,7 @@ pub fn write_cuArrayGetMemoryRequirements(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(memoryRequirements), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &memoryRequirements,
         "cuArrayGetMemoryRequirements",
         arg_idx,
@@ -10189,21 +9246,11 @@ pub fn write_cuArrayGetMemoryRequirements(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(array), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &array,
-        "cuArrayGetMemoryRequirements",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&array, "cuArrayGetMemoryRequirements", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &device,
-        "cuArrayGetMemoryRequirements",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&device, "cuArrayGetMemoryRequirements", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMipmappedArrayGetMemoryRequirements(
@@ -10215,7 +9262,7 @@ pub fn write_cuMipmappedArrayGetMemoryRequirements(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(memoryRequirements), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &memoryRequirements,
         "cuMipmappedArrayGetMemoryRequirements",
         arg_idx,
@@ -10224,7 +9271,7 @@ pub fn write_cuMipmappedArrayGetMemoryRequirements(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(mipmap), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &mipmap,
         "cuMipmappedArrayGetMemoryRequirements",
         arg_idx,
@@ -10233,7 +9280,7 @@ pub fn write_cuMipmappedArrayGetMemoryRequirements(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &device,
         "cuMipmappedArrayGetMemoryRequirements",
         arg_idx,
@@ -10250,15 +9297,15 @@ pub fn write_cuArrayGetPlane(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pPlaneArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pPlaneArray, "cuArrayGetPlane", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pPlaneArray, "cuArrayGetPlane", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hArray, "cuArrayGetPlane", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hArray, "cuArrayGetPlane", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(planeIdx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&planeIdx, "cuArrayGetPlane", arg_idx, writer)?;
+    crate::CudaDisplay::write(&planeIdx, "cuArrayGetPlane", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuArrayDestroy(
@@ -10268,7 +9315,7 @@ pub fn write_cuArrayDestroy(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hArray, "cuArrayDestroy", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hArray, "cuArrayDestroy", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuArray3DCreate_v2(
@@ -10279,16 +9326,11 @@ pub fn write_cuArray3DCreate_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pHandle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pHandle, "cuArray3DCreate_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pHandle, "cuArray3DCreate_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pAllocateArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pAllocateArray,
-        "cuArray3DCreate_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pAllocateArray, "cuArray3DCreate_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuArray3DGetDescriptor_v2(
@@ -10299,7 +9341,7 @@ pub fn write_cuArray3DGetDescriptor_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pArrayDescriptor), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pArrayDescriptor,
         "cuArray3DGetDescriptor_v2",
         arg_idx,
@@ -10308,12 +9350,7 @@ pub fn write_cuArray3DGetDescriptor_v2(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hArray,
-        "cuArray3DGetDescriptor_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hArray, "cuArray3DGetDescriptor_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMipmappedArrayCreate(
@@ -10325,16 +9362,11 @@ pub fn write_cuMipmappedArrayCreate(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pHandle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pHandle,
-        "cuMipmappedArrayCreate",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pHandle, "cuMipmappedArrayCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pMipmappedArrayDesc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pMipmappedArrayDesc,
         "cuMipmappedArrayCreate",
         arg_idx,
@@ -10343,7 +9375,7 @@ pub fn write_cuMipmappedArrayCreate(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numMipmapLevels), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numMipmapLevels,
         "cuMipmappedArrayCreate",
         arg_idx,
@@ -10360,7 +9392,7 @@ pub fn write_cuMipmappedArrayGetLevel(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pLevelArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pLevelArray,
         "cuMipmappedArrayGetLevel",
         arg_idx,
@@ -10369,7 +9401,7 @@ pub fn write_cuMipmappedArrayGetLevel(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hMipmappedArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hMipmappedArray,
         "cuMipmappedArrayGetLevel",
         arg_idx,
@@ -10378,12 +9410,7 @@ pub fn write_cuMipmappedArrayGetLevel(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(level), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &level,
-        "cuMipmappedArrayGetLevel",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&level, "cuMipmappedArrayGetLevel", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMipmappedArrayDestroy(
@@ -10393,7 +9420,7 @@ pub fn write_cuMipmappedArrayDestroy(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hMipmappedArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hMipmappedArray,
         "cuMipmappedArrayDestroy",
         arg_idx,
@@ -10412,7 +9439,7 @@ pub fn write_cuMemGetHandleForAddressRange(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(handle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &handle,
         "cuMemGetHandleForAddressRange",
         arg_idx,
@@ -10421,25 +9448,15 @@ pub fn write_cuMemGetHandleForAddressRange(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dptr,
-        "cuMemGetHandleForAddressRange",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dptr, "cuMemGetHandleForAddressRange", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(size), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &size,
-        "cuMemGetHandleForAddressRange",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&size, "cuMemGetHandleForAddressRange", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(handleType), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &handleType,
         "cuMemGetHandleForAddressRange",
         arg_idx,
@@ -10448,15 +9465,10 @@ pub fn write_cuMemGetHandleForAddressRange(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuMemGetHandleForAddressRange",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuMemGetHandleForAddressRange", arg_idx, writer)?;
     writer.write_all(b")")
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmemDecompressAlgorithm_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemDecompressAlgorithm_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -10481,7 +9493,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmemDecompressAlgorithm_e
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUmemDecompressParams_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUmemDecompressParams_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -10489,19 +9501,19 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUmemDecompressParams_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(srcNumBytes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcNumBytes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcNumBytes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstNumBytes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstNumBytes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstNumBytes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstActBytes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstActBytes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstActBytes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(src), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.src, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.src, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dst), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dst, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dst, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(algo), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.algo, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.algo, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(padding), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.padding, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.padding, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
@@ -10516,7 +9528,7 @@ pub fn write_cuMemBatchDecompressAsync_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(paramsArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &paramsArray,
         "cuMemBatchDecompressAsync_ptsz",
         arg_idx,
@@ -10525,7 +9537,7 @@ pub fn write_cuMemBatchDecompressAsync_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &count,
         "cuMemBatchDecompressAsync_ptsz",
         arg_idx,
@@ -10534,7 +9546,7 @@ pub fn write_cuMemBatchDecompressAsync_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &flags,
         "cuMemBatchDecompressAsync_ptsz",
         arg_idx,
@@ -10543,7 +9555,7 @@ pub fn write_cuMemBatchDecompressAsync_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(errorIndex), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &errorIndex,
         "cuMemBatchDecompressAsync_ptsz",
         arg_idx,
@@ -10552,7 +9564,7 @@ pub fn write_cuMemBatchDecompressAsync_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &stream,
         "cuMemBatchDecompressAsync_ptsz",
         arg_idx,
@@ -10571,28 +9583,23 @@ pub fn write_cuMemAddressReserve(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(ptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ptr, "cuMemAddressReserve", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ptr, "cuMemAddressReserve", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(size), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&size, "cuMemAddressReserve", arg_idx, writer)?;
+    crate::CudaDisplay::write(&size, "cuMemAddressReserve", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(alignment), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &alignment,
-        "cuMemAddressReserve",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&alignment, "cuMemAddressReserve", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(addr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&addr, "cuMemAddressReserve", arg_idx, writer)?;
+    crate::CudaDisplay::write(&addr, "cuMemAddressReserve", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuMemAddressReserve", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuMemAddressReserve", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemAddressFree(
@@ -10603,11 +9610,11 @@ pub fn write_cuMemAddressFree(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(ptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ptr, "cuMemAddressFree", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ptr, "cuMemAddressFree", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(size), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&size, "cuMemAddressFree", arg_idx, writer)?;
+    crate::CudaDisplay::write(&size, "cuMemAddressFree", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemCreate(
@@ -10620,19 +9627,19 @@ pub fn write_cuMemCreate(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(handle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&handle, "cuMemCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&handle, "cuMemCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(size), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&size, "cuMemCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&size, "cuMemCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(prop), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&prop, "cuMemCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&prop, "cuMemCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuMemCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuMemCreate", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemRelease(
@@ -10642,7 +9649,7 @@ pub fn write_cuMemRelease(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(handle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&handle, "cuMemRelease", arg_idx, writer)?;
+    crate::CudaDisplay::write(&handle, "cuMemRelease", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemMap(
@@ -10656,23 +9663,23 @@ pub fn write_cuMemMap(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(ptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ptr, "cuMemMap", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ptr, "cuMemMap", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(size), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&size, "cuMemMap", arg_idx, writer)?;
+    crate::CudaDisplay::write(&size, "cuMemMap", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(offset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&offset, "cuMemMap", arg_idx, writer)?;
+    crate::CudaDisplay::write(&offset, "cuMemMap", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(handle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&handle, "cuMemMap", arg_idx, writer)?;
+    crate::CudaDisplay::write(&handle, "cuMemMap", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuMemMap", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuMemMap", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemMapArrayAsync_ptsz(
@@ -10689,7 +9696,7 @@ pub fn write_cuMemMapArrayAsync_ptsz(
         if i != 0 {
             writer.write_all(b", ")?;
         }
-        crate::format::CudaDisplay::write(
+        crate::CudaDisplay::write(
             unsafe { &*mapInfoList.add(i as usize) },
             "cuMemMapArrayAsync_ptsz",
             arg_idx,
@@ -10700,21 +9707,11 @@ pub fn write_cuMemMapArrayAsync_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &count,
-        "cuMemMapArrayAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&count, "cuMemMapArrayAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemMapArrayAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemMapArrayAsync_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemUnmap(
@@ -10725,11 +9722,11 @@ pub fn write_cuMemUnmap(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(ptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ptr, "cuMemUnmap", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ptr, "cuMemUnmap", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(size), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&size, "cuMemUnmap", arg_idx, writer)?;
+    crate::CudaDisplay::write(&size, "cuMemUnmap", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemSetAccess(
@@ -10742,19 +9739,19 @@ pub fn write_cuMemSetAccess(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(ptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ptr, "cuMemSetAccess", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ptr, "cuMemSetAccess", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(size), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&size, "cuMemSetAccess", arg_idx, writer)?;
+    crate::CudaDisplay::write(&size, "cuMemSetAccess", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(desc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&desc, "cuMemSetAccess", arg_idx, writer)?;
+    crate::CudaDisplay::write(&desc, "cuMemSetAccess", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&count, "cuMemSetAccess", arg_idx, writer)?;
+    crate::CudaDisplay::write(&count, "cuMemSetAccess", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemGetAccess(
@@ -10766,15 +9763,15 @@ pub fn write_cuMemGetAccess(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuMemGetAccess", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuMemGetAccess", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(location), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&location, "cuMemGetAccess", arg_idx, writer)?;
+    crate::CudaDisplay::write(&location, "cuMemGetAccess", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ptr, "cuMemGetAccess", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ptr, "cuMemGetAccess", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemExportToShareableHandle(
@@ -10787,7 +9784,7 @@ pub fn write_cuMemExportToShareableHandle(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(shareableHandle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &shareableHandle,
         "cuMemExportToShareableHandle",
         arg_idx,
@@ -10796,16 +9793,11 @@ pub fn write_cuMemExportToShareableHandle(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(handle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &handle,
-        "cuMemExportToShareableHandle",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&handle, "cuMemExportToShareableHandle", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(handleType), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &handleType,
         "cuMemExportToShareableHandle",
         arg_idx,
@@ -10814,12 +9806,7 @@ pub fn write_cuMemExportToShareableHandle(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuMemExportToShareableHandle",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuMemExportToShareableHandle", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemImportFromShareableHandle(
@@ -10831,7 +9818,7 @@ pub fn write_cuMemImportFromShareableHandle(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(handle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &handle,
         "cuMemImportFromShareableHandle",
         arg_idx,
@@ -10840,7 +9827,7 @@ pub fn write_cuMemImportFromShareableHandle(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(osHandle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &osHandle,
         "cuMemImportFromShareableHandle",
         arg_idx,
@@ -10849,7 +9836,7 @@ pub fn write_cuMemImportFromShareableHandle(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(shHandleType), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &shHandleType,
         "cuMemImportFromShareableHandle",
         arg_idx,
@@ -10866,7 +9853,7 @@ pub fn write_cuMemGetAllocationGranularity(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(granularity), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &granularity,
         "cuMemGetAllocationGranularity",
         arg_idx,
@@ -10875,16 +9862,11 @@ pub fn write_cuMemGetAllocationGranularity(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(prop), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &prop,
-        "cuMemGetAllocationGranularity",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&prop, "cuMemGetAllocationGranularity", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(option), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &option,
         "cuMemGetAllocationGranularity",
         arg_idx,
@@ -10900,7 +9882,7 @@ pub fn write_cuMemGetAllocationPropertiesFromHandle(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(prop), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &prop,
         "cuMemGetAllocationPropertiesFromHandle",
         arg_idx,
@@ -10909,7 +9891,7 @@ pub fn write_cuMemGetAllocationPropertiesFromHandle(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(handle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &handle,
         "cuMemGetAllocationPropertiesFromHandle",
         arg_idx,
@@ -10925,21 +9907,11 @@ pub fn write_cuMemRetainAllocationHandle(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(handle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &handle,
-        "cuMemRetainAllocationHandle",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&handle, "cuMemRetainAllocationHandle", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(addr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &addr,
-        "cuMemRetainAllocationHandle",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&addr, "cuMemRetainAllocationHandle", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemFreeAsync_ptsz(
@@ -10950,11 +9922,11 @@ pub fn write_cuMemFreeAsync_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dptr, "cuMemFreeAsync_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dptr, "cuMemFreeAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuMemFreeAsync_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuMemFreeAsync_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemAllocAsync_ptsz(
@@ -10966,25 +9938,15 @@ pub fn write_cuMemAllocAsync_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dptr, "cuMemAllocAsync_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dptr, "cuMemAllocAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(bytesize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &bytesize,
-        "cuMemAllocAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&bytesize, "cuMemAllocAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemAllocAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemAllocAsync_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemPoolTrimTo(
@@ -10995,16 +9957,11 @@ pub fn write_cuMemPoolTrimTo(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pool), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pool, "cuMemPoolTrimTo", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pool, "cuMemPoolTrimTo", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(minBytesToKeep), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &minBytesToKeep,
-        "cuMemPoolTrimTo",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&minBytesToKeep, "cuMemPoolTrimTo", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemPoolSetAttribute(
@@ -11016,15 +9973,15 @@ pub fn write_cuMemPoolSetAttribute(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pool), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pool, "cuMemPoolSetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pool, "cuMemPoolSetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(attr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&attr, "cuMemPoolSetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&attr, "cuMemPoolSetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&value, "cuMemPoolSetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&value, "cuMemPoolSetAttribute", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemPoolGetAttribute(
@@ -11036,15 +9993,15 @@ pub fn write_cuMemPoolGetAttribute(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pool), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pool, "cuMemPoolGetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pool, "cuMemPoolGetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(attr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&attr, "cuMemPoolGetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&attr, "cuMemPoolGetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&value, "cuMemPoolGetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&value, "cuMemPoolGetAttribute", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemPoolSetAccess(
@@ -11056,15 +10013,15 @@ pub fn write_cuMemPoolSetAccess(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pool), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pool, "cuMemPoolSetAccess", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pool, "cuMemPoolSetAccess", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(map), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&map, "cuMemPoolSetAccess", arg_idx, writer)?;
+    crate::CudaDisplay::write(&map, "cuMemPoolSetAccess", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&count, "cuMemPoolSetAccess", arg_idx, writer)?;
+    crate::CudaDisplay::write(&count, "cuMemPoolSetAccess", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemPoolGetAccess(
@@ -11076,15 +10033,15 @@ pub fn write_cuMemPoolGetAccess(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuMemPoolGetAccess", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuMemPoolGetAccess", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(memPool), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&memPool, "cuMemPoolGetAccess", arg_idx, writer)?;
+    crate::CudaDisplay::write(&memPool, "cuMemPoolGetAccess", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(location), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&location, "cuMemPoolGetAccess", arg_idx, writer)?;
+    crate::CudaDisplay::write(&location, "cuMemPoolGetAccess", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemPoolCreate(
@@ -11095,11 +10052,11 @@ pub fn write_cuMemPoolCreate(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pool), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pool, "cuMemPoolCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pool, "cuMemPoolCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(poolProps), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&poolProps, "cuMemPoolCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&poolProps, "cuMemPoolCreate", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemPoolDestroy(
@@ -11109,7 +10066,7 @@ pub fn write_cuMemPoolDestroy(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pool), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pool, "cuMemPoolDestroy", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pool, "cuMemPoolDestroy", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemAllocFromPoolAsync_ptsz(
@@ -11122,16 +10079,11 @@ pub fn write_cuMemAllocFromPoolAsync_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dptr,
-        "cuMemAllocFromPoolAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dptr, "cuMemAllocFromPoolAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(bytesize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &bytesize,
         "cuMemAllocFromPoolAsync_ptsz",
         arg_idx,
@@ -11140,16 +10092,11 @@ pub fn write_cuMemAllocFromPoolAsync_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pool), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pool,
-        "cuMemAllocFromPoolAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pool, "cuMemAllocFromPoolAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hStream,
         "cuMemAllocFromPoolAsync_ptsz",
         arg_idx,
@@ -11167,7 +10114,7 @@ pub fn write_cuMemPoolExportToShareableHandle(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(handle_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &handle_out,
         "cuMemPoolExportToShareableHandle",
         arg_idx,
@@ -11176,7 +10123,7 @@ pub fn write_cuMemPoolExportToShareableHandle(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pool), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pool,
         "cuMemPoolExportToShareableHandle",
         arg_idx,
@@ -11185,7 +10132,7 @@ pub fn write_cuMemPoolExportToShareableHandle(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(handleType), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &handleType,
         "cuMemPoolExportToShareableHandle",
         arg_idx,
@@ -11194,7 +10141,7 @@ pub fn write_cuMemPoolExportToShareableHandle(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &flags,
         "cuMemPoolExportToShareableHandle",
         arg_idx,
@@ -11212,7 +10159,7 @@ pub fn write_cuMemPoolImportFromShareableHandle(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pool_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pool_out,
         "cuMemPoolImportFromShareableHandle",
         arg_idx,
@@ -11221,7 +10168,7 @@ pub fn write_cuMemPoolImportFromShareableHandle(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(handle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &handle,
         "cuMemPoolImportFromShareableHandle",
         arg_idx,
@@ -11230,7 +10177,7 @@ pub fn write_cuMemPoolImportFromShareableHandle(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(handleType), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &handleType,
         "cuMemPoolImportFromShareableHandle",
         arg_idx,
@@ -11239,7 +10186,7 @@ pub fn write_cuMemPoolImportFromShareableHandle(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &flags,
         "cuMemPoolImportFromShareableHandle",
         arg_idx,
@@ -11255,7 +10202,7 @@ pub fn write_cuMemPoolExportPointer(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(shareData_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &shareData_out,
         "cuMemPoolExportPointer",
         arg_idx,
@@ -11264,7 +10211,7 @@ pub fn write_cuMemPoolExportPointer(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ptr, "cuMemPoolExportPointer", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ptr, "cuMemPoolExportPointer", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemPoolImportPointer(
@@ -11276,25 +10223,15 @@ pub fn write_cuMemPoolImportPointer(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(ptr_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ptr_out,
-        "cuMemPoolImportPointer",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ptr_out, "cuMemPoolImportPointer", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pool), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pool, "cuMemPoolImportPointer", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pool, "cuMemPoolImportPointer", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(shareData), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &shareData,
-        "cuMemPoolImportPointer",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&shareData, "cuMemPoolImportPointer", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMulticastCreate(
@@ -11305,11 +10242,11 @@ pub fn write_cuMulticastCreate(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(mcHandle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&mcHandle, "cuMulticastCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&mcHandle, "cuMulticastCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(prop), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&prop, "cuMulticastCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&prop, "cuMulticastCreate", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMulticastAddDevice(
@@ -11320,16 +10257,11 @@ pub fn write_cuMulticastAddDevice(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(mcHandle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &mcHandle,
-        "cuMulticastAddDevice",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&mcHandle, "cuMulticastAddDevice", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dev, "cuMulticastAddDevice", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dev, "cuMulticastAddDevice", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMulticastBindMem(
@@ -11344,37 +10276,27 @@ pub fn write_cuMulticastBindMem(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(mcHandle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&mcHandle, "cuMulticastBindMem", arg_idx, writer)?;
+    crate::CudaDisplay::write(&mcHandle, "cuMulticastBindMem", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(mcOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&mcOffset, "cuMulticastBindMem", arg_idx, writer)?;
+    crate::CudaDisplay::write(&mcOffset, "cuMulticastBindMem", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(memHandle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &memHandle,
-        "cuMulticastBindMem",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&memHandle, "cuMulticastBindMem", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(memOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &memOffset,
-        "cuMulticastBindMem",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&memOffset, "cuMulticastBindMem", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(size), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&size, "cuMulticastBindMem", arg_idx, writer)?;
+    crate::CudaDisplay::write(&size, "cuMulticastBindMem", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuMulticastBindMem", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuMulticastBindMem", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMulticastBindAddr(
@@ -11388,33 +10310,23 @@ pub fn write_cuMulticastBindAddr(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(mcHandle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &mcHandle,
-        "cuMulticastBindAddr",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&mcHandle, "cuMulticastBindAddr", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(mcOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &mcOffset,
-        "cuMulticastBindAddr",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&mcOffset, "cuMulticastBindAddr", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(memptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&memptr, "cuMulticastBindAddr", arg_idx, writer)?;
+    crate::CudaDisplay::write(&memptr, "cuMulticastBindAddr", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(size), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&size, "cuMulticastBindAddr", arg_idx, writer)?;
+    crate::CudaDisplay::write(&size, "cuMulticastBindAddr", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuMulticastBindAddr", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuMulticastBindAddr", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMulticastUnbind(
@@ -11427,19 +10339,19 @@ pub fn write_cuMulticastUnbind(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(mcHandle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&mcHandle, "cuMulticastUnbind", arg_idx, writer)?;
+    crate::CudaDisplay::write(&mcHandle, "cuMulticastUnbind", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dev, "cuMulticastUnbind", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dev, "cuMulticastUnbind", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(mcOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&mcOffset, "cuMulticastUnbind", arg_idx, writer)?;
+    crate::CudaDisplay::write(&mcOffset, "cuMulticastUnbind", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(size), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&size, "cuMulticastUnbind", arg_idx, writer)?;
+    crate::CudaDisplay::write(&size, "cuMulticastUnbind", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMulticastGetGranularity(
@@ -11451,7 +10363,7 @@ pub fn write_cuMulticastGetGranularity(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(granularity), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &granularity,
         "cuMulticastGetGranularity",
         arg_idx,
@@ -11460,21 +10372,11 @@ pub fn write_cuMulticastGetGranularity(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(prop), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &prop,
-        "cuMulticastGetGranularity",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&prop, "cuMulticastGetGranularity", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(option), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &option,
-        "cuMulticastGetGranularity",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&option, "cuMulticastGetGranularity", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuPointerGetAttribute(
@@ -11486,20 +10388,15 @@ pub fn write_cuPointerGetAttribute(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(data), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&data, "cuPointerGetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&data, "cuPointerGetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(attribute), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &attribute,
-        "cuPointerGetAttribute",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&attribute, "cuPointerGetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ptr, "cuPointerGetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ptr, "cuPointerGetAttribute", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemPrefetchAsync_ptsz(
@@ -11512,39 +10409,19 @@ pub fn write_cuMemPrefetchAsync_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(devPtr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &devPtr,
-        "cuMemPrefetchAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&devPtr, "cuMemPrefetchAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &count,
-        "cuMemPrefetchAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&count, "cuMemPrefetchAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstDevice,
-        "cuMemPrefetchAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemPrefetchAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemPrefetchAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemPrefetchAsync_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemPrefetchAsync_v2_ptsz(
@@ -11558,48 +10435,23 @@ pub fn write_cuMemPrefetchAsync_v2_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(devPtr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &devPtr,
-        "cuMemPrefetchAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&devPtr, "cuMemPrefetchAsync_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &count,
-        "cuMemPrefetchAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&count, "cuMemPrefetchAsync_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(location), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &location,
-        "cuMemPrefetchAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&location, "cuMemPrefetchAsync_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuMemPrefetchAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuMemPrefetchAsync_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemPrefetchAsync_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemPrefetchAsync_v2_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemAdvise(
@@ -11612,19 +10464,19 @@ pub fn write_cuMemAdvise(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(devPtr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&devPtr, "cuMemAdvise", arg_idx, writer)?;
+    crate::CudaDisplay::write(&devPtr, "cuMemAdvise", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&count, "cuMemAdvise", arg_idx, writer)?;
+    crate::CudaDisplay::write(&count, "cuMemAdvise", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(advice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&advice, "cuMemAdvise", arg_idx, writer)?;
+    crate::CudaDisplay::write(&advice, "cuMemAdvise", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&device, "cuMemAdvise", arg_idx, writer)?;
+    crate::CudaDisplay::write(&device, "cuMemAdvise", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemAdvise_v2(
@@ -11637,19 +10489,19 @@ pub fn write_cuMemAdvise_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(devPtr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&devPtr, "cuMemAdvise_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&devPtr, "cuMemAdvise_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&count, "cuMemAdvise_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&count, "cuMemAdvise_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(advice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&advice, "cuMemAdvise_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&advice, "cuMemAdvise_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(location), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&location, "cuMemAdvise_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&location, "cuMemAdvise_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemRangeGetAttribute(
@@ -11663,43 +10515,23 @@ pub fn write_cuMemRangeGetAttribute(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(data), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&data, "cuMemRangeGetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&data, "cuMemRangeGetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dataSize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dataSize,
-        "cuMemRangeGetAttribute",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dataSize, "cuMemRangeGetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(attribute), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &attribute,
-        "cuMemRangeGetAttribute",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&attribute, "cuMemRangeGetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(devPtr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &devPtr,
-        "cuMemRangeGetAttribute",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&devPtr, "cuMemRangeGetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &count,
-        "cuMemRangeGetAttribute",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&count, "cuMemRangeGetAttribute", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemRangeGetAttributes(
@@ -11714,34 +10546,19 @@ pub fn write_cuMemRangeGetAttributes(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(data), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &data,
-        "cuMemRangeGetAttributes",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&data, "cuMemRangeGetAttributes", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dataSizes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dataSizes,
-        "cuMemRangeGetAttributes",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dataSizes, "cuMemRangeGetAttributes", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(attributes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &attributes,
-        "cuMemRangeGetAttributes",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&attributes, "cuMemRangeGetAttributes", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numAttributes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numAttributes,
         "cuMemRangeGetAttributes",
         arg_idx,
@@ -11750,21 +10567,11 @@ pub fn write_cuMemRangeGetAttributes(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(devPtr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &devPtr,
-        "cuMemRangeGetAttributes",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&devPtr, "cuMemRangeGetAttributes", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &count,
-        "cuMemRangeGetAttributes",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&count, "cuMemRangeGetAttributes", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuPointerSetAttribute(
@@ -11776,20 +10583,15 @@ pub fn write_cuPointerSetAttribute(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&value, "cuPointerSetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&value, "cuPointerSetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(attribute), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &attribute,
-        "cuPointerSetAttribute",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&attribute, "cuPointerSetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ptr, "cuPointerSetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ptr, "cuPointerSetAttribute", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuPointerGetAttributes(
@@ -11802,7 +10604,7 @@ pub fn write_cuPointerGetAttributes(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(numAttributes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numAttributes,
         "cuPointerGetAttributes",
         arg_idx,
@@ -11811,20 +10613,15 @@ pub fn write_cuPointerGetAttributes(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(attributes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &attributes,
-        "cuPointerGetAttributes",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&attributes, "cuPointerGetAttributes", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(data), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&data, "cuPointerGetAttributes", arg_idx, writer)?;
+    crate::CudaDisplay::write(&data, "cuPointerGetAttributes", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ptr, "cuPointerGetAttributes", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ptr, "cuPointerGetAttributes", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamCreate(
@@ -11835,11 +10632,11 @@ pub fn write_cuStreamCreate(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&phStream, "cuStreamCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&phStream, "cuStreamCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Flags, "cuStreamCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Flags, "cuStreamCreate", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamCreateWithPriority(
@@ -11851,30 +10648,15 @@ pub fn write_cuStreamCreateWithPriority(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &phStream,
-        "cuStreamCreateWithPriority",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&phStream, "cuStreamCreateWithPriority", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuStreamCreateWithPriority",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuStreamCreateWithPriority", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(priority), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &priority,
-        "cuStreamCreateWithPriority",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&priority, "cuStreamCreateWithPriority", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamGetPriority_ptsz(
@@ -11885,21 +10667,11 @@ pub fn write_cuStreamGetPriority_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuStreamGetPriority_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuStreamGetPriority_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(priority), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &priority,
-        "cuStreamGetPriority_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&priority, "cuStreamGetPriority_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamGetDevice_ptsz(
@@ -11910,21 +10682,11 @@ pub fn write_cuStreamGetDevice_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuStreamGetDevice_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuStreamGetDevice_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &device,
-        "cuStreamGetDevice_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&device, "cuStreamGetDevice_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamGetFlags_ptsz(
@@ -11935,16 +10697,11 @@ pub fn write_cuStreamGetFlags_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuStreamGetFlags_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuStreamGetFlags_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuStreamGetFlags_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuStreamGetFlags_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamGetId_ptsz(
@@ -11955,11 +10712,11 @@ pub fn write_cuStreamGetId_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuStreamGetId_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuStreamGetId_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(streamId), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&streamId, "cuStreamGetId_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&streamId, "cuStreamGetId_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamGetCtx_ptsz(
@@ -11970,11 +10727,11 @@ pub fn write_cuStreamGetCtx_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuStreamGetCtx_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuStreamGetCtx_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pctx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pctx, "cuStreamGetCtx_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pctx, "cuStreamGetCtx_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamGetCtx_v2_ptsz(
@@ -11986,25 +10743,15 @@ pub fn write_cuStreamGetCtx_v2_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuStreamGetCtx_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuStreamGetCtx_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pCtx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pCtx, "cuStreamGetCtx_v2_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pCtx, "cuStreamGetCtx_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pGreenCtx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pGreenCtx,
-        "cuStreamGetCtx_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pGreenCtx, "cuStreamGetCtx_v2_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamWaitEvent_ptsz(
@@ -12016,30 +10763,15 @@ pub fn write_cuStreamWaitEvent_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuStreamWaitEvent_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuStreamWaitEvent_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hEvent), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hEvent,
-        "cuStreamWaitEvent_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hEvent, "cuStreamWaitEvent_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &Flags,
-        "cuStreamWaitEvent_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&Flags, "cuStreamWaitEvent_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamAddCallback_ptsz(
@@ -12052,39 +10784,19 @@ pub fn write_cuStreamAddCallback_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuStreamAddCallback_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuStreamAddCallback_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(callback), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &callback,
-        "cuStreamAddCallback_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&callback, "cuStreamAddCallback_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(userData), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &userData,
-        "cuStreamAddCallback_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&userData, "cuStreamAddCallback_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuStreamAddCallback_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuStreamAddCallback_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamBeginCapture_v2_ptsz(
@@ -12095,7 +10807,7 @@ pub fn write_cuStreamBeginCapture_v2_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hStream,
         "cuStreamBeginCapture_v2_ptsz",
         arg_idx,
@@ -12104,12 +10816,7 @@ pub fn write_cuStreamBeginCapture_v2_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(mode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &mode,
-        "cuStreamBeginCapture_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&mode, "cuStreamBeginCapture_v2_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamBeginCaptureToGraph_ptsz(
@@ -12124,7 +10831,7 @@ pub fn write_cuStreamBeginCaptureToGraph_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hStream,
         "cuStreamBeginCaptureToGraph_ptsz",
         arg_idx,
@@ -12133,7 +10840,7 @@ pub fn write_cuStreamBeginCaptureToGraph_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hGraph,
         "cuStreamBeginCaptureToGraph_ptsz",
         arg_idx,
@@ -12142,7 +10849,7 @@ pub fn write_cuStreamBeginCaptureToGraph_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dependencies,
         "cuStreamBeginCaptureToGraph_ptsz",
         arg_idx,
@@ -12151,7 +10858,7 @@ pub fn write_cuStreamBeginCaptureToGraph_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencyData), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dependencyData,
         "cuStreamBeginCaptureToGraph_ptsz",
         arg_idx,
@@ -12160,7 +10867,7 @@ pub fn write_cuStreamBeginCaptureToGraph_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies,
         "cuStreamBeginCaptureToGraph_ptsz",
         arg_idx,
@@ -12169,7 +10876,7 @@ pub fn write_cuStreamBeginCaptureToGraph_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(mode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &mode,
         "cuStreamBeginCaptureToGraph_ptsz",
         arg_idx,
@@ -12184,7 +10891,7 @@ pub fn write_cuThreadExchangeStreamCaptureMode(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(mode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &mode,
         "cuThreadExchangeStreamCaptureMode",
         arg_idx,
@@ -12200,21 +10907,11 @@ pub fn write_cuStreamEndCapture_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuStreamEndCapture_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuStreamEndCapture_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(phGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &phGraph,
-        "cuStreamEndCapture_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&phGraph, "cuStreamEndCapture_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamIsCapturing_ptsz(
@@ -12225,16 +10922,11 @@ pub fn write_cuStreamIsCapturing_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuStreamIsCapturing_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuStreamIsCapturing_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(captureStatus), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &captureStatus,
         "cuStreamIsCapturing_ptsz",
         arg_idx,
@@ -12254,7 +10946,7 @@ pub fn write_cuStreamGetCaptureInfo_v2_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hStream,
         "cuStreamGetCaptureInfo_v2_ptsz",
         arg_idx,
@@ -12263,7 +10955,7 @@ pub fn write_cuStreamGetCaptureInfo_v2_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(captureStatus_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &captureStatus_out,
         "cuStreamGetCaptureInfo_v2_ptsz",
         arg_idx,
@@ -12272,7 +10964,7 @@ pub fn write_cuStreamGetCaptureInfo_v2_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(id_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &id_out,
         "cuStreamGetCaptureInfo_v2_ptsz",
         arg_idx,
@@ -12281,7 +10973,7 @@ pub fn write_cuStreamGetCaptureInfo_v2_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(graph_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &graph_out,
         "cuStreamGetCaptureInfo_v2_ptsz",
         arg_idx,
@@ -12290,7 +10982,7 @@ pub fn write_cuStreamGetCaptureInfo_v2_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dependencies_out,
         "cuStreamGetCaptureInfo_v2_ptsz",
         arg_idx,
@@ -12299,7 +10991,7 @@ pub fn write_cuStreamGetCaptureInfo_v2_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies_out,
         "cuStreamGetCaptureInfo_v2_ptsz",
         arg_idx,
@@ -12320,7 +11012,7 @@ pub fn write_cuStreamGetCaptureInfo_v3_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hStream,
         "cuStreamGetCaptureInfo_v3_ptsz",
         arg_idx,
@@ -12329,7 +11021,7 @@ pub fn write_cuStreamGetCaptureInfo_v3_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(captureStatus_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &captureStatus_out,
         "cuStreamGetCaptureInfo_v3_ptsz",
         arg_idx,
@@ -12338,7 +11030,7 @@ pub fn write_cuStreamGetCaptureInfo_v3_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(id_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &id_out,
         "cuStreamGetCaptureInfo_v3_ptsz",
         arg_idx,
@@ -12347,7 +11039,7 @@ pub fn write_cuStreamGetCaptureInfo_v3_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(graph_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &graph_out,
         "cuStreamGetCaptureInfo_v3_ptsz",
         arg_idx,
@@ -12356,7 +11048,7 @@ pub fn write_cuStreamGetCaptureInfo_v3_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dependencies_out,
         "cuStreamGetCaptureInfo_v3_ptsz",
         arg_idx,
@@ -12365,7 +11057,7 @@ pub fn write_cuStreamGetCaptureInfo_v3_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(edgeData_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &edgeData_out,
         "cuStreamGetCaptureInfo_v3_ptsz",
         arg_idx,
@@ -12374,7 +11066,7 @@ pub fn write_cuStreamGetCaptureInfo_v3_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies_out,
         "cuStreamGetCaptureInfo_v3_ptsz",
         arg_idx,
@@ -12392,7 +11084,7 @@ pub fn write_cuStreamUpdateCaptureDependencies_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hStream,
         "cuStreamUpdateCaptureDependencies_ptsz",
         arg_idx,
@@ -12401,7 +11093,7 @@ pub fn write_cuStreamUpdateCaptureDependencies_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dependencies,
         "cuStreamUpdateCaptureDependencies_ptsz",
         arg_idx,
@@ -12410,7 +11102,7 @@ pub fn write_cuStreamUpdateCaptureDependencies_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies,
         "cuStreamUpdateCaptureDependencies_ptsz",
         arg_idx,
@@ -12419,7 +11111,7 @@ pub fn write_cuStreamUpdateCaptureDependencies_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &flags,
         "cuStreamUpdateCaptureDependencies_ptsz",
         arg_idx,
@@ -12438,7 +11130,7 @@ pub fn write_cuStreamUpdateCaptureDependencies_v2_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hStream,
         "cuStreamUpdateCaptureDependencies_v2_ptsz",
         arg_idx,
@@ -12447,7 +11139,7 @@ pub fn write_cuStreamUpdateCaptureDependencies_v2_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dependencies,
         "cuStreamUpdateCaptureDependencies_v2_ptsz",
         arg_idx,
@@ -12456,7 +11148,7 @@ pub fn write_cuStreamUpdateCaptureDependencies_v2_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencyData), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dependencyData,
         "cuStreamUpdateCaptureDependencies_v2_ptsz",
         arg_idx,
@@ -12465,7 +11157,7 @@ pub fn write_cuStreamUpdateCaptureDependencies_v2_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies,
         "cuStreamUpdateCaptureDependencies_v2_ptsz",
         arg_idx,
@@ -12474,7 +11166,7 @@ pub fn write_cuStreamUpdateCaptureDependencies_v2_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &flags,
         "cuStreamUpdateCaptureDependencies_v2_ptsz",
         arg_idx,
@@ -12492,39 +11184,19 @@ pub fn write_cuStreamAttachMemAsync_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuStreamAttachMemAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuStreamAttachMemAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dptr,
-        "cuStreamAttachMemAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dptr, "cuStreamAttachMemAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(length), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &length,
-        "cuStreamAttachMemAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&length, "cuStreamAttachMemAsync_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuStreamAttachMemAsync_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuStreamAttachMemAsync_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamQuery_ptsz(
@@ -12534,7 +11206,7 @@ pub fn write_cuStreamQuery_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuStreamQuery_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuStreamQuery_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamSynchronize_ptsz(
@@ -12544,12 +11216,7 @@ pub fn write_cuStreamSynchronize_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuStreamSynchronize_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuStreamSynchronize_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamDestroy_v2(
@@ -12559,7 +11226,7 @@ pub fn write_cuStreamDestroy_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuStreamDestroy_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuStreamDestroy_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamCopyAttributes_ptsz(
@@ -12570,21 +11237,11 @@ pub fn write_cuStreamCopyAttributes_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dst), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dst,
-        "cuStreamCopyAttributes_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dst, "cuStreamCopyAttributes_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(src), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &src,
-        "cuStreamCopyAttributes_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&src, "cuStreamCopyAttributes_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuEventCreate(
@@ -12595,11 +11252,11 @@ pub fn write_cuEventCreate(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phEvent), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&phEvent, "cuEventCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&phEvent, "cuEventCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Flags, "cuEventCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Flags, "cuEventCreate", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuEventRecord_ptsz(
@@ -12610,11 +11267,11 @@ pub fn write_cuEventRecord_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hEvent), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hEvent, "cuEventRecord_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hEvent, "cuEventRecord_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuEventRecord_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuEventRecord_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuEventRecordWithFlags_ptsz(
@@ -12626,30 +11283,15 @@ pub fn write_cuEventRecordWithFlags_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hEvent), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hEvent,
-        "cuEventRecordWithFlags_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hEvent, "cuEventRecordWithFlags_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuEventRecordWithFlags_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuEventRecordWithFlags_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuEventRecordWithFlags_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuEventRecordWithFlags_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuEventQuery(
@@ -12659,7 +11301,7 @@ pub fn write_cuEventQuery(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hEvent), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hEvent, "cuEventQuery", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hEvent, "cuEventQuery", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuEventSynchronize(
@@ -12669,7 +11311,7 @@ pub fn write_cuEventSynchronize(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hEvent), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hEvent, "cuEventSynchronize", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hEvent, "cuEventSynchronize", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuEventDestroy_v2(
@@ -12679,7 +11321,7 @@ pub fn write_cuEventDestroy_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hEvent), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hEvent, "cuEventDestroy_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hEvent, "cuEventDestroy_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuEventElapsedTime(
@@ -12691,20 +11333,15 @@ pub fn write_cuEventElapsedTime(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pMilliseconds), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pMilliseconds,
-        "cuEventElapsedTime",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pMilliseconds, "cuEventElapsedTime", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStart), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStart, "cuEventElapsedTime", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStart, "cuEventElapsedTime", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hEnd), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hEnd, "cuEventElapsedTime", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hEnd, "cuEventElapsedTime", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuEventElapsedTime_v2(
@@ -12716,25 +11353,15 @@ pub fn write_cuEventElapsedTime_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pMilliseconds), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pMilliseconds,
-        "cuEventElapsedTime_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pMilliseconds, "cuEventElapsedTime_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStart), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStart,
-        "cuEventElapsedTime_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStart, "cuEventElapsedTime_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hEnd), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hEnd, "cuEventElapsedTime_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hEnd, "cuEventElapsedTime_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuImportExternalMemory(
@@ -12745,16 +11372,11 @@ pub fn write_cuImportExternalMemory(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(extMem_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &extMem_out,
-        "cuImportExternalMemory",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&extMem_out, "cuImportExternalMemory", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(memHandleDesc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &memHandleDesc,
         "cuImportExternalMemory",
         arg_idx,
@@ -12771,7 +11393,7 @@ pub fn write_cuExternalMemoryGetMappedBuffer(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(devPtr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &devPtr,
         "cuExternalMemoryGetMappedBuffer",
         arg_idx,
@@ -12780,7 +11402,7 @@ pub fn write_cuExternalMemoryGetMappedBuffer(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(extMem), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &extMem,
         "cuExternalMemoryGetMappedBuffer",
         arg_idx,
@@ -12789,7 +11411,7 @@ pub fn write_cuExternalMemoryGetMappedBuffer(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(bufferDesc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &bufferDesc,
         "cuExternalMemoryGetMappedBuffer",
         arg_idx,
@@ -12806,7 +11428,7 @@ pub fn write_cuExternalMemoryGetMappedMipmappedArray(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(mipmap), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &mipmap,
         "cuExternalMemoryGetMappedMipmappedArray",
         arg_idx,
@@ -12815,7 +11437,7 @@ pub fn write_cuExternalMemoryGetMappedMipmappedArray(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(extMem), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &extMem,
         "cuExternalMemoryGetMappedMipmappedArray",
         arg_idx,
@@ -12824,7 +11446,7 @@ pub fn write_cuExternalMemoryGetMappedMipmappedArray(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(mipmapDesc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &mipmapDesc,
         "cuExternalMemoryGetMappedMipmappedArray",
         arg_idx,
@@ -12839,12 +11461,7 @@ pub fn write_cuDestroyExternalMemory(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(extMem), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &extMem,
-        "cuDestroyExternalMemory",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&extMem, "cuDestroyExternalMemory", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuImportExternalSemaphore(
@@ -12855,7 +11472,7 @@ pub fn write_cuImportExternalSemaphore(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(extSem_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &extSem_out,
         "cuImportExternalSemaphore",
         arg_idx,
@@ -12864,7 +11481,7 @@ pub fn write_cuImportExternalSemaphore(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(semHandleDesc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &semHandleDesc,
         "cuImportExternalSemaphore",
         arg_idx,
@@ -12882,7 +11499,7 @@ pub fn write_cuSignalExternalSemaphoresAsync_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(extSemArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &extSemArray,
         "cuSignalExternalSemaphoresAsync_ptsz",
         arg_idx,
@@ -12891,7 +11508,7 @@ pub fn write_cuSignalExternalSemaphoresAsync_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(paramsArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &paramsArray,
         "cuSignalExternalSemaphoresAsync_ptsz",
         arg_idx,
@@ -12900,7 +11517,7 @@ pub fn write_cuSignalExternalSemaphoresAsync_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numExtSems), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numExtSems,
         "cuSignalExternalSemaphoresAsync_ptsz",
         arg_idx,
@@ -12909,7 +11526,7 @@ pub fn write_cuSignalExternalSemaphoresAsync_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &stream,
         "cuSignalExternalSemaphoresAsync_ptsz",
         arg_idx,
@@ -12927,7 +11544,7 @@ pub fn write_cuWaitExternalSemaphoresAsync_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(extSemArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &extSemArray,
         "cuWaitExternalSemaphoresAsync_ptsz",
         arg_idx,
@@ -12936,7 +11553,7 @@ pub fn write_cuWaitExternalSemaphoresAsync_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(paramsArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &paramsArray,
         "cuWaitExternalSemaphoresAsync_ptsz",
         arg_idx,
@@ -12945,7 +11562,7 @@ pub fn write_cuWaitExternalSemaphoresAsync_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numExtSems), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numExtSems,
         "cuWaitExternalSemaphoresAsync_ptsz",
         arg_idx,
@@ -12954,7 +11571,7 @@ pub fn write_cuWaitExternalSemaphoresAsync_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &stream,
         "cuWaitExternalSemaphoresAsync_ptsz",
         arg_idx,
@@ -12969,12 +11586,7 @@ pub fn write_cuDestroyExternalSemaphore(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(extSem), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &extSem,
-        "cuDestroyExternalSemaphore",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&extSem, "cuDestroyExternalSemaphore", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamWaitValue32_v2_ptsz(
@@ -12987,39 +11599,19 @@ pub fn write_cuStreamWaitValue32_v2_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &stream,
-        "cuStreamWaitValue32_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&stream, "cuStreamWaitValue32_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(addr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &addr,
-        "cuStreamWaitValue32_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&addr, "cuStreamWaitValue32_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &value,
-        "cuStreamWaitValue32_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&value, "cuStreamWaitValue32_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuStreamWaitValue32_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuStreamWaitValue32_v2_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamWaitValue64_v2_ptsz(
@@ -13032,39 +11624,19 @@ pub fn write_cuStreamWaitValue64_v2_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &stream,
-        "cuStreamWaitValue64_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&stream, "cuStreamWaitValue64_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(addr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &addr,
-        "cuStreamWaitValue64_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&addr, "cuStreamWaitValue64_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &value,
-        "cuStreamWaitValue64_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&value, "cuStreamWaitValue64_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuStreamWaitValue64_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuStreamWaitValue64_v2_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamWriteValue32_v2_ptsz(
@@ -13077,39 +11649,19 @@ pub fn write_cuStreamWriteValue32_v2_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &stream,
-        "cuStreamWriteValue32_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&stream, "cuStreamWriteValue32_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(addr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &addr,
-        "cuStreamWriteValue32_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&addr, "cuStreamWriteValue32_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &value,
-        "cuStreamWriteValue32_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&value, "cuStreamWriteValue32_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuStreamWriteValue32_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuStreamWriteValue32_v2_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamWriteValue64_v2_ptsz(
@@ -13122,39 +11674,19 @@ pub fn write_cuStreamWriteValue64_v2_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &stream,
-        "cuStreamWriteValue64_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&stream, "cuStreamWriteValue64_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(addr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &addr,
-        "cuStreamWriteValue64_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&addr, "cuStreamWriteValue64_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &value,
-        "cuStreamWriteValue64_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&value, "cuStreamWriteValue64_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuStreamWriteValue64_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuStreamWriteValue64_v2_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamBatchMemOp_v2_ptsz(
@@ -13167,25 +11699,15 @@ pub fn write_cuStreamBatchMemOp_v2_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &stream,
-        "cuStreamBatchMemOp_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&stream, "cuStreamBatchMemOp_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &count,
-        "cuStreamBatchMemOp_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&count, "cuStreamBatchMemOp_v2_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(paramArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &paramArray,
         "cuStreamBatchMemOp_v2_ptsz",
         arg_idx,
@@ -13194,12 +11716,7 @@ pub fn write_cuStreamBatchMemOp_v2_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuStreamBatchMemOp_v2_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuStreamBatchMemOp_v2_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuFuncGetAttribute(
@@ -13211,15 +11728,15 @@ pub fn write_cuFuncGetAttribute(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pi), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pi, "cuFuncGetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pi, "cuFuncGetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(attrib), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&attrib, "cuFuncGetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&attrib, "cuFuncGetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hfunc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hfunc, "cuFuncGetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hfunc, "cuFuncGetAttribute", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuFuncSetAttribute(
@@ -13231,15 +11748,15 @@ pub fn write_cuFuncSetAttribute(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hfunc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hfunc, "cuFuncSetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hfunc, "cuFuncSetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(attrib), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&attrib, "cuFuncSetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&attrib, "cuFuncSetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&value, "cuFuncSetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&value, "cuFuncSetAttribute", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuFuncSetCacheConfig(
@@ -13250,11 +11767,11 @@ pub fn write_cuFuncSetCacheConfig(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hfunc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hfunc, "cuFuncSetCacheConfig", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hfunc, "cuFuncSetCacheConfig", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(config), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&config, "cuFuncSetCacheConfig", arg_idx, writer)?;
+    crate::CudaDisplay::write(&config, "cuFuncSetCacheConfig", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuFuncGetModule(
@@ -13265,11 +11782,11 @@ pub fn write_cuFuncGetModule(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hmod), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hmod, "cuFuncGetModule", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hmod, "cuFuncGetModule", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hfunc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hfunc, "cuFuncGetModule", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hfunc, "cuFuncGetModule", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuFuncGetName(
@@ -13280,11 +11797,11 @@ pub fn write_cuFuncGetName(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(name), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&name, "cuFuncGetName", arg_idx, writer)?;
+    crate::CudaDisplay::write(&name, "cuFuncGetName", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hfunc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hfunc, "cuFuncGetName", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hfunc, "cuFuncGetName", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuFuncGetParamInfo(
@@ -13297,37 +11814,22 @@ pub fn write_cuFuncGetParamInfo(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(func), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&func, "cuFuncGetParamInfo", arg_idx, writer)?;
+    crate::CudaDisplay::write(&func, "cuFuncGetParamInfo", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(paramIndex), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &paramIndex,
-        "cuFuncGetParamInfo",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&paramIndex, "cuFuncGetParamInfo", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(paramOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &paramOffset,
-        "cuFuncGetParamInfo",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&paramOffset, "cuFuncGetParamInfo", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(paramSize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &paramSize,
-        "cuFuncGetParamInfo",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&paramSize, "cuFuncGetParamInfo", arg_idx, writer)?;
     writer.write_all(b")")
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUfunctionLoadingState_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUfunctionLoadingState_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -13357,11 +11859,11 @@ pub fn write_cuFuncIsLoaded(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(state), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&state, "cuFuncIsLoaded", arg_idx, writer)?;
+    crate::CudaDisplay::write(&state, "cuFuncIsLoaded", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(function), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&function, "cuFuncIsLoaded", arg_idx, writer)?;
+    crate::CudaDisplay::write(&function, "cuFuncIsLoaded", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuFuncLoad(
@@ -13371,7 +11873,7 @@ pub fn write_cuFuncLoad(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(function), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&function, "cuFuncLoad", arg_idx, writer)?;
+    crate::CudaDisplay::write(&function, "cuFuncLoad", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLaunchKernel_ptsz(
@@ -13391,87 +11893,47 @@ pub fn write_cuLaunchKernel_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(f), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&f, "cuLaunchKernel_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&f, "cuLaunchKernel_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(gridDimX), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &gridDimX,
-        "cuLaunchKernel_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&gridDimX, "cuLaunchKernel_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(gridDimY), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &gridDimY,
-        "cuLaunchKernel_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&gridDimY, "cuLaunchKernel_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(gridDimZ), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &gridDimZ,
-        "cuLaunchKernel_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&gridDimZ, "cuLaunchKernel_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(blockDimX), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &blockDimX,
-        "cuLaunchKernel_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&blockDimX, "cuLaunchKernel_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(blockDimY), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &blockDimY,
-        "cuLaunchKernel_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&blockDimY, "cuLaunchKernel_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(blockDimZ), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &blockDimZ,
-        "cuLaunchKernel_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&blockDimZ, "cuLaunchKernel_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(sharedMemBytes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &sharedMemBytes,
-        "cuLaunchKernel_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&sharedMemBytes, "cuLaunchKernel_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuLaunchKernel_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuLaunchKernel_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(kernelParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &kernelParams,
-        "cuLaunchKernel_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&kernelParams, "cuLaunchKernel_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(extra), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&extra, "cuLaunchKernel_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&extra, "cuLaunchKernel_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLaunchKernelEx_ptsz(
@@ -13484,29 +11946,19 @@ pub fn write_cuLaunchKernelEx_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(config), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &config,
-        "cuLaunchKernelEx_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&config, "cuLaunchKernelEx_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(f), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&f, "cuLaunchKernelEx_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&f, "cuLaunchKernelEx_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(kernelParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &kernelParams,
-        "cuLaunchKernelEx_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&kernelParams, "cuLaunchKernelEx_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(extra), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&extra, "cuLaunchKernelEx_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&extra, "cuLaunchKernelEx_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLaunchCooperativeKernel_ptsz(
@@ -13525,16 +11977,11 @@ pub fn write_cuLaunchCooperativeKernel_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(f), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &f,
-        "cuLaunchCooperativeKernel_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&f, "cuLaunchCooperativeKernel_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(gridDimX), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &gridDimX,
         "cuLaunchCooperativeKernel_ptsz",
         arg_idx,
@@ -13543,7 +11990,7 @@ pub fn write_cuLaunchCooperativeKernel_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(gridDimY), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &gridDimY,
         "cuLaunchCooperativeKernel_ptsz",
         arg_idx,
@@ -13552,7 +11999,7 @@ pub fn write_cuLaunchCooperativeKernel_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(gridDimZ), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &gridDimZ,
         "cuLaunchCooperativeKernel_ptsz",
         arg_idx,
@@ -13561,7 +12008,7 @@ pub fn write_cuLaunchCooperativeKernel_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(blockDimX), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &blockDimX,
         "cuLaunchCooperativeKernel_ptsz",
         arg_idx,
@@ -13570,7 +12017,7 @@ pub fn write_cuLaunchCooperativeKernel_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(blockDimY), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &blockDimY,
         "cuLaunchCooperativeKernel_ptsz",
         arg_idx,
@@ -13579,7 +12026,7 @@ pub fn write_cuLaunchCooperativeKernel_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(blockDimZ), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &blockDimZ,
         "cuLaunchCooperativeKernel_ptsz",
         arg_idx,
@@ -13588,7 +12035,7 @@ pub fn write_cuLaunchCooperativeKernel_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(sharedMemBytes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &sharedMemBytes,
         "cuLaunchCooperativeKernel_ptsz",
         arg_idx,
@@ -13597,7 +12044,7 @@ pub fn write_cuLaunchCooperativeKernel_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hStream,
         "cuLaunchCooperativeKernel_ptsz",
         arg_idx,
@@ -13606,7 +12053,7 @@ pub fn write_cuLaunchCooperativeKernel_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(kernelParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &kernelParams,
         "cuLaunchCooperativeKernel_ptsz",
         arg_idx,
@@ -13623,7 +12070,7 @@ pub fn write_cuLaunchCooperativeKernelMultiDevice(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(launchParamsList), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &launchParamsList,
         "cuLaunchCooperativeKernelMultiDevice",
         arg_idx,
@@ -13632,7 +12079,7 @@ pub fn write_cuLaunchCooperativeKernelMultiDevice(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDevices), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDevices,
         "cuLaunchCooperativeKernelMultiDevice",
         arg_idx,
@@ -13641,7 +12088,7 @@ pub fn write_cuLaunchCooperativeKernelMultiDevice(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &flags,
         "cuLaunchCooperativeKernelMultiDevice",
         arg_idx,
@@ -13658,25 +12105,15 @@ pub fn write_cuLaunchHostFunc_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuLaunchHostFunc_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuLaunchHostFunc_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(fn_), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&fn_, "cuLaunchHostFunc_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&fn_, "cuLaunchHostFunc_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(userData), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &userData,
-        "cuLaunchHostFunc_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&userData, "cuLaunchHostFunc_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuFuncSetBlockShape(
@@ -13689,19 +12126,19 @@ pub fn write_cuFuncSetBlockShape(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hfunc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hfunc, "cuFuncSetBlockShape", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hfunc, "cuFuncSetBlockShape", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(x), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&x, "cuFuncSetBlockShape", arg_idx, writer)?;
+    crate::CudaDisplay::write(&x, "cuFuncSetBlockShape", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(y), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&y, "cuFuncSetBlockShape", arg_idx, writer)?;
+    crate::CudaDisplay::write(&y, "cuFuncSetBlockShape", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(z), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&z, "cuFuncSetBlockShape", arg_idx, writer)?;
+    crate::CudaDisplay::write(&z, "cuFuncSetBlockShape", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuFuncSetSharedSize(
@@ -13712,11 +12149,11 @@ pub fn write_cuFuncSetSharedSize(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hfunc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hfunc, "cuFuncSetSharedSize", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hfunc, "cuFuncSetSharedSize", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(bytes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&bytes, "cuFuncSetSharedSize", arg_idx, writer)?;
+    crate::CudaDisplay::write(&bytes, "cuFuncSetSharedSize", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuParamSetSize(
@@ -13727,11 +12164,11 @@ pub fn write_cuParamSetSize(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hfunc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hfunc, "cuParamSetSize", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hfunc, "cuParamSetSize", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numbytes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&numbytes, "cuParamSetSize", arg_idx, writer)?;
+    crate::CudaDisplay::write(&numbytes, "cuParamSetSize", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuParamSeti(
@@ -13743,15 +12180,15 @@ pub fn write_cuParamSeti(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hfunc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hfunc, "cuParamSeti", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hfunc, "cuParamSeti", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(offset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&offset, "cuParamSeti", arg_idx, writer)?;
+    crate::CudaDisplay::write(&offset, "cuParamSeti", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&value, "cuParamSeti", arg_idx, writer)?;
+    crate::CudaDisplay::write(&value, "cuParamSeti", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuParamSetf(
@@ -13763,15 +12200,15 @@ pub fn write_cuParamSetf(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hfunc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hfunc, "cuParamSetf", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hfunc, "cuParamSetf", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(offset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&offset, "cuParamSetf", arg_idx, writer)?;
+    crate::CudaDisplay::write(&offset, "cuParamSetf", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&value, "cuParamSetf", arg_idx, writer)?;
+    crate::CudaDisplay::write(&value, "cuParamSetf", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuParamSetv(
@@ -13784,19 +12221,19 @@ pub fn write_cuParamSetv(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hfunc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hfunc, "cuParamSetv", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hfunc, "cuParamSetv", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(offset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&offset, "cuParamSetv", arg_idx, writer)?;
+    crate::CudaDisplay::write(&offset, "cuParamSetv", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ptr, "cuParamSetv", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ptr, "cuParamSetv", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numbytes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&numbytes, "cuParamSetv", arg_idx, writer)?;
+    crate::CudaDisplay::write(&numbytes, "cuParamSetv", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLaunch(
@@ -13806,7 +12243,7 @@ pub fn write_cuLaunch(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(f), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&f, "cuLaunch", arg_idx, writer)?;
+    crate::CudaDisplay::write(&f, "cuLaunch", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLaunchGrid(
@@ -13818,15 +12255,15 @@ pub fn write_cuLaunchGrid(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(f), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&f, "cuLaunchGrid", arg_idx, writer)?;
+    crate::CudaDisplay::write(&f, "cuLaunchGrid", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(grid_width), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&grid_width, "cuLaunchGrid", arg_idx, writer)?;
+    crate::CudaDisplay::write(&grid_width, "cuLaunchGrid", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(grid_height), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&grid_height, "cuLaunchGrid", arg_idx, writer)?;
+    crate::CudaDisplay::write(&grid_height, "cuLaunchGrid", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLaunchGridAsync(
@@ -13839,29 +12276,19 @@ pub fn write_cuLaunchGridAsync(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(f), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&f, "cuLaunchGridAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&f, "cuLaunchGridAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(grid_width), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &grid_width,
-        "cuLaunchGridAsync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&grid_width, "cuLaunchGridAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(grid_height), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &grid_height,
-        "cuLaunchGridAsync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&grid_height, "cuLaunchGridAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuLaunchGridAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuLaunchGridAsync", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuParamSetTexRef(
@@ -13873,15 +12300,15 @@ pub fn write_cuParamSetTexRef(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hfunc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hfunc, "cuParamSetTexRef", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hfunc, "cuParamSetTexRef", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(texunit), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&texunit, "cuParamSetTexRef", arg_idx, writer)?;
+    crate::CudaDisplay::write(&texunit, "cuParamSetTexRef", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hTexRef, "cuParamSetTexRef", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hTexRef, "cuParamSetTexRef", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuFuncSetSharedMemConfig(
@@ -13892,21 +12319,11 @@ pub fn write_cuFuncSetSharedMemConfig(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hfunc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hfunc,
-        "cuFuncSetSharedMemConfig",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hfunc, "cuFuncSetSharedMemConfig", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(config), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &config,
-        "cuFuncSetSharedMemConfig",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&config, "cuFuncSetSharedMemConfig", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphCreate(
@@ -13917,11 +12334,11 @@ pub fn write_cuGraphCreate(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&phGraph, "cuGraphCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&phGraph, "cuGraphCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuGraphCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuGraphCreate", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphAddKernelNode_v2(
@@ -13935,25 +12352,15 @@ pub fn write_cuGraphAddKernelNode_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phGraphNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &phGraphNode,
-        "cuGraphAddKernelNode_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&phGraphNode, "cuGraphAddKernelNode_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hGraph,
-        "cuGraphAddKernelNode_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphAddKernelNode_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dependencies,
         "cuGraphAddKernelNode_v2",
         arg_idx,
@@ -13962,7 +12369,7 @@ pub fn write_cuGraphAddKernelNode_v2(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies,
         "cuGraphAddKernelNode_v2",
         arg_idx,
@@ -13971,12 +12378,7 @@ pub fn write_cuGraphAddKernelNode_v2(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &nodeParams,
-        "cuGraphAddKernelNode_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&nodeParams, "cuGraphAddKernelNode_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphKernelNodeGetParams_v2(
@@ -13987,16 +12389,11 @@ pub fn write_cuGraphKernelNodeGetParams_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hNode,
-        "cuGraphKernelNodeGetParams_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hNode, "cuGraphKernelNodeGetParams_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &nodeParams,
         "cuGraphKernelNodeGetParams_v2",
         arg_idx,
@@ -14012,16 +12409,11 @@ pub fn write_cuGraphKernelNodeSetParams_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hNode,
-        "cuGraphKernelNodeSetParams_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hNode, "cuGraphKernelNodeSetParams_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &nodeParams,
         "cuGraphKernelNodeSetParams_v2",
         arg_idx,
@@ -14041,29 +12433,19 @@ pub fn write_cuGraphAddMemcpyNode(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phGraphNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &phGraphNode,
-        "cuGraphAddMemcpyNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&phGraphNode, "cuGraphAddMemcpyNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hGraph, "cuGraphAddMemcpyNode", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphAddMemcpyNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dependencies,
-        "cuGraphAddMemcpyNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dependencies, "cuGraphAddMemcpyNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies,
         "cuGraphAddMemcpyNode",
         arg_idx,
@@ -14072,16 +12454,11 @@ pub fn write_cuGraphAddMemcpyNode(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(copyParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &copyParams,
-        "cuGraphAddMemcpyNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&copyParams, "cuGraphAddMemcpyNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ctx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ctx, "cuGraphAddMemcpyNode", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ctx, "cuGraphAddMemcpyNode", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphMemcpyNodeGetParams(
@@ -14092,16 +12469,11 @@ pub fn write_cuGraphMemcpyNodeGetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hNode,
-        "cuGraphMemcpyNodeGetParams",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hNode, "cuGraphMemcpyNodeGetParams", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &nodeParams,
         "cuGraphMemcpyNodeGetParams",
         arg_idx,
@@ -14117,16 +12489,11 @@ pub fn write_cuGraphMemcpyNodeSetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hNode,
-        "cuGraphMemcpyNodeSetParams",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hNode, "cuGraphMemcpyNodeSetParams", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &nodeParams,
         "cuGraphMemcpyNodeSetParams",
         arg_idx,
@@ -14146,29 +12513,19 @@ pub fn write_cuGraphAddMemsetNode(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phGraphNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &phGraphNode,
-        "cuGraphAddMemsetNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&phGraphNode, "cuGraphAddMemsetNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hGraph, "cuGraphAddMemsetNode", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphAddMemsetNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dependencies,
-        "cuGraphAddMemsetNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dependencies, "cuGraphAddMemsetNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies,
         "cuGraphAddMemsetNode",
         arg_idx,
@@ -14177,16 +12534,11 @@ pub fn write_cuGraphAddMemsetNode(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(memsetParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &memsetParams,
-        "cuGraphAddMemsetNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&memsetParams, "cuGraphAddMemsetNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ctx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ctx, "cuGraphAddMemsetNode", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ctx, "cuGraphAddMemsetNode", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphMemsetNodeGetParams(
@@ -14197,16 +12549,11 @@ pub fn write_cuGraphMemsetNodeGetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hNode,
-        "cuGraphMemsetNodeGetParams",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hNode, "cuGraphMemsetNodeGetParams", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &nodeParams,
         "cuGraphMemsetNodeGetParams",
         arg_idx,
@@ -14222,16 +12569,11 @@ pub fn write_cuGraphMemsetNodeSetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hNode,
-        "cuGraphMemsetNodeSetParams",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hNode, "cuGraphMemsetNodeSetParams", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &nodeParams,
         "cuGraphMemsetNodeSetParams",
         arg_idx,
@@ -14250,43 +12592,23 @@ pub fn write_cuGraphAddHostNode(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phGraphNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &phGraphNode,
-        "cuGraphAddHostNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&phGraphNode, "cuGraphAddHostNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hGraph, "cuGraphAddHostNode", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphAddHostNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dependencies,
-        "cuGraphAddHostNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dependencies, "cuGraphAddHostNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &numDependencies,
-        "cuGraphAddHostNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&numDependencies, "cuGraphAddHostNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &nodeParams,
-        "cuGraphAddHostNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&nodeParams, "cuGraphAddHostNode", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphHostNodeGetParams(
@@ -14297,21 +12619,11 @@ pub fn write_cuGraphHostNodeGetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hNode,
-        "cuGraphHostNodeGetParams",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hNode, "cuGraphHostNodeGetParams", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &nodeParams,
-        "cuGraphHostNodeGetParams",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&nodeParams, "cuGraphHostNodeGetParams", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphHostNodeSetParams(
@@ -14322,21 +12634,11 @@ pub fn write_cuGraphHostNodeSetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hNode,
-        "cuGraphHostNodeSetParams",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hNode, "cuGraphHostNodeSetParams", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &nodeParams,
-        "cuGraphHostNodeSetParams",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&nodeParams, "cuGraphHostNodeSetParams", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphAddChildGraphNode(
@@ -14350,7 +12652,7 @@ pub fn write_cuGraphAddChildGraphNode(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phGraphNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &phGraphNode,
         "cuGraphAddChildGraphNode",
         arg_idx,
@@ -14359,16 +12661,11 @@ pub fn write_cuGraphAddChildGraphNode(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hGraph,
-        "cuGraphAddChildGraphNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphAddChildGraphNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dependencies,
         "cuGraphAddChildGraphNode",
         arg_idx,
@@ -14377,7 +12674,7 @@ pub fn write_cuGraphAddChildGraphNode(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies,
         "cuGraphAddChildGraphNode",
         arg_idx,
@@ -14386,12 +12683,7 @@ pub fn write_cuGraphAddChildGraphNode(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(childGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &childGraph,
-        "cuGraphAddChildGraphNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&childGraph, "cuGraphAddChildGraphNode", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphChildGraphNodeGetGraph(
@@ -14402,16 +12694,11 @@ pub fn write_cuGraphChildGraphNodeGetGraph(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hNode,
-        "cuGraphChildGraphNodeGetGraph",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hNode, "cuGraphChildGraphNodeGetGraph", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(phGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &phGraph,
         "cuGraphChildGraphNodeGetGraph",
         arg_idx,
@@ -14429,34 +12716,19 @@ pub fn write_cuGraphAddEmptyNode(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phGraphNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &phGraphNode,
-        "cuGraphAddEmptyNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&phGraphNode, "cuGraphAddEmptyNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hGraph, "cuGraphAddEmptyNode", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphAddEmptyNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dependencies,
-        "cuGraphAddEmptyNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dependencies, "cuGraphAddEmptyNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &numDependencies,
-        "cuGraphAddEmptyNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&numDependencies, "cuGraphAddEmptyNode", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphAddEventRecordNode(
@@ -14470,7 +12742,7 @@ pub fn write_cuGraphAddEventRecordNode(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phGraphNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &phGraphNode,
         "cuGraphAddEventRecordNode",
         arg_idx,
@@ -14479,16 +12751,11 @@ pub fn write_cuGraphAddEventRecordNode(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hGraph,
-        "cuGraphAddEventRecordNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphAddEventRecordNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dependencies,
         "cuGraphAddEventRecordNode",
         arg_idx,
@@ -14497,7 +12764,7 @@ pub fn write_cuGraphAddEventRecordNode(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies,
         "cuGraphAddEventRecordNode",
         arg_idx,
@@ -14506,12 +12773,7 @@ pub fn write_cuGraphAddEventRecordNode(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(event), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &event,
-        "cuGraphAddEventRecordNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&event, "cuGraphAddEventRecordNode", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphEventRecordNodeGetEvent(
@@ -14522,7 +12784,7 @@ pub fn write_cuGraphEventRecordNodeGetEvent(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hNode,
         "cuGraphEventRecordNodeGetEvent",
         arg_idx,
@@ -14531,7 +12793,7 @@ pub fn write_cuGraphEventRecordNodeGetEvent(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(event_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &event_out,
         "cuGraphEventRecordNodeGetEvent",
         arg_idx,
@@ -14547,7 +12809,7 @@ pub fn write_cuGraphEventRecordNodeSetEvent(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hNode,
         "cuGraphEventRecordNodeSetEvent",
         arg_idx,
@@ -14556,7 +12818,7 @@ pub fn write_cuGraphEventRecordNodeSetEvent(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(event), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &event,
         "cuGraphEventRecordNodeSetEvent",
         arg_idx,
@@ -14575,25 +12837,15 @@ pub fn write_cuGraphAddEventWaitNode(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phGraphNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &phGraphNode,
-        "cuGraphAddEventWaitNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&phGraphNode, "cuGraphAddEventWaitNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hGraph,
-        "cuGraphAddEventWaitNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphAddEventWaitNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dependencies,
         "cuGraphAddEventWaitNode",
         arg_idx,
@@ -14602,7 +12854,7 @@ pub fn write_cuGraphAddEventWaitNode(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies,
         "cuGraphAddEventWaitNode",
         arg_idx,
@@ -14611,12 +12863,7 @@ pub fn write_cuGraphAddEventWaitNode(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(event), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &event,
-        "cuGraphAddEventWaitNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&event, "cuGraphAddEventWaitNode", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphEventWaitNodeGetEvent(
@@ -14627,16 +12874,11 @@ pub fn write_cuGraphEventWaitNodeGetEvent(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hNode,
-        "cuGraphEventWaitNodeGetEvent",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hNode, "cuGraphEventWaitNodeGetEvent", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(event_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &event_out,
         "cuGraphEventWaitNodeGetEvent",
         arg_idx,
@@ -14652,21 +12894,11 @@ pub fn write_cuGraphEventWaitNodeSetEvent(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hNode,
-        "cuGraphEventWaitNodeSetEvent",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hNode, "cuGraphEventWaitNodeSetEvent", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(event), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &event,
-        "cuGraphEventWaitNodeSetEvent",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&event, "cuGraphEventWaitNodeSetEvent", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphAddExternalSemaphoresSignalNode(
@@ -14680,7 +12912,7 @@ pub fn write_cuGraphAddExternalSemaphoresSignalNode(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phGraphNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &phGraphNode,
         "cuGraphAddExternalSemaphoresSignalNode",
         arg_idx,
@@ -14689,7 +12921,7 @@ pub fn write_cuGraphAddExternalSemaphoresSignalNode(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hGraph,
         "cuGraphAddExternalSemaphoresSignalNode",
         arg_idx,
@@ -14698,7 +12930,7 @@ pub fn write_cuGraphAddExternalSemaphoresSignalNode(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dependencies,
         "cuGraphAddExternalSemaphoresSignalNode",
         arg_idx,
@@ -14707,7 +12939,7 @@ pub fn write_cuGraphAddExternalSemaphoresSignalNode(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies,
         "cuGraphAddExternalSemaphoresSignalNode",
         arg_idx,
@@ -14716,7 +12948,7 @@ pub fn write_cuGraphAddExternalSemaphoresSignalNode(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &nodeParams,
         "cuGraphAddExternalSemaphoresSignalNode",
         arg_idx,
@@ -14732,7 +12964,7 @@ pub fn write_cuGraphExternalSemaphoresSignalNodeGetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hNode,
         "cuGraphExternalSemaphoresSignalNodeGetParams",
         arg_idx,
@@ -14741,7 +12973,7 @@ pub fn write_cuGraphExternalSemaphoresSignalNodeGetParams(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(params_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &params_out,
         "cuGraphExternalSemaphoresSignalNodeGetParams",
         arg_idx,
@@ -14757,7 +12989,7 @@ pub fn write_cuGraphExternalSemaphoresSignalNodeSetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hNode,
         "cuGraphExternalSemaphoresSignalNodeSetParams",
         arg_idx,
@@ -14766,7 +12998,7 @@ pub fn write_cuGraphExternalSemaphoresSignalNodeSetParams(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &nodeParams,
         "cuGraphExternalSemaphoresSignalNodeSetParams",
         arg_idx,
@@ -14785,7 +13017,7 @@ pub fn write_cuGraphAddExternalSemaphoresWaitNode(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phGraphNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &phGraphNode,
         "cuGraphAddExternalSemaphoresWaitNode",
         arg_idx,
@@ -14794,7 +13026,7 @@ pub fn write_cuGraphAddExternalSemaphoresWaitNode(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hGraph,
         "cuGraphAddExternalSemaphoresWaitNode",
         arg_idx,
@@ -14803,7 +13035,7 @@ pub fn write_cuGraphAddExternalSemaphoresWaitNode(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dependencies,
         "cuGraphAddExternalSemaphoresWaitNode",
         arg_idx,
@@ -14812,7 +13044,7 @@ pub fn write_cuGraphAddExternalSemaphoresWaitNode(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies,
         "cuGraphAddExternalSemaphoresWaitNode",
         arg_idx,
@@ -14821,7 +13053,7 @@ pub fn write_cuGraphAddExternalSemaphoresWaitNode(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &nodeParams,
         "cuGraphAddExternalSemaphoresWaitNode",
         arg_idx,
@@ -14837,7 +13069,7 @@ pub fn write_cuGraphExternalSemaphoresWaitNodeGetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hNode,
         "cuGraphExternalSemaphoresWaitNodeGetParams",
         arg_idx,
@@ -14846,7 +13078,7 @@ pub fn write_cuGraphExternalSemaphoresWaitNodeGetParams(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(params_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &params_out,
         "cuGraphExternalSemaphoresWaitNodeGetParams",
         arg_idx,
@@ -14862,7 +13094,7 @@ pub fn write_cuGraphExternalSemaphoresWaitNodeSetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hNode,
         "cuGraphExternalSemaphoresWaitNodeSetParams",
         arg_idx,
@@ -14871,7 +13103,7 @@ pub fn write_cuGraphExternalSemaphoresWaitNodeSetParams(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &nodeParams,
         "cuGraphExternalSemaphoresWaitNodeSetParams",
         arg_idx,
@@ -14890,7 +13122,7 @@ pub fn write_cuGraphAddBatchMemOpNode(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phGraphNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &phGraphNode,
         "cuGraphAddBatchMemOpNode",
         arg_idx,
@@ -14899,16 +13131,11 @@ pub fn write_cuGraphAddBatchMemOpNode(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hGraph,
-        "cuGraphAddBatchMemOpNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphAddBatchMemOpNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dependencies,
         "cuGraphAddBatchMemOpNode",
         arg_idx,
@@ -14917,7 +13144,7 @@ pub fn write_cuGraphAddBatchMemOpNode(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies,
         "cuGraphAddBatchMemOpNode",
         arg_idx,
@@ -14926,12 +13153,7 @@ pub fn write_cuGraphAddBatchMemOpNode(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &nodeParams,
-        "cuGraphAddBatchMemOpNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&nodeParams, "cuGraphAddBatchMemOpNode", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphBatchMemOpNodeGetParams(
@@ -14942,7 +13164,7 @@ pub fn write_cuGraphBatchMemOpNodeGetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hNode,
         "cuGraphBatchMemOpNodeGetParams",
         arg_idx,
@@ -14951,7 +13173,7 @@ pub fn write_cuGraphBatchMemOpNodeGetParams(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &nodeParams_out,
         "cuGraphBatchMemOpNodeGetParams",
         arg_idx,
@@ -14967,7 +13189,7 @@ pub fn write_cuGraphBatchMemOpNodeSetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hNode,
         "cuGraphBatchMemOpNodeSetParams",
         arg_idx,
@@ -14976,7 +13198,7 @@ pub fn write_cuGraphBatchMemOpNodeSetParams(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &nodeParams,
         "cuGraphBatchMemOpNodeSetParams",
         arg_idx,
@@ -14993,7 +13215,7 @@ pub fn write_cuGraphExecBatchMemOpNodeSetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraphExec), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hGraphExec,
         "cuGraphExecBatchMemOpNodeSetParams",
         arg_idx,
@@ -15002,7 +13224,7 @@ pub fn write_cuGraphExecBatchMemOpNodeSetParams(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hNode,
         "cuGraphExecBatchMemOpNodeSetParams",
         arg_idx,
@@ -15011,7 +13233,7 @@ pub fn write_cuGraphExecBatchMemOpNodeSetParams(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &nodeParams,
         "cuGraphExecBatchMemOpNodeSetParams",
         arg_idx,
@@ -15030,34 +13252,19 @@ pub fn write_cuGraphAddMemAllocNode(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phGraphNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &phGraphNode,
-        "cuGraphAddMemAllocNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&phGraphNode, "cuGraphAddMemAllocNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hGraph,
-        "cuGraphAddMemAllocNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphAddMemAllocNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dependencies,
-        "cuGraphAddMemAllocNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dependencies, "cuGraphAddMemAllocNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies,
         "cuGraphAddMemAllocNode",
         arg_idx,
@@ -15066,12 +13273,7 @@ pub fn write_cuGraphAddMemAllocNode(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &nodeParams,
-        "cuGraphAddMemAllocNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&nodeParams, "cuGraphAddMemAllocNode", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphMemAllocNodeGetParams(
@@ -15082,16 +13284,11 @@ pub fn write_cuGraphMemAllocNodeGetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hNode,
-        "cuGraphMemAllocNodeGetParams",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hNode, "cuGraphMemAllocNodeGetParams", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(params_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &params_out,
         "cuGraphMemAllocNodeGetParams",
         arg_idx,
@@ -15110,34 +13307,19 @@ pub fn write_cuGraphAddMemFreeNode(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phGraphNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &phGraphNode,
-        "cuGraphAddMemFreeNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&phGraphNode, "cuGraphAddMemFreeNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hGraph,
-        "cuGraphAddMemFreeNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphAddMemFreeNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dependencies,
-        "cuGraphAddMemFreeNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dependencies, "cuGraphAddMemFreeNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies,
         "cuGraphAddMemFreeNode",
         arg_idx,
@@ -15146,7 +13328,7 @@ pub fn write_cuGraphAddMemFreeNode(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dptr, "cuGraphAddMemFreeNode", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dptr, "cuGraphAddMemFreeNode", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphMemFreeNodeGetParams(
@@ -15157,16 +13339,11 @@ pub fn write_cuGraphMemFreeNodeGetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hNode,
-        "cuGraphMemFreeNodeGetParams",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hNode, "cuGraphMemFreeNodeGetParams", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dptr_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dptr_out,
         "cuGraphMemFreeNodeGetParams",
         arg_idx,
@@ -15181,7 +13358,7 @@ pub fn write_cuDeviceGraphMemTrim(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&device, "cuDeviceGraphMemTrim", arg_idx, writer)?;
+    crate::CudaDisplay::write(&device, "cuDeviceGraphMemTrim", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDeviceGetGraphMemAttribute(
@@ -15193,30 +13370,15 @@ pub fn write_cuDeviceGetGraphMemAttribute(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &device,
-        "cuDeviceGetGraphMemAttribute",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&device, "cuDeviceGetGraphMemAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(attr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &attr,
-        "cuDeviceGetGraphMemAttribute",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&attr, "cuDeviceGetGraphMemAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &value,
-        "cuDeviceGetGraphMemAttribute",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&value, "cuDeviceGetGraphMemAttribute", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDeviceSetGraphMemAttribute(
@@ -15228,30 +13390,15 @@ pub fn write_cuDeviceSetGraphMemAttribute(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &device,
-        "cuDeviceSetGraphMemAttribute",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&device, "cuDeviceSetGraphMemAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(attr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &attr,
-        "cuDeviceSetGraphMemAttribute",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&attr, "cuDeviceSetGraphMemAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &value,
-        "cuDeviceSetGraphMemAttribute",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&value, "cuDeviceSetGraphMemAttribute", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphClone(
@@ -15262,11 +13409,11 @@ pub fn write_cuGraphClone(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phGraphClone), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&phGraphClone, "cuGraphClone", arg_idx, writer)?;
+    crate::CudaDisplay::write(&phGraphClone, "cuGraphClone", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(originalGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&originalGraph, "cuGraphClone", arg_idx, writer)?;
+    crate::CudaDisplay::write(&originalGraph, "cuGraphClone", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphNodeFindInClone(
@@ -15278,16 +13425,11 @@ pub fn write_cuGraphNodeFindInClone(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &phNode,
-        "cuGraphNodeFindInClone",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&phNode, "cuGraphNodeFindInClone", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hOriginalNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hOriginalNode,
         "cuGraphNodeFindInClone",
         arg_idx,
@@ -15296,12 +13438,7 @@ pub fn write_cuGraphNodeFindInClone(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hClonedGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hClonedGraph,
-        "cuGraphNodeFindInClone",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hClonedGraph, "cuGraphNodeFindInClone", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphNodeGetType(
@@ -15312,11 +13449,11 @@ pub fn write_cuGraphNodeGetType(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hNode, "cuGraphNodeGetType", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hNode, "cuGraphNodeGetType", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(type_), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&type_, "cuGraphNodeGetType", arg_idx, writer)?;
+    crate::CudaDisplay::write(&type_, "cuGraphNodeGetType", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphGetNodes(
@@ -15328,15 +13465,15 @@ pub fn write_cuGraphGetNodes(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hGraph, "cuGraphGetNodes", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphGetNodes", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&nodes, "cuGraphGetNodes", arg_idx, writer)?;
+    crate::CudaDisplay::write(&nodes, "cuGraphGetNodes", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numNodes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&numNodes, "cuGraphGetNodes", arg_idx, writer)?;
+    crate::CudaDisplay::write(&numNodes, "cuGraphGetNodes", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphGetRootNodes(
@@ -15348,25 +13485,15 @@ pub fn write_cuGraphGetRootNodes(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hGraph, "cuGraphGetRootNodes", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphGetRootNodes", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(rootNodes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &rootNodes,
-        "cuGraphGetRootNodes",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&rootNodes, "cuGraphGetRootNodes", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numRootNodes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &numRootNodes,
-        "cuGraphGetRootNodes",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&numRootNodes, "cuGraphGetRootNodes", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphGetEdges(
@@ -15379,19 +13506,19 @@ pub fn write_cuGraphGetEdges(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hGraph, "cuGraphGetEdges", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphGetEdges", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(from), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&from, "cuGraphGetEdges", arg_idx, writer)?;
+    crate::CudaDisplay::write(&from, "cuGraphGetEdges", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(to), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&to, "cuGraphGetEdges", arg_idx, writer)?;
+    crate::CudaDisplay::write(&to, "cuGraphGetEdges", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numEdges), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&numEdges, "cuGraphGetEdges", arg_idx, writer)?;
+    crate::CudaDisplay::write(&numEdges, "cuGraphGetEdges", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphGetEdges_v2(
@@ -15405,23 +13532,23 @@ pub fn write_cuGraphGetEdges_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hGraph, "cuGraphGetEdges_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphGetEdges_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(from), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&from, "cuGraphGetEdges_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&from, "cuGraphGetEdges_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(to), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&to, "cuGraphGetEdges_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&to, "cuGraphGetEdges_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(edgeData), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&edgeData, "cuGraphGetEdges_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&edgeData, "cuGraphGetEdges_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numEdges), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&numEdges, "cuGraphGetEdges_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&numEdges, "cuGraphGetEdges_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphNodeGetDependencies(
@@ -15433,16 +13560,11 @@ pub fn write_cuGraphNodeGetDependencies(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hNode,
-        "cuGraphNodeGetDependencies",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hNode, "cuGraphNodeGetDependencies", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dependencies,
         "cuGraphNodeGetDependencies",
         arg_idx,
@@ -15451,7 +13573,7 @@ pub fn write_cuGraphNodeGetDependencies(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies,
         "cuGraphNodeGetDependencies",
         arg_idx,
@@ -15469,16 +13591,11 @@ pub fn write_cuGraphNodeGetDependencies_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hNode,
-        "cuGraphNodeGetDependencies_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hNode, "cuGraphNodeGetDependencies_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dependencies,
         "cuGraphNodeGetDependencies_v2",
         arg_idx,
@@ -15487,7 +13604,7 @@ pub fn write_cuGraphNodeGetDependencies_v2(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(edgeData), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &edgeData,
         "cuGraphNodeGetDependencies_v2",
         arg_idx,
@@ -15496,7 +13613,7 @@ pub fn write_cuGraphNodeGetDependencies_v2(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies,
         "cuGraphNodeGetDependencies_v2",
         arg_idx,
@@ -15513,16 +13630,11 @@ pub fn write_cuGraphNodeGetDependentNodes(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hNode,
-        "cuGraphNodeGetDependentNodes",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hNode, "cuGraphNodeGetDependentNodes", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependentNodes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dependentNodes,
         "cuGraphNodeGetDependentNodes",
         arg_idx,
@@ -15531,7 +13643,7 @@ pub fn write_cuGraphNodeGetDependentNodes(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependentNodes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependentNodes,
         "cuGraphNodeGetDependentNodes",
         arg_idx,
@@ -15549,7 +13661,7 @@ pub fn write_cuGraphNodeGetDependentNodes_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hNode,
         "cuGraphNodeGetDependentNodes_v2",
         arg_idx,
@@ -15558,7 +13670,7 @@ pub fn write_cuGraphNodeGetDependentNodes_v2(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependentNodes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dependentNodes,
         "cuGraphNodeGetDependentNodes_v2",
         arg_idx,
@@ -15567,7 +13679,7 @@ pub fn write_cuGraphNodeGetDependentNodes_v2(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(edgeData), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &edgeData,
         "cuGraphNodeGetDependentNodes_v2",
         arg_idx,
@@ -15576,7 +13688,7 @@ pub fn write_cuGraphNodeGetDependentNodes_v2(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependentNodes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependentNodes,
         "cuGraphNodeGetDependentNodes_v2",
         arg_idx,
@@ -15594,24 +13706,19 @@ pub fn write_cuGraphAddDependencies(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hGraph,
-        "cuGraphAddDependencies",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphAddDependencies", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(from), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&from, "cuGraphAddDependencies", arg_idx, writer)?;
+    crate::CudaDisplay::write(&from, "cuGraphAddDependencies", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(to), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&to, "cuGraphAddDependencies", arg_idx, writer)?;
+    crate::CudaDisplay::write(&to, "cuGraphAddDependencies", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies,
         "cuGraphAddDependencies",
         arg_idx,
@@ -15630,43 +13737,23 @@ pub fn write_cuGraphAddDependencies_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hGraph,
-        "cuGraphAddDependencies_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphAddDependencies_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(from), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &from,
-        "cuGraphAddDependencies_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&from, "cuGraphAddDependencies_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(to), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &to,
-        "cuGraphAddDependencies_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&to, "cuGraphAddDependencies_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(edgeData), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &edgeData,
-        "cuGraphAddDependencies_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&edgeData, "cuGraphAddDependencies_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies,
         "cuGraphAddDependencies_v2",
         arg_idx,
@@ -15684,34 +13771,19 @@ pub fn write_cuGraphRemoveDependencies(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hGraph,
-        "cuGraphRemoveDependencies",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphRemoveDependencies", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(from), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &from,
-        "cuGraphRemoveDependencies",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&from, "cuGraphRemoveDependencies", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(to), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &to,
-        "cuGraphRemoveDependencies",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&to, "cuGraphRemoveDependencies", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies,
         "cuGraphRemoveDependencies",
         arg_idx,
@@ -15730,34 +13802,19 @@ pub fn write_cuGraphRemoveDependencies_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hGraph,
-        "cuGraphRemoveDependencies_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphRemoveDependencies_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(from), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &from,
-        "cuGraphRemoveDependencies_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&from, "cuGraphRemoveDependencies_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(to), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &to,
-        "cuGraphRemoveDependencies_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&to, "cuGraphRemoveDependencies_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(edgeData), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &edgeData,
         "cuGraphRemoveDependencies_v2",
         arg_idx,
@@ -15766,7 +13823,7 @@ pub fn write_cuGraphRemoveDependencies_v2(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies,
         "cuGraphRemoveDependencies_v2",
         arg_idx,
@@ -15781,7 +13838,7 @@ pub fn write_cuGraphDestroyNode(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hNode, "cuGraphDestroyNode", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hNode, "cuGraphDestroyNode", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphInstantiateWithFlags(
@@ -15793,7 +13850,7 @@ pub fn write_cuGraphInstantiateWithFlags(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phGraphExec), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &phGraphExec,
         "cuGraphInstantiateWithFlags",
         arg_idx,
@@ -15802,21 +13859,11 @@ pub fn write_cuGraphInstantiateWithFlags(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hGraph,
-        "cuGraphInstantiateWithFlags",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphInstantiateWithFlags", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuGraphInstantiateWithFlags",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuGraphInstantiateWithFlags", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphInstantiateWithParams_ptsz(
@@ -15828,7 +13875,7 @@ pub fn write_cuGraphInstantiateWithParams_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phGraphExec), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &phGraphExec,
         "cuGraphInstantiateWithParams_ptsz",
         arg_idx,
@@ -15837,7 +13884,7 @@ pub fn write_cuGraphInstantiateWithParams_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hGraph,
         "cuGraphInstantiateWithParams_ptsz",
         arg_idx,
@@ -15846,7 +13893,7 @@ pub fn write_cuGraphInstantiateWithParams_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(instantiateParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &instantiateParams,
         "cuGraphInstantiateWithParams_ptsz",
         arg_idx,
@@ -15862,16 +13909,11 @@ pub fn write_cuGraphExecGetFlags(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraphExec), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hGraphExec,
-        "cuGraphExecGetFlags",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hGraphExec, "cuGraphExecGetFlags", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuGraphExecGetFlags", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuGraphExecGetFlags", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphExecKernelNodeSetParams_v2(
@@ -15883,7 +13925,7 @@ pub fn write_cuGraphExecKernelNodeSetParams_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraphExec), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hGraphExec,
         "cuGraphExecKernelNodeSetParams_v2",
         arg_idx,
@@ -15892,7 +13934,7 @@ pub fn write_cuGraphExecKernelNodeSetParams_v2(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hNode,
         "cuGraphExecKernelNodeSetParams_v2",
         arg_idx,
@@ -15901,7 +13943,7 @@ pub fn write_cuGraphExecKernelNodeSetParams_v2(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &nodeParams,
         "cuGraphExecKernelNodeSetParams_v2",
         arg_idx,
@@ -15919,7 +13961,7 @@ pub fn write_cuGraphExecMemcpyNodeSetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraphExec), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hGraphExec,
         "cuGraphExecMemcpyNodeSetParams",
         arg_idx,
@@ -15928,7 +13970,7 @@ pub fn write_cuGraphExecMemcpyNodeSetParams(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hNode,
         "cuGraphExecMemcpyNodeSetParams",
         arg_idx,
@@ -15937,7 +13979,7 @@ pub fn write_cuGraphExecMemcpyNodeSetParams(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(copyParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &copyParams,
         "cuGraphExecMemcpyNodeSetParams",
         arg_idx,
@@ -15946,12 +13988,7 @@ pub fn write_cuGraphExecMemcpyNodeSetParams(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ctx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ctx,
-        "cuGraphExecMemcpyNodeSetParams",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ctx, "cuGraphExecMemcpyNodeSetParams", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphExecMemsetNodeSetParams(
@@ -15964,7 +14001,7 @@ pub fn write_cuGraphExecMemsetNodeSetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraphExec), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hGraphExec,
         "cuGraphExecMemsetNodeSetParams",
         arg_idx,
@@ -15973,7 +14010,7 @@ pub fn write_cuGraphExecMemsetNodeSetParams(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hNode,
         "cuGraphExecMemsetNodeSetParams",
         arg_idx,
@@ -15982,7 +14019,7 @@ pub fn write_cuGraphExecMemsetNodeSetParams(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(memsetParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &memsetParams,
         "cuGraphExecMemsetNodeSetParams",
         arg_idx,
@@ -15991,12 +14028,7 @@ pub fn write_cuGraphExecMemsetNodeSetParams(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ctx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ctx,
-        "cuGraphExecMemsetNodeSetParams",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ctx, "cuGraphExecMemsetNodeSetParams", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphExecHostNodeSetParams(
@@ -16008,7 +14040,7 @@ pub fn write_cuGraphExecHostNodeSetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraphExec), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hGraphExec,
         "cuGraphExecHostNodeSetParams",
         arg_idx,
@@ -16017,16 +14049,11 @@ pub fn write_cuGraphExecHostNodeSetParams(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hNode,
-        "cuGraphExecHostNodeSetParams",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hNode, "cuGraphExecHostNodeSetParams", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &nodeParams,
         "cuGraphExecHostNodeSetParams",
         arg_idx,
@@ -16043,7 +14070,7 @@ pub fn write_cuGraphExecChildGraphNodeSetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraphExec), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hGraphExec,
         "cuGraphExecChildGraphNodeSetParams",
         arg_idx,
@@ -16052,7 +14079,7 @@ pub fn write_cuGraphExecChildGraphNodeSetParams(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hNode,
         "cuGraphExecChildGraphNodeSetParams",
         arg_idx,
@@ -16061,7 +14088,7 @@ pub fn write_cuGraphExecChildGraphNodeSetParams(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(childGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &childGraph,
         "cuGraphExecChildGraphNodeSetParams",
         arg_idx,
@@ -16078,7 +14105,7 @@ pub fn write_cuGraphExecEventRecordNodeSetEvent(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraphExec), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hGraphExec,
         "cuGraphExecEventRecordNodeSetEvent",
         arg_idx,
@@ -16087,7 +14114,7 @@ pub fn write_cuGraphExecEventRecordNodeSetEvent(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hNode,
         "cuGraphExecEventRecordNodeSetEvent",
         arg_idx,
@@ -16096,7 +14123,7 @@ pub fn write_cuGraphExecEventRecordNodeSetEvent(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(event), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &event,
         "cuGraphExecEventRecordNodeSetEvent",
         arg_idx,
@@ -16113,7 +14140,7 @@ pub fn write_cuGraphExecEventWaitNodeSetEvent(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraphExec), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hGraphExec,
         "cuGraphExecEventWaitNodeSetEvent",
         arg_idx,
@@ -16122,7 +14149,7 @@ pub fn write_cuGraphExecEventWaitNodeSetEvent(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hNode,
         "cuGraphExecEventWaitNodeSetEvent",
         arg_idx,
@@ -16131,7 +14158,7 @@ pub fn write_cuGraphExecEventWaitNodeSetEvent(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(event), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &event,
         "cuGraphExecEventWaitNodeSetEvent",
         arg_idx,
@@ -16148,7 +14175,7 @@ pub fn write_cuGraphExecExternalSemaphoresSignalNodeSetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraphExec), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hGraphExec,
         "cuGraphExecExternalSemaphoresSignalNodeSetParams",
         arg_idx,
@@ -16157,7 +14184,7 @@ pub fn write_cuGraphExecExternalSemaphoresSignalNodeSetParams(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hNode,
         "cuGraphExecExternalSemaphoresSignalNodeSetParams",
         arg_idx,
@@ -16166,7 +14193,7 @@ pub fn write_cuGraphExecExternalSemaphoresSignalNodeSetParams(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &nodeParams,
         "cuGraphExecExternalSemaphoresSignalNodeSetParams",
         arg_idx,
@@ -16183,7 +14210,7 @@ pub fn write_cuGraphExecExternalSemaphoresWaitNodeSetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraphExec), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hGraphExec,
         "cuGraphExecExternalSemaphoresWaitNodeSetParams",
         arg_idx,
@@ -16192,7 +14219,7 @@ pub fn write_cuGraphExecExternalSemaphoresWaitNodeSetParams(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hNode,
         "cuGraphExecExternalSemaphoresWaitNodeSetParams",
         arg_idx,
@@ -16201,7 +14228,7 @@ pub fn write_cuGraphExecExternalSemaphoresWaitNodeSetParams(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &nodeParams,
         "cuGraphExecExternalSemaphoresWaitNodeSetParams",
         arg_idx,
@@ -16218,25 +14245,15 @@ pub fn write_cuGraphNodeSetEnabled(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraphExec), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hGraphExec,
-        "cuGraphNodeSetEnabled",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hGraphExec, "cuGraphNodeSetEnabled", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hNode, "cuGraphNodeSetEnabled", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hNode, "cuGraphNodeSetEnabled", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(isEnabled), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &isEnabled,
-        "cuGraphNodeSetEnabled",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&isEnabled, "cuGraphNodeSetEnabled", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphNodeGetEnabled(
@@ -16248,25 +14265,15 @@ pub fn write_cuGraphNodeGetEnabled(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraphExec), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hGraphExec,
-        "cuGraphNodeGetEnabled",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hGraphExec, "cuGraphNodeGetEnabled", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hNode, "cuGraphNodeGetEnabled", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hNode, "cuGraphNodeGetEnabled", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(isEnabled), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &isEnabled,
-        "cuGraphNodeGetEnabled",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&isEnabled, "cuGraphNodeGetEnabled", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphUpload_ptsz(
@@ -16277,16 +14284,11 @@ pub fn write_cuGraphUpload_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraphExec), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hGraphExec,
-        "cuGraphUpload_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hGraphExec, "cuGraphUpload_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuGraphUpload_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuGraphUpload_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphLaunch_ptsz(
@@ -16297,16 +14299,11 @@ pub fn write_cuGraphLaunch_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraphExec), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hGraphExec,
-        "cuGraphLaunch_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hGraphExec, "cuGraphLaunch_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuGraphLaunch_ptsz", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuGraphLaunch_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphExecDestroy(
@@ -16316,12 +14313,7 @@ pub fn write_cuGraphExecDestroy(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraphExec), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hGraphExec,
-        "cuGraphExecDestroy",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hGraphExec, "cuGraphExecDestroy", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphDestroy(
@@ -16331,7 +14323,7 @@ pub fn write_cuGraphDestroy(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hGraph, "cuGraphDestroy", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphDestroy", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphExecUpdate_v2(
@@ -16343,25 +14335,15 @@ pub fn write_cuGraphExecUpdate_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraphExec), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hGraphExec,
-        "cuGraphExecUpdate_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hGraphExec, "cuGraphExecUpdate_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hGraph, "cuGraphExecUpdate_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphExecUpdate_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(resultInfo), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &resultInfo,
-        "cuGraphExecUpdate_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&resultInfo, "cuGraphExecUpdate_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphKernelNodeCopyAttributes(
@@ -16372,21 +14354,11 @@ pub fn write_cuGraphKernelNodeCopyAttributes(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dst), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dst,
-        "cuGraphKernelNodeCopyAttributes",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dst, "cuGraphKernelNodeCopyAttributes", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(src), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &src,
-        "cuGraphKernelNodeCopyAttributes",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&src, "cuGraphKernelNodeCopyAttributes", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphDebugDotPrint(
@@ -16398,15 +14370,15 @@ pub fn write_cuGraphDebugDotPrint(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hGraph, "cuGraphDebugDotPrint", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphDebugDotPrint", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(path), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&path, "cuGraphDebugDotPrint", arg_idx, writer)?;
+    crate::CudaDisplay::write(&path, "cuGraphDebugDotPrint", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuGraphDebugDotPrint", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuGraphDebugDotPrint", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuUserObjectCreate(
@@ -16420,33 +14392,23 @@ pub fn write_cuUserObjectCreate(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(object_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &object_out,
-        "cuUserObjectCreate",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&object_out, "cuUserObjectCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ptr, "cuUserObjectCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ptr, "cuUserObjectCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(destroy), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&destroy, "cuUserObjectCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&destroy, "cuUserObjectCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(initialRefcount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &initialRefcount,
-        "cuUserObjectCreate",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&initialRefcount, "cuUserObjectCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuUserObjectCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuUserObjectCreate", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuUserObjectRetain(
@@ -16457,11 +14419,11 @@ pub fn write_cuUserObjectRetain(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(object), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&object, "cuUserObjectRetain", arg_idx, writer)?;
+    crate::CudaDisplay::write(&object, "cuUserObjectRetain", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&count, "cuUserObjectRetain", arg_idx, writer)?;
+    crate::CudaDisplay::write(&count, "cuUserObjectRetain", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuUserObjectRelease(
@@ -16472,11 +14434,11 @@ pub fn write_cuUserObjectRelease(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(object), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&object, "cuUserObjectRelease", arg_idx, writer)?;
+    crate::CudaDisplay::write(&object, "cuUserObjectRelease", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&count, "cuUserObjectRelease", arg_idx, writer)?;
+    crate::CudaDisplay::write(&count, "cuUserObjectRelease", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphRetainUserObject(
@@ -16489,39 +14451,19 @@ pub fn write_cuGraphRetainUserObject(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(graph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &graph,
-        "cuGraphRetainUserObject",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&graph, "cuGraphRetainUserObject", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(object), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &object,
-        "cuGraphRetainUserObject",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&object, "cuGraphRetainUserObject", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &count,
-        "cuGraphRetainUserObject",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&count, "cuGraphRetainUserObject", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuGraphRetainUserObject",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuGraphRetainUserObject", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphReleaseUserObject(
@@ -16533,30 +14475,15 @@ pub fn write_cuGraphReleaseUserObject(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(graph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &graph,
-        "cuGraphReleaseUserObject",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&graph, "cuGraphReleaseUserObject", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(object), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &object,
-        "cuGraphReleaseUserObject",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&object, "cuGraphReleaseUserObject", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &count,
-        "cuGraphReleaseUserObject",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&count, "cuGraphReleaseUserObject", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphAddNode(
@@ -16570,28 +14497,23 @@ pub fn write_cuGraphAddNode(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phGraphNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&phGraphNode, "cuGraphAddNode", arg_idx, writer)?;
+    crate::CudaDisplay::write(&phGraphNode, "cuGraphAddNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hGraph, "cuGraphAddNode", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphAddNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dependencies, "cuGraphAddNode", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dependencies, "cuGraphAddNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &numDependencies,
-        "cuGraphAddNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&numDependencies, "cuGraphAddNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&nodeParams, "cuGraphAddNode", arg_idx, writer)?;
+    crate::CudaDisplay::write(&nodeParams, "cuGraphAddNode", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphAddNode_v2(
@@ -16606,52 +14528,27 @@ pub fn write_cuGraphAddNode_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phGraphNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &phGraphNode,
-        "cuGraphAddNode_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&phGraphNode, "cuGraphAddNode_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hGraph, "cuGraphAddNode_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphAddNode_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dependencies,
-        "cuGraphAddNode_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dependencies, "cuGraphAddNode_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencyData), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dependencyData,
-        "cuGraphAddNode_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dependencyData, "cuGraphAddNode_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &numDependencies,
-        "cuGraphAddNode_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&numDependencies, "cuGraphAddNode_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &nodeParams,
-        "cuGraphAddNode_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&nodeParams, "cuGraphAddNode_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphNodeSetParams(
@@ -16662,16 +14559,11 @@ pub fn write_cuGraphNodeSetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hNode, "cuGraphNodeSetParams", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hNode, "cuGraphNodeSetParams", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &nodeParams,
-        "cuGraphNodeSetParams",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&nodeParams, "cuGraphNodeSetParams", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphExecNodeSetParams(
@@ -16683,30 +14575,15 @@ pub fn write_cuGraphExecNodeSetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraphExec), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hGraphExec,
-        "cuGraphExecNodeSetParams",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hGraphExec, "cuGraphExecNodeSetParams", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hNode,
-        "cuGraphExecNodeSetParams",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hNode, "cuGraphExecNodeSetParams", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &nodeParams,
-        "cuGraphExecNodeSetParams",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&nodeParams, "cuGraphExecNodeSetParams", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphConditionalHandleCreate(
@@ -16720,7 +14597,7 @@ pub fn write_cuGraphConditionalHandleCreate(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pHandle_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pHandle_out,
         "cuGraphConditionalHandleCreate",
         arg_idx,
@@ -16729,7 +14606,7 @@ pub fn write_cuGraphConditionalHandleCreate(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hGraph,
         "cuGraphConditionalHandleCreate",
         arg_idx,
@@ -16738,16 +14615,11 @@ pub fn write_cuGraphConditionalHandleCreate(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ctx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ctx,
-        "cuGraphConditionalHandleCreate",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ctx, "cuGraphConditionalHandleCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(defaultLaunchValue), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &defaultLaunchValue,
         "cuGraphConditionalHandleCreate",
         arg_idx,
@@ -16756,7 +14628,7 @@ pub fn write_cuGraphConditionalHandleCreate(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &flags,
         "cuGraphConditionalHandleCreate",
         arg_idx,
@@ -16774,7 +14646,7 @@ pub fn write_cuOccupancyMaxActiveBlocksPerMultiprocessor(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(numBlocks), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numBlocks,
         "cuOccupancyMaxActiveBlocksPerMultiprocessor",
         arg_idx,
@@ -16783,7 +14655,7 @@ pub fn write_cuOccupancyMaxActiveBlocksPerMultiprocessor(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(func), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &func,
         "cuOccupancyMaxActiveBlocksPerMultiprocessor",
         arg_idx,
@@ -16792,7 +14664,7 @@ pub fn write_cuOccupancyMaxActiveBlocksPerMultiprocessor(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(blockSize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &blockSize,
         "cuOccupancyMaxActiveBlocksPerMultiprocessor",
         arg_idx,
@@ -16801,7 +14673,7 @@ pub fn write_cuOccupancyMaxActiveBlocksPerMultiprocessor(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dynamicSMemSize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dynamicSMemSize,
         "cuOccupancyMaxActiveBlocksPerMultiprocessor",
         arg_idx,
@@ -16820,7 +14692,7 @@ pub fn write_cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(numBlocks), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numBlocks,
         "cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags",
         arg_idx,
@@ -16829,7 +14701,7 @@ pub fn write_cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(func), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &func,
         "cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags",
         arg_idx,
@@ -16838,7 +14710,7 @@ pub fn write_cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(blockSize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &blockSize,
         "cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags",
         arg_idx,
@@ -16847,7 +14719,7 @@ pub fn write_cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dynamicSMemSize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dynamicSMemSize,
         "cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags",
         arg_idx,
@@ -16856,7 +14728,7 @@ pub fn write_cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &flags,
         "cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags",
         arg_idx,
@@ -16876,7 +14748,7 @@ pub fn write_cuOccupancyMaxPotentialBlockSize(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(minGridSize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &minGridSize,
         "cuOccupancyMaxPotentialBlockSize",
         arg_idx,
@@ -16885,7 +14757,7 @@ pub fn write_cuOccupancyMaxPotentialBlockSize(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(blockSize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &blockSize,
         "cuOccupancyMaxPotentialBlockSize",
         arg_idx,
@@ -16894,7 +14766,7 @@ pub fn write_cuOccupancyMaxPotentialBlockSize(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(func), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &func,
         "cuOccupancyMaxPotentialBlockSize",
         arg_idx,
@@ -16903,7 +14775,7 @@ pub fn write_cuOccupancyMaxPotentialBlockSize(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(blockSizeToDynamicSMemSize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &blockSizeToDynamicSMemSize,
         "cuOccupancyMaxPotentialBlockSize",
         arg_idx,
@@ -16912,7 +14784,7 @@ pub fn write_cuOccupancyMaxPotentialBlockSize(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dynamicSMemSize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dynamicSMemSize,
         "cuOccupancyMaxPotentialBlockSize",
         arg_idx,
@@ -16921,7 +14793,7 @@ pub fn write_cuOccupancyMaxPotentialBlockSize(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(blockSizeLimit), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &blockSizeLimit,
         "cuOccupancyMaxPotentialBlockSize",
         arg_idx,
@@ -16942,7 +14814,7 @@ pub fn write_cuOccupancyMaxPotentialBlockSizeWithFlags(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(minGridSize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &minGridSize,
         "cuOccupancyMaxPotentialBlockSizeWithFlags",
         arg_idx,
@@ -16951,7 +14823,7 @@ pub fn write_cuOccupancyMaxPotentialBlockSizeWithFlags(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(blockSize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &blockSize,
         "cuOccupancyMaxPotentialBlockSizeWithFlags",
         arg_idx,
@@ -16960,7 +14832,7 @@ pub fn write_cuOccupancyMaxPotentialBlockSizeWithFlags(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(func), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &func,
         "cuOccupancyMaxPotentialBlockSizeWithFlags",
         arg_idx,
@@ -16969,7 +14841,7 @@ pub fn write_cuOccupancyMaxPotentialBlockSizeWithFlags(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(blockSizeToDynamicSMemSize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &blockSizeToDynamicSMemSize,
         "cuOccupancyMaxPotentialBlockSizeWithFlags",
         arg_idx,
@@ -16978,7 +14850,7 @@ pub fn write_cuOccupancyMaxPotentialBlockSizeWithFlags(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dynamicSMemSize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dynamicSMemSize,
         "cuOccupancyMaxPotentialBlockSizeWithFlags",
         arg_idx,
@@ -16987,7 +14859,7 @@ pub fn write_cuOccupancyMaxPotentialBlockSizeWithFlags(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(blockSizeLimit), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &blockSizeLimit,
         "cuOccupancyMaxPotentialBlockSizeWithFlags",
         arg_idx,
@@ -16996,7 +14868,7 @@ pub fn write_cuOccupancyMaxPotentialBlockSizeWithFlags(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &flags,
         "cuOccupancyMaxPotentialBlockSizeWithFlags",
         arg_idx,
@@ -17014,7 +14886,7 @@ pub fn write_cuOccupancyAvailableDynamicSMemPerBlock(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dynamicSmemSize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dynamicSmemSize,
         "cuOccupancyAvailableDynamicSMemPerBlock",
         arg_idx,
@@ -17023,7 +14895,7 @@ pub fn write_cuOccupancyAvailableDynamicSMemPerBlock(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(func), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &func,
         "cuOccupancyAvailableDynamicSMemPerBlock",
         arg_idx,
@@ -17032,7 +14904,7 @@ pub fn write_cuOccupancyAvailableDynamicSMemPerBlock(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numBlocks), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numBlocks,
         "cuOccupancyAvailableDynamicSMemPerBlock",
         arg_idx,
@@ -17041,7 +14913,7 @@ pub fn write_cuOccupancyAvailableDynamicSMemPerBlock(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(blockSize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &blockSize,
         "cuOccupancyAvailableDynamicSMemPerBlock",
         arg_idx,
@@ -17058,7 +14930,7 @@ pub fn write_cuOccupancyMaxPotentialClusterSize(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(clusterSize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &clusterSize,
         "cuOccupancyMaxPotentialClusterSize",
         arg_idx,
@@ -17067,7 +14939,7 @@ pub fn write_cuOccupancyMaxPotentialClusterSize(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(func), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &func,
         "cuOccupancyMaxPotentialClusterSize",
         arg_idx,
@@ -17076,7 +14948,7 @@ pub fn write_cuOccupancyMaxPotentialClusterSize(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(config), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &config,
         "cuOccupancyMaxPotentialClusterSize",
         arg_idx,
@@ -17093,7 +14965,7 @@ pub fn write_cuOccupancyMaxActiveClusters(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(numClusters), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numClusters,
         "cuOccupancyMaxActiveClusters",
         arg_idx,
@@ -17102,21 +14974,11 @@ pub fn write_cuOccupancyMaxActiveClusters(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(func), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &func,
-        "cuOccupancyMaxActiveClusters",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&func, "cuOccupancyMaxActiveClusters", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(config), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &config,
-        "cuOccupancyMaxActiveClusters",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&config, "cuOccupancyMaxActiveClusters", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefSetArray(
@@ -17128,15 +14990,15 @@ pub fn write_cuTexRefSetArray(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hTexRef, "cuTexRefSetArray", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefSetArray", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hArray, "cuTexRefSetArray", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hArray, "cuTexRefSetArray", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Flags, "cuTexRefSetArray", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Flags, "cuTexRefSetArray", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefSetMipmappedArray(
@@ -17148,16 +15010,11 @@ pub fn write_cuTexRefSetMipmappedArray(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hTexRef,
-        "cuTexRefSetMipmappedArray",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefSetMipmappedArray", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hMipmappedArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hMipmappedArray,
         "cuTexRefSetMipmappedArray",
         arg_idx,
@@ -17166,12 +15023,7 @@ pub fn write_cuTexRefSetMipmappedArray(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &Flags,
-        "cuTexRefSetMipmappedArray",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&Flags, "cuTexRefSetMipmappedArray", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefSetAddress_v2(
@@ -17184,29 +15036,19 @@ pub fn write_cuTexRefSetAddress_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(ByteOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ByteOffset,
-        "cuTexRefSetAddress_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ByteOffset, "cuTexRefSetAddress_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hTexRef,
-        "cuTexRefSetAddress_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefSetAddress_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dptr, "cuTexRefSetAddress_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dptr, "cuTexRefSetAddress_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(bytes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&bytes, "cuTexRefSetAddress_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&bytes, "cuTexRefSetAddress_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefSetAddress2D_v3(
@@ -17219,39 +15061,19 @@ pub fn write_cuTexRefSetAddress2D_v3(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hTexRef,
-        "cuTexRefSetAddress2D_v3",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefSetAddress2D_v3", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(desc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &desc,
-        "cuTexRefSetAddress2D_v3",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&desc, "cuTexRefSetAddress2D_v3", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dptr,
-        "cuTexRefSetAddress2D_v3",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dptr, "cuTexRefSetAddress2D_v3", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Pitch), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &Pitch,
-        "cuTexRefSetAddress2D_v3",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&Pitch, "cuTexRefSetAddress2D_v3", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefSetFormat(
@@ -17263,15 +15085,15 @@ pub fn write_cuTexRefSetFormat(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hTexRef, "cuTexRefSetFormat", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefSetFormat", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(fmt), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&fmt, "cuTexRefSetFormat", arg_idx, writer)?;
+    crate::CudaDisplay::write(&fmt, "cuTexRefSetFormat", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(NumPackedComponents), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &NumPackedComponents,
         "cuTexRefSetFormat",
         arg_idx,
@@ -17288,20 +15110,15 @@ pub fn write_cuTexRefSetAddressMode(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hTexRef,
-        "cuTexRefSetAddressMode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefSetAddressMode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dim), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dim, "cuTexRefSetAddressMode", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dim, "cuTexRefSetAddressMode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(am), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&am, "cuTexRefSetAddressMode", arg_idx, writer)?;
+    crate::CudaDisplay::write(&am, "cuTexRefSetAddressMode", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefSetFilterMode(
@@ -17312,16 +15129,11 @@ pub fn write_cuTexRefSetFilterMode(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hTexRef,
-        "cuTexRefSetFilterMode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefSetFilterMode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(fm), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&fm, "cuTexRefSetFilterMode", arg_idx, writer)?;
+    crate::CudaDisplay::write(&fm, "cuTexRefSetFilterMode", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefSetMipmapFilterMode(
@@ -17332,21 +15144,11 @@ pub fn write_cuTexRefSetMipmapFilterMode(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hTexRef,
-        "cuTexRefSetMipmapFilterMode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefSetMipmapFilterMode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(fm), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &fm,
-        "cuTexRefSetMipmapFilterMode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&fm, "cuTexRefSetMipmapFilterMode", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefSetMipmapLevelBias(
@@ -17357,21 +15159,11 @@ pub fn write_cuTexRefSetMipmapLevelBias(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hTexRef,
-        "cuTexRefSetMipmapLevelBias",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefSetMipmapLevelBias", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(bias), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &bias,
-        "cuTexRefSetMipmapLevelBias",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&bias, "cuTexRefSetMipmapLevelBias", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefSetMipmapLevelClamp(
@@ -17383,16 +15175,11 @@ pub fn write_cuTexRefSetMipmapLevelClamp(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hTexRef,
-        "cuTexRefSetMipmapLevelClamp",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefSetMipmapLevelClamp", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(minMipmapLevelClamp), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &minMipmapLevelClamp,
         "cuTexRefSetMipmapLevelClamp",
         arg_idx,
@@ -17401,7 +15188,7 @@ pub fn write_cuTexRefSetMipmapLevelClamp(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(maxMipmapLevelClamp), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &maxMipmapLevelClamp,
         "cuTexRefSetMipmapLevelClamp",
         arg_idx,
@@ -17417,21 +15204,11 @@ pub fn write_cuTexRefSetMaxAnisotropy(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hTexRef,
-        "cuTexRefSetMaxAnisotropy",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefSetMaxAnisotropy", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(maxAniso), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &maxAniso,
-        "cuTexRefSetMaxAnisotropy",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&maxAniso, "cuTexRefSetMaxAnisotropy", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefSetBorderColor(
@@ -17442,21 +15219,11 @@ pub fn write_cuTexRefSetBorderColor(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hTexRef,
-        "cuTexRefSetBorderColor",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefSetBorderColor", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pBorderColor), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pBorderColor,
-        "cuTexRefSetBorderColor",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pBorderColor, "cuTexRefSetBorderColor", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefSetFlags(
@@ -17467,11 +15234,11 @@ pub fn write_cuTexRefSetFlags(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hTexRef, "cuTexRefSetFlags", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefSetFlags", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Flags, "cuTexRefSetFlags", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Flags, "cuTexRefSetFlags", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefGetAddress_v2(
@@ -17482,16 +15249,11 @@ pub fn write_cuTexRefGetAddress_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pdptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pdptr, "cuTexRefGetAddress_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pdptr, "cuTexRefGetAddress_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hTexRef,
-        "cuTexRefGetAddress_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefGetAddress_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefGetArray(
@@ -17502,11 +15264,11 @@ pub fn write_cuTexRefGetArray(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&phArray, "cuTexRefGetArray", arg_idx, writer)?;
+    crate::CudaDisplay::write(&phArray, "cuTexRefGetArray", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hTexRef, "cuTexRefGetArray", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefGetArray", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefGetMipmappedArray(
@@ -17517,7 +15279,7 @@ pub fn write_cuTexRefGetMipmappedArray(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phMipmappedArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &phMipmappedArray,
         "cuTexRefGetMipmappedArray",
         arg_idx,
@@ -17526,12 +15288,7 @@ pub fn write_cuTexRefGetMipmappedArray(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hTexRef,
-        "cuTexRefGetMipmappedArray",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefGetMipmappedArray", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefGetAddressMode(
@@ -17543,20 +15300,15 @@ pub fn write_cuTexRefGetAddressMode(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pam), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pam, "cuTexRefGetAddressMode", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pam, "cuTexRefGetAddressMode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hTexRef,
-        "cuTexRefGetAddressMode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefGetAddressMode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dim), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dim, "cuTexRefGetAddressMode", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dim, "cuTexRefGetAddressMode", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefGetFilterMode(
@@ -17567,16 +15319,11 @@ pub fn write_cuTexRefGetFilterMode(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pfm), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pfm, "cuTexRefGetFilterMode", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pfm, "cuTexRefGetFilterMode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hTexRef,
-        "cuTexRefGetFilterMode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefGetFilterMode", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefGetFormat(
@@ -17588,20 +15335,15 @@ pub fn write_cuTexRefGetFormat(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pFormat), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pFormat, "cuTexRefGetFormat", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pFormat, "cuTexRefGetFormat", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pNumChannels), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pNumChannels,
-        "cuTexRefGetFormat",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pNumChannels, "cuTexRefGetFormat", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hTexRef, "cuTexRefGetFormat", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefGetFormat", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefGetMipmapFilterMode(
@@ -17612,21 +15354,11 @@ pub fn write_cuTexRefGetMipmapFilterMode(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pfm), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pfm,
-        "cuTexRefGetMipmapFilterMode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pfm, "cuTexRefGetMipmapFilterMode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hTexRef,
-        "cuTexRefGetMipmapFilterMode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefGetMipmapFilterMode", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefGetMipmapLevelBias(
@@ -17637,21 +15369,11 @@ pub fn write_cuTexRefGetMipmapLevelBias(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pbias), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pbias,
-        "cuTexRefGetMipmapLevelBias",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pbias, "cuTexRefGetMipmapLevelBias", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hTexRef,
-        "cuTexRefGetMipmapLevelBias",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefGetMipmapLevelBias", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefGetMipmapLevelClamp(
@@ -17663,7 +15385,7 @@ pub fn write_cuTexRefGetMipmapLevelClamp(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pminMipmapLevelClamp), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pminMipmapLevelClamp,
         "cuTexRefGetMipmapLevelClamp",
         arg_idx,
@@ -17672,7 +15394,7 @@ pub fn write_cuTexRefGetMipmapLevelClamp(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pmaxMipmapLevelClamp), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pmaxMipmapLevelClamp,
         "cuTexRefGetMipmapLevelClamp",
         arg_idx,
@@ -17681,12 +15403,7 @@ pub fn write_cuTexRefGetMipmapLevelClamp(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hTexRef,
-        "cuTexRefGetMipmapLevelClamp",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefGetMipmapLevelClamp", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefGetMaxAnisotropy(
@@ -17697,21 +15414,11 @@ pub fn write_cuTexRefGetMaxAnisotropy(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pmaxAniso), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pmaxAniso,
-        "cuTexRefGetMaxAnisotropy",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pmaxAniso, "cuTexRefGetMaxAnisotropy", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hTexRef,
-        "cuTexRefGetMaxAnisotropy",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefGetMaxAnisotropy", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefGetBorderColor(
@@ -17722,21 +15429,11 @@ pub fn write_cuTexRefGetBorderColor(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pBorderColor), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pBorderColor,
-        "cuTexRefGetBorderColor",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pBorderColor, "cuTexRefGetBorderColor", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hTexRef,
-        "cuTexRefGetBorderColor",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefGetBorderColor", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefGetFlags(
@@ -17747,11 +15444,11 @@ pub fn write_cuTexRefGetFlags(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pFlags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pFlags, "cuTexRefGetFlags", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pFlags, "cuTexRefGetFlags", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hTexRef, "cuTexRefGetFlags", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefGetFlags", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefCreate(
@@ -17761,7 +15458,7 @@ pub fn write_cuTexRefCreate(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pTexRef, "cuTexRefCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pTexRef, "cuTexRefCreate", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefDestroy(
@@ -17771,7 +15468,7 @@ pub fn write_cuTexRefDestroy(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hTexRef, "cuTexRefDestroy", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefDestroy", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuSurfRefSetArray(
@@ -17783,15 +15480,15 @@ pub fn write_cuSurfRefSetArray(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hSurfRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hSurfRef, "cuSurfRefSetArray", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hSurfRef, "cuSurfRefSetArray", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hArray, "cuSurfRefSetArray", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hArray, "cuSurfRefSetArray", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Flags, "cuSurfRefSetArray", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Flags, "cuSurfRefSetArray", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuSurfRefGetArray(
@@ -17802,11 +15499,11 @@ pub fn write_cuSurfRefGetArray(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&phArray, "cuSurfRefGetArray", arg_idx, writer)?;
+    crate::CudaDisplay::write(&phArray, "cuSurfRefGetArray", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hSurfRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hSurfRef, "cuSurfRefGetArray", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hSurfRef, "cuSurfRefGetArray", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexObjectCreate(
@@ -17819,29 +15516,19 @@ pub fn write_cuTexObjectCreate(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pTexObject), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pTexObject,
-        "cuTexObjectCreate",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pTexObject, "cuTexObjectCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pResDesc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pResDesc, "cuTexObjectCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pResDesc, "cuTexObjectCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pTexDesc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pTexDesc, "cuTexObjectCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pTexDesc, "cuTexObjectCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pResViewDesc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pResViewDesc,
-        "cuTexObjectCreate",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pResViewDesc, "cuTexObjectCreate", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexObjectDestroy(
@@ -17851,12 +15538,7 @@ pub fn write_cuTexObjectDestroy(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(texObject), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &texObject,
-        "cuTexObjectDestroy",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&texObject, "cuTexObjectDestroy", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexObjectGetResourceDesc(
@@ -17867,16 +15549,11 @@ pub fn write_cuTexObjectGetResourceDesc(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pResDesc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pResDesc,
-        "cuTexObjectGetResourceDesc",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pResDesc, "cuTexObjectGetResourceDesc", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(texObject), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &texObject,
         "cuTexObjectGetResourceDesc",
         arg_idx,
@@ -17892,21 +15569,11 @@ pub fn write_cuTexObjectGetTextureDesc(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pTexDesc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pTexDesc,
-        "cuTexObjectGetTextureDesc",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pTexDesc, "cuTexObjectGetTextureDesc", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(texObject), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &texObject,
-        "cuTexObjectGetTextureDesc",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&texObject, "cuTexObjectGetTextureDesc", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexObjectGetResourceViewDesc(
@@ -17917,7 +15584,7 @@ pub fn write_cuTexObjectGetResourceViewDesc(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pResViewDesc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pResViewDesc,
         "cuTexObjectGetResourceViewDesc",
         arg_idx,
@@ -17926,7 +15593,7 @@ pub fn write_cuTexObjectGetResourceViewDesc(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(texObject), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &texObject,
         "cuTexObjectGetResourceViewDesc",
         arg_idx,
@@ -17942,16 +15609,11 @@ pub fn write_cuSurfObjectCreate(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pSurfObject), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pSurfObject,
-        "cuSurfObjectCreate",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pSurfObject, "cuSurfObjectCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pResDesc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pResDesc, "cuSurfObjectCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pResDesc, "cuSurfObjectCreate", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuSurfObjectDestroy(
@@ -17961,12 +15623,7 @@ pub fn write_cuSurfObjectDestroy(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(surfObject), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &surfObject,
-        "cuSurfObjectDestroy",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&surfObject, "cuSurfObjectDestroy", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuSurfObjectGetResourceDesc(
@@ -17977,7 +15634,7 @@ pub fn write_cuSurfObjectGetResourceDesc(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pResDesc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pResDesc,
         "cuSurfObjectGetResourceDesc",
         arg_idx,
@@ -17986,7 +15643,7 @@ pub fn write_cuSurfObjectGetResourceDesc(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(surfObject), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &surfObject,
         "cuSurfObjectGetResourceDesc",
         arg_idx,
@@ -18012,16 +15669,11 @@ pub fn write_cuTensorMapEncodeTiled(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(tensorMap), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &tensorMap,
-        "cuTensorMapEncodeTiled",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&tensorMap, "cuTensorMapEncodeTiled", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(tensorDataType), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &tensorDataType,
         "cuTensorMapEncodeTiled",
         arg_idx,
@@ -18030,16 +15682,11 @@ pub fn write_cuTensorMapEncodeTiled(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(tensorRank), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &tensorRank,
-        "cuTensorMapEncodeTiled",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&tensorRank, "cuTensorMapEncodeTiled", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(globalAddress), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &globalAddress,
         "cuTensorMapEncodeTiled",
         arg_idx,
@@ -18048,16 +15695,11 @@ pub fn write_cuTensorMapEncodeTiled(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(globalDim), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &globalDim,
-        "cuTensorMapEncodeTiled",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&globalDim, "cuTensorMapEncodeTiled", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(globalStrides), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &globalStrides,
         "cuTensorMapEncodeTiled",
         arg_idx,
@@ -18066,16 +15708,11 @@ pub fn write_cuTensorMapEncodeTiled(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(boxDim), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &boxDim,
-        "cuTensorMapEncodeTiled",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&boxDim, "cuTensorMapEncodeTiled", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(elementStrides), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &elementStrides,
         "cuTensorMapEncodeTiled",
         arg_idx,
@@ -18084,39 +15721,19 @@ pub fn write_cuTensorMapEncodeTiled(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(interleave), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &interleave,
-        "cuTensorMapEncodeTiled",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&interleave, "cuTensorMapEncodeTiled", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(swizzle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &swizzle,
-        "cuTensorMapEncodeTiled",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&swizzle, "cuTensorMapEncodeTiled", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(l2Promotion), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &l2Promotion,
-        "cuTensorMapEncodeTiled",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&l2Promotion, "cuTensorMapEncodeTiled", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(oobFill), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &oobFill,
-        "cuTensorMapEncodeTiled",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&oobFill, "cuTensorMapEncodeTiled", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTensorMapEncodeIm2col(
@@ -18140,16 +15757,11 @@ pub fn write_cuTensorMapEncodeIm2col(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(tensorMap), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &tensorMap,
-        "cuTensorMapEncodeIm2col",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&tensorMap, "cuTensorMapEncodeIm2col", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(tensorDataType), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &tensorDataType,
         "cuTensorMapEncodeIm2col",
         arg_idx,
@@ -18158,16 +15770,11 @@ pub fn write_cuTensorMapEncodeIm2col(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(tensorRank), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &tensorRank,
-        "cuTensorMapEncodeIm2col",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&tensorRank, "cuTensorMapEncodeIm2col", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(globalAddress), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &globalAddress,
         "cuTensorMapEncodeIm2col",
         arg_idx,
@@ -18176,16 +15783,11 @@ pub fn write_cuTensorMapEncodeIm2col(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(globalDim), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &globalDim,
-        "cuTensorMapEncodeIm2col",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&globalDim, "cuTensorMapEncodeIm2col", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(globalStrides), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &globalStrides,
         "cuTensorMapEncodeIm2col",
         arg_idx,
@@ -18194,7 +15796,7 @@ pub fn write_cuTensorMapEncodeIm2col(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pixelBoxLowerCorner), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pixelBoxLowerCorner,
         "cuTensorMapEncodeIm2col",
         arg_idx,
@@ -18203,7 +15805,7 @@ pub fn write_cuTensorMapEncodeIm2col(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pixelBoxUpperCorner), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pixelBoxUpperCorner,
         "cuTensorMapEncodeIm2col",
         arg_idx,
@@ -18212,7 +15814,7 @@ pub fn write_cuTensorMapEncodeIm2col(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(channelsPerPixel), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &channelsPerPixel,
         "cuTensorMapEncodeIm2col",
         arg_idx,
@@ -18221,7 +15823,7 @@ pub fn write_cuTensorMapEncodeIm2col(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pixelsPerColumn), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pixelsPerColumn,
         "cuTensorMapEncodeIm2col",
         arg_idx,
@@ -18230,7 +15832,7 @@ pub fn write_cuTensorMapEncodeIm2col(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(elementStrides), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &elementStrides,
         "cuTensorMapEncodeIm2col",
         arg_idx,
@@ -18239,39 +15841,19 @@ pub fn write_cuTensorMapEncodeIm2col(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(interleave), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &interleave,
-        "cuTensorMapEncodeIm2col",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&interleave, "cuTensorMapEncodeIm2col", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(swizzle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &swizzle,
-        "cuTensorMapEncodeIm2col",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&swizzle, "cuTensorMapEncodeIm2col", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(l2Promotion), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &l2Promotion,
-        "cuTensorMapEncodeIm2col",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&l2Promotion, "cuTensorMapEncodeIm2col", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(oobFill), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &oobFill,
-        "cuTensorMapEncodeIm2col",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&oobFill, "cuTensorMapEncodeIm2col", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTensorMapEncodeIm2colWide(
@@ -18296,7 +15878,7 @@ pub fn write_cuTensorMapEncodeIm2colWide(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(tensorMap), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &tensorMap,
         "cuTensorMapEncodeIm2colWide",
         arg_idx,
@@ -18305,7 +15887,7 @@ pub fn write_cuTensorMapEncodeIm2colWide(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(tensorDataType), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &tensorDataType,
         "cuTensorMapEncodeIm2colWide",
         arg_idx,
@@ -18314,7 +15896,7 @@ pub fn write_cuTensorMapEncodeIm2colWide(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(tensorRank), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &tensorRank,
         "cuTensorMapEncodeIm2colWide",
         arg_idx,
@@ -18323,7 +15905,7 @@ pub fn write_cuTensorMapEncodeIm2colWide(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(globalAddress), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &globalAddress,
         "cuTensorMapEncodeIm2colWide",
         arg_idx,
@@ -18332,7 +15914,7 @@ pub fn write_cuTensorMapEncodeIm2colWide(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(globalDim), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &globalDim,
         "cuTensorMapEncodeIm2colWide",
         arg_idx,
@@ -18341,7 +15923,7 @@ pub fn write_cuTensorMapEncodeIm2colWide(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(globalStrides), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &globalStrides,
         "cuTensorMapEncodeIm2colWide",
         arg_idx,
@@ -18350,7 +15932,7 @@ pub fn write_cuTensorMapEncodeIm2colWide(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pixelBoxLowerCornerWidth), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pixelBoxLowerCornerWidth,
         "cuTensorMapEncodeIm2colWide",
         arg_idx,
@@ -18359,7 +15941,7 @@ pub fn write_cuTensorMapEncodeIm2colWide(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pixelBoxUpperCornerWidth), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pixelBoxUpperCornerWidth,
         "cuTensorMapEncodeIm2colWide",
         arg_idx,
@@ -18368,7 +15950,7 @@ pub fn write_cuTensorMapEncodeIm2colWide(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(channelsPerPixel), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &channelsPerPixel,
         "cuTensorMapEncodeIm2colWide",
         arg_idx,
@@ -18377,7 +15959,7 @@ pub fn write_cuTensorMapEncodeIm2colWide(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pixelsPerColumn), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pixelsPerColumn,
         "cuTensorMapEncodeIm2colWide",
         arg_idx,
@@ -18386,7 +15968,7 @@ pub fn write_cuTensorMapEncodeIm2colWide(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(elementStrides), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &elementStrides,
         "cuTensorMapEncodeIm2colWide",
         arg_idx,
@@ -18395,7 +15977,7 @@ pub fn write_cuTensorMapEncodeIm2colWide(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(interleave), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &interleave,
         "cuTensorMapEncodeIm2colWide",
         arg_idx,
@@ -18404,25 +15986,15 @@ pub fn write_cuTensorMapEncodeIm2colWide(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(mode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &mode,
-        "cuTensorMapEncodeIm2colWide",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&mode, "cuTensorMapEncodeIm2colWide", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(swizzle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &swizzle,
-        "cuTensorMapEncodeIm2colWide",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&swizzle, "cuTensorMapEncodeIm2colWide", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(l2Promotion), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &l2Promotion,
         "cuTensorMapEncodeIm2colWide",
         arg_idx,
@@ -18431,12 +16003,7 @@ pub fn write_cuTensorMapEncodeIm2colWide(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(oobFill), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &oobFill,
-        "cuTensorMapEncodeIm2colWide",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&oobFill, "cuTensorMapEncodeIm2colWide", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTensorMapReplaceAddress(
@@ -18447,16 +16014,11 @@ pub fn write_cuTensorMapReplaceAddress(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(tensorMap), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &tensorMap,
-        "cuTensorMapReplaceAddress",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&tensorMap, "cuTensorMapReplaceAddress", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(globalAddress), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &globalAddress,
         "cuTensorMapReplaceAddress",
         arg_idx,
@@ -18473,25 +16035,15 @@ pub fn write_cuDeviceCanAccessPeer(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(canAccessPeer), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &canAccessPeer,
-        "cuDeviceCanAccessPeer",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&canAccessPeer, "cuDeviceCanAccessPeer", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dev, "cuDeviceCanAccessPeer", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dev, "cuDeviceCanAccessPeer", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(peerDev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &peerDev,
-        "cuDeviceCanAccessPeer",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&peerDev, "cuDeviceCanAccessPeer", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxEnablePeerAccess(
@@ -18502,16 +16054,11 @@ pub fn write_cuCtxEnablePeerAccess(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(peerContext), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &peerContext,
-        "cuCtxEnablePeerAccess",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&peerContext, "cuCtxEnablePeerAccess", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Flags, "cuCtxEnablePeerAccess", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Flags, "cuCtxEnablePeerAccess", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxDisablePeerAccess(
@@ -18521,12 +16068,7 @@ pub fn write_cuCtxDisablePeerAccess(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(peerContext), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &peerContext,
-        "cuCtxDisablePeerAccess",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&peerContext, "cuCtxDisablePeerAccess", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDeviceGetP2PAttribute(
@@ -18539,39 +16081,19 @@ pub fn write_cuDeviceGetP2PAttribute(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &value,
-        "cuDeviceGetP2PAttribute",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&value, "cuDeviceGetP2PAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(attrib), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &attrib,
-        "cuDeviceGetP2PAttribute",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&attrib, "cuDeviceGetP2PAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcDevice,
-        "cuDeviceGetP2PAttribute",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcDevice, "cuDeviceGetP2PAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstDevice,
-        "cuDeviceGetP2PAttribute",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstDevice, "cuDeviceGetP2PAttribute", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphicsUnregisterResource(
@@ -18581,7 +16103,7 @@ pub fn write_cuGraphicsUnregisterResource(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(resource), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &resource,
         "cuGraphicsUnregisterResource",
         arg_idx,
@@ -18599,7 +16121,7 @@ pub fn write_cuGraphicsSubResourceGetMappedArray(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pArray,
         "cuGraphicsSubResourceGetMappedArray",
         arg_idx,
@@ -18608,7 +16130,7 @@ pub fn write_cuGraphicsSubResourceGetMappedArray(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(resource), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &resource,
         "cuGraphicsSubResourceGetMappedArray",
         arg_idx,
@@ -18617,7 +16139,7 @@ pub fn write_cuGraphicsSubResourceGetMappedArray(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(arrayIndex), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &arrayIndex,
         "cuGraphicsSubResourceGetMappedArray",
         arg_idx,
@@ -18626,7 +16148,7 @@ pub fn write_cuGraphicsSubResourceGetMappedArray(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(mipLevel), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &mipLevel,
         "cuGraphicsSubResourceGetMappedArray",
         arg_idx,
@@ -18642,7 +16164,7 @@ pub fn write_cuGraphicsResourceGetMappedMipmappedArray(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pMipmappedArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pMipmappedArray,
         "cuGraphicsResourceGetMappedMipmappedArray",
         arg_idx,
@@ -18651,7 +16173,7 @@ pub fn write_cuGraphicsResourceGetMappedMipmappedArray(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(resource), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &resource,
         "cuGraphicsResourceGetMappedMipmappedArray",
         arg_idx,
@@ -18668,7 +16190,7 @@ pub fn write_cuGraphicsResourceGetMappedPointer_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pDevPtr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pDevPtr,
         "cuGraphicsResourceGetMappedPointer_v2",
         arg_idx,
@@ -18677,7 +16199,7 @@ pub fn write_cuGraphicsResourceGetMappedPointer_v2(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pSize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pSize,
         "cuGraphicsResourceGetMappedPointer_v2",
         arg_idx,
@@ -18686,7 +16208,7 @@ pub fn write_cuGraphicsResourceGetMappedPointer_v2(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(resource), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &resource,
         "cuGraphicsResourceGetMappedPointer_v2",
         arg_idx,
@@ -18702,7 +16224,7 @@ pub fn write_cuGraphicsResourceSetMapFlags_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(resource), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &resource,
         "cuGraphicsResourceSetMapFlags_v2",
         arg_idx,
@@ -18711,7 +16233,7 @@ pub fn write_cuGraphicsResourceSetMapFlags_v2(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &flags,
         "cuGraphicsResourceSetMapFlags_v2",
         arg_idx,
@@ -18728,16 +16250,11 @@ pub fn write_cuGraphicsMapResources_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &count,
-        "cuGraphicsMapResources_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&count, "cuGraphicsMapResources_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(resources), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &resources,
         "cuGraphicsMapResources_ptsz",
         arg_idx,
@@ -18746,12 +16263,7 @@ pub fn write_cuGraphicsMapResources_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuGraphicsMapResources_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuGraphicsMapResources_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphicsUnmapResources_ptsz(
@@ -18763,16 +16275,11 @@ pub fn write_cuGraphicsUnmapResources_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &count,
-        "cuGraphicsUnmapResources_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&count, "cuGraphicsUnmapResources_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(resources), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &resources,
         "cuGraphicsUnmapResources_ptsz",
         arg_idx,
@@ -18781,7 +16288,7 @@ pub fn write_cuGraphicsUnmapResources_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hStream,
         "cuGraphicsUnmapResources_ptsz",
         arg_idx,
@@ -18800,36 +16307,26 @@ pub fn write_cuGetProcAddress_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(symbol), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&symbol, "cuGetProcAddress_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&symbol, "cuGetProcAddress_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pfn), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pfn, "cuGetProcAddress_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pfn, "cuGetProcAddress_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(cudaVersion), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &cudaVersion,
-        "cuGetProcAddress_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&cudaVersion, "cuGetProcAddress_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuGetProcAddress_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuGetProcAddress_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(symbolStatus), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &symbolStatus,
-        "cuGetProcAddress_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&symbolStatus, "cuGetProcAddress_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUcoredumpSettings_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUcoredumpSettings_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -18865,7 +16362,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUcoredumpSettings_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUCoredumpGenerationFlags {
+impl crate::CudaDisplay for cuda_types::cuda::CUCoredumpGenerationFlags {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -18914,25 +16411,15 @@ pub fn write_cuCoredumpGetAttribute(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(attrib), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &attrib,
-        "cuCoredumpGetAttribute",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&attrib, "cuCoredumpGetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &value,
-        "cuCoredumpGetAttribute",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&value, "cuCoredumpGetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(size), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&size, "cuCoredumpGetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&size, "cuCoredumpGetAttribute", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCoredumpGetAttributeGlobal(
@@ -18944,30 +16431,15 @@ pub fn write_cuCoredumpGetAttributeGlobal(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(attrib), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &attrib,
-        "cuCoredumpGetAttributeGlobal",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&attrib, "cuCoredumpGetAttributeGlobal", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &value,
-        "cuCoredumpGetAttributeGlobal",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&value, "cuCoredumpGetAttributeGlobal", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(size), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &size,
-        "cuCoredumpGetAttributeGlobal",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&size, "cuCoredumpGetAttributeGlobal", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCoredumpSetAttribute(
@@ -18979,25 +16451,15 @@ pub fn write_cuCoredumpSetAttribute(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(attrib), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &attrib,
-        "cuCoredumpSetAttribute",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&attrib, "cuCoredumpSetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &value,
-        "cuCoredumpSetAttribute",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&value, "cuCoredumpSetAttribute", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(size), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&size, "cuCoredumpSetAttribute", arg_idx, writer)?;
+    crate::CudaDisplay::write(&size, "cuCoredumpSetAttribute", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCoredumpSetAttributeGlobal(
@@ -19009,30 +16471,15 @@ pub fn write_cuCoredumpSetAttributeGlobal(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(attrib), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &attrib,
-        "cuCoredumpSetAttributeGlobal",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&attrib, "cuCoredumpSetAttributeGlobal", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &value,
-        "cuCoredumpSetAttributeGlobal",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&value, "cuCoredumpSetAttributeGlobal", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(size), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &size,
-        "cuCoredumpSetAttributeGlobal",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&size, "cuCoredumpSetAttributeGlobal", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGetExportTable(
@@ -19043,24 +16490,14 @@ pub fn write_cuGetExportTable(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(ppExportTable), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ppExportTable,
-        "cuGetExportTable",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ppExportTable, "cuGetExportTable", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pExportTableId), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pExportTableId,
-        "cuGetExportTable",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pExportTableId, "cuGetExportTable", arg_idx, writer)?;
     writer.write_all(b")")
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUdevResourceDesc {
+impl crate::CudaDisplay for cuda_types::cuda::CUdevResourceDesc {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -19070,7 +16507,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUdevResourceDesc {
         write!(writer, "{:p}", *self)
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUgreenCtxCreate_flags {
+impl crate::CudaDisplay for cuda_types::cuda::CUgreenCtxCreate_flags {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -19085,7 +16522,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUgreenCtxCreate_flags {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUdevSmResourceSplit_flags {
+impl crate::CudaDisplay for cuda_types::cuda::CUdevSmResourceSplit_flags {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -19111,7 +16548,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUdevSmResourceSplit_flags
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUdevResourceType {
+impl crate::CudaDisplay for cuda_types::cuda::CUdevResourceType {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -19132,7 +16569,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUdevResourceType {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUdevSmResource_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUdevSmResource_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -19140,7 +16577,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUdevSmResource_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(smCount), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.smCount, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.smCount, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
@@ -19154,19 +16591,19 @@ pub fn write_cuGreenCtxCreate(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phCtx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&phCtx, "cuGreenCtxCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&phCtx, "cuGreenCtxCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(desc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&desc, "cuGreenCtxCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&desc, "cuGreenCtxCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dev, "cuGreenCtxCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dev, "cuGreenCtxCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuGreenCtxCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuGreenCtxCreate", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGreenCtxDestroy(
@@ -19176,7 +16613,7 @@ pub fn write_cuGreenCtxDestroy(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hCtx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hCtx, "cuGreenCtxDestroy", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hCtx, "cuGreenCtxDestroy", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxFromGreenCtx(
@@ -19187,11 +16624,11 @@ pub fn write_cuCtxFromGreenCtx(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pContext), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pContext, "cuCtxFromGreenCtx", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pContext, "cuCtxFromGreenCtx", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hCtx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hCtx, "cuCtxFromGreenCtx", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hCtx, "cuCtxFromGreenCtx", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDeviceGetDevResource(
@@ -19203,30 +16640,15 @@ pub fn write_cuDeviceGetDevResource(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &device,
-        "cuDeviceGetDevResource",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&device, "cuDeviceGetDevResource", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(resource), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &resource,
-        "cuDeviceGetDevResource",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&resource, "cuDeviceGetDevResource", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(type_), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &type_,
-        "cuDeviceGetDevResource",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&type_, "cuDeviceGetDevResource", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxGetDevResource(
@@ -19238,20 +16660,15 @@ pub fn write_cuCtxGetDevResource(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hCtx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hCtx, "cuCtxGetDevResource", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hCtx, "cuCtxGetDevResource", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(resource), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &resource,
-        "cuCtxGetDevResource",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&resource, "cuCtxGetDevResource", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(type_), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&type_, "cuCtxGetDevResource", arg_idx, writer)?;
+    crate::CudaDisplay::write(&type_, "cuCtxGetDevResource", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGreenCtxGetDevResource(
@@ -19263,30 +16680,15 @@ pub fn write_cuGreenCtxGetDevResource(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hCtx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hCtx,
-        "cuGreenCtxGetDevResource",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hCtx, "cuGreenCtxGetDevResource", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(resource), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &resource,
-        "cuGreenCtxGetDevResource",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&resource, "cuGreenCtxGetDevResource", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(type_), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &type_,
-        "cuGreenCtxGetDevResource",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&type_, "cuGreenCtxGetDevResource", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDevSmResourceSplitByCount(
@@ -19301,16 +16703,11 @@ pub fn write_cuDevSmResourceSplitByCount(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(result), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &result,
-        "cuDevSmResourceSplitByCount",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&result, "cuDevSmResourceSplitByCount", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nbGroups), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &nbGroups,
         "cuDevSmResourceSplitByCount",
         arg_idx,
@@ -19319,16 +16716,11 @@ pub fn write_cuDevSmResourceSplitByCount(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(input), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &input,
-        "cuDevSmResourceSplitByCount",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&input, "cuDevSmResourceSplitByCount", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(remaining), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &remaining,
         "cuDevSmResourceSplitByCount",
         arg_idx,
@@ -19337,7 +16729,7 @@ pub fn write_cuDevSmResourceSplitByCount(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(useFlags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &useFlags,
         "cuDevSmResourceSplitByCount",
         arg_idx,
@@ -19346,7 +16738,7 @@ pub fn write_cuDevSmResourceSplitByCount(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(minCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &minCount,
         "cuDevSmResourceSplitByCount",
         arg_idx,
@@ -19363,25 +16755,15 @@ pub fn write_cuDevResourceGenerateDesc(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phDesc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &phDesc,
-        "cuDevResourceGenerateDesc",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&phDesc, "cuDevResourceGenerateDesc", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(resources), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &resources,
-        "cuDevResourceGenerateDesc",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&resources, "cuDevResourceGenerateDesc", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nbResources), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &nbResources,
         "cuDevResourceGenerateDesc",
         arg_idx,
@@ -19397,16 +16779,11 @@ pub fn write_cuGreenCtxRecordEvent(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hCtx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hCtx, "cuGreenCtxRecordEvent", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hCtx, "cuGreenCtxRecordEvent", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hEvent), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hEvent,
-        "cuGreenCtxRecordEvent",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hEvent, "cuGreenCtxRecordEvent", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGreenCtxWaitEvent(
@@ -19417,11 +16794,11 @@ pub fn write_cuGreenCtxWaitEvent(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hCtx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hCtx, "cuGreenCtxWaitEvent", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hCtx, "cuGreenCtxWaitEvent", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hEvent), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hEvent, "cuGreenCtxWaitEvent", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hEvent, "cuGreenCtxWaitEvent", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamGetGreenCtx(
@@ -19432,11 +16809,11 @@ pub fn write_cuStreamGetGreenCtx(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuStreamGetGreenCtx", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuStreamGetGreenCtx", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(phCtx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&phCtx, "cuStreamGetGreenCtx", arg_idx, writer)?;
+    crate::CudaDisplay::write(&phCtx, "cuStreamGetGreenCtx", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGreenCtxStreamCreate(
@@ -19449,39 +16826,19 @@ pub fn write_cuGreenCtxStreamCreate(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &phStream,
-        "cuGreenCtxStreamCreate",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&phStream, "cuGreenCtxStreamCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(greenCtx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &greenCtx,
-        "cuGreenCtxStreamCreate",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&greenCtx, "cuGreenCtxStreamCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuGreenCtxStreamCreate",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuGreenCtxStreamCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(priority), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &priority,
-        "cuGreenCtxStreamCreate",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&priority, "cuGreenCtxStreamCreate", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemHostRegister(
@@ -19493,15 +16850,15 @@ pub fn write_cuMemHostRegister(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(p), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&p, "cuMemHostRegister", arg_idx, writer)?;
+    crate::CudaDisplay::write(&p, "cuMemHostRegister", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(bytesize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&bytesize, "cuMemHostRegister", arg_idx, writer)?;
+    crate::CudaDisplay::write(&bytesize, "cuMemHostRegister", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Flags, "cuMemHostRegister", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Flags, "cuMemHostRegister", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphicsResourceSetMapFlags(
@@ -19512,7 +16869,7 @@ pub fn write_cuGraphicsResourceSetMapFlags(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(resource), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &resource,
         "cuGraphicsResourceSetMapFlags",
         arg_idx,
@@ -19521,12 +16878,7 @@ pub fn write_cuGraphicsResourceSetMapFlags(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuGraphicsResourceSetMapFlags",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuGraphicsResourceSetMapFlags", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLinkCreate(
@@ -19539,19 +16891,19 @@ pub fn write_cuLinkCreate(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(numOptions), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&numOptions, "cuLinkCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&numOptions, "cuLinkCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(options), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&options, "cuLinkCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&options, "cuLinkCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(optionValues), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&optionValues, "cuLinkCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&optionValues, "cuLinkCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(stateOut), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&stateOut, "cuLinkCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&stateOut, "cuLinkCreate", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLinkAddData(
@@ -19568,35 +16920,35 @@ pub fn write_cuLinkAddData(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(state), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&state, "cuLinkAddData", arg_idx, writer)?;
+    crate::CudaDisplay::write(&state, "cuLinkAddData", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(type_), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&type_, "cuLinkAddData", arg_idx, writer)?;
+    crate::CudaDisplay::write(&type_, "cuLinkAddData", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(data), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&data, "cuLinkAddData", arg_idx, writer)?;
+    crate::CudaDisplay::write(&data, "cuLinkAddData", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(size), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&size, "cuLinkAddData", arg_idx, writer)?;
+    crate::CudaDisplay::write(&size, "cuLinkAddData", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(name), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&name, "cuLinkAddData", arg_idx, writer)?;
+    crate::CudaDisplay::write(&name, "cuLinkAddData", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numOptions), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&numOptions, "cuLinkAddData", arg_idx, writer)?;
+    crate::CudaDisplay::write(&numOptions, "cuLinkAddData", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(options), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&options, "cuLinkAddData", arg_idx, writer)?;
+    crate::CudaDisplay::write(&options, "cuLinkAddData", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(optionValues), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&optionValues, "cuLinkAddData", arg_idx, writer)?;
+    crate::CudaDisplay::write(&optionValues, "cuLinkAddData", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLinkAddFile(
@@ -19611,27 +16963,27 @@ pub fn write_cuLinkAddFile(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(state), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&state, "cuLinkAddFile", arg_idx, writer)?;
+    crate::CudaDisplay::write(&state, "cuLinkAddFile", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(type_), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&type_, "cuLinkAddFile", arg_idx, writer)?;
+    crate::CudaDisplay::write(&type_, "cuLinkAddFile", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(path), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&path, "cuLinkAddFile", arg_idx, writer)?;
+    crate::CudaDisplay::write(&path, "cuLinkAddFile", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numOptions), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&numOptions, "cuLinkAddFile", arg_idx, writer)?;
+    crate::CudaDisplay::write(&numOptions, "cuLinkAddFile", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(options), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&options, "cuLinkAddFile", arg_idx, writer)?;
+    crate::CudaDisplay::write(&options, "cuLinkAddFile", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(optionValues), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&optionValues, "cuLinkAddFile", arg_idx, writer)?;
+    crate::CudaDisplay::write(&optionValues, "cuLinkAddFile", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefSetAddress2D_v2(
@@ -19644,42 +16996,22 @@ pub fn write_cuTexRefSetAddress2D_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hTexRef,
-        "cuTexRefSetAddress2D_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefSetAddress2D_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(desc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &desc,
-        "cuTexRefSetAddress2D_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&desc, "cuTexRefSetAddress2D_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dptr,
-        "cuTexRefSetAddress2D_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dptr, "cuTexRefSetAddress2D_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Pitch), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &Pitch,
-        "cuTexRefSetAddress2D_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&Pitch, "cuTexRefSetAddress2D_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_MEMCPY2D_v1_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_MEMCPY2D_v1_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -19687,41 +17019,41 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_MEMCPY2D_v1_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(srcXInBytes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcXInBytes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcXInBytes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcY), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcY, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcY, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcMemoryType), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcMemoryType, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcMemoryType, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcHost), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcHost, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcHost, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcDevice), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcDevice, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcDevice, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcArray), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcArray, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcArray, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcPitch), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcPitch, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcPitch, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstXInBytes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstXInBytes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstXInBytes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstY), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstY, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstY, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstMemoryType), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstMemoryType, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstMemoryType, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstHost), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstHost, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstHost, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstDevice), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstDevice, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstDevice, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstArray), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstArray, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstArray, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstPitch), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstPitch, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstPitch, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(WidthInBytes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.WidthInBytes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.WidthInBytes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(Height), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.Height, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.Height, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_MEMCPY3D_v1_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_MEMCPY3D_v1_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -19729,55 +17061,55 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_MEMCPY3D_v1_st {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(srcXInBytes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcXInBytes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcXInBytes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcY), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcY, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcY, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcZ), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcZ, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcZ, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcLOD), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcLOD, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcLOD, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcMemoryType), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcMemoryType, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcMemoryType, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcHost), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcHost, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcHost, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcDevice), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcDevice, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcDevice, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcArray), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcArray, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcArray, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcPitch), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcPitch, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcPitch, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(srcHeight), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.srcHeight, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.srcHeight, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstXInBytes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstXInBytes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstXInBytes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstY), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstY, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstY, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstZ), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstZ, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstZ, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstLOD), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstLOD, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstLOD, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstMemoryType), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstMemoryType, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstMemoryType, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstHost), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstHost, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstHost, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstDevice), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstDevice, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstDevice, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstArray), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstArray, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstArray, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstPitch), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstPitch, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstPitch, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(dstHeight), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.dstHeight, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.dstHeight, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(WidthInBytes), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.WidthInBytes, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.WidthInBytes, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(Height), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.Height, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.Height, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(Depth), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.Depth, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.Depth, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_ARRAY_DESCRIPTOR_v1_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_ARRAY_DESCRIPTOR_v1_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -19785,17 +17117,17 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_ARRAY_DESCRIPTOR_v1_s
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(Width), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.Width, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.Width, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(Height), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.Height, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.Height, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(Format), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.Format, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.Format, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(NumChannels), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.NumChannels, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.NumChannels, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_ARRAY3D_DESCRIPTOR_v1_st {
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_ARRAY3D_DESCRIPTOR_v1_st {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -19803,17 +17135,17 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUDA_ARRAY3D_DESCRIPTOR_v1
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(Width), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.Width, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.Width, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(Height), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.Height, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.Height, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(Depth), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.Depth, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.Depth, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(Format), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.Format, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.Format, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(NumChannels), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.NumChannels, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.NumChannels, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(Flags), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.Flags, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.Flags, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
@@ -19825,11 +17157,11 @@ pub fn write_cuDeviceTotalMem(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(bytes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&bytes, "cuDeviceTotalMem", arg_idx, writer)?;
+    crate::CudaDisplay::write(&bytes, "cuDeviceTotalMem", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dev, "cuDeviceTotalMem", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dev, "cuDeviceTotalMem", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxCreate(
@@ -19841,15 +17173,15 @@ pub fn write_cuCtxCreate(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pctx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pctx, "cuCtxCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pctx, "cuCtxCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuCtxCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuCtxCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dev, "cuCtxCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dev, "cuCtxCreate", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuModuleGetGlobal(
@@ -19862,19 +17194,19 @@ pub fn write_cuModuleGetGlobal(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dptr, "cuModuleGetGlobal", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dptr, "cuModuleGetGlobal", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(bytes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&bytes, "cuModuleGetGlobal", arg_idx, writer)?;
+    crate::CudaDisplay::write(&bytes, "cuModuleGetGlobal", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hmod), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hmod, "cuModuleGetGlobal", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hmod, "cuModuleGetGlobal", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(name), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&name, "cuModuleGetGlobal", arg_idx, writer)?;
+    crate::CudaDisplay::write(&name, "cuModuleGetGlobal", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemGetInfo(
@@ -19885,11 +17217,11 @@ pub fn write_cuMemGetInfo(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(free), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&free, "cuMemGetInfo", arg_idx, writer)?;
+    crate::CudaDisplay::write(&free, "cuMemGetInfo", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(total), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&total, "cuMemGetInfo", arg_idx, writer)?;
+    crate::CudaDisplay::write(&total, "cuMemGetInfo", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemAlloc(
@@ -19900,11 +17232,11 @@ pub fn write_cuMemAlloc(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dptr, "cuMemAlloc", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dptr, "cuMemAlloc", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(bytesize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&bytesize, "cuMemAlloc", arg_idx, writer)?;
+    crate::CudaDisplay::write(&bytesize, "cuMemAlloc", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemAllocPitch(
@@ -19918,33 +17250,23 @@ pub fn write_cuMemAllocPitch(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dptr, "cuMemAllocPitch", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dptr, "cuMemAllocPitch", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pPitch), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pPitch, "cuMemAllocPitch", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pPitch, "cuMemAllocPitch", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(WidthInBytes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &WidthInBytes,
-        "cuMemAllocPitch",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&WidthInBytes, "cuMemAllocPitch", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Height), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Height, "cuMemAllocPitch", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Height, "cuMemAllocPitch", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ElementSizeBytes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ElementSizeBytes,
-        "cuMemAllocPitch",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ElementSizeBytes, "cuMemAllocPitch", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemFree(
@@ -19954,7 +17276,7 @@ pub fn write_cuMemFree(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dptr, "cuMemFree", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dptr, "cuMemFree", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemGetAddressRange(
@@ -19966,15 +17288,15 @@ pub fn write_cuMemGetAddressRange(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pbase), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pbase, "cuMemGetAddressRange", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pbase, "cuMemGetAddressRange", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(psize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&psize, "cuMemGetAddressRange", arg_idx, writer)?;
+    crate::CudaDisplay::write(&psize, "cuMemGetAddressRange", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dptr, "cuMemGetAddressRange", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dptr, "cuMemGetAddressRange", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemAllocHost(
@@ -19985,11 +17307,11 @@ pub fn write_cuMemAllocHost(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pp), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pp, "cuMemAllocHost", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pp, "cuMemAllocHost", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(bytesize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&bytesize, "cuMemAllocHost", arg_idx, writer)?;
+    crate::CudaDisplay::write(&bytesize, "cuMemAllocHost", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemHostGetDevicePointer(
@@ -20001,25 +17323,15 @@ pub fn write_cuMemHostGetDevicePointer(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pdptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pdptr,
-        "cuMemHostGetDevicePointer",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pdptr, "cuMemHostGetDevicePointer", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(p), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&p, "cuMemHostGetDevicePointer", arg_idx, writer)?;
+    crate::CudaDisplay::write(&p, "cuMemHostGetDevicePointer", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &Flags,
-        "cuMemHostGetDevicePointer",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&Flags, "cuMemHostGetDevicePointer", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyHtoD(
@@ -20031,15 +17343,15 @@ pub fn write_cuMemcpyHtoD(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemcpyHtoD", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemcpyHtoD", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcHost), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcHost, "cuMemcpyHtoD", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcHost, "cuMemcpyHtoD", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpyHtoD", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyHtoD", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyDtoH(
@@ -20051,15 +17363,15 @@ pub fn write_cuMemcpyDtoH(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstHost), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstHost, "cuMemcpyDtoH", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstHost, "cuMemcpyDtoH", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcDevice, "cuMemcpyDtoH", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcDevice, "cuMemcpyDtoH", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpyDtoH", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyDtoH", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyDtoD(
@@ -20071,15 +17383,15 @@ pub fn write_cuMemcpyDtoD(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemcpyDtoD", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemcpyDtoD", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcDevice, "cuMemcpyDtoD", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcDevice, "cuMemcpyDtoD", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpyDtoD", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyDtoD", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyDtoA(
@@ -20092,19 +17404,19 @@ pub fn write_cuMemcpyDtoA(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstArray, "cuMemcpyDtoA", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstArray, "cuMemcpyDtoA", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstOffset, "cuMemcpyDtoA", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstOffset, "cuMemcpyDtoA", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcDevice, "cuMemcpyDtoA", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcDevice, "cuMemcpyDtoA", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpyDtoA", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyDtoA", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyAtoD(
@@ -20117,19 +17429,19 @@ pub fn write_cuMemcpyAtoD(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemcpyAtoD", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemcpyAtoD", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcArray, "cuMemcpyAtoD", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcArray, "cuMemcpyAtoD", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcOffset, "cuMemcpyAtoD", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcOffset, "cuMemcpyAtoD", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpyAtoD", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyAtoD", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyHtoA(
@@ -20142,19 +17454,19 @@ pub fn write_cuMemcpyHtoA(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstArray, "cuMemcpyHtoA", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstArray, "cuMemcpyHtoA", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstOffset, "cuMemcpyHtoA", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstOffset, "cuMemcpyHtoA", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcHost), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcHost, "cuMemcpyHtoA", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcHost, "cuMemcpyHtoA", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpyHtoA", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyHtoA", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyAtoH(
@@ -20167,19 +17479,19 @@ pub fn write_cuMemcpyAtoH(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstHost), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstHost, "cuMemcpyAtoH", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstHost, "cuMemcpyAtoH", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcArray, "cuMemcpyAtoH", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcArray, "cuMemcpyAtoH", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcOffset, "cuMemcpyAtoH", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcOffset, "cuMemcpyAtoH", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpyAtoH", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyAtoH", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyAtoA(
@@ -20193,23 +17505,23 @@ pub fn write_cuMemcpyAtoA(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstArray, "cuMemcpyAtoA", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstArray, "cuMemcpyAtoA", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstOffset, "cuMemcpyAtoA", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstOffset, "cuMemcpyAtoA", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcArray, "cuMemcpyAtoA", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcArray, "cuMemcpyAtoA", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcOffset, "cuMemcpyAtoA", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcOffset, "cuMemcpyAtoA", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpyAtoA", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyAtoA", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyHtoAAsync(
@@ -20223,23 +17535,23 @@ pub fn write_cuMemcpyHtoAAsync(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstArray, "cuMemcpyHtoAAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstArray, "cuMemcpyHtoAAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstOffset, "cuMemcpyHtoAAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstOffset, "cuMemcpyHtoAAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcHost), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcHost, "cuMemcpyHtoAAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcHost, "cuMemcpyHtoAAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpyHtoAAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyHtoAAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuMemcpyHtoAAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpyHtoAAsync", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyAtoHAsync(
@@ -20253,23 +17565,23 @@ pub fn write_cuMemcpyAtoHAsync(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstHost), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstHost, "cuMemcpyAtoHAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstHost, "cuMemcpyAtoHAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcArray, "cuMemcpyAtoHAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcArray, "cuMemcpyAtoHAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcOffset, "cuMemcpyAtoHAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcOffset, "cuMemcpyAtoHAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpyAtoHAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyAtoHAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuMemcpyAtoHAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpyAtoHAsync", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpy2D(
@@ -20279,7 +17591,7 @@ pub fn write_cuMemcpy2D(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCopy), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pCopy, "cuMemcpy2D", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pCopy, "cuMemcpy2D", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpy2DUnaligned(
@@ -20289,7 +17601,7 @@ pub fn write_cuMemcpy2DUnaligned(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCopy), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pCopy, "cuMemcpy2DUnaligned", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pCopy, "cuMemcpy2DUnaligned", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpy3D(
@@ -20299,7 +17611,7 @@ pub fn write_cuMemcpy3D(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCopy), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pCopy, "cuMemcpy3D", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pCopy, "cuMemcpy3D", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyHtoDAsync(
@@ -20312,19 +17624,19 @@ pub fn write_cuMemcpyHtoDAsync(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemcpyHtoDAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemcpyHtoDAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcHost), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcHost, "cuMemcpyHtoDAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcHost, "cuMemcpyHtoDAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpyHtoDAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyHtoDAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuMemcpyHtoDAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpyHtoDAsync", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyDtoHAsync(
@@ -20337,19 +17649,19 @@ pub fn write_cuMemcpyDtoHAsync(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstHost), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstHost, "cuMemcpyDtoHAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstHost, "cuMemcpyDtoHAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcDevice, "cuMemcpyDtoHAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcDevice, "cuMemcpyDtoHAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpyDtoHAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyDtoHAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuMemcpyDtoHAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpyDtoHAsync", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyDtoDAsync(
@@ -20362,19 +17674,19 @@ pub fn write_cuMemcpyDtoDAsync(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemcpyDtoDAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemcpyDtoDAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcDevice, "cuMemcpyDtoDAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcDevice, "cuMemcpyDtoDAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpyDtoDAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyDtoDAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuMemcpyDtoDAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpyDtoDAsync", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpy2DAsync(
@@ -20385,11 +17697,11 @@ pub fn write_cuMemcpy2DAsync(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCopy), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pCopy, "cuMemcpy2DAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pCopy, "cuMemcpy2DAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuMemcpy2DAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpy2DAsync", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpy3DAsync(
@@ -20400,11 +17712,11 @@ pub fn write_cuMemcpy3DAsync(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCopy), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pCopy, "cuMemcpy3DAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pCopy, "cuMemcpy3DAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuMemcpy3DAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpy3DAsync", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD8(
@@ -20416,15 +17728,15 @@ pub fn write_cuMemsetD8(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemsetD8", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD8", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(uc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&uc, "cuMemsetD8", arg_idx, writer)?;
+    crate::CudaDisplay::write(&uc, "cuMemsetD8", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(N), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&N, "cuMemsetD8", arg_idx, writer)?;
+    crate::CudaDisplay::write(&N, "cuMemsetD8", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD16(
@@ -20436,15 +17748,15 @@ pub fn write_cuMemsetD16(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemsetD16", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD16", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(us), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&us, "cuMemsetD16", arg_idx, writer)?;
+    crate::CudaDisplay::write(&us, "cuMemsetD16", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(N), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&N, "cuMemsetD16", arg_idx, writer)?;
+    crate::CudaDisplay::write(&N, "cuMemsetD16", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD32(
@@ -20456,15 +17768,15 @@ pub fn write_cuMemsetD32(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemsetD32", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD32", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ui), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ui, "cuMemsetD32", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ui, "cuMemsetD32", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(N), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&N, "cuMemsetD32", arg_idx, writer)?;
+    crate::CudaDisplay::write(&N, "cuMemsetD32", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD2D8(
@@ -20478,23 +17790,23 @@ pub fn write_cuMemsetD2D8(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemsetD2D8", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD2D8", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstPitch), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstPitch, "cuMemsetD2D8", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstPitch, "cuMemsetD2D8", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(uc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&uc, "cuMemsetD2D8", arg_idx, writer)?;
+    crate::CudaDisplay::write(&uc, "cuMemsetD2D8", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Width), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Width, "cuMemsetD2D8", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Width, "cuMemsetD2D8", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Height), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Height, "cuMemsetD2D8", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Height, "cuMemsetD2D8", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD2D16(
@@ -20508,23 +17820,23 @@ pub fn write_cuMemsetD2D16(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemsetD2D16", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD2D16", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstPitch), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstPitch, "cuMemsetD2D16", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstPitch, "cuMemsetD2D16", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(us), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&us, "cuMemsetD2D16", arg_idx, writer)?;
+    crate::CudaDisplay::write(&us, "cuMemsetD2D16", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Width), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Width, "cuMemsetD2D16", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Width, "cuMemsetD2D16", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Height), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Height, "cuMemsetD2D16", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Height, "cuMemsetD2D16", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD2D32(
@@ -20538,23 +17850,23 @@ pub fn write_cuMemsetD2D32(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemsetD2D32", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD2D32", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstPitch), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstPitch, "cuMemsetD2D32", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstPitch, "cuMemsetD2D32", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ui), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ui, "cuMemsetD2D32", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ui, "cuMemsetD2D32", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Width), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Width, "cuMemsetD2D32", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Width, "cuMemsetD2D32", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Height), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Height, "cuMemsetD2D32", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Height, "cuMemsetD2D32", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuArrayCreate(
@@ -20565,16 +17877,11 @@ pub fn write_cuArrayCreate(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pHandle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pHandle, "cuArrayCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pHandle, "cuArrayCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pAllocateArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pAllocateArray,
-        "cuArrayCreate",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pAllocateArray, "cuArrayCreate", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuArrayGetDescriptor(
@@ -20585,7 +17892,7 @@ pub fn write_cuArrayGetDescriptor(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pArrayDescriptor), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pArrayDescriptor,
         "cuArrayGetDescriptor",
         arg_idx,
@@ -20594,7 +17901,7 @@ pub fn write_cuArrayGetDescriptor(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hArray, "cuArrayGetDescriptor", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hArray, "cuArrayGetDescriptor", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuArray3DCreate(
@@ -20605,16 +17912,11 @@ pub fn write_cuArray3DCreate(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pHandle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pHandle, "cuArray3DCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pHandle, "cuArray3DCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pAllocateArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pAllocateArray,
-        "cuArray3DCreate",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pAllocateArray, "cuArray3DCreate", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuArray3DGetDescriptor(
@@ -20625,7 +17927,7 @@ pub fn write_cuArray3DGetDescriptor(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pArrayDescriptor), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pArrayDescriptor,
         "cuArray3DGetDescriptor",
         arg_idx,
@@ -20634,12 +17936,7 @@ pub fn write_cuArray3DGetDescriptor(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hArray,
-        "cuArray3DGetDescriptor",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hArray, "cuArray3DGetDescriptor", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefSetAddress(
@@ -20652,24 +17949,19 @@ pub fn write_cuTexRefSetAddress(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(ByteOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ByteOffset,
-        "cuTexRefSetAddress",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ByteOffset, "cuTexRefSetAddress", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hTexRef, "cuTexRefSetAddress", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefSetAddress", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dptr, "cuTexRefSetAddress", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dptr, "cuTexRefSetAddress", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(bytes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&bytes, "cuTexRefSetAddress", arg_idx, writer)?;
+    crate::CudaDisplay::write(&bytes, "cuTexRefSetAddress", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefSetAddress2D(
@@ -20682,24 +17974,19 @@ pub fn write_cuTexRefSetAddress2D(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hTexRef,
-        "cuTexRefSetAddress2D",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefSetAddress2D", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(desc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&desc, "cuTexRefSetAddress2D", arg_idx, writer)?;
+    crate::CudaDisplay::write(&desc, "cuTexRefSetAddress2D", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dptr, "cuTexRefSetAddress2D", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dptr, "cuTexRefSetAddress2D", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Pitch), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Pitch, "cuTexRefSetAddress2D", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Pitch, "cuTexRefSetAddress2D", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuTexRefGetAddress(
@@ -20710,11 +17997,11 @@ pub fn write_cuTexRefGetAddress(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pdptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pdptr, "cuTexRefGetAddress", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pdptr, "cuTexRefGetAddress", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hTexRef), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hTexRef, "cuTexRefGetAddress", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hTexRef, "cuTexRefGetAddress", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphicsResourceGetMappedPointer(
@@ -20726,7 +18013,7 @@ pub fn write_cuGraphicsResourceGetMappedPointer(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pDevPtr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pDevPtr,
         "cuGraphicsResourceGetMappedPointer",
         arg_idx,
@@ -20735,7 +18022,7 @@ pub fn write_cuGraphicsResourceGetMappedPointer(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pSize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pSize,
         "cuGraphicsResourceGetMappedPointer",
         arg_idx,
@@ -20744,7 +18031,7 @@ pub fn write_cuGraphicsResourceGetMappedPointer(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(resource), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &resource,
         "cuGraphicsResourceGetMappedPointer",
         arg_idx,
@@ -20759,7 +18046,7 @@ pub fn write_cuCtxDestroy(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(ctx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ctx, "cuCtxDestroy", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ctx, "cuCtxDestroy", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxPopCurrent(
@@ -20769,7 +18056,7 @@ pub fn write_cuCtxPopCurrent(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pctx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pctx, "cuCtxPopCurrent", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pctx, "cuCtxPopCurrent", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCtxPushCurrent(
@@ -20779,7 +18066,7 @@ pub fn write_cuCtxPushCurrent(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(ctx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ctx, "cuCtxPushCurrent", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ctx, "cuCtxPushCurrent", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamDestroy(
@@ -20789,7 +18076,7 @@ pub fn write_cuStreamDestroy(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuStreamDestroy", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuStreamDestroy", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuEventDestroy(
@@ -20799,7 +18086,7 @@ pub fn write_cuEventDestroy(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hEvent), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hEvent, "cuEventDestroy", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hEvent, "cuEventDestroy", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDevicePrimaryCtxRelease(
@@ -20809,12 +18096,7 @@ pub fn write_cuDevicePrimaryCtxRelease(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dev,
-        "cuDevicePrimaryCtxRelease",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dev, "cuDevicePrimaryCtxRelease", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDevicePrimaryCtxReset(
@@ -20824,7 +18106,7 @@ pub fn write_cuDevicePrimaryCtxReset(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dev, "cuDevicePrimaryCtxReset", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dev, "cuDevicePrimaryCtxReset", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuDevicePrimaryCtxSetFlags(
@@ -20835,21 +18117,11 @@ pub fn write_cuDevicePrimaryCtxSetFlags(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dev), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dev,
-        "cuDevicePrimaryCtxSetFlags",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dev, "cuDevicePrimaryCtxSetFlags", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuDevicePrimaryCtxSetFlags",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuDevicePrimaryCtxSetFlags", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyHtoD_v2(
@@ -20861,15 +18133,15 @@ pub fn write_cuMemcpyHtoD_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemcpyHtoD_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemcpyHtoD_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcHost), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcHost, "cuMemcpyHtoD_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcHost, "cuMemcpyHtoD_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpyHtoD_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyHtoD_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyDtoH_v2(
@@ -20881,15 +18153,15 @@ pub fn write_cuMemcpyDtoH_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstHost), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstHost, "cuMemcpyDtoH_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstHost, "cuMemcpyDtoH_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcDevice, "cuMemcpyDtoH_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcDevice, "cuMemcpyDtoH_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpyDtoH_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyDtoH_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyDtoD_v2(
@@ -20901,15 +18173,15 @@ pub fn write_cuMemcpyDtoD_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemcpyDtoD_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemcpyDtoD_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcDevice, "cuMemcpyDtoD_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcDevice, "cuMemcpyDtoD_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpyDtoD_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyDtoD_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyDtoA_v2(
@@ -20922,19 +18194,19 @@ pub fn write_cuMemcpyDtoA_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstArray, "cuMemcpyDtoA_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstArray, "cuMemcpyDtoA_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstOffset, "cuMemcpyDtoA_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstOffset, "cuMemcpyDtoA_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcDevice, "cuMemcpyDtoA_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcDevice, "cuMemcpyDtoA_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpyDtoA_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyDtoA_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyAtoD_v2(
@@ -20947,19 +18219,19 @@ pub fn write_cuMemcpyAtoD_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemcpyAtoD_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemcpyAtoD_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcArray, "cuMemcpyAtoD_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcArray, "cuMemcpyAtoD_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcOffset, "cuMemcpyAtoD_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcOffset, "cuMemcpyAtoD_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpyAtoD_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyAtoD_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyHtoA_v2(
@@ -20972,19 +18244,19 @@ pub fn write_cuMemcpyHtoA_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstArray, "cuMemcpyHtoA_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstArray, "cuMemcpyHtoA_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstOffset, "cuMemcpyHtoA_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstOffset, "cuMemcpyHtoA_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcHost), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcHost, "cuMemcpyHtoA_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcHost, "cuMemcpyHtoA_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpyHtoA_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyHtoA_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyAtoH_v2(
@@ -20997,19 +18269,19 @@ pub fn write_cuMemcpyAtoH_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstHost), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstHost, "cuMemcpyAtoH_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstHost, "cuMemcpyAtoH_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcArray, "cuMemcpyAtoH_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcArray, "cuMemcpyAtoH_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcOffset, "cuMemcpyAtoH_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcOffset, "cuMemcpyAtoH_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpyAtoH_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyAtoH_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyAtoA_v2(
@@ -21023,23 +18295,23 @@ pub fn write_cuMemcpyAtoA_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstArray, "cuMemcpyAtoA_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstArray, "cuMemcpyAtoA_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstOffset, "cuMemcpyAtoA_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstOffset, "cuMemcpyAtoA_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcArray, "cuMemcpyAtoA_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcArray, "cuMemcpyAtoA_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcOffset, "cuMemcpyAtoA_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcOffset, "cuMemcpyAtoA_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpyAtoA_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyAtoA_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyHtoAAsync_v2(
@@ -21053,48 +18325,23 @@ pub fn write_cuMemcpyHtoAAsync_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstArray,
-        "cuMemcpyHtoAAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstArray, "cuMemcpyHtoAAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstOffset,
-        "cuMemcpyHtoAAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstOffset, "cuMemcpyHtoAAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcHost), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcHost,
-        "cuMemcpyHtoAAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcHost, "cuMemcpyHtoAAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ByteCount,
-        "cuMemcpyHtoAAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyHtoAAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemcpyHtoAAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpyHtoAAsync_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyAtoHAsync_v2(
@@ -21108,48 +18355,23 @@ pub fn write_cuMemcpyAtoHAsync_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstHost), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstHost,
-        "cuMemcpyAtoHAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstHost, "cuMemcpyAtoHAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcArray,
-        "cuMemcpyAtoHAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcArray, "cuMemcpyAtoHAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcOffset), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcOffset,
-        "cuMemcpyAtoHAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcOffset, "cuMemcpyAtoHAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ByteCount,
-        "cuMemcpyAtoHAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyAtoHAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemcpyAtoHAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpyAtoHAsync_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpy2D_v2(
@@ -21159,7 +18381,7 @@ pub fn write_cuMemcpy2D_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCopy), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pCopy, "cuMemcpy2D_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pCopy, "cuMemcpy2D_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpy2DUnaligned_v2(
@@ -21169,12 +18391,7 @@ pub fn write_cuMemcpy2DUnaligned_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCopy), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pCopy,
-        "cuMemcpy2DUnaligned_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pCopy, "cuMemcpy2DUnaligned_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpy3D_v2(
@@ -21184,7 +18401,7 @@ pub fn write_cuMemcpy3D_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCopy), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pCopy, "cuMemcpy3D_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pCopy, "cuMemcpy3D_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyHtoDAsync_v2(
@@ -21197,39 +18414,19 @@ pub fn write_cuMemcpyHtoDAsync_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstDevice,
-        "cuMemcpyHtoDAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemcpyHtoDAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcHost), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcHost,
-        "cuMemcpyHtoDAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcHost, "cuMemcpyHtoDAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ByteCount,
-        "cuMemcpyHtoDAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyHtoDAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemcpyHtoDAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpyHtoDAsync_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyDtoHAsync_v2(
@@ -21242,39 +18439,19 @@ pub fn write_cuMemcpyDtoHAsync_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstHost), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstHost,
-        "cuMemcpyDtoHAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstHost, "cuMemcpyDtoHAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcDevice,
-        "cuMemcpyDtoHAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcDevice, "cuMemcpyDtoHAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ByteCount,
-        "cuMemcpyDtoHAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyDtoHAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemcpyDtoHAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpyDtoHAsync_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyDtoDAsync_v2(
@@ -21287,39 +18464,19 @@ pub fn write_cuMemcpyDtoDAsync_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstDevice,
-        "cuMemcpyDtoDAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemcpyDtoDAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcDevice,
-        "cuMemcpyDtoDAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcDevice, "cuMemcpyDtoDAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &ByteCount,
-        "cuMemcpyDtoDAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyDtoDAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemcpyDtoDAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpyDtoDAsync_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpy2DAsync_v2(
@@ -21330,11 +18487,11 @@ pub fn write_cuMemcpy2DAsync_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCopy), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pCopy, "cuMemcpy2DAsync_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pCopy, "cuMemcpy2DAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuMemcpy2DAsync_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpy2DAsync_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpy3DAsync_v2(
@@ -21345,11 +18502,11 @@ pub fn write_cuMemcpy3DAsync_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCopy), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pCopy, "cuMemcpy3DAsync_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pCopy, "cuMemcpy3DAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuMemcpy3DAsync_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpy3DAsync_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD8_v2(
@@ -21361,15 +18518,15 @@ pub fn write_cuMemsetD8_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemsetD8_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD8_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(uc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&uc, "cuMemsetD8_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&uc, "cuMemsetD8_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(N), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&N, "cuMemsetD8_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&N, "cuMemsetD8_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD16_v2(
@@ -21381,15 +18538,15 @@ pub fn write_cuMemsetD16_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemsetD16_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD16_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(us), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&us, "cuMemsetD16_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&us, "cuMemsetD16_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(N), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&N, "cuMemsetD16_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&N, "cuMemsetD16_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD32_v2(
@@ -21401,15 +18558,15 @@ pub fn write_cuMemsetD32_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemsetD32_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD32_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ui), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ui, "cuMemsetD32_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ui, "cuMemsetD32_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(N), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&N, "cuMemsetD32_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&N, "cuMemsetD32_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD2D8_v2(
@@ -21423,23 +18580,23 @@ pub fn write_cuMemsetD2D8_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemsetD2D8_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD2D8_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstPitch), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstPitch, "cuMemsetD2D8_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstPitch, "cuMemsetD2D8_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(uc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&uc, "cuMemsetD2D8_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&uc, "cuMemsetD2D8_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Width), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Width, "cuMemsetD2D8_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Width, "cuMemsetD2D8_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Height), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Height, "cuMemsetD2D8_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Height, "cuMemsetD2D8_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD2D16_v2(
@@ -21453,23 +18610,23 @@ pub fn write_cuMemsetD2D16_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemsetD2D16_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD2D16_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstPitch), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstPitch, "cuMemsetD2D16_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstPitch, "cuMemsetD2D16_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(us), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&us, "cuMemsetD2D16_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&us, "cuMemsetD2D16_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Width), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Width, "cuMemsetD2D16_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Width, "cuMemsetD2D16_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Height), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Height, "cuMemsetD2D16_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Height, "cuMemsetD2D16_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD2D32_v2(
@@ -21483,23 +18640,23 @@ pub fn write_cuMemsetD2D32_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemsetD2D32_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD2D32_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstPitch), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstPitch, "cuMemsetD2D32_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstPitch, "cuMemsetD2D32_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ui), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ui, "cuMemsetD2D32_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ui, "cuMemsetD2D32_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Width), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Width, "cuMemsetD2D32_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Width, "cuMemsetD2D32_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Height), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Height, "cuMemsetD2D32_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Height, "cuMemsetD2D32_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpy(
@@ -21511,15 +18668,15 @@ pub fn write_cuMemcpy(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dst), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dst, "cuMemcpy", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dst, "cuMemcpy", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(src), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&src, "cuMemcpy", arg_idx, writer)?;
+    crate::CudaDisplay::write(&src, "cuMemcpy", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpy", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpy", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyAsync(
@@ -21532,19 +18689,19 @@ pub fn write_cuMemcpyAsync(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dst), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dst, "cuMemcpyAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dst, "cuMemcpyAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(src), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&src, "cuMemcpyAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&src, "cuMemcpyAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpyAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuMemcpyAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpyAsync", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyPeer(
@@ -21558,23 +18715,23 @@ pub fn write_cuMemcpyPeer(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemcpyPeer", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemcpyPeer", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstContext), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstContext, "cuMemcpyPeer", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstContext, "cuMemcpyPeer", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcDevice, "cuMemcpyPeer", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcDevice, "cuMemcpyPeer", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcContext), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcContext, "cuMemcpyPeer", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcContext, "cuMemcpyPeer", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpyPeer", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyPeer", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyPeerAsync(
@@ -21589,37 +18746,27 @@ pub fn write_cuMemcpyPeerAsync(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemcpyPeerAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemcpyPeerAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstContext), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstContext,
-        "cuMemcpyPeerAsync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstContext, "cuMemcpyPeerAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcDevice, "cuMemcpyPeerAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcDevice, "cuMemcpyPeerAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcContext), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcContext,
-        "cuMemcpyPeerAsync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcContext, "cuMemcpyPeerAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ByteCount), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ByteCount, "cuMemcpyPeerAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ByteCount, "cuMemcpyPeerAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuMemcpyPeerAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpyPeerAsync", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpy3DPeer(
@@ -21629,7 +18776,7 @@ pub fn write_cuMemcpy3DPeer(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCopy), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pCopy, "cuMemcpy3DPeer", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pCopy, "cuMemcpy3DPeer", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpy3DPeerAsync(
@@ -21640,11 +18787,11 @@ pub fn write_cuMemcpy3DPeerAsync(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCopy), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pCopy, "cuMemcpy3DPeerAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pCopy, "cuMemcpy3DPeerAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuMemcpy3DPeerAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpy3DPeerAsync", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpyBatchAsync(
@@ -21662,44 +18809,39 @@ pub fn write_cuMemcpyBatchAsync(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dsts), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dsts, "cuMemcpyBatchAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dsts, "cuMemcpyBatchAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcs), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&srcs, "cuMemcpyBatchAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&srcs, "cuMemcpyBatchAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(sizes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&sizes, "cuMemcpyBatchAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&sizes, "cuMemcpyBatchAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&count, "cuMemcpyBatchAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&count, "cuMemcpyBatchAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(attrs), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&attrs, "cuMemcpyBatchAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&attrs, "cuMemcpyBatchAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(attrsIdxs), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &attrsIdxs,
-        "cuMemcpyBatchAsync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&attrsIdxs, "cuMemcpyBatchAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numAttrs), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&numAttrs, "cuMemcpyBatchAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&numAttrs, "cuMemcpyBatchAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(failIdx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&failIdx, "cuMemcpyBatchAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&failIdx, "cuMemcpyBatchAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuMemcpyBatchAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpyBatchAsync", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemcpy3DBatchAsync(
@@ -21713,33 +18855,23 @@ pub fn write_cuMemcpy3DBatchAsync(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(numOps), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&numOps, "cuMemcpy3DBatchAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&numOps, "cuMemcpy3DBatchAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(opList), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&opList, "cuMemcpy3DBatchAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&opList, "cuMemcpy3DBatchAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(failIdx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &failIdx,
-        "cuMemcpy3DBatchAsync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&failIdx, "cuMemcpy3DBatchAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuMemcpy3DBatchAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuMemcpy3DBatchAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemcpy3DBatchAsync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemcpy3DBatchAsync", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD8Async(
@@ -21752,19 +18884,19 @@ pub fn write_cuMemsetD8Async(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemsetD8Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD8Async", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(uc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&uc, "cuMemsetD8Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&uc, "cuMemsetD8Async", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(N), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&N, "cuMemsetD8Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&N, "cuMemsetD8Async", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuMemsetD8Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuMemsetD8Async", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD16Async(
@@ -21777,19 +18909,19 @@ pub fn write_cuMemsetD16Async(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemsetD16Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD16Async", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(us), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&us, "cuMemsetD16Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&us, "cuMemsetD16Async", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(N), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&N, "cuMemsetD16Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&N, "cuMemsetD16Async", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuMemsetD16Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuMemsetD16Async", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD32Async(
@@ -21802,19 +18934,19 @@ pub fn write_cuMemsetD32Async(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemsetD32Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD32Async", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ui), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ui, "cuMemsetD32Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ui, "cuMemsetD32Async", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(N), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&N, "cuMemsetD32Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&N, "cuMemsetD32Async", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuMemsetD32Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuMemsetD32Async", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD2D8Async(
@@ -21829,27 +18961,27 @@ pub fn write_cuMemsetD2D8Async(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstDevice, "cuMemsetD2D8Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD2D8Async", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstPitch), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstPitch, "cuMemsetD2D8Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstPitch, "cuMemsetD2D8Async", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(uc), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&uc, "cuMemsetD2D8Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&uc, "cuMemsetD2D8Async", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Width), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Width, "cuMemsetD2D8Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Width, "cuMemsetD2D8Async", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Height), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Height, "cuMemsetD2D8Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Height, "cuMemsetD2D8Async", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuMemsetD2D8Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuMemsetD2D8Async", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD2D16Async(
@@ -21864,32 +18996,27 @@ pub fn write_cuMemsetD2D16Async(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstDevice,
-        "cuMemsetD2D16Async",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD2D16Async", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstPitch), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstPitch, "cuMemsetD2D16Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstPitch, "cuMemsetD2D16Async", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(us), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&us, "cuMemsetD2D16Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&us, "cuMemsetD2D16Async", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Width), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Width, "cuMemsetD2D16Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Width, "cuMemsetD2D16Async", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Height), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Height, "cuMemsetD2D16Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Height, "cuMemsetD2D16Async", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuMemsetD2D16Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuMemsetD2D16Async", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemsetD2D32Async(
@@ -21904,32 +19031,27 @@ pub fn write_cuMemsetD2D32Async(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstDevice,
-        "cuMemsetD2D32Async",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemsetD2D32Async", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstPitch), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dstPitch, "cuMemsetD2D32Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dstPitch, "cuMemsetD2D32Async", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ui), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&ui, "cuMemsetD2D32Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&ui, "cuMemsetD2D32Async", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Width), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Width, "cuMemsetD2D32Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Width, "cuMemsetD2D32Async", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Height), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Height, "cuMemsetD2D32Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Height, "cuMemsetD2D32Async", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuMemsetD2D32Async", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuMemsetD2D32Async", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamGetPriority(
@@ -21940,16 +19062,11 @@ pub fn write_cuStreamGetPriority(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuStreamGetPriority", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuStreamGetPriority", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(priority), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &priority,
-        "cuStreamGetPriority",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&priority, "cuStreamGetPriority", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamGetId(
@@ -21960,11 +19077,11 @@ pub fn write_cuStreamGetId(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuStreamGetId", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuStreamGetId", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(streamId), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&streamId, "cuStreamGetId", arg_idx, writer)?;
+    crate::CudaDisplay::write(&streamId, "cuStreamGetId", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamGetFlags(
@@ -21975,11 +19092,11 @@ pub fn write_cuStreamGetFlags(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuStreamGetFlags", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuStreamGetFlags", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuStreamGetFlags", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuStreamGetFlags", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamGetDevice(
@@ -21990,11 +19107,11 @@ pub fn write_cuStreamGetDevice(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuStreamGetDevice", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuStreamGetDevice", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&device, "cuStreamGetDevice", arg_idx, writer)?;
+    crate::CudaDisplay::write(&device, "cuStreamGetDevice", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamGetCtx(
@@ -22005,11 +19122,11 @@ pub fn write_cuStreamGetCtx(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuStreamGetCtx", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuStreamGetCtx", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pctx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pctx, "cuStreamGetCtx", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pctx, "cuStreamGetCtx", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamGetCtx_v2(
@@ -22021,15 +19138,15 @@ pub fn write_cuStreamGetCtx_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuStreamGetCtx_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuStreamGetCtx_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pCtx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pCtx, "cuStreamGetCtx_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pCtx, "cuStreamGetCtx_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pGreenCtx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pGreenCtx, "cuStreamGetCtx_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pGreenCtx, "cuStreamGetCtx_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamWaitEvent(
@@ -22041,15 +19158,15 @@ pub fn write_cuStreamWaitEvent(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuStreamWaitEvent", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuStreamWaitEvent", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hEvent), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hEvent, "cuStreamWaitEvent", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hEvent, "cuStreamWaitEvent", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Flags, "cuStreamWaitEvent", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Flags, "cuStreamWaitEvent", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamAddCallback(
@@ -22062,29 +19179,19 @@ pub fn write_cuStreamAddCallback(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuStreamAddCallback", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuStreamAddCallback", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(callback), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &callback,
-        "cuStreamAddCallback",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&callback, "cuStreamAddCallback", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(userData), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &userData,
-        "cuStreamAddCallback",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&userData, "cuStreamAddCallback", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuStreamAddCallback", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuStreamAddCallback", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamAttachMemAsync(
@@ -22097,34 +19204,19 @@ pub fn write_cuStreamAttachMemAsync(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuStreamAttachMemAsync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuStreamAttachMemAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dptr, "cuStreamAttachMemAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dptr, "cuStreamAttachMemAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(length), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &length,
-        "cuStreamAttachMemAsync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&length, "cuStreamAttachMemAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuStreamAttachMemAsync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuStreamAttachMemAsync", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamQuery(
@@ -22134,7 +19226,7 @@ pub fn write_cuStreamQuery(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuStreamQuery", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuStreamQuery", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamSynchronize(
@@ -22144,7 +19236,7 @@ pub fn write_cuStreamSynchronize(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuStreamSynchronize", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuStreamSynchronize", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuEventRecord(
@@ -22155,11 +19247,11 @@ pub fn write_cuEventRecord(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hEvent), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hEvent, "cuEventRecord", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hEvent, "cuEventRecord", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuEventRecord", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuEventRecord", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuEventRecordWithFlags(
@@ -22171,30 +19263,15 @@ pub fn write_cuEventRecordWithFlags(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hEvent), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hEvent,
-        "cuEventRecordWithFlags",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hEvent, "cuEventRecordWithFlags", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuEventRecordWithFlags",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuEventRecordWithFlags", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuEventRecordWithFlags",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuEventRecordWithFlags", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLaunchKernel(
@@ -22214,52 +19291,47 @@ pub fn write_cuLaunchKernel(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(f), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&f, "cuLaunchKernel", arg_idx, writer)?;
+    crate::CudaDisplay::write(&f, "cuLaunchKernel", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(gridDimX), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&gridDimX, "cuLaunchKernel", arg_idx, writer)?;
+    crate::CudaDisplay::write(&gridDimX, "cuLaunchKernel", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(gridDimY), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&gridDimY, "cuLaunchKernel", arg_idx, writer)?;
+    crate::CudaDisplay::write(&gridDimY, "cuLaunchKernel", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(gridDimZ), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&gridDimZ, "cuLaunchKernel", arg_idx, writer)?;
+    crate::CudaDisplay::write(&gridDimZ, "cuLaunchKernel", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(blockDimX), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&blockDimX, "cuLaunchKernel", arg_idx, writer)?;
+    crate::CudaDisplay::write(&blockDimX, "cuLaunchKernel", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(blockDimY), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&blockDimY, "cuLaunchKernel", arg_idx, writer)?;
+    crate::CudaDisplay::write(&blockDimY, "cuLaunchKernel", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(blockDimZ), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&blockDimZ, "cuLaunchKernel", arg_idx, writer)?;
+    crate::CudaDisplay::write(&blockDimZ, "cuLaunchKernel", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(sharedMemBytes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &sharedMemBytes,
-        "cuLaunchKernel",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&sharedMemBytes, "cuLaunchKernel", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuLaunchKernel", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuLaunchKernel", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(kernelParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&kernelParams, "cuLaunchKernel", arg_idx, writer)?;
+    crate::CudaDisplay::write(&kernelParams, "cuLaunchKernel", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(extra), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&extra, "cuLaunchKernel", arg_idx, writer)?;
+    crate::CudaDisplay::write(&extra, "cuLaunchKernel", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLaunchKernelEx(
@@ -22272,24 +19344,19 @@ pub fn write_cuLaunchKernelEx(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(config), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&config, "cuLaunchKernelEx", arg_idx, writer)?;
+    crate::CudaDisplay::write(&config, "cuLaunchKernelEx", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(f), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&f, "cuLaunchKernelEx", arg_idx, writer)?;
+    crate::CudaDisplay::write(&f, "cuLaunchKernelEx", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(kernelParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &kernelParams,
-        "cuLaunchKernelEx",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&kernelParams, "cuLaunchKernelEx", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(extra), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&extra, "cuLaunchKernelEx", arg_idx, writer)?;
+    crate::CudaDisplay::write(&extra, "cuLaunchKernelEx", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLaunchHostFunc(
@@ -22301,15 +19368,15 @@ pub fn write_cuLaunchHostFunc(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuLaunchHostFunc", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuLaunchHostFunc", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(fn_), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&fn_, "cuLaunchHostFunc", arg_idx, writer)?;
+    crate::CudaDisplay::write(&fn_, "cuLaunchHostFunc", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(userData), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&userData, "cuLaunchHostFunc", arg_idx, writer)?;
+    crate::CudaDisplay::write(&userData, "cuLaunchHostFunc", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphicsMapResources(
@@ -22321,30 +19388,15 @@ pub fn write_cuGraphicsMapResources(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &count,
-        "cuGraphicsMapResources",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&count, "cuGraphicsMapResources", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(resources), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &resources,
-        "cuGraphicsMapResources",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&resources, "cuGraphicsMapResources", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuGraphicsMapResources",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuGraphicsMapResources", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphicsUnmapResources(
@@ -22356,30 +19408,15 @@ pub fn write_cuGraphicsUnmapResources(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &count,
-        "cuGraphicsUnmapResources",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&count, "cuGraphicsUnmapResources", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(resources), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &resources,
-        "cuGraphicsUnmapResources",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&resources, "cuGraphicsUnmapResources", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuGraphicsUnmapResources",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuGraphicsUnmapResources", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamWriteValue32(
@@ -22392,19 +19429,19 @@ pub fn write_cuStreamWriteValue32(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&stream, "cuStreamWriteValue32", arg_idx, writer)?;
+    crate::CudaDisplay::write(&stream, "cuStreamWriteValue32", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(addr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&addr, "cuStreamWriteValue32", arg_idx, writer)?;
+    crate::CudaDisplay::write(&addr, "cuStreamWriteValue32", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&value, "cuStreamWriteValue32", arg_idx, writer)?;
+    crate::CudaDisplay::write(&value, "cuStreamWriteValue32", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuStreamWriteValue32", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuStreamWriteValue32", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamWaitValue32(
@@ -22417,19 +19454,19 @@ pub fn write_cuStreamWaitValue32(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&stream, "cuStreamWaitValue32", arg_idx, writer)?;
+    crate::CudaDisplay::write(&stream, "cuStreamWaitValue32", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(addr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&addr, "cuStreamWaitValue32", arg_idx, writer)?;
+    crate::CudaDisplay::write(&addr, "cuStreamWaitValue32", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&value, "cuStreamWaitValue32", arg_idx, writer)?;
+    crate::CudaDisplay::write(&value, "cuStreamWaitValue32", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuStreamWaitValue32", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuStreamWaitValue32", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamWriteValue64(
@@ -22442,19 +19479,19 @@ pub fn write_cuStreamWriteValue64(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&stream, "cuStreamWriteValue64", arg_idx, writer)?;
+    crate::CudaDisplay::write(&stream, "cuStreamWriteValue64", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(addr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&addr, "cuStreamWriteValue64", arg_idx, writer)?;
+    crate::CudaDisplay::write(&addr, "cuStreamWriteValue64", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&value, "cuStreamWriteValue64", arg_idx, writer)?;
+    crate::CudaDisplay::write(&value, "cuStreamWriteValue64", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuStreamWriteValue64", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuStreamWriteValue64", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamWaitValue64(
@@ -22467,19 +19504,19 @@ pub fn write_cuStreamWaitValue64(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&stream, "cuStreamWaitValue64", arg_idx, writer)?;
+    crate::CudaDisplay::write(&stream, "cuStreamWaitValue64", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(addr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&addr, "cuStreamWaitValue64", arg_idx, writer)?;
+    crate::CudaDisplay::write(&addr, "cuStreamWaitValue64", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&value, "cuStreamWaitValue64", arg_idx, writer)?;
+    crate::CudaDisplay::write(&value, "cuStreamWaitValue64", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuStreamWaitValue64", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuStreamWaitValue64", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamBatchMemOp(
@@ -22492,11 +19529,11 @@ pub fn write_cuStreamBatchMemOp(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&stream, "cuStreamBatchMemOp", arg_idx, writer)?;
+    crate::CudaDisplay::write(&stream, "cuStreamBatchMemOp", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&count, "cuStreamBatchMemOp", arg_idx, writer)?;
+    crate::CudaDisplay::write(&count, "cuStreamBatchMemOp", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(paramArray), ": ").as_bytes())?;
@@ -22505,7 +19542,7 @@ pub fn write_cuStreamBatchMemOp(
         if i != 0 {
             writer.write_all(b", ")?;
         }
-        crate::format::CudaDisplay::write(
+        crate::CudaDisplay::write(
             unsafe { &*paramArray.add(i as usize) },
             "cuStreamBatchMemOp",
             arg_idx,
@@ -22516,7 +19553,7 @@ pub fn write_cuStreamBatchMemOp(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuStreamBatchMemOp", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuStreamBatchMemOp", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamWriteValue32_ptsz(
@@ -22529,39 +19566,19 @@ pub fn write_cuStreamWriteValue32_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &stream,
-        "cuStreamWriteValue32_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&stream, "cuStreamWriteValue32_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(addr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &addr,
-        "cuStreamWriteValue32_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&addr, "cuStreamWriteValue32_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &value,
-        "cuStreamWriteValue32_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&value, "cuStreamWriteValue32_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuStreamWriteValue32_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuStreamWriteValue32_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamWaitValue32_ptsz(
@@ -22574,39 +19591,19 @@ pub fn write_cuStreamWaitValue32_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &stream,
-        "cuStreamWaitValue32_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&stream, "cuStreamWaitValue32_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(addr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &addr,
-        "cuStreamWaitValue32_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&addr, "cuStreamWaitValue32_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &value,
-        "cuStreamWaitValue32_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&value, "cuStreamWaitValue32_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuStreamWaitValue32_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuStreamWaitValue32_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamWriteValue64_ptsz(
@@ -22619,39 +19616,19 @@ pub fn write_cuStreamWriteValue64_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &stream,
-        "cuStreamWriteValue64_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&stream, "cuStreamWriteValue64_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(addr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &addr,
-        "cuStreamWriteValue64_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&addr, "cuStreamWriteValue64_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &value,
-        "cuStreamWriteValue64_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&value, "cuStreamWriteValue64_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuStreamWriteValue64_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuStreamWriteValue64_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamWaitValue64_ptsz(
@@ -22664,39 +19641,19 @@ pub fn write_cuStreamWaitValue64_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &stream,
-        "cuStreamWaitValue64_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&stream, "cuStreamWaitValue64_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(addr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &addr,
-        "cuStreamWaitValue64_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&addr, "cuStreamWaitValue64_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &value,
-        "cuStreamWaitValue64_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&value, "cuStreamWaitValue64_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuStreamWaitValue64_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuStreamWaitValue64_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamBatchMemOp_ptsz(
@@ -22709,21 +19666,11 @@ pub fn write_cuStreamBatchMemOp_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &stream,
-        "cuStreamBatchMemOp_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&stream, "cuStreamBatchMemOp_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &count,
-        "cuStreamBatchMemOp_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&count, "cuStreamBatchMemOp_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(paramArray), ": ").as_bytes())?;
@@ -22732,7 +19679,7 @@ pub fn write_cuStreamBatchMemOp_ptsz(
         if i != 0 {
             writer.write_all(b", ")?;
         }
-        crate::format::CudaDisplay::write(
+        crate::CudaDisplay::write(
             unsafe { &*paramArray.add(i as usize) },
             "cuStreamBatchMemOp_ptsz",
             arg_idx,
@@ -22743,12 +19690,7 @@ pub fn write_cuStreamBatchMemOp_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuStreamBatchMemOp_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuStreamBatchMemOp_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamWriteValue32_v2(
@@ -22761,39 +19703,19 @@ pub fn write_cuStreamWriteValue32_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &stream,
-        "cuStreamWriteValue32_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&stream, "cuStreamWriteValue32_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(addr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &addr,
-        "cuStreamWriteValue32_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&addr, "cuStreamWriteValue32_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &value,
-        "cuStreamWriteValue32_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&value, "cuStreamWriteValue32_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuStreamWriteValue32_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuStreamWriteValue32_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamWaitValue32_v2(
@@ -22806,34 +19728,19 @@ pub fn write_cuStreamWaitValue32_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &stream,
-        "cuStreamWaitValue32_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&stream, "cuStreamWaitValue32_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(addr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&addr, "cuStreamWaitValue32_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&addr, "cuStreamWaitValue32_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &value,
-        "cuStreamWaitValue32_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&value, "cuStreamWaitValue32_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuStreamWaitValue32_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuStreamWaitValue32_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamWriteValue64_v2(
@@ -22846,39 +19753,19 @@ pub fn write_cuStreamWriteValue64_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &stream,
-        "cuStreamWriteValue64_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&stream, "cuStreamWriteValue64_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(addr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &addr,
-        "cuStreamWriteValue64_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&addr, "cuStreamWriteValue64_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &value,
-        "cuStreamWriteValue64_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&value, "cuStreamWriteValue64_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuStreamWriteValue64_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuStreamWriteValue64_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamWaitValue64_v2(
@@ -22891,34 +19778,19 @@ pub fn write_cuStreamWaitValue64_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &stream,
-        "cuStreamWaitValue64_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&stream, "cuStreamWaitValue64_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(addr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&addr, "cuStreamWaitValue64_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&addr, "cuStreamWaitValue64_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(value), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &value,
-        "cuStreamWaitValue64_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&value, "cuStreamWaitValue64_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuStreamWaitValue64_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuStreamWaitValue64_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamBatchMemOp_v2(
@@ -22931,16 +19803,11 @@ pub fn write_cuStreamBatchMemOp_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &stream,
-        "cuStreamBatchMemOp_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&stream, "cuStreamBatchMemOp_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&count, "cuStreamBatchMemOp_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&count, "cuStreamBatchMemOp_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(paramArray), ": ").as_bytes())?;
@@ -22949,7 +19816,7 @@ pub fn write_cuStreamBatchMemOp_v2(
         if i != 0 {
             writer.write_all(b", ")?;
         }
-        crate::format::CudaDisplay::write(
+        crate::CudaDisplay::write(
             unsafe { &*paramArray.add(i as usize) },
             "cuStreamBatchMemOp_v2",
             arg_idx,
@@ -22960,7 +19827,7 @@ pub fn write_cuStreamBatchMemOp_v2(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuStreamBatchMemOp_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuStreamBatchMemOp_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemPrefetchAsync(
@@ -22973,24 +19840,19 @@ pub fn write_cuMemPrefetchAsync(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(devPtr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&devPtr, "cuMemPrefetchAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&devPtr, "cuMemPrefetchAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&count, "cuMemPrefetchAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&count, "cuMemPrefetchAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dstDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstDevice,
-        "cuMemPrefetchAsync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstDevice, "cuMemPrefetchAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuMemPrefetchAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuMemPrefetchAsync", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemPrefetchAsync_v2(
@@ -23004,38 +19866,23 @@ pub fn write_cuMemPrefetchAsync_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(devPtr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &devPtr,
-        "cuMemPrefetchAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&devPtr, "cuMemPrefetchAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&count, "cuMemPrefetchAsync_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&count, "cuMemPrefetchAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(location), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &location,
-        "cuMemPrefetchAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&location, "cuMemPrefetchAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuMemPrefetchAsync_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuMemPrefetchAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemPrefetchAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemPrefetchAsync_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuLaunchCooperativeKernel(
@@ -23054,65 +19901,35 @@ pub fn write_cuLaunchCooperativeKernel(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(f), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&f, "cuLaunchCooperativeKernel", arg_idx, writer)?;
+    crate::CudaDisplay::write(&f, "cuLaunchCooperativeKernel", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(gridDimX), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &gridDimX,
-        "cuLaunchCooperativeKernel",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&gridDimX, "cuLaunchCooperativeKernel", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(gridDimY), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &gridDimY,
-        "cuLaunchCooperativeKernel",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&gridDimY, "cuLaunchCooperativeKernel", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(gridDimZ), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &gridDimZ,
-        "cuLaunchCooperativeKernel",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&gridDimZ, "cuLaunchCooperativeKernel", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(blockDimX), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &blockDimX,
-        "cuLaunchCooperativeKernel",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&blockDimX, "cuLaunchCooperativeKernel", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(blockDimY), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &blockDimY,
-        "cuLaunchCooperativeKernel",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&blockDimY, "cuLaunchCooperativeKernel", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(blockDimZ), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &blockDimZ,
-        "cuLaunchCooperativeKernel",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&blockDimZ, "cuLaunchCooperativeKernel", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(sharedMemBytes), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &sharedMemBytes,
         "cuLaunchCooperativeKernel",
         arg_idx,
@@ -23121,16 +19938,11 @@ pub fn write_cuLaunchCooperativeKernel(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuLaunchCooperativeKernel",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuLaunchCooperativeKernel", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(kernelParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &kernelParams,
         "cuLaunchCooperativeKernel",
         arg_idx,
@@ -23148,7 +19960,7 @@ pub fn write_cuSignalExternalSemaphoresAsync(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(extSemArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &extSemArray,
         "cuSignalExternalSemaphoresAsync",
         arg_idx,
@@ -23157,7 +19969,7 @@ pub fn write_cuSignalExternalSemaphoresAsync(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(paramsArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &paramsArray,
         "cuSignalExternalSemaphoresAsync",
         arg_idx,
@@ -23166,7 +19978,7 @@ pub fn write_cuSignalExternalSemaphoresAsync(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numExtSems), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numExtSems,
         "cuSignalExternalSemaphoresAsync",
         arg_idx,
@@ -23175,7 +19987,7 @@ pub fn write_cuSignalExternalSemaphoresAsync(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &stream,
         "cuSignalExternalSemaphoresAsync",
         arg_idx,
@@ -23193,7 +20005,7 @@ pub fn write_cuWaitExternalSemaphoresAsync(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(extSemArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &extSemArray,
         "cuWaitExternalSemaphoresAsync",
         arg_idx,
@@ -23202,7 +20014,7 @@ pub fn write_cuWaitExternalSemaphoresAsync(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(paramsArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &paramsArray,
         "cuWaitExternalSemaphoresAsync",
         arg_idx,
@@ -23211,7 +20023,7 @@ pub fn write_cuWaitExternalSemaphoresAsync(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numExtSems), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numExtSems,
         "cuWaitExternalSemaphoresAsync",
         arg_idx,
@@ -23220,7 +20032,7 @@ pub fn write_cuWaitExternalSemaphoresAsync(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &stream,
         "cuWaitExternalSemaphoresAsync",
         arg_idx,
@@ -23235,12 +20047,7 @@ pub fn write_cuStreamBeginCapture(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuStreamBeginCapture",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuStreamBeginCapture", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamBeginCapture_ptsz(
@@ -23250,12 +20057,7 @@ pub fn write_cuStreamBeginCapture_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuStreamBeginCapture_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuStreamBeginCapture_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamBeginCapture_v2(
@@ -23266,21 +20068,11 @@ pub fn write_cuStreamBeginCapture_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuStreamBeginCapture_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuStreamBeginCapture_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(mode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &mode,
-        "cuStreamBeginCapture_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&mode, "cuStreamBeginCapture_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamBeginCaptureToGraph(
@@ -23295,25 +20087,15 @@ pub fn write_cuStreamBeginCaptureToGraph(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuStreamBeginCaptureToGraph",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuStreamBeginCaptureToGraph", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hGraph,
-        "cuStreamBeginCaptureToGraph",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hGraph, "cuStreamBeginCaptureToGraph", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dependencies,
         "cuStreamBeginCaptureToGraph",
         arg_idx,
@@ -23322,7 +20104,7 @@ pub fn write_cuStreamBeginCaptureToGraph(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencyData), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dependencyData,
         "cuStreamBeginCaptureToGraph",
         arg_idx,
@@ -23331,7 +20113,7 @@ pub fn write_cuStreamBeginCaptureToGraph(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies,
         "cuStreamBeginCaptureToGraph",
         arg_idx,
@@ -23340,12 +20122,7 @@ pub fn write_cuStreamBeginCaptureToGraph(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(mode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &mode,
-        "cuStreamBeginCaptureToGraph",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&mode, "cuStreamBeginCaptureToGraph", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamEndCapture(
@@ -23356,11 +20133,11 @@ pub fn write_cuStreamEndCapture(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuStreamEndCapture", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuStreamEndCapture", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(phGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&phGraph, "cuStreamEndCapture", arg_idx, writer)?;
+    crate::CudaDisplay::write(&phGraph, "cuStreamEndCapture", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamIsCapturing(
@@ -23371,16 +20148,11 @@ pub fn write_cuStreamIsCapturing(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuStreamIsCapturing", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuStreamIsCapturing", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(captureStatus), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &captureStatus,
-        "cuStreamIsCapturing",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&captureStatus, "cuStreamIsCapturing", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamGetCaptureInfo(
@@ -23392,16 +20164,11 @@ pub fn write_cuStreamGetCaptureInfo(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuStreamGetCaptureInfo",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuStreamGetCaptureInfo", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(captureStatus_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &captureStatus_out,
         "cuStreamGetCaptureInfo",
         arg_idx,
@@ -23410,12 +20177,7 @@ pub fn write_cuStreamGetCaptureInfo(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(id_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &id_out,
-        "cuStreamGetCaptureInfo",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&id_out, "cuStreamGetCaptureInfo", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamGetCaptureInfo_ptsz(
@@ -23427,16 +20189,11 @@ pub fn write_cuStreamGetCaptureInfo_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuStreamGetCaptureInfo_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuStreamGetCaptureInfo_ptsz", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(captureStatus_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &captureStatus_out,
         "cuStreamGetCaptureInfo_ptsz",
         arg_idx,
@@ -23445,12 +20202,7 @@ pub fn write_cuStreamGetCaptureInfo_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(id_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &id_out,
-        "cuStreamGetCaptureInfo_ptsz",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&id_out, "cuStreamGetCaptureInfo_ptsz", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamGetCaptureInfo_v2(
@@ -23465,16 +20217,11 @@ pub fn write_cuStreamGetCaptureInfo_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuStreamGetCaptureInfo_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuStreamGetCaptureInfo_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(captureStatus_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &captureStatus_out,
         "cuStreamGetCaptureInfo_v2",
         arg_idx,
@@ -23483,25 +20230,15 @@ pub fn write_cuStreamGetCaptureInfo_v2(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(id_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &id_out,
-        "cuStreamGetCaptureInfo_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&id_out, "cuStreamGetCaptureInfo_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(graph_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &graph_out,
-        "cuStreamGetCaptureInfo_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&graph_out, "cuStreamGetCaptureInfo_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dependencies_out,
         "cuStreamGetCaptureInfo_v2",
         arg_idx,
@@ -23510,7 +20247,7 @@ pub fn write_cuStreamGetCaptureInfo_v2(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies_out,
         "cuStreamGetCaptureInfo_v2",
         arg_idx,
@@ -23531,16 +20268,11 @@ pub fn write_cuStreamGetCaptureInfo_v3(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuStreamGetCaptureInfo_v3",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuStreamGetCaptureInfo_v3", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(captureStatus_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &captureStatus_out,
         "cuStreamGetCaptureInfo_v3",
         arg_idx,
@@ -23549,25 +20281,15 @@ pub fn write_cuStreamGetCaptureInfo_v3(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(id_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &id_out,
-        "cuStreamGetCaptureInfo_v3",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&id_out, "cuStreamGetCaptureInfo_v3", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(graph_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &graph_out,
-        "cuStreamGetCaptureInfo_v3",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&graph_out, "cuStreamGetCaptureInfo_v3", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dependencies_out,
         "cuStreamGetCaptureInfo_v3",
         arg_idx,
@@ -23576,7 +20298,7 @@ pub fn write_cuStreamGetCaptureInfo_v3(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(edgeData_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &edgeData_out,
         "cuStreamGetCaptureInfo_v3",
         arg_idx,
@@ -23585,7 +20307,7 @@ pub fn write_cuStreamGetCaptureInfo_v3(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies_out,
         "cuStreamGetCaptureInfo_v3",
         arg_idx,
@@ -23604,29 +20326,19 @@ pub fn write_cuGraphAddKernelNode(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phGraphNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &phGraphNode,
-        "cuGraphAddKernelNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&phGraphNode, "cuGraphAddKernelNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hGraph, "cuGraphAddKernelNode", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphAddKernelNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dependencies,
-        "cuGraphAddKernelNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dependencies, "cuGraphAddKernelNode", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies,
         "cuGraphAddKernelNode",
         arg_idx,
@@ -23635,12 +20347,7 @@ pub fn write_cuGraphAddKernelNode(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &nodeParams,
-        "cuGraphAddKernelNode",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&nodeParams, "cuGraphAddKernelNode", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphKernelNodeGetParams(
@@ -23651,16 +20358,11 @@ pub fn write_cuGraphKernelNodeGetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hNode,
-        "cuGraphKernelNodeGetParams",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hNode, "cuGraphKernelNodeGetParams", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &nodeParams,
         "cuGraphKernelNodeGetParams",
         arg_idx,
@@ -23676,16 +20378,11 @@ pub fn write_cuGraphKernelNodeSetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hNode,
-        "cuGraphKernelNodeSetParams",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hNode, "cuGraphKernelNodeSetParams", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &nodeParams,
         "cuGraphKernelNodeSetParams",
         arg_idx,
@@ -23702,7 +20399,7 @@ pub fn write_cuGraphExecKernelNodeSetParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraphExec), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hGraphExec,
         "cuGraphExecKernelNodeSetParams",
         arg_idx,
@@ -23711,7 +20408,7 @@ pub fn write_cuGraphExecKernelNodeSetParams(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hNode,
         "cuGraphExecKernelNodeSetParams",
         arg_idx,
@@ -23720,7 +20417,7 @@ pub fn write_cuGraphExecKernelNodeSetParams(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(nodeParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &nodeParams,
         "cuGraphExecKernelNodeSetParams",
         arg_idx,
@@ -23737,7 +20434,7 @@ pub fn write_cuGraphInstantiateWithParams(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phGraphExec), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &phGraphExec,
         "cuGraphInstantiateWithParams",
         arg_idx,
@@ -23746,16 +20443,11 @@ pub fn write_cuGraphInstantiateWithParams(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hGraph,
-        "cuGraphInstantiateWithParams",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphInstantiateWithParams", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(instantiateParams), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &instantiateParams,
         "cuGraphInstantiateWithParams",
         arg_idx,
@@ -23773,34 +20465,19 @@ pub fn write_cuGraphExecUpdate(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraphExec), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hGraphExec,
-        "cuGraphExecUpdate",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hGraphExec, "cuGraphExecUpdate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hGraph, "cuGraphExecUpdate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphExecUpdate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hErrorNode_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hErrorNode_out,
-        "cuGraphExecUpdate",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hErrorNode_out, "cuGraphExecUpdate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(updateResult_out), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &updateResult_out,
-        "cuGraphExecUpdate",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&updateResult_out, "cuGraphExecUpdate", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphUpload(
@@ -23811,11 +20488,11 @@ pub fn write_cuGraphUpload(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hGraph, "cuGraphUpload", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphUpload", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuGraphUpload", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuGraphUpload", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphLaunch(
@@ -23826,11 +20503,11 @@ pub fn write_cuGraphLaunch(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hGraph, "cuGraphLaunch", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphLaunch", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuGraphLaunch", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuGraphLaunch", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamCopyAttributes(
@@ -23841,21 +20518,11 @@ pub fn write_cuStreamCopyAttributes(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dstStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dstStream,
-        "cuStreamCopyAttributes",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dstStream, "cuStreamCopyAttributes", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(srcStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &srcStream,
-        "cuStreamCopyAttributes",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&srcStream, "cuStreamCopyAttributes", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuIpcOpenMemHandle(
@@ -23867,15 +20534,15 @@ pub fn write_cuIpcOpenMemHandle(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pdptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pdptr, "cuIpcOpenMemHandle", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pdptr, "cuIpcOpenMemHandle", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(handle), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&handle, "cuIpcOpenMemHandle", arg_idx, writer)?;
+    crate::CudaDisplay::write(&handle, "cuIpcOpenMemHandle", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Flags, "cuIpcOpenMemHandle", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Flags, "cuIpcOpenMemHandle", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphInstantiate(
@@ -23889,43 +20556,23 @@ pub fn write_cuGraphInstantiate(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phGraphExec), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &phGraphExec,
-        "cuGraphInstantiate",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&phGraphExec, "cuGraphInstantiate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hGraph, "cuGraphInstantiate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphInstantiate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(phErrorNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &phErrorNode,
-        "cuGraphInstantiate",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&phErrorNode, "cuGraphInstantiate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(logBuffer), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &logBuffer,
-        "cuGraphInstantiate",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&logBuffer, "cuGraphInstantiate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(bufferSize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &bufferSize,
-        "cuGraphInstantiate",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&bufferSize, "cuGraphInstantiate", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphInstantiate_v2(
@@ -23939,48 +20586,23 @@ pub fn write_cuGraphInstantiate_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phGraphExec), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &phGraphExec,
-        "cuGraphInstantiate_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&phGraphExec, "cuGraphInstantiate_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hGraph), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hGraph,
-        "cuGraphInstantiate_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hGraph, "cuGraphInstantiate_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(phErrorNode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &phErrorNode,
-        "cuGraphInstantiate_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&phErrorNode, "cuGraphInstantiate_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(logBuffer), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &logBuffer,
-        "cuGraphInstantiate_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&logBuffer, "cuGraphInstantiate_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(bufferSize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &bufferSize,
-        "cuGraphInstantiate_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&bufferSize, "cuGraphInstantiate_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemMapArrayAsync(
@@ -23997,7 +20619,7 @@ pub fn write_cuMemMapArrayAsync(
         if i != 0 {
             writer.write_all(b", ")?;
         }
-        crate::format::CudaDisplay::write(
+        crate::CudaDisplay::write(
             unsafe { &*mapInfoList.add(i as usize) },
             "cuMemMapArrayAsync",
             arg_idx,
@@ -24008,11 +20630,11 @@ pub fn write_cuMemMapArrayAsync(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&count, "cuMemMapArrayAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&count, "cuMemMapArrayAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuMemMapArrayAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuMemMapArrayAsync", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemFreeAsync(
@@ -24023,11 +20645,11 @@ pub fn write_cuMemFreeAsync(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dptr, "cuMemFreeAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dptr, "cuMemFreeAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuMemFreeAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuMemFreeAsync", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemAllocAsync(
@@ -24039,15 +20661,15 @@ pub fn write_cuMemAllocAsync(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dptr, "cuMemAllocAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dptr, "cuMemAllocAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(bytesize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&bytesize, "cuMemAllocAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&bytesize, "cuMemAllocAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&hStream, "cuMemAllocAsync", arg_idx, writer)?;
+    crate::CudaDisplay::write(&hStream, "cuMemAllocAsync", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemAllocFromPoolAsync(
@@ -24060,39 +20682,19 @@ pub fn write_cuMemAllocFromPoolAsync(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dptr,
-        "cuMemAllocFromPoolAsync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dptr, "cuMemAllocFromPoolAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(bytesize), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &bytesize,
-        "cuMemAllocFromPoolAsync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&bytesize, "cuMemAllocFromPoolAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pool), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pool,
-        "cuMemAllocFromPoolAsync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pool, "cuMemAllocFromPoolAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuMemAllocFromPoolAsync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuMemAllocFromPoolAsync", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamUpdateCaptureDependencies(
@@ -24105,7 +20707,7 @@ pub fn write_cuStreamUpdateCaptureDependencies(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hStream,
         "cuStreamUpdateCaptureDependencies",
         arg_idx,
@@ -24114,7 +20716,7 @@ pub fn write_cuStreamUpdateCaptureDependencies(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dependencies,
         "cuStreamUpdateCaptureDependencies",
         arg_idx,
@@ -24123,7 +20725,7 @@ pub fn write_cuStreamUpdateCaptureDependencies(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies,
         "cuStreamUpdateCaptureDependencies",
         arg_idx,
@@ -24132,7 +20734,7 @@ pub fn write_cuStreamUpdateCaptureDependencies(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &flags,
         "cuStreamUpdateCaptureDependencies",
         arg_idx,
@@ -24151,7 +20753,7 @@ pub fn write_cuStreamUpdateCaptureDependencies_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hStream,
         "cuStreamUpdateCaptureDependencies_v2",
         arg_idx,
@@ -24160,7 +20762,7 @@ pub fn write_cuStreamUpdateCaptureDependencies_v2(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dependencies,
         "cuStreamUpdateCaptureDependencies_v2",
         arg_idx,
@@ -24169,7 +20771,7 @@ pub fn write_cuStreamUpdateCaptureDependencies_v2(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(dependencyData), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dependencyData,
         "cuStreamUpdateCaptureDependencies_v2",
         arg_idx,
@@ -24178,7 +20780,7 @@ pub fn write_cuStreamUpdateCaptureDependencies_v2(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(numDependencies), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &numDependencies,
         "cuStreamUpdateCaptureDependencies_v2",
         arg_idx,
@@ -24187,7 +20789,7 @@ pub fn write_cuStreamUpdateCaptureDependencies_v2(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &flags,
         "cuStreamUpdateCaptureDependencies_v2",
         arg_idx,
@@ -24206,7 +20808,7 @@ pub fn write_cuMemBatchDecompressAsync(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(paramsArray), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &paramsArray,
         "cuMemBatchDecompressAsync",
         arg_idx,
@@ -24215,25 +20817,15 @@ pub fn write_cuMemBatchDecompressAsync(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &count,
-        "cuMemBatchDecompressAsync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&count, "cuMemBatchDecompressAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuMemBatchDecompressAsync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuMemBatchDecompressAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(errorIndex), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &errorIndex,
         "cuMemBatchDecompressAsync",
         arg_idx,
@@ -24242,12 +20834,7 @@ pub fn write_cuMemBatchDecompressAsync(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &stream,
-        "cuMemBatchDecompressAsync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&stream, "cuMemBatchDecompressAsync", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGetProcAddress(
@@ -24260,24 +20847,19 @@ pub fn write_cuGetProcAddress(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(symbol), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&symbol, "cuGetProcAddress", arg_idx, writer)?;
+    crate::CudaDisplay::write(&symbol, "cuGetProcAddress", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pfn), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pfn, "cuGetProcAddress", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pfn, "cuGetProcAddress", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(cudaVersion), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &cudaVersion,
-        "cuGetProcAddress",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&cudaVersion, "cuGetProcAddress", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuGetProcAddress", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuGetProcAddress", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCheckpointProcessGetRestoreThreadId(
@@ -24288,7 +20870,7 @@ pub fn write_cuCheckpointProcessGetRestoreThreadId(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pid), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pid,
         "cuCheckpointProcessGetRestoreThreadId",
         arg_idx,
@@ -24297,7 +20879,7 @@ pub fn write_cuCheckpointProcessGetRestoreThreadId(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(tid), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &tid,
         "cuCheckpointProcessGetRestoreThreadId",
         arg_idx,
@@ -24313,21 +20895,11 @@ pub fn write_cuCheckpointProcessGetState(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pid), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pid,
-        "cuCheckpointProcessGetState",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pid, "cuCheckpointProcessGetState", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(state), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &state,
-        "cuCheckpointProcessGetState",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&state, "cuCheckpointProcessGetState", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCheckpointProcessLock(
@@ -24338,16 +20910,11 @@ pub fn write_cuCheckpointProcessLock(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pid), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pid, "cuCheckpointProcessLock", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pid, "cuCheckpointProcessLock", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(args), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &args,
-        "cuCheckpointProcessLock",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&args, "cuCheckpointProcessLock", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCheckpointProcessCheckpoint(
@@ -24358,21 +20925,11 @@ pub fn write_cuCheckpointProcessCheckpoint(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pid), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pid,
-        "cuCheckpointProcessCheckpoint",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pid, "cuCheckpointProcessCheckpoint", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(args), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &args,
-        "cuCheckpointProcessCheckpoint",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&args, "cuCheckpointProcessCheckpoint", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCheckpointProcessRestore(
@@ -24383,21 +20940,11 @@ pub fn write_cuCheckpointProcessRestore(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pid), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pid,
-        "cuCheckpointProcessRestore",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pid, "cuCheckpointProcessRestore", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(args), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &args,
-        "cuCheckpointProcessRestore",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&args, "cuCheckpointProcessRestore", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuCheckpointProcessUnlock(
@@ -24408,24 +20955,14 @@ pub fn write_cuCheckpointProcessUnlock(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pid), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &pid,
-        "cuCheckpointProcessUnlock",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&pid, "cuCheckpointProcessUnlock", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(args), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &args,
-        "cuCheckpointProcessUnlock",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&args, "cuCheckpointProcessUnlock", arg_idx, writer)?;
     writer.write_all(b")")
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUoutput_mode_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUoutput_mode_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -24452,30 +20989,15 @@ pub fn write_cuProfilerInitialize(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(configFile), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &configFile,
-        "cuProfilerInitialize",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&configFile, "cuProfilerInitialize", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(outputFile), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &outputFile,
-        "cuProfilerInitialize",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&outputFile, "cuProfilerInitialize", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(outputMode), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &outputMode,
-        "cuProfilerInitialize",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&outputMode, "cuProfilerInitialize", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuProfilerStart(
@@ -24497,7 +21019,7 @@ pub fn write_cuGraphicsGLRegisterBuffer(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCudaResource), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pCudaResource,
         "cuGraphicsGLRegisterBuffer",
         arg_idx,
@@ -24506,21 +21028,11 @@ pub fn write_cuGraphicsGLRegisterBuffer(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(buffer), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &buffer,
-        "cuGraphicsGLRegisterBuffer",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&buffer, "cuGraphicsGLRegisterBuffer", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &Flags,
-        "cuGraphicsGLRegisterBuffer",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&Flags, "cuGraphicsGLRegisterBuffer", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGraphicsGLRegisterImage(
@@ -24533,7 +21045,7 @@ pub fn write_cuGraphicsGLRegisterImage(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCudaResource), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pCudaResource,
         "cuGraphicsGLRegisterImage",
         arg_idx,
@@ -24542,33 +21054,18 @@ pub fn write_cuGraphicsGLRegisterImage(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(image), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &image,
-        "cuGraphicsGLRegisterImage",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&image, "cuGraphicsGLRegisterImage", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(target), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &target,
-        "cuGraphicsGLRegisterImage",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&target, "cuGraphicsGLRegisterImage", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &Flags,
-        "cuGraphicsGLRegisterImage",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&Flags, "cuGraphicsGLRegisterImage", arg_idx, writer)?;
     writer.write_all(b")")
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUGLDeviceList_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUGLDeviceList_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -24589,7 +21086,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUGLDeviceList_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUGLmap_flags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUGLmap_flags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -24623,15 +21120,15 @@ pub fn write_cuGLCtxCreate_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCtx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pCtx, "cuGLCtxCreate_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pCtx, "cuGLCtxCreate_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Flags, "cuGLCtxCreate_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Flags, "cuGLCtxCreate_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&device, "cuGLCtxCreate_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&device, "cuGLCtxCreate_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGLInit(
@@ -24646,12 +21143,7 @@ pub fn write_cuGLRegisterBufferObject(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(buffer), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &buffer,
-        "cuGLRegisterBufferObject",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&buffer, "cuGLRegisterBufferObject", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGLMapBufferObject_v2_ptds(
@@ -24663,30 +21155,15 @@ pub fn write_cuGLMapBufferObject_v2_ptds(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dptr,
-        "cuGLMapBufferObject_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dptr, "cuGLMapBufferObject_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(size), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &size,
-        "cuGLMapBufferObject_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&size, "cuGLMapBufferObject_v2_ptds", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(buffer), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &buffer,
-        "cuGLMapBufferObject_v2_ptds",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&buffer, "cuGLMapBufferObject_v2_ptds", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGLUnmapBufferObject(
@@ -24696,12 +21173,7 @@ pub fn write_cuGLUnmapBufferObject(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(buffer), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &buffer,
-        "cuGLUnmapBufferObject",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&buffer, "cuGLUnmapBufferObject", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGLUnregisterBufferObject(
@@ -24711,12 +21183,7 @@ pub fn write_cuGLUnregisterBufferObject(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(buffer), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &buffer,
-        "cuGLUnregisterBufferObject",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&buffer, "cuGLUnregisterBufferObject", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGLSetBufferObjectMapFlags(
@@ -24727,21 +21194,11 @@ pub fn write_cuGLSetBufferObjectMapFlags(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(buffer), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &buffer,
-        "cuGLSetBufferObjectMapFlags",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&buffer, "cuGLSetBufferObjectMapFlags", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &Flags,
-        "cuGLSetBufferObjectMapFlags",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&Flags, "cuGLSetBufferObjectMapFlags", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGLMapBufferObjectAsync_v2_ptsz(
@@ -24754,7 +21211,7 @@ pub fn write_cuGLMapBufferObjectAsync_v2_ptsz(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &dptr,
         "cuGLMapBufferObjectAsync_v2_ptsz",
         arg_idx,
@@ -24763,7 +21220,7 @@ pub fn write_cuGLMapBufferObjectAsync_v2_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(size), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &size,
         "cuGLMapBufferObjectAsync_v2_ptsz",
         arg_idx,
@@ -24772,7 +21229,7 @@ pub fn write_cuGLMapBufferObjectAsync_v2_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(buffer), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &buffer,
         "cuGLMapBufferObjectAsync_v2_ptsz",
         arg_idx,
@@ -24781,7 +21238,7 @@ pub fn write_cuGLMapBufferObjectAsync_v2_ptsz(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &hStream,
         "cuGLMapBufferObjectAsync_v2_ptsz",
         arg_idx,
@@ -24797,21 +21254,11 @@ pub fn write_cuGLUnmapBufferObjectAsync(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(buffer), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &buffer,
-        "cuGLUnmapBufferObjectAsync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&buffer, "cuGLUnmapBufferObjectAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuGLUnmapBufferObjectAsync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuGLUnmapBufferObjectAsync", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGLMapBufferObject_v2(
@@ -24823,20 +21270,15 @@ pub fn write_cuGLMapBufferObject_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dptr, "cuGLMapBufferObject_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dptr, "cuGLMapBufferObject_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(size), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&size, "cuGLMapBufferObject_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&size, "cuGLMapBufferObject_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(buffer), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &buffer,
-        "cuGLMapBufferObject_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&buffer, "cuGLMapBufferObject_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGLMapBufferObjectAsync_v2(
@@ -24849,39 +21291,19 @@ pub fn write_cuGLMapBufferObjectAsync_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dptr,
-        "cuGLMapBufferObjectAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dptr, "cuGLMapBufferObjectAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(size), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &size,
-        "cuGLMapBufferObjectAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&size, "cuGLMapBufferObjectAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(buffer), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &buffer,
-        "cuGLMapBufferObjectAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&buffer, "cuGLMapBufferObjectAsync_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuGLMapBufferObjectAsync_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuGLMapBufferObjectAsync_v2", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGLCtxCreate(
@@ -24893,15 +21315,15 @@ pub fn write_cuGLCtxCreate(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCtx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pCtx, "cuGLCtxCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pCtx, "cuGLCtxCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&Flags, "cuGLCtxCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&Flags, "cuGLCtxCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&device, "cuGLCtxCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&device, "cuGLCtxCreate", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGLMapBufferObject(
@@ -24913,15 +21335,15 @@ pub fn write_cuGLMapBufferObject(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&dptr, "cuGLMapBufferObject", arg_idx, writer)?;
+    crate::CudaDisplay::write(&dptr, "cuGLMapBufferObject", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(size), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&size, "cuGLMapBufferObject", arg_idx, writer)?;
+    crate::CudaDisplay::write(&size, "cuGLMapBufferObject", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(buffer), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&buffer, "cuGLMapBufferObject", arg_idx, writer)?;
+    crate::CudaDisplay::write(&buffer, "cuGLMapBufferObject", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuGLMapBufferObjectAsync(
@@ -24934,42 +21356,22 @@ pub fn write_cuGLMapBufferObjectAsync(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(dptr), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &dptr,
-        "cuGLMapBufferObjectAsync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&dptr, "cuGLMapBufferObjectAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(size), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &size,
-        "cuGLMapBufferObjectAsync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&size, "cuGLMapBufferObjectAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(buffer), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &buffer,
-        "cuGLMapBufferObjectAsync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&buffer, "cuGLMapBufferObjectAsync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(hStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &hStream,
-        "cuGLMapBufferObjectAsync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&hStream, "cuGLMapBufferObjectAsync", arg_idx, writer)?;
     writer.write_all(b")")
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUeglFrameType_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUeglFrameType_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -24987,7 +21389,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUeglFrameType_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUeglResourceLocationFlags_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUeglResourceLocationFlags_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -25005,7 +21407,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUeglResourceLocationFlags
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUeglColorFormat_enum {
+impl crate::CudaDisplay for cuda_types::cuda::CUeglColorFormat_enum {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -25527,7 +21929,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::CUeglColorFormat_enum {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUeglStreamConnection {
+impl crate::CudaDisplay for cuda_types::cuda::CUeglStreamConnection {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -25546,7 +21948,7 @@ pub fn write_cuGraphicsEGLRegisterImage(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCudaResource), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pCudaResource,
         "cuGraphicsEGLRegisterImage",
         arg_idx,
@@ -25555,21 +21957,11 @@ pub fn write_cuGraphicsEGLRegisterImage(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(image), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &image,
-        "cuGraphicsEGLRegisterImage",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&image, "cuGraphicsEGLRegisterImage", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuGraphicsEGLRegisterImage",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuGraphicsEGLRegisterImage", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuEGLStreamConsumerConnect(
@@ -25580,21 +21972,11 @@ pub fn write_cuEGLStreamConsumerConnect(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(conn), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &conn,
-        "cuEGLStreamConsumerConnect",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&conn, "cuEGLStreamConsumerConnect", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &stream,
-        "cuEGLStreamConsumerConnect",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&stream, "cuEGLStreamConsumerConnect", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuEGLStreamConsumerConnectWithFlags(
@@ -25606,7 +21988,7 @@ pub fn write_cuEGLStreamConsumerConnectWithFlags(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(conn), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &conn,
         "cuEGLStreamConsumerConnectWithFlags",
         arg_idx,
@@ -25615,7 +21997,7 @@ pub fn write_cuEGLStreamConsumerConnectWithFlags(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &stream,
         "cuEGLStreamConsumerConnectWithFlags",
         arg_idx,
@@ -25624,7 +22006,7 @@ pub fn write_cuEGLStreamConsumerConnectWithFlags(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &flags,
         "cuEGLStreamConsumerConnectWithFlags",
         arg_idx,
@@ -25639,12 +22021,7 @@ pub fn write_cuEGLStreamConsumerDisconnect(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(conn), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &conn,
-        "cuEGLStreamConsumerDisconnect",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&conn, "cuEGLStreamConsumerDisconnect", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuEGLStreamConsumerAcquireFrame(
@@ -25657,7 +22034,7 @@ pub fn write_cuEGLStreamConsumerAcquireFrame(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(conn), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &conn,
         "cuEGLStreamConsumerAcquireFrame",
         arg_idx,
@@ -25666,7 +22043,7 @@ pub fn write_cuEGLStreamConsumerAcquireFrame(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pCudaResource), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pCudaResource,
         "cuEGLStreamConsumerAcquireFrame",
         arg_idx,
@@ -25675,7 +22052,7 @@ pub fn write_cuEGLStreamConsumerAcquireFrame(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pStream,
         "cuEGLStreamConsumerAcquireFrame",
         arg_idx,
@@ -25684,7 +22061,7 @@ pub fn write_cuEGLStreamConsumerAcquireFrame(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(timeout), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &timeout,
         "cuEGLStreamConsumerAcquireFrame",
         arg_idx,
@@ -25701,7 +22078,7 @@ pub fn write_cuEGLStreamConsumerReleaseFrame(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(conn), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &conn,
         "cuEGLStreamConsumerReleaseFrame",
         arg_idx,
@@ -25710,7 +22087,7 @@ pub fn write_cuEGLStreamConsumerReleaseFrame(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pCudaResource), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pCudaResource,
         "cuEGLStreamConsumerReleaseFrame",
         arg_idx,
@@ -25719,7 +22096,7 @@ pub fn write_cuEGLStreamConsumerReleaseFrame(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pStream,
         "cuEGLStreamConsumerReleaseFrame",
         arg_idx,
@@ -25737,39 +22114,19 @@ pub fn write_cuEGLStreamProducerConnect(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(conn), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &conn,
-        "cuEGLStreamProducerConnect",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&conn, "cuEGLStreamProducerConnect", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(stream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &stream,
-        "cuEGLStreamProducerConnect",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&stream, "cuEGLStreamProducerConnect", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(width), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &width,
-        "cuEGLStreamProducerConnect",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&width, "cuEGLStreamProducerConnect", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(height), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &height,
-        "cuEGLStreamProducerConnect",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&height, "cuEGLStreamProducerConnect", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuEGLStreamProducerDisconnect(
@@ -25779,12 +22136,7 @@ pub fn write_cuEGLStreamProducerDisconnect(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(conn), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &conn,
-        "cuEGLStreamProducerDisconnect",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&conn, "cuEGLStreamProducerDisconnect", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuEGLStreamProducerPresentFrame(
@@ -25796,7 +22148,7 @@ pub fn write_cuEGLStreamProducerPresentFrame(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(conn), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &conn,
         "cuEGLStreamProducerPresentFrame",
         arg_idx,
@@ -25805,7 +22157,7 @@ pub fn write_cuEGLStreamProducerPresentFrame(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(eglframe), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &eglframe,
         "cuEGLStreamProducerPresentFrame",
         arg_idx,
@@ -25814,7 +22166,7 @@ pub fn write_cuEGLStreamProducerPresentFrame(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pStream,
         "cuEGLStreamProducerPresentFrame",
         arg_idx,
@@ -25831,16 +22183,11 @@ pub fn write_cuEGLStreamProducerReturnFrame(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(conn), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &conn,
-        "cuEGLStreamProducerReturnFrame",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&conn, "cuEGLStreamProducerReturnFrame", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(eglframe), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &eglframe,
         "cuEGLStreamProducerReturnFrame",
         arg_idx,
@@ -25849,7 +22196,7 @@ pub fn write_cuEGLStreamProducerReturnFrame(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(pStream), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pStream,
         "cuEGLStreamProducerReturnFrame",
         arg_idx,
@@ -25867,7 +22214,7 @@ pub fn write_cuGraphicsResourceGetMappedEglFrame(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(eglFrame), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &eglFrame,
         "cuGraphicsResourceGetMappedEglFrame",
         arg_idx,
@@ -25876,7 +22223,7 @@ pub fn write_cuGraphicsResourceGetMappedEglFrame(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(resource), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &resource,
         "cuGraphicsResourceGetMappedEglFrame",
         arg_idx,
@@ -25885,7 +22232,7 @@ pub fn write_cuGraphicsResourceGetMappedEglFrame(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(index), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &index,
         "cuGraphicsResourceGetMappedEglFrame",
         arg_idx,
@@ -25894,7 +22241,7 @@ pub fn write_cuGraphicsResourceGetMappedEglFrame(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(mipLevel), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &mipLevel,
         "cuGraphicsResourceGetMappedEglFrame",
         arg_idx,
@@ -25911,33 +22258,18 @@ pub fn write_cuEventCreateFromEGLSync(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(phEvent), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &phEvent,
-        "cuEventCreateFromEGLSync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&phEvent, "cuEventCreateFromEGLSync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(eglSync), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &eglSync,
-        "cuEventCreateFromEGLSync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&eglSync, "cuEventCreateFromEGLSync", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &flags,
-        "cuEventCreateFromEGLSync",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&flags, "cuEventCreateFromEGLSync", arg_idx, writer)?;
     writer.write_all(b")")
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::VdpStatus {
+impl crate::CudaDisplay for cuda_types::cuda::VdpStatus {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -26050,7 +22382,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::VdpStatus {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::VdpGetProcAddress {
+impl crate::CudaDisplay for cuda_types::cuda::VdpGetProcAddress {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -26078,20 +22410,15 @@ pub fn write_cuVDPAUGetDevice(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pDevice, "cuVDPAUGetDevice", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pDevice, "cuVDPAUGetDevice", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(vdpDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&vdpDevice, "cuVDPAUGetDevice", arg_idx, writer)?;
+    crate::CudaDisplay::write(&vdpDevice, "cuVDPAUGetDevice", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(vdpGetProcAddress), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &vdpGetProcAddress,
-        "cuVDPAUGetDevice",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&vdpGetProcAddress, "cuVDPAUGetDevice", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuVDPAUCtxCreate_v2(
@@ -26105,28 +22432,23 @@ pub fn write_cuVDPAUCtxCreate_v2(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCtx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pCtx, "cuVDPAUCtxCreate_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pCtx, "cuVDPAUCtxCreate_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuVDPAUCtxCreate_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuVDPAUCtxCreate_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&device, "cuVDPAUCtxCreate_v2", arg_idx, writer)?;
+    crate::CudaDisplay::write(&device, "cuVDPAUCtxCreate_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(vdpDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &vdpDevice,
-        "cuVDPAUCtxCreate_v2",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&vdpDevice, "cuVDPAUCtxCreate_v2", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(vdpGetProcAddress), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &vdpGetProcAddress,
         "cuVDPAUCtxCreate_v2",
         arg_idx,
@@ -26143,7 +22465,7 @@ pub fn write_cuGraphicsVDPAURegisterVideoSurface(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCudaResource), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pCudaResource,
         "cuGraphicsVDPAURegisterVideoSurface",
         arg_idx,
@@ -26152,7 +22474,7 @@ pub fn write_cuGraphicsVDPAURegisterVideoSurface(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(vdpSurface), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &vdpSurface,
         "cuGraphicsVDPAURegisterVideoSurface",
         arg_idx,
@@ -26161,7 +22483,7 @@ pub fn write_cuGraphicsVDPAURegisterVideoSurface(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &flags,
         "cuGraphicsVDPAURegisterVideoSurface",
         arg_idx,
@@ -26178,7 +22500,7 @@ pub fn write_cuGraphicsVDPAURegisterOutputSurface(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCudaResource), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &pCudaResource,
         "cuGraphicsVDPAURegisterOutputSurface",
         arg_idx,
@@ -26187,7 +22509,7 @@ pub fn write_cuGraphicsVDPAURegisterOutputSurface(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(vdpSurface), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &vdpSurface,
         "cuGraphicsVDPAURegisterOutputSurface",
         arg_idx,
@@ -26196,7 +22518,7 @@ pub fn write_cuGraphicsVDPAURegisterOutputSurface(
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
+    crate::CudaDisplay::write(
         &flags,
         "cuGraphicsVDPAURegisterOutputSurface",
         arg_idx,
@@ -26215,31 +22537,26 @@ pub fn write_cuVDPAUCtxCreate(
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(pCtx), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&pCtx, "cuVDPAUCtxCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&pCtx, "cuVDPAUCtxCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&flags, "cuVDPAUCtxCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&flags, "cuVDPAUCtxCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&device, "cuVDPAUCtxCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&device, "cuVDPAUCtxCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(vdpDevice), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(&vdpDevice, "cuVDPAUCtxCreate", arg_idx, writer)?;
+    crate::CudaDisplay::write(&vdpDevice, "cuVDPAUCtxCreate", arg_idx, writer)?;
     arg_idx += 1;
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(vdpGetProcAddress), ": ").as_bytes())?;
-    crate::format::CudaDisplay::write(
-        &vdpGetProcAddress,
-        "cuVDPAUCtxCreate",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&vdpGetProcAddress, "cuVDPAUCtxCreate", arg_idx, writer)?;
     writer.write_all(b")")
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::cudaDataType_t {
+impl crate::CudaDisplay for cuda_types::cuda::cudaDataType_t {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -26356,7 +22673,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::cudaDataType_t {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::libraryPropertyType_t {
+impl crate::CudaDisplay for cuda_types::cuda::libraryPropertyType_t {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -26377,7 +22694,7 @@ impl crate::format::CudaDisplay for cuda_types::cuda::libraryPropertyType_t {
         }
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::float2 {
+impl crate::CudaDisplay for cuda_types::cuda::float2 {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -26385,13 +22702,13 @@ impl crate::format::CudaDisplay for cuda_types::cuda::float2 {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(x), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.x, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.x, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(y), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.y, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.y, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::double2 {
+impl crate::CudaDisplay for cuda_types::cuda::double2 {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -26399,13 +22716,13 @@ impl crate::format::CudaDisplay for cuda_types::cuda::double2 {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(x), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.x, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.x, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(y), ": ").as_bytes())?;
-        crate::format::CudaDisplay::write(&self.y, "", 0, writer)?;
+        crate::CudaDisplay::write(&self.y, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
-impl crate::format::CudaDisplay for cuda_types::cuda::CUresult {
+impl crate::CudaDisplay for cuda_types::cuda::CUresult {
     fn write(
         &self,
         _fn_name: &'static str,

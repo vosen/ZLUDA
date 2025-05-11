@@ -550,7 +550,7 @@ fn generate_cuda(crate_root: &PathBuf) {
     );
     generate_display(
         &crate_root,
-        &["..", "zluda_dump", "src", "format_generated.rs"],
+        &["..", "format", "src", "format_generated.rs"],
         &["cuda_types", "cuda"],
         &module,
     )
@@ -1101,14 +1101,14 @@ fn cuda_derive_display_trait_for_item<'a>(
                                 if i != 0 {
                                     writer.write_all(b", ")?;
                                 }
-                                crate::format::CudaDisplay::write(unsafe { &*#name.add(i as usize) }, #original_fn_name, arg_idx, writer)?;
+                                crate::CudaDisplay::write(unsafe { &*#name.add(i as usize) }, #original_fn_name, arg_idx, writer)?;
                             }
                             writer.write_all(b"]")?;
                         }
                     } else {
                         quote! {
                             writer.write_all(concat!(stringify!(#name), ": ").as_bytes())?;
-                            crate::format::CudaDisplay::write(&#name, #original_fn_name, arg_idx, writer)?;
+                            crate::CudaDisplay::write(&#name, #original_fn_name, arg_idx, writer)?;
                         }
                     }
                 });
@@ -1157,7 +1157,7 @@ fn cuda_derive_display_trait_for_item<'a>(
                 let enum_iter = iter::repeat(&item_struct.ident);
                 let variants = state.enums.get(&item_struct.ident).unwrap().iter();
                 Some(parse_quote! {
-                    impl crate::format::CudaDisplay for #path_prefix :: #enum_ {
+                    impl crate::CudaDisplay for #path_prefix :: #enum_ {
                         fn write(&self, _fn_name: &'static str, _index: usize, writer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
                             match self {
                                 #(& #path_prefix_iter :: #enum_iter :: #variants => writer.write_all(stringify!(#variants).as_bytes()),)*
@@ -1184,13 +1184,13 @@ fn cuda_derive_display_trait_for_item<'a>(
                             None => return None,
                         };
                         Some(parse_quote! {
-                            impl crate::format::CudaDisplay for #path_prefix :: #struct_ {
+                            impl crate::CudaDisplay for #path_prefix :: #struct_ {
                                 fn write(&self, _fn_name: &'static str, _index: usize, writer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
                                     writer.write_all(concat!("{ ", stringify!(#first_field), ": ").as_bytes())?;
-                                    crate::format::CudaDisplay::write(&self.#first_field, "", 0, writer)?;
+                                    crate::CudaDisplay::write(&self.#first_field, "", 0, writer)?;
                                     #(
                                         writer.write_all(concat!(", ", stringify!(#rest_of_fields), ": ").as_bytes())?;
-                                        crate::format::CudaDisplay::write(&self.#rest_of_fields, "", 0, writer)?;
+                                        crate::CudaDisplay::write(&self.#rest_of_fields, "", 0, writer)?;
                                     )*
                                     writer.write_all(b" }")
                                 }
@@ -1199,7 +1199,7 @@ fn cuda_derive_display_trait_for_item<'a>(
                     }
                     Fields::Unnamed(FieldsUnnamed { ref unnamed, .. }) if unnamed.len() == 1 => {
                         Some(parse_quote! {
-                            impl crate::format::CudaDisplay for #path_prefix :: #struct_ {
+                            impl crate::CudaDisplay for #path_prefix :: #struct_ {
                                 fn write(&self, _fn_name: &'static str, _index: usize, writer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
                                     write!(writer, "{:p}", self.0)
                                 }
@@ -1218,7 +1218,7 @@ fn cuda_derive_display_trait_for_item<'a>(
                 Type::Ptr(_) => {
                     let type_ = &item_type.ident;
                     Some(parse_quote! {
-                        impl crate::format::CudaDisplay for #path_prefix :: #type_ {
+                        impl crate::CudaDisplay for #path_prefix :: #type_ {
                             fn write(&self, _fn_name: &'static str, _index: usize, writer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
                                 write!(writer, "{:p}", *self)
                             }
@@ -1234,7 +1234,7 @@ fn cuda_derive_display_trait_for_item<'a>(
                                     syn::GenericArgument::Type(Type::BareFn(_)) => {
                                         let type_ = &item_type.ident;
                                         return Some(parse_quote! {
-                                            impl crate::format::CudaDisplay for #path_prefix :: #type_ {
+                                            impl crate::CudaDisplay for #path_prefix :: #type_ {
                                                 fn write(&self, _fn_name: &'static str, _index: usize, writer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
                                                     write!(writer, "{:p}", unsafe { std::mem::transmute::<#path_prefix :: #type_, *mut ::std::ffi::c_void>(*self) })
                                                 }
@@ -1280,7 +1280,7 @@ fn curesult_display_trait(derive_state: &DeriveDisplayState) -> syn::Item {
         })
     });
     parse_quote! {
-        impl crate::format::CudaDisplay for cuda_types::cuda::CUresult {
+        impl crate::CudaDisplay for cuda_types::cuda::CUresult {
             fn write(&self, _fn_name: &'static str, _index: usize, writer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
                 match self {
                     Ok(()) => writer.write_all(b"CUDA_SUCCESS"),

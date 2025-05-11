@@ -25,7 +25,7 @@ members = [
     "zluda_blaslt",
     "zluda_fft",
     "zluda_sparse",
-    "zluda_dump_blas",
+    "zluda_dump_blas", "zluda_dump_common", "dark_api", "format",
 ]
 
 default-members = ["zluda", "zluda_ml", "zluda_inject", "zluda_redirect"]

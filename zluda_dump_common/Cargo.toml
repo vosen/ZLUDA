@@ -1,0 +1,10 @@
+[package]
+name = "zluda_dump_common"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+
+[dependencies]
+libloading = "0.8"
+cuda_types = { path = "../cuda_types" }
