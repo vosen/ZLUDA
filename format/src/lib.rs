@@ -5,7 +5,7 @@ use std::{
     mem, ptr, slice,
 };
 
-pub(crate) trait CudaDisplay {
+pub trait CudaDisplay {
     fn write(
         &self,
         fn_name: &'static str,
