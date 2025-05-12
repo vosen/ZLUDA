@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 cuda_types = { path = "../cuda_types" }
+uuid = "1.16"

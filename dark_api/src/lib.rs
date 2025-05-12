@@ -45,8 +45,7 @@ macro_rules! dark_api_format_args {
         format::CudaDisplay::write(& $first_arg, "", $arg_idx, $writer)?;
         $(
             $arg_idx += 1;
-            $writer.write_all(b", ")?;
-            $writer.write_all(concat!(stringify!($arg_id), ": ").as_bytes())?;
+            $writer.write_all(concat!(", ", stringify!($arg_id), ": ").as_bytes())?;
             format::CudaDisplay::write(& $arg_id, "", $arg_idx, $writer)?;
         )*
     };
@@ -146,17 +145,94 @@ macro_rules! dark_api {
 }
 
 dark_api! {
-    "{7330F811-F47F-41BC-A4FF-E792D073F41F}" => CUDART_INTERFACE[10] {
+    "{6BD5FB6C-5BF4-E74A-8987-D93912FD9DF9}" => CUDART_INTERFACE[10] {
         [0] = SIZE_OF,
-        [1] = cudart_interface_fn1(foobar: usize, baz: i32) -> (),
-        [2] = get_module_from_cubin() -> (),
-        [6] = get_module_from_cubin_ext1(foobar: usize) -> (),
-        [7] = cudart_interface_fn6(foobar: usize) -> (),
-        [8] = get_module_from_cubin_ext2(foobar: usize) -> ()
+        [1] = get_module_from_cubin(
+            module: *mut cuda_types::cuda::CUmodule,
+            fatbinc_wrapper: *const std::ffi::c_void // FatbincWrapper
+        ) -> (),
+        [2] = cudart_interface_fn2(
+            pctx: *mut cuda_types::cuda::CUcontext,
+            dev: cuda_types::cuda::CUdevice
+        ) -> cuda_types::cuda::CUresult,
+        [6] = get_module_from_cubin_ext1(
+            result: *mut cuda_types::cuda::CUmodule,
+            fatbinc_wrapper: *const std::ffi::c_void, // FatbincWrapper
+            arg3: *mut std::ffi::c_void,
+            arg4: *mut std::ffi::c_void,
+            arg5: u32
+        ) -> cuda_types::cuda::CUresult,
+        [7] = cudart_interface_fn7(arg1: usize) -> cuda_types::cuda::CUresult,
+        [8] = get_module_from_cubin_ext2(
+            fatbinc_wrapper: *const std::ffi::c_void, // FatbinHeader
+            result: *mut cuda_types::cuda::CUmodule,
+            arg3: *mut std::ffi::c_void,
+            arg4: *mut std::ffi::c_void,
+            arg5: u32
+        ) -> cuda_types::cuda::CUresult
     },
-    "{7330F811-F47F-41BC-A4FF-E792D073F42F}" => CONTEXT_LOCAL_STORAGE_INTERFACE_V0301[4] {
-        [0] = context_local_storage_ctor(foobar: usize) -> (),
-        [1] = context_local_storage_dtor(foobar: usize) -> (),
-        [2] = context_local_storage_get_state(foobar: usize) -> ()
+    "{42D85A81-23F6-CB47-8298-F6E78A3AECDC}" => TOOLS_TLS[4] {
+        [0] = SIZE_OF
+    },
+    "{A094798C-2E74-2E74-93F2-0800200C0A66}" => TOOLS_RUNTIME_CALLBACK_HOOKS[7] {
+        [0] = SIZE_OF,
+        [2] = runtime_callback_hooks_fn2(ptr: *mut *mut std::ffi::c_void, size: *mut usize) -> (),
+        [6] = runtime_callback_hooks_fn6(ptr: *mut *mut std::ffi::c_void, size: *mut usize) -> ()
+    },
+    "{C693336E-1121-DF11-A8C3-68F355D89593}" => CONTEXT_LOCAL_STORAGE_INTERFACE_V0301[4] {
+        [0] = context_local_storage_ctor(
+            context: cuda_types::cuda::CUcontext,
+            manager: *mut std::ffi::c_void, // ContextStateManager
+            ctx_state: *mut std::ffi::c_void, // ContextState
+            // clsContextDestroyCallback, have to be called on cuDevicePrimaryCtxReset
+            dtor_cb: Option<extern "system" fn(
+                cuda_types::cuda::CUcontext,
+                *mut std::ffi::c_void, // ContextStateManager
+                *mut std::ffi::c_void, // ContextState
+            )>
+        ) -> cuda_types::cuda::CUresult,
+        [1] = context_local_storage_dtor(
+            arg1: *mut std::ffi::c_void,
+            arg2: *mut std::ffi::c_void
+        ) -> cuda_types::cuda::CUresult,
+        [2] = context_local_storage_get_state(
+            ctx_state: *mut std::ffi::c_void, // ContextState
+            cu_ctx: cuda_types::cuda::CUcontext,
+            manager: *mut std::ffi::c_void // ContextStateManager
+        ) -> cuda_types::cuda::CUresult
+    },
+    "{0CA50B8C-1004-929A-89A7-D0DF10E77286}" => CTX_CREATE_BYPASS[2] {
+        [0] = SIZE_OF,
+        [1] = ctx_create_v2_bypass(
+            pctx: *mut cuda_types::cuda::CUcontext,
+            flags: ::std::os::raw::c_uint,
+            dev: cuda_types::cuda::CUdevice
+        ) -> cuda_types::cuda::CUresult
+    },
+    "{195BCBF4-D67D-024A-ACC5-1D29CEA631AE}" => HEAP_ACCESS[3] {
+        [0] = SIZE_OF,
+        [1] = heap_alloc(
+            heap_alloc_record_ptr: *mut *const std::ffi::c_void, // HeapAllocRecord
+            arg2: usize,
+            arg3: usize
+        ) -> cuda_types::cuda::CUresult,
+        [2] = heap_free(
+            heap_alloc_record_ptr: *const std::ffi::c_void, // HeapAllocRecord
+            arg2: *mut usize
+        ) -> cuda_types::cuda::CUresult
+    },
+    "{B10541E1-F7C7-C74A-9F64-F223BE99F1E2}" => DEVICE_EXTENDED_RT[26] {
+        [0] = SIZE_OF,
+        [5] = device_get_attribute_ext(
+            dev: cuda_types::cuda::CUdevice,
+            attribute: std::ffi::c_uint,
+            unknown: std::ffi::c_int,
+            result: *mut [usize; 2]
+        ) -> cuda_types::cuda::CUresult,
+        // I don't know is this function return, but on my GTX 1060 it returns 0
+        [13] = device_get_something(
+            result: *mut std::ffi::c_uchar,
+            dev: cuda_types::cuda::CUdevice
+        ) -> cuda_types::cuda::CUresult
     }
 }

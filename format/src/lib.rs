@@ -22,7 +22,9 @@ impl CudaDisplay for CUuuid {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         let guid = self.bytes;
-        write!(writer, "{{{:02X}{:02X}{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}}}", guid[0], guid[1], guid[2], guid[3], guid[4], guid[5], guid[6], guid[7], guid[8], guid[9], guid[10], guid[11], guid[12], guid[13], guid[14], guid[15])
+        let uuid = uuid::Uuid::from_bytes(guid);
+        let braced = uuid.as_braced();
+        write!(writer, "{braced:#X}")
     }
 }
 
@@ -122,6 +124,30 @@ impl CudaDisplay for f64 {
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
         write!(writer, "{}", *self)
+    }
+}
+
+// user by Dark API
+impl CudaDisplay
+    for Option<
+        extern "system" fn(
+            cuda_types::cuda::CUcontext,
+            *mut std::ffi::c_void,
+            *mut std::ffi::c_void,
+        ),
+    >
+{
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        if let Some(fn_ptr) = self {
+            write!(writer, "{:p}", *fn_ptr)
+        } else {
+            writer.write_all(b"NULL")
+        }
     }
 }
 

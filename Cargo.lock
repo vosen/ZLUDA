@@ -264,6 +264,9 @@ dependencies = [
 name = "dark_api"
 version = "0.0.0"
 dependencies = [
+ "cuda_types",
+ "format",
+ "paste",
  "uuid",
 ]
 
@@ -384,6 +387,7 @@ name = "format"
 version = "0.0.0"
 dependencies = [
  "cuda_types",
+ "uuid",
 ]
 
 [[package]]
