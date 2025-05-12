@@ -180,6 +180,15 @@ pub fn compile_bitcode(
     main_buffer: &[u8],
     ptx_impl: &[u8],
 ) -> Result<Vec<u8>, Error> {
+    match comgr {
+        Comgr::V2(comgr) => {
+            let mut major = 0;
+            let mut minor = 0;
+            unsafe { comgr.amd_comgr_get_version(&mut major, &mut minor) };
+            eprintln!("COMGR version: {}.{}", major, minor);
+        }
+        _ => {}
+    }
     let bitcode_data_set = DataSet::new(comgr)?;
     let main_bitcode_data = Data::new(comgr, DataKind::Bc, c"zluda.bc", main_buffer)?;
     bitcode_data_set.add(&main_bitcode_data)?;
