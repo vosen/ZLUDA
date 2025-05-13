@@ -11,6 +11,7 @@ crate-type = ["cdylib"]
 [dependencies]
 ptx = { path = "../ptx" }
 ptx_parser = { path = "../ptx_parser" }
+format = { path = "../format" }
 lz4-sys = "1.9"
 regex = "1.4"
 dynasm = "1.2"

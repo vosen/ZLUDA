@@ -1,5 +1,4 @@
 use super::Settings;
-use crate::format;
 use crate::FnCallLog;
 use crate::LogEntry;
 use cuda_types::cuda::*;

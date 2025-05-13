@@ -177,7 +177,6 @@ cuda_function_declarations!(
 );
 
 mod dark_api;
-mod format;
 mod log;
 #[cfg_attr(windows, path = "os_win.rs")]
 #[cfg_attr(not(windows), path = "os_unix.rs")]

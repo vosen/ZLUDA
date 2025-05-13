@@ -1452,6 +1452,7 @@ dependencies = [
  "detours-sys",
  "dynasm",
  "dynasmrt",
+ "format",
  "goblin",
  "lazy_static",
  "libc",

@@ -1,4 +1,4 @@
-use crate::{format, FnCallLog};
+use crate::FnCallLog;
 use crate::{log, os, trace::StateTracker};
 use crate::{log::UInt, GlobalDelayedState};
 use cuda_types::cuda::*;
@@ -492,18 +492,18 @@ unsafe extern "system" fn get_module_from_cubin_ext1(
 }
     */
 
-    #[allow(improper_ctypes_definitions)]
-    unsafe extern "system" fn get_module_from_cubin_ext2(
-        fatbin_header: *const FatbinHeader,
-        module: *mut CUmodule,
-        ptr1: *mut c_void,
-        ptr2: *mut c_void,
-        _unknown: usize,
-    ) -> CUresult {
-        todo!()
-    }
+#[allow(improper_ctypes_definitions)]
+unsafe extern "system" fn get_module_from_cubin_ext2(
+    fatbin_header: *const FatbinHeader,
+    module: *mut CUmodule,
+    ptr1: *mut c_void,
+    ptr2: *mut c_void,
+    _unknown: usize,
+) -> CUresult {
+    todo!()
+}
 
-    /*
+/*
 #[allow(improper_ctypes_definitions)]
 unsafe extern "system" fn get_module_from_cubin_ext2(
     fatbin_header: *const FatbinHeader,
