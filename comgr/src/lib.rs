@@ -257,7 +257,7 @@ impl Comgr {
 
     // For reasons unknown, on AMD Adrenalin 25.5.1, AMD ships amd_comgr_2.dll that shows up as
     // version 2.9.0, but actually uses the 3.X ABI. This is our best effort to detect it.
-    // Version 25.3.1 retursns 2.8.0, which seem to be the last version that actually uses the 2 ABI
+    // Version 25.3.1 returns 2.8.0, which seem to be the last version that actually uses the 2 ABI
     fn is_broken_v2(lib: &libloading::Library) -> bool {
         if cfg!(not(windows)) {
             return false;
