@@ -180,15 +180,6 @@ pub fn compile_bitcode(
     main_buffer: &[u8],
     ptx_impl: &[u8],
 ) -> Result<Vec<u8>, Error> {
-    match comgr {
-        Comgr::V2(comgr) => {
-            let mut major = 0;
-            let mut minor = 0;
-            unsafe { comgr.amd_comgr_get_version(&mut major, &mut minor) };
-            eprintln!("COMGR version: {}.{}", major, minor);
-        }
-        _ => {}
-    }
     let bitcode_data_set = DataSet::new(comgr)?;
     let main_bitcode_data = Data::new(comgr, DataKind::Bc, c"zluda.bc", main_buffer)?;
     bitcode_data_set.add(&main_bitcode_data)?;
@@ -254,12 +245,35 @@ impl Comgr {
             })
             .or_else(|_| {
                 unsafe { libloading::Library::new(os::COMGR2) }.and_then(|lib| {
-                    Ok(Comgr::V2(unsafe {
-                        amd_comgr_sys::comgr2::Comgr2::from_library(lib)?
-                    }))
+                    Ok(if Self::is_broken_v2(&lib) {
+                        Comgr::V3(unsafe { amd_comgr_sys::comgr3::Comgr3::from_library(lib)? })
+                    } else {
+                        Comgr::V2(unsafe { amd_comgr_sys::comgr2::Comgr2::from_library(lib)? })
+                    })
                 })
             })
             .map_err(Into::into)
+    }
+
+    // For reasons unknown, on AMD Adrenalin 25.5.1, AMD ships amd_comgr_2.dll that shows up as
+    // version 2.9.0, but actually uses the 3.X ABI. This is our best effort to detect it.
+    // Version 25.3.1 retursns 2.8.0, which seem to be the last version that actually uses the 2 ABI
+    fn is_broken_v2(lib: &libloading::Library) -> bool {
+        if cfg!(not(windows)) {
+            return false;
+        }
+        let amd_comgr_get_version = match unsafe {
+            lib.get::<unsafe extern "C" fn(major: *mut usize, minor: *mut usize)>(
+                b"amd_comgr_get_version\0",
+            )
+        } {
+            Ok(symbol) => symbol,
+            Err(_) => return false,
+        };
+        let mut major = 0;
+        let mut minor = 0;
+        unsafe { (amd_comgr_get_version)(&mut major, &mut minor) };
+        (major, minor) >= (2, 9)
     }
 
     fn do_action(
