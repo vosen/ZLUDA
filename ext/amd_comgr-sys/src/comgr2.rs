@@ -256,6 +256,8 @@ pub struct amd_comgr_action_kind_s(pub ::std::os::raw::c_uint);
 pub use self::amd_comgr_action_kind_s as amd_comgr_action_kind_t;
 pub struct Comgr2 {
     __library: ::libloading::Library,
+    pub amd_comgr_get_version:
+        Result<unsafe extern "C" fn(major: *mut usize, minor: *mut usize), ::libloading::Error>,
     pub amd_comgr_create_data: Result<
         unsafe extern "C" fn(
             kind: amd_comgr_data_kind_t,
@@ -363,6 +365,7 @@ impl Comgr2 {
         L: Into<::libloading::Library>,
     {
         let __library = library.into();
+        let amd_comgr_get_version = __library.get(b"amd_comgr_get_version\0").map(|sym| *sym);
         let amd_comgr_create_data = __library.get(b"amd_comgr_create_data\0").map(|sym| *sym);
         let amd_comgr_set_data = __library.get(b"amd_comgr_set_data\0").map(|sym| *sym);
         let amd_comgr_set_data_name = __library.get(b"amd_comgr_set_data_name\0").map(|sym| *sym);
@@ -395,6 +398,7 @@ impl Comgr2 {
         let amd_comgr_do_action = __library.get(b"amd_comgr_do_action\0").map(|sym| *sym);
         Ok(Comgr2 {
             __library,
+            amd_comgr_get_version,
             amd_comgr_create_data,
             amd_comgr_set_data,
             amd_comgr_set_data_name,
@@ -410,6 +414,13 @@ impl Comgr2 {
             amd_comgr_action_info_set_option_list,
             amd_comgr_do_action,
         })
+    }
+    #[doc = " @brief Get the version of the code object manager interface\n supported.\n\n An interface is backwards compatible with an implementation with an\n equal major version, and a greater than or equal minor version.\n\n @param[out] major Major version number.\n\n @param[out] minor Minor version number."]
+    pub unsafe fn amd_comgr_get_version(&self, major: *mut usize, minor: *mut usize) {
+        (self
+            .amd_comgr_get_version
+            .as_ref()
+            .expect("Expected function, got error."))(major, minor)
     }
     #[must_use]
     #[doc = " @brief Create a data object that can hold data of a specified kind.\n\n Data objects are reference counted and are destroyed when the\n reference count reaches 0. When a data object is created its\n reference count is 1, it has 0 bytes of data, it has an empty name,\n and it has no metadata.\n\n @param[in] kind The kind of data the object is intended to hold.\n\n @param[out] data A handle to the data object created. Its reference\n count is set to 1.\n\n @retval ::AMD_COMGR_STATUS_SUCCESS The function has\n been executed successfully.\n\n @retval ::AMD_COMGR_STATUS_ERROR_INVALID_ARGUMENT @p\n kind is an invalid data kind, or @p\n AMD_COMGR_DATA_KIND_UNDEF. @p data is NULL.\n\n @retval ::AMD_COMGR_STATUS_ERROR_OUT_OF_RESOURCES\n Unable to create the data object as out of resources."]
