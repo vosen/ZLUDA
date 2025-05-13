@@ -8,3 +8,5 @@ edition = "2021"
 [dependencies]
 libloading = "0.8"
 cuda_types = { path = "../cuda_types" }
+dark_api = { path = "../dark_api" }
+format = { path = "../format" }

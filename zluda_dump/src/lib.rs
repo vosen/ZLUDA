@@ -97,6 +97,56 @@ macro_rules! emit_cuda_fn_table {
     };
 }
 
+macro_rules! export_table {
+    ($($abi:literal fn cuGetExportTable( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
+        $(
+            #[no_mangle]
+            #[allow(non_snake_case)]
+            pub unsafe extern $abi fn cuGetExportTable ( $( $arg_id : $arg_type),* ) -> $ret_type {
+                cuGetExportTable_impl( $($arg_id),* )
+            }
+        )*
+    }
+}
+
+static INTERNAL_TABLE: ::dark_api::zluda_dump::CudaDarkApiGlobalTable =
+    ::dark_api::zluda_dump::CudaDarkApiGlobalTable::new::<InternalTableImpl>();
+struct InternalTableImpl;
+
+impl ::dark_api::zluda_dump::CudaDarkApi for InternalTableImpl {
+    unsafe extern "system" fn logged_call(
+        fn_name: &'static str,
+        args: String,
+        fn_: &dyn Fn() -> usize,
+        internal_error: usize,
+        format_status: fn(usize) -> Vec<u8>,
+    ) -> usize {
+        GlobalState2::under_lock(
+            CudaFunctionName::Normal(fn_name),
+            Some(args.into_bytes()),
+            internal_error,
+            format_status,
+            |_, _| Some(()),
+            |_| fn_(),
+            move |_, _, _, _| {},
+        )
+    }
+}
+
+#[allow(non_snake_case)]
+unsafe fn cuGetExportTable_impl(
+    ppExportTable: *mut *const ::core::ffi::c_void,
+    pExportTableId: *const cuda_types::cuda::CUuuid,
+) -> cuda_types::cuda::CUresult {
+    if let (Some(result), Some(export_table)) = (ppExportTable.as_mut(), pExportTableId.as_ref()) {
+        if let Some(table) = INTERNAL_TABLE.get(export_table) {
+            *result = ptr::from_ref(table).cast();
+            return cuda_types::cuda::CUresult::SUCCESS;
+        }
+    }
+    todo!()
+}
+
 cuda_function_declarations!(emit_cuda_fn_table);
 
 macro_rules! extern_redirect {
@@ -121,6 +171,8 @@ macro_rules! extern_redirect {
                 GlobalState2::under_lock(
                     CudaFunctionName::Normal(stringify!($fn_name)),
                     Some(formatted_args),
+                    CUresult::INTERNAL_ERROR,
+                    format_curesult,
                     extract_fn_ptr,
                     cuda_call,
                     move |_, _, _, _| {}
@@ -152,6 +204,8 @@ macro_rules! extern_redirect_with_post {
                 GlobalState2::under_lock(
                     CudaFunctionName::Normal(stringify!($fn_name)),
                     Some(formatted_args),
+                    CUresult::INTERNAL_ERROR,
+                    format_curesult,
                     extract_fn_ptr,
                     cuda_call,
                     move |state, logger, _, cuda_result| paste! { [<$fn_name _Post>] } ( $( $arg_id ),* , &mut state.cuda_state, logger, cuda_result )
@@ -159,6 +213,13 @@ macro_rules! extern_redirect_with_post {
             }
         )*
     };
+}
+
+fn format_curesult(curesult: CUresult) -> Vec<u8> {
+    use format::CudaDisplay;
+    let mut output_string = Vec::new();
+    curesult.write("", usize::MAX, &mut output_string).ok();
+    output_string
 }
 
 use cuda_base::cuda_function_declarations;
@@ -173,7 +234,8 @@ cuda_function_declarations!(
                          //cuDeviceGetAttribute,
                          //cuDeviceComputeCapability,
                          //cuModuleLoadFatBinary
-        ]
+        ],
+    export_table <= [cuGetExportTable]
 );
 
 mod dark_api;
@@ -223,16 +285,18 @@ impl GlobalState2 {
     //   function name and its arguments to logging buffer. This whole phase is covered by a drop
     //   guard which will flush the log buffer in case of panic
     // * Call:
-    //   We call the actual CUDA function from the actual library. This phase is covered by 
+    //   We call the actual CUDA function from the actual library. This phase is covered by
     //   a (different) drop guard. We also make sure to drop any &mut and RefMuts we created in the
     //   pre-call phase - this is done to ensure reentrancy. Our CUDA function could call another
     //   CUDA function which would try to acquire the same RefCell
     // * Post-call:
     //   We log the output of the CUDA function and any errors that may have occurred. This phase
     //   is also covered by a drop guard which will flush the log buffer in case of panic
-    fn under_lock<'a, FnPtr: Copy, InnerResult: CudaResult>(
+    fn under_lock<'a, FnPtr: Copy, InnerResult: Copy>(
         name: CudaFunctionName,
         args: Option<Vec<u8>>,
+        internal_error: InnerResult,
+        format_status: fn(InnerResult) -> Vec<u8>,
         pre_call: impl FnOnce(&mut GlobalDelayedState, &mut FnCallLog) -> Option<FnPtr>,
         inner_call: impl FnOnce(FnPtr) -> InnerResult,
         post_call: impl FnOnce(&mut GlobalDelayedState, &mut FnCallLog, FnPtr, InnerResult),
@@ -273,7 +337,7 @@ impl GlobalState2 {
                 }
                 None => {
                     logger.log(ErrorEntry::FunctionNotFound(name));
-                    return InnerResult::INTERNAL_ERROR;
+                    return internal_error;
                 }
             }
         };
@@ -288,9 +352,7 @@ impl GlobalState2 {
         let mut logger = RefMut::map(global_state.log_stack.borrow_mut(), |log_stack| {
             log_stack.resume()
         });
-        let mut output_string = Vec::new();
-        inner_result.write("", usize::MAX, &mut output_string).ok();
-        logger.output = Some(output_string);
+        logger.output = Some(format_status(inner_result));
         post_call(
             global_state.delayed_state.as_mut().unwrap(),
             &mut logger,
@@ -463,7 +525,9 @@ impl<'a> Drop for InnerCallGuard<'a> {
         let mut log_root = global_state.log_stack.borrow_mut();
         log_root.depth -= 1;
         if log_root.depth == 0 {
-            global_state.log_writer.write_and_flush(&mut log_root.log_root);
+            global_state
+                .log_writer
+                .write_and_flush(&mut log_root.log_root);
         }
     }
 }

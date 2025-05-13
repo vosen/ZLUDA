@@ -9,8 +9,10 @@ name = "zluda_dump_blas"
 crate-type = ["cdylib"]
 
 [dependencies]
+format = { path = "../format" }
 cuda_base = { path = "../cuda_base" }
 cuda_types = { path = "../cuda_types" }
+zluda_dump_common = { path = "../zluda_dump_common" }
 libloading = "0.8"
 
 [package.metadata.zluda]

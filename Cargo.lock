@@ -1449,6 +1449,7 @@ version = "0.0.0"
 dependencies = [
  "cuda_base",
  "cuda_types",
+ "dark_api",
  "detours-sys",
  "dynasm",
  "dynasmrt",
@@ -1472,7 +1473,9 @@ version = "0.0.0"
 dependencies = [
  "cuda_base",
  "cuda_types",
+ "format",
  "libloading",
+ "zluda_dump_common",
 ]
 
 [[package]]
@@ -1480,6 +1483,8 @@ name = "zluda_dump_common"
 version = "0.1.0"
 dependencies = [
  "cuda_types",
+ "dark_api",
+ "format",
  "libloading",
 ]
 

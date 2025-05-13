@@ -1,5 +1,3 @@
-use uuid::uuid;
-
 macro_rules! dark_api_init {
     (SIZE_OF, $table_len:literal, $type_:ty) => {
         (std::mem::size_of::<usize>() * $table_len) as *const std::ffi::c_void
@@ -56,6 +54,7 @@ macro_rules! dark_api_format_args {
 macro_rules! dark_api_format_fn {
     (SIZE_OF) => { };
     (NULL) => { };
+    (#[noformat] $fn_:ident ( $($arg_id:ident: $arg_type:ty),* ) -> $ret_type:ty) => { };
     ($fn_:ident ( $($arg_id:ident: $arg_type:ty),* ) -> $ret_type:ty) => {
         pub fn $fn_ (
             writer: &mut (impl std::io::Write + ?Sized),
@@ -71,24 +70,31 @@ macro_rules! dark_api_format_fn {
 }
 
 macro_rules! dark_api {
-    ($(
-        $guid:expr => $name:ident [$len:literal] {
-            $( [$index:literal] = $fn_:ident $( ( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty )? ),*
-        }
-    ),+) => {
+    (
+        $mod_name: ident;
+        $(
+            $guid:expr => $name:ident [$len:literal] {
+                $(
+                    $(#[$attr:ident])?
+                    [$index:literal] = $fn_:ident $( ( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty )?
+                ),*
+            }
+        ),+
+    ) => {
+        pub mod $mod_name {
         #[allow(non_snake_case)]
         pub struct CudaDarkApiGlobalTable {
             $(pub $name: [*const std::ffi::c_void; $len],)+
         }
 
         impl CudaDarkApiGlobalTable {
-            $(const $name: cuda_types::cuda::CUuuid = cuda_types::cuda::CUuuid { bytes: *uuid!($guid).as_bytes() };)+
+            $(const $name: cuda_types::cuda::CUuuid = cuda_types::cuda::CUuuid { bytes: *uuid::uuid!($guid).as_bytes() };)+
         }
 
         unsafe impl Sync for CudaDarkApiGlobalTable {}
 
         impl CudaDarkApiGlobalTable {
-            pub fn new<T: CudaDarkApi>() -> Self {
+            pub const fn new<T: CudaDarkApi>() -> Self {
                 let mut result = Self {
                     $(
                         $name: [std::ptr::null(); $len],
@@ -112,6 +118,16 @@ macro_rules! dark_api {
             $($(
                 dark_api_fn!($fn_ $( ( $($arg_id: $arg_type),* ) -> $ret_type )?);
             )*)+
+        }
+
+        pub fn guid_to_name(guid: &cuda_types::cuda::CUuuid) -> Option<&'static str> {
+            let guid = uuid::Uuid::from_bytes(guid.bytes);
+            $(
+                if guid == uuid::uuid!($guid) {
+                    return Some(stringify!($name));
+                }
+            )+
+            None
         }
 
         $(
@@ -138,13 +154,15 @@ macro_rules! dark_api {
 
         pub mod format {
             $($(
-                dark_api_format_fn!($fn_ $( ( $($arg_id: $arg_type),* ) -> $ret_type )? );
+                dark_api_format_fn!($(#[$attr])? $fn_ $( ( $($arg_id: $arg_type),* ) -> $ret_type )? );
             )*)+
+        }
         }
     };
 }
 
 dark_api! {
+    cuda;
     "{6BD5FB6C-5BF4-E74A-8987-D93912FD9DF9}" => CUDART_INTERFACE[10] {
         [0] = SIZE_OF,
         [1] = get_module_from_cubin(
@@ -234,5 +252,20 @@ dark_api! {
             result: *mut std::ffi::c_uchar,
             dev: cuda_types::cuda::CUdevice
         ) -> cuda_types::cuda::CUresult
+    }
+}
+
+// Purely for internal use by ZLUDA dump
+dark_api! {
+    zluda_dump;
+    "{0B7A5827-AF98-46AB-A951-22D19BDF5C08}" => ZLUDA_DUMP_INTERNAL[1] {
+        #[noformat]
+        [0] = logged_call(
+            fn_name: &'static str,
+            args: String,
+            fn_: &dyn Fn() -> usize,
+            internal_error: usize,
+            format_status: fn(usize) -> Vec<u8>
+        ) -> usize
     }
 }

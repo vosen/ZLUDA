@@ -14,9 +14,21 @@ macro_rules! unimplemented {
             #[allow(improper_ctypes)]
             #[allow(improper_ctypes_definitions)]
             pub unsafe extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
-                eprintln!(stringify!($fn_name));
+                use ::zluda_dump_common::ReprUsize;
                 let fn_ptr = (&*LIBRARY).as_ref().unwrap().get::<unsafe extern $abi fn ( $($arg_type),* ) -> $ret_type>(concat!( stringify!($fn_name), "\0").as_bytes()).unwrap();
-                return fn_ptr(  $( $arg_id),* );
+                let export_table = ::zluda_dump_common::get_export_table().unwrap();
+                ReprUsize::from_usize(export_table.logged_call(
+                    stringify!($fn_name),
+                    "()".to_string(),
+                    &|| {
+                        let result = fn_ptr(  $( $arg_id),* );
+                        ReprUsize::to_usize(result)
+                    },
+                    <$ret_type as ReprUsize>::INTERNAL_ERROR,
+                    <$ret_type as ReprUsize>::format_status)
+                )
+                //eprintln!(stringify!($fn_name));
+                //return fn_ptr(  $( $arg_id),* );
             }
         )*
     };
