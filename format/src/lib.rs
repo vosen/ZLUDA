@@ -224,11 +224,15 @@ impl CudaDisplay for *const i8 {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(
-            writer,
-            "\"{}\"",
-            unsafe { CStr::from_ptr(*self as _) }.to_string_lossy()
-        )
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(
+                writer,
+                "\"{}\"",
+                unsafe { CStr::from_ptr(*self as _) }.to_string_lossy()
+            )
+        }
     }
 }
 
