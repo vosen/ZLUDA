@@ -954,7 +954,6 @@ fn generate_display(
         "CUeglFrame_st",
         "CUdevResource_st",
         "CUlaunchAttribute_st",
-        "CUlaunchConfig_st",
         "CUmemcpy3DOperand_st",
     ];
     let ignore_functions = [
