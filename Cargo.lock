@@ -1412,6 +1412,8 @@ name = "zluda_bindgen"
 version = "0.1.0"
 dependencies = [
  "bindgen",
+ "cuda_types",
+ "libloading",
  "prettyplease",
  "proc-macro2",
  "quote",
