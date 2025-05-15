@@ -97,13 +97,30 @@ macro_rules! emit_cuda_fn_table {
     };
 }
 
-macro_rules! export_table {
-    ($($abi:literal fn cuGetExportTable( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
+macro_rules! override_fn {
+    ($($abi:literal fn $fn_name: ident ( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
         $(
             #[no_mangle]
             #[allow(non_snake_case)]
-            pub unsafe extern $abi fn cuGetExportTable ( $( $arg_id : $arg_type),* ) -> $ret_type {
-                cuGetExportTable_impl( $($arg_id),* )
+            pub unsafe extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
+                let mut formatted_args = Vec::new();
+                (paste! { format :: [<write_ $fn_name>] }) (
+                        &mut formatted_args
+                        $(,$arg_id)*
+                ).ok();
+                let extract_fn_ptr = |_: &mut GlobalDelayedState, _: &mut FnCallLog| Some(());
+                let cuda_call = |_| {
+                    paste!{ [<$fn_name _impl >] ( $($arg_id),* ) }
+                };
+                GlobalState2::under_lock(
+                    CudaFunctionName::Normal(stringify!($fn_name)),
+                    Some(formatted_args),
+                    CUresult::INTERNAL_ERROR,
+                    format_curesult,
+                    extract_fn_ptr,
+                    cuda_call,
+                    move |_, _, _, _| {}
+                )
             }
         )*
     }
@@ -147,6 +164,63 @@ unsafe fn cuGetExportTable_impl(
     todo!()
 }
 
+#[allow(non_snake_case)]
+fn cuGetProcAddress_impl(
+    symbol: *const ::core::ffi::c_char,
+    pfn: *mut *mut ::core::ffi::c_void,
+    cudaVersion: ::core::ffi::c_int,
+    flags: cuda_types::cuda::cuuint64_t,
+) -> cuda_types::cuda::CUresult {
+    unsafe { cuGetProcAddress_v2_impl(symbol, pfn, cudaVersion, flags, ptr::null_mut()) }
+}
+
+#[allow(non_snake_case)]
+unsafe fn cuGetProcAddress_v2_impl(
+    symbol: *const ::core::ffi::c_char,
+    pfn: *mut *mut ::core::ffi::c_void,
+    cudaVersion: ::core::ffi::c_int,
+    flags: cuda_types::cuda::cuuint64_t,
+    symbolStatus: *mut cuda_types::cuda::CUdriverProcAddressQueryResult,
+) -> cuda_types::cuda::CUresult {
+    fn raw_match(name: &[u8], flag: u64, version: i32) -> *mut ::core::ffi::c_void {
+        include!("../../zluda_bindgen/src/process_table.rs")
+    }
+    if symbol == ptr::null() {
+        return CUresult::ERROR_INVALID_VALUE;
+    }
+    let symbolStatus = symbolStatus.as_mut();
+    let pfn = if let Some(pfn) = pfn.as_mut() {
+        pfn
+    } else {
+        return CUresult::ERROR_INVALID_VALUE;
+    };
+    let fn_ptr = raw_match(CStr::from_ptr(symbol).to_bytes(), flags, cudaVersion);
+    match fn_ptr as usize {
+        0 => {
+            if let Some(symbolStatus) = symbolStatus {
+                *symbolStatus = cuda_types::cuda::CUdriverProcAddressQueryResult::CU_GET_PROC_ADDRESS_SYMBOL_NOT_FOUND;
+            }
+            *pfn = ptr::null_mut();
+            CUresult::ERROR_NOT_FOUND
+        }
+        usize::MAX => {
+            if let Some(symbolStatus) = symbolStatus {
+                *symbolStatus = cuda_types::cuda::CUdriverProcAddressQueryResult::CU_GET_PROC_ADDRESS_VERSION_NOT_SUFFICIENT;
+            }
+            *pfn = ptr::null_mut();
+            CUresult::ERROR_NOT_FOUND
+        }
+        _ => {
+            if let Some(symbolStatus) = symbolStatus {
+                *symbolStatus =
+                    cuda_types::cuda::CUdriverProcAddressQueryResult::CU_GET_PROC_ADDRESS_SUCCESS;
+            }
+            *pfn = fn_ptr;
+            Ok(())
+        }
+    }
+}
+
 cuda_function_declarations!(emit_cuda_fn_table);
 
 macro_rules! extern_redirect {
@@ -160,7 +234,7 @@ macro_rules! extern_redirect {
                         &mut formatted_args
                         $(,$arg_id)*
                 ).ok();
-                let extract_fn_ptr = |state: &mut GlobalDelayedState, log: &mut FnCallLog| {
+                let extract_fn_ptr = |state: &mut GlobalDelayedState, _: &mut FnCallLog| {
                     paste::paste! {
                         state.libcuda. [<get_ $fn_name>]()
                     }
@@ -235,7 +309,7 @@ cuda_function_declarations!(
                          //cuDeviceComputeCapability,
                          //cuModuleLoadFatBinary
         ],
-    export_table <= [cuGetExportTable]
+    override_fn <= [cuGetExportTable, cuGetProcAddress, cuGetProcAddress_v2]
 );
 
 mod dark_api;

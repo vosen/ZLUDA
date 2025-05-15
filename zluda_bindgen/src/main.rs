@@ -115,7 +115,7 @@ fn generate_process_address_table(crate_root: &PathBuf, mut cuda_fns: Vec<Ident>
             }
     }
     let mut path = crate_root.clone();
-    path.extend(["..", "zluda_bindgen", "process_table.rs"]);
+    path.extend(["..", "zluda_bindgen", "src", "process_table.rs"]);
     let mut file = File::create(path).unwrap();
     writeln!(file, "match (name, flag) {{").unwrap();
     for (fn_, version, breakpoints) in result {
