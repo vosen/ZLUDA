@@ -19,7 +19,7 @@ macro_rules! unimplemented {
                 let export_table = ::zluda_dump_common::get_export_table().unwrap();
                 ReprUsize::from_usize(export_table.logged_call(
                     stringify!($fn_name),
-                    "()".to_string(),
+                    &|| "()".to_string().into(),
                     &|| {
                         let result = fn_ptr(  $( $arg_id),* );
                         ReprUsize::to_usize(result)

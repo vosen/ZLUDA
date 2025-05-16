@@ -262,7 +262,7 @@ dark_api! {
         #[noformat]
         [0] = logged_call(
             fn_name: &'static str,
-            args: String,
+            args: &dyn Fn() -> Vec<u8>,
             fn_: &dyn Fn() -> usize,
             internal_error: usize,
             format_status: fn(usize) -> Vec<u8>

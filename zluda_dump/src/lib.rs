@@ -103,18 +103,21 @@ macro_rules! override_fn {
             #[no_mangle]
             #[allow(non_snake_case)]
             pub unsafe extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
-                let mut formatted_args = Vec::new();
-                (paste! { format :: [<write_ $fn_name>] }) (
-                        &mut formatted_args
-                        $(,$arg_id)*
-                ).ok();
+                let format_args = || {
+                    let mut formatted_args = Vec::new();
+                    (paste! { format :: [<write_ $fn_name>] }) (
+                            &mut formatted_args
+                            $(,$arg_id)*
+                    ).ok();
+                    formatted_args
+                };
                 let extract_fn_ptr = |_: &mut GlobalDelayedState, _: &mut FnCallLog| Some(());
                 let cuda_call = |_| {
                     paste!{ [<$fn_name _impl >] ( $($arg_id),* ) }
                 };
                 GlobalState2::under_lock(
                     CudaFunctionName::Normal(stringify!($fn_name)),
-                    Some(formatted_args),
+                    Some(format_args),
                     CUresult::INTERNAL_ERROR,
                     format_curesult,
                     extract_fn_ptr,
@@ -133,14 +136,14 @@ struct InternalTableImpl;
 impl ::dark_api::zluda_dump::CudaDarkApi for InternalTableImpl {
     unsafe extern "system" fn logged_call(
         fn_name: &'static str,
-        args: String,
+        args: &dyn Fn() -> Vec<u8>,
         fn_: &dyn Fn() -> usize,
         internal_error: usize,
         format_status: fn(usize) -> Vec<u8>,
     ) -> usize {
         GlobalState2::under_lock(
             CudaFunctionName::Normal(fn_name),
-            Some(args.into_bytes()),
+            Some(args),
             internal_error,
             format_status,
             |_, _| Some(()),
@@ -229,11 +232,14 @@ macro_rules! extern_redirect {
             #[no_mangle]
             #[allow(improper_ctypes_definitions)]
             pub extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
-                let mut formatted_args = Vec::new();
-                (paste! { format :: [<write_ $fn_name>] }) (
-                        &mut formatted_args
-                        $(,$arg_id)*
-                ).ok();
+                let format_args = || {
+                    let mut formatted_args = Vec::new();
+                    (paste! { format :: [<write_ $fn_name>] }) (
+                            &mut formatted_args
+                            $(,$arg_id)*
+                    ).ok();
+                    formatted_args
+                };
                 let extract_fn_ptr = |state: &mut GlobalDelayedState, _: &mut FnCallLog| {
                     paste::paste! {
                         state.libcuda. [<get_ $fn_name>]()
@@ -244,7 +250,7 @@ macro_rules! extern_redirect {
                 };
                 GlobalState2::under_lock(
                     CudaFunctionName::Normal(stringify!($fn_name)),
-                    Some(formatted_args),
+                    Some(format_args),
                     CUresult::INTERNAL_ERROR,
                     format_curesult,
                     extract_fn_ptr,
@@ -262,11 +268,14 @@ macro_rules! extern_redirect_with_post {
             #[no_mangle]
             #[allow(improper_ctypes_definitions)]
             pub extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
-                let mut formatted_args = Vec::new();
-                (paste! { format :: [<write_ $fn_name>] }) (
-                        &mut formatted_args
-                        $(,$arg_id)*
-                ).ok();
+                let format_args = || {
+                    let mut formatted_args = Vec::new();
+                    (paste! { format :: [<write_ $fn_name>] }) (
+                            &mut formatted_args
+                            $(,$arg_id)*
+                    ).ok();
+                    formatted_args
+                };
                 let extract_fn_ptr = |state: &mut GlobalDelayedState, log: &mut FnCallLog| {
                     paste::paste! {
                         state.libcuda. [<get_ $fn_name>]()
@@ -277,7 +286,7 @@ macro_rules! extern_redirect_with_post {
                 };
                 GlobalState2::under_lock(
                     CudaFunctionName::Normal(stringify!($fn_name)),
-                    Some(formatted_args),
+                    Some(format_args),
                     CUresult::INTERNAL_ERROR,
                     format_curesult,
                     extract_fn_ptr,
@@ -368,7 +377,7 @@ impl GlobalState2 {
     //   is also covered by a drop guard which will flush the log buffer in case of panic
     fn under_lock<'a, FnPtr: Copy, InnerResult: Copy>(
         name: CudaFunctionName,
-        args: Option<Vec<u8>>,
+        args: Option<impl FnOnce() -> Vec<u8>>,
         internal_error: InnerResult,
         format_status: fn(InnerResult) -> Vec<u8>,
         pre_call: impl FnOnce(&mut GlobalDelayedState, &mut FnCallLog) -> Option<FnPtr>,
@@ -377,7 +386,7 @@ impl GlobalState2 {
     ) -> InnerResult {
         fn under_lock_impl<'a, FnPtr: Copy, InnerResult: Copy>(
             name: CudaFunctionName,
-            args: Option<Vec<u8>>,
+            args: Option<impl FnOnce() -> Vec<u8>>,
             internal_error: InnerResult,
             format_status: fn(InnerResult) -> Vec<u8>,
             pre_call: impl FnOnce(&mut GlobalDelayedState, &mut FnCallLog) -> Option<FnPtr>,
@@ -399,7 +408,6 @@ impl GlobalState2 {
                     log_stack.enter()
                 });
                 logger.name = name.clone();
-                logger.args = args;
                 let delayed_state = match global_state.delayed_state {
                     LateInit::Success(ref mut delayed_state) => delayed_state,
                     // There's no libcuda to load, so we might as well panic
@@ -435,6 +443,7 @@ impl GlobalState2 {
             let mut logger = RefMut::map(global_state.log_stack.borrow_mut(), |log_stack| {
                 log_stack.resume()
             });
+            logger.args = args.map(|args| args());
             logger.output = Some(format_status(inner_result));
             post_call(
                 global_state.delayed_state.as_mut().unwrap(),
