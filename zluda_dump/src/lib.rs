@@ -375,65 +375,87 @@ impl GlobalState2 {
         inner_call: impl FnOnce(FnPtr) -> InnerResult,
         post_call: impl FnOnce(&mut GlobalDelayedState, &mut FnCallLog, FnPtr, InnerResult),
     ) -> InnerResult {
-        static GLOBAL_STATE2: LazyLock<ReentrantMutex<RefCell<GlobalState2>>> =
-            LazyLock::new(|| ReentrantMutex::new(RefCell::new(GlobalState2::new())));
-        let global_state = GLOBAL_STATE2.lock();
-        let global_state_ref_cell = &*global_state;
-        let pre_value = {
-            let mut global_state_ref_mut = global_state_ref_cell.borrow_mut();
-            let global_state = &mut *global_state_ref_mut;
-            let panic_guard = OuterCallGuard {
+        fn under_lock_impl<'a, FnPtr: Copy, InnerResult: Copy>(
+            name: CudaFunctionName,
+            args: Option<Vec<u8>>,
+            internal_error: InnerResult,
+            format_status: fn(InnerResult) -> Vec<u8>,
+            pre_call: impl FnOnce(&mut GlobalDelayedState, &mut FnCallLog) -> Option<FnPtr>,
+            inner_call: impl FnOnce(FnPtr) -> InnerResult,
+            post_call: impl FnOnce(&mut GlobalDelayedState, &mut FnCallLog, FnPtr, InnerResult),
+        ) -> InnerResult {
+            static GLOBAL_STATE2: LazyLock<ReentrantMutex<RefCell<GlobalState2>>> =
+                LazyLock::new(|| ReentrantMutex::new(RefCell::new(GlobalState2::new())));
+            let global_state = GLOBAL_STATE2.lock();
+            let global_state_ref_cell = &*global_state;
+            let pre_value = {
+                let mut global_state_ref_mut = global_state_ref_cell.borrow_mut();
+                let global_state = &mut *global_state_ref_mut;
+                let panic_guard = OuterCallGuard {
+                    writer: &mut global_state.log_writer,
+                    log_root: &global_state.log_stack,
+                };
+                let mut logger = RefMut::map(global_state.log_stack.borrow_mut(), |log_stack| {
+                    log_stack.enter()
+                });
+                logger.name = name.clone();
+                logger.args = args;
+                let delayed_state = match global_state.delayed_state {
+                    LateInit::Success(ref mut delayed_state) => delayed_state,
+                    // There's no libcuda to load, so we might as well panic
+                    LateInit::Error => panic!(),
+                    LateInit::Unitialized => {
+                        global_state.delayed_state =
+                            GlobalDelayedState::new2(panic_guard.writer, &mut logger);
+                        // `global_state.delayed_state` could be LateInit::Error,
+                        // we can crash in this case since there's no libcuda
+                        global_state.delayed_state.as_mut().unwrap()
+                    }
+                };
+                let fn_ptr = pre_call(delayed_state, &mut logger);
+                match fn_ptr {
+                    Some(fn_ptr) => {
+                        mem::forget(panic_guard);
+                        fn_ptr
+                    }
+                    None => {
+                        logger.log(ErrorEntry::FunctionNotFound(name));
+                        return internal_error;
+                    }
+                }
+            };
+            let panic_guard = InnerCallGuard(global_state_ref_cell);
+            let inner_result = inner_call(pre_value);
+            let global_state = &mut *global_state_ref_cell.borrow_mut();
+            mem::forget(panic_guard);
+            let _drop_guard = OuterCallGuard {
                 writer: &mut global_state.log_writer,
                 log_root: &global_state.log_stack,
             };
             let mut logger = RefMut::map(global_state.log_stack.borrow_mut(), |log_stack| {
-                log_stack.enter()
+                log_stack.resume()
             });
-            logger.name = name.clone();
-            logger.args = args;
-            let delayed_state = match global_state.delayed_state {
-                LateInit::Success(ref mut delayed_state) => delayed_state,
-                // There's no libcuda to load, so we might as well panic
-                LateInit::Error => panic!(),
-                LateInit::Unitialized => {
-                    global_state.delayed_state =
-                        GlobalDelayedState::new2(panic_guard.writer, &mut logger);
-                    // `global_state.delayed_state` could be LateInit::Error,
-                    // we can crash in this case since there's no libcuda
-                    global_state.delayed_state.as_mut().unwrap()
-                }
-            };
-            let fn_ptr = pre_call(delayed_state, &mut logger);
-            match fn_ptr {
-                Some(fn_ptr) => {
-                    mem::forget(panic_guard);
-                    fn_ptr
-                }
-                None => {
-                    logger.log(ErrorEntry::FunctionNotFound(name));
-                    return internal_error;
-                }
-            }
-        };
-        let panic_guard = InnerCallGuard(global_state_ref_cell);
-        let inner_result = inner_call(pre_value);
-        let global_state = &mut *global_state_ref_cell.borrow_mut();
-        mem::forget(panic_guard);
-        let _drop_guard = OuterCallGuard {
-            writer: &mut global_state.log_writer,
-            log_root: &global_state.log_stack,
-        };
-        let mut logger = RefMut::map(global_state.log_stack.borrow_mut(), |log_stack| {
-            log_stack.resume()
-        });
-        logger.output = Some(format_status(inner_result));
-        post_call(
-            global_state.delayed_state.as_mut().unwrap(),
-            &mut logger,
-            pre_value,
-            inner_result,
-        );
-        inner_result
+            logger.output = Some(format_status(inner_result));
+            post_call(
+                global_state.delayed_state.as_mut().unwrap(),
+                &mut logger,
+                pre_value,
+                inner_result,
+            );
+            inner_result
+        }
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            under_lock_impl(
+                name,
+                args,
+                internal_error,
+                format_status,
+                pre_call,
+                inner_call,
+                post_call,
+            )
+        }))
+        .unwrap_or(internal_error)
     }
 }
 
