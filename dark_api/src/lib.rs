@@ -52,9 +52,15 @@ macro_rules! dark_api_format_args {
 }
 
 macro_rules! dark_api_is_fn {
-    (SIZE_OF) => { false };
-    (NULL) => { false };
-    ($fn_:ident) => { true };
+    (SIZE_OF) => {
+        false
+    };
+    (NULL) => {
+        false
+    };
+    ($fn_:ident) => {
+        true
+    };
 }
 
 macro_rules! dark_api_format_fn {
@@ -138,11 +144,17 @@ macro_rules! dark_api {
             )*)+
         }
 
-        pub fn guid_to_name(guid: &cuda_types::cuda::CUuuid) -> Option<&'static str> {
+        pub fn guid_to_name(guid: &cuda_types::cuda::CUuuid, index: usize) -> Option<(&'static str, Option<&'static str>)> {
             let guid = uuid::Uuid::from_bytes(guid.bytes);
             $(
                 if guid == uuid::uuid!($guid) {
-                    return Some(stringify!($name));
+                    let guid = stringify!($name);
+                    $(
+                        if index == $index {
+                            return Some((guid, Some(stringify!($fn_))));
+                        }
+                    )*
+                    return Some((guid, None));
                 }
             )+
             None

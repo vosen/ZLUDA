@@ -159,7 +159,7 @@ impl ::dark_api::zluda_dump::CudaDarkApi for InternalTableImpl {
             CudaFunctionName::Normal(fn_name),
             Some(args),
             internal_error,
-            |status| format_status(*status),
+            |status| format_status(status),
             |_, _| Some(()),
             |_| fn_(),
             move |_, _, _, _| {},
@@ -184,7 +184,45 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApiDump {
         pctx: *mut cuda_types::cuda::CUcontext,
         dev: cuda_types::cuda::CUdevice,
     ) -> cuda_types::cuda::CUresult {
-        todo!()
+        let global_state = crate::GLOBAL_STATE2.lock();
+        let global_state_ref_cell = &*global_state;
+        let mut global_state_ref_mut = global_state_ref_cell.borrow_mut();
+        let global_state = &mut *global_state_ref_mut;
+        let drop_guard = crate::OuterCallGuard {
+            writer: &mut global_state.log_writer,
+            log_root: &global_state.log_stack,
+        };
+        let original_result = {
+            let mut logger = RefMut::map(global_state.log_stack.borrow_mut(), |log_stack| {
+                log_stack.enter()
+            });
+            logger.name = CudaFunctionName::Dark {
+                guid: ::dark_api::cuda::CudartInterface::GUID,
+                index: 2,
+            };
+            let dark_api = DARK_API_STATE.lock().unwrap();
+            let (original_table, _) = dark_api
+                .overrides
+                .get(&crate::dark_api::CUuuidWrapper(
+                    ::dark_api::cuda::CudartInterface::GUID,
+                ))
+                .unwrap();
+            let original_fn = mem::transmute::<
+                _,
+                extern "system" fn(
+                    *mut cuda_types::cuda::CUcontext,
+                    cuda_types::cuda::CUdevice,
+                ) -> cuda_types::cuda::CUresult,
+            >(*((*original_table).add(2)));
+            let original_result = original_fn(pctx, dev);
+            let mut args = Vec::new();
+            ::dark_api::cuda::format::cudart_interface_fn2(&mut args, pctx, dev).ok();
+            logger.args = Some(args);
+            logger.output = Some(format_curesult(original_result));
+            original_result
+        };
+        drop(drop_guard);
+        original_result
     }
 
     unsafe extern "system" fn get_module_from_cubin_ext1(
@@ -345,10 +383,12 @@ unsafe fn cuGetExportTable_impl(
         }
         Some(original_fn) => original_fn,
     };
-    original_fn(
-        ppExportTable,
-        pExportTableId,
-    )?;
+    let original_result = original_fn(ppExportTable, pExportTableId);
+    let mut args = Vec::new();
+    format::write_cuGetExportTable(&mut args, ppExportTable, pExportTableId).ok();
+    logger.args = Some(args);
+    logger.output = Some(format_curesult(original_result));
+    original_result?;
     let maybe_error = cuGetExportTable_override(result, guid)?;
     if let Some(error) = maybe_error {
         logger.log(error);
@@ -356,25 +396,19 @@ unsafe fn cuGetExportTable_impl(
     CUresult::SUCCESS
 }
 
-struct DarkApiState {
-    // Key is Box<CUuuid, because thunk reporting unknown export table needs a
-    // stable memory location for the guid
-    overrides: FxHashMap<Box<CUuuidWrapper>, Vec<*const c_void>>,
-    original: OriginalExports,
-}
+static DARK_API_STATE: LazyLock<Mutex<DarkApiState2>> =
+    LazyLock::new(|| Mutex::new(DarkApiState2::new()));
 
 fn cuGetExportTable_override(
     result: &mut *const c_void,
     guid: &CUuuid_st,
 ) -> Result<Option<ErrorEntry>, CUerror> {
-    static DARK_API_STATE: LazyLock<Mutex<DarkApiState2>> =
-        LazyLock::new(|| Mutex::new(DarkApiState2::new()));
     let (new_ptr, error) = {
         let mut state = DARK_API_STATE.lock().unwrap();
         state.override_export_table(&EXPORT_TABLE, (*result).cast(), guid)
     };
     *result = new_ptr.cast();
-    error
+    Ok(error)
 }
 
 #[allow(non_snake_case)]
@@ -508,7 +542,7 @@ macro_rules! extern_redirect_with_post {
     };
 }
 
-fn format_curesult(curesult: &CUresult) -> Vec<u8> {
+fn format_curesult(curesult: CUresult) -> Vec<u8> {
     use format::CudaDisplay;
     let mut output_string = Vec::new();
     curesult.write("", usize::MAX, &mut output_string).ok();

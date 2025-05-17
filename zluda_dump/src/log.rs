@@ -2,6 +2,7 @@ use super::Settings;
 use crate::FnCallLog;
 use crate::LogEntry;
 use cuda_types::cuda::*;
+use format::CudaDisplay;
 use std::error::Error;
 use std::ffi::c_void;
 use std::ffi::NulError;
@@ -79,13 +80,7 @@ impl Writer {
 
     fn write_call(&mut self, depth: usize, call: &FnCallLog) {
         self.write_buffer.start_line(depth);
-        match call.name {
-            CudaFunctionName::Normal(fn_name) => self.write_buffer.write(fn_name),
-            CudaFunctionName::Dark { guid, index } => {
-                format::CudaDisplay::write(&guid, "", 0, &mut self.write_buffer).ok();
-                write!(&mut self.write_buffer, "::{}", index).ok();
-            }
-        }
+        write!(self.write_buffer, "{}", call.name).ok();
         match call.args {
             Some(ref args) => {
                 self.write_buffer.write_all(args).ok();
@@ -353,10 +348,18 @@ impl Display for CudaFunctionName {
         match self {
             CudaFunctionName::Normal(fn_) => f.write_str(fn_),
             CudaFunctionName::Dark { guid, index } => {
-                let mut temp = Vec::new();
-                format::CudaDisplay::write(guid, "", 0, &mut temp)
-                    .map_err(|_| std::fmt::Error::default())?;
-                write!(f, "::{index}")
+                match ::dark_api::cuda::guid_to_name(guid, *index) {
+                    Some((name, fn_)) => match fn_ {
+                        Some(fn_) => write!(f, "{name}::{fn_}"),
+                        None => write!(f, "{name}::{index}"),
+                    },
+                    None => {
+                        let mut temp = Vec::new();
+                        format::CudaDisplay::write(guid, "", 0, &mut temp)
+                            .map_err(|_| std::fmt::Error::default())?;
+                        write!(f, "::{index}")
+                    }
+                }
             }
         }
     }
@@ -490,7 +493,6 @@ pub(crate) enum ErrorEntry {
         value: String,
     },
     UnexpectedExportTableSize {
-        guid: CUuuid,
         expected: usize,
         computed: usize,
     },
@@ -576,7 +578,9 @@ impl Display for ErrorEntry {
                         f,
                         "No function {cuda_function_name} in the underlying library"
                     ),
-ErrorEntry::UnexpectedExportTableSize { guid, expected, computed } => todo!()
+            ErrorEntry::UnexpectedExportTableSize { expected, computed } => {
+                write!(f, "Table length mismatch. Expected: {expected}, got: {computed}")
+            }
         }
     }
 }
