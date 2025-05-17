@@ -44,6 +44,7 @@ Not supported
 * Python 3
 * Rust compiler (recent version)
 * C++ compiler
+* AMD HIP64 library (development package)
 * (Optional, but recommended) [Ninja build system](https://ninja-build.org/)
 
 ### Build steps
