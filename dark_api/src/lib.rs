@@ -51,6 +51,12 @@ macro_rules! dark_api_format_args {
     };
 }
 
+macro_rules! dark_api_is_fn {
+    (SIZE_OF) => { false };
+    (NULL) => { false };
+    ($fn_:ident) => { true };
+}
+
 macro_rules! dark_api_format_fn {
     (SIZE_OF) => { };
     (NULL) => { };
@@ -106,9 +112,21 @@ macro_rules! dark_api {
                 result
             }
 
-            pub fn get(&self, key: &cuda_types::cuda::CUuuid) -> Option<&[*const std::ffi::c_void]> {
+            pub fn get(&self, key: &cuda_types::cuda::CUuuid) -> Option<crate::DarkApiTable> {
                 match key {
-                    $(&Self::$name => Some(&self.$name[..]),)+
+                    $(
+                        &Self::$name => {
+                            let fns = &self.$name[..];
+                            let mut valid_fns = bit_vec::BitVec::from_elem($len, false);
+                            $(
+                                valid_fns.set($index, dark_api_is_fn!($fn_) );
+                            )*
+                            Some(crate::DarkApiTable {
+                                fns,
+                                valid_fns
+                            })
+                        }
+                    )+
                     _ => None
                 }
             }
@@ -159,6 +177,29 @@ macro_rules! dark_api {
         }
         }
     };
+}
+
+pub struct DarkApiTable<'a> {
+    fns: &'a [*const std::ffi::c_void],
+    valid_fns: bit_vec::BitVec,
+}
+
+impl<'a> DarkApiTable<'a> {
+    pub fn len(&self) -> usize {
+        self.fns.len()
+    }
+
+    pub fn get_fn(&self, idx: usize) -> Option<*const std::ffi::c_void> {
+        if self.valid_fns.get(idx).unwrap_or(false) {
+            Some(self.fns[idx])
+        } else {
+            None
+        }
+    }
+
+    pub fn start(&self) -> *const std::ffi::c_void {
+        self.fns.as_ptr().cast()
+    }
 }
 
 dark_api! {
@@ -265,7 +306,7 @@ dark_api! {
             args: &dyn Fn() -> Vec<u8>,
             fn_: &dyn Fn() -> usize,
             internal_error: usize,
-            format_status: fn(usize) -> Vec<u8>
+            format_status: extern "C" fn(usize) -> Vec<u8>
         ) -> usize
     }
 }

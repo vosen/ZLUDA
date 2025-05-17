@@ -64,7 +64,7 @@ pub trait ReprUsize {
     const INTERNAL_ERROR: usize;
     fn to_usize(self) -> usize;
     fn from_usize(x: usize) -> Self;
-    fn format_status(x: usize) -> Vec<u8>;
+    extern "C" fn format_status(x: usize) -> Vec<u8>;
 }
 
 impl ReprUsize for usize {
@@ -78,7 +78,7 @@ impl ReprUsize for usize {
 
     const INTERNAL_ERROR: usize = 0;
 
-    fn format_status(x: usize) -> Vec<u8> {
+    extern "C" fn format_status(x: usize) -> Vec<u8> {
         todo!()
     }
 }
@@ -94,7 +94,7 @@ impl<T> ReprUsize for *const T {
 
     const INTERNAL_ERROR: usize = 0;
 
-    fn format_status(x: usize) -> Vec<u8> {
+    extern "C" fn format_status(x: usize) -> Vec<u8> {
         todo!()
     }
 }
@@ -110,7 +110,7 @@ impl ReprUsize for cuda_types::cublas::cublasStatus_t {
 
     const INTERNAL_ERROR: usize = 0;
 
-    fn format_status(x: usize) -> Vec<u8> {
+    extern "C" fn format_status(x: usize) -> Vec<u8> {
         let mut result = Vec::new();
         format::CudaDisplay::write(&x, "", 0, &mut result).ok();
         result
@@ -128,7 +128,7 @@ impl ReprUsize for () {
 
     const INTERNAL_ERROR: usize = 0;
 
-    fn format_status(x: usize) -> Vec<u8> {
+    extern "C" fn format_status(x: usize) -> Vec<u8> {
         todo!()
     }
 }

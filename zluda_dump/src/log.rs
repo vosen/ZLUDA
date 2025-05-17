@@ -458,7 +458,6 @@ impl<'a> Drop for FunctionLogger<'a> {
     }
 }
 
-// Structured log type. We don't want frontend to care about log formatting
 pub(crate) enum ErrorEntry {
     IoError(io::Error),
     CreatedDumpDirectory(PathBuf),
@@ -490,6 +489,11 @@ pub(crate) enum ErrorEntry {
         pattern: &'static str,
         value: String,
     },
+    UnexpectedExportTableSize {
+        guid: CUuuid,
+        expected: usize,
+        computed: usize,
+    },
 }
 
 unsafe impl Send for ErrorEntry {}
@@ -500,78 +504,79 @@ impl Display for ErrorEntry {
         match self {
             ErrorEntry::IoError(e) => e.fmt(f),
             ErrorEntry::CreatedDumpDirectory(dir) => {
-                        write!(
-                            f,
-                            "Created dump directory {} ",
-                            dir.as_os_str().to_string_lossy()
-                        )
-                    }
+                                write!(
+                                    f,
+                                    "Created dump directory {} ",
+                                    dir.as_os_str().to_string_lossy()
+                                )
+                            }
             ErrorEntry::ErrorBox(e) => e.fmt(f),
             ErrorEntry::UnsupportedModule {
-                        module,
-                        raw_image,
-                        kind,
-                    } => {
-                        write!(
-                            f,
-                            "Unsupported {} module {:?} loaded from module image {:?}",
-                            kind, module, raw_image
-                        )
-                    }
+                                module,
+                                raw_image,
+                                kind,
+                            } => {
+                                write!(
+                                    f,
+                                    "Unsupported {} module {:?} loaded from module image {:?}",
+                                    kind, module, raw_image
+                                )
+                            }
             ErrorEntry::MalformedModulePath(e) => e.fmt(f),
             ErrorEntry::NonUtf8ModuleText(e) => e.fmt(f),
             ErrorEntry::ModuleParsingError(file_name) => {
-                        write!(
-                            f,
-                            "Error parsing module, log has been written to {}",
-                            file_name
-                        )
-                    }
+                                write!(
+                                    f,
+                                    "Error parsing module, log has been written to {}",
+                                    file_name
+                                )
+                            }
             ErrorEntry::NulInsideModuleText(e) => e.fmt(f),
             ErrorEntry::Lz4DecompressionFailure => write!(f, "LZ4 decompression failure"),
             ErrorEntry::UnknownExportTableFn => write!(f, "Unknown export table function"),
             ErrorEntry::UnexpectedBinaryField {
-                        field_name,
-                        expected,
-                        observed,
-                    } => write!(
-                        f,
-                        "Unexpected field {}. Expected one of: {{{}}}, observed: {}",
-                        field_name,
-                        expected
-                            .iter()
-                            .map(|x| x.to_string())
-                            .collect::<Vec<_>>()
-                            .join(", "),
-                        observed
-                    ),
+                                field_name,
+                                expected,
+                                observed,
+                            } => write!(
+                                f,
+                                "Unexpected field {}. Expected one of: {{{}}}, observed: {}",
+                                field_name,
+                                expected
+                                    .iter()
+                                    .map(|x| x.to_string())
+                                    .collect::<Vec<_>>()
+                                    .join(", "),
+                                observed
+                            ),
             ErrorEntry::UnexpectedArgument {
-                        arg_name,
-                        expected,
-                        observed,
-                    } => write!(
-                        f,
-                        "Unexpected argument {}. Expected one of: {{{}}}, observed: {}",
-                        arg_name,
-                        expected
-                            .iter()
-                            .map(|x| x.to_string())
-                            .collect::<Vec<_>>()
-                            .join(", "),
-                        observed
-                    ),
+                                arg_name,
+                                expected,
+                                observed,
+                            } => write!(
+                                f,
+                                "Unexpected argument {}. Expected one of: {{{}}}, observed: {}",
+                                arg_name,
+                                expected
+                                    .iter()
+                                    .map(|x| x.to_string())
+                                    .collect::<Vec<_>>()
+                                    .join(", "),
+                                observed
+                            ),
             ErrorEntry::InvalidEnvVar {
-                        var,
-                        pattern,
-                        value,
-                    } => write!(
-                        f,
-                        "Unexpected value of environment variable {var}. Expected pattern: {pattern}, got value: {value}"
-                    ),
+                                var,
+                                pattern,
+                                value,
+                            } => write!(
+                                f,
+                                "Unexpected value of environment variable {var}. Expected pattern: {pattern}, got value: {value}"
+                            ),
             ErrorEntry::FunctionNotFound(cuda_function_name) => write!(
-                f,
-                "No function {cuda_function_name} in the underlying library"
-            ),
+                        f,
+                        "No function {cuda_function_name} in the underlying library"
+                    ),
+ErrorEntry::UnexpectedExportTableSize { guid, expected, computed } => todo!()
         }
     }
 }

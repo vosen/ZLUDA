@@ -1,4 +1,6 @@
 use cuda_types::cuda::*;
+use dark_api::DarkApiState2;
+use goblin::error;
 use log::{CudaFunctionName, ErrorEntry};
 use parking_lot::ReentrantMutex;
 use paste::paste;
@@ -97,7 +99,7 @@ macro_rules! emit_cuda_fn_table {
     };
 }
 
-macro_rules! override_fn {
+macro_rules! override_fn_core {
     ($($abi:literal fn $fn_name: ident ( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
         $(
             #[no_mangle]
@@ -129,6 +131,18 @@ macro_rules! override_fn {
     }
 }
 
+macro_rules! override_fn_full {
+    ($($abi:literal fn $fn_name: ident ( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
+        $(
+            #[no_mangle]
+            #[allow(non_snake_case)]
+            pub unsafe extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
+                paste!{ [<$fn_name _impl >] ( $($arg_id),* ) }
+            }
+        )*
+    }
+}
+
 static INTERNAL_TABLE: ::dark_api::zluda_dump::CudaDarkApiGlobalTable =
     ::dark_api::zluda_dump::CudaDarkApiGlobalTable::new::<InternalTableImpl>();
 struct InternalTableImpl;
@@ -139,17 +153,145 @@ impl ::dark_api::zluda_dump::CudaDarkApi for InternalTableImpl {
         args: &dyn Fn() -> Vec<u8>,
         fn_: &dyn Fn() -> usize,
         internal_error: usize,
-        format_status: fn(usize) -> Vec<u8>,
+        format_status: extern "C" fn(usize) -> Vec<u8>,
     ) -> usize {
         GlobalState2::under_lock(
             CudaFunctionName::Normal(fn_name),
             Some(args),
             internal_error,
-            format_status,
+            |status| format_status(*status),
             |_, _| Some(()),
             |_| fn_(),
             move |_, _, _, _| {},
         )
+    }
+}
+
+static EXPORT_TABLE: ::dark_api::cuda::CudaDarkApiGlobalTable =
+    ::dark_api::cuda::CudaDarkApiGlobalTable::new::<DarkApiDump>();
+
+struct DarkApiDump;
+
+impl ::dark_api::cuda::CudaDarkApi for DarkApiDump {
+    unsafe extern "system" fn get_module_from_cubin(
+        module: *mut cuda_types::cuda::CUmodule,
+        fatbinc_wrapper: *const std::ffi::c_void,
+    ) -> () {
+        todo!()
+    }
+
+    unsafe extern "system" fn cudart_interface_fn2(
+        pctx: *mut cuda_types::cuda::CUcontext,
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult {
+        todo!()
+    }
+
+    unsafe extern "system" fn get_module_from_cubin_ext1(
+        result: *mut cuda_types::cuda::CUmodule,
+        fatbinc_wrapper: *const std::ffi::c_void,
+        arg3: *mut std::ffi::c_void,
+        arg4: *mut std::ffi::c_void,
+        arg5: u32,
+    ) -> cuda_types::cuda::CUresult {
+        todo!()
+    }
+
+    unsafe extern "system" fn cudart_interface_fn7(arg1: usize) -> cuda_types::cuda::CUresult {
+        todo!()
+    }
+
+    unsafe extern "system" fn get_module_from_cubin_ext2(
+        fatbinc_wrapper: *const std::ffi::c_void,
+        result: *mut cuda_types::cuda::CUmodule,
+        arg3: *mut std::ffi::c_void,
+        arg4: *mut std::ffi::c_void,
+        arg5: u32,
+    ) -> cuda_types::cuda::CUresult {
+        todo!()
+    }
+
+    unsafe extern "system" fn runtime_callback_hooks_fn2(
+        ptr: *mut *mut std::ffi::c_void,
+        size: *mut usize,
+    ) -> () {
+        todo!()
+    }
+
+    unsafe extern "system" fn runtime_callback_hooks_fn6(
+        ptr: *mut *mut std::ffi::c_void,
+        size: *mut usize,
+    ) -> () {
+        todo!()
+    }
+
+    unsafe extern "system" fn context_local_storage_ctor(
+        context: cuda_types::cuda::CUcontext,
+        manager: *mut std::ffi::c_void,
+        ctx_state: *mut std::ffi::c_void,
+        dtor_cb: Option<
+            extern "system" fn(
+                cuda_types::cuda::CUcontext,
+                *mut std::ffi::c_void,
+                *mut std::ffi::c_void,
+            ),
+        >,
+    ) -> cuda_types::cuda::CUresult {
+        todo!()
+    }
+
+    unsafe extern "system" fn context_local_storage_dtor(
+        arg1: *mut std::ffi::c_void,
+        arg2: *mut std::ffi::c_void,
+    ) -> cuda_types::cuda::CUresult {
+        todo!()
+    }
+
+    unsafe extern "system" fn context_local_storage_get_state(
+        ctx_state: *mut std::ffi::c_void,
+        cu_ctx: cuda_types::cuda::CUcontext,
+        manager: *mut std::ffi::c_void,
+    ) -> cuda_types::cuda::CUresult {
+        todo!()
+    }
+
+    unsafe extern "system" fn ctx_create_v2_bypass(
+        pctx: *mut cuda_types::cuda::CUcontext,
+        flags: ::std::os::raw::c_uint,
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult {
+        todo!()
+    }
+
+    unsafe extern "system" fn heap_alloc(
+        heap_alloc_record_ptr: *mut *const std::ffi::c_void,
+        arg2: usize,
+        arg3: usize,
+    ) -> cuda_types::cuda::CUresult {
+        todo!()
+    }
+
+    unsafe extern "system" fn heap_free(
+        heap_alloc_record_ptr: *const std::ffi::c_void,
+        arg2: *mut usize,
+    ) -> cuda_types::cuda::CUresult {
+        todo!()
+    }
+
+    unsafe extern "system" fn device_get_attribute_ext(
+        dev: cuda_types::cuda::CUdevice,
+        attribute: std::ffi::c_uint,
+        unknown: std::ffi::c_int,
+        result: *mut [usize; 2],
+    ) -> cuda_types::cuda::CUresult {
+        todo!()
+    }
+
+    unsafe extern "system" fn device_get_something(
+        result: *mut std::ffi::c_uchar,
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult {
+        todo!()
     }
 }
 
@@ -158,13 +300,81 @@ unsafe fn cuGetExportTable_impl(
     ppExportTable: *mut *const ::core::ffi::c_void,
     pExportTableId: *const cuda_types::cuda::CUuuid,
 ) -> cuda_types::cuda::CUresult {
-    if let (Some(result), Some(export_table)) = (ppExportTable.as_mut(), pExportTableId.as_ref()) {
-        if let Some(table) = INTERNAL_TABLE.get(export_table) {
-            *result = ptr::from_ref(table).cast();
-            return cuda_types::cuda::CUresult::SUCCESS;
+    let (result, guid) =
+        if let (Some(result), Some(guid)) = (ppExportTable.as_mut(), pExportTableId.as_ref()) {
+            if let Some(table) = INTERNAL_TABLE.get(guid) {
+                *result = table.start();
+                return cuda_types::cuda::CUresult::SUCCESS;
+            } else {
+                (result, guid)
+            }
+        } else {
+            return cuda_types::cuda::CUresult::ERROR_INVALID_VALUE;
+        };
+    // I'd rather use GlobalState::under_lock, but that function has a bunch of
+    // requirements about types that are very difficult to fulfill here.
+    // This particular function does not call any public CUDA functions so it
+    // should be all fine
+    let mut global_state = GLOBAL_STATE2.lock();
+    let mut global_state = &mut *global_state.borrow_mut();
+    let panic_guard = OuterCallGuard {
+        writer: &mut global_state.log_writer,
+        log_root: &global_state.log_stack,
+    };
+    let mut logger = RefMut::map(global_state.log_stack.borrow_mut(), |log_stack| {
+        log_stack.enter()
+    });
+    logger.name = CudaFunctionName::Normal("cuGetExportTable");
+    let delayed_state = match global_state.delayed_state {
+        LateInit::Success(ref mut delayed_state) => delayed_state,
+        // There's no libcuda to load, so we might as well panic
+        LateInit::Error => panic!(),
+        LateInit::Unitialized => {
+            global_state.delayed_state = GlobalDelayedState::new2(panic_guard.writer, &mut logger);
+            // `global_state.delayed_state` could be LateInit::Error,
+            // we can crash in this case since there's no libcuda
+            global_state.delayed_state.as_mut().unwrap()
         }
+    };
+    let original_fn = match delayed_state.libcuda.get_cuGetExportTable() {
+        None => {
+            logger.log(ErrorEntry::FunctionNotFound(CudaFunctionName::Normal(
+                "cuGetExportTable",
+            )));
+            return cuda_types::cuda::CUresult::ERROR_UNKNOWN;
+        }
+        Some(original_fn) => original_fn,
+    };
+    original_fn(
+        ppExportTable,
+        pExportTableId,
+    )?;
+    let maybe_error = cuGetExportTable_override(result, guid)?;
+    if let Some(error) = maybe_error {
+        logger.log(error);
     }
-    todo!()
+    CUresult::SUCCESS
+}
+
+struct DarkApiState {
+    // Key is Box<CUuuid, because thunk reporting unknown export table needs a
+    // stable memory location for the guid
+    overrides: FxHashMap<Box<CUuuidWrapper>, Vec<*const c_void>>,
+    original: OriginalExports,
+}
+
+fn cuGetExportTable_override(
+    result: &mut *const c_void,
+    guid: &CUuuid_st,
+) -> Result<Option<ErrorEntry>, CUerror> {
+    static DARK_API_STATE: LazyLock<Mutex<DarkApiState2>> =
+        LazyLock::new(|| Mutex::new(DarkApiState2::new()));
+    let (new_ptr, error) = {
+        let mut state = DARK_API_STATE.lock().unwrap();
+        state.override_export_table(&EXPORT_TABLE, (*result).cast(), guid)
+    };
+    *result = new_ptr.cast();
+    error
 }
 
 #[allow(non_snake_case)]
@@ -298,7 +508,7 @@ macro_rules! extern_redirect_with_post {
     };
 }
 
-fn format_curesult(curesult: CUresult) -> Vec<u8> {
+fn format_curesult(curesult: &CUresult) -> Vec<u8> {
     use format::CudaDisplay;
     let mut output_string = Vec::new();
     curesult.write("", usize::MAX, &mut output_string).ok();
@@ -318,7 +528,8 @@ cuda_function_declarations!(
                          //cuDeviceComputeCapability,
                          //cuModuleLoadFatBinary
         ],
-    override_fn <= [cuGetExportTable, cuGetProcAddress, cuGetProcAddress_v2]
+    override_fn_core <= [cuGetProcAddress, cuGetProcAddress_v2],
+    override_fn_full <= [cuGetExportTable],
 );
 
 mod dark_api;
@@ -340,6 +551,9 @@ struct GlobalState2 {
     // initalization (e.g. we passed a non-existant path to libcuda)
     delayed_state: LateInit<GlobalDelayedState>,
 }
+
+static GLOBAL_STATE2: LazyLock<ReentrantMutex<RefCell<GlobalState2>>> =
+    LazyLock::new(|| ReentrantMutex::new(RefCell::new(GlobalState2::new())));
 
 impl GlobalState2 {
     fn new() -> Self {
@@ -379,7 +593,7 @@ impl GlobalState2 {
         name: CudaFunctionName,
         args: Option<impl FnOnce() -> Vec<u8>>,
         internal_error: InnerResult,
-        format_status: fn(InnerResult) -> Vec<u8>,
+        format_status: impl FnOnce(InnerResult) -> Vec<u8>,
         pre_call: impl FnOnce(&mut GlobalDelayedState, &mut FnCallLog) -> Option<FnPtr>,
         inner_call: impl FnOnce(FnPtr) -> InnerResult,
         post_call: impl FnOnce(&mut GlobalDelayedState, &mut FnCallLog, FnPtr, InnerResult),
@@ -388,13 +602,11 @@ impl GlobalState2 {
             name: CudaFunctionName,
             args: Option<impl FnOnce() -> Vec<u8>>,
             internal_error: InnerResult,
-            format_status: fn(InnerResult) -> Vec<u8>,
+            format_status: impl FnOnce(InnerResult) -> Vec<u8>,
             pre_call: impl FnOnce(&mut GlobalDelayedState, &mut FnCallLog) -> Option<FnPtr>,
             inner_call: impl FnOnce(FnPtr) -> InnerResult,
             post_call: impl FnOnce(&mut GlobalDelayedState, &mut FnCallLog, FnPtr, InnerResult),
         ) -> InnerResult {
-            static GLOBAL_STATE2: LazyLock<ReentrantMutex<RefCell<GlobalState2>>> =
-                LazyLock::new(|| ReentrantMutex::new(RefCell::new(GlobalState2::new())));
             let global_state = GLOBAL_STATE2.lock();
             let global_state_ref_cell = &*global_state;
             let pre_value = {
