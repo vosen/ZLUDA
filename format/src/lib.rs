@@ -14,6 +14,17 @@ pub trait CudaDisplay {
     ) -> std::io::Result<()>;
 }
 
+impl CudaDisplay for () {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        write!(writer, "()")
+    }
+}
+
 impl CudaDisplay for CUuuid {
     fn write(
         &self,

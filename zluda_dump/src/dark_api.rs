@@ -75,7 +75,8 @@ impl DarkApiState2 {
             }
         }
         let mut override_table =
-            unsafe { std::slice::from_raw_parts(original_export_table, export_functions_size) }.to_vec();
+            unsafe { std::slice::from_raw_parts(original_export_table, export_functions_size) }
+                .to_vec();
         for i in export_functions_start_idx..export_functions_size {
             let current_fn = (|| {
                 if let Some(ref our_functions) = our_functions {
@@ -93,7 +94,10 @@ impl DarkApiState2 {
             override_table[i] = current_fn;
         }
         (
-            entry.insert((original_export_table, override_table)).1.as_ptr(),
+            entry
+                .insert((original_export_table, override_table))
+                .1
+                .as_ptr(),
             error,
         )
     }
@@ -103,15 +107,17 @@ impl DarkApiState2 {
         let global_state_ref_cell = &*global_state;
         let mut global_state_ref_mut = global_state_ref_cell.borrow_mut();
         let global_state = &mut *global_state_ref_mut;
-        let drop_guard = crate::OuterCallGuard {
+        let log_guard = crate::OuterCallGuard {
             writer: &mut global_state.log_writer,
             log_root: &global_state.log_stack,
         };
-        let mut logger = RefMut::map(global_state.log_stack.borrow_mut(), |log_stack| {
-            log_stack.enter()
-        });
-        logger.name = CudaFunctionName::Dark { guid: *guid, index };
-        drop(drop_guard);
+        {
+            let mut logger = RefMut::map(global_state.log_stack.borrow_mut(), |log_stack| {
+                log_stack.enter()
+            });
+            logger.name = CudaFunctionName::Dark { guid: *guid, index };
+        };
+        drop(log_guard);
     }
 }
 

@@ -357,7 +357,8 @@ impl Display for CudaFunctionName {
                         let mut temp = Vec::new();
                         format::CudaDisplay::write(guid, "", 0, &mut temp)
                             .map_err(|_| std::fmt::Error::default())?;
-                        write!(f, "::{index}")
+                        let temp = String::from_utf8_lossy(&*temp);
+                        write!(f, "{temp}::{index}")
                     }
                 }
             }

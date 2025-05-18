@@ -170,166 +170,162 @@ impl ::dark_api::zluda_dump::CudaDarkApi for InternalTableImpl {
 static EXPORT_TABLE: ::dark_api::cuda::CudaDarkApiGlobalTable =
     ::dark_api::cuda::CudaDarkApiGlobalTable::new::<DarkApiDump>();
 
+macro_rules! dark_api_fn_print_redirect {
+    (
+        $iface:ident {
+            $([$index:expr] = $fn_:ident ( $($arg_id:ident: $arg_type:ty),* ) -> $ret_type:ty ),+
+        }
+    ) => {
+            $(
+            unsafe extern "system" fn $fn_(
+                $($arg_id: $arg_type),*
+            ) -> $ret_type {
+                let global_state = crate::GLOBAL_STATE2.lock();
+                let global_state_ref_cell = &*global_state;
+                let mut global_state_ref_mut = global_state_ref_cell.borrow_mut();
+                let global_state = &mut *global_state_ref_mut;
+                let log_guard = crate::OuterCallGuard {
+                    writer: &mut global_state.log_writer,
+                    log_root: &global_state.log_stack,
+                };
+                let original_result = {
+                    let mut logger = RefMut::map(global_state.log_stack.borrow_mut(), |log_stack| {
+                        log_stack.enter()
+                    });
+                    logger.name = CudaFunctionName::Dark {
+                        guid: paste::paste! { ::dark_api::cuda:: [< $iface:camel >] ::GUID  },
+                        index: $index,
+                    };
+                    let dark_api = DARK_API_STATE.lock().unwrap();
+                    let (original_table, _) = dark_api
+                        .overrides
+                        .get(&crate::dark_api::CUuuidWrapper(
+                            paste::paste! { ::dark_api::cuda:: [< $iface:camel >] ::GUID  },
+                        ))
+                        .unwrap();
+                    let original_fn = mem::transmute::<
+                        _,
+                        unsafe extern "system" fn(
+                            $($arg_id: $arg_type),*
+                        ) -> $ret_type,
+                    >(*((*original_table).add($index)));
+                    let original_result = original_fn( $($arg_id),*);
+                    let mut args = Vec::new();
+                    ::dark_api::cuda::format::$fn_(&mut args, $($arg_id),*).ok();
+                    logger.args = Some(args);
+                    let mut output = Vec::new();
+                    ::format::CudaDisplay::write(&original_result, "", 0, &mut output).ok();
+                    logger.output = Some(output);
+                    original_result
+                };
+                drop(log_guard);
+                original_result
+            }
+            )+
+    };
+}
+
 struct DarkApiDump;
 
 impl ::dark_api::cuda::CudaDarkApi for DarkApiDump {
-    unsafe extern "system" fn get_module_from_cubin(
-        module: *mut cuda_types::cuda::CUmodule,
-        fatbinc_wrapper: *const std::ffi::c_void,
-    ) -> () {
-        todo!()
+    dark_api_fn_print_redirect! {
+        CUDART_INTERFACE {
+            [1] = get_module_from_cubin(
+                module: *mut cuda_types::cuda::CUmodule,
+                fatbinc_wrapper: *const std::ffi::c_void // FatbincWrapper
+            ) -> (),
+            [2] = cudart_interface_fn2(
+                pctx: *mut cuda_types::cuda::CUcontext,
+                dev: cuda_types::cuda::CUdevice
+            ) -> cuda_types::cuda::CUresult,
+            [6] = get_module_from_cubin_ext1(
+                result: *mut cuda_types::cuda::CUmodule,
+                fatbinc_wrapper: *const std::ffi::c_void, // FatbincWrapper
+                arg3: *mut std::ffi::c_void,
+                arg4: *mut std::ffi::c_void,
+                arg5: u32
+            ) -> cuda_types::cuda::CUresult,
+            [7] = cudart_interface_fn7(arg1: usize) -> cuda_types::cuda::CUresult,
+            [8] = get_module_from_cubin_ext2(
+                fatbinc_wrapper: *const std::ffi::c_void, // FatbinHeader
+                result: *mut cuda_types::cuda::CUmodule,
+                arg3: *mut std::ffi::c_void,
+                arg4: *mut std::ffi::c_void,
+                arg5: u32
+            ) -> cuda_types::cuda::CUresult
+        }
     }
 
-    unsafe extern "system" fn cudart_interface_fn2(
-        pctx: *mut cuda_types::cuda::CUcontext,
-        dev: cuda_types::cuda::CUdevice,
-    ) -> cuda_types::cuda::CUresult {
-        let global_state = crate::GLOBAL_STATE2.lock();
-        let global_state_ref_cell = &*global_state;
-        let mut global_state_ref_mut = global_state_ref_cell.borrow_mut();
-        let global_state = &mut *global_state_ref_mut;
-        let drop_guard = crate::OuterCallGuard {
-            writer: &mut global_state.log_writer,
-            log_root: &global_state.log_stack,
-        };
-        let original_result = {
-            let mut logger = RefMut::map(global_state.log_stack.borrow_mut(), |log_stack| {
-                log_stack.enter()
-            });
-            logger.name = CudaFunctionName::Dark {
-                guid: ::dark_api::cuda::CudartInterface::GUID,
-                index: 2,
-            };
-            let dark_api = DARK_API_STATE.lock().unwrap();
-            let (original_table, _) = dark_api
-                .overrides
-                .get(&crate::dark_api::CUuuidWrapper(
-                    ::dark_api::cuda::CudartInterface::GUID,
-                ))
-                .unwrap();
-            let original_fn = mem::transmute::<
-                _,
-                extern "system" fn(
-                    *mut cuda_types::cuda::CUcontext,
-                    cuda_types::cuda::CUdevice,
-                ) -> cuda_types::cuda::CUresult,
-            >(*((*original_table).add(2)));
-            let original_result = original_fn(pctx, dev);
-            let mut args = Vec::new();
-            ::dark_api::cuda::format::cudart_interface_fn2(&mut args, pctx, dev).ok();
-            logger.args = Some(args);
-            logger.output = Some(format_curesult(original_result));
-            original_result
-        };
-        drop(drop_guard);
-        original_result
+    dark_api_fn_print_redirect! {
+        TOOLS_RUNTIME_CALLBACK_HOOKS {
+            [2] = runtime_callback_hooks_fn2(ptr: *mut *mut std::ffi::c_void, size: *mut usize) -> (),
+            [6] = runtime_callback_hooks_fn6(ptr: *mut *mut std::ffi::c_void, size: *mut usize) -> ()
+        }
     }
 
-    unsafe extern "system" fn get_module_from_cubin_ext1(
-        result: *mut cuda_types::cuda::CUmodule,
-        fatbinc_wrapper: *const std::ffi::c_void,
-        arg3: *mut std::ffi::c_void,
-        arg4: *mut std::ffi::c_void,
-        arg5: u32,
-    ) -> cuda_types::cuda::CUresult {
-        todo!()
+    dark_api_fn_print_redirect! {
+        CONTEXT_LOCAL_STORAGE_INTERFACE_V0301 {
+            [0] = context_local_storage_ctor(
+                context: cuda_types::cuda::CUcontext,
+                manager: *mut std::ffi::c_void, // ContextStateManager
+                ctx_state: *mut std::ffi::c_void, // ContextState
+                // clsContextDestroyCallback, have to be called on cuDevicePrimaryCtxReset
+                dtor_cb: Option<extern "system" fn(
+                    cuda_types::cuda::CUcontext,
+                    *mut std::ffi::c_void, // ContextStateManager
+                    *mut std::ffi::c_void, // ContextState
+                )>
+            ) -> cuda_types::cuda::CUresult,
+            [1] = context_local_storage_dtor(
+                arg1: *mut std::ffi::c_void,
+                arg2: *mut std::ffi::c_void
+            ) -> cuda_types::cuda::CUresult,
+            [2] = context_local_storage_get_state(
+                ctx_state: *mut std::ffi::c_void, // ContextState
+                cu_ctx: cuda_types::cuda::CUcontext,
+                manager: *mut std::ffi::c_void // ContextStateManager
+            ) -> cuda_types::cuda::CUresult
+        }
     }
 
-    unsafe extern "system" fn cudart_interface_fn7(arg1: usize) -> cuda_types::cuda::CUresult {
-        todo!()
+    dark_api_fn_print_redirect! {
+        CTX_CREATE_BYPASS {
+            [1] = ctx_create_v2_bypass(
+                pctx: *mut cuda_types::cuda::CUcontext,
+                flags: ::std::os::raw::c_uint,
+                dev: cuda_types::cuda::CUdevice
+            ) -> cuda_types::cuda::CUresult
+        }
     }
 
-    unsafe extern "system" fn get_module_from_cubin_ext2(
-        fatbinc_wrapper: *const std::ffi::c_void,
-        result: *mut cuda_types::cuda::CUmodule,
-        arg3: *mut std::ffi::c_void,
-        arg4: *mut std::ffi::c_void,
-        arg5: u32,
-    ) -> cuda_types::cuda::CUresult {
-        todo!()
+    dark_api_fn_print_redirect! {
+        HEAP_ACCESS {
+            [1] = heap_alloc(
+                heap_alloc_record_ptr: *mut *const std::ffi::c_void, // HeapAllocRecord
+                arg2: usize,
+                arg3: usize
+            ) -> cuda_types::cuda::CUresult,
+            [2] = heap_free(
+                heap_alloc_record_ptr: *const std::ffi::c_void, // HeapAllocRecord
+                arg2: *mut usize
+            ) -> cuda_types::cuda::CUresult
+        }
     }
 
-    unsafe extern "system" fn runtime_callback_hooks_fn2(
-        ptr: *mut *mut std::ffi::c_void,
-        size: *mut usize,
-    ) -> () {
-        todo!()
-    }
-
-    unsafe extern "system" fn runtime_callback_hooks_fn6(
-        ptr: *mut *mut std::ffi::c_void,
-        size: *mut usize,
-    ) -> () {
-        todo!()
-    }
-
-    unsafe extern "system" fn context_local_storage_ctor(
-        context: cuda_types::cuda::CUcontext,
-        manager: *mut std::ffi::c_void,
-        ctx_state: *mut std::ffi::c_void,
-        dtor_cb: Option<
-            extern "system" fn(
-                cuda_types::cuda::CUcontext,
-                *mut std::ffi::c_void,
-                *mut std::ffi::c_void,
-            ),
-        >,
-    ) -> cuda_types::cuda::CUresult {
-        todo!()
-    }
-
-    unsafe extern "system" fn context_local_storage_dtor(
-        arg1: *mut std::ffi::c_void,
-        arg2: *mut std::ffi::c_void,
-    ) -> cuda_types::cuda::CUresult {
-        todo!()
-    }
-
-    unsafe extern "system" fn context_local_storage_get_state(
-        ctx_state: *mut std::ffi::c_void,
-        cu_ctx: cuda_types::cuda::CUcontext,
-        manager: *mut std::ffi::c_void,
-    ) -> cuda_types::cuda::CUresult {
-        todo!()
-    }
-
-    unsafe extern "system" fn ctx_create_v2_bypass(
-        pctx: *mut cuda_types::cuda::CUcontext,
-        flags: ::std::os::raw::c_uint,
-        dev: cuda_types::cuda::CUdevice,
-    ) -> cuda_types::cuda::CUresult {
-        todo!()
-    }
-
-    unsafe extern "system" fn heap_alloc(
-        heap_alloc_record_ptr: *mut *const std::ffi::c_void,
-        arg2: usize,
-        arg3: usize,
-    ) -> cuda_types::cuda::CUresult {
-        todo!()
-    }
-
-    unsafe extern "system" fn heap_free(
-        heap_alloc_record_ptr: *const std::ffi::c_void,
-        arg2: *mut usize,
-    ) -> cuda_types::cuda::CUresult {
-        todo!()
-    }
-
-    unsafe extern "system" fn device_get_attribute_ext(
-        dev: cuda_types::cuda::CUdevice,
-        attribute: std::ffi::c_uint,
-        unknown: std::ffi::c_int,
-        result: *mut [usize; 2],
-    ) -> cuda_types::cuda::CUresult {
-        todo!()
-    }
-
-    unsafe extern "system" fn device_get_something(
-        result: *mut std::ffi::c_uchar,
-        dev: cuda_types::cuda::CUdevice,
-    ) -> cuda_types::cuda::CUresult {
-        todo!()
+    dark_api_fn_print_redirect! {
+        HEAP_ACCESS {
+            [5] = device_get_attribute_ext(
+                dev: cuda_types::cuda::CUdevice,
+                attribute: std::ffi::c_uint,
+                unknown: std::ffi::c_int,
+                result: *mut [usize; 2]
+            ) -> cuda_types::cuda::CUresult,
+            // I don't know is this function return, but on my GTX 1060 it returns 0
+            [13] = device_get_something(
+                result: *mut std::ffi::c_uchar,
+                dev: cuda_types::cuda::CUdevice
+            ) -> cuda_types::cuda::CUresult
+        }
     }
 }
 
