@@ -350,8 +350,8 @@ impl Display for CudaFunctionName {
             CudaFunctionName::Dark { guid, index } => {
                 match ::dark_api::cuda::guid_to_name(guid, *index) {
                     Some((name, fn_)) => match fn_ {
-                        Some(fn_) => write!(f, "{name}::{fn_}"),
-                        None => write!(f, "{name}::{index}"),
+                        Some(fn_) => write!(f, "{{{name}}}::{fn_}"),
+                        None => write!(f, "{{{name}}}::{index}"),
                     },
                     None => {
                         let mut temp = Vec::new();
@@ -497,6 +497,10 @@ pub(crate) enum ErrorEntry {
         expected: usize,
         computed: usize,
     },
+    IntegrityCheck {
+        original: [u64; 2],
+        overriden: [u64; 2],
+    },
 }
 
 unsafe impl Send for ErrorEntry {}
@@ -581,6 +585,9 @@ impl Display for ErrorEntry {
                     ),
             ErrorEntry::UnexpectedExportTableSize { expected, computed } => {
                 write!(f, "Table length mismatch. Expected: {expected}, got: {computed}")
+            }
+            ErrorEntry::IntegrityCheck { original, overriden } => {
+                write!(f, "Overriding integrity check hash. Original: {original:?}, overriden: {overriden:?}")
             }
         }
     }

@@ -328,15 +328,145 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApiDump {
         }
     }
 
-    dark_api_fn_print_redirect! {
-        INTEGRITY_CHECK {
-            [1] = integrity_check(
-                arg1: u32,
-                arg2: u64,
-                arg3: *mut [u64;2]
-            ) -> cuda_types::cuda::CUresult
-        }
+    unsafe extern "system" fn integrity_check(
+        version: u32,
+        unix_seconds: u64,
+        result: *mut [u64; 2],
+    ) -> cuda_types::cuda::CUresult {
+        let global_state = crate::GLOBAL_STATE2.lock();
+        let global_state_ref_cell = &*global_state;
+        let mut global_state_ref_mut = global_state_ref_cell.borrow_mut();
+        let global_state = &mut *global_state_ref_mut;
+        let log_guard = crate::OuterCallGuard {
+            writer: &mut global_state.log_writer,
+            log_root: &global_state.log_stack,
+        };
+        let original_result = {
+            let mut logger = RefMut::map(global_state.log_stack.borrow_mut(), |log_stack| {
+                log_stack.enter()
+            });
+            logger.name = CudaFunctionName::Dark {
+                guid: ::dark_api::cuda::IntegrityCheck::GUID,
+                index: 1,
+            };
+            let dark_api = DARK_API_STATE.lock().unwrap();
+            let (original_table, override_table) = dark_api
+                .overrides
+                .get(&crate::dark_api::CUuuidWrapper(
+                    ::dark_api::cuda::IntegrityCheck::GUID,
+                ))
+                .unwrap();
+            let original_fn = mem::transmute::<
+                _,
+                unsafe extern "system" fn(u32, u64, *mut [u64; 2]) -> cuda_types::cuda::CUresult,
+            >(*((*original_table).add(1)));
+            let original_result = original_fn(version, unix_seconds, result);
+            if original_result.is_ok() && version % 10 >= 2 {
+                (|| {
+                    let (driver_version, devices) =
+                        get_cuda_hash_input(&mut global_state.delayed_state)?;
+                    let current_process = std::process::id();
+                    let current_thread = os::current_thread();
+                    let integrity_check_table = override_table.as_ptr().cast();
+                    let cudart_table = dark_api
+                        .overrides
+                        .get(&crate::dark_api::CUuuidWrapper(
+                            ::dark_api::cuda::CudartInterface::GUID,
+                        ))?
+                        .1
+                        .as_ptr()
+                        .cast();
+                    let fn_address = unsafe { *override_table.as_ptr().add(1) };
+                    let devices_count = devices.len() as u32;
+                    let get_device = |dev| devices[dev as usize];
+                    let new_hash = ::dark_api::integrity_check(
+                        version,
+                        unix_seconds,
+                        driver_version,
+                        current_process,
+                        current_thread,
+                        integrity_check_table,
+                        cudart_table,
+                        fn_address,
+                        devices_count,
+                        get_device,
+                    );
+                    logger.log(ErrorEntry::IntegrityCheck {
+                        original: *result,
+                        overriden: new_hash,
+                    });
+                    *result = new_hash;
+                    Some(())
+                })();
+            }
+            let mut args = Vec::new();
+            ::dark_api::cuda::format::integrity_check(&mut args, version, unix_seconds, result)
+                .ok();
+            logger.args = Some(args);
+            let mut output = Vec::new();
+            ::format::CudaDisplay::write(&original_result, "", 0, &mut output).ok();
+            logger.output = Some(output);
+            original_result
+        };
+        drop(log_guard);
+        original_result
     }
+}
+
+fn get_cuda_hash_input(
+    delayed_state: &mut LateInit<GlobalDelayedState>,
+) -> Option<(u32, Vec<::dark_api::DeviceHashinfo>)> {
+    let delayed_state = delayed_state.as_mut()?;
+    let mut driver_version = 0;
+    delayed_state
+        .libcuda
+        .cuDriverGetVersion(&mut driver_version)?
+        .ok()?;
+    let mut devices = 0;
+    delayed_state.libcuda.cuDeviceGetCount(&mut devices)?.ok()?;
+    let devices = (0..devices)
+        .map(|dev| {
+            let mut guid = unsafe { mem::zeroed() };
+            delayed_state
+                .libcuda
+                .cuDeviceGetUuid(&mut guid, dev)?
+                .ok()?;
+            let mut pci_domain = 0;
+            delayed_state
+                .libcuda
+                .cuDeviceGetAttribute(
+                    &mut pci_domain,
+                    CUdevice_attribute::CU_DEVICE_ATTRIBUTE_PCI_DOMAIN_ID,
+                    dev,
+                )?
+                .ok()?;
+            let mut pci_bus = 0;
+            delayed_state
+                .libcuda
+                .cuDeviceGetAttribute(
+                    &mut pci_bus,
+                    CUdevice_attribute::CU_DEVICE_ATTRIBUTE_PCI_BUS_ID,
+                    dev,
+                )?
+                .ok()?;
+            let mut pci_device = 0;
+            delayed_state
+                .libcuda
+                .cuDeviceGetAttribute(
+                    &mut pci_device,
+                    CUdevice_attribute::CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID,
+                    dev,
+                )?
+                .ok()?;
+            Some(::dark_api::DeviceHashinfo {
+                guid,
+                pci_domain,
+                pci_bus,
+                pci_device,
+            })
+        })
+        .collect::<Option<Vec<_>>>()?;
+    Some((driver_version as u32, devices))
 }
 
 #[allow(non_snake_case)]

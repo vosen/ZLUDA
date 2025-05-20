@@ -70,3 +70,12 @@ pub fn get_thunk(
     mem::forget(exe_buf);
     result_fn as *const _
 }
+
+#[link(name = "pthread")]
+unsafe extern "C" {
+    fn pthread_self() -> std::os::unix::thread::RawPthread;
+}
+
+pub(crate) fn current_thread() -> u32 {
+    (unsafe { pthread_self() }) as u32
+}

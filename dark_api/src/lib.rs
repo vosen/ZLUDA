@@ -313,9 +313,9 @@ dark_api! {
     "{D4082055-BDE6-704B-8D34-BA123C66E1F2}" => INTEGRITY_CHECK[3] {
         [0] = SIZE_OF,
         [1] = integrity_check(
-            arg1: u32,
-            arg2: u64,
-            arg3: *mut [u64;2]
+            version: u32,
+            unix_seconds: u64,
+            result: *mut [u64;2]
         ) -> cuda_types::cuda::CUresult
     }
 }
@@ -341,8 +341,8 @@ pub fn integrity_check(
     driver_version: u32,
     current_process: u32,
     current_thread: u32,
-    export_table_start: *const c_void,
-    export_table_end: *const c_void,
+    integrity_check_table: *const c_void,
+    cudart_table: *const c_void,
     fn_address: *const c_void,
     devices: u32,
     get_device: impl FnMut(u32) -> DeviceHashinfo,
@@ -364,8 +364,8 @@ pub fn integrity_check(
         version,
         current_process,
         current_thread,
-        export_table_end,
-        export_table_start,
+        cudart_table,
+        integrity_check_table,
         fn_address,
         unix_seconds,
     };
@@ -379,7 +379,7 @@ pub fn integrity_check(
 }
 
 fn pass7(accumulator: &mut [u8; 66], pass5_1: &[u64; 2]) {
-    hash_pass(accumulator, pass5_1, 0x5c);
+    hash_pass(accumulator, pass5_1, 0);
 }
 
 fn pass6(accumulator: &mut [u8; 66], pass1_result: &[u8; 16]) {
@@ -421,18 +421,19 @@ struct Pass3Input {
     version: u32,
     current_process: u32,
     current_thread: u32,
-    export_table_end: *const c_void,
-    export_table_start: *const c_void,
+    cudart_table: *const c_void,
+    integrity_check_table: *const c_void,
     fn_address: *const c_void,
     unix_seconds: u64,
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct DeviceHashinfo {
-    guid: CUuuid,
-    pci_domain: u32,
-    pci_bus: u32,
-    pci_device: u32,
+    pub guid: CUuuid,
+    pub pci_domain: i32,
+    pub pci_bus: i32,
+    pub pci_device: i32,
 }
 
 fn pass2(accumulator: &mut [u8; 66], pass1_result: &[u8; 16]) {
@@ -522,7 +523,10 @@ fn integrity_check_single_pass(arg1: &mut [u8; 66], arg2: u8) {
     }
 }
 
+#[cfg(test)]
 mod tests {
+    use std::mem;
+
     #[test]
     fn integrity_check_single_pass() {
         let mut input = [
@@ -575,8 +579,8 @@ mod tests {
             version: 12082,
             current_process: 0x002fa423,
             current_thread: 0xf79c1000,
-            export_table_end: 0x00007ffff6958240 as *const _,
-            export_table_start: 0x00007ffff6958220 as *const _,
+            cudart_table: 0x00007ffff6958240 as *const _,
+            integrity_check_table: 0x00007ffff6958220 as *const _,
             fn_address: 0x00007ffff2aaf4a0 as *const _,
             unix_seconds: 0x682b9cee,
         };
@@ -618,5 +622,31 @@ mod tests {
             0x66, 0xaf, 0xa0, 0x50, 0x7a, 0x7d, 0xbb, 0xbc, 0x0c, 0x50,
         ];
         assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn integrity_check_pass5() {
+        let mut result = [
+            0x3e, 0x4b, 0xf2, 0x95, 0x71, 0xf5, 0x6b, 0x51, 0x07, 0xbf, 0x4b, 0xf1, 0x04, 0x0e,
+            0x8e, 0x0b, 0x5f, 0x4d, 0x30, 0x0c, 0x0f, 0x0c, 0xae, 0xfb, 0x48, 0xaf, 0x23, 0xb5,
+            0xea, 0x4c, 0xc2, 0xdb, 0xd7, 0xdf, 0x88, 0x74, 0x39, 0x58, 0x16, 0x3a, 0x1f, 0x7c,
+            0x9b, 0x20, 0x7e, 0x7e, 0x94, 0xc8, 0x8b, 0xc6, 0xb2, 0x38, 0x0d, 0x07, 0x7d, 0xbd,
+            0x90, 0xd5, 0x39, 0x63, 0xeb, 0x1d, 0x4f, 0x40, 0x00, 0x40,
+        ];
+        let output = super::pass5(&mut result);
+        let expected_result = [
+            0x00, 0x23, 0x53, 0x06, 0x5e, 0x96, 0xf6, 0x9c, 0x61, 0xaa, 0x96, 0x2d, 0x2e, 0xcd,
+            0xa8, 0x58, 0xe9, 0xca, 0xc0, 0x2e, 0x35, 0xed, 0x5f, 0xca, 0xe1, 0x0e, 0xcd, 0x1f,
+            0xd0, 0x8e, 0x8b, 0x9c, 0x29, 0x4d, 0x1c, 0x94, 0x6b, 0xf7, 0x10, 0xb0, 0x07, 0x08,
+            0x91, 0xd6, 0x14, 0x06, 0xc0, 0xec, 0xe1, 0x9c, 0x8e, 0x33, 0xd4, 0xe9, 0x43, 0x5c,
+            0x86, 0x0c, 0x72, 0x4d, 0x27, 0x98, 0x91, 0x7f, 0x00, 0x7f,
+        ];
+        assert_eq!(result, expected_result);
+        let output = unsafe { mem::transmute::<_, [u8; 16]>(output) };
+        let expected = [
+            0x00, 0x23, 0x53, 0x06, 0x5e, 0x96, 0xf6, 0x9c, 0x61, 0xaa, 0x96, 0x2d, 0x2e, 0xcd,
+            0xa8, 0x58,
+        ];
+        assert_eq!(output, expected);
     }
 }
