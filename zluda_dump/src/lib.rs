@@ -313,7 +313,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApiDump {
     }
 
     dark_api_fn_print_redirect! {
-        HEAP_ACCESS {
+        DEVICE_EXTENDED_RT {
             [5] = device_get_attribute_ext(
                 dev: cuda_types::cuda::CUdevice,
                 attribute: std::ffi::c_uint,
@@ -324,6 +324,16 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApiDump {
             [13] = device_get_something(
                 result: *mut std::ffi::c_uchar,
                 dev: cuda_types::cuda::CUdevice
+            ) -> cuda_types::cuda::CUresult
+        }
+    }
+
+    dark_api_fn_print_redirect! {
+        INTEGRITY_CHECK {
+            [1] = integrity_check(
+                arg1: u32,
+                arg2: u64,
+                arg3: *mut [u64;2]
             ) -> cuda_types::cuda::CUresult
         }
     }
