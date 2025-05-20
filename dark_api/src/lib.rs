@@ -317,6 +317,11 @@ dark_api! {
             unix_seconds: u64,
             result: *mut [u64;2]
         ) -> cuda_types::cuda::CUresult
+    },
+    // This functions check for some bits that are never observably set
+    "{263E8860-7CD2-6143-92F6-BBD5006DFA7E}" => UNKNOWN_CHECKS[4] {
+        [0] = SIZE_OF,
+        [3] = check_fn3() -> u32
     }
 }
 

@@ -411,6 +411,12 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApiDump {
         drop(log_guard);
         original_result
     }
+
+    dark_api_fn_print_redirect! {
+        UNKNOWN_CHECKS {
+            [3] = check_fn3() -> u32
+        }
+    }
 }
 
 fn get_cuda_hash_input(
