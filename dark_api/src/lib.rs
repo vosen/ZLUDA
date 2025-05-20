@@ -338,6 +338,7 @@ dark_api! {
 pub fn integrity_check(
     version: u32,
     unix_seconds: u64,
+    driver_version: u32,
     current_process: u32,
     current_thread: u32,
     export_table_start: *const c_void,
@@ -359,7 +360,7 @@ pub fn integrity_check(
     let mut result = [0u8; 66];
     pass2(&mut result, &pass1_result);
     let pass3_input = Pass3Input {
-        builtin_version: 0x2f30,
+        driver_version,
         version,
         current_process,
         current_thread,
@@ -416,7 +417,7 @@ fn pass5(result: &mut [u8; 66]) -> [u64; 2] {
 
 #[repr(C)]
 struct Pass3Input {
-    builtin_version: u32,
+    driver_version: u32,
     version: u32,
     current_process: u32,
     current_thread: u32,
@@ -570,7 +571,7 @@ mod tests {
             0x70, 0x5f, 0x67, 0xd1, 0xeb, 0x67, 0xa1, 0x3d, 0x00, 0x3d,
         ];
         let input = super::Pass3Input {
-            builtin_version: 0x2f30,
+            driver_version: 0x2f30,
             version: 12082,
             current_process: 0x002fa423,
             current_thread: 0xf79c1000,
