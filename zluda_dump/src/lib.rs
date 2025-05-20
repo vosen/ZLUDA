@@ -414,6 +414,11 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApiDump {
 
     dark_api_fn_print_redirect! {
         UNKNOWN_CHECKS {
+            [2] = context_check(
+                ctx_in: cuda_types::cuda::CUcontext,
+                result1: *mut u32,
+                result2: *mut *const std::ffi::c_void
+            ) -> cuda_types::cuda::CUresult,
             [3] = check_fn3() -> u32
         }
     }

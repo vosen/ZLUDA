@@ -321,7 +321,12 @@ dark_api! {
     // This functions check for some bits that are never observably set
     "{263E8860-7CD2-6143-92F6-BBD5006DFA7E}" => UNKNOWN_CHECKS[4] {
         [0] = SIZE_OF,
-        [3] = check_fn3() -> u32
+        [2] = context_check(
+            ctx_in: cuda_types::cuda::CUcontext,
+            result1: *mut u32, // seems to be always 0
+            result2: *mut *const std::ffi::c_void
+        ) -> cuda_types::cuda::CUresult,
+        [3] = check_fn3() -> u32 // seeems to always return 0
     }
 }
 
