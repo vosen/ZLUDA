@@ -43,7 +43,6 @@ fn main() -> Result<(), VarError> {
             rustc_cmd.arg(r"-lucrt");
         }
         rustc_cmd
-            .arg("-ldylib=nvcuda")
             .arg("-C")
             .arg(format!("opt-level={}", opt_level))
             .arg("-L")
