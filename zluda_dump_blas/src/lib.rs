@@ -19,7 +19,12 @@ macro_rules! unimplemented {
                 let export_table = ::zluda_dump_common::get_export_table().unwrap();
                 ReprUsize::from_usize(export_table.logged_call(
                     stringify!($fn_name),
-                    &|| "()".to_string().into(),
+                    &|| {
+                        let mut writer = Vec::new();
+                        let formatter = paste::paste! { ::format:: [< write_  $fn_name>] };
+                        formatter(&mut writer $(, $arg_id)* ).ok();
+                        writer
+                    },
                     &|| {
                         let result = fn_ptr(  $( $arg_id),* );
                         ReprUsize::to_usize(result)
@@ -27,8 +32,6 @@ macro_rules! unimplemented {
                     <$ret_type as ReprUsize>::INTERNAL_ERROR,
                     <$ret_type as ReprUsize>::format_status)
                 )
-                //eprintln!(stringify!($fn_name));
-                //return fn_ptr(  $( $arg_id),* );
             }
         )*
     };

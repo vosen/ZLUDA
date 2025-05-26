@@ -112,7 +112,7 @@ impl ReprUsize for cuda_types::cublas::cublasStatus_t {
 
     extern "C" fn format_status(x: usize) -> Vec<u8> {
         let mut result = Vec::new();
-        format::CudaDisplay::write(&x, "", 0, &mut result).ok();
+        format::CudaDisplay::write(&Self::from_usize(x), "", 0, &mut result).ok();
         result
     }
 }

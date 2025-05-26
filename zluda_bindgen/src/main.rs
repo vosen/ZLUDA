@@ -601,7 +601,13 @@ fn generate_cublas(crate_root: &PathBuf) {
         &crate_root,
         &["..", "cuda_types", "src", "cublas.rs"],
         &module,
-    )
+    );
+    generate_display_blas(
+        &crate_root,
+        &["..", "format", "src", "format_generated_blas.rs"],
+        &["cuda_types", "cublas"],
+        &module,
+    );
 }
 
 fn generate_cublaslt(crate_root: &PathBuf) {
@@ -664,7 +670,7 @@ fn generate_cuda(crate_root: &PathBuf) -> Vec<Ident> {
         &["..", "cuda_types", "src", "cuda.rs"],
         &module,
     );
-    generate_display(
+    generate_display_cuda(
         &crate_root,
         &["..", "format", "src", "format_generated.rs"],
         &["cuda_types", "cuda"],
@@ -837,7 +843,12 @@ fn generate_functions(
         }
     };
     let submodule = Ident::new(submodule, Span::call_site());
-    syn::visit_mut::visit_file_mut(&mut PrependCudaPath { module: submodule }, &mut module);
+    syn::visit_mut::visit_file_mut(
+        &mut PrependCudaPath {
+            module: vec![Ident::new("cuda_types", Span::call_site()), submodule],
+        },
+        &mut module,
+    );
     syn::visit_mut::visit_file_mut(&mut RemoveVisibility, &mut module);
     syn::visit_mut::visit_file_mut(&mut ExplicitReturnType, &mut module);
     let mut output = output.clone();
@@ -1030,7 +1041,7 @@ impl VisitMut for FixAbi {
 }
 
 struct PrependCudaPath {
-    module: Ident,
+    module: Vec<Ident>,
 }
 
 impl VisitMut for PrependCudaPath {
@@ -1040,7 +1051,7 @@ impl VisitMut for PrependCudaPath {
                 "usize" | "u32" | "i32" | "u64" | "i64" | "f64" | "f32" | "FILE" => {}
                 _ => {
                     let module = &self.module;
-                    *type_ = parse_quote! { cuda_types :: #module :: #type_ };
+                    *type_ = parse_quote! { #(#module :: )* #type_ };
                 }
             }
         }
@@ -1065,7 +1076,7 @@ impl VisitMut for ExplicitReturnType {
     }
 }
 
-fn generate_display(
+fn generate_display_cuda(
     output: &PathBuf,
     path: &[&str],
     types_crate: &[&'static str],
@@ -1093,6 +1104,7 @@ fn generate_display(
         "CUdevResource_st",
         "CUlaunchAttribute_st",
         "CUmemcpy3DOperand_st",
+        "CUlaunchConfig_st",
     ];
     let ignore_functions = [
         "cuGLGetDevices",
@@ -1121,9 +1133,41 @@ fn generate_display(
     let mut items = module
         .items
         .iter()
-        .filter_map(|i| cuda_derive_display_trait_for_item(&mut derive_state, i))
+        .filter_map(|i| cuda_derive_display_trait_for_item(types_crate, &mut derive_state, i))
         .collect::<Vec<_>>();
     items.push(curesult_display_trait(&derive_state));
+    let mut output = output.clone();
+    output.extend(path);
+    write_rust_to_file(
+        output,
+        &prettyplease::unparse(&syn::File {
+            shebang: None,
+            attrs: Vec::new(),
+            items,
+        }),
+    );
+}
+
+fn generate_display_blas(
+    output: &PathBuf,
+    path: &[&str],
+    types_crate: &[&'static str],
+    module: &syn::File,
+) {
+    let ignore_types = [];
+    let ignore_functions = [];
+    let count_selectors = [];
+    let mut derive_state = DeriveDisplayState::new(
+        &ignore_types,
+        types_crate,
+        &ignore_functions,
+        &count_selectors,
+    );
+    let mut items = module
+        .items
+        .iter()
+        .filter_map(|i| cuda_derive_display_trait_for_item(types_crate, &mut derive_state, i))
+        .collect::<Vec<_>>();
     let mut output = output.clone();
     output.extend(path);
     write_rust_to_file(
@@ -1194,13 +1238,17 @@ impl<'a> DeriveDisplayState<'a> {
 }
 
 fn cuda_derive_display_trait_for_item<'a>(
+    path: &[&str],
     state: &mut DeriveDisplayState<'a>,
     item: &'a Item,
 ) -> Option<syn::Item> {
     let path_prefix = &state.types_crate;
     let path_prefix_iter = iter::repeat(&path_prefix);
     let mut prepend_path = PrependCudaPath {
-        module: Ident::new("cuda", Span::call_site()),
+        module: path
+            .iter()
+            .map(|segment| Ident::new(segment, Span::call_site()))
+            .collect(),
     };
     match item {
         Item::Const(const_) => {

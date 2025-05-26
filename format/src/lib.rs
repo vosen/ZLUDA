@@ -1,5 +1,6 @@
 use cuda_types::cuda::*;
 use std::{
+    any::TypeId,
     ffi::{c_void, CStr},
     fmt::LowerHex,
     mem, ptr, slice,
@@ -84,6 +85,17 @@ impl CudaDisplay for i32 {
 }
 
 impl CudaDisplay for u32 {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        write!(writer, "{}", *self)
+    }
+}
+
+impl CudaDisplay for i64 {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -664,23 +676,18 @@ impl CudaDisplay for CUlaunchAttribute_st {
     }
 }
 
-impl<T: CudaDisplay> CudaDisplay for *mut T {
+impl<T: CudaDisplay + 'static> CudaDisplay for *mut T {
     fn write(
         &self,
         fn_name: &'static str,
         index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        if *self == ptr::null_mut() {
-            writer.write_all(b"NULL")
-        } else {
-            let this: &T = unsafe { &**self };
-            this.write(fn_name, index, writer)
-        }
+        CudaDisplay::write(&self.cast_const(), fn_name, index, writer)
     }
 }
 
-impl<T: CudaDisplay> CudaDisplay for *const T {
+impl<T: CudaDisplay + 'static> CudaDisplay for *const T {
     fn write(
         &self,
         fn_name: &'static str,
@@ -690,8 +697,17 @@ impl<T: CudaDisplay> CudaDisplay for *const T {
         if *self == ptr::null() {
             writer.write_all(b"NULL")
         } else {
-            let this: &T = unsafe { &**self };
-            this.write(fn_name, index, writer)
+            if fn_name.len() > 2
+                && fn_name.starts_with("cu")
+                && fn_name.as_bytes()[2].is_ascii_lowercase()
+                && (TypeId::of::<T>() == TypeId::of::<f32>()
+                    || TypeId::of::<T>() == TypeId::of::<f64>())
+            {
+                CudaDisplay::write(&self.cast::<c_void>(), fn_name, index, writer)
+            } else {
+                let this: &T = unsafe { &**self };
+                this.write(fn_name, index, writer)
+            }
         }
     }
 }
@@ -916,3 +932,5 @@ pub fn write_cuGLGetDevices_v2(
 
 mod format_generated;
 pub use format_generated::*;
+mod format_generated_blas;
+pub use format_generated_blas::*;

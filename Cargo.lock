@@ -1485,6 +1485,7 @@ dependencies = [
  "cuda_types",
  "format",
  "libloading",
+ "paste",
  "zluda_dump_common",
 ]
 
