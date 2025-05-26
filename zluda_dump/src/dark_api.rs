@@ -31,13 +31,13 @@ impl Hash for CUuuidWrapper {
 #[allow(improper_ctypes_definitions)]
 pub(crate) struct OriginalExports {
     original_get_module_from_cubin: Option<
-        unsafe extern "system" fn(
+        unsafe extern "C" fn(
             result: *mut CUmodule,
             fatbinc_wrapper: *const FatbincWrapper,
         ) -> CUresult,
     >,
     original_get_module_from_cubin_ext1: Option<
-        unsafe extern "system" fn(
+        unsafe extern "C" fn(
             result: *mut CUmodule,
             fatbinc_wrapper: *const FatbincWrapper,
             ptr1: *mut c_void,
@@ -46,7 +46,7 @@ pub(crate) struct OriginalExports {
         ) -> CUresult,
     >,
     original_get_module_from_cubin_ext2: Option<
-        unsafe extern "system" fn(
+        unsafe extern "C" fn(
             fatbinc_wrapper: *const FatbinHeader,
             result: *mut CUmodule,
             ptr1: *mut c_void,
@@ -358,7 +358,7 @@ unsafe fn record_submodules_from_fatbin(
 }
 
 #[allow(improper_ctypes_definitions)]
-unsafe extern "system" fn get_module_from_cubin(
+unsafe extern "C" fn get_module_from_cubin(
     module: *mut CUmodule,
     fatbinc_wrapper: *const FatbincWrapper,
 ) -> CUresult {
@@ -391,7 +391,7 @@ unsafe extern "system" fn get_module_from_cubin(
 }
 
 #[allow(improper_ctypes_definitions)]
-unsafe extern "system" fn get_module_from_cubin_ext1(
+unsafe extern "C" fn get_module_from_cubin_ext1(
     module: *mut CUmodule,
     fatbinc_wrapper: *const FatbincWrapper,
     ptr1: *mut c_void,
@@ -455,7 +455,7 @@ unsafe extern "system" fn get_module_from_cubin_ext1(
 }
 
 #[allow(improper_ctypes_definitions)]
-unsafe extern "system" fn get_module_from_cubin_ext2(
+unsafe extern "C" fn get_module_from_cubin_ext2(
     fatbin_header: *const FatbinHeader,
     module: *mut CUmodule,
     ptr1: *mut c_void,
