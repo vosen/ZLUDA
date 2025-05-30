@@ -33,40 +33,6 @@ pub const CUBLASLT_NUMERICAL_IMPL_FLAGS_INPUT_8F_E4M3: u32 = 4194304;
 pub const CUBLASLT_NUMERICAL_IMPL_FLAGS_INPUT_8F_E5M2: u32 = 8388608;
 pub const CUBLASLT_NUMERICAL_IMPL_FLAGS_OP_INPUT_TYPE_MASK: u32 = 16711680;
 pub const CUBLASLT_NUMERICAL_IMPL_FLAGS_GAUSSIAN: u64 = 4294967296;
-impl cublasStatus_t {
-    pub const CUBLAS_STATUS_SUCCESS: cublasStatus_t = cublasStatus_t(0);
-}
-impl cublasStatus_t {
-    pub const CUBLAS_STATUS_NOT_INITIALIZED: cublasStatus_t = cublasStatus_t(1);
-}
-impl cublasStatus_t {
-    pub const CUBLAS_STATUS_ALLOC_FAILED: cublasStatus_t = cublasStatus_t(3);
-}
-impl cublasStatus_t {
-    pub const CUBLAS_STATUS_INVALID_VALUE: cublasStatus_t = cublasStatus_t(7);
-}
-impl cublasStatus_t {
-    pub const CUBLAS_STATUS_ARCH_MISMATCH: cublasStatus_t = cublasStatus_t(8);
-}
-impl cublasStatus_t {
-    pub const CUBLAS_STATUS_MAPPING_ERROR: cublasStatus_t = cublasStatus_t(11);
-}
-impl cublasStatus_t {
-    pub const CUBLAS_STATUS_EXECUTION_FAILED: cublasStatus_t = cublasStatus_t(13);
-}
-impl cublasStatus_t {
-    pub const CUBLAS_STATUS_INTERNAL_ERROR: cublasStatus_t = cublasStatus_t(14);
-}
-impl cublasStatus_t {
-    pub const CUBLAS_STATUS_NOT_SUPPORTED: cublasStatus_t = cublasStatus_t(15);
-}
-impl cublasStatus_t {
-    pub const CUBLAS_STATUS_LICENSE_ERROR: cublasStatus_t = cublasStatus_t(16);
-}
-#[repr(transparent)]
-#[must_use]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct cublasStatus_t(pub ::core::ffi::c_uint);
 impl cublasFillMode_t {
     pub const CUBLAS_FILL_MODE_LOWER: cublasFillMode_t = cublasFillMode_t(0);
 }
@@ -5116,7 +5082,7 @@ pub struct cublasLtMatmulHeuristicResult_t {
     pub workspaceSize: usize,
     /** Result status, other fields are only valid if after call to cublasLtMatmulAlgoGetHeuristic() this member is set to
  CUBLAS_STATUS_SUCCESS.*/
-    pub state: cublasStatus_t,
+    pub state: super::cublas::cublasStatus_t,
     /** Waves count - a device utilization metric.
 
  wavesCount value of 1.0f suggests that when kernel is launched it will fully occupy the GPU.*/

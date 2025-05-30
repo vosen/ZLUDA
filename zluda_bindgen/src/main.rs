@@ -157,18 +157,38 @@ fn generate_cufft(crate_root: &PathBuf) -> Vec<Ident> {
         .unwrap()
         .to_string();
     let module: syn::File = syn::parse_str(&cufft_header).unwrap();
-    let functions = generate_functions(
+    let functions = get_functions(generate_functions(
         &crate_root,
         "cufft",
         &["..", "cuda_base", "src", "cufft.rs"],
         &module,
-    );
+    ));
     generate_types_library(
+        Some(LibraryOverride::CuFft),
         &crate_root,
         &["..", "cuda_types", "src", "cufft.rs"],
         &module,
     );
     functions
+}
+
+fn get_functions(module: syn::File) -> Vec<Ident> {
+    module
+        .items
+        .iter()
+        .flat_map(|item| match item {
+            Item::ForeignMod(extern_) => {
+                extern_
+                    .items
+                    .iter()
+                    .filter_map(|foreign_item| match foreign_item {
+                        ForeignItem::Fn(fn_) => Some(fn_.sig.ident.clone()),
+                        _ => None,
+                    })
+            }
+            _ => unreachable!(),
+        })
+        .collect::<Vec<_>>()
 }
 
 fn generate_cusparse(crate_root: &PathBuf) {
@@ -193,6 +213,7 @@ fn generate_cusparse(crate_root: &PathBuf) {
         &module,
     );
     generate_types_library(
+        None,
         &crate_root,
         &["..", "cuda_types", "src", "cusparse.rs"],
         &module,
@@ -598,6 +619,7 @@ fn generate_cublas(crate_root: &PathBuf) {
         &module,
     );
     generate_types_library(
+        None,
         &crate_root,
         &["..", "cuda_types", "src", "cublas.rs"],
         &module,
@@ -608,6 +630,20 @@ fn generate_cublas(crate_root: &PathBuf) {
         &["cuda_types", "cublas"],
         &module,
     );
+}
+
+fn remove_type(module: &mut syn::File, type_name: &str) {
+    let items = std::mem::replace(&mut module.items, Vec::new());
+    let items = items
+        .into_iter()
+        .filter_map(|item| match item {
+            Item::Enum(enum_) if enum_.ident == type_name => None,
+            Item::Struct(struct_) if struct_.ident == type_name => None,
+            Item::Impl(impl_) if impl_.self_ty.to_token_stream().to_string() == type_name => None,
+            _ => Some(item),
+        })
+        .collect();
+    module.items = items;
 }
 
 fn generate_cublaslt(crate_root: &PathBuf) {
@@ -622,7 +658,8 @@ fn generate_cublaslt(crate_root: &PathBuf) {
         .generate()
         .unwrap()
         .to_string();
-    let module: syn::File = syn::parse_str(&cublas_header).unwrap();
+    let mut module: syn::File = syn::parse_str(&cublas_header).unwrap();
+    remove_type(&mut module, "cublasStatus_t");
     generate_functions(
         &crate_root,
         "cublaslt",
@@ -630,6 +667,7 @@ fn generate_cublaslt(crate_root: &PathBuf) {
         &module,
     );
     generate_types_library(
+        Some(LibraryOverride::CuBlasLt),
         &crate_root,
         &["..", "cuda_types", "src", "cublaslt.rs"],
         &module,
@@ -659,12 +697,12 @@ fn generate_cuda(crate_root: &PathBuf) -> Vec<Ident> {
         .unwrap()
         .to_string();
     let module: syn::File = syn::parse_str(&cuda_header).unwrap();
-    let cuda_functions = generate_functions(
+    let cuda_functions = get_functions(generate_functions(
         &crate_root,
         "cuda",
         &["..", "cuda_base", "src", "cuda.rs"],
         &module,
-    );
+    ));
     generate_types_cuda(
         &crate_root,
         &["..", "cuda_types", "src", "cuda.rs"],
@@ -718,22 +756,42 @@ fn generate_ml(crate_root: &PathBuf) {
         &module,
     );
     generate_types_library(
+        None,
         &crate_root,
         &["..", "cuda_types", "src", "nvml.rs"],
         &module,
     );
 }
 
-fn generate_types_library(crate_root: &PathBuf, path: &[&str], module: &syn::File) {
+fn generate_types_library(
+    override_: Option<LibraryOverride>,
+    crate_root: &PathBuf,
+    path: &[&str],
+    module: &syn::File,
+) {
     let module = generate_types_library_impl(module);
     let mut output = crate_root.clone();
     output.extend(path);
-    let text = prettyplease::unparse(&module)
-        .replace("self::cudaDataType", "super::cuda::cudaDataType")
-        // complex as used by cuFFT
-        .replace(" cuComplex", " super::cuda::cuComplex")
-        .replace(" cuDoubleComplex", " super::cuda::cuDoubleComplex");
+    let mut text =
+        prettyplease::unparse(&module).replace("self::cudaDataType", "super::cuda::cudaDataType");
+    match override_ {
+        None => {}
+        Some(LibraryOverride::CuBlasLt) => {
+            text = text.replace(" cublasStatus_t", " super::cublas::cublasStatus_t");
+        }
+        Some(LibraryOverride::CuFft) => {
+            text = text
+                .replace(" cuComplex", " super::cuda::cuComplex")
+                .replace(" cuDoubleComplex", " super::cuda::cuDoubleComplex");
+        }
+    }
     write_rust_to_file(output, &text)
+}
+
+#[derive(Clone, Copy)]
+enum LibraryOverride {
+    CuBlasLt,
+    CuFft,
 }
 
 fn generate_types_library_impl(module: &syn::File) -> syn::File {
@@ -829,7 +887,7 @@ fn generate_functions(
     submodule: &str,
     path: &[&str],
     module: &syn::File,
-) -> Vec<Ident> {
+) -> syn::File {
     let fns_ = module.items.iter().filter_map(|item| match item {
         Item::ForeignMod(extern_) => match &*extern_.items {
             [ForeignItem::Fn(fn_)] => Some(fn_),
@@ -837,6 +895,17 @@ fn generate_functions(
         },
         _ => None,
     });
+    /*
+    let prelude = match submodule {
+        "cublaslt" => Some(quote! {
+            use cuda_types::cublas::cublasStatus_t;
+        }),
+        "cublas" => Some(quote! {
+            use cuda_types::cublas::cublasStatus_t;
+        }),
+        _ => None,
+    };
+    */
     let mut module: syn::File = parse_quote! {
         extern "system" {
             #(#fns_)*
@@ -855,6 +924,8 @@ fn generate_functions(
     output.extend(path);
     write_rust_to_file(output, &prettyplease::unparse(&module));
     module
+    /*
+    module
         .items
         .iter()
         .flat_map(|item| match item {
@@ -870,6 +941,7 @@ fn generate_functions(
             _ => unreachable!(),
         })
         .collect::<Vec<_>>()
+     */
 }
 
 fn generate_types_cuda(output: &PathBuf, path: &[&str], module: &syn::File) {
@@ -1049,6 +1121,10 @@ impl VisitMut for PrependCudaPath {
         if type_.path.segments.len() == 1 {
             match &*type_.path.segments[0].ident.to_string() {
                 "usize" | "u32" | "i32" | "u64" | "i64" | "f64" | "f32" | "FILE" => {}
+                "cublasStatus_t" => {
+                    let module = self.module.iter().rev().skip(1).rev();
+                    *type_ = parse_quote! { #(#module :: )* cublas :: #type_ };
+                }
                 _ => {
                     let module = &self.module;
                     *type_ = parse_quote! { #(#module :: )* #type_ };
@@ -1163,7 +1239,7 @@ fn generate_display_blas(
         &ignore_functions,
         &count_selectors,
     );
-    let mut items = module
+    let items = module
         .items
         .iter()
         .filter_map(|i| cuda_derive_display_trait_for_item(types_crate, &mut derive_state, i))

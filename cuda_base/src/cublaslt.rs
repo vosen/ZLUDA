@@ -5,16 +5,16 @@ extern "system" {
     #[must_use]
     fn cublasLtCreate(
         lightHandle: *mut cuda_types::cublaslt::cublasLtHandle_t,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasLtDestroy(
         lightHandle: cuda_types::cublaslt::cublasLtHandle_t,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     fn cublasLtGetStatusName(
-        status: cuda_types::cublaslt::cublasStatus_t,
+        status: cuda_types::cublas::cublasStatus_t,
     ) -> *const ::core::ffi::c_char;
     fn cublasLtGetStatusString(
-        status: cuda_types::cublaslt::cublasStatus_t,
+        status: cuda_types::cublas::cublasStatus_t,
     ) -> *const ::core::ffi::c_char;
     fn cublasLtGetVersion() -> usize;
     fn cublasLtGetCudartVersion() -> usize;
@@ -22,15 +22,15 @@ extern "system" {
     fn cublasLtGetProperty(
         type_: cuda_types::cublaslt::libraryPropertyType,
         value: *mut ::core::ffi::c_int,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasLtHeuristicsCacheGetCapacity(
         capacity: *mut usize,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     fn cublasLtHeuristicsCacheSetCapacity(
         capacity: usize,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     /** Restricts usage of CPU instructions (ISA) specified by the flags in the mask.
 
  Flags can be combined with bitwise OR(|) operator. Supported flags:
@@ -72,7 +72,7 @@ extern "system" {
         workspace: *mut ::core::ffi::c_void,
         workspaceSizeInBytes: usize,
         stream: cuda_types::cublaslt::cudaStream_t,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Matrix layout conversion helper (C = alpha * op(A) + beta * op(B))
 
@@ -98,7 +98,7 @@ extern "system" {
         C: *mut ::core::ffi::c_void,
         Cdesc: cuda_types::cublaslt::cublasLtMatrixLayout_t,
         stream: cuda_types::cublaslt::cudaStream_t,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /// Internal. Do not use directly.
     fn cublasLtMatrixLayoutInit_internal(
@@ -108,7 +108,7 @@ extern "system" {
         rows: u64,
         cols: u64,
         ld: i64,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Create new matrix layout descriptor.
 
@@ -120,14 +120,14 @@ extern "system" {
         rows: u64,
         cols: u64,
         ld: i64,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Destroy matrix layout descriptor.
 
  \retval     CUBLAS_STATUS_SUCCESS  if operation was successful*/
     fn cublasLtMatrixLayoutDestroy(
         matLayout: cuda_types::cublaslt::cublasLtMatrixLayout_t,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Set matrix layout descriptor attribute.
 
@@ -144,7 +144,7 @@ extern "system" {
         attr: cuda_types::cublaslt::cublasLtMatrixLayoutAttribute_t,
         buf: *const ::core::ffi::c_void,
         sizeInBytes: usize,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Get matrix layout descriptor attribute.
 
@@ -165,7 +165,7 @@ extern "system" {
         buf: *mut ::core::ffi::c_void,
         sizeInBytes: usize,
         sizeWritten: *mut usize,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /// Internal. Do not use directly.
     fn cublasLtMatmulDescInit_internal(
@@ -173,7 +173,7 @@ extern "system" {
         size: usize,
         computeType: cuda_types::cublaslt::cublasComputeType_t,
         scaleType: cuda_types::cublaslt::cudaDataType_t,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Create new matmul operation descriptor.
 
@@ -183,14 +183,14 @@ extern "system" {
         matmulDesc: *mut cuda_types::cublaslt::cublasLtMatmulDesc_t,
         computeType: cuda_types::cublaslt::cublasComputeType_t,
         scaleType: cuda_types::cublaslt::cudaDataType_t,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Destroy matmul operation descriptor.
 
  \retval     CUBLAS_STATUS_SUCCESS  if operation was successful*/
     fn cublasLtMatmulDescDestroy(
         matmulDesc: cuda_types::cublaslt::cublasLtMatmulDesc_t,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Set matmul operation descriptor attribute.
 
@@ -207,7 +207,7 @@ extern "system" {
         attr: cuda_types::cublaslt::cublasLtMatmulDescAttributes_t,
         buf: *const ::core::ffi::c_void,
         sizeInBytes: usize,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Get matmul operation descriptor attribute.
 
@@ -228,14 +228,14 @@ extern "system" {
         buf: *mut ::core::ffi::c_void,
         sizeInBytes: usize,
         sizeWritten: *mut usize,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /// Internal. Do not use directly.
     fn cublasLtMatrixTransformDescInit_internal(
         transformDesc: cuda_types::cublaslt::cublasLtMatrixTransformDesc_t,
         size: usize,
         scaleType: cuda_types::cublaslt::cudaDataType,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Create new matrix transform operation descriptor.
 
@@ -244,14 +244,14 @@ extern "system" {
     fn cublasLtMatrixTransformDescCreate(
         transformDesc: *mut cuda_types::cublaslt::cublasLtMatrixTransformDesc_t,
         scaleType: cuda_types::cublaslt::cudaDataType,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Destroy matrix transform operation descriptor.
 
  \retval     CUBLAS_STATUS_SUCCESS  if operation was successful*/
     fn cublasLtMatrixTransformDescDestroy(
         transformDesc: cuda_types::cublaslt::cublasLtMatrixTransformDesc_t,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Set matrix transform operation descriptor attribute.
 
@@ -268,7 +268,7 @@ extern "system" {
         attr: cuda_types::cublaslt::cublasLtMatrixTransformDescAttributes_t,
         buf: *const ::core::ffi::c_void,
         sizeInBytes: usize,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Get matrix transform operation descriptor attribute.
 
@@ -289,13 +289,13 @@ extern "system" {
         buf: *mut ::core::ffi::c_void,
         sizeInBytes: usize,
         sizeWritten: *mut usize,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /// Internal. Do not use directly.
     fn cublasLtMatmulPreferenceInit_internal(
         pref: cuda_types::cublaslt::cublasLtMatmulPreference_t,
         size: usize,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Create new matmul heuristic search preference descriptor.
 
@@ -303,14 +303,14 @@ extern "system" {
  \retval     CUBLAS_STATUS_SUCCESS       if desciptor was created successfully*/
     fn cublasLtMatmulPreferenceCreate(
         pref: *mut cuda_types::cublaslt::cublasLtMatmulPreference_t,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Destroy matmul heuristic search preference descriptor.
 
  \retval     CUBLAS_STATUS_SUCCESS  if operation was successful*/
     fn cublasLtMatmulPreferenceDestroy(
         pref: cuda_types::cublaslt::cublasLtMatmulPreference_t,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Set matmul heuristic search preference descriptor attribute.
 
@@ -327,7 +327,7 @@ extern "system" {
         attr: cuda_types::cublaslt::cublasLtMatmulPreferenceAttributes_t,
         buf: *const ::core::ffi::c_void,
         sizeInBytes: usize,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Get matmul heuristic search preference descriptor attribute.
 
@@ -348,7 +348,7 @@ extern "system" {
         buf: *mut ::core::ffi::c_void,
         sizeInBytes: usize,
         sizeWritten: *mut usize,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Query cublasLt heuristic for algorithm appropriate for given use case.
 
@@ -383,7 +383,7 @@ extern "system" {
         requestedAlgoCount: ::core::ffi::c_int,
         heuristicResultsArray: *mut cuda_types::cublaslt::cublasLtMatmulHeuristicResult_t,
         returnAlgoCount: *mut ::core::ffi::c_int,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Routine to get all algo IDs that can potentially run
 
@@ -405,7 +405,7 @@ extern "system" {
         requestedAlgoCount: ::core::ffi::c_int,
         algoIdsArray: *mut ::core::ffi::c_int,
         returnAlgoCount: *mut ::core::ffi::c_int,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Initialize algo structure
 
@@ -422,7 +422,7 @@ extern "system" {
         Dtype: cuda_types::cublaslt::cudaDataType_t,
         algoId: ::core::ffi::c_int,
         algo: *mut cuda_types::cublaslt::cublasLtMatmulAlgo_t,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Check configured algo descriptor for correctness and support on current device.
 
@@ -449,7 +449,7 @@ extern "system" {
         Ddesc: cuda_types::cublaslt::cublasLtMatrixLayout_t,
         algo: *const cuda_types::cublaslt::cublasLtMatmulAlgo_t,
         result: *mut cuda_types::cublaslt::cublasLtMatmulHeuristicResult_t,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Get algo capability attribute.
 
@@ -477,7 +477,7 @@ extern "system" {
         buf: *mut ::core::ffi::c_void,
         sizeInBytes: usize,
         sizeWritten: *mut usize,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Set algo configuration attribute.
 
@@ -494,7 +494,7 @@ extern "system" {
         attr: cuda_types::cublaslt::cublasLtMatmulAlgoConfigAttributes_t,
         buf: *const ::core::ffi::c_void,
         sizeInBytes: usize,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Get algo configuration attribute.
 
@@ -515,7 +515,7 @@ extern "system" {
         buf: *mut ::core::ffi::c_void,
         sizeInBytes: usize,
         sizeWritten: *mut usize,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Experimental: Logger callback setter.
 
@@ -524,14 +524,14 @@ extern "system" {
  \retval     CUBLAS_STATUS_SUCCESS        if callback was set successfully*/
     fn cublasLtLoggerSetCallback(
         callback: cuda_types::cublaslt::cublasLtLoggerCallback_t,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Experimental: Log file setter.
 
  \param[in]  file                         an open file with write permissions
 
  \retval     CUBLAS_STATUS_SUCCESS        if log file was set successfully*/
-    fn cublasLtLoggerSetFile(file: *mut FILE) -> cuda_types::cublaslt::cublasStatus_t;
+    fn cublasLtLoggerSetFile(file: *mut FILE) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Experimental: Open log file.
 
@@ -540,7 +540,7 @@ extern "system" {
  \retval     CUBLAS_STATUS_SUCCESS        if log file was created successfully*/
     fn cublasLtLoggerOpenFile(
         logFile: *const ::core::ffi::c_char,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Experimental: Log level setter.
 
@@ -557,7 +557,7 @@ extern "system" {
  \retval     CUBLAS_STATUS_SUCCESS        if log level was set successfully*/
     fn cublasLtLoggerSetLevel(
         level: ::core::ffi::c_int,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Experimental: Log mask setter.
 
@@ -572,10 +572,10 @@ extern "system" {
  \retval     CUBLAS_STATUS_SUCCESS        if log mask was set successfully*/
     fn cublasLtLoggerSetMask(
         mask: ::core::ffi::c_int,
-    ) -> cuda_types::cublaslt::cublasStatus_t;
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Experimental: Disable logging for the entire session.
 
  \retval     CUBLAS_STATUS_SUCCESS        if disabled logging*/
-    fn cublasLtLoggerForceDisable() -> cuda_types::cublaslt::cublasStatus_t;
+    fn cublasLtLoggerForceDisable() -> cuda_types::cublas::cublasStatus_t;
 }
