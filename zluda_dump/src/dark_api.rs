@@ -1,8 +1,10 @@
-use crate::format;
 use crate::{log, os, trace::StateTracker};
 use crate::{log::UInt, GlobalDelayedState};
+use crate::{CudaFunctionName, ErrorEntry, FnCallLog, GlobalState2, GLOBAL_STATE};
 use cuda_types::cuda::*;
+use rustc_hash::FxHashMap;
 use std::borrow::Cow;
+use std::cell::RefMut;
 use std::hash::Hash;
 use std::{
     collections::{hash_map, HashMap},
@@ -12,14 +14,125 @@ use std::{
     ptr, slice,
 };
 
+pub(crate) struct DarkApiState2 {
+    // Key is Box<CUuuid, because thunk reporting unknown export table needs a
+    // stable memory location for the guid
+    pub(crate) overrides: FxHashMap<Box<CUuuidWrapper>, (*const *const c_void, Vec<*const c_void>)>,
+}
+
+unsafe impl Send for DarkApiState2 {}
+unsafe impl Sync for DarkApiState2 {}
+
+impl DarkApiState2 {
+    pub(crate) fn new() -> Self {
+        DarkApiState2 {
+            overrides: FxHashMap::default(),
+        }
+    }
+
+    pub(crate) fn override_export_table(
+        &mut self,
+        known_exports: &::dark_api::cuda::CudaDarkApiGlobalTable,
+        original_export_table: *const *const c_void,
+        guid: &CUuuid_st,
+    ) -> (*const *const c_void, Option<ErrorEntry>) {
+        let entry = match self.overrides.entry(Box::new(CUuuidWrapper(*guid))) {
+            hash_map::Entry::Occupied(entry) => {
+                let (_, override_table) = entry.get();
+                return (override_table.as_ptr(), None);
+            }
+            hash_map::Entry::Vacant(entry) => entry,
+        };
+        let mut error = None;
+        let byte_size: usize = unsafe { *(original_export_table.cast::<usize>()) };
+        // Some export tables don't start with a byte count, but directly with a
+        // pointer, and are instead terminated by 0 or MAX
+        let export_functions_start_idx;
+        let export_functions_size;
+        if byte_size > 0x10000 {
+            export_functions_start_idx = 0;
+            let mut i = 0;
+            loop {
+                let current_ptr = unsafe { original_export_table.add(i) };
+                let current_ptr_numeric = unsafe { *current_ptr } as usize;
+                if current_ptr_numeric == 0usize || current_ptr_numeric == usize::MAX {
+                    export_functions_size = i;
+                    break;
+                }
+                i += 1;
+            }
+        } else {
+            export_functions_start_idx = 1;
+            export_functions_size = byte_size / mem::size_of::<usize>();
+        }
+        let our_functions = known_exports.get(guid);
+        if let Some(ref our_functions) = our_functions {
+            if our_functions.len() != export_functions_size {
+                error = Some(ErrorEntry::UnexpectedExportTableSize {
+                    expected: our_functions.len(),
+                    computed: export_functions_size,
+                });
+            }
+        }
+        let mut override_table =
+            unsafe { std::slice::from_raw_parts(original_export_table, export_functions_size) }
+                .to_vec();
+        for i in export_functions_start_idx..export_functions_size {
+            let current_fn = (|| {
+                if let Some(ref our_functions) = our_functions {
+                    if let Some(fn_) = our_functions.get_fn(i) {
+                        return fn_;
+                    }
+                }
+                os::get_thunk(
+                    override_table[i],
+                    Self::report_unknown_export_table_call,
+                    std::ptr::from_ref(entry.key().as_ref()).cast(),
+                    i,
+                )
+            })();
+            override_table[i] = current_fn;
+        }
+        (
+            entry
+                .insert((original_export_table, override_table))
+                .1
+                .as_ptr(),
+            error,
+        )
+    }
+
+    unsafe extern "system" fn report_unknown_export_table_call(guid: &CUuuid, index: usize) {
+        let global_state = crate::GLOBAL_STATE2.lock();
+        let global_state_ref_cell = &*global_state;
+        let mut global_state_ref_mut = global_state_ref_cell.borrow_mut();
+        let global_state = &mut *global_state_ref_mut;
+        let log_guard = crate::OuterCallGuard {
+            writer: &mut global_state.log_writer,
+            log_root: &global_state.log_stack,
+        };
+        {
+            let mut logger = RefMut::map(global_state.log_stack.borrow_mut(), |log_stack| {
+                log_stack.enter()
+            });
+            logger.name = CudaFunctionName::Dark { guid: *guid, index };
+        };
+        drop(log_guard);
+    }
+}
+
 pub(crate) struct DarkApiState {
     // Key is Box<CUuuid, because thunk reporting unknown export table needs a
-    // stablememory location for the guid
+    // stable memory location for the guid
     overrides: HashMap<Box<CUuuidWrapper>, Vec<*const c_void>>,
     original: OriginalExports,
 }
 
+unsafe impl Send for DarkApiState {}
+unsafe impl Sync for DarkApiState {}
+
 #[derive(Eq, PartialEq)]
+#[repr(transparent)]
 pub(crate) struct CUuuidWrapper(pub CUuuid);
 
 impl Hash for CUuuidWrapper {
@@ -98,28 +211,30 @@ unsafe fn create_new_override(
     export_id: *const CUuuid,
     state: &mut OriginalExports,
 ) -> Vec<*const c_void> {
-    let mut byte_length: usize = *(export_table as *const usize);
+    let byte_size: usize = *(export_table as *const usize);
     // Some export tables don't start with a byte count, but directly with a
     // pointer, and are instead terminated by 0 or MAX
     let export_functions_start_idx;
-    let mut override_table = Vec::new();
-    if byte_length > 0x10000 {
+    let export_functions_size;
+    if byte_size > 0x10000 {
         export_functions_start_idx = 0;
         let mut i = 0;
         loop {
-            let current_fn = export_table.add(i);
-            let current_fn_numeric = *current_fn as usize;
-            if current_fn_numeric == 0usize || current_fn_numeric == usize::MAX {
-                byte_length = (i + 1) * mem::size_of::<usize>();
+            let current_ptr = export_table.add(i);
+            let current_ptr_numeric = *current_ptr as usize;
+            if current_ptr_numeric == 0usize || current_ptr_numeric == usize::MAX {
+                export_functions_size = i;
                 break;
             }
             i += 1;
         }
     } else {
-        override_table.push(byte_length as *const _);
         export_functions_start_idx = 1;
+        export_functions_size = byte_size / mem::size_of::<usize>();
     }
-    for i in export_functions_start_idx..(byte_length / mem::size_of::<usize>()) {
+    let mut override_table =
+        std::slice::from_raw_parts(export_table, export_functions_size).to_vec();
+    for i in export_functions_start_idx..export_functions_size {
         let current_fn = export_table.add(i);
         override_table.push(get_export_override_fn(state, *current_fn, export_id, i));
     }
@@ -134,7 +249,7 @@ unsafe extern "system" fn report_unknown_export_table_call(
         let mut logger = global_state
             .log_factory
             .get_logger_dark_api(*export_table, idx, None);
-        logger.log(log::LogEntry::UnknownExportTableFn)
+        logger.log(log::ErrorEntry::UnknownExportTableFn)
     }
 }
 
@@ -186,6 +301,8 @@ unsafe fn get_export_override_fn(
     guid: *const CUuuid,
     idx: usize,
 ) -> *const c_void {
+    todo!()
+    /*
     match (*guid, idx) {
         (TOOLS_RUNTIME_CALLBACK_HOOKS_GUID, 2)
         | (TOOLS_RUNTIME_CALLBACK_HOOKS_GUID, 6)
@@ -220,6 +337,7 @@ unsafe fn get_export_override_fn(
             }
         }
     }
+    */
 }
 
 const FATBINC_MAGIC: c_uint = 0x466243B1;
@@ -272,7 +390,18 @@ struct FatbinFileHeader {
 unsafe fn record_submodules_from_wrapped_fatbin(
     module: *mut CUmodule,
     fatbinc_wrapper: *const FatbincWrapper,
-    fn_logger: &mut log::FunctionLogger,
+    fn_logger: &mut FnCallLog,
+    delayed_state: &mut GlobalDelayedState,
+    original_fn: impl FnOnce(&OriginalExports) -> CUresult,
+) -> CUresult {
+    todo!()
+}
+
+/*
+unsafe fn record_submodules_from_wrapped_fatbin(
+    module: *mut CUmodule,
+    fatbinc_wrapper: *const FatbincWrapper,
+    fn_logger: &mut FnCallLog,
     delayed_state: &mut GlobalDelayedState,
     original_fn: impl FnOnce(&OriginalExports) -> CUresult,
 ) -> CUresult {
@@ -280,7 +409,7 @@ unsafe fn record_submodules_from_wrapped_fatbin(
     fn_logger.result = Some(result);
     let magic = (*fatbinc_wrapper).magic;
     if magic != FATBINC_MAGIC {
-        fn_logger.log(log::LogEntry::UnexpectedBinaryField {
+        fn_logger.log(log::ErrorEntry::UnexpectedBinaryField {
             field_name: "FATBINC_MAGIC",
             expected: vec![UInt::U32(FATBINC_MAGIC)],
             observed: UInt::U32(magic),
@@ -289,7 +418,7 @@ unsafe fn record_submodules_from_wrapped_fatbin(
     if (*fatbinc_wrapper).version != FATBINC_VERSION_V1
         && (*fatbinc_wrapper).version != FATBINC_VERSION_V2
     {
-        fn_logger.log(log::LogEntry::UnexpectedBinaryField {
+        fn_logger.log(log::ErrorEntry::UnexpectedBinaryField {
             field_name: "FATBINC_VERSION",
             expected: vec![UInt::U32(FATBINC_VERSION_V1), UInt::U32(FATBINC_VERSION_V2)],
             observed: UInt::U32(magic),
@@ -318,17 +447,18 @@ unsafe fn record_submodules_from_wrapped_fatbin(
     }
     result
 }
+     */
 
 unsafe fn record_submodules_from_fatbin(
     module: CUmodule,
     fatbin_header: *const FatbinHeader,
     fatbin_version: Option<usize>,
-    logger: &mut log::FunctionLogger,
+    logger: &mut FnCallLog,
     state: &mut StateTracker,
 ) {
     let magic = (*fatbin_header).magic;
     if magic != FATBIN_MAGIC {
-        logger.log(log::LogEntry::UnexpectedBinaryField {
+        logger.log(log::ErrorEntry::UnexpectedBinaryField {
             field_name: "FATBIN_MAGIC",
             expected: vec![UInt::U32(FATBIN_MAGIC)],
             observed: UInt::U32(magic),
@@ -337,7 +467,7 @@ unsafe fn record_submodules_from_fatbin(
     }
     let version = (*fatbin_header).version;
     if version != FATBIN_VERSION {
-        logger.log(log::LogEntry::UnexpectedBinaryField {
+        logger.log(log::ErrorEntry::UnexpectedBinaryField {
             field_name: "FATBIN_VERSION",
             expected: vec![UInt::U16(FATBIN_VERSION)],
             observed: UInt::U16(version),
@@ -357,6 +487,15 @@ unsafe fn record_submodules_from_fatbin(
     );
 }
 
+#[allow(improper_ctypes_definitions)]
+unsafe extern "system" fn get_module_from_cubin(
+    module: *mut CUmodule,
+    fatbinc_wrapper: *const FatbincWrapper,
+) -> CUresult {
+    todo!()
+}
+
+/*
 #[allow(improper_ctypes_definitions)]
 unsafe extern "system" fn get_module_from_cubin(
     module: *mut CUmodule,
@@ -389,7 +528,20 @@ unsafe extern "system" fn get_module_from_cubin(
         },
     )
 }
+    */
 
+#[allow(improper_ctypes_definitions)]
+unsafe extern "system" fn get_module_from_cubin_ext1(
+    module: *mut CUmodule,
+    fatbinc_wrapper: *const FatbincWrapper,
+    ptr1: *mut c_void,
+    ptr2: *mut c_void,
+    _unknown: usize,
+) -> CUresult {
+    todo!()
+}
+
+/*
 #[allow(improper_ctypes_definitions)]
 unsafe extern "system" fn get_module_from_cubin_ext1(
     module: *mut CUmodule,
@@ -420,21 +572,21 @@ unsafe extern "system" fn get_module_from_cubin_ext1(
         Some(arguments_writer),
     );
     if ptr1 != ptr::null_mut() {
-        fn_logger.log(log::LogEntry::UnexpectedArgument {
+        fn_logger.log(log::ErrorEntry::UnexpectedArgument {
             arg_name: stringify!(ptr1),
             expected: vec![UInt::USize(0)],
             observed: UInt::USize(ptr1 as usize),
         });
     }
     if ptr2 != ptr::null_mut() {
-        fn_logger.log(log::LogEntry::UnexpectedArgument {
+        fn_logger.log(log::ErrorEntry::UnexpectedArgument {
             arg_name: stringify!(ptr2),
             expected: vec![UInt::USize(0)],
             observed: UInt::USize(ptr2 as usize),
         });
     }
     if _unknown != 0 {
-        fn_logger.log(log::LogEntry::UnexpectedArgument {
+        fn_logger.log(log::ErrorEntry::UnexpectedArgument {
             arg_name: stringify!(_unknown),
             expected: vec![UInt::USize(0)],
             observed: UInt::USize(_unknown),
@@ -453,7 +605,20 @@ unsafe extern "system" fn get_module_from_cubin_ext1(
         },
     )
 }
+    */
 
+#[allow(improper_ctypes_definitions)]
+unsafe extern "system" fn get_module_from_cubin_ext2(
+    fatbin_header: *const FatbinHeader,
+    module: *mut CUmodule,
+    ptr1: *mut c_void,
+    ptr2: *mut c_void,
+    _unknown: usize,
+) -> CUresult {
+    todo!()
+}
+
+/*
 #[allow(improper_ctypes_definitions)]
 unsafe extern "system" fn get_module_from_cubin_ext2(
     fatbin_header: *const FatbinHeader,
@@ -484,21 +649,21 @@ unsafe extern "system" fn get_module_from_cubin_ext2(
         Some(arguments_writer),
     );
     if ptr1 != ptr::null_mut() {
-        fn_logger.log(log::LogEntry::UnexpectedArgument {
+        fn_logger.log(log::ErrorEntry::UnexpectedArgument {
             arg_name: stringify!(ptr1),
             expected: vec![UInt::USize(0)],
             observed: UInt::USize(ptr1 as usize),
         });
     }
     if ptr2 != ptr::null_mut() {
-        fn_logger.log(log::LogEntry::UnexpectedArgument {
+        fn_logger.log(log::ErrorEntry::UnexpectedArgument {
             arg_name: stringify!(ptr2),
             expected: vec![UInt::USize(0)],
             observed: UInt::USize(ptr2 as usize),
         });
     }
     if _unknown != 0 {
-        fn_logger.log(log::LogEntry::UnexpectedArgument {
+        fn_logger.log(log::ErrorEntry::UnexpectedArgument {
             arg_name: stringify!(_unknown),
             expected: vec![UInt::USize(0)],
             observed: UInt::USize(_unknown),
@@ -524,12 +689,13 @@ unsafe extern "system" fn get_module_from_cubin_ext2(
     );
     result
 }
+     */
 
 unsafe fn record_submodules(
     should_decompress_elf: bool,
     module: CUmodule,
     version: Option<usize>,
-    fn_logger: &mut log::FunctionLogger,
+    fn_logger: &mut FnCallLog,
     state: &mut StateTracker,
     start: *const u8,
     end: *const u8,
@@ -539,7 +705,7 @@ unsafe fn record_submodules(
         let fatbin_file = index as *const FatbinFileHeader;
         let fatbin_file_version = (*fatbin_file).version;
         if fatbin_file_version != FATBIN_FILE_HEADER_VERSION_CURRENT {
-            fn_logger.log(log::LogEntry::UnexpectedBinaryField {
+            fn_logger.log(log::ErrorEntry::UnexpectedBinaryField {
                 field_name: stringify!(fatbin_file_version),
                 expected: vec![UInt::U16(FATBIN_FILE_HEADER_VERSION_CURRENT)],
                 observed: UInt::U16(fatbin_file_version),
@@ -553,7 +719,7 @@ unsafe fn record_submodules(
                     decompressed.pop(); // remove trailing zero
                     state.record_new_submodule(module, version, &*decompressed, fn_logger, "ptx")
                 }
-                None => fn_logger.log(log::LogEntry::Lz4DecompressionFailure),
+                None => fn_logger.log(log::ErrorEntry::Lz4DecompressionFailure),
             }
         } else if fatbin_file_kind == FATBIN_FILE_HEADER_KIND_ELF {
             let source_buffer = if should_decompress_elf {
@@ -561,7 +727,7 @@ unsafe fn record_submodules(
                 match decompressed {
                     Some(decompressed) => Cow::Owned(decompressed),
                     None => {
-                        fn_logger.log(log::LogEntry::Lz4DecompressionFailure);
+                        fn_logger.log(log::ErrorEntry::Lz4DecompressionFailure);
                         continue;
                     }
                 }
@@ -573,7 +739,7 @@ unsafe fn record_submodules(
             };
             state.record_new_submodule(module, version, &*source_buffer, fn_logger, "elf")
         } else {
-            fn_logger.log(log::LogEntry::UnexpectedBinaryField {
+            fn_logger.log(log::ErrorEntry::UnexpectedBinaryField {
                 field_name: stringify!(fatbin_file_kind),
                 expected: vec![
                     UInt::U16(FATBIN_FILE_HEADER_KIND_PTX),

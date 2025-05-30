@@ -1,6 +1,8 @@
-use crate::format;
-use cuda_types::cuda::*;
 use super::Settings;
+use crate::FnCallLog;
+use crate::LogEntry;
+use cuda_types::cuda::*;
+use format::CudaDisplay;
 use std::error::Error;
 use std::ffi::c_void;
 use std::ffi::NulError;
@@ -14,133 +16,114 @@ use std::str::Utf8Error;
 
 const LOG_PREFIX: &[u8] = b"[ZLUDA_DUMP] ";
 
-// This type holds all the relevant settings for logging like output path and
-// creates objects which match those settings
-pub(crate) struct Factory {
-    // Fallible emitter is optional emitter to file system, we might lack
+pub(crate) struct Writer {
+    // Fallible emitter is an optional emitter to the file system, we might lack
     // file permissions or be out of disk space
-    fallible_emitter: Option<Box<dyn WriteTrailingZeroAware>>,
+    fallible_emitter: Option<Box<dyn WriteTrailingZeroAware + Send>>,
     // This is emitter that "always works" (and if it does not, then we don't
     // care). In addition of normal logs it emits errors from fallible emitter
-    infallible_emitter: Box<dyn WriteTrailingZeroAware>,
-    write_buffer: WriteBuffer,
-    // another shared buffer, so we dont't reallocate on every function call
-    log_queue: Vec<LogEntry>,
+    infallible_emitter: Box<dyn WriteTrailingZeroAware + Send>,
+    // This object could be recreated every time, but it's slightly better for performance to
+    // reuse the allocations by keeping the object in globals
+    pub(crate) write_buffer: WriteBuffer,
 }
 
-// When writing out to the emitter (file, WinAPI, whatever else) instead of
-// writing piece-by-piece it's better to first concatenate everything in memory
-// then write out from memory to the slow emitter only once.
-// Additionally we might have an unprefixed and prefixed buffer, this struct
-// handles this detail
-struct WriteBuffer {
-    prefixed_buffer: Option<Vec<u8>>,
-    unprefixed_buffer: Option<Vec<u8>>,
-}
-
-impl WriteBuffer {
-    fn new() -> Self {
-        WriteBuffer {
-            prefixed_buffer: None,
-            unprefixed_buffer: None,
+impl Writer {
+    pub(crate) fn new() -> Self {
+        let debug_emitter = os::new_debug_logger();
+        Self {
+            infallible_emitter: debug_emitter,
+            fallible_emitter: None,
+            write_buffer: WriteBuffer::new(),
         }
     }
 
-    fn init(
-        &mut self,
-        fallible_emitter: &Option<Box<dyn WriteTrailingZeroAware>>,
-        infallible_emitter: &Box<dyn WriteTrailingZeroAware>,
-    ) {
-        if infallible_emitter.should_prefix() {
-            self.prefixed_buffer = Some(Vec::new());
-        } else {
-            self.unprefixed_buffer = Some(Vec::new());
+    pub(crate) fn late_init(&mut self, settings: &Settings) -> Result<(), ErrorEntry> {
+        self.fallible_emitter = settings
+            .dump_dir
+            .as_ref()
+            .map(|path| {
+                Ok::<_, std::io::Error>(Box::new(File::create(path.to_path_buf().join("log.txt"))?)
+                    as Box<dyn WriteTrailingZeroAware + Send>)
+            })
+            .transpose()
+            .map_err(ErrorEntry::IoError)?;
+        self.write_buffer
+            .init(&self.fallible_emitter, &self.infallible_emitter);
+        Ok(())
+    }
+
+    pub(crate) fn write_and_flush(&mut self, log_root: &mut FnCallLog) {
+        self.write_all_from_depth(0, log_root);
+        self.write_buffer.finish();
+        let error_from_writing_to_fallible_emitter = match self.fallible_emitter {
+            Some(ref mut emitter) => self.write_buffer.send_to(emitter),
+            None => Ok(()),
+        };
+        if let Err(e) = error_from_writing_to_fallible_emitter {
+            self.hack_squeeze_in_additional_error(ErrorEntry::IoError(e))
         }
-        if let Some(emitter) = fallible_emitter {
-            if emitter.should_prefix() {
-                self.prefixed_buffer = Some(Vec::new());
-            } else {
-                self.unprefixed_buffer = Some(Vec::new());
+        self.write_buffer.send_to(&mut self.infallible_emitter).ok();
+        self.write_buffer.reset();
+        log_root.reset();
+    }
+
+    fn write_all_from_depth(&mut self, depth: usize, fn_call: &FnCallLog) {
+        self.write_call(depth, fn_call);
+        for sub in fn_call.subcalls.iter() {
+            match sub {
+                LogEntry::FnCall(fn_call) => self.write_all_from_depth(depth + 1, fn_call),
+                LogEntry::Error(err) => self.write_error(depth + 1, err),
             }
         }
     }
 
-    fn all_buffers(&mut self) -> impl Iterator<Item = &mut Vec<u8>> {
-        self.prefixed_buffer
-            .as_mut()
-            .into_iter()
-            .chain(self.unprefixed_buffer.as_mut().into_iter())
-    }
-
-    fn start_line(&mut self) {
-        if let Some(buffer) = &mut self.prefixed_buffer {
-            buffer.extend_from_slice(LOG_PREFIX);
+    fn write_call(&mut self, depth: usize, call: &FnCallLog) {
+        self.write_buffer.start_line(depth);
+        write!(self.write_buffer, "{}", call.name).ok();
+        match call.args {
+            Some(ref args) => {
+                self.write_buffer.write_all(args).ok();
+            }
+            None => {
+                self.write_buffer.write_all(b"(...)").ok();
+            }
         }
-    }
-
-    fn end_line(&mut self) {
-        for buffer in self.all_buffers() {
-            buffer.push(b'\n');
-        }
-    }
-
-    fn write(&mut self, s: &str) {
-        for buffer in self.all_buffers() {
-            buffer.extend_from_slice(s.as_bytes());
-        }
-    }
-
-    fn finish(&mut self) {
-        for buffer in self.all_buffers() {
-            buffer.push(b'\0');
-        }
-    }
-
-    fn undo_finish(&mut self) {
-        for buffer in self.all_buffers() {
-            buffer.truncate(buffer.len() - 1);
-        }
-    }
-
-    fn send_to(&self, log_emitter: &mut Box<dyn WriteTrailingZeroAware>) -> Result<(), io::Error> {
-        if log_emitter.should_prefix() {
-            log_emitter.write_zero_aware(
-                &*self
-                    .prefixed_buffer
-                    .as_ref()
-                    .unwrap_or_else(|| unreachable!()),
-            )
+        self.write_buffer.write_all(b" -> ").ok();
+        if let Some(ref result) = call.output {
+            self.write_buffer.write_all(result).ok();
         } else {
-            log_emitter.write_zero_aware(
-                &*self
-                    .unprefixed_buffer
-                    .as_ref()
-                    .unwrap_or_else(|| unreachable!()),
-            )
-        }
+            self.write_buffer.write_all(b"UNKNOWN").ok();
+        };
+        self.write_buffer.end_line();
     }
 
-    fn reset(&mut self) {
-        for buffer in self.all_buffers() {
-            unsafe { buffer.set_len(0) };
-        }
+    fn write_error(&mut self, depth: usize, error: &ErrorEntry) {
+        self.write_buffer.start_line(depth);
+        write!(self.write_buffer, "{}", error).ok();
+        self.write_buffer.end_line();
+    }
+
+    fn hack_squeeze_in_additional_error(&mut self, entry: ErrorEntry) {
+        self.write_buffer.undo_finish();
+        write!(self.write_buffer, "    {}", entry).ok();
+        self.write_buffer.end_line();
+        self.write_buffer.finish();
     }
 }
 
-impl Write for WriteBuffer {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        if let Some(buffer) = &mut self.prefixed_buffer {
-            buffer.extend_from_slice(buf);
-        }
-        if let Some(buffer) = &mut self.unprefixed_buffer {
-            buffer.extend_from_slice(buf);
-        }
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
+// This type holds all the relevant settings for logging like output path and
+// creates objects which match those settings
+pub(crate) struct Factory {
+    // Fallible emitter is an optional emitter to the file system, we might lack
+    // file permissions or be out of disk space
+    fallible_emitter: Option<Box<dyn WriteTrailingZeroAware + Send>>,
+    // This is emitter that "always works" (and if it does not, then we don't
+    // care). In addition of normal logs it emits errors from fallible emitter
+    infallible_emitter: Box<dyn WriteTrailingZeroAware + Send>,
+    write_buffer: WriteBuffer,
+    // another shared buffer, so we dont't reallocate on every function call
+    log_queue: Vec<ErrorEntry>,
 }
 
 impl Factory {
@@ -156,13 +139,13 @@ impl Factory {
 
     fn initalize_fallible_emitter(
         settings: &Settings,
-    ) -> std::io::Result<Option<Box<dyn WriteTrailingZeroAware>>> {
+    ) -> std::io::Result<Option<Box<dyn WriteTrailingZeroAware + Send>>> {
         settings
             .dump_dir
             .as_ref()
             .map(|path| {
                 Ok::<_, std::io::Error>(Box::new(File::create(path.to_path_buf().join("log.txt"))?)
-                    as Box<dyn WriteTrailingZeroAware>)
+                    as Box<dyn WriteTrailingZeroAware + Send>)
             })
             .transpose()
     }
@@ -187,7 +170,7 @@ impl Factory {
             Ok(fallible_emitter) => {
                 *first_logger.fallible_emitter = fallible_emitter;
             }
-            Err(err) => first_logger.log(LogEntry::IoError(err)),
+            Err(err) => first_logger.log(ErrorEntry::IoError(err)),
         }
         first_logger.write_buffer.init(
             first_logger.fallible_emitter,
@@ -230,9 +213,157 @@ impl Factory {
     }
 }
 
-enum CudaFunctionName {
+// When writing out to the emitter (file, WinAPI, whatever else) instead of
+// writing piece-by-piece it's better to first concatenate everything in memory
+// then write out from memory to the slow emitter only once.
+// Additionally we might have an unprefixed and prefixed buffer, this struct
+// handles this detail
+struct WriteBuffer {
+    prefixed_buffer: Option<Vec<u8>>,
+    unprefixed_buffer: Option<Vec<u8>>,
+}
+
+impl WriteBuffer {
+    fn new() -> Self {
+        WriteBuffer {
+            prefixed_buffer: None,
+            unprefixed_buffer: None,
+        }
+    }
+
+    fn init(
+        &mut self,
+        fallible_emitter: &Option<Box<dyn WriteTrailingZeroAware + Send>>,
+        infallible_emitter: &Box<dyn WriteTrailingZeroAware + Send>,
+    ) {
+        if infallible_emitter.should_prefix() {
+            self.prefixed_buffer = Some(Vec::new());
+        } else {
+            self.unprefixed_buffer = Some(Vec::new());
+        }
+        if let Some(emitter) = fallible_emitter {
+            if emitter.should_prefix() {
+                self.prefixed_buffer = Some(Vec::new());
+            } else {
+                self.unprefixed_buffer = Some(Vec::new());
+            }
+        }
+    }
+
+    fn all_buffers(&mut self) -> impl Iterator<Item = &mut Vec<u8>> {
+        self.prefixed_buffer
+            .as_mut()
+            .into_iter()
+            .chain(self.unprefixed_buffer.as_mut().into_iter())
+    }
+
+    fn start_line(&mut self, depth: usize) {
+        if let Some(buffer) = &mut self.prefixed_buffer {
+            buffer.extend_from_slice(LOG_PREFIX);
+        }
+        if depth == 0 {
+            return;
+        }
+        for buffer in self.all_buffers() {
+            buffer.extend(std::iter::repeat_n(b' ', depth * 4));
+        }
+    }
+
+    fn end_line(&mut self) {
+        for buffer in self.all_buffers() {
+            buffer.push(b'\n');
+        }
+    }
+
+    fn write(&mut self, s: &str) {
+        for buffer in self.all_buffers() {
+            buffer.extend_from_slice(s.as_bytes());
+        }
+    }
+
+    fn finish(&mut self) {
+        for buffer in self.all_buffers() {
+            buffer.push(b'\0');
+        }
+    }
+
+    fn undo_finish(&mut self) {
+        for buffer in self.all_buffers() {
+            buffer.truncate(buffer.len() - 1);
+        }
+    }
+
+    fn send_to(
+        &self,
+        log_emitter: &mut Box<dyn WriteTrailingZeroAware + Send>,
+    ) -> Result<(), io::Error> {
+        if log_emitter.should_prefix() {
+            log_emitter.write_zero_aware(
+                &*self
+                    .prefixed_buffer
+                    .as_ref()
+                    .unwrap_or_else(|| unreachable!()),
+            )
+        } else {
+            log_emitter.write_zero_aware(
+                &*self
+                    .unprefixed_buffer
+                    .as_ref()
+                    .unwrap_or_else(|| unreachable!()),
+            )
+        }
+    }
+
+    fn reset(&mut self) {
+        for buffer in self.all_buffers() {
+            unsafe { buffer.set_len(0) };
+        }
+    }
+}
+
+impl Write for WriteBuffer {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        if let Some(buffer) = &mut self.prefixed_buffer {
+            buffer.extend_from_slice(buf);
+        }
+        if let Some(buffer) = &mut self.unprefixed_buffer {
+            buffer.extend_from_slice(buf);
+        }
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+pub(crate) enum CudaFunctionName {
     Normal(&'static str),
     Dark { guid: CUuuid, index: usize },
+}
+
+impl Display for CudaFunctionName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CudaFunctionName::Normal(fn_) => f.write_str(fn_),
+            CudaFunctionName::Dark { guid, index } => {
+                match ::dark_api::cuda::guid_to_name(guid, *index) {
+                    Some((name, fn_)) => match fn_ {
+                        Some(fn_) => write!(f, "{{{name}}}::{fn_}"),
+                        None => write!(f, "{{{name}}}::{index}"),
+                    },
+                    None => {
+                        let mut temp = Vec::new();
+                        format::CudaDisplay::write(guid, "", 0, &mut temp)
+                            .map_err(|_| std::fmt::Error::default())?;
+                        let temp = String::from_utf8_lossy(&*temp);
+                        write!(f, "{temp}::{index}")
+                    }
+                }
+            }
+        }
+    }
 }
 
 // This encapsulates log output for a single function call.
@@ -243,26 +374,39 @@ enum CudaFunctionName {
 pub(crate) struct FunctionLogger<'a> {
     pub(crate) result: Option<CUresult>,
     name: CudaFunctionName,
-    infallible_emitter: &'a mut Box<dyn WriteTrailingZeroAware>,
-    fallible_emitter: &'a mut Option<Box<dyn WriteTrailingZeroAware>>,
+    infallible_emitter: &'a mut Box<dyn WriteTrailingZeroAware + Send>,
+    fallible_emitter: &'a mut Option<Box<dyn WriteTrailingZeroAware + Send>>,
     arguments_writer: Option<Box<dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>>>,
     write_buffer: &'a mut WriteBuffer,
-    log_queue: &'a mut Vec<LogEntry>,
+    log_queue: &'a mut Vec<ErrorEntry>,
 }
 
 impl<'a> FunctionLogger<'a> {
-    pub(crate) fn log(&mut self, l: LogEntry) {
+    pub(crate) fn log(&mut self, l: ErrorEntry) {
         self.log_queue.push(l);
+    }
+
+    pub(crate) fn try_<T>(
+        &mut self,
+        f: impl FnOnce(&mut Self) -> Result<T, ErrorEntry>,
+    ) -> Option<T> {
+        match f(self) {
+            Err(e) => {
+                self.log(e);
+                None
+            }
+            Ok(x) => Some(x),
+        }
     }
 
     pub(crate) fn log_io_error(&mut self, error: io::Result<()>) {
         if let Err(e) = error {
-            self.log_queue.push(LogEntry::IoError(e));
+            self.log_queue.push(ErrorEntry::IoError(e));
         }
     }
 
     fn flush_log_queue_to_write_buffer(&mut self) {
-        self.write_buffer.start_line();
+        self.write_buffer.start_line(0);
         match self.name {
             CudaFunctionName::Normal(fn_name) => self.write_buffer.write(fn_name),
             CudaFunctionName::Dark { guid, index } => {
@@ -294,7 +438,7 @@ impl<'a> FunctionLogger<'a> {
 
     // This is a dirty hack: we call it at the point where our write buffer is
     // already finalized and squeeze the error produced by the previous emitter
-    fn hack_squeeze_in_additional_error(&mut self, entry: LogEntry) {
+    fn hack_squeeze_in_additional_error(&mut self, entry: ErrorEntry) {
         self.write_buffer.undo_finish();
         write!(self.write_buffer, "    {}", entry).unwrap_or_else(|_| unreachable!());
         self.write_buffer.end_line();
@@ -310,7 +454,7 @@ impl<'a> Drop for FunctionLogger<'a> {
             None => Ok(()),
         };
         if let Err(e) = error_from_writing_to_fallible_emitter {
-            self.hack_squeeze_in_additional_error(LogEntry::IoError(e))
+            self.hack_squeeze_in_additional_error(ErrorEntry::IoError(e))
         }
         self.write_buffer.send_to(self.infallible_emitter).ok();
         self.write_buffer.reset();
@@ -318,8 +462,7 @@ impl<'a> Drop for FunctionLogger<'a> {
     }
 }
 
-// Structured log type. We don't want frontend to care about log formatting
-pub(crate) enum LogEntry {
+pub(crate) enum ErrorEntry {
     IoError(io::Error),
     CreatedDumpDirectory(PathBuf),
     ErrorBox(Box<dyn Error>),
@@ -328,6 +471,7 @@ pub(crate) enum LogEntry {
         raw_image: *const c_void,
         kind: &'static str,
     },
+    FunctionNotFound(CudaFunctionName),
     MalformedModulePath(Utf8Error),
     NonUtf8ModuleText(Utf8Error),
     NulInsideModuleText(NulError),
@@ -344,73 +488,107 @@ pub(crate) enum LogEntry {
         expected: Vec<UInt>,
         observed: UInt,
     },
+    InvalidEnvVar {
+        var: &'static str,
+        pattern: &'static str,
+        value: String,
+    },
+    UnexpectedExportTableSize {
+        expected: usize,
+        computed: usize,
+    },
+    IntegrityCheck {
+        original: [u64; 2],
+        overriden: [u64; 2],
+    },
 }
 
-impl Display for LogEntry {
+unsafe impl Send for ErrorEntry {}
+unsafe impl Sync for ErrorEntry {}
+
+impl Display for ErrorEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LogEntry::IoError(e) => e.fmt(f),
-            LogEntry::CreatedDumpDirectory(dir) => {
-                write!(
-                    f,
-                    "Created dump directory {} ",
-                    dir.as_os_str().to_string_lossy()
-                )
+            ErrorEntry::IoError(e) => e.fmt(f),
+            ErrorEntry::CreatedDumpDirectory(dir) => {
+                                write!(
+                                    f,
+                                    "Created dump directory {} ",
+                                    dir.as_os_str().to_string_lossy()
+                                )
+                            }
+            ErrorEntry::ErrorBox(e) => e.fmt(f),
+            ErrorEntry::UnsupportedModule {
+                                module,
+                                raw_image,
+                                kind,
+                            } => {
+                                write!(
+                                    f,
+                                    "Unsupported {} module {:?} loaded from module image {:?}",
+                                    kind, module, raw_image
+                                )
+                            }
+            ErrorEntry::MalformedModulePath(e) => e.fmt(f),
+            ErrorEntry::NonUtf8ModuleText(e) => e.fmt(f),
+            ErrorEntry::ModuleParsingError(file_name) => {
+                                write!(
+                                    f,
+                                    "Error parsing module, log has been written to {}",
+                                    file_name
+                                )
+                            }
+            ErrorEntry::NulInsideModuleText(e) => e.fmt(f),
+            ErrorEntry::Lz4DecompressionFailure => write!(f, "LZ4 decompression failure"),
+            ErrorEntry::UnknownExportTableFn => write!(f, "Unknown export table function"),
+            ErrorEntry::UnexpectedBinaryField {
+                                field_name,
+                                expected,
+                                observed,
+                            } => write!(
+                                f,
+                                "Unexpected field {}. Expected one of: {{{}}}, observed: {}",
+                                field_name,
+                                expected
+                                    .iter()
+                                    .map(|x| x.to_string())
+                                    .collect::<Vec<_>>()
+                                    .join(", "),
+                                observed
+                            ),
+            ErrorEntry::UnexpectedArgument {
+                                arg_name,
+                                expected,
+                                observed,
+                            } => write!(
+                                f,
+                                "Unexpected argument {}. Expected one of: {{{}}}, observed: {}",
+                                arg_name,
+                                expected
+                                    .iter()
+                                    .map(|x| x.to_string())
+                                    .collect::<Vec<_>>()
+                                    .join(", "),
+                                observed
+                            ),
+            ErrorEntry::InvalidEnvVar {
+                                var,
+                                pattern,
+                                value,
+                            } => write!(
+                                f,
+                                "Unexpected value of environment variable {var}. Expected pattern: {pattern}, got value: {value}"
+                            ),
+            ErrorEntry::FunctionNotFound(cuda_function_name) => write!(
+                        f,
+                        "No function {cuda_function_name} in the underlying library"
+                    ),
+            ErrorEntry::UnexpectedExportTableSize { expected, computed } => {
+                write!(f, "Table length mismatch. Expected: {expected}, got: {computed}")
             }
-            LogEntry::ErrorBox(e) => e.fmt(f),
-            LogEntry::UnsupportedModule {
-                module,
-                raw_image,
-                kind,
-            } => {
-                write!(
-                    f,
-                    "Unsupported {} module {:?} loaded from module image {:?}",
-                    kind, module, raw_image
-                )
+            ErrorEntry::IntegrityCheck { original, overriden } => {
+                write!(f, "Overriding integrity check hash. Original: {original:?}, overriden: {overriden:?}")
             }
-            LogEntry::MalformedModulePath(e) => e.fmt(f),
-            LogEntry::NonUtf8ModuleText(e) => e.fmt(f),
-            LogEntry::ModuleParsingError(file_name) => {
-                write!(
-                    f,
-                    "Error parsing module, log has been written to {}",
-                    file_name
-                )
-            }
-            LogEntry::NulInsideModuleText(e) => e.fmt(f),
-            LogEntry::Lz4DecompressionFailure => write!(f, "LZ4 decompression failure"),
-            LogEntry::UnknownExportTableFn => write!(f, "Unknown export table function"),
-            LogEntry::UnexpectedBinaryField {
-                field_name,
-                expected,
-                observed,
-            } => write!(
-                f,
-                "Unexpected field {}. Expected one of: {{{}}}, observed: {}",
-                field_name,
-                expected
-                    .iter()
-                    .map(|x| x.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                observed
-            ),
-            LogEntry::UnexpectedArgument {
-                arg_name,
-                expected,
-                observed,
-            } => write!(
-                f,
-                "Unexpected argument {}. Expected one of: {{{}}}, observed: {}",
-                arg_name,
-                expected
-                    .iter()
-                    .map(|x| x.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                observed
-            ),
         }
     }
 }
@@ -491,7 +669,7 @@ mod os {
         }
     }
 
-    pub(crate) fn new_debug_logger() -> Box<dyn WriteTrailingZeroAware> {
+    pub(crate) fn new_debug_logger() -> Box<dyn WriteTrailingZeroAware + Send> {
         let stderr = std::io::stderr();
         let log_to_stderr = stderr.as_raw_handle() != ptr::null_mut();
         if log_to_stderr {
@@ -506,19 +684,22 @@ mod os {
 mod os {
     use super::WriteTrailingZeroAware;
 
-    pub(crate) fn new_debug_logger() -> Box<dyn WriteTrailingZeroAware> {
+    pub(crate) fn new_debug_logger() -> Box<dyn WriteTrailingZeroAware + Send> {
         Box::new(std::io::stderr())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{borrow::Cow, cell::RefCell, io, rc::Rc, str};
+    use std::{cell::RefCell, io, rc::Rc, str};
 
     use cuda_types::cuda::CUresultConsts;
 
-    use super::{FunctionLogger, LogEntry, WriteTrailingZeroAware};
-    use crate::{log::{CudaFunctionName, WriteBuffer}, CUresult};
+    use super::{ErrorEntry, FunctionLogger, WriteTrailingZeroAware};
+    use crate::{
+        log::{CudaFunctionName, WriteBuffer},
+        CUresult,
+    };
 
     struct FailOnNthWrite {
         fail_on: usize,
@@ -567,11 +748,12 @@ mod tests {
     #[test]
     fn error_in_fallible_emitter_is_handled_gracefully() {
         let result = RcVec(Rc::new(RefCell::new(Vec::<u8>::new())));
-        let mut infallible_emitter = Box::new(result.clone()) as Box<dyn WriteTrailingZeroAware>;
+        let mut infallible_emitter =
+            Box::new(result.clone()) as Box<dyn WriteTrailingZeroAware + Send>;
         let mut fallible_emitter = Some(Box::new(FailOnNthWrite {
             fail_on: 1,
             counter: 0,
-        }) as Box<dyn WriteTrailingZeroAware>);
+        }) as Box<dyn WriteTrailingZeroAware + Send>);
         let mut write_buffer = WriteBuffer::new();
         write_buffer.unprefixed_buffer = Some(Vec::new());
         let mut log_queue = Vec::new();
@@ -585,9 +767,9 @@ mod tests {
             arguments_writer: None,
         };
 
-        func_logger.log(LogEntry::IoError(io::Error::from_raw_os_error(1)));
-        func_logger.log(LogEntry::IoError(io::Error::from_raw_os_error(2)));
-        func_logger.log(LogEntry::IoError(io::Error::from_raw_os_error(3)));
+        func_logger.log(ErrorEntry::IoError(io::Error::from_raw_os_error(1)));
+        func_logger.log(ErrorEntry::IoError(io::Error::from_raw_os_error(2)));
+        func_logger.log(ErrorEntry::IoError(io::Error::from_raw_os_error(3)));
         drop(func_logger);
         drop(infallible_emitter);
 

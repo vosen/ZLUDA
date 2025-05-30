@@ -1,4 +1,4 @@
-use crate::{dark_api, log, Settings};
+use crate::{dark_api, log, FnCallLog, Settings};
 use cuda_types::cuda::*;
 use std::{
     collections::HashMap,
@@ -6,7 +6,6 @@ use std::{
     fs::{self, File},
     io::{self, Read, Write},
     path::PathBuf,
-    rc::Rc,
 };
 
 // This struct is the heart of CUDA state tracking, it:
@@ -20,7 +19,7 @@ pub(crate) struct StateTracker {
     submodule_counter: usize,
     last_module_version: Option<usize>,
     pub(crate) dark_api: dark_api::DarkApiState,
-    pub(crate) override_cc_major: Option<u32>,
+    pub(crate) override_cc: Option<(u32, u32)>,
 }
 
 impl StateTracker {
@@ -32,7 +31,7 @@ impl StateTracker {
             submodule_counter: 0,
             last_module_version: None,
             dark_api: dark_api::DarkApiState::new(),
-            override_cc_major: settings.override_cc_major,
+            override_cc: settings.override_cc,
         }
     }
 
@@ -40,12 +39,12 @@ impl StateTracker {
         &mut self,
         module: CUmodule,
         file_name: *const i8,
-        fn_logger: &mut log::FunctionLogger,
+        fn_logger: &mut FnCallLog,
     ) {
         let file_name = match unsafe { CStr::from_ptr(file_name) }.to_str() {
             Ok(f) => f,
             Err(err) => {
-                fn_logger.log(log::LogEntry::MalformedModulePath(err));
+                fn_logger.log(log::ErrorEntry::MalformedModulePath(err));
                 return;
             }
         };
@@ -56,7 +55,7 @@ impl StateTracker {
     fn try_record_new_module_file(
         &mut self,
         module: CUmodule,
-        fn_logger: &mut log::FunctionLogger,
+        fn_logger: &mut FnCallLog,
         file_name: &str,
     ) -> io::Result<()> {
         let mut module_file = fs::File::open(file_name)?;
@@ -71,7 +70,7 @@ impl StateTracker {
         module: CUmodule,
         version: Option<usize>,
         submodule: &[u8],
-        fn_logger: &mut log::FunctionLogger,
+        fn_logger: &mut FnCallLog,
         type_: &'static str,
     ) {
         if !self.modules.contains_key(&module) {
@@ -93,9 +92,9 @@ impl StateTracker {
         ));
         if type_ == "ptx" {
             match CString::new(submodule) {
-                Err(e) => fn_logger.log(log::LogEntry::NulInsideModuleText(e)),
+                Err(e) => fn_logger.log(log::ErrorEntry::NulInsideModuleText(e)),
                 Ok(submodule_cstring) => match submodule_cstring.to_str() {
-                    Err(e) => fn_logger.log(log::LogEntry::NonUtf8ModuleText(e)),
+                    Err(e) => fn_logger.log(log::ErrorEntry::NonUtf8ModuleText(e)),
                     Ok(submodule_text) => self.try_parse_and_record_kernels(
                         fn_logger,
                         self.module_counter,
@@ -112,13 +111,13 @@ impl StateTracker {
         &mut self,
         module: CUmodule,
         raw_image: *const c_void,
-        fn_logger: &mut log::FunctionLogger,
+        fn_logger: &mut FnCallLog,
     ) {
         self.module_counter += 1;
         if unsafe { *(raw_image as *const [u8; 4]) } == *goblin::elf64::header::ELFMAG {
             self.modules.insert(module, None);
             // TODO: Parse ELF and write it to disk
-            fn_logger.log(log::LogEntry::UnsupportedModule {
+            fn_logger.log(log::ErrorEntry::UnsupportedModule {
                 module,
                 raw_image,
                 kind: "ELF",
@@ -126,7 +125,7 @@ impl StateTracker {
         } else if unsafe { *(raw_image as *const [u8; 8]) } == *goblin::archive::MAGIC {
             self.modules.insert(module, None);
             // TODO: Figure out how to get size of archive module and write it to disk
-            fn_logger.log(log::LogEntry::UnsupportedModule {
+            fn_logger.log(log::ErrorEntry::UnsupportedModule {
                 module,
                 raw_image,
                 kind: "archive",
@@ -140,14 +139,14 @@ impl StateTracker {
         &mut self,
         module: CUmodule,
         raw_image: *const c_void,
-        fn_logger: &mut log::FunctionLogger,
+        fn_logger: &mut FnCallLog,
     ) {
         self.modules.insert(module, None);
         let module_text = unsafe { CStr::from_ptr(raw_image as *const _) }.to_str();
         let module_text = match module_text {
             Ok(m) => m,
             Err(utf8_err) => {
-                fn_logger.log(log::LogEntry::NonUtf8ModuleText(utf8_err));
+                fn_logger.log(log::ErrorEntry::NonUtf8ModuleText(utf8_err));
                 return;
             }
         };
@@ -163,7 +162,7 @@ impl StateTracker {
 
     fn try_parse_and_record_kernels(
         &mut self,
-        fn_logger: &mut log::FunctionLogger,
+        fn_logger: &mut FnCallLog,
         module_index: usize,
         version: Option<usize>,
         submodule_index: Option<usize>,
@@ -171,7 +170,7 @@ impl StateTracker {
     ) {
         let errors = ptx_parser::parse_for_errors(module_text);
         if !errors.is_empty() {
-            fn_logger.log(log::LogEntry::ModuleParsingError(
+            fn_logger.log(log::ErrorEntry::ModuleParsingError(
                 DumpWriter::get_file_name(module_index, version, submodule_index, "log"),
             ));
             fn_logger.log_io_error(self.writer.save_module_error_log(
@@ -186,7 +185,6 @@ impl StateTracker {
 }
 
 struct ParsedModule {
-    content: Rc<String>,
     kernels_args: Option<HashMap<String, Vec<usize>>>,
 }
 
