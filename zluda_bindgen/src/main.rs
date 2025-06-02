@@ -647,7 +647,7 @@ fn remove_type(module: &mut syn::File, type_name: &str) {
 }
 
 fn generate_cublaslt(crate_root: &PathBuf) {
-    let cublas_header = new_builder()
+    let cublaslt_header = new_builder()
         .header("/usr/local/cuda/include/cublasLt.h")
         .allowlist_type("^cublas.*")
         .allowlist_function("^cublasLt.*")
@@ -658,7 +658,26 @@ fn generate_cublaslt(crate_root: &PathBuf) {
         .generate()
         .unwrap()
         .to_string();
-    let mut module: syn::File = syn::parse_str(&cublas_header).unwrap();
+    let cublaslt_internal_header = new_builder()
+        .header_contents(
+            "cublasLt_internal.h",
+            include_str!("../build/cublasLt_internal.h"),
+        )
+        .clang_args(["-x", "c++"])
+        .override_abi(bindgen::Abi::System, ".*")
+        .generate()
+        .unwrap()
+        .to_string();
+    std::fs::write(
+        crate_root
+            .join("..")
+            .join("cuda_base")
+            .join("src")
+            .join("cublaslt_internal.rs"),
+        cublaslt_internal_header,
+    )
+    .unwrap();
+    let mut module: syn::File = syn::parse_str(&cublaslt_header).unwrap();
     remove_type(&mut module, "cublasStatus_t");
     generate_functions(
         &crate_root,

@@ -17,6 +17,7 @@ const CUDA_RS: &'static str = include_str! {"cuda.rs"};
 const NVML_RS: &'static str = include_str! {"nvml.rs"};
 const CUBLAS_RS: &'static str = include_str! {"cublas.rs"};
 const CUBLASLT_RS: &'static str = include_str! {"cublaslt.rs"};
+const CUBLASLT_INTERNAL_RS: &'static str = include_str! {"cublaslt.rs"};
 const CUFFT_RS: &'static str = include_str! {"cufft.rs"};
 const CUSPARSE_RS: &'static str = include_str! {"cusparse.rs"};
 const CUDNN9_RS: &'static str = include_str! {"cudnn9.rs"};
@@ -48,6 +49,11 @@ pub fn cublas_function_declarations(tokens: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn cublaslt_function_declarations(tokens: TokenStream) -> TokenStream {
     function_declarations(tokens, CUBLASLT_RS)
+}
+
+#[proc_macro]
+pub fn cublaslt_internal_function_declarations(tokens: TokenStream) -> TokenStream {
+    function_declarations(tokens, CUBLASLT_INTERNAL_RS)
 }
 
 #[proc_macro]
