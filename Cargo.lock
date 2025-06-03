@@ -1486,6 +1486,7 @@ dependencies = [
  "format",
  "libloading",
  "paste",
+ "unwrap_or",
  "zluda_dump_common",
 ]
 
@@ -1497,6 +1498,19 @@ dependencies = [
  "dark_api",
  "format",
  "libloading",
+]
+
+[[package]]
+name = "zluda_dump_dnn"
+version = "0.0.0"
+dependencies = [
+ "cuda_base",
+ "cuda_types",
+ "format",
+ "libloading",
+ "paste",
+ "unwrap_or",
+ "zluda_dump_common",
 ]
 
 [[package]]

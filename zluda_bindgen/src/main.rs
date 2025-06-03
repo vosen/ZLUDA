@@ -251,6 +251,12 @@ fn generate_cudnn(crate_root: &PathBuf) {
         &["..", "cuda_base", "src", "cudnn9.rs"],
         &cudnn9_module,
     );
+    generate_display_perflib(
+        &crate_root,
+        &["..", "format", "src", "format_generated_dnn9.rs"],
+        &["cuda_types", "cudnn9"],
+        &cudnn9_module,
+    );
 }
 
 // This code splits types (and constants) into one of:
@@ -602,7 +608,7 @@ fn generate_cublas(crate_root: &PathBuf) {
         &["..", "cuda_types", "src", "cublas.rs"],
         &module,
     );
-    generate_display_blas(
+    generate_display_perflib(
         &crate_root,
         &["..", "format", "src", "format_generated_blas.rs"],
         &["cuda_types", "cublas"],
@@ -1148,22 +1154,27 @@ fn generate_display_cuda(
     );
 }
 
-fn generate_display_blas(
+fn generate_display_perflib(
     output: &PathBuf,
     path: &[&str],
     types_crate: &[&'static str],
     module: &syn::File,
 ) {
-    let ignore_types = [];
+    let ignore_types = [
+        "cudnnBackendDescriptor_t"
+    ];
     let ignore_functions = [];
-    let count_selectors = [];
+    let count_selectors = [
+        ("cudnnBackendSetAttribute", 4, 3),
+        ("cudnnBackendGetAttribute", 5, 4)
+    ];
     let mut derive_state = DeriveDisplayState::new(
         &ignore_types,
         types_crate,
         &ignore_functions,
         &count_selectors,
     );
-    let mut items = module
+    let items = module
         .items
         .iter()
         .filter_map(|i| cuda_derive_display_trait_for_item(types_crate, &mut derive_state, i))
