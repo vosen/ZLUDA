@@ -185,10 +185,7 @@ impl CudaDisplay
     }
 }
 
-
-impl CudaDisplay
-    for Option<unsafe extern "C" fn(*const i8)>
-{
+impl CudaDisplay for Option<unsafe extern "C" fn(*const i8)> {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -1043,7 +1040,9 @@ pub fn write_cudnnBackendGetAttribute(
     cudnn9_print_elements(
         writer,
         attributeType,
-        unsafe { *elementCount },
+        unsafe { elementCount.as_ref() }
+            .copied()
+            .unwrap_or(requestedElementCount),
         arrayOfElements,
     )?;
     writer.write_all(b")")
