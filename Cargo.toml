@@ -25,6 +25,7 @@ members = [
     "zluda_dump_blas",
     "zluda_dump_blaslt",
     "zluda_dump_common",
+    "zluda_dump_dnn",
     "zluda_fft",
     "zluda_inject",
     "zluda_ml",

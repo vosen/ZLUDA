@@ -134,6 +134,43 @@ impl ReprUsize for cuda_types::cublas::cublasStatus_t {
     }
 }
 
+impl ReprUsize for cuda_types::cudnn9::cudnnStatus_t {
+    fn to_usize(self) -> usize {
+        self.0 as usize
+    }
+
+    fn from_usize(x: usize) -> Self {
+        Self(x as u32)
+    }
+
+    const INTERNAL_ERROR: usize =
+        cuda_types::cublas::cublasStatus_t::CUBLAS_STATUS_INTERNAL_ERROR.0 as usize;
+
+    extern "C" fn format_status(x: usize) -> Vec<u8> {
+        let mut result = Vec::new();
+        format::CudaDisplay::write(&Self::from_usize(x), "", 0, &mut result).ok();
+        result
+    }
+}
+
+impl ReprUsize for cuda_types::cudnn9::cudnnStatus_t {
+    fn to_usize(self) -> usize {
+        self.0 as usize
+    }
+
+    fn from_usize(x: usize) -> Self {
+        Self(x as u32)
+    }
+
+    const INTERNAL_ERROR: usize = 0;
+
+    extern "C" fn format_status(x: usize) -> Vec<u8> {
+        let mut result = Vec::new();
+        format::CudaDisplay::write(&Self::from_usize(x), "", 0, &mut result).ok();
+        result
+    }
+}
+
 impl ReprUsize for () {
     fn to_usize(self) -> usize {
         0

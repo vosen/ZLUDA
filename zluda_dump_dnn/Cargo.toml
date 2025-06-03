@@ -1,11 +1,11 @@
 [package]
-name = "zluda_dump_blas"
+name = "zluda_dump_dnn"
 version = "0.0.0"
 authors = ["Andrzej Janik <vosen@vosen.pl>"]
 edition = "2021"
 
 [lib]
-name = "zluda_dump_blas"
+name = "zluda_dump_dnn"
 crate-type = ["cdylib"]
 
 [dependencies]
@@ -19,6 +19,6 @@ unwrap_or = "1.0.1"
 
 [package.metadata.zluda]
 linux_symlinks = [
-    "dump/libcublas.so",
-    "dump/libcublas.so.12"
+    "dump/libcudnn.so",
+    "dump/libcudnn.so.9"
 ]

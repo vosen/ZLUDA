@@ -4,9 +4,9 @@ use std::sync::LazyLock;
 static LIBRARY: LazyLock<Option<Library>> = LazyLock::new(get_library);
 
 fn get_library() -> Option<Library> {
-    let cuda_lib = std::env::var("ZLUDA_BLAS_LIB")
+    let cuda_lib = std::env::var("ZLUDA_DNN_LIB")
         .ok()
-        .unwrap_or_else(|| "/usr/local/cuda/lib64/libcublas.so".to_string());
+        .unwrap_or_else(|| "/usr/lib/x86_64-linux-gnu/libcudnn.so.9".to_string());
     unsafe { Library::new(cuda_lib) }.ok()
 }
 
@@ -43,4 +43,4 @@ macro_rules! unimplemented {
     };
 }
 
-cuda_base::cublas_function_declarations!(unimplemented);
+cuda_base::cudnn9_function_declarations!(unimplemented);
