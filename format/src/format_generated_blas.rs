@@ -390,26 +390,11 @@ impl crate::CudaDisplay for cuda_types::cublas::cublasHandle_t {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
-    }
-}
-impl crate::CudaDisplay for cuda_types::cublas::cublasLogCallback {
-    fn write(
-        &self,
-        _fn_name: &'static str,
-        _index: usize,
-        writer: &mut (impl std::io::Write + ?Sized),
-    ) -> std::io::Result<()> {
-        write!(
-            writer,
-            "{:p}",
-            unsafe {
-                std::mem::transmute::<
-                    cuda_types::cublas::cublasLogCallback,
-                    *mut ::std::ffi::c_void,
-                >(*self)
-            },
-        )
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 pub fn write_cublasCreate_v2(

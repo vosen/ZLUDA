@@ -174,6 +174,24 @@ impl CudaDisplay
     }
 }
 
+
+impl CudaDisplay
+    for Option<unsafe extern "C" fn(*const i8)>
+{
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        if let Some(fn_ptr) = self {
+            write!(writer, "{:p}", *fn_ptr)
+        } else {
+            writer.write_all(b"NULL")
+        }
+    }
+}
+
 pub fn write_handle<T: LowerHex>(
     this: &[T; 64],
     writer: &mut (impl std::io::Write + ?Sized),
@@ -255,6 +273,21 @@ impl CudaDisplay for *const i8 {
                 "\"{}\"",
                 unsafe { CStr::from_ptr(*self as _) }.to_string_lossy()
             )
+        }
+    }
+}
+
+impl CudaDisplay for *mut cuda_types::FILE {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
         }
     }
 }
@@ -934,3 +967,7 @@ mod format_generated;
 pub use format_generated::*;
 mod format_generated_blas;
 pub use format_generated_blas::*;
+mod format_generated_blaslt;
+pub use format_generated_blaslt::*;
+mod format_generated_blaslt_internal;
+pub use format_generated_blaslt_internal::*;

@@ -17,7 +17,7 @@ const CUDA_RS: &'static str = include_str! {"cuda.rs"};
 const NVML_RS: &'static str = include_str! {"nvml.rs"};
 const CUBLAS_RS: &'static str = include_str! {"cublas.rs"};
 const CUBLASLT_RS: &'static str = include_str! {"cublaslt.rs"};
-const CUBLASLT_INTERNAL_RS: &'static str = include_str! {"cublaslt.rs"};
+const CUBLASLT_INTERNAL_RS: &'static str = include_str! {"cublaslt_internal.rs"};
 const CUFFT_RS: &'static str = include_str! {"cufft.rs"};
 const CUSPARSE_RS: &'static str = include_str! {"cusparse.rs"};
 const CUDNN9_RS: &'static str = include_str! {"cudnn9.rs"};
@@ -76,23 +76,25 @@ fn function_declarations(tokens: TokenStream, module: &str) -> TokenStream {
     let mut cuda_module = syn::parse_str::<File>(module).unwrap();
     let mut choose_macro = ChooseMacro::new(input);
     syn::visit_mut::visit_file_mut(&mut FixFnSignatures, &mut cuda_module);
-    let extern_ = if let Item::ForeignMod(extern_) = cuda_module.items.pop().unwrap() {
-        extern_
-    } else {
-        unreachable!()
-    };
-    let abi = extern_.abi.name;
-    for mut item in extern_.items {
-        if let ForeignItem::Fn(ForeignItemFn {
-            sig: Signature { ref ident, .. },
-            ref mut attrs,
-            ..
-        }) = item
-        {
-            *attrs = Vec::new();
-            choose_macro.add(ident, quote! { #abi #item });
+    for item in cuda_module.items {
+        let extern_ = if let Item::ForeignMod(extern_) = item {
+            extern_
         } else {
             unreachable!()
+        };
+        let abi = extern_.abi.name;
+        for mut item in extern_.items {
+            if let ForeignItem::Fn(ForeignItemFn {
+                sig: Signature { ref ident, .. },
+                ref mut attrs,
+                ..
+            }) = item
+            {
+                *attrs = Vec::new();
+                choose_macro.add(ident, quote! { #abi #item });
+            } else {
+                unreachable!()
+            }
         }
     }
     let mut result = proc_macro2::TokenStream::new();

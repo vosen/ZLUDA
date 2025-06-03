@@ -531,7 +531,9 @@ extern "system" {
  \param[in]  file                         an open file with write permissions
 
  \retval     CUBLAS_STATUS_SUCCESS        if log file was set successfully*/
-    fn cublasLtLoggerSetFile(file: *mut FILE) -> cuda_types::cublas::cublasStatus_t;
+    fn cublasLtLoggerSetFile(
+        file: *mut cuda_types::FILE,
+    ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
     /** Experimental: Open log file.
 

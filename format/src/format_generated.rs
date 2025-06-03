@@ -58,7 +58,11 @@ impl crate::CudaDisplay for cuda_types::cuda::CUkernel {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cuda::CUarray {
@@ -68,7 +72,11 @@ impl crate::CudaDisplay for cuda_types::cuda::CUarray {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cuda::CUmipmappedArray {
@@ -78,7 +86,11 @@ impl crate::CudaDisplay for cuda_types::cuda::CUmipmappedArray {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cuda::CUtexref {
@@ -88,7 +100,11 @@ impl crate::CudaDisplay for cuda_types::cuda::CUtexref {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cuda::CUsurfref {
@@ -98,7 +114,11 @@ impl crate::CudaDisplay for cuda_types::cuda::CUsurfref {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cuda::CUevent {
@@ -108,7 +128,11 @@ impl crate::CudaDisplay for cuda_types::cuda::CUevent {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cuda::CUstream {
@@ -128,7 +152,11 @@ impl crate::CudaDisplay for cuda_types::cuda::CUgraphicsResource {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cuda::CUexternalMemory {
@@ -138,7 +166,11 @@ impl crate::CudaDisplay for cuda_types::cuda::CUexternalMemory {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cuda::CUexternalSemaphore {
@@ -148,7 +180,11 @@ impl crate::CudaDisplay for cuda_types::cuda::CUexternalSemaphore {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cuda::CUgraph {
@@ -158,7 +194,11 @@ impl crate::CudaDisplay for cuda_types::cuda::CUgraph {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cuda::CUgraphNode {
@@ -168,7 +208,11 @@ impl crate::CudaDisplay for cuda_types::cuda::CUgraphNode {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cuda::CUgraphExec {
@@ -178,7 +222,11 @@ impl crate::CudaDisplay for cuda_types::cuda::CUgraphExec {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cuda::CUmemoryPool {
@@ -188,7 +236,11 @@ impl crate::CudaDisplay for cuda_types::cuda::CUmemoryPool {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cuda::CUuserObject {
@@ -198,7 +250,11 @@ impl crate::CudaDisplay for cuda_types::cuda::CUuserObject {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cuda::CUgraphDeviceNode {
@@ -208,7 +264,11 @@ impl crate::CudaDisplay for cuda_types::cuda::CUgraphDeviceNode {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cuda::CUasyncCallbackHandle {
@@ -218,7 +278,11 @@ impl crate::CudaDisplay for cuda_types::cuda::CUasyncCallbackHandle {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cuda::CUgreenCtx {
@@ -228,7 +292,11 @@ impl crate::CudaDisplay for cuda_types::cuda::CUgreenCtx {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cuda::CUmemFabricHandle_st {
@@ -2628,7 +2696,11 @@ impl crate::CudaDisplay for cuda_types::cuda::CUlinkState {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cuda::CUgraphicsRegisterFlags_enum {
@@ -16504,7 +16576,11 @@ impl crate::CudaDisplay for cuda_types::cuda::CUdevResourceDesc {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cuda::CUgreenCtxCreate_flags {
@@ -21936,7 +22012,11 @@ impl crate::CudaDisplay for cuda_types::cuda::CUeglStreamConnection {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 pub fn write_cuGraphicsEGLRegisterImage(

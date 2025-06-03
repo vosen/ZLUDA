@@ -33,9 +33,9 @@ fn main() {
     generate_ml(&crate_root);
     generate_cublas(&crate_root);
     generate_cublaslt(&crate_root);
-    generate_cudnn(&crate_root);
     generate_cufft(&crate_root);
     generate_cusparse(&crate_root);
+    generate_cudnn(&crate_root);
 }
 
 fn generate_process_address_table(crate_root: &PathBuf, mut cuda_fns: Vec<Ident>) {
@@ -667,7 +667,11 @@ fn generate_cublaslt(crate_root: &PathBuf) {
         .override_abi(bindgen::Abi::System, ".*")
         .generate()
         .unwrap()
-        .to_string();
+        .to_string()
+        // Simplest and dumbest way to do this
+        .replace("pub fn", "fn")
+        .replace(");", ") -> ();");
+    let module_blaslt_internal: syn::File = syn::parse_str(&cublaslt_internal_header).unwrap();
     std::fs::write(
         crate_root
             .join("..")
@@ -677,20 +681,32 @@ fn generate_cublaslt(crate_root: &PathBuf) {
         cublaslt_internal_header,
     )
     .unwrap();
-    let mut module: syn::File = syn::parse_str(&cublaslt_header).unwrap();
-    remove_type(&mut module, "cublasStatus_t");
+    let mut module_blas: syn::File = syn::parse_str(&cublaslt_header).unwrap();
+    remove_type(&mut module_blas, "cublasStatus_t");
     generate_functions(
         &crate_root,
         "cublaslt",
         &["..", "cuda_base", "src", "cublaslt.rs"],
-        &module,
+        &module_blas,
     );
     generate_types_library(
         Some(LibraryOverride::CuBlasLt),
         &crate_root,
         &["..", "cuda_types", "src", "cublaslt.rs"],
-        &module,
-    )
+        &module_blas,
+    );
+    generate_display_blas(
+        &crate_root,
+        &["..", "format", "src", "format_generated_blaslt.rs"],
+        &["cuda_types", "cublaslt"],
+        &module_blas,
+    );
+    generate_display_blas(
+        &crate_root,
+        &["..", "format", "src", "format_generated_blaslt_internal.rs"],
+        &["cuda_types", "cublaslt"],
+        &module_blaslt_internal,
+    );
 }
 
 fn generate_cuda(crate_root: &PathBuf) -> Vec<Ident> {
@@ -1139,7 +1155,10 @@ impl VisitMut for PrependCudaPath {
     fn visit_type_path_mut(&mut self, type_: &mut TypePath) {
         if type_.path.segments.len() == 1 {
             match &*type_.path.segments[0].ident.to_string() {
-                "usize" | "u32" | "i32" | "u64" | "i64" | "f64" | "f32" | "FILE" => {}
+                "usize" | "u32" | "i32" | "u64" | "i64" | "f64" | "f32" => {}
+                "FILE" => {
+                    *type_ = parse_quote! { cuda_types :: FILE };
+                }
                 "cublasStatus_t" => {
                     let module = self.module.iter().rev().skip(1).rev();
                     *type_ = parse_quote! { #(#module :: )* cublas :: #type_ };
@@ -1249,7 +1268,13 @@ fn generate_display_blas(
     types_crate: &[&'static str],
     module: &syn::File,
 ) {
-    let ignore_types = [];
+    let ignore_types = [
+        "cublasLtMatrixLayoutOpaque_t",
+        "cublasLtMatmulDescOpaque_t",
+        "cublasLtMatrixTransformDescOpaque_t",
+        "cublasLtMatmulPreferenceOpaque_t",
+        "cublasLogCallback",
+    ];
     let ignore_functions = [];
     let count_selectors = [];
     let mut derive_state = DeriveDisplayState::new(
@@ -1500,7 +1525,11 @@ fn cuda_derive_display_trait_for_item<'a>(
                     Some(parse_quote! {
                         impl crate::CudaDisplay for #path_prefix :: #type_ {
                             fn write(&self, _fn_name: &'static str, _index: usize, writer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
-                                write!(writer, "{:p}", *self)
+                                if self.is_null() {
+                                    writer.write_all(b"NULL")
+                                } else {
+                                    write!(writer, "{:p}", *self)
+                                }
                             }
                         }
                     })

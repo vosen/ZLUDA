@@ -53,15 +53,13 @@ pub(crate) mod os {
 pub(crate) mod os {
     use libloading::os;
 
-    const RTLD_NOLOAD: i32 = 0x4;
-
     pub fn open_driver() -> Result<libloading::Library, libloading::Error> {
-        unsafe { os::windows::Library::open_already_loaded("nvcuda.dll").map(Into::into) }
+        unsafe { os::windows::Library::open_already_loaded("nvcuda").map(Into::into) }
     }
 }
 
 pub trait ReprUsize {
-    const INTERNAL_ERROR: usize;
+    const INTERNAL_ERROR: usize = usize::MAX;
     fn to_usize(self) -> usize;
     fn from_usize(x: usize) -> Self;
     extern "C" fn format_status(x: usize) -> Vec<u8>;
@@ -76,10 +74,16 @@ impl ReprUsize for usize {
         x
     }
 
-    const INTERNAL_ERROR: usize = 0;
-
     extern "C" fn format_status(x: usize) -> Vec<u8> {
-        todo!()
+        let mut writer = Vec::new();
+        format::CudaDisplay::write(
+            &cuda_types::cublas::cublasStatus_t::from_usize(x),
+            "",
+            0,
+            &mut writer,
+        )
+        .ok();
+        writer
     }
 }
 
@@ -92,10 +96,16 @@ impl<T> ReprUsize for *const T {
         x as Self
     }
 
-    const INTERNAL_ERROR: usize = 0;
-
     extern "C" fn format_status(x: usize) -> Vec<u8> {
-        todo!()
+        let mut writer = Vec::new();
+        format::CudaDisplay::write(
+            &cuda_types::cublas::cublasStatus_t::from_usize(x),
+            "",
+            0,
+            &mut writer,
+        )
+        .ok();
+        writer
     }
 }
 
@@ -108,12 +118,19 @@ impl ReprUsize for cuda_types::cublas::cublasStatus_t {
         Self(x as u32)
     }
 
-    const INTERNAL_ERROR: usize = 0;
+    const INTERNAL_ERROR: usize =
+        cuda_types::cublas::cublasStatus_t::CUBLAS_STATUS_INTERNAL_ERROR.0 as usize;
 
     extern "C" fn format_status(x: usize) -> Vec<u8> {
-        let mut result = Vec::new();
-        format::CudaDisplay::write(&Self::from_usize(x), "", 0, &mut result).ok();
-        result
+        let mut writer = Vec::new();
+        format::CudaDisplay::write(
+            &cuda_types::cublas::cublasStatus_t::from_usize(x),
+            "",
+            0,
+            &mut writer,
+        )
+        .ok();
+        writer
     }
 }
 
@@ -126,9 +143,103 @@ impl ReprUsize for () {
         ()
     }
 
-    const INTERNAL_ERROR: usize = 0;
+    extern "C" fn format_status(x: usize) -> Vec<u8> {
+        let mut writer = Vec::new();
+        format::CudaDisplay::write(
+            &cuda_types::cublas::cublasStatus_t::from_usize(x),
+            "",
+            0,
+            &mut writer,
+        )
+        .ok();
+        writer
+    }
+}
+
+impl ReprUsize for u32 {
+    fn to_usize(self) -> usize {
+        self as usize
+    }
+
+    fn from_usize(x: usize) -> Self {
+        x as Self
+    }
 
     extern "C" fn format_status(x: usize) -> Vec<u8> {
-        todo!()
+        let mut writer = Vec::new();
+        format::CudaDisplay::write(
+            &cuda_types::cublas::cublasStatus_t::from_usize(x),
+            "",
+            0,
+            &mut writer,
+        )
+        .ok();
+        writer
+    }
+}
+
+impl ReprUsize for i32 {
+    fn to_usize(self) -> usize {
+        self as usize
+    }
+
+    fn from_usize(x: usize) -> Self {
+        x as Self
+    }
+
+    extern "C" fn format_status(x: usize) -> Vec<u8> {
+        let mut writer = Vec::new();
+        format::CudaDisplay::write(
+            &cuda_types::cublas::cublasStatus_t::from_usize(x),
+            "",
+            0,
+            &mut writer,
+        )
+        .ok();
+        writer
+    }
+}
+
+impl ReprUsize for u64 {
+    fn to_usize(self) -> usize {
+        self as usize
+    }
+
+    fn from_usize(x: usize) -> Self {
+        x as Self
+    }
+
+    extern "C" fn format_status(x: usize) -> Vec<u8> {
+        let mut writer = Vec::new();
+        format::CudaDisplay::write(
+            &cuda_types::cublas::cublasStatus_t::from_usize(x),
+            "",
+            0,
+            &mut writer,
+        )
+        .ok();
+        writer
+    }
+}
+
+impl ReprUsize for *mut std::ffi::c_void {
+    fn to_usize(self) -> usize {
+        self as usize
+    }
+
+    fn from_usize(x: usize) -> Self {
+        x as Self
+    }
+
+    extern "C" fn format_status(x: usize) -> Vec<u8> {
+        let mut writer = Vec::new();
+        format::CudaDisplay::write(
+            &cuda_types::cublas::cublasStatus_t::from_usize(x),
+            "",
+            0,
+            &mut writer,
+        )
+        .ok();
+        writer
     }
 }

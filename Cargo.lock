@@ -1490,6 +1490,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "zluda_dump_blaslt"
+version = "0.0.0"
+dependencies = [
+ "cuda_base",
+ "cuda_types",
+ "format",
+ "libloading",
+ "paste",
+ "zluda_dump_common",
+]
+
+[[package]]
 name = "zluda_dump_common"
 version = "0.1.0"
 dependencies = [
