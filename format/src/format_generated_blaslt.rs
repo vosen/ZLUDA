@@ -4893,25 +4893,6 @@ pub fn write_cublasLtMatmulAlgoConfigGetAttribute(
     )?;
     writer.write_all(b")")
 }
-impl crate::CudaDisplay for cuda_types::cublaslt::cublasLtLoggerCallback_t {
-    fn write(
-        &self,
-        _fn_name: &'static str,
-        _index: usize,
-        writer: &mut (impl std::io::Write + ?Sized),
-    ) -> std::io::Result<()> {
-        write!(
-            writer,
-            "{:p}",
-            unsafe {
-                std::mem::transmute::<
-                    cuda_types::cublaslt::cublasLtLoggerCallback_t,
-                    *mut ::std::ffi::c_void,
-                >(*self)
-            },
-        )
-    }
-}
 pub fn write_cublasLtLoggerSetCallback(
     writer: &mut (impl std::io::Write + ?Sized),
     callback: cuda_types::cublaslt::cublasLtLoggerCallback_t,

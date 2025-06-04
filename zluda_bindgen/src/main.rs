@@ -140,7 +140,7 @@ fn cuda_numeric_version(version: &str) -> i32 {
     major * 1000 + minor * 10 + patch
 }
 
-fn generate_cufft(crate_root: &PathBuf) -> Vec<Ident> {
+fn generate_cufft(crate_root: &PathBuf) {
     let cufft_header = new_builder()
         .header_contents("cufft_wraper.h", include_str!("../build/cufft_wraper.h"))
         .header("/usr/local/cuda/include/cufftXt.h")
@@ -157,19 +157,24 @@ fn generate_cufft(crate_root: &PathBuf) -> Vec<Ident> {
         .unwrap()
         .to_string();
     let module: syn::File = syn::parse_str(&cufft_header).unwrap();
-    let functions = get_functions(generate_functions(
+    generate_functions(
         &crate_root,
         "cufft",
         &["..", "cuda_base", "src", "cufft.rs"],
         &module,
-    ));
+    );
     generate_types_library(
         Some(LibraryOverride::CuFft),
         &crate_root,
         &["..", "cuda_types", "src", "cufft.rs"],
         &module,
     );
-    functions
+    generate_display_perflib(
+        &crate_root,
+        &["..", "format", "src", "format_generated_fft.rs"],
+        &["cuda_types", "cufft"],
+        &module,
+    );
 }
 
 fn get_functions(module: syn::File) -> Vec<Ident> {
@@ -197,6 +202,7 @@ fn generate_cusparse(crate_root: &PathBuf) {
         .allowlist_type("^cusparse.*")
         .allowlist_type(".*Info_t$")
         .allowlist_type(".*Info$")
+        .blocklist_type("^cudaAsync.*")
         .allowlist_function("^cusparse.*")
         .allowlist_var("^CUSPARSE_.*")
         .must_use_type("cusparseStatus_t")
@@ -217,7 +223,13 @@ fn generate_cusparse(crate_root: &PathBuf) {
         &crate_root,
         &["..", "cuda_types", "src", "cusparse.rs"],
         &module,
-    )
+    );
+    generate_display_perflib(
+        &crate_root,
+        &["..", "format", "src", "format_generated_sparse.rs"],
+        &["cuda_types", "cusparse"],
+        &module,
+    );
 }
 
 fn generate_cudnn(crate_root: &PathBuf) {
@@ -701,13 +713,13 @@ fn generate_cublaslt(crate_root: &PathBuf) {
         &["..", "cuda_types", "src", "cublaslt.rs"],
         &module_blas,
     );
-    generate_display_blas(
+    generate_display_perflib(
         &crate_root,
         &["..", "format", "src", "format_generated_blaslt.rs"],
         &["cuda_types", "cublaslt"],
         &module_blas,
     );
-    generate_display_blas(
+    generate_display_perflib(
         &crate_root,
         &["..", "format", "src", "format_generated_blaslt_internal.rs"],
         &["cuda_types", "cublaslt"],
@@ -1280,12 +1292,14 @@ fn generate_display_perflib(
         "cublasLtMatrixTransformDescOpaque_t",
         "cublasLtMatmulPreferenceOpaque_t",
         "cublasLogCallback",
-        "cudnnBackendDescriptor_t"
+        "cudnnBackendDescriptor_t",
+        "cublasLtLoggerCallback_t",
+        "cusparseLoggerCallback_t",
     ];
     let ignore_functions = [];
     let count_selectors = [
         ("cudnnBackendSetAttribute", 4, 3),
-        ("cudnnBackendGetAttribute", 5, 4)
+        ("cudnnBackendGetAttribute", 5, 4),
     ];
     let mut derive_state = DeriveDisplayState::new(
         &ignore_types,
@@ -1293,7 +1307,6 @@ fn generate_display_perflib(
         &ignore_functions,
         &count_selectors,
     );
-    let items = module
     let items = module
         .items
         .iter()

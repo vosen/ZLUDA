@@ -262,3 +262,110 @@ impl ReprUsize for *mut std::ffi::c_void {
         writer
     }
 }
+
+impl ReprUsize for cuda_types::cufft::cufftResult_t {
+    fn to_usize(self) -> usize {
+        self.0 as usize
+    }
+
+    fn from_usize(x: usize) -> Self {
+        Self(x as u32)
+    }
+
+    extern "C" fn format_status(x: usize) -> Vec<u8> {
+        let mut writer = Vec::new();
+        format::CudaDisplay::write(&Self::from_usize(x), "", 0, &mut writer).ok();
+        writer
+    }
+}
+
+impl ReprUsize for cuda_types::cusparse::cusparseStatus_t {
+    fn to_usize(self) -> usize {
+        self.0 as usize
+    }
+
+    fn from_usize(x: usize) -> Self {
+        Self(x as u32)
+    }
+
+    const INTERNAL_ERROR: usize =
+        cuda_types::cusparse::cusparseStatus_t::CUSPARSE_STATUS_INTERNAL_ERROR.0 as usize;
+
+    extern "C" fn format_status(x: usize) -> Vec<u8> {
+        let mut writer = Vec::new();
+        format::CudaDisplay::write(&Self::from_usize(x), "", 0, &mut writer).ok();
+        writer
+    }
+}
+
+impl ReprUsize for cuda_types::cusparse::cusparseFillMode_t {
+    fn to_usize(self) -> usize {
+        self.0 as usize
+    }
+
+    fn from_usize(x: usize) -> Self {
+        Self(x as u32)
+    }
+
+    const INTERNAL_ERROR: usize = 0;
+
+    extern "C" fn format_status(x: usize) -> Vec<u8> {
+        let mut writer = Vec::new();
+        format::CudaDisplay::write(&Self::from_usize(x), "", 0, &mut writer).ok();
+        writer
+    }
+}
+
+impl ReprUsize for cuda_types::cusparse::cusparseIndexBase_t {
+    fn to_usize(self) -> usize {
+        self.0 as usize
+    }
+
+    fn from_usize(x: usize) -> Self {
+        Self(x as u32)
+    }
+
+    const INTERNAL_ERROR: usize = 0;
+
+    extern "C" fn format_status(x: usize) -> Vec<u8> {
+        let mut writer = Vec::new();
+        format::CudaDisplay::write(&Self::from_usize(x), "", 0, &mut writer).ok();
+        writer
+    }
+}
+
+impl ReprUsize for cuda_types::cusparse::cusparseDiagType_t {
+    fn to_usize(self) -> usize {
+        self.0 as usize
+    }
+
+    fn from_usize(x: usize) -> Self {
+        Self(x as u32)
+    }
+
+    const INTERNAL_ERROR: usize = 0;
+
+    extern "C" fn format_status(x: usize) -> Vec<u8> {
+        let mut writer = Vec::new();
+        format::CudaDisplay::write(&Self::from_usize(x), "", 0, &mut writer).ok();
+        writer
+    }
+}
+
+impl ReprUsize for cuda_types::cusparse::cusparseMatrixType_t {
+    fn to_usize(self) -> usize {
+        self.0 as usize
+    }
+
+    fn from_usize(x: usize) -> Self {
+        Self(x as u32)
+    }
+
+    const INTERNAL_ERROR: usize = 0;
+
+    extern "C" fn format_status(x: usize) -> Vec<u8> {
+        let mut writer = Vec::new();
+        format::CudaDisplay::write(&Self::from_usize(x), "", 0, &mut writer).ok();
+        writer
+    }
+}

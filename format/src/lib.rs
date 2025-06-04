@@ -200,6 +200,21 @@ impl CudaDisplay for Option<unsafe extern "C" fn(*const i8)> {
     }
 }
 
+impl CudaDisplay for Option<unsafe extern "C" fn(i32, *const i8, *const i8)> {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        if let Some(fn_ptr) = self {
+            write!(writer, "{:p}", *fn_ptr)
+        } else {
+            writer.write_all(b"NULL")
+        }
+    }
+}
+
 pub fn write_handle<T: LowerHex>(
     this: &[T; 64],
     writer: &mut (impl std::io::Write + ?Sized),
@@ -1294,3 +1309,7 @@ mod format_generated_blaslt_internal;
 pub use format_generated_blaslt_internal::*;
 mod format_generated_dnn9;
 pub use format_generated_dnn9::*;
+mod format_generated_fft;
+pub use format_generated_fft::*;
+mod format_generated_sparse;
+pub use format_generated_sparse::*;
