@@ -336,12 +336,62 @@ dark_api! {
     "{0B7A5827-AF98-46AB-A951-22D19BDF5C08}" => ZLUDA_DUMP_INTERNAL[1] {
         #[noformat]
         [0] = logged_call(
-            fn_name: &'static str,
-            args: &dyn Fn() -> Vec<u8>,
-            fn_: &dyn Fn() -> usize,
+            fn_name: cglue::slice::CSliceRef<'static, u8>,
+            args: crate::FnFfiRef<crate::ByteVecFfi>,
+            fn_: crate::FnFfiRef<usize>,
             internal_error: usize,
-            format_status: extern "C" fn(usize) -> Vec<u8>
+            format_status: extern "C" fn(usize) -> crate::ByteVecFfi
         ) -> usize
+    }
+}
+
+#[repr(C)]
+pub struct ByteVecFfi {
+    ptr: *mut u8,
+    len: usize,
+    capacity: usize,
+}
+
+impl ByteVecFfi {
+    pub fn new(mut v: Vec<u8>) -> Self {
+        let (ptr, len, capacity) = (v.as_mut_ptr(), v.len(), v.capacity());
+        std::mem::forget(v);
+        Self { ptr, len, capacity }
+    }
+
+    pub fn to_vec(self) -> Vec<u8> {
+        let vec = unsafe { Vec::from_raw_parts(self.ptr, self.len, self.capacity) };
+        std::mem::forget(self);
+        vec
+    }
+}
+
+impl Drop for ByteVecFfi {
+    fn drop(&mut self) {
+        // SAFETY: We are dropping the Vec<u8> that we created in `from`
+        // and we know that the pointer is valid.
+        unsafe {
+            let _ = Vec::from_raw_parts(self.ptr, self.len, self.capacity);
+        }
+    }
+}
+
+#[cglue::cglue_trait]
+pub trait FnFfi {
+    type Output;
+    fn call(&self) -> Self::Output;
+}
+
+// We use this wrapper instead of implementing `FnFfi` for all T that implement `Fn() -> Output`
+// because cglue machinery already provided blanket implementation of `FnFfi` for its own needs
+// `cglue_trait_ext` does not work with `Fn` traits because they are special
+#[repr(transparent)]
+pub struct FnFfiWrapper<Output, T: std::ops::Fn() -> Output>(pub T);
+
+impl<Output, T: std::ops::Fn() -> Output> FnFfi for FnFfiWrapper<Output, T> {
+    type Output = Output;
+    fn call(&self) -> Output {
+        (self.0)()
     }
 }
 

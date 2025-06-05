@@ -1,3 +1,4 @@
+use ::dark_api::FnFfi;
 use cuda_types::cuda::*;
 use dark_api::DarkApiState2;
 use goblin::error;
@@ -149,19 +150,19 @@ struct InternalTableImpl;
 
 impl ::dark_api::zluda_dump::CudaDarkApi for InternalTableImpl {
     unsafe extern "system" fn logged_call(
-        fn_name: &'static str,
-        args: &dyn Fn() -> Vec<u8>,
-        fn_: &dyn Fn() -> usize,
+        fn_name: cglue::slice::CSliceRef<'static, u8>,
+        args: ::dark_api::FnFfiRef<::dark_api::ByteVecFfi>,
+        fn_: ::dark_api::FnFfiRef<usize>,
         internal_error: usize,
-        format_status: extern "C" fn(usize) -> Vec<u8>,
+        format_status: extern "C" fn(usize) -> ::dark_api::ByteVecFfi,
     ) -> usize {
         GlobalState2::under_lock(
-            CudaFunctionName::Normal(fn_name),
-            Some(args),
+            CudaFunctionName::Normal(unsafe { fn_name.into_str() }),
+            Some(|| args.call().to_vec()),
             internal_error,
-            |status| format_status(status),
+            |status| format_status(status).to_vec(),
             |_, _| Some(()),
-            |_| fn_(),
+            |_| fn_.call(),
             move |_, _, _, _| {},
         )
     }

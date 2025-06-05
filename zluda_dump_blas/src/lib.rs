@@ -23,18 +23,20 @@ macro_rules! unimplemented {
                 let maybe_fn_ptr = (&*LIBRARY).as_ref().and_then(|lib| lib.get::<unsafe extern $abi fn ( $($arg_type),* ) -> $ret_type>(concat!( stringify!($fn_name), "\0").as_bytes()).ok());
                 let fn_ptr = unwrap_or::unwrap_some_or!(maybe_fn_ptr, return internal_error);
                 let export_table = unwrap_or::unwrap_some_or!(::zluda_dump_common::get_export_table(), return internal_error);
+                let format_args = dark_api::FnFfiWrapper(|| {
+                    let mut writer = Vec::new();
+                    let formatter = paste::paste! { ::format:: [< write_  $fn_name>] };
+                    formatter(&mut writer $(, $arg_id)* ).ok();
+                    dark_api::ByteVecFfi::new(writer)
+                });
+                let underlying_fn = dark_api::FnFfiWrapper(|| {
+                    let result = fn_ptr(  $( $arg_id),* );
+                    ReprUsize::to_usize(result)
+                });
                 ReprUsize::from_usize(export_table.logged_call(
-                    stringify!($fn_name),
-                    &|| {
-                        let mut writer = Vec::new();
-                        let formatter = paste::paste! { ::format:: [< write_  $fn_name>] };
-                        formatter(&mut writer $(, $arg_id)* ).ok();
-                        writer
-                    },
-                    &|| {
-                        let result = fn_ptr(  $( $arg_id),* );
-                        ReprUsize::to_usize(result)
-                    },
+                    cglue::slice::CSliceRef::from_str(stringify!($fn_name)),
+                    cglue::trait_obj!(&format_args as dark_api::FnFfi),
+                    cglue::trait_obj!(&underlying_fn as dark_api::FnFfi),
                     internal_error_untyped,
                     <$ret_type as ReprUsize>::format_status)
                 )
