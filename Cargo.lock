@@ -1569,7 +1569,6 @@ dependencies = [
  "dynasmrt",
  "format",
  "goblin",
- "lazy_static",
  "libc",
  "lz4-sys",
  "parking_lot",
@@ -1580,6 +1579,7 @@ dependencies = [
  "rustc-hash 1.1.0",
  "wchar",
  "winapi",
+ "zluda_dump_common",
 ]
 
 [[package]]

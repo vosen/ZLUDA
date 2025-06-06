@@ -1,6 +1,6 @@
-use cuda_types::cuda::{CUresult, CUuuid};
+use cuda_types::cuda::{CUerror, CUresult, CUresultConsts, CUuuid};
 use dark_api::ByteVecFfi;
-use std::{ptr, sync::LazyLock};
+use std::{num::NonZero, ptr, sync::LazyLock};
 
 pub fn get_export_table() -> Option<::dark_api::zluda_dump::ZludaDumpInternal> {
     static CU_GET_EXPORT_TABLE: LazyLock<
@@ -66,6 +66,30 @@ pub trait ReprUsize {
     extern "C" fn format_status(x: usize) -> ByteVecFfi;
 }
 
+impl ReprUsize for CUresult {
+    const INTERNAL_ERROR: usize = CUerror::UNKNOWN.0.get() as usize;
+
+    fn to_usize(self) -> usize {
+        match self {
+            CUresult::SUCCESS => 0,
+            Err(err) => err.0.get() as usize,
+        }
+    }
+
+    fn from_usize(x: usize) -> Self {
+        match NonZero::new(x as u32) {
+            None => Ok(()),
+            Some(err) => Err(CUerror(err)),
+        }
+    }
+
+    extern "C" fn format_status(x: usize) -> ByteVecFfi {
+        let mut writer = Vec::new();
+        format::CudaDisplay::write(&Self::from_usize(x), "", 0, &mut writer).ok();
+        ByteVecFfi::new(writer)
+    }
+}
+
 impl ReprUsize for usize {
     fn to_usize(self) -> usize {
         self
@@ -77,13 +101,7 @@ impl ReprUsize for usize {
 
     extern "C" fn format_status(x: usize) -> ByteVecFfi {
         let mut writer = Vec::new();
-        format::CudaDisplay::write(
-            &cuda_types::cublas::cublasStatus_t::from_usize(x),
-            "",
-            0,
-            &mut writer,
-        )
-        .ok();
+        format::CudaDisplay::write(&Self::from_usize(x), "", 0, &mut writer).ok();
         ByteVecFfi::new(writer)
     }
 }
@@ -99,13 +117,7 @@ impl<T> ReprUsize for *const T {
 
     extern "C" fn format_status(x: usize) -> ByteVecFfi {
         let mut writer = Vec::new();
-        format::CudaDisplay::write(
-            &cuda_types::cublas::cublasStatus_t::from_usize(x),
-            "",
-            0,
-            &mut writer,
-        )
-        .ok();
+        format::CudaDisplay::write(&x, "", 0, &mut writer).ok();
         ByteVecFfi::new(writer)
     }
 }
@@ -124,13 +136,7 @@ impl ReprUsize for cuda_types::cublas::cublasStatus_t {
 
     extern "C" fn format_status(x: usize) -> ByteVecFfi {
         let mut writer = Vec::new();
-        format::CudaDisplay::write(
-            &cuda_types::cublas::cublasStatus_t::from_usize(x),
-            "",
-            0,
-            &mut writer,
-        )
-        .ok();
+        format::CudaDisplay::write(&Self::from_usize(x), "", 0, &mut writer).ok();
         ByteVecFfi::new(writer)
     }
 }

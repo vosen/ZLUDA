@@ -15,8 +15,6 @@ use std::sync::LazyLock;
 use std::{collections::HashMap, env, error::Error, fs, path::PathBuf, sync::Mutex};
 use std::{io, mem, ptr, usize};
 
-#[macro_use]
-extern crate lazy_static;
 extern crate cuda_types;
 
 struct DynamicFn<T> {
@@ -171,57 +169,57 @@ impl ::dark_api::zluda_dump::CudaDarkApi for InternalTableImpl {
 static EXPORT_TABLE: ::dark_api::cuda::CudaDarkApiGlobalTable =
     ::dark_api::cuda::CudaDarkApiGlobalTable::new::<DarkApiDump>();
 
-macro_rules! dark_api_fn_print_redirect {
+macro_rules! dark_api_fn_redirect_log {
     (
         $iface:ident {
             $([$index:expr] = $fn_:ident ( $($arg_id:ident: $arg_type:ty),* ) -> $ret_type:ty ),+
         }
     ) => {
             $(
-            unsafe extern "system" fn $fn_(
-                $($arg_id: $arg_type),*
-            ) -> $ret_type {
-                let global_state = crate::GLOBAL_STATE2.lock();
-                let global_state_ref_cell = &*global_state;
-                let mut global_state_ref_mut = global_state_ref_cell.borrow_mut();
-                let global_state = &mut *global_state_ref_mut;
-                let log_guard = crate::OuterCallGuard {
-                    writer: &mut global_state.log_writer,
-                    log_root: &global_state.log_stack,
-                };
-                let original_result = {
-                    let mut logger = RefMut::map(global_state.log_stack.borrow_mut(), |log_stack| {
-                        log_stack.enter()
-                    });
-                    logger.name = CudaFunctionName::Dark {
-                        guid: paste::paste! { ::dark_api::cuda:: [< $iface:camel >] ::GUID  },
-                        index: $index,
+                unsafe extern "system" fn $fn_(
+                    $($arg_id: $arg_type),*
+                ) -> $ret_type {
+                    use zluda_dump_common::ReprUsize;
+                    let original_fn = {
+                        let dark_api = DARK_API_STATE.lock().unwrap();
+                        let (original_table, _) = dark_api
+                            .overrides
+                            .get(&crate::dark_api::CUuuidWrapper(
+                                paste::paste! { ::dark_api::cuda:: [< $iface:camel >] ::GUID  },
+                            ))
+                            .unwrap();
+                        mem::transmute::<
+                            _,
+                            unsafe extern "system" fn(
+                                $($arg_id: $arg_type),*
+                            ) -> $ret_type,
+                        >(*((*original_table).add($index)))
                     };
-                    let dark_api = DARK_API_STATE.lock().unwrap();
-                    let (original_table, _) = dark_api
-                        .overrides
-                        .get(&crate::dark_api::CUuuidWrapper(
-                            paste::paste! { ::dark_api::cuda:: [< $iface:camel >] ::GUID  },
-                        ))
-                        .unwrap();
-                    let original_fn = mem::transmute::<
-                        _,
-                        unsafe extern "system" fn(
-                            $($arg_id: $arg_type),*
-                        ) -> $ret_type,
-                    >(*((*original_table).add($index)));
-                    let original_result = original_fn( $($arg_id),*);
-                    let mut args = Vec::new();
-                    ::dark_api::cuda::format::$fn_(&mut args, $($arg_id),*).ok();
-                    logger.args = Some(args);
-                    let mut output = Vec::new();
-                    ::format::CudaDisplay::write(&original_result, "", 0, &mut output).ok();
-                    logger.output = Some(output);
-                    original_result
-                };
-                drop(log_guard);
-                original_result
-            }
+                    let format_args = || {
+                        let mut formatted_args = Vec::new();
+                        ::dark_api::cuda::format::$fn_ (
+                                &mut formatted_args
+                                $(,$arg_id)*
+                        ).ok();
+                        formatted_args
+                    };
+                    let extract_fn_ptr = |_: &mut GlobalDelayedState, _: &mut FnCallLog| { Some(()) };
+                    let cuda_call = |_: () | {
+                       ReprUsize::to_usize(original_fn( $( $arg_id ),* ))
+                    };
+                    ReprUsize::from_usize(GlobalState2::under_lock(
+                        CudaFunctionName::Dark {
+                            guid: paste::paste! { ::dark_api::cuda:: [< $iface:camel >] ::GUID  },
+                            index: $index,
+                        },
+                        Some(format_args),
+                        <$ret_type as ReprUsize>::INTERNAL_ERROR,
+                        |status| <$ret_type as ReprUsize>::format_status(status).to_vec(),
+                        extract_fn_ptr,
+                        cuda_call,
+                        move |_, _, _, _| {}
+                    ))
+                }
             )+
     };
 }
@@ -229,7 +227,7 @@ macro_rules! dark_api_fn_print_redirect {
 struct DarkApiDump;
 
 impl ::dark_api::cuda::CudaDarkApi for DarkApiDump {
-    dark_api_fn_print_redirect! {
+    dark_api_fn_redirect_log! {
         CUDART_INTERFACE {
             [1] = get_module_from_cubin(
                 module: *mut cuda_types::cuda::CUmodule,
@@ -257,14 +255,14 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApiDump {
         }
     }
 
-    dark_api_fn_print_redirect! {
+    dark_api_fn_redirect_log! {
         TOOLS_RUNTIME_CALLBACK_HOOKS {
             [2] = runtime_callback_hooks_fn2(ptr: *mut *mut std::ffi::c_void, size: *mut usize) -> (),
             [6] = runtime_callback_hooks_fn6(ptr: *mut *mut std::ffi::c_void, size: *mut usize) -> ()
         }
     }
 
-    dark_api_fn_print_redirect! {
+    dark_api_fn_redirect_log! {
         CONTEXT_LOCAL_STORAGE_INTERFACE_V0301 {
             [0] = context_local_storage_ctor(
                 context: cuda_types::cuda::CUcontext,
@@ -289,7 +287,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApiDump {
         }
     }
 
-    dark_api_fn_print_redirect! {
+    dark_api_fn_redirect_log! {
         CTX_CREATE_BYPASS {
             [1] = ctx_create_v2_bypass(
                 pctx: *mut cuda_types::cuda::CUcontext,
@@ -299,7 +297,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApiDump {
         }
     }
 
-    dark_api_fn_print_redirect! {
+    dark_api_fn_redirect_log! {
         HEAP_ACCESS {
             [1] = heap_alloc(
                 heap_alloc_record_ptr: *mut *const std::ffi::c_void, // HeapAllocRecord
@@ -313,7 +311,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApiDump {
         }
     }
 
-    dark_api_fn_print_redirect! {
+    dark_api_fn_redirect_log! {
         DEVICE_EXTENDED_RT {
             [5] = device_get_attribute_ext(
                 dev: cuda_types::cuda::CUdevice,
@@ -413,7 +411,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApiDump {
         original_result
     }
 
-    dark_api_fn_print_redirect! {
+    dark_api_fn_redirect_log! {
         UNKNOWN_CHECKS {
             [2] = context_check(
                 ctx_in: cuda_types::cuda::CUcontext,
@@ -501,8 +499,8 @@ unsafe fn cuGetExportTable_impl(
     // requirements about types that are very difficult to fulfill here.
     // This particular function does not call any public CUDA functions so it
     // should be all fine
-    let mut global_state = GLOBAL_STATE2.lock();
-    let mut global_state = &mut *global_state.borrow_mut();
+    let global_state = GLOBAL_STATE2.lock();
+    let global_state = &mut *global_state.borrow_mut();
     let panic_guard = OuterCallGuard {
         writer: &mut global_state.log_writer,
         log_root: &global_state.log_stack,
@@ -537,7 +535,7 @@ unsafe fn cuGetExportTable_impl(
     logger.args = Some(args);
     logger.output = Some(format_curesult(original_result));
     original_result?;
-    let maybe_error = cuGetExportTable_override(result, guid)?;
+    let maybe_error = cu_get_export_table_override(result, guid)?;
     if let Some(error) = maybe_error {
         logger.log(error);
     }
@@ -547,7 +545,7 @@ unsafe fn cuGetExportTable_impl(
 static DARK_API_STATE: LazyLock<Mutex<DarkApiState2>> =
     LazyLock::new(|| Mutex::new(DarkApiState2::new()));
 
-fn cuGetExportTable_override(
+fn cu_get_export_table_override(
     result: &mut *const c_void,
     guid: &CUuuid_st,
 ) -> Result<Option<ErrorEntry>, CUerror> {
@@ -702,13 +700,13 @@ cuda_function_declarations!(
     extern_redirect,
     extern_redirect_with_post
         <= [
-            cuModuleLoad //cuModuleLoadData,
-                         //cuModuleLoadDataEx,
-                         //cuGetExportTable,
-                         //cuModuleGetFunction,
-                         //cuDeviceGetAttribute,
-                         //cuDeviceComputeCapability,
-                         //cuModuleLoadFatBinary
+            cuModuleLoad,
+            cuModuleLoadData,
+            cuModuleLoadDataEx,
+            cuModuleGetFunction,
+            cuDeviceGetAttribute,
+            cuDeviceComputeCapability,
+            cuModuleLoadFatBinary
         ],
     override_fn_core <= [cuGetProcAddress, cuGetProcAddress_v2],
     override_fn_full <= [cuGetExportTable],
@@ -720,10 +718,6 @@ mod log;
 #[cfg_attr(not(windows), path = "os_unix.rs")]
 mod os;
 mod trace;
-
-lazy_static! {
-    static ref GLOBAL_STATE: Mutex<GlobalState> = Mutex::new(GlobalState::new());
-}
 
 struct GlobalState2 {
     log_writer: log::Writer,
@@ -859,7 +853,7 @@ impl GlobalState2 {
             )
         }))
         .unwrap_or(internal_error)
-    }
+    } 
 }
 
 trait CudaResult: Copy + format::CudaDisplay {
@@ -1268,71 +1262,6 @@ pub struct ModuleDump {
     kernels_args: Option<HashMap<String, Vec<usize>>>,
 }
 
-fn handle_cuda_function_call(
-    func: &'static str,
-    original_cuda_fn: impl FnOnce(&mut CudaDynamicFns) -> Option<CUresult>,
-    arguments_writer: Box<dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>>,
-) -> CUresult {
-    handle_cuda_function_call_with_probes(
-        func,
-        || (),
-        original_cuda_fn,
-        arguments_writer,
-        |_, _, _, _| (),
-    )
-}
-
-fn handle_cuda_function_call_with_probes<T, PostFn>(
-    func: &'static str,
-    pre_probe: impl FnOnce() -> T,
-    original_cuda_fn: impl FnOnce(&mut CudaDynamicFns) -> Option<CUresult>,
-    arguments_writer: Box<dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>>,
-    post_probe: PostFn,
-) -> CUresult
-where
-    for<'a> PostFn: FnOnce(&'a mut log::FunctionLogger, &'a mut trace::StateTracker, T, CUresult),
-{
-    let global_state_mutex = &*GLOBAL_STATE;
-    // We unwrap because there's really no sensible thing we could do,
-    // alternatively we could return a CUDA error, but I think it's fine to
-    // crash. This is a diagnostic utility, if the lock was poisoned we can't
-    // extract any useful trace or logging anyway
-    let global_state = &mut *global_state_mutex.lock().unwrap();
-    let (mut logger, delayed_state) = match global_state.delayed_state {
-        LateInit::Success(ref mut delayed_state) => (
-            global_state.log_factory.get_logger(func, arguments_writer),
-            delayed_state,
-        ),
-        // There's no libcuda to load, so we might as well panic
-        LateInit::Error => panic!(),
-        LateInit::Unitialized => {
-            let (new_delayed_state, logger) =
-                GlobalDelayedState::new(func, arguments_writer, &mut global_state.log_factory);
-            global_state.delayed_state = new_delayed_state;
-            (logger, global_state.delayed_state.as_mut().unwrap())
-        }
-    };
-    let pre_result = pre_probe();
-    let maybe_cu_result = original_cuda_fn(&mut delayed_state.libcuda);
-    let cu_result = match maybe_cu_result {
-        Some(result) => result,
-        None => {
-            logger.log(log::ErrorEntry::ErrorBox(
-                format!("No function {} in the underlying CUDA library", func).into(),
-            ));
-            CUresult::ERROR_UNKNOWN
-        }
-    };
-    logger.result = maybe_cu_result;
-    post_probe(
-        &mut logger,
-        &mut delayed_state.cuda_state,
-        pre_result,
-        cu_result,
-    );
-    cu_result
-}
-
 #[derive(Clone, Copy)]
 enum AllocLocation {
     Device,
@@ -1363,8 +1292,8 @@ pub(crate) fn cuModuleLoad_Post(
 pub(crate) fn cuModuleLoadData_Post(
     module: *mut CUmodule,
     raw_image: *const ::std::os::raw::c_void,
-    fn_logger: &mut FnCallLog,
     state: &mut trace::StateTracker,
+    fn_logger: &mut FnCallLog,
     result: CUresult,
 ) {
     if result.is_err() {
@@ -1380,25 +1309,11 @@ pub(crate) fn cuModuleLoadDataEx_Post(
     _numOptions: ::std::os::raw::c_uint,
     _options: *mut CUjit_option,
     _optionValues: *mut *mut ::std::os::raw::c_void,
+    state: &mut trace::StateTracker,
     fn_logger: &mut FnCallLog,
-    state: &mut trace::StateTracker,
     result: CUresult,
 ) {
-    cuModuleLoadData_Post(module, raw_image, fn_logger, state, result)
-}
-
-#[allow(non_snake_case)]
-pub(crate) fn cuGetExportTable_Post(
-    ppExportTable: *mut *const ::std::os::raw::c_void,
-    pExportTableId: *const CUuuid,
-    _fn_logger: &mut log::FunctionLogger,
-    state: &mut trace::StateTracker,
-    result: CUresult,
-) {
-    if result.is_err() {
-        return;
-    }
-    dark_api::override_export_table(ppExportTable, pExportTableId, state)
+    cuModuleLoadData_Post(module, raw_image, state, fn_logger, result)
 }
 
 #[allow(non_snake_case)]
@@ -1406,8 +1321,8 @@ pub(crate) fn cuModuleGetFunction_Post(
     _hfunc: *mut CUfunction,
     _hmod: CUmodule,
     _name: *const ::std::os::raw::c_char,
-    _fn_logger: &mut log::FunctionLogger,
     _state: &mut trace::StateTracker,
+    _fn_logger: &mut FnCallLog,
     _result: CUresult,
 ) {
 }
@@ -1417,8 +1332,8 @@ pub(crate) fn cuDeviceGetAttribute_Post(
     _pi: *mut ::std::os::raw::c_int,
     _attrib: CUdevice_attribute,
     _dev: CUdevice,
-    _fn_logger: &mut log::FunctionLogger,
     _state: &mut trace::StateTracker,
+    _fn_logger: &mut FnCallLog,
     _result: CUresult,
 ) {
 }
@@ -1428,8 +1343,8 @@ pub(crate) fn cuDeviceComputeCapability_Post(
     major: *mut ::std::os::raw::c_int,
     minor: *mut ::std::os::raw::c_int,
     _dev: CUdevice,
-    _fn_logger: &mut log::FunctionLogger,
     state: &mut trace::StateTracker,
+    _fn_logger: &mut FnCallLog,
     _result: CUresult,
 ) {
     if let Some((major_override, minor_override)) = state.override_cc {
@@ -1444,8 +1359,8 @@ pub(crate) fn cuDeviceComputeCapability_Post(
 pub(crate) fn cuModuleLoadFatBinary_Post(
     _module: *mut CUmodule,
     _fatCubin: *const ::std::os::raw::c_void,
-    _fn_logger: &mut log::FunctionLogger,
     _state: &mut trace::StateTracker,
+    _fn_logger: &mut FnCallLog,
     result: CUresult,
 ) {
     if result.is_ok() {
