@@ -224,7 +224,7 @@ dark_api! {
         [0] = SIZE_OF,
         [1] = get_module_from_cubin(
             module: *mut cuda_types::cuda::CUmodule,
-            fatbinc_wrapper: *const std::ffi::c_void // FatbincWrapper
+            fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper
         ) -> (),
         [2] = cudart_interface_fn2(
             pctx: *mut cuda_types::cuda::CUcontext,
@@ -232,14 +232,14 @@ dark_api! {
         ) -> cuda_types::cuda::CUresult,
         [6] = get_module_from_cubin_ext1(
             result: *mut cuda_types::cuda::CUmodule,
-            fatbinc_wrapper: *const std::ffi::c_void, // FatbincWrapper
+            fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper,
             arg3: *mut std::ffi::c_void,
             arg4: *mut std::ffi::c_void,
             arg5: u32
         ) -> cuda_types::cuda::CUresult,
         [7] = cudart_interface_fn7(arg1: usize) -> cuda_types::cuda::CUresult,
         [8] = get_module_from_cubin_ext2(
-            fatbinc_wrapper: *const std::ffi::c_void, // FatbinHeader
+            fatbin_header: *const cuda_types::dark_api::FatbinHeader,
             result: *mut cuda_types::cuda::CUmodule,
             arg3: *mut std::ffi::c_void,
             arg4: *mut std::ffi::c_void,

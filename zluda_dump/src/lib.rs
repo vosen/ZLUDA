@@ -224,29 +224,133 @@ macro_rules! dark_api_fn_redirect_log {
     };
 }
 
+macro_rules! dark_api_fn_redirect_log_post {
+    (
+        $iface:ident {
+            $([$index:expr] = $fn_:ident ( $($arg_id:ident: $arg_type:ty),* ) -> $ret_type:ty ),+
+        }
+    ) => {
+            $(
+                unsafe extern "system" fn $fn_(
+                    $($arg_id: $arg_type),*
+                ) -> $ret_type {
+                    use zluda_dump_common::ReprUsize;
+                    let original_fn = {
+                        let dark_api = DARK_API_STATE.lock().unwrap();
+                        let (original_table, _) = dark_api
+                            .overrides
+                            .get(&crate::dark_api::CUuuidWrapper(
+                                paste::paste! { ::dark_api::cuda:: [< $iface:camel >] ::GUID  },
+                            ))
+                            .unwrap();
+                        mem::transmute::<
+                            _,
+                            unsafe extern "system" fn(
+                                $($arg_id: $arg_type),*
+                            ) -> $ret_type,
+                        >(*((*original_table).add($index)))
+                    };
+                    let format_args = || {
+                        let mut formatted_args = Vec::new();
+                        ::dark_api::cuda::format::$fn_ (
+                                &mut formatted_args
+                                $(,$arg_id)*
+                        ).ok();
+                        formatted_args
+                    };
+                    let extract_fn_ptr = |_: &mut GlobalDelayedState, _: &mut FnCallLog| { Some(()) };
+                    let cuda_call = |_: () | {
+                       ReprUsize::to_usize(original_fn( $( $arg_id ),* ))
+                    };
+                    ReprUsize::from_usize(GlobalState2::under_lock(
+                        CudaFunctionName::Dark {
+                            guid: paste::paste! { ::dark_api::cuda:: [< $iface:camel >] ::GUID  },
+                            index: $index,
+                        },
+                        Some(format_args),
+                        <$ret_type as ReprUsize>::INTERNAL_ERROR,
+                        |status| <$ret_type as ReprUsize>::format_status(status).to_vec(),
+                        extract_fn_ptr,
+                        cuda_call,
+                        move |state, logger, _, cuda_result| paste! { Self:: [<$fn_ _post>] } ( $( $arg_id ),* , &mut state.cuda_state, logger, <$ret_type as ReprUsize>::from_usize(cuda_result))
+                    ))
+                }
+            )+
+    };
+}
+
 struct DarkApiDump;
+
+impl DarkApiDump {
+    fn get_module_from_cubin_post(
+        module: *mut cuda_types::cuda::CUmodule,
+        fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper,
+        state: &mut trace::StateTracker,
+        fn_logger: &mut FnCallLog,
+        _result: (),
+    ) {
+        fn_logger.try_(|fn_logger| unsafe {
+            trace::record_submodules_from_wrapped_fatbin(*module, fatbinc_wrapper, fn_logger, state)
+        });
+    }
+
+    fn get_module_from_cubin_ext1_post(
+        module: *mut cuda_types::cuda::CUmodule,
+        fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper,
+        _arg3: *mut std::ffi::c_void,
+        _arg4: *mut std::ffi::c_void,
+        _arg5: u32,
+        state: &mut trace::StateTracker,
+        fn_logger: &mut FnCallLog,
+        _result: CUresult,
+    ) {
+        fn_logger.try_(|fn_logger| unsafe {
+            trace::record_submodules_from_wrapped_fatbin(*module, fatbinc_wrapper, fn_logger, state)
+        });
+    }
+
+    fn get_module_from_cubin_ext2_post(
+        fatbin_header: *const cuda_types::dark_api::FatbinHeader,
+        module: *mut cuda_types::cuda::CUmodule,
+        _arg3: *mut std::ffi::c_void,
+        _arg4: *mut std::ffi::c_void,
+        _arg5: u32,
+        state: &mut trace::StateTracker,
+        fn_logger: &mut FnCallLog,
+        _result: CUresult,
+    ) {
+        fn_logger.try_(|fn_logger| unsafe {
+            trace::record_submodules_from_fatbin(*module, fatbin_header, fn_logger, state)
+        });
+    }
+}
 
 impl ::dark_api::cuda::CudaDarkApi for DarkApiDump {
     dark_api_fn_redirect_log! {
         CUDART_INTERFACE {
-            [1] = get_module_from_cubin(
-                module: *mut cuda_types::cuda::CUmodule,
-                fatbinc_wrapper: *const std::ffi::c_void // FatbincWrapper
-            ) -> (),
             [2] = cudart_interface_fn2(
                 pctx: *mut cuda_types::cuda::CUcontext,
                 dev: cuda_types::cuda::CUdevice
             ) -> cuda_types::cuda::CUresult,
+            [7] = cudart_interface_fn7(arg1: usize) -> cuda_types::cuda::CUresult
+        }
+    }
+
+    dark_api_fn_redirect_log_post! {
+        CUDART_INTERFACE {
+            [1] = get_module_from_cubin(
+                module: *mut cuda_types::cuda::CUmodule,
+                fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper // FatbincWrapper
+            ) -> (),
             [6] = get_module_from_cubin_ext1(
                 result: *mut cuda_types::cuda::CUmodule,
-                fatbinc_wrapper: *const std::ffi::c_void, // FatbincWrapper
+                fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper, // FatbincWrapper
                 arg3: *mut std::ffi::c_void,
                 arg4: *mut std::ffi::c_void,
                 arg5: u32
             ) -> cuda_types::cuda::CUresult,
-            [7] = cudart_interface_fn7(arg1: usize) -> cuda_types::cuda::CUresult,
             [8] = get_module_from_cubin_ext2(
-                fatbinc_wrapper: *const std::ffi::c_void, // FatbinHeader
+                fatbinc_wrapper: *const cuda_types::dark_api::FatbinHeader, // FatbinHeader
                 result: *mut cuda_types::cuda::CUmodule,
                 arg3: *mut std::ffi::c_void,
                 arg4: *mut std::ffi::c_void,
@@ -666,7 +770,7 @@ macro_rules! extern_redirect_with_post {
                     ).ok();
                     formatted_args
                 };
-                let extract_fn_ptr = |state: &mut GlobalDelayedState, log: &mut FnCallLog| {
+                let extract_fn_ptr = |state: &mut GlobalDelayedState, _: &mut FnCallLog| {
                     paste::paste! {
                         state.libcuda. [<get_ $fn_name>]()
                     }
@@ -706,7 +810,9 @@ cuda_function_declarations!(
             cuModuleGetFunction,
             cuDeviceGetAttribute,
             cuDeviceComputeCapability,
-            cuModuleLoadFatBinary
+            cuModuleLoadFatBinary,
+            cuLibraryGetModule,
+            cuLibraryLoadData
         ],
     override_fn_core <= [cuGetProcAddress, cuGetProcAddress_v2],
     override_fn_full <= [cuGetExportTable],
@@ -853,7 +959,7 @@ impl GlobalState2 {
             )
         }))
         .unwrap_or(internal_error)
-    } 
+    }
 }
 
 trait CudaResult: Copy + format::CudaDisplay {
@@ -970,6 +1076,16 @@ impl FnCallLog {
         match fn_() {
             Err(err) => {
                 self.subcalls.push(LogEntry::Error(err));
+                None
+            }
+            Ok(x) => Some(x),
+        }
+    }
+
+    fn try_<T>(&mut self, f: impl FnOnce(&mut Self) -> Result<T, ErrorEntry>) -> Option<T> {
+        match f(self) {
+            Err(e) => {
+                self.log(e);
                 None
             }
             Ok(x) => Some(x),
@@ -1280,11 +1396,8 @@ pub(crate) fn cuModuleLoad_Post(
     fname: *const ::std::os::raw::c_char,
     state: &mut trace::StateTracker,
     fn_logger: &mut FnCallLog,
-    result: CUresult,
+    _result: CUresult,
 ) {
-    if result.is_err() {
-        return;
-    }
     state.record_new_module_file(unsafe { *module }, fname, fn_logger)
 }
 
@@ -1294,11 +1407,8 @@ pub(crate) fn cuModuleLoadData_Post(
     raw_image: *const ::std::os::raw::c_void,
     state: &mut trace::StateTracker,
     fn_logger: &mut FnCallLog,
-    result: CUresult,
+    _result: CUresult,
 ) {
-    if result.is_err() {
-        return;
-    }
     state.record_new_module(unsafe { *module }, raw_image, fn_logger)
 }
 
@@ -1361,9 +1471,49 @@ pub(crate) fn cuModuleLoadFatBinary_Post(
     _fatCubin: *const ::std::os::raw::c_void,
     _state: &mut trace::StateTracker,
     _fn_logger: &mut FnCallLog,
-    result: CUresult,
+    _result: CUresult,
 ) {
-    if result.is_ok() {
-        panic!()
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuLibraryGetModule_Post(
+    module: *mut cuda_types::cuda::CUmodule,
+    library: cuda_types::cuda::CUlibrary,
+    state: &mut trace::StateTracker,
+    fn_logger: &mut FnCallLog,
+    _result: CUresult,
+) {
+    match state.libraries.get(&library).copied() {
+        None => fn_logger.log(log::ErrorEntry::UnknownLibrary(library)),
+        Some(code) => {
+            fn_logger.try_(|fn_logger| unsafe {
+                trace::record_submodules_from_wrapped_fatbin(
+                    *module,
+                    code.0.cast(),
+                    fn_logger,
+                    state,
+                )
+            });
+        }
     }
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuLibraryLoadData_Post(
+    library: *mut cuda_types::cuda::CUlibrary,
+    code: *const ::core::ffi::c_void,
+    _jit_options: *mut cuda_types::cuda::CUjit_option,
+    _jit_options_values: *mut *mut ::core::ffi::c_void,
+    _num_jit_options: ::core::ffi::c_uint,
+    _library_options: *mut cuda_types::cuda::CUlibraryOption,
+    _library_option_values: *mut *mut ::core::ffi::c_void,
+    _num_library_options: ::core::ffi::c_uint,
+    state: &mut trace::StateTracker,
+    _fn_logger: &mut FnCallLog,
+    _result: CUresult,
+) {
+    // TODO: this is not great, the lifetime of `code` is not guaranteed to be 'static
+    state
+        .libraries
+        .insert(unsafe { *library }, trace::CodePointer(code));
 }

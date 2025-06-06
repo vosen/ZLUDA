@@ -157,32 +157,7 @@ fn cudart_interface_fn1_impl(pctx: *mut CUcontext, dev: c_int) -> hipError_t {
     hipError_t::hipSuccess
 }
 
-/*
-fat_cubin:
-typedef struct {
-  int magic;
-  int version;
-  const unsigned long long* data;
-  void *filename_or_fatbins;  /* version 1: offline filename,
-                               * version 2: array of prelinked fatbins */
-} __fatBinC_Wrapper_t;
 
-data start with this header:
-#define FATBIN_MAGIC 0xBA55ED50U
-#define OLD_STYLE_FATBIN_MAGIC 0x1EE55A01U
-#define FATBIN_VERSION 0x0001U
-
-struct fatbinary_ALIGN_(8) fatBinaryHeader
-{
-  unsigned int           magic;   // FATBIN_MAGIC
-  unsigned short         version; // FATBIN_VERSION
-  unsigned short         headerSize;
-  unsigned long long int fatSize; // size of the entire fat binary excluding this header
-};
-
-there's binary data after header
-
-*/
 
 const FATBINC_MAGIC: c_uint = 0x466243B1;
 const FATBINC_VERSION: c_uint = 0x1;
