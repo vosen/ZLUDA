@@ -19,24 +19,6 @@ pub const CUSPARSE_VER_BUILD: u32 = 93;
 pub const CUSPARSE_VERSION: u32 = 12508;
 /// Result information returned by cudaGraphExecUpdate
 pub type cudaGraphExecUpdateResultInfo = cudaGraphExecUpdateResultInfo_st;
-/// Information describing an async notification event
-#[repr(C)]
-pub struct cudaAsyncNotificationInfo {
-    pub type_: cudaAsyncNotificationType,
-    pub info: cudaAsyncNotificationInfo__bindgen_ty_1,
-}
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub union cudaAsyncNotificationInfo__bindgen_ty_1 {
-    pub overBudget: cudaAsyncNotificationInfo__bindgen_ty_1__bindgen_ty_1,
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct cudaAsyncNotificationInfo__bindgen_ty_1__bindgen_ty_1 {
-    pub bytesOverBudget: ::core::ffi::c_ulonglong,
-}
-/// Information describing an async notification event
-pub type cudaAsyncNotificationInfo_t = cudaAsyncNotificationInfo;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct cusparseContext {

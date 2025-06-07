@@ -2,7 +2,8 @@ use proc_macro2::Span;
 use quote::{format_ident, quote, ToTokens};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::{
-    borrow::Cow, collections::hash_map, fs::File, io::Write, iter, path::PathBuf, str::FromStr,
+    borrow::Cow, cmp, collections::hash_map, ffi::CString, fs::File, io::Write, iter, mem,
+    path::PathBuf, ptr, str::FromStr,
 };
 use syn::{
     parse_quote, punctuated::Punctuated, visit_mut::VisitMut, Abi, Fields, FieldsUnnamed, FnArg,
@@ -10,19 +11,133 @@ use syn::{
     PathArguments, PathSegment, Signature, Type, TypePath, UseTree,
 };
 
+// Source: https://developer.nvidia.com/cuda-toolkit-archive
+static KNOWN_CUDA_VERSIONS: &[&'static str] = &[
+    "12.8.1", "12.8.0", "12.6.3", "12.6.2", "12.6.1", "12.6.0", "12.5.1", "12.5.0", "12.4.1",
+    "12.4.0", "12.3.2", "12.3.1", "12.3.0", "12.2.2", "12.2.1", "12.2.0", "12.1.1", "12.1.0",
+    "12.0.1", "12.0.0", "11.8.0", "11.7.1", "11.7.0", "11.6.2", "11.6.1", "11.6.0", "11.5.2",
+    "11.5.1", "11.5.0", "11.4.4", "11.4.3", "11.4.2", "11.4.1", "11.4.0", "11.3.1", "11.3.0",
+    "11.2.2", "11.2.1", "11.2.0", "11.1.1", "11.1.0", "11.0.3", "11.0.2", "11.0.1", "11.0.0",
+    "10.2", "10.1", "10.0", "9.2", "9.1", "9.0", "8.0", "7.5", "7.0", "6.5", "6.0", "5.5", "5.0",
+    "4.2", "4.1", "4.0", "3.2", "3.1", "3.0", "2.3", "2.2", "2.1", "2.0", "1.1", "1.0",
+];
+
 fn main() {
     let crate_root = PathBuf::from_str(env!("CARGO_MANIFEST_DIR")).unwrap();
     generate_hip_runtime(
         &crate_root,
         &["..", "ext", "hip_runtime-sys", "src", "lib.rs"],
     );
-    generate_cuda(&crate_root);
+    let cuda_functions = generate_cuda(&crate_root);
+    generate_process_address_table(&crate_root, cuda_functions);
     generate_ml(&crate_root);
     generate_cublas(&crate_root);
     generate_cublaslt(&crate_root);
-    generate_cudnn(&crate_root);
     generate_cufft(&crate_root);
     generate_cusparse(&crate_root);
+    generate_cudnn(&crate_root);
+}
+
+fn generate_process_address_table(crate_root: &PathBuf, mut cuda_fns: Vec<Ident>) {
+    cuda_fns.sort_unstable();
+    let mut versions = KNOWN_CUDA_VERSIONS
+        .iter()
+        .copied()
+        .map(cuda_numeric_version)
+        .collect::<Vec<_>>();
+    versions.sort_unstable();
+    let library =
+        unsafe { libloading::Library::new("/usr/lib/x86_64-linux-gnu/libcuda.so.1") }.unwrap();
+    let cu_get_proc_address = unsafe {
+        library.get::<unsafe extern "system" fn(
+            symbol: *const ::core::ffi::c_char,
+            pfn: *mut *mut ::core::ffi::c_void,
+            cudaVersion: ::core::ffi::c_int,
+            flags: cuda_types::cuda::cuuint64_t,
+            symbolStatus: *mut cuda_types::cuda::CUdriverProcAddressQueryResult,
+        ) -> cuda_types::cuda::CUresult>(b"cuGetProcAddress_v2\0")
+    }
+    .unwrap();
+    let mut result = Vec::new();
+    for fn_ in cuda_fns {
+        let mut known_variants = FxHashMap::default();
+        for version in std::iter::successors(Some(1), |x| Some(x + 1)) {
+            let map_len = known_variants.len();
+            for thread_suffix in ["", "_ptds", "_ptsz"] {
+                let version = if version == 1 {
+                    "".to_string()
+                } else {
+                    format!("_v{}", version)
+                };
+                let fn_ = format!("{}{}{}", fn_, version, thread_suffix);
+                match unsafe { library.get::<*mut std::ffi::c_void>(fn_.as_bytes()) } {
+                    Ok(symbol) => {
+                        known_variants.insert(unsafe { symbol.into_raw() }.as_raw_ptr(), fn_);
+                    }
+                    Err(_) => {}
+                }
+            }
+            if known_variants.len() == map_len {
+                break;
+            }
+        }
+        let fn_ = fn_.to_string();
+        let symbol = CString::new(fn_.clone()).unwrap();
+        for flag in [
+            cuda_types::cuda::CUdriverProcAddress_flags::CU_GET_PROC_ADDRESS_DEFAULT,
+            cuda_types::cuda::CUdriverProcAddress_flags::CU_GET_PROC_ADDRESS_LEGACY_STREAM,
+            cuda_types::cuda::CUdriverProcAddress_flags::CU_GET_PROC_ADDRESS_PER_THREAD_DEFAULT_STREAM,
+            ] {
+                let mut breakpoints = Vec::new();
+                let mut last_result = None;
+                for version in versions.iter().copied() {
+                    let mut result = ptr::null_mut();
+                    let mut status = unsafe { mem::zeroed() };
+                    match unsafe { (cu_get_proc_address)(symbol.as_ptr(), &mut result, version, flag.0 as _, &mut status) } {
+                        Ok(()) => {}
+                        Err(cuda_types::cuda::CUerror::NOT_FOUND) => {
+                            continue;
+                        }
+                        Err(e) => panic!("{}", e.0)
+                    }
+                    if status != cuda_types::cuda::CUdriverProcAddressQueryResult::CU_GET_PROC_ADDRESS_SUCCESS {
+                        continue;
+                    }
+                    if Some(result) != last_result {
+                        last_result = Some(result);
+                        breakpoints.push((version, known_variants.get(&result).unwrap().clone()));
+                    }
+                }
+                breakpoints.sort_unstable_by_key(|(version, _)| cmp::Reverse(*version));
+                if !breakpoints.is_empty() {
+                    result.push((fn_.clone(), flag.0, breakpoints));
+                }
+            }
+    }
+    let mut path = crate_root.clone();
+    path.extend(["..", "zluda_bindgen", "src", "process_table.rs"]);
+    let mut file = File::create(path).unwrap();
+    writeln!(file, "match (name, flag) {{").unwrap();
+    for (fn_, version, breakpoints) in result {
+        writeln!(file, "    (b\"{fn_}\", {version}) => {{").unwrap();
+        for (version, name) in breakpoints {
+            writeln!(file, "        if version >= {version} {{").unwrap();
+            writeln!(file, "            return {name} as _;").unwrap();
+            writeln!(file, "        }}").unwrap();
+        }
+        writeln!(file, "        usize::MAX as _").unwrap();
+        writeln!(file, "    }}").unwrap();
+    }
+    writeln!(file, "    _ => 0usize as _").unwrap();
+    writeln!(file, "}}").unwrap();
+}
+
+fn cuda_numeric_version(version: &str) -> i32 {
+    let mut version = version.split('.').map(|s| s.parse::<i32>().unwrap());
+    let major = version.next().unwrap();
+    let minor = version.next().unwrap();
+    let patch = version.next().unwrap_or(0);
+    major * 1000 + minor * 10 + patch
 }
 
 fn generate_cufft(crate_root: &PathBuf) {
@@ -49,10 +164,36 @@ fn generate_cufft(crate_root: &PathBuf) {
         &module,
     );
     generate_types_library(
+        Some(LibraryOverride::CuFft),
         &crate_root,
         &["..", "cuda_types", "src", "cufft.rs"],
         &module,
-    )
+    );
+    generate_display_perflib(
+        &crate_root,
+        &["..", "format", "src", "format_generated_fft.rs"],
+        &["cuda_types", "cufft"],
+        &module,
+    );
+}
+
+fn get_functions(module: syn::File) -> Vec<Ident> {
+    module
+        .items
+        .iter()
+        .flat_map(|item| match item {
+            Item::ForeignMod(extern_) => {
+                extern_
+                    .items
+                    .iter()
+                    .filter_map(|foreign_item| match foreign_item {
+                        ForeignItem::Fn(fn_) => Some(fn_.sig.ident.clone()),
+                        _ => None,
+                    })
+            }
+            _ => unreachable!(),
+        })
+        .collect::<Vec<_>>()
 }
 
 fn generate_cusparse(crate_root: &PathBuf) {
@@ -61,6 +202,7 @@ fn generate_cusparse(crate_root: &PathBuf) {
         .allowlist_type("^cusparse.*")
         .allowlist_type(".*Info_t$")
         .allowlist_type(".*Info$")
+        .blocklist_type("^cudaAsync.*")
         .allowlist_function("^cusparse.*")
         .allowlist_var("^CUSPARSE_.*")
         .must_use_type("cusparseStatus_t")
@@ -77,10 +219,17 @@ fn generate_cusparse(crate_root: &PathBuf) {
         &module,
     );
     generate_types_library(
+        None,
         &crate_root,
         &["..", "cuda_types", "src", "cusparse.rs"],
         &module,
-    )
+    );
+    generate_display_perflib(
+        &crate_root,
+        &["..", "format", "src", "format_generated_sparse.rs"],
+        &["cuda_types", "cusparse"],
+        &module,
+    );
 }
 
 fn generate_cudnn(crate_root: &PathBuf) {
@@ -133,6 +282,12 @@ fn generate_cudnn(crate_root: &PathBuf) {
         &crate_root,
         "cudnn9",
         &["..", "cuda_base", "src", "cudnn9.rs"],
+        &cudnn9_module,
+    );
+    generate_display_perflib(
+        &crate_root,
+        &["..", "format", "src", "format_generated_dnn9.rs"],
+        &["cuda_types", "cudnn9"],
         &cudnn9_module,
     );
 }
@@ -482,14 +637,35 @@ fn generate_cublas(crate_root: &PathBuf) {
         &module,
     );
     generate_types_library(
+        None,
         &crate_root,
         &["..", "cuda_types", "src", "cublas.rs"],
         &module,
-    )
+    );
+    generate_display_perflib(
+        &crate_root,
+        &["..", "format", "src", "format_generated_blas.rs"],
+        &["cuda_types", "cublas"],
+        &module,
+    );
+}
+
+fn remove_type(module: &mut syn::File, type_name: &str) {
+    let items = std::mem::replace(&mut module.items, Vec::new());
+    let items = items
+        .into_iter()
+        .filter_map(|item| match item {
+            Item::Enum(enum_) if enum_.ident == type_name => None,
+            Item::Struct(struct_) if struct_.ident == type_name => None,
+            Item::Impl(impl_) if impl_.self_ty.to_token_stream().to_string() == type_name => None,
+            _ => Some(item),
+        })
+        .collect();
+    module.items = items;
 }
 
 fn generate_cublaslt(crate_root: &PathBuf) {
-    let cublas_header = new_builder()
+    let cublaslt_header = new_builder()
         .header("/usr/local/cuda/include/cublasLt.h")
         .allowlist_type("^cublas.*")
         .allowlist_function("^cublasLt.*")
@@ -500,21 +676,58 @@ fn generate_cublaslt(crate_root: &PathBuf) {
         .generate()
         .unwrap()
         .to_string();
-    let module: syn::File = syn::parse_str(&cublas_header).unwrap();
+    let cublaslt_internal_header = new_builder()
+        .header_contents(
+            "cublasLt_internal.h",
+            include_str!("../build/cublasLt_internal.h"),
+        )
+        .clang_args(["-x", "c++"])
+        .override_abi(bindgen::Abi::System, ".*")
+        .generate()
+        .unwrap()
+        .to_string()
+        // Simplest and dumbest way to do this
+        .replace("pub fn", "fn")
+        .replace(");", ") -> ();");
+    let module_blaslt_internal: syn::File = syn::parse_str(&cublaslt_internal_header).unwrap();
+    std::fs::write(
+        crate_root
+            .join("..")
+            .join("cuda_base")
+            .join("src")
+            .join("cublaslt_internal.rs"),
+        cublaslt_internal_header,
+    )
+    .unwrap();
+    let mut module_blas: syn::File = syn::parse_str(&cublaslt_header).unwrap();
+    remove_type(&mut module_blas, "cublasStatus_t");
     generate_functions(
         &crate_root,
         "cublaslt",
         &["..", "cuda_base", "src", "cublaslt.rs"],
-        &module,
+        &module_blas,
     );
     generate_types_library(
+        Some(LibraryOverride::CuBlasLt),
         &crate_root,
         &["..", "cuda_types", "src", "cublaslt.rs"],
-        &module,
-    )
+        &module_blas,
+    );
+    generate_display_perflib(
+        &crate_root,
+        &["..", "format", "src", "format_generated_blaslt.rs"],
+        &["cuda_types", "cublaslt"],
+        &module_blas,
+    );
+    generate_display_perflib(
+        &crate_root,
+        &["..", "format", "src", "format_generated_blaslt_internal.rs"],
+        &["cuda_types", "cublaslt"],
+        &module_blaslt_internal,
+    );
 }
 
-fn generate_cuda(crate_root: &PathBuf) {
+fn generate_cuda(crate_root: &PathBuf) -> Vec<Ident> {
     let cuda_header = new_builder()
         .header_contents("cuda_wrapper.h", include_str!("../build/cuda_wrapper.h"))
         .allowlist_type("^CU.*")
@@ -537,23 +750,24 @@ fn generate_cuda(crate_root: &PathBuf) {
         .unwrap()
         .to_string();
     let module: syn::File = syn::parse_str(&cuda_header).unwrap();
-    generate_functions(
+    let cuda_functions = get_functions(generate_functions(
         &crate_root,
         "cuda",
         &["..", "cuda_base", "src", "cuda.rs"],
         &module,
-    );
+    ));
     generate_types_cuda(
         &crate_root,
         &["..", "cuda_types", "src", "cuda.rs"],
         &module,
     );
-    generate_display(
+    generate_display_cuda(
         &crate_root,
-        &["..", "zluda_dump", "src", "format_generated.rs"],
+        &["..", "format", "src", "format_generated.rs"],
         &["cuda_types", "cuda"],
         &module,
-    )
+    );
+    cuda_functions
 }
 
 fn generate_ml(crate_root: &PathBuf) {
@@ -595,22 +809,42 @@ fn generate_ml(crate_root: &PathBuf) {
         &module,
     );
     generate_types_library(
+        None,
         &crate_root,
         &["..", "cuda_types", "src", "nvml.rs"],
         &module,
     );
 }
 
-fn generate_types_library(crate_root: &PathBuf, path: &[&str], module: &syn::File) {
+fn generate_types_library(
+    override_: Option<LibraryOverride>,
+    crate_root: &PathBuf,
+    path: &[&str],
+    module: &syn::File,
+) {
     let module = generate_types_library_impl(module);
     let mut output = crate_root.clone();
     output.extend(path);
-    let text = prettyplease::unparse(&module)
-        .replace("self::cudaDataType", "super::cuda::cudaDataType")
-        // complex as used by cuFFT
-        .replace(" cuComplex", " super::cuda::cuComplex")
-        .replace(" cuDoubleComplex", " super::cuda::cuDoubleComplex");
+    let mut text =
+        prettyplease::unparse(&module).replace("self::cudaDataType", "super::cuda::cudaDataType");
+    match override_ {
+        None => {}
+        Some(LibraryOverride::CuBlasLt) => {
+            text = text.replace(" cublasStatus_t", " super::cublas::cublasStatus_t");
+        }
+        Some(LibraryOverride::CuFft) => {
+            text = text
+                .replace(" cuComplex", " super::cuda::cuComplex")
+                .replace(" cuDoubleComplex", " super::cuda::cuDoubleComplex");
+        }
+    }
     write_rust_to_file(output, &text)
+}
+
+#[derive(Clone, Copy)]
+enum LibraryOverride {
+    CuBlasLt,
+    CuFft,
 }
 
 fn generate_types_library_impl(module: &syn::File) -> syn::File {
@@ -701,7 +935,12 @@ fn add_send_sync(items: &mut Vec<Item>, arg: &[&str]) {
     }
 }
 
-fn generate_functions(output: &PathBuf, submodule: &str, path: &[&str], module: &syn::File) {
+fn generate_functions(
+    output: &PathBuf,
+    submodule: &str,
+    path: &[&str],
+    module: &syn::File,
+) -> syn::File {
     let fns_ = module.items.iter().filter_map(|item| match item {
         Item::ForeignMod(extern_) => match &*extern_.items {
             [ForeignItem::Fn(fn_)] => Some(fn_),
@@ -709,18 +948,53 @@ fn generate_functions(output: &PathBuf, submodule: &str, path: &[&str], module: 
         },
         _ => None,
     });
+    /*
+    let prelude = match submodule {
+        "cublaslt" => Some(quote! {
+            use cuda_types::cublas::cublasStatus_t;
+        }),
+        "cublas" => Some(quote! {
+            use cuda_types::cublas::cublasStatus_t;
+        }),
+        _ => None,
+    };
+    */
     let mut module: syn::File = parse_quote! {
         extern "system" {
             #(#fns_)*
         }
     };
     let submodule = Ident::new(submodule, Span::call_site());
-    syn::visit_mut::visit_file_mut(&mut PrependCudaPath { module: submodule }, &mut module);
+    syn::visit_mut::visit_file_mut(
+        &mut PrependCudaPath {
+            module: vec![Ident::new("cuda_types", Span::call_site()), submodule],
+        },
+        &mut module,
+    );
     syn::visit_mut::visit_file_mut(&mut RemoveVisibility, &mut module);
     syn::visit_mut::visit_file_mut(&mut ExplicitReturnType, &mut module);
     let mut output = output.clone();
     output.extend(path);
-    write_rust_to_file(output, &prettyplease::unparse(&module))
+    write_rust_to_file(output, &prettyplease::unparse(&module));
+    module
+    /*
+    module
+        .items
+        .iter()
+        .flat_map(|item| match item {
+            Item::ForeignMod(extern_) => {
+                extern_
+                    .items
+                    .iter()
+                    .filter_map(|foreign_item| match foreign_item {
+                        ForeignItem::Fn(fn_) => Some(fn_.sig.ident.clone()),
+                        _ => None,
+                    })
+            }
+            _ => unreachable!(),
+        })
+        .collect::<Vec<_>>()
+     */
 }
 
 fn generate_types_cuda(output: &PathBuf, path: &[&str], module: &syn::File) {
@@ -892,17 +1166,24 @@ impl VisitMut for FixAbi {
 }
 
 struct PrependCudaPath {
-    module: Ident,
+    module: Vec<Ident>,
 }
 
 impl VisitMut for PrependCudaPath {
     fn visit_type_path_mut(&mut self, type_: &mut TypePath) {
         if type_.path.segments.len() == 1 {
             match &*type_.path.segments[0].ident.to_string() {
-                "usize" | "u32" | "i32" | "u64" | "i64" | "f64" | "f32" | "FILE" => {}
+                "usize" | "u32" | "i32" | "u64" | "i64" | "f64" | "f32" => {}
+                "FILE" => {
+                    *type_ = parse_quote! { cuda_types :: FILE };
+                }
+                "cublasStatus_t" => {
+                    let module = self.module.iter().rev().skip(1).rev();
+                    *type_ = parse_quote! { #(#module :: )* cublas :: #type_ };
+                }
                 _ => {
                     let module = &self.module;
-                    *type_ = parse_quote! { cuda_types :: #module :: #type_ };
+                    *type_ = parse_quote! { #(#module :: )* #type_ };
                 }
             }
         }
@@ -927,7 +1208,7 @@ impl VisitMut for ExplicitReturnType {
     }
 }
 
-fn generate_display(
+fn generate_display_cuda(
     output: &PathBuf,
     path: &[&str],
     types_crate: &[&'static str],
@@ -954,8 +1235,8 @@ fn generate_display(
         "CUeglFrame_st",
         "CUdevResource_st",
         "CUlaunchAttribute_st",
-        "CUlaunchConfig_st",
         "CUmemcpy3DOperand_st",
+        "CUlaunchConfig_st",
     ];
     let ignore_functions = [
         "cuGLGetDevices",
@@ -984,9 +1265,53 @@ fn generate_display(
     let mut items = module
         .items
         .iter()
-        .filter_map(|i| cuda_derive_display_trait_for_item(&mut derive_state, i))
+        .filter_map(|i| cuda_derive_display_trait_for_item(types_crate, &mut derive_state, i))
         .collect::<Vec<_>>();
     items.push(curesult_display_trait(&derive_state));
+    let mut output = output.clone();
+    output.extend(path);
+    write_rust_to_file(
+        output,
+        &prettyplease::unparse(&syn::File {
+            shebang: None,
+            attrs: Vec::new(),
+            items,
+        }),
+    );
+}
+
+fn generate_display_perflib(
+    output: &PathBuf,
+    path: &[&str],
+    types_crate: &[&'static str],
+    module: &syn::File,
+) {
+    let ignore_types = [
+        "cublasLtMatrixLayoutOpaque_t",
+        "cublasLtMatmulDescOpaque_t",
+        "cublasLtMatrixTransformDescOpaque_t",
+        "cublasLtMatmulPreferenceOpaque_t",
+        "cublasLogCallback",
+        "cudnnBackendDescriptor_t",
+        "cublasLtLoggerCallback_t",
+        "cusparseLoggerCallback_t",
+    ];
+    let ignore_functions = [];
+    let count_selectors = [
+        ("cudnnBackendSetAttribute", 4, 3),
+        ("cudnnBackendGetAttribute", 5, 4),
+    ];
+    let mut derive_state = DeriveDisplayState::new(
+        &ignore_types,
+        types_crate,
+        &ignore_functions,
+        &count_selectors,
+    );
+    let items = module
+        .items
+        .iter()
+        .filter_map(|i| cuda_derive_display_trait_for_item(types_crate, &mut derive_state, i))
+        .collect::<Vec<_>>();
     let mut output = output.clone();
     output.extend(path);
     write_rust_to_file(
@@ -1057,13 +1382,17 @@ impl<'a> DeriveDisplayState<'a> {
 }
 
 fn cuda_derive_display_trait_for_item<'a>(
+    path: &[&str],
     state: &mut DeriveDisplayState<'a>,
     item: &'a Item,
 ) -> Option<syn::Item> {
     let path_prefix = &state.types_crate;
     let path_prefix_iter = iter::repeat(&path_prefix);
     let mut prepend_path = PrependCudaPath {
-        module: Ident::new("cuda", Span::call_site()),
+        module: path
+            .iter()
+            .map(|segment| Ident::new(segment, Span::call_site()))
+            .collect(),
     };
     match item {
         Item::Const(const_) => {
@@ -1101,14 +1430,14 @@ fn cuda_derive_display_trait_for_item<'a>(
                                 if i != 0 {
                                     writer.write_all(b", ")?;
                                 }
-                                crate::format::CudaDisplay::write(unsafe { &*#name.add(i as usize) }, #original_fn_name, arg_idx, writer)?;
+                                crate::CudaDisplay::write(unsafe { &*#name.add(i as usize) }, #original_fn_name, arg_idx, writer)?;
                             }
                             writer.write_all(b"]")?;
                         }
                     } else {
                         quote! {
                             writer.write_all(concat!(stringify!(#name), ": ").as_bytes())?;
-                            crate::format::CudaDisplay::write(&#name, #original_fn_name, arg_idx, writer)?;
+                            crate::CudaDisplay::write(&#name, #original_fn_name, arg_idx, writer)?;
                         }
                     }
                 });
@@ -1157,7 +1486,7 @@ fn cuda_derive_display_trait_for_item<'a>(
                 let enum_iter = iter::repeat(&item_struct.ident);
                 let variants = state.enums.get(&item_struct.ident).unwrap().iter();
                 Some(parse_quote! {
-                    impl crate::format::CudaDisplay for #path_prefix :: #enum_ {
+                    impl crate::CudaDisplay for #path_prefix :: #enum_ {
                         fn write(&self, _fn_name: &'static str, _index: usize, writer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
                             match self {
                                 #(& #path_prefix_iter :: #enum_iter :: #variants => writer.write_all(stringify!(#variants).as_bytes()),)*
@@ -1184,13 +1513,13 @@ fn cuda_derive_display_trait_for_item<'a>(
                             None => return None,
                         };
                         Some(parse_quote! {
-                            impl crate::format::CudaDisplay for #path_prefix :: #struct_ {
+                            impl crate::CudaDisplay for #path_prefix :: #struct_ {
                                 fn write(&self, _fn_name: &'static str, _index: usize, writer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
                                     writer.write_all(concat!("{ ", stringify!(#first_field), ": ").as_bytes())?;
-                                    crate::format::CudaDisplay::write(&self.#first_field, "", 0, writer)?;
+                                    crate::CudaDisplay::write(&self.#first_field, "", 0, writer)?;
                                     #(
                                         writer.write_all(concat!(", ", stringify!(#rest_of_fields), ": ").as_bytes())?;
-                                        crate::format::CudaDisplay::write(&self.#rest_of_fields, "", 0, writer)?;
+                                        crate::CudaDisplay::write(&self.#rest_of_fields, "", 0, writer)?;
                                     )*
                                     writer.write_all(b" }")
                                 }
@@ -1199,7 +1528,7 @@ fn cuda_derive_display_trait_for_item<'a>(
                     }
                     Fields::Unnamed(FieldsUnnamed { ref unnamed, .. }) if unnamed.len() == 1 => {
                         Some(parse_quote! {
-                            impl crate::format::CudaDisplay for #path_prefix :: #struct_ {
+                            impl crate::CudaDisplay for #path_prefix :: #struct_ {
                                 fn write(&self, _fn_name: &'static str, _index: usize, writer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
                                     write!(writer, "{:p}", self.0)
                                 }
@@ -1218,9 +1547,13 @@ fn cuda_derive_display_trait_for_item<'a>(
                 Type::Ptr(_) => {
                     let type_ = &item_type.ident;
                     Some(parse_quote! {
-                        impl crate::format::CudaDisplay for #path_prefix :: #type_ {
+                        impl crate::CudaDisplay for #path_prefix :: #type_ {
                             fn write(&self, _fn_name: &'static str, _index: usize, writer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
-                                write!(writer, "{:p}", *self)
+                                if self.is_null() {
+                                    writer.write_all(b"NULL")
+                                } else {
+                                    write!(writer, "{:p}", *self)
+                                }
                             }
                         }
                     })
@@ -1234,7 +1567,7 @@ fn cuda_derive_display_trait_for_item<'a>(
                                     syn::GenericArgument::Type(Type::BareFn(_)) => {
                                         let type_ = &item_type.ident;
                                         return Some(parse_quote! {
-                                            impl crate::format::CudaDisplay for #path_prefix :: #type_ {
+                                            impl crate::CudaDisplay for #path_prefix :: #type_ {
                                                 fn write(&self, _fn_name: &'static str, _index: usize, writer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
                                                     write!(writer, "{:p}", unsafe { std::mem::transmute::<#path_prefix :: #type_, *mut ::std::ffi::c_void>(*self) })
                                                 }
@@ -1280,7 +1613,7 @@ fn curesult_display_trait(derive_state: &DeriveDisplayState) -> syn::Item {
         })
     });
     parse_quote! {
-        impl crate::format::CudaDisplay for cuda_types::cuda::CUresult {
+        impl crate::CudaDisplay for cuda_types::cuda::CUresult {
             fn write(&self, _fn_name: &'static str, _index: usize, writer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
                 match self {
                     Ok(()) => writer.write_all(b"CUDA_SUCCESS"),

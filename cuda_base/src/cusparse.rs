@@ -51,7 +51,9 @@ extern "system" {
         callback: cuda_types::cusparse::cusparseLoggerCallback_t,
     ) -> cuda_types::cusparse::cusparseStatus_t;
     #[must_use]
-    fn cusparseLoggerSetFile(file: *mut FILE) -> cuda_types::cusparse::cusparseStatus_t;
+    fn cusparseLoggerSetFile(
+        file: *mut cuda_types::FILE,
+    ) -> cuda_types::cusparse::cusparseStatus_t;
     #[must_use]
     fn cusparseLoggerOpenFile(
         logFile: *const ::core::ffi::c_char,

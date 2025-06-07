@@ -2,7 +2,7 @@
 name = "detours-sys"
 version = "0.1.2"
 authors = ["Diana <5275194+DianaNites@users.noreply.github.com>"]
-edition = "2018"
+edition = "2021"
 links = "detours"
 # Package stuff
 description = "Rust bindings to Microsoft Detours"
