@@ -1,7 +1,6 @@
 use ::dark_api::FnFfi;
 use cuda_types::cuda::*;
 use dark_api::DarkApiState2;
-use goblin::error;
 use log::{CudaFunctionName, ErrorEntry};
 use parking_lot::ReentrantMutex;
 use paste::paste;
@@ -9,10 +8,9 @@ use regex::Regex;
 use std::cell::{RefCell, RefMut};
 use std::ffi::{c_void, CStr};
 use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
 use std::ptr::NonNull;
 use std::sync::LazyLock;
-use std::{collections::HashMap, env, error::Error, fs, path::PathBuf, sync::Mutex};
+use std::{env, error::Error, fs, path::PathBuf, sync::Mutex};
 use std::{io, mem, ptr, usize};
 
 extern crate cuda_types;
@@ -297,13 +295,34 @@ impl DarkApiDump {
     fn get_module_from_cubin_ext1_post(
         module: *mut cuda_types::cuda::CUmodule,
         fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper,
-        _arg3: *mut std::ffi::c_void,
-        _arg4: *mut std::ffi::c_void,
-        _arg5: u32,
+        arg3: *mut std::ffi::c_void,
+        arg4: *mut std::ffi::c_void,
+        arg5: u32,
         state: &mut trace::StateTracker,
         fn_logger: &mut FnCallLog,
         _result: CUresult,
     ) {
+        if arg3 != ptr::null_mut() {
+            fn_logger.log(log::ErrorEntry::UnexpectedArgument {
+                arg_name: "arg3",
+                expected: vec![UInt::USize(0)],
+                observed: UInt::USize(arg3 as usize),
+            });
+        }
+        if arg4 != ptr::null_mut() {
+            fn_logger.log(log::ErrorEntry::UnexpectedArgument {
+                arg_name: "arg4",
+                expected: vec![UInt::USize(0)],
+                observed: UInt::USize(arg4 as usize),
+            });
+        }
+        if arg5 != 0 {
+            fn_logger.log(log::ErrorEntry::UnexpectedArgument {
+                arg_name: "arg5",
+                expected: vec![UInt::U32(0)],
+                observed: UInt::U32(arg5),
+            });
+        }
         fn_logger.try_(|fn_logger| unsafe {
             trace::record_submodules_from_wrapped_fatbin(*module, fatbinc_wrapper, fn_logger, state)
         });
@@ -312,13 +331,34 @@ impl DarkApiDump {
     fn get_module_from_cubin_ext2_post(
         fatbin_header: *const cuda_types::dark_api::FatbinHeader,
         module: *mut cuda_types::cuda::CUmodule,
-        _arg3: *mut std::ffi::c_void,
-        _arg4: *mut std::ffi::c_void,
-        _arg5: u32,
+        arg3: *mut std::ffi::c_void,
+        arg4: *mut std::ffi::c_void,
+        arg5: u32,
         state: &mut trace::StateTracker,
         fn_logger: &mut FnCallLog,
         _result: CUresult,
     ) {
+        if arg3 != ptr::null_mut() {
+            fn_logger.log(log::ErrorEntry::UnexpectedArgument {
+                arg_name: "arg3",
+                expected: vec![UInt::USize(0)],
+                observed: UInt::USize(arg3 as usize),
+            });
+        }
+        if arg4 != ptr::null_mut() {
+            fn_logger.log(log::ErrorEntry::UnexpectedArgument {
+                arg_name: "arg4",
+                expected: vec![UInt::USize(0)],
+                observed: UInt::USize(arg4 as usize),
+            });
+        }
+        if arg5 != 0 {
+            fn_logger.log(log::ErrorEntry::UnexpectedArgument {
+                arg_name: "arg5",
+                expected: vec![UInt::U32(0)],
+                observed: UInt::U32(arg5),
+            });
+        }
         fn_logger.try_(|fn_logger| unsafe {
             trace::record_submodules_from_fatbin(*module, fatbin_header, fn_logger, state)
         });
@@ -618,7 +658,7 @@ unsafe fn cuGetExportTable_impl(
         // There's no libcuda to load, so we might as well panic
         LateInit::Error => panic!(),
         LateInit::Unitialized => {
-            global_state.delayed_state = GlobalDelayedState::new2(panic_guard.writer, &mut logger);
+            global_state.delayed_state = GlobalDelayedState::new(panic_guard.writer, &mut logger);
             // `global_state.delayed_state` could be LateInit::Error,
             // we can crash in this case since there's no libcuda
             global_state.delayed_state.as_mut().unwrap()
@@ -800,6 +840,8 @@ fn format_curesult(curesult: CUresult) -> Vec<u8> {
 }
 
 use cuda_base::cuda_function_declarations;
+
+use crate::log::UInt;
 cuda_function_declarations!(
     extern_redirect,
     extern_redirect_with_post
@@ -908,7 +950,7 @@ impl GlobalState2 {
                     LateInit::Error => panic!(),
                     LateInit::Unitialized => {
                         global_state.delayed_state =
-                            GlobalDelayedState::new2(panic_guard.writer, &mut logger);
+                            GlobalDelayedState::new(panic_guard.writer, &mut logger);
                         // `global_state.delayed_state` could be LateInit::Error,
                         // we can crash in this case since there's no libcuda
                         global_state.delayed_state.as_mut().unwrap()
@@ -968,26 +1010,6 @@ trait CudaResult: Copy + format::CudaDisplay {
 
 impl CudaResult for CUresult {
     const INTERNAL_ERROR: Self = CUresult::ERROR_UNKNOWN;
-}
-
-struct GlobalState2DropGuard<'a, Fn: FnOnce() -> String> {
-    mut_ref: &'a mut GlobalState2,
-    cell: &'a RefCell<GlobalState2>,
-    fn_: Fn,
-}
-
-impl<'a, Fn: FnOnce() -> String> Deref for GlobalState2DropGuard<'a, Fn> {
-    type Target = GlobalState2;
-
-    fn deref(&self) -> &GlobalState2 {
-        &*self.mut_ref
-    }
-}
-
-impl<'a, Fn: FnOnce() -> String> DerefMut for GlobalState2DropGuard<'a, Fn> {
-    fn deref_mut(&mut self) -> &mut GlobalState2 {
-        self.mut_ref
-    }
 }
 
 struct FnCallLogStack {
@@ -1146,25 +1168,6 @@ enum LogEntry {
     Error(ErrorEntry),
 }
 
-struct GlobalState {
-    log_factory: log::Factory,
-    // We split off fields that require a mutable reference to log factory to be
-    // created, additionally creation of some fields in this struct can fail
-    // initalization (e.g. we passed a non-existant path to libcuda)
-    delayed_state: LateInit<GlobalDelayedState>,
-}
-
-unsafe impl Send for GlobalState {}
-
-impl GlobalState {
-    fn new() -> Self {
-        GlobalState {
-            log_factory: log::Factory::new(),
-            delayed_state: LateInit::Unitialized,
-        }
-    }
-}
-
 enum LateInit<T> {
     Success(T),
     Unitialized,
@@ -1179,13 +1182,6 @@ impl<T> LateInit<T> {
             Self::Error => None,
         }
     }
-
-    pub(crate) fn unwrap_mut(&mut self) -> &mut T {
-        match self {
-            Self::Success(t) => t,
-            Self::Unitialized | Self::Error => panic!(),
-        }
-    }
 }
 
 struct GlobalDelayedState {
@@ -1194,32 +1190,8 @@ struct GlobalDelayedState {
 }
 
 impl GlobalDelayedState {
-    fn new<'a>(
-        func: &'static str,
-        arguments_writer: Box<dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>>,
-        factory: &'a mut log::Factory,
-    ) -> (LateInit<Self>, log::FunctionLogger<'a>) {
-        let (mut fn_logger, settings) =
-            factory.get_first_logger_and_init_settings(func, arguments_writer);
-        let libcuda = match unsafe { CudaDynamicFns::load_library(&settings.libcuda_path) } {
-            Some(libcuda) => libcuda,
-            None => {
-                fn_logger.log(log::ErrorEntry::ErrorBox(
-                    format!("Invalid CUDA library at path {}", &settings.libcuda_path).into(),
-                ));
-                return (LateInit::Error, fn_logger);
-            }
-        };
-        let cuda_state = trace::StateTracker::new(&settings);
-        let delayed_state = GlobalDelayedState {
-            libcuda,
-            cuda_state,
-        };
-        (LateInit::Success(delayed_state), fn_logger)
-    }
-
-    fn new2<'a>(log_writer: &mut log::Writer, logger: &mut FnCallLog) -> LateInit<Self> {
-        let settings = Settings::read_and_init2(logger);
+    fn new<'a>(log_writer: &mut log::Writer, logger: &mut FnCallLog) -> LateInit<Self> {
+        let settings = Settings::read_and_init(logger);
         logger.try_return(|| log_writer.late_init(&settings));
         let libcuda = match unsafe { CudaDynamicFns::load_library(&settings.libcuda_path) } {
             Some(libcuda) => libcuda,
@@ -1246,7 +1218,7 @@ struct Settings {
 }
 
 impl Settings {
-    fn read_and_init2(logger: &mut FnCallLog) -> Self {
+    fn read_and_init(logger: &mut FnCallLog) -> Self {
         fn parse_compute_capability(env_string: &str) -> Option<(u32, u32)> {
             let regex = Regex::new(r"(\d+)\.(\d+)").unwrap();
             let captures = regex.captures(&env_string)?;
@@ -1298,58 +1270,6 @@ impl Settings {
         }
     }
 
-    fn read_and_init(logger: &mut log::FunctionLogger) -> Self {
-        fn parse_compute_capability(env_string: &str) -> Option<(u32, u32)> {
-            let regex = Regex::new(r"(\d+)\.(\d+)").unwrap();
-            let captures = regex.captures(&env_string)?;
-            let major = captures.get(0)?;
-            let major = str::parse::<u32>(major.as_str()).ok()?;
-            let minor = captures.get(1)?;
-            let minor = str::parse::<u32>(minor.as_str()).ok()?;
-            Some((major, minor))
-        }
-
-        let maybe_dump_dir = Self::read_and_init_dump_dir();
-        let dump_dir = match maybe_dump_dir {
-            Ok(Some(dir)) => {
-                logger.log(log::ErrorEntry::CreatedDumpDirectory(dir.clone()));
-                Some(dir)
-            }
-            Ok(None) => None,
-            Err(err) => {
-                logger.log(log::ErrorEntry::ErrorBox(err));
-                None
-            }
-        };
-        let libcuda_path = match env::var("ZLUDA_CUDA_LIB") {
-            Err(env::VarError::NotPresent) => os::LIBCUDA_DEFAULT_PATH.to_string(),
-            Err(e) => {
-                logger.log(log::ErrorEntry::ErrorBox(Box::new(e) as _));
-                os::LIBCUDA_DEFAULT_PATH.to_string()
-            }
-            Ok(env_string) => env_string,
-        };
-        let override_cc = match env::var("ZLUDA_OVERRIDE_COMPUTE_CAPABILITY") {
-            Err(env::VarError::NotPresent) => None,
-            Err(e) => {
-                logger.log(log::ErrorEntry::ErrorBox(Box::new(e) as _));
-                None
-            }
-            Ok(env_string) => logger.try_(|_| {
-                parse_compute_capability(&env_string).ok_or_else(|| ErrorEntry::InvalidEnvVar {
-                    var: "ZLUDA_OVERRIDE_COMPUTE_CAPABILITY",
-                    pattern: "MAJOR.MINOR",
-                    value: env_string,
-                })
-            }),
-        };
-        Settings {
-            dump_dir,
-            libcuda_path,
-            override_cc,
-        }
-    }
-
     fn read_and_init_dump_dir() -> Result<Option<PathBuf>, Box<dyn Error>> {
         let dir = match env::var("ZLUDA_DUMP_DIR") {
             Ok(dir) => dir,
@@ -1372,22 +1292,6 @@ impl Settings {
         fs::create_dir_all(&*main_dir)?;
         Ok(main_dir)
     }
-}
-
-pub struct ModuleDump {
-    kernels_args: Option<HashMap<String, Vec<usize>>>,
-}
-
-#[derive(Clone, Copy)]
-enum AllocLocation {
-    Device,
-    DeviceV2,
-    Host,
-}
-
-pub struct KernelDump {
-    name: String,
-    arguments: Option<Vec<usize>>,
 }
 
 #[allow(non_snake_case)]

@@ -6,10 +6,9 @@ use cuda_types::{
     cuda::*,
     dark_api::{FatbinFileHeader, FatbinFileHeaderFlags, FatbinHeader, FatbincWrapper},
 };
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::{
     borrow::Cow,
-    collections::HashMap,
     ffi::{c_void, CStr, CString},
     fs::{self, File},
     io::{self, Read, Write},
@@ -25,10 +24,9 @@ use unwrap_or::unwrap_some_or;
 pub(crate) struct StateTracker {
     writer: DumpWriter,
     pub(crate) libraries: FxHashMap<CUlibrary, CodePointer>,
-    modules: FxHashMap<CUmodule, Option<ParsedModule>>,
+    saved_modules: FxHashSet<CUmodule>,
     module_counter: usize,
     submodule_counter: usize,
-    last_module_version: Option<usize>,
     pub(crate) override_cc: Option<(u32, u32)>,
 }
 
@@ -43,10 +41,9 @@ impl StateTracker {
         StateTracker {
             writer: DumpWriter::new(settings.dump_dir.clone()),
             libraries: FxHashMap::default(),
-            modules: FxHashMap::default(),
+            saved_modules: FxHashSet::default(),
             module_counter: 0,
             submodule_counter: 0,
-            last_module_version: None,
             override_cc: settings.override_cc,
         }
     }
@@ -88,10 +85,9 @@ impl StateTracker {
         fn_logger: &mut FnCallLog,
         type_: &'static str,
     ) {
-        if !self.modules.contains_key(&module) {
+        if self.saved_modules.insert(module) {
             self.module_counter += 1;
             self.submodule_counter = 0;
-            self.modules.insert(module, None);
         }
         self.submodule_counter += 1;
         fn_logger.log_io_error(self.writer.save_module(
@@ -124,7 +120,7 @@ impl StateTracker {
     ) {
         self.module_counter += 1;
         if unsafe { *(raw_image as *const [u8; 4]) } == *goblin::elf64::header::ELFMAG {
-            self.modules.insert(module, None);
+            self.saved_modules.insert(module);
             // TODO: Parse ELF and write it to disk
             fn_logger.log(log::ErrorEntry::UnsupportedModule {
                 module,
@@ -132,7 +128,7 @@ impl StateTracker {
                 kind: "ELF",
             })
         } else if unsafe { *(raw_image as *const [u8; 8]) } == *goblin::archive::MAGIC {
-            self.modules.insert(module, None);
+            self.saved_modules.insert(module);
             // TODO: Figure out how to get size of archive module and write it to disk
             fn_logger.log(log::ErrorEntry::UnsupportedModule {
                 module,
@@ -161,7 +157,7 @@ impl StateTracker {
         raw_image: *const c_void,
         fn_logger: &mut FnCallLog,
     ) {
-        self.modules.insert(module, None);
+        self.saved_modules.insert(module);
         let module_text = unsafe { CStr::from_ptr(raw_image as *const _) }.to_str();
         let module_text = match module_text {
             Ok(m) => m,
@@ -198,10 +194,6 @@ impl StateTracker {
             ));
         }
     }
-}
-
-struct ParsedModule {
-    kernels_args: Option<HashMap<String, Vec<usize>>>,
 }
 
 // This structs writes out information about CUDA execution to the dump dir

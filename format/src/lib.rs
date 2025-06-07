@@ -1300,7 +1300,6 @@ fn cudnn9_print_elements(
 }
 
 mod dark_api;
-pub use dark_api::*;
 mod format_generated;
 pub use format_generated::*;
 mod format_generated_blas;
