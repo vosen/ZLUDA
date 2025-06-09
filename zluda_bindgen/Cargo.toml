@@ -10,3 +10,5 @@ proc-macro2 = "1.0.89"
 quote = "1.0"
 prettyplease = "0.2.25"
 rustc-hash = "1.1.0"
+libloading = "0.8"
+cuda_types = { path = "../cuda_types" }

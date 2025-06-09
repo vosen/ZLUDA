@@ -51,7 +51,7 @@ impl Project {
     fn try_new(p: Package) -> Option<Project> {
         let name = p.name;
         let clib_name = p.targets.into_iter().find_map(|target| {
-            if target.is_cdylib() {
+            if target.is_cdylib() || target.is_dylib() {
                 Some(target.name)
             } else {
                 None
