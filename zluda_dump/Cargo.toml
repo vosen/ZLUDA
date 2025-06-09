@@ -11,16 +11,23 @@ crate-type = ["cdylib"]
 [dependencies]
 ptx = { path = "../ptx" }
 ptx_parser = { path = "../ptx_parser" }
+zluda_dump_common = { path = "../zluda_dump_common" }
+format = { path = "../format" }
+dark_api = { path = "../dark_api" }
 lz4-sys = "1.9"
 regex = "1.4"
 dynasm = "1.2"
 dynasmrt = "1.2"
-lazy_static = "1.4"
 # we don't need elf32, but goblin has a bug where elf64 does not build without elf32
 goblin = { version = "0.4", default-features = false, features = ["elf64", "elf32", "archive"] }
 paste = "1.0"
 cuda_base = { path = "../cuda_base" }
 cuda_types = { path = "../cuda_types" }
+parking_lot = "0.12.3"
+rustc-hash = "1.1.0"
+cglue = "0.3.5"
+zstd-safe = { version = "7.2.4", features = ["std"] }
+unwrap_or = "1.0.1"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["libloaderapi", "debugapi", "std"] }

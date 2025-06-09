@@ -1,0 +1,8 @@
+[package]
+name = "format"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+cuda_types = { path = "../cuda_types" }
+uuid = "1.16"

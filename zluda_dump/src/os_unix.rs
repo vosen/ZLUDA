@@ -34,18 +34,16 @@ macro_rules! os_log {
 #[cfg(target_arch = "x86_64")]
 pub fn get_thunk(
     original_fn: *const c_void,
-    report_fn: unsafe extern "system" fn(*const CUuuid, usize),
+    report_fn: unsafe extern "system" fn(&CUuuid, usize),
     guid: *const CUuuid,
     idx: usize,
 ) -> *const c_void {
     use dynasmrt::{dynasm, DynasmApi};
-    let mut ops = dynasmrt::x86::Assembler::new().unwrap();
+    let mut ops = dynasmrt::x64::Assembler::new().unwrap();
     let start = ops.offset();
-    // Let's hope there's never more than 6 arguments
     dynasm!(ops
-        ; .arch x64
-        ; push rbp
-        ; mov rbp, rsp
+        // stack alignment
+        ; sub rsp, 8
         ; push rdi
         ; push rsi
         ; push rdx
@@ -62,14 +60,22 @@ pub fn get_thunk(
         ; pop rdx
         ; pop rsi
         ; pop rdi
+        ; add rsp, 8
         ; mov rax, QWORD original_fn as i64
-        ; call rax
-        ; pop rbp
-        ; ret
+        ; jmp rax
         ; int 3
     );
     let exe_buf = ops.finalize().unwrap();
     let result_fn = exe_buf.ptr(start);
     mem::forget(exe_buf);
     result_fn as *const _
+}
+
+#[link(name = "pthread")]
+unsafe extern "C" {
+    fn pthread_self() -> std::os::unix::thread::RawPthread;
+}
+
+pub(crate) fn current_thread() -> u32 {
+    (unsafe { pthread_self() }) as u32
 }

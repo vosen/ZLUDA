@@ -427,7 +427,7 @@ fn directive<'a, 'input>(
             | Token::DotFile | Token::DotSection => true,
             _ => false,
         }),
-        PtxError::UnrecognizedDirective,
+        |text| PtxError::UnrecognizedDirective(text.unwrap_or("")),
     )
     .map(Option::flatten)
     .parse_next(stream)
@@ -675,7 +675,7 @@ fn statement<'a, 'input>(
                 _ => false,
             },
         ),
-        PtxError::UnrecognizedStatement,
+        |text| PtxError::UnrecognizedStatement(text.unwrap_or("")),
     )
     .map(Option::flatten)
     .parse_next(stream)
@@ -1285,10 +1285,10 @@ pub enum PtxError<'input> {
     ArrayInitalizer,
     #[error("")]
     NonExternPointer,
-    #[error("{0:?}")]
-    UnrecognizedStatement(Option<&'input str>),
-    #[error("{0:?}")]
-    UnrecognizedDirective(Option<&'input str>),
+    #[error("Unrecognized statement {0:?}")]
+    UnrecognizedStatement(&'input str),
+    #[error("Unrecognized directive {0:?}")]
+    UnrecognizedDirective(&'input str),
 }
 
 #[derive(Debug)]
@@ -3492,11 +3492,11 @@ mod tests {
         assert_eq!(errors.len(), 2);
         assert!(matches!(
             errors[0],
-            PtxError::UnrecognizedStatement(Some("unknown_op1.asdf foobar;"))
+            PtxError::UnrecognizedStatement("unknown_op1.asdf foobar;")
         ));
         assert!(matches!(
             errors[1],
-            PtxError::UnrecognizedStatement(Some("unknown_op2 temp2, temp;"))
+            PtxError::UnrecognizedStatement("unknown_op2 temp2, temp;")
         ));
     }
 
@@ -3533,11 +3533,11 @@ mod tests {
         assert_eq!(errors.len(), 2);
         assert!(matches!(
             errors[0],
-            PtxError::UnrecognizedDirective(Some(".broken_directive_fail; 34; {"))
+            PtxError::UnrecognizedDirective(".broken_directive_fail; 34; {")
         ));
         assert!(matches!(
             errors[1],
-            PtxError::UnrecognizedDirective(Some("section foobar }"))
+            PtxError::UnrecognizedDirective("section foobar }")
         ));
     }
 }

@@ -1,4 +1,4 @@
-use cuda_types::cublaslt::cublasStatus_t;
+use cuda_types::cublas::cublasStatus_t;
 
 #[cfg(debug_assertions)]
 pub(crate) fn unimplemented() -> cublasStatus_t {
@@ -12,14 +12,14 @@ pub(crate) fn unimplemented() -> cublasStatus_t {
 
 #[allow(non_snake_case)]
 pub(crate) fn cublasLtGetStatusName(
-    _status: cuda_types::cublaslt::cublasStatus_t,
+    _status: cuda_types::cublas::cublasStatus_t,
 ) -> *const ::core::ffi::c_char {
     todo!()
 }
 
 #[allow(non_snake_case)]
 pub(crate) fn cublasLtGetStatusString(
-    _status: cuda_types::cublaslt::cublasStatus_t,
+    _status: cuda_types::cublas::cublasStatus_t,
 ) -> *const ::core::ffi::c_char {
     todo!()
 }
