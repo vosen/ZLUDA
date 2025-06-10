@@ -15,6 +15,7 @@ ptx = { path = "../ptx" }
 cuda_types = { path = "../cuda_types" }
 cuda_base = { path = "../cuda_base" }
 hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
+dark_api = { path = "../dark_api" }
 lazy_static = "1.4"
 num_enum = "0.4"
 lz4-sys = "1.9"
