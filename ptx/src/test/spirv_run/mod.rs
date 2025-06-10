@@ -1,5 +1,6 @@
 use crate::pass;
 use comgr::Comgr;
+use cuda_types::cuda::CUstream;
 use hip_runtime_sys::hipError_t;
 use pretty_assertions;
 use std::env;
@@ -95,7 +96,8 @@ test_ptx!(b64tof64, [111u64], [111u64]);
 // This segfaults NV compiler
 // test_ptx!(implicit_param, [34u32], [34u32]);
 test_ptx!(pred_not, [10u64, 11u64], [2u64, 0u64]);
-test_ptx!(mad_s32, [2i32, 3i32, 4i32], [10i32, 10i32, 10i32]);
+test_ptx!(mad_s32, [2i32, 3i32, 4i32], [10i32]);
+test_ptx!(mad_wide, [-1i32, 3, 4, 5], [21474836481i64]);
 test_ptx!(
     mul_wide,
     [0x01_00_00_00__01_00_00_00i64],
@@ -313,22 +315,9 @@ fn test_cuda_assert<
     output: &mut [Output],
 ) -> Result<(), Box<dyn error::Error + 'a>> {
     let name = CString::new(name)?;
-    let result =
-        run_cuda(name.as_c_str(), ptx_text, input, output).map_err(|err| DisplayError { err })?;
+    let result = run_cuda(name.as_c_str(), ptx_text, input, output);
     assert_eq!(result.as_slice(), output);
     Ok(())
-}
-
-macro_rules! cuda_call {
-    ($expr:expr) => {
-        #[allow(unused_unsafe)]
-        {
-            let err = unsafe { $expr };
-            if err != cuda_driver_sys::CUresult::CUDA_SUCCESS {
-                return Result::Err(err);
-            }
-        }
-    };
 }
 
 fn run_cuda<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Default>(
@@ -336,37 +325,116 @@ fn run_cuda<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + De
     ptx_module: &str,
     input: &[Input],
     output: &mut [Output],
-) -> Result<Vec<Output>, cuda_driver_sys::CUresult> {
-    use cuda_driver_sys::*;
-    cuda_call! { cuInit(0) };
+) -> Vec<Output> {
+    unsafe { CUDA.cuInit(0) }.unwrap().unwrap();
     let ptx_module = CString::new(ptx_module).unwrap();
     let mut result = vec![0u8.into(); output.len()];
     {
-        let mut ctx = ptr::null_mut();
-        cuda_call! { cuCtxCreate_v2(&mut ctx, 0, 0) };
-        let mut module = ptr::null_mut();
-        cuda_call! { cuModuleLoadData(&mut module, ptx_module.as_ptr() as _) };
-        let mut kernel = ptr::null_mut();
-        cuda_call! { cuModuleGetFunction(&mut kernel, module, name.as_ptr()) };
+        let mut ctx = unsafe { mem::zeroed() };
+        unsafe { CUDA.cuCtxCreate_v2(&mut ctx, 0, 0) }
+            .unwrap()
+            .unwrap();
+        let mut module = unsafe { mem::zeroed() };
+        unsafe { CUDA.cuModuleLoadData(&mut module, ptx_module.as_ptr() as _) }
+            .unwrap()
+            .unwrap();
+        let mut kernel = unsafe { mem::zeroed() };
+        unsafe { CUDA.cuModuleGetFunction(&mut kernel, module, name.as_ptr()) }
+            .unwrap()
+            .unwrap();
         let mut inp_b = unsafe { mem::zeroed() };
-        cuda_call! { cuMemAlloc_v2(&mut inp_b, input.len() * mem::size_of::<Input>()) };
+        unsafe { CUDA.cuMemAlloc_v2(&mut inp_b, input.len() * mem::size_of::<Input>()) }
+            .unwrap()
+            .unwrap();
         let mut out_b = unsafe { mem::zeroed() };
-        cuda_call! { cuMemAlloc_v2(&mut out_b, output.len() * mem::size_of::<Output>()) };
-        cuda_call! { cuMemcpyHtoD_v2(inp_b, input.as_ptr() as _, input.len() * mem::size_of::<Input>()) };
-        cuda_call! { cuMemsetD8_v2(out_b, 0, output.len() * mem::size_of::<Output>()) };
+        unsafe { CUDA.cuMemAlloc_v2(&mut out_b, output.len() * mem::size_of::<Output>()) }
+            .unwrap()
+            .unwrap();
+        unsafe {
+            CUDA.cuMemcpyHtoD_v2(
+                inp_b,
+                input.as_ptr() as _,
+                input.len() * mem::size_of::<Input>(),
+            )
+        }
+        .unwrap()
+        .unwrap();
+        unsafe { CUDA.cuMemsetD8_v2(out_b, 0, output.len() * mem::size_of::<Output>()) }
+            .unwrap()
+            .unwrap();
         let mut args = [&inp_b, &out_b];
-        cuda_call! { cuLaunchKernel(kernel, 1,1,1,1,1,1, 1024, 0 as _, args.as_mut_ptr() as _, ptr::null_mut()) };
-        cuda_call! { cuMemcpyDtoH_v2(result.as_mut_ptr() as _, out_b, output.len() * mem::size_of::<Output>()) };
-        cuda_call! { cuStreamSynchronize(0 as _) };
-        cuda_call! { cuMemFree_v2(inp_b) };
-        cuda_call! { cuMemFree_v2(out_b) };
-        cuda_call! { cuModuleUnload(module) };
-        cuda_call! { cuCtxDestroy_v2(ctx) };
+        unsafe {
+            CUDA.cuLaunchKernel(
+                kernel,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1024,
+                CUstream(ptr::null_mut()),
+                args.as_mut_ptr() as _,
+                ptr::null_mut(),
+            )
+        }
+        .unwrap()
+        .unwrap();
+        unsafe {
+            CUDA.cuMemcpyDtoH_v2(
+                result.as_mut_ptr() as _,
+                out_b,
+                output.len() * mem::size_of::<Output>(),
+            )
+        }
+        .unwrap()
+        .unwrap();
+        unsafe { CUDA.cuStreamSynchronize(CUstream(ptr::null_mut())) }
+            .unwrap()
+            .unwrap();
+        unsafe { CUDA.cuMemFree_v2(inp_b) }.unwrap().unwrap();
+        unsafe { CUDA.cuMemFree_v2(out_b) }.unwrap().unwrap();
+        unsafe { CUDA.cuModuleUnload(module) }.unwrap().unwrap();
+        unsafe { CUDA.cuCtxDestroy_v2(ctx) }.unwrap().unwrap();
     }
-    Ok(result)
+    result
 }
 
+struct DynamicCuda {
+    lib: libloading::Library,
+}
+
+impl DynamicCuda {
+    #[cfg(not(windows))]
+    const CUDA_PATH: &'static str = "/usr/lib/x86_64-linux-gnu/libcuda.so.1";
+    #[cfg(windows)]
+    const CUDA_PATH: &'static str = "C:\\Windows\\System32\\nvcuda.dll";
+
+    pub fn new() -> Result<Self, libloading::Error> {
+        let lib = unsafe { libloading::Library::new(Self::CUDA_PATH) }?;
+        Ok(Self { lib })
+    }
+}
+
+macro_rules! dynamic_fns {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
+        impl DynamicCuda {
+        $(
+            #[allow(dead_code)]
+            unsafe fn $fn_name(&self, $($arg_id : $arg_type),*) -> Result<$ret_type, libloading::Error> {
+                let func = unsafe { self.lib.get::<unsafe extern "system" fn ($($arg_type),*) -> $ret_type>(concat!(stringify!($fn_name), "\0").as_bytes()) };
+                func.map(|f| f($($arg_id),*) )
+            }
+        )*
+        }
+    };
+}
+
+cuda_base::cuda_function_declarations!(dynamic_fns);
+
 static COMGR: std::sync::LazyLock<Comgr> = std::sync::LazyLock::new(|| Comgr::new().unwrap());
+static CUDA: std::sync::LazyLock<DynamicCuda> =
+    std::sync::LazyLock::new(|| DynamicCuda::new().unwrap());
 
 fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Default>(
     name: &CStr,

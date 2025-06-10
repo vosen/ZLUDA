@@ -251,7 +251,10 @@ ptx_parser_macros::generate_instruction_type!(
                 },
                 src1: T,
                 src2: T,
-                src3: T,
+                src3: {
+                    repr: T,
+                    type: { Type::from(data.dst_type()) },
+                }
             }
         },
         Max {

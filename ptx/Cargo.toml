@@ -25,7 +25,9 @@ unwrap_or = "1.0.1"
 [dev-dependencies]
 hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
 comgr = { path = "../comgr" }
+cuda_types = { path = "../cuda_types" }
+cuda_base = { path = "../cuda_base" }
 tempfile = "3"
 paste = "1.0"
-cuda-driver-sys = "0.3.0"
 pretty_assertions = "1.4.1"
+libloading = "0.8"
