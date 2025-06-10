@@ -271,24 +271,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cuda-config"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ee74643f7430213a1a78320f88649de309b20b80818325575e393f848f79f5d"
-dependencies = [
- "glob",
-]
-
-[[package]]
-name = "cuda-driver-sys"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d4c552cc0de854877d80bcd1f11db75d42be32962d72a6799b88dcca88fffbd"
-dependencies = [
- "cuda-config",
-]
-
-[[package]]
 name = "cuda_base"
 version = "0.0.0"
 dependencies = [
@@ -938,10 +920,12 @@ dependencies = [
  "bit-vec 0.6.3",
  "bitflags 1.3.2",
  "comgr",
- "cuda-driver-sys",
+ "cuda_base",
+ "cuda_types",
  "half",
  "hip_runtime-sys",
  "int-enum",
+ "libloading",
  "llvm_zluda",
  "microlp",
  "paste",

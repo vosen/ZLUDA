@@ -9,6 +9,7 @@ pub(super) mod function;
 pub(super) mod memory;
 pub(super) mod module;
 pub(super) mod pointer;
+pub(super) mod stream;
 
 #[cfg(debug_assertions)]
 pub(crate) fn unimplemented() -> CUresult {

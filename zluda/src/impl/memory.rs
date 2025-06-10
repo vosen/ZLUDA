@@ -42,3 +42,6 @@ pub(crate) fn set_d32_v2(dst: hipDeviceptr_t, ui: ::core::ffi::c_uint, n: usize)
 pub(crate) fn set_d8_v2(dst: hipDeviceptr_t, value: ::core::ffi::c_uchar, n: usize) -> hipError_t {
     unsafe { hipMemsetD8(dst, value, n) }
 }
+pub(crate) fn get_info_v2(free: *mut usize, total: *mut usize) -> hipError_t {
+    unsafe { hipMemGetInfo(free, total) }
+}
