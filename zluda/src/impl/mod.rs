@@ -1,6 +1,6 @@
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
-use std::mem::{self, ManuallyDrop, MaybeUninit};
+use std::{ffi::CStr, mem::{self, ManuallyDrop, MaybeUninit}, ptr};
 
 pub(super) mod context;
 pub(super) mod device;
@@ -141,6 +141,16 @@ impl<'a> FromCuda<'a, CUlimit> for hipLimit_t {
             CUlimit::CU_LIMIT_MALLOC_HEAP_SIZE => hipLimit_t::hipLimitMallocHeapSize,
             _ => return Err(CUerror::NOT_SUPPORTED),
         })
+    }
+}
+
+impl<'a> FromCuda<'a, *const ::core::ffi::c_char> for &CStr {
+    fn from_cuda(s: &'a *const ::core::ffi::c_char) -> Result<Self, CUerror> {
+        if *s != ptr::null() {
+            Ok(unsafe { CStr::from_ptr(*s) })
+        } else {
+            Err(CUerror::INVALID_VALUE)
+        }
     }
 }
 
