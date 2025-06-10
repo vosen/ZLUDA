@@ -42,6 +42,12 @@ macro_rules! from_cuda_nop {
                     }
                 }
             }
+
+            impl<'a> FromCuda<'a, *mut $type_> for Option<&'a mut $type_> {
+                fn from_cuda(x: &'a *mut $type_) -> Result<Self, CUerror> {
+                    Ok(unsafe { x.as_mut() })
+                }
+            }
         )*
     };
 }
@@ -111,9 +117,11 @@ from_cuda_nop!(
     u8,
     i32,
     u32,
+    u64,
     usize,
     cuda_types::cuda::CUdevprop,
-    CUdevice_attribute
+    CUdevice_attribute,
+    CUdriverProcAddressQueryResult
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,
