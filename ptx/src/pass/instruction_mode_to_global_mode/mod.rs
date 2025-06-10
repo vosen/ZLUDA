@@ -174,9 +174,11 @@ impl InstructionModes {
     ) -> Self {
         if type_ != ast::ScalarType::F32 {
             Self {
-                denormal_f16f64: denormal,
+                denormal_f32: denormal,
+                denormal_f16f64: Some(DenormalMode::Preserve),
+                // TODO: maybe only one of the modes is necessary?
                 rounding_f32: rounding,
-                ..Self::none()
+                rounding_f16f64: rounding,
             }
         } else {
             Self {
@@ -222,16 +224,18 @@ impl InstructionModes {
             | ast::CvtMode::Bitcast
             | ast::CvtMode::SaturateUnsignedToSigned
             | ast::CvtMode::SaturateSignedToUnsigned => Self::none(),
-            ast::CvtMode::FPExtend { flush_to_zero } => {
+            ast::CvtMode::FPExtend { flush_to_zero, .. } => {
                 Self::from_ftz(ast::ScalarType::F32, flush_to_zero)
             }
             ast::CvtMode::FPTruncate {
                 rounding,
                 flush_to_zero,
+                ..
             }
             | ast::CvtMode::FPRound {
                 integer_rounding: rounding,
                 flush_to_zero,
+                ..
             } => Self::mixed_ftz_f32(
                 cvt.to,
                 flush_to_zero.map(DenormalMode::from_ftz),

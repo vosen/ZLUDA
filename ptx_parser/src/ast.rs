@@ -2,7 +2,7 @@ use super::{
     AtomSemantics, MemScope, RawRoundingMode, RawSetpCompareOp, ScalarType, SetpBoolPostOp,
     StateSpace, VectorPrefix,
 };
-use crate::{PtxError, PtxParserState, Mul24Control};
+use crate::{Mul24Control, PtxError, PtxParserState};
 use bitflags::bitflags;
 use std::{alloc::Layout, cmp::Ordering, num::NonZeroU8};
 
@@ -1197,7 +1197,6 @@ pub enum MulIntControl {
     Wide,
 }
 
-
 #[derive(Copy, Clone)]
 pub struct Mul24Details {
     pub type_: ScalarType,
@@ -1478,15 +1477,18 @@ pub enum CvtMode {
     // float from float
     FPExtend {
         flush_to_zero: Option<bool>,
+        saturate: bool,
     },
     FPTruncate {
         // float rounding
         rounding: RoundingMode,
         flush_to_zero: Option<bool>,
+        saturate: bool,
     },
     FPRound {
         integer_rounding: RoundingMode,
         flush_to_zero: Option<bool>,
+        saturate: bool,
     },
     // int from float
     SignedFromFP {
@@ -1511,9 +1513,6 @@ impl CvtDetails {
         dst: ScalarType,
         src: ScalarType,
     ) -> Self {
-        if saturate && dst.kind() == ScalarKind::Float {
-            errors.push(PtxError::SyntaxError);
-        }
         // Modifier .ftz can only be specified when either .dtype or .atype is .f32 and applies only to single precision (.f32) inputs and results.
         let flush_to_zero = match (dst, src) {
             (ScalarType::F32, _) | (_, ScalarType::F32) => Some(ftz),
@@ -1537,16 +1536,21 @@ impl CvtDetails {
                 Ordering::Less => CvtMode::FPTruncate {
                     rounding: unwrap_rounding(),
                     flush_to_zero,
+                    saturate,
                 },
                 Ordering::Equal => CvtMode::FPRound {
                     integer_rounding: rounding.unwrap_or(RoundingMode::NearestEven),
                     flush_to_zero,
+                    saturate,
                 },
                 Ordering::Greater => {
                     if rounding.is_some() {
                         errors.push(PtxError::SyntaxError);
                     }
-                    CvtMode::FPExtend { flush_to_zero }
+                    CvtMode::FPExtend {
+                        flush_to_zero,
+                        saturate,
+                    }
                 }
             },
             (ScalarKind::Unsigned, ScalarKind::Float) => CvtMode::UnsignedFromFP {

@@ -518,6 +518,7 @@ impl<'a> MethodEmitContext<'a> {
             Statement::VectorRead(vector_read) => self.emit_vector_read(vector_read)?,
             Statement::VectorWrite(vector_write) => self.emit_vector_write(vector_write)?,
             Statement::SetMode(mode_reg) => self.emit_set_mode(mode_reg)?,
+            Statement::FpSaturate { dst, src, type_ } => self.emit_fp_saturate(type_, dst, src)?,
         })
     }
 
@@ -2289,7 +2290,11 @@ impl<'a> MethodEmitContext<'a> {
         };
         let res_lo = self.emit_intrinsic(
             name_lo,
-            if data.control == Mul24Control::Lo { Some(arguments.dst) } else { None },
+            if data.control == Mul24Control::Lo {
+                Some(arguments.dst)
+            } else {
+                None
+            },
             Some(&ast::Type::Scalar(data.type_)),
             vec![
                 (src1, get_scalar_type(self.context, data.type_)),
@@ -2316,9 +2321,8 @@ impl<'a> MethodEmitContext<'a> {
                 ],
             )?;
             let shift_number = unsafe { LLVMConstInt(LLVMInt32TypeInContext(self.context), 16, 0) };
-            let res_lo_shr = unsafe {
-                LLVMBuildLShr(self.builder, res_lo, shift_number, LLVM_UNNAMED.as_ptr())
-            };
+            let res_lo_shr =
+                unsafe { LLVMBuildLShr(self.builder, res_lo, shift_number, LLVM_UNNAMED.as_ptr()) };
             let res_hi_shl =
                 unsafe { LLVMBuildShl(self.builder, res_hi, shift_number, LLVM_UNNAMED.as_ptr()) };
 
@@ -2377,6 +2381,33 @@ impl<'a> MethodEmitContext<'a> {
             None,
             None,
             vec![(hwreg_llvm, llvm_i32), (value_llvm, llvm_i32)],
+        )?;
+        Ok(())
+    }
+
+    fn emit_fp_saturate(
+        &mut self,
+        type_: ast::ScalarType,
+        dst: SpirvWord,
+        src: SpirvWord,
+    ) -> Result<(), TranslateError> {
+        let llvm_type = get_scalar_type(self.context, type_);
+        let zero = unsafe { LLVMConstReal(llvm_type, 0.0) };
+        let one = unsafe { LLVMConstReal(llvm_type, 1.0) };
+        let maxnum_intrinsic = format!("llvm.maxnum.{}\0", LLVMTypeDisplay(type_));
+        let minnum_intrinsic = format!("llvm.minnum.{}\0", LLVMTypeDisplay(type_));
+        let src = self.resolver.value(src)?;
+        let maxnum = self.emit_intrinsic(
+            unsafe { CStr::from_bytes_with_nul_unchecked(maxnum_intrinsic.as_bytes()) },
+            None,
+            Some(&type_.into()),
+            vec![(src, llvm_type), (zero, llvm_type)],
+        )?;
+        self.emit_intrinsic(
+            unsafe { CStr::from_bytes_with_nul_unchecked(minnum_intrinsic.as_bytes()) },
+            Some(dst),
+            Some(&type_.into()),
+            vec![(maxnum, llvm_type), (one, llvm_type)],
         )?;
         Ok(())
     }
