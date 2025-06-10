@@ -62,6 +62,8 @@ cuda_base::cuda_function_declarations!(
         cuDeviceTotalMem_v2,
         cuDriverGetVersion,
         cuFuncGetAttribute,
+        cuGetProcAddress,
+        cuGetProcAddress_v2,
         cuInit,
         cuMemAlloc_v2,
         cuMemFree_v2,

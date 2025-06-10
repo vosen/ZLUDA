@@ -1,6 +1,6 @@
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
-use std::mem::{self, ManuallyDrop, MaybeUninit};
+use std::{ffi::CStr, mem::{self, ManuallyDrop, MaybeUninit}, ptr};
 
 pub(super) mod context;
 pub(super) mod device;
@@ -40,6 +40,12 @@ macro_rules! from_cuda_nop {
                         Some(x) => Ok(x),
                         None => Err(CUerror::INVALID_VALUE),
                     }
+                }
+            }
+
+            impl<'a> FromCuda<'a, *mut $type_> for Option<&'a mut $type_> {
+                fn from_cuda(x: &'a *mut $type_) -> Result<Self, CUerror> {
+                    Ok(unsafe { x.as_mut() })
                 }
             }
         )*
@@ -111,9 +117,11 @@ from_cuda_nop!(
     u8,
     i32,
     u32,
+    u64,
     usize,
     cuda_types::cuda::CUdevprop,
-    CUdevice_attribute
+    CUdevice_attribute,
+    CUdriverProcAddressQueryResult
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,
@@ -133,6 +141,16 @@ impl<'a> FromCuda<'a, CUlimit> for hipLimit_t {
             CUlimit::CU_LIMIT_MALLOC_HEAP_SIZE => hipLimit_t::hipLimitMallocHeapSize,
             _ => return Err(CUerror::NOT_SUPPORTED),
         })
+    }
+}
+
+impl<'a> FromCuda<'a, *const ::core::ffi::c_char> for &CStr {
+    fn from_cuda(s: &'a *const ::core::ffi::c_char) -> Result<Self, CUerror> {
+        if *s != ptr::null() {
+            Ok(unsafe { CStr::from_ptr(*s) })
+        } else {
+            Err(CUerror::INVALID_VALUE)
+        }
     }
 }
 
