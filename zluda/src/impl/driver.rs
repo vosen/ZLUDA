@@ -76,6 +76,183 @@ pub(crate) fn init(flags: ::core::ffi::c_uint) -> CUresult {
     Ok(())
 }
 
+const FN2_BUFFER_SIZE: usize = 400;
+
+struct Fn2Buffer {
+    buffer: std::cell::UnsafeCell<[u8; FN2_BUFFER_SIZE]>,
+}
+
+impl Fn2Buffer {
+    const fn new() -> Self {
+        Fn2Buffer { buffer: std::cell::UnsafeCell::new([0; FN2_BUFFER_SIZE]) }
+    }
+}
+
+unsafe impl Sync for Fn2Buffer {}
+
+static FN2_BUFFER: Fn2Buffer = Fn2Buffer::new();
+
+struct DarkApi {}
+
+impl ::dark_api::cuda::CudaDarkApi for DarkApi {
+    unsafe extern "system" fn get_module_from_cubin(
+        module: *mut cuda_types::cuda::CUmodule,
+        fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper,
+    ) -> () {
+        todo!()
+    }
+
+    unsafe extern "system" fn cudart_interface_fn2(
+        pctx: *mut cuda_types::cuda::CUcontext,
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult {
+        todo!()
+    }
+
+    unsafe extern "system" fn get_module_from_cubin_ext1(
+        result: *mut cuda_types::cuda::CUmodule,
+        fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper,
+        arg3: *mut std::ffi::c_void,
+        arg4: *mut std::ffi::c_void,
+        arg5: u32,
+    ) -> cuda_types::cuda::CUresult {
+        todo!()
+    }
+
+    unsafe extern "system" fn cudart_interface_fn7(arg1: usize) -> cuda_types::cuda::CUresult {
+        todo!()
+    }
+
+    unsafe extern "system" fn get_module_from_cubin_ext2(
+        fatbin_header: *const cuda_types::dark_api::FatbinHeader,
+        result: *mut cuda_types::cuda::CUmodule,
+        arg3: *mut std::ffi::c_void,
+        arg4: *mut std::ffi::c_void,
+        arg5: u32,
+    ) -> cuda_types::cuda::CUresult {
+        todo!()
+    }
+
+    unsafe extern "system" fn runtime_callback_hooks_fn2(
+        ptr: *mut *mut std::ffi::c_void,
+        size: *mut usize,
+    ) -> () {
+        *ptr = FN2_BUFFER.buffer.get() as *mut std::ffi::c_void;
+        *size = FN2_BUFFER_SIZE;
+    }
+
+    unsafe extern "system" fn runtime_callback_hooks_fn6(
+        ptr: *mut *mut std::ffi::c_void,
+        size: *mut usize,
+    ) -> () {
+        todo!()
+    }
+
+    unsafe extern "system" fn context_local_storage_ctor(
+        context: cuda_types::cuda::CUcontext,
+        manager: *mut std::ffi::c_void,
+        ctx_state: *mut std::ffi::c_void,
+        dtor_cb: Option<
+            extern "system" fn(
+                cuda_types::cuda::CUcontext,
+                *mut std::ffi::c_void,
+                *mut std::ffi::c_void,
+            ),
+        >,
+    ) -> cuda_types::cuda::CUresult {
+        todo!()
+    }
+
+    unsafe extern "system" fn context_local_storage_dtor(
+        arg1: *mut std::ffi::c_void,
+        arg2: *mut std::ffi::c_void,
+    ) -> cuda_types::cuda::CUresult {
+        todo!()
+    }
+
+    unsafe extern "system" fn context_local_storage_get_state(
+        ctx_state: *mut std::ffi::c_void,
+        cu_ctx: cuda_types::cuda::CUcontext,
+        manager: *mut std::ffi::c_void,
+    ) -> cuda_types::cuda::CUresult {
+        todo!()
+    }
+
+    unsafe extern "system" fn ctx_create_v2_bypass(
+        pctx: *mut cuda_types::cuda::CUcontext,
+        flags: ::std::os::raw::c_uint,
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult {
+        todo!()
+    }
+
+    unsafe extern "system" fn heap_alloc(
+        heap_alloc_record_ptr: *mut *const std::ffi::c_void,
+        arg2: usize,
+        arg3: usize,
+    ) -> cuda_types::cuda::CUresult {
+        todo!()
+    }
+
+    unsafe extern "system" fn heap_free(
+        heap_alloc_record_ptr: *const std::ffi::c_void,
+        arg2: *mut usize,
+    ) -> cuda_types::cuda::CUresult {
+        todo!()
+    }
+
+    unsafe extern "system" fn device_get_attribute_ext(
+        dev: cuda_types::cuda::CUdevice,
+        attribute: std::ffi::c_uint,
+        unknown: std::ffi::c_int,
+        result: *mut [usize; 2],
+    ) -> cuda_types::cuda::CUresult {
+        todo!()
+    }
+
+    unsafe extern "system" fn device_get_something(
+        result: *mut std::ffi::c_uchar,
+        dev: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult {
+        todo!()
+    }
+
+    unsafe extern "system" fn integrity_check(
+        version: u32,
+        unix_seconds: u64,
+        result: *mut [u64; 2],
+    ) -> cuda_types::cuda::CUresult {
+        todo!()
+    }
+
+    unsafe extern "system" fn context_check(
+        ctx_in: cuda_types::cuda::CUcontext,
+        result1: *mut u32,
+        result2: *mut *const std::ffi::c_void,
+    ) -> cuda_types::cuda::CUresult {
+        todo!()
+    }
+
+    unsafe extern "system" fn check_fn3() -> u32 {
+        todo!()
+    }
+}
+
+static EXPORT_TABLE: ::dark_api::cuda::CudaDarkApiGlobalTable =
+    ::dark_api::cuda::CudaDarkApiGlobalTable::new::<DarkApi>();
+
+pub(crate) fn get_export_table(
+    pp_export_table: &mut *const ::core::ffi::c_void,
+    p_export_table_id: &CUuuid,
+) -> CUresult {
+    if let Some(table) = EXPORT_TABLE.get(p_export_table_id) {
+        *pp_export_table = table.start();
+        cuda_types::cuda::CUresult::SUCCESS
+    } else {
+        cuda_types::cuda::CUresult::ERROR_INVALID_VALUE
+    }
+}
+
 pub(crate) fn get_version(version: &mut ::core::ffi::c_int) -> CUresult {
     *version = cuda_types::cuda::CUDA_VERSION as i32;
     Ok(())
