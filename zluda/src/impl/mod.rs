@@ -1,6 +1,10 @@
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
-use std::{ffi::CStr, mem::{self, ManuallyDrop, MaybeUninit}, ptr};
+use std::{
+    ffi::CStr,
+    mem::{self, ManuallyDrop, MaybeUninit},
+    ptr,
+};
 
 pub(super) mod context;
 pub(super) mod device;
@@ -131,6 +135,7 @@ from_cuda_nop!(
     cuda_types::cuda::CUdevprop,
     CUdevice_attribute,
     CUdriverProcAddressQueryResult,
+    CUmoduleLoadingMode,
     CUuuid
 );
 from_cuda_transmute!(
