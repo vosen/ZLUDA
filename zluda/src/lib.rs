@@ -75,6 +75,7 @@ cuda_base::cuda_function_declarations!(
         cuMemsetD32_v2,
         cuMemsetD8_v2,
         cuModuleGetFunction,
+        cuModuleGetLoadingMode,
         cuModuleLoadData,
         cuModuleUnload,
         cuPointerGetAttribute,
