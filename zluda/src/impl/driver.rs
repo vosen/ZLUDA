@@ -77,7 +77,20 @@ pub(crate) fn init(flags: ::core::ffi::c_uint) -> CUresult {
 }
 
 const FN2_BUFFER_SIZE: usize = 400;
-static FN2_BUFFER: [u8;FN2_BUFFER_SIZE] = [0;FN2_BUFFER_SIZE];
+
+struct Fn2Buffer {
+    buffer: std::cell::UnsafeCell<[u8; FN2_BUFFER_SIZE]>,
+}
+
+impl Fn2Buffer {
+    const fn new() -> Self {
+        Fn2Buffer { buffer: std::cell::UnsafeCell::new([0; FN2_BUFFER_SIZE]) }
+    }
+}
+
+unsafe impl Sync for Fn2Buffer {}
+
+static FN2_BUFFER: Fn2Buffer = Fn2Buffer::new();
 
 struct DarkApi {}
 
@@ -124,7 +137,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         ptr: *mut *mut std::ffi::c_void,
         size: *mut usize,
     ) -> () {
-        *ptr = FN2_BUFFER.as_ptr() as *mut std::ffi::c_void;
+        *ptr = FN2_BUFFER.buffer.get() as *mut std::ffi::c_void;
         *size = FN2_BUFFER_SIZE;
     }
 
