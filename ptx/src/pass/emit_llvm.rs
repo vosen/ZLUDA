@@ -591,7 +591,7 @@ impl<'a> MethodEmitContext<'a> {
         inst: ast::Instruction<SpirvWord>,
     ) -> Result<(), TranslateError> {
         match inst {
-            ast::Instruction::Mov { data, arguments } => self.emit_mov(data, arguments),
+            ast::Instruction::Mov { data: _, arguments } => self.emit_mov(arguments),
             ast::Instruction::Ld { data, arguments } => self.emit_ld(data, arguments),
             ast::Instruction::Add { data, arguments } => self.emit_add(data, arguments),
             ast::Instruction::St { data, arguments } => self.emit_st(data, arguments),
@@ -924,11 +924,7 @@ impl<'a> MethodEmitContext<'a> {
         Ok(())
     }
 
-    fn emit_mov(
-        &mut self,
-        _data: ast::MovDetails,
-        arguments: ast::MovArgs<SpirvWord>,
-    ) -> Result<(), TranslateError> {
+    fn emit_mov(&mut self, arguments: ast::MovArgs<SpirvWord>) -> Result<(), TranslateError> {
         self.resolver
             .register(arguments.dst, self.resolver.value(arguments.src)?);
         Ok(())
@@ -1628,12 +1624,28 @@ impl<'a> MethodEmitContext<'a> {
             ptx_parser::CvtMode::FPExtend { .. } => LLVMBuildFPExt,
             ptx_parser::CvtMode::FPTruncate { .. } => LLVMBuildFPTrunc,
             ptx_parser::CvtMode::FPRound {
-                integer_rounding, ..
+                integer_rounding: None,
+                flush_to_zero: None | Some(false),
+                ..
+            } => {
+                return self.emit_mov(ast::MovArgs {
+                    dst: arguments.dst,
+                    src: arguments.src,
+                })
+            }
+            ptx_parser::CvtMode::FPRound {
+                integer_rounding: None,
+                flush_to_zero: Some(true),
+                ..
+            } => return self.flush_denormals(data.to, arguments.src, arguments.dst),
+            ptx_parser::CvtMode::FPRound {
+                integer_rounding: Some(rounding),
+                ..
             } => {
                 return self.emit_cvt_float_to_int(
                     data.from,
                     data.to,
-                    integer_rounding,
+                    rounding,
                     arguments,
                     Some(LLVMBuildFPToSI),
                 )
@@ -2437,6 +2449,24 @@ impl<'a> MethodEmitContext<'a> {
             Some(arguments.dst),
             Some(&type_.into()),
             vec![(src1, llvm_type), (src2, llvm_type)],
+        )?;
+        Ok(())
+    }
+
+    fn flush_denormals(
+        &mut self,
+        type_: ptx_parser::ScalarType,
+        src: SpirvWord,
+        dst: SpirvWord,
+    ) -> Result<(), TranslateError> {
+        let llvm_type = get_scalar_type(self.context, type_);
+        let src = self.resolver.value(src)?;
+        let intrinsic = format!("llvm.canonicalize.{}\0", LLVMTypeDisplay(type_));
+        self.emit_intrinsic(
+            unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
+            Some(dst),
+            Some(&type_.into()),
+            vec![(src, llvm_type)],
         )?;
         Ok(())
     }

@@ -167,23 +167,60 @@ impl InstructionModes {
         }
     }
 
-    fn mixed_ftz_f32(
-        type_: ast::ScalarType,
+    fn trunc_rnd_ftz(
+        to_type: ast::ScalarType,
         denormal: Option<DenormalMode>,
         rounding: Option<RoundingMode>,
     ) -> Self {
-        if type_ != ast::ScalarType::F32 {
+        // f32 to f16
+        if to_type != ast::ScalarType::F32 {
             Self {
-                denormal_f32: denormal,
+                denormal_f32: Some(DenormalMode::Preserve),
+                denormal_f16f64: denormal,
+                rounding_f16f64: rounding,
+                rounding_f32: rounding,
+            }
+        // f64 to f32
+        } else {
+            Self {
                 denormal_f16f64: Some(DenormalMode::Preserve),
-                // TODO: maybe only one of the modes is necessary?
+                denormal_f32: denormal,
                 rounding_f32: rounding,
                 rounding_f16f64: rounding,
             }
+        }
+    }
+
+    fn extend_rnd_ftz(
+        from_type: ast::ScalarType,
+        to_type: ast::ScalarType,
+        denormal: DenormalMode,
+    ) -> Self {
+        fn field_for_type(
+            type_: ast::ScalarType,
+            result: &mut InstructionModes,
+        ) -> &mut Option<DenormalMode> {
+            match type_ {
+                ast::ScalarType::F32 => &mut result.denormal_f32,
+                _ => &mut result.denormal_f16f64,
+            }
+        }
+        let mut result = Self::none();
+        *field_for_type(from_type, &mut result) = Some(DenormalMode::Preserve);
+        *field_for_type(to_type, &mut result) = Some(denormal);
+        result
+    }
+
+    // rounding mode is part of the instruction type
+    fn from_denormal(type_: ast::ScalarType, denormal: DenormalMode) -> Self {
+        if type_ != ast::ScalarType::F32 {
+            Self {
+                denormal_f16f64: Some(denormal),
+                ..Self::none()
+            }
         } else {
             Self {
-                denormal_f32: denormal,
-                rounding_f32: rounding,
+                denormal_f32: Some(denormal),
                 ..Self::none()
             }
         }
@@ -224,29 +261,37 @@ impl InstructionModes {
             | ast::CvtMode::Bitcast
             | ast::CvtMode::SaturateUnsignedToSigned
             | ast::CvtMode::SaturateSignedToUnsigned => Self::none(),
-            ast::CvtMode::FPExtend { flush_to_zero, .. } => {
-                Self::from_ftz(ast::ScalarType::F32, flush_to_zero)
-            }
+            ast::CvtMode::FPExtend { flush_to_zero, .. } => Self::extend_rnd_ftz(
+                cvt.from,
+                cvt.to,
+                flush_to_zero
+                    .map(DenormalMode::from_ftz)
+                    .unwrap_or(DenormalMode::Preserve),
+            ),
             ast::CvtMode::FPTruncate {
                 rounding,
                 flush_to_zero,
                 ..
-            }
-            | ast::CvtMode::FPRound {
-                integer_rounding: rounding,
-                flush_to_zero,
-                ..
-            } => Self::mixed_ftz_f32(
+            } => Self::trunc_rnd_ftz(
                 cvt.to,
                 flush_to_zero.map(DenormalMode::from_ftz),
                 Some(RoundingMode::from_ast(rounding)),
             ),
+            ast::CvtMode::FPRound { flush_to_zero, .. } => Self::from_denormal(
+                cvt.to,
+                flush_to_zero
+                    .map(DenormalMode::from_ftz)
+                    .unwrap_or(DenormalMode::Preserve),
+            ),
             // float to int contains rounding field, but it's not a rounding
             // mode but rather round-to-int operation that will be applied
             ast::CvtMode::SignedFromFP { flush_to_zero, .. }
-            | ast::CvtMode::UnsignedFromFP { flush_to_zero, .. } => {
-                Self::new(cvt.from, flush_to_zero.map(DenormalMode::from_ftz), None)
-            }
+            | ast::CvtMode::UnsignedFromFP { flush_to_zero, .. } => Self::from_denormal(
+                cvt.from,
+                flush_to_zero
+                    .map(DenormalMode::from_ftz)
+                    .unwrap_or(DenormalMode::Preserve),
+            ),
             ast::CvtMode::FPFromSigned(rnd) | ast::CvtMode::FPFromUnsigned(rnd) => {
                 Self::new(cvt.to, None, Some(RoundingMode::from_ast(rnd)))
             }

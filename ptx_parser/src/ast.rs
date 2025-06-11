@@ -1486,7 +1486,7 @@ pub enum CvtMode {
         saturate: bool,
     },
     FPRound {
-        integer_rounding: RoundingMode,
+        integer_rounding: Option<RoundingMode>,
         flush_to_zero: Option<bool>,
         saturate: bool,
     },
@@ -1539,7 +1539,7 @@ impl CvtDetails {
                     saturate,
                 },
                 Ordering::Equal => CvtMode::FPRound {
-                    integer_rounding: rounding.unwrap_or(RoundingMode::NearestEven),
+                    integer_rounding: rounding,
                     flush_to_zero,
                     saturate,
                 },
