@@ -837,7 +837,13 @@ impl<'a> MethodEmitContext<'a> {
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
         let fn_ = match data {
-            ast::ArithDetails::Integer(..) => LLVMBuildAdd,
+            ast::ArithDetails::Integer(ast::ArithInteger {
+                saturate: true,
+                type_,
+            }) => return self.emit_add_sat(type_, arguments),
+            ast::ArithDetails::Integer(ast::ArithInteger {
+                saturate: false, ..
+            }) => LLVMBuildAdd,
             ast::ArithDetails::Float(..) => LLVMBuildFAdd,
         };
         self.resolver.with_result(arguments.dst, |dst| unsafe {
@@ -2408,6 +2414,29 @@ impl<'a> MethodEmitContext<'a> {
             Some(dst),
             Some(&type_.into()),
             vec![(maxnum, llvm_type), (one, llvm_type)],
+        )?;
+        Ok(())
+    }
+
+    fn emit_add_sat(
+        &mut self,
+        type_: ast::ScalarType,
+        arguments: ast::AddArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let llvm_type = get_scalar_type(self.context, type_);
+        let src1 = self.resolver.value(arguments.src1)?;
+        let src2 = self.resolver.value(arguments.src2)?;
+        let op = if type_.kind() == ast::ScalarKind::Signed {
+            "sadd"
+        } else {
+            "uadd"
+        };
+        let intrinsic = format!("llvm.{}.sat.{}\0", op, LLVMTypeDisplay(type_));
+        self.emit_intrinsic(
+            unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
+            Some(arguments.dst),
+            Some(&type_.into()),
+            vec![(src1, llvm_type), (src2, llvm_type)],
         )?;
         Ok(())
     }
