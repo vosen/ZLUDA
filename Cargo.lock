@@ -1508,6 +1508,7 @@ dependencies = [
  "comgr",
  "cuda_base",
  "cuda_types",
+ "dark_api",
  "hip_runtime-sys",
  "lazy_static",
  "lz4-sys",
