@@ -1482,6 +1482,7 @@ pub enum CvtMode {
     FPTruncate {
         // float rounding
         rounding: RoundingMode,
+        is_integer_rounding: bool,
         flush_to_zero: Option<bool>,
         saturate: bool,
     },
@@ -1500,8 +1501,14 @@ pub enum CvtMode {
         flush_to_zero: Option<bool>,
     }, // integer rounding
     // float from int, ftz is allowed in the grammar, but clearly nonsensical
-    FPFromSigned(RoundingMode),   // float rounding
-    FPFromUnsigned(RoundingMode), // float rounding
+    FPFromSigned {
+        rounding: RoundingMode,
+        saturate: bool,
+    }, // float rounding
+    FPFromUnsigned {
+        rounding: RoundingMode,
+        saturate: bool,
+    }, // float rounding
 }
 
 impl CvtDetails {
@@ -1523,23 +1530,27 @@ impl CvtDetails {
                 None
             }
         };
-        let rounding = rnd.map(Into::into);
+        let rounding = rnd.map(RawRoundingMode::normalize);
         let mut unwrap_rounding = || match rounding {
-            Some(rnd) => rnd,
+            Some((rnd, is_integer)) => (rnd, is_integer),
             None => {
                 errors.push(PtxError::SyntaxError);
-                RoundingMode::NearestEven
+                (RoundingMode::NearestEven, false)
             }
         };
         let mode = match (dst.kind(), src.kind()) {
             (ScalarKind::Float, ScalarKind::Float) => match dst.size_of().cmp(&src.size_of()) {
-                Ordering::Less => CvtMode::FPTruncate {
-                    rounding: unwrap_rounding(),
-                    flush_to_zero,
-                    saturate,
-                },
+                Ordering::Less => {
+                    let (rounding, is_integer_rounding) = unwrap_rounding();
+                    CvtMode::FPTruncate {
+                        rounding,
+                        is_integer_rounding,
+                        flush_to_zero,
+                        saturate,
+                    }
+                }
                 Ordering::Equal => CvtMode::FPRound {
-                    integer_rounding: rounding,
+                    integer_rounding: rounding.map(|(rnd, _)| rnd),
                     flush_to_zero,
                     saturate,
                 },
@@ -1554,15 +1565,21 @@ impl CvtDetails {
                 }
             },
             (ScalarKind::Unsigned, ScalarKind::Float) => CvtMode::UnsignedFromFP {
-                rounding: unwrap_rounding(),
+                rounding: unwrap_rounding().0,
                 flush_to_zero,
             },
             (ScalarKind::Signed, ScalarKind::Float) => CvtMode::SignedFromFP {
-                rounding: unwrap_rounding(),
+                rounding: unwrap_rounding().0,
                 flush_to_zero,
             },
-            (ScalarKind::Float, ScalarKind::Unsigned) => CvtMode::FPFromUnsigned(unwrap_rounding()),
-            (ScalarKind::Float, ScalarKind::Signed) => CvtMode::FPFromSigned(unwrap_rounding()),
+            (ScalarKind::Float, ScalarKind::Unsigned) => CvtMode::FPFromUnsigned {
+                rounding: unwrap_rounding().0,
+                saturate,
+            },
+            (ScalarKind::Float, ScalarKind::Signed) => CvtMode::FPFromSigned {
+                rounding: unwrap_rounding().0,
+                saturate,
+            },
             (ScalarKind::Signed, ScalarKind::Unsigned) if saturate => {
                 CvtMode::SaturateUnsignedToSigned
             }

@@ -1668,10 +1668,10 @@ impl<'a> MethodEmitContext<'a> {
                     Some(LLVMBuildFPToUI),
                 )
             }
-            ptx_parser::CvtMode::FPFromSigned(_) => {
+            ptx_parser::CvtMode::FPFromSigned { .. } => {
                 return self.emit_cvt_int_to_float(data.to, arguments, LLVMBuildSIToFP)
             }
-            ptx_parser::CvtMode::FPFromUnsigned(_) => {
+            ptx_parser::CvtMode::FPFromUnsigned { .. } => {
                 return self.emit_cvt_int_to_float(data.to, arguments, LLVMBuildUIToFP)
             }
         };

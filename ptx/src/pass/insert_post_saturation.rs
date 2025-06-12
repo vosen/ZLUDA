@@ -51,6 +51,7 @@ fn run_statement<'input>(
     }
     Ok(())
 }
+
 fn run_instruction<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
     result: &mut Vec<Statement<ast::Instruction<SpirvWord>, SpirvWord>>,
@@ -93,8 +94,12 @@ fn run_instruction<'input>(
                         | ast::CvtMode::SaturateSignedToUnsigned
                         | ast::CvtMode::SignedFromFP { .. }
                         | ast::CvtMode::UnsignedFromFP { .. }
-                        | ast::CvtMode::FPFromSigned(..)
-                        | ast::CvtMode::FPFromUnsigned(..)
+                        | ast::CvtMode::FPFromSigned {
+                            saturate: false, ..
+                        }
+                        | ast::CvtMode::FPFromUnsigned {
+                            saturate: false, ..
+                        }
                         | ast::CvtMode::FPExtend {
                             saturate: false, ..
                         }
@@ -245,6 +250,24 @@ fn run_instruction<'input>(
                 ast::CvtDetails {
                     to: type_,
                     mode: ast::CvtMode::FPRound { saturate: true, .. },
+                    ..
+                },
+            arguments: ast::CvtArgs { ref mut dst, .. },
+        }
+        | ast::Instruction::Cvt {
+            data:
+                ast::CvtDetails {
+                    to: type_,
+                    mode: ast::CvtMode::FPFromSigned { saturate: true, .. },
+                    ..
+                },
+            arguments: ast::CvtArgs { ref mut dst, .. },
+        }
+        | ast::Instruction::Cvt {
+            data:
+                ast::CvtDetails {
+                    to: type_,
+                    mode: ast::CvtMode::FPFromUnsigned { saturate: true, .. },
                     ..
                 },
             arguments: ast::CvtArgs { ref mut dst, .. },
