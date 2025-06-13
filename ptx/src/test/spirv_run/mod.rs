@@ -226,6 +226,11 @@ test_ptx!(
     [f32::from_bits(0x800000), f32::from_bits(0x007FFFFF)],
     [0x800000u32, 0xFFFFFF]
 );
+test_ptx!(
+    add_s32_sat,
+    [i32::MIN, -1],
+    [i32::MIN, i32::MAX]
+);
 test_ptx!(malformed_label, [2u64], [3u64]);
 test_ptx!(
     call_rnd,
