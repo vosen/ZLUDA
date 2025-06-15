@@ -51,6 +51,13 @@ struct Project {
 impl Project {
     fn try_new(p: Package) -> Option<Project> {
         let name = p.name;
+        let clib_name = p.targets.into_iter().find_map(|target| {
+            if target.is_cdylib() || target.is_dylib() {
+                Some(target.name)
+            } else {
+                None
+            }
+        });
         serde_json::from_value::<Option<Metadata>>(p.metadata)
             .unwrap()
             .map(|m| {
@@ -69,6 +76,7 @@ impl Project {
                     .unwrap();
                 Self {
                     name,
+                    clib_name,
                     target_name,
                     target_kind,
                     meta: m.zluda,

@@ -1,4 +1,4 @@
-use super::ZludaObject;
+use super::{driver, ZludaObject};
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
 use std::{ffi::CStr, mem};
@@ -19,6 +19,7 @@ impl ZludaObject for Module {
 }
 
 pub(crate) fn load_data(module: &mut CUmodule, image: *const std::ffi::c_void) -> CUresult {
+    let global_state = driver::global_state()?;
     let text = unsafe { CStr::from_ptr(image.cast()) }
         .to_str()
         .map_err(|_| CUerror::INVALID_VALUE)?;
@@ -29,6 +30,7 @@ pub(crate) fn load_data(module: &mut CUmodule, image: *const std::ffi::c_void) -
     let mut props = unsafe { mem::zeroed() };
     unsafe { hipGetDevicePropertiesR0600(&mut props, dev) }?;
     let elf_module = comgr::compile_bitcode(
+        &global_state.comgr,
         unsafe { CStr::from_ptr(props.gcnArchName.as_ptr()) },
         &*llvm_module.llvm_ir.write_bitcode_to_memory(),
         llvm_module.linked_bitcode(),
@@ -50,4 +52,9 @@ pub(crate) fn get_function(
     name: *const ::core::ffi::c_char,
 ) -> hipError_t {
     unsafe { hipModuleGetFunction(hfunc, hmod.base, name) }
+}
+
+pub(crate) fn get_loading_mode(mode: &mut cuda_types::cuda::CUmoduleLoadingMode) -> CUresult {
+    *mode = cuda_types::cuda::CUmoduleLoadingMode::CU_MODULE_EAGER_LOADING;
+    Ok(())
 }

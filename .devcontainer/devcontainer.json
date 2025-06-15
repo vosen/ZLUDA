@@ -7,7 +7,7 @@
 	},
 	"securityOpt": [ "seccomp=unconfined" ],
 	"runArgs": [
-		"--runtime=nvidia",
+		//"--runtime=nvidia",
 		"--device=/dev/kfd",
 		"--device=/dev/dri",
 		"--group-add=video"
@@ -25,7 +25,7 @@
 	},
 	// https://aka.ms/dev-containers-non-root.
 	"remoteUser": "root",
-	//"hostRequirements": { "gpu": "optional" }
+	"hostRequirements": { "gpu": true },
 	"customizations": {
 		"vscode": {
 			"extensions": [ "mhutchie.git-graph" ]

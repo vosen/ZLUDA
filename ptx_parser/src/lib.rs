@@ -284,7 +284,7 @@ fn immediate_value<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<as
     .parse_next(stream)
 }
 
-pub fn parse_for_errors<'input>(text: &'input str) -> Vec<PtxError> {
+pub fn parse_for_errors<'input>(text: &'input str) -> Vec<PtxError<'input>> {
     let (tokens, mut errors) = lex_with_span_unchecked(text);
     let parse_result = {
         let state = PtxParserState::new(text, &mut errors);
@@ -307,7 +307,7 @@ pub fn parse_for_errors<'input>(text: &'input str) -> Vec<PtxError> {
 
 fn lex_with_span_unchecked<'input>(
     text: &'input str,
-) -> (Vec<(Token<'input>, logos::Span)>, Vec<PtxError>) {
+) -> (Vec<(Token<'input>, logos::Span)>, Vec<PtxError<'input>>) {
     let lexer = Token::lexer(text);
     let mut result = Vec::new();
     let mut errors = Vec::new();
@@ -322,7 +322,7 @@ fn lex_with_span_unchecked<'input>(
 
 pub fn parse_module_checked<'input>(
     text: &'input str,
-) -> Result<ast::Module<'input>, Vec<PtxError>> {
+) -> Result<ast::Module<'input>, Vec<PtxError<'input>>> {
     let mut lexer = Token::lexer(text);
     let mut errors = Vec::new();
     let mut tokens = Vec::new();
@@ -427,7 +427,7 @@ fn directive<'a, 'input>(
             | Token::DotFile | Token::DotSection => true,
             _ => false,
         }),
-        PtxError::UnrecognizedDirective,
+        |text| PtxError::UnrecognizedDirective(text.unwrap_or("")),
     )
     .map(Option::flatten)
     .parse_next(stream)
@@ -675,7 +675,7 @@ fn statement<'a, 'input>(
                 _ => false,
             },
         ),
-        PtxError::UnrecognizedStatement,
+        |text| PtxError::UnrecognizedStatement(text.unwrap_or("")),
     )
     .map(Option::flatten)
     .parse_next(stream)
@@ -1194,7 +1194,7 @@ impl<Ident> ast::ParsedOperand<Ident> {
     ) -> PResult<ast::ParsedOperand<&'input str>> {
         use winnow::combinator::*;
         use winnow::token::any;
-        fn vector_index<'input>(inp: &'input str) -> Result<u8, PtxError> {
+        fn vector_index<'input>(inp: &'input str) -> Result<u8, PtxError<'input>> {
             match inp {
                 ".x" | ".r" => Ok(0),
                 ".y" | ".g" => Ok(1),
@@ -1285,10 +1285,10 @@ pub enum PtxError<'input> {
     ArrayInitalizer,
     #[error("")]
     NonExternPointer,
-    #[error("{0:?}")]
-    UnrecognizedStatement(Option<&'input str>),
-    #[error("{0:?}")]
-    UnrecognizedDirective(Option<&'input str>),
+    #[error("Unrecognized statement {0:?}")]
+    UnrecognizedStatement(&'input str),
+    #[error("Unrecognized directive {0:?}")]
+    UnrecognizedDirective(&'input str),
 }
 
 #[derive(Debug)]
@@ -3492,11 +3492,11 @@ mod tests {
         assert_eq!(errors.len(), 2);
         assert!(matches!(
             errors[0],
-            PtxError::UnrecognizedStatement(Some("unknown_op1.asdf foobar;"))
+            PtxError::UnrecognizedStatement("unknown_op1.asdf foobar;")
         ));
         assert!(matches!(
             errors[1],
-            PtxError::UnrecognizedStatement(Some("unknown_op2 temp2, temp;"))
+            PtxError::UnrecognizedStatement("unknown_op2 temp2, temp;")
         ));
     }
 
@@ -3533,11 +3533,11 @@ mod tests {
         assert_eq!(errors.len(), 2);
         assert!(matches!(
             errors[0],
-            PtxError::UnrecognizedDirective(Some(".broken_directive_fail; 34; {"))
+            PtxError::UnrecognizedDirective(".broken_directive_fail; 34; {")
         ));
         assert!(matches!(
             errors[1],
-            PtxError::UnrecognizedDirective(Some("section foobar }"))
+            PtxError::UnrecognizedDirective("section foobar }")
         ));
     }
 }
