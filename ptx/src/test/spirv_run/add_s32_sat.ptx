@@ -1,0 +1,24 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry add_s32_sat(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .s32 	    temp<4>;
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.s32          temp0, [in_addr];
+    ld.s32          temp1, [in_addr+4];
+	add.sat.s32		temp2, temp0, temp1;
+	add.s32         temp3, temp0, temp1;
+    st.s32          [out_addr], temp2;
+    st.s32          [out_addr+4], temp3;
+	ret;
+}

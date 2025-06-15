@@ -147,6 +147,7 @@ test_ptx!(ex2, [10f32], [1024f32]);
 test_ptx!(cvt_rni, [9.5f32, 10.5f32], [10f32, 10f32]);
 test_ptx!(cvt_rzi, [-13.8f32, 12.9f32], [-13f32, 12f32]);
 test_ptx!(cvt_s32_f32, [-13.8f32, 12.9f32], [-13i32, 13i32]);
+test_ptx!(cvt_rni_u16_f32, [0x477FFF80u32], [65535u16]);
 test_ptx!(clz, [0b00000101_00101101_00010011_10101011u32], [5u32]);
 test_ptx!(popc, [0b10111100_10010010_01001001_10001010u32], [14u32]);
 test_ptx!(
@@ -226,6 +227,7 @@ test_ptx!(
     [f32::from_bits(0x800000), f32::from_bits(0x007FFFFF)],
     [0x800000u32, 0xFFFFFF]
 );
+test_ptx!(add_s32_sat, [i32::MIN, -1], [i32::MIN, i32::MAX]);
 test_ptx!(malformed_label, [2u64], [3u64]);
 test_ptx!(
     call_rnd,
