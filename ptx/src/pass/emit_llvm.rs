@@ -1641,22 +1641,14 @@ impl<'a> MethodEmitContext<'a> {
             ptx_parser::CvtMode::FPRound {
                 integer_rounding: Some(rounding),
                 ..
-            } => {
-                return self.emit_cvt_float_to_int(
-                    data.from,
-                    data.to,
-                    rounding,
-                    arguments,
-                    Some(LLVMBuildFPToSI),
-                )
-            }
+            } => return self.emit_cvt_float_to_int(data.from, data.to, rounding, arguments, None),
             ptx_parser::CvtMode::SignedFromFP { rounding, .. } => {
                 return self.emit_cvt_float_to_int(
                     data.from,
                     data.to,
                     rounding,
                     arguments,
-                    Some(LLVMBuildFPToSI),
+                    Some(true),
                 )
             }
             ptx_parser::CvtMode::UnsignedFromFP { rounding, .. } => {
@@ -1665,7 +1657,7 @@ impl<'a> MethodEmitContext<'a> {
                     data.to,
                     rounding,
                     arguments,
-                    Some(LLVMBuildFPToUI),
+                    Some(false),
                 )
             }
             ptx_parser::CvtMode::FPFromSigned { .. } => {
@@ -1773,18 +1765,89 @@ impl<'a> MethodEmitContext<'a> {
         to: ast::ScalarType,
         rounding: ast::RoundingMode,
         arguments: ptx_parser::CvtArgs<SpirvWord>,
-        llvm_cast: Option<
-            unsafe extern "C" fn(
-                arg1: LLVMBuilderRef,
-                Val: LLVMValueRef,
-                DestTy: LLVMTypeRef,
-                Name: *const i8,
-            ) -> LLVMValueRef,
-        >,
+        signed_cast: Option<bool>,
     ) -> Result<(), TranslateError> {
+        let dst_int_rounded =
+            self.emit_fp_int_rounding(from, rounding, &arguments, signed_cast.is_some())?;
+        // In PTX all the int-from-float casts are saturating casts. On the other hand, in LLVM,
+        // out-of-range fptoui and fptosi have undefined behavior.
+        // We could handle this all with llvm.fptosi.sat and llvm.fptoui.sat intrinsics, but
+        // the problem is that, when using *.sat variants AMDGPU target _always_ emits saturation
+        // checks. Often they are unnecessary because v_cvt_* instructions saturates anyway.
+        // For that reason, all from-to combinations that we know have a direct corresponding
+        // v_cvt_* instruction get special treatment
+        let is_saturating_cast = match (to, from) {
+            (ast::ScalarType::S16, ast::ScalarType::F16)
+            | (ast::ScalarType::S32, ast::ScalarType::F32)
+            | (ast::ScalarType::S32, ast::ScalarType::F64)
+            | (ast::ScalarType::U16, ast::ScalarType::F16)
+            | (ast::ScalarType::U32, ast::ScalarType::F32)
+            | (ast::ScalarType::U32, ast::ScalarType::F64) => true,
+            _ => false,
+        };
+        let signed_cast = match signed_cast {
+            Some(s) => s,
+            None => {
+                self.resolver.register(
+                    arguments.dst,
+                    dst_int_rounded.ok_or_else(error_unreachable)?,
+                );
+                return Ok(());
+            }
+        };
+        if is_saturating_cast {
+            let to = get_scalar_type(self.context, to);
+            let src =
+                dst_int_rounded.unwrap_or_else(|| self.resolver.value(arguments.src).unwrap());
+            let llvm_cast = if signed_cast {
+                LLVMBuildFPToSI
+            } else {
+                LLVMBuildFPToUI
+            };
+            let poisoned_dst = unsafe { llvm_cast(self.builder, src, to, LLVM_UNNAMED.as_ptr()) };
+            self.resolver.with_result(arguments.dst, |dst| unsafe {
+                LLVMBuildFreeze(self.builder, poisoned_dst, dst)
+            });
+        } else {
+            let cvt_op = if to.kind() == ptx_parser::ScalarKind::Unsigned {
+                "fptoui"
+            } else {
+                "fptosi"
+            };
+            let cast_intrinsic = format!(
+                "llvm.{cvt_op}.sat.{}.{}\0",
+                LLVMTypeDisplay(to),
+                LLVMTypeDisplay(from)
+            );
+            let src =
+                dst_int_rounded.unwrap_or_else(|| self.resolver.value(arguments.src).unwrap());
+            self.emit_intrinsic(
+                unsafe { CStr::from_bytes_with_nul_unchecked(cast_intrinsic.as_bytes()) },
+                Some(arguments.dst),
+                Some(&to.into()),
+                vec![(src, get_scalar_type(self.context, from))],
+            )?;
+        }
+        Ok(())
+    }
+
+    fn emit_fp_int_rounding(
+        &mut self,
+        from: ptx_parser::ScalarType,
+        rounding: ptx_parser::RoundingMode,
+        arguments: &ptx_parser::CvtArgs<SpirvWord>,
+        will_saturate_with_cvt: bool,
+    ) -> Result<Option<LLVMValueRef>, TranslateError> {
         let prefix = match rounding {
             ptx_parser::RoundingMode::NearestEven => "llvm.roundeven",
-            ptx_parser::RoundingMode::Zero => "llvm.trunc",
+            ptx_parser::RoundingMode::Zero => {
+                // cvt has round-to-zero semantics
+                if will_saturate_with_cvt {
+                    return Ok(None);
+                } else {
+                    "llvm.trunc"
+                }
+            }
             ptx_parser::RoundingMode::NegativeInf => "llvm.floor",
             ptx_parser::RoundingMode::PositiveInf => "llvm.ceil",
         };
@@ -1798,34 +1861,7 @@ impl<'a> MethodEmitContext<'a> {
                 get_scalar_type(self.context, from),
             )],
         )?;
-        if let Some(llvm_cast) = llvm_cast {
-            let to = get_scalar_type(self.context, to);
-            let poisoned_dst =
-                unsafe { llvm_cast(self.builder, rounded_float, to, LLVM_UNNAMED.as_ptr()) };
-            self.resolver.with_result(arguments.dst, |dst| unsafe {
-                LLVMBuildFreeze(self.builder, poisoned_dst, dst)
-            });
-        } else {
-            self.resolver.register(arguments.dst, rounded_float);
-        }
-        // Using explicit saturation gives us worse codegen: it explicitly checks for out of bound
-        // values and NaNs. Using non-saturated fptosi/fptoui emits v_cvt_<TO>_<FROM> which
-        // saturates by default and we don't care about NaNs anyway
-        /*
-        let cast_intrinsic = format!(
-            "{}.{}.{}\0",
-            llvm_cast,
-            LLVMTypeDisplay(to),
-            LLVMTypeDisplay(from)
-        );
-        self.emit_intrinsic(
-            unsafe { CStr::from_bytes_with_nul_unchecked(cast_intrinsic.as_bytes()) },
-            Some(arguments.dst),
-            &to.into(),
-            vec![(rounded_float, get_scalar_type(self.context, from))],
-        )?;
-        */
-        Ok(())
+        Ok(Some(rounded_float))
     }
 
     fn emit_cvt_int_to_float(
