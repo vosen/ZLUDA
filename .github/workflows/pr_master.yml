@@ -24,6 +24,7 @@ jobs:
         sudo sh -c 'echo Pin-Priority: 600 >> /etc/apt/preferences.d/rocm-pin-600'
         sudo apt-get update
         sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends rocm-smi-lib rocm-llvm-dev hip-runtime-amd hip-dev
+        sudo echo 'Checking permissions'
         echo 'export PATH="$PATH:/opt/rocm/bin"' | sudo tee /etc/profile.d/rocm.sh  
         echo '/opt/rocm/lib' | sudo tee /etc/ld.so.conf.d/rocm.conf
         sudo ldconfig
