@@ -244,7 +244,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
     }
 
     unsafe extern "system" fn check_fn3() -> u32 {
-        todo!()
+        0
     }
 }
 
