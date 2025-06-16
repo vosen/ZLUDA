@@ -90,8 +90,8 @@ fn run_instruction<'input>(
                         | ast::CvtMode::SignExtend
                         | ast::CvtMode::Truncate
                         | ast::CvtMode::Bitcast
-                        | ast::CvtMode::SaturateUnsignedToSigned
-                        | ast::CvtMode::SaturateSignedToUnsigned
+                        | ast::CvtMode::IntSaturateToSigned
+                        | ast::CvtMode::IntSaturateToUnsigned
                         | ast::CvtMode::SignedFromFP { .. }
                         | ast::CvtMode::UnsignedFromFP { .. }
                         | ast::CvtMode::FPFromSigned {

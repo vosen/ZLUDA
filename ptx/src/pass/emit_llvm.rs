@@ -1615,10 +1615,10 @@ impl<'a> MethodEmitContext<'a> {
             ptx_parser::CvtMode::SignExtend => LLVMBuildSExt,
             ptx_parser::CvtMode::Truncate => LLVMBuildTrunc,
             ptx_parser::CvtMode::Bitcast => LLVMBuildBitCast,
-            ptx_parser::CvtMode::SaturateUnsignedToSigned => {
+            ptx_parser::CvtMode::IntSaturateToSigned => {
                 return self.emit_cvt_unsigned_to_signed_sat(data.from, data.to, arguments)
             }
-            ptx_parser::CvtMode::SaturateSignedToUnsigned => {
+            ptx_parser::CvtMode::IntSaturateToUnsigned => {
                 return self.emit_cvt_signed_to_unsigned_sat(data.from, data.to, arguments)
             }
             ptx_parser::CvtMode::FPExtend { .. } => LLVMBuildFPExt,
@@ -1680,27 +1680,7 @@ impl<'a> MethodEmitContext<'a> {
         to: ptx_parser::ScalarType,
         arguments: ptx_parser::CvtArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        // This looks dodgy, but it's fine. MAX bit pattern is always 0b11..1,
-        // so if it's downcast to a smaller type, it will be the maximum value
-        // of the smaller type
-        let max_value = match to {
-            ptx_parser::ScalarType::S8 => i8::MAX as u64,
-            ptx_parser::ScalarType::S16 => i16::MAX as u64,
-            ptx_parser::ScalarType::S32 => i32::MAX as u64,
-            ptx_parser::ScalarType::S64 => i64::MAX as u64,
-            _ => return Err(error_unreachable()),
-        };
-        let from_llvm = get_scalar_type(self.context, from);
-        let max = unsafe { LLVMConstInt(from_llvm, max_value, 0) };
-        let clamped = self.emit_intrinsic(
-            c"llvm.umin",
-            None,
-            Some(&from.into()),
-            vec![
-                (self.resolver.value(arguments.src)?, from_llvm),
-                (max, from_llvm),
-            ],
-        )?;
+        let clamped = self.emit_saturate_integer(from, to, &arguments)?;
         let resize_fn = if to.layout().size() >= from.layout().size() {
             LLVMBuildSExtOrBitCast
         } else {
@@ -1713,40 +1693,92 @@ impl<'a> MethodEmitContext<'a> {
         Ok(())
     }
 
+    fn emit_saturate_integer(
+        &mut self,
+        from: ptx_parser::ScalarType,
+        to: ptx_parser::ScalarType,
+        arguments: &ptx_parser::CvtArgs<SpirvWord>,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        let from_llvm = get_scalar_type(self.context, from);
+        match from.kind() {
+            ptx_parser::ScalarKind::Unsigned => {
+                let max_value = match to {
+                    ptx_parser::ScalarType::U8 => u8::MAX as u64,
+                    ptx_parser::ScalarType::S8 => i8::MAX as u64,
+                    ptx_parser::ScalarType::U16 => u16::MAX as u64,
+                    ptx_parser::ScalarType::S16 => i16::MAX as u64,
+                    ptx_parser::ScalarType::U32 => u32::MAX as u64,
+                    ptx_parser::ScalarType::S32 => i32::MAX as u64,
+                    ptx_parser::ScalarType::U64 => u64::MAX as u64,
+                    ptx_parser::ScalarType::S64 => i64::MAX as u64,
+                    _ => return Err(error_unreachable()),
+                };
+                let intrinsic = format!("llvm.umin.{}\0", LLVMTypeDisplay(from));
+                let max = unsafe { LLVMConstInt(from_llvm, max_value, 0) };
+                let clamped = self.emit_intrinsic(
+                    unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
+                    None,
+                    Some(&from.into()),
+                    vec![
+                        (self.resolver.value(arguments.src)?, from_llvm),
+                        (max, from_llvm),
+                    ],
+                )?;
+                Ok(clamped)
+            }
+            ptx_parser::ScalarKind::Signed => {
+                let (min_value_from, max_value_from) = match from {
+                    ptx_parser::ScalarType::S8 => (i8::MIN as i128, i8::MAX as i128),
+                    ptx_parser::ScalarType::S16 => (i16::MIN as i128, i16::MAX as i128),
+                    ptx_parser::ScalarType::S32 => (i32::MIN as i128, i32::MAX as i128),
+                    ptx_parser::ScalarType::S64 => (i64::MIN as i128, i64::MAX as i128),
+                    _ => return Err(error_unreachable()),
+                };
+                let (min_value_to, max_value_to) = match to {
+                    ptx_parser::ScalarType::U8 => (u8::MIN as i128, u8::MAX as i128),
+                    ptx_parser::ScalarType::S8 => (i8::MIN as i128, i8::MAX as i128),
+                    ptx_parser::ScalarType::U16 => (u16::MIN as i128, u16::MAX as i128),
+                    ptx_parser::ScalarType::S16 => (i16::MIN as i128, i16::MAX as i128),
+                    ptx_parser::ScalarType::U32 => (u32::MIN as i128, u32::MAX as i128),
+                    ptx_parser::ScalarType::S32 => (i32::MIN as i128, i32::MAX as i128),
+                    ptx_parser::ScalarType::U64 => (u64::MIN as i128, u64::MAX as i128),
+                    ptx_parser::ScalarType::S64 => (i64::MIN as i128, i64::MAX as i128),
+                    _ => return Err(error_unreachable()),
+                };
+                let min_value = min_value_from.max(min_value_to);
+                let max_value = max_value_from.min(max_value_to);
+                let max_intrinsic = format!("llvm.smax.{}\0", LLVMTypeDisplay(from));
+                let min = unsafe { LLVMConstInt(from_llvm, min_value as u64, 1) };
+                let min_intrinsic = format!("llvm.smin.{}\0", LLVMTypeDisplay(from));
+                let max = unsafe { LLVMConstInt(from_llvm, max_value as u64, 1) };
+                let clamped = self.emit_intrinsic(
+                    unsafe { CStr::from_bytes_with_nul_unchecked(max_intrinsic.as_bytes()) },
+                    None,
+                    Some(&from.into()),
+                    vec![
+                        (self.resolver.value(arguments.src)?, from_llvm),
+                        (min, from_llvm),
+                    ],
+                )?;
+                let clamped = self.emit_intrinsic(
+                    unsafe { CStr::from_bytes_with_nul_unchecked(min_intrinsic.as_bytes()) },
+                    None,
+                    Some(&from.into()),
+                    vec![(clamped, from_llvm), (max, from_llvm)],
+                )?;
+                Ok(clamped)
+            }
+            _ => return Err(error_unreachable()),
+        }
+    }
+
     fn emit_cvt_signed_to_unsigned_sat(
         &mut self,
         from: ptx_parser::ScalarType,
         to: ptx_parser::ScalarType,
         arguments: ptx_parser::CvtArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        let from_llvm = get_scalar_type(self.context, from);
-        let zero = unsafe { LLVMConstInt(from_llvm, 0, 0) };
-        let zero_clamp_intrinsic = format!("llvm.smax.{}\0", LLVMTypeDisplay(from));
-        let zero_clamped = self.emit_intrinsic(
-            unsafe { CStr::from_bytes_with_nul_unchecked(zero_clamp_intrinsic.as_bytes()) },
-            None,
-            Some(&from.into()),
-            vec![
-                (self.resolver.value(arguments.src)?, from_llvm),
-                (zero, from_llvm),
-            ],
-        )?;
-        // zero_clamped is now unsigned
-        let max_value = match to {
-            ptx_parser::ScalarType::U8 => u8::MAX as u64,
-            ptx_parser::ScalarType::U16 => u16::MAX as u64,
-            ptx_parser::ScalarType::U32 => u32::MAX as u64,
-            ptx_parser::ScalarType::U64 => u64::MAX as u64,
-            _ => return Err(error_unreachable()),
-        };
-        let max = unsafe { LLVMConstInt(from_llvm, max_value, 0) };
-        let max_clamp_intrinsic = format!("llvm.umin.{}\0", LLVMTypeDisplay(from));
-        let fully_clamped = self.emit_intrinsic(
-            unsafe { CStr::from_bytes_with_nul_unchecked(max_clamp_intrinsic.as_bytes()) },
-            None,
-            Some(&from.into()),
-            vec![(zero_clamped, from_llvm), (max, from_llvm)],
-        )?;
+        let clamped = self.emit_saturate_integer(from, to, &arguments)?;
         let resize_fn = if to.layout().size() >= from.layout().size() {
             LLVMBuildZExtOrBitCast
         } else {
@@ -1754,7 +1786,7 @@ impl<'a> MethodEmitContext<'a> {
         };
         let to_llvm = get_scalar_type(self.context, to);
         self.resolver.with_result(arguments.dst, |dst| unsafe {
-            resize_fn(self.builder, fully_clamped, to_llvm, dst)
+            resize_fn(self.builder, clamped, to_llvm, dst)
         });
         Ok(())
     }

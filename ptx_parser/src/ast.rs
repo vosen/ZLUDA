@@ -1472,8 +1472,8 @@ pub enum CvtMode {
     SignExtend,
     Truncate,
     Bitcast,
-    SaturateUnsignedToSigned,
-    SaturateSignedToUnsigned,
+    IntSaturateToSigned,
+    IntSaturateToUnsigned,
     // float from float
     FPExtend {
         flush_to_zero: Option<bool>,
@@ -1580,20 +1580,31 @@ impl CvtDetails {
                 rounding: unwrap_rounding().0,
                 saturate,
             },
-            (ScalarKind::Signed, ScalarKind::Unsigned) if saturate => {
-                CvtMode::SaturateUnsignedToSigned
-            }
-            (ScalarKind::Unsigned, ScalarKind::Signed) if saturate => {
-                CvtMode::SaturateSignedToUnsigned
+            (ScalarKind::Signed, ScalarKind::Unsigned)
+            | (ScalarKind::Signed, ScalarKind::Signed)
+                if saturate =>
+            {
+                CvtMode::IntSaturateToSigned
             }
             (ScalarKind::Unsigned, ScalarKind::Signed)
+            | (ScalarKind::Unsigned, ScalarKind::Unsigned)
+                if saturate =>
+            {
+                CvtMode::IntSaturateToUnsigned
+            }
+            (ScalarKind::Unsigned, ScalarKind::Unsigned)
+            | (ScalarKind::Signed, ScalarKind::Signed)
+            | (ScalarKind::Unsigned, ScalarKind::Signed)
             | (ScalarKind::Signed, ScalarKind::Unsigned)
                 if dst.size_of() == src.size_of() =>
             {
                 CvtMode::Bitcast
             }
             (ScalarKind::Unsigned, ScalarKind::Unsigned)
-            | (ScalarKind::Signed, ScalarKind::Signed) => match dst.size_of().cmp(&src.size_of()) {
+            | (ScalarKind::Signed, ScalarKind::Signed)
+            | (ScalarKind::Unsigned, ScalarKind::Signed)
+            | (ScalarKind::Signed, ScalarKind::Unsigned) => match dst.size_of().cmp(&src.size_of())
+            {
                 Ordering::Less => CvtMode::Truncate,
                 Ordering::Equal => CvtMode::Bitcast,
                 Ordering::Greater => {
@@ -1604,7 +1615,6 @@ impl CvtDetails {
                     }
                 }
             },
-            (ScalarKind::Unsigned, ScalarKind::Signed) => CvtMode::SaturateSignedToUnsigned,
             (_, _) => {
                 errors.push(PtxError::SyntaxError);
                 CvtMode::Bitcast

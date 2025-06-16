@@ -236,8 +236,8 @@ impl InstructionModes {
             | ast::CvtMode::SignExtend
             | ast::CvtMode::Truncate
             | ast::CvtMode::Bitcast
-            | ast::CvtMode::SaturateUnsignedToSigned
-            | ast::CvtMode::SaturateSignedToUnsigned => Self::none(),
+            | ast::CvtMode::IntSaturateToSigned
+            | ast::CvtMode::IntSaturateToUnsigned => Self::none(),
             ast::CvtMode::FPExtend { flush_to_zero, .. } => Self::from_typed_denormal(
                 cvt.from,
                 cvt.to,
