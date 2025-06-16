@@ -76,10 +76,10 @@ pub(crate) fn init(flags: ::core::ffi::c_uint) -> CUresult {
     Ok(())
 }
 
-const FN2_BUFFER_SIZE: usize = 400;
+const FN2_BUFFER_SIZE: usize = 1024;
 
 struct Fn2Buffer {
-    buffer: std::cell::UnsafeCell<[u8; FN2_BUFFER_SIZE]>,
+    buffer: std::cell::UnsafeCell<[u32; FN2_BUFFER_SIZE]>,
 }
 
 impl Fn2Buffer {
