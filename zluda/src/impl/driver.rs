@@ -10,6 +10,10 @@ use std::{
     usize,
 };
 
+#[cfg_attr(windows, path = "os_win.rs")]
+#[cfg_attr(not(windows), path = "os_unix.rs")]
+mod os;
+
 pub(crate) struct GlobalState {
     pub devices: Vec<Device>,
     pub comgr: Comgr,
@@ -232,7 +236,31 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         unix_seconds: u64,
         result: *mut [u64; 2],
     ) -> cuda_types::cuda::CUresult {
-        todo!()
+        let current_process = std::process::id();
+        let current_thread = os::current_thread();
+
+        let integrity_check_table = EXPORT_TABLE.INTEGRITY_CHECK.as_ptr().cast();
+        let cudart_table = EXPORT_TABLE.CUDART_INTERFACE.as_ptr().cast();
+        let fn_address = EXPORT_TABLE.INTEGRITY_CHECK[1];
+
+        let devices = get_device_hash_info()?;
+        let device_count = devices.len() as u32;
+        let get_device = |dev| devices[dev as usize];
+
+        let hash = ::dark_api::integrity_check(
+            version,
+            unix_seconds,
+            cuda_types::cuda::CUDA_VERSION,
+            current_process,
+            current_thread,
+            integrity_check_table,
+            cudart_table,
+            fn_address,
+            device_count,
+            get_device,
+        );
+        *result = hash;
+        Ok(())
     }
 
     unsafe extern "system" fn context_check(
@@ -244,8 +272,48 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
     }
 
     unsafe extern "system" fn check_fn3() -> u32 {
-        todo!()
+        0
     }
+}
+
+fn get_device_hash_info() -> Result<Vec<::dark_api::DeviceHashinfo>, CUerror> {
+    let mut device_count = 0;
+    device::get_count(&mut device_count)?;
+
+    (0..device_count)
+        .map(|dev| {
+            let mut guid = CUuuid_st { bytes: [0; 16] };
+            unsafe { crate::cuDeviceGetUuid(&mut guid, dev)? };
+
+            let mut pci_domain = 0;
+            device::get_attribute(
+                &mut pci_domain,
+                CUdevice_attribute::CU_DEVICE_ATTRIBUTE_PCI_DOMAIN_ID,
+                dev,
+            )?;
+
+            let mut pci_bus = 0;
+            device::get_attribute(
+                &mut pci_bus,
+                CUdevice_attribute::CU_DEVICE_ATTRIBUTE_PCI_BUS_ID,
+                dev,
+            )?;
+
+            let mut pci_device = 0;
+            device::get_attribute(
+                &mut pci_device,
+                CUdevice_attribute::CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID,
+                dev,
+            )?;
+
+            Ok(::dark_api::DeviceHashinfo {
+                guid,
+                pci_domain,
+                pci_bus,
+                pci_device,
+            })
+        })
+        .collect()
 }
 
 static EXPORT_TABLE: ::dark_api::cuda::CudaDarkApiGlobalTable =
