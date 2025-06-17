@@ -251,8 +251,8 @@ dark_api! {
     },
     "{A094798C-2E74-2E74-93F2-0800200C0A66}" => TOOLS_RUNTIME_CALLBACK_HOOKS[7] {
         [0] = SIZE_OF,
-        [2] = runtime_callback_hooks_fn2(ptr: *mut *mut std::ffi::c_void, size: *mut usize) -> (),
-        [6] = runtime_callback_hooks_fn6(ptr: *mut *mut std::ffi::c_void, size: *mut usize) -> ()
+        [2] = get_unknown_buffer1(ptr: *mut *mut std::ffi::c_void, size: *mut usize) -> (),
+        [6] = get_unknown_buffer2(ptr: *mut *mut std::ffi::c_void, size: *mut usize) -> ()
     },
     "{C693336E-1121-DF11-A8C3-68F355D89593}" => CONTEXT_LOCAL_STORAGE_INTERFACE_V0301[4] {
         [0] = context_local_storage_ctor(

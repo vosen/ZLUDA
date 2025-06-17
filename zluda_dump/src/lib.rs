@@ -401,8 +401,8 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApiDump {
 
     dark_api_fn_redirect_log! {
         TOOLS_RUNTIME_CALLBACK_HOOKS {
-            [2] = runtime_callback_hooks_fn2(ptr: *mut *mut std::ffi::c_void, size: *mut usize) -> (),
-            [6] = runtime_callback_hooks_fn6(ptr: *mut *mut std::ffi::c_void, size: *mut usize) -> ()
+            [2] = get_unknown_buffer1(ptr: *mut *mut std::ffi::c_void, size: *mut usize) -> (),
+            [6] = get_unknown_buffer2(ptr: *mut *mut std::ffi::c_void, size: *mut usize) -> ()
         }
     }
 

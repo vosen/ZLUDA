@@ -76,23 +76,25 @@ pub(crate) fn init(flags: ::core::ffi::c_uint) -> CUresult {
     Ok(())
 }
 
-const FN2_BUFFER_SIZE: usize = 400;
-
-struct Fn2Buffer {
-    buffer: std::cell::UnsafeCell<[u8; FN2_BUFFER_SIZE]>,
+struct UnknownBuffer<const S: usize> {
+    buffer: std::cell::UnsafeCell<[u32; S]>,
 }
 
-impl Fn2Buffer {
+impl<const S: usize> UnknownBuffer<S> {
     const fn new() -> Self {
-        Fn2Buffer {
-            buffer: std::cell::UnsafeCell::new([0; FN2_BUFFER_SIZE]),
+        UnknownBuffer {
+            buffer: std::cell::UnsafeCell::new([0; S]),
         }
+    }
+    const fn len(&self) -> usize {
+        S
     }
 }
 
-unsafe impl Sync for Fn2Buffer {}
+unsafe impl<const S: usize> Sync for UnknownBuffer<S> {}
 
-static FN2_BUFFER: Fn2Buffer = Fn2Buffer::new();
+static UNKNOWN_BUFFER1: UnknownBuffer<1024> = UnknownBuffer::new();
+static UNKNOWN_BUFFER2: UnknownBuffer<14> = UnknownBuffer::new();
 
 struct DarkApi {}
 
@@ -140,19 +142,20 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         todo!()
     }
 
-    unsafe extern "system" fn runtime_callback_hooks_fn2(
+    unsafe extern "system" fn get_unknown_buffer1(
         ptr: *mut *mut std::ffi::c_void,
         size: *mut usize,
     ) -> () {
-        *ptr = FN2_BUFFER.buffer.get() as *mut std::ffi::c_void;
-        *size = FN2_BUFFER_SIZE;
+        *ptr = UNKNOWN_BUFFER1.buffer.get() as *mut std::ffi::c_void;
+        *size = UNKNOWN_BUFFER1.len();
     }
 
-    unsafe extern "system" fn runtime_callback_hooks_fn6(
+    unsafe extern "system" fn get_unknown_buffer2(
         ptr: *mut *mut std::ffi::c_void,
         size: *mut usize,
     ) -> () {
-        todo!()
+        *ptr = UNKNOWN_BUFFER2.buffer.get() as *mut std::ffi::c_void;
+        *size = UNKNOWN_BUFFER2.len();
     }
 
     unsafe extern "system" fn context_local_storage_ctor(
