@@ -167,6 +167,18 @@ impl FatbinFileHeader {
             .add(self.header_size as usize);
         std::slice::from_raw_parts(start, self.payload_size as usize)
     }
+
+    pub unsafe fn decompress<'a>(&'a self) -> Result<Vec<u8>, ParseError> {
+        let payload = if self.flags.contains(FatbinFileHeaderFlags::CompressedLz4) {
+            unsafe { decompress_lz4(self) }?
+        } else if self.flags.contains(FatbinFileHeaderFlags::CompressedZstd) {
+            unsafe { decompress_zstd(self) }?
+        } else {
+            unsafe { self.get_payload().to_vec() }
+        };
+
+        Ok(payload)
+    }
 }
 
 pub enum ParseError {
@@ -176,6 +188,8 @@ pub enum ParseError {
         observed: u32,
         expected: Vec<u32>,
     },
+    Lz4DecompressionFailure,
+    ZstdDecompressionFailure(usize),
 }
 
 impl ParseError {
@@ -195,5 +209,45 @@ impl ParseError {
                 observed,
             })
         }
+    }
+}
+
+const MAX_MODULE_DECOMPRESSION_BOUND: usize = 64 * 1024 * 1024;
+
+pub unsafe fn decompress_lz4(file: &FatbinFileHeader) -> Result<Vec<u8>, ParseError> {
+    let decompressed_size = usize::max(1024, (*file).uncompressed_payload as usize);
+    let mut decompressed_vec = vec![0u8; decompressed_size];
+    loop {
+        match lz4_sys::LZ4_decompress_safe(
+            file.get_payload().as_ptr() as *const _,
+            decompressed_vec.as_mut_ptr() as *mut _,
+            (*file).payload_size as _,
+            decompressed_vec.len() as _,
+        ) {
+            error if error < 0 => {
+                let new_size = decompressed_vec.len() * 2;
+                if new_size > MAX_MODULE_DECOMPRESSION_BOUND {
+                    return Err(ParseError::Lz4DecompressionFailure);
+                }
+                decompressed_vec.resize(decompressed_vec.len() * 2, 0);
+            }
+            real_decompressed_size => {
+                decompressed_vec.truncate(real_decompressed_size as usize);
+                return Ok(decompressed_vec);
+            }
+        }
+    }
+}
+
+pub unsafe fn decompress_zstd(file: &FatbinFileHeader) -> Result<Vec<u8>, ParseError> {
+    let mut result = Vec::with_capacity(file.uncompressed_payload as usize);
+    let payload = file.get_payload();
+    dbg!((payload.len(), file.uncompressed_payload, file.payload_size));
+    match zstd_safe::decompress(&mut result, payload) {
+        Ok(actual_size) => {
+            result.truncate(actual_size);
+            Ok(result)
+        }
+        Err(err) => Err(ParseError::ZstdDecompressionFailure(err)),
     }
 }

@@ -4,7 +4,10 @@ use crate::{
 };
 use cuda_types::{
     cuda::*,
-    dark_api::{FatbinFileHeader, FatbinFileHeaderFlags, FatbinHeader, FatbincWrapper},
+    dark_api::{
+        decompress_lz4, decompress_zstd, FatbinFileHeader, FatbinFileHeaderFlags, FatbinHeader,
+        FatbincWrapper,
+    },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::{
@@ -293,12 +296,12 @@ unsafe fn record_submodules(
     while let Some(file) = FatbinFileHeader::next(&mut file_buffer)? {
         let mut payload = if file.flags.contains(FatbinFileHeaderFlags::CompressedLz4) {
             Cow::Owned(unwrap_some_or!(
-                fn_logger.try_return(|| decompress_lz4(file)),
+                fn_logger.try_return(|| decompress_lz4(file).map_err(|e| e.into())),
                 continue
             ))
         } else if file.flags.contains(FatbinFileHeaderFlags::CompressedZstd) {
             Cow::Owned(unwrap_some_or!(
-                fn_logger.try_return(|| decompress_zstd(file)),
+                fn_logger.try_return(|| decompress_zstd(file).map_err(|e| e.into())),
                 continue
             ))
         } else {
@@ -328,44 +331,4 @@ unsafe fn record_submodules(
         }
     }
     Ok(())
-}
-
-const MAX_MODULE_DECOMPRESSION_BOUND: usize = 64 * 1024 * 1024;
-
-unsafe fn decompress_lz4(file: &FatbinFileHeader) -> Result<Vec<u8>, ErrorEntry> {
-    let decompressed_size = usize::max(1024, (*file).uncompressed_payload as usize);
-    let mut decompressed_vec = vec![0u8; decompressed_size];
-    loop {
-        match lz4_sys::LZ4_decompress_safe(
-            file.get_payload().as_ptr() as *const _,
-            decompressed_vec.as_mut_ptr() as *mut _,
-            (*file).payload_size as _,
-            decompressed_vec.len() as _,
-        ) {
-            error if error < 0 => {
-                let new_size = decompressed_vec.len() * 2;
-                if new_size > MAX_MODULE_DECOMPRESSION_BOUND {
-                    return Err(ErrorEntry::Lz4DecompressionFailure);
-                }
-                decompressed_vec.resize(decompressed_vec.len() * 2, 0);
-            }
-            real_decompressed_size => {
-                decompressed_vec.truncate(real_decompressed_size as usize);
-                return Ok(decompressed_vec);
-            }
-        }
-    }
-}
-
-unsafe fn decompress_zstd(file: &FatbinFileHeader) -> Result<Vec<u8>, ErrorEntry> {
-    let mut result = Vec::with_capacity(file.uncompressed_payload as usize);
-    let payload = file.get_payload();
-    dbg!((payload.len(), file.uncompressed_payload, file.payload_size));
-    match zstd_safe::decompress(&mut result, payload) {
-        Ok(actual_size) => {
-            result.truncate(actual_size);
-            Ok(result)
-        }
-        Err(err) => Err(ErrorEntry::ZstdDecompressionFailure(err)),
-    }
 }

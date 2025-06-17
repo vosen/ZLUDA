@@ -321,6 +321,12 @@ impl From<cuda_types::dark_api::ParseError> for ErrorEntry {
                 observed: UInt::from(observed),
                 expected: expected.into_iter().map(UInt::from).collect(),
             },
+            cuda_types::dark_api::ParseError::Lz4DecompressionFailure => {
+                ErrorEntry::Lz4DecompressionFailure
+            }
+            cuda_types::dark_api::ParseError::ZstdDecompressionFailure(c) => {
+                ErrorEntry::ZstdDecompressionFailure(c)
+            }
         }
     }
 }
