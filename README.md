@@ -37,8 +37,6 @@ Not supported
 
 ## Building
 
-### Dependencies
-
 * Git
 * CMake
 * Python 3
@@ -49,7 +47,7 @@ Not supported
 ### Build steps
 
 * Git clone the repo (make sure to use `--recursive` option to fetch submodules):  
-`git clone --recursive https://github.com/vosen/ZLUDA.git`  
+`git clone --recursive --depth=1 https://github.com/vosen/ZLUDA.git`  
 * Enter freshly cloned `ZLUDA` directory and build with cargo (this takes a while):  
 `cargo xtask --release`
 
