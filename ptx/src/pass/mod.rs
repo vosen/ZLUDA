@@ -17,8 +17,9 @@ mod expand_operands;
 mod fix_special_registers2;
 mod hoist_globals;
 mod insert_explicit_load_store;
-mod instruction_mode_to_global_mode;
 mod insert_implicit_conversions2;
+mod insert_post_saturation;
+mod instruction_mode_to_global_mode;
 mod normalize_basic_blocks;
 mod normalize_identifiers2;
 mod normalize_predicates2;
@@ -51,6 +52,7 @@ pub fn to_llvm_module<'input>(ast: ast::Module<'input>) -> Result<Module, Transl
     let directives = resolve_function_pointers::run(directives)?;
     let directives = fix_special_registers2::run(&mut flat_resolver, &sreg_map, directives)?;
     let directives = expand_operands::run(&mut flat_resolver, directives)?;
+    let directives = insert_post_saturation::run(&mut flat_resolver, directives)?;
     let directives = deparamize_functions::run(&mut flat_resolver, directives)?;
     let directives = normalize_basic_blocks::run(&mut flat_resolver, directives)?;
     let directives = remove_unreachable_basic_blocks::run(directives)?;
@@ -202,6 +204,11 @@ enum Statement<I, P: ast::Operand> {
     VectorRead(VectorRead),
     VectorWrite(VectorWrite),
     SetMode(ModeRegister),
+    FpSaturate {
+        dst: SpirvWord,
+        src: SpirvWord,
+        type_: ast::ScalarType,
+    },
 }
 
 #[derive(Eq, PartialEq, Clone, Copy)]
@@ -488,6 +495,21 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                 Statement::FunctionPointer(FunctionPointerDetails { dst, src })
             }
             Statement::SetMode(mode_register) => Statement::SetMode(mode_register),
+            Statement::FpSaturate { dst, src, type_ } => {
+                let dst = visitor.visit_ident(
+                    dst,
+                    Some((&type_.into(), ast::StateSpace::Reg)),
+                    true,
+                    false,
+                )?;
+                let src = visitor.visit_ident(
+                    src,
+                    Some((&type_.into(), ast::StateSpace::Reg)),
+                    false,
+                    false,
+                )?;
+                Statement::FpSaturate { dst, src, type_ }
+            }
         })
     }
 }
