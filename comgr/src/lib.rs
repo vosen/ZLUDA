@@ -307,14 +307,14 @@ impl From<libloading::Error> for Error {
 }
 
 impl From<comgr2::amd_comgr_status_s> for Error {
-    fn from(_: comgr2::amd_comgr_status_s) -> Self {
-        todo!()
+    fn from(status: comgr2::amd_comgr_status_s) -> Self {
+        Error(status.0)
     }
 }
 
 impl From<comgr3::amd_comgr_status_s> for Error {
-    fn from(_: comgr3::amd_comgr_status_s) -> Self {
-        todo!()
+    fn from(status: comgr3::amd_comgr_status_s) -> Self {
+        Error(status.0)
     }
 }
 

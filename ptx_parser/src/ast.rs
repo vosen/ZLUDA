@@ -2,7 +2,7 @@ use super::{
     AtomSemantics, MemScope, RawRoundingMode, RawSetpCompareOp, ScalarType, SetpBoolPostOp,
     StateSpace, VectorPrefix,
 };
-use crate::{PtxError, PtxParserState, Mul24Control};
+use crate::{Mul24Control, PtxError, PtxParserState};
 use bitflags::bitflags;
 use std::{alloc::Layout, cmp::Ordering, num::NonZeroU8};
 
@@ -1197,7 +1197,6 @@ pub enum MulIntControl {
     Wide,
 }
 
-
 #[derive(Copy, Clone)]
 pub struct Mul24Details {
     pub type_: ScalarType,
@@ -1473,20 +1472,24 @@ pub enum CvtMode {
     SignExtend,
     Truncate,
     Bitcast,
-    SaturateUnsignedToSigned,
-    SaturateSignedToUnsigned,
+    IntSaturateToSigned,
+    IntSaturateToUnsigned,
     // float from float
     FPExtend {
         flush_to_zero: Option<bool>,
+        saturate: bool,
     },
     FPTruncate {
         // float rounding
         rounding: RoundingMode,
+        is_integer_rounding: bool,
         flush_to_zero: Option<bool>,
+        saturate: bool,
     },
     FPRound {
-        integer_rounding: RoundingMode,
+        integer_rounding: Option<RoundingMode>,
         flush_to_zero: Option<bool>,
+        saturate: bool,
     },
     // int from float
     SignedFromFP {
@@ -1498,8 +1501,14 @@ pub enum CvtMode {
         flush_to_zero: Option<bool>,
     }, // integer rounding
     // float from int, ftz is allowed in the grammar, but clearly nonsensical
-    FPFromSigned(RoundingMode),   // float rounding
-    FPFromUnsigned(RoundingMode), // float rounding
+    FPFromSigned {
+        rounding: RoundingMode,
+        saturate: bool,
+    }, // float rounding
+    FPFromUnsigned {
+        rounding: RoundingMode,
+        saturate: bool,
+    }, // float rounding
 }
 
 impl CvtDetails {
@@ -1511,9 +1520,6 @@ impl CvtDetails {
         dst: ScalarType,
         src: ScalarType,
     ) -> Self {
-        if saturate && dst.kind() == ScalarKind::Float {
-            errors.push(PtxError::SyntaxError);
-        }
         // Modifier .ftz can only be specified when either .dtype or .atype is .f32 and applies only to single precision (.f32) inputs and results.
         let flush_to_zero = match (dst, src) {
             (ScalarType::F32, _) | (_, ScalarType::F32) => Some(ftz),
@@ -1524,55 +1530,81 @@ impl CvtDetails {
                 None
             }
         };
-        let rounding = rnd.map(Into::into);
+        let rounding = rnd.map(RawRoundingMode::normalize);
         let mut unwrap_rounding = || match rounding {
-            Some(rnd) => rnd,
+            Some((rnd, is_integer)) => (rnd, is_integer),
             None => {
                 errors.push(PtxError::SyntaxError);
-                RoundingMode::NearestEven
+                (RoundingMode::NearestEven, false)
             }
         };
         let mode = match (dst.kind(), src.kind()) {
             (ScalarKind::Float, ScalarKind::Float) => match dst.size_of().cmp(&src.size_of()) {
-                Ordering::Less => CvtMode::FPTruncate {
-                    rounding: unwrap_rounding(),
-                    flush_to_zero,
-                },
+                Ordering::Less => {
+                    let (rounding, is_integer_rounding) = unwrap_rounding();
+                    CvtMode::FPTruncate {
+                        rounding,
+                        is_integer_rounding,
+                        flush_to_zero,
+                        saturate,
+                    }
+                }
                 Ordering::Equal => CvtMode::FPRound {
-                    integer_rounding: rounding.unwrap_or(RoundingMode::NearestEven),
+                    integer_rounding: rounding.map(|(rnd, _)| rnd),
                     flush_to_zero,
+                    saturate,
                 },
                 Ordering::Greater => {
                     if rounding.is_some() {
                         errors.push(PtxError::SyntaxError);
                     }
-                    CvtMode::FPExtend { flush_to_zero }
+                    CvtMode::FPExtend {
+                        flush_to_zero,
+                        saturate,
+                    }
                 }
             },
             (ScalarKind::Unsigned, ScalarKind::Float) => CvtMode::UnsignedFromFP {
-                rounding: unwrap_rounding(),
+                rounding: unwrap_rounding().0,
                 flush_to_zero,
             },
             (ScalarKind::Signed, ScalarKind::Float) => CvtMode::SignedFromFP {
-                rounding: unwrap_rounding(),
+                rounding: unwrap_rounding().0,
                 flush_to_zero,
             },
-            (ScalarKind::Float, ScalarKind::Unsigned) => CvtMode::FPFromUnsigned(unwrap_rounding()),
-            (ScalarKind::Float, ScalarKind::Signed) => CvtMode::FPFromSigned(unwrap_rounding()),
-            (ScalarKind::Signed, ScalarKind::Unsigned) if saturate => {
-                CvtMode::SaturateUnsignedToSigned
-            }
-            (ScalarKind::Unsigned, ScalarKind::Signed) if saturate => {
-                CvtMode::SaturateSignedToUnsigned
+            (ScalarKind::Float, ScalarKind::Unsigned) => CvtMode::FPFromUnsigned {
+                rounding: unwrap_rounding().0,
+                saturate,
+            },
+            (ScalarKind::Float, ScalarKind::Signed) => CvtMode::FPFromSigned {
+                rounding: unwrap_rounding().0,
+                saturate,
+            },
+            (ScalarKind::Signed, ScalarKind::Unsigned)
+            | (ScalarKind::Signed, ScalarKind::Signed)
+                if saturate =>
+            {
+                CvtMode::IntSaturateToSigned
             }
             (ScalarKind::Unsigned, ScalarKind::Signed)
+            | (ScalarKind::Unsigned, ScalarKind::Unsigned)
+                if saturate =>
+            {
+                CvtMode::IntSaturateToUnsigned
+            }
+            (ScalarKind::Unsigned, ScalarKind::Unsigned)
+            | (ScalarKind::Signed, ScalarKind::Signed)
+            | (ScalarKind::Unsigned, ScalarKind::Signed)
             | (ScalarKind::Signed, ScalarKind::Unsigned)
                 if dst.size_of() == src.size_of() =>
             {
                 CvtMode::Bitcast
             }
             (ScalarKind::Unsigned, ScalarKind::Unsigned)
-            | (ScalarKind::Signed, ScalarKind::Signed) => match dst.size_of().cmp(&src.size_of()) {
+            | (ScalarKind::Signed, ScalarKind::Signed)
+            | (ScalarKind::Unsigned, ScalarKind::Signed)
+            | (ScalarKind::Signed, ScalarKind::Unsigned) => match dst.size_of().cmp(&src.size_of())
+            {
                 Ordering::Less => CvtMode::Truncate,
                 Ordering::Equal => CvtMode::Bitcast,
                 Ordering::Greater => {
@@ -1583,7 +1615,6 @@ impl CvtDetails {
                     }
                 }
             },
-            (ScalarKind::Unsigned, ScalarKind::Signed) => CvtMode::SaturateSignedToUnsigned,
             (_, _) => {
                 errors.push(PtxError::SyntaxError);
                 CvtMode::Bitcast

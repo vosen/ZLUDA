@@ -64,11 +64,21 @@ impl From<RawLdStQualifier> for ast::LdStQualifier {
 
 impl From<RawRoundingMode> for ast::RoundingMode {
     fn from(value: RawRoundingMode) -> Self {
-        match value {
-            RawRoundingMode::Rn | RawRoundingMode::Rni => ast::RoundingMode::NearestEven,
-            RawRoundingMode::Rz | RawRoundingMode::Rzi => ast::RoundingMode::Zero,
-            RawRoundingMode::Rm | RawRoundingMode::Rmi => ast::RoundingMode::NegativeInf,
-            RawRoundingMode::Rp | RawRoundingMode::Rpi => ast::RoundingMode::PositiveInf,
+        value.normalize().0
+    }
+}
+
+impl RawRoundingMode {
+    fn normalize(self) -> (ast::RoundingMode, bool) {
+        match self {
+            RawRoundingMode::Rn => (ast::RoundingMode::NearestEven, false),
+            RawRoundingMode::Rz => (ast::RoundingMode::Zero, false),
+            RawRoundingMode::Rm => (ast::RoundingMode::NegativeInf, false),
+            RawRoundingMode::Rp => (ast::RoundingMode::PositiveInf, false),
+            RawRoundingMode::Rni => (ast::RoundingMode::NearestEven, true),
+            RawRoundingMode::Rzi => (ast::RoundingMode::Zero, true),
+            RawRoundingMode::Rmi => (ast::RoundingMode::NegativeInf, true),
+            RawRoundingMode::Rpi => (ast::RoundingMode::PositiveInf, true),
         }
     }
 }
