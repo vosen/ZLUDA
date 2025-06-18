@@ -135,7 +135,7 @@ impl<'a> FatbinFile<'a> {
     }
 
     pub unsafe fn get_payload(&'a self) -> &'a [u8] {
-        let start = std::ptr::from_ref(self)
+        let start = std::ptr::from_ref(self.header)
             .cast::<u8>()
             .add(self.header.header_size as usize);
         std::slice::from_raw_parts(start, self.header.payload_size as usize)
