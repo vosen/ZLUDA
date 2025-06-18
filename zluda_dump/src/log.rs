@@ -308,11 +308,11 @@ pub(crate) enum ErrorEntry {
 unsafe impl Send for ErrorEntry {}
 unsafe impl Sync for ErrorEntry {}
 
-impl From<cuda_types::dark_api::ParseError> for ErrorEntry {
-    fn from(e: cuda_types::dark_api::ParseError) -> Self {
+impl From<dark_api::fatbin::ParseError> for ErrorEntry {
+    fn from(e: dark_api::fatbin::ParseError) -> Self {
         match e {
-            cuda_types::dark_api::ParseError::NullPointer(s) => ErrorEntry::NullPointer(s),
-            cuda_types::dark_api::ParseError::UnexpectedBinaryField {
+            dark_api::fatbin::ParseError::NullPointer(s) => ErrorEntry::NullPointer(s),
+            dark_api::fatbin::ParseError::UnexpectedBinaryField {
                 field_name,
                 observed,
                 expected,
@@ -321,10 +321,18 @@ impl From<cuda_types::dark_api::ParseError> for ErrorEntry {
                 observed: UInt::from(observed),
                 expected: expected.into_iter().map(UInt::from).collect(),
             },
-            cuda_types::dark_api::ParseError::Lz4DecompressionFailure => {
+        }
+    }
+}
+
+impl From<dark_api::fatbin::FatbinError> for ErrorEntry {
+    fn from(e: dark_api::fatbin::FatbinError) -> Self {
+        match e {
+            dark_api::fatbin::FatbinError::ParseFailure(parse_error) => parse_error.into(),
+            dark_api::fatbin::FatbinError::Lz4DecompressionFailure => {
                 ErrorEntry::Lz4DecompressionFailure
             }
-            cuda_types::dark_api::ParseError::ZstdDecompressionFailure(c) => {
+            dark_api::fatbin::FatbinError::ZstdDecompressionFailure(c) => {
                 ErrorEntry::ZstdDecompressionFailure(c)
             }
         }

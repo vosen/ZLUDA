@@ -323,8 +323,6 @@ dependencies = [
  "bitflags 2.9.1",
  "cuda_base",
  "hip_runtime-sys",
- "lz4-sys",
- "zstd-safe",
 ]
 
 [[package]]
@@ -335,8 +333,10 @@ dependencies = [
  "cglue",
  "cuda_types",
  "format",
+ "lz4-sys",
  "paste",
  "uuid",
+ "zstd-safe",
 ]
 
 [[package]]

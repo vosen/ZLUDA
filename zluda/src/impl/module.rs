@@ -1,8 +1,9 @@
 use super::{driver, ZludaObject};
 use cuda_types::{
     cuda::*,
-    dark_api::{FatbinFileHeader, FatbinFileHeaderFlags, FatbinHeader, FatbincWrapper},
+    dark_api::{FatbinFileHeader, FatbincWrapper},
 };
+use dark_api::fatbin::Fatbin;
 use hip_runtime_sys::*;
 use std::{ffi::CStr, mem};
 
@@ -22,13 +23,12 @@ impl ZludaObject for Module {
 }
 
 fn get_ptx_from_wrapped_fatbin(image: *const ::core::ffi::c_void) -> Result<Vec<u8>, CUerror> {
-    let fatbinc_wrapper = FatbincWrapper::new(&image).map_err(|_| CUerror::UNKNOWN)?;
-    let header = FatbinHeader::new(&fatbinc_wrapper.data).map_err(|_| CUerror::UNKNOWN)?;
-    let mut file_buffer = unsafe { header.get_content() };
-    while let Some(file) =
-        unsafe { FatbinFileHeader::next(&mut file_buffer) }.map_err(|_| CUerror::UNKNOWN)?
-    {
-        if file.kind == FatbinFileHeader::HEADER_KIND_PTX {
+    let fatbin = Fatbin::new(&image).map_err(|_| CUerror::UNKNOWN)?;
+    let first = fatbin.get_first().map_err(|_| CUerror::UNKNOWN)?;
+    let mut files = first.get_files();
+
+    while let Some(file) = unsafe { files.next().map_err(|_| CUerror::UNKNOWN)? } {
+        if file.header.kind == FatbinFileHeader::HEADER_KIND_PTX {
             let decompressed = unsafe { file.decompress() }.map_err(|_| CUerror::UNKNOWN)?;
             return Ok(decompressed);
         }

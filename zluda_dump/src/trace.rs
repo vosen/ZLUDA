@@ -4,10 +4,10 @@ use crate::{
 };
 use cuda_types::{
     cuda::*,
-    dark_api::{
-        decompress_lz4, decompress_zstd, FatbinFileHeader, FatbinFileHeaderFlags, FatbinHeader,
-        FatbincWrapper,
-    },
+    dark_api::{FatbinFileHeader, FatbinFileHeaderFlags, FatbincWrapper},
+};
+use dark_api::fatbin::{
+    decompress_lz4, decompress_zstd, Fatbin, FatbinFileIterator, FatbinSubmodule,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::{
@@ -16,7 +16,6 @@ use std::{
     fs::{self, File},
     io::{self, Read, Write},
     path::PathBuf,
-    ptr,
 };
 use unwrap_or::unwrap_some_or;
 
@@ -262,14 +261,12 @@ pub(crate) unsafe fn record_submodules_from_wrapped_fatbin(
     fn_logger: &mut FnCallLog,
     state: &mut StateTracker,
 ) -> Result<(), ErrorEntry> {
-    let fatbinc_wrapper = FatbincWrapper::new(&fatbinc_wrapper).map_err(ErrorEntry::from)?;
-    let is_version_2 = fatbinc_wrapper.version == FatbincWrapper::VERSION_V2;
-    record_submodules_from_fatbin(module, (*fatbinc_wrapper).data, fn_logger, state)?;
-    if is_version_2 {
-        let mut current = (*fatbinc_wrapper).filename_or_fatbins as *const *const c_void;
-        while *current != ptr::null() {
-            record_submodules_from_fatbin(module, *current as *const _, fn_logger, state)?;
-            current = current.add(1);
+    let fatbin = Fatbin::new(&fatbinc_wrapper).map_err(ErrorEntry::from)?;
+    let first = fatbin.get_first().map_err(ErrorEntry::from)?;
+    record_submodules_from_fatbin(module, first, fn_logger, state)?;
+    if let Some(mut submodules) = fatbin.get_submodules() {
+        while let Some(current) = submodules.next()? {
+            record_submodules_from_fatbin(module, current, fn_logger, state)?;
         }
     }
     Ok(())
@@ -277,37 +274,43 @@ pub(crate) unsafe fn record_submodules_from_wrapped_fatbin(
 
 pub(crate) unsafe fn record_submodules_from_fatbin(
     module: CUmodule,
-    fatbin_header: *const FatbinHeader,
+    submodule: FatbinSubmodule,
     logger: &mut FnCallLog,
     state: &mut StateTracker,
 ) -> Result<(), ErrorEntry> {
-    let header = FatbinHeader::new(&fatbin_header).map_err(ErrorEntry::from)?;
-    let file = header.get_content();
-    record_submodules(module, logger, state, file)?;
+    record_submodules(module, logger, state, submodule.get_files())?;
     Ok(())
 }
 
-unsafe fn record_submodules(
+pub(crate) unsafe fn record_submodules(
     module: CUmodule,
     fn_logger: &mut FnCallLog,
     state: &mut StateTracker,
-    mut file_buffer: &[u8],
+    mut files: FatbinFileIterator,
 ) -> Result<(), ErrorEntry> {
-    while let Some(file) = FatbinFileHeader::next(&mut file_buffer)? {
-        let mut payload = if file.flags.contains(FatbinFileHeaderFlags::CompressedLz4) {
+    while let Some(file) = files.next()? {
+        let mut payload = if file
+            .header
+            .flags
+            .contains(FatbinFileHeaderFlags::CompressedLz4)
+        {
             Cow::Owned(unwrap_some_or!(
-                fn_logger.try_return(|| decompress_lz4(file).map_err(|e| e.into())),
+                fn_logger.try_return(|| decompress_lz4(&file).map_err(|e| e.into())),
                 continue
             ))
-        } else if file.flags.contains(FatbinFileHeaderFlags::CompressedZstd) {
+        } else if file
+            .header
+            .flags
+            .contains(FatbinFileHeaderFlags::CompressedZstd)
+        {
             Cow::Owned(unwrap_some_or!(
-                fn_logger.try_return(|| decompress_zstd(file).map_err(|e| e.into())),
+                fn_logger.try_return(|| decompress_zstd(&file).map_err(|e| e.into())),
                 continue
             ))
         } else {
             Cow::Borrowed(file.get_payload())
         };
-        match file.kind {
+        match file.header.kind {
             FatbinFileHeader::HEADER_KIND_PTX => {
                 while payload.last() == Some(&0) {
                     // remove trailing zeros
@@ -325,7 +328,7 @@ unsafe fn record_submodules(
                         UInt::U16(FatbinFileHeader::HEADER_KIND_PTX),
                         UInt::U16(FatbinFileHeader::HEADER_KIND_ELF),
                     ],
-                    observed: UInt::U16(file.kind),
+                    observed: UInt::U16(file.header.kind),
                 });
             }
         }
