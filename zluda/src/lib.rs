@@ -66,6 +66,7 @@ cuda_base::cuda_function_declarations!(
         cuGetProcAddress,
         cuGetProcAddress_v2,
         cuInit,
+        cuLibraryLoadData,
         cuMemAlloc_v2,
         cuMemFree_v2,
         cuMemGetAddressRange_v2,

@@ -1,3 +1,4 @@
+use ::dark_api::fatbin::FatbinFileIterator;
 use ::dark_api::FnFfi;
 use cuda_types::cuda::*;
 use dark_api::DarkApiState2;
@@ -360,7 +361,16 @@ impl DarkApiDump {
             });
         }
         fn_logger.try_(|fn_logger| unsafe {
-            trace::record_submodules_from_fatbin(*module, fatbin_header, fn_logger, state)
+            trace::record_submodules(
+                *module,
+                fn_logger,
+                state,
+                FatbinFileIterator::new(
+                    fatbin_header
+                        .as_ref()
+                        .ok_or(ErrorEntry::NullPointer("get_module_from_cubin_ext2_post"))?,
+                ),
+            )
         });
     }
 }
