@@ -28,6 +28,7 @@ fn get_ptx_from_wrapped_fatbin(image: *const ::core::ffi::c_void) -> Result<Vec<
     let mut files = first.get_files();
 
     while let Some(file) = unsafe { files.next().map_err(|_| CUerror::UNKNOWN)? } {
+        // Eventually we will want to get the PTX for the highest hardware version that we can get to compile. But for now we just get the first PTX we can find.
         if file.header.kind == FatbinFileHeader::HEADER_KIND_PTX {
             let decompressed = unsafe { file.decompress() }.map_err(|_| CUerror::UNKNOWN)?;
             return Ok(decompressed);

@@ -15,6 +15,7 @@ impl ZludaObject for Library {
     type CudaHandle = CUlibrary;
 
     fn drop_checked(&mut self) -> CUresult {
+        // TODO: we will want to test that we handle `cuModuleUnload` on a module that came from a library correctly, without calling `hipModuleUnload` twice.
         unsafe { hipModuleUnload(self.base) }?;
         Ok(())
     }
