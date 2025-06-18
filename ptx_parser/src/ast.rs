@@ -2,7 +2,7 @@ use super::{
     AtomSemantics, MemScope, RawRoundingMode, RawSetpCompareOp, ScalarType, SetpBoolPostOp,
     StateSpace, VectorPrefix,
 };
-use crate::{Mul24Control, Reduction, PtxError, PtxParserState};
+use crate::{Mul24Control, Reduction, PtxError, PtxParserState, ShuffleMode};
 use bitflags::bitflags;
 use std::{alloc::Layout, cmp::Ordering, num::NonZeroU8};
 
@@ -466,6 +466,20 @@ ptx_parser_macros::generate_instruction_type!(
                     repr: T,
                     type: Type::from(ScalarType::Pred)
                 }
+            }
+        },
+        ShflSync {
+            data: ShflSyncDetails,
+            type: Type::Scalar(ScalarType::B32),
+            arguments<T>: {
+                dst: T,
+                src_pred: {
+                    repr: Option<T>,
+                },
+                src: T,
+                src_lane: T,
+                src_opts: T,
+                src_membermask: T
             }
         },
         Shl {
@@ -977,6 +991,10 @@ impl MovDetails {
             relaxed_src2_conv: false,
         }
     }
+}
+
+pub struct ShflSyncDetails {
+    pub mode: ShuffleMode,
 }
 
 #[derive(Clone)]
