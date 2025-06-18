@@ -1589,7 +1589,7 @@ where
 //   * Opcode: `ld`
 //   * Modifiers, always start with a dot: `.global`, `.relaxed`. Optionals are enclosed in braces
 //   * Arguments: `a`, `b`. Optionals are enclosed in braces
-//   * Code block: => { <code expression> }. Code blocks implictly take all modifiers ansd arguments
+//   * Code block: => { <code expression> }. Code blocks implictly take all modifiers and arguments
 //     as parameters. All modifiers and arguments are passed to the code block:
 //     * If it is an alternative (as defined in rules list later):
 //       * If it is mandatory then its type is Foo (as defined by the relevant rule)
@@ -1722,6 +1722,9 @@ derive_parser!(
 
     #[derive(Copy, Clone, PartialEq, Eq, Hash)]
     pub enum Reduction { }
+
+    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    pub enum ShuffleMode { }
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
     mov{.vec}.type  d, a => {
@@ -3487,6 +3490,16 @@ derive_parser!(
     .mode: Mul24Control = { .hi, .lo };
     .type: ScalarType = { .u32, .s32 };
 
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-shfl-sync
+    // shfl.sync.mode.b32  d[|p], a, b, c, membermask;
+    // .mode = { .up, .down, .bfly, .idx };
+    shfl.sync.mode.b32  d[|p], a, b, c, membermask => {
+        Instruction::ShflSync  {
+            data: ast::ShflSyncDetails { mode },
+            arguments: ShflSyncArgs { dst: d, src_pred: p, src: a, src_lane: b, src_opts: c, src_membermask: membermask }
+        }
+    }
+    .mode: ShuffleMode = { .up, .down, .bfly, .idx };
 );
 
 #[cfg(test)]
