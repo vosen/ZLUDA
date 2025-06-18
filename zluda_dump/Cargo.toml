@@ -14,7 +14,6 @@ ptx_parser = { path = "../ptx_parser" }
 zluda_dump_common = { path = "../zluda_dump_common" }
 format = { path = "../format" }
 dark_api = { path = "../dark_api" }
-lz4-sys = "1.9"
 regex = "1.4"
 dynasm = "1.2"
 dynasmrt = "1.2"

@@ -10,6 +10,7 @@ pub(super) mod context;
 pub(super) mod device;
 pub(super) mod driver;
 pub(super) mod function;
+pub(super) mod library;
 pub(super) mod memory;
 pub(super) mod module;
 pub(super) mod pointer;
@@ -135,6 +136,9 @@ from_cuda_nop!(
     cuda_types::cuda::CUdevprop,
     CUdevice_attribute,
     CUdriverProcAddressQueryResult,
+    CUjit_option,
+    CUlibrary,
+    CUlibraryOption,
     CUmoduleLoadingMode,
     CUuuid
 );
@@ -165,6 +169,15 @@ impl<'a> FromCuda<'a, *const ::core::ffi::c_char> for &CStr {
             Ok(unsafe { CStr::from_ptr(*s) })
         } else {
             Err(CUerror::INVALID_VALUE)
+        }
+    }
+}
+
+impl<'a> FromCuda<'a, *const ::core::ffi::c_void> for &'a ::core::ffi::c_void {
+    fn from_cuda(x: &'a *const ::core::ffi::c_void) -> Result<Self, CUerror> {
+        match unsafe { x.as_ref() } {
+            Some(x) => Ok(x),
+            None => Err(CUerror::INVALID_VALUE),
         }
     }
 }

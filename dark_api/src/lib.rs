@@ -2,6 +2,8 @@ use std::ffi::c_void;
 
 use cuda_types::cuda::CUuuid;
 
+pub mod fatbin;
+
 macro_rules! dark_api_init {
     (SIZE_OF, $table_len:literal, $type_:ty) => {
         (std::mem::size_of::<usize>() * $table_len) as *const std::ffi::c_void
