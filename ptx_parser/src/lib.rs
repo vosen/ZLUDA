@@ -1705,6 +1705,9 @@ derive_parser!(
     #[derive(Copy, Clone, PartialEq, Eq, Hash)]
     pub enum Mul24Control { }
 
+    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    pub enum Reduction { }
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
     mov{.vec}.type  d, a => {
         Instruction::Mov {
@@ -2987,7 +2990,9 @@ derive_parser!(
     barrier{.cta}.sync{.aligned}    a{, b} => {
         let _ = cta;
         ast::Instruction::Bar {
-            data: ast::BarData { aligned },
+            data: ast::BarData {
+                aligned,
+            },
             arguments: BarArgs { src1: a, src2: b }
         }
     }
@@ -2997,14 +3002,32 @@ derive_parser!(
     bar{.cta}.sync                  a{, b} => {
         let _ = cta;
         ast::Instruction::Bar {
-            data: ast::BarData { aligned: true },
+            data: ast::BarData {
+                aligned: true,
+            },
             arguments: BarArgs { src1: a, src2: b }
         }
     }
     //bar{.cta}.arrive    a, b;
     //bar{.cta}.red.popc.u32  d, a{, b}, {!}c;
-    //bar{.cta}.red.op.pred   p, a{, b}, {!}c;
-    //.op = { .and, .or };
+    bar{.cta}.red.op.pred   p, a{, b}, {!}c => {
+        let _ = cta;
+        let (negate_src3, c) = c;
+        ast::Instruction::BarRed {
+            data: ast::BarRedData {
+                aligned: true,
+                pred_reduction: op,
+            },
+            arguments: BarRedArgs {
+                dst1: p,
+                src_barrier: a,
+                src_threadcount: b,
+                src_predicate: c,
+                src_negate_predicate: ParsedOperand::Imm(ImmediateValue::U64(negate_src3 as u64))
+            }
+        }
+    }
+    .op: Reduction = { .and, .or };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-atom
     atom{.sem}{.scope}{.space}.op{.level::cache_hint}.type                                      d, [a], b{, cache_policy} => {

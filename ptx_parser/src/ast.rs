@@ -2,7 +2,7 @@ use super::{
     AtomSemantics, MemScope, RawRoundingMode, RawSetpCompareOp, ScalarType, SetpBoolPostOp,
     StateSpace, VectorPrefix,
 };
-use crate::{Mul24Control, PtxError, PtxParserState};
+use crate::{Mul24Control, Reduction, PtxError, PtxParserState};
 use bitflags::bitflags;
 use std::{alloc::Layout, cmp::Ordering, num::NonZeroU8};
 
@@ -93,6 +93,26 @@ ptx_parser_macros::generate_instruction_type!(
             arguments<T>: {
                 src1: T,
                 src2: Option<T>,
+            }
+        },
+        BarRed {
+            type: Type::Scalar(ScalarType::U32),
+            data: BarRedData,
+            arguments<T>: {
+                dst1: {
+                    repr: T,
+                    type: Type::from(ScalarType::Pred)
+                },
+                src_barrier: T,
+                src_threadcount: Option<T>,
+                src_predicate: {
+                    repr: T,
+                    type: Type::from(ScalarType::Pred)
+                },
+                src_negate_predicate: {
+                    repr: T,
+                    type: Type::from(ScalarType::U64)
+                },
             }
         },
         Bfe {
@@ -1743,6 +1763,12 @@ pub enum RcpKind {
 
 pub struct BarData {
     pub aligned: bool,
+}
+
+#[derive(Copy, Clone)]
+pub struct BarRedData {
+    pub aligned: bool,
+    pub pred_reduction: Reduction,
 }
 
 pub struct AtomDetails {

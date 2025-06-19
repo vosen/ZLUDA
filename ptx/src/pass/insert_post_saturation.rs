@@ -75,6 +75,7 @@ fn run_instruction<'input>(
         | ast::Instruction::Atom { .. }
         | ast::Instruction::AtomCas { .. }
         | ast::Instruction::Bar { .. }
+        | ast::Instruction::BarRed { .. }
         | ast::Instruction::Bfe { .. }
         | ast::Instruction::Bfi { .. }
         | ast::Instruction::Bra { .. }
