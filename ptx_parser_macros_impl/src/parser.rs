@@ -327,7 +327,7 @@ impl DotModifier {
             write!(&mut result, "_{}", part2.0).unwrap();
         } else {
             match self.part1 {
-                IdentLike::Type(_) | IdentLike::Const(_) => result.push('_'),
+                IdentLike::Type(_) | IdentLike::Const(_) | IdentLike::Async(_) => result.push('_'),
                 IdentLike::Ident(_) | IdentLike::Integer(_) => {}
             }
         }
@@ -437,6 +437,7 @@ impl Parse for HyphenatedIdent {
 enum IdentLike {
     Type(Token![type]),
     Const(Token![const]),
+    Async(Token![async]),
     Ident(Ident),
     Integer(LitInt),
 }
@@ -446,6 +447,7 @@ impl IdentLike {
         match self {
             IdentLike::Type(c) => c.span(),
             IdentLike::Const(t) => t.span(),
+            IdentLike::Async(a) => a.span(),
             IdentLike::Ident(i) => i.span(),
             IdentLike::Integer(l) => l.span(),
         }
@@ -457,6 +459,7 @@ impl std::fmt::Display for IdentLike {
         match self {
             IdentLike::Type(_) => f.write_str("type"),
             IdentLike::Const(_) => f.write_str("const"),
+            IdentLike::Async(_) => f.write_str("async"),
             IdentLike::Ident(ident) => write!(f, "{}", ident),
             IdentLike::Integer(integer) => write!(f, "{}", integer),
         }
@@ -468,6 +471,7 @@ impl ToTokens for IdentLike {
         match self {
             IdentLike::Type(_) => quote! { type }.to_tokens(tokens),
             IdentLike::Const(_) => quote! { const }.to_tokens(tokens),
+            IdentLike::Async(_) => quote! { async }.to_tokens(tokens),
             IdentLike::Ident(ident) => quote! { #ident }.to_tokens(tokens),
             IdentLike::Integer(int) => quote! { #int }.to_tokens(tokens),
         }
@@ -481,6 +485,8 @@ impl Parse for IdentLike {
             IdentLike::Const(input.parse::<Token![const]>()?)
         } else if lookahead.peek(Token![type]) {
             IdentLike::Type(input.parse::<Token![type]>()?)
+        } else if lookahead.peek(Token![async]) {
+            IdentLike::Async(input.parse::<Token![async]>()?)
         } else if lookahead.peek(Ident) {
             IdentLike::Ident(input.parse::<Ident>()?)
         } else if lookahead.peek(LitInt) {

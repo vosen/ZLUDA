@@ -188,6 +188,15 @@ ptx_parser_macros::generate_instruction_type!(
                 src: T
             }
         },
+        CpAsync {
+            // TODO: check type, might depend on cp-size
+            type: Type::Scalar(ScalarType::U32),
+            data: CpAsyncDetails,
+            arguments<T>: {
+                dst: T,
+                src: T
+            }
+        },
         Cvt {
             data: CvtDetails,
             arguments<T>: {
@@ -1047,6 +1056,10 @@ impl MovDetails {
 #[derive(Copy, Clone)]
 pub struct ShflSyncDetails {
     pub mode: ShuffleMode,
+}
+
+pub struct CpAsyncDetails {
+    pub space: StateSpace,
 }
 
 #[derive(Clone)]
