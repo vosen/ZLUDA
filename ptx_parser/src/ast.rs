@@ -327,6 +327,12 @@ ptx_parser_macros::generate_instruction_type!(
                 src2: T,
             }
         },
+        Nanosleep {
+            type: Type::Scalar(ScalarType::U32),
+            arguments<T>: {
+                src: T
+            }
+         },
         Neg {
             type: Type::Scalar(data.type_),
             data: TypeFtz,

@@ -636,6 +636,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Prmt { data, arguments } => self.emit_prmt(data, arguments),
             ast::Instruction::Membar { data } => self.emit_membar(data),
             ast::Instruction::Trap {} => todo!(),
+            ast::Instruction::Nanosleep { arguments } => todo!(),
             // replaced by a function call
             ast::Instruction::Bfe { .. }
             | ast::Instruction::Bar { .. }
