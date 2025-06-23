@@ -1,4 +1,5 @@
 @constparams = addrspace(4) global [4 x i16] [i16 10, i16 20, i16 30, i16 40], align 8
+@__ZLUDA_PTX_IMPL_ATTRIBUTE_CLOCK_RATE = addrspace(1) global i32 2124000
 
 define amdgpu_kernel void @const(ptr addrspace(4) byref(i64) %"46", ptr addrspace(4) byref(i64) %"47") #0 {
   %"48" = alloca i64, align 8, addrspace(5)

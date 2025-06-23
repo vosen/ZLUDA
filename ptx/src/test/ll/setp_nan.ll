@@ -1,3 +1,5 @@
+@__ZLUDA_PTX_IMPL_ATTRIBUTE_CLOCK_RATE = addrspace(1) global i32 2124000
+
 define amdgpu_kernel void @setp_nan(ptr addrspace(4) byref(i64) %"83", ptr addrspace(4) byref(i64) %"84") #0 {
   %"85" = alloca i64, align 8, addrspace(5)
   %"86" = alloca i64, align 8, addrspace(5)

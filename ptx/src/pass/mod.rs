@@ -46,7 +46,13 @@ quick_error! {
     }
 }
 
-pub fn to_llvm_module<'input>(ast: ast::Module<'input>) -> Result<Module, TranslateError> {
+/// GPU attributes needed at compile time.
+pub struct Attributes {
+    /// Clock frequency in kHz.
+    pub clock_rate: u32,
+}
+
+pub fn to_llvm_module<'input>(ast: ast::Module<'input>, attributes: Attributes) -> Result<Module, TranslateError> {
     let mut flat_resolver = GlobalStringIdentResolver2::<'input>::new(SpirvWord(1));
     let mut scoped_resolver = ScopedResolver::new(&mut flat_resolver);
     let sreg_map = SpecialRegistersMap2::new(&mut scoped_resolver)?;
@@ -65,7 +71,7 @@ pub fn to_llvm_module<'input>(ast: ast::Module<'input>) -> Result<Module, Transl
     let directives = insert_implicit_conversions2::run(&mut flat_resolver, directives)?;
     let directives = replace_instructions_with_function_calls::run(&mut flat_resolver, directives)?;
     let directives = hoist_globals::run(directives)?;
-    let llvm_ir = emit_llvm::run(flat_resolver, directives)?;
+    let llvm_ir = emit_llvm::run(flat_resolver, attributes, directives)?;
     Ok(Module {
         llvm_ir,
         kernel_info: HashMap::new(),

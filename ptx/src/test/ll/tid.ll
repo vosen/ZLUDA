@@ -1,3 +1,5 @@
+@__ZLUDA_PTX_IMPL_ATTRIBUTE_CLOCK_RATE = addrspace(1) global i32 2124000
+
 declare i32 @__zluda_ptx_impl_sreg_tid(i8) #0
 
 define amdgpu_kernel void @tid(ptr addrspace(4) byref(i64) %"34") #1 {

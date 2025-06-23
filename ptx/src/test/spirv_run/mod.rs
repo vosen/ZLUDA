@@ -297,6 +297,8 @@ test_ptx!(
 test_ptx!(multiple_return, [5u32], [6u32, 123u32]);
 test_ptx!(warp_sz, [0u8], [32u8]);
 
+test_ptx!(nanosleep, [0u64], [0u64]);
+
 test_ptx!(assertfail);
 // TODO: not yet supported
 //test_ptx!(func_ptr);
@@ -375,7 +377,8 @@ fn test_hip_assert<
     block_dim_x: u32,
 ) -> Result<(), Box<dyn error::Error>> {
     let ast = ptx_parser::parse_module_checked(ptx_text).unwrap();
-    let llvm_ir = pass::to_llvm_module(ast).unwrap();
+    // TODO: update clock_rate with actual value
+    let llvm_ir = pass::to_llvm_module(ast, pass::Attributes { clock_rate: 2124000 }).unwrap();
     let name = CString::new(name)?;
     let result =
         run_hip(name.as_c_str(), llvm_ir, input, output, block_dim_x).map_err(|err| DisplayError { err })?;
@@ -389,7 +392,8 @@ fn test_llvm_assert(
     expected_ll: &str,
 ) -> Result<(), Box<dyn error::Error>> {
     let ast = ptx_parser::parse_module_checked(ptx_text).unwrap();
-    let llvm_ir = pass::to_llvm_module(ast).unwrap();
+    // TODO: update clock_rate with actual value
+    let llvm_ir = pass::to_llvm_module(ast, pass::Attributes { clock_rate: 2124000 }).unwrap();
     let actual_ll = llvm_ir.llvm_ir.print_module_to_string();
     let actual_ll = actual_ll.to_str();
     if actual_ll != expected_ll {

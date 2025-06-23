@@ -187,6 +187,7 @@ impl Deref for MemoryBuffer {
 
 pub(super) fn run<'input>(
     id_defs: GlobalStringIdentResolver2<'input>,
+    attributes: Attributes,
     directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
 ) -> Result<Module, TranslateError> {
     let context = Context::new();
@@ -198,6 +199,7 @@ pub(super) fn run<'input>(
             Directive2::Method(method) => emit_ctx.emit_method(method)?,
         }
     }
+    emit_ctx.emit_attribute_globals(attributes)?;
     if let Err(err) = module.verify() {
         panic!("{:?}", err);
     }
@@ -368,6 +370,27 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         if !var.array_init.is_empty() {
             self.emit_array_init(&var.v_type, &*var.array_init, global)?;
         }
+        Ok(())
+    }
+
+    fn emit_attribute_globals(&self, attributes: Attributes) -> Result<(), TranslateError> {
+        self.emit_attribute_global("clock_rate", attributes.clock_rate)?;
+        Ok(())
+    }
+
+    fn emit_attribute_global(&self, name: &str, attribute: u32) -> Result<(), TranslateError> {
+        let name = format!("{}attribute_{}\0", ZLUDA_PTX_PREFIX, name).to_ascii_uppercase();
+        let name = unsafe { CStr::from_bytes_with_nul_unchecked(name.as_bytes()) };
+        let attribute_type = get_scalar_type(self.context, ast::ScalarType::U32);
+        let global = unsafe {
+            LLVMAddGlobalInAddressSpace(
+                self.module,
+                attribute_type,
+                name.as_ptr(),
+                get_state_space(ast::StateSpace::Global)?,
+            )
+        };
+        unsafe { LLVMSetInitializer(global, LLVMConstInt(attribute_type, attribute as u64, 0)) };
         Ok(())
     }
 
@@ -636,14 +659,14 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Prmt { data, arguments } => self.emit_prmt(data, arguments),
             ast::Instruction::Membar { data } => self.emit_membar(data),
             ast::Instruction::Trap {} => todo!(),
-            ast::Instruction::Nanosleep { arguments } => todo!(),
             // replaced by a function call
             ast::Instruction::Bfe { .. }
             | ast::Instruction::Bar { .. }
             | ast::Instruction::BarRed { .. }
             | ast::Instruction::Bfi { .. }
             | ast::Instruction::Activemask { .. }
-            | ast::Instruction::ShflSync { .. } => return Err(error_unreachable()),
+            | ast::Instruction::ShflSync { .. }
+            | ast::Instruction::Nanosleep { .. } => return Err(error_unreachable()),
         }
     }
 
