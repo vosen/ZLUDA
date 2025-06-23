@@ -22,14 +22,23 @@ impl Parse for ParseDefinitions {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let token_type = input.parse::<ItemEnum>()?;
         let mut additional_enums = FxHashMap::default();
-        while input.peek(Token![#]) {
-            let enum_ = input.parse::<ItemEnum>()?;
-            additional_enums.insert(enum_.ident.clone(), enum_);
-        }
         let mut definitions = Vec::new();
-        while !input.is_empty() {
-            definitions.push(input.parse::<OpcodeDefinition>()?);
+        loop {
+            if input.is_empty() {
+                break;
+            }
+
+            let lookahead = input.lookahead1();
+            if lookahead.peek(Token![#]) {
+                let enum_ = input.parse::<ItemEnum>()?;
+                additional_enums.insert(enum_.ident.clone(), enum_);
+            } else if lookahead.peek(Ident) {
+                definitions.push(input.parse::<OpcodeDefinition>()?);
+            } else {
+                return Err(lookahead.error());
+            }
         }
+
         Ok(Self {
             token_type,
             additional_enums,
