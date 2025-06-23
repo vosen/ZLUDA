@@ -198,6 +198,13 @@ ptx_parser_macros::generate_instruction_type!(
             }
         },
         CpAsyncCommitGroup { },
+        CpAsyncWaitGroup {
+            type: Type::Scalar(ScalarType::U64),
+            arguments<T>: {
+                src_group: T
+            }
+        },
+        CpAsyncWaitAll { },
         Cvt {
             data: CvtDetails,
             arguments<T>: {

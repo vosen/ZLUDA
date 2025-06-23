@@ -3589,6 +3589,16 @@ derive_parser!(
     cp.async.commit_group => {
         Instruction::CpAsyncCommitGroup {}
     }
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cp-async-wait-group
+    cp.async.wait_group n => {
+        Instruction::CpAsyncWaitGroup {
+            arguments: CpAsyncWaitGroupArgs { src_group: n },
+        }
+    }
+    cp.async.wait_all => {
+        Instruction::CpAsyncWaitAll {}
+    }
 );
 
 #[cfg(test)]

@@ -517,6 +517,8 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Tanh { data, arguments } => self.emit_tanh(data, arguments),
             ast::Instruction::CpAsync { .. } => todo!(),
             ast::Instruction::CpAsyncCommitGroup { .. } => todo!(),
+            ast::Instruction::CpAsyncWaitGroup { .. } => todo!(),
+            ast::Instruction::CpAsyncWaitAll { .. } => todo!(),
             // replaced by a function call
             ast::Instruction::Bfe { .. }
             | ast::Instruction::Bar { .. }

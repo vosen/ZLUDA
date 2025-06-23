@@ -85,6 +85,8 @@ fn run_instruction<'input>(
         | ast::Instruction::Cos { .. }
         | ast::Instruction::CpAsync { .. }
         | ast::Instruction::CpAsyncCommitGroup { .. }
+        | ast::Instruction::CpAsyncWaitGroup { .. }
+        | ast::Instruction::CpAsyncWaitAll { .. }
         | ast::Instruction::Cvt {
             data:
                 ast::CvtDetails {
