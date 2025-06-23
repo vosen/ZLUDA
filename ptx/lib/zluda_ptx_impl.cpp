@@ -157,6 +157,19 @@ extern "C"
         __builtin_amdgcn_s_barrier();
     }
 
+    int32_t __ockl_wgred_and_i32(int32_t) __device__;
+    int32_t __ockl_wgred_or_i32(int32_t) __device__;
+
+    #define BAR_RED_IMPL(reducer)                                                                                     \
+    bool FUNC(bar_red_##reducer)(uint32_t barrier __attribute__((unused)), bool predicate, uint64_t invert_predicate) \
+    {                                                                                                                 \
+        /* TODO: handle barrier */                                                                                    \
+        return __ockl_wgred_##reducer##_i32(predicate ^ !!invert_predicate);                                          \
+    }
+
+    BAR_RED_IMPL(and);
+    BAR_RED_IMPL(or);
+
     void FUNC(__assertfail)(uint64_t message,
                             uint64_t file,
                             uint32_t line,

@@ -1,0 +1,60 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry bar_red_and_pred(
+    .param .u64 input,
+    .param .u64 output
+)
+{
+    .reg .u64 	     out_addr;
+    .reg .u64 	     out_index;
+    .reg .u32        thread_id;
+    .reg .u32        thread_mod_2;
+    .reg .pred       pred;
+    .reg .pred       cond;
+    .reg .u32        result;
+
+    ld.param.u64 	 out_addr, [output];
+
+    mov.u32          thread_id, %tid.x;
+    rem.u32          thread_mod_2, thread_id, 2;
+    setp.eq.u32      cond, thread_mod_2, 0;
+
+    mov.u32          result, 0;
+
+    // Basic functionality
+
+    // result += AND(tid.x % 2 == 0) forall threads
+    bar.red.and.pred pred, 1, cond;
+    @pred add.u32    result, result, 1;
+    // result += OR(tid.x % 2 == 0) forall threads
+    bar.red.or.pred  pred, 1, cond;
+    @pred add.u32    result, result, 1;
+
+    // result += AND(true) forall threads
+    setp.eq.u32      cond, 1, 1;
+    bar.red.and.pred pred, 1, cond;
+    @pred add.u32    result, result, 1;
+    // result += OR(false) forall threads
+    setp.eq.u32      cond, 1, 0;
+    bar.red.or.pred  pred, 1, cond;
+    @pred add.u32    result, result, 1;
+
+    // Negated condition
+    // result += AND(!true) forall threads
+    setp.eq.u32      cond, 1, 1;
+    bar.red.and.pred pred, 1, !cond;
+    @pred add.u32    result, result, 1;
+
+    // Return result
+
+    cvt.u64.u32      out_index, thread_id;
+    mul.lo.u64       out_index, out_index, 4;
+    add.u64          out_addr, out_addr, out_index;
+    st.u32           [out_addr], result;
+
+    // result should be 2
+
+    ret;
+}
