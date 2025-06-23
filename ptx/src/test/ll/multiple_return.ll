@@ -1,3 +1,5 @@
+@__ZLUDA_PTX_IMPL_ATTRIBUTE_CLOCK_RATE = addrspace(1) global i32 2124000
+
 define [2 x i32] @do_something(i32 %"10") #0 {
   %"46" = alloca i32, align 4, addrspace(5)
   %"47" = alloca i1, align 1, addrspace(5)

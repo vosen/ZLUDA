@@ -1,3 +1,5 @@
+@__ZLUDA_PTX_IMPL_ATTRIBUTE_CLOCK_RATE = addrspace(1) global i32 2124000
+
 define amdgpu_kernel void @mad_wide(ptr addrspace(4) byref(i64) %"37", ptr addrspace(4) byref(i64) %"38") #0 {
   %"39" = alloca i64, align 8, addrspace(5)
   %"40" = alloca i64, align 8, addrspace(5)

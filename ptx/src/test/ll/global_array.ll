@@ -1,4 +1,5 @@
 @foobar = addrspace(1) global [4 x i32] [i32 1, i32 0, i32 0, i32 0]
+@__ZLUDA_PTX_IMPL_ATTRIBUTE_CLOCK_RATE = addrspace(1) global i32 2124000
 
 define amdgpu_kernel void @global_array(ptr addrspace(4) byref(i64) %"31", ptr addrspace(4) byref(i64) %"32") #0 {
   %"33" = alloca i64, align 8, addrspace(5)
