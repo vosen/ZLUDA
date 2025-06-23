@@ -197,6 +197,7 @@ ptx_parser_macros::generate_instruction_type!(
                 src: T
             }
         },
+        CpAsyncCommitGroup { },
         Cvt {
             data: CvtDetails,
             arguments<T>: {

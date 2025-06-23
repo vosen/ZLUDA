@@ -3584,6 +3584,11 @@ derive_parser!(
     // TODO: how to handle this?
     // cp-size =                { 4, 8, 16 }
     .space: StateSpace =            { .shared{::cta} };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cp-async-commit-group
+    cp.async.commit_group => {
+        Instruction::CpAsyncCommitGroup {}
+    }
 );
 
 #[cfg(test)]

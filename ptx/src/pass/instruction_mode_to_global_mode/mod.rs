@@ -1820,6 +1820,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::Shr { .. }
         | ast::Instruction::ShflSync { .. }
         | ast::Instruction::CpAsync { .. }
+        | ast::Instruction::CpAsyncCommitGroup { .. }
         | ast::Instruction::Shl { .. }
         | ast::Instruction::Selp { .. }
         | ast::Instruction::Ret { .. }

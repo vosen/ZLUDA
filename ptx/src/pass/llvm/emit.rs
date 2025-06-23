@@ -516,6 +516,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Trap {} => Err(error_todo_msg("Trap is not implemented yet")),
             ast::Instruction::Tanh { data, arguments } => self.emit_tanh(data, arguments),
             ast::Instruction::CpAsync { .. } => todo!(),
+            ast::Instruction::CpAsyncCommitGroup { .. } => todo!(),
             // replaced by a function call
             ast::Instruction::Bfe { .. }
             | ast::Instruction::Bar { .. }
