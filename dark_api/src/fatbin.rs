@@ -142,7 +142,7 @@ impl<'a> FatbinFile<'a> {
     }
 
     pub unsafe fn decompress(&'a self) -> Result<Vec<u8>, FatbinError> {
-        let payload = if self
+        let mut payload = if self
             .header
             .flags
             .contains(FatbinFileHeaderFlags::CompressedLz4)
@@ -157,6 +157,12 @@ impl<'a> FatbinFile<'a> {
         } else {
             unsafe { self.get_payload().to_vec() }
         };
+
+        
+        while payload.last() == Some(&0) {
+            // remove trailing zeros
+            payload.pop();
+        }
 
         Ok(payload)
     }
