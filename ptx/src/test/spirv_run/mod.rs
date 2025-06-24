@@ -250,10 +250,10 @@ test_ptx!(
 );
 
 test_ptx!(assertfail);
-test_ptx!(func_ptr);
-test_ptx!(lanemask_lt);
 // TODO: not yet supported
-// test_ptx!(extern_func);
+//test_ptx!(func_ptr);
+test_ptx!(lanemask_lt);
+test_ptx!(extern_func);
 
 struct DisplayError<T: Debug> {
     err: T,
