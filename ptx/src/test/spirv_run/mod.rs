@@ -46,7 +46,16 @@ macro_rules! test_ptx {
         }
     };
 
-    ($fn_name:ident) => {};
+    ($fn_name:ident) => {
+        paste::item! {
+            #[test]
+            fn [<$fn_name _llvm>]() -> Result<(), Box<dyn std::error::Error>> {
+                let ptx = include_str!(concat!(stringify!($fn_name), ".ptx"));
+                let ll = include_str!(concat!("../ll/", stringify!($fn_name), ".ll")).trim();
+                test_llvm_assert(stringify!($fn_name), ptx, &ll)
+            }
+        }
+    };
 }
 
 test_ptx!(ld_st, [1u64], [1u64]);
@@ -243,7 +252,8 @@ test_ptx!(
 test_ptx!(assertfail);
 test_ptx!(func_ptr);
 test_ptx!(lanemask_lt);
-test_ptx!(extern_func);
+// TODO: not yet supported
+// test_ptx!(extern_func);
 
 struct DisplayError<T: Debug> {
     err: T,
