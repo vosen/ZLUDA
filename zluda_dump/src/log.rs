@@ -278,7 +278,6 @@ pub(crate) enum ErrorEntry {
     ModuleParsingError(String),
     Lz4DecompressionFailure,
     ZstdDecompressionFailure(usize),
-
     UnexpectedArgument {
         arg_name: &'static str,
         expected: Vec<UInt>,
@@ -332,9 +331,6 @@ impl From<dark_api::fatbin::FatbinError> for ErrorEntry {
             dark_api::fatbin::FatbinError::ParseFailure(parse_error) => parse_error.into(),
             dark_api::fatbin::FatbinError::Lz4DecompressionFailure => {
                 ErrorEntry::Lz4DecompressionFailure
-            }
-            dark_api::fatbin::FatbinError::ZstdDecompressionFailure(c) => {
-                ErrorEntry::ZstdDecompressionFailure(c)
             }
             dark_api::fatbin::FatbinError::ZstdDecompressionFailure(c) => {
                 ErrorEntry::ZstdDecompressionFailure(c)
