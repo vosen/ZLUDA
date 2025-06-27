@@ -37,7 +37,6 @@ pub enum FatbinError {
     ParseFailure(ParseError),
     Lz4DecompressionFailure,
     ZstdDecompressionFailure(usize),
-    UnsupportedVersion(u32),
 }
 
 pub fn parse_fatbinc_wrapper<T: Sized>(ptr: &*const T) -> Result<&FatbincWrapper, ParseError> {
@@ -88,7 +87,11 @@ impl<'a> Fatbin<'a> {
                     .map_err(FatbinError::ParseFailure)?;
                 Ok(FatbinIter::V1(Some(FatbinSubmodule::new(header))))
             }
-            version => Err(FatbinError::UnsupportedVersion(version)),
+            version => Err(FatbinError::ParseFailure(ParseError::UnexpectedBinaryField{
+                field_name: "FATBINC_VERSION",
+                observed: version,
+                expected: [FatbincWrapper::VERSION_V1, FatbincWrapper::VERSION_V2].into(),
+            })),
         }
     }
 }
@@ -116,13 +119,7 @@ impl<'a> FatbinIter<'a> {
     pub fn next(&mut self) -> Result<Option<FatbinSubmodule<'a>>, ParseError> {
         match self {
             FatbinIter::V1(opt) => Ok(opt.take()),
-            FatbinIter::V2(iter) => unsafe {
-                match iter.next() {
-                    Ok(Some(submodule)) => Ok(Some(submodule)),
-                    Ok(None) => Ok(None),
-                    Err(e) => Err(e),
-                }
-            },
+            FatbinIter::V2(iter) => unsafe { iter.next() },
         }
     }
 }
