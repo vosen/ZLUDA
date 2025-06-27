@@ -24,14 +24,15 @@ impl ZludaObject for Module {
 
 fn get_ptx_from_wrapped_fatbin(image: *const ::core::ffi::c_void) -> Result<Vec<u8>, CUerror> {
     let fatbin = Fatbin::new(&image).map_err(|_| CUerror::UNKNOWN)?;
-    let first = fatbin.get_first().map_err(|_| CUerror::UNKNOWN)?;
-    let mut files = first.get_files();
+    let mut submodules = fatbin.get_submodules().map_err(|_| CUerror::UNKNOWN)?;
 
-    while let Some(file) = unsafe { files.next().map_err(|_| CUerror::UNKNOWN)? } {
-        // Eventually we will want to get the PTX for the highest hardware version that we can get to compile. But for now we just get the first PTX we can find.
-        if file.header.kind == FatbinFileHeader::HEADER_KIND_PTX {
-            let decompressed = unsafe { file.decompress() }.map_err(|_| CUerror::UNKNOWN)?;
-            return Ok(decompressed);
+    while let Some(current) = unsafe { submodules.next().map_err(|_| CUerror::UNKNOWN)? } { 
+        let mut files = current.get_files();
+        while let Some(file) = unsafe { files.next().map_err(|_| CUerror::UNKNOWN)? } {
+            if file.header.kind == FatbinFileHeader::HEADER_KIND_PTX {
+                let decompressed = unsafe { file.decompress() }.map_err(|_| CUerror::UNKNOWN)?;
+                return Ok(decompressed);
+            }
         }
     }
 

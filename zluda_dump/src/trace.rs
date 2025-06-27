@@ -262,12 +262,9 @@ pub(crate) unsafe fn record_submodules_from_wrapped_fatbin(
     state: &mut StateTracker,
 ) -> Result<(), ErrorEntry> {
     let fatbin = Fatbin::new(&fatbinc_wrapper).map_err(ErrorEntry::from)?;
-    let first = fatbin.get_first().map_err(ErrorEntry::from)?;
-    record_submodules_from_fatbin(module, first, fn_logger, state)?;
-    if let Some(mut submodules) = fatbin.get_submodules() {
-        while let Some(current) = submodules.next()? {
-            record_submodules_from_fatbin(module, current, fn_logger, state)?;
-        }
+    let mut submodules = fatbin.get_submodules()?;
+    while let Some(current) = submodules.next()? {
+        record_submodules_from_fatbin(module, current, fn_logger, state)?;
     }
     Ok(())
 }
