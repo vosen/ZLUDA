@@ -37,6 +37,7 @@ pub enum FatbinError {
     ParseFailure(ParseError),
     Lz4DecompressionFailure,
     ZstdDecompressionFailure(usize),
+    UnsupportedVersion(u32),
 }
 
 pub fn parse_fatbinc_wrapper<T: Sized>(ptr: &*const T) -> Result<&FatbincWrapper, ParseError> {
@@ -75,21 +76,20 @@ impl<'a> Fatbin<'a> {
         Ok(Fatbin { wrapper })
     }
 
-    pub fn get_first(&self) -> Result<FatbinSubmodule, FatbinError> {
-        let header: &FatbinHeader =
-            parse_fatbin_header(&self.wrapper.data).map_err(|e| FatbinError::ParseFailure(e))?;
-        Ok(FatbinSubmodule::new(header))
-    }
-
-    pub fn get_submodules(&self) -> Option<FatbinSubmoduleIterator> {
-        let is_version_2 = self.wrapper.version == FatbincWrapper::VERSION_V2;
-        if !is_version_2 {
-            return None;
+    pub fn get_submodules(&self) -> Result<FatbinIter<'a>, FatbinError> {
+        match self.wrapper.version {
+            FatbincWrapper::VERSION_V2 => 
+                Ok(FatbinIter::V2(FatbinSubmoduleIterator {
+                    fatbins: self.wrapper.filename_or_fatbins as *const *const std::ffi::c_void,
+                    _phantom: std::marker::PhantomData,
+                })),
+            FatbincWrapper::VERSION_V1 => {
+                let header = parse_fatbin_header(&self.wrapper.data)
+                    .map_err(FatbinError::ParseFailure)?;
+                Ok(FatbinIter::V1(Some(FatbinSubmodule::new(header))))
+            }
+            version => Err(FatbinError::UnsupportedVersion(version)),
         }
-
-        Some(FatbinSubmoduleIterator {
-            fatbins: self.wrapper.filename_or_fatbins as *const *const std::ffi::c_void,
-        })
     }
 }
 
@@ -107,12 +107,33 @@ impl<'a> FatbinSubmodule<'a> {
     }
 }
 
-pub struct FatbinSubmoduleIterator {
-    fatbins: *const *const std::ffi::c_void,
+pub enum FatbinIter<'a> {
+    V1(Option<FatbinSubmodule<'a>>),
+    V2(FatbinSubmoduleIterator<'a>),
 }
 
-impl FatbinSubmoduleIterator {
-    pub unsafe fn next(&mut self) -> Result<Option<FatbinSubmodule>, ParseError> {
+impl<'a> FatbinIter<'a> {
+    pub fn next(&mut self) -> Result<Option<FatbinSubmodule<'a>>, ParseError> {
+        match self {
+            FatbinIter::V1(opt) => Ok(opt.take()),
+            FatbinIter::V2(iter) => unsafe {
+                match iter.next() {
+                    Ok(Some(submodule)) => Ok(Some(submodule)),
+                    Ok(None) => Ok(None),
+                    Err(e) => Err(e),
+                }
+            },
+        }
+    }
+}
+
+pub struct FatbinSubmoduleIterator<'a> {
+    fatbins: *const *const std::ffi::c_void,
+    _phantom: std::marker::PhantomData<&'a FatbinHeader>,
+}
+
+impl<'a> FatbinSubmoduleIterator<'a> {
+    pub unsafe fn next(&mut self) -> Result<Option<FatbinSubmodule<'a>>, ParseError> {
         if *self.fatbins != ptr::null() {
             let header = *self.fatbins as *const FatbinHeader;
             self.fatbins = self.fatbins.add(1);
