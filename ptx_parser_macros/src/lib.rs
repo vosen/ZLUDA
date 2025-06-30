@@ -3,7 +3,6 @@ use ptx_parser_macros_impl::parser;
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, ToTokens};
 use rustc_hash::{FxHashMap, FxHashSet};
-use uuid::Uuid;
 use std::{collections::hash_map, hash::Hash, iter, rc::Rc};
 use syn::{
     parse_macro_input, parse_quote, punctuated::Punctuated, Ident, ItemEnum, Token, Type, TypePath,
@@ -439,35 +438,6 @@ fn emit_enum_types(
     result
 }
 
-#[derive(Clone)]
-struct ParseFunctionDecl {
-    id: Ident,
-    return_type: TokenStream,
-    body: TokenStream,
-}
-
-#[derive(Clone)]
-enum TuplePattern {
-    NonLeaf(Vec<TuplePattern>),
-    Leaf(Ident)
-}
-
-impl TuplePattern {
-    fn emit_pattern(&self) -> TokenStream {
-        match self {
-            TuplePattern::NonLeaf(args) => {
-                if args.len() == 1 {
-                    args[0].emit_pattern()
-                } else {
-                    let inner = args.iter().map(|a| a.emit_pattern());
-                    quote! { ( #(#inner),* ) }
-                }
-            }
-            TuplePattern::Leaf(id) => quote! { #id }
-        }
-    }
-}
-
 fn emit_parse_function(
     type_name: &Ident,
     defs: &FxHashMap<Ident, OpcodeDefinitions>,
@@ -787,77 +757,12 @@ fn emit_definition_parser(
                 DotModifierRef::Direct { optional: true, .. }
                 | DotModifierRef::Indirect { optional: true, .. } => TokenStream::new(),
             });
-    let arguments_parse = if let Some(ArgumentParserContext { pattern, functions, entry_point }) = emit_argument_parser(token_type, true, &definition.arguments.0) {
-        let decls = functions.iter().map(|decl| {
-            let ParseFunctionDecl { id: name, return_type, body } = decl;
-            quote! {
-                fn #name<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> winnow::error::PResult<#return_type> {
-                    #body
-                }
-            }
-        });
-        let parse_fn = entry_point.id.clone();
-        let args_pattern = pattern.emit_pattern();
-        quote! {
-            #(#decls)*
-            let #args_pattern = #parse_fn.parse_next(stream)?;
-        }
-    } else {
-        quote! {}
-    };
-    let fn_args = definition.function_arguments();
-    let fn_name = format_ident!("{}_{}", opcode, fn_idx);
-    let fn_call = quote! {
-        #fn_name(&mut stream.state,  #(#fn_args),* )
-    };
-    quote! {
-        #(#unordered_parse_declarations)*
-        #(#ordered_parse_declarations)*
-        {
-            let mut stream = ReverseStream(modifiers);
-            #(#ordered_parse)*
-            let mut stream: &[_] = stream.0;
-            for (token, _) in stream.iter().cloned() {
-                match token {
-                    #(#unordered_parse)*
-                    _ => #return_error_ref
-                }
-            }
-        }
-        #(#unordered_parse_validations)*
-        #arguments_parse
-        #fn_call
-    }
-}
-
-struct ArgumentParserContext {
-    pattern: TuplePattern,
-    functions: Vec<ParseFunctionDecl>,
-    entry_point: ParseFunctionDecl
-}
-
-fn emit_argument_parser(token_type: &Ident, mut first: bool, arguments: &[crate::parser::Argument]) -> Option<ArgumentParserContext> {
-    if arguments.is_empty() {
-        return None
-    }
-
-    let mut argument_parsers = vec![];
-
-    let mut patterns = vec![];
-    let mut return_types = vec![];
-
-    let mut fns = vec![];
-
-    for (idx, arg) in arguments.iter().enumerate() {
-        let mut returned = quote! { ast::ParsedOperand<&'input str> };
-
-        let comma = if first || arg.pre_pipe {
+    let (arguments_pattern, arguments_parser) = definition.arguments.0.iter().enumerate().rfold((quote! { () }, quote! { empty }), |(emitted_pattern, emitted_parser), (idx, arg)| {
+        let comma = if idx == 0 || arg.pre_pipe {
             quote! { empty }
         } else {
             quote! { any.verify(|(t, _)| *t == #token_type::Comma).void() }
         };
-
-        first = false;
 
         let pre_bracket = if arg.pre_bracket {
             quote! {
@@ -878,7 +783,6 @@ fn emit_argument_parser(token_type: &Ident, mut first: bool, arguments: &[crate:
             }
         };
         let can_be_negated = if arg.can_be_negated {
-            returned = quote! { (bool, #returned) };
             quote! {
                 opt(any.verify(|(t, _)| *t == #token_type::Not)).map(|o| o.is_some())
             }
@@ -913,11 +817,11 @@ fn emit_argument_parser(token_type: &Ident, mut first: bool, arguments: &[crate:
         let pattern = quote! {
             (#comma, #pre_bracket, #pre_pipe, #can_be_negated, #operand, #post_bracket, #unified)
         };
+        let arg_name = &arg.ident;
         if arg.unified && arg.can_be_negated {
             panic!("TODO: argument can't be both prefixed by `!` and suffixed by  `.unified`")
         }
         let inner_parser = if arg.unified {
-            returned = quote! { (#returned, bool) };
             quote! {
                 #pattern.map(|(_, _, _, _, name, _, unified)| (name, unified))
             }
@@ -930,61 +834,43 @@ fn emit_argument_parser(token_type: &Ident, mut first: bool, arguments: &[crate:
                 #pattern.map(|(_, _, _, _, name, _, _)| name)
             }
         };
-        if arg.optional {
-            let (_, remaining_arguments) = arguments.split_at(idx + 1);
-            let parse_remaining_arguments = emit_argument_parser(token_type, first, remaining_arguments);
 
-            if let Some(context) = parse_remaining_arguments {
-                let mut alt_types = vec![quote! { Option<#returned> }];
-                let next_parser_returns = context.entry_point.return_type.clone();
-                alt_types.push(quote! { ( #next_parser_returns ) });
-                patterns.push(TuplePattern::NonLeaf(vec![TuplePattern::Leaf(arg.ident.clone()), context.pattern]));
-                fns.extend(context.functions.clone());
-                let next_parser_id = &context.entry_point.id;
-                argument_parsers.push(quote! {
-                    alt(((#inner_parser.map(|s| Some(s)), #next_parser_id), (empty.value(None), #next_parser_id)))
-                });
-
-                let returned = quote! { ( #(#alt_types),* ) };
-                return_types.push(returned);
-                break;
-            } else {
-                returned = quote! { Option<#returned> };
-
-                patterns.push(TuplePattern::Leaf(arg.ident.clone()));
-                return_types.push(returned);
-                argument_parsers.push(quote! {
-                    opt(#inner_parser)
-                });
-                break;
-            }
+        let parser = if arg.optional {
+            quote! { first_optional(#inner_parser, #emitted_parser) }
         } else {
-            let arg_parser = quote! {
-                #inner_parser
-            };
-            patterns.push(TuplePattern::Leaf(arg.ident.clone()));
-            return_types.push(returned);
-            argument_parsers.push(arg_parser);
+            quote! { (#inner_parser, #emitted_parser) }
+        };
+
+        let pattern = quote! { ( #arg_name, #emitted_pattern ) };
+
+        (pattern, parser)
+    });
+
+    let arguments_parse = quote! { let #arguments_pattern = ( #arguments_parser ).parse_next(stream)?; };
+
+    let fn_args = definition.function_arguments();
+    let fn_name = format_ident!("{}_{}", opcode, fn_idx);
+    let fn_call = quote! {
+        #fn_name(&mut stream.state,  #(#fn_args),* )
+    };
+    quote! {
+        #(#unordered_parse_declarations)*
+        #(#ordered_parse_declarations)*
+        {
+            let mut stream = ReverseStream(modifiers);
+            #(#ordered_parse)*
+            let mut stream: &[_] = stream.0;
+            for (token, _) in stream.iter().cloned() {
+                match token {
+                    #(#unordered_parse)*
+                    _ => #return_error_ref
+                }
+            }
         }
+        #(#unordered_parse_validations)*
+        #arguments_parse
+        #fn_call
     }
-    let id = format_ident!("parser_{}", Uuid::new_v4().simple().to_string());
-    let body = quote! { ( #(#argument_parsers),* ).parse_next(stream) };
-    let return_type = if return_types.len() == 1 {
-        return_types[0].clone()
-    } else {
-        quote! { ( #(#return_types),* ) }
-    };
-
-    let this_parser = ParseFunctionDecl { id: id.clone(), return_type, body };
-    fns.push(this_parser.clone());
-
-    let arguments_tree = if patterns.len() == 1 {
-        patterns[0].clone()
-    } else {
-        TuplePattern::NonLeaf(patterns)
-    };
-
-    Some(ArgumentParserContext { pattern: arguments_tree, functions: fns, entry_point: this_parser })
 }
 
 fn write_definitions_into_tokens<'a>(

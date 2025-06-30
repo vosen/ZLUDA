@@ -15,4 +15,3 @@ syn = "2.0.67"
 quote = "1.0"
 proc-macro2 = "1.0.86"
 either = "1.13.0"
-uuid = { version = "1.17.0", features = ["v4"] }
