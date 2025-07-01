@@ -18,7 +18,7 @@ use std::str;
 macro_rules! read_test_file {
     ($file:expr) => {
         {
-            // CARGO_MANIFEST_DIR is the crate directory (ptx), but file! is relative to the workspace root (and therefore also includes ptx). 
+            // CARGO_MANIFEST_DIR is the crate directory (ptx), but file! is relative to the workspace root (and therefore also includes ptx).
             let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
             path.pop();
             path.push(file!());
@@ -175,7 +175,7 @@ test_ptx!(sin, [std::f32::consts::PI / 2f32], [1f32]);
 test_ptx!(cos, [std::f32::consts::PI], [-1f32]);
 test_ptx!(lg2, [512f32], [9f32]);
 test_ptx!(ex2, [10f32], [1024f32]);
-test_ptx!(fmax, [0u32, 0x8000u32], [0x8000u32]);
+test_ptx!(fmax, [0u16, half::f16::NAN.to_bits()], [0u16]);
 test_ptx!(cvt_rni, [9.5f32, 10.5f32], [10f32, 10f32]);
 test_ptx!(cvt_rzi, [-13.8f32, 12.9f32], [-13f32, 12f32]);
 test_ptx!(cvt_s32_f32, [-13.8f32, 12.9f32], [-13i32, 13i32]);
