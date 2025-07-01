@@ -1492,6 +1492,46 @@ pub struct TokenError(std::ops::Range<usize>);
 
 impl std::error::Error for TokenError {}
 
+fn first_optional<
+    'a,
+    'input,
+    Input: Stream,
+    OptionalOutput,
+    RequiredOutput,
+    Error,
+    ParseOptional,
+    ParseRequired,
+>(
+    mut optional: ParseOptional,
+    mut required: ParseRequired,
+) -> impl Parser<Input, (Option<OptionalOutput>, RequiredOutput), Error>
+where
+    ParseOptional: Parser<Input, OptionalOutput, Error>,
+    ParseRequired: Parser<Input, RequiredOutput, Error>,
+    Error: ParserError<Input>,
+{
+    move |input: &mut Input| -> Result<(Option<OptionalOutput>, RequiredOutput), ErrMode<Error>> {
+        let start = input.checkpoint();
+
+        let parsed_optional = match optional.parse_next(input) {
+            Ok(v) => Some(v),
+            Err(ErrMode::Backtrack(_)) => {
+                input.reset(&start);
+                None
+            },
+            Err(e) => return Err(e)
+        };
+
+        match required.parse_next(input) {
+            Ok(v) => return Ok((parsed_optional, v)),
+            Err(ErrMode::Backtrack(_)) => input.reset(&start),
+            Err(e) => return Err(e)
+        };
+
+        Ok((None, required.parse_next(input)?))
+    }
+}
+
 // This macro is responsible for generating parser code for instruction parser.
 // Instruction parsing is by far the most complex part of parsing PTX code:
 // * There are tens of instruction kinds, each with slightly different parsing rules
@@ -3413,6 +3453,7 @@ derive_parser!(
 
 #[cfg(test)]
 mod tests {
+    use crate::first_optional;
     use crate::parse_module_checked;
     use crate::PtxError;
 
@@ -3422,6 +3463,55 @@ mod tests {
     use logos::Logos;
     use logos::Span;
     use winnow::prelude::*;
+
+    #[test]
+    fn first_optional_present() {
+        let text = "AB";
+        let result = first_optional::<_, _, _, (), _, _>('A', 'B').parse(text);
+        assert_eq!(result, Ok((Some('A'), 'B')));
+    }
+
+    #[test]
+    fn first_optional_absent() {
+        let text = "B";
+        let result = first_optional::<_, _, _, (), _, _>('A', 'B').parse(text);
+        assert_eq!(result, Ok((None, 'B')));
+    }
+
+    #[test]
+    fn first_optional_repeated_absent() {
+        let text = "A";
+        let result = first_optional::<_, _, _, (), _, _>('A', 'A').parse(text);
+        assert_eq!(result, Ok((None, 'A')));
+    }
+
+    #[test]
+    fn first_optional_repeated_present() {
+        let text = "AA";
+        let result = first_optional::<_, _, _, (), _, _>('A', 'A').parse(text);
+        assert_eq!(result, Ok((Some('A'), 'A')));
+    }
+
+    #[test]
+    fn first_optional_sequence_absent() {
+        let text = "AA";
+        let result = ('A', first_optional::<_, _, _, (), _, _>('A', 'A')).parse(text);
+        assert_eq!(result, Ok(('A', (None, 'A'))));
+    }
+
+    #[test]
+    fn first_optional_sequence_present() {
+        let text = "AAA";
+        let result = ('A', first_optional::<_, _, _, (), _, _>('A', 'A')).parse(text);
+        assert_eq!(result, Ok(('A', (Some('A'), 'A'))));
+    }
+
+    #[test]
+    fn first_optional_no_match() {
+        let text = "C";
+        let result = first_optional::<_, _, _, (), _, _>('A', 'B').parse(text);
+        assert!(result.is_err());
+    }
 
     #[test]
     fn sm_11() {

@@ -757,12 +757,13 @@ fn emit_definition_parser(
                 DotModifierRef::Direct { optional: true, .. }
                 | DotModifierRef::Indirect { optional: true, .. } => TokenStream::new(),
             });
-    let arguments_parse = definition.arguments.0.iter().enumerate().map(|(idx, arg)| {
+    let (arguments_pattern, arguments_parser) = definition.arguments.0.iter().enumerate().rfold((quote! { () }, quote! { empty }), |(emitted_pattern, emitted_parser), (idx, arg)| {
         let comma = if idx == 0 || arg.pre_pipe {
             quote! { empty }
         } else {
             quote! { any.verify(|(t, _)| *t == #token_type::Comma).void() }
         };
+
         let pre_bracket = if arg.pre_bracket {
             quote! {
                 any.verify(|(t, _)| *t == #token_type::LBracket).void()
@@ -833,16 +834,20 @@ fn emit_definition_parser(
                 #pattern.map(|(_, _, _, _, name, _, _)| name)
             }
         };
-        if arg.optional {
-            quote! {
-                let #arg_name = opt(#inner_parser).parse_next(stream)?;
-            }
+
+        let parser = if arg.optional {
+            quote! { first_optional(#inner_parser, #emitted_parser) }
         } else {
-            quote! {
-                let #arg_name = #inner_parser.parse_next(stream)?;
-            }
-        }
+            quote! { (#inner_parser, #emitted_parser) }
+        };
+
+        let pattern = quote! { ( #arg_name, #emitted_pattern ) };
+
+        (pattern, parser)
     });
+
+    let arguments_parse = quote! { let #arguments_pattern = ( #arguments_parser ).parse_next(stream)?; };
+
     let fn_args = definition.function_arguments();
     let fn_name = format_ident!("{}_{}", opcode, fn_idx);
     let fn_call = quote! {
@@ -863,7 +868,7 @@ fn emit_definition_parser(
             }
         }
         #(#unordered_parse_validations)*
-        #(#arguments_parse)*
+        #arguments_parse
         #fn_call
     }
 }

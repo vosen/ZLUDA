@@ -10,32 +10,65 @@ use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::{self, File};
 use std::io::Write;
 use std::mem;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::ptr;
 use std::str;
+
+#[cfg(not(feature = "ci_build"))]
+macro_rules! read_test_file {
+    ($file:expr) => {
+        {
+            // CARGO_MANIFEST_DIR is the crate directory (ptx), but file! is relative to the workspace root (and therefore also includes ptx). 
+            let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            path.pop();
+            path.push(file!());
+            path.pop();
+            path.push($file);
+            std::fs::read_to_string(path).unwrap()
+        }
+    };
+}
+
+#[cfg(feature = "ci_build")]
+macro_rules! read_test_file {
+    ($file:expr) => {
+        include_str!($file).to_string()
+    };
+}
 
 macro_rules! test_ptx {
     ($fn_name:ident, $input:expr, $output:expr) => {
         paste::item! {
             #[test]
             fn [<$fn_name _hip>]() -> Result<(), Box<dyn std::error::Error>> {
-                let ptx = include_str!(concat!(stringify!($fn_name), ".ptx"));
+                let ptx = read_test_file!(concat!(stringify!($fn_name), ".ptx"));
                 let input = $input;
                 let mut output = $output;
-                test_hip_assert(stringify!($fn_name), ptx, &input, &mut output)
+                test_hip_assert(stringify!($fn_name), &ptx, &input, &mut output)
             }
         }
 
         paste::item! {
             #[test]
             fn [<$fn_name _cuda>]() -> Result<(), Box<dyn std::error::Error>> {
-                let ptx = include_str!(concat!(stringify!($fn_name), ".ptx"));
+                let ptx = read_test_file!(concat!(stringify!($fn_name), ".ptx"));
                 let input = $input;
                 let mut output = $output;
-                test_cuda_assert(stringify!($fn_name), ptx, &input, &mut output)
+                test_cuda_assert(stringify!($fn_name), &ptx, &input, &mut output)
             }
         }
 
+        paste::item! {
+            #[test]
+            fn [<$fn_name _llvm>]() -> Result<(), Box<dyn std::error::Error>> {
+                let ptx = read_test_file!(concat!(stringify!($fn_name), ".ptx"));
+                let ll = read_test_file!(concat!("../ll/", stringify!($fn_name), ".ll"));
+                test_llvm_assert(stringify!($fn_name), &ptx, ll.trim())
+            }
+        }
+    };
+
+    ($fn_name:ident) => {
         paste::item! {
             #[test]
             fn [<$fn_name _llvm>]() -> Result<(), Box<dyn std::error::Error>> {
@@ -45,8 +78,6 @@ macro_rules! test_ptx {
             }
         }
     };
-
-    ($fn_name:ident) => {};
 }
 
 test_ptx!(ld_st, [1u64], [1u64]);
@@ -242,7 +273,8 @@ test_ptx!(
 );
 
 test_ptx!(assertfail);
-test_ptx!(func_ptr);
+// TODO: not yet supported
+//test_ptx!(func_ptr);
 test_ptx!(lanemask_lt);
 test_ptx!(extern_func);
 
@@ -265,15 +297,14 @@ impl<T: Debug> Debug for DisplayError<T> {
 impl<T: Debug> error::Error for DisplayError<T> {}
 
 fn test_hip_assert<
-    'a,
     Input: From<u8> + Debug + Copy + PartialEq,
     Output: From<u8> + Debug + Copy + PartialEq + Default,
 >(
     name: &str,
-    ptx_text: &'a str,
+    ptx_text: &str,
     input: &[Input],
     output: &mut [Output],
-) -> Result<(), Box<dyn error::Error + 'a>> {
+) -> Result<(), Box<dyn error::Error>> {
     let ast = ptx_parser::parse_module_checked(ptx_text).unwrap();
     let llvm_ir = pass::to_llvm_module(ast).unwrap();
     let name = CString::new(name)?;
@@ -283,11 +314,11 @@ fn test_hip_assert<
     Ok(())
 }
 
-fn test_llvm_assert<'a>(
+fn test_llvm_assert(
     name: &str,
-    ptx_text: &'a str,
+    ptx_text: &str,
     expected_ll: &str,
-) -> Result<(), Box<dyn error::Error + 'a>> {
+) -> Result<(), Box<dyn error::Error>> {
     let ast = ptx_parser::parse_module_checked(ptx_text).unwrap();
     let llvm_ir = pass::to_llvm_module(ast).unwrap();
     let actual_ll = llvm_ir.llvm_ir.print_module_to_string();
@@ -301,22 +332,21 @@ fn test_llvm_assert<'a>(
             let mut output_file = File::create(output_file).unwrap();
             output_file.write_all(actual_ll.as_bytes()).unwrap();
         }
-        let comparison = pretty_assertions::StrComparison::new(expected_ll, actual_ll);
+        let comparison = pretty_assertions::StrComparison::new(&expected_ll, &actual_ll);
         panic!("assertion failed: `(left == right)`\n\n{}", comparison);
     }
     Ok(())
 }
 
 fn test_cuda_assert<
-    'a,
     Input: From<u8> + Debug + Copy + PartialEq,
     Output: From<u8> + Debug + Copy + PartialEq + Default,
 >(
     name: &str,
-    ptx_text: &'a str,
+    ptx_text: &str,
     input: &[Input],
     output: &mut [Output],
-) -> Result<(), Box<dyn error::Error + 'a>> {
+) -> Result<(), Box<dyn error::Error>> {
     let name = CString::new(name)?;
     let result = run_cuda(name.as_c_str(), ptx_text, input, output);
     assert_eq!(result.as_slice(), output);

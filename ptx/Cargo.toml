@@ -18,7 +18,7 @@ rustc-hash = "2.0.0"
 strum = "0.26"
 strum_macros = "0.26"
 petgraph = "0.7.1"
-microlp = "0.2.10"
+microlp = "0.2.11"
 int-enum = "1.1"
 unwrap_or = "1.0.1"
 
@@ -31,3 +31,6 @@ tempfile = "3"
 paste = "1.0"
 pretty_assertions = "1.4.1"
 libloading = "0.8"
+
+[features]
+ci_build = []

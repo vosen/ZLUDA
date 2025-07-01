@@ -1,5 +1,9 @@
 use super::{driver, ZludaObject};
-use cuda_types::cuda::*;
+use cuda_types::{
+    cuda::*,
+    dark_api::{FatbinFileHeader, FatbincWrapper},
+};
+use dark_api::fatbin::Fatbin;
 use hip_runtime_sys::*;
 use std::{ffi::CStr, mem};
 
@@ -18,12 +22,48 @@ impl ZludaObject for Module {
     }
 }
 
-pub(crate) fn load_data(module: &mut CUmodule, image: *const std::ffi::c_void) -> CUresult {
+fn get_ptx_from_wrapped_fatbin(image: *const ::core::ffi::c_void) -> Result<Vec<u8>, CUerror> {
+    let fatbin = Fatbin::new(&image).map_err(|_| CUerror::UNKNOWN)?;
+    let mut submodules = fatbin.get_submodules().map_err(|_| CUerror::UNKNOWN)?;
+
+    while let Some(current) = unsafe { submodules.next().map_err(|_| CUerror::UNKNOWN)? } { 
+        let mut files = current.get_files();
+        while let Some(file) = unsafe { files.next().map_err(|_| CUerror::UNKNOWN)? } {
+            if file.header.kind == FatbinFileHeader::HEADER_KIND_PTX {
+                let decompressed = unsafe { file.decompress() }.map_err(|_| CUerror::UNKNOWN)?;
+                return Ok(decompressed);
+            }
+        }
+    }
+
+    Err(CUerror::NO_BINARY_FOR_GPU)
+}
+
+/// get_ptx takes an `image` that can be either a fatbin or a NULL-terminated ptx, and returns a String containing a ptx extracted from `image`.
+fn get_ptx(image: *const ::core::ffi::c_void) -> Result<String, CUerror> {
+    if image.is_null() {
+        return Err(CUerror::INVALID_VALUE);
+    }
+
+    let ptx = if unsafe { *(image as *const u32) } == FatbincWrapper::MAGIC {
+        let ptx_bytes = get_ptx_from_wrapped_fatbin(image)?;
+        str::from_utf8(&ptx_bytes)
+            .map_err(|_| CUerror::UNKNOWN)?
+            .to_owned()
+    } else {
+        unsafe { CStr::from_ptr(image.cast()) }
+            .to_str()
+            .map_err(|_| CUerror::INVALID_VALUE)?
+            .to_owned()
+    };
+
+    Ok(ptx)
+}
+
+pub(crate) fn load_hip_module(image: *const std::ffi::c_void) -> Result<hipModule_t, CUerror> {
     let global_state = driver::global_state()?;
-    let text = unsafe { CStr::from_ptr(image.cast()) }
-        .to_str()
-        .map_err(|_| CUerror::INVALID_VALUE)?;
-    let ast = ptx_parser::parse_module_checked(text).map_err(|_| CUerror::NO_BINARY_FOR_GPU)?;
+    let text = get_ptx(image)?;
+    let ast = ptx_parser::parse_module_checked(&text).map_err(|_| CUerror::NO_BINARY_FOR_GPU)?;
     let llvm_module = ptx::to_llvm_module(ast).map_err(|_| CUerror::UNKNOWN)?;
     let mut dev = 0;
     unsafe { hipCtxGetDevice(&mut dev) }?;
@@ -38,6 +78,11 @@ pub(crate) fn load_data(module: &mut CUmodule, image: *const std::ffi::c_void) -
     .map_err(|_| CUerror::UNKNOWN)?;
     let mut hip_module = unsafe { mem::zeroed() };
     unsafe { hipModuleLoadData(&mut hip_module, elf_module.as_ptr().cast()) }?;
+    Ok(hip_module)
+}
+
+pub(crate) fn load_data(module: &mut CUmodule, image: &std::ffi::c_void) -> CUresult {
+    let hip_module = load_hip_module(image)?;
     *module = Module { base: hip_module }.wrap();
     Ok(())
 }
