@@ -20,11 +20,10 @@ macro_rules! read_test_file {
         {
             // CARGO_MANIFEST_DIR is the crate directory (ptx), but file! is relative to the workspace root (and therefore also includes ptx). 
             let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-
-            let mut file_dir = PathBuf::from(file!());
-            file_dir.pop();
-
-            path.extend(["..", file_dir.to_str().unwrap(), $file]);
+            path.pop();
+            path.push(file!());
+            path.pop();
+            path.push($file);
             std::fs::read_to_string(path).unwrap()
         }
     };
