@@ -31,3 +31,6 @@ tempfile = "3"
 paste = "1.0"
 pretty_assertions = "1.4.1"
 libloading = "0.8"
+
+[features]
+ci_build = []
