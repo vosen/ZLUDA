@@ -84,8 +84,8 @@ jobs:
     - name: Run sccache-cache
       uses: mozilla-actions/sccache-action@v0.0.9
     - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-export
+      with:
+        tool: cargo-export
     - name: Build
       run: |
         cargo export target/tests -- test --workspace
