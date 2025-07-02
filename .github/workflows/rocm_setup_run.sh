@@ -1,6 +1,6 @@
 #!/bin/bash
 set -ex
-ROCM_VERSION=$0
+ROCM_VERSION=$1
 
 DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends gpg zstd "linux-headers-$(uname -r)" "linux-modules-extra-$(uname -r)"
 # Source: https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/install-methods/package-manager/package-manager-ubuntu.html

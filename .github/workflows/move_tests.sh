@@ -1,7 +1,7 @@
 #!/bin/bash
 set -ex
-TEST_EXECUTABLES_DIR=$0
-SUFFIX=$1
+TEST_EXECUTABLES_DIR=$1
+SUFFIX=$2
 
 ls ${TEST_EXECUTABLES_DIR}/* | sort -u | while read -r executable; do
     output=$("$executable" --list 2>/dev/null)
