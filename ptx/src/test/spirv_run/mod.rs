@@ -40,7 +40,7 @@ macro_rules! test_ptx {
     ($fn_name:ident, $input:expr, $output:expr) => {
         paste::item! {
             #[test]
-            fn [<$fn_name _hip>]() -> Result<(), Box<dyn std::error::Error>> {
+            fn [<$fn_name _amdgpu>]() -> Result<(), Box<dyn std::error::Error>> {
                 let ptx = read_test_file!(concat!(stringify!($fn_name), ".ptx"));
                 let input = $input;
                 let mut output = $output;
