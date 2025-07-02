@@ -7,7 +7,7 @@ DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends gpg
 mkdir --parents --mode=0755 /etc/apt/keyrings
 wget https://repo.radeon.com/rocm/rocm.gpg.key -O - | \
     gpg --dearmor | tee /etc/apt/keyrings/rocm.gpg > /dev/null
-echo deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/$ROCM_VERSION noble main | tee /etc/apt/sources.list.d/rocm.list
+echo deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/$ROCM_VERSION jammy main | tee /etc/apt/sources.list.d/rocm.list
 echo -e 'Package: *\nPin: release o=repo.radeon.com\nPin-Priority: 600' \
     | tee /etc/apt/preferences.d/rocm-pin-600
 DEBIAN_FRONTEND=noninteractive apt update -y
