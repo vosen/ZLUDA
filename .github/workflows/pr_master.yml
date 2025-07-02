@@ -23,11 +23,11 @@ jobs:
         large-packages: false
         docker-images: false
         swap-storage: false
-    - name: Install ROCm
-      run: sudo bash .github/workflows/rocm_setup_build.sh ${{ env.ROCM_VERSION }}
     - uses: actions/checkout@v4
       with:
         submodules: true
+    - name: Install ROCm
+      run: sudo bash .github/workflows/rocm_setup_build.sh ${{ env.ROCM_VERSION }}
     - name: Run sccache-cache
       uses: mozilla-actions/sccache-action@v0.0.9
     - name: Build
@@ -76,11 +76,11 @@ jobs:
         large-packages: false
         docker-images: false
         swap-storage: false
-    - name: Install ROCm
-      run: sudo bash .github/workflows/rocm_setup_build.sh ${{ env.ROCM_VERSION }}
     - uses: actions/checkout@v4
       with:
         submodules: true
+    - name: Install ROCm
+      run: sudo bash .github/workflows/rocm_setup_build.sh ${{ env.ROCM_VERSION }}
     - name: Run sccache-cache
       uses: mozilla-actions/sccache-action@v0.0.9
     - uses: taiki-e/install-action@v2
