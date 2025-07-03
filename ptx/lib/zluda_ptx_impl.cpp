@@ -4,6 +4,8 @@
 
 #include <cstddef>
 #include <cstdint>
+
+#define HIP_ENABLE_WARP_SYNC_BUILTINS 1
 #include <hip/amd_detail/amd_device_functions.h>
 
 #define FUNC(NAME) __device__ __attribute__((retain)) __zluda_ptx_impl_##NAME
@@ -169,6 +171,55 @@ extern "C"
 
     BAR_RED_IMPL(and);
     BAR_RED_IMPL(or);
+
+    struct ShflSyncResult {
+        uint32_t output;
+        bool in_bounds;
+    };
+
+    // shfl.sync opts consists of two values, the endpoint ID and the subsection mask.
+    //
+    // The current warp is partitioned into some number of subsections with a width of w. The
+    // subsection mask is 32 - w, and indicates which bits of the lane id are part of the subsection
+    // address. For example, if each subsection is 8 lanes wide, the subsection mask will be 24 –
+    // 11000 in binary. This indicates that the two most significant bits in the 5-bit lane ID are
+    // the subsection address. For example, for a lane ID 13 (0b01101) the address of the beginning
+    // of the subsection is 0b01000 (8).
+    //
+    // The endpoint ID is the lane ID of the max lane ID for a specific mode. For the CUDA
+    // __shfl_sync intrinsics, it is always 31 for idx, bfly, and down, and 0 for up. For now, it
+    // seems like we don't need to use this.
+
+    #define SHFL_SYNC_IMPL(mode, fn, out_of_bounds_check)                                                               \
+    uint32_t FUNC(shfl_sync_##mode##_b32)(uint32_t input, int32_t idx, uint32_t opts, uint32_t membermask)              \
+    {                                                                                                                   \
+        uint64_t mask = membermask & 0xFFFFFFFF;                                                                        \
+        uint32_t section_mask = (opts >> 8) & 0b11111;                                                                  \
+        uint32_t __attribute__((unused)) endpoint = opts & 0b11111;                                                     \
+        int32_t width = 32 - section_mask;                                                                              \
+        return fn(mask, input, idx, width);                                                                             \
+    }                                                                                                                   \
+                                                                                                                        \
+    ShflSyncResult FUNC(shfl_sync_##mode##_b32_pred)(uint32_t input, int32_t idx, uint32_t opts, uint32_t membermask)   \
+    {                                                                                                                   \
+        uint64_t mask = membermask & 0xFFFFFFFF;                                                                        \
+        uint32_t section_mask = (opts >> 8) & 0b11111;                                                                  \
+        uint32_t __attribute__((unused)) endpoint = opts & 0b11111;                                                     \
+        int32_t width = 32 - section_mask;                                                                              \
+        int32_t __attribute__((unused)) self = __lane_id();                                                             \
+        return {fn(mask, input, idx, width), !(out_of_bounds_check)};                                                   \
+    }
+    
+    // We can call the HIP __shfl_sync intrinsics to implement these, but they do not return the
+    // result of the range check, so we must replicate that logic here.
+
+    // the __shfl_mode_sync functions have different signs
+    #pragma GCC diagnostic ignored "-Wsign-conversion"
+    SHFL_SYNC_IMPL(up,   __shfl_up_sync,   (self - idx) < (self & ~(width-1)));
+    SHFL_SYNC_IMPL(down, __shfl_down_sync, ((self&(width-1))+idx) >= width);
+    SHFL_SYNC_IMPL(bfly, __shfl_xor_sync,  (self^idx) >= ((self+width)&~(width-1)));
+    SHFL_SYNC_IMPL(idx,  __shfl_sync,      false);
+    #pragma GCC diagnostic pop
 
     void FUNC(__assertfail)(uint64_t message,
                             uint64_t file,
