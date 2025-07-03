@@ -67,7 +67,7 @@ jobs:
     name: Build AMD GPU unit tests
     runs-on: ubuntu-22.04
     outputs:
-      test_package: ${{ steps.upload_artifacts.outputs.artifact-url }}
+      test_package: ${{ steps.upload_artifacts.outputs.artifact-id }}
     steps:
     - uses: jlumbroso/free-disk-space@main
       with:
@@ -111,12 +111,11 @@ jobs:
         submodules: false
     - name: Install ROCm
       run: sudo bash .github/workflows/rocm_setup_run.sh ${{ env.ROCM_VERSION }}
+    - uses: actions/download-artifact@v4
+      with:
+        artifact-ids: ${{ needs.build_tests.outputs.test_package }}
     - name: Run tests
-      env:
-        GH_TEST_URL: ${{ needs.build_tests.outputs.test_package }}
-        GH_ARTIFACTS_TOKEN: ${{ secrets.GH_ARTIFACTS_TOKEN }}
       run: |
-        curl -o tests.zip -H "Authorization: token $GH_ARTIFACTS_TOKEN" $GH_TEST_URL
         unzip tests.zip -d tests
         for exe in tests/*; do
             ./"$exe"
