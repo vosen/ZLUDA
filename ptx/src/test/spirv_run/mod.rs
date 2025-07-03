@@ -36,28 +36,8 @@ macro_rules! read_test_file {
     };
 }
 
-macro_rules! test_ptx {
-    ($fn_name:ident, $input:expr, $output:expr) => {
-        paste::item! {
-            #[test]
-            fn [<$fn_name _hip>]() -> Result<(), Box<dyn std::error::Error>> {
-                let ptx = read_test_file!(concat!(stringify!($fn_name), ".ptx"));
-                let input = $input;
-                let mut output = $output;
-                test_hip_assert(stringify!($fn_name), &ptx, &input, &mut output)
-            }
-        }
-
-        paste::item! {
-            #[test]
-            fn [<$fn_name _cuda>]() -> Result<(), Box<dyn std::error::Error>> {
-                let ptx = read_test_file!(concat!(stringify!($fn_name), ".ptx"));
-                let input = $input;
-                let mut output = $output;
-                test_cuda_assert(stringify!($fn_name), &ptx, &input, &mut output)
-            }
-        }
-
+macro_rules! test_ptx_llvm {
+    ($fn_name:ident) => {
         paste::item! {
             #[test]
             fn [<$fn_name _llvm>]() -> Result<(), Box<dyn std::error::Error>> {
@@ -66,17 +46,60 @@ macro_rules! test_ptx {
                 test_llvm_assert(stringify!($fn_name), &ptx, ll.trim())
             }
         }
+    }
+}
+
+macro_rules! test_ptx {
+    ($fn_name:ident, $input:expr, $output:expr) => {
+        paste::item! {
+            #[test]
+            fn [<$fn_name _hip>]() -> Result<(), Box<dyn std::error::Error>> {
+                let ptx = read_test_file!(concat!(stringify!($fn_name), ".ptx"));
+                let input = $input;
+                let output = $output;
+                test_hip_assert(stringify!($fn_name), &ptx, Some(&input), &output, 1)
+            }
+        }
+
+        paste::item! {
+            #[test]
+            fn [<$fn_name _cuda>]() -> Result<(), Box<dyn std::error::Error>> {
+                let ptx = read_test_file!(concat!(stringify!($fn_name), ".ptx"));
+                let input = $input;
+                let output = $output;
+                test_cuda_assert(stringify!($fn_name), &ptx, Some(&input), &output, 1)
+            }
+        }
+
+        test_ptx_llvm!($fn_name);
     };
 
     ($fn_name:ident) => {
+        test_ptx_llvm!($fn_name);
+    };
+}
+
+macro_rules! test_ptx_warp {
+    ($fn_name:ident, $output:expr) => {
         paste::item! {
             #[test]
-            fn [<$fn_name _llvm>]() -> Result<(), Box<dyn std::error::Error>> {
-                let ptx = include_str!(concat!(stringify!($fn_name), ".ptx"));
-                let ll = include_str!(concat!("../ll/", stringify!($fn_name), ".ll")).trim();
-                test_llvm_assert(stringify!($fn_name), ptx, &ll)
+            fn [<$fn_name _hip>]() -> Result<(), Box<dyn std::error::Error>> {
+                let ptx = read_test_file!(concat!(stringify!($fn_name), ".ptx"));
+                let mut output = $output;
+                test_hip_assert(stringify!($fn_name), &ptx, None::<&[u8]>, &mut output, 64)
             }
         }
+
+        paste::item! {
+            #[test]
+            fn [<$fn_name _cuda>]() -> Result<(), Box<dyn std::error::Error>> {
+                let ptx = read_test_file!(concat!(stringify!($fn_name), ".ptx"));
+                let mut output = $output;
+                test_cuda_assert(stringify!($fn_name), &ptx, None::<&[u8]>, &mut output, 64)
+            }
+        }
+
+        test_ptx_llvm!($fn_name);
     };
 }
 
@@ -278,6 +301,12 @@ test_ptx!(assertfail);
 test_ptx!(lanemask_lt);
 test_ptx!(extern_func);
 
+test_ptx_warp!(tid, [
+     0u8,  1u8,  2u8,  3u8,  4u8,  5u8,  6u8,  7u8,  8u8,  9u8, 10u8, 11u8, 12u8, 13u8, 14u8, 15u8,
+    16u8, 17u8, 18u8, 19u8, 20u8, 21u8, 22u8, 23u8, 24u8, 25u8, 26u8, 27u8, 28u8, 29u8, 30u8, 31u8,
+    32u8, 33u8, 34u8, 35u8, 36u8, 37u8, 38u8, 39u8, 40u8, 41u8, 42u8, 43u8, 44u8, 45u8, 46u8, 47u8,
+    48u8, 49u8, 50u8, 51u8, 52u8, 53u8, 54u8, 55u8, 56u8, 57u8, 58u8, 59u8, 60u8, 61u8, 62u8, 63u8,
+]);
 struct DisplayError<T: Debug> {
     err: T,
 }
@@ -302,14 +331,15 @@ fn test_hip_assert<
 >(
     name: &str,
     ptx_text: &str,
-    input: &[Input],
-    output: &mut [Output],
+    input: Option<&[Input]>,
+    output: &[Output],
+    block_dim_x: u32,
 ) -> Result<(), Box<dyn error::Error>> {
     let ast = ptx_parser::parse_module_checked(ptx_text).unwrap();
     let llvm_ir = pass::to_llvm_module(ast).unwrap();
     let name = CString::new(name)?;
     let result =
-        run_hip(name.as_c_str(), llvm_ir, input, output).map_err(|err| DisplayError { err })?;
+        run_hip(name.as_c_str(), llvm_ir, input, output, block_dim_x).map_err(|err| DisplayError { err })?;
     assert_eq!(result.as_slice(), output);
     Ok(())
 }
@@ -344,11 +374,12 @@ fn test_cuda_assert<
 >(
     name: &str,
     ptx_text: &str,
-    input: &[Input],
-    output: &mut [Output],
+    input: Option<&[Input]>,
+    output: &[Output],
+    block_dim_x: u32,
 ) -> Result<(), Box<dyn error::Error>> {
     let name = CString::new(name)?;
-    let result = run_cuda(name.as_c_str(), ptx_text, input, output);
+    let result = run_cuda(name.as_c_str(), ptx_text, input, output, block_dim_x);
     assert_eq!(result.as_slice(), output);
     Ok(())
 }
@@ -356,8 +387,9 @@ fn test_cuda_assert<
 fn run_cuda<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Default>(
     name: &CStr,
     ptx_module: &str,
-    input: &[Input],
-    output: &mut [Output],
+    input: Option<&[Input]>,
+    output: &[Output],
+    block_dim_x: u32,
 ) -> Vec<Output> {
     unsafe { CUDA.cuInit(0) }.unwrap().unwrap();
     let ptx_module = CString::new(ptx_module).unwrap();
@@ -375,34 +407,40 @@ fn run_cuda<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + De
         unsafe { CUDA.cuModuleGetFunction(&mut kernel, module, name.as_ptr()) }
             .unwrap()
             .unwrap();
-        let mut inp_b = unsafe { mem::zeroed() };
-        unsafe { CUDA.cuMemAlloc_v2(&mut inp_b, input.len() * mem::size_of::<Input>()) }
-            .unwrap()
-            .unwrap();
         let mut out_b = unsafe { mem::zeroed() };
         unsafe { CUDA.cuMemAlloc_v2(&mut out_b, output.len() * mem::size_of::<Output>()) }
             .unwrap()
             .unwrap();
-        unsafe {
-            CUDA.cuMemcpyHtoD_v2(
-                inp_b,
-                input.as_ptr() as _,
-                input.len() * mem::size_of::<Input>(),
-            )
+        let mut inp_b = unsafe { mem::zeroed() };
+        if let Some(input) = input {
+            unsafe { CUDA.cuMemAlloc_v2(&mut inp_b, input.len() * mem::size_of::<Input>()) }
+                .unwrap()
+                .unwrap();
+            unsafe {
+                CUDA.cuMemcpyHtoD_v2(
+                    inp_b,
+                    input.as_ptr() as _,
+                    input.len() * mem::size_of::<Input>(),
+                )
+            }
+            .unwrap()
+            .unwrap();
         }
-        .unwrap()
-        .unwrap();
         unsafe { CUDA.cuMemsetD8_v2(out_b, 0, output.len() * mem::size_of::<Output>()) }
             .unwrap()
             .unwrap();
-        let mut args = [&inp_b, &out_b];
+        let mut args = if input.is_some() {
+            [&inp_b, &out_b]
+        } else {
+            [&out_b, &out_b]
+        };
         unsafe {
             CUDA.cuLaunchKernel(
                 kernel,
                 1,
                 1,
                 1,
-                1,
+                block_dim_x,
                 1,
                 1,
                 1024,
@@ -472,8 +510,9 @@ static CUDA: std::sync::LazyLock<DynamicCuda> =
 fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Default>(
     name: &CStr,
     module: pass::Module,
-    input: &[Input],
-    output: &mut [Output],
+    input: Option<&[Input]>,
+    output: &[Output],
+    block_dim_x: u32,
 ) -> Result<Vec<Output>, hipError_t> {
     use hip_runtime_sys::*;
     unsafe { hipInit(0) }.unwrap();
@@ -496,29 +535,35 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
         unsafe { hipModuleLoadData(&mut module, elf_module.as_ptr() as _) }.unwrap();
         let mut kernel = unsafe { mem::zeroed() };
         unsafe { hipModuleGetFunction(&mut kernel, module, name.as_ptr()) }.unwrap();
-        let mut inp_b = ptr::null_mut();
-        unsafe { hipMalloc(&mut inp_b, input.len() * mem::size_of::<Input>()) }.unwrap();
         let mut out_b = ptr::null_mut();
         unsafe { hipMalloc(&mut out_b, output.len() * mem::size_of::<Output>()) }.unwrap();
-        unsafe {
-            hipMemcpyWithStream(
-                inp_b,
-                input.as_ptr() as _,
-                input.len() * mem::size_of::<Input>(),
-                hipMemcpyKind::hipMemcpyHostToDevice,
-                stream,
-            )
+        let mut inp_b = ptr::null_mut();
+        if let Some(input) = input {
+            unsafe { hipMalloc(&mut inp_b, input.len() * mem::size_of::<Input>()) }.unwrap();
+            unsafe {
+                hipMemcpyWithStream(
+                    inp_b,
+                    input.as_ptr() as _,
+                    input.len() * mem::size_of::<Input>(),
+                    hipMemcpyKind::hipMemcpyHostToDevice,
+                    stream,
+                )
+            }
+            .unwrap();
         }
-        .unwrap();
         unsafe { hipMemset(out_b, 0, output.len() * mem::size_of::<Output>()) }.unwrap();
-        let mut args = [&inp_b, &out_b];
+        let mut args = if input.is_some() { 
+            [&inp_b, &out_b]
+        } else {
+            [&out_b, &out_b]
+        };
         unsafe {
             hipModuleLaunchKernel(
                 kernel,
                 1,
                 1,
                 1,
-                1,
+                block_dim_x,
                 1,
                 1,
                 1024,
