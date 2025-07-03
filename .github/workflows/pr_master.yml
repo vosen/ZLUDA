@@ -90,7 +90,7 @@ jobs:
         tool: cargo-export
     - name: Build
       run: |
-        cargo export target/tests -- test --workspace --exclude cuda_base --exclude ptx_parser_macros
+        cargo export target/tests -- test --features ci_build --workspace --exclude cuda_base --exclude ptx_parser_macros
         mkdir -p target/amdgpu
         bash .github/workflows/move_tests.sh target/tests amdgpu
         strip target/amdgpu/*
