@@ -88,11 +88,12 @@ jobs:
         tool: cargo-export
     - name: Build
       run: |
-        cargo export target/tests -- test --workspace
+        cargo export target/tests -- test --workspace --exclude cuda_base --exclude ptx_parser_macros
+        mkdir -p target/amdgpu
         bash .github/workflows/move_tests.sh target/tests amdgpu
     - name: Upload
       id: upload_artifacts
       uses: actions/upload-artifact@v4
       with:
         name: zluda-test-amdgpu
-        path: target/tests/amdgpu
+        path: target/amdgpu
