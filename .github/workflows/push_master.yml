@@ -24,9 +24,9 @@ jobs:
         large-packages: false
         docker-images: false
         swap-storage: false
+    - uses: actions/checkout@v4
       with:
         submodules: true
-    - uses: actions/checkout@v4
     - name: Install ROCm
       run: sudo bash .github/workflows/rocm_setup_build.sh ${{ env.ROCM_VERSION }}
     - name: Run sccache-cache
@@ -64,3 +64,64 @@ jobs:
       with:
         name: zluda-windows-${{ env.SHORT_SHA }}
         path: target/${{ env.CARGO_PROFILE }}/zluda
+  build_tests:
+    name: Build AMD GPU unit tests
+    runs-on: ubuntu-22.04
+    outputs:
+      test_package: ${{ steps.upload_artifacts.outputs.artifact-id }}
+    steps:
+    - uses: jlumbroso/free-disk-space@main
+      with:
+        # Removing Android stuff should be enough
+        android: true
+        dotnet: false
+        haskell: false
+        large-packages: false
+        docker-images: false
+        swap-storage: false
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - name: Install ROCm
+      run: sudo bash .github/workflows/rocm_setup_build.sh ${{ env.ROCM_VERSION }}
+    - name: Run sccache-cache
+      uses: mozilla-actions/sccache-action@v0.0.9
+    - uses: taiki-e/install-action@v2
+      with:
+        tool: cargo-export
+    - name: Build
+      run: |
+        cargo export target/tests -- test --features ci_build --workspace --exclude cuda_base --exclude ptx_parser_macros
+        mkdir -p target/amdgpu
+        bash .github/workflows/move_tests.sh target/tests amdgpu
+        strip target/amdgpu/*
+    - name: Upload
+      id: upload_artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: tests
+        path: target/amdgpu
+        retention-days: 7
+  run_tests:
+    name: Run AMD GPU unit tests
+    runs-on: gpu_small
+    needs: [build_tests]
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: false
+        sparse-checkout: .github
+    - name: Install ROCm
+      run: sudo bash .github/workflows/rocm_setup_run.sh ${{ env.ROCM_VERSION }}
+    - uses: actions/download-artifact@v4
+      with:
+        artifact-ids: ${{ needs.build_tests.outputs.test_package }}
+        path: target
+    - name: Run tests
+      run: |
+        chmod +x target/tests/*
+        error_occurred=0
+        for exe in target/tests/*; do
+            ./"$exe" _amdgpu || { error_occurred=1; true; }
+        done
+        exit $error_occurred
