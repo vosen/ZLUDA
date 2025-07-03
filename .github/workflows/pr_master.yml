@@ -106,18 +106,17 @@ jobs:
     runs-on: gpu_small
     needs: [build_tests]
     steps:
-    - env:
-      GH_TEST_PACKAGE: ${{ needs.build_tests.outputs.test_package }}
     - uses: actions/checkout@v4
       with:
         submodules: false
     - name: Install ROCm
       run: sudo bash .github/workflows/rocm_setup_run.sh ${{ env.ROCM_VERSION }}
     - name: Run tests
+      env:
+        GH_TEST_URL: ${{ needs.build_tests.outputs.test_package }}
       run: |
-        wget $GH_TEST_PACKAGE -O tests.zip
+        wget $GH_TEST_URL -O tests.zip
         unzip tests.zip -d tests
         for exe in tests/*; do
             ./"$exe"
         done
-        
