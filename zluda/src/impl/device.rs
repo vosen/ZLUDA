@@ -1,8 +1,7 @@
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
 use std::{mem, ptr};
-
-use super::context;
+use super::{driver, context};
 
 const PROJECT_SUFFIX: &[u8] = b" [ZLUDA]\0";
 pub const COMPUTE_CAPABILITY_MAJOR: i32 = 8;
@@ -463,30 +462,43 @@ fn clamp_usize(x: usize) -> i32 {
     usize::min(x, i32::MAX as usize) as i32
 }
 
+pub(crate) fn get_primary_context(hip_dev: hipDevice_t) -> Result<(&'static context::Context, CUcontext), CUerror> {
+    let dev: &'static driver::Device = driver::device(hip_dev)?;
+    Ok(dev.primary_context())
+}
+
 pub(crate) fn primary_context_retain(
     pctx: &mut CUcontext,
     hip_dev: hipDevice_t,
-) -> Result<(), CUerror> {
-    let (ctx, raw_ctx) = context::get_primary(hip_dev)?;
-    {
-        let mut mutable_ctx = ctx.mutable.lock().map_err(|_| CUerror::UNKNOWN)?;
-        mutable_ctx.ref_count += 1;
-    }
-    *pctx = raw_ctx;
+) -> CUresult {
+    let (ctx, cu_ctx) = get_primary_context(hip_dev)?;
+    
+    ctx.with_state_mut(|state: &mut context::ContextState| {
+        state.ref_count += 1;
+        Ok(())
+    })?;
+    
+    *pctx = cu_ctx;
     Ok(())
 }
 
-pub(crate) fn primary_context_release(hip_dev: hipDevice_t) -> Result<(), CUerror> {
-    let (ctx, _) = context::get_primary(hip_dev)?;
-    {
-        let mut mutable_ctx = ctx.mutable.lock().map_err(|_| CUerror::UNKNOWN)?;
-        if mutable_ctx.ref_count == 0 {
-            return Err(CUerror::INVALID_CONTEXT);
+pub(crate) fn primary_context_release(hip_dev: hipDevice_t) -> CUresult {
+    let (ctx, _) = get_primary_context(hip_dev)?;
+
+    ctx.with_state_mut(|state| {
+        state.ref_count -= 1;
+        if state.ref_count == 0 {
+            return state.reset();
         }
-        mutable_ctx.ref_count -= 1;
-        if mutable_ctx.ref_count == 0 {
-            // TODO: drop all children
-        }
-    }
+        Ok(())
+    })?;
+    Ok(())
+}
+
+pub(crate) fn primary_context_reset(hip_dev: hipDevice_t) -> CUresult {
+    let (ctx, _) = get_primary_context(hip_dev)?;
+    ctx.with_state_mut(|state| {
+        state.reset()
+    })?;
     Ok(())
 }

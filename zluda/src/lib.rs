@@ -46,6 +46,7 @@ cuda_base::cuda_function_declarations!(
     implemented <= [
         cuCtxGetLimit,
         cuCtxSetCurrent,
+        cuCtxGetCurrent,
         cuCtxSetLimit,
         cuCtxSynchronize,
         cuDeviceComputeCapability,
@@ -59,6 +60,7 @@ cuda_base::cuda_function_declarations!(
         cuDeviceGetUuid_v2,
         cuDevicePrimaryCtxRelease,
         cuDevicePrimaryCtxRetain,
+        cuDevicePrimaryCtxReset,
         cuDeviceTotalMem_v2,
         cuDriverGetVersion,
         cuFuncGetAttribute,
