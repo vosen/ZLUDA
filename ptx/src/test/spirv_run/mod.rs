@@ -83,7 +83,7 @@ macro_rules! test_ptx_warp {
     ($fn_name:ident, $output:expr) => {
         paste::item! {
             #[test]
-            fn [<$fn_name _hip>]() -> Result<(), Box<dyn std::error::Error>> {
+            fn [<$fn_name _amdgpu>]() -> Result<(), Box<dyn std::error::Error>> {
                 let ptx = read_test_file!(concat!(stringify!($fn_name), ".ptx"));
                 let mut output = $output;
                 test_hip_assert(stringify!($fn_name), &ptx, None::<&[u8]>, &mut output, 64)
