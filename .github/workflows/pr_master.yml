@@ -119,6 +119,8 @@ jobs:
     - name: Run tests
       run: |
         chmod +x target/tests/*
+        error_occurred=0
         for exe in target/tests/*; do
-            ./"$exe" _amdgpu || true
+            ./"$exe" _amdgpu || { error_occurred=1; true; }
         done
+        exit $error_occurred
