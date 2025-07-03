@@ -160,11 +160,11 @@ extern "C"
     int32_t __ockl_wgred_and_i32(int32_t) __device__;
     int32_t __ockl_wgred_or_i32(int32_t) __device__;
 
-    #define BAR_RED_IMPL(reducer)                                                                                     \
-    bool FUNC(bar_red_##reducer)(uint32_t barrier __attribute__((unused)), bool predicate, uint64_t invert_predicate) \
-    {                                                                                                                 \
-        /* TODO: handle barrier */                                                                                    \
-        return __ockl_wgred_##reducer##_i32(predicate ^ !!invert_predicate);                                          \
+    #define BAR_RED_IMPL(reducer)                                                                                        \
+    bool FUNC(bar_red_##reducer##_pred)(uint32_t barrier __attribute__((unused)), bool predicate, bool invert_predicate) \
+    {                                                                                                                    \
+        /* TODO: handle barrier */                                                                                       \
+        return __ockl_wgred_##reducer##_i32(predicate ^ invert_predicate);                                               \
     }
 
     BAR_RED_IMPL(and);

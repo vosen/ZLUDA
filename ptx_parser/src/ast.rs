@@ -111,7 +111,7 @@ ptx_parser_macros::generate_instruction_type!(
                 },
                 src_negate_predicate: {
                     repr: T,
-                    type: Type::from(ScalarType::U64)
+                    type: Type::from(ScalarType::Pred)
                 },
             }
         },
