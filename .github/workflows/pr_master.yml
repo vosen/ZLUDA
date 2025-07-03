@@ -114,8 +114,9 @@ jobs:
     - name: Run tests
       env:
         GH_TEST_URL: ${{ needs.build_tests.outputs.test_package }}
+        GH_ARTIFACTS_TOKEN: ${{ secrets.GH_ARTIFACTS_TOKEN }}
       run: |
-        wget $GH_TEST_URL -O tests.zip
+        wget -o tests.zip -H "Authorization: token $GH_ARTIFACTS_TOKEN" $GH_TEST_URL
         unzip tests.zip -d tests
         for exe in tests/*; do
             ./"$exe"
