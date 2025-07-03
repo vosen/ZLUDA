@@ -1804,6 +1804,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::Selp { .. }
         | ast::Instruction::Ret { .. }
         | ast::Instruction::Bar { .. }
+        | ast::Instruction::BarRed { .. }
         | ast::Instruction::Cvta { .. }
         | ast::Instruction::Atom { .. }
         | ast::Instruction::Mul24 { .. }

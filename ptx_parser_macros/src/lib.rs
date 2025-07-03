@@ -784,7 +784,7 @@ fn emit_definition_parser(
         };
         let can_be_negated = if arg.can_be_negated {
             quote! {
-                opt(any.verify(|(t, _)| *t == #token_type::Not)).map(|o| o.is_some())
+                opt(any.verify(|(t, _)| *t == #token_type::Exclamation)).map(|o| o.is_some())
             }
         } else {
             quote! {

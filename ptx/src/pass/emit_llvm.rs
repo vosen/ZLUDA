@@ -639,6 +639,7 @@ impl<'a> MethodEmitContext<'a> {
             // replaced by a function call
             ast::Instruction::Bfe { .. }
             | ast::Instruction::Bar { .. }
+            | ast::Instruction::BarRed { .. }
             | ast::Instruction::Bfi { .. }
             | ast::Instruction::Activemask { .. } => return Err(error_unreachable()),
         }

@@ -108,6 +108,16 @@ fn run_instruction<'input>(
         i @ ptx_parser::Instruction::Bar { .. } => {
             to_call(resolver, fn_declarations, "bar_sync".into(), i)?
         }
+        ptx_parser::Instruction::BarRed { data, arguments } => {
+            if arguments.src_threadcount.is_some() {
+                return Err(error_todo());
+            }
+            let name = match data.pred_reduction {
+                ptx_parser::Reduction::And => "bar_red_and_pred",
+                ptx_parser::Reduction::Or => "bar_red_or_pred",
+            };
+            to_call(resolver, fn_declarations, name.into(), ptx_parser::Instruction::BarRed { data, arguments })?
+        }
         i => i,
     })
 }
