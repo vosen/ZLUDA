@@ -115,9 +115,9 @@ jobs:
     - uses: actions/download-artifact@v4
       with:
         artifact-ids: ${{ needs.build_tests.outputs.test_package }}
+        path: target/tests
     - name: Run tests
       run: |
-        unzip tests.zip -d tests
-        for exe in tests/*; do
-            ./"$exe"
+        for exe in target/tests/*; do
+            ./"$exe" -f _amdgpu
         done
