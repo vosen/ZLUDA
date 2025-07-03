@@ -5,6 +5,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  SCCACHE_GHA_ENABLED: "true"
   CARGO_PROFILE: release
   ROCM_VERSION: "6.3.1"
 
@@ -14,23 +15,21 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
     - uses: jlumbroso/free-disk-space@main
-    - name: Install ROCm
-      run: |
-        sudo mkdir --parents --mode=0755 /etc/apt/keyrings
-        sudo sh -c 'wget https://repo.radeon.com/rocm/rocm.gpg.key -O - |  gpg --dearmor | tee /etc/apt/keyrings/rocm.gpg > /dev/null'
-        sudo sh -c 'echo deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/${{ env.ROCM_VERSION }} jammy main > /etc/apt/sources.list.d/rocm.list'
-        sudo sh -c 'echo Package: * > /etc/apt/preferences.d/rocm-pin-600'
-        sudo sh -c 'echo Pin: release o=repo.radeon.com >> /etc/apt/preferences.d/rocm-pin-600'
-        sudo sh -c 'echo Pin-Priority: 600 >> /etc/apt/preferences.d/rocm-pin-600'
-        sudo apt-get update
-        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends rocm-smi-lib rocm-llvm-dev hip-runtime-amd hip-dev
-        echo 'export PATH="$PATH:/opt/rocm/bin"' | sudo tee /etc/profile.d/rocm.sh  
-        echo '/opt/rocm/lib' | sudo tee /etc/ld.so.conf.d/rocm.conf
-        sudo ldconfig
+      with:
+        # Removing Android stuff should be enough
+        android: true
+        dotnet: false
+        haskell: false
+        large-packages: false
+        docker-images: false
+        swap-storage: false
     - uses: actions/checkout@v4
       with:
         submodules: true
-    - uses: Swatinem/rust-cache@v2
+    - name: Install ROCm
+      run: sudo bash .github/workflows/rocm_setup_build.sh ${{ env.ROCM_VERSION }}
+    - name: Run sccache-cache
+      uses: mozilla-actions/sccache-action@v0.0.9
     - name: Build
       # https://github.com/actions/upload-artifact/issues/39
       run: |
@@ -51,7 +50,8 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: true
-    - uses: Swatinem/rust-cache@v2
+    - name: Run sccache-cache
+      uses: mozilla-actions/sccache-action@v0.0.9
     - name: Build
       run: |
         cargo xtask zip --profile ${{ env.CARGO_PROFILE }}
@@ -63,3 +63,64 @@ jobs:
       with:
         name: zluda-windows-${{ env.SHORT_SHA }}
         path: target/${{ env.CARGO_PROFILE }}/zluda
+  build_tests:
+    name: Build AMD GPU unit tests
+    runs-on: ubuntu-22.04
+    outputs:
+      test_package: ${{ steps.upload_artifacts.outputs.artifact-id }}
+    steps:
+    - uses: jlumbroso/free-disk-space@main
+      with:
+        # Removing Android stuff should be enough
+        android: true
+        dotnet: false
+        haskell: false
+        large-packages: false
+        docker-images: false
+        swap-storage: false
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - name: Install ROCm
+      run: sudo bash .github/workflows/rocm_setup_build.sh ${{ env.ROCM_VERSION }}
+    - name: Run sccache-cache
+      uses: mozilla-actions/sccache-action@v0.0.9
+    - uses: taiki-e/install-action@v2
+      with:
+        tool: cargo-export
+    - name: Build
+      run: |
+        cargo export target/tests -- test --features ci_build --workspace --exclude cuda_base --exclude ptx_parser_macros
+        mkdir -p target/amdgpu
+        bash .github/workflows/move_tests.sh target/tests amdgpu
+        strip target/amdgpu/*
+    - name: Upload
+      id: upload_artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: tests
+        path: target/amdgpu
+        retention-days: 7
+  run_tests:
+    name: Run AMD GPU unit tests
+    runs-on: gpu_small
+    needs: [build_tests]
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: false
+        sparse-checkout: .github
+    - name: Install ROCm
+      run: sudo bash .github/workflows/rocm_setup_run.sh ${{ env.ROCM_VERSION }}
+    - uses: actions/download-artifact@v4
+      with:
+        artifact-ids: ${{ needs.build_tests.outputs.test_package }}
+        path: target
+    - name: Run tests
+      run: |
+        chmod +x target/tests/*
+        error_occurred=0
+        for exe in target/tests/*; do
+            ./"$exe" _amdgpu || { error_occurred=1; true; }
+        done
+        exit $error_occurred

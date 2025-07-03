@@ -14,6 +14,7 @@ const COMPONENTS: &[&'static str] = &[
 
 fn main() {
     let mut cmake = Config::new(r"../ext/llvm-project/llvm");
+    try_use_sccache(&mut cmake);
     try_use_ninja(&mut cmake);
     cmake
         // It's not like we can do anything about the warnings
@@ -50,6 +51,21 @@ fn main() {
     }
     link_llvm_components(lib_names);
     compile_cxx_lib(cxxflags);
+}
+
+// https://github.com/mozilla/sccache/blob/main/README.md#usage
+fn try_use_sccache(cmake: &mut Config) {
+    if let Ok(sccache) = std::env::var("SCCACHE_PATH") {
+        cmake.define("CMAKE_CXX_COMPILER_LAUNCHER", &*sccache);
+        cmake.define("CMAKE_C_COMPILER_LAUNCHER", &*sccache);
+        match std::env::var_os("CARGO_CFG_TARGET_OS") {
+            Some(os) if os == "windows" => {
+                cmake.define("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT", "Embedded");
+                cmake.define("CMAKE_POLICY_CMP0141", "NEW");
+            }
+            _ => {}
+        }
+    }
 }
 
 fn try_use_ninja(cmake: &mut Config) {

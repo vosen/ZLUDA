@@ -1,3 +1,4 @@
+#![cfg(windows)]
 use std::{env, io, path::PathBuf, process::Command};
 
 #[test]
