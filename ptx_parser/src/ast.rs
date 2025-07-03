@@ -473,8 +473,9 @@ ptx_parser_macros::generate_instruction_type!(
             type: Type::Scalar(ScalarType::B32),
             arguments<T>: {
                 dst: T,
-                src_pred: {
+                dst_pred: {
                     repr: Option<T>,
+                    type: Type::from(ScalarType::Pred)
                 },
                 src: T,
                 src_lane: T,
@@ -993,6 +994,7 @@ impl MovDetails {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct ShflSyncDetails {
     pub mode: ShuffleMode,
 }

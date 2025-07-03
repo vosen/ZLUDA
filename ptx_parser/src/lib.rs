@@ -3491,12 +3491,10 @@ derive_parser!(
     .type: ScalarType = { .u32, .s32 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-shfl-sync
-    // shfl.sync.mode.b32  d[|p], a, b, c, membermask;
-    // .mode = { .up, .down, .bfly, .idx };
     shfl.sync.mode.b32  d[|p], a, b, c, membermask => {
         Instruction::ShflSync  {
             data: ast::ShflSyncDetails { mode },
-            arguments: ShflSyncArgs { dst: d, src_pred: p, src: a, src_lane: b, src_opts: c, src_membermask: membermask }
+            arguments: ShflSyncArgs { dst: d, dst_pred: p, src: a, src_lane: b, src_opts: c, src_membermask: membermask }
         }
     }
     .mode: ShuffleMode = { .up, .down, .bfly, .idx };

@@ -636,13 +636,13 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Prmt { data, arguments } => self.emit_prmt(data, arguments),
             ast::Instruction::Membar { data } => self.emit_membar(data),
             ast::Instruction::Trap {} => todo!(),
-            ast::Instruction::ShflSync { data, arguments } => todo!(),
             // replaced by a function call
             ast::Instruction::Bfe { .. }
             | ast::Instruction::Bar { .. }
             | ast::Instruction::BarRed { .. }
             | ast::Instruction::Bfi { .. }
-            | ast::Instruction::Activemask { .. } => return Err(error_unreachable()),
+            | ast::Instruction::Activemask { .. }
+            | ast::Instruction::ShflSync { .. } => return Err(error_unreachable()),
         }
     }
 
