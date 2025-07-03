@@ -66,6 +66,8 @@ jobs:
   build_tests:
     name: Build AMD GPU unit tests
     runs-on: ubuntu-22.04
+    outputs:
+      test_package: ${{ steps.upload_artifacts.outputs.artifact-url }}
     steps:
     - uses: jlumbroso/free-disk-space@main
       with:
@@ -91,9 +93,31 @@ jobs:
         cargo export target/tests -- test --workspace --exclude cuda_base --exclude ptx_parser_macros
         mkdir -p target/amdgpu
         bash .github/workflows/move_tests.sh target/tests amdgpu
+        strip target/amdgpu/*
     - name: Upload
       id: upload_artifacts
       uses: actions/upload-artifact@v4
       with:
         name: zluda-test-amdgpu
         path: target/amdgpu
+        retention-days: 7
+  run_tests:
+    name: Run AMD GPU unit tests
+    runs-on: gpu_small
+    needs: [build_tests]
+    steps:
+    - env:
+      GH_TEST_PACKAGE: ${{ needs.build_tests.outputs.test_package }}
+    - uses: actions/checkout@v4
+      with:
+        submodules: false
+    - name: Install ROCm
+      run: sudo bash .github/workflows/rocm_setup_run.sh ${{ env.ROCM_VERSION }}
+    - name: Run tests
+      run: |
+        wget $GH_TEST_PACKAGE -O tests.zip
+        unzip tests.zip -d tests
+        for exe in tests/*; do
+            ./"$exe"
+        done
+        
