@@ -2,7 +2,7 @@
 set -ex
 ROCM_VERSION=$1
 
-DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends gpg zstd "linux-headers-$(uname -r)" "linux-modules-extra-$(uname -r)"
+DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends gpg zstd unzip "linux-headers-$(uname -r)" "linux-modules-extra-$(uname -r)"
 # Source: https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/install-methods/package-manager/package-manager-ubuntu.html
 mkdir --parents --mode=0755 /etc/apt/keyrings
 wget https://repo.radeon.com/rocm/rocm.gpg.key -O - | \
