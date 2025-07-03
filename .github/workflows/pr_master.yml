@@ -118,6 +118,7 @@ jobs:
         path: target
     - name: Run tests
       run: |
+        chmod +x target/tests/*
         for exe in target/tests/*; do
             ./"$exe" -f _amdgpu
         done
