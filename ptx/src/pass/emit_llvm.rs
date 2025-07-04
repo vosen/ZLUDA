@@ -1418,7 +1418,7 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ptx_parser::SubArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         if arith_integer.saturate {
-            todo!()
+            return self.emit_sub_sat(arith_integer.type_, arguments);
         }
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
@@ -1428,13 +1428,36 @@ impl<'a> MethodEmitContext<'a> {
         Ok(())
     }
 
+    fn emit_sub_sat(
+        &mut self,
+        type_: ast::ScalarType,
+        arguments: ast::SubArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let llvm_type = get_scalar_type(self.context, type_);
+        let src1 = self.resolver.value(arguments.src1)?;
+        let src2 = self.resolver.value(arguments.src2)?;
+        let op = if type_.kind() == ast::ScalarKind::Signed {
+            "ssub"
+        } else {
+            "usub"
+        };
+        let intrinsic = format!("llvm.{}.sat.{}\0", op, LLVMTypeDisplay(type_));
+        self.emit_intrinsic(
+            unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
+            Some(arguments.dst),
+            Some(&type_.into()),
+            vec![(src1, llvm_type), (src2, llvm_type)],
+        )?;
+        Ok(())
+    }
+
     fn emit_sub_float(
         &mut self,
         arith_float: ptx_parser::ArithFloat,
         arguments: ptx_parser::SubArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         if arith_float.saturate {
-            todo!()
+            return Err(error_unreachable());
         }
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
