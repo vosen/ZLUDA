@@ -471,6 +471,7 @@ pub(crate) fn primary_context_retain(
     pctx: &mut CUcontext,
     hip_dev: hipDevice_t,
 ) -> CUresult {
+    println!("RETAIN");
     let (ctx, cu_ctx) = get_primary_context(hip_dev)?;
     
     ctx.with_state_mut(|state: &mut context::ContextState| {

@@ -82,13 +82,16 @@ pub(crate) fn load_hip_module(image: *const std::ffi::c_void) -> Result<hipModul
 }
 
 pub(crate) fn load_data(module: &mut CUmodule, image: &std::ffi::c_void) -> CUresult {
+    println!("LOAD");
     let hip_module = load_hip_module(image)?;
     *module = Module { base: hip_module }.wrap();
     Ok(())
 }
 
 pub(crate) fn unload(hmod: CUmodule) -> CUresult {
+    println!("UNLOAD");
     super::drop_checked::<Module>(hmod)
+    
 }
 
 pub(crate) fn get_function(

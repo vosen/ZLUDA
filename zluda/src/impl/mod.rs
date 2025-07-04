@@ -137,7 +137,6 @@ from_cuda_nop!(
     CUdevice_attribute,
     CUdriverProcAddressQueryResult,
     CUjit_option,
-    CUlibrary,
     CUlibraryOption,
     CUmoduleLoadingMode,
     CUuuid
@@ -150,7 +149,7 @@ from_cuda_transmute!(
     CUpointer_attribute => hipPointer_attribute,
     CUdeviceptr_v2 => hipDeviceptr_t
 );
-from_cuda_object!(module::Module, context::Context);
+from_cuda_object!(module::Module, context::Context, library::Library);
 
 impl<'a> FromCuda<'a, CUlimit> for hipLimit_t {
     fn from_cuda(limit: &'a CUlimit) -> Result<Self, CUerror> {

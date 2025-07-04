@@ -89,6 +89,12 @@ impl ZludaObject for Context {
     }
 }
 
+pub(crate) fn get_current_context() -> Result<CUcontext, CUerror> {
+    if let Some(ctx) = STACK.with(|stack| stack.borrow().last().copied().map(|(ctx, _)| ctx)) {
+        return Ok(ctx);
+    }
+    Err(CUerror::INVALID_CONTEXT)
+}
 
 pub(crate) unsafe fn get_limit(pvalue: *mut usize, limit: hipLimit_t) -> hipError_t {
     unsafe { hipDeviceGetLimit(pvalue, limit) }
@@ -136,10 +142,16 @@ pub(crate) fn set_current(raw_ctx: CUcontext) -> CUresult {
 }
 
 pub(crate) fn get_current(pctx: &mut CUcontext) -> CUresult {
-    if let Some(ctx) = STACK.with(|stack| stack.borrow().last().copied().map(|(ctx, _)| ctx)) {
-        *pctx = ctx;
-        return CUresult::SUCCESS;
+    match get_current_context() {
+        Ok(ctx) => *pctx = ctx,
+        Err(_) => *pctx = CUcontext(ptr::null_mut()),
     }
-    CUresult::ERROR_INVALID_CONTEXT
+    CUresult::SUCCESS
 }
 
+pub(crate) fn get_device(dev: &mut hipDevice_t) -> CUresult {
+    let cu_ctx = get_current_context()?;
+    let ctx: &Context = FromCuda::from_cuda(&cu_ctx)?;
+    *dev = ctx.device;
+    Ok(())
+}

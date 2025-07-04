@@ -217,18 +217,17 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         cu_ctx: CUcontext,
         key: *mut c_void,
     ) -> CUresult {
-        
-        let _ctx = if cu_ctx.0 != ptr::null_mut() {
-            cu_ctx
+        let mut _ctx: CUcontext;
+        if cu_ctx.0 == ptr::null_mut() {
+            _ctx = context::get_current_context()?;
         } else {
-            let mut current_ctx: CUcontext = CUcontext(ptr::null_mut());
-            context::get_current(&mut current_ctx)?;
-            current_ctx
+            _ctx = cu_ctx
         };
         let ctx_obj: &context::Context = FromCuda::from_cuda(&_ctx)?;
         ctx_obj.with_state(|state: &context::ContextState| {
-            if let Some(data) = state.storage.get(&(key as usize)) {
-                *value = data.value as *mut c_void;
+            match state.storage.get(&(key as usize)) {
+                Some(data) => *value = data.value as *mut c_void,
+                None => return CUresult::ERROR_INVALID_HANDLE
             }
             Ok(())
         })?;
@@ -311,7 +310,8 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         result1: *mut u32,
         result2: *mut *const std::ffi::c_void,
     ) -> cuda_types::cuda::CUresult {
-        todo!()
+        *result1 = 0;
+        CUresult::SUCCESS
     }
 
     unsafe extern "system" fn check_fn3() -> u32 {
