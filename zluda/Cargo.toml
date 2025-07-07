@@ -27,6 +27,9 @@ dtor = "0.0.6"
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["heapapi", "std"] }
 
+[target.'cfg(not(windows))'.dependencies]
+libc = "0.2"
+
 [package.metadata.zluda]
 linux_symlinks = [
     "libcuda.so",
