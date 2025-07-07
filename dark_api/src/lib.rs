@@ -20,7 +20,7 @@ macro_rules! dark_api_fn {
     (SIZE_OF) => { };
     (NULL) => { };
     ($fn_:ident ( $($arg_id:ident: $arg_type:ty),* ) -> $ret_type:ty) => {
-        unsafe extern "system" fn $fn_(
+        unsafe extern "C" fn $fn_(
             $($arg_id : $arg_type,)*
         ) -> $ret_type;
     }
@@ -37,7 +37,7 @@ macro_rules! dark_api_entry {
         ) -> $ret_type {
             let ptr = self.ptr as *const *const std::ffi::c_void;
             let ptr = ptr.add($idx);
-            let fn_ = std::mem::transmute::<_, unsafe extern "system" fn( $($arg_type,)* ) -> $ret_type >(*ptr);
+            let fn_ = std::mem::transmute::<_, unsafe extern "C" fn( $($arg_type,)* ) -> $ret_type >(*ptr);
             (fn_)( $($arg_id,)* )
         }
     }
@@ -262,7 +262,7 @@ dark_api! {
             manager: *mut std::ffi::c_void, // ContextStateManager
             ctx_state: *mut std::ffi::c_void, // ContextState
             // clsContextDestroyCallback, have to be called on cuDevicePrimaryCtxReset
-            dtor_cb: Option<extern "system" fn(
+            dtor_cb: Option<extern "C" fn(
                 cuda_types::cuda::CUcontext,
                 *mut std::ffi::c_void, // ContextStateManager
                 *mut std::ffi::c_void, // ContextState

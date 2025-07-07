@@ -146,7 +146,7 @@ static INTERNAL_TABLE: ::dark_api::zluda_dump::CudaDarkApiGlobalTable =
 struct InternalTableImpl;
 
 impl ::dark_api::zluda_dump::CudaDarkApi for InternalTableImpl {
-    unsafe extern "system" fn logged_call(
+    unsafe extern "C" fn logged_call(
         fn_name: cglue::slice::CSliceRef<'static, u8>,
         args: ::dark_api::FnFfiRef<::dark_api::ByteVecFfi>,
         fn_: ::dark_api::FnFfiRef<usize>,
@@ -175,7 +175,7 @@ macro_rules! dark_api_fn_redirect_log {
         }
     ) => {
             $(
-                unsafe extern "system" fn $fn_(
+                unsafe extern "C" fn $fn_(
                     $($arg_id: $arg_type),*
                 ) -> $ret_type {
                     use zluda_dump_common::ReprUsize;
@@ -189,7 +189,7 @@ macro_rules! dark_api_fn_redirect_log {
                             .unwrap();
                         mem::transmute::<
                             _,
-                            unsafe extern "system" fn(
+                            unsafe extern "C" fn(
                                 $($arg_id: $arg_type),*
                             ) -> $ret_type,
                         >(*((*original_table).add($index)))
@@ -230,7 +230,7 @@ macro_rules! dark_api_fn_redirect_log_post {
         }
     ) => {
             $(
-                unsafe extern "system" fn $fn_(
+                unsafe extern "C" fn $fn_(
                     $($arg_id: $arg_type),*
                 ) -> $ret_type {
                     use zluda_dump_common::ReprUsize;
@@ -244,7 +244,7 @@ macro_rules! dark_api_fn_redirect_log_post {
                             .unwrap();
                         mem::transmute::<
                             _,
-                            unsafe extern "system" fn(
+                            unsafe extern "C" fn(
                                 $($arg_id: $arg_type),*
                             ) -> $ret_type,
                         >(*((*original_table).add($index)))
@@ -423,7 +423,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApiDump {
                 manager: *mut std::ffi::c_void, // ContextStateManager
                 ctx_state: *mut std::ffi::c_void, // ContextState
                 // clsContextDestroyCallback, have to be called on cuDevicePrimaryCtxReset
-                dtor_cb: Option<extern "system" fn(
+                dtor_cb: Option<extern "C" fn(
                     cuda_types::cuda::CUcontext,
                     *mut std::ffi::c_void, // ContextStateManager
                     *mut std::ffi::c_void, // ContextState
@@ -481,7 +481,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApiDump {
         }
     }
 
-    unsafe extern "system" fn integrity_check(
+    unsafe extern "C" fn integrity_check(
         version: u32,
         unix_seconds: u64,
         result: *mut [u64; 2],
@@ -511,7 +511,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApiDump {
                 .unwrap();
             let original_fn = mem::transmute::<
                 _,
-                unsafe extern "system" fn(u32, u64, *mut [u64; 2]) -> cuda_types::cuda::CUresult,
+                unsafe extern "C" fn(u32, u64, *mut [u64; 2]) -> cuda_types::cuda::CUresult,
             >(*((*original_table).add(1)));
             let original_result = original_fn(version, unix_seconds, result);
             if original_result.is_ok() && version % 10 >= 2 {

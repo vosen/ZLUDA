@@ -164,7 +164,7 @@ impl CudaDisplay for f64 {
 // user by Dark API
 impl CudaDisplay
     for Option<
-        extern "system" fn(
+        extern "C" fn(
             cuda_types::cuda::CUcontext,
             *mut std::ffi::c_void,
             *mut std::ffi::c_void,
