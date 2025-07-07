@@ -88,7 +88,6 @@ pub(crate) fn load_data(module: &mut CUmodule, image: &std::ffi::c_void) -> CUre
 }
 
 pub(crate) fn unload(hmod: CUmodule) -> CUresult {
-    println!("UNLOAD");
     super::drop_checked::<Module>(hmod)
     
 }

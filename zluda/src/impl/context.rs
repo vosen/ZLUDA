@@ -1,4 +1,4 @@
-use super::{FromCuda, ZludaObject};
+use super::{FromCuda, ZludaObject, module};
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
 use rustc_hash::{FxHashSet, FxHashMap};
@@ -40,12 +40,15 @@ impl ContextState {
     pub(crate) fn reset(&mut self) -> CUresult {
         for (key, data) in self.storage.iter_mut() {
             if let Some(_cb) = data.reset_cb {
+                // TODO: check that these callbacks do not call into the CUDA driver
                 _cb(data.handle, *key as *mut c_void, data.value as *mut c_void);
             }
         }
         self.ref_count = 0;
         self.flags = 0;
-        self.modules.clear();
+        for hmod in self.modules.drain() {
+            super::drop_checked::<module::Module>(hmod)?;
+        }
         self.storage.clear();
         Ok(())
     }
