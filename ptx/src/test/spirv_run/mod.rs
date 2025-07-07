@@ -500,7 +500,7 @@ macro_rules! dynamic_fns {
         $(
             #[allow(dead_code)]
             unsafe fn $fn_name(&self, $($arg_id : $arg_type),*) -> Result<$ret_type, libloading::Error> {
-                let func = unsafe { self.lib.get::<unsafe extern $abi fn ($($arg_type),*) -> $ret_type>(concat!(stringify!($fn_name), "\0").as_bytes()) };
+                let func = unsafe { self.lib.get::<unsafe extern "system" fn ($($arg_type),*) -> $ret_type>(concat!(stringify!($fn_name), "\0").as_bytes()) };
                 func.map(|f| f($($arg_id),*) )
             }
         )*

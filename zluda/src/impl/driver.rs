@@ -103,14 +103,14 @@ static UNKNOWN_BUFFER2: UnknownBuffer<14> = UnknownBuffer::new();
 struct DarkApi {}
 
 impl ::dark_api::cuda::CudaDarkApi for DarkApi {
-    unsafe extern "C" fn get_module_from_cubin(
+    unsafe extern "system" fn get_module_from_cubin(
         module: *mut cuda_types::cuda::CUmodule,
         fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper,
     ) -> () {
         todo!()
     }
 
-    unsafe extern "C" fn cudart_interface_fn2(
+    unsafe extern "system" fn cudart_interface_fn2(
         pctx: *mut cuda_types::cuda::CUcontext,
         hip_dev: hipDevice_t,
     ) -> cuda_types::cuda::CUresult {
@@ -122,7 +122,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         device::primary_context_retain(pctx, hip_dev)
     }
 
-    unsafe extern "C" fn get_module_from_cubin_ext1(
+    unsafe extern "system" fn get_module_from_cubin_ext1(
         result: *mut cuda_types::cuda::CUmodule,
         fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper,
         arg3: *mut std::ffi::c_void,
@@ -132,11 +132,11 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         todo!()
     }
 
-    unsafe extern "C" fn cudart_interface_fn7(arg1: usize) -> cuda_types::cuda::CUresult {
+    unsafe extern "system" fn cudart_interface_fn7(arg1: usize) -> cuda_types::cuda::CUresult {
         todo!()
     }
 
-    unsafe extern "C" fn get_module_from_cubin_ext2(
+    unsafe extern "system" fn get_module_from_cubin_ext2(
         fatbin_header: *const cuda_types::dark_api::FatbinHeader,
         result: *mut cuda_types::cuda::CUmodule,
         arg3: *mut std::ffi::c_void,
@@ -146,7 +146,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         todo!()
     }
 
-    unsafe extern "C" fn get_unknown_buffer1(
+    unsafe extern "system" fn get_unknown_buffer1(
         ptr: *mut *mut std::ffi::c_void,
         size: *mut usize,
     ) -> () {
@@ -154,7 +154,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         *size = UNKNOWN_BUFFER1.len();
     }
 
-    unsafe extern "C" fn get_unknown_buffer2(
+    unsafe extern "system" fn get_unknown_buffer2(
         ptr: *mut *mut std::ffi::c_void,
         size: *mut usize,
     ) -> () {
@@ -162,12 +162,12 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         *size = UNKNOWN_BUFFER2.len();
     }
 
-    unsafe extern "C" fn context_local_storage_ctor(
+    unsafe extern "system" fn context_local_storage_ctor(
         context: cuda_types::cuda::CUcontext,
         manager: *mut std::ffi::c_void,
         ctx_state: *mut std::ffi::c_void,
         dtor_cb: Option<
-            extern "C" fn(
+            extern "system" fn(
                 cuda_types::cuda::CUcontext,
                 *mut std::ffi::c_void,
                 *mut std::ffi::c_void,
@@ -177,14 +177,14 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         todo!()
     }
 
-    unsafe extern "C" fn context_local_storage_dtor(
+    unsafe extern "system" fn context_local_storage_dtor(
         arg1: *mut std::ffi::c_void,
         arg2: *mut std::ffi::c_void,
     ) -> cuda_types::cuda::CUresult {
         todo!()
     }
 
-    unsafe extern "C" fn context_local_storage_get_state(
+    unsafe extern "system" fn context_local_storage_get_state(
         ctx_state: *mut std::ffi::c_void,
         cu_ctx: cuda_types::cuda::CUcontext,
         manager: *mut std::ffi::c_void,
@@ -192,7 +192,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         todo!()
     }
 
-    unsafe extern "C" fn ctx_create_v2_bypass(
+    unsafe extern "system" fn ctx_create_v2_bypass(
         pctx: *mut cuda_types::cuda::CUcontext,
         flags: ::std::os::raw::c_uint,
         dev: cuda_types::cuda::CUdevice,
@@ -200,7 +200,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         todo!()
     }
 
-    unsafe extern "C" fn heap_alloc(
+    unsafe extern "system" fn heap_alloc(
         heap_alloc_record_ptr: *mut *const std::ffi::c_void,
         arg2: usize,
         arg3: usize,
@@ -208,14 +208,14 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         todo!()
     }
 
-    unsafe extern "C" fn heap_free(
+    unsafe extern "system" fn heap_free(
         heap_alloc_record_ptr: *const std::ffi::c_void,
         arg2: *mut usize,
     ) -> cuda_types::cuda::CUresult {
         todo!()
     }
 
-    unsafe extern "C" fn device_get_attribute_ext(
+    unsafe extern "system" fn device_get_attribute_ext(
         dev: cuda_types::cuda::CUdevice,
         attribute: std::ffi::c_uint,
         unknown: std::ffi::c_int,
@@ -224,14 +224,14 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         todo!()
     }
 
-    unsafe extern "C" fn device_get_something(
+    unsafe extern "system" fn device_get_something(
         result: *mut std::ffi::c_uchar,
         dev: cuda_types::cuda::CUdevice,
     ) -> cuda_types::cuda::CUresult {
         todo!()
     }
 
-    unsafe extern "C" fn integrity_check(
+    unsafe extern "system" fn integrity_check(
         version: u32,
         unix_seconds: u64,
         result: *mut [u64; 2],
@@ -263,7 +263,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         Ok(())
     }
 
-    unsafe extern "C" fn context_check(
+    unsafe extern "system" fn context_check(
         ctx_in: cuda_types::cuda::CUcontext,
         result1: *mut u32,
         result2: *mut *const std::ffi::c_void,
@@ -271,7 +271,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         todo!()
     }
 
-    unsafe extern "C" fn check_fn3() -> u32 {
+    unsafe extern "system" fn check_fn3() -> u32 {
         0
     }
 }
