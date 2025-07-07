@@ -1,0 +1,27 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry mad_wide(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+
+    .reg .s64 	    dst;
+    .reg .s32 	    src1;
+    .reg .s32 	    src2;
+    .reg .s64 	    src3;
+
+	ld.param.u64    in_addr, [input];
+    ld.param.u64    out_addr, [output];
+
+    ld.s32          src1, [in_addr];
+    ld.s32          src2, [in_addr+4];
+    ld.s64          src3, [in_addr+8];
+	mad.wide.s32      dst, src1, src2, src3;
+    st.s64          [out_addr], dst;
+	ret;
+}

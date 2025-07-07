@@ -22,7 +22,5 @@
     ld.s32          src3, [in_addr+8];
 	mad.lo.s32      dst, src1, src2, src3;
     st.s32          [out_addr], dst;
-    st.s32          [out_addr+4], dst;
-    st.s32          [out_addr+8], dst;
 	ret;
 }

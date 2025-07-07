@@ -1,7 +1,7 @@
 use bpaf::{Args, Bpaf, Parser};
 use cargo_metadata::{MetadataCommand, Package};
 use serde::Deserialize;
-use std::{env, ffi::OsString, process::Command};
+use std::{env, ffi::OsString, path::PathBuf, process::Command};
 
 #[derive(Debug, Clone, Bpaf)]
 #[bpaf(options)]
@@ -10,8 +10,8 @@ enum Options {
     /// Compile ZLUDA (default command)
     Build(#[bpaf(external(build))] Build),
     #[bpaf(command)]
-    /// Build ZLUDA package
-    Zip,
+    /// Compile ZLUDA and build a package
+    Zip(#[bpaf(external(build))] Build),
 }
 
 #[derive(Debug, Clone, Bpaf)]
@@ -43,28 +43,108 @@ struct Cargo {
 
 struct Project {
     name: String,
-    clib_name: Option<String>,
+    target_name: String,
+    target_kind: ProjectTarget,
     meta: ZludaMetadata,
 }
 
 impl Project {
     fn try_new(p: Package) -> Option<Project> {
         let name = p.name;
-        let clib_name = p.targets.into_iter().find_map(|target| {
-            if target.is_cdylib() {
-                Some(target.name)
-            } else {
-                None
-            }
-        });
         serde_json::from_value::<Option<Metadata>>(p.metadata)
             .unwrap()
-            .map(|m| Self {
-                name,
-                clib_name,
-                meta: m.zluda,
+            .map(|m| {
+                let (target_name, target_kind) = p
+                    .targets
+                    .into_iter()
+                    .find_map(|target| {
+                        if target.is_cdylib() {
+                            Some((target.name, ProjectTarget::Cdylib))
+                        } else if target.is_bin() {
+                            Some((target.name, ProjectTarget::Bin))
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap();
+                Self {
+                    name,
+                    target_name,
+                    target_kind,
+                    meta: m.zluda,
+                }
             })
     }
+
+    #[cfg(unix)]
+    fn prefix(&self) -> &'static str {
+        match self.target_kind {
+            ProjectTarget::Bin => "",
+            ProjectTarget::Cdylib => "lib",
+        }
+    }
+
+    #[cfg(not(unix))]
+    fn prefix(&self) -> &'static str {
+        ""
+    }
+
+    #[cfg(unix)]
+    fn suffix(&self) -> &'static str {
+        match self.target_kind {
+            ProjectTarget::Bin => "",
+            ProjectTarget::Cdylib => ".so",
+        }
+    }
+
+    #[cfg(not(unix))]
+    fn suffix(&self) -> &'static str {
+        match self.target_kind {
+            ProjectTarget::Bin => ".exe",
+            ProjectTarget::Cdylib => ".dll",
+        }
+    }
+
+    // Returns tuple:
+    // * symlink file path (relative to the root of build dir)
+    // * symlink absolute file path
+    // * target actual file (relative to symlink file)
+    #[cfg_attr(not(unix), allow(unused))]
+    fn symlinks<'a>(
+        &'a self,
+        target_dir: &'a PathBuf,
+        profile: &'a str,
+        libname: &'a str,
+    ) -> impl Iterator<Item = (&'a str, PathBuf, PathBuf)> + 'a {
+        self.meta.linux_symlinks.iter().map(move |source| {
+            let mut link = target_dir.clone();
+            link.extend([profile, source]);
+            let relative_link = PathBuf::from(source);
+            let ancestors = relative_link.as_path().ancestors().count();
+            let mut target = std::iter::repeat_with(|| "../").take(ancestors - 2).fold(
+                PathBuf::new(),
+                |mut buff, segment| {
+                    buff.push(segment);
+                    buff
+                },
+            );
+            target.push(libname);
+            (&**source, link, target)
+        })
+    }
+
+    fn file_name(&self) -> String {
+        let target_name = &self.target_name;
+        let prefix = self.prefix();
+        let suffix = self.suffix();
+        format!("{prefix}{target_name}{suffix}")
+    }
+}
+
+#[derive(Clone, Copy)]
+enum ProjectTarget {
+    Cdylib,
+    Bin,
 }
 
 #[derive(Deserialize)]
@@ -79,6 +159,7 @@ struct ZludaMetadata {
     windows_only: bool,
     #[serde(default)]
     debug_only: bool,
+    #[cfg_attr(not(unix), allow(unused))]
     #[serde(default)]
     linux_symlinks: Vec<String>,
 }
@@ -95,12 +176,14 @@ fn main() {
         },
     };
     match options {
-        Options::Build(b) => compile(b),
-        Options::Zip => zip(),
+        Options::Build(b) => {
+            compile(b);
+        }
+        Options::Zip(b) => zip(b),
     }
 }
 
-fn compile(b: Build) {
+fn compile(b: Build) -> (PathBuf, String, Vec<Project>) {
     let profile = sniff_out_profile_name(&b.cargo_arguments);
     let meta = MetadataCommand::new().no_deps().exec().unwrap();
     let target_directory = meta.target_directory.into_std_path_buf();
@@ -108,24 +191,28 @@ fn compile(b: Build) {
         .packages
         .into_iter()
         .filter_map(Project::try_new)
+        .filter(|project| {
+            if project.meta.windows_only && cfg!(not(windows)) {
+                return false;
+            }
+            if project.meta.debug_only && profile != "debug" {
+                return false;
+            }
+            true
+        })
         .collect::<Vec<_>>();
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let mut command = Command::new(&cargo);
     command.arg("build");
     command.arg("--locked");
     for project in projects.iter() {
-        if project.meta.windows_only && cfg!(not(windows)) {
-            continue;
-        }
-        if project.meta.debug_only && profile != "debug" {
-            continue;
-        }
         command.arg("--package");
         command.arg(&project.name);
     }
     command.args(b.cargo_arguments);
     assert!(command.status().unwrap().success());
-    os::make_symlinks(target_directory, projects, profile);
+    os::make_symlinks(&target_directory, &*projects, &*profile);
+    (target_directory, profile, projects)
 }
 
 fn sniff_out_profile_name(b: &[OsString]) -> String {
@@ -143,56 +230,98 @@ fn sniff_out_profile_name(b: &[OsString]) -> String {
     }
 }
 
-fn zip() {
-    todo!()
+fn zip(zip: Build) {
+    let (target_dir, profile, projects) = compile(zip);
+    os::zip(target_dir, profile, projects)
 }
 
 #[cfg(unix)]
 mod os {
-    use std::path::PathBuf;
+    use flate2::write::GzEncoder;
+    use flate2::Compression;
+    use std::{
+        fs::{self, File},
+        path::PathBuf,
+    };
+    use tar::Header;
 
     pub fn make_symlinks(
-        target_directory: std::path::PathBuf,
-        projects: Vec<super::Project>,
-        profile: String,
+        target_directory: &std::path::PathBuf,
+        projects: &[super::Project],
+        profile: &str,
     ) {
-        use std::fs;
         use std::os::unix::fs as unix_fs;
         for project in projects.iter() {
-            let clib_name = match project.clib_name {
-                Some(ref l) => l,
-                None => continue,
-            };
-            let libname = format!("lib{}.so", clib_name);
-            for source in project.meta.linux_symlinks.iter() {
-                let relative_link = PathBuf::from(source);
-                let ancestors = relative_link.as_path().ancestors().count();
-                let mut target = std::iter::repeat_with(|| "../").take(ancestors - 2).fold(
-                    PathBuf::new(),
-                    |mut buff, segment| {
-                        buff.push(segment);
-                        buff
-                    },
-                );
-                let mut link = target_directory.clone();
-                link.extend([&*profile, source]);
-                let mut dir = link.clone();
+            let libname = project.file_name();
+            for (_, full_path, target) in project.symlinks(target_directory, profile, &libname) {
+                let mut dir = full_path.clone();
                 assert!(dir.pop());
                 fs::create_dir_all(dir).unwrap();
-                fs::remove_file(&link).ok();
-                target.push(&*libname);
-                unix_fs::symlink(&target, link).unwrap();
+                fs::remove_file(&full_path).ok();
+                unix_fs::symlink(&target, full_path).unwrap();
             }
         }
+    }
+
+    pub(crate) fn zip(target_dir: PathBuf, profile: String, projects: Vec<crate::Project>) {
+        let tar_gz =
+            File::create(format!("{}/{profile}/zluda.tar.gz", target_dir.display())).unwrap();
+        let enc = GzEncoder::new(tar_gz, Compression::default());
+        let mut tar = tar::Builder::new(enc);
+        for project in projects.iter() {
+            let file_name = project.file_name();
+            let mut file =
+                File::open(format!("{}/{profile}/{file_name}", target_dir.display())).unwrap();
+            tar.append_file(format!("zluda/{file_name}"), &mut file)
+                .unwrap();
+            for (source, full_path, target) in project.symlinks(&target_dir, &profile, &file_name) {
+                let mut header = Header::new_gnu();
+                let meta = fs::symlink_metadata(&full_path).unwrap();
+                header.set_metadata(&meta);
+                tar.append_link(&mut header, format!("zluda/{source}"), target)
+                    .unwrap();
+            }
+        }
+        tar.finish().unwrap();
     }
 }
 
 #[cfg(not(unix))]
 mod os {
+    use std::{fs::File, io, path::PathBuf};
+    use zip::{write::SimpleFileOptions, ZipWriter};
+
     pub fn make_symlinks(
-        target_directory: std::path::PathBuf,
-        projects: Vec<super::Project>,
-        profile: String,
+        _target_directory: &std::path::PathBuf,
+        _projects: &[super::Project],
+        _profile: &str,
     ) {
+    }
+
+    pub(crate) fn zip(target_dir: PathBuf, profile: String, projects: Vec<crate::Project>) {
+        let zip_file =
+            File::create(format!("{}/{profile}/zluda.zip", target_dir.display())).unwrap();
+        let mut zip = ZipWriter::new(zip_file);
+        zip.add_directory("zluda", SimpleFileOptions::default())
+            .unwrap();
+        for project in projects.iter() {
+            let file_name = project.file_name();
+            let mut file =
+                File::open(format!("{}/{profile}/{file_name}", target_dir.display())).unwrap();
+            let file_options = file_options_from_time(&file).unwrap_or_default();
+            zip.start_file(format!("zluda/{file_name}"), file_options)
+                .unwrap();
+            io::copy(&mut file, &mut zip).unwrap();
+        }
+        zip.finish().unwrap();
+    }
+
+    fn file_options_from_time(from: &File) -> io::Result<SimpleFileOptions> {
+        let metadata = from.metadata()?;
+        let modified = metadata.modified()?;
+        let modified = time::OffsetDateTime::from(modified);
+        Ok(SimpleFileOptions::default().last_modified_time(
+            zip::DateTime::try_from(modified).map_err(|err| io::Error::other(err))?,
+        ))
     }
 }

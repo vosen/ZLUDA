@@ -518,6 +518,7 @@ impl<'a> MethodEmitContext<'a> {
             Statement::VectorRead(vector_read) => self.emit_vector_read(vector_read)?,
             Statement::VectorWrite(vector_write) => self.emit_vector_write(vector_write)?,
             Statement::SetMode(mode_reg) => self.emit_set_mode(mode_reg)?,
+            Statement::FpSaturate { dst, src, type_ } => self.emit_fp_saturate(type_, dst, src)?,
         })
     }
 
@@ -590,7 +591,7 @@ impl<'a> MethodEmitContext<'a> {
         inst: ast::Instruction<SpirvWord>,
     ) -> Result<(), TranslateError> {
         match inst {
-            ast::Instruction::Mov { data, arguments } => self.emit_mov(data, arguments),
+            ast::Instruction::Mov { data: _, arguments } => self.emit_mov(arguments),
             ast::Instruction::Ld { data, arguments } => self.emit_ld(data, arguments),
             ast::Instruction::Add { data, arguments } => self.emit_add(data, arguments),
             ast::Instruction::St { data, arguments } => self.emit_st(data, arguments),
@@ -638,6 +639,7 @@ impl<'a> MethodEmitContext<'a> {
             // replaced by a function call
             ast::Instruction::Bfe { .. }
             | ast::Instruction::Bar { .. }
+            | ast::Instruction::BarRed { .. }
             | ast::Instruction::Bfi { .. }
             | ast::Instruction::Activemask { .. } => return Err(error_unreachable()),
         }
@@ -836,7 +838,13 @@ impl<'a> MethodEmitContext<'a> {
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
         let fn_ = match data {
-            ast::ArithDetails::Integer(..) => LLVMBuildAdd,
+            ast::ArithDetails::Integer(ast::ArithInteger {
+                saturate: true,
+                type_,
+            }) => return self.emit_add_sat(type_, arguments),
+            ast::ArithDetails::Integer(ast::ArithInteger {
+                saturate: false, ..
+            }) => LLVMBuildAdd,
             ast::ArithDetails::Float(..) => LLVMBuildFAdd,
         };
         self.resolver.with_result(arguments.dst, |dst| unsafe {
@@ -917,11 +925,7 @@ impl<'a> MethodEmitContext<'a> {
         Ok(())
     }
 
-    fn emit_mov(
-        &mut self,
-        _data: ast::MovDetails,
-        arguments: ast::MovArgs<SpirvWord>,
-    ) -> Result<(), TranslateError> {
+    fn emit_mov(&mut self, arguments: ast::MovArgs<SpirvWord>) -> Result<(), TranslateError> {
         self.resolver
             .register(arguments.dst, self.resolver.value(arguments.src)?);
         Ok(())
@@ -1612,32 +1616,40 @@ impl<'a> MethodEmitContext<'a> {
             ptx_parser::CvtMode::SignExtend => LLVMBuildSExt,
             ptx_parser::CvtMode::Truncate => LLVMBuildTrunc,
             ptx_parser::CvtMode::Bitcast => LLVMBuildBitCast,
-            ptx_parser::CvtMode::SaturateUnsignedToSigned => {
+            ptx_parser::CvtMode::IntSaturateToSigned => {
                 return self.emit_cvt_unsigned_to_signed_sat(data.from, data.to, arguments)
             }
-            ptx_parser::CvtMode::SaturateSignedToUnsigned => {
+            ptx_parser::CvtMode::IntSaturateToUnsigned => {
                 return self.emit_cvt_signed_to_unsigned_sat(data.from, data.to, arguments)
             }
             ptx_parser::CvtMode::FPExtend { .. } => LLVMBuildFPExt,
             ptx_parser::CvtMode::FPTruncate { .. } => LLVMBuildFPTrunc,
             ptx_parser::CvtMode::FPRound {
-                integer_rounding, ..
+                integer_rounding: None,
+                flush_to_zero: None | Some(false),
+                ..
             } => {
-                return self.emit_cvt_float_to_int(
-                    data.from,
-                    data.to,
-                    integer_rounding,
-                    arguments,
-                    Some(LLVMBuildFPToSI),
-                )
+                return self.emit_mov(ast::MovArgs {
+                    dst: arguments.dst,
+                    src: arguments.src,
+                })
             }
+            ptx_parser::CvtMode::FPRound {
+                integer_rounding: None,
+                flush_to_zero: Some(true),
+                ..
+            } => return self.flush_denormals(data.to, arguments.src, arguments.dst),
+            ptx_parser::CvtMode::FPRound {
+                integer_rounding: Some(rounding),
+                ..
+            } => return self.emit_cvt_float_to_int(data.from, data.to, rounding, arguments, None),
             ptx_parser::CvtMode::SignedFromFP { rounding, .. } => {
                 return self.emit_cvt_float_to_int(
                     data.from,
                     data.to,
                     rounding,
                     arguments,
-                    Some(LLVMBuildFPToSI),
+                    Some(true),
                 )
             }
             ptx_parser::CvtMode::UnsignedFromFP { rounding, .. } => {
@@ -1646,13 +1658,13 @@ impl<'a> MethodEmitContext<'a> {
                     data.to,
                     rounding,
                     arguments,
-                    Some(LLVMBuildFPToUI),
+                    Some(false),
                 )
             }
-            ptx_parser::CvtMode::FPFromSigned(_) => {
+            ptx_parser::CvtMode::FPFromSigned { .. } => {
                 return self.emit_cvt_int_to_float(data.to, arguments, LLVMBuildSIToFP)
             }
-            ptx_parser::CvtMode::FPFromUnsigned(_) => {
+            ptx_parser::CvtMode::FPFromUnsigned { .. } => {
                 return self.emit_cvt_int_to_float(data.to, arguments, LLVMBuildUIToFP)
             }
         };
@@ -1669,27 +1681,7 @@ impl<'a> MethodEmitContext<'a> {
         to: ptx_parser::ScalarType,
         arguments: ptx_parser::CvtArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        // This looks dodgy, but it's fine. MAX bit pattern is always 0b11..1,
-        // so if it's downcast to a smaller type, it will be the maximum value
-        // of the smaller type
-        let max_value = match to {
-            ptx_parser::ScalarType::S8 => i8::MAX as u64,
-            ptx_parser::ScalarType::S16 => i16::MAX as u64,
-            ptx_parser::ScalarType::S32 => i32::MAX as u64,
-            ptx_parser::ScalarType::S64 => i64::MAX as u64,
-            _ => return Err(error_unreachable()),
-        };
-        let from_llvm = get_scalar_type(self.context, from);
-        let max = unsafe { LLVMConstInt(from_llvm, max_value, 0) };
-        let clamped = self.emit_intrinsic(
-            c"llvm.umin",
-            None,
-            Some(&from.into()),
-            vec![
-                (self.resolver.value(arguments.src)?, from_llvm),
-                (max, from_llvm),
-            ],
-        )?;
+        let clamped = self.emit_saturate_integer(from, to, &arguments)?;
         let resize_fn = if to.layout().size() >= from.layout().size() {
             LLVMBuildSExtOrBitCast
         } else {
@@ -1702,40 +1694,92 @@ impl<'a> MethodEmitContext<'a> {
         Ok(())
     }
 
+    fn emit_saturate_integer(
+        &mut self,
+        from: ptx_parser::ScalarType,
+        to: ptx_parser::ScalarType,
+        arguments: &ptx_parser::CvtArgs<SpirvWord>,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        let from_llvm = get_scalar_type(self.context, from);
+        match from.kind() {
+            ptx_parser::ScalarKind::Unsigned => {
+                let max_value = match to {
+                    ptx_parser::ScalarType::U8 => u8::MAX as u64,
+                    ptx_parser::ScalarType::S8 => i8::MAX as u64,
+                    ptx_parser::ScalarType::U16 => u16::MAX as u64,
+                    ptx_parser::ScalarType::S16 => i16::MAX as u64,
+                    ptx_parser::ScalarType::U32 => u32::MAX as u64,
+                    ptx_parser::ScalarType::S32 => i32::MAX as u64,
+                    ptx_parser::ScalarType::U64 => u64::MAX as u64,
+                    ptx_parser::ScalarType::S64 => i64::MAX as u64,
+                    _ => return Err(error_unreachable()),
+                };
+                let intrinsic = format!("llvm.umin.{}\0", LLVMTypeDisplay(from));
+                let max = unsafe { LLVMConstInt(from_llvm, max_value, 0) };
+                let clamped = self.emit_intrinsic(
+                    unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
+                    None,
+                    Some(&from.into()),
+                    vec![
+                        (self.resolver.value(arguments.src)?, from_llvm),
+                        (max, from_llvm),
+                    ],
+                )?;
+                Ok(clamped)
+            }
+            ptx_parser::ScalarKind::Signed => {
+                let (min_value_from, max_value_from) = match from {
+                    ptx_parser::ScalarType::S8 => (i8::MIN as i128, i8::MAX as i128),
+                    ptx_parser::ScalarType::S16 => (i16::MIN as i128, i16::MAX as i128),
+                    ptx_parser::ScalarType::S32 => (i32::MIN as i128, i32::MAX as i128),
+                    ptx_parser::ScalarType::S64 => (i64::MIN as i128, i64::MAX as i128),
+                    _ => return Err(error_unreachable()),
+                };
+                let (min_value_to, max_value_to) = match to {
+                    ptx_parser::ScalarType::U8 => (u8::MIN as i128, u8::MAX as i128),
+                    ptx_parser::ScalarType::S8 => (i8::MIN as i128, i8::MAX as i128),
+                    ptx_parser::ScalarType::U16 => (u16::MIN as i128, u16::MAX as i128),
+                    ptx_parser::ScalarType::S16 => (i16::MIN as i128, i16::MAX as i128),
+                    ptx_parser::ScalarType::U32 => (u32::MIN as i128, u32::MAX as i128),
+                    ptx_parser::ScalarType::S32 => (i32::MIN as i128, i32::MAX as i128),
+                    ptx_parser::ScalarType::U64 => (u64::MIN as i128, u64::MAX as i128),
+                    ptx_parser::ScalarType::S64 => (i64::MIN as i128, i64::MAX as i128),
+                    _ => return Err(error_unreachable()),
+                };
+                let min_value = min_value_from.max(min_value_to);
+                let max_value = max_value_from.min(max_value_to);
+                let max_intrinsic = format!("llvm.smax.{}\0", LLVMTypeDisplay(from));
+                let min = unsafe { LLVMConstInt(from_llvm, min_value as u64, 1) };
+                let min_intrinsic = format!("llvm.smin.{}\0", LLVMTypeDisplay(from));
+                let max = unsafe { LLVMConstInt(from_llvm, max_value as u64, 1) };
+                let clamped = self.emit_intrinsic(
+                    unsafe { CStr::from_bytes_with_nul_unchecked(max_intrinsic.as_bytes()) },
+                    None,
+                    Some(&from.into()),
+                    vec![
+                        (self.resolver.value(arguments.src)?, from_llvm),
+                        (min, from_llvm),
+                    ],
+                )?;
+                let clamped = self.emit_intrinsic(
+                    unsafe { CStr::from_bytes_with_nul_unchecked(min_intrinsic.as_bytes()) },
+                    None,
+                    Some(&from.into()),
+                    vec![(clamped, from_llvm), (max, from_llvm)],
+                )?;
+                Ok(clamped)
+            }
+            _ => return Err(error_unreachable()),
+        }
+    }
+
     fn emit_cvt_signed_to_unsigned_sat(
         &mut self,
         from: ptx_parser::ScalarType,
         to: ptx_parser::ScalarType,
         arguments: ptx_parser::CvtArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        let from_llvm = get_scalar_type(self.context, from);
-        let zero = unsafe { LLVMConstInt(from_llvm, 0, 0) };
-        let zero_clamp_intrinsic = format!("llvm.smax.{}\0", LLVMTypeDisplay(from));
-        let zero_clamped = self.emit_intrinsic(
-            unsafe { CStr::from_bytes_with_nul_unchecked(zero_clamp_intrinsic.as_bytes()) },
-            None,
-            Some(&from.into()),
-            vec![
-                (self.resolver.value(arguments.src)?, from_llvm),
-                (zero, from_llvm),
-            ],
-        )?;
-        // zero_clamped is now unsigned
-        let max_value = match to {
-            ptx_parser::ScalarType::U8 => u8::MAX as u64,
-            ptx_parser::ScalarType::U16 => u16::MAX as u64,
-            ptx_parser::ScalarType::U32 => u32::MAX as u64,
-            ptx_parser::ScalarType::U64 => u64::MAX as u64,
-            _ => return Err(error_unreachable()),
-        };
-        let max = unsafe { LLVMConstInt(from_llvm, max_value, 0) };
-        let max_clamp_intrinsic = format!("llvm.umin.{}\0", LLVMTypeDisplay(from));
-        let fully_clamped = self.emit_intrinsic(
-            unsafe { CStr::from_bytes_with_nul_unchecked(max_clamp_intrinsic.as_bytes()) },
-            None,
-            Some(&from.into()),
-            vec![(zero_clamped, from_llvm), (max, from_llvm)],
-        )?;
+        let clamped = self.emit_saturate_integer(from, to, &arguments)?;
         let resize_fn = if to.layout().size() >= from.layout().size() {
             LLVMBuildZExtOrBitCast
         } else {
@@ -1743,7 +1787,7 @@ impl<'a> MethodEmitContext<'a> {
         };
         let to_llvm = get_scalar_type(self.context, to);
         self.resolver.with_result(arguments.dst, |dst| unsafe {
-            resize_fn(self.builder, fully_clamped, to_llvm, dst)
+            resize_fn(self.builder, clamped, to_llvm, dst)
         });
         Ok(())
     }
@@ -1754,18 +1798,89 @@ impl<'a> MethodEmitContext<'a> {
         to: ast::ScalarType,
         rounding: ast::RoundingMode,
         arguments: ptx_parser::CvtArgs<SpirvWord>,
-        llvm_cast: Option<
-            unsafe extern "C" fn(
-                arg1: LLVMBuilderRef,
-                Val: LLVMValueRef,
-                DestTy: LLVMTypeRef,
-                Name: *const i8,
-            ) -> LLVMValueRef,
-        >,
+        signed_cast: Option<bool>,
     ) -> Result<(), TranslateError> {
+        let dst_int_rounded =
+            self.emit_fp_int_rounding(from, rounding, &arguments, signed_cast.is_some())?;
+        // In PTX all the int-from-float casts are saturating casts. On the other hand, in LLVM,
+        // out-of-range fptoui and fptosi have undefined behavior.
+        // We could handle this all with llvm.fptosi.sat and llvm.fptoui.sat intrinsics, but
+        // the problem is that, when using *.sat variants AMDGPU target _always_ emits saturation
+        // checks. Often they are unnecessary because v_cvt_* instructions saturates anyway.
+        // For that reason, all from-to combinations that we know have a direct corresponding
+        // v_cvt_* instruction get special treatment
+        let is_saturating_cast = match (to, from) {
+            (ast::ScalarType::S16, ast::ScalarType::F16)
+            | (ast::ScalarType::S32, ast::ScalarType::F32)
+            | (ast::ScalarType::S32, ast::ScalarType::F64)
+            | (ast::ScalarType::U16, ast::ScalarType::F16)
+            | (ast::ScalarType::U32, ast::ScalarType::F32)
+            | (ast::ScalarType::U32, ast::ScalarType::F64) => true,
+            _ => false,
+        };
+        let signed_cast = match signed_cast {
+            Some(s) => s,
+            None => {
+                self.resolver.register(
+                    arguments.dst,
+                    dst_int_rounded.ok_or_else(error_unreachable)?,
+                );
+                return Ok(());
+            }
+        };
+        if is_saturating_cast {
+            let to = get_scalar_type(self.context, to);
+            let src =
+                dst_int_rounded.unwrap_or_else(|| self.resolver.value(arguments.src).unwrap());
+            let llvm_cast = if signed_cast {
+                LLVMBuildFPToSI
+            } else {
+                LLVMBuildFPToUI
+            };
+            let poisoned_dst = unsafe { llvm_cast(self.builder, src, to, LLVM_UNNAMED.as_ptr()) };
+            self.resolver.with_result(arguments.dst, |dst| unsafe {
+                LLVMBuildFreeze(self.builder, poisoned_dst, dst)
+            });
+        } else {
+            let cvt_op = if to.kind() == ptx_parser::ScalarKind::Unsigned {
+                "fptoui"
+            } else {
+                "fptosi"
+            };
+            let cast_intrinsic = format!(
+                "llvm.{cvt_op}.sat.{}.{}\0",
+                LLVMTypeDisplay(to),
+                LLVMTypeDisplay(from)
+            );
+            let src =
+                dst_int_rounded.unwrap_or_else(|| self.resolver.value(arguments.src).unwrap());
+            self.emit_intrinsic(
+                unsafe { CStr::from_bytes_with_nul_unchecked(cast_intrinsic.as_bytes()) },
+                Some(arguments.dst),
+                Some(&to.into()),
+                vec![(src, get_scalar_type(self.context, from))],
+            )?;
+        }
+        Ok(())
+    }
+
+    fn emit_fp_int_rounding(
+        &mut self,
+        from: ptx_parser::ScalarType,
+        rounding: ptx_parser::RoundingMode,
+        arguments: &ptx_parser::CvtArgs<SpirvWord>,
+        will_saturate_with_cvt: bool,
+    ) -> Result<Option<LLVMValueRef>, TranslateError> {
         let prefix = match rounding {
             ptx_parser::RoundingMode::NearestEven => "llvm.roundeven",
-            ptx_parser::RoundingMode::Zero => "llvm.trunc",
+            ptx_parser::RoundingMode::Zero => {
+                // cvt has round-to-zero semantics
+                if will_saturate_with_cvt {
+                    return Ok(None);
+                } else {
+                    "llvm.trunc"
+                }
+            }
             ptx_parser::RoundingMode::NegativeInf => "llvm.floor",
             ptx_parser::RoundingMode::PositiveInf => "llvm.ceil",
         };
@@ -1779,34 +1894,7 @@ impl<'a> MethodEmitContext<'a> {
                 get_scalar_type(self.context, from),
             )],
         )?;
-        if let Some(llvm_cast) = llvm_cast {
-            let to = get_scalar_type(self.context, to);
-            let poisoned_dst =
-                unsafe { llvm_cast(self.builder, rounded_float, to, LLVM_UNNAMED.as_ptr()) };
-            self.resolver.with_result(arguments.dst, |dst| unsafe {
-                LLVMBuildFreeze(self.builder, poisoned_dst, dst)
-            });
-        } else {
-            self.resolver.register(arguments.dst, rounded_float);
-        }
-        // Using explicit saturation gives us worse codegen: it explicitly checks for out of bound
-        // values and NaNs. Using non-saturated fptosi/fptoui emits v_cvt_<TO>_<FROM> which
-        // saturates by default and we don't care about NaNs anyway
-        /*
-        let cast_intrinsic = format!(
-            "{}.{}.{}\0",
-            llvm_cast,
-            LLVMTypeDisplay(to),
-            LLVMTypeDisplay(from)
-        );
-        self.emit_intrinsic(
-            unsafe { CStr::from_bytes_with_nul_unchecked(cast_intrinsic.as_bytes()) },
-            Some(arguments.dst),
-            &to.into(),
-            vec![(rounded_float, get_scalar_type(self.context, from))],
-        )?;
-        */
-        Ok(())
+        Ok(Some(rounded_float))
     }
 
     fn emit_cvt_int_to_float(
@@ -2094,7 +2182,7 @@ impl<'a> MethodEmitContext<'a> {
             ptx_parser::MinMaxDetails::Signed(..) => "llvm.smin",
             ptx_parser::MinMaxDetails::Unsigned(..) => "llvm.umin",
             ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { nan: true, .. }) => {
-                return Err(error_todo())
+                "llvm.minimum"
             }
             ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { .. }) => "llvm.minnum",
         };
@@ -2121,7 +2209,7 @@ impl<'a> MethodEmitContext<'a> {
             ptx_parser::MinMaxDetails::Signed(..) => "llvm.smax",
             ptx_parser::MinMaxDetails::Unsigned(..) => "llvm.umax",
             ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { nan: true, .. }) => {
-                return Err(error_todo())
+                "llvm.maximum"
             }
             ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { .. }) => "llvm.maxnum",
         };
@@ -2289,7 +2377,11 @@ impl<'a> MethodEmitContext<'a> {
         };
         let res_lo = self.emit_intrinsic(
             name_lo,
-            if data.control == Mul24Control::Lo { Some(arguments.dst) } else { None },
+            if data.control == Mul24Control::Lo {
+                Some(arguments.dst)
+            } else {
+                None
+            },
             Some(&ast::Type::Scalar(data.type_)),
             vec![
                 (src1, get_scalar_type(self.context, data.type_)),
@@ -2316,9 +2408,8 @@ impl<'a> MethodEmitContext<'a> {
                 ],
             )?;
             let shift_number = unsafe { LLVMConstInt(LLVMInt32TypeInContext(self.context), 16, 0) };
-            let res_lo_shr = unsafe {
-                LLVMBuildLShr(self.builder, res_lo, shift_number, LLVM_UNNAMED.as_ptr())
-            };
+            let res_lo_shr =
+                unsafe { LLVMBuildLShr(self.builder, res_lo, shift_number, LLVM_UNNAMED.as_ptr()) };
             let res_hi_shl =
                 unsafe { LLVMBuildShl(self.builder, res_hi, shift_number, LLVM_UNNAMED.as_ptr()) };
 
@@ -2377,6 +2468,74 @@ impl<'a> MethodEmitContext<'a> {
             None,
             None,
             vec![(hwreg_llvm, llvm_i32), (value_llvm, llvm_i32)],
+        )?;
+        Ok(())
+    }
+
+    fn emit_fp_saturate(
+        &mut self,
+        type_: ast::ScalarType,
+        dst: SpirvWord,
+        src: SpirvWord,
+    ) -> Result<(), TranslateError> {
+        let llvm_type = get_scalar_type(self.context, type_);
+        let zero = unsafe { LLVMConstReal(llvm_type, 0.0) };
+        let one = unsafe { LLVMConstReal(llvm_type, 1.0) };
+        let maxnum_intrinsic = format!("llvm.maxnum.{}\0", LLVMTypeDisplay(type_));
+        let minnum_intrinsic = format!("llvm.minnum.{}\0", LLVMTypeDisplay(type_));
+        let src = self.resolver.value(src)?;
+        let maxnum = self.emit_intrinsic(
+            unsafe { CStr::from_bytes_with_nul_unchecked(maxnum_intrinsic.as_bytes()) },
+            None,
+            Some(&type_.into()),
+            vec![(src, llvm_type), (zero, llvm_type)],
+        )?;
+        self.emit_intrinsic(
+            unsafe { CStr::from_bytes_with_nul_unchecked(minnum_intrinsic.as_bytes()) },
+            Some(dst),
+            Some(&type_.into()),
+            vec![(maxnum, llvm_type), (one, llvm_type)],
+        )?;
+        Ok(())
+    }
+
+    fn emit_add_sat(
+        &mut self,
+        type_: ast::ScalarType,
+        arguments: ast::AddArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let llvm_type = get_scalar_type(self.context, type_);
+        let src1 = self.resolver.value(arguments.src1)?;
+        let src2 = self.resolver.value(arguments.src2)?;
+        let op = if type_.kind() == ast::ScalarKind::Signed {
+            "sadd"
+        } else {
+            "uadd"
+        };
+        let intrinsic = format!("llvm.{}.sat.{}\0", op, LLVMTypeDisplay(type_));
+        self.emit_intrinsic(
+            unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
+            Some(arguments.dst),
+            Some(&type_.into()),
+            vec![(src1, llvm_type), (src2, llvm_type)],
+        )?;
+        Ok(())
+    }
+
+    fn flush_denormals(
+        &mut self,
+        type_: ptx_parser::ScalarType,
+        src: SpirvWord,
+        dst: SpirvWord,
+    ) -> Result<(), TranslateError> {
+        let llvm_type = get_scalar_type(self.context, type_);
+        let src = self.resolver.value(src)?;
+        let intrinsic = format!("llvm.canonicalize.{}\0", LLVMTypeDisplay(type_));
+        self.emit_intrinsic(
+            unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
+            Some(dst),
+            Some(&type_.into()),
+            vec![(src, llvm_type)],
         )?;
         Ok(())
     }

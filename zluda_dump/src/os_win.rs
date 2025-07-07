@@ -1,6 +1,7 @@
 use std::{
     ffi::{c_void, CStr},
     mem, ptr,
+    sync::LazyLock,
 };
 
 use std::os::windows::io::AsRawHandle;
@@ -15,9 +16,9 @@ use cuda_types::cuda::CUuuid;
 pub(crate) const LIBCUDA_DEFAULT_PATH: &'static str = "C:\\Windows\\System32\\nvcuda.dll";
 const LOAD_LIBRARY_NO_REDIRECT: &'static [u8] = b"ZludaLoadLibraryW_NoRedirect\0";
 const GET_PROC_ADDRESS_NO_REDIRECT: &'static [u8] = b"ZludaGetProcAddress_NoRedirect\0";
-lazy_static! {
-    static ref PLATFORM_LIBRARY: PlatformLibrary = unsafe { PlatformLibrary::new() };
-}
+
+static PLATFORM_LIBRARY: LazyLock<PlatformLibrary> =
+    LazyLock::new(|| unsafe { PlatformLibrary::new() });
 
 #[allow(non_snake_case)]
 struct PlatformLibrary {
@@ -116,7 +117,7 @@ pub fn __log_impl(s: String) {
 #[cfg(target_arch = "x86")]
 pub fn get_thunk(
     original_fn: *const c_void,
-    report_fn: unsafe extern "system" fn(*const CUuuid, usize),
+    report_fn: unsafe extern "system" fn(&CUuuid, usize),
     guid: *const CUuuid,
     idx: usize,
 ) -> *const c_void {
@@ -143,7 +144,7 @@ pub fn get_thunk(
 #[cfg(target_arch = "x86_64")]
 pub fn get_thunk(
     original_fn: *const c_void,
-    report_fn: unsafe extern "system" fn(*const CUuuid, usize),
+    report_fn: unsafe extern "system" fn(&CUuuid, usize),
     guid: *const CUuuid,
     idx: usize,
 ) -> *const c_void {
@@ -177,4 +178,13 @@ pub fn get_thunk(
     let result_fn = exe_buf.ptr(start);
     mem::forget(exe_buf);
     result_fn as *const _
+}
+
+#[link(name = "kernel32")]
+unsafe extern "system" {
+    fn GetCurrentThreadId() -> u32;
+}
+
+pub(crate) fn current_thread() -> u32 {
+    unsafe { GetCurrentThreadId() }
 }

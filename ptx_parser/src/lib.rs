@@ -64,11 +64,21 @@ impl From<RawLdStQualifier> for ast::LdStQualifier {
 
 impl From<RawRoundingMode> for ast::RoundingMode {
     fn from(value: RawRoundingMode) -> Self {
-        match value {
-            RawRoundingMode::Rn | RawRoundingMode::Rni => ast::RoundingMode::NearestEven,
-            RawRoundingMode::Rz | RawRoundingMode::Rzi => ast::RoundingMode::Zero,
-            RawRoundingMode::Rm | RawRoundingMode::Rmi => ast::RoundingMode::NegativeInf,
-            RawRoundingMode::Rp | RawRoundingMode::Rpi => ast::RoundingMode::PositiveInf,
+        value.normalize().0
+    }
+}
+
+impl RawRoundingMode {
+    fn normalize(self) -> (ast::RoundingMode, bool) {
+        match self {
+            RawRoundingMode::Rn => (ast::RoundingMode::NearestEven, false),
+            RawRoundingMode::Rz => (ast::RoundingMode::Zero, false),
+            RawRoundingMode::Rm => (ast::RoundingMode::NegativeInf, false),
+            RawRoundingMode::Rp => (ast::RoundingMode::PositiveInf, false),
+            RawRoundingMode::Rni => (ast::RoundingMode::NearestEven, true),
+            RawRoundingMode::Rzi => (ast::RoundingMode::Zero, true),
+            RawRoundingMode::Rmi => (ast::RoundingMode::NegativeInf, true),
+            RawRoundingMode::Rpi => (ast::RoundingMode::PositiveInf, true),
         }
     }
 }
@@ -427,7 +437,7 @@ fn directive<'a, 'input>(
             | Token::DotFile | Token::DotSection => true,
             _ => false,
         }),
-        PtxError::UnrecognizedDirective,
+        |text| PtxError::UnrecognizedDirective(text.unwrap_or("")),
     )
     .map(Option::flatten)
     .parse_next(stream)
@@ -675,7 +685,7 @@ fn statement<'a, 'input>(
                 _ => false,
             },
         ),
-        PtxError::UnrecognizedStatement,
+        |text| PtxError::UnrecognizedStatement(text.unwrap_or("")),
     )
     .map(Option::flatten)
     .parse_next(stream)
@@ -1285,10 +1295,10 @@ pub enum PtxError<'input> {
     ArrayInitalizer,
     #[error("")]
     NonExternPointer,
-    #[error("{0:?}")]
-    UnrecognizedStatement(Option<&'input str>),
-    #[error("{0:?}")]
-    UnrecognizedDirective(Option<&'input str>),
+    #[error("Unrecognized statement {0:?}")]
+    UnrecognizedStatement(&'input str),
+    #[error("Unrecognized directive {0:?}")]
+    UnrecognizedDirective(&'input str),
 }
 
 #[derive(Debug)]
@@ -1482,6 +1492,46 @@ pub struct TokenError(std::ops::Range<usize>);
 
 impl std::error::Error for TokenError {}
 
+fn first_optional<
+    'a,
+    'input,
+    Input: Stream,
+    OptionalOutput,
+    RequiredOutput,
+    Error,
+    ParseOptional,
+    ParseRequired,
+>(
+    mut optional: ParseOptional,
+    mut required: ParseRequired,
+) -> impl Parser<Input, (Option<OptionalOutput>, RequiredOutput), Error>
+where
+    ParseOptional: Parser<Input, OptionalOutput, Error>,
+    ParseRequired: Parser<Input, RequiredOutput, Error>,
+    Error: ParserError<Input>,
+{
+    move |input: &mut Input| -> Result<(Option<OptionalOutput>, RequiredOutput), ErrMode<Error>> {
+        let start = input.checkpoint();
+
+        let parsed_optional = match optional.parse_next(input) {
+            Ok(v) => Some(v),
+            Err(ErrMode::Backtrack(_)) => {
+                input.reset(&start);
+                None
+            },
+            Err(e) => return Err(e)
+        };
+
+        match required.parse_next(input) {
+            Ok(v) => return Ok((parsed_optional, v)),
+            Err(ErrMode::Backtrack(_)) => input.reset(&start),
+            Err(e) => return Err(e)
+        };
+
+        Ok((None, required.parse_next(input)?))
+    }
+}
+
 // This macro is responsible for generating parser code for instruction parser.
 // Instruction parsing is by far the most complex part of parsing PTX code:
 // * There are tens of instruction kinds, each with slightly different parsing rules
@@ -1654,6 +1704,9 @@ derive_parser!(
 
     #[derive(Copy, Clone, PartialEq, Eq, Hash)]
     pub enum Mul24Control { }
+
+    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    pub enum Reduction { }
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
     mov{.vec}.type  d, a => {
@@ -2937,7 +2990,9 @@ derive_parser!(
     barrier{.cta}.sync{.aligned}    a{, b} => {
         let _ = cta;
         ast::Instruction::Bar {
-            data: ast::BarData { aligned },
+            data: ast::BarData {
+                aligned,
+            },
             arguments: BarArgs { src1: a, src2: b }
         }
     }
@@ -2947,14 +3002,32 @@ derive_parser!(
     bar{.cta}.sync                  a{, b} => {
         let _ = cta;
         ast::Instruction::Bar {
-            data: ast::BarData { aligned: true },
+            data: ast::BarData {
+                aligned: true,
+            },
             arguments: BarArgs { src1: a, src2: b }
         }
     }
     //bar{.cta}.arrive    a, b;
     //bar{.cta}.red.popc.u32  d, a{, b}, {!}c;
-    //bar{.cta}.red.op.pred   p, a{, b}, {!}c;
-    //.op = { .and, .or };
+    bar{.cta}.red.op.pred   p, a{, b}, {!}c => {
+        let _ = cta;
+        let (negate_src3, c) = c;
+        ast::Instruction::BarRed {
+            data: ast::BarRedData {
+                aligned: true,
+                pred_reduction: op,
+            },
+            arguments: BarRedArgs {
+                dst1: p,
+                src_barrier: a,
+                src_threadcount: b,
+                src_predicate: c,
+                src_negate_predicate: ParsedOperand::Imm(ImmediateValue::U64(negate_src3 as u64))
+            }
+        }
+    }
+    .op: Reduction = { .and, .or };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-atom
     atom{.sem}{.scope}{.space}.op{.level::cache_hint}.type                                      d, [a], b{, cache_policy} => {
@@ -3403,6 +3476,7 @@ derive_parser!(
 
 #[cfg(test)]
 mod tests {
+    use crate::first_optional;
     use crate::parse_module_checked;
     use crate::PtxError;
 
@@ -3412,6 +3486,55 @@ mod tests {
     use logos::Logos;
     use logos::Span;
     use winnow::prelude::*;
+
+    #[test]
+    fn first_optional_present() {
+        let text = "AB";
+        let result = first_optional::<_, _, _, (), _, _>('A', 'B').parse(text);
+        assert_eq!(result, Ok((Some('A'), 'B')));
+    }
+
+    #[test]
+    fn first_optional_absent() {
+        let text = "B";
+        let result = first_optional::<_, _, _, (), _, _>('A', 'B').parse(text);
+        assert_eq!(result, Ok((None, 'B')));
+    }
+
+    #[test]
+    fn first_optional_repeated_absent() {
+        let text = "A";
+        let result = first_optional::<_, _, _, (), _, _>('A', 'A').parse(text);
+        assert_eq!(result, Ok((None, 'A')));
+    }
+
+    #[test]
+    fn first_optional_repeated_present() {
+        let text = "AA";
+        let result = first_optional::<_, _, _, (), _, _>('A', 'A').parse(text);
+        assert_eq!(result, Ok((Some('A'), 'A')));
+    }
+
+    #[test]
+    fn first_optional_sequence_absent() {
+        let text = "AA";
+        let result = ('A', first_optional::<_, _, _, (), _, _>('A', 'A')).parse(text);
+        assert_eq!(result, Ok(('A', (None, 'A'))));
+    }
+
+    #[test]
+    fn first_optional_sequence_present() {
+        let text = "AAA";
+        let result = ('A', first_optional::<_, _, _, (), _, _>('A', 'A')).parse(text);
+        assert_eq!(result, Ok(('A', (Some('A'), 'A'))));
+    }
+
+    #[test]
+    fn first_optional_no_match() {
+        let text = "C";
+        let result = first_optional::<_, _, _, (), _, _>('A', 'B').parse(text);
+        assert!(result.is_err());
+    }
 
     #[test]
     fn sm_11() {
@@ -3492,11 +3615,11 @@ mod tests {
         assert_eq!(errors.len(), 2);
         assert!(matches!(
             errors[0],
-            PtxError::UnrecognizedStatement(Some("unknown_op1.asdf foobar;"))
+            PtxError::UnrecognizedStatement("unknown_op1.asdf foobar;")
         ));
         assert!(matches!(
             errors[1],
-            PtxError::UnrecognizedStatement(Some("unknown_op2 temp2, temp;"))
+            PtxError::UnrecognizedStatement("unknown_op2 temp2, temp;")
         ));
     }
 
@@ -3533,11 +3656,11 @@ mod tests {
         assert_eq!(errors.len(), 2);
         assert!(matches!(
             errors[0],
-            PtxError::UnrecognizedDirective(Some(".broken_directive_fail; 34; {"))
+            PtxError::UnrecognizedDirective(".broken_directive_fail; 34; {")
         ));
         assert!(matches!(
             errors[1],
-            PtxError::UnrecognizedDirective(Some("section foobar }"))
+            PtxError::UnrecognizedDirective("section foobar }")
         ));
     }
 }
