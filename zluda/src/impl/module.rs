@@ -8,7 +8,7 @@ use hip_runtime_sys::*;
 use std::{ffi::CStr, mem};
 
 pub(crate) struct Module {
-    base: hipModule_t,
+    pub(crate) base: hipModule_t,
 }
 
 impl ZludaObject for Module {
@@ -89,6 +89,7 @@ pub(crate) fn load_data(module: &mut CUmodule, image: &std::ffi::c_void) -> CUre
 
 pub(crate) fn unload(hmod: CUmodule) -> CUresult {
     super::drop_checked::<Module>(hmod)
+    
 }
 
 pub(crate) fn get_function(

@@ -1,7 +1,6 @@
-use super::module;
+use crate::r#impl::driver;
 
-use super::ZludaObject;
-
+use super::{module, ZludaObject, FromCuda};
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
 
@@ -34,5 +33,18 @@ pub(crate) fn load_data(
 ) -> CUresult {
     let hip_module = module::load_hip_module(code)?;
     *library = Library { base: hip_module }.wrap();
+    Ok(())
+}
+
+pub(crate) unsafe fn unload(library: CUlibrary) -> CUresult {
+    super::drop_checked::<Library>(library)
+}
+
+pub(crate) unsafe fn get_module(
+    out: &mut CUmodule,
+    library: CUlibrary,
+) -> CUresult {
+    let lib: &Library = FromCuda::from_cuda(&library)?;
+    *out = module::Module{base: lib.base}.wrap();
     Ok(())
 }
