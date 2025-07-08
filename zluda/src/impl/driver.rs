@@ -1,10 +1,10 @@
-use super::LiveCheck;
+use super::{FromCuda, LiveCheck};
 use crate::r#impl::{context, device};
 use comgr::Comgr;
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
 use std::{
-    ffi::{CStr, CString},
+    ffi::{CStr, CString, c_void},
     mem, ptr, slice,
     sync::OnceLock,
     usize,
@@ -64,7 +64,7 @@ pub(crate) fn global_state() -> Result<&'static GlobalState, CUerror> {
                             ))
                             .map_err(|_| CUerror::UNKNOWN)?
                             .to_owned(),
-                            primary_context: LiveCheck::new(context::new(i)),
+                            primary_context: LiveCheck::new(context::Context::new(i)),
                         })
                     })
                     .collect::<Result<Vec<_>, _>>()?,
@@ -162,34 +162,72 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         *size = UNKNOWN_BUFFER2.len();
     }
 
-    unsafe extern "system" fn context_local_storage_ctor(
-        context: cuda_types::cuda::CUcontext,
-        manager: *mut std::ffi::c_void,
-        ctx_state: *mut std::ffi::c_void,
+    unsafe extern "system" fn context_local_storage_put(
+        cu_ctx: CUcontext,
+        key: *mut c_void,
+        value: *mut c_void,
         dtor_cb: Option<
             extern "system" fn(
-                cuda_types::cuda::CUcontext,
-                *mut std::ffi::c_void,
-                *mut std::ffi::c_void,
+                CUcontext,
+                *mut c_void,
+                *mut c_void,
             ),
         >,
-    ) -> cuda_types::cuda::CUresult {
-        todo!()
+    ) -> CUresult {
+        let _ctx = if cu_ctx.0 != ptr::null_mut() {
+            cu_ctx
+        } else {
+            let mut current_ctx: CUcontext = CUcontext(ptr::null_mut());
+            context::get_current(&mut current_ctx)?;
+            current_ctx
+        };
+        let ctx_obj: &context::Context = FromCuda::from_cuda(&_ctx)?;
+        ctx_obj.with_state_mut(|state: &mut context::ContextState| {
+            state.storage.insert(
+                key as usize,
+                context::StorageData {
+                    value: value as usize,
+                    reset_cb: dtor_cb,
+                    handle: _ctx,
+                },
+            );
+            Ok(())
+        })?;
+        Ok(())
     }
 
-    unsafe extern "system" fn context_local_storage_dtor(
-        arg1: *mut std::ffi::c_void,
-        arg2: *mut std::ffi::c_void,
-    ) -> cuda_types::cuda::CUresult {
-        todo!()
+    unsafe extern "system" fn context_local_storage_delete(
+        cu_ctx: CUcontext,
+        key: *mut c_void,
+    ) -> CUresult {
+        let ctx_obj: &context::Context = FromCuda::from_cuda(&cu_ctx)?;
+        ctx_obj.with_state_mut(|state: &mut context::ContextState| {
+            state.storage.remove(&(key as usize));
+            Ok(())
+        })?;
+        Ok(())
     }
 
-    unsafe extern "system" fn context_local_storage_get_state(
-        ctx_state: *mut std::ffi::c_void,
-        cu_ctx: cuda_types::cuda::CUcontext,
-        manager: *mut std::ffi::c_void,
-    ) -> cuda_types::cuda::CUresult {
-        todo!()
+    unsafe extern "system" fn context_local_storage_get(
+        value: *mut *mut c_void,
+        cu_ctx: CUcontext,
+        key: *mut c_void,
+    ) -> CUresult {
+        let mut _ctx: CUcontext;
+        if cu_ctx.0 == ptr::null_mut() {
+            _ctx = context::get_current_context()?;
+        } else {
+            _ctx = cu_ctx
+        };
+        let ctx_obj: &context::Context = FromCuda::from_cuda(&_ctx)?;
+        ctx_obj.with_state(|state: &context::ContextState| {
+            match state.storage.get(&(key as usize)) {
+                Some(data) => *value = data.value as *mut c_void,
+                None => return CUresult::ERROR_INVALID_HANDLE
+            }
+            Ok(())
+        })?;
+        Ok(())
     }
 
     unsafe extern "system" fn ctx_create_v2_bypass(
@@ -268,7 +306,8 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         result1: *mut u32,
         result2: *mut *const std::ffi::c_void,
     ) -> cuda_types::cuda::CUresult {
-        todo!()
+        *result1 = 0;
+        CUresult::SUCCESS
     }
 
     unsafe extern "system" fn check_fn3() -> u32 {
@@ -382,4 +421,12 @@ pub(crate) unsafe fn get_proc_address_v2(
             Ok(())
         }
     }
+}
+
+pub(crate) fn profiler_start() -> CUresult {
+    Ok(())
+}
+
+pub(crate) fn profiler_stop() -> CUresult {
+    Ok(())
 }

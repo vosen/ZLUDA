@@ -1776,6 +1776,7 @@ dependencies = [
  "dtor",
  "hip_runtime-sys",
  "lazy_static",
+ "libc",
  "lz4-sys",
  "num_enum",
  "paste",

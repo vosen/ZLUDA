@@ -45,3 +45,15 @@ pub(crate) fn set_d8_v2(dst: hipDeviceptr_t, value: ::core::ffi::c_uchar, n: usi
 pub(crate) fn get_info_v2(free: *mut usize, total: *mut usize) -> hipError_t {
     unsafe { hipMemGetInfo(free, total) }
 }
+
+pub(crate) unsafe fn free_host(ptr: *mut ::core::ffi::c_void) -> hipError_t {
+    hipFreeHost(ptr)
+}
+
+pub(crate) unsafe fn host_alloc(
+    pp: *mut *mut ::core::ffi::c_void,
+    bytesize: usize,
+    flags: ::std::os::raw::c_uint,
+) -> hipError_t {
+    hipHostMalloc(pp, bytesize, flags)
+}
