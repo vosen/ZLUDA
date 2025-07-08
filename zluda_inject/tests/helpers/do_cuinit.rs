@@ -1,5 +1,6 @@
 #![crate_type = "cdylib"]
 
+#[link(name = "nvcuda", kind = "raw-dylib")]
 extern "system" {
     fn cuInit(flags: u32) -> u32;
 }

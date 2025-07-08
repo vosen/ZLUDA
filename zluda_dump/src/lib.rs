@@ -286,7 +286,7 @@ impl DarkApiDump {
         fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper,
         state: &mut trace::StateTracker,
         fn_logger: &mut FnCallLog,
-        _result: (),
+        _result: CUresult,
     ) {
         fn_logger.try_(|fn_logger| unsafe {
             trace::record_submodules_from_wrapped_fatbin(*module, fatbinc_wrapper, fn_logger, state)
@@ -391,7 +391,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApiDump {
             [1] = get_module_from_cubin(
                 module: *mut cuda_types::cuda::CUmodule,
                 fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper // FatbincWrapper
-            ) -> (),
+            ) -> cuda_types::cuda::CUresult,
             [6] = get_module_from_cubin_ext1(
                 result: *mut cuda_types::cuda::CUmodule,
                 fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper, // FatbincWrapper

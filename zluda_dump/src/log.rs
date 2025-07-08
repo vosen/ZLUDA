@@ -380,7 +380,7 @@ impl Display for ErrorEntry {
                                                         observed,
                                                     } => write!(
                                                         f,
-                                                        "Unexpected field {}. Expected one of: {{{}}}, observed: {}",
+                                                        "Unexpected field {}. Expected one of: [{}], observed: {}",
                                                         field_name,
                                                         expected
                                                             .iter()
