@@ -428,8 +428,9 @@ impl CudaDisplay for CUmemcpy3DOperand_st {
                 CudaDisplay::write(unsafe { &self.op.ptr }, fn_name, index, writer)?;
             }
             _ => {
+                const CU_MEMCPY_3D_OP_SIZE: usize = mem::size_of::<CUmemcpy3DOperand_st__bindgen_ty_1>();
                 CudaDisplay::write(
-                    &unsafe { mem::transmute::<_, [u8; 32]>(self.op) },
+                    &unsafe { mem::transmute::<_, [u8; CU_MEMCPY_3D_OP_SIZE]>(self.op) },
                     fn_name,
                     index,
                     writer,

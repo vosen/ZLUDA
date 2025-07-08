@@ -720,12 +720,7 @@ fn get_payload(guid: &detours_sys::GUID) -> Option<&'static [u8]> {
     let mut size = 0;
     let payload_ptr = unsafe { detours_sys::DetourFindPayloadEx(guid, &mut size) };
     if payload_ptr != ptr::null_mut() {
-        Some(unsafe {
-            slice::from_raw_parts(
-                payload_ptr as *const _,
-                (size as usize) / mem::size_of::<u16>(),
-            )
-        })
+        Some(unsafe { slice::from_raw_parts(payload_ptr as *const _, size as usize) })
     } else {
         None
     }

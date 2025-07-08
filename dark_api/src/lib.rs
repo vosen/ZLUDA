@@ -227,7 +227,7 @@ dark_api! {
         [1] = get_module_from_cubin(
             module: *mut cuda_types::cuda::CUmodule,
             fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper
-        ) -> (),
+        ) -> cuda_types::cuda::CUresult,
         [2] = cudart_interface_fn2(
             pctx: *mut cuda_types::cuda::CUcontext,
             dev: cuda_types::cuda::CUdevice

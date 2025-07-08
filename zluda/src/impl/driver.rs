@@ -106,7 +106,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
     unsafe extern "system" fn get_module_from_cubin(
         module: *mut cuda_types::cuda::CUmodule,
         fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper,
-    ) -> () {
+    ) -> cuda_types::cuda::CUresult {
         todo!()
     }
 
