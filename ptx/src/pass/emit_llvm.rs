@@ -889,9 +889,8 @@ impl<'a> MethodEmitContext<'a> {
             }
         }
         let name = match &*arguments.return_arguments {
-            [] => LLVM_UNNAMED.as_ptr(),
             [dst] => self.resolver.get_or_add_raw(*dst),
-            _ => todo!(),
+            _ => LLVM_UNNAMED.as_ptr(),
         };
         let type_ = get_function_type(
             self.context,
@@ -905,7 +904,7 @@ impl<'a> MethodEmitContext<'a> {
             .iter()
             .map(|arg| self.resolver.value(*arg))
             .collect::<Result<Vec<_>, _>>()?;
-        let llvm_fn = unsafe {
+        let llvm_call = unsafe {
             LLVMBuildCall2(
                 self.builder,
                 type_,
@@ -918,9 +917,15 @@ impl<'a> MethodEmitContext<'a> {
         match &*arguments.return_arguments {
             [] => {}
             [name] => {
-                self.resolver.register(*name, llvm_fn);
+                self.resolver.register(*name, llvm_call)
             }
-            _ => todo!(),
+            args => {
+                for (idx, arg) in args.iter().enumerate() {
+                    self.resolver.with_result(*arg, |name| unsafe {
+                        LLVMBuildExtractValue(self.builder, llvm_call, idx as u32, name)
+                    });
+                }
+            }
         }
         Ok(())
     }
@@ -1057,16 +1062,38 @@ impl<'a> MethodEmitContext<'a> {
         &mut self,
         values: Vec<(SpirvWord, ptx_parser::Type)>,
     ) -> Result<(), TranslateError> {
-        match &*values {
+        let loads = values.iter().map(|(value, type_)| {
+            let value = self.resolver.value(*value)?;
+            let type_ = get_type(self.context, type_)?;
+            Ok(unsafe {
+                LLVMBuildLoad2(self.builder, type_, value, LLVM_UNNAMED.as_ptr())
+            })
+        }).collect::<Result<Vec<_>, _>>()?;
+
+        match &*loads {
             [] => unsafe { LLVMBuildRetVoid(self.builder) },
-            [(value, type_)] => {
-                let value = self.resolver.value(*value)?;
-                let type_ = get_type(self.context, type_)?;
-                let value =
-                    unsafe { LLVMBuildLoad2(self.builder, type_, value, LLVM_UNNAMED.as_ptr()) };
-                unsafe { LLVMBuildRet(self.builder, value) }
+            [value] => {
+                unsafe { LLVMBuildRet(self.builder, *value) }
             }
-            _ => todo!(),
+            _ => {
+                let struct_ty =
+                    get_struct_type(self.context, values.iter().map(|(_, type_)| type_))?;
+                let struct_ = loads.into_iter().enumerate().fold(
+                    unsafe { LLVMGetPoison(struct_ty) },
+                    |struct_, (idx, elem)| {
+                        unsafe {
+                            LLVMBuildInsertValue(
+                                self.builder,
+                                struct_,
+                                elem,
+                                idx as u32,
+                                LLVM_UNNAMED.as_ptr(),
+                            )
+                        }
+                    },
+                );
+                unsafe { LLVMBuildRet(self.builder, struct_) }
+            }
         };
         Ok(())
     }
@@ -2705,6 +2732,23 @@ fn get_scalar_type(context: LLVMContextRef, type_: ast::ScalarType) -> LLVMTypeR
     }
 }
 
+fn get_struct_type<'a>(
+    context: LLVMContextRef,
+    return_args: impl ExactSizeIterator<Item = &'a ast::Type>,
+) -> Result<LLVMTypeRef, TranslateError> {
+    let mut types = return_args
+        .map(|type_| get_type(context, type_))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(unsafe {
+        LLVMStructTypeInContext(
+            context,
+            types.as_mut_ptr(),
+            types.len() as u32,
+            false as i32,
+        )
+    })
+}
+
 fn get_function_type<'a>(
     context: LLVMContextRef,
     mut return_args: impl ExactSizeIterator<Item = &'a ast::Type>,
@@ -2713,9 +2757,10 @@ fn get_function_type<'a>(
     let mut input_args = input_args.collect::<Result<Vec<_>, _>>()?;
     let return_type = match return_args.len() {
         0 => unsafe { LLVMVoidTypeInContext(context) },
-        1 => get_type(context, return_args.next().unwrap())?,
-        _ => todo!(),
+        1 => get_type(context, &return_args.next().unwrap())?,
+        _ => get_struct_type(context, return_args)?,
     };
+
     Ok(unsafe {
         LLVMFunctionType(
             return_type,
