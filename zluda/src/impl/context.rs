@@ -41,16 +41,23 @@ impl ContextState {
         for (key, data) in self.storage.iter_mut() {
             if let Some(_cb) = data.reset_cb {
                 // TODO: check that these callbacks do not call into the CUDA driver
+                // since this could result in a recursive mutex lock.
                 _cb(data.handle, *key as *mut c_void, data.value as *mut c_void);
             }
         }
         self.ref_count = 0;
         self.flags = 0;
-        for hmod in self.modules.drain() {
-            super::drop_checked::<module::Module>(hmod)?;
-        }
+        // drop all modules and return first error if any
+        let result = self.modules.drain().fold(
+            Ok(()), |res: CUresult, hmod| {
+                match (res, super::drop_checked::<module::Module>(hmod)) {
+                    (Err(e), _) => Err(e),
+                    (_, Err(e)) => Err(e),
+                    _ => Ok(()),
+            }
+        });
         self.storage.clear();
-        Ok(())
+        result
     }
 }
 
