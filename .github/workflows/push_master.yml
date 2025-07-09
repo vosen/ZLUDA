@@ -6,14 +6,17 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  SCCACHE_GHA_ENABLED: "true"
   CARGO_PROFILE: release-lto
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: "sccache"
   ROCM_VERSION: "6.3.1"
 
 jobs:
   build_linux:
     name: Build (Linux)
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write
     steps:
     - uses: jlumbroso/free-disk-space@main
       with:
@@ -25,7 +28,10 @@ jobs:
         docker-images: false
         swap-storage: false
     - uses: actions/checkout@v4
+      # fetch-depth and fetch-tags are required to properly tag pre-release builds
       with:
+        fetch-depth: 0
+        fetch-tags: true
         submodules: true
     - name: Install ROCm
       run: sudo bash .github/workflows/rocm_setup_build.sh ${{ env.ROCM_VERSION }}
@@ -44,12 +50,34 @@ jobs:
       with:
         name: zluda-linux-${{ env.SHORT_SHA }}
         path: target/${{ env.CARGO_PROFILE }}/zluda
+    - name: Prepare artifact for release
+      run: |
+        mv target/${{ env.CARGO_PROFILE }}/zluda.tar.gz target/${{ env.CARGO_PROFILE }}/zluda-linux-${{ env.SHORT_SHA }}.tar.gz
+        latest_tag=$(git tag -l "v*" | grep -E "^v[0-9]+$" | sort -V | tail -n 1)
+        next_version="$((${latest_tag:1} + 1))"
+        offset=$(git rev-list $latest_tag..HEAD --count)
+        echo "VERSION=$next_version-preview.$offset" >> $GITHUB_OUTPUT
+      id: prepare_artifacts
+    - uses: ncipollo/release-action@v1
+      with:
+        prerelease: true
+        generateReleaseNotes: true
+        allowUpdates: true
+        omitNameDuringUpdate: true
+        artifacts: "target/${{ env.CARGO_PROFILE }}/zluda-linux-${{ env.SHORT_SHA }}.tar.gz"
+        name: "Version ${{ steps.prepare_artifacts.outputs.VERSION }}"
+        tag: "v${{ steps.prepare_artifacts.outputs.VERSION }}"
   build_windows:
     name: Build (Windows)
     runs-on: windows-2022
+    permissions:
+      contents: write
     steps:
     - uses: actions/checkout@v4
+      # fetch-depth and fetch-tags are required to properly tag pre-release builds
       with:
+        fetch-depth: 0
+        fetch-tags: true
         submodules: true
     - name: Run sccache-cache
       uses: mozilla-actions/sccache-action@v0.0.9
@@ -64,6 +92,25 @@ jobs:
       with:
         name: zluda-windows-${{ env.SHORT_SHA }}
         path: target/${{ env.CARGO_PROFILE }}/zluda
+    - name: Prepare artifact for release
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      run: |
+        mv target/${{ env.CARGO_PROFILE }}/zluda.zip target/${{ env.CARGO_PROFILE }}/zluda-windows-${{ env.SHORT_SHA }}.zip
+        latest_tag=$(git tag -l "v*" | grep -E "^v[0-9]+$" | sort -V | tail -n 1)
+        next_version="$((${latest_tag:1} + 1))"
+        offset=$(git rev-list $latest_tag..HEAD --count)
+        echo "VERSION=$next_version-preview.$offset" >> $GITHUB_OUTPUT
+      id: prepare_artifacts
+    - uses: ncipollo/release-action@v1
+      with:
+        prerelease: true
+        generateReleaseNotes: true
+        allowUpdates: true
+        omitNameDuringUpdate: true
+        artifacts: "target/${{ env.CARGO_PROFILE }}/zluda-windows-${{ env.SHORT_SHA }}.zip"
+        name: "Version ${{ steps.prepare_artifacts.outputs.VERSION }}"
+        tag: "v${{ steps.prepare_artifacts.outputs.VERSION }}"
   build_tests:
     name: Build AMD GPU unit tests
     runs-on: ubuntu-22.04
