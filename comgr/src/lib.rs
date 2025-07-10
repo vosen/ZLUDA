@@ -186,7 +186,6 @@ pub fn compile_bitcode(
     let stdlib_bitcode_data = Data::new(comgr, DataKind::Bc, c"ptx_impl.bc", ptx_impl)?;
     bitcode_data_set.add(&stdlib_bitcode_data)?;
     let linking_info = ActionInfo::new(comgr)?;
-    comgr.do_action(ActionKind::LinkBcToBc, &linking_info, &bitcode_data_set)?;
     let linked_data_set =
         comgr.do_action(ActionKind::LinkBcToBc, &linking_info, &bitcode_data_set)?;
     let compile_to_exec = ActionInfo::new(comgr)?;
