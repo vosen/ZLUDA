@@ -165,6 +165,7 @@ fn run_instruction<'input>(
         | ast::Instruction::Selp { .. }
         | ast::Instruction::Setp { .. }
         | ast::Instruction::SetpBool { .. }
+        | ast::Instruction::ShflSync { .. }
         | ast::Instruction::Shl { .. }
         | ast::Instruction::Shr { .. }
         | ast::Instruction::Sin { .. }
