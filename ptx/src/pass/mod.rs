@@ -34,7 +34,9 @@ const ZLUDA_PTX_PREFIX: &'static str = "__zluda_ptx_impl_";
 quick_error! {
     #[derive(Debug)]
     pub enum TranslateError {
-        UnknownSymbol {}
+        UnknownSymbol(symbol: String) {
+            display("Unknown symbol: \"{}\"", symbol)
+        }
         UntypedSymbol {}
         MismatchedType {}
         Unreachable {}
@@ -170,13 +172,13 @@ fn error_todo() -> TranslateError {
 }
 
 #[cfg(debug_assertions)]
-fn error_unknown_symbol() -> TranslateError {
-    panic!()
+fn error_unknown_symbol<T: Into<String>>(symbol: T) -> TranslateError {
+    panic!("Unknown symbol: \"{}\"", symbol.into())
 }
 
 #[cfg(not(debug_assertions))]
-fn error_unknown_symbol() -> TranslateError {
-    TranslateError::UnknownSymbol
+fn error_unknown_symbol<T: Into<String>>(symbol: T) -> TranslateError {
+    TranslateError::UnknownSymbol(symbol.into())
 }
 
 #[cfg(debug_assertions)]
@@ -691,7 +693,7 @@ impl<'input> GlobalStringIdentResolver2<'input> {
                 type_space: Some(type_space),
                 ..
             }) => Ok(type_space),
-            _ => Err(error_unknown_symbol()),
+            _ => Err(error_unknown_symbol(format!("{:?}", id))),
         }
     }
 }
@@ -737,7 +739,7 @@ impl<'input, 'b> ScopedResolver<'input, 'b> {
                         .get(&ident)
                         .ok_or_else(|| error_unreachable())?;
                     if entry.type_space.is_some() {
-                        return Err(error_unknown_symbol());
+                        return Err(error_unknown_symbol(name));
                     }
                     ident
                 }
@@ -771,7 +773,7 @@ impl<'input, 'b> ScopedResolver<'input, 'b> {
             .insert(name.clone(), result)
             .is_some()
         {
-            return Err(error_unknown_symbol());
+            return Err(error_unknown_symbol(name));
         }
         current_scope.ident_map.insert(
             result,
@@ -788,7 +790,7 @@ impl<'input, 'b> ScopedResolver<'input, 'b> {
             .iter()
             .rev()
             .find_map(|resolver| resolver.name_to_ident.get(name).copied())
-            .ok_or_else(|| error_unreachable())
+            .ok_or_else(|| error_unknown_symbol(name))
     }
 
     fn get_in_current_scope(&self, label: &'input str) -> Result<SpirvWord, TranslateError> {
