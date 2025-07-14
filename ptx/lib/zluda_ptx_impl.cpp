@@ -190,35 +190,34 @@ extern "C"
     // __shfl_sync intrinsics, it is always 31 for idx, bfly, and down, and 0 for up. For now, it
     // seems like we don't need to use this.
 
-    #define SHFL_SYNC_IMPL(mode, fn, out_of_bounds_check)                                                               \
-    uint32_t FUNC(shfl_sync_##mode##_b32)(uint32_t input, int32_t idx, uint32_t opts, uint32_t membermask)              \
-    {                                                                                                                   \
-        uint64_t mask = membermask & 0xFFFFFFFF;                                                                        \
-        uint32_t section_mask = (opts >> 8) & 0b11111;                                                                  \
-        uint32_t __attribute__((unused)) endpoint = opts & 0b11111;                                                     \
-        int32_t width = 32 - section_mask;                                                                              \
-        return fn(mask, input, idx, width);                                                                             \
-    }                                                                                                                   \
-                                                                                                                        \
-    ShflSyncResult FUNC(shfl_sync_##mode##_b32_pred)(uint32_t input, int32_t idx, uint32_t opts, uint32_t membermask)   \
-    {                                                                                                                   \
-        uint64_t mask = membermask & 0xFFFFFFFF;                                                                        \
-        uint32_t section_mask = (opts >> 8) & 0b11111;                                                                  \
-        uint32_t __attribute__((unused)) endpoint = opts & 0b11111;                                                     \
-        int32_t width = 32 - section_mask;                                                                              \
-        int32_t __attribute__((unused)) self = __lane_id();                                                             \
-        return {fn(mask, input, idx, width), !(out_of_bounds_check)};                                                   \
+    #define SHFL_SYNC_IMPL(mode, fn, out_of_bounds_check)                                                                                     \
+    uint32_t FUNC(shfl_sync_##mode##_b32)(uint32_t input, int32_t idx, uint32_t opts, uint32_t membermask __attribute__((unused)))            \
+    {                                                                                                                                         \
+        uint32_t section_mask = (opts >> 8) & 0b11111;                                                                                        \
+        uint32_t __attribute__((unused)) endpoint = opts & 0b11111;                                                                           \
+        int32_t width = 32 - section_mask;                                                                                                    \
+        return fn(input, idx, width);                                                                                                         \
+    }                                                                                                                                         \
+                                                                                                                                              \
+    ShflSyncResult FUNC(shfl_sync_##mode##_b32_pred)(uint32_t input, int32_t idx, uint32_t opts, uint32_t membermask __attribute__((unused))) \
+    {                                                                                                                                         \
+        uint32_t section_mask = (opts >> 8) & 0b11111;                                                                                        \
+        uint32_t __attribute__((unused)) endpoint = opts & 0b11111;                                                                           \
+        int32_t width = 32 - section_mask;                                                                                                    \
+        int32_t __attribute__((unused)) self = __lane_id();                                                                                   \
+        return {fn(input, idx, width), !(out_of_bounds_check)};                                                                               \
     }
     
-    // We can call the HIP __shfl_sync intrinsics to implement these, but they do not return the
-    // result of the range check, so we must replicate that logic here.
+    // We are using the HIP __shfl intrinsics to implement these, rather than the __shfl_sync
+    // intrinsics, as those only add an assertion checking that the membermask is used correctly.
+    // They do not return the result of the range check, so we must replicate that logic here.
 
-    // the __shfl_mode_sync functions have different signs
+    // the __shfl_mode functions have different signs
     #pragma GCC diagnostic ignored "-Wsign-conversion"
-    SHFL_SYNC_IMPL(up,   __shfl_up_sync,   (self - idx) < (self & ~(width-1)));
-    SHFL_SYNC_IMPL(down, __shfl_down_sync, ((self&(width-1))+idx) >= width);
-    SHFL_SYNC_IMPL(bfly, __shfl_xor_sync,  (self^idx) >= ((self+width)&~(width-1)));
-    SHFL_SYNC_IMPL(idx,  __shfl_sync,      false);
+    SHFL_SYNC_IMPL(up,   __shfl_up,   (self - idx) < (self & ~(width-1)));
+    SHFL_SYNC_IMPL(down, __shfl_down, ((self&(width-1))+idx) >= width);
+    SHFL_SYNC_IMPL(bfly, __shfl_xor,  (self^idx) >= ((self+width)&~(width-1)));
+    SHFL_SYNC_IMPL(idx,  __shfl,      false);
     #pragma GCC diagnostic pop
 
     void FUNC(__assertfail)(uint64_t message,
