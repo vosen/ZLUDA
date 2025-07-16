@@ -2336,7 +2336,7 @@ impl<'a> MethodEmitContext<'a> {
             (control >> 12) & 0b1111,
         ];
         if components.iter().any(|&c| c > 7) {
-            return Err(TranslateError::Todo);
+            return Err(TranslateError::Todo("".to_string()));
         }
         let u32_type = get_scalar_type(self.context, ast::ScalarType::U32);
         let v4u8_type = get_type(self.context, &ast::Type::Vector(4, ast::ScalarType::U8))?;
@@ -2775,15 +2775,15 @@ fn get_state_space(space: ast::StateSpace) -> Result<u32, TranslateError> {
     match space {
         ast::StateSpace::Reg => Ok(PRIVATE_ADDRESS_SPACE),
         ast::StateSpace::Generic => Ok(GENERIC_ADDRESS_SPACE),
-        ast::StateSpace::Param => Err(TranslateError::Todo),
+        ast::StateSpace::Param => Err(TranslateError::Todo("".to_string())),
         ast::StateSpace::ParamEntry => Ok(CONSTANT_ADDRESS_SPACE),
-        ast::StateSpace::ParamFunc => Err(TranslateError::Todo),
+        ast::StateSpace::ParamFunc => Err(TranslateError::Todo("".to_string())),
         ast::StateSpace::Local => Ok(PRIVATE_ADDRESS_SPACE),
         ast::StateSpace::Global => Ok(GLOBAL_ADDRESS_SPACE),
         ast::StateSpace::Const => Ok(CONSTANT_ADDRESS_SPACE),
         ast::StateSpace::Shared => Ok(SHARED_ADDRESS_SPACE),
-        ast::StateSpace::SharedCta => Err(TranslateError::Todo),
-        ast::StateSpace::SharedCluster => Err(TranslateError::Todo),
+        ast::StateSpace::SharedCta => Err(TranslateError::Todo("".to_string())),
+        ast::StateSpace::SharedCluster => Err(TranslateError::Todo("".to_string())),
     }
 }
 
