@@ -1,4 +1,4 @@
-declare { i32, i1 } @__zluda_ptx_impl_shfl_sync_bfly_b32_pred(i32, i32, i32, i32) #0
+declare [2 x i32] @__zluda_ptx_impl_shfl_sync_bfly_b32_pred(i32, i32, i32, i32) #0
 
 declare i32 @__zluda_ptx_impl_sreg_tid(i8) #0
 
@@ -22,9 +22,10 @@ define amdgpu_kernel void @shfl_sync_bfly_b32_pred(ptr addrspace(4) byref(i64) %
 "40":                                             ; preds = %"39"
   store i32 %"33", ptr addrspace(5) %"45", align 4
   %"52" = load i32, ptr addrspace(5) %"45", align 4
-  %2 = call { i32, i1 } @__zluda_ptx_impl_shfl_sync_bfly_b32_pred(i32 %"52", i32 3, i32 31, i32 -1)
-  %"65" = extractvalue { i32, i1 } %2, 0
-  %"51" = extractvalue { i32, i1 } %2, 1
+  %2 = call [2 x i32] @__zluda_ptx_impl_shfl_sync_bfly_b32_pred(i32 %"52", i32 3, i32 31, i32 -1)
+  %"65" = extractvalue [2 x i32] %2, 0
+  %3 = extractvalue [2 x i32] %2, 1
+  %"51" = trunc i32 %3 to i1
   store i32 %"65", ptr addrspace(5) %"46", align 4
   store i1 %"51", ptr addrspace(5) %"47", align 1
   %"53" = load i1, ptr addrspace(5) %"47", align 1
