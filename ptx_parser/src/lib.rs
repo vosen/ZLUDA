@@ -285,11 +285,24 @@ fn u32<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<u32> {
     .parse_next(stream)
 }
 
+fn constant<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::ImmediateValue> {
+    // Currently the only built-in constant is WARP_SZ
+    // If new ones are added, we can change this to use a Token::Constant(&str) instead
+    any.verify_map(|(t, _)| {
+        if t == Token::WarpSz {
+            Some(ast::ImmediateValue::U64(32))
+        } else {
+            None
+        }
+    }).parse_next(stream)
+}
+
 fn immediate_value<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::ImmediateValue> {
     alt((
         int_immediate,
         f32.map(ast::ImmediateValue::F32),
         f64.map(ast::ImmediateValue::F64),
+        constant,
     ))
     .parse_next(stream)
 }
@@ -1648,6 +1661,8 @@ derive_parser!(
         Plus,
         #[token("=")]
         Eq,
+        #[token("WARP_SZ")]
+        WarpSz,
         #[token(".version")]
         DotVersion,
         #[token(".loc")]
