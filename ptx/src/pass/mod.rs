@@ -40,7 +40,9 @@ quick_error! {
         UntypedSymbol {}
         MismatchedType {}
         Unreachable {}
-        Todo {}
+        Todo(msg: String) {
+            display("TODO: {}", msg)
+        }
     }
 }
 
@@ -162,13 +164,23 @@ fn error_unreachable() -> TranslateError {
 }
 
 #[cfg(debug_assertions)]
+fn error_todo_msg<T: Into<String>>(msg: T) -> TranslateError {
+    unreachable!("{}", msg.into())
+}
+
+#[cfg(not(debug_assertions))]
+fn error_todo_msg<T: Into<String>>(msg: T) -> TranslateError {
+    TranslateError::Todo(msg.into())
+}
+
+#[cfg(debug_assertions)]
 fn error_todo() -> TranslateError {
     unreachable!()
 }
 
 #[cfg(not(debug_assertions))]
 fn error_todo() -> TranslateError {
-    TranslateError::Todo
+    TranslateError::Todo("".to_string())
 }
 
 #[cfg(debug_assertions)]
