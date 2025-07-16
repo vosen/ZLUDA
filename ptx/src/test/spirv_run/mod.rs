@@ -295,6 +295,7 @@ test_ptx!(
     [1.0000001, 1.0f32]
 );
 test_ptx!(multiple_return, [5u64], [6u64, 7u64]);
+test_ptx!(warp_sz, [0u8], [32u8]);
 
 test_ptx!(assertfail);
 // TODO: not yet supported
