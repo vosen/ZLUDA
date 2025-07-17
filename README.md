@@ -15,7 +15,7 @@ ZLUDA is a work in progress. Follow development here and say hi on [Discord](htt
 
 ### Windows
 You should have a recent AMD GPU driver ("AMD Software: Adrenalin Edition") installed.\
-To run your application, you should etiher:
+To run your application, you should either:
 * (Recommended approach) Copy ZLUDA-provided `nvcuda.dll` and `nvml.dll` from `target\release` (if built from sources) or `zluda` (if downloaded a zip package) into a path which your application uses to load CUDA. Paths vary application to application, but usually it's the directory where the .exe file is located
 * Use ZLUDA launcher like below. ZLUDA launcher is known to be buggy and incomplete:
     ```
