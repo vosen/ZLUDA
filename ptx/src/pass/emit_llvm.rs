@@ -2051,15 +2051,34 @@ impl<'a> MethodEmitContext<'a> {
         data: ptx_parser::ShrData,
         arguments: ptx_parser::ShrArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        let shift_fn = match data.kind {
-            ptx_parser::RightShiftKind::Arithmetic => LLVMBuildAShr,
-            ptx_parser::RightShiftKind::Logical => LLVMBuildLShr,
+        let llvm_type = get_scalar_type(self.context, data.type_);
+        let (out_of_range, shift_fn): (
+            *mut LLVMValue,
+            unsafe extern "C" fn(
+                LLVMBuilderRef,
+                LLVMValueRef,
+                LLVMValueRef,
+                *const i8,
+            ) -> LLVMValueRef,
+        ) = match data.kind {
+            ptx_parser::RightShiftKind::Logical => {
+                (unsafe { LLVMConstNull(llvm_type) }, LLVMBuildLShr)
+            }
+            ptx_parser::RightShiftKind::Arithmetic => {
+                let src1 = self.resolver.value(arguments.src1)?;
+                let shift_size =
+                    unsafe { LLVMConstInt(llvm_type, (data.type_.size_of() as u64 * 8) - 1, 0) };
+                let out_of_range =
+                    unsafe { LLVMBuildAShr(self.builder, src1, shift_size, LLVM_UNNAMED.as_ptr()) };
+                (out_of_range, LLVMBuildAShr)
+            }
         };
         self.emit_shift(
             data.type_,
             arguments.dst,
             arguments.src1,
             arguments.src2,
+            out_of_range,
             shift_fn,
         )
     }
@@ -2069,11 +2088,13 @@ impl<'a> MethodEmitContext<'a> {
         type_: ptx_parser::ScalarType,
         arguments: ptx_parser::ShlArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
+        let llvm_type = get_scalar_type(self.context, type_);
         self.emit_shift(
             type_,
             arguments.dst,
             arguments.src1,
             arguments.src2,
+            unsafe { LLVMConstNull(llvm_type) },
             LLVMBuildShl,
         )
     }
@@ -2084,6 +2105,7 @@ impl<'a> MethodEmitContext<'a> {
         dst: SpirvWord,
         src1: SpirvWord,
         src2: SpirvWord,
+        out_of_range_value: LLVMValueRef,
         llvm_fn: unsafe extern "C" fn(
             LLVMBuilderRef,
             LLVMValueRef,
@@ -2111,7 +2133,6 @@ impl<'a> MethodEmitContext<'a> {
             )
         };
         let llvm_type = get_scalar_type(self.context, type_);
-        let zero = unsafe { LLVMConstNull(llvm_type) };
         let normalized_shift_size = if type_.layout().size() >= 4 {
             unsafe {
                 LLVMBuildZExtOrBitCast(self.builder, shift_size, llvm_type, LLVM_UNNAMED.as_ptr())
@@ -2128,7 +2149,7 @@ impl<'a> MethodEmitContext<'a> {
             )
         };
         self.resolver.with_result(dst, |dst| unsafe {
-            LLVMBuildSelect(self.builder, should_clamp, zero, shifted, dst)
+            LLVMBuildSelect(self.builder, should_clamp, out_of_range_value, shifted, dst)
         });
         Ok(())
     }
