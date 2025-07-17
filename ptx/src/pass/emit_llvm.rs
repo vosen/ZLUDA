@@ -836,18 +836,31 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ast::AddArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let builder = self.builder;
-        let src1 = self.resolver.value(arguments.src1)?;
-        let src2 = self.resolver.value(arguments.src2)?;
         let fn_ = match data {
             ast::ArithDetails::Integer(ast::ArithInteger {
                 saturate: true,
                 type_,
-            }) => return self.emit_add_sat(type_, arguments),
+            }) => {
+                let op = if type_.kind() == ast::ScalarKind::Signed {
+                    "sadd"
+                } else {
+                    "uadd"
+                };
+                return self.emit_intrinsic_saturate(
+                    op,
+                    type_,
+                    arguments.dst,
+                    arguments.src1,
+                    arguments.src2,
+                );
+            }
             ast::ArithDetails::Integer(ast::ArithInteger {
                 saturate: false, ..
             }) => LLVMBuildAdd,
             ast::ArithDetails::Float(..) => LLVMBuildFAdd,
         };
+        let src1 = self.resolver.value(arguments.src1)?;
+        let src2 = self.resolver.value(arguments.src2)?;
         self.resolver.with_result(arguments.dst, |dst| unsafe {
             fn_(builder, src1, src2, dst)
         });
@@ -1469,7 +1482,18 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ptx_parser::SubArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         if arith_integer.saturate {
-            todo!()
+            let op = if arith_integer.type_.kind() == ast::ScalarKind::Signed {
+                "ssub"
+            } else {
+                "usub"
+            };
+            return self.emit_intrinsic_saturate(
+                op,
+                arith_integer.type_,
+                arguments.dst,
+                arguments.src1,
+                arguments.src2,
+            );
         }
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
@@ -1481,12 +1505,9 @@ impl<'a> MethodEmitContext<'a> {
 
     fn emit_sub_float(
         &mut self,
-        arith_float: ptx_parser::ArithFloat,
+        _arith_float: ptx_parser::ArithFloat,
         arguments: ptx_parser::SubArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        if arith_float.saturate {
-            todo!()
-        }
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
         self.resolver.with_result(arguments.dst, |dst| unsafe {
@@ -2597,23 +2618,21 @@ impl<'a> MethodEmitContext<'a> {
         Ok(())
     }
 
-    fn emit_add_sat(
+    fn emit_intrinsic_saturate(
         &mut self,
+        op: &str,
         type_: ast::ScalarType,
-        arguments: ast::AddArgs<SpirvWord>,
+        dst: SpirvWord,
+        src1: SpirvWord,
+        src2: SpirvWord,
     ) -> Result<(), TranslateError> {
         let llvm_type = get_scalar_type(self.context, type_);
-        let src1 = self.resolver.value(arguments.src1)?;
-        let src2 = self.resolver.value(arguments.src2)?;
-        let op = if type_.kind() == ast::ScalarKind::Signed {
-            "sadd"
-        } else {
-            "uadd"
-        };
+        let src1 = self.resolver.value(src1)?;
+        let src2 = self.resolver.value(src2)?;
         let intrinsic = format!("llvm.{}.sat.{}\0", op, LLVMTypeDisplay(type_));
         self.emit_intrinsic(
             unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
-            Some(arguments.dst),
+            Some(dst),
             Some(&type_.into()),
             vec![(src1, llvm_type), (src2, llvm_type)],
         )?;
