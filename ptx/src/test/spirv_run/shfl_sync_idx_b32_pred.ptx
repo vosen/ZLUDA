@@ -1,0 +1,32 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry shfl_sync_idx_b32_pred(
+    .param .u64 output
+)
+{
+    .reg .u64 	      out_addr;
+    .reg .u64 	      out_index;
+    .reg .u32         thread_id;
+    .reg .u32         result;
+    .reg .pred        in_range;
+
+    ld.param.u64  	  out_addr, [output];
+    mov.u32           thread_id, %tid.x;
+
+    // result = __shfl_sync(mask=0xFFFFFFFF, thread_id, srcLane=12, width=32)
+    // c is ((32-width) << 8) | 31
+    shfl.sync.idx.b32 result|in_range, thread_id, 12, 31, 0xFFFFFFFF;
+
+    @!in_range add.u32 result, result, 1000;
+
+    // Return result
+
+    cvt.u64.u32       out_index, thread_id;
+    mul.lo.u64        out_index, out_index, 4;
+    add.u64           out_addr, out_addr, out_index;
+    st.u32            [out_addr], result;
+
+    ret;
+}

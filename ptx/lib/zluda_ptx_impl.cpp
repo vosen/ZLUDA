@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+
 #include <hip/amd_detail/amd_device_functions.h>
 
 #define FUNC(NAME) __device__ __attribute__((retain)) __zluda_ptx_impl_##NAME
@@ -169,6 +170,55 @@ extern "C"
 
     BAR_RED_IMPL(and);
     BAR_RED_IMPL(or);
+
+    struct ShflSyncResult {
+        uint32_t output;
+        bool in_bounds;
+    };
+
+    // shfl.sync opts consists of two values, the warp end ID and the subsection mask.
+    //
+    // The current warp is partitioned into some number of subsections with a width of w. The
+    // subsection mask is 32 - w, and indicates which bits of the lane id are part of the subsection
+    // address. For example, if each subsection is 8 lanes wide, the subsection mask will be 24 –
+    // 11000 in binary. This indicates that the two most significant bits in the 5-bit lane ID are
+    // the subsection address. For example, for a lane ID 13 (0b01101) the address of the beginning
+    // of the subsection is 0b01000 (8).
+    //
+    // The warp end ID is the max lane ID for a specific mode. For the CUDA __shfl_sync
+    // intrinsics, it is always 31 for idx, bfly, and down, and 0 for up. This is used for the
+    // bounds check.
+
+    #define SHFL_SYNC_IMPL(mode, calculate_index, CMP)                                                                                          \
+    ShflSyncResult FUNC(shfl_sync_##mode##_b32_pred)(uint32_t input, int32_t delta, uint32_t opts, uint32_t membermask __attribute__((unused))) \
+    {                                                                                                                                           \
+        int32_t section_mask = (opts >> 8) & 0b11111;                                                                                           \
+        int32_t warp_end = opts & 0b11111;                                                                                                      \
+        int32_t self = (int32_t)__lane_id();                                                                                                    \
+        int32_t subsection = section_mask & self;                                                                                               \
+        int32_t subsection_end = subsection | (~section_mask & warp_end);                                                                       \
+        int32_t idx = calculate_index;                                                                                                          \
+        bool out_of_bounds = idx CMP subsection_end;                                                                                            \
+        if (out_of_bounds) {                                                                                                                    \
+            idx = self;                                                                                                                         \
+        }                                                                                                                                       \
+        int32_t output = __builtin_amdgcn_ds_bpermute(idx<<2, (int32_t)input);                                                                  \
+        return {(uint32_t)output, !out_of_bounds};                                                                                              \
+    }                                                                                                                                           \
+                                                                                                                                                \
+    uint32_t FUNC(shfl_sync_##mode##_b32)(uint32_t input, int32_t delta, uint32_t opts, uint32_t membermask)                                    \
+    {                                                                                                                                           \
+        return __zluda_ptx_impl_shfl_sync_##mode##_b32_pred(input, delta, opts, membermask).output;                                             \
+    }
+    
+    // We are using the HIP __shfl intrinsics to implement these, rather than the __shfl_sync
+    // intrinsics, as those only add an assertion checking that the membermask is used correctly.
+    // They do not return the result of the range check, so we must replicate that logic here.
+
+    SHFL_SYNC_IMPL(up,   self - delta,                         <);
+    SHFL_SYNC_IMPL(down, self + delta,                         >);
+    SHFL_SYNC_IMPL(bfly, self ^ delta,                         >);
+    SHFL_SYNC_IMPL(idx,  (delta & ~section_mask) | subsection, >);
 
     void FUNC(__assertfail)(uint64_t message,
                             uint64_t file,
