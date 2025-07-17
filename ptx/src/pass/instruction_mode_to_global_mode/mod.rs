@@ -1921,16 +1921,27 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
                     ..
                 }),
             ..
-        }
-        | ast::Instruction::Div {
+        } => InstructionModes::from_ftz(*type_, *flush_to_zero),
+        ast::Instruction::Div {
             data:
                 ast::DivDetails::Float(ast::DivFloatDetails {
                     type_,
                     flush_to_zero,
-                    ..
+                    kind,
                 }),
             ..
-        } => InstructionModes::from_ftz(*type_, *flush_to_zero),
+        } => {
+            let rounding = match kind {
+                ast::DivFloatKind::Rounding(rnd) => RoundingMode::from_ast(*rnd),
+                ast::DivFloatKind::Approx => RoundingMode::NearestEven,
+                ast::DivFloatKind::ApproxFull => RoundingMode::NearestEven,
+            };
+            InstructionModes::new(
+                *type_,
+                flush_to_zero.map(DenormalMode::from_ftz),
+                Some(rounding),
+            )
+        }
         ast::Instruction::Sin { data, .. }
         | ast::Instruction::Cos { data, .. }
         | ast::Instruction::Lg2 { data, .. } => InstructionModes::from_ftz_f32(data.flush_to_zero),
