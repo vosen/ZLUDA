@@ -294,7 +294,8 @@ fn constant<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::Imme
         } else {
             None
         }
-    }).parse_next(stream)
+    })
+    .parse_next(stream)
 }
 
 fn immediate_value<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::ImmediateValue> {
@@ -439,6 +440,8 @@ fn directive<'a, 'input>(
             (module_variable, Token::Semicolon)
                 .map(|((linking, var), _)| Some(ast::Directive::Variable(linking, var))),
         )),
+        (
+            any,
         take_till(1.., |(token, _)| match token {
             // visibility
             Token::DotExtern | Token::DotVisible | Token::DotWeak
@@ -450,6 +453,8 @@ fn directive<'a, 'input>(
             | Token::DotFile | Token::DotSection => true,
             _ => false,
         }),
+        )
+            .map(|(_, x)| x),
         |text| PtxError::UnrecognizedDirective(text.unwrap_or("")),
     )
     .map(Option::flatten)
@@ -708,32 +713,32 @@ fn take_till_inclusive<I: Stream, E: ParserError<I>>(
     backtrack_token: impl Fn(&I::Token) -> bool,
     end_token: impl Fn(&I::Token) -> bool,
 ) -> impl Parser<I, <I as Stream>::Slice, E> {
-    fn get_offset<I: Stream>(
+    fn get_offset<I: Stream, E: ParserError<I>>(
         input: &mut I,
         backtrack_token: &impl Fn(&I::Token) -> bool,
         end_token: &impl Fn(&I::Token) -> bool,
         should_backtrack: &mut bool,
-    ) -> usize {
+    ) -> Result<usize, E> {
         *should_backtrack = false;
         let mut hit = false;
         for (offset, token) in input.iter_offsets() {
             if hit {
-                return offset;
+                return Ok(offset);
             } else {
                 if backtrack_token(&token) {
                     *should_backtrack = true;
-                    return offset;
+                    return Ok(offset);
                 }
                 if end_token(&token) {
                     hit = true;
                 }
             }
         }
-        input.eof_offset()
+        Err(ParserError::from_error_kind(input, ErrorKind::Eof))
     }
     move |stream: &mut I| {
         let mut should_backtrack = false;
-        let offset = get_offset(stream, &backtrack_token, &end_token, &mut should_backtrack);
+        let offset = get_offset(stream, &backtrack_token, &end_token, &mut should_backtrack)?;
         let result = stream.next_slice(offset);
         if should_backtrack {
             Err(ErrMode::from_error_kind(
@@ -774,7 +779,7 @@ fn with_recovery<'a, 'input: 'a, T>(
         let stream_start = stream.checkpoint();
         match parser.parse_next(stream) {
             Ok(value) => Ok(Some(value)),
-            Err(ErrMode::Backtrack(_)) => {
+            Err(_) => {
                 stream.reset(&stream_start);
                 let tokens = recovery.parse_next(stream)?;
                 let range = match input_start {
@@ -788,7 +793,6 @@ fn with_recovery<'a, 'input: 'a, T>(
                 stream.state.errors.push(error(range));
                 Ok(None)
             }
-            Err(err) => Err(err),
         }
     }
 }
@@ -1280,7 +1284,7 @@ pub enum PtxError<'input> {
         #[from]
         source: TokenError,
     },
-    #[error("")]
+    #[error("{0}")]
     Parser(ContextError),
     #[error("")]
     Todo,
@@ -1531,14 +1535,14 @@ where
             Err(ErrMode::Backtrack(_)) => {
                 input.reset(&start);
                 None
-            },
-            Err(e) => return Err(e)
+            }
+            Err(e) => return Err(e),
         };
 
         match required.parse_next(input) {
             Ok(v) => return Ok((parsed_optional, v)),
             Err(ErrMode::Backtrack(_)) => input.reset(&start),
-            Err(e) => return Err(e)
+            Err(e) => return Err(e),
         };
 
         Ok((None, required.parse_next(input)?))
@@ -3611,7 +3615,7 @@ mod tests {
     }
 
     #[test]
-    fn report_unknown_intruction() {
+    fn report_unknown_instruction() {
         let text = "
             .version 6.5
             .target sm_30
@@ -3687,6 +3691,23 @@ mod tests {
         assert!(matches!(
             errors[1],
             PtxError::UnrecognizedDirective("section foobar }")
+        ));
+    }
+
+    #[test]
+    fn report_unknown_type_in_directive() {
+        let text = "
+            .version 4.1
+            .target sm_52
+            .address_size 64
+            .global .bad_type foo;
+            .const .b32 bar;
+";
+        let errors = parse_module_checked(text).err().unwrap();
+        assert_eq!(errors.len(), 1);
+        assert!(matches!(
+            errors[0],
+            PtxError::UnrecognizedDirective(".global .bad_type foo;")
         ));
     }
 }
