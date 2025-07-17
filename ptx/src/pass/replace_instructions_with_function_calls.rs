@@ -118,6 +118,25 @@ fn run_instruction<'input>(
             };
             to_call(resolver, fn_declarations, name.into(), ptx_parser::Instruction::BarRed { data, arguments })?
         }
+        ptx_parser::Instruction::ShflSync { data, arguments } => {
+            let mode = match data.mode {
+                ptx_parser::ShuffleMode::Up => "up",
+                ptx_parser::ShuffleMode::Down => "down",
+                ptx_parser::ShuffleMode::BFly => "bfly",
+                ptx_parser::ShuffleMode::Idx => "idx",
+            };
+            let pred = if arguments.dst_pred.is_some() {
+                "_pred"
+            } else {
+                ""
+            };
+            to_call(
+                resolver,
+                fn_declarations,
+                format!("shfl_sync_{}_b32{}", mode, pred).into(),
+                ptx_parser::Instruction::ShflSync { data, arguments },
+            )?
+        }
         i => i,
     })
 }

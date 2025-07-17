@@ -641,7 +641,8 @@ impl<'a> MethodEmitContext<'a> {
             | ast::Instruction::Bar { .. }
             | ast::Instruction::BarRed { .. }
             | ast::Instruction::Bfi { .. }
-            | ast::Instruction::Activemask { .. } => return Err(error_unreachable()),
+            | ast::Instruction::Activemask { .. }
+            | ast::Instruction::ShflSync { .. } => return Err(error_unreachable()),
         }
     }
 
