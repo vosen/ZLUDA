@@ -2323,7 +2323,19 @@ impl<'a> MethodEmitContext<'a> {
                     },
                 )
             }
-            ptx_parser::MadDetails::Integer { saturate: true, .. } => return Err(error_todo()),
+            ptx_parser::MadDetails::Integer {
+                saturate: true,
+                control: ast::MulIntControl::High,
+                type_: ast::ScalarType::S32,
+            } => {
+                return self.emit_mad_hi_sat_s32(
+                    arguments.dst,
+                    (arguments.src1, arguments.src2, arguments.src3),
+                );
+            }
+            ptx_parser::MadDetails::Integer { saturate: true, .. } => {
+                return Err(error_unreachable())
+            }
             ptx_parser::MadDetails::Integer { type_, control, .. } => {
                 ast::MulDetails::Integer { control, type_ }
             }
@@ -2397,7 +2409,8 @@ impl<'a> MethodEmitContext<'a> {
     ) -> Result<(), TranslateError> {
         let llvm_type = get_scalar_type(self.context, data.type_);
         let src = self.resolver.value(arguments.src)?;
-        let (prefix, intrinsic_arguments) = if data.type_.kind() == ast::ScalarKind::Float {
+        let is_floating_point = data.type_.kind() == ast::ScalarKind::Float;
+        let (prefix, intrinsic_arguments) = if is_floating_point {
             ("llvm.fabs", vec![(src, llvm_type)])
         } else {
             let pred = get_scalar_type(self.context, ast::ScalarType::Pred);
@@ -2405,12 +2418,25 @@ impl<'a> MethodEmitContext<'a> {
             ("llvm.abs", vec![(src, llvm_type), (zero, pred)])
         };
         let llvm_intrinsic = format!("{}.{}\0", prefix, LLVMTypeDisplay(data.type_));
-        self.emit_intrinsic(
+        let abs_result = self.emit_intrinsic(
             unsafe { CStr::from_bytes_with_nul_unchecked(llvm_intrinsic.as_bytes()) },
-            Some(arguments.dst),
+            if is_floating_point {
+                None
+            } else {
+                Some(arguments.dst)
+            },
             Some(&data.type_.into()),
             intrinsic_arguments,
         )?;
+        if is_floating_point {
+            let intrinsic = format!("llvm.canonicalize.{}\0", LLVMTypeDisplay(data.type_));
+            self.emit_intrinsic(
+                unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
+                Some(arguments.dst),
+                Some(&data.type_.into()),
+                vec![(abs_result, llvm_type)],
+            )?;
+        }
         Ok(())
     }
 
@@ -2587,6 +2613,36 @@ impl<'a> MethodEmitContext<'a> {
             Some(dst),
             Some(&type_.into()),
             vec![(src, llvm_type)],
+        )?;
+        Ok(())
+    }
+
+    fn emit_mad_hi_sat_s32(
+        &mut self,
+        dst: SpirvWord,
+        (src1, src2, src3): (SpirvWord, SpirvWord, SpirvWord),
+    ) -> Result<(), TranslateError> {
+        let src1 = self.resolver.value(src1)?;
+        let src2 = self.resolver.value(src2)?;
+        let src3 = self.resolver.value(src3)?;
+        let llvm_type_s32 = get_scalar_type(self.context, ast::ScalarType::S32);
+        let llvm_type_s64 = get_scalar_type(self.context, ast::ScalarType::S64);
+        let src1_wide =
+            unsafe { LLVMBuildSExt(self.builder, src1, llvm_type_s64, LLVM_UNNAMED.as_ptr()) };
+        let src2_wide =
+            unsafe { LLVMBuildSExt(self.builder, src2, llvm_type_s64, LLVM_UNNAMED.as_ptr()) };
+        let mul_wide =
+            unsafe { LLVMBuildMul(self.builder, src1_wide, src2_wide, LLVM_UNNAMED.as_ptr()) };
+        let const_32 = unsafe { LLVMConstInt(llvm_type_s64, 32, 0) };
+        let mul_wide =
+            unsafe { LLVMBuildLShr(self.builder, mul_wide, const_32, LLVM_UNNAMED.as_ptr()) };
+        let mul_narrow =
+            unsafe { LLVMBuildTrunc(self.builder, mul_wide, llvm_type_s32, LLVM_UNNAMED.as_ptr()) };
+        self.emit_intrinsic(
+            c"llvm.sadd.sat.i32",
+            Some(dst),
+            Some(&ast::ScalarType::S32.into()),
+            vec![(mul_narrow, llvm_type_s32), (src3, llvm_type_s32)],
         )?;
         Ok(())
     }
@@ -2795,7 +2851,7 @@ fn get_function_type<'a>(
         _ => {
             check_multiple_return_types(return_args)?;
             get_array_type(context, &ast::Type::Scalar(ast::ScalarType::B32), 2)?
-        },
+        }
     };
 
     Ok(unsafe {
