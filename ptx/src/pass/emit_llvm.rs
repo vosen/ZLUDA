@@ -598,9 +598,9 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Mul { data, arguments } => self.emit_mul(data, arguments),
             ast::Instruction::Mul24 { data, arguments } => self.emit_mul24(data, arguments),
             ast::Instruction::Set { data, arguments } => self.emit_set(data, arguments),
-            ast::Instruction::SetBool { .. } => return Err(error_todo()),
+            ast::Instruction::SetBool { data, arguments } => self.emit_set_bool(data, arguments),
             ast::Instruction::Setp { data, arguments } => self.emit_setp(data, arguments),
-            ast::Instruction::SetpBool { .. } => return Err(error_todo()),
+            ast::Instruction::SetpBool { data, arguments } => self.emit_setp_bool(data, arguments),
             ast::Instruction::Not { data, arguments } => self.emit_not(data, arguments),
             ast::Instruction::Or { data, arguments } => self.emit_or(data, arguments),
             ast::Instruction::And { arguments, .. } => self.emit_and(arguments),
@@ -1582,12 +1582,14 @@ impl<'a> MethodEmitContext<'a> {
 
     fn emit_not(
         &mut self,
-        _data: ptx_parser::ScalarType,
+        type_: ptx_parser::ScalarType,
         arguments: ptx_parser::NotArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let src = self.resolver.value(arguments.src)?;
+        let type_ = get_scalar_type(self.context, type_);
+        let constant = unsafe { LLVMConstInt(type_, u64::MAX, 0) };
         self.resolver.with_result(arguments.dst, |dst| unsafe {
-            LLVMBuildNot(self.builder, src, dst)
+            LLVMBuildXor(self.builder, src, constant, dst)
         });
         Ok(())
     }
@@ -1597,20 +1599,14 @@ impl<'a> MethodEmitContext<'a> {
         data: ptx_parser::SetpData,
         arguments: ptx_parser::SetpArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        self.emit_setp_impl(
-            data,
-            arguments.dst1,
-            arguments.dst2,
-            arguments.src1,
-            arguments.src2,
-        )?;
+        let dst = self.emit_setp_impl(data, arguments.dst2, arguments.src1, arguments.src2)?;
+        self.resolver.register(arguments.dst1, dst);
         Ok(())
     }
 
     fn emit_setp_impl(
         &mut self,
         data: ptx_parser::SetpData,
-        dst1: SpirvWord,
         dst2: Option<SpirvWord>,
         src1: SpirvWord,
         src2: SpirvWord,
@@ -1622,10 +1618,10 @@ impl<'a> MethodEmitContext<'a> {
         }
         match data.cmp_op {
             ptx_parser::SetpCompareOp::Integer(setp_compare_int) => {
-                self.emit_setp_int(setp_compare_int, dst1, src1, src2)
+                self.emit_setp_int(setp_compare_int, src1, src2)
             }
             ptx_parser::SetpCompareOp::Float(setp_compare_float) => {
-                self.emit_setp_float(setp_compare_float, dst1, src1, src2)
+                self.emit_setp_float(setp_compare_float, src1, src2)
             }
         }
     }
@@ -1633,7 +1629,6 @@ impl<'a> MethodEmitContext<'a> {
     fn emit_setp_int(
         &mut self,
         setp: ptx_parser::SetpCompareInt,
-        dst: SpirvWord,
         src1: SpirvWord,
         src2: SpirvWord,
     ) -> Result<LLVMValueRef, TranslateError> {
@@ -1651,15 +1646,12 @@ impl<'a> MethodEmitContext<'a> {
         };
         let src1 = self.resolver.value(src1)?;
         let src2 = self.resolver.value(src2)?;
-        Ok(self.resolver.with_result(dst, |dst| unsafe {
-            LLVMBuildICmp(self.builder, op, src1, src2, dst)
-        }))
+        Ok(unsafe { LLVMBuildICmp(self.builder, op, src1, src2, LLVM_UNNAMED.as_ptr()) })
     }
 
     fn emit_setp_float(
         &mut self,
         setp: ptx_parser::SetpCompareFloat,
-        dst: SpirvWord,
         src1: SpirvWord,
         src2: SpirvWord,
     ) -> Result<LLVMValueRef, TranslateError> {
@@ -1681,9 +1673,7 @@ impl<'a> MethodEmitContext<'a> {
         };
         let src1 = self.resolver.value(src1)?;
         let src2 = self.resolver.value(src2)?;
-        Ok(self.resolver.with_result(dst, |dst| unsafe {
-            LLVMBuildFCmp(self.builder, op, src1, src2, dst)
-        }))
+        Ok(unsafe { LLVMBuildFCmp(self.builder, op, src1, src2, LLVM_UNNAMED.as_ptr()) })
     }
 
     fn emit_conditional(&mut self, cond: BrachCondition) -> Result<(), TranslateError> {
@@ -2714,21 +2704,70 @@ impl<'a> MethodEmitContext<'a> {
         data: ptx_parser::SetData,
         arguments: ptx_parser::SetArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        let setp_result = self.emit_setp_impl(
-            data.base,
-            arguments.dst,
-            None,
-            arguments.src1,
-            arguments.src2,
-        )?;
-        let dtype = get_scalar_type(self.context, data.dtype);
-        let zero = unsafe { LLVMConstNull(dtype) };
-        let one = if data.dtype.kind() == ast::ScalarKind::Float {
-            unsafe { LLVMConstReal(dtype, 1.0) }
+        let setp_result = self.emit_setp_impl(data.base, None, arguments.src1, arguments.src2)?;
+        self.setp_to_set(arguments.dst, data.dtype, setp_result)?;
+        Ok(())
+    }
+
+    fn emit_set_bool(
+        &mut self,
+        data: ptx_parser::SetBoolData,
+        arguments: ptx_parser::SetBoolArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let result =
+            self.emit_setp_bool_impl(data.base, arguments.src1, arguments.src2, arguments.src3)?;
+        self.setp_to_set(arguments.dst, data.dtype, result)?;
+        Ok(())
+    }
+
+    fn emit_setp_bool(
+        &mut self,
+        data: ast::SetpBoolData,
+        args: ast::SetpBoolArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let dst = self.emit_setp_bool_impl(data, args.src1, args.src2, args.src3)?;
+        self.resolver.register(args.dst1, dst);
+        Ok(())
+    }
+
+    fn emit_setp_bool_impl(
+        &mut self,
+        data: ptx_parser::SetpBoolData,
+        src1: SpirvWord,
+        src2: SpirvWord,
+        src3: SpirvWord,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        let bool_result = self.emit_setp_impl(data.base, None, src1, src2)?;
+        let bool_result = if data.negate_src3 {
+            let constant =
+                unsafe { LLVMConstInt(LLVMIntTypeInContext(self.context, 1), u64::MAX, 0) };
+            unsafe { LLVMBuildXor(self.builder, bool_result, constant, LLVM_UNNAMED.as_ptr()) }
         } else {
-            unsafe { LLVMConstInt(dtype, u64::MAX, 0) }
+            bool_result
         };
-        self.resolver.with_result(arguments.dst, |dst| unsafe {
+        let post_op = match data.bool_op {
+            ptx_parser::SetpBoolPostOp::Xor => LLVMBuildXor,
+            ptx_parser::SetpBoolPostOp::And => LLVMBuildAnd,
+            ptx_parser::SetpBoolPostOp::Or => LLVMBuildOr,
+        };
+        let src3 = self.resolver.value(src3)?;
+        Ok(unsafe { post_op(self.builder, bool_result, src3, LLVM_UNNAMED.as_ptr()) })
+    }
+
+    fn setp_to_set(
+        &mut self,
+        dst: SpirvWord,
+        dtype: ast::ScalarType,
+        setp_result: LLVMValueRef,
+    ) -> Result<(), TranslateError> {
+        let llvm_dtype = get_scalar_type(self.context, dtype);
+        let zero = unsafe { LLVMConstNull(llvm_dtype) };
+        let one = if dtype.kind() == ast::ScalarKind::Float {
+            unsafe { LLVMConstReal(llvm_dtype, 1.0) }
+        } else {
+            unsafe { LLVMConstInt(llvm_dtype, u64::MAX, 0) }
+        };
+        self.resolver.with_result(dst, |dst| unsafe {
             LLVMBuildSelect(self.builder, setp_result, one, zero, dst)
         });
         Ok(())
