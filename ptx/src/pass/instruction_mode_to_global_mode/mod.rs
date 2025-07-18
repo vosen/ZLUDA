@@ -1780,7 +1780,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
     match inst {
         // TODO: review it when implementing virtual calls
         ast::Instruction::Call { .. }
-        // abs is special ion that it gets compiled down to an instruction 
+        // abs is special in that it gets compiled down to an instruction 
         // argument modifier, floating point flags have no effect on it.
         // We give it special handling when emitting LLVM bitcode
         | ast::Instruction::Abs { .. }
