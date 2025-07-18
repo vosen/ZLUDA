@@ -1,4 +1,5 @@
 @shared_mem = external addrspace(3) global [0 x i32], align 4
+@__ZLUDA_PTX_IMPL_ATTRIBUTE_CLOCK_RATE = addrspace(1) global i32 2124000
 
 define void @incr_shared_2_global() #0 {
   %"36" = alloca i64, align 8, addrspace(5)

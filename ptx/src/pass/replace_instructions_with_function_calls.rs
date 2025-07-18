@@ -137,6 +137,9 @@ fn run_instruction<'input>(
                 ptx_parser::Instruction::ShflSync { data, arguments },
             )?
         }
+        i @ ptx_parser::Instruction::Nanosleep { .. } => {
+            to_call(resolver, fn_declarations, "nanosleep_u32".into(), i)?
+        }
         i => i,
     })
 }

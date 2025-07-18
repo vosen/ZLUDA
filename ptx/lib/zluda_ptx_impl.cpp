@@ -8,6 +8,8 @@
 #include <hip/amd_detail/amd_device_functions.h>
 
 #define FUNC(NAME) __device__ __attribute__((retain)) __zluda_ptx_impl_##NAME
+#define ATTR(NAME) __ZLUDA_PTX_IMPL_ATTRIBUTE_##NAME
+#define DECLARE_ATTR(TYPE, NAME) extern TYPE ATTR(NAME) __device__
 
 extern "C"
 {
@@ -219,6 +221,29 @@ extern "C"
     SHFL_SYNC_IMPL(down, self + delta,                         >);
     SHFL_SYNC_IMPL(bfly, self ^ delta,                         >);
     SHFL_SYNC_IMPL(idx,  (delta & ~section_mask) | subsection, >);
+
+    DECLARE_ATTR(uint32_t, CLOCK_RATE);
+    void FUNC(nanosleep_u32)(uint32_t nanoseconds) {
+        // clock_rate is in kHz
+        uint64_t cycles_per_ns = ATTR(CLOCK_RATE) / 1000000;
+        uint64_t cycles = nanoseconds * cycles_per_ns;
+        // Avoid small sleep values resulting in s_sleep 0
+        cycles += 63;
+        // s_sleep N sleeps for 64 * N cycles
+        uint64_t sleep_amount = cycles / 64;
+
+        // The argument to s_sleep must be a constant
+        for (size_t i = 0; i < sleep_amount >> 4; i++)
+            __builtin_amdgcn_s_sleep(16);
+        if (sleep_amount & 8U)
+            __builtin_amdgcn_s_sleep(8);
+        if (sleep_amount & 4U)
+            __builtin_amdgcn_s_sleep(4);
+        if (sleep_amount & 2U)
+            __builtin_amdgcn_s_sleep(2);
+        if (sleep_amount & 1U)
+            __builtin_amdgcn_s_sleep(1);
+    }
 
     void FUNC(__assertfail)(uint64_t message,
                             uint64_t file,
