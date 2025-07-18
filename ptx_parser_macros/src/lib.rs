@@ -197,7 +197,7 @@ impl SingleOpcodeDefinition {
                 })
             })
             .chain(self.arguments.0.iter().map(|arg| {
-                let name = &arg.ident;
+                let name = &arg.ident.ident();
                 let arg_type = if arg.unified {
                     quote! { (ParsedOperandStr<'input>, bool) }
                 } else if arg.can_be_negated {
@@ -225,7 +225,7 @@ impl SingleOpcodeDefinition {
                 })
             })
             .chain(self.arguments.0.iter().map(|arg| {
-                let name = &arg.ident;
+                let name = &arg.ident.ident();
                 quote! { #name }
             }))
     }
@@ -817,7 +817,7 @@ fn emit_definition_parser(
         let pattern = quote! {
             (#comma, #pre_bracket, #pre_pipe, #can_be_negated, #operand, #post_bracket, #unified)
         };
-        let arg_name = &arg.ident;
+        let arg_name = &arg.ident.ident();
         if arg.unified && arg.can_be_negated {
             panic!("TODO: argument can't be both prefixed by `!` and suffixed by  `.unified`")
         }
