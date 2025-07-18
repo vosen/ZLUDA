@@ -634,10 +634,12 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Popc { data, arguments } => self.emit_popc(data, arguments),
             ast::Instruction::Xor { data, arguments } => self.emit_xor(data, arguments),
             ast::Instruction::Rem { data, arguments } => self.emit_rem(data, arguments),
-            ast::Instruction::PrmtSlow { .. } => todo!(),
+            ast::Instruction::PrmtSlow { .. } => {
+                Err(error_todo_msg("PrmtSlow is not implemented yet"))
+            }
             ast::Instruction::Prmt { data, arguments } => self.emit_prmt(data, arguments),
             ast::Instruction::Membar { data } => self.emit_membar(data),
-            ast::Instruction::Trap {} => todo!(),
+            ast::Instruction::Trap {} => Err(error_todo_msg("Trap is not implemented yet")),
             // replaced by a function call
             ast::Instruction::Bfe { .. }
             | ast::Instruction::Bar { .. }
@@ -1569,14 +1571,26 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ptx_parser::NegArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let src = self.resolver.value(arguments.src)?;
-        let llvm_fn = if data.type_.kind() == ptx_parser::ScalarKind::Float {
+        let is_floating_point = data.type_.kind() == ptx_parser::ScalarKind::Float;
+        let llvm_fn = if is_floating_point {
             LLVMBuildFNeg
         } else {
             LLVMBuildNeg
         };
-        self.resolver.with_result(arguments.dst, |dst| unsafe {
-            llvm_fn(self.builder, src, dst)
-        });
+        if is_floating_point && data.flush_to_zero == Some(true) {
+            let negated = unsafe { llvm_fn(self.builder, src, LLVM_UNNAMED.as_ptr()) };
+            let intrinsic = format!("llvm.canonicalize.{}\0", LLVMTypeDisplay(data.type_));
+            self.emit_intrinsic(
+                unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
+                Some(arguments.dst),
+                Some(&data.type_.into()),
+                vec![(negated, get_scalar_type(self.context, data.type_))],
+            )?;
+        } else {
+            self.resolver.with_result(arguments.dst, |dst| unsafe {
+                llvm_fn(self.builder, src, dst)
+            });
+        }
         Ok(())
     }
 
@@ -2199,15 +2213,52 @@ impl<'a> MethodEmitContext<'a> {
             ast::ScalarType::F32 => c"llvm.amdgcn.exp2.f32",
             _ => return Err(error_unreachable()),
         };
-        self.emit_intrinsic(
+        let ex2 = self.emit_intrinsic(
             intrinsic,
-            Some(arguments.dst),
+            None,
             Some(&data.type_.into()),
             vec![(
                 self.resolver.value(arguments.src)?,
                 get_scalar_type(self.context, data.type_),
             )],
         )?;
+        // Don't ask me to explain the logic here, it came from Copilot
+        if data.flush_to_zero != Some(true) && ast::ScalarType::F32 == data.type_ {
+            let src = self.resolver.value(arguments.src)?;
+            let denormal_boundary =
+                unsafe { LLVMConstReal(get_scalar_type(self.context, data.type_), -126.0) };
+            let half = unsafe { LLVMConstReal(get_scalar_type(self.context, data.type_), 0.5) };
+            let special_handling = unsafe {
+                LLVMBuildFCmp(
+                    self.builder,
+                    LLVMRealPredicate::LLVMRealOLT,
+                    src,
+                    denormal_boundary,
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            };
+            let mul_result =
+                unsafe { LLVMBuildFMul(self.builder, half, src, LLVM_UNNAMED.as_ptr()) };
+            let ex2_post_mul = self.emit_intrinsic(
+                intrinsic,
+                None,
+                Some(&data.type_.into()),
+                vec![(mul_result, get_scalar_type(self.context, data.type_))],
+            )?;
+            let result = unsafe {
+                LLVMBuildFMul(
+                    self.builder,
+                    ex2_post_mul,
+                    ex2_post_mul,
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            };
+            self.resolver.with_result(arguments.dst, |dst| unsafe {
+                LLVMBuildSelect(self.builder, special_handling, result, ex2, dst)
+            });
+        } else {
+            self.resolver.register(arguments.dst, ex2);
+        }
         Ok(())
     }
 
