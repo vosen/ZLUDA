@@ -28,7 +28,7 @@ use std::array::TryFromSliceError;
 use std::convert::TryInto;
 use std::ffi::{CStr, NulError};
 use std::ops::Deref;
-use std::{i8, ptr};
+use std::{i8, ptr, u64};
 
 use super::*;
 use llvm_zluda::analysis::{LLVMVerifierFailureAction, LLVMVerifyModule};
@@ -597,8 +597,10 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::St { data, arguments } => self.emit_st(data, arguments),
             ast::Instruction::Mul { data, arguments } => self.emit_mul(data, arguments),
             ast::Instruction::Mul24 { data, arguments } => self.emit_mul24(data, arguments),
+            ast::Instruction::Set { data, arguments } => self.emit_set(data, arguments),
+            ast::Instruction::SetBool { .. } => return Err(error_todo()),
             ast::Instruction::Setp { data, arguments } => self.emit_setp(data, arguments),
-            ast::Instruction::SetpBool { .. } => todo!(),
+            ast::Instruction::SetpBool { .. } => return Err(error_todo()),
             ast::Instruction::Not { data, arguments } => self.emit_not(data, arguments),
             ast::Instruction::Or { data, arguments } => self.emit_or(data, arguments),
             ast::Instruction::And { arguments, .. } => self.emit_and(arguments),
@@ -1595,15 +1597,35 @@ impl<'a> MethodEmitContext<'a> {
         data: ptx_parser::SetpData,
         arguments: ptx_parser::SetpArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        if arguments.dst2.is_some() {
-            todo!()
+        self.emit_setp_impl(
+            data,
+            arguments.dst1,
+            arguments.dst2,
+            arguments.src1,
+            arguments.src2,
+        )?;
+        Ok(())
+    }
+
+    fn emit_setp_impl(
+        &mut self,
+        data: ptx_parser::SetpData,
+        dst1: SpirvWord,
+        dst2: Option<SpirvWord>,
+        src1: SpirvWord,
+        src2: SpirvWord,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        if dst2.is_some() {
+            return Err(error_todo_msg(
+                "setp with two dst arguments not yet supported",
+            ));
         }
         match data.cmp_op {
             ptx_parser::SetpCompareOp::Integer(setp_compare_int) => {
-                self.emit_setp_int(setp_compare_int, arguments)
+                self.emit_setp_int(setp_compare_int, dst1, src1, src2)
             }
             ptx_parser::SetpCompareOp::Float(setp_compare_float) => {
-                self.emit_setp_float(setp_compare_float, arguments)
+                self.emit_setp_float(setp_compare_float, dst1, src1, src2)
             }
         }
     }
@@ -1611,8 +1633,10 @@ impl<'a> MethodEmitContext<'a> {
     fn emit_setp_int(
         &mut self,
         setp: ptx_parser::SetpCompareInt,
-        arguments: ptx_parser::SetpArgs<SpirvWord>,
-    ) -> Result<(), TranslateError> {
+        dst: SpirvWord,
+        src1: SpirvWord,
+        src2: SpirvWord,
+    ) -> Result<LLVMValueRef, TranslateError> {
         let op = match setp {
             ptx_parser::SetpCompareInt::Eq => LLVMIntPredicate::LLVMIntEQ,
             ptx_parser::SetpCompareInt::NotEq => LLVMIntPredicate::LLVMIntNE,
@@ -1625,19 +1649,20 @@ impl<'a> MethodEmitContext<'a> {
             ptx_parser::SetpCompareInt::SignedGreater => LLVMIntPredicate::LLVMIntSGT,
             ptx_parser::SetpCompareInt::SignedGreaterOrEq => LLVMIntPredicate::LLVMIntSGE,
         };
-        let src1 = self.resolver.value(arguments.src1)?;
-        let src2 = self.resolver.value(arguments.src2)?;
-        self.resolver.with_result(arguments.dst1, |dst1| unsafe {
-            LLVMBuildICmp(self.builder, op, src1, src2, dst1)
-        });
-        Ok(())
+        let src1 = self.resolver.value(src1)?;
+        let src2 = self.resolver.value(src2)?;
+        Ok(self.resolver.with_result(dst, |dst| unsafe {
+            LLVMBuildICmp(self.builder, op, src1, src2, dst)
+        }))
     }
 
     fn emit_setp_float(
         &mut self,
         setp: ptx_parser::SetpCompareFloat,
-        arguments: ptx_parser::SetpArgs<SpirvWord>,
-    ) -> Result<(), TranslateError> {
+        dst: SpirvWord,
+        src1: SpirvWord,
+        src2: SpirvWord,
+    ) -> Result<LLVMValueRef, TranslateError> {
         let op = match setp {
             ptx_parser::SetpCompareFloat::Eq => LLVMRealPredicate::LLVMRealOEQ,
             ptx_parser::SetpCompareFloat::NotEq => LLVMRealPredicate::LLVMRealONE,
@@ -1654,12 +1679,11 @@ impl<'a> MethodEmitContext<'a> {
             ptx_parser::SetpCompareFloat::IsNotNan => LLVMRealPredicate::LLVMRealORD,
             ptx_parser::SetpCompareFloat::IsAnyNan => LLVMRealPredicate::LLVMRealUNO,
         };
-        let src1 = self.resolver.value(arguments.src1)?;
-        let src2 = self.resolver.value(arguments.src2)?;
-        self.resolver.with_result(arguments.dst1, |dst1| unsafe {
-            LLVMBuildFCmp(self.builder, op, src1, src2, dst1)
-        });
-        Ok(())
+        let src1 = self.resolver.value(src1)?;
+        let src2 = self.resolver.value(src2)?;
+        Ok(self.resolver.with_result(dst, |dst| unsafe {
+            LLVMBuildFCmp(self.builder, op, src1, src2, dst)
+        }))
     }
 
     fn emit_conditional(&mut self, cond: BrachCondition) -> Result<(), TranslateError> {
@@ -2462,15 +2486,11 @@ impl<'a> MethodEmitContext<'a> {
         let llvm_intrinsic = format!("{}.{}\0", prefix, LLVMTypeDisplay(data.type_));
         let abs_result = self.emit_intrinsic(
             unsafe { CStr::from_bytes_with_nul_unchecked(llvm_intrinsic.as_bytes()) },
-            if is_floating_point {
-                None
-            } else {
-                Some(arguments.dst)
-            },
+            None,
             Some(&data.type_.into()),
             intrinsic_arguments,
         )?;
-        if is_floating_point {
+        if is_floating_point && data.flush_to_zero == Some(true) {
             let intrinsic = format!("llvm.canonicalize.{}\0", LLVMTypeDisplay(data.type_));
             self.emit_intrinsic(
                 unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
@@ -2478,6 +2498,8 @@ impl<'a> MethodEmitContext<'a> {
                 Some(&data.type_.into()),
                 vec![(abs_result, llvm_type)],
             )?;
+        } else {
+            self.resolver.register(arguments.dst, abs_result);
         }
         Ok(())
     }
@@ -2684,6 +2706,31 @@ impl<'a> MethodEmitContext<'a> {
             Some(&ast::ScalarType::S32.into()),
             vec![(mul_narrow, llvm_type_s32), (src3, llvm_type_s32)],
         )?;
+        Ok(())
+    }
+
+    fn emit_set(
+        &mut self,
+        data: ptx_parser::SetData,
+        arguments: ptx_parser::SetArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let setp_result = self.emit_setp_impl(
+            data.base,
+            arguments.dst,
+            None,
+            arguments.src1,
+            arguments.src2,
+        )?;
+        let dtype = get_scalar_type(self.context, data.dtype);
+        let zero = unsafe { LLVMConstNull(dtype) };
+        let one = if data.dtype.kind() == ast::ScalarKind::Float {
+            unsafe { LLVMConstReal(dtype, 1.0) }
+        } else {
+            unsafe { LLVMConstInt(dtype, u64::MAX, 0) }
+        };
+        self.resolver.with_result(arguments.dst, |dst| unsafe {
+            LLVMBuildSelect(self.builder, setp_result, one, zero, dst)
+        });
         Ok(())
     }
 

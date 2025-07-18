@@ -1859,7 +1859,31 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
             data: ast::ArithDetails::Float(data),
             ..
         } => InstructionModes::from_arith_float(data),
-        ast::Instruction::Setp {
+        ast::Instruction::Set {
+            data: ast::SetData{
+                base: ast::SetpData {
+                    type_,
+                    flush_to_zero,
+                    ..
+                },
+                ..
+            },
+            ..
+        }
+        | ast::Instruction::SetBool {
+            data: ast::SetBoolData {
+                base: ast::SetpBoolData {
+                    base: ast::SetpData {
+                        type_,
+                        flush_to_zero,
+                            ..
+                        },
+                    ..
+                },
+            ..
+            }, ..
+        }
+        | ast::Instruction::Setp {
             data:
                 ast::SetpData {
                     type_,

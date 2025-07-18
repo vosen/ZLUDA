@@ -422,6 +422,44 @@ ptx_parser_macros::generate_instruction_type!(
                 },
             }
         },
+        Set {
+            data: SetData,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: Type::from(data.dtype)
+                },
+                src1: {
+                    repr: T,
+                    type: Type::from(data.base.type_),
+                },
+                src2: {
+                    repr: T,
+                    type: Type::from(data.base.type_),
+                }
+            }
+        },
+        SetBool {
+            data: SetBoolData,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: Type::from(data.dtype)
+                },
+                src1: {
+                    repr: T,
+                    type: Type::from(data.base.base.type_),
+                },
+                src2: {
+                    repr: T,
+                    type: Type::from(data.base.base.type_),
+                },
+                src3: {
+                    repr: T,
+                    type: Type::from(ScalarType::Pred)
+                }
+            }
+        },
         Setp {
             data: SetpData,
             arguments<T>: {
@@ -1243,6 +1281,11 @@ pub struct Mul24Details {
     pub control: Mul24Control,
 }
 
+pub struct SetData {
+    pub dtype: ScalarType,
+    pub base: SetpData,
+}
+
 pub struct SetpData {
     pub type_: ScalarType,
     pub flush_to_zero: Option<bool>,
@@ -1282,6 +1325,12 @@ impl SetpData {
             cmp_op,
         }
     }
+}
+
+
+pub struct SetBoolData {
+    pub dtype: ScalarType,
+    pub base: SetpBoolData,
 }
 
 pub struct SetpBoolData {
