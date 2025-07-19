@@ -1,7 +1,7 @@
-define amdgpu_kernel void @shr(ptr addrspace(4) byref(i64) %"31", ptr addrspace(4) byref(i64) %"32") #0 {
+define amdgpu_kernel void @shr_oob(ptr addrspace(4) byref(i64) %"31", ptr addrspace(4) byref(i64) %"32") #0 {
   %"33" = alloca i64, align 8, addrspace(5)
   %"34" = alloca i64, align 8, addrspace(5)
-  %"35" = alloca i32, align 4, addrspace(5)
+  %"35" = alloca i16, align 2, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
@@ -14,17 +14,17 @@ define amdgpu_kernel void @shr(ptr addrspace(4) byref(i64) %"31", ptr addrspace(
   store i64 %"37", ptr addrspace(5) %"34", align 4
   %"39" = load i64, ptr addrspace(5) %"33", align 4
   %"44" = inttoptr i64 %"39" to ptr
-  %"38" = load i32, ptr %"44", align 4
-  store i32 %"38", ptr addrspace(5) %"35", align 4
-  %"41" = load i32, ptr addrspace(5) %"35", align 4
-  %2 = ashr i32 %"41", 31
-  %3 = ashr i32 %"41", 1
-  %"40" = select i1 false, i32 %2, i32 %3
-  store i32 %"40", ptr addrspace(5) %"35", align 4
+  %"38" = load i16, ptr %"44", align 2
+  store i16 %"38", ptr addrspace(5) %"35", align 2
+  %"41" = load i16, ptr addrspace(5) %"35", align 2
+  %2 = ashr i16 %"41", 15
+  %3 = ashr i16 %"41", 16
+  %"40" = select i1 true, i16 %2, i16 %3
+  store i16 %"40", ptr addrspace(5) %"35", align 2
   %"42" = load i64, ptr addrspace(5) %"34", align 4
-  %"43" = load i32, ptr addrspace(5) %"35", align 4
+  %"43" = load i16, ptr addrspace(5) %"35", align 2
   %"45" = inttoptr i64 %"42" to ptr
-  store i32 %"43", ptr %"45", align 4
+  store i16 %"43", ptr %"45", align 2
   ret void
 }
 

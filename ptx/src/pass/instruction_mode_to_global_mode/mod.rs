@@ -1780,6 +1780,11 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
     match inst {
         // TODO: review it when implementing virtual calls
         ast::Instruction::Call { .. }
+        // abs and neg have special handling in AMD GPU ISA. They get compiled
+        // down to instruction argument modifiers, floating point flags have no
+        // effect on it. We handle it during LLVM bitcode emission
+        | ast::Instruction::Abs { .. }
+        | ast::Instruction::Neg {.. }
         | ast::Instruction::Mov { .. }
         | ast::Instruction::Ld { .. }
         | ast::Instruction::St { .. }
@@ -1855,7 +1860,31 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
             data: ast::ArithDetails::Float(data),
             ..
         } => InstructionModes::from_arith_float(data),
-        ast::Instruction::Setp {
+        ast::Instruction::Set {
+            data: ast::SetData{
+                base: ast::SetpData {
+                    type_,
+                    flush_to_zero,
+                    ..
+                },
+                ..
+            },
+            ..
+        }
+        | ast::Instruction::SetBool {
+            data: ast::SetBoolData {
+                base: ast::SetpBoolData {
+                    base: ast::SetpData {
+                        type_,
+                        flush_to_zero,
+                            ..
+                        },
+                    ..
+                },
+            ..
+            }, ..
+        }
+        | ast::Instruction::Setp {
             data:
                 ast::SetpData {
                     type_,
@@ -1877,13 +1906,6 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
                 },
             ..
         }
-        | ast::Instruction::Neg {
-            data: ast::TypeFtz {
-                type_,
-                flush_to_zero,
-            },
-            ..
-        }
         | ast::Instruction::Ex2 {
             data: ast::TypeFtz {
                 type_,
@@ -1892,13 +1914,6 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
             ..
         }
         | ast::Instruction::Rsqrt {
-            data: ast::TypeFtz {
-                type_,
-                flush_to_zero,
-            },
-            ..
-        }
-        | ast::Instruction::Abs {
             data: ast::TypeFtz {
                 type_,
                 flush_to_zero,

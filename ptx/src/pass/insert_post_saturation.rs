@@ -163,6 +163,8 @@ fn run_instruction<'input>(
         | ast::Instruction::Ret { .. }
         | ast::Instruction::Rsqrt { .. }
         | ast::Instruction::Selp { .. }
+        | ast::Instruction::Set { .. }
+        | ast::Instruction::SetBool { .. }
         | ast::Instruction::Setp { .. }
         | ast::Instruction::SetpBool { .. }
         | ast::Instruction::ShflSync { .. }

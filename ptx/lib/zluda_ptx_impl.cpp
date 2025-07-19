@@ -229,4 +229,13 @@ extern "C"
         (void)char_size;
         __assert_fail((const char *)message, (const char *)file, line, (const char *)function);
     }
+
+    float FUNC(sqrt_approx_f32)(float x)
+    {
+        float result = __builtin_amdgcn_sqrtf(x);
+        // Single iteratiopn of Newton-Raphson
+        float recip = __builtin_amdgcn_rcpf(result);
+        result = 0.5f * (result + x * recip);
+        return result;
+    }
 }
