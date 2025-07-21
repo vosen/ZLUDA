@@ -20,10 +20,10 @@ const SHARED_ADDRESS_SPACE: u32 = 3;
 const CONSTANT_ADDRESS_SPACE: u32 = 4;
 const PRIVATE_ADDRESS_SPACE: u32 = 5;
 
-struct Context(LLVMContextRef);
+pub(super) struct Context(LLVMContextRef);
 
 impl Context {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self(unsafe { LLVMContextCreate() })
     }
 
@@ -40,22 +40,17 @@ impl Drop for Context {
     }
 }
 
-pub struct Module(LLVMModuleRef, Context);
+pub struct Module(LLVMModuleRef);
 
 impl Module {
-    fn new(ctx: Context, name: &CStr) -> Self {
+    fn new(ctx: &Context, name: &CStr) -> Self {
         Self(
             unsafe { LLVMModuleCreateWithNameInContext(name.as_ptr(), ctx.get()) },
-            ctx,
         )
     }
 
     fn get(&self) -> LLVMModuleRef {
         self.0
-    }
-
-    fn context(&self) -> &Context {
-        &self.1
     }
 
     fn verify(&self) -> Result<(), Message> {

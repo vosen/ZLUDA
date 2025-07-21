@@ -61,12 +61,12 @@ impl Drop for Builder {
 }
 
 pub(crate) fn run<'input>(
+    context: &Context,
     id_defs: GlobalStringIdentResolver2<'input>,
     directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
 ) -> Result<llvm::Module, TranslateError> {
-    let context = Context::new();
     let module = llvm::Module::new(context, LLVM_UNNAMED);
-    let mut emit_ctx = ModuleEmitContext::new(&module, &id_defs);
+    let mut emit_ctx = ModuleEmitContext::new(context, &module, &id_defs);
     for directive in directives {
         match directive {
             Directive2::Variable(linking, variable) => emit_ctx.emit_global(linking, variable)?,
@@ -88,8 +88,7 @@ struct ModuleEmitContext<'a, 'input> {
 }
 
 impl<'a, 'input> ModuleEmitContext<'a, 'input> {
-    fn new(module: &llvm::Module, id_defs: &'a GlobalStringIdentResolver2<'input>) -> Self {
-        let context = module.context();
+    fn new(context: &Context, module: &llvm::Module, id_defs: &'a GlobalStringIdentResolver2<'input>) -> Self {
         ModuleEmitContext {
             context: context.get(),
             module: module.get(),
