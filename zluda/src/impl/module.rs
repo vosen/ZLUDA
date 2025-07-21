@@ -26,7 +26,7 @@ fn get_ptx_from_wrapped_fatbin(image: *const ::core::ffi::c_void) -> Result<Vec<
     let fatbin = Fatbin::new(&image).map_err(|_| CUerror::UNKNOWN)?;
     let mut submodules = fatbin.get_submodules().map_err(|_| CUerror::UNKNOWN)?;
 
-    while let Some(current) = unsafe { submodules.next().map_err(|_| CUerror::UNKNOWN)? } {
+    while let Some(current) = submodules.next().map_err(|_| CUerror::UNKNOWN)? {
         let mut files = current.get_files();
         while let Some(file) = unsafe { files.next().map_err(|_| CUerror::UNKNOWN)? } {
             if file.header.kind == FatbinFileHeader::HEADER_KIND_PTX {
