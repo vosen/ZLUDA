@@ -1,5 +1,3 @@
-@__ZLUDA_PTX_IMPL_ATTRIBUTE_CLOCK_RATE = addrspace(1) global i32 2124000
-
 declare [16 x i8] @foobar(i64) #0
 
 define amdgpu_kernel void @extern_func(ptr addrspace(4) byref(i64) %"44", ptr addrspace(4) byref(i64) %"45") #1 {

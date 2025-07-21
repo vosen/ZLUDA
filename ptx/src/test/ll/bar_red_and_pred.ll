@@ -1,5 +1,3 @@
-@__ZLUDA_PTX_IMPL_ATTRIBUTE_CLOCK_RATE = addrspace(1) global i32 2124000
-
 declare i1 @__zluda_ptx_impl_bar_red_and_pred(i32, i1, i1) #0
 
 declare i1 @__zluda_ptx_impl_bar_red_or_pred(i32, i1, i1) #0

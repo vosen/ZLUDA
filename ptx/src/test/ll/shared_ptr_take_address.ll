@@ -1,5 +1,4 @@
 @shared_mem = external addrspace(3) global [0 x i8], align 4
-@__ZLUDA_PTX_IMPL_ATTRIBUTE_CLOCK_RATE = addrspace(1) global i32 2124000
 
 define amdgpu_kernel void @shared_ptr_take_address(ptr addrspace(4) byref(i64) %"33", ptr addrspace(4) byref(i64) %"34") #0 {
   %"35" = alloca i64, align 8, addrspace(5)

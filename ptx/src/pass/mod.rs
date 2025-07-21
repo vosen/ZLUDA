@@ -12,7 +12,6 @@ use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
 mod deparamize_functions;
-pub(crate) mod emit_llvm;
 mod expand_operands;
 mod fix_special_registers2;
 mod hoist_globals;
@@ -20,6 +19,7 @@ mod insert_explicit_load_store;
 mod insert_implicit_conversions2;
 mod insert_post_saturation;
 mod instruction_mode_to_global_mode;
+mod llvm;
 mod normalize_basic_blocks;
 mod normalize_identifiers2;
 mod normalize_predicates2;
@@ -71,15 +71,18 @@ pub fn to_llvm_module<'input>(ast: ast::Module<'input>, attributes: Attributes) 
     let directives = insert_implicit_conversions2::run(&mut flat_resolver, directives)?;
     let directives = replace_instructions_with_function_calls::run(&mut flat_resolver, directives)?;
     let directives = hoist_globals::run(directives)?;
-    let llvm_ir = emit_llvm::run(flat_resolver, attributes, directives)?;
+    let llvm_ir = llvm::emit::run(flat_resolver, directives)?;
+    let attributes_ir = llvm::attributes::run(attributes)?;
     Ok(Module {
         llvm_ir,
+        attributes_ir,
         kernel_info: HashMap::new(),
     })
 }
 
 pub struct Module {
-    pub llvm_ir: emit_llvm::Module,
+    pub llvm_ir: llvm::Module,
+    pub attributes_ir: llvm::Module,
     pub kernel_info: HashMap<String, KernelInfo>,
 }
 

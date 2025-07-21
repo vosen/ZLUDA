@@ -1,6 +1,5 @@
 @shared_ex = external addrspace(3) global [0 x i32]
 @shared_mod = external addrspace(3) global i64, align 4
-@__ZLUDA_PTX_IMPL_ATTRIBUTE_CLOCK_RATE = addrspace(1) global i32 2124000
 
 define i64 @add(i64 %"10") #0 {
   %"47" = alloca i64, align 8, addrspace(5)

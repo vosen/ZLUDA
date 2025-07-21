@@ -1,5 +1,3 @@
-@__ZLUDA_PTX_IMPL_ATTRIBUTE_CLOCK_RATE = addrspace(1) global i32 2124000
-
 declare void @__zluda_ptx_impl___assertfail(i64, i64, i32, i64, i64) #0
 
 define amdgpu_kernel void @assertfail(ptr addrspace(4) byref(i64) %"86", ptr addrspace(4) byref(i64) %"87") #1 {

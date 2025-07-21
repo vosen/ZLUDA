@@ -1,5 +1,3 @@
-@__ZLUDA_PTX_IMPL_ATTRIBUTE_CLOCK_RATE = addrspace(1) global i32 2124000
-
 define float @add_rm(float %"79", float %"80") #0 {
   %"128" = alloca float, align 4, addrspace(5)
   %"129" = alloca float, align 4, addrspace(5)

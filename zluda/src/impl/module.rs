@@ -74,6 +74,7 @@ pub(crate) fn load_hip_module(image: *const std::ffi::c_void) -> Result<hipModul
         &global_state.comgr,
         unsafe { CStr::from_ptr(props.gcnArchName.as_ptr()) },
         &*llvm_module.llvm_ir.write_bitcode_to_memory(),
+        &*llvm_module.attributes_ir.write_bitcode_to_memory(),
         llvm_module.linked_bitcode(),
     )
     .map_err(|_| CUerror::UNKNOWN)?;

@@ -1,5 +1,3 @@
-@__ZLUDA_PTX_IMPL_ATTRIBUTE_CLOCK_RATE = addrspace(1) global i32 2124000
-
 declare i32 @__zluda_ptx_impl_shfl_sync_down_b32(i32, i32, i32, i32) #0
 
 declare i32 @__zluda_ptx_impl_shfl_sync_up_b32(i32, i32, i32, i32) #0
