@@ -34,7 +34,7 @@ use crate::pass::*;
 use llvm_zluda::{core::*, *};
 use llvm_zluda::{prelude::*, LLVMZludaBuildAtomicRMW};
 use llvm_zluda::{LLVMCallConv, LLVMZludaBuildAlloca};
-use ptx_parser::Mul24Control;
+use ptx_parser::{CpAsyncArgs, CpAsyncDetails, Mul24Control};
 
 struct Builder(LLVMBuilderRef);
 
@@ -515,10 +515,10 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Membar { data } => self.emit_membar(data),
             ast::Instruction::Trap {} => Err(error_todo_msg("Trap is not implemented yet")),
             ast::Instruction::Tanh { data, arguments } => self.emit_tanh(data, arguments),
-            ast::Instruction::CpAsync { .. } => todo!(),
-            ast::Instruction::CpAsyncCommitGroup { .. } => todo!(),
-            ast::Instruction::CpAsyncWaitGroup { .. } => todo!(),
-            ast::Instruction::CpAsyncWaitAll { .. } => todo!(),
+            ast::Instruction::CpAsync { data, arguments } => self.emit_cp_async(data, arguments),
+            ast::Instruction::CpAsyncCommitGroup { } => Ok(()), // nop
+            ast::Instruction::CpAsyncWaitGroup { .. } => Ok(()), // nop
+            ast::Instruction::CpAsyncWaitAll { .. } => Ok(()), // nop
             // replaced by a function call
             ast::Instruction::Bfe { .. }
             | ast::Instruction::Bar { .. }
@@ -2553,6 +2553,44 @@ impl<'a> MethodEmitContext<'a> {
         )?;
         Ok(())
     }
+
+    fn emit_cp_async(
+        &mut self,
+        data: CpAsyncDetails,
+        arguments: CpAsyncArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        // Asynchronous copies are not supported by all AMD hardware, so we just do a synchronous copy for now
+        let to = self.resolver.value(arguments.src_to)?;
+        let from = self.resolver.value(arguments.src_from)?;
+        let cp_size = data.cp_size;
+        let src_size = data.src_size.unwrap_or(cp_size.as_u64());
+
+        let type_ = match cp_size {
+            ptx_parser::CpAsyncCpSize::Bytes4 => unsafe { LLVMInt32TypeInContext(self.context) },
+            ptx_parser::CpAsyncCpSize::Bytes8 => unsafe { LLVMInt64TypeInContext(self.context) },
+            ptx_parser::CpAsyncCpSize::Bytes16 => unsafe { LLVMInt128TypeInContext(self.context) },
+        };
+
+        let load = unsafe { LLVMBuildLoad2(self.builder, type_, from, LLVM_UNNAMED.as_ptr()) };
+
+        let masked = if src_size < cp_size.as_u64() {
+            let byte_mask = if src_size > 8 {
+                vec![u64::MAX, u64::MAX >> (64 - (src_size - 8) * 8)]
+            } else {
+                vec![u64::MAX >> (64 - src_size * 8)]
+            };
+
+            let byte_mask = unsafe { LLVMConstIntOfArbitraryPrecision(type_, byte_mask.len() as u32, byte_mask.as_ptr()) };
+
+            unsafe { LLVMBuildAnd(self.builder, load, byte_mask, LLVM_UNNAMED.as_ptr()) }
+        } else {
+            load
+        };
+
+        unsafe { LLVMBuildStore(self.builder, masked, to) };
+        Ok(())
+    }
+
 
     fn flush_denormals(
         &mut self,

@@ -189,12 +189,16 @@ ptx_parser_macros::generate_instruction_type!(
             }
         },
         CpAsync {
-            // TODO: check type, might depend on cp-size
-            type: Type::Scalar(ScalarType::U32),
             data: CpAsyncDetails,
             arguments<T>: {
-                dst: T,
-                src: T
+                src_to: {
+                    repr: T,
+                    type: Type::Pointer(ScalarType::U32, StateSpace::Shared)
+                },
+                src_from: {
+                    repr: T,
+                    type: Type::Pointer(ScalarType::U32, StateSpace::Global)
+                }
             }
         },
         CpAsyncCommitGroup { },
@@ -1066,8 +1070,36 @@ pub struct ShflSyncDetails {
     pub mode: ShuffleMode,
 }
 
+pub enum CpAsyncCpSize {
+    Bytes4,
+    Bytes8,
+    Bytes16,
+}
+
+impl CpAsyncCpSize {
+    pub fn from_u64(n: u64) -> Option<Self> {
+        match n {
+            4 => Some(Self::Bytes4),
+            8 => Some(Self::Bytes8),
+            16 => Some(Self::Bytes16),
+            _ => None,
+        }
+    }
+
+    pub fn as_u64(&self) -> u64 {
+        match self {
+            CpAsyncCpSize::Bytes4 => 4,
+            CpAsyncCpSize::Bytes8 => 8,
+            CpAsyncCpSize::Bytes16 => 16,
+        }
+    }
+}
+
 pub struct CpAsyncDetails {
+    pub caching: CpAsyncCacheOperator,
     pub space: StateSpace,
+    pub cp_size: CpAsyncCpSize,
+    pub src_size: Option<u64>,
 }
 
 #[derive(Clone)]
@@ -1077,6 +1109,15 @@ pub enum ParsedOperand<Ident> {
     Imm(ImmediateValue),
     VecMember(Ident, u8),
     VecPack(Vec<Ident>),
+}
+
+impl<Ident> ParsedOperand<Ident> {
+    pub fn as_immediate(&self) -> Option<ImmediateValue> {
+        match self {
+            ParsedOperand::Imm(imm) => Some(*imm),
+            _ => None,
+        }
+    }
 }
 
 impl<Ident: Copy> Operand for ParsedOperand<Ident> {
@@ -1101,6 +1142,17 @@ pub enum ImmediateValue {
     F64(f64),
 }
 
+impl ImmediateValue {
+    /// If the value is a U64 or S64, returns the value as a u64, ignoring the sign.
+    pub fn as_u64(&self) -> Option<u64> {
+        match *self {
+            ImmediateValue::U64(n) => Some(n),
+            ImmediateValue::S64(n) => Some(n as u64),
+            ImmediateValue::F32(_) | ImmediateValue::F64(_) => None,
+        }
+    }
+}
+
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum StCacheOperator {
     Writeback,
@@ -1116,6 +1168,11 @@ pub enum LdCacheOperator {
     Streaming,
     LastUse,
     Uncached,
+}
+
+pub enum CpAsyncCacheOperator {
+    Cached,
+    L2Only,
 }
 
 #[derive(Copy, Clone)]

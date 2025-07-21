@@ -62,6 +62,15 @@ impl From<RawLdStQualifier> for ast::LdStQualifier {
     }
 }
 
+impl From<RawCpAsyncCacheOperator> for ast::CpAsyncCacheOperator {
+    fn from(value: RawCpAsyncCacheOperator) -> Self {
+        match value {
+            RawCpAsyncCacheOperator::Ca => ast::CpAsyncCacheOperator::Cached,
+            RawCpAsyncCacheOperator::Cg => ast::CpAsyncCacheOperator::L2Only,
+        }
+    }
+}
+
 impl From<RawRoundingMode> for ast::RoundingMode {
     fn from(value: RawRoundingMode) -> Self {
         value.normalize().0
@@ -3558,32 +3567,49 @@ derive_parser!(
     .type: ScalarType = { .f32, .f16, .f16x2, .bf16, .bf16x2 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cp-async
-    // TODO: remove implemented patterns
-    // cp.async.ca.shared{::cta}.global{.level::cache_hint}{.level::prefetch_size}
-    //                          [dst], [src], cp-size{, src-size}{, cache-policy} ;
-    cp.async.ca.space.global{.level::cache_hint}{.level::prefetch_size}
-                             [dst], [src], cp-size{, src-size}{, cache_policy} => {
+    cp.async.cop.space.global{.level::cache_hint}{.level::prefetch_size}
+                             [dst], [src], cp-size{, src-size}{, cache-policy} => {
         if level_cache_hint || cache_policy.is_some() || level_prefetch_size.is_some() {
             state.errors.push(PtxError::Todo);
         }
-        // TODO: handle cp-size and src-size
+
+        let cp_size = cp_size
+            .as_immediate()
+            .and_then(|imm| imm.as_u64())
+            .and_then(|n| CpAsyncCpSize::from_u64(n))
+            .unwrap_or_else(|| {
+                state.errors.push(PtxError::SyntaxError);
+                CpAsyncCpSize::Bytes4
+            });
+        
+        let src_size = src_size
+            .and_then(|op| op.as_immediate())
+            .and_then(|imm| imm.as_u64());
+
         Instruction::CpAsync {
-            data: CpAsyncDetails { space },
-            arguments: CpAsyncArgs { dst, src }
+            data: CpAsyncDetails {
+                caching: cop.into(),
+                space,
+                cp_size,
+                src_size,
+            },
+            arguments: CpAsyncArgs {
+                src_to: dst,
+                src_from: src,
+            }
         }
     }
-    // cp.async.cg.shared{::cta}.global{.level::cache_hint}{.level::prefetch_size}
-    //                          [dst], [src], 16{, src-size}{, cache-policy} ;
     // cp.async.ca.shared{::cta}.global{.level::cache_hint}{.level::prefetch_size}
     //                          [dst], [src], cp-size{, ignore-src}{, cache-policy} ;
     // cp.async.cg.shared{::cta}.global{.level::cache_hint}{.level::prefetch_size}
     //                          [dst], [src], 16{, ignore-src}{, cache-policy} ;
 
-    .level::cache_hint =     { .L2::cache_hint };
+    .level::cache_hint = { .L2::cache_hint };
     .level::prefetch_size: PrefetchSize =  { .L2::64B, .L2::128B, .L2::256B };
     // TODO: how to handle this?
     // cp-size =                { 4, 8, 16 }
-    .space: StateSpace =            { .shared{::cta} };
+    .space: StateSpace = { .shared{::cta} };
+    .cop: RawCpAsyncCacheOperator = { .ca, .cg };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cp-async-commit-group
     cp.async.commit_group => {
