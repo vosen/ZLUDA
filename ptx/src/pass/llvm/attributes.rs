@@ -29,5 +29,6 @@ fn emit_attribute(context: &Context, module: &llvm::Module, name: &str, attribut
         )
     };
     unsafe { LLVMSetInitializer(global, LLVMConstInt(attribute_type, attribute as u64, 0)) };
+    unsafe { LLVMSetGlobalConstant(global, 1) };
     Ok(())
 }

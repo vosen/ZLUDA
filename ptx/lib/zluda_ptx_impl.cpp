@@ -9,7 +9,7 @@
 
 #define FUNC(NAME) __device__ __attribute__((retain)) __zluda_ptx_impl_##NAME
 #define ATTR(NAME) __ZLUDA_PTX_IMPL_ATTRIBUTE_##NAME
-#define DECLARE_ATTR(TYPE, NAME) extern TYPE ATTR(NAME) __device__
+#define DECLARE_ATTR(TYPE, NAME) extern const TYPE ATTR(NAME) __device__
 
 extern "C"
 {
