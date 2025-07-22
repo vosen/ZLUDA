@@ -178,11 +178,14 @@ pub fn compile_bitcode(
     comgr: &Comgr,
     gcn_arch: &CStr,
     main_buffer: &[u8],
+    attributes_buffer: &[u8],
     ptx_impl: &[u8],
 ) -> Result<Vec<u8>, Error> {
     let bitcode_data_set = DataSet::new(comgr)?;
     let main_bitcode_data = Data::new(comgr, DataKind::Bc, c"zluda.bc", main_buffer)?;
     bitcode_data_set.add(&main_bitcode_data)?;
+    let attributes_bitcode_data = Data::new(comgr, DataKind::Bc, c"attributes.bc", attributes_buffer)?;
+    bitcode_data_set.add(&attributes_bitcode_data)?;
     let stdlib_bitcode_data = Data::new(comgr, DataKind::Bc, c"ptx_impl.bc", ptx_impl)?;
     bitcode_data_set.add(&stdlib_bitcode_data)?;
     let linking_info = ActionInfo::new(comgr)?;

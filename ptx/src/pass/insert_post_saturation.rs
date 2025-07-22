@@ -152,6 +152,7 @@ fn run_instruction<'input>(
             ..
         }
         | ast::Instruction::Mul24 { .. }
+        | ast::Instruction::Nanosleep { .. }
         | ast::Instruction::Neg { .. }
         | ast::Instruction::Not { .. }
         | ast::Instruction::Or { .. }
