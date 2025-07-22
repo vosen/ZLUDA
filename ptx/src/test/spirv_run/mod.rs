@@ -297,6 +297,8 @@ test_ptx!(
 test_ptx!(multiple_return, [5u32], [6u32, 123u32]);
 test_ptx!(warp_sz, [0u8], [32u8]);
 
+test_ptx!(nanosleep, [0u64], [0u64]);
+
 test_ptx!(assertfail);
 // TODO: not yet supported
 //test_ptx!(func_ptr);
@@ -375,7 +377,7 @@ fn test_hip_assert<
     block_dim_x: u32,
 ) -> Result<(), Box<dyn error::Error>> {
     let ast = ptx_parser::parse_module_checked(ptx_text).unwrap();
-    let llvm_ir = pass::to_llvm_module(ast).unwrap();
+    let llvm_ir = pass::to_llvm_module(ast, pass::Attributes { clock_rate: 2124000 }).unwrap();
     let name = CString::new(name)?;
     let result =
         run_hip(name.as_c_str(), llvm_ir, input, output, block_dim_x).map_err(|err| DisplayError { err })?;
@@ -389,9 +391,19 @@ fn test_llvm_assert(
     expected_ll: &str,
 ) -> Result<(), Box<dyn error::Error>> {
     let ast = ptx_parser::parse_module_checked(ptx_text).unwrap();
-    let llvm_ir = pass::to_llvm_module(ast).unwrap();
+    let llvm_ir = pass::to_llvm_module(ast, pass::Attributes { clock_rate: 2124000 }).unwrap();
     let actual_ll = llvm_ir.llvm_ir.print_module_to_string();
     let actual_ll = actual_ll.to_str();
+    compare_llvm(name, actual_ll, expected_ll);
+
+    let expected_attributes_ll = read_test_file!(concat!("../ll/_attributes.ll"));
+    let actual_attributes_ll = llvm_ir.attributes_ir.print_module_to_string();
+    let actual_attributes_ll = actual_attributes_ll.to_str();
+    compare_llvm("_attributes", actual_attributes_ll, &expected_attributes_ll);
+    Ok(())
+}
+
+fn compare_llvm(name: &str, actual_ll: &str, expected_ll: &str) {
     if actual_ll != expected_ll {
         let output_dir = env::var("TEST_PTX_LLVM_FAIL_DIR");
         if let Ok(output_dir) = output_dir {
@@ -404,7 +416,6 @@ fn test_llvm_assert(
         let comparison = pretty_assertions::StrComparison::new(&expected_ll, &actual_ll);
         panic!("assertion failed: `(left == right)`\n\n{}", comparison);
     }
-    Ok(())
 }
 
 fn test_cuda_assert<
@@ -567,6 +578,7 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
             &comgr,
             unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) },
             &*module.llvm_ir.write_bitcode_to_memory(),
+            &*module.attributes_ir.write_bitcode_to_memory(),
             module.linked_bitcode(),
         )
         .unwrap();

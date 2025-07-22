@@ -1,0 +1,13 @@
+.version 6.5
+.target sm_70
+.address_size 64
+
+.visible .entry nanosleep(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+    // TODO: check if there's some way of testing that it actually sleeps
+    nanosleep.u32 1;
+	ret;
+}
