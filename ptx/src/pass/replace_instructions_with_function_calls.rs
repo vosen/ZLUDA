@@ -99,7 +99,7 @@ fn run_instruction<'input>(
                 ast::RcpData {
                     kind: ast::RcpKind::Approx,
                     type_: ast::ScalarType::F32,
-                    ..
+                    flush_to_zero: None | Some(false),
                 },
             ..
         } => to_call(resolver, fn_declarations, "sqrt_approx_f32".into(), i)?,

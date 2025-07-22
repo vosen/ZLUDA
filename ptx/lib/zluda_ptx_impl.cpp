@@ -4,7 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
-
+#include <bit>
 #include <hip/amd_detail/amd_device_functions.h>
 
 #define FUNC(NAME) __device__ __attribute__((retain)) __zluda_ptx_impl_##NAME
@@ -232,10 +232,10 @@ extern "C"
 
     float FUNC(sqrt_approx_f32)(float x)
     {
-        float result = __builtin_amdgcn_sqrtf(x);
-        // Single iteratiopn of Newton-Raphson
-        float recip = __builtin_amdgcn_rcpf(result);
-        result = 0.5f * (result + x * recip);
-        return result;
+        // DO NOT replace this with `>` or you will break NaN handling
+        if (!(x <= std::bit_cast<float>(0x007FFFFFU)))
+            return __builtin_amdgcn_sqrtf(x);
+        // formula provided by Copilot
+        return __builtin_amdgcn_sqrtf(x * 16777216.0f) * 0.000244140625f;
     }
 }

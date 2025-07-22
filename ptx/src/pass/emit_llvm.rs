@@ -2043,10 +2043,6 @@ impl<'a> MethodEmitContext<'a> {
     ) -> Result<(), TranslateError> {
         let type_ = get_scalar_type(self.context, data.type_);
         let intrinsic = match (data.type_, data.kind) {
-            // This emits AMDGPU-specific intrinsic instruction. Unfortunately it does not
-            // fit into expected PTX precision guarantees. Instead  we use a
-            // slightly slower method from zluda_ptx_impl.cpp that does.
-            // We might re-enable this version under a flag in the future
             (ast::ScalarType::F32, ast::RcpKind::Approx) => c"llvm.amdgcn.sqrt.f32",
             (ast::ScalarType::F32, ast::RcpKind::Compliant(..)) => c"llvm.sqrt.f32",
             (ast::ScalarType::F64, ast::RcpKind::Compliant(..)) => c"llvm.sqrt.f64",
