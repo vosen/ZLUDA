@@ -3539,6 +3539,16 @@ derive_parser!(
         }
     }
     .mode: ShuffleMode = { .up, .down, .bfly, .idx };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-tanh
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#half-precision-floating-point-instructions-tanh
+    tanh.approx.type d, a => {
+        Instruction::Tanh {
+            data: type_,
+            arguments: TanhArgs { dst: d, src: a }
+        }
+    }
+    .type: ScalarType = { .f32, .f16, .f16x2, .bf16, .bf16x2 };
 );
 
 #[cfg(test)]

@@ -594,6 +594,14 @@ ptx_parser_macros::generate_instruction_type!(
                 src2: T
             }
         },
+        Tanh {
+            type: Type::Scalar(data.clone()),
+            data: ScalarType,
+            arguments<T>: {
+                dst: T,
+                src: T
+            }
+        },
     }
 );
 

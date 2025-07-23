@@ -184,6 +184,7 @@ fn run_instruction<'input>(
             data: ast::ArithDetails::Integer(..),
             ..
         }
+        | ast::Instruction::Tanh { .. }
         | ast::Instruction::Trap {}
         | ast::Instruction::Xor { .. } => result.push(Statement::Instruction(instruction)),
         ast::Instruction::Add {

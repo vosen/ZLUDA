@@ -1980,6 +1980,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
             InstructionModes::from_rtz_special(data)
         },
         ast::Instruction::Cvt { data, .. } => InstructionModes::from_cvt(data),
+        ast::Instruction::Tanh { data, .. } => InstructionModes::from_ftz(*data, Some(false)),
     }
 }
 

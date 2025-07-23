@@ -640,6 +640,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Prmt { data, arguments } => self.emit_prmt(data, arguments),
             ast::Instruction::Membar { data } => self.emit_membar(data),
             ast::Instruction::Trap {} => Err(error_todo_msg("Trap is not implemented yet")),
+            ast::Instruction::Tanh { data, arguments } => self.emit_tanh(data, arguments),
             // replaced by a function call
             ast::Instruction::Bfe { .. }
             | ast::Instruction::Bar { .. }
@@ -2784,6 +2785,26 @@ impl<'a> MethodEmitContext<'a> {
         self.resolver.with_result(dst, |dst| unsafe {
             LLVMBuildSelect(self.builder, setp_result, one, zero, dst)
         });
+        Ok(())
+    }
+
+    // TOOD: revisit this on gfx1250 which has native tanh support
+    fn emit_tanh(
+        &mut self,
+        data: ast::ScalarType,
+        arguments: ast::TanhArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let src = self.resolver.value(arguments.src)?;
+        let llvm_type = get_scalar_type(self.context, data);
+        let name = format!("__ocml_tanh_{}\0", LLVMTypeDisplay(data));
+        let tanh = self.emit_intrinsic(
+            unsafe { CStr::from_bytes_with_nul_unchecked(name.as_bytes()) },
+            Some(arguments.dst),
+            Some(&data.into()),
+            vec![(src, llvm_type)],
+        )?;
+        // Not sure if it ultimately does anything
+        unsafe { LLVMZludaSetFastMathFlags(tanh, LLVMZludaFastMathApproxFunc) }
         Ok(())
     }
 
