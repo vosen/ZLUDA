@@ -34,7 +34,7 @@ use crate::pass::*;
 use llvm_zluda::{core::*, *};
 use llvm_zluda::{prelude::*, LLVMZludaBuildAtomicRMW};
 use llvm_zluda::{LLVMCallConv, LLVMZludaBuildAlloca};
-use ptx_parser::Mul24Control;
+use ptx_parser::{CpAsyncArgs, CpAsyncDetails, Mul24Control};
 
 struct Builder(LLVMBuilderRef);
 
@@ -515,6 +515,10 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Membar { data } => self.emit_membar(data),
             ast::Instruction::Trap {} => Err(error_todo_msg("Trap is not implemented yet")),
             ast::Instruction::Tanh { data, arguments } => self.emit_tanh(data, arguments),
+            ast::Instruction::CpAsync { data, arguments } => self.emit_cp_async(data, arguments),
+            ast::Instruction::CpAsyncCommitGroup { } => Ok(()), // nop
+            ast::Instruction::CpAsyncWaitGroup { .. } => Ok(()), // nop
+            ast::Instruction::CpAsyncWaitAll { .. } => Ok(()), // nop
             // replaced by a function call
             ast::Instruction::Bfe { .. }
             | ast::Instruction::Bar { .. }
@@ -2549,6 +2553,40 @@ impl<'a> MethodEmitContext<'a> {
         )?;
         Ok(())
     }
+
+    fn emit_cp_async(
+        &mut self,
+        data: CpAsyncDetails,
+        arguments: CpAsyncArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        // Asynchronous copies are not supported by all AMD hardware, so we just do a synchronous copy for now
+        let to = self.resolver.value(arguments.src_to)?;
+        let from = self.resolver.value(arguments.src_from)?;
+        let cp_size = data.cp_size;
+        let src_size = data.src_size.unwrap_or(cp_size.as_u64());
+
+        let from_type = unsafe { LLVMIntTypeInContext(self.context, (src_size as u32) * 8) };
+
+        let to_type = match cp_size {
+            ptx_parser::CpAsyncCpSize::Bytes4 => unsafe { LLVMInt32TypeInContext(self.context) },
+            ptx_parser::CpAsyncCpSize::Bytes8 => unsafe { LLVMInt64TypeInContext(self.context) },
+            ptx_parser::CpAsyncCpSize::Bytes16 => unsafe { LLVMInt128TypeInContext(self.context) },
+        };
+
+        let load = unsafe { LLVMBuildLoad2(self.builder, from_type, from, LLVM_UNNAMED.as_ptr()) };
+        unsafe {
+            LLVMSetAlignment(load, (cp_size.as_u64() as u32) * 8);
+        }
+
+        let extended = unsafe { LLVMBuildZExt(self.builder, load, to_type, LLVM_UNNAMED.as_ptr()) };
+
+        unsafe { LLVMBuildStore(self.builder, extended, to) };
+        unsafe {
+            LLVMSetAlignment(load, (cp_size.as_u64() as u32) * 8);
+        }
+        Ok(())
+    }
+
 
     fn flush_denormals(
         &mut self,

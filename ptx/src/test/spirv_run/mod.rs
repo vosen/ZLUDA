@@ -299,6 +299,7 @@ test_ptx!(
 test_ptx!(multiple_return, [5u32], [6u32, 123u32]);
 test_ptx!(warp_sz, [0u8], [32u8]);
 test_ptx!(tanh, [f32::INFINITY], [1.0f32]);
+test_ptx!(cp_async, [0u32], [1u32, 2u32, 3u32, 0u32]);
 
 test_ptx!(nanosleep, [0u64], [0u64]);
 
