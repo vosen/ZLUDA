@@ -1958,8 +1958,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
             )
         }
         ast::Instruction::Sin { data, .. }
-        | ast::Instruction::Cos { data, .. }
-        | ast::Instruction::Lg2 { data, .. } => InstructionModes::from_ftz_f32(data.flush_to_zero),
+        | ast::Instruction::Cos { data, .. } => InstructionModes::from_ftz_f32(data.flush_to_zero),
         ast::Instruction::Rcp { data, .. } | ast::Instruction::Sqrt { data, .. } => {
             InstructionModes::from_rtz_special(*data)
         }
@@ -1968,6 +1967,14 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
             let data = ast::RcpData {
                 type_: data.type_,
                 flush_to_zero: data.flush_to_zero,
+                kind: ast::RcpKind::Approx,
+            };
+            InstructionModes::from_rtz_special(data)
+        },
+        | ast::Instruction::Lg2 { data, .. } => {
+            let data = ast::RcpData {
+                type_: ast::ScalarType::F32,
+                flush_to_zero: Some(data.flush_to_zero),
                 kind: ast::RcpKind::Approx,
             };
             InstructionModes::from_rtz_special(data)

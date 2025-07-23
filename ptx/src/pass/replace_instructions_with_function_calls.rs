@@ -128,6 +128,12 @@ fn run_instruction<'input>(
                 },
             ..
         } => to_call(resolver, fn_declarations, "ex2_approx_f32".into(), i)?,
+        i @ ptx_parser::Instruction::Lg2 {
+            data: ast::FlushToZero {
+                flush_to_zero: false,
+            },
+            ..
+        } => to_call(resolver, fn_declarations, "lg2_approx_f32".into(), i)?,
         i @ ptx_parser::Instruction::Activemask { .. } => {
             to_call(resolver, fn_declarations, "activemask".into(), i)?
         }

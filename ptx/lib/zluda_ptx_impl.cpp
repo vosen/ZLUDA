@@ -297,4 +297,17 @@ extern "C"
         else
             return result;
     }
+
+    float FUNC(lg2_approx_f32)(float x)
+    {
+        bool is_subnormal = __builtin_isfpclass(x, __FPCLASS_NEGSUBNORMAL | __FPCLASS_POSSUBNORMAL);
+        float input = x;
+        if (is_subnormal)
+            input = x * DENORMAL_TO_NORMAL_FACTOR_F32;
+        float value = __builtin_amdgcn_logf(input);
+        if (is_subnormal)
+            return value - 24.0f;
+        else
+            return value;
+    }
 }
