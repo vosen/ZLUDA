@@ -1,0 +1,39 @@
+.version 7.0
+.target sm_80
+.address_size 64
+
+.visible .entry cp_async(
+    .param .u64 input,
+    .param .u64 output
+)
+{
+    .global .b32               from[4] = {  1,   2,   3,   4};
+    .shared .b32               to[4];
+
+    .reg .u64                  in_addr;
+    .reg .u64                  out_addr;
+
+    .reg .b32                  temp1;
+    .reg .b32                  temp2;
+    .reg .b32                  temp3;
+    .reg .b32                  temp4;
+
+    ld.param.u64               in_addr,  [input];
+    ld.param.u64               out_addr, [output];
+
+    cp.async.ca.shared.global [to], [from], 16, 12;
+    cp.async.commit_group;
+    cp.async.wait_group        0;
+
+    ld.b32                     temp1, [to];
+    ld.b32                     temp2, [to+4];
+    ld.b32                     temp3, [to+8];
+    ld.b32                     temp4, [to+12];
+    
+    st.b32                     [out_addr],    temp1;
+    st.b32                     [out_addr+4],  temp2;
+    st.b32                     [out_addr+8],  temp3;
+    st.b32                     [out_addr+12], temp4;
+
+    ret;
+}
