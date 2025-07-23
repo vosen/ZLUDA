@@ -27,7 +27,6 @@
 use std::array::TryFromSliceError;
 use std::convert::TryInto;
 use std::ffi::{CStr, NulError};
-use std::ops::Deref;
 use std::{i8, ptr, u64};
 
 use super::*;
@@ -2673,7 +2672,7 @@ impl<'a> MethodEmitContext<'a> {
         Ok(())
     }
 
-    // TOOD: revisit this on gfx1250 which has native tanh support
+    // TODO: revisit this on gfx1250 which has native tanh support
     fn emit_tanh(
         &mut self,
         data: ast::ScalarType,

@@ -1963,7 +1963,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         ast::Instruction::Rcp { data, .. } | ast::Instruction::Sqrt { data, .. } => {
             InstructionModes::from_rtz_special(*data)
         }
-        | ast::Instruction::Rsqrt { data, .. }
+        ast::Instruction::Rsqrt { data, .. }
         | ast::Instruction::Ex2 { data, .. } => {
             let data = ast::RcpData {
                 type_: data.type_,
@@ -1972,7 +1972,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
             };
             InstructionModes::from_rtz_special(data)
         },
-        | ast::Instruction::Lg2 { data, .. } => {
+        ast::Instruction::Lg2 { data, .. } => {
             let data = ast::RcpData {
                 type_: ast::ScalarType::F32,
                 flush_to_zero: Some(data.flush_to_zero),
