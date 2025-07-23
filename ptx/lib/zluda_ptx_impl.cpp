@@ -271,7 +271,6 @@ extern "C"
 
     float FUNC(rcp_approx_f32)(float x)
     {
-        // DO NOT replace this with `>` or you will break NaN handling
         float factor = 1.0f;
         if (__builtin_isfpclass(x, __FPCLASS_NEGSUBNORMAL | __FPCLASS_POSSUBNORMAL))
         {
@@ -282,5 +281,20 @@ extern "C"
             factor = REVERSE_DENORMAL_TO_NORMAL_FACTOR_F32;
         }
         return __builtin_amdgcn_rcpf(x * factor) * factor;
+    }
+
+    // When x = -126, exp2(x) = 2^(-126) ≈ 1.175494351 × 10^(-38),
+    // which is the smallest normalized number in FP32
+    float FUNC(ex2_approx_f32)(float x)
+    {
+        bool special_handling = x < -126.0f;
+        float input = x;
+        if (special_handling)
+            input *= 0.5f;
+        float result = __builtin_amdgcn_exp2f(input);
+        if (special_handling)
+            return result * result;
+        else
+            return result;
     }
 }

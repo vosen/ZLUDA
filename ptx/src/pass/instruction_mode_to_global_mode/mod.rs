@@ -1919,13 +1919,6 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
                 },
             ..
         }
-        | ast::Instruction::Ex2 {
-            data: ast::TypeFtz {
-                type_,
-                flush_to_zero,
-            },
-            ..
-        }
         | ast::Instruction::Min {
             data:
                 ast::MinMaxDetails::Float(ast::MinMaxFloat {
@@ -1970,7 +1963,8 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         ast::Instruction::Rcp { data, .. } | ast::Instruction::Sqrt { data, .. } => {
             InstructionModes::from_rtz_special(*data)
         }
-        | ast::Instruction::Rsqrt { data, .. } => {
+        | ast::Instruction::Rsqrt { data, .. }
+        | ast::Instruction::Ex2 { data, .. } => {
             let data = ast::RcpData {
                 type_: data.type_,
                 flush_to_zero: data.flush_to_zero,

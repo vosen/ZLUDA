@@ -2213,52 +2213,15 @@ impl<'a> MethodEmitContext<'a> {
             ast::ScalarType::F32 => c"llvm.amdgcn.exp2.f32",
             _ => return Err(error_unreachable()),
         };
-        let ex2 = self.emit_intrinsic(
+        self.emit_intrinsic(
             intrinsic,
-            None,
+            Some(arguments.dst),
             Some(&data.type_.into()),
             vec![(
                 self.resolver.value(arguments.src)?,
                 get_scalar_type(self.context, data.type_),
             )],
         )?;
-        // Don't ask me to explain the logic here, it came from Copilot
-        if data.flush_to_zero != Some(true) && ast::ScalarType::F32 == data.type_ {
-            let src = self.resolver.value(arguments.src)?;
-            let denormal_boundary =
-                unsafe { LLVMConstReal(get_scalar_type(self.context, data.type_), -126.0) };
-            let half = unsafe { LLVMConstReal(get_scalar_type(self.context, data.type_), 0.5) };
-            let special_handling = unsafe {
-                LLVMBuildFCmp(
-                    self.builder,
-                    LLVMRealPredicate::LLVMRealOLT,
-                    src,
-                    denormal_boundary,
-                    LLVM_UNNAMED.as_ptr(),
-                )
-            };
-            let mul_result =
-                unsafe { LLVMBuildFMul(self.builder, half, src, LLVM_UNNAMED.as_ptr()) };
-            let ex2_post_mul = self.emit_intrinsic(
-                intrinsic,
-                None,
-                Some(&data.type_.into()),
-                vec![(mul_result, get_scalar_type(self.context, data.type_))],
-            )?;
-            let result = unsafe {
-                LLVMBuildFMul(
-                    self.builder,
-                    ex2_post_mul,
-                    ex2_post_mul,
-                    LLVM_UNNAMED.as_ptr(),
-                )
-            };
-            self.resolver.with_result(arguments.dst, |dst| unsafe {
-                LLVMBuildSelect(self.builder, special_handling, result, ex2, dst)
-            });
-        } else {
-            self.resolver.register(arguments.dst, ex2);
-        }
         Ok(())
     }
 

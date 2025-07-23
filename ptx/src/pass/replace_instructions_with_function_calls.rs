@@ -120,6 +120,14 @@ fn run_instruction<'input>(
                 },
             ..
         } => to_call(resolver, fn_declarations, "rcp_approx_f32".into(), i)?,
+        i @ ptx_parser::Instruction::Ex2 {
+            data:
+                ast::TypeFtz {
+                    type_: ast::ScalarType::F32,
+                    flush_to_zero: None | Some(false),
+                },
+            ..
+        } => to_call(resolver, fn_declarations, "ex2_approx_f32".into(), i)?,
         i @ ptx_parser::Instruction::Activemask { .. } => {
             to_call(resolver, fn_declarations, "activemask".into(), i)?
         }
