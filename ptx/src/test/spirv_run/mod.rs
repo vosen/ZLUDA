@@ -159,6 +159,7 @@ test_ptx!(
 );
 test_ptx!(vector_extract, [1u8, 2u8, 3u8, 4u8], [3u8, 4u8, 1u8, 2u8]);
 test_ptx!(shr, [-2i32], [-1i32]);
+test_ptx!(shr_oob, [-32768i16], [-1i16]);
 test_ptx!(or, [1u64, 2u64], [3u64]);
 test_ptx!(sub, [2u64], [1u64]);
 test_ptx!(min, [555i32, 444i32], [444i32]);
@@ -180,6 +181,7 @@ test_ptx!(
     [0b1_00000000_01000000000000000000000u32]
 );
 test_ptx!(constant_f32, [10f32], [5f32]);
+test_ptx!(abs, [i32::MIN], [i32::MIN]);
 test_ptx!(constant_negative, [-101i32], [101i32]);
 test_ptx!(and, [6u32, 3u32], [2u32]);
 test_ptx!(selp, [100u16, 200u16], [200u16]);
@@ -296,6 +298,7 @@ test_ptx!(
 );
 test_ptx!(multiple_return, [5u32], [6u32, 123u32]);
 test_ptx!(warp_sz, [0u8], [32u8]);
+test_ptx!(tanh, [f32::INFINITY], [1.0f32]);
 
 test_ptx!(nanosleep, [0u64], [0u64]);
 

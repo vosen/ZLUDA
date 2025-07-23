@@ -164,6 +164,8 @@ fn run_instruction<'input>(
         | ast::Instruction::Ret { .. }
         | ast::Instruction::Rsqrt { .. }
         | ast::Instruction::Selp { .. }
+        | ast::Instruction::Set { .. }
+        | ast::Instruction::SetBool { .. }
         | ast::Instruction::Setp { .. }
         | ast::Instruction::SetpBool { .. }
         | ast::Instruction::ShflSync { .. }
@@ -183,6 +185,7 @@ fn run_instruction<'input>(
             data: ast::ArithDetails::Integer(..),
             ..
         }
+        | ast::Instruction::Tanh { .. }
         | ast::Instruction::Trap {}
         | ast::Instruction::Xor { .. } => result.push(Statement::Instruction(instruction)),
         ast::Instruction::Add {
