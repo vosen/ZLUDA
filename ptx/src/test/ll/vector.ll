@@ -49,11 +49,11 @@ define amdgpu_kernel void @vector(ptr addrspace(4) byref(i64) %"67", ptr addrspa
   br label %"45"
 
 "45":                                             ; preds = %1
-  %"75" = load i64, ptr addrspace(4) %"67", align 4
-  store i64 %"75", ptr addrspace(5) %"69", align 4
-  %"76" = load i64, ptr addrspace(4) %"68", align 4
-  store i64 %"76", ptr addrspace(5) %"70", align 4
-  %"78" = load i64, ptr addrspace(5) %"69", align 4
+  %"75" = load i64, ptr addrspace(4) %"67", align 8
+  store i64 %"75", ptr addrspace(5) %"69", align 8
+  %"76" = load i64, ptr addrspace(4) %"68", align 8
+  store i64 %"76", ptr addrspace(5) %"70", align 8
+  %"78" = load i64, ptr addrspace(5) %"69", align 8
   %"85" = inttoptr i64 %"78" to ptr
   %"77" = load <2 x i32>, ptr %"85", align 8
   store <2 x i32> %"77", ptr addrspace(5) %"71", align 8
@@ -65,8 +65,8 @@ define amdgpu_kernel void @vector(ptr addrspace(4) byref(i64) %"67", ptr addrspa
 "46":                                             ; preds = %"45"
   %"82" = load <2 x i32>, ptr addrspace(5) %"71", align 8
   %"86" = bitcast <2 x i32> %"82" to i64
-  store i64 %"86", ptr addrspace(5) %"74", align 4
-  %"83" = load i64, ptr addrspace(5) %"70", align 4
+  store i64 %"86", ptr addrspace(5) %"74", align 8
+  %"83" = load i64, ptr addrspace(5) %"70", align 8
   %"84" = load <2 x i32>, ptr addrspace(5) %"71", align 8
   %"87" = inttoptr i64 %"83" to ptr
   store <2 x i32> %"84", ptr %"87", align 8

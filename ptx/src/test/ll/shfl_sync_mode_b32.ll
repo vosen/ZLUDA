@@ -20,8 +20,8 @@ define amdgpu_kernel void @shfl_sync_mode_b32(ptr addrspace(4) byref(i64) %"48")
   br label %"45"
 
 "45":                                             ; preds = %1
-  %"54" = load i64, ptr addrspace(4) %"48", align 4
-  store i64 %"54", ptr addrspace(5) %"49", align 4
+  %"54" = load i64, ptr addrspace(4) %"48", align 8
+  store i64 %"54", ptr addrspace(5) %"49", align 8
   %"31" = call i32 @__zluda_ptx_impl_sreg_tid(i8 0)
   br label %"46"
 
@@ -55,15 +55,15 @@ define amdgpu_kernel void @shfl_sync_mode_b32(ptr addrspace(4) byref(i64) %"48")
   store i32 %"72", ptr addrspace(5) %"53", align 4
   %"76" = load i32, ptr addrspace(5) %"51", align 4
   %"75" = zext i32 %"76" to i64
-  store i64 %"75", ptr addrspace(5) %"50", align 4
-  %"78" = load i64, ptr addrspace(5) %"50", align 4
+  store i64 %"75", ptr addrspace(5) %"50", align 8
+  %"78" = load i64, ptr addrspace(5) %"50", align 8
   %"77" = mul i64 %"78", 4
-  store i64 %"77", ptr addrspace(5) %"50", align 4
-  %"80" = load i64, ptr addrspace(5) %"49", align 4
-  %"81" = load i64, ptr addrspace(5) %"50", align 4
+  store i64 %"77", ptr addrspace(5) %"50", align 8
+  %"80" = load i64, ptr addrspace(5) %"49", align 8
+  %"81" = load i64, ptr addrspace(5) %"50", align 8
   %"79" = add i64 %"80", %"81"
-  store i64 %"79", ptr addrspace(5) %"49", align 4
-  %"82" = load i64, ptr addrspace(5) %"49", align 4
+  store i64 %"79", ptr addrspace(5) %"49", align 8
+  %"82" = load i64, ptr addrspace(5) %"49", align 8
   %"83" = load i32, ptr addrspace(5) %"53", align 4
   %"92" = inttoptr i64 %"82" to ptr
   store i32 %"83", ptr %"92", align 4

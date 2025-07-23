@@ -394,6 +394,45 @@ impl Parse for DotModifier {
     }
 }
 
+#[derive(PartialEq, Eq)]
+pub struct HyphenatedIdent {
+    idents: Punctuated<Ident, Token![-]>,
+}
+
+impl HyphenatedIdent {
+    fn span(&self) -> Span {
+        self.idents.span()
+    }
+
+    pub fn ident(&self) -> Ident {
+        Ident::new(&self.to_string().to_string(), self.span())
+    }
+}
+
+impl std::fmt::Display for HyphenatedIdent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut idents = self.idents.iter();
+        
+        if let Some(id) = idents.next() {
+            write!(f, "{}", id)?;
+        }
+
+        for id in idents {
+            write!(f, "_{}", id)?;
+        }
+
+        Ok(())
+    }
+    
+}
+
+impl Parse for HyphenatedIdent {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let idents = Punctuated::parse_separated_nonempty(input)?;
+        Ok(Self { idents })
+    }
+}
+
 #[derive(PartialEq, Eq, Hash, Clone)]
 enum IdentLike {
     Type(Token![type]),
@@ -452,7 +491,7 @@ impl Parse for IdentLike {
     }
 }
 
-// Arguments decalaration can loook like this:
+// Arguments declaration can loook like this:
 //  a{, b}
 // That's why we don't parse Arguments as Punctuated<Argument, Token![,]>
 #[derive(PartialEq, Eq)]
@@ -477,11 +516,11 @@ impl Parse for Arguments {
                 if lookahead.peek(Token![!]) {
                     content.parse::<Token![!]>()?;
                     can_be_negated = true;
-                    ident = input.parse::<Ident>()?;
+                    ident = input.parse::<HyphenatedIdent>()?;
                 } else if lookahead.peek(Token![,]) {
                     optional = true;
                     content.parse::<Token![,]>()?;
-                    ident = content.parse::<Ident>()?;
+                    ident = content.parse::<HyphenatedIdent>()?;
                 } else {
                     return Err(lookahead.error());
                 }
@@ -492,7 +531,7 @@ impl Parse for Arguments {
                     optional = true;
                     bracketed.parse::<Token![|]>()?;
                     pre_pipe = true;
-                    ident = bracketed.parse::<Ident>()?;
+                    ident = bracketed.parse::<HyphenatedIdent>()?;
                 } else {
                     let mut sub_args = Self::parse(&bracketed)?;
                     sub_args.0.first_mut().unwrap().pre_bracket = true;
@@ -505,7 +544,7 @@ impl Parse for Arguments {
                         if unified_ident.to_string() != "unified" {
                             return Err(syn::Error::new(
                                 unified_ident.span(),
-                                format!("Exptected `unified`, got `{}`", unified_ident),
+                                format!("Expected `unified`, got `{}`", unified_ident),
                             ));
                         }
                         for a in sub_args.0.iter_mut() {
@@ -516,11 +555,11 @@ impl Parse for Arguments {
                     continue;
                 }
             } else if lookahead.peek(Ident) {
-                ident = input.parse::<Ident>()?;
+                ident = input.parse::<HyphenatedIdent>()?;
             } else if lookahead.peek(Token![|]) {
                 input.parse::<Token![|]>()?;
                 pre_pipe = true;
-                ident = input.parse::<Ident>()?;
+                ident = input.parse::<HyphenatedIdent>()?;
             } else {
                 break;
             }
@@ -555,7 +594,7 @@ pub struct Argument {
     pub pre_bracket: bool,
     pub pre_pipe: bool,
     pub can_be_negated: bool,
-    pub ident: Ident,
+    pub ident: HyphenatedIdent,
     pub post_bracket: bool,
     pub unified: bool,
 }
@@ -841,6 +880,22 @@ mod tests {
         assert!(a.post_bracket);
         assert!(!a.can_be_negated);
         assert!(a.unified);
+    }
+
+    #[test]
+    fn args_hyphenated() {
+        let input = quote! {
+            d, cp-size, b
+        };
+        let args = syn::parse2::<super::Arguments>(input).unwrap();
+        let cp_size = &args.0[1];
+        assert!(!cp_size.optional);
+        assert_eq!("cp_size", cp_size.ident.to_string());
+        assert!(!cp_size.pre_bracket);
+        assert!(!cp_size.pre_pipe);
+        assert!(!cp_size.post_bracket);
+        assert!(!cp_size.can_be_negated);
+        assert!(!cp_size.unified);
     }
 
     #[test]

@@ -26,7 +26,7 @@ fn get_ptx_from_wrapped_fatbin(image: *const ::core::ffi::c_void) -> Result<Vec<
     let fatbin = Fatbin::new(&image).map_err(|_| CUerror::UNKNOWN)?;
     let mut submodules = fatbin.get_submodules().map_err(|_| CUerror::UNKNOWN)?;
 
-    while let Some(current) = unsafe { submodules.next().map_err(|_| CUerror::UNKNOWN)? } {
+    while let Some(current) = submodules.next().map_err(|_| CUerror::UNKNOWN)? {
         let mut files = current.get_files();
         while let Some(file) = unsafe { files.next().map_err(|_| CUerror::UNKNOWN)? } {
             if file.header.kind == FatbinFileHeader::HEADER_KIND_PTX {
@@ -64,15 +64,17 @@ pub(crate) fn load_hip_module(image: *const std::ffi::c_void) -> Result<hipModul
     let global_state = driver::global_state()?;
     let text = get_ptx(image)?;
     let ast = ptx_parser::parse_module_checked(&text).map_err(|_| CUerror::NO_BINARY_FOR_GPU)?;
-    let llvm_module = ptx::to_llvm_module(ast).map_err(|_| CUerror::UNKNOWN)?;
     let mut dev = 0;
     unsafe { hipCtxGetDevice(&mut dev) }?;
     let mut props = unsafe { mem::zeroed() };
     unsafe { hipGetDevicePropertiesR0600(&mut props, dev) }?;
+    let attributes = ptx::Attributes { clock_rate: props.clockRate as u32 };
+    let llvm_module = ptx::to_llvm_module(ast, attributes).map_err(|_| CUerror::UNKNOWN)?;
     let elf_module = comgr::compile_bitcode(
         &global_state.comgr,
         unsafe { CStr::from_ptr(props.gcnArchName.as_ptr()) },
         &*llvm_module.llvm_ir.write_bitcode_to_memory(),
+        &*llvm_module.attributes_ir.write_bitcode_to_memory(),
         llvm_module.linked_bitcode(),
     )
     .map_err(|_| CUerror::UNKNOWN)?;

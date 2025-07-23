@@ -1827,6 +1827,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::Cvta { .. }
         | ast::Instruction::Atom { .. }
         | ast::Instruction::Mul24 { .. }
+        | ast::Instruction::Nanosleep { .. }
         | ast::Instruction::AtomCas { .. } => InstructionModes::none(),
         ast::Instruction::Add {
             data: ast::ArithDetails::Integer(_),

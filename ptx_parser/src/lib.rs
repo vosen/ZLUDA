@@ -3540,6 +3540,13 @@ derive_parser!(
     }
     .mode: ShuffleMode = { .up, .down, .bfly, .idx };
 
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#miscellaneous-instructions-nanosleep
+    nanosleep.u32 t => {
+        Instruction::Nanosleep {
+            arguments: NanosleepArgs { src: t }
+        }
+    }
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-tanh
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#half-precision-floating-point-instructions-tanh
     tanh.approx.type d, a => {

@@ -9,24 +9,24 @@ define amdgpu_kernel void @ld_st_offset(ptr addrspace(4) byref(i64) %"35", ptr a
   br label %"34"
 
 "34":                                             ; preds = %1
-  %"41" = load i64, ptr addrspace(4) %"35", align 4
-  store i64 %"41", ptr addrspace(5) %"37", align 4
-  %"42" = load i64, ptr addrspace(4) %"36", align 4
-  store i64 %"42", ptr addrspace(5) %"38", align 4
-  %"44" = load i64, ptr addrspace(5) %"37", align 4
+  %"41" = load i64, ptr addrspace(4) %"35", align 8
+  store i64 %"41", ptr addrspace(5) %"37", align 8
+  %"42" = load i64, ptr addrspace(4) %"36", align 8
+  store i64 %"42", ptr addrspace(5) %"38", align 8
+  %"44" = load i64, ptr addrspace(5) %"37", align 8
   %"51" = inttoptr i64 %"44" to ptr
   %"43" = load i32, ptr %"51", align 4
   store i32 %"43", ptr addrspace(5) %"39", align 4
-  %"45" = load i64, ptr addrspace(5) %"37", align 4
+  %"45" = load i64, ptr addrspace(5) %"37", align 8
   %"52" = inttoptr i64 %"45" to ptr
   %"31" = getelementptr inbounds i8, ptr %"52", i64 4
   %"46" = load i32, ptr %"31", align 4
   store i32 %"46", ptr addrspace(5) %"40", align 4
-  %"47" = load i64, ptr addrspace(5) %"38", align 4
+  %"47" = load i64, ptr addrspace(5) %"38", align 8
   %"48" = load i32, ptr addrspace(5) %"40", align 4
   %"53" = inttoptr i64 %"47" to ptr
   store i32 %"48", ptr %"53", align 4
-  %"49" = load i64, ptr addrspace(5) %"38", align 4
+  %"49" = load i64, ptr addrspace(5) %"38", align 8
   %"54" = inttoptr i64 %"49" to ptr
   %"33" = getelementptr inbounds i8, ptr %"54", i64 4
   %"50" = load i32, ptr addrspace(5) %"39", align 4
