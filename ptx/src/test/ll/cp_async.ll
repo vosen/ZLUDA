@@ -18,8 +18,8 @@ define amdgpu_kernel void @cp_async(ptr addrspace(4) byref(i64) %"48", ptr addrs
   store i64 %"56", ptr addrspace(5) %"50", align 4
   %"57" = load i64, ptr addrspace(4) %"49", align 4
   store i64 %"57", ptr addrspace(5) %"51", align 4
-  %2 = load i128, ptr addrspace(1) @from, align 4
-  %3 = and i128 %2, 79228162514264337593543950335
+  %2 = load i96, ptr addrspace(1) @from, align 128
+  %3 = zext i96 %2 to i128
   store i128 %3, ptr addrspace(3) @to, align 4
   %"58" = load i32, ptr addrspacecast (ptr addrspace(3) @to to ptr), align 4
   store i32 %"58", ptr addrspace(5) %"52", align 4

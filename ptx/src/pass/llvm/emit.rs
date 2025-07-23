@@ -2565,29 +2565,29 @@ impl<'a> MethodEmitContext<'a> {
         let cp_size = data.cp_size;
         let src_size = data.src_size.unwrap_or(cp_size.as_u64());
 
-        let type_ = match cp_size {
+        let from_type = unsafe { LLVMIntTypeInContext(self.context, (src_size as u32) * 8) };
+
+        let to_type = match cp_size {
             ptx_parser::CpAsyncCpSize::Bytes4 => unsafe { LLVMInt32TypeInContext(self.context) },
             ptx_parser::CpAsyncCpSize::Bytes8 => unsafe { LLVMInt64TypeInContext(self.context) },
             ptx_parser::CpAsyncCpSize::Bytes16 => unsafe { LLVMInt128TypeInContext(self.context) },
         };
 
-        let load = unsafe { LLVMBuildLoad2(self.builder, type_, from, LLVM_UNNAMED.as_ptr()) };
+        let load = unsafe { LLVMBuildLoad2(self.builder, from_type, from, LLVM_UNNAMED.as_ptr()) };
+        unsafe {
+            LLVMSetAlignment(load, (cp_size.as_u64() as u32) * 8);
+        }
 
-        let masked = if src_size < cp_size.as_u64() {
-            let byte_mask = if src_size > 8 {
-                vec![u64::MAX, u64::MAX >> (64 - (src_size - 8) * 8)]
-            } else {
-                vec![u64::MAX >> (64 - src_size * 8)]
-            };
-
-            let byte_mask = unsafe { LLVMConstIntOfArbitraryPrecision(type_, byte_mask.len() as u32, byte_mask.as_ptr()) };
-
-            unsafe { LLVMBuildAnd(self.builder, load, byte_mask, LLVM_UNNAMED.as_ptr()) }
+        let extended = if from_type != to_type {
+            unsafe { LLVMBuildZExt(self.builder, load, to_type, LLVM_UNNAMED.as_ptr()) }
         } else {
             load
         };
 
-        unsafe { LLVMBuildStore(self.builder, masked, to) };
+        unsafe { LLVMBuildStore(self.builder, extended, to) };
+        unsafe {
+            LLVMSetAlignment(load, (cp_size.as_u64() as u32) * 8);
+        }
         Ok(())
     }
 

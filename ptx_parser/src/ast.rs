@@ -189,15 +189,16 @@ ptx_parser_macros::generate_instruction_type!(
             }
         },
         CpAsync {
+            type: Type::Scalar(ScalarType::U32),
             data: CpAsyncDetails,
             arguments<T>: {
                 src_to: {
                     repr: T,
-                    type: Type::Pointer(ScalarType::U32, StateSpace::Shared)
+                    space: StateSpace::Shared
                 },
                 src_from: {
                     repr: T,
-                    type: Type::Pointer(ScalarType::U32, StateSpace::Global)
+                    space: StateSpace::Global
                 }
             }
         },
