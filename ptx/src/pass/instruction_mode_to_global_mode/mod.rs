@@ -221,12 +221,25 @@ impl InstructionModes {
         )
     }
 
-    fn from_rcp(data: ast::RcpData) -> InstructionModes {
+    fn from_rtz_special(data: ast::RcpData) -> InstructionModes {
         let rounding = match data.kind {
             ast::RcpKind::Approx => None,
             ast::RcpKind::Compliant(rnd) => Some(RoundingMode::from_ast(rnd)),
         };
-        let denormal = data.flush_to_zero.map(DenormalMode::from_ftz);
+        let denormal = match (
+            data.kind == ast::RcpKind::Approx,
+            data.flush_to_zero == Some(true),
+        ) {
+            // If we are approximate and flushing then we compile to V_RSQ_F32
+            // or V_SQRT_F32 which ignores prevailing denormal mode and flushes anyway
+            (true, true) => None,
+            // If we are approximate and flushing the V_RSQ_F32/V_SQRT_F32
+            // ignores ftz mode, but we implement instruction in terms of fmuls
+            // which must preserve denormals
+            (true, false) => Some(DenormalMode::Preserve),
+            // For full precision we set denormal mode accordingly
+            (false, ftz) => Some(DenormalMode::from_ftz(ftz)),
+        };
         InstructionModes::new(data.type_, denormal, rounding)
     }
 
@@ -1913,13 +1926,6 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
             },
             ..
         }
-        | ast::Instruction::Rsqrt {
-            data: ast::TypeFtz {
-                type_,
-                flush_to_zero,
-            },
-            ..
-        }
         | ast::Instruction::Min {
             data:
                 ast::MinMaxDetails::Float(ast::MinMaxFloat {
@@ -1962,8 +1968,16 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::Cos { data, .. }
         | ast::Instruction::Lg2 { data, .. } => InstructionModes::from_ftz_f32(data.flush_to_zero),
         ast::Instruction::Rcp { data, .. } | ast::Instruction::Sqrt { data, .. } => {
-            InstructionModes::from_rcp(*data)
+            InstructionModes::from_rtz_special(*data)
         }
+        | ast::Instruction::Rsqrt { data, .. } => {
+            let data = ast::RcpData {
+                type_: data.type_,
+                flush_to_zero: data.flush_to_zero,
+                kind: ast::RcpKind::Approx,
+            };
+            InstructionModes::from_rtz_special(data)
+        },
         ast::Instruction::Cvt { data, .. } => InstructionModes::from_cvt(data),
     }
 }

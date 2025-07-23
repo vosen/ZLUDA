@@ -103,6 +103,23 @@ fn run_instruction<'input>(
                 },
             ..
         } => to_call(resolver, fn_declarations, "sqrt_approx_f32".into(), i)?,
+        i @ ptx_parser::Instruction::Rsqrt {
+            data:
+                ast::TypeFtz {
+                    type_: ast::ScalarType::F32,
+                    flush_to_zero: None | Some(false),
+                },
+            ..
+        } => to_call(resolver, fn_declarations, "rsqrt_approx_f32".into(), i)?,
+        i @ ptx_parser::Instruction::Rcp {
+            data:
+                ast::RcpData {
+                    kind: ast::RcpKind::Approx,
+                    type_: ast::ScalarType::F32,
+                    flush_to_zero: None | Some(false),
+                },
+            ..
+        } => to_call(resolver, fn_declarations, "rcp_approx_f32".into(), i)?,
         i @ ptx_parser::Instruction::Activemask { .. } => {
             to_call(resolver, fn_declarations, "activemask".into(), i)?
         }

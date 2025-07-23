@@ -1,10 +1,11 @@
 // Every time this file changes it must te rebuilt, you need `rocm-llvm-dev` and `llvm-17`
 // `fdenormal-fp-math=dynamic` is required to make functions eligible for inlining
-//  /opt/rocm/llvm/bin/clang -Xclang -fdenormal-fp-math=dynamic  -Wall -Wextra -Wsign-compare -Wconversion -x hip zluda_ptx_impl.cpp -nogpulib -O3 -mno-wavefrontsize64 -o zluda_ptx_impl.bc -emit-llvm -c --offload-device-only --offload-arch=gfx1010 && /opt/rocm/llvm/bin/llvm-dis zluda_ptx_impl.bc -o - | sed '/@llvm.used/d' | sed '/wchar_size/d' | sed '/llvm.module.flags/d' | sed 's/define hidden/define linkonce_odr/g' | sed 's/\"target-cpu\"=\"gfx1010\"//g' | sed -E 's/\"target-features\"=\"[^\"]+\"//g' | sed 's/ nneg / /g' | sed 's/ disjoint / /g' | llvm-as-17 - -o  zluda_ptx_impl.bc && /opt/rocm/llvm/bin/llvm-dis zluda_ptx_impl.bc
+//  /opt/rocm/llvm/bin/clang -std=c++20 -Xclang -fdenormal-fp-math=dynamic  -Wall -Wextra -Wsign-compare -Wconversion -x hip zluda_ptx_impl.cpp -nogpulib -O3 -mno-wavefrontsize64 -o zluda_ptx_impl.bc -emit-llvm -c --offload-device-only --offload-arch=gfx1010 && /opt/rocm/llvm/bin/llvm-dis zluda_ptx_impl.bc -o - | sed '/@llvm.used/d' | sed '/wchar_size/d' | sed '/llvm.module.flags/d' | sed 's/define hidden/define linkonce_odr/g' | sed 's/\"target-cpu\"=\"gfx1010\"//g' | sed -E 's/\"target-features\"=\"[^\"]+\"//g' | sed 's/ nneg / /g' | sed 's/ disjoint / /g' | llvm-as-17 - -o  zluda_ptx_impl.bc && /opt/rocm/llvm/bin/llvm-dis zluda_ptx_impl.bc
 
 #include <cstddef>
 #include <cstdint>
 #include <bit>
+#include <cmath>
 #include <hip/amd_detail/amd_device_functions.h>
 
 #define FUNC(NAME) __device__ __attribute__((retain)) __zluda_ptx_impl_##NAME
@@ -161,7 +162,7 @@ extern "C"
     int32_t __ockl_wgred_and_i32(int32_t) __device__;
     int32_t __ockl_wgred_or_i32(int32_t) __device__;
 
-    #define BAR_RED_IMPL(reducer)                                                                                        \
+#define BAR_RED_IMPL(reducer)                                                                                            \
     bool FUNC(bar_red_##reducer##_pred)(uint32_t barrier __attribute__((unused)), bool predicate, bool invert_predicate) \
     {                                                                                                                    \
         /* TODO: handle barrier */                                                                                       \
@@ -171,7 +172,8 @@ extern "C"
     BAR_RED_IMPL(and);
     BAR_RED_IMPL(or);
 
-    struct ShflSyncResult {
+    struct ShflSyncResult
+    {
         uint32_t output;
         bool in_bounds;
     };
@@ -189,7 +191,7 @@ extern "C"
     // intrinsics, it is always 31 for idx, bfly, and down, and 0 for up. This is used for the
     // bounds check.
 
-    #define SHFL_SYNC_IMPL(mode, calculate_index, CMP)                                                                                          \
+#define SHFL_SYNC_IMPL(mode, calculate_index, CMP)                                                                                              \
     ShflSyncResult FUNC(shfl_sync_##mode##_b32_pred)(uint32_t input, int32_t delta, uint32_t opts, uint32_t membermask __attribute__((unused))) \
     {                                                                                                                                           \
         int32_t section_mask = (opts >> 8) & 0b11111;                                                                                           \
@@ -199,10 +201,11 @@ extern "C"
         int32_t subsection_end = subsection | (~section_mask & warp_end);                                                                       \
         int32_t idx = calculate_index;                                                                                                          \
         bool out_of_bounds = idx CMP subsection_end;                                                                                            \
-        if (out_of_bounds) {                                                                                                                    \
+        if (out_of_bounds)                                                                                                                      \
+        {                                                                                                                                       \
             idx = self;                                                                                                                         \
         }                                                                                                                                       \
-        int32_t output = __builtin_amdgcn_ds_bpermute(idx<<2, (int32_t)input);                                                                  \
+        int32_t output = __builtin_amdgcn_ds_bpermute(idx << 2, (int32_t)input);                                                                \
         return {(uint32_t)output, !out_of_bounds};                                                                                              \
     }                                                                                                                                           \
                                                                                                                                                 \
@@ -210,15 +213,15 @@ extern "C"
     {                                                                                                                                           \
         return __zluda_ptx_impl_shfl_sync_##mode##_b32_pred(input, delta, opts, membermask).output;                                             \
     }
-    
+
     // We are using the HIP __shfl intrinsics to implement these, rather than the __shfl_sync
     // intrinsics, as those only add an assertion checking that the membermask is used correctly.
     // They do not return the result of the range check, so we must replicate that logic here.
 
-    SHFL_SYNC_IMPL(up,   self - delta,                         <);
-    SHFL_SYNC_IMPL(down, self + delta,                         >);
-    SHFL_SYNC_IMPL(bfly, self ^ delta,                         >);
-    SHFL_SYNC_IMPL(idx,  (delta & ~section_mask) | subsection, >);
+    SHFL_SYNC_IMPL(up, self - delta, <);
+    SHFL_SYNC_IMPL(down, self + delta, >);
+    SHFL_SYNC_IMPL(bfly, self ^ delta, >);
+    SHFL_SYNC_IMPL(idx, (delta & ~section_mask) | subsection, >);
 
     void FUNC(__assertfail)(uint64_t message,
                             uint64_t file,
@@ -230,12 +233,54 @@ extern "C"
         __assert_fail((const char *)message, (const char *)file, line, (const char *)function);
     }
 
+    // * Smallest denormal is 1.4 × 10^-45
+    // * Smallest normal is ~1.175494351 × 10^(-38)
+    // * Now, 1.175494351×10^-38 / 1.4 × 10^-45  = 8396388 + 31/140
+    // * Next power of 2 is 16777216
+    const float DENORMAL_TO_NORMAL_FACTOR_F32 = 16777216.0f;
+    // * Largest subnormal is ~1.175494210692441e × 10^(-38)
+    // * Then any value equal or larger than following will produce subnormals: 8.50706018714406320806444272332455743547934627837873057975602739772164... × 10^37
+    const float RCP_DENORMAL_OUTPUT = 8.50706018714406320806444272332455743547934627837873057975602739772164e37f;
+    const float REVERSE_DENORMAL_TO_NORMAL_FACTOR_F32 = 0.029387360490963111877208252592662410455594571842846914442095471744599661631813495980086003637902577995683214210345151992265999035207077609582844f;
+
     float FUNC(sqrt_approx_f32)(float x)
     {
+        bool is_subnormal = __builtin_isfpclass(x, __FPCLASS_NEGSUBNORMAL | __FPCLASS_POSSUBNORMAL);
+        float input = x;
+        if (is_subnormal)
+            input = x * DENORMAL_TO_NORMAL_FACTOR_F32;
+        float value = __builtin_amdgcn_sqrtf(input);
+        if (is_subnormal)
+            return value * 0.000244140625f;
+        else
+            return value;
+    }
+
+    float FUNC(rsqrt_approx_f32)(float x)
+    {
+        bool is_subnormal = __builtin_isfpclass(x, __FPCLASS_NEGSUBNORMAL | __FPCLASS_POSSUBNORMAL);
+        float input = x;
+        if (is_subnormal)
+            input = x * DENORMAL_TO_NORMAL_FACTOR_F32;
+        float value = __builtin_amdgcn_rsqf(input);
+        if (is_subnormal)
+            return value * 4096.0f;
+        else
+            return value;
+    }
+
+    float FUNC(rcp_approx_f32)(float x)
+    {
         // DO NOT replace this with `>` or you will break NaN handling
-        if (!(x <= std::bit_cast<float>(0x007FFFFFU)))
-            return __builtin_amdgcn_sqrtf(x);
-        // formula provided by Copilot
-        return __builtin_amdgcn_sqrtf(x * 16777216.0f) * 0.000244140625f;
+        float factor = 1.0f;
+        if (__builtin_isfpclass(x, __FPCLASS_NEGSUBNORMAL | __FPCLASS_POSSUBNORMAL))
+        {
+            factor = DENORMAL_TO_NORMAL_FACTOR_F32;
+        }
+        if (std::fabs(x) >= RCP_DENORMAL_OUTPUT)
+        {
+            factor = REVERSE_DENORMAL_TO_NORMAL_FACTOR_F32;
+        }
+        return __builtin_amdgcn_rcpf(x * factor) * factor;
     }
 }
