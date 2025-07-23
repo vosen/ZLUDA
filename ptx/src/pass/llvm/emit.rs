@@ -2600,7 +2600,6 @@ fn get_type(context: LLVMContextRef, type_: &ast::Type) -> Result<LLVMTypeRef, T
                     LLVMArrayType2(result, *dimension as u64)
                 })
         }
-        ast::Type::Pointer(_, space) => get_pointer_type(context, *space)?,
     })
 }
 

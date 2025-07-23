@@ -138,10 +138,7 @@ pub(crate) fn default_implicit_conversion(
         }
     }
     if instruction_space != operand_space {
-        default_implicit_conversion_space(
-            (operand_space, operand_type),
-            (instruction_space, instruction_type),
-        )
+        default_implicit_conversion_space((operand_space, operand_type), instruction_space)
     } else if instruction_type != operand_type {
         default_implicit_conversion_type(instruction_space, operand_type, instruction_type)
     } else {
@@ -167,7 +164,7 @@ fn is_addressable(this: ast::StateSpace) -> bool {
 // Space is different
 fn default_implicit_conversion_space(
     (operand_space, operand_type): (ast::StateSpace, &ast::Type),
-    (instruction_space, instruction_type): (ast::StateSpace, &ast::Type),
+    instruction_space: ast::StateSpace,
 ) -> Result<Option<ConversionKind>, TranslateError> {
     if (instruction_space == ast::StateSpace::Generic && coerces_to_generic(operand_space))
         || (operand_space == ast::StateSpace::Generic && coerces_to_generic(instruction_space))
@@ -175,15 +172,6 @@ fn default_implicit_conversion_space(
         Ok(Some(ConversionKind::PtrToPtr))
     } else if operand_space == ast::StateSpace::Reg {
         match operand_type {
-            ast::Type::Pointer(operand_ptr_type, operand_ptr_space)
-                if *operand_ptr_space == instruction_space =>
-            {
-                if instruction_type != &ast::Type::Scalar(*operand_ptr_type) {
-                    Ok(Some(ConversionKind::PtrToPtr))
-                } else {
-                    Ok(None)
-                }
-            }
             // TODO: 32 bit
             ast::Type::Scalar(ast::ScalarType::B64)
             | ast::Type::Scalar(ast::ScalarType::U64)
@@ -203,19 +191,6 @@ fn default_implicit_conversion_space(
                 }
                 _ => Err(error_mismatched_type()),
             },
-            _ => Err(error_mismatched_type()),
-        }
-    } else if instruction_space == ast::StateSpace::Reg {
-        match instruction_type {
-            ast::Type::Pointer(instruction_ptr_type, instruction_ptr_space)
-                if operand_space == *instruction_ptr_space =>
-            {
-                if operand_type != &ast::Type::Scalar(*instruction_ptr_type) {
-                    Ok(Some(ConversionKind::PtrToPtr))
-                } else {
-                    Ok(None)
-                }
-            }
             _ => Err(error_mismatched_type()),
         }
     } else {
