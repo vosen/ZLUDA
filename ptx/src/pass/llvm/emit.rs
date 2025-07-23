@@ -2578,11 +2578,7 @@ impl<'a> MethodEmitContext<'a> {
             LLVMSetAlignment(load, (cp_size.as_u64() as u32) * 8);
         }
 
-        let extended = if from_type != to_type {
-            unsafe { LLVMBuildZExt(self.builder, load, to_type, LLVM_UNNAMED.as_ptr()) }
-        } else {
-            load
-        };
+        let extended = unsafe { LLVMBuildZExt(self.builder, load, to_type, LLVM_UNNAMED.as_ptr()) };
 
         unsafe { LLVMBuildStore(self.builder, extended, to) };
         unsafe {
