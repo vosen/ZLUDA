@@ -9,15 +9,15 @@ define amdgpu_kernel void @min(ptr addrspace(4) byref(i64) %"33", ptr addrspace(
   br label %"32"
 
 "32":                                             ; preds = %1
-  %"39" = load i64, ptr addrspace(4) %"33", align 4
-  store i64 %"39", ptr addrspace(5) %"35", align 4
-  %"40" = load i64, ptr addrspace(4) %"34", align 4
-  store i64 %"40", ptr addrspace(5) %"36", align 4
-  %"42" = load i64, ptr addrspace(5) %"35", align 4
+  %"39" = load i64, ptr addrspace(4) %"33", align 8
+  store i64 %"39", ptr addrspace(5) %"35", align 8
+  %"40" = load i64, ptr addrspace(4) %"34", align 8
+  store i64 %"40", ptr addrspace(5) %"36", align 8
+  %"42" = load i64, ptr addrspace(5) %"35", align 8
   %"50" = inttoptr i64 %"42" to ptr
   %"41" = load i32, ptr %"50", align 4
   store i32 %"41", ptr addrspace(5) %"37", align 4
-  %"43" = load i64, ptr addrspace(5) %"35", align 4
+  %"43" = load i64, ptr addrspace(5) %"35", align 8
   %"51" = inttoptr i64 %"43" to ptr
   %"31" = getelementptr inbounds i8, ptr %"51", i64 4
   %"44" = load i32, ptr %"31", align 4
@@ -26,7 +26,7 @@ define amdgpu_kernel void @min(ptr addrspace(4) byref(i64) %"33", ptr addrspace(
   %"47" = load i32, ptr addrspace(5) %"38", align 4
   %"45" = call i32 @llvm.smin.i32(i32 %"46", i32 %"47")
   store i32 %"45", ptr addrspace(5) %"37", align 4
-  %"48" = load i64, ptr addrspace(5) %"36", align 4
+  %"48" = load i64, ptr addrspace(5) %"36", align 8
   %"49" = load i32, ptr addrspace(5) %"37", align 4
   %"52" = inttoptr i64 %"48" to ptr
   store i32 %"49", ptr %"52", align 4

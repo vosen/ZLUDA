@@ -8,7 +8,7 @@ define amdgpu_kernel void @mov_address(ptr addrspace(4) byref(i64) %"29", ptr ad
 
 "28":                                             ; preds = %1
   %"33" = ptrtoint ptr addrspace(5) %"10" to i64
-  store i64 %"33", ptr addrspace(5) %"31", align 4
+  store i64 %"33", ptr addrspace(5) %"31", align 8
   ret void
 }
 

@@ -18,8 +18,8 @@ define amdgpu_kernel void @bar_red_and_pred(ptr addrspace(4) byref(i64) %"73", p
   br label %"70"
 
 "70":                                             ; preds = %1
-  %"82" = load i64, ptr addrspace(4) %"74", align 4
-  store i64 %"82", ptr addrspace(5) %"75", align 4
+  %"82" = load i64, ptr addrspace(4) %"74", align 8
+  store i64 %"82", ptr addrspace(5) %"75", align 8
   %"44" = call i32 @__zluda_ptx_impl_sreg_tid(i8 0)
   br label %"71"
 
@@ -102,15 +102,15 @@ define amdgpu_kernel void @bar_red_and_pred(ptr addrspace(4) byref(i64) %"73", p
 "26":                                             ; preds = %"25", %"24"
   %"118" = load i32, ptr addrspace(5) %"77", align 4
   %"117" = zext i32 %"118" to i64
-  store i64 %"117", ptr addrspace(5) %"76", align 4
-  %"120" = load i64, ptr addrspace(5) %"76", align 4
+  store i64 %"117", ptr addrspace(5) %"76", align 8
+  %"120" = load i64, ptr addrspace(5) %"76", align 8
   %"119" = mul i64 %"120", 4
-  store i64 %"119", ptr addrspace(5) %"76", align 4
-  %"122" = load i64, ptr addrspace(5) %"75", align 4
-  %"123" = load i64, ptr addrspace(5) %"76", align 4
+  store i64 %"119", ptr addrspace(5) %"76", align 8
+  %"122" = load i64, ptr addrspace(5) %"75", align 8
+  %"123" = load i64, ptr addrspace(5) %"76", align 8
   %"121" = add i64 %"122", %"123"
-  store i64 %"121", ptr addrspace(5) %"75", align 4
-  %"124" = load i64, ptr addrspace(5) %"75", align 4
+  store i64 %"121", ptr addrspace(5) %"75", align 8
+  %"124" = load i64, ptr addrspace(5) %"75", align 8
   %"125" = load i32, ptr addrspace(5) %"81", align 4
   %"126" = inttoptr i64 %"124" to ptr
   store i32 %"125", ptr %"126", align 4

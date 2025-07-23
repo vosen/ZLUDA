@@ -8,18 +8,18 @@ define amdgpu_kernel void @constant_f32(ptr addrspace(4) byref(i64) %"31", ptr a
   br label %"30"
 
 "30":                                             ; preds = %1
-  %"36" = load i64, ptr addrspace(4) %"31", align 4
-  store i64 %"36", ptr addrspace(5) %"33", align 4
-  %"37" = load i64, ptr addrspace(4) %"32", align 4
-  store i64 %"37", ptr addrspace(5) %"34", align 4
-  %"39" = load i64, ptr addrspace(5) %"33", align 4
+  %"36" = load i64, ptr addrspace(4) %"31", align 8
+  store i64 %"36", ptr addrspace(5) %"33", align 8
+  %"37" = load i64, ptr addrspace(4) %"32", align 8
+  store i64 %"37", ptr addrspace(5) %"34", align 8
+  %"39" = load i64, ptr addrspace(5) %"33", align 8
   %"44" = inttoptr i64 %"39" to ptr
   %"38" = load float, ptr %"44", align 4
   store float %"38", ptr addrspace(5) %"35", align 4
   %"41" = load float, ptr addrspace(5) %"35", align 4
   %"40" = fmul float %"41", 5.000000e-01
   store float %"40", ptr addrspace(5) %"35", align 4
-  %"42" = load i64, ptr addrspace(5) %"34", align 4
+  %"42" = load i64, ptr addrspace(5) %"34", align 8
   %"43" = load float, ptr addrspace(5) %"35", align 4
   %"45" = inttoptr i64 %"42" to ptr
   store float %"43", ptr %"45", align 4
