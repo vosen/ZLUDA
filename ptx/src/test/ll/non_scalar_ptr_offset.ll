@@ -9,11 +9,11 @@ define amdgpu_kernel void @non_scalar_ptr_offset(ptr addrspace(4) byref(i64) %"3
   br label %"33"
 
 "33":                                             ; preds = %1
-  %"40" = load i64, ptr addrspace(4) %"34", align 4
-  store i64 %"40", ptr addrspace(5) %"36", align 4
-  %"41" = load i64, ptr addrspace(4) %"35", align 4
-  store i64 %"41", ptr addrspace(5) %"37", align 4
-  %"42" = load i64, ptr addrspace(5) %"36", align 4
+  %"40" = load i64, ptr addrspace(4) %"34", align 8
+  store i64 %"40", ptr addrspace(5) %"36", align 8
+  %"41" = load i64, ptr addrspace(4) %"35", align 8
+  store i64 %"41", ptr addrspace(5) %"37", align 8
+  %"42" = load i64, ptr addrspace(5) %"36", align 8
   %"50" = inttoptr i64 %"42" to ptr addrspace(1)
   %"32" = getelementptr inbounds i8, ptr addrspace(1) %"50", i64 8
   %"30" = load <2 x i32>, ptr addrspace(1) %"32", align 8
@@ -25,7 +25,7 @@ define amdgpu_kernel void @non_scalar_ptr_offset(ptr addrspace(4) byref(i64) %"3
   %"47" = load i32, ptr addrspace(5) %"39", align 4
   %"45" = add i32 %"46", %"47"
   store i32 %"45", ptr addrspace(5) %"38", align 4
-  %"48" = load i64, ptr addrspace(5) %"37", align 4
+  %"48" = load i64, ptr addrspace(5) %"37", align 8
   %"49" = load i32, ptr addrspace(5) %"38", align 4
   %"51" = inttoptr i64 %"48" to ptr addrspace(1)
   store i32 %"49", ptr addrspace(1) %"51", align 4

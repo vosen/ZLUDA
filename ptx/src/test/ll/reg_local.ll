@@ -9,27 +9,27 @@ define amdgpu_kernel void @reg_local(ptr addrspace(4) byref(i64) %"37", ptr addr
   br label %"36"
 
 "36":                                             ; preds = %1
-  %"42" = load i64, ptr addrspace(4) %"37", align 4
-  store i64 %"42", ptr addrspace(5) %"39", align 4
-  %"43" = load i64, ptr addrspace(4) %"38", align 4
-  store i64 %"43", ptr addrspace(5) %"40", align 4
-  %"45" = load i64, ptr addrspace(5) %"39", align 4
+  %"42" = load i64, ptr addrspace(4) %"37", align 8
+  store i64 %"42", ptr addrspace(5) %"39", align 8
+  %"43" = load i64, ptr addrspace(4) %"38", align 8
+  store i64 %"43", ptr addrspace(5) %"40", align 8
+  %"45" = load i64, ptr addrspace(5) %"39", align 8
   %"51" = inttoptr i64 %"45" to ptr addrspace(1)
-  %"50" = load i64, ptr addrspace(1) %"51", align 4
-  store i64 %"50", ptr addrspace(5) %"41", align 4
-  %"46" = load i64, ptr addrspace(5) %"41", align 4
+  %"50" = load i64, ptr addrspace(1) %"51", align 8
+  store i64 %"50", ptr addrspace(5) %"41", align 8
+  %"46" = load i64, ptr addrspace(5) %"41", align 8
   %"31" = add i64 %"46", 1
   %"52" = addrspacecast ptr addrspace(5) %"10" to ptr
-  store i64 %"31", ptr %"52", align 4
+  store i64 %"31", ptr %"52", align 8
   %"54" = addrspacecast ptr addrspace(5) %"10" to ptr
   %"33" = getelementptr inbounds i8, ptr %"54", i64 0
-  %"55" = load i64, ptr %"33", align 4
-  store i64 %"55", ptr addrspace(5) %"41", align 4
-  %"48" = load i64, ptr addrspace(5) %"40", align 4
+  %"55" = load i64, ptr %"33", align 8
+  store i64 %"55", ptr addrspace(5) %"41", align 8
+  %"48" = load i64, ptr addrspace(5) %"40", align 8
   %"56" = inttoptr i64 %"48" to ptr addrspace(1)
   %"35" = getelementptr inbounds i8, ptr addrspace(1) %"56", i64 0
-  %"49" = load i64, ptr addrspace(5) %"41", align 4
-  store i64 %"49", ptr addrspace(1) %"35", align 4
+  %"49" = load i64, ptr addrspace(5) %"41", align 8
+  store i64 %"49", ptr addrspace(1) %"35", align 8
   ret void
 }
 

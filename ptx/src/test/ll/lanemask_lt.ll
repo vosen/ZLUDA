@@ -12,11 +12,11 @@ define amdgpu_kernel void @lanemask_lt(ptr addrspace(4) byref(i64) %"36", ptr ad
   br label %"33"
 
 "33":                                             ; preds = %1
-  %"43" = load i64, ptr addrspace(4) %"36", align 4
-  store i64 %"43", ptr addrspace(5) %"38", align 4
-  %"44" = load i64, ptr addrspace(4) %"37", align 4
-  store i64 %"44", ptr addrspace(5) %"39", align 4
-  %"46" = load i64, ptr addrspace(5) %"38", align 4
+  %"43" = load i64, ptr addrspace(4) %"36", align 8
+  store i64 %"43", ptr addrspace(5) %"38", align 8
+  %"44" = load i64, ptr addrspace(4) %"37", align 8
+  store i64 %"44", ptr addrspace(5) %"39", align 8
+  %"46" = load i64, ptr addrspace(5) %"38", align 8
   %"56" = inttoptr i64 %"46" to ptr
   %"55" = load i32, ptr %"56", align 4
   store i32 %"55", ptr addrspace(5) %"40", align 4
@@ -32,7 +32,7 @@ define amdgpu_kernel void @lanemask_lt(ptr addrspace(4) byref(i64) %"36", ptr ad
   %"52" = load i32, ptr addrspace(5) %"42", align 4
   %"60" = add i32 %"51", %"52"
   store i32 %"60", ptr addrspace(5) %"41", align 4
-  %"53" = load i64, ptr addrspace(5) %"39", align 4
+  %"53" = load i64, ptr addrspace(5) %"39", align 8
   %"54" = load i32, ptr addrspace(5) %"41", align 4
   %"63" = inttoptr i64 %"53" to ptr
   store i32 %"54", ptr %"63", align 4

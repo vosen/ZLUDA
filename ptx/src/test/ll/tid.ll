@@ -18,17 +18,17 @@ define amdgpu_kernel void @tid(ptr addrspace(4) byref(i64) %"34") #1 {
   store i32 %"30", ptr addrspace(5) %"36", align 4
   %"41" = load i32, ptr addrspace(5) %"36", align 4
   %"40" = zext i32 %"41" to i64
-  store i64 %"40", ptr addrspace(5) %"37", align 4
+  store i64 %"40", ptr addrspace(5) %"37", align 8
   %"43" = load i32, ptr addrspace(5) %"36", align 4
   %"42" = trunc i32 %"43" to i8
   store i8 %"42", ptr addrspace(5) %"38", align 1
-  %"44" = load i64, ptr addrspace(4) %"34", align 4
-  store i64 %"44", ptr addrspace(5) %"35", align 4
-  %"46" = load i64, ptr addrspace(5) %"35", align 4
-  %"47" = load i64, ptr addrspace(5) %"37", align 4
+  %"44" = load i64, ptr addrspace(4) %"34", align 8
+  store i64 %"44", ptr addrspace(5) %"35", align 8
+  %"46" = load i64, ptr addrspace(5) %"35", align 8
+  %"47" = load i64, ptr addrspace(5) %"37", align 8
   %"45" = add i64 %"46", %"47"
-  store i64 %"45", ptr addrspace(5) %"35", align 4
-  %"48" = load i64, ptr addrspace(5) %"35", align 4
+  store i64 %"45", ptr addrspace(5) %"35", align 8
+  %"48" = load i64, ptr addrspace(5) %"35", align 8
   %"49" = load i8, ptr addrspace(5) %"38", align 1
   %"50" = inttoptr i64 %"48" to ptr
   store i8 %"49", ptr %"50", align 1

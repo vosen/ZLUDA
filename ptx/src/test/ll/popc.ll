@@ -8,18 +8,18 @@ define amdgpu_kernel void @popc(ptr addrspace(4) byref(i64) %"30", ptr addrspace
   br label %"29"
 
 "29":                                             ; preds = %1
-  %"35" = load i64, ptr addrspace(4) %"30", align 4
-  store i64 %"35", ptr addrspace(5) %"32", align 4
-  %"36" = load i64, ptr addrspace(4) %"31", align 4
-  store i64 %"36", ptr addrspace(5) %"33", align 4
-  %"38" = load i64, ptr addrspace(5) %"32", align 4
+  %"35" = load i64, ptr addrspace(4) %"30", align 8
+  store i64 %"35", ptr addrspace(5) %"32", align 8
+  %"36" = load i64, ptr addrspace(4) %"31", align 8
+  store i64 %"36", ptr addrspace(5) %"33", align 8
+  %"38" = load i64, ptr addrspace(5) %"32", align 8
   %"43" = inttoptr i64 %"38" to ptr
   %"37" = load i32, ptr %"43", align 4
   store i32 %"37", ptr addrspace(5) %"34", align 4
   %"40" = load i32, ptr addrspace(5) %"34", align 4
   %"44" = call i32 @llvm.ctpop.i32(i32 %"40")
   store i32 %"44", ptr addrspace(5) %"34", align 4
-  %"41" = load i64, ptr addrspace(5) %"33", align 4
+  %"41" = load i64, ptr addrspace(5) %"33", align 8
   %"42" = load i32, ptr addrspace(5) %"34", align 4
   %"45" = inttoptr i64 %"41" to ptr
   store i32 %"42", ptr %"45", align 4

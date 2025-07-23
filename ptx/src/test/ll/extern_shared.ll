@@ -10,22 +10,22 @@ define amdgpu_kernel void @extern_shared(ptr addrspace(4) byref(i64) %"31", ptr 
   br label %"30"
 
 "30":                                             ; preds = %1
-  %"36" = load i64, ptr addrspace(4) %"31", align 4
-  store i64 %"36", ptr addrspace(5) %"33", align 4
-  %"37" = load i64, ptr addrspace(4) %"32", align 4
-  store i64 %"37", ptr addrspace(5) %"34", align 4
-  %"39" = load i64, ptr addrspace(5) %"33", align 4
+  %"36" = load i64, ptr addrspace(4) %"31", align 8
+  store i64 %"36", ptr addrspace(5) %"33", align 8
+  %"37" = load i64, ptr addrspace(4) %"32", align 8
+  store i64 %"37", ptr addrspace(5) %"34", align 8
+  %"39" = load i64, ptr addrspace(5) %"33", align 8
   %"44" = inttoptr i64 %"39" to ptr addrspace(1)
-  %"38" = load i64, ptr addrspace(1) %"44", align 4
-  store i64 %"38", ptr addrspace(5) %"35", align 4
-  %"40" = load i64, ptr addrspace(5) %"35", align 4
-  store i64 %"40", ptr addrspace(3) @shared_mem, align 4
-  %"41" = load i64, ptr addrspace(3) @shared_mem, align 4
-  store i64 %"41", ptr addrspace(5) %"35", align 4
-  %"42" = load i64, ptr addrspace(5) %"34", align 4
-  %"43" = load i64, ptr addrspace(5) %"35", align 4
+  %"38" = load i64, ptr addrspace(1) %"44", align 8
+  store i64 %"38", ptr addrspace(5) %"35", align 8
+  %"40" = load i64, ptr addrspace(5) %"35", align 8
+  store i64 %"40", ptr addrspace(3) @shared_mem, align 8
+  %"41" = load i64, ptr addrspace(3) @shared_mem, align 8
+  store i64 %"41", ptr addrspace(5) %"35", align 8
+  %"42" = load i64, ptr addrspace(5) %"34", align 8
+  %"43" = load i64, ptr addrspace(5) %"35", align 8
   %"47" = inttoptr i64 %"42" to ptr addrspace(1)
-  store i64 %"43", ptr addrspace(1) %"47", align 4
+  store i64 %"43", ptr addrspace(1) %"47", align 8
   ret void
 }
 

@@ -12,27 +12,27 @@ define amdgpu_kernel void @shared_ptr_take_address(ptr addrspace(4) byref(i64) %
   br label %"32"
 
 "32":                                             ; preds = %1
-  %"40" = load i64, ptr addrspace(4) %"33", align 4
-  store i64 %"40", ptr addrspace(5) %"35", align 4
-  %"41" = load i64, ptr addrspace(4) %"34", align 4
-  store i64 %"41", ptr addrspace(5) %"36", align 4
-  store i64 ptrtoint (ptr addrspace(3) @shared_mem to i64), ptr addrspace(5) %"37", align 4
-  %"44" = load i64, ptr addrspace(5) %"35", align 4
+  %"40" = load i64, ptr addrspace(4) %"33", align 8
+  store i64 %"40", ptr addrspace(5) %"35", align 8
+  %"41" = load i64, ptr addrspace(4) %"34", align 8
+  store i64 %"41", ptr addrspace(5) %"36", align 8
+  store i64 ptrtoint (ptr addrspace(3) @shared_mem to i64), ptr addrspace(5) %"37", align 8
+  %"44" = load i64, ptr addrspace(5) %"35", align 8
   %"52" = inttoptr i64 %"44" to ptr addrspace(1)
-  %"43" = load i64, ptr addrspace(1) %"52", align 4
-  store i64 %"43", ptr addrspace(5) %"38", align 4
-  %"45" = load i64, ptr addrspace(5) %"37", align 4
-  %"46" = load i64, ptr addrspace(5) %"38", align 4
+  %"43" = load i64, ptr addrspace(1) %"52", align 8
+  store i64 %"43", ptr addrspace(5) %"38", align 8
+  %"45" = load i64, ptr addrspace(5) %"37", align 8
+  %"46" = load i64, ptr addrspace(5) %"38", align 8
   %"53" = inttoptr i64 %"45" to ptr addrspace(3)
-  store i64 %"46", ptr addrspace(3) %"53", align 4
-  %"48" = load i64, ptr addrspace(5) %"37", align 4
+  store i64 %"46", ptr addrspace(3) %"53", align 8
+  %"48" = load i64, ptr addrspace(5) %"37", align 8
   %"54" = inttoptr i64 %"48" to ptr addrspace(3)
-  %"47" = load i64, ptr addrspace(3) %"54", align 4
-  store i64 %"47", ptr addrspace(5) %"39", align 4
-  %"49" = load i64, ptr addrspace(5) %"36", align 4
-  %"50" = load i64, ptr addrspace(5) %"39", align 4
+  %"47" = load i64, ptr addrspace(3) %"54", align 8
+  store i64 %"47", ptr addrspace(5) %"39", align 8
+  %"49" = load i64, ptr addrspace(5) %"36", align 8
+  %"50" = load i64, ptr addrspace(5) %"39", align 8
   %"55" = inttoptr i64 %"49" to ptr addrspace(1)
-  store i64 %"50", ptr addrspace(1) %"55", align 4
+  store i64 %"50", ptr addrspace(1) %"55", align 8
   ret void
 }
 

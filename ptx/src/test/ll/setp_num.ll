@@ -17,45 +17,45 @@ define amdgpu_kernel void @setp_num(ptr addrspace(4) byref(i64) %"83", ptr addrs
   br label %"82"
 
 "82":                                             ; preds = %1
-  %"97" = load i64, ptr addrspace(4) %"83", align 4
-  store i64 %"97", ptr addrspace(5) %"85", align 4
-  %"98" = load i64, ptr addrspace(4) %"84", align 4
-  store i64 %"98", ptr addrspace(5) %"86", align 4
-  %"100" = load i64, ptr addrspace(5) %"85", align 4
+  %"97" = load i64, ptr addrspace(4) %"83", align 8
+  store i64 %"97", ptr addrspace(5) %"85", align 8
+  %"98" = load i64, ptr addrspace(4) %"84", align 8
+  store i64 %"98", ptr addrspace(5) %"86", align 8
+  %"100" = load i64, ptr addrspace(5) %"85", align 8
   %"151" = inttoptr i64 %"100" to ptr
   %"99" = load float, ptr %"151", align 4
   store float %"99", ptr addrspace(5) %"87", align 4
-  %"101" = load i64, ptr addrspace(5) %"85", align 4
+  %"101" = load i64, ptr addrspace(5) %"85", align 8
   %"152" = inttoptr i64 %"101" to ptr
   %"55" = getelementptr inbounds i8, ptr %"152", i64 4
   %"102" = load float, ptr %"55", align 4
   store float %"102", ptr addrspace(5) %"88", align 4
-  %"103" = load i64, ptr addrspace(5) %"85", align 4
+  %"103" = load i64, ptr addrspace(5) %"85", align 8
   %"153" = inttoptr i64 %"103" to ptr
   %"57" = getelementptr inbounds i8, ptr %"153", i64 8
   %"104" = load float, ptr %"57", align 4
   store float %"104", ptr addrspace(5) %"89", align 4
-  %"105" = load i64, ptr addrspace(5) %"85", align 4
+  %"105" = load i64, ptr addrspace(5) %"85", align 8
   %"154" = inttoptr i64 %"105" to ptr
   %"59" = getelementptr inbounds i8, ptr %"154", i64 12
   %"106" = load float, ptr %"59", align 4
   store float %"106", ptr addrspace(5) %"90", align 4
-  %"107" = load i64, ptr addrspace(5) %"85", align 4
+  %"107" = load i64, ptr addrspace(5) %"85", align 8
   %"155" = inttoptr i64 %"107" to ptr
   %"61" = getelementptr inbounds i8, ptr %"155", i64 16
   %"108" = load float, ptr %"61", align 4
   store float %"108", ptr addrspace(5) %"91", align 4
-  %"109" = load i64, ptr addrspace(5) %"85", align 4
+  %"109" = load i64, ptr addrspace(5) %"85", align 8
   %"156" = inttoptr i64 %"109" to ptr
   %"63" = getelementptr inbounds i8, ptr %"156", i64 20
   %"110" = load float, ptr %"63", align 4
   store float %"110", ptr addrspace(5) %"92", align 4
-  %"111" = load i64, ptr addrspace(5) %"85", align 4
+  %"111" = load i64, ptr addrspace(5) %"85", align 8
   %"157" = inttoptr i64 %"111" to ptr
   %"65" = getelementptr inbounds i8, ptr %"157", i64 24
   %"112" = load float, ptr %"65", align 4
   store float %"112", ptr addrspace(5) %"93", align 4
-  %"113" = load i64, ptr addrspace(5) %"85", align 4
+  %"113" = load i64, ptr addrspace(5) %"85", align 8
   %"158" = inttoptr i64 %"113" to ptr
   %"67" = getelementptr inbounds i8, ptr %"158", i64 28
   %"114" = load float, ptr %"67", align 4
@@ -80,7 +80,7 @@ define amdgpu_kernel void @setp_num(ptr addrspace(4) byref(i64) %"83", ptr addrs
   br label %"25"
 
 "25":                                             ; preds = %"24", %"23"
-  %"122" = load i64, ptr addrspace(5) %"86", align 4
+  %"122" = load i64, ptr addrspace(5) %"86", align 8
   %"123" = load i32, ptr addrspace(5) %"95", align 4
   %"159" = inttoptr i64 %"122" to ptr
   store i32 %"123", ptr %"159", align 4
@@ -104,7 +104,7 @@ define amdgpu_kernel void @setp_num(ptr addrspace(4) byref(i64) %"83", ptr addrs
   br label %"29"
 
 "29":                                             ; preds = %"28", %"27"
-  %"131" = load i64, ptr addrspace(5) %"86", align 4
+  %"131" = load i64, ptr addrspace(5) %"86", align 8
   %"160" = inttoptr i64 %"131" to ptr
   %"73" = getelementptr inbounds i8, ptr %"160", i64 4
   %"132" = load i32, ptr addrspace(5) %"95", align 4
@@ -129,7 +129,7 @@ define amdgpu_kernel void @setp_num(ptr addrspace(4) byref(i64) %"83", ptr addrs
   br label %"33"
 
 "33":                                             ; preds = %"32", %"31"
-  %"140" = load i64, ptr addrspace(5) %"86", align 4
+  %"140" = load i64, ptr addrspace(5) %"86", align 8
   %"161" = inttoptr i64 %"140" to ptr
   %"77" = getelementptr inbounds i8, ptr %"161", i64 8
   %"141" = load i32, ptr addrspace(5) %"95", align 4
@@ -154,7 +154,7 @@ define amdgpu_kernel void @setp_num(ptr addrspace(4) byref(i64) %"83", ptr addrs
   br label %"37"
 
 "37":                                             ; preds = %"36", %"35"
-  %"149" = load i64, ptr addrspace(5) %"86", align 4
+  %"149" = load i64, ptr addrspace(5) %"86", align 8
   %"162" = inttoptr i64 %"149" to ptr
   %"81" = getelementptr inbounds i8, ptr %"162", i64 12
   %"150" = load i32, ptr addrspace(5) %"95", align 4

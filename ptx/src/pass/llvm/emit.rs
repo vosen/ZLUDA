@@ -532,8 +532,10 @@ impl<'a> MethodEmitContext<'a> {
         let builder = self.builder;
         let type_ = get_type(self.context, &data.typ)?;
         let ptr = self.resolver.value(arguments.src)?;
-        self.resolver.with_result(arguments.dst, |dst| unsafe {
-            LLVMBuildLoad2(builder, type_, ptr, dst)
+        self.resolver.with_result(arguments.dst, |dst| {
+            let load = unsafe { LLVMBuildLoad2(builder, type_, ptr, dst) };
+            unsafe { LLVMSetAlignment(load, data.typ.layout().align() as u32) };
+            load
         });
         Ok(())
     }
@@ -739,7 +741,8 @@ impl<'a> MethodEmitContext<'a> {
         if data.qualifier != ast::LdStQualifier::Weak {
             todo!()
         }
-        unsafe { LLVMBuildStore(self.builder, value, ptr) };
+        let store = unsafe { LLVMBuildStore(self.builder, value, ptr) };
+        unsafe { LLVMSetAlignment(store, data.typ.layout().align() as u32); }
         Ok(())
     }
 
@@ -953,8 +956,14 @@ impl<'a> MethodEmitContext<'a> {
             .iter()
             .map(|(value, type_)| {
                 let value = self.resolver.value(*value)?;
-                let type_ = get_type(self.context, type_)?;
-                Ok(unsafe { LLVMBuildLoad2(self.builder, type_, value, LLVM_UNNAMED.as_ptr()) })
+                let lowered_type = get_type(self.context, type_)?;
+                let load = unsafe {
+                    LLVMBuildLoad2(self.builder, lowered_type, value, LLVM_UNNAMED.as_ptr())
+                };
+                unsafe {
+                    LLVMSetAlignment(load, type_.layout().align() as u32);
+                }
+                Ok(load)
             })
             .collect::<Result<Vec<_>, _>>()?;
 

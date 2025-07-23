@@ -12,11 +12,11 @@ define amdgpu_kernel void @vector_extract(ptr addrspace(4) byref(i64) %"40", ptr
   br label %"39"
 
 "39":                                             ; preds = %1
-  %"49" = load i64, ptr addrspace(4) %"40", align 4
-  store i64 %"49", ptr addrspace(5) %"42", align 4
-  %"50" = load i64, ptr addrspace(4) %"41", align 4
-  store i64 %"50", ptr addrspace(5) %"43", align 4
-  %"51" = load i64, ptr addrspace(5) %"42", align 4
+  %"49" = load i64, ptr addrspace(4) %"40", align 8
+  store i64 %"49", ptr addrspace(5) %"42", align 8
+  %"50" = load i64, ptr addrspace(4) %"41", align 8
+  store i64 %"50", ptr addrspace(5) %"43", align 8
+  %"51" = load i64, ptr addrspace(5) %"42", align 8
   %"79" = inttoptr i64 %"51" to ptr addrspace(1)
   %"33" = load <4 x i8>, ptr addrspace(1) %"79", align 4
   %"80" = extractelement <4 x i8> %"33", i8 0
@@ -77,7 +77,7 @@ define amdgpu_kernel void @vector_extract(ptr addrspace(4) byref(i64) %"40", ptr
   %9 = insertelement <4 x i8> %8, i8 %"85", i8 1
   %10 = insertelement <4 x i8> %9, i8 %"86", i8 2
   %"38" = insertelement <4 x i8> %10, i8 %"87", i8 3
-  %"78" = load i64, ptr addrspace(5) %"43", align 4
+  %"78" = load i64, ptr addrspace(5) %"43", align 8
   %"88" = inttoptr i64 %"78" to ptr addrspace(1)
   store <4 x i8> %"38", ptr addrspace(1) %"88", align 4
   ret void

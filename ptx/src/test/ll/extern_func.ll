@@ -13,29 +13,29 @@ define amdgpu_kernel void @extern_func(ptr addrspace(4) byref(i64) %"44", ptr ad
   br label %"41"
 
 "41":                                             ; preds = %1
-  %"50" = load i64, ptr addrspace(4) %"44", align 4
-  store i64 %"50", ptr addrspace(5) %"46", align 4
-  %"51" = load i64, ptr addrspace(4) %"45", align 4
-  store i64 %"51", ptr addrspace(5) %"47", align 4
-  %"53" = load i64, ptr addrspace(5) %"46", align 4
+  %"50" = load i64, ptr addrspace(4) %"44", align 8
+  store i64 %"50", ptr addrspace(5) %"46", align 8
+  %"51" = load i64, ptr addrspace(4) %"45", align 8
+  store i64 %"51", ptr addrspace(5) %"47", align 8
+  %"53" = load i64, ptr addrspace(5) %"46", align 8
   %"61" = inttoptr i64 %"53" to ptr addrspace(1)
-  %"52" = load i64, ptr addrspace(1) %"61", align 4
-  store i64 %"52", ptr addrspace(5) %"48", align 4
+  %"52" = load i64, ptr addrspace(1) %"61", align 8
+  store i64 %"52", ptr addrspace(5) %"48", align 8
   %"55" = getelementptr inbounds i8, ptr addrspace(5) %"54", i64 0
-  %"56" = load i64, ptr addrspace(5) %"48", align 4
-  store i64 %"56", ptr addrspace(5) %"55", align 4
-  %"39" = load i64, ptr addrspace(5) %"54", align 4
+  %"56" = load i64, ptr addrspace(5) %"48", align 8
+  store i64 %"56", ptr addrspace(5) %"55", align 8
+  %"39" = load i64, ptr addrspace(5) %"54", align 8
   %"40" = call [16 x i8] @foobar(i64 %"39")
   br label %"42"
 
 "42":                                             ; preds = %"41"
   store [16 x i8] %"40", ptr addrspace(5) %"57", align 1
-  %"58" = load i64, ptr addrspace(5) %"57", align 4
-  store i64 %"58", ptr addrspace(5) %"49", align 4
-  %"59" = load i64, ptr addrspace(5) %"47", align 4
-  %"60" = load i64, ptr addrspace(5) %"49", align 4
+  %"58" = load i64, ptr addrspace(5) %"57", align 8
+  store i64 %"58", ptr addrspace(5) %"49", align 8
+  %"59" = load i64, ptr addrspace(5) %"47", align 8
+  %"60" = load i64, ptr addrspace(5) %"49", align 8
   %"64" = inttoptr i64 %"59" to ptr
-  store i64 %"60", ptr %"64", align 4
+  store i64 %"60", ptr %"64", align 8
   ret void
 }
 

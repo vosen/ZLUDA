@@ -17,46 +17,46 @@ define amdgpu_kernel void @assertfail(ptr addrspace(4) byref(i64) %"86", ptr add
   br label %"84"
 
 "84":                                             ; preds = %1
-  %"92" = load i64, ptr addrspace(4) %"86", align 4
-  store i64 %"92", ptr addrspace(5) %"88", align 4
-  %"93" = load i64, ptr addrspace(4) %"87", align 4
-  store i64 %"93", ptr addrspace(5) %"89", align 4
+  %"92" = load i64, ptr addrspace(4) %"86", align 8
+  store i64 %"92", ptr addrspace(5) %"88", align 8
+  %"93" = load i64, ptr addrspace(4) %"87", align 8
+  store i64 %"93", ptr addrspace(5) %"89", align 8
   store i32 0, ptr addrspace(5) %"94", align 4
   %"97" = getelementptr inbounds i8, ptr addrspace(5) %"96", i64 0
-  %"98" = load i64, ptr addrspace(5) %"88", align 4
-  store i64 %"98", ptr addrspace(5) %"97", align 4
+  %"98" = load i64, ptr addrspace(5) %"88", align 8
+  store i64 %"98", ptr addrspace(5) %"97", align 8
   %"100" = getelementptr inbounds i8, ptr addrspace(5) %"99", i64 0
-  %"101" = load i64, ptr addrspace(5) %"88", align 4
-  store i64 %"101", ptr addrspace(5) %"100", align 4
+  %"101" = load i64, ptr addrspace(5) %"88", align 8
+  store i64 %"101", ptr addrspace(5) %"100", align 8
   %"103" = getelementptr inbounds i8, ptr addrspace(5) %"102", i64 0
   %"104" = load i32, ptr addrspace(5) %"94", align 4
   store i32 %"104", ptr addrspace(5) %"103", align 4
   %"106" = getelementptr inbounds i8, ptr addrspace(5) %"105", i64 0
-  %"107" = load i64, ptr addrspace(5) %"88", align 4
-  store i64 %"107", ptr addrspace(5) %"106", align 4
+  %"107" = load i64, ptr addrspace(5) %"88", align 8
+  store i64 %"107", ptr addrspace(5) %"106", align 8
   %"109" = getelementptr inbounds i8, ptr addrspace(5) %"108", i64 0
-  %"110" = load i64, ptr addrspace(5) %"88", align 4
-  store i64 %"110", ptr addrspace(5) %"109", align 4
-  %"74" = load i64, ptr addrspace(5) %"96", align 4
-  %"75" = load i64, ptr addrspace(5) %"99", align 4
+  %"110" = load i64, ptr addrspace(5) %"88", align 8
+  store i64 %"110", ptr addrspace(5) %"109", align 8
+  %"74" = load i64, ptr addrspace(5) %"96", align 8
+  %"75" = load i64, ptr addrspace(5) %"99", align 8
   %"76" = load i32, ptr addrspace(5) %"102", align 4
-  %"77" = load i64, ptr addrspace(5) %"105", align 4
-  %"78" = load i64, ptr addrspace(5) %"108", align 4
+  %"77" = load i64, ptr addrspace(5) %"105", align 8
+  %"78" = load i64, ptr addrspace(5) %"108", align 8
   call void @__zluda_ptx_impl___assertfail(i64 %"74", i64 %"75", i32 %"76", i64 %"77", i64 %"78")
   br label %"85"
 
 "85":                                             ; preds = %"84"
-  %"112" = load i64, ptr addrspace(5) %"88", align 4
+  %"112" = load i64, ptr addrspace(5) %"88", align 8
   %"122" = inttoptr i64 %"112" to ptr
-  %"111" = load i64, ptr %"122", align 4
-  store i64 %"111", ptr addrspace(5) %"90", align 4
-  %"114" = load i64, ptr addrspace(5) %"90", align 4
+  %"111" = load i64, ptr %"122", align 8
+  store i64 %"111", ptr addrspace(5) %"90", align 8
+  %"114" = load i64, ptr addrspace(5) %"90", align 8
   %"113" = add i64 %"114", 1
-  store i64 %"113", ptr addrspace(5) %"91", align 4
-  %"115" = load i64, ptr addrspace(5) %"89", align 4
-  %"116" = load i64, ptr addrspace(5) %"91", align 4
+  store i64 %"113", ptr addrspace(5) %"91", align 8
+  %"115" = load i64, ptr addrspace(5) %"89", align 8
+  %"116" = load i64, ptr addrspace(5) %"91", align 8
   %"123" = inttoptr i64 %"115" to ptr
-  store i64 %"116", ptr %"123", align 4
+  store i64 %"116", ptr %"123", align 8
   ret void
 }
 

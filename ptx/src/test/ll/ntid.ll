@@ -11,11 +11,11 @@ define amdgpu_kernel void @ntid(ptr addrspace(4) byref(i64) %"35", ptr addrspace
   br label %"32"
 
 "32":                                             ; preds = %1
-  %"41" = load i64, ptr addrspace(4) %"35", align 4
-  store i64 %"41", ptr addrspace(5) %"37", align 4
-  %"42" = load i64, ptr addrspace(4) %"36", align 4
-  store i64 %"42", ptr addrspace(5) %"38", align 4
-  %"44" = load i64, ptr addrspace(5) %"37", align 4
+  %"41" = load i64, ptr addrspace(4) %"35", align 8
+  store i64 %"41", ptr addrspace(5) %"37", align 8
+  %"42" = load i64, ptr addrspace(4) %"36", align 8
+  store i64 %"42", ptr addrspace(5) %"38", align 8
+  %"44" = load i64, ptr addrspace(5) %"37", align 8
   %"51" = inttoptr i64 %"44" to ptr
   %"43" = load i32, ptr %"51", align 4
   store i32 %"43", ptr addrspace(5) %"39", align 4
@@ -28,7 +28,7 @@ define amdgpu_kernel void @ntid(ptr addrspace(4) byref(i64) %"35", ptr addrspace
   %"48" = load i32, ptr addrspace(5) %"40", align 4
   %"46" = add i32 %"47", %"48"
   store i32 %"46", ptr addrspace(5) %"39", align 4
-  %"49" = load i64, ptr addrspace(5) %"38", align 4
+  %"49" = load i64, ptr addrspace(5) %"38", align 8
   %"50" = load i32, ptr addrspace(5) %"39", align 4
   %"52" = inttoptr i64 %"49" to ptr
   store i32 %"50", ptr %"52", align 4

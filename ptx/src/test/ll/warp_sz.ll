@@ -6,9 +6,9 @@ define amdgpu_kernel void @warp_sz(ptr addrspace(4) byref(i64) %"29", ptr addrsp
   br label %"28"
 
 "28":                                             ; preds = %1
-  %"32" = load i64, ptr addrspace(4) %"30", align 4
-  store i64 %"32", ptr addrspace(5) %"31", align 4
-  %"33" = load i64, ptr addrspace(5) %"31", align 4
+  %"32" = load i64, ptr addrspace(4) %"30", align 8
+  store i64 %"32", ptr addrspace(5) %"31", align 8
+  %"33" = load i64, ptr addrspace(5) %"31", align 8
   %"34" = inttoptr i64 %"33" to ptr
   store i8 32, ptr %"34", align 1
   ret void

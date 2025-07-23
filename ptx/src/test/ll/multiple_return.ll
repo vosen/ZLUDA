@@ -30,11 +30,11 @@ define amdgpu_kernel void @multiple_return(ptr addrspace(4) byref(i64) %"50", pt
   br label %"44"
 
 "44":                                             ; preds = %1
-  %"57" = load i64, ptr addrspace(4) %"50", align 4
-  store i64 %"57", ptr addrspace(5) %"52", align 4
-  %"58" = load i64, ptr addrspace(4) %"51", align 4
-  store i64 %"58", ptr addrspace(5) %"53", align 4
-  %"60" = load i64, ptr addrspace(5) %"52", align 4
+  %"57" = load i64, ptr addrspace(4) %"50", align 8
+  store i64 %"57", ptr addrspace(5) %"52", align 8
+  %"58" = load i64, ptr addrspace(4) %"51", align 8
+  store i64 %"58", ptr addrspace(5) %"53", align 8
+  %"60" = load i64, ptr addrspace(5) %"52", align 8
   %"68" = inttoptr i64 %"60" to ptr
   %"59" = load i32, ptr %"68", align 4
   store i32 %"59", ptr addrspace(5) %"54", align 4
@@ -48,7 +48,7 @@ define amdgpu_kernel void @multiple_return(ptr addrspace(4) byref(i64) %"50", pt
   br label %"45"
 
 "45":                                             ; preds = %"44"
-  %"64" = load i64, ptr addrspace(5) %"53", align 4
+  %"64" = load i64, ptr addrspace(5) %"53", align 8
   %"65" = load i32, ptr addrspace(5) %"55", align 4
   %"69" = inttoptr i64 %"64" to ptr
   store i32 %"65", ptr %"69", align 4
@@ -56,7 +56,7 @@ define amdgpu_kernel void @multiple_return(ptr addrspace(4) byref(i64) %"50", pt
   br i1 %"66", label %"19", label %"20"
 
 "19":                                             ; preds = %"45"
-  %"67" = load i64, ptr addrspace(5) %"53", align 4
+  %"67" = load i64, ptr addrspace(5) %"53", align 8
   %"70" = inttoptr i64 %"67" to ptr
   %"41" = getelementptr inbounds i8, ptr %"70", i64 4
   store i32 123, ptr %"41", align 4

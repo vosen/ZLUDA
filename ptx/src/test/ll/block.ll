@@ -10,24 +10,24 @@ define amdgpu_kernel void @block(ptr addrspace(4) byref(i64) %"34", ptr addrspac
   br label %"33"
 
 "33":                                             ; preds = %1
-  %"40" = load i64, ptr addrspace(4) %"34", align 4
-  store i64 %"40", ptr addrspace(5) %"36", align 4
-  %"41" = load i64, ptr addrspace(4) %"35", align 4
-  store i64 %"41", ptr addrspace(5) %"37", align 4
-  %"43" = load i64, ptr addrspace(5) %"36", align 4
+  %"40" = load i64, ptr addrspace(4) %"34", align 8
+  store i64 %"40", ptr addrspace(5) %"36", align 8
+  %"41" = load i64, ptr addrspace(4) %"35", align 8
+  store i64 %"41", ptr addrspace(5) %"37", align 8
+  %"43" = load i64, ptr addrspace(5) %"36", align 8
   %"51" = inttoptr i64 %"43" to ptr
-  %"42" = load i64, ptr %"51", align 4
-  store i64 %"42", ptr addrspace(5) %"38", align 4
-  %"45" = load i64, ptr addrspace(5) %"38", align 4
+  %"42" = load i64, ptr %"51", align 8
+  store i64 %"42", ptr addrspace(5) %"38", align 8
+  %"45" = load i64, ptr addrspace(5) %"38", align 8
   %"44" = add i64 %"45", 1
-  store i64 %"44", ptr addrspace(5) %"39", align 4
-  %"48" = load i64, ptr addrspace(5) %"46", align 4
+  store i64 %"44", ptr addrspace(5) %"39", align 8
+  %"48" = load i64, ptr addrspace(5) %"46", align 8
   %"47" = add i64 %"48", 1
-  store i64 %"47", ptr addrspace(5) %"46", align 4
-  %"49" = load i64, ptr addrspace(5) %"37", align 4
-  %"50" = load i64, ptr addrspace(5) %"39", align 4
+  store i64 %"47", ptr addrspace(5) %"46", align 8
+  %"49" = load i64, ptr addrspace(5) %"37", align 8
+  %"50" = load i64, ptr addrspace(5) %"39", align 8
   %"52" = inttoptr i64 %"49" to ptr
-  store i64 %"50", ptr %"52", align 4
+  store i64 %"50", ptr %"52", align 8
   ret void
 }
 
