@@ -1,0 +1,21 @@
+.version 7.0
+.target sm_75
+.address_size 64
+
+.visible .entry tanh(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	        in_addr;
+    .reg .u64 	        out_addr;
+    .reg .f32 	        temp1;
+
+	ld.param.u64 	    in_addr, [input];
+    ld.param.u64 	    out_addr, [output];
+
+    ld.f32              temp1, [in_addr];
+	tanh.approx.f32     temp1, temp1;
+    st.f32              [out_addr], temp1;
+	ret;
+}

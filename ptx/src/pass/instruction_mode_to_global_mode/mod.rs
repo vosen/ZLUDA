@@ -221,12 +221,25 @@ impl InstructionModes {
         )
     }
 
-    fn from_rcp(data: ast::RcpData) -> InstructionModes {
+    fn from_rtz_special(data: ast::RcpData) -> InstructionModes {
         let rounding = match data.kind {
             ast::RcpKind::Approx => None,
             ast::RcpKind::Compliant(rnd) => Some(RoundingMode::from_ast(rnd)),
         };
-        let denormal = data.flush_to_zero.map(DenormalMode::from_ftz);
+        let denormal = match (
+            data.kind == ast::RcpKind::Approx,
+            data.flush_to_zero == Some(true),
+        ) {
+            // If we are approximate and flushing then we compile to V_RSQ_F32
+            // or V_SQRT_F32 which ignores prevailing denormal mode and flushes anyway
+            (true, true) => None,
+            // If we are approximate and flushing the V_RSQ_F32/V_SQRT_F32
+            // ignores ftz mode, but we implement instruction in terms of fmuls
+            // which must preserve denormals
+            (true, false) => Some(DenormalMode::Preserve),
+            // For full precision we set denormal mode accordingly
+            (false, ftz) => Some(DenormalMode::from_ftz(ftz)),
+        };
         InstructionModes::new(data.type_, denormal, rounding)
     }
 
@@ -1780,6 +1793,11 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
     match inst {
         // TODO: review it when implementing virtual calls
         ast::Instruction::Call { .. }
+        // abs and neg have special handling in AMD GPU ISA. They get compiled
+        // down to instruction argument modifiers, floating point flags have no
+        // effect on it. We handle it during LLVM bitcode emission
+        | ast::Instruction::Abs { .. }
+        | ast::Instruction::Neg {.. }
         | ast::Instruction::Mov { .. }
         | ast::Instruction::Ld { .. }
         | ast::Instruction::St { .. }
@@ -1856,7 +1874,31 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
             data: ast::ArithDetails::Float(data),
             ..
         } => InstructionModes::from_arith_float(data),
-        ast::Instruction::Setp {
+        ast::Instruction::Set {
+            data: ast::SetData{
+                base: ast::SetpData {
+                    type_,
+                    flush_to_zero,
+                    ..
+                },
+                ..
+            },
+            ..
+        }
+        | ast::Instruction::SetBool {
+            data: ast::SetBoolData {
+                base: ast::SetpBoolData {
+                    base: ast::SetpData {
+                        type_,
+                        flush_to_zero,
+                            ..
+                        },
+                    ..
+                },
+            ..
+            }, ..
+        }
+        | ast::Instruction::Setp {
             data:
                 ast::SetpData {
                     type_,
@@ -1876,34 +1918,6 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
                         },
                     ..
                 },
-            ..
-        }
-        | ast::Instruction::Neg {
-            data: ast::TypeFtz {
-                type_,
-                flush_to_zero,
-            },
-            ..
-        }
-        | ast::Instruction::Ex2 {
-            data: ast::TypeFtz {
-                type_,
-                flush_to_zero,
-            },
-            ..
-        }
-        | ast::Instruction::Rsqrt {
-            data: ast::TypeFtz {
-                type_,
-                flush_to_zero,
-            },
-            ..
-        }
-        | ast::Instruction::Abs {
-            data: ast::TypeFtz {
-                type_,
-                flush_to_zero,
-            },
             ..
         }
         | ast::Instruction::Min {
@@ -1945,12 +1959,29 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
             )
         }
         ast::Instruction::Sin { data, .. }
-        | ast::Instruction::Cos { data, .. }
-        | ast::Instruction::Lg2 { data, .. } => InstructionModes::from_ftz_f32(data.flush_to_zero),
+        | ast::Instruction::Cos { data, .. } => InstructionModes::from_ftz_f32(data.flush_to_zero),
         ast::Instruction::Rcp { data, .. } | ast::Instruction::Sqrt { data, .. } => {
-            InstructionModes::from_rcp(*data)
+            InstructionModes::from_rtz_special(*data)
         }
+        ast::Instruction::Rsqrt { data, .. }
+        | ast::Instruction::Ex2 { data, .. } => {
+            let data = ast::RcpData {
+                type_: data.type_,
+                flush_to_zero: data.flush_to_zero,
+                kind: ast::RcpKind::Approx,
+            };
+            InstructionModes::from_rtz_special(data)
+        },
+        ast::Instruction::Lg2 { data, .. } => {
+            let data = ast::RcpData {
+                type_: ast::ScalarType::F32,
+                flush_to_zero: Some(data.flush_to_zero),
+                kind: ast::RcpKind::Approx,
+            };
+            InstructionModes::from_rtz_special(data)
+        },
         ast::Instruction::Cvt { data, .. } => InstructionModes::from_cvt(data),
+        ast::Instruction::Tanh { data, .. } => InstructionModes::from_ftz(*data, Some(false)),
     }
 }
 

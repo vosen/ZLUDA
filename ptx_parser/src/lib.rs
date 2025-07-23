@@ -442,7 +442,7 @@ fn directive<'a, 'input>(
         )),
         (
             any,
-        take_till(1.., |(token, _)| match token {
+            take_till(1.., |(token, _)| match token {
             // visibility
             Token::DotExtern | Token::DotVisible | Token::DotWeak
             // methods
@@ -2201,6 +2201,43 @@ derive_parser!(
     .rnd: RawRoundingMode = { .rn };
     ScalarType = { .f16, .f16x2, .bf16, .bf16x2 };
 
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#comparison-and-selection-instructions-set
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#half-precision-comparison-instructions-set
+    set.CmpOp{.ftz}.dtype.stype         d, a, b => {
+        let base = ast::SetpData::try_parse(state, cmpop, ftz, stype);
+        let data = ast::SetData {
+            base, dtype
+        };
+        ast::Instruction::Set {
+            data,
+            arguments: SetArgs { dst: d, src1: a, src2: b }
+        }
+    }
+    set.CmpOp.BoolOp{.ftz}.dtype.stype  d, a, b, {!}c => {
+        let (negate_src3, c) = c;
+        let base = ast::SetpData::try_parse(state, cmpop, ftz, stype);
+        let base = ast::SetpBoolData {
+            base,
+            bool_op: boolop,
+            negate_src3
+        };
+        let data = ast::SetBoolData {
+            base, dtype
+        };
+        ast::Instruction::SetBool {
+            data,
+            arguments: SetBoolArgs { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+
+    .CmpOp: RawSetpCompareOp  = { .eq, .ne, .lt, .le, .gt, .ge,
+                                  .lo, .ls, .hi, .hs, // signed
+                                  .equ, .neu, .ltu, .leu, .gtu, .geu, .num, .nan }; // float-only
+    .BoolOp: SetpBoolPostOp = { .and, .or, .xor };
+    .dtype: ScalarType = { .u32, .s32, .f32 };
+    .stype: ScalarType = { .b16, .b32, .b64, .u16, .u32, .u64, .s16, .s32, .s64, .f32, .f64 };
+
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions-setp
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#half-precision-comparison-instructions-setp
     setp.CmpOp{.ftz}.type         p[|q], a, b => {
@@ -3509,6 +3546,16 @@ derive_parser!(
             arguments: NanosleepArgs { src: t }
         }
     }
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-tanh
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#half-precision-floating-point-instructions-tanh
+    tanh.approx.type d, a => {
+        Instruction::Tanh {
+            data: type_,
+            arguments: TanhArgs { dst: d, src: a }
+        }
+    }
+    .type: ScalarType = { .f32, .f16, .f16x2, .bf16, .bf16x2 };
 );
 
 #[cfg(test)]
