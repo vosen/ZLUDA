@@ -86,25 +86,25 @@ define amdgpu_kernel void @call_rnd(ptr addrspace(4) byref(i64) %"92", ptr addrs
 
 "84":                                             ; preds = %1
   call void @llvm.amdgcn.s.setreg(i32 6145, i32 1)
-  %"108" = load i64, ptr addrspace(4) %"92", align 4
-  store i64 %"108", ptr addrspace(5) %"94", align 4
-  %"109" = load i64, ptr addrspace(4) %"93", align 4
-  store i64 %"109", ptr addrspace(5) %"95", align 4
-  %"111" = load i64, ptr addrspace(5) %"94", align 4
+  %"108" = load i64, ptr addrspace(4) %"92", align 8
+  store i64 %"108", ptr addrspace(5) %"94", align 8
+  %"109" = load i64, ptr addrspace(4) %"93", align 8
+  store i64 %"109", ptr addrspace(5) %"95", align 8
+  %"111" = load i64, ptr addrspace(5) %"94", align 8
   %"154" = inttoptr i64 %"111" to ptr
   %"110" = load float, ptr %"154", align 4
   store float %"110", ptr addrspace(5) %"96", align 4
-  %"112" = load i64, ptr addrspace(5) %"94", align 4
+  %"112" = load i64, ptr addrspace(5) %"94", align 8
   %"155" = inttoptr i64 %"112" to ptr
   %"59" = getelementptr inbounds i8, ptr %"155", i64 4
   %"113" = load float, ptr %"59", align 4
   store float %"113", ptr addrspace(5) %"97", align 4
-  %"114" = load i64, ptr addrspace(5) %"94", align 4
+  %"114" = load i64, ptr addrspace(5) %"94", align 8
   %"156" = inttoptr i64 %"114" to ptr
   %"61" = getelementptr inbounds i8, ptr %"156", i64 8
   %"115" = load float, ptr %"61", align 4
   store float %"115", ptr addrspace(5) %"98", align 4
-  %"116" = load i64, ptr addrspace(5) %"94", align 4
+  %"116" = load i64, ptr addrspace(5) %"94", align 8
   %"157" = inttoptr i64 %"116" to ptr
   %"63" = getelementptr inbounds i8, ptr %"157", i64 12
   %"117" = load float, ptr %"63", align 4
@@ -122,7 +122,7 @@ define amdgpu_kernel void @call_rnd(ptr addrspace(4) byref(i64) %"92", ptr addrs
   store float %"74", ptr addrspace(5) %"104", align 4
   %"120" = load float, ptr addrspace(5) %"104", align 4
   store float %"120", ptr addrspace(5) %"100", align 4
-  %"121" = load i64, ptr addrspace(5) %"95", align 4
+  %"121" = load i64, ptr addrspace(5) %"95", align 8
   %"122" = load float, ptr addrspace(5) %"100", align 4
   %"158" = inttoptr i64 %"121" to ptr
   store float %"122", ptr %"158", align 4
@@ -139,7 +139,7 @@ define amdgpu_kernel void @call_rnd(ptr addrspace(4) byref(i64) %"92", ptr addrs
   store float %"77", ptr addrspace(5) %"107", align 4
   %"125" = load float, ptr addrspace(5) %"107", align 4
   store float %"125", ptr addrspace(5) %"101", align 4
-  %"126" = load i64, ptr addrspace(5) %"95", align 4
+  %"126" = load i64, ptr addrspace(5) %"95", align 8
   %"159" = inttoptr i64 %"126" to ptr
   %"65" = getelementptr inbounds i8, ptr %"159", i64 4
   %"127" = load float, ptr addrspace(5) %"101", align 4

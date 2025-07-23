@@ -10,14 +10,14 @@ define amdgpu_kernel void @global_array(ptr addrspace(4) byref(i64) %"31", ptr a
   br label %"30"
 
 "30":                                             ; preds = %1
-  store i64 ptrtoint (ptr addrspace(1) @foobar to i64), ptr addrspace(5) %"33", align 4
-  %"37" = load i64, ptr addrspace(4) %"32", align 4
-  store i64 %"37", ptr addrspace(5) %"34", align 4
-  %"39" = load i64, ptr addrspace(5) %"33", align 4
+  store i64 ptrtoint (ptr addrspace(1) @foobar to i64), ptr addrspace(5) %"33", align 8
+  %"37" = load i64, ptr addrspace(4) %"32", align 8
+  store i64 %"37", ptr addrspace(5) %"34", align 8
+  %"39" = load i64, ptr addrspace(5) %"33", align 8
   %"43" = inttoptr i64 %"39" to ptr addrspace(1)
   %"38" = load i32, ptr addrspace(1) %"43", align 4
   store i32 %"38", ptr addrspace(5) %"35", align 4
-  %"40" = load i64, ptr addrspace(5) %"34", align 4
+  %"40" = load i64, ptr addrspace(5) %"34", align 8
   %"41" = load i32, ptr addrspace(5) %"35", align 4
   %"44" = inttoptr i64 %"40" to ptr addrspace(1)
   store i32 %"41", ptr addrspace(1) %"44", align 4

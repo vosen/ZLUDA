@@ -8,16 +8,16 @@ define amdgpu_kernel void @membar(ptr addrspace(4) byref(i64) %"30", ptr addrspa
   br label %"29"
 
 "29":                                             ; preds = %1
-  %"35" = load i64, ptr addrspace(4) %"30", align 4
-  store i64 %"35", ptr addrspace(5) %"32", align 4
-  %"36" = load i64, ptr addrspace(4) %"31", align 4
-  store i64 %"36", ptr addrspace(5) %"33", align 4
-  %"38" = load i64, ptr addrspace(5) %"32", align 4
+  %"35" = load i64, ptr addrspace(4) %"30", align 8
+  store i64 %"35", ptr addrspace(5) %"32", align 8
+  %"36" = load i64, ptr addrspace(4) %"31", align 8
+  store i64 %"36", ptr addrspace(5) %"33", align 8
+  %"38" = load i64, ptr addrspace(5) %"32", align 8
   %"42" = inttoptr i64 %"38" to ptr
   %"41" = load i32, ptr %"42", align 4
   store i32 %"41", ptr addrspace(5) %"34", align 4
   fence seq_cst
-  %"39" = load i64, ptr addrspace(5) %"33", align 4
+  %"39" = load i64, ptr addrspace(5) %"33", align 8
   %"40" = load i32, ptr addrspace(5) %"34", align 4
   %"43" = inttoptr i64 %"39" to ptr
   store i32 %"40", ptr %"43", align 4

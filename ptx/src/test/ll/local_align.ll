@@ -9,18 +9,18 @@ define amdgpu_kernel void @local_align(ptr addrspace(4) byref(i64) %"31", ptr ad
   br label %"30"
 
 "30":                                             ; preds = %1
-  %"36" = load i64, ptr addrspace(4) %"31", align 4
-  store i64 %"36", ptr addrspace(5) %"33", align 4
-  %"37" = load i64, ptr addrspace(4) %"32", align 4
-  store i64 %"37", ptr addrspace(5) %"34", align 4
-  %"39" = load i64, ptr addrspace(5) %"33", align 4
+  %"36" = load i64, ptr addrspace(4) %"31", align 8
+  store i64 %"36", ptr addrspace(5) %"33", align 8
+  %"37" = load i64, ptr addrspace(4) %"32", align 8
+  store i64 %"37", ptr addrspace(5) %"34", align 8
+  %"39" = load i64, ptr addrspace(5) %"33", align 8
   %"42" = inttoptr i64 %"39" to ptr
-  %"38" = load i64, ptr %"42", align 4
-  store i64 %"38", ptr addrspace(5) %"35", align 4
-  %"40" = load i64, ptr addrspace(5) %"34", align 4
-  %"41" = load i64, ptr addrspace(5) %"35", align 4
+  %"38" = load i64, ptr %"42", align 8
+  store i64 %"38", ptr addrspace(5) %"35", align 8
+  %"40" = load i64, ptr addrspace(5) %"34", align 8
+  %"41" = load i64, ptr addrspace(5) %"35", align 8
   %"43" = inttoptr i64 %"40" to ptr
-  store i64 %"41", ptr %"43", align 4
+  store i64 %"41", ptr %"43", align 8
   ret void
 }
 

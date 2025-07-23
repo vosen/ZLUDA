@@ -11,19 +11,19 @@ define amdgpu_kernel void @b64tof64(ptr addrspace(4) byref(i64) %"31", ptr addrs
 "30":                                             ; preds = %1
   %"37" = load double, ptr addrspace(4) %"31", align 8
   store double %"37", ptr addrspace(5) %"33", align 8
-  %"38" = load i64, ptr addrspace(4) %"32", align 4
-  store i64 %"38", ptr addrspace(5) %"35", align 4
+  %"38" = load i64, ptr addrspace(4) %"32", align 8
+  store i64 %"38", ptr addrspace(5) %"35", align 8
   %"40" = load double, ptr addrspace(5) %"33", align 8
   %"46" = bitcast double %"40" to i64
-  store i64 %"46", ptr addrspace(5) %"34", align 4
-  %"42" = load i64, ptr addrspace(5) %"34", align 4
+  store i64 %"46", ptr addrspace(5) %"34", align 8
+  %"42" = load i64, ptr addrspace(5) %"34", align 8
   %"47" = inttoptr i64 %"42" to ptr
-  %"41" = load i64, ptr %"47", align 4
-  store i64 %"41", ptr addrspace(5) %"36", align 4
-  %"43" = load i64, ptr addrspace(5) %"35", align 4
-  %"44" = load i64, ptr addrspace(5) %"36", align 4
+  %"41" = load i64, ptr %"47", align 8
+  store i64 %"41", ptr addrspace(5) %"36", align 8
+  %"43" = load i64, ptr addrspace(5) %"35", align 8
+  %"44" = load i64, ptr addrspace(5) %"36", align 8
   %"48" = inttoptr i64 %"43" to ptr
-  store i64 %"44", ptr %"48", align 4
+  store i64 %"44", ptr %"48", align 8
   ret void
 }
 
