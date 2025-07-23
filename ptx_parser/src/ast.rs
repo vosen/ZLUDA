@@ -831,7 +831,6 @@ pub enum Type {
     Vector(u8, ScalarType),
     // .param.b32 foo[4];
     Array(Option<NonZeroU8>, ScalarType, Vec<u32>),
-    Pointer(ScalarType, StateSpace),
 }
 
 impl Type {
@@ -882,7 +881,6 @@ impl Type {
                     )
                 }
             }
-            Type::Pointer(..) => Layout::new::<usize>(),
         }
     }
 }
