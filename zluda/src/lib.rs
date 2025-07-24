@@ -61,6 +61,8 @@ macro_rules! implemented_in_function {
 cuda_base::cuda_function_declarations!(
     unimplemented,
     implemented <= [
+        cuCtxCreate_v2,
+        cuCtxDestroy_v2,
         cuCtxGetLimit,
         cuCtxSetCurrent,
         cuCtxGetCurrent,
