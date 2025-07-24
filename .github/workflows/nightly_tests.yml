@@ -1,4 +1,5 @@
 on:
+  name: Nightly tests
   workflow_call:
 
 env:
