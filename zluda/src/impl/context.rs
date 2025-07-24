@@ -188,6 +188,8 @@ pub(crate) unsafe fn create_v2(
     dev: cuda_types::cuda::CUdevice,
 ) -> CUresult {
     let handle = Context::wrap(Context::new(dev));
+    // TODO: optimize
+    set_current(handle)?;
     *ctx = handle;
     Ok(())
 }
