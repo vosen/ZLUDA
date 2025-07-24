@@ -1,0 +1,24 @@
+name: Nightly tests
+on:
+  schedule:
+    - cron: "0 8 * * *"
+
+jobs:
+  check_last_nightly_run:
+    runs-on: 'ubuntu-latest'
+    outputs:
+      last_sha: ${{ fromJson(steps.check_last_run.outputs.data).workflow_runs[0].head_sha }}
+    steps:
+    - uses: octokit/request-action@v2.4
+      id: check_last_run
+      with:
+        route: GET /repos/${{github.repository}}/actions/workflows/nightly_tests.yml/runs?per_page=1&status=completed
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - run: "echo Last nightly build: ${{ fromJson(steps.check_last_run.outputs.data).workflow_runs[0].head_sha }}"
+  build:
+    runs-on: gpu_large
+    needs: [check_last_nightly_run]
+    if: needs.check_last_nightly_run.outputs.last_sha != github.sha
+    uses: ./.github/workflows/nightly_tests.yml
+    secrets: inherit
