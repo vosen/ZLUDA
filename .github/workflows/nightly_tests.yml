@@ -1,6 +1,7 @@
 name: Nightly tests
 on:
   workflow_call:
+  workflow_dispatch:
 
 env:
   ROCM_VERSION: "6.3.1"
