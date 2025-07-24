@@ -33,7 +33,7 @@ jobs:
         pids=()
         exit_codes=()
         for i in $(seq 0 $((${{ env.TEST_THREADS }} - 1))); do
-          cargo run -r -- zluda/libcuda.so.1 --shard-index $i --shard-count ${{ env.TEST_THREADS }} &> output_$i.log &
+          cargo run -r -- zluda/libcuda.so.1 --shard-index $i --shard-count ${{ env.TEST_THREADS }} > output_$i.log 2>&1 &
           pids+=($!)
         done
         for pid in "${pids[@]}"; do
