@@ -7,6 +7,7 @@ env:
 
 jobs:
   run_tests:
+    runs-on: gpu_large
     steps:
     - name: Install ROCm
       run: sudo bash .github/workflows/rocm_setup_run.sh ${{ env.ROCM_VERSION }}
@@ -26,6 +27,7 @@ jobs:
         exit_codes=()
         for i in $(seq 0 $((${{ env.TEST_THREADS }} - 1))); do
           cargo run -r -- zluda/libcuda.so.1 --shard-index $i --shard-count ${{ env.TEST_THREADS }} &> output_$i.log &
+          pids+=($!)
         done
         for pid in "${pids[@]}"; do
           wait $pid
@@ -39,6 +41,7 @@ jobs:
         done
         exit $error_occurred
     - name: Upload logs
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: output_logs
