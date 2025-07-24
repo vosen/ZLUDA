@@ -1,0 +1,44 @@
+on:
+  workflow_call:
+
+env:
+  ROCM_VERSION: "6.3.1"
+  TEST_THREADS: 24
+
+jobs:
+  steps:
+  - name: Install ROCm
+    run: sudo bash .github/workflows/rocm_setup_run.sh ${{ env.ROCM_VERSION }}
+  - uses: actions/checkout@v4
+    with:
+      repository: 'vosen/ptx_tests'
+  - uses: robinraju/release-downloader@v1
+    with:
+      repository: 'vosen/ZLUDA'
+      latest: true
+      preRelease: true
+      extract: true
+      fileName: 'zluda-linux-*.tar.gz'
+  - name: Build and run
+    run: |
+      pids=()
+      exit_codes=()
+      for i in $(seq 0 $((${{ env.TEST_THREADS }} - 1))); do
+        cargo run -r -- zluda/libcuda.so.1 --shard-index $i --shard-count ${{ env.TEST_THREADS }} &> output_$i.log &
+      done
+      for pid in "${pids[@]}"; do
+        wait $pid
+        exit_codes+=($?)
+      done
+      error_occurred=0
+      for i in "${!exit_codes[@]}"; do
+        if [ ${exit_codes[$i]} -ne 0 ]; then
+          error_occurred=1
+        fi
+      done
+      exit $error_occurred
+  - name: Upload logs
+    uses: actions/upload-artifact@v4
+    with:
+      name: output_logs
+      path: output_*.log
