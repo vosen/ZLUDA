@@ -1,7 +1,7 @@
 name: Nightly tests
 on:
   schedule:
-    - cron: "30 01 * * *"
+    - cron: "0 8 * * *"
 
 jobs:
   check_last_nightly_run:
@@ -21,5 +21,5 @@ jobs:
     runs-on: gpu_big
     needs: [check_last_nightly_run]
     if: needs.check_last_nightly_run.outputs.last_sha != github.sha
-    uses: ./.github/workflows/dothebuild.yml
+    uses: ./.github/workflows/nightly_tests.yml
     secrets: inherit
