@@ -1,22 +1,35 @@
-name: zluda_dump Report
-description: Share the zluda_dump logs to help us support your application.
-title: "[Trace]: "
-labels: ["zluda_dump logs"]
+name: Bug Report
+description: Report an issue with ZLUDA
+title: ""
+labels: []
 body:
   - type: markdown
     attributes:
       value: |
-        TODO: We will post a tutorial for creating these logs. Add a link to it here.
+        If you are reporting an application that is not supported by ZLUDA, please use zluda_dump to
+        create logs that we can use to debug the issue. TODO: We will post a tutorial for creating
+        these logs. Add a link to it here.
   - type: textarea
     id: logs
     attributes:
       label: zluda_dump logs (tarball/zip file)
       description: |
         Please create a tarball (`.tar.gz`) or zip file (`.zip`) of your log directory and attach
-        it here. You can drag and drop files directly into the comment box.
+        it here. You can drag and drop files directly into the comment box. Please also include
+        zluda_dump logs using CUDA if you have NVIDIA hardware to test on.
       placeholder: Attach file (e.g., drag and drop)
     validations:
-      required: true
+      required: false
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: |
+        Describe the issue you've encountered. What is the expected behavior? What is the actual
+        behavior?
+      placeholder: Description
+    validations:
+      required: false
   - type: textarea
     id: reproduce
     attributes:
@@ -35,7 +48,7 @@ body:
             ./train_gpt2fp32cu
           4. Build and run the tests:
             make test_gpt2fp32cu
-            ./test_gpt2fp32cu
+            LD_LIBRARY_PATH=<ZLUDA_DUMP_DIR> ./test_gpt2fp32cu
     validations:
       required: true
   - type: input
@@ -51,6 +64,6 @@ body:
     attributes:
       label: GPU
       description: What GPU are you using?
-      placeholder:  "example: NVIDIA GeForce RTX 5080"
+      placeholder:  "example: AMD Radeon RX 6600"
     validations:
       required: true
