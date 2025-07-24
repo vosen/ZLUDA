@@ -16,7 +16,6 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - run: "echo Last nightly build: ${{ fromJson(steps.check_last_run.outputs.data).workflow_runs[0].head_sha }}"
-
   build:
     runs-on: gpu_big
     needs: [check_last_nightly_run]
