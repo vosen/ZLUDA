@@ -1,5 +1,3 @@
-use crate::r#impl::driver;
-
 use super::{module, ZludaObject, FromCuda};
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
