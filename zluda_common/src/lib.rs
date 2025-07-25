@@ -27,7 +27,7 @@ macro_rules! define_init_state {
 
         #[dtor::dtor]
         fn deinitialize() {
-            INITIALIZED.deinitialize();
+            $name.deinitialize();
         }
     };
 }
