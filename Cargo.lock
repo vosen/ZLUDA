@@ -563,6 +563,10 @@ name = "hip_runtime-sys"
 version = "0.0.0"
 
 [[package]]
+name = "hipblas-sys"
+version = "0.1.0"
+
+[[package]]
 name = "indexmap"
 version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

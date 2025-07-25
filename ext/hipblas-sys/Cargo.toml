@@ -1,0 +1,7 @@
+[package]
+name = "hipblas-sys"
+version = "0.1.0"
+authors = ["Violet <c01368481@gmail.com>"]
+edition = "2021"
+
+[lib]

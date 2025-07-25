@@ -28,6 +28,10 @@ fn main() {
         &crate_root,
         &["..", "ext", "hip_runtime-sys", "src", "lib.rs"],
     );
+    generate_hipblas(
+        &crate_root,
+        &["..", "ext", "hipblas-sys", "src", "lib.rs"],
+    );
     let cuda_functions = generate_cuda(&crate_root);
     generate_process_address_table(&crate_root, cuda_functions);
     generate_ml(&crate_root);
@@ -919,6 +923,51 @@ fn generate_hip_runtime(output: &PathBuf, path: &[&str]) {
     let mut output = output.clone();
     output.extend(path);
     write_rust_to_file(output, &prettyplease::unparse(&module))
+}
+
+fn generate_hipblas(output: &PathBuf, path: &[&str]) {
+    let hipblas_header = new_builder()
+        .header("/opt/rocm/include/hipblas/hipblas.h")
+        .allowlist_type("^hipblas.*")
+        .allowlist_function("^hipblas.*")
+        .allowlist_var("^hipblas.*")
+        .must_use_type("hipblasError_t")
+        .constified_enum("hipblasStatus_t")
+        .new_type_alias("hipblasHandle_t")
+        .clang_args(["-I/opt/rocm/include", "-D__HIP_PLATFORM_AMD__"])
+        .generate()
+        .unwrap()
+        .to_string();
+    let mut module: syn::File = syn::parse_str(&hipblas_header).unwrap();
+    let mut converter = ConvertIntoRustResult {
+        type_: "hipblasStatus_t",
+        underlying_type: "hipblasStatus_t",
+        new_error_type: "hipblasErrorCode_t",
+        error_prefix: ("HIPBLAS_STATUS_", "ERROR_"),
+        success: ("HIPBLAS_STATUS_SUCCESS", "SUCCESS"),
+        constants: Vec::new(),
+    };
+    module.items = module
+        .items
+        .into_iter()
+        .filter_map(|item| match item {
+            Item::Const(const_) => converter.get_const(const_).map(Item::Const),
+            Item::Use(use_) => converter.get_use(use_).map(Item::Use),
+            Item::Type(type_) => converter.get_type(type_).map(Item::Type),
+            item => Some(item),
+        })
+        .collect::<Vec<_>>();
+    converter.flush(&mut module.items);
+    add_send_sync(
+        &mut module.items,
+        &[
+            "hipblasHandle_t",
+        ],
+    );
+    let mut output = output.clone();
+    output.extend(path);
+    write_rust_to_file(output, &prettyplease::unparse(&module))
+
 }
 
 fn add_send_sync(items: &mut Vec<Item>, arg: &[&str]) {

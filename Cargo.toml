@@ -9,7 +9,7 @@ members = [
     "dark_api",
     "detours-sys",
     "ext/amd_comgr-sys",
-    "ext/hip_runtime-sys",
+    "ext/hip_runtime-sys", "ext/hipblas-sys",
     "format",
     "ptx",
     "ptx_parser",
