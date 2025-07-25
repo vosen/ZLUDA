@@ -24,7 +24,7 @@ macro_rules! implemented_fn {
     };
 }
 
-cuda_base::nvml_function_declarations!(
+cuda_macros::nvml_function_declarations!(
     unimplemented_fn,
     implemented_fn <= [
         nvmlErrorString,

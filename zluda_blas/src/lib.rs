@@ -26,7 +26,7 @@ macro_rules! implemented {
     };
 }
 
-cuda_base::cublas_function_declarations!(
+cuda_macros::cublas_function_declarations!(
     unimplemented,
     implemented <= [
         cublasGetStatusName,

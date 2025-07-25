@@ -45,5 +45,5 @@ macro_rules! unimplemented {
     };
 }
 
-cuda_base::cublaslt_function_declarations!(unimplemented);
-cuda_base::cublaslt_internal_function_declarations!(unimplemented);
+cuda_macros::cublaslt_function_declarations!(unimplemented);
+cuda_macros::cublaslt_internal_function_declarations!(unimplemented);

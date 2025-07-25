@@ -45,4 +45,4 @@ macro_rules! unimplemented {
     };
 }
 
-cuda_base::cublas_function_declarations!(unimplemented);
+cuda_macros::cublas_function_declarations!(unimplemented);

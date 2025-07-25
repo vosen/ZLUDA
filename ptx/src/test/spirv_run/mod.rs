@@ -555,7 +555,7 @@ macro_rules! dynamic_fns {
     };
 }
 
-cuda_base::cuda_function_declarations!(dynamic_fns);
+cuda_macros::cuda_function_declarations!(dynamic_fns);
 
 static COMGR: std::sync::LazyLock<Comgr> = std::sync::LazyLock::new(|| Comgr::new().unwrap());
 static CUDA: std::sync::LazyLock<DynamicCuda> =
