@@ -116,6 +116,7 @@ fn function_declarations(tokens: TokenStream, module: &str) -> TokenStream {
 pub fn nvml_function_declarations(tokens: TokenStream) -> TokenStream {
     function_declarations(tokens, NVML_RS)
 }
+
 struct FnDeclInput {
     normal_macro: Path,
     overrides: Punctuated<OverrideMacro, Token![,]>,

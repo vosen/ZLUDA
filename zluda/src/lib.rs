@@ -1,15 +1,8 @@
 use cuda_types::cuda::CUerror;
-use std::sync::atomic::{AtomicBool, Ordering};
+use zluda_common::{define_init_state, InitState};
 pub(crate) mod r#impl;
 
-static INITIALIZED: AtomicBool = AtomicBool::new(true);
-pub(crate) fn initialized() -> bool {
-    INITIALIZED.load(Ordering::SeqCst)
-}
-#[dtor::dtor]
-fn deinitialize() {
-    INITIALIZED.store(false, Ordering::SeqCst);
-}
+define_init_state!(INITIALIZED);
 
 macro_rules! unimplemented {
     ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
@@ -31,7 +24,7 @@ macro_rules! implemented {
             #[allow(improper_ctypes)]
             #[allow(improper_ctypes_definitions)]
             pub unsafe extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
-                if !initialized() {
+                if !INITIALIZED.is_initialized() {
                     return Err(CUerror::DEINITIALIZED);
                 }
                 cuda_macros::cuda_normalize_fn!( crate::r#impl::$fn_name ) ($(crate::r#impl::FromCuda::from_cuda(&$arg_id)?),*)?;
@@ -48,7 +41,7 @@ macro_rules! implemented_in_function {
             #[allow(improper_ctypes)]
             #[allow(improper_ctypes_definitions)]
             pub unsafe extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
-                if !initialized() {
+                if !INITIALIZED.is_initialized() {
                     return Err(CUerror::DEINITIALIZED);
                 }
                 cuda_macros::cuda_normalize_fn!( crate::r#impl::function::$fn_name ) ($(crate::r#impl::FromCuda::from_cuda(&$arg_id)?),*)?;
