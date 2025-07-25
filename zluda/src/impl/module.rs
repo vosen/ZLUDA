@@ -103,6 +103,15 @@ pub(crate) fn get_function(
     unsafe { hipModuleGetFunction(hfunc, hmod.base, name) }
 }
 
+pub(crate) fn get_global_v2(
+    dptr: *mut hipDeviceptr_t,
+    bytes: *mut usize,
+    hmod: &Module,
+    name: *const ::core::ffi::c_char,
+) -> hipError_t {
+    unsafe { hipModuleGetGlobal(dptr, bytes, hmod.base, name) }
+}
+
 pub(crate) fn get_loading_mode(mode: &mut cuda_types::cuda::CUmoduleLoadingMode) -> CUresult {
     *mode = cuda_types::cuda::CUmoduleLoadingMode::CU_MODULE_EAGER_LOADING;
     Ok(())
