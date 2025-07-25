@@ -849,7 +849,7 @@ fn format_curesult(curesult: CUresult) -> Vec<u8> {
     output_string
 }
 
-use cuda_base::cuda_function_declarations;
+use cuda_macros::cuda_function_declarations;
 
 use crate::log::UInt;
 cuda_function_declarations!(

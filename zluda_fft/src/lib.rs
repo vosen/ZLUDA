@@ -13,6 +13,6 @@ macro_rules! unimplemented {
     };
 }
 
-cuda_base::cufft_function_declarations!(
+cuda_macros::cufft_function_declarations!(
     unimplemented
 );

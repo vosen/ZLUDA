@@ -160,7 +160,7 @@ fn generate_cufft(crate_root: &PathBuf) {
     generate_functions(
         &crate_root,
         "cufft",
-        &["..", "cuda_base", "src", "cufft.rs"],
+        &["..", "cuda_macros", "src", "cufft.rs"],
         &module,
     );
     generate_types_library(
@@ -215,7 +215,7 @@ fn generate_cusparse(crate_root: &PathBuf) {
     generate_functions(
         &crate_root,
         "cusparse",
-        &["..", "cuda_base", "src", "cusparse.rs"],
+        &["..", "cuda_macros", "src", "cusparse.rs"],
         &module,
     );
     generate_types_library(
@@ -275,13 +275,13 @@ fn generate_cudnn(crate_root: &PathBuf) {
     generate_functions(
         &crate_root,
         "cudnn8",
-        &["..", "cuda_base", "src", "cudnn8.rs"],
+        &["..", "cuda_macros", "src", "cudnn8.rs"],
         &cudnn8_module,
     );
     generate_functions(
         &crate_root,
         "cudnn9",
-        &["..", "cuda_base", "src", "cudnn9.rs"],
+        &["..", "cuda_macros", "src", "cudnn9.rs"],
         &cudnn9_module,
     );
     generate_display_perflib(
@@ -633,7 +633,7 @@ fn generate_cublas(crate_root: &PathBuf) {
     generate_functions(
         &crate_root,
         "cublas",
-        &["..", "cuda_base", "src", "cublas.rs"],
+        &["..", "cuda_macros", "src", "cublas.rs"],
         &module,
     );
     generate_types_library(
@@ -693,7 +693,7 @@ fn generate_cublaslt(crate_root: &PathBuf) {
     std::fs::write(
         crate_root
             .join("..")
-            .join("cuda_base")
+            .join("cuda_macros")
             .join("src")
             .join("cublaslt_internal.rs"),
         cublaslt_internal_header,
@@ -704,7 +704,7 @@ fn generate_cublaslt(crate_root: &PathBuf) {
     generate_functions(
         &crate_root,
         "cublaslt",
-        &["..", "cuda_base", "src", "cublaslt.rs"],
+        &["..", "cuda_macros", "src", "cublaslt.rs"],
         &module_blas,
     );
     generate_types_library(
@@ -753,7 +753,7 @@ fn generate_cuda(crate_root: &PathBuf) -> Vec<Ident> {
     let cuda_functions = get_functions(generate_functions(
         &crate_root,
         "cuda",
-        &["..", "cuda_base", "src", "cuda.rs"],
+        &["..", "cuda_macros", "src", "cuda.rs"],
         &module,
     ));
     generate_types_cuda(
@@ -805,7 +805,7 @@ fn generate_ml(crate_root: &PathBuf) {
     generate_functions(
         &crate_root,
         "nvml",
-        &["..", "cuda_base", "src", "nvml.rs"],
+        &["..", "cuda_macros", "src", "nvml.rs"],
         &module,
     );
     generate_types_library(

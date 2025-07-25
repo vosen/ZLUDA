@@ -26,7 +26,7 @@ unwrap_or = "1.0.1"
 hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
 comgr = { path = "../comgr" }
 cuda_types = { path = "../cuda_types" }
-cuda_base = { path = "../cuda_base" }
+cuda_macros = { path = "../cuda_macros" }
 tempfile = "3"
 paste = "1.0"
 pretty_assertions = "1.4.1"

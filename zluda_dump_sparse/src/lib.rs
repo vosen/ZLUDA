@@ -45,4 +45,4 @@ macro_rules! unimplemented {
     };
 }
 
-cuda_base::cusparse_function_declarations!(unimplemented);
+cuda_macros::cusparse_function_declarations!(unimplemented);

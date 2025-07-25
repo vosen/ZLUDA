@@ -34,7 +34,7 @@ macro_rules! implemented {
                 if !initialized() {
                     return Err(CUerror::DEINITIALIZED);
                 }
-                cuda_base::cuda_normalize_fn!( crate::r#impl::$fn_name ) ($(crate::r#impl::FromCuda::from_cuda(&$arg_id)?),*)?;
+                cuda_macros::cuda_normalize_fn!( crate::r#impl::$fn_name ) ($(crate::r#impl::FromCuda::from_cuda(&$arg_id)?),*)?;
                 Ok(())
             }
         )*
@@ -51,14 +51,14 @@ macro_rules! implemented_in_function {
                 if !initialized() {
                     return Err(CUerror::DEINITIALIZED);
                 }
-                cuda_base::cuda_normalize_fn!( crate::r#impl::function::$fn_name ) ($(crate::r#impl::FromCuda::from_cuda(&$arg_id)?),*)?;
+                cuda_macros::cuda_normalize_fn!( crate::r#impl::function::$fn_name ) ($(crate::r#impl::FromCuda::from_cuda(&$arg_id)?),*)?;
                 Ok(())
             }
         )*
     };
 }
 
-cuda_base::cuda_function_declarations!(
+cuda_macros::cuda_function_declarations!(
     unimplemented,
     implemented <= [
         cuCtxCreate_v2,

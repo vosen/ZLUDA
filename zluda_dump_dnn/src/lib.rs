@@ -45,4 +45,4 @@ macro_rules! unimplemented {
     };
 }
 
-cuda_base::cudnn9_function_declarations!(unimplemented);
+cuda_macros::cudnn9_function_declarations!(unimplemented);

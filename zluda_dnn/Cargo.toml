@@ -8,7 +8,7 @@ crate-type = ["cdylib"]
 name = "cudnn64_9"
 
 [dependencies]
-cuda_base = { path = "../cuda_base" }
+cuda_macros = { path = "../cuda_macros" }
 cuda_types = { path = "../cuda_types" }
 
 [package.metadata.zluda]
