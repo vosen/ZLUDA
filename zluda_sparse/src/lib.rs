@@ -26,7 +26,7 @@ macro_rules! implemented {
     };
 }
 
-cuda_base::cusparse_function_declarations!(
+cuda_macros::cusparse_function_declarations!(
     unimplemented,
     implemented <= [
         cusparseGetErrorName,

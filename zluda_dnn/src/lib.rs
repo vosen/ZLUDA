@@ -26,7 +26,7 @@ macro_rules! implemented {
     };
 }
 
-cuda_base::cudnn9_function_declarations!(
+cuda_macros::cudnn9_function_declarations!(
     unimplemented,
     implemented <= [
         cudnnGetVersion,
