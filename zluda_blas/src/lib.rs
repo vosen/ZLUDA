@@ -1,5 +1,7 @@
 mod r#impl;
 
+use cuda_types::cublas::cublasError_t;
+
 macro_rules! unimplemented {
     ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
         $(
@@ -42,7 +44,7 @@ macro_rules! implemented_and_always_succeeds {
 
 cuda_macros::cublas_function_declarations!(
     unimplemented,
-    implemented <= [],
+    implemented <= [cublasCreate_v2],
     implemented_and_always_succeeds
         <= [
             cublasGetStatusName,
