@@ -4706,94 +4706,94 @@ pub struct nvmlPowerSmoothingState_v1_t {
 }
 pub type nvmlPowerSmoothingState_t = nvmlPowerSmoothingState_v1_t;
 impl nvmlError_t {
-    pub const UNINITIALIZED: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#UNINITIALIZED: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(1)
     });
-    pub const INVALID_ARGUMENT: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#INVALID_ARGUMENT: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(2)
     });
-    pub const NOT_SUPPORTED: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#NOT_SUPPORTED: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(3)
     });
-    pub const NO_PERMISSION: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#NO_PERMISSION: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(4)
     });
-    pub const ALREADY_INITIALIZED: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#ALREADY_INITIALIZED: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(5)
     });
-    pub const NOT_FOUND: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#NOT_FOUND: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(6)
     });
-    pub const INSUFFICIENT_SIZE: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#INSUFFICIENT_SIZE: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(7)
     });
-    pub const INSUFFICIENT_POWER: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#INSUFFICIENT_POWER: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(8)
     });
-    pub const DRIVER_NOT_LOADED: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#DRIVER_NOT_LOADED: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(9)
     });
-    pub const TIMEOUT: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#TIMEOUT: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(10)
     });
-    pub const IRQ_ISSUE: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#IRQ_ISSUE: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(11)
     });
-    pub const LIBRARY_NOT_FOUND: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#LIBRARY_NOT_FOUND: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(12)
     });
-    pub const FUNCTION_NOT_FOUND: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#FUNCTION_NOT_FOUND: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(13)
     });
-    pub const CORRUPTED_INFOROM: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#CORRUPTED_INFOROM: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(14)
     });
-    pub const GPU_IS_LOST: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#GPU_IS_LOST: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(15)
     });
-    pub const RESET_REQUIRED: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#RESET_REQUIRED: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(16)
     });
-    pub const OPERATING_SYSTEM: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#OPERATING_SYSTEM: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(17)
     });
-    pub const LIB_RM_VERSION_MISMATCH: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#LIB_RM_VERSION_MISMATCH: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(18)
     });
-    pub const IN_USE: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#IN_USE: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(19)
     });
-    pub const MEMORY: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#MEMORY: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(20)
     });
-    pub const NO_DATA: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#NO_DATA: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(21)
     });
-    pub const VGPU_ECC_NOT_SUPPORTED: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#VGPU_ECC_NOT_SUPPORTED: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(22)
     });
-    pub const INSUFFICIENT_RESOURCES: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#INSUFFICIENT_RESOURCES: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(23)
     });
-    pub const FREQ_NOT_SUPPORTED: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#FREQ_NOT_SUPPORTED: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(24)
     });
-    pub const ARGUMENT_VERSION_MISMATCH: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#ARGUMENT_VERSION_MISMATCH: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(25)
     });
-    pub const DEPRECATED: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#DEPRECATED: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(26)
     });
-    pub const NOT_READY: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#NOT_READY: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(27)
     });
-    pub const GPU_NOT_FOUND: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#GPU_NOT_FOUND: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(28)
     });
-    pub const INVALID_STATE: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#INVALID_STATE: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(29)
     });
-    pub const UNKNOWN: nvmlError_t = nvmlError_t(unsafe {
+    pub const r#UNKNOWN: nvmlError_t = nvmlError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(999)
     });
 }
@@ -4803,75 +4803,77 @@ pub struct nvmlError_t(pub ::core::num::NonZeroU32);
 pub trait nvmlReturn_tConsts {
     const SUCCESS: nvmlReturn_t = nvmlReturn_t::Ok(());
     const ERROR_UNINITIALIZED: nvmlReturn_t = nvmlReturn_t::Err(
-        nvmlError_t::UNINITIALIZED,
+        nvmlError_t::r#UNINITIALIZED,
     );
     const ERROR_INVALID_ARGUMENT: nvmlReturn_t = nvmlReturn_t::Err(
-        nvmlError_t::INVALID_ARGUMENT,
+        nvmlError_t::r#INVALID_ARGUMENT,
     );
     const ERROR_NOT_SUPPORTED: nvmlReturn_t = nvmlReturn_t::Err(
-        nvmlError_t::NOT_SUPPORTED,
+        nvmlError_t::r#NOT_SUPPORTED,
     );
     const ERROR_NO_PERMISSION: nvmlReturn_t = nvmlReturn_t::Err(
-        nvmlError_t::NO_PERMISSION,
+        nvmlError_t::r#NO_PERMISSION,
     );
     const ERROR_ALREADY_INITIALIZED: nvmlReturn_t = nvmlReturn_t::Err(
-        nvmlError_t::ALREADY_INITIALIZED,
+        nvmlError_t::r#ALREADY_INITIALIZED,
     );
-    const ERROR_NOT_FOUND: nvmlReturn_t = nvmlReturn_t::Err(nvmlError_t::NOT_FOUND);
+    const ERROR_NOT_FOUND: nvmlReturn_t = nvmlReturn_t::Err(nvmlError_t::r#NOT_FOUND);
     const ERROR_INSUFFICIENT_SIZE: nvmlReturn_t = nvmlReturn_t::Err(
-        nvmlError_t::INSUFFICIENT_SIZE,
+        nvmlError_t::r#INSUFFICIENT_SIZE,
     );
     const ERROR_INSUFFICIENT_POWER: nvmlReturn_t = nvmlReturn_t::Err(
-        nvmlError_t::INSUFFICIENT_POWER,
+        nvmlError_t::r#INSUFFICIENT_POWER,
     );
     const ERROR_DRIVER_NOT_LOADED: nvmlReturn_t = nvmlReturn_t::Err(
-        nvmlError_t::DRIVER_NOT_LOADED,
+        nvmlError_t::r#DRIVER_NOT_LOADED,
     );
-    const ERROR_TIMEOUT: nvmlReturn_t = nvmlReturn_t::Err(nvmlError_t::TIMEOUT);
-    const ERROR_IRQ_ISSUE: nvmlReturn_t = nvmlReturn_t::Err(nvmlError_t::IRQ_ISSUE);
+    const ERROR_TIMEOUT: nvmlReturn_t = nvmlReturn_t::Err(nvmlError_t::r#TIMEOUT);
+    const ERROR_IRQ_ISSUE: nvmlReturn_t = nvmlReturn_t::Err(nvmlError_t::r#IRQ_ISSUE);
     const ERROR_LIBRARY_NOT_FOUND: nvmlReturn_t = nvmlReturn_t::Err(
-        nvmlError_t::LIBRARY_NOT_FOUND,
+        nvmlError_t::r#LIBRARY_NOT_FOUND,
     );
     const ERROR_FUNCTION_NOT_FOUND: nvmlReturn_t = nvmlReturn_t::Err(
-        nvmlError_t::FUNCTION_NOT_FOUND,
+        nvmlError_t::r#FUNCTION_NOT_FOUND,
     );
     const ERROR_CORRUPTED_INFOROM: nvmlReturn_t = nvmlReturn_t::Err(
-        nvmlError_t::CORRUPTED_INFOROM,
+        nvmlError_t::r#CORRUPTED_INFOROM,
     );
-    const ERROR_GPU_IS_LOST: nvmlReturn_t = nvmlReturn_t::Err(nvmlError_t::GPU_IS_LOST);
+    const ERROR_GPU_IS_LOST: nvmlReturn_t = nvmlReturn_t::Err(
+        nvmlError_t::r#GPU_IS_LOST,
+    );
     const ERROR_RESET_REQUIRED: nvmlReturn_t = nvmlReturn_t::Err(
-        nvmlError_t::RESET_REQUIRED,
+        nvmlError_t::r#RESET_REQUIRED,
     );
     const ERROR_OPERATING_SYSTEM: nvmlReturn_t = nvmlReturn_t::Err(
-        nvmlError_t::OPERATING_SYSTEM,
+        nvmlError_t::r#OPERATING_SYSTEM,
     );
     const ERROR_LIB_RM_VERSION_MISMATCH: nvmlReturn_t = nvmlReturn_t::Err(
-        nvmlError_t::LIB_RM_VERSION_MISMATCH,
+        nvmlError_t::r#LIB_RM_VERSION_MISMATCH,
     );
-    const ERROR_IN_USE: nvmlReturn_t = nvmlReturn_t::Err(nvmlError_t::IN_USE);
-    const ERROR_MEMORY: nvmlReturn_t = nvmlReturn_t::Err(nvmlError_t::MEMORY);
-    const ERROR_NO_DATA: nvmlReturn_t = nvmlReturn_t::Err(nvmlError_t::NO_DATA);
+    const ERROR_IN_USE: nvmlReturn_t = nvmlReturn_t::Err(nvmlError_t::r#IN_USE);
+    const ERROR_MEMORY: nvmlReturn_t = nvmlReturn_t::Err(nvmlError_t::r#MEMORY);
+    const ERROR_NO_DATA: nvmlReturn_t = nvmlReturn_t::Err(nvmlError_t::r#NO_DATA);
     const ERROR_VGPU_ECC_NOT_SUPPORTED: nvmlReturn_t = nvmlReturn_t::Err(
-        nvmlError_t::VGPU_ECC_NOT_SUPPORTED,
+        nvmlError_t::r#VGPU_ECC_NOT_SUPPORTED,
     );
     const ERROR_INSUFFICIENT_RESOURCES: nvmlReturn_t = nvmlReturn_t::Err(
-        nvmlError_t::INSUFFICIENT_RESOURCES,
+        nvmlError_t::r#INSUFFICIENT_RESOURCES,
     );
     const ERROR_FREQ_NOT_SUPPORTED: nvmlReturn_t = nvmlReturn_t::Err(
-        nvmlError_t::FREQ_NOT_SUPPORTED,
+        nvmlError_t::r#FREQ_NOT_SUPPORTED,
     );
     const ERROR_ARGUMENT_VERSION_MISMATCH: nvmlReturn_t = nvmlReturn_t::Err(
-        nvmlError_t::ARGUMENT_VERSION_MISMATCH,
+        nvmlError_t::r#ARGUMENT_VERSION_MISMATCH,
     );
-    const ERROR_DEPRECATED: nvmlReturn_t = nvmlReturn_t::Err(nvmlError_t::DEPRECATED);
-    const ERROR_NOT_READY: nvmlReturn_t = nvmlReturn_t::Err(nvmlError_t::NOT_READY);
+    const ERROR_DEPRECATED: nvmlReturn_t = nvmlReturn_t::Err(nvmlError_t::r#DEPRECATED);
+    const ERROR_NOT_READY: nvmlReturn_t = nvmlReturn_t::Err(nvmlError_t::r#NOT_READY);
     const ERROR_GPU_NOT_FOUND: nvmlReturn_t = nvmlReturn_t::Err(
-        nvmlError_t::GPU_NOT_FOUND,
+        nvmlError_t::r#GPU_NOT_FOUND,
     );
     const ERROR_INVALID_STATE: nvmlReturn_t = nvmlReturn_t::Err(
-        nvmlError_t::INVALID_STATE,
+        nvmlError_t::r#INVALID_STATE,
     );
-    const ERROR_UNKNOWN: nvmlReturn_t = nvmlReturn_t::Err(nvmlError_t::UNKNOWN);
+    const ERROR_UNKNOWN: nvmlReturn_t = nvmlReturn_t::Err(nvmlError_t::r#UNKNOWN);
 }
 impl nvmlReturn_tConsts for nvmlReturn_t {}
 #[must_use]

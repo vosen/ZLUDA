@@ -8454,301 +8454,301 @@ pub type cuFloatComplex = float2;
 pub type cuDoubleComplex = double2;
 pub type cuComplex = cuFloatComplex;
 impl CUerror {
-    pub const INVALID_VALUE: CUerror = CUerror(unsafe {
+    pub const r#INVALID_VALUE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(1)
     });
-    pub const OUT_OF_MEMORY: CUerror = CUerror(unsafe {
+    pub const r#OUT_OF_MEMORY: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(2)
     });
-    pub const NOT_INITIALIZED: CUerror = CUerror(unsafe {
+    pub const r#NOT_INITIALIZED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(3)
     });
-    pub const DEINITIALIZED: CUerror = CUerror(unsafe {
+    pub const r#DEINITIALIZED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(4)
     });
-    pub const PROFILER_DISABLED: CUerror = CUerror(unsafe {
+    pub const r#PROFILER_DISABLED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(5)
     });
-    pub const PROFILER_NOT_INITIALIZED: CUerror = CUerror(unsafe {
+    pub const r#PROFILER_NOT_INITIALIZED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(6)
     });
-    pub const PROFILER_ALREADY_STARTED: CUerror = CUerror(unsafe {
+    pub const r#PROFILER_ALREADY_STARTED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(7)
     });
-    pub const PROFILER_ALREADY_STOPPED: CUerror = CUerror(unsafe {
+    pub const r#PROFILER_ALREADY_STOPPED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(8)
     });
-    pub const STUB_LIBRARY: CUerror = CUerror(unsafe {
+    pub const r#STUB_LIBRARY: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(34)
     });
-    pub const DEVICE_UNAVAILABLE: CUerror = CUerror(unsafe {
+    pub const r#DEVICE_UNAVAILABLE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(46)
     });
-    pub const NO_DEVICE: CUerror = CUerror(unsafe {
+    pub const r#NO_DEVICE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(100)
     });
-    pub const INVALID_DEVICE: CUerror = CUerror(unsafe {
+    pub const r#INVALID_DEVICE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(101)
     });
-    pub const DEVICE_NOT_LICENSED: CUerror = CUerror(unsafe {
+    pub const r#DEVICE_NOT_LICENSED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(102)
     });
-    pub const INVALID_IMAGE: CUerror = CUerror(unsafe {
+    pub const r#INVALID_IMAGE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(200)
     });
-    pub const INVALID_CONTEXT: CUerror = CUerror(unsafe {
+    pub const r#INVALID_CONTEXT: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(201)
     });
-    pub const CONTEXT_ALREADY_CURRENT: CUerror = CUerror(unsafe {
+    pub const r#CONTEXT_ALREADY_CURRENT: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(202)
     });
-    pub const MAP_FAILED: CUerror = CUerror(unsafe {
+    pub const r#MAP_FAILED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(205)
     });
-    pub const UNMAP_FAILED: CUerror = CUerror(unsafe {
+    pub const r#UNMAP_FAILED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(206)
     });
-    pub const ARRAY_IS_MAPPED: CUerror = CUerror(unsafe {
+    pub const r#ARRAY_IS_MAPPED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(207)
     });
-    pub const ALREADY_MAPPED: CUerror = CUerror(unsafe {
+    pub const r#ALREADY_MAPPED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(208)
     });
-    pub const NO_BINARY_FOR_GPU: CUerror = CUerror(unsafe {
+    pub const r#NO_BINARY_FOR_GPU: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(209)
     });
-    pub const ALREADY_ACQUIRED: CUerror = CUerror(unsafe {
+    pub const r#ALREADY_ACQUIRED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(210)
     });
-    pub const NOT_MAPPED: CUerror = CUerror(unsafe {
+    pub const r#NOT_MAPPED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(211)
     });
-    pub const NOT_MAPPED_AS_ARRAY: CUerror = CUerror(unsafe {
+    pub const r#NOT_MAPPED_AS_ARRAY: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(212)
     });
-    pub const NOT_MAPPED_AS_POINTER: CUerror = CUerror(unsafe {
+    pub const r#NOT_MAPPED_AS_POINTER: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(213)
     });
-    pub const ECC_UNCORRECTABLE: CUerror = CUerror(unsafe {
+    pub const r#ECC_UNCORRECTABLE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(214)
     });
-    pub const UNSUPPORTED_LIMIT: CUerror = CUerror(unsafe {
+    pub const r#UNSUPPORTED_LIMIT: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(215)
     });
-    pub const CONTEXT_ALREADY_IN_USE: CUerror = CUerror(unsafe {
+    pub const r#CONTEXT_ALREADY_IN_USE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(216)
     });
-    pub const PEER_ACCESS_UNSUPPORTED: CUerror = CUerror(unsafe {
+    pub const r#PEER_ACCESS_UNSUPPORTED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(217)
     });
-    pub const INVALID_PTX: CUerror = CUerror(unsafe {
+    pub const r#INVALID_PTX: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(218)
     });
-    pub const INVALID_GRAPHICS_CONTEXT: CUerror = CUerror(unsafe {
+    pub const r#INVALID_GRAPHICS_CONTEXT: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(219)
     });
-    pub const NVLINK_UNCORRECTABLE: CUerror = CUerror(unsafe {
+    pub const r#NVLINK_UNCORRECTABLE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(220)
     });
-    pub const JIT_COMPILER_NOT_FOUND: CUerror = CUerror(unsafe {
+    pub const r#JIT_COMPILER_NOT_FOUND: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(221)
     });
-    pub const UNSUPPORTED_PTX_VERSION: CUerror = CUerror(unsafe {
+    pub const r#UNSUPPORTED_PTX_VERSION: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(222)
     });
-    pub const JIT_COMPILATION_DISABLED: CUerror = CUerror(unsafe {
+    pub const r#JIT_COMPILATION_DISABLED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(223)
     });
-    pub const UNSUPPORTED_EXEC_AFFINITY: CUerror = CUerror(unsafe {
+    pub const r#UNSUPPORTED_EXEC_AFFINITY: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(224)
     });
-    pub const UNSUPPORTED_DEVSIDE_SYNC: CUerror = CUerror(unsafe {
+    pub const r#UNSUPPORTED_DEVSIDE_SYNC: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(225)
     });
-    pub const CONTAINED: CUerror = CUerror(unsafe {
+    pub const r#CONTAINED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(226)
     });
-    pub const INVALID_SOURCE: CUerror = CUerror(unsafe {
+    pub const r#INVALID_SOURCE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(300)
     });
-    pub const FILE_NOT_FOUND: CUerror = CUerror(unsafe {
+    pub const r#FILE_NOT_FOUND: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(301)
     });
-    pub const SHARED_OBJECT_SYMBOL_NOT_FOUND: CUerror = CUerror(unsafe {
+    pub const r#SHARED_OBJECT_SYMBOL_NOT_FOUND: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(302)
     });
-    pub const SHARED_OBJECT_INIT_FAILED: CUerror = CUerror(unsafe {
+    pub const r#SHARED_OBJECT_INIT_FAILED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(303)
     });
-    pub const OPERATING_SYSTEM: CUerror = CUerror(unsafe {
+    pub const r#OPERATING_SYSTEM: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(304)
     });
-    pub const INVALID_HANDLE: CUerror = CUerror(unsafe {
+    pub const r#INVALID_HANDLE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(400)
     });
-    pub const ILLEGAL_STATE: CUerror = CUerror(unsafe {
+    pub const r#ILLEGAL_STATE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(401)
     });
-    pub const LOSSY_QUERY: CUerror = CUerror(unsafe {
+    pub const r#LOSSY_QUERY: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(402)
     });
-    pub const NOT_FOUND: CUerror = CUerror(unsafe {
+    pub const r#NOT_FOUND: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(500)
     });
-    pub const NOT_READY: CUerror = CUerror(unsafe {
+    pub const r#NOT_READY: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(600)
     });
-    pub const ILLEGAL_ADDRESS: CUerror = CUerror(unsafe {
+    pub const r#ILLEGAL_ADDRESS: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(700)
     });
-    pub const LAUNCH_OUT_OF_RESOURCES: CUerror = CUerror(unsafe {
+    pub const r#LAUNCH_OUT_OF_RESOURCES: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(701)
     });
-    pub const LAUNCH_TIMEOUT: CUerror = CUerror(unsafe {
+    pub const r#LAUNCH_TIMEOUT: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(702)
     });
-    pub const LAUNCH_INCOMPATIBLE_TEXTURING: CUerror = CUerror(unsafe {
+    pub const r#LAUNCH_INCOMPATIBLE_TEXTURING: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(703)
     });
-    pub const PEER_ACCESS_ALREADY_ENABLED: CUerror = CUerror(unsafe {
+    pub const r#PEER_ACCESS_ALREADY_ENABLED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(704)
     });
-    pub const PEER_ACCESS_NOT_ENABLED: CUerror = CUerror(unsafe {
+    pub const r#PEER_ACCESS_NOT_ENABLED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(705)
     });
-    pub const PRIMARY_CONTEXT_ACTIVE: CUerror = CUerror(unsafe {
+    pub const r#PRIMARY_CONTEXT_ACTIVE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(708)
     });
-    pub const CONTEXT_IS_DESTROYED: CUerror = CUerror(unsafe {
+    pub const r#CONTEXT_IS_DESTROYED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(709)
     });
-    pub const ASSERT: CUerror = CUerror(unsafe {
+    pub const r#ASSERT: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(710)
     });
-    pub const TOO_MANY_PEERS: CUerror = CUerror(unsafe {
+    pub const r#TOO_MANY_PEERS: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(711)
     });
-    pub const HOST_MEMORY_ALREADY_REGISTERED: CUerror = CUerror(unsafe {
+    pub const r#HOST_MEMORY_ALREADY_REGISTERED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(712)
     });
-    pub const HOST_MEMORY_NOT_REGISTERED: CUerror = CUerror(unsafe {
+    pub const r#HOST_MEMORY_NOT_REGISTERED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(713)
     });
-    pub const HARDWARE_STACK_ERROR: CUerror = CUerror(unsafe {
+    pub const r#HARDWARE_STACK_ERROR: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(714)
     });
-    pub const ILLEGAL_INSTRUCTION: CUerror = CUerror(unsafe {
+    pub const r#ILLEGAL_INSTRUCTION: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(715)
     });
-    pub const MISALIGNED_ADDRESS: CUerror = CUerror(unsafe {
+    pub const r#MISALIGNED_ADDRESS: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(716)
     });
-    pub const INVALID_ADDRESS_SPACE: CUerror = CUerror(unsafe {
+    pub const r#INVALID_ADDRESS_SPACE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(717)
     });
-    pub const INVALID_PC: CUerror = CUerror(unsafe {
+    pub const r#INVALID_PC: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(718)
     });
-    pub const LAUNCH_FAILED: CUerror = CUerror(unsafe {
+    pub const r#LAUNCH_FAILED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(719)
     });
-    pub const COOPERATIVE_LAUNCH_TOO_LARGE: CUerror = CUerror(unsafe {
+    pub const r#COOPERATIVE_LAUNCH_TOO_LARGE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(720)
     });
-    pub const TENSOR_MEMORY_LEAK: CUerror = CUerror(unsafe {
+    pub const r#TENSOR_MEMORY_LEAK: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(721)
     });
-    pub const NOT_PERMITTED: CUerror = CUerror(unsafe {
+    pub const r#NOT_PERMITTED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(800)
     });
-    pub const NOT_SUPPORTED: CUerror = CUerror(unsafe {
+    pub const r#NOT_SUPPORTED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(801)
     });
-    pub const SYSTEM_NOT_READY: CUerror = CUerror(unsafe {
+    pub const r#SYSTEM_NOT_READY: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(802)
     });
-    pub const SYSTEM_DRIVER_MISMATCH: CUerror = CUerror(unsafe {
+    pub const r#SYSTEM_DRIVER_MISMATCH: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(803)
     });
-    pub const COMPAT_NOT_SUPPORTED_ON_DEVICE: CUerror = CUerror(unsafe {
+    pub const r#COMPAT_NOT_SUPPORTED_ON_DEVICE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(804)
     });
-    pub const MPS_CONNECTION_FAILED: CUerror = CUerror(unsafe {
+    pub const r#MPS_CONNECTION_FAILED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(805)
     });
-    pub const MPS_RPC_FAILURE: CUerror = CUerror(unsafe {
+    pub const r#MPS_RPC_FAILURE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(806)
     });
-    pub const MPS_SERVER_NOT_READY: CUerror = CUerror(unsafe {
+    pub const r#MPS_SERVER_NOT_READY: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(807)
     });
-    pub const MPS_MAX_CLIENTS_REACHED: CUerror = CUerror(unsafe {
+    pub const r#MPS_MAX_CLIENTS_REACHED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(808)
     });
-    pub const MPS_MAX_CONNECTIONS_REACHED: CUerror = CUerror(unsafe {
+    pub const r#MPS_MAX_CONNECTIONS_REACHED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(809)
     });
-    pub const MPS_CLIENT_TERMINATED: CUerror = CUerror(unsafe {
+    pub const r#MPS_CLIENT_TERMINATED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(810)
     });
-    pub const CDP_NOT_SUPPORTED: CUerror = CUerror(unsafe {
+    pub const r#CDP_NOT_SUPPORTED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(811)
     });
-    pub const CDP_VERSION_MISMATCH: CUerror = CUerror(unsafe {
+    pub const r#CDP_VERSION_MISMATCH: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(812)
     });
-    pub const STREAM_CAPTURE_UNSUPPORTED: CUerror = CUerror(unsafe {
+    pub const r#STREAM_CAPTURE_UNSUPPORTED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(900)
     });
-    pub const STREAM_CAPTURE_INVALIDATED: CUerror = CUerror(unsafe {
+    pub const r#STREAM_CAPTURE_INVALIDATED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(901)
     });
-    pub const STREAM_CAPTURE_MERGE: CUerror = CUerror(unsafe {
+    pub const r#STREAM_CAPTURE_MERGE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(902)
     });
-    pub const STREAM_CAPTURE_UNMATCHED: CUerror = CUerror(unsafe {
+    pub const r#STREAM_CAPTURE_UNMATCHED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(903)
     });
-    pub const STREAM_CAPTURE_UNJOINED: CUerror = CUerror(unsafe {
+    pub const r#STREAM_CAPTURE_UNJOINED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(904)
     });
-    pub const STREAM_CAPTURE_ISOLATION: CUerror = CUerror(unsafe {
+    pub const r#STREAM_CAPTURE_ISOLATION: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(905)
     });
-    pub const STREAM_CAPTURE_IMPLICIT: CUerror = CUerror(unsafe {
+    pub const r#STREAM_CAPTURE_IMPLICIT: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(906)
     });
-    pub const CAPTURED_EVENT: CUerror = CUerror(unsafe {
+    pub const r#CAPTURED_EVENT: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(907)
     });
-    pub const STREAM_CAPTURE_WRONG_THREAD: CUerror = CUerror(unsafe {
+    pub const r#STREAM_CAPTURE_WRONG_THREAD: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(908)
     });
-    pub const TIMEOUT: CUerror = CUerror(unsafe {
+    pub const r#TIMEOUT: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(909)
     });
-    pub const GRAPH_EXEC_UPDATE_FAILURE: CUerror = CUerror(unsafe {
+    pub const r#GRAPH_EXEC_UPDATE_FAILURE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(910)
     });
-    pub const EXTERNAL_DEVICE: CUerror = CUerror(unsafe {
+    pub const r#EXTERNAL_DEVICE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(911)
     });
-    pub const INVALID_CLUSTER_SIZE: CUerror = CUerror(unsafe {
+    pub const r#INVALID_CLUSTER_SIZE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(912)
     });
-    pub const FUNCTION_NOT_LOADED: CUerror = CUerror(unsafe {
+    pub const r#FUNCTION_NOT_LOADED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(913)
     });
-    pub const INVALID_RESOURCE_TYPE: CUerror = CUerror(unsafe {
+    pub const r#INVALID_RESOURCE_TYPE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(914)
     });
-    pub const INVALID_RESOURCE_CONFIGURATION: CUerror = CUerror(unsafe {
+    pub const r#INVALID_RESOURCE_CONFIGURATION: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(915)
     });
-    pub const KEY_ROTATION: CUerror = CUerror(unsafe {
+    pub const r#KEY_ROTATION: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(916)
     });
-    pub const UNKNOWN: CUerror = CUerror(unsafe {
+    pub const r#UNKNOWN: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(999)
     });
 }
@@ -8757,213 +8757,223 @@ impl CUerror {
 pub struct CUerror(pub ::core::num::NonZeroU32);
 pub trait CUresultConsts {
     const SUCCESS: CUresult = CUresult::Ok(());
-    const ERROR_INVALID_VALUE: CUresult = CUresult::Err(CUerror::INVALID_VALUE);
-    const ERROR_OUT_OF_MEMORY: CUresult = CUresult::Err(CUerror::OUT_OF_MEMORY);
-    const ERROR_NOT_INITIALIZED: CUresult = CUresult::Err(CUerror::NOT_INITIALIZED);
-    const ERROR_DEINITIALIZED: CUresult = CUresult::Err(CUerror::DEINITIALIZED);
-    const ERROR_PROFILER_DISABLED: CUresult = CUresult::Err(CUerror::PROFILER_DISABLED);
+    const ERROR_INVALID_VALUE: CUresult = CUresult::Err(CUerror::r#INVALID_VALUE);
+    const ERROR_OUT_OF_MEMORY: CUresult = CUresult::Err(CUerror::r#OUT_OF_MEMORY);
+    const ERROR_NOT_INITIALIZED: CUresult = CUresult::Err(CUerror::r#NOT_INITIALIZED);
+    const ERROR_DEINITIALIZED: CUresult = CUresult::Err(CUerror::r#DEINITIALIZED);
+    const ERROR_PROFILER_DISABLED: CUresult = CUresult::Err(
+        CUerror::r#PROFILER_DISABLED,
+    );
     const ERROR_PROFILER_NOT_INITIALIZED: CUresult = CUresult::Err(
-        CUerror::PROFILER_NOT_INITIALIZED,
+        CUerror::r#PROFILER_NOT_INITIALIZED,
     );
     const ERROR_PROFILER_ALREADY_STARTED: CUresult = CUresult::Err(
-        CUerror::PROFILER_ALREADY_STARTED,
+        CUerror::r#PROFILER_ALREADY_STARTED,
     );
     const ERROR_PROFILER_ALREADY_STOPPED: CUresult = CUresult::Err(
-        CUerror::PROFILER_ALREADY_STOPPED,
+        CUerror::r#PROFILER_ALREADY_STOPPED,
     );
-    const ERROR_STUB_LIBRARY: CUresult = CUresult::Err(CUerror::STUB_LIBRARY);
+    const ERROR_STUB_LIBRARY: CUresult = CUresult::Err(CUerror::r#STUB_LIBRARY);
     const ERROR_DEVICE_UNAVAILABLE: CUresult = CUresult::Err(
-        CUerror::DEVICE_UNAVAILABLE,
+        CUerror::r#DEVICE_UNAVAILABLE,
     );
-    const ERROR_NO_DEVICE: CUresult = CUresult::Err(CUerror::NO_DEVICE);
-    const ERROR_INVALID_DEVICE: CUresult = CUresult::Err(CUerror::INVALID_DEVICE);
+    const ERROR_NO_DEVICE: CUresult = CUresult::Err(CUerror::r#NO_DEVICE);
+    const ERROR_INVALID_DEVICE: CUresult = CUresult::Err(CUerror::r#INVALID_DEVICE);
     const ERROR_DEVICE_NOT_LICENSED: CUresult = CUresult::Err(
-        CUerror::DEVICE_NOT_LICENSED,
+        CUerror::r#DEVICE_NOT_LICENSED,
     );
-    const ERROR_INVALID_IMAGE: CUresult = CUresult::Err(CUerror::INVALID_IMAGE);
-    const ERROR_INVALID_CONTEXT: CUresult = CUresult::Err(CUerror::INVALID_CONTEXT);
+    const ERROR_INVALID_IMAGE: CUresult = CUresult::Err(CUerror::r#INVALID_IMAGE);
+    const ERROR_INVALID_CONTEXT: CUresult = CUresult::Err(CUerror::r#INVALID_CONTEXT);
     const ERROR_CONTEXT_ALREADY_CURRENT: CUresult = CUresult::Err(
-        CUerror::CONTEXT_ALREADY_CURRENT,
+        CUerror::r#CONTEXT_ALREADY_CURRENT,
     );
-    const ERROR_MAP_FAILED: CUresult = CUresult::Err(CUerror::MAP_FAILED);
-    const ERROR_UNMAP_FAILED: CUresult = CUresult::Err(CUerror::UNMAP_FAILED);
-    const ERROR_ARRAY_IS_MAPPED: CUresult = CUresult::Err(CUerror::ARRAY_IS_MAPPED);
-    const ERROR_ALREADY_MAPPED: CUresult = CUresult::Err(CUerror::ALREADY_MAPPED);
-    const ERROR_NO_BINARY_FOR_GPU: CUresult = CUresult::Err(CUerror::NO_BINARY_FOR_GPU);
-    const ERROR_ALREADY_ACQUIRED: CUresult = CUresult::Err(CUerror::ALREADY_ACQUIRED);
-    const ERROR_NOT_MAPPED: CUresult = CUresult::Err(CUerror::NOT_MAPPED);
+    const ERROR_MAP_FAILED: CUresult = CUresult::Err(CUerror::r#MAP_FAILED);
+    const ERROR_UNMAP_FAILED: CUresult = CUresult::Err(CUerror::r#UNMAP_FAILED);
+    const ERROR_ARRAY_IS_MAPPED: CUresult = CUresult::Err(CUerror::r#ARRAY_IS_MAPPED);
+    const ERROR_ALREADY_MAPPED: CUresult = CUresult::Err(CUerror::r#ALREADY_MAPPED);
+    const ERROR_NO_BINARY_FOR_GPU: CUresult = CUresult::Err(
+        CUerror::r#NO_BINARY_FOR_GPU,
+    );
+    const ERROR_ALREADY_ACQUIRED: CUresult = CUresult::Err(CUerror::r#ALREADY_ACQUIRED);
+    const ERROR_NOT_MAPPED: CUresult = CUresult::Err(CUerror::r#NOT_MAPPED);
     const ERROR_NOT_MAPPED_AS_ARRAY: CUresult = CUresult::Err(
-        CUerror::NOT_MAPPED_AS_ARRAY,
+        CUerror::r#NOT_MAPPED_AS_ARRAY,
     );
     const ERROR_NOT_MAPPED_AS_POINTER: CUresult = CUresult::Err(
-        CUerror::NOT_MAPPED_AS_POINTER,
+        CUerror::r#NOT_MAPPED_AS_POINTER,
     );
-    const ERROR_ECC_UNCORRECTABLE: CUresult = CUresult::Err(CUerror::ECC_UNCORRECTABLE);
-    const ERROR_UNSUPPORTED_LIMIT: CUresult = CUresult::Err(CUerror::UNSUPPORTED_LIMIT);
+    const ERROR_ECC_UNCORRECTABLE: CUresult = CUresult::Err(
+        CUerror::r#ECC_UNCORRECTABLE,
+    );
+    const ERROR_UNSUPPORTED_LIMIT: CUresult = CUresult::Err(
+        CUerror::r#UNSUPPORTED_LIMIT,
+    );
     const ERROR_CONTEXT_ALREADY_IN_USE: CUresult = CUresult::Err(
-        CUerror::CONTEXT_ALREADY_IN_USE,
+        CUerror::r#CONTEXT_ALREADY_IN_USE,
     );
     const ERROR_PEER_ACCESS_UNSUPPORTED: CUresult = CUresult::Err(
-        CUerror::PEER_ACCESS_UNSUPPORTED,
+        CUerror::r#PEER_ACCESS_UNSUPPORTED,
     );
-    const ERROR_INVALID_PTX: CUresult = CUresult::Err(CUerror::INVALID_PTX);
+    const ERROR_INVALID_PTX: CUresult = CUresult::Err(CUerror::r#INVALID_PTX);
     const ERROR_INVALID_GRAPHICS_CONTEXT: CUresult = CUresult::Err(
-        CUerror::INVALID_GRAPHICS_CONTEXT,
+        CUerror::r#INVALID_GRAPHICS_CONTEXT,
     );
     const ERROR_NVLINK_UNCORRECTABLE: CUresult = CUresult::Err(
-        CUerror::NVLINK_UNCORRECTABLE,
+        CUerror::r#NVLINK_UNCORRECTABLE,
     );
     const ERROR_JIT_COMPILER_NOT_FOUND: CUresult = CUresult::Err(
-        CUerror::JIT_COMPILER_NOT_FOUND,
+        CUerror::r#JIT_COMPILER_NOT_FOUND,
     );
     const ERROR_UNSUPPORTED_PTX_VERSION: CUresult = CUresult::Err(
-        CUerror::UNSUPPORTED_PTX_VERSION,
+        CUerror::r#UNSUPPORTED_PTX_VERSION,
     );
     const ERROR_JIT_COMPILATION_DISABLED: CUresult = CUresult::Err(
-        CUerror::JIT_COMPILATION_DISABLED,
+        CUerror::r#JIT_COMPILATION_DISABLED,
     );
     const ERROR_UNSUPPORTED_EXEC_AFFINITY: CUresult = CUresult::Err(
-        CUerror::UNSUPPORTED_EXEC_AFFINITY,
+        CUerror::r#UNSUPPORTED_EXEC_AFFINITY,
     );
     const ERROR_UNSUPPORTED_DEVSIDE_SYNC: CUresult = CUresult::Err(
-        CUerror::UNSUPPORTED_DEVSIDE_SYNC,
+        CUerror::r#UNSUPPORTED_DEVSIDE_SYNC,
     );
-    const ERROR_CONTAINED: CUresult = CUresult::Err(CUerror::CONTAINED);
-    const ERROR_INVALID_SOURCE: CUresult = CUresult::Err(CUerror::INVALID_SOURCE);
-    const ERROR_FILE_NOT_FOUND: CUresult = CUresult::Err(CUerror::FILE_NOT_FOUND);
+    const ERROR_CONTAINED: CUresult = CUresult::Err(CUerror::r#CONTAINED);
+    const ERROR_INVALID_SOURCE: CUresult = CUresult::Err(CUerror::r#INVALID_SOURCE);
+    const ERROR_FILE_NOT_FOUND: CUresult = CUresult::Err(CUerror::r#FILE_NOT_FOUND);
     const ERROR_SHARED_OBJECT_SYMBOL_NOT_FOUND: CUresult = CUresult::Err(
-        CUerror::SHARED_OBJECT_SYMBOL_NOT_FOUND,
+        CUerror::r#SHARED_OBJECT_SYMBOL_NOT_FOUND,
     );
     const ERROR_SHARED_OBJECT_INIT_FAILED: CUresult = CUresult::Err(
-        CUerror::SHARED_OBJECT_INIT_FAILED,
+        CUerror::r#SHARED_OBJECT_INIT_FAILED,
     );
-    const ERROR_OPERATING_SYSTEM: CUresult = CUresult::Err(CUerror::OPERATING_SYSTEM);
-    const ERROR_INVALID_HANDLE: CUresult = CUresult::Err(CUerror::INVALID_HANDLE);
-    const ERROR_ILLEGAL_STATE: CUresult = CUresult::Err(CUerror::ILLEGAL_STATE);
-    const ERROR_LOSSY_QUERY: CUresult = CUresult::Err(CUerror::LOSSY_QUERY);
-    const ERROR_NOT_FOUND: CUresult = CUresult::Err(CUerror::NOT_FOUND);
-    const ERROR_NOT_READY: CUresult = CUresult::Err(CUerror::NOT_READY);
-    const ERROR_ILLEGAL_ADDRESS: CUresult = CUresult::Err(CUerror::ILLEGAL_ADDRESS);
+    const ERROR_OPERATING_SYSTEM: CUresult = CUresult::Err(CUerror::r#OPERATING_SYSTEM);
+    const ERROR_INVALID_HANDLE: CUresult = CUresult::Err(CUerror::r#INVALID_HANDLE);
+    const ERROR_ILLEGAL_STATE: CUresult = CUresult::Err(CUerror::r#ILLEGAL_STATE);
+    const ERROR_LOSSY_QUERY: CUresult = CUresult::Err(CUerror::r#LOSSY_QUERY);
+    const ERROR_NOT_FOUND: CUresult = CUresult::Err(CUerror::r#NOT_FOUND);
+    const ERROR_NOT_READY: CUresult = CUresult::Err(CUerror::r#NOT_READY);
+    const ERROR_ILLEGAL_ADDRESS: CUresult = CUresult::Err(CUerror::r#ILLEGAL_ADDRESS);
     const ERROR_LAUNCH_OUT_OF_RESOURCES: CUresult = CUresult::Err(
-        CUerror::LAUNCH_OUT_OF_RESOURCES,
+        CUerror::r#LAUNCH_OUT_OF_RESOURCES,
     );
-    const ERROR_LAUNCH_TIMEOUT: CUresult = CUresult::Err(CUerror::LAUNCH_TIMEOUT);
+    const ERROR_LAUNCH_TIMEOUT: CUresult = CUresult::Err(CUerror::r#LAUNCH_TIMEOUT);
     const ERROR_LAUNCH_INCOMPATIBLE_TEXTURING: CUresult = CUresult::Err(
-        CUerror::LAUNCH_INCOMPATIBLE_TEXTURING,
+        CUerror::r#LAUNCH_INCOMPATIBLE_TEXTURING,
     );
     const ERROR_PEER_ACCESS_ALREADY_ENABLED: CUresult = CUresult::Err(
-        CUerror::PEER_ACCESS_ALREADY_ENABLED,
+        CUerror::r#PEER_ACCESS_ALREADY_ENABLED,
     );
     const ERROR_PEER_ACCESS_NOT_ENABLED: CUresult = CUresult::Err(
-        CUerror::PEER_ACCESS_NOT_ENABLED,
+        CUerror::r#PEER_ACCESS_NOT_ENABLED,
     );
     const ERROR_PRIMARY_CONTEXT_ACTIVE: CUresult = CUresult::Err(
-        CUerror::PRIMARY_CONTEXT_ACTIVE,
+        CUerror::r#PRIMARY_CONTEXT_ACTIVE,
     );
     const ERROR_CONTEXT_IS_DESTROYED: CUresult = CUresult::Err(
-        CUerror::CONTEXT_IS_DESTROYED,
+        CUerror::r#CONTEXT_IS_DESTROYED,
     );
-    const ERROR_ASSERT: CUresult = CUresult::Err(CUerror::ASSERT);
-    const ERROR_TOO_MANY_PEERS: CUresult = CUresult::Err(CUerror::TOO_MANY_PEERS);
+    const ERROR_ASSERT: CUresult = CUresult::Err(CUerror::r#ASSERT);
+    const ERROR_TOO_MANY_PEERS: CUresult = CUresult::Err(CUerror::r#TOO_MANY_PEERS);
     const ERROR_HOST_MEMORY_ALREADY_REGISTERED: CUresult = CUresult::Err(
-        CUerror::HOST_MEMORY_ALREADY_REGISTERED,
+        CUerror::r#HOST_MEMORY_ALREADY_REGISTERED,
     );
     const ERROR_HOST_MEMORY_NOT_REGISTERED: CUresult = CUresult::Err(
-        CUerror::HOST_MEMORY_NOT_REGISTERED,
+        CUerror::r#HOST_MEMORY_NOT_REGISTERED,
     );
     const ERROR_HARDWARE_STACK_ERROR: CUresult = CUresult::Err(
-        CUerror::HARDWARE_STACK_ERROR,
+        CUerror::r#HARDWARE_STACK_ERROR,
     );
     const ERROR_ILLEGAL_INSTRUCTION: CUresult = CUresult::Err(
-        CUerror::ILLEGAL_INSTRUCTION,
+        CUerror::r#ILLEGAL_INSTRUCTION,
     );
     const ERROR_MISALIGNED_ADDRESS: CUresult = CUresult::Err(
-        CUerror::MISALIGNED_ADDRESS,
+        CUerror::r#MISALIGNED_ADDRESS,
     );
     const ERROR_INVALID_ADDRESS_SPACE: CUresult = CUresult::Err(
-        CUerror::INVALID_ADDRESS_SPACE,
+        CUerror::r#INVALID_ADDRESS_SPACE,
     );
-    const ERROR_INVALID_PC: CUresult = CUresult::Err(CUerror::INVALID_PC);
-    const ERROR_LAUNCH_FAILED: CUresult = CUresult::Err(CUerror::LAUNCH_FAILED);
+    const ERROR_INVALID_PC: CUresult = CUresult::Err(CUerror::r#INVALID_PC);
+    const ERROR_LAUNCH_FAILED: CUresult = CUresult::Err(CUerror::r#LAUNCH_FAILED);
     const ERROR_COOPERATIVE_LAUNCH_TOO_LARGE: CUresult = CUresult::Err(
-        CUerror::COOPERATIVE_LAUNCH_TOO_LARGE,
+        CUerror::r#COOPERATIVE_LAUNCH_TOO_LARGE,
     );
     const ERROR_TENSOR_MEMORY_LEAK: CUresult = CUresult::Err(
-        CUerror::TENSOR_MEMORY_LEAK,
+        CUerror::r#TENSOR_MEMORY_LEAK,
     );
-    const ERROR_NOT_PERMITTED: CUresult = CUresult::Err(CUerror::NOT_PERMITTED);
-    const ERROR_NOT_SUPPORTED: CUresult = CUresult::Err(CUerror::NOT_SUPPORTED);
-    const ERROR_SYSTEM_NOT_READY: CUresult = CUresult::Err(CUerror::SYSTEM_NOT_READY);
+    const ERROR_NOT_PERMITTED: CUresult = CUresult::Err(CUerror::r#NOT_PERMITTED);
+    const ERROR_NOT_SUPPORTED: CUresult = CUresult::Err(CUerror::r#NOT_SUPPORTED);
+    const ERROR_SYSTEM_NOT_READY: CUresult = CUresult::Err(CUerror::r#SYSTEM_NOT_READY);
     const ERROR_SYSTEM_DRIVER_MISMATCH: CUresult = CUresult::Err(
-        CUerror::SYSTEM_DRIVER_MISMATCH,
+        CUerror::r#SYSTEM_DRIVER_MISMATCH,
     );
     const ERROR_COMPAT_NOT_SUPPORTED_ON_DEVICE: CUresult = CUresult::Err(
-        CUerror::COMPAT_NOT_SUPPORTED_ON_DEVICE,
+        CUerror::r#COMPAT_NOT_SUPPORTED_ON_DEVICE,
     );
     const ERROR_MPS_CONNECTION_FAILED: CUresult = CUresult::Err(
-        CUerror::MPS_CONNECTION_FAILED,
+        CUerror::r#MPS_CONNECTION_FAILED,
     );
-    const ERROR_MPS_RPC_FAILURE: CUresult = CUresult::Err(CUerror::MPS_RPC_FAILURE);
+    const ERROR_MPS_RPC_FAILURE: CUresult = CUresult::Err(CUerror::r#MPS_RPC_FAILURE);
     const ERROR_MPS_SERVER_NOT_READY: CUresult = CUresult::Err(
-        CUerror::MPS_SERVER_NOT_READY,
+        CUerror::r#MPS_SERVER_NOT_READY,
     );
     const ERROR_MPS_MAX_CLIENTS_REACHED: CUresult = CUresult::Err(
-        CUerror::MPS_MAX_CLIENTS_REACHED,
+        CUerror::r#MPS_MAX_CLIENTS_REACHED,
     );
     const ERROR_MPS_MAX_CONNECTIONS_REACHED: CUresult = CUresult::Err(
-        CUerror::MPS_MAX_CONNECTIONS_REACHED,
+        CUerror::r#MPS_MAX_CONNECTIONS_REACHED,
     );
     const ERROR_MPS_CLIENT_TERMINATED: CUresult = CUresult::Err(
-        CUerror::MPS_CLIENT_TERMINATED,
+        CUerror::r#MPS_CLIENT_TERMINATED,
     );
-    const ERROR_CDP_NOT_SUPPORTED: CUresult = CUresult::Err(CUerror::CDP_NOT_SUPPORTED);
+    const ERROR_CDP_NOT_SUPPORTED: CUresult = CUresult::Err(
+        CUerror::r#CDP_NOT_SUPPORTED,
+    );
     const ERROR_CDP_VERSION_MISMATCH: CUresult = CUresult::Err(
-        CUerror::CDP_VERSION_MISMATCH,
+        CUerror::r#CDP_VERSION_MISMATCH,
     );
     const ERROR_STREAM_CAPTURE_UNSUPPORTED: CUresult = CUresult::Err(
-        CUerror::STREAM_CAPTURE_UNSUPPORTED,
+        CUerror::r#STREAM_CAPTURE_UNSUPPORTED,
     );
     const ERROR_STREAM_CAPTURE_INVALIDATED: CUresult = CUresult::Err(
-        CUerror::STREAM_CAPTURE_INVALIDATED,
+        CUerror::r#STREAM_CAPTURE_INVALIDATED,
     );
     const ERROR_STREAM_CAPTURE_MERGE: CUresult = CUresult::Err(
-        CUerror::STREAM_CAPTURE_MERGE,
+        CUerror::r#STREAM_CAPTURE_MERGE,
     );
     const ERROR_STREAM_CAPTURE_UNMATCHED: CUresult = CUresult::Err(
-        CUerror::STREAM_CAPTURE_UNMATCHED,
+        CUerror::r#STREAM_CAPTURE_UNMATCHED,
     );
     const ERROR_STREAM_CAPTURE_UNJOINED: CUresult = CUresult::Err(
-        CUerror::STREAM_CAPTURE_UNJOINED,
+        CUerror::r#STREAM_CAPTURE_UNJOINED,
     );
     const ERROR_STREAM_CAPTURE_ISOLATION: CUresult = CUresult::Err(
-        CUerror::STREAM_CAPTURE_ISOLATION,
+        CUerror::r#STREAM_CAPTURE_ISOLATION,
     );
     const ERROR_STREAM_CAPTURE_IMPLICIT: CUresult = CUresult::Err(
-        CUerror::STREAM_CAPTURE_IMPLICIT,
+        CUerror::r#STREAM_CAPTURE_IMPLICIT,
     );
-    const ERROR_CAPTURED_EVENT: CUresult = CUresult::Err(CUerror::CAPTURED_EVENT);
+    const ERROR_CAPTURED_EVENT: CUresult = CUresult::Err(CUerror::r#CAPTURED_EVENT);
     const ERROR_STREAM_CAPTURE_WRONG_THREAD: CUresult = CUresult::Err(
-        CUerror::STREAM_CAPTURE_WRONG_THREAD,
+        CUerror::r#STREAM_CAPTURE_WRONG_THREAD,
     );
-    const ERROR_TIMEOUT: CUresult = CUresult::Err(CUerror::TIMEOUT);
+    const ERROR_TIMEOUT: CUresult = CUresult::Err(CUerror::r#TIMEOUT);
     const ERROR_GRAPH_EXEC_UPDATE_FAILURE: CUresult = CUresult::Err(
-        CUerror::GRAPH_EXEC_UPDATE_FAILURE,
+        CUerror::r#GRAPH_EXEC_UPDATE_FAILURE,
     );
-    const ERROR_EXTERNAL_DEVICE: CUresult = CUresult::Err(CUerror::EXTERNAL_DEVICE);
+    const ERROR_EXTERNAL_DEVICE: CUresult = CUresult::Err(CUerror::r#EXTERNAL_DEVICE);
     const ERROR_INVALID_CLUSTER_SIZE: CUresult = CUresult::Err(
-        CUerror::INVALID_CLUSTER_SIZE,
+        CUerror::r#INVALID_CLUSTER_SIZE,
     );
     const ERROR_FUNCTION_NOT_LOADED: CUresult = CUresult::Err(
-        CUerror::FUNCTION_NOT_LOADED,
+        CUerror::r#FUNCTION_NOT_LOADED,
     );
     const ERROR_INVALID_RESOURCE_TYPE: CUresult = CUresult::Err(
-        CUerror::INVALID_RESOURCE_TYPE,
+        CUerror::r#INVALID_RESOURCE_TYPE,
     );
     const ERROR_INVALID_RESOURCE_CONFIGURATION: CUresult = CUresult::Err(
-        CUerror::INVALID_RESOURCE_CONFIGURATION,
+        CUerror::r#INVALID_RESOURCE_CONFIGURATION,
     );
-    const ERROR_KEY_ROTATION: CUresult = CUresult::Err(CUerror::KEY_ROTATION);
-    const ERROR_UNKNOWN: CUresult = CUresult::Err(CUerror::UNKNOWN);
+    const ERROR_KEY_ROTATION: CUresult = CUresult::Err(CUerror::r#KEY_ROTATION);
+    const ERROR_UNKNOWN: CUresult = CUresult::Err(CUerror::r#UNKNOWN);
 }
 impl CUresultConsts for CUresult {}
 #[must_use]

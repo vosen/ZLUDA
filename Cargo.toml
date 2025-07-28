@@ -10,6 +10,7 @@ members = [
     "detours-sys",
     "ext/amd_comgr-sys",
     "ext/hip_runtime-sys",
+    "ext/rocblas-sys",
     "format",
     "ptx",
     "ptx_parser",

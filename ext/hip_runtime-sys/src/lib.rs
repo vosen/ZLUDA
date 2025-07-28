@@ -13215,241 +13215,241 @@ extern "C" {
     ) -> hipError_t;
 }
 impl hipErrorCode_t {
-    pub const InvalidValue: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#InvalidValue: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(1)
     });
-    pub const OutOfMemory: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#OutOfMemory: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(2)
     });
-    pub const MemoryAllocation: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#MemoryAllocation: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(2)
     });
-    pub const NotInitialized: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#NotInitialized: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(3)
     });
-    pub const InitializationError: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#InitializationError: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(3)
     });
-    pub const Deinitialized: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#Deinitialized: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(4)
     });
-    pub const ProfilerDisabled: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#ProfilerDisabled: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(5)
     });
-    pub const ProfilerNotInitialized: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#ProfilerNotInitialized: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(6)
     });
-    pub const ProfilerAlreadyStarted: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#ProfilerAlreadyStarted: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(7)
     });
-    pub const ProfilerAlreadyStopped: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#ProfilerAlreadyStopped: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(8)
     });
-    pub const InvalidConfiguration: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#InvalidConfiguration: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(9)
     });
-    pub const InvalidPitchValue: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#InvalidPitchValue: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(12)
     });
-    pub const InvalidSymbol: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#InvalidSymbol: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(13)
     });
-    pub const InvalidDevicePointer: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#InvalidDevicePointer: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(17)
     });
-    pub const InvalidMemcpyDirection: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#InvalidMemcpyDirection: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(21)
     });
-    pub const InsufficientDriver: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#InsufficientDriver: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(35)
     });
-    pub const MissingConfiguration: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#MissingConfiguration: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(52)
     });
-    pub const PriorLaunchFailure: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#PriorLaunchFailure: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(53)
     });
-    pub const InvalidDeviceFunction: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#InvalidDeviceFunction: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(98)
     });
-    pub const NoDevice: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#NoDevice: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(100)
     });
-    pub const InvalidDevice: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#InvalidDevice: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(101)
     });
-    pub const InvalidImage: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#InvalidImage: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(200)
     });
-    pub const InvalidContext: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#InvalidContext: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(201)
     });
-    pub const ContextAlreadyCurrent: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#ContextAlreadyCurrent: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(202)
     });
-    pub const MapFailed: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#MapFailed: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(205)
     });
-    pub const MapBufferObjectFailed: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#MapBufferObjectFailed: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(205)
     });
-    pub const UnmapFailed: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#UnmapFailed: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(206)
     });
-    pub const ArrayIsMapped: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#ArrayIsMapped: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(207)
     });
-    pub const AlreadyMapped: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#AlreadyMapped: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(208)
     });
-    pub const NoBinaryForGpu: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#NoBinaryForGpu: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(209)
     });
-    pub const AlreadyAcquired: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#AlreadyAcquired: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(210)
     });
-    pub const NotMapped: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#NotMapped: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(211)
     });
-    pub const NotMappedAsArray: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#NotMappedAsArray: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(212)
     });
-    pub const NotMappedAsPointer: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#NotMappedAsPointer: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(213)
     });
-    pub const ECCNotCorrectable: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#ECCNotCorrectable: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(214)
     });
-    pub const UnsupportedLimit: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#UnsupportedLimit: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(215)
     });
-    pub const ContextAlreadyInUse: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#ContextAlreadyInUse: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(216)
     });
-    pub const PeerAccessUnsupported: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#PeerAccessUnsupported: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(217)
     });
-    pub const InvalidKernelFile: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#InvalidKernelFile: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(218)
     });
-    pub const InvalidGraphicsContext: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#InvalidGraphicsContext: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(219)
     });
-    pub const InvalidSource: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#InvalidSource: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(300)
     });
-    pub const FileNotFound: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#FileNotFound: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(301)
     });
-    pub const SharedObjectSymbolNotFound: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#SharedObjectSymbolNotFound: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(302)
     });
-    pub const SharedObjectInitFailed: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#SharedObjectInitFailed: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(303)
     });
-    pub const OperatingSystem: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#OperatingSystem: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(304)
     });
-    pub const InvalidHandle: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#InvalidHandle: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(400)
     });
-    pub const InvalidResourceHandle: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#InvalidResourceHandle: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(400)
     });
-    pub const IllegalState: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#IllegalState: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(401)
     });
-    pub const NotFound: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#NotFound: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(500)
     });
-    pub const NotReady: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#NotReady: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(600)
     });
-    pub const IllegalAddress: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#IllegalAddress: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(700)
     });
-    pub const LaunchOutOfResources: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#LaunchOutOfResources: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(701)
     });
-    pub const LaunchTimeOut: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#LaunchTimeOut: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(702)
     });
-    pub const PeerAccessAlreadyEnabled: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#PeerAccessAlreadyEnabled: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(704)
     });
-    pub const PeerAccessNotEnabled: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#PeerAccessNotEnabled: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(705)
     });
-    pub const SetOnActiveProcess: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#SetOnActiveProcess: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(708)
     });
-    pub const ContextIsDestroyed: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#ContextIsDestroyed: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(709)
     });
-    pub const Assert: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#Assert: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(710)
     });
-    pub const HostMemoryAlreadyRegistered: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#HostMemoryAlreadyRegistered: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(712)
     });
-    pub const HostMemoryNotRegistered: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#HostMemoryNotRegistered: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(713)
     });
-    pub const LaunchFailure: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#LaunchFailure: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(719)
     });
-    pub const CooperativeLaunchTooLarge: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#CooperativeLaunchTooLarge: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(720)
     });
-    pub const NotSupported: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#NotSupported: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(801)
     });
-    pub const StreamCaptureUnsupported: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#StreamCaptureUnsupported: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(900)
     });
-    pub const StreamCaptureInvalidated: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#StreamCaptureInvalidated: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(901)
     });
-    pub const StreamCaptureMerge: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#StreamCaptureMerge: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(902)
     });
-    pub const StreamCaptureUnmatched: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#StreamCaptureUnmatched: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(903)
     });
-    pub const StreamCaptureUnjoined: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#StreamCaptureUnjoined: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(904)
     });
-    pub const StreamCaptureIsolation: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#StreamCaptureIsolation: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(905)
     });
-    pub const StreamCaptureImplicit: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#StreamCaptureImplicit: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(906)
     });
-    pub const CapturedEvent: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#CapturedEvent: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(907)
     });
-    pub const StreamCaptureWrongThread: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#StreamCaptureWrongThread: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(908)
     });
-    pub const GraphExecUpdateFailure: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#GraphExecUpdateFailure: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(910)
     });
-    pub const InvalidChannelDescriptor: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#InvalidChannelDescriptor: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(911)
     });
-    pub const InvalidTexture: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#InvalidTexture: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(912)
     });
-    pub const Unknown: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#Unknown: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(999)
     });
-    pub const RuntimeMemory: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#RuntimeMemory: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(1052)
     });
-    pub const RuntimeOther: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#RuntimeOther: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(1053)
     });
-    pub const Tbd: hipErrorCode_t = hipErrorCode_t(unsafe {
+    pub const r#Tbd: hipErrorCode_t = hipErrorCode_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(1054)
     });
 }
@@ -13458,211 +13458,223 @@ impl hipErrorCode_t {
 pub struct hipErrorCode_t(pub ::core::num::NonZeroU32);
 pub trait hipError_tConsts {
     const Success: hipError_t = hipError_t::Ok(());
-    const ErrorInvalidValue: hipError_t = hipError_t::Err(hipErrorCode_t::InvalidValue);
-    const ErrorOutOfMemory: hipError_t = hipError_t::Err(hipErrorCode_t::OutOfMemory);
+    const ErrorInvalidValue: hipError_t = hipError_t::Err(
+        hipErrorCode_t::r#InvalidValue,
+    );
+    const ErrorOutOfMemory: hipError_t = hipError_t::Err(hipErrorCode_t::r#OutOfMemory);
     const ErrorMemoryAllocation: hipError_t = hipError_t::Err(
-        hipErrorCode_t::MemoryAllocation,
+        hipErrorCode_t::r#MemoryAllocation,
     );
     const ErrorNotInitialized: hipError_t = hipError_t::Err(
-        hipErrorCode_t::NotInitialized,
+        hipErrorCode_t::r#NotInitialized,
     );
     const ErrorInitializationError: hipError_t = hipError_t::Err(
-        hipErrorCode_t::InitializationError,
+        hipErrorCode_t::r#InitializationError,
     );
     const ErrorDeinitialized: hipError_t = hipError_t::Err(
-        hipErrorCode_t::Deinitialized,
+        hipErrorCode_t::r#Deinitialized,
     );
     const ErrorProfilerDisabled: hipError_t = hipError_t::Err(
-        hipErrorCode_t::ProfilerDisabled,
+        hipErrorCode_t::r#ProfilerDisabled,
     );
     const ErrorProfilerNotInitialized: hipError_t = hipError_t::Err(
-        hipErrorCode_t::ProfilerNotInitialized,
+        hipErrorCode_t::r#ProfilerNotInitialized,
     );
     const ErrorProfilerAlreadyStarted: hipError_t = hipError_t::Err(
-        hipErrorCode_t::ProfilerAlreadyStarted,
+        hipErrorCode_t::r#ProfilerAlreadyStarted,
     );
     const ErrorProfilerAlreadyStopped: hipError_t = hipError_t::Err(
-        hipErrorCode_t::ProfilerAlreadyStopped,
+        hipErrorCode_t::r#ProfilerAlreadyStopped,
     );
     const ErrorInvalidConfiguration: hipError_t = hipError_t::Err(
-        hipErrorCode_t::InvalidConfiguration,
+        hipErrorCode_t::r#InvalidConfiguration,
     );
     const ErrorInvalidPitchValue: hipError_t = hipError_t::Err(
-        hipErrorCode_t::InvalidPitchValue,
+        hipErrorCode_t::r#InvalidPitchValue,
     );
     const ErrorInvalidSymbol: hipError_t = hipError_t::Err(
-        hipErrorCode_t::InvalidSymbol,
+        hipErrorCode_t::r#InvalidSymbol,
     );
     const ErrorInvalidDevicePointer: hipError_t = hipError_t::Err(
-        hipErrorCode_t::InvalidDevicePointer,
+        hipErrorCode_t::r#InvalidDevicePointer,
     );
     const ErrorInvalidMemcpyDirection: hipError_t = hipError_t::Err(
-        hipErrorCode_t::InvalidMemcpyDirection,
+        hipErrorCode_t::r#InvalidMemcpyDirection,
     );
     const ErrorInsufficientDriver: hipError_t = hipError_t::Err(
-        hipErrorCode_t::InsufficientDriver,
+        hipErrorCode_t::r#InsufficientDriver,
     );
     const ErrorMissingConfiguration: hipError_t = hipError_t::Err(
-        hipErrorCode_t::MissingConfiguration,
+        hipErrorCode_t::r#MissingConfiguration,
     );
     const ErrorPriorLaunchFailure: hipError_t = hipError_t::Err(
-        hipErrorCode_t::PriorLaunchFailure,
+        hipErrorCode_t::r#PriorLaunchFailure,
     );
     const ErrorInvalidDeviceFunction: hipError_t = hipError_t::Err(
-        hipErrorCode_t::InvalidDeviceFunction,
+        hipErrorCode_t::r#InvalidDeviceFunction,
     );
-    const ErrorNoDevice: hipError_t = hipError_t::Err(hipErrorCode_t::NoDevice);
+    const ErrorNoDevice: hipError_t = hipError_t::Err(hipErrorCode_t::r#NoDevice);
     const ErrorInvalidDevice: hipError_t = hipError_t::Err(
-        hipErrorCode_t::InvalidDevice,
+        hipErrorCode_t::r#InvalidDevice,
     );
-    const ErrorInvalidImage: hipError_t = hipError_t::Err(hipErrorCode_t::InvalidImage);
+    const ErrorInvalidImage: hipError_t = hipError_t::Err(
+        hipErrorCode_t::r#InvalidImage,
+    );
     const ErrorInvalidContext: hipError_t = hipError_t::Err(
-        hipErrorCode_t::InvalidContext,
+        hipErrorCode_t::r#InvalidContext,
     );
     const ErrorContextAlreadyCurrent: hipError_t = hipError_t::Err(
-        hipErrorCode_t::ContextAlreadyCurrent,
+        hipErrorCode_t::r#ContextAlreadyCurrent,
     );
-    const ErrorMapFailed: hipError_t = hipError_t::Err(hipErrorCode_t::MapFailed);
+    const ErrorMapFailed: hipError_t = hipError_t::Err(hipErrorCode_t::r#MapFailed);
     const ErrorMapBufferObjectFailed: hipError_t = hipError_t::Err(
-        hipErrorCode_t::MapBufferObjectFailed,
+        hipErrorCode_t::r#MapBufferObjectFailed,
     );
-    const ErrorUnmapFailed: hipError_t = hipError_t::Err(hipErrorCode_t::UnmapFailed);
+    const ErrorUnmapFailed: hipError_t = hipError_t::Err(hipErrorCode_t::r#UnmapFailed);
     const ErrorArrayIsMapped: hipError_t = hipError_t::Err(
-        hipErrorCode_t::ArrayIsMapped,
+        hipErrorCode_t::r#ArrayIsMapped,
     );
     const ErrorAlreadyMapped: hipError_t = hipError_t::Err(
-        hipErrorCode_t::AlreadyMapped,
+        hipErrorCode_t::r#AlreadyMapped,
     );
     const ErrorNoBinaryForGpu: hipError_t = hipError_t::Err(
-        hipErrorCode_t::NoBinaryForGpu,
+        hipErrorCode_t::r#NoBinaryForGpu,
     );
     const ErrorAlreadyAcquired: hipError_t = hipError_t::Err(
-        hipErrorCode_t::AlreadyAcquired,
+        hipErrorCode_t::r#AlreadyAcquired,
     );
-    const ErrorNotMapped: hipError_t = hipError_t::Err(hipErrorCode_t::NotMapped);
+    const ErrorNotMapped: hipError_t = hipError_t::Err(hipErrorCode_t::r#NotMapped);
     const ErrorNotMappedAsArray: hipError_t = hipError_t::Err(
-        hipErrorCode_t::NotMappedAsArray,
+        hipErrorCode_t::r#NotMappedAsArray,
     );
     const ErrorNotMappedAsPointer: hipError_t = hipError_t::Err(
-        hipErrorCode_t::NotMappedAsPointer,
+        hipErrorCode_t::r#NotMappedAsPointer,
     );
     const ErrorECCNotCorrectable: hipError_t = hipError_t::Err(
-        hipErrorCode_t::ECCNotCorrectable,
+        hipErrorCode_t::r#ECCNotCorrectable,
     );
     const ErrorUnsupportedLimit: hipError_t = hipError_t::Err(
-        hipErrorCode_t::UnsupportedLimit,
+        hipErrorCode_t::r#UnsupportedLimit,
     );
     const ErrorContextAlreadyInUse: hipError_t = hipError_t::Err(
-        hipErrorCode_t::ContextAlreadyInUse,
+        hipErrorCode_t::r#ContextAlreadyInUse,
     );
     const ErrorPeerAccessUnsupported: hipError_t = hipError_t::Err(
-        hipErrorCode_t::PeerAccessUnsupported,
+        hipErrorCode_t::r#PeerAccessUnsupported,
     );
     const ErrorInvalidKernelFile: hipError_t = hipError_t::Err(
-        hipErrorCode_t::InvalidKernelFile,
+        hipErrorCode_t::r#InvalidKernelFile,
     );
     const ErrorInvalidGraphicsContext: hipError_t = hipError_t::Err(
-        hipErrorCode_t::InvalidGraphicsContext,
+        hipErrorCode_t::r#InvalidGraphicsContext,
     );
     const ErrorInvalidSource: hipError_t = hipError_t::Err(
-        hipErrorCode_t::InvalidSource,
+        hipErrorCode_t::r#InvalidSource,
     );
-    const ErrorFileNotFound: hipError_t = hipError_t::Err(hipErrorCode_t::FileNotFound);
+    const ErrorFileNotFound: hipError_t = hipError_t::Err(
+        hipErrorCode_t::r#FileNotFound,
+    );
     const ErrorSharedObjectSymbolNotFound: hipError_t = hipError_t::Err(
-        hipErrorCode_t::SharedObjectSymbolNotFound,
+        hipErrorCode_t::r#SharedObjectSymbolNotFound,
     );
     const ErrorSharedObjectInitFailed: hipError_t = hipError_t::Err(
-        hipErrorCode_t::SharedObjectInitFailed,
+        hipErrorCode_t::r#SharedObjectInitFailed,
     );
     const ErrorOperatingSystem: hipError_t = hipError_t::Err(
-        hipErrorCode_t::OperatingSystem,
+        hipErrorCode_t::r#OperatingSystem,
     );
     const ErrorInvalidHandle: hipError_t = hipError_t::Err(
-        hipErrorCode_t::InvalidHandle,
+        hipErrorCode_t::r#InvalidHandle,
     );
     const ErrorInvalidResourceHandle: hipError_t = hipError_t::Err(
-        hipErrorCode_t::InvalidResourceHandle,
+        hipErrorCode_t::r#InvalidResourceHandle,
     );
-    const ErrorIllegalState: hipError_t = hipError_t::Err(hipErrorCode_t::IllegalState);
-    const ErrorNotFound: hipError_t = hipError_t::Err(hipErrorCode_t::NotFound);
-    const ErrorNotReady: hipError_t = hipError_t::Err(hipErrorCode_t::NotReady);
+    const ErrorIllegalState: hipError_t = hipError_t::Err(
+        hipErrorCode_t::r#IllegalState,
+    );
+    const ErrorNotFound: hipError_t = hipError_t::Err(hipErrorCode_t::r#NotFound);
+    const ErrorNotReady: hipError_t = hipError_t::Err(hipErrorCode_t::r#NotReady);
     const ErrorIllegalAddress: hipError_t = hipError_t::Err(
-        hipErrorCode_t::IllegalAddress,
+        hipErrorCode_t::r#IllegalAddress,
     );
     const ErrorLaunchOutOfResources: hipError_t = hipError_t::Err(
-        hipErrorCode_t::LaunchOutOfResources,
+        hipErrorCode_t::r#LaunchOutOfResources,
     );
     const ErrorLaunchTimeOut: hipError_t = hipError_t::Err(
-        hipErrorCode_t::LaunchTimeOut,
+        hipErrorCode_t::r#LaunchTimeOut,
     );
     const ErrorPeerAccessAlreadyEnabled: hipError_t = hipError_t::Err(
-        hipErrorCode_t::PeerAccessAlreadyEnabled,
+        hipErrorCode_t::r#PeerAccessAlreadyEnabled,
     );
     const ErrorPeerAccessNotEnabled: hipError_t = hipError_t::Err(
-        hipErrorCode_t::PeerAccessNotEnabled,
+        hipErrorCode_t::r#PeerAccessNotEnabled,
     );
     const ErrorSetOnActiveProcess: hipError_t = hipError_t::Err(
-        hipErrorCode_t::SetOnActiveProcess,
+        hipErrorCode_t::r#SetOnActiveProcess,
     );
     const ErrorContextIsDestroyed: hipError_t = hipError_t::Err(
-        hipErrorCode_t::ContextIsDestroyed,
+        hipErrorCode_t::r#ContextIsDestroyed,
     );
-    const ErrorAssert: hipError_t = hipError_t::Err(hipErrorCode_t::Assert);
+    const ErrorAssert: hipError_t = hipError_t::Err(hipErrorCode_t::r#Assert);
     const ErrorHostMemoryAlreadyRegistered: hipError_t = hipError_t::Err(
-        hipErrorCode_t::HostMemoryAlreadyRegistered,
+        hipErrorCode_t::r#HostMemoryAlreadyRegistered,
     );
     const ErrorHostMemoryNotRegistered: hipError_t = hipError_t::Err(
-        hipErrorCode_t::HostMemoryNotRegistered,
+        hipErrorCode_t::r#HostMemoryNotRegistered,
     );
     const ErrorLaunchFailure: hipError_t = hipError_t::Err(
-        hipErrorCode_t::LaunchFailure,
+        hipErrorCode_t::r#LaunchFailure,
     );
     const ErrorCooperativeLaunchTooLarge: hipError_t = hipError_t::Err(
-        hipErrorCode_t::CooperativeLaunchTooLarge,
+        hipErrorCode_t::r#CooperativeLaunchTooLarge,
     );
-    const ErrorNotSupported: hipError_t = hipError_t::Err(hipErrorCode_t::NotSupported);
+    const ErrorNotSupported: hipError_t = hipError_t::Err(
+        hipErrorCode_t::r#NotSupported,
+    );
     const ErrorStreamCaptureUnsupported: hipError_t = hipError_t::Err(
-        hipErrorCode_t::StreamCaptureUnsupported,
+        hipErrorCode_t::r#StreamCaptureUnsupported,
     );
     const ErrorStreamCaptureInvalidated: hipError_t = hipError_t::Err(
-        hipErrorCode_t::StreamCaptureInvalidated,
+        hipErrorCode_t::r#StreamCaptureInvalidated,
     );
     const ErrorStreamCaptureMerge: hipError_t = hipError_t::Err(
-        hipErrorCode_t::StreamCaptureMerge,
+        hipErrorCode_t::r#StreamCaptureMerge,
     );
     const ErrorStreamCaptureUnmatched: hipError_t = hipError_t::Err(
-        hipErrorCode_t::StreamCaptureUnmatched,
+        hipErrorCode_t::r#StreamCaptureUnmatched,
     );
     const ErrorStreamCaptureUnjoined: hipError_t = hipError_t::Err(
-        hipErrorCode_t::StreamCaptureUnjoined,
+        hipErrorCode_t::r#StreamCaptureUnjoined,
     );
     const ErrorStreamCaptureIsolation: hipError_t = hipError_t::Err(
-        hipErrorCode_t::StreamCaptureIsolation,
+        hipErrorCode_t::r#StreamCaptureIsolation,
     );
     const ErrorStreamCaptureImplicit: hipError_t = hipError_t::Err(
-        hipErrorCode_t::StreamCaptureImplicit,
+        hipErrorCode_t::r#StreamCaptureImplicit,
     );
     const ErrorCapturedEvent: hipError_t = hipError_t::Err(
-        hipErrorCode_t::CapturedEvent,
+        hipErrorCode_t::r#CapturedEvent,
     );
     const ErrorStreamCaptureWrongThread: hipError_t = hipError_t::Err(
-        hipErrorCode_t::StreamCaptureWrongThread,
+        hipErrorCode_t::r#StreamCaptureWrongThread,
     );
     const ErrorGraphExecUpdateFailure: hipError_t = hipError_t::Err(
-        hipErrorCode_t::GraphExecUpdateFailure,
+        hipErrorCode_t::r#GraphExecUpdateFailure,
     );
     const ErrorInvalidChannelDescriptor: hipError_t = hipError_t::Err(
-        hipErrorCode_t::InvalidChannelDescriptor,
+        hipErrorCode_t::r#InvalidChannelDescriptor,
     );
     const ErrorInvalidTexture: hipError_t = hipError_t::Err(
-        hipErrorCode_t::InvalidTexture,
+        hipErrorCode_t::r#InvalidTexture,
     );
-    const ErrorUnknown: hipError_t = hipError_t::Err(hipErrorCode_t::Unknown);
+    const ErrorUnknown: hipError_t = hipError_t::Err(hipErrorCode_t::r#Unknown);
     const ErrorRuntimeMemory: hipError_t = hipError_t::Err(
-        hipErrorCode_t::RuntimeMemory,
+        hipErrorCode_t::r#RuntimeMemory,
     );
-    const ErrorRuntimeOther: hipError_t = hipError_t::Err(hipErrorCode_t::RuntimeOther);
-    const ErrorTbd: hipError_t = hipError_t::Err(hipErrorCode_t::Tbd);
+    const ErrorRuntimeOther: hipError_t = hipError_t::Err(
+        hipErrorCode_t::r#RuntimeOther,
+    );
+    const ErrorTbd: hipError_t = hipError_t::Err(hipErrorCode_t::r#Tbd);
 }
 impl hipError_tConsts for hipError_t {}
 #[must_use]
