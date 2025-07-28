@@ -35,7 +35,7 @@ fn main() {
     generate_cublaslt(&crate_root);
     generate_cufft(&crate_root);
     generate_cusparse(&crate_root);
-    // generate_cudnn(&crate_root);
+    generate_cudnn(&crate_root);
 }
 
 fn generate_process_address_table(crate_root: &PathBuf, mut cuda_fns: Vec<Ident>) {

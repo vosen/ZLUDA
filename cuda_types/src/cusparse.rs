@@ -85,50 +85,6 @@ pub struct pruneInfo {
     _unused: [u8; 0],
 }
 pub type pruneInfo_t = *mut pruneInfo;
-impl cusparseStatus_t {
-    pub const CUSPARSE_STATUS_SUCCESS: cusparseStatus_t = cusparseStatus_t(0);
-}
-impl cusparseStatus_t {
-    pub const CUSPARSE_STATUS_NOT_INITIALIZED: cusparseStatus_t = cusparseStatus_t(1);
-}
-impl cusparseStatus_t {
-    pub const CUSPARSE_STATUS_ALLOC_FAILED: cusparseStatus_t = cusparseStatus_t(2);
-}
-impl cusparseStatus_t {
-    pub const CUSPARSE_STATUS_INVALID_VALUE: cusparseStatus_t = cusparseStatus_t(3);
-}
-impl cusparseStatus_t {
-    pub const CUSPARSE_STATUS_ARCH_MISMATCH: cusparseStatus_t = cusparseStatus_t(4);
-}
-impl cusparseStatus_t {
-    pub const CUSPARSE_STATUS_MAPPING_ERROR: cusparseStatus_t = cusparseStatus_t(5);
-}
-impl cusparseStatus_t {
-    pub const CUSPARSE_STATUS_EXECUTION_FAILED: cusparseStatus_t = cusparseStatus_t(6);
-}
-impl cusparseStatus_t {
-    pub const CUSPARSE_STATUS_INTERNAL_ERROR: cusparseStatus_t = cusparseStatus_t(7);
-}
-impl cusparseStatus_t {
-    pub const CUSPARSE_STATUS_MATRIX_TYPE_NOT_SUPPORTED: cusparseStatus_t = cusparseStatus_t(
-        8,
-    );
-}
-impl cusparseStatus_t {
-    pub const CUSPARSE_STATUS_ZERO_PIVOT: cusparseStatus_t = cusparseStatus_t(9);
-}
-impl cusparseStatus_t {
-    pub const CUSPARSE_STATUS_NOT_SUPPORTED: cusparseStatus_t = cusparseStatus_t(10);
-}
-impl cusparseStatus_t {
-    pub const CUSPARSE_STATUS_INSUFFICIENT_RESOURCES: cusparseStatus_t = cusparseStatus_t(
-        11,
-    );
-}
-#[repr(transparent)]
-#[must_use]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct cusparseStatus_t(pub ::core::ffi::c_uint);
 impl cusparsePointerMode_t {
     pub const CUSPARSE_POINTER_MODE_HOST: cusparsePointerMode_t = cusparsePointerMode_t(
         0,
@@ -530,3 +486,83 @@ impl cusparseSpMMOpAlg_t {
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct cusparseSpMMOpAlg_t(pub ::core::ffi::c_uint);
+impl cusparseError_t {
+    pub const NOT_INITIALIZED: cusparseError_t = cusparseError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(1)
+    });
+    pub const ALLOC_FAILED: cusparseError_t = cusparseError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(2)
+    });
+    pub const INVALID_VALUE: cusparseError_t = cusparseError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(3)
+    });
+    pub const ARCH_MISMATCH: cusparseError_t = cusparseError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(4)
+    });
+    pub const MAPPING_ERROR: cusparseError_t = cusparseError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(5)
+    });
+    pub const EXECUTION_FAILED: cusparseError_t = cusparseError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(6)
+    });
+    pub const INTERNAL_ERROR: cusparseError_t = cusparseError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(7)
+    });
+    pub const MATRIX_TYPE_NOT_SUPPORTED: cusparseError_t = cusparseError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(8)
+    });
+    pub const ZERO_PIVOT: cusparseError_t = cusparseError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(9)
+    });
+    pub const NOT_SUPPORTED: cusparseError_t = cusparseError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(10)
+    });
+    pub const INSUFFICIENT_RESOURCES: cusparseError_t = cusparseError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(11)
+    });
+}
+#[repr(transparent)]
+#[derive(Debug, Hash, Copy, Clone, PartialEq, Eq)]
+pub struct cusparseError_t(pub ::core::num::NonZeroU32);
+pub trait cusparseStatus_tConsts {
+    const SUCCESS: cusparseStatus_t = cusparseStatus_t::Ok(());
+    const ERROR_NOT_INITIALIZED: cusparseStatus_t = cusparseStatus_t::Err(
+        cusparseError_t::NOT_INITIALIZED,
+    );
+    const ERROR_ALLOC_FAILED: cusparseStatus_t = cusparseStatus_t::Err(
+        cusparseError_t::ALLOC_FAILED,
+    );
+    const ERROR_INVALID_VALUE: cusparseStatus_t = cusparseStatus_t::Err(
+        cusparseError_t::INVALID_VALUE,
+    );
+    const ERROR_ARCH_MISMATCH: cusparseStatus_t = cusparseStatus_t::Err(
+        cusparseError_t::ARCH_MISMATCH,
+    );
+    const ERROR_MAPPING_ERROR: cusparseStatus_t = cusparseStatus_t::Err(
+        cusparseError_t::MAPPING_ERROR,
+    );
+    const ERROR_EXECUTION_FAILED: cusparseStatus_t = cusparseStatus_t::Err(
+        cusparseError_t::EXECUTION_FAILED,
+    );
+    const ERROR_INTERNAL_ERROR: cusparseStatus_t = cusparseStatus_t::Err(
+        cusparseError_t::INTERNAL_ERROR,
+    );
+    const ERROR_MATRIX_TYPE_NOT_SUPPORTED: cusparseStatus_t = cusparseStatus_t::Err(
+        cusparseError_t::MATRIX_TYPE_NOT_SUPPORTED,
+    );
+    const ERROR_ZERO_PIVOT: cusparseStatus_t = cusparseStatus_t::Err(
+        cusparseError_t::ZERO_PIVOT,
+    );
+    const ERROR_NOT_SUPPORTED: cusparseStatus_t = cusparseStatus_t::Err(
+        cusparseError_t::NOT_SUPPORTED,
+    );
+    const ERROR_INSUFFICIENT_RESOURCES: cusparseStatus_t = cusparseStatus_t::Err(
+        cusparseError_t::INSUFFICIENT_RESOURCES,
+    );
+}
+impl cusparseStatus_tConsts for cusparseStatus_t {}
+#[must_use]
+pub type cusparseStatus_t = ::core::result::Result<(), cusparseError_t>;
+const _: fn() = || {
+    let _ = std::mem::transmute::<cusparseStatus_t, u32>;
+};

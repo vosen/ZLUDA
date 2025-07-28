@@ -1,4 +1,9 @@
-use cuda_types::cuda::{CUerror, CUresult, CUresultConsts, CUuuid};
+use cuda_types::{
+    cublas::cublasStatus_tConsts,
+    cuda::{CUerror, CUresult, CUresultConsts, CUuuid},
+    cufft::cufftResultConsts,
+    cusparse::cusparseStatus_tConsts,
+};
 use dark_api::ByteVecFfi;
 use std::{ffi::c_void, num::NonZero, ptr, sync::LazyLock};
 
@@ -124,15 +129,21 @@ impl<T> ReprUsize for *const T {
 
 impl ReprUsize for cuda_types::cublas::cublasStatus_t {
     fn to_usize(self) -> usize {
-        self.0 as usize
+        match self {
+            cuda_types::cublas::cublasStatus_t::SUCCESS => 0,
+            Err(err) => err.0.get() as usize,
+        }
     }
 
     fn from_usize(x: usize) -> Self {
-        Self(x as u32)
+        match NonZero::new(x as u32) {
+            None => Ok(()),
+            Some(err) => Err(cuda_types::cublas::cublasError_t(err)),
+        }
     }
 
     const INTERNAL_ERROR: usize =
-        cuda_types::cublas::cublasStatus_t::CUBLAS_STATUS_INTERNAL_ERROR.0 as usize;
+        cuda_types::cublas::cublasError_t::INTERNAL_ERROR.0.get() as usize;
 
     extern "C" fn format_status(x: usize) -> ByteVecFfi {
         let mut writer = Vec::new();
@@ -150,8 +161,9 @@ impl ReprUsize for cuda_types::cudnn9::cudnnStatus_t {
         Self(x as u32)
     }
 
-    const INTERNAL_ERROR: usize =
-        cuda_types::cublas::cublasStatus_t::CUBLAS_STATUS_INTERNAL_ERROR.0 as usize;
+    // TODO: handle this after cudnn fix
+
+    const INTERNAL_ERROR: usize = 14;
 
     extern "C" fn format_status(x: usize) -> ByteVecFfi {
         let mut writer = Vec::new();
@@ -240,13 +252,21 @@ impl ReprUsize for *mut std::ffi::c_void {
     }
 }
 
-impl ReprUsize for cuda_types::cufft::cufftResult_t {
+impl ReprUsize for cuda_types::cufft::cufftResult {
+    const INTERNAL_ERROR: usize = cuda_types::cufft::cufftError_t::INTERNAL_ERROR.0.get() as usize;
+
     fn to_usize(self) -> usize {
-        self.0 as usize
+        match self {
+            cuda_types::cufft::cufftResult::SUCCESS => 0,
+            Err(err) => err.0.get() as usize,
+        }
     }
 
     fn from_usize(x: usize) -> Self {
-        Self(x as u32)
+        match NonZero::new(x as u32) {
+            None => Ok(()),
+            Some(err) => Err(cuda_types::cufft::cufftError_t(err)),
+        }
     }
 
     extern "C" fn format_status(x: usize) -> ByteVecFfi {
@@ -258,15 +278,22 @@ impl ReprUsize for cuda_types::cufft::cufftResult_t {
 
 impl ReprUsize for cuda_types::cusparse::cusparseStatus_t {
     fn to_usize(self) -> usize {
-        self.0 as usize
+        match self {
+            cuda_types::cusparse::cusparseStatus_t::SUCCESS => 0,
+            Err(err) => err.0.get() as usize,
+        }
     }
 
     fn from_usize(x: usize) -> Self {
-        Self(x as u32)
+        match NonZero::new(x as u32) {
+            None => Ok(()),
+            Some(err) => Err(cuda_types::cusparse::cusparseError_t(err)),
+        }
     }
 
-    const INTERNAL_ERROR: usize =
-        cuda_types::cusparse::cusparseStatus_t::CUSPARSE_STATUS_INTERNAL_ERROR.0 as usize;
+    const INTERNAL_ERROR: usize = cuda_types::cusparse::cusparseError_t::INTERNAL_ERROR
+        .0
+        .get() as usize;
 
     extern "C" fn format_status(x: usize) -> ByteVecFfi {
         let mut writer = Vec::new();
