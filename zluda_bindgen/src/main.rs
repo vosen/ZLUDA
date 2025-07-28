@@ -24,22 +24,22 @@ static KNOWN_CUDA_VERSIONS: &[&'static str] = &[
 
 fn main() {
     let crate_root = PathBuf::from_str(env!("CARGO_MANIFEST_DIR")).unwrap();
-    generate_hip_runtime(
+    // generate_hip_runtime(
+    //     &crate_root,
+    //     &["..", "ext", "hip_runtime-sys", "src", "lib.rs"],
+    // );
+    generate_rocblas(
         &crate_root,
-        &["..", "ext", "hip_runtime-sys", "src", "lib.rs"],
+        &["..", "ext", "rocblas-sys", "src", "lib.rs"],
     );
-    generate_hipblas(
-        &crate_root,
-        &["..", "ext", "hipblas-sys", "src", "lib.rs"],
-    );
-    let cuda_functions = generate_cuda(&crate_root);
-    generate_process_address_table(&crate_root, cuda_functions);
-    generate_ml(&crate_root);
-    generate_cublas(&crate_root);
-    generate_cublaslt(&crate_root);
-    generate_cufft(&crate_root);
-    generate_cusparse(&crate_root);
-    generate_cudnn(&crate_root);
+    // let cuda_functions = generate_cuda(&crate_root);
+    // generate_process_address_table(&crate_root, cuda_functions);
+    // generate_ml(&crate_root);
+    // generate_cublas(&crate_root);
+    // generate_cublaslt(&crate_root);
+    // generate_cufft(&crate_root);
+    // generate_cusparse(&crate_root);
+    // generate_cudnn(&crate_root);
 }
 
 fn generate_process_address_table(crate_root: &PathBuf, mut cuda_fns: Vec<Ident>) {
@@ -925,26 +925,28 @@ fn generate_hip_runtime(output: &PathBuf, path: &[&str]) {
     write_rust_to_file(output, &prettyplease::unparse(&module))
 }
 
-fn generate_hipblas(output: &PathBuf, path: &[&str]) {
-    let hipblas_header = new_builder()
-        .header("/opt/rocm/include/hipblas/hipblas.h")
-        .allowlist_type("^hipblas.*")
-        .allowlist_function("^hipblas.*")
-        .allowlist_var("^hipblas.*")
-        .must_use_type("hipblasError_t")
-        .constified_enum("hipblasStatus_t")
-        .new_type_alias("hipblasHandle_t")
+fn generate_rocblas(output: &PathBuf, path: &[&str]) {
+    let rocblas_header = new_builder()
+        .header("/opt/rocm/include/rocblas/rocblas.h")
+        .allowlist_type("^rocblas.*")
+        .allowlist_function("^rocblas.*")
+        .allowlist_var("^rocblas.*")
+        .must_use_type("rocblas_status")
+        .constified_enum("rocblas_status_")
+        .new_type_alias("^rocblas_handle$")
+        .new_type_alias("^hipStream_t$")
+        .new_type_alias("^hipEvent_t$")
         .clang_args(["-I/opt/rocm/include", "-D__HIP_PLATFORM_AMD__"])
         .generate()
         .unwrap()
         .to_string();
-    let mut module: syn::File = syn::parse_str(&hipblas_header).unwrap();
+    let mut module: syn::File = syn::parse_str(&rocblas_header).unwrap();
     let mut converter = ConvertIntoRustResult {
-        type_: "hipblasStatus_t",
-        underlying_type: "hipblasStatus_t",
-        new_error_type: "hipblasErrorCode_t",
-        error_prefix: ("HIPBLAS_STATUS_", "ERROR_"),
-        success: ("HIPBLAS_STATUS_SUCCESS", "SUCCESS"),
+        type_: "rocblas_status",
+        underlying_type: "rocblas_status_",
+        new_error_type: "rocblas_error",
+        error_prefix: ("rocblas_status_", "error_"),
+        success: ("rocblas_status_success", "success"),
         constants: Vec::new(),
     };
     module.items = module
@@ -961,7 +963,7 @@ fn generate_hipblas(output: &PathBuf, path: &[&str]) {
     add_send_sync(
         &mut module.items,
         &[
-            "hipblasHandle_t",
+            "rocblas_handle",
         ],
     );
     let mut output = output.clone();
@@ -1164,7 +1166,7 @@ impl ConvertIntoRustResult {
                 let old_prefix_len = self.underlying_type.len() + 1 + self.error_prefix.0.len();
                 let variant_ident =
                     format_ident!("{}{}", self.error_prefix.1, &ident[old_prefix_len..]);
-                let error_ident = format_ident!("{}", &ident[old_prefix_len..]);
+                let error_ident = format_ident!("r#{}", &ident[old_prefix_len..]);
                 let expr = &const_.expr;
                 result_variants.push(quote! {
                     const #variant_ident: #type_ = #type_::Err(#new_error_type::#error_ident);
