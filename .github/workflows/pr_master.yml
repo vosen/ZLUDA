@@ -74,11 +74,11 @@ jobs:
       with:
         # Removing Android stuff should be enough
         android: true
-        dotnet: true
+        dotnet: false
         haskell: false
-        large-packages: true
+        large-packages: false
         docker-images: false
-        swap-storage: true
+        swap-storage: false
     - uses: actions/checkout@v4
       with:
         submodules: true
