@@ -1826,6 +1826,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "zluda_common"
+version = "0.1.0"
+
+[[package]]
 name = "zluda_dnn"
 version = "0.0.0"
 dependencies = [
