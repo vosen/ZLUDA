@@ -1,12 +1,18 @@
 use cuda_types::cuda::CUerror;
 use std::sync::atomic::{AtomicBool, Ordering};
+
+
+#[cfg_attr(windows, path = "os_win.rs")]
+#[cfg_attr(not(windows), path = "os_unix.rs")]
+mod os;
 pub(crate) mod r#impl;
 
 static INITIALIZED: AtomicBool = AtomicBool::new(true);
 pub(crate) fn initialized() -> bool {
     INITIALIZED.load(Ordering::SeqCst)
 }
-#[dtor::dtor]
+
+#[cfg_attr(not(windows), dtor::dtor)]
 fn deinitialize() {
     INITIALIZED.store(false, Ordering::SeqCst);
 }
