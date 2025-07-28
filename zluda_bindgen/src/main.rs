@@ -28,6 +28,7 @@ fn main() {
         &crate_root,
         &["..", "ext", "hip_runtime-sys", "src", "lib.rs"],
     );
+    generate_rocblas(&crate_root, &["..", "ext", "rocblas-sys", "src", "lib.rs"]);
     let cuda_functions = generate_cuda(&crate_root);
     generate_process_address_table(&crate_root, cuda_functions);
     generate_ml(&crate_root);
@@ -655,6 +656,7 @@ fn remove_type(module: &mut syn::File, type_name: &str) {
     let items = items
         .into_iter()
         .filter_map(|item| match item {
+            Item::Type(type_) if type_.ident == type_name => None,
             Item::Enum(enum_) if enum_.ident == type_name => None,
             Item::Struct(struct_) if struct_.ident == type_name => None,
             Item::Impl(impl_) if impl_.self_ty.to_token_stream().to_string() == type_name => None,
@@ -921,6 +923,58 @@ fn generate_hip_runtime(output: &PathBuf, path: &[&str]) {
     write_rust_to_file(output, &prettyplease::unparse(&module))
 }
 
+fn generate_rocblas(output: &PathBuf, path: &[&str]) {
+    let rocblas_header = new_builder()
+        .header("/opt/rocm/include/rocblas/rocblas.h")
+        .allowlist_type("^rocblas.*")
+        .allowlist_function("^rocblas.*")
+        .allowlist_var("^rocblas.*")
+        .must_use_type("rocblas_status")
+        .constified_enum("rocblas_status_")
+        .new_type_alias("^rocblas_handle$")
+        .clang_args(["-I/opt/rocm/include", "-D__HIP_PLATFORM_AMD__"])
+        .generate()
+        .unwrap()
+        .to_string();
+    let mut module: syn::File = syn::parse_str(&rocblas_header).unwrap();
+    remove_type(&mut module, "hipStream_t");
+    remove_type(&mut module, "ihipStream_t");
+    remove_type(&mut module, "hipEvent_t");
+    remove_type(&mut module, "ihipEvent_t");
+    let mut converter = ConvertIntoRustResult {
+        type_: "rocblas_status",
+        underlying_type: "rocblas_status_",
+        new_error_type: "rocblas_error",
+        error_prefix: ("rocblas_status_", "error_"),
+        success: ("rocblas_status_success", "success"),
+        constants: Vec::new(),
+    };
+    module.items = module
+        .items
+        .into_iter()
+        .filter_map(|item| match item {
+            Item::Const(const_) => converter.get_const(const_).map(Item::Const),
+            Item::Use(use_) => converter.get_use(use_).map(Item::Use),
+            Item::Type(type_) => converter.get_type(type_).map(Item::Type),
+            Item::ForeignMod(mut extern_) => {
+                extern_.attrs.push(
+                    parse_quote!(#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]),
+                );
+                Some(Item::ForeignMod(extern_))
+            }
+            item => Some(item),
+        })
+        .collect::<Vec<_>>();
+    converter.flush(&mut module.items);
+    add_send_sync(&mut module.items, &["rocblas_handle"]);
+    let mut output = output.clone();
+    output.extend(path);
+    let text = &prettyplease::unparse(&module)
+        .replace("hipStream_t", "hip_runtime_sys::hipStream_t")
+        .replace("hipEvent_t", "hip_runtime_sys::hipEvent_t");
+    write_rust_to_file(output, text)
+}
+
 fn add_send_sync(items: &mut Vec<Item>, arg: &[&str]) {
     for type_ in arg {
         let type_ = Ident::new(type_, Span::call_site());
@@ -1115,7 +1169,7 @@ impl ConvertIntoRustResult {
                 let old_prefix_len = self.underlying_type.len() + 1 + self.error_prefix.0.len();
                 let variant_ident =
                     format_ident!("{}{}", self.error_prefix.1, &ident[old_prefix_len..]);
-                let error_ident = format_ident!("{}", &ident[old_prefix_len..]);
+                let error_ident = format_ident!("r#{}", &ident[old_prefix_len..]);
                 let expr = &const_.expr;
                 result_variants.push(quote! {
                     const #variant_ident: #type_ = #type_::Err(#new_error_type::#error_ident);

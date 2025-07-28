@@ -1,0 +1,10 @@
+[package]
+name = "rocblas-sys"
+version = "0.1.0"
+authors = ["Violet <c01368481@gmail.com>"]
+edition = "2021"
+
+[lib]
+
+[dependencies]
+hip_runtime-sys = { version = "0.0.0", path = "../hip_runtime-sys" }
