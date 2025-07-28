@@ -656,6 +656,7 @@ fn remove_type(module: &mut syn::File, type_name: &str) {
     let items = items
         .into_iter()
         .filter_map(|item| match item {
+            Item::Type(type_) if type_.ident == type_name => None,
             Item::Enum(enum_) if enum_.ident == type_name => None,
             Item::Struct(struct_) if struct_.ident == type_name => None,
             Item::Impl(impl_) if impl_.self_ty.to_token_stream().to_string() == type_name => None,
@@ -931,8 +932,6 @@ fn generate_rocblas(output: &PathBuf, path: &[&str]) {
         .must_use_type("rocblas_status")
         .constified_enum("rocblas_status_")
         .new_type_alias("^rocblas_handle$")
-        .new_type_alias("^hipStream_t$")
-        .new_type_alias("^hipEvent_t$")
         .clang_args(["-I/opt/rocm/include", "-D__HIP_PLATFORM_AMD__"])
         .generate()
         .unwrap()
@@ -959,7 +958,7 @@ fn generate_rocblas(output: &PathBuf, path: &[&str]) {
             Item::Type(type_) => converter.get_type(type_).map(Item::Type),
             Item::ForeignMod(mut extern_) => {
                 extern_.attrs.push(
-                    parse_quote!(#[cfg_attr(windows, link = "rocblas_4", kind = "raw-dylib")]),
+                    parse_quote!(#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]),
                 );
                 Some(Item::ForeignMod(extern_))
             }
