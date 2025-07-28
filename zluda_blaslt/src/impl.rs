@@ -1,4 +1,4 @@
-use cuda_types::cublas::cublasStatus_t;
+use cuda_types::cublas::*;
 
 #[cfg(debug_assertions)]
 pub(crate) fn unimplemented() -> cublasStatus_t {
@@ -7,7 +7,7 @@ pub(crate) fn unimplemented() -> cublasStatus_t {
 
 #[cfg(not(debug_assertions))]
 pub(crate) fn unimplemented() -> cublasStatus_t {
-    cublasStatus_t::CUBLAS_STATUS_NOT_SUPPORTED
+    cublasStatus_t::ERROR_NOT_SUPPORTED
 }
 
 #[allow(non_snake_case)]
