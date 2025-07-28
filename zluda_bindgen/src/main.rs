@@ -24,19 +24,19 @@ static KNOWN_CUDA_VERSIONS: &[&'static str] = &[
 
 fn main() {
     let crate_root = PathBuf::from_str(env!("CARGO_MANIFEST_DIR")).unwrap();
-    generate_hip_runtime(
-        &crate_root,
-        &["..", "ext", "hip_runtime-sys", "src", "lib.rs"],
-    );
+    // generate_hip_runtime(
+    //     &crate_root,
+    //     &["..", "ext", "hip_runtime-sys", "src", "lib.rs"],
+    // );
     generate_rocblas(&crate_root, &["..", "ext", "rocblas-sys", "src", "lib.rs"]);
-    let cuda_functions = generate_cuda(&crate_root);
-    generate_process_address_table(&crate_root, cuda_functions);
-    generate_ml(&crate_root);
-    generate_cublas(&crate_root);
-    generate_cublaslt(&crate_root);
-    generate_cufft(&crate_root);
-    generate_cusparse(&crate_root);
-    generate_cudnn(&crate_root);
+    // let cuda_functions = generate_cuda(&crate_root);
+    // generate_process_address_table(&crate_root, cuda_functions);
+    // generate_ml(&crate_root);
+    // generate_cublas(&crate_root);
+    // generate_cublaslt(&crate_root);
+    // generate_cufft(&crate_root);
+    // generate_cusparse(&crate_root);
+    // generate_cudnn(&crate_root);
 }
 
 fn generate_process_address_table(crate_root: &PathBuf, mut cuda_fns: Vec<Ident>) {
@@ -938,6 +938,10 @@ fn generate_rocblas(output: &PathBuf, path: &[&str]) {
         .unwrap()
         .to_string();
     let mut module: syn::File = syn::parse_str(&rocblas_header).unwrap();
+    remove_type(&mut module, "hipStream_t");
+    remove_type(&mut module, "ihipStream_t");
+    remove_type(&mut module, "hipEvent_t");
+    remove_type(&mut module, "ihipEvent_t");
     let mut converter = ConvertIntoRustResult {
         type_: "rocblas_status",
         underlying_type: "rocblas_status_",
@@ -966,7 +970,10 @@ fn generate_rocblas(output: &PathBuf, path: &[&str]) {
     add_send_sync(&mut module.items, &["rocblas_handle"]);
     let mut output = output.clone();
     output.extend(path);
-    write_rust_to_file(output, &prettyplease::unparse(&module))
+    let text = &prettyplease::unparse(&module)
+        .replace("hipStream_t", "hip_runtime_sys::hipStream_t")
+        .replace("hipEvent_t", "hip_runtime_sys::hipEvent_t");
+    write_rust_to_file(output, text)
 }
 
 fn add_send_sync(items: &mut Vec<Item>, arg: &[&str]) {

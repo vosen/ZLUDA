@@ -31,24 +31,6 @@ pub struct _rocblas_handle {
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct rocblas_handle(pub *mut _rocblas_handle);
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct ihipStream_t {
-    _unused: [u8; 0],
-}
-/// \brief Forward declaration of hipStream_t
-#[repr(transparent)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct hipStream_t(pub *mut ihipStream_t);
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct ihipEvent_t {
-    _unused: [u8; 0],
-}
-/// \brief Forward declaration of hipEvent_t
-#[repr(transparent)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct hipEvent_t(pub *mut ihipEvent_t);
 /// \brief Opaque base class for device memory allocation
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -527,7 +509,7 @@ extern "C" {
     /// \brief Set stream for handle
     pub fn rocblas_set_stream(
         handle: rocblas_handle,
-        stream: hipStream_t,
+        stream: hip_runtime_sys::hipStream_t,
     ) -> rocblas_status;
 }
 #[cfg_attr(windows, link = "rocblas_4", kind = "raw-dylib")]
@@ -536,7 +518,7 @@ extern "C" {
     /// \brief Get stream [0] from handle
     pub fn rocblas_get_stream(
         handle: rocblas_handle,
-        stream: *mut hipStream_t,
+        stream: *mut hip_runtime_sys::hipStream_t,
     ) -> rocblas_status;
 }
 #[cfg_attr(windows, link = "rocblas_4", kind = "raw-dylib")]
@@ -814,7 +796,7 @@ stream      specifies the stream into which this transfer request is queued*/
         incx: rocblas_int,
         y: *mut ::core::ffi::c_void,
         incy: rocblas_int,
-        stream: hipStream_t,
+        stream: hip_runtime_sys::hipStream_t,
     ) -> rocblas_status;
 }
 #[cfg_attr(windows, link = "rocblas_4", kind = "raw-dylib")]
@@ -827,7 +809,7 @@ extern "C" {
         incx: i64,
         y: *mut ::core::ffi::c_void,
         incy: i64,
-        stream: hipStream_t,
+        stream: hip_runtime_sys::hipStream_t,
     ) -> rocblas_status;
 }
 #[cfg_attr(windows, link = "rocblas_4", kind = "raw-dylib")]
@@ -862,7 +844,7 @@ stream      specifies the stream into which this transfer request is queued*/
         incx: rocblas_int,
         y: *mut ::core::ffi::c_void,
         incy: rocblas_int,
-        stream: hipStream_t,
+        stream: hip_runtime_sys::hipStream_t,
     ) -> rocblas_status;
 }
 #[cfg_attr(windows, link = "rocblas_4", kind = "raw-dylib")]
@@ -875,7 +857,7 @@ extern "C" {
         incx: i64,
         y: *mut ::core::ffi::c_void,
         incy: i64,
-        stream: hipStream_t,
+        stream: hip_runtime_sys::hipStream_t,
     ) -> rocblas_status;
 }
 #[cfg_attr(windows, link = "rocblas_4", kind = "raw-dylib")]
@@ -914,7 +896,7 @@ stream      specifies the stream into which this transfer request is queued*/
         lda: rocblas_int,
         b: *mut ::core::ffi::c_void,
         ldb: rocblas_int,
-        stream: hipStream_t,
+        stream: hip_runtime_sys::hipStream_t,
     ) -> rocblas_status;
 }
 #[cfg_attr(windows, link = "rocblas_4", kind = "raw-dylib")]
@@ -928,7 +910,7 @@ extern "C" {
         lda: i64,
         b: *mut ::core::ffi::c_void,
         ldb: i64,
-        stream: hipStream_t,
+        stream: hip_runtime_sys::hipStream_t,
     ) -> rocblas_status;
 }
 #[cfg_attr(windows, link = "rocblas_4", kind = "raw-dylib")]
@@ -967,7 +949,7 @@ stream      specifies the stream into which this transfer request is queued*/
         lda: rocblas_int,
         b: *mut ::core::ffi::c_void,
         ldb: rocblas_int,
-        stream: hipStream_t,
+        stream: hip_runtime_sys::hipStream_t,
     ) -> rocblas_status;
 }
 #[cfg_attr(windows, link = "rocblas_4", kind = "raw-dylib")]
@@ -981,7 +963,7 @@ extern "C" {
         lda: i64,
         b: *mut ::core::ffi::c_void,
         ldb: i64,
-        stream: hipStream_t,
+        stream: hip_runtime_sys::hipStream_t,
     ) -> rocblas_status;
 }
 #[cfg_attr(windows, link = "rocblas_4", kind = "raw-dylib")]
@@ -990,8 +972,8 @@ extern "C" {
     /// Function to set start/stop event handlers (for internal use only)
     pub fn rocblas_set_start_stop_events(
         handle: rocblas_handle,
-        startEvent: hipEvent_t,
-        stopEvent: hipEvent_t,
+        startEvent: hip_runtime_sys::hipEvent_t,
+        stopEvent: hip_runtime_sys::hipEvent_t,
     ) -> rocblas_status;
 }
 #[cfg_attr(windows, link = "rocblas_4", kind = "raw-dylib")]
