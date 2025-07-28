@@ -2140,8 +2140,6 @@ impl nvmlInforomObject_enum {
 pub struct nvmlInforomObject_enum(pub ::core::ffi::c_uint);
 /// Available infoROM objects.
 pub use self::nvmlInforomObject_enum as nvmlInforomObject_t;
-/// Return values for NVML API calls.
-pub type nvmlReturn_enum = ::core::ffi::c_uint;
 impl nvmlMemoryLocation_enum {
     ///!< GPU L1 Cache
     pub const NVML_MEMORY_LOCATION_L1_CACHE: nvmlMemoryLocation_enum = nvmlMemoryLocation_enum(

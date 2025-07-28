@@ -1208,7 +1208,9 @@ impl ConvertIntoRustResult {
     }
 
     fn get_type(&self, type_: syn::ItemType) -> Option<syn::ItemType> {
-        if type_.ident.to_string() == self.options.type_ {
+        if type_.ident.to_string() == self.options.type_
+            || type_.ident.to_string() == self.options.underlying_type
+        {
             None
         } else {
             Some(type_)

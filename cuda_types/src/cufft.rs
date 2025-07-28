@@ -50,8 +50,6 @@ pub struct cudaLibXtDesc_t {
     pub libDescriptor: *mut ::core::ffi::c_void,
 }
 pub type cudaLibXtDesc = cudaLibXtDesc_t;
-#[must_use]
-pub type cufftResult_t = ::core::ffi::c_uint;
 pub type cufftReal = f32;
 pub type cufftDoubleReal = f64;
 pub type cufftComplex = super::cuda::cuComplex;
