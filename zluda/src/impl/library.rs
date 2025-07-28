@@ -9,6 +9,7 @@ pub(crate) struct Library {
 impl ZludaObject for Library {
     const COOKIE: usize = 0xb328a916cc234d7c;
 
+    type Error = CUerror;
     type CudaHandle = CUlibrary;
 
     fn drop_checked(&mut self) -> CUresult {
@@ -38,10 +39,7 @@ pub(crate) unsafe fn unload(library: CUlibrary) -> CUresult {
     super::drop_checked::<Library>(library)
 }
 
-pub(crate) unsafe fn get_module(
-    out: &mut CUmodule,
-    library: &Library,
-) -> CUresult {
-    *out = module::Module{base: library.base}.wrap();
+pub(crate) unsafe fn get_module(out: &mut CUmodule, library: &Library) -> CUresult {
+    *out = module::Module { base: library.base }.wrap();
     Ok(())
 }

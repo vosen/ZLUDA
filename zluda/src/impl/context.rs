@@ -88,6 +88,7 @@ impl Context {
 impl ZludaObject for Context {
     const COOKIE: usize = 0x5f867c6d9cb73315;
 
+    type Error = CUerror;
     type CudaHandle = CUcontext;
 
     fn drop_checked(&mut self) -> CUresult {
@@ -128,7 +129,7 @@ pub(crate) fn set_current(raw_ctx: CUcontext) -> CUresult {
             None
         })
     } else {
-        let ctx: &Context = FromCuda::from_cuda(&raw_ctx)?;
+        let ctx: &Context = FromCuda::<_, CUerror>::from_cuda(&raw_ctx)?;
         let device = ctx.device;
         STACK.with(move |stack| {
             let mut stack = stack.borrow_mut();
@@ -157,7 +158,7 @@ pub(crate) fn get_current(pctx: &mut CUcontext) -> CUresult {
 
 pub(crate) fn get_device(dev: &mut hipDevice_t) -> CUresult {
     let cu_ctx = get_current_context()?;
-    let ctx: &Context = FromCuda::from_cuda(&cu_ctx)?;
+    let ctx: &Context = FromCuda::<_, CUerror>::from_cuda(&cu_ctx)?;
     *dev = ctx.device;
     Ok(())
 }

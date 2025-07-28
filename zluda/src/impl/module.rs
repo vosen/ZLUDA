@@ -14,6 +14,7 @@ pub(crate) struct Module {
 impl ZludaObject for Module {
     const COOKIE: usize = 0xe9138bd040487d4a;
 
+    type Error = CUerror;
     type CudaHandle = CUmodule;
 
     fn drop_checked(&mut self) -> CUresult {

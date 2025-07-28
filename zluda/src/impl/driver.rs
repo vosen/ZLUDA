@@ -175,7 +175,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
             context::get_current(&mut current_ctx)?;
             current_ctx
         };
-        let ctx_obj: &context::Context = FromCuda::from_cuda(&_ctx)?;
+        let ctx_obj: &context::Context = FromCuda::<_, CUerror>::from_cuda(&_ctx)?;
         ctx_obj.with_state_mut(|state: &mut context::ContextState| {
             state.storage.insert(
                 key as usize,
@@ -194,7 +194,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         cu_ctx: CUcontext,
         key: *mut c_void,
     ) -> CUresult {
-        let ctx_obj: &context::Context = FromCuda::from_cuda(&cu_ctx)?;
+        let ctx_obj: &context::Context = FromCuda::<_, CUerror>::from_cuda(&cu_ctx)?;
         ctx_obj.with_state_mut(|state: &mut context::ContextState| {
             state.storage.remove(&(key as usize));
             Ok(())
@@ -213,7 +213,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         } else {
             _ctx = cu_ctx
         };
-        let ctx_obj: &context::Context = FromCuda::from_cuda(&_ctx)?;
+        let ctx_obj: &context::Context = FromCuda::<_, CUerror>::from_cuda(&_ctx)?;
         ctx_obj.with_state(|state: &context::ContextState| {
             match state.storage.get(&(key as usize)) {
                 Some(data) => *value = data.value as *mut c_void,
