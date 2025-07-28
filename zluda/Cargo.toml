@@ -22,13 +22,13 @@ lz4-sys = "1.9"
 tempfile = "3"
 paste = "1.0"
 rustc-hash = "1.1"
-dtor = "0.0.6"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["heapapi", "std"] }
 
 [target.'cfg(not(windows))'.dependencies]
 libc = "0.2"
+dtor = "0.0.6"
 
 [package.metadata.zluda]
 linux_symlinks = [

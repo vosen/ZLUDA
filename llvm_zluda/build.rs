@@ -19,8 +19,8 @@ fn main() {
     cmake
         // It's not like we can do anything about the warnings
         .define("LLVM_ENABLE_WARNINGS", "OFF")
-        // For some reason Rust always links to release MSVCRT
-        .define("CMAKE_MSVC_RUNTIME_LIBRARY", "MultiThreadedDLL")
+        // For some reason Rust always links to release CRT
+        .define("CMAKE_MSVC_RUNTIME_LIBRARY", "MultiThreaded")
         .define("LLVM_ENABLE_TERMINFO", "OFF")
         .define("LLVM_ENABLE_LIBXML2", "OFF")
         .define("LLVM_ENABLE_LIBEDIT", "OFF")
