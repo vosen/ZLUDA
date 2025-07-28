@@ -155,60 +155,6 @@ impl crate::CudaDisplay for cuda_types::cusparse::pruneInfo_t {
         }
     }
 }
-impl crate::CudaDisplay for cuda_types::cusparse::cusparseStatus_t {
-    fn write(
-        &self,
-        _fn_name: &'static str,
-        _index: usize,
-        writer: &mut (impl std::io::Write + ?Sized),
-    ) -> std::io::Result<()> {
-        match self {
-            &cuda_types::cusparse::cusparseStatus_t::CUSPARSE_STATUS_SUCCESS => {
-                writer.write_all(stringify!(CUSPARSE_STATUS_SUCCESS).as_bytes())
-            }
-            &cuda_types::cusparse::cusparseStatus_t::CUSPARSE_STATUS_NOT_INITIALIZED => {
-                writer.write_all(stringify!(CUSPARSE_STATUS_NOT_INITIALIZED).as_bytes())
-            }
-            &cuda_types::cusparse::cusparseStatus_t::CUSPARSE_STATUS_ALLOC_FAILED => {
-                writer.write_all(stringify!(CUSPARSE_STATUS_ALLOC_FAILED).as_bytes())
-            }
-            &cuda_types::cusparse::cusparseStatus_t::CUSPARSE_STATUS_INVALID_VALUE => {
-                writer.write_all(stringify!(CUSPARSE_STATUS_INVALID_VALUE).as_bytes())
-            }
-            &cuda_types::cusparse::cusparseStatus_t::CUSPARSE_STATUS_ARCH_MISMATCH => {
-                writer.write_all(stringify!(CUSPARSE_STATUS_ARCH_MISMATCH).as_bytes())
-            }
-            &cuda_types::cusparse::cusparseStatus_t::CUSPARSE_STATUS_MAPPING_ERROR => {
-                writer.write_all(stringify!(CUSPARSE_STATUS_MAPPING_ERROR).as_bytes())
-            }
-            &cuda_types::cusparse::cusparseStatus_t::CUSPARSE_STATUS_EXECUTION_FAILED => {
-                writer.write_all(stringify!(CUSPARSE_STATUS_EXECUTION_FAILED).as_bytes())
-            }
-            &cuda_types::cusparse::cusparseStatus_t::CUSPARSE_STATUS_INTERNAL_ERROR => {
-                writer.write_all(stringify!(CUSPARSE_STATUS_INTERNAL_ERROR).as_bytes())
-            }
-            &cuda_types::cusparse::cusparseStatus_t::CUSPARSE_STATUS_MATRIX_TYPE_NOT_SUPPORTED => {
-                writer
-                    .write_all(
-                        stringify!(CUSPARSE_STATUS_MATRIX_TYPE_NOT_SUPPORTED).as_bytes(),
-                    )
-            }
-            &cuda_types::cusparse::cusparseStatus_t::CUSPARSE_STATUS_ZERO_PIVOT => {
-                writer.write_all(stringify!(CUSPARSE_STATUS_ZERO_PIVOT).as_bytes())
-            }
-            &cuda_types::cusparse::cusparseStatus_t::CUSPARSE_STATUS_NOT_SUPPORTED => {
-                writer.write_all(stringify!(CUSPARSE_STATUS_NOT_SUPPORTED).as_bytes())
-            }
-            &cuda_types::cusparse::cusparseStatus_t::CUSPARSE_STATUS_INSUFFICIENT_RESOURCES => {
-                writer
-                    .write_all(
-                        stringify!(CUSPARSE_STATUS_INSUFFICIENT_RESOURCES).as_bytes(),
-                    )
-            }
-            _ => write!(writer, "{}", self.0),
-        }
-    }
-}
 impl crate::CudaDisplay for cuda_types::cusparse::cusparsePointerMode_t {
     fn write(
         &self,
@@ -31119,4 +31065,42 @@ pub fn write_cusparseSpMMOp_destroyPlan(
     writer.write_all(concat!(stringify!(plan), ": ").as_bytes())?;
     crate::CudaDisplay::write(&plan, "cusparseSpMMOp_destroyPlan", arg_idx, writer)?;
     writer.write_all(b")")
+}
+impl crate::CudaDisplay for cuda_types::cusparse::cusparseStatus_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        match self {
+            Ok(()) => writer.write_all(b"CUSPARSE_STATUS_SUCCESS"),
+            Err(err) => {
+                match err.0.get() {
+                    1 => writer.write_all("CUSPARSE_STATUS_NOT_INITIALIZED".as_bytes()),
+                    2 => writer.write_all("CUSPARSE_STATUS_ALLOC_FAILED".as_bytes()),
+                    3 => writer.write_all("CUSPARSE_STATUS_INVALID_VALUE".as_bytes()),
+                    4 => writer.write_all("CUSPARSE_STATUS_ARCH_MISMATCH".as_bytes()),
+                    5 => writer.write_all("CUSPARSE_STATUS_MAPPING_ERROR".as_bytes()),
+                    6 => writer.write_all("CUSPARSE_STATUS_EXECUTION_FAILED".as_bytes()),
+                    7 => writer.write_all("CUSPARSE_STATUS_INTERNAL_ERROR".as_bytes()),
+                    8 => {
+                        writer
+                            .write_all(
+                                "CUSPARSE_STATUS_MATRIX_TYPE_NOT_SUPPORTED".as_bytes(),
+                            )
+                    }
+                    9 => writer.write_all("CUSPARSE_STATUS_ZERO_PIVOT".as_bytes()),
+                    10 => writer.write_all("CUSPARSE_STATUS_NOT_SUPPORTED".as_bytes()),
+                    11 => {
+                        writer
+                            .write_all(
+                                "CUSPARSE_STATUS_INSUFFICIENT_RESOURCES".as_bytes(),
+                            )
+                    }
+                    err => write!(writer, "{}", err),
+                }
+            }
+        }
+    }
 }

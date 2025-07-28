@@ -35,7 +35,7 @@ fn main() {
     generate_cublaslt(&crate_root);
     generate_cufft(&crate_root);
     generate_cusparse(&crate_root);
-    // generate_cudnn(&crate_root);
+    generate_cudnn(&crate_root);
 }
 
 fn generate_process_address_table(crate_root: &PathBuf, mut cuda_fns: Vec<Ident>) {
@@ -1125,7 +1125,6 @@ struct ConvertIntoRustResultOptions {
     new_error_type: &'static str,
     error_prefix: (&'static str, &'static str),
     success: (&'static str, &'static str),
-    // TODO: this should no longer be an Option once all hip perf libraries are present
     hip_type: Option<Path>,
 }
 
