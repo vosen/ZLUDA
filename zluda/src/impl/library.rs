@@ -1,4 +1,4 @@
-use super::{module, ZludaObject, FromCuda};
+use super::{module, ZludaObject};
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
 
@@ -40,9 +40,8 @@ pub(crate) unsafe fn unload(library: CUlibrary) -> CUresult {
 
 pub(crate) unsafe fn get_module(
     out: &mut CUmodule,
-    library: CUlibrary,
+    library: &Library,
 ) -> CUresult {
-    let lib: &Library = FromCuda::from_cuda(&library)?;
-    *out = module::Module{base: lib.base}.wrap();
+    *out = module::Module{base: library.base}.wrap();
     Ok(())
 }
