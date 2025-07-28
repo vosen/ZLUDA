@@ -40,7 +40,7 @@ macro_rules! implemented {
                 if !initialized() {
                     return Err(CUerror::DEINITIALIZED);
                 }
-                cuda_macros::cuda_normalize_fn!( crate::r#impl::$fn_name ) ($(crate::r#impl::FromCuda::<_, CUerror>::from_cuda(&$arg_id)?),*)?;
+                cuda_macros::cuda_normalize_fn!( crate::r#impl::$fn_name ) ($(zluda_common::FromCuda::<_, CUerror>::from_cuda(&$arg_id)?),*)?;
                 Ok(())
             }
         )*
@@ -57,7 +57,7 @@ macro_rules! implemented_in_function {
                 if !initialized() {
                     return Err(CUerror::DEINITIALIZED);
                 }
-                cuda_macros::cuda_normalize_fn!( crate::r#impl::function::$fn_name ) ($(crate::r#impl::FromCuda::<_, CUerror>::from_cuda(&$arg_id)?),*)?;
+                cuda_macros::cuda_normalize_fn!( crate::r#impl::function::$fn_name ) ($(zluda_common::FromCuda::<_, CUerror>::from_cuda(&$arg_id)?),*)?;
                 Ok(())
             }
         )*

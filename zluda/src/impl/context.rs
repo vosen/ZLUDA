@@ -1,8 +1,9 @@
-use super::{module, FromCuda, ZludaObject};
+use super::module;
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::{cell::RefCell, ffi::c_void, ptr, sync::Mutex};
+use zluda_common::{FromCuda, ZludaObject};
 
 thread_local! {
     pub(crate) static STACK: RefCell<Vec<(CUcontext, hipDevice_t)>> = RefCell::new(Vec::new());
@@ -48,7 +49,7 @@ impl ContextState {
         self.flags = 0;
         // drop all modules and return first error if any
         let result = self.modules.drain().fold(Ok(()), |res: CUresult, hmod| {
-            match (res, super::drop_checked::<module::Module>(hmod)) {
+            match (res, zluda_common::drop_checked::<module::Module>(hmod)) {
                 (Err(e), _) => Err(e),
                 (_, Err(e)) => Err(e),
                 _ => Ok(()),
@@ -196,7 +197,7 @@ pub(crate) unsafe fn create_v2(
 }
 
 pub(crate) unsafe fn destroy_v2(ctx: CUcontext) -> CUresult {
-    super::drop_checked::<Context>(ctx)
+    zluda_common::drop_checked::<Context>(ctx)
 }
 
 pub(crate) unsafe fn pop_current_v2(ctx: &mut CUcontext) -> CUresult {

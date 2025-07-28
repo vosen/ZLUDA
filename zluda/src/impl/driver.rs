@@ -1,8 +1,8 @@
-use super::{FromCuda, LiveCheck};
 use crate::r#impl::{context, device};
 use comgr::Comgr;
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
+use zluda_common::{FromCuda, LiveCheck};
 use std::{
     ffi::{c_void, CStr, CString},
     mem, ptr, slice,

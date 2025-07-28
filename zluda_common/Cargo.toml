@@ -5,3 +5,5 @@ authors = ["Violet <c01368481@gmail.com>"]
 edition = "2021"
 
 [dependencies]
+cuda_types = { "0.0.0", path = "../cuda_types" }
+hip_runtime-sys = { "0.0.0", path = "../ext/hip_runtime-sys" }

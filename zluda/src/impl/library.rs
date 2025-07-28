@@ -1,6 +1,7 @@
-use super::{module, ZludaObject};
+use super::module;
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
+use zluda_common::ZludaObject;
 
 pub(crate) struct Library {
     base: hipModule_t,
@@ -36,7 +37,7 @@ pub(crate) fn load_data(
 }
 
 pub(crate) unsafe fn unload(library: CUlibrary) -> CUresult {
-    super::drop_checked::<Library>(library)
+    zluda_common::drop_checked::<Library>(library)
 }
 
 pub(crate) unsafe fn get_module(out: &mut CUmodule, library: &Library) -> CUresult {

@@ -1,5 +1,238 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
+use cuda_types::cuda::*;
+use hip_runtime_sys::*;
+use std::{
+    ffi::CStr,
+    mem::{self, ManuallyDrop, MaybeUninit},
+    ptr,
+};
+
+pub trait CudaErrorType {
+    const INVALID_VALUE: Self;
+    const NOT_SUPPORTED: Self;
+}
+
+impl CudaErrorType for CUerror {
+    const INVALID_VALUE: Self = Self::INVALID_VALUE;
+    const NOT_SUPPORTED: Self = Self::NOT_SUPPORTED;
+}
+
+pub trait FromCuda<'a, T, E: CudaErrorType>: Sized {
+    fn from_cuda(t: &'a T) -> Result<Self, E>;
+}
+
+macro_rules! from_cuda_nop {
+    ($($type_:ty),*) => {
+        $(
+            impl<'a, E: CudaErrorType> FromCuda<'a, $type_, E> for $type_ {
+                fn from_cuda(x: &'a $type_) -> Result<Self, E> {
+                    Ok(*x)
+                }
+            }
+
+            impl<'a, E: CudaErrorType> FromCuda<'a, *mut $type_, E> for &'a mut $type_ {
+                fn from_cuda(x: &'a *mut $type_) -> Result<Self, E> {
+                    match unsafe { x.as_mut() } {
+                        Some(x) => Ok(x),
+                        None => Err(E::INVALID_VALUE),
+                    }
+                }
+            }
+
+            impl<'a, E: CudaErrorType> FromCuda<'a, *const $type_, E> for &'a $type_ {
+                fn from_cuda(x: &'a *const $type_) -> Result<Self, E> {
+                    match unsafe { x.as_ref() } {
+                        Some(x) => Ok(x),
+                        None => Err(E::INVALID_VALUE),
+                    }
+                }
+            }
+
+            impl<'a, E: CudaErrorType> FromCuda<'a, *mut $type_, E> for Option<&'a mut $type_> {
+                fn from_cuda(x: &'a *mut $type_) -> Result<Self, E> {
+                    Ok(unsafe { x.as_mut() })
+                }
+            }
+        )*
+    };
+}
+
+macro_rules! from_cuda_transmute {
+    ($($from:ty => $to:ty),*) => {
+        $(
+            impl<'a, E: CudaErrorType> FromCuda<'a, $from, E> for $to {
+                fn from_cuda(x: &'a $from) -> Result<Self, E> {
+                    Ok(unsafe { std::mem::transmute(*x) })
+                }
+            }
+
+            impl<'a, E: CudaErrorType> FromCuda<'a, *mut $from, E> for &'a mut $to {
+                fn from_cuda(x: &'a *mut $from) -> Result<Self, E> {
+                    match unsafe { x.cast::<$to>().as_mut() } {
+                        Some(x) => Ok(x),
+                        None => Err(E::INVALID_VALUE),
+                    }
+                }
+            }
+
+            impl<'a, E: CudaErrorType> FromCuda<'a, *mut $from, E> for * mut $to {
+                fn from_cuda(x: &'a *mut $from) -> Result<Self, E> {
+                    Ok(x.cast::<$to>())
+                }
+            }
+        )*
+    };
+}
+
+#[macro_export]
+macro_rules! from_cuda_object {
+    ($($type_:ty),*) => {
+        $(
+            impl<'a> zluda_common::FromCuda<'a, <$type_ as zluda_common::ZludaObject>::CudaHandle, <$type_ as zluda_common::ZludaObject>::Error> for &'a $type_ {
+                fn from_cuda(handle: &'a <$type_ as zluda_common::ZludaObject>::CudaHandle) -> Result<&'a $type_, <$type_ as zluda_common::ZludaObject>::Error> {
+                    Ok(zluda_common::as_ref(handle).as_result()?)
+                }
+            }
+        )*
+    };
+}
+
+from_cuda_nop!(
+    *mut i8,
+    *mut i32,
+    *mut usize,
+    *const ::core::ffi::c_void,
+    *const ::core::ffi::c_char,
+    *mut ::core::ffi::c_void,
+    *mut *mut ::core::ffi::c_void,
+    u8,
+    i32,
+    u32,
+    u64,
+    usize,
+    cuda_types::cuda::CUdevprop,
+    CUdevice_attribute,
+    CUdriverProcAddressQueryResult,
+    CUjit_option,
+    CUlibraryOption,
+    CUmoduleLoadingMode,
+    CUuuid,
+
+    CUlibrary,
+    CUmodule,
+    CUcontext
+);
+from_cuda_transmute!(
+    CUuuid => hipUUID,
+    CUfunction => hipFunction_t,
+    CUfunction_attribute => hipFunction_attribute,
+    CUstream => hipStream_t,
+    CUpointer_attribute => hipPointer_attribute,
+    CUdeviceptr_v2 => hipDeviceptr_t
+);
+
+impl<'a, E: CudaErrorType> FromCuda<'a, CUlimit, E> for hipLimit_t {
+    fn from_cuda(limit: &'a CUlimit) -> Result<Self, E> {
+        Ok(match *limit {
+            CUlimit::CU_LIMIT_STACK_SIZE => hipLimit_t::hipLimitStackSize,
+            CUlimit::CU_LIMIT_PRINTF_FIFO_SIZE => hipLimit_t::hipLimitPrintfFifoSize,
+            CUlimit::CU_LIMIT_MALLOC_HEAP_SIZE => hipLimit_t::hipLimitMallocHeapSize,
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, *const ::core::ffi::c_char, E> for &CStr {
+    fn from_cuda(s: &'a *const ::core::ffi::c_char) -> Result<Self, E> {
+        if *s != ptr::null() {
+            Ok(unsafe { CStr::from_ptr(*s) })
+        } else {
+            Err(E::INVALID_VALUE)
+        }
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, *const ::core::ffi::c_void, E> for &'a ::core::ffi::c_void {
+    fn from_cuda(x: &'a *const ::core::ffi::c_void) -> Result<Self, E> {
+        match unsafe { x.as_ref() } {
+            Some(x) => Ok(x),
+            None => Err(E::INVALID_VALUE),
+        }
+    }
+}
+
+pub trait ZludaObject: Sized + Send + Sync {
+    const COOKIE: usize;
+    const LIVENESS_FAIL: Self::Error = Self::Error::INVALID_VALUE;
+
+    type Error: CudaErrorType;
+    type CudaHandle: Sized;
+
+    fn drop_checked(&mut self) -> Result<(), Self::Error>;
+
+    fn wrap(self) -> Self::CudaHandle {
+        unsafe { mem::transmute_copy(&LiveCheck::wrap(self)) }
+    }
+}
+
+#[repr(C)]
+pub struct LiveCheck<T: ZludaObject> {
+    cookie: usize,
+    pub data: MaybeUninit<T>,
+}
+
+impl<T: ZludaObject> LiveCheck<T> {
+    pub fn new(data: T) -> Self {
+        LiveCheck {
+            cookie: T::COOKIE,
+            data: MaybeUninit::new(data),
+        }
+    }
+
+    pub fn as_handle(&self) -> T::CudaHandle {
+        unsafe { mem::transmute_copy(&self) }
+    }
+
+    fn wrap(data: T) -> *mut Self {
+        Box::into_raw(Box::new(Self::new(data)))
+    }
+
+    pub fn as_result(&self) -> Result<&T, T::Error> {
+        if self.cookie == T::COOKIE {
+            Ok(unsafe { self.data.assume_init_ref() })
+        } else {
+            Err(T::LIVENESS_FAIL)
+        }
+    }
+
+    // This looks like nonsense, but it's not. There are two cases:
+    // Err(CUerror) -> meaning that the object is invalid, this pointer does not point into valid memory
+    // Ok(maybe_error) -> meaning that the object is valid, we dropped everything, but there *might*
+    //                    an error in the underlying runtime that we want to propagate
+    #[must_use]
+    fn drop_checked(&mut self) -> Result<Result<(), T::Error>, T::Error> {
+        if self.cookie == T::COOKIE {
+            self.cookie = 0;
+            let result = unsafe { self.data.assume_init_mut().drop_checked() };
+            unsafe { MaybeUninit::assume_init_drop(&mut self.data) };
+            Ok(result)
+        } else {
+            Err(T::LIVENESS_FAIL)
+        }
+    }
+}
+
+pub fn as_ref<'a, T: ZludaObject>(
+    handle: &'a T::CudaHandle,
+) -> &'a ManuallyDrop<Box<LiveCheck<T>>> {
+    unsafe { mem::transmute(handle) }
+}
+
+pub fn drop_checked<T: ZludaObject>(handle: T::CudaHandle) -> Result<(), T::Error> {
+    let mut wrapped_object: ManuallyDrop<Box<LiveCheck<T>>> =
+        unsafe { mem::transmute_copy(&handle) };
+    let underlying_error = LiveCheck::drop_checked(&mut wrapped_object)?;
+    unsafe { ManuallyDrop::drop(&mut wrapped_object) };
+    underlying_error
 }
 
 #[cfg(test)]
@@ -8,7 +241,6 @@ mod tests {
 
     #[test]
     fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+        assert_eq!(4, 4);
     }
 }
