@@ -28,10 +28,7 @@ fn main() {
         &crate_root,
         &["..", "ext", "hip_runtime-sys", "src", "lib.rs"],
     );
-    generate_rocblas(
-        &crate_root,
-        &["..", "ext", "rocblas-sys", "src", "lib.rs"],
-    );
+    generate_rocblas(&crate_root, &["..", "ext", "rocblas-sys", "src", "lib.rs"]);
     let cuda_functions = generate_cuda(&crate_root);
     generate_process_address_table(&crate_root, cuda_functions);
     generate_ml(&crate_root);
@@ -956,20 +953,20 @@ fn generate_rocblas(output: &PathBuf, path: &[&str]) {
             Item::Const(const_) => converter.get_const(const_).map(Item::Const),
             Item::Use(use_) => converter.get_use(use_).map(Item::Use),
             Item::Type(type_) => converter.get_type(type_).map(Item::Type),
+            Item::ForeignMod(mut extern_) => {
+                extern_.attrs.push(
+                    parse_quote!(#[cfg_attr(windows, link = "rocblas_4", kind = "raw-dylib")]),
+                );
+                Some(Item::ForeignMod(extern_))
+            }
             item => Some(item),
         })
         .collect::<Vec<_>>();
     converter.flush(&mut module.items);
-    add_send_sync(
-        &mut module.items,
-        &[
-            "rocblas_handle",
-        ],
-    );
+    add_send_sync(&mut module.items, &["rocblas_handle"]);
     let mut output = output.clone();
     output.extend(path);
     write_rust_to_file(output, &prettyplease::unparse(&module))
-
 }
 
 fn add_send_sync(items: &mut Vec<Item>, arg: &[&str]) {
