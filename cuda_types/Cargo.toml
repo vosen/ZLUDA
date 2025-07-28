@@ -8,3 +8,4 @@ edition = "2021"
 cuda_macros = { path = "../cuda_macros" }
 hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
 bitflags = "2.9.1"
+rocblas-sys = { version = "0.1.0", path = "../ext/rocblas-sys" }

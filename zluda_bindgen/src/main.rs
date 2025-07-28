@@ -152,6 +152,7 @@ fn generate_cufft(crate_root: &PathBuf) {
         .allowlist_function("^cufft.*")
         .allowlist_var("^CUFFT_.*")
         .must_use_type("cufftResult_t")
+        .constified_enum("cufftResult_t")
         .allowlist_recursively(false)
         .clang_args(["-I/usr/local/cuda/include"])
         .generate()
@@ -164,13 +165,23 @@ fn generate_cufft(crate_root: &PathBuf) {
         &["..", "cuda_macros", "src", "cufft.rs"],
         &module,
     );
+    let result_options = ConvertIntoRustResultOptions {
+        type_: "cufftResult",
+        underlying_type: "cufftResult_t",
+        new_error_type: "cufftError_t",
+        error_prefix: ("CUFFT_", "ERROR_"),
+        success: ("CUFFT_SUCCESS", "SUCCESS"),
+        hip_type: None,
+    };
     generate_types_library(
+        Some(&result_options),
         Some(LibraryOverride::CuFft),
         &crate_root,
         &["..", "cuda_types", "src", "cufft.rs"],
         &module,
     );
     generate_display_perflib(
+        Some(&result_options),
         &crate_root,
         &["..", "format", "src", "format_generated_fft.rs"],
         &["cuda_types", "cufft"],
@@ -207,6 +218,7 @@ fn generate_cusparse(crate_root: &PathBuf) {
         .allowlist_function("^cusparse.*")
         .allowlist_var("^CUSPARSE_.*")
         .must_use_type("cusparseStatus_t")
+        .constified_enum("cusparseStatus_t")
         .allowlist_recursively(false)
         .clang_args(["-I/usr/local/cuda/include"])
         .generate()
@@ -219,13 +231,23 @@ fn generate_cusparse(crate_root: &PathBuf) {
         &["..", "cuda_macros", "src", "cusparse.rs"],
         &module,
     );
+    let result_options = ConvertIntoRustResultOptions {
+        type_: "cusparseStatus_t",
+        underlying_type: "cusparseStatus_t",
+        new_error_type: "cusparseError_t",
+        error_prefix: ("CUSPARSE_STATUS_", "ERROR_"),
+        success: ("CUSPARSE_STATUS_SUCCESS", "SUCCESS"),
+        hip_type: None,
+    };
     generate_types_library(
+        Some(&result_options),
         None,
         &crate_root,
         &["..", "cuda_types", "src", "cusparse.rs"],
         &module,
     );
     generate_display_perflib(
+        Some(&result_options),
         &crate_root,
         &["..", "format", "src", "format_generated_sparse.rs"],
         &["cuda_types", "cusparse"],
@@ -240,13 +262,22 @@ fn generate_cudnn(crate_root: &PathBuf) {
         .allowlist_function("^cudnn.*")
         .allowlist_var("^CUDNN_.*")
         .must_use_type("cudnnStatus_t")
+        .constified_enum("cudnnStatus_t")
         .allowlist_recursively(false)
         .clang_args(["-I/usr/local/cuda/include"])
         .generate()
         .unwrap()
         .to_string();
+    let result_options = ConvertIntoRustResultOptions {
+        type_: "cudnnStatus_t",
+        underlying_type: "cudnnStatus_t",
+        new_error_type: "cudnnError_",
+        error_prefix: ("CUDNN_STATUS_", "ERROR_"),
+        success: ("CUDNN_STATUS_SUCCESS", "SUCCESS"),
+        hip_type: None,
+    };
     let cudnn9_module: syn::File = syn::parse_str(&cudnn9).unwrap();
-    let cudnn9_types = generate_types_library_impl(&cudnn9_module);
+    let cudnn9_types = generate_types_library_impl(Some(&result_options), &cudnn9_module);
     let mut current_dir = PathBuf::from(file!());
     current_dir.pop();
     let cudnn8 = new_builder()
@@ -264,7 +295,7 @@ fn generate_cudnn(crate_root: &PathBuf) {
         .unwrap()
         .to_string();
     let cudnn8_module: syn::File = syn::parse_str(&cudnn8).unwrap();
-    let cudnn8_types = generate_types_library_impl(&cudnn8_module);
+    let cudnn8_types = generate_types_library_impl(Some(&result_options), &cudnn8_module);
     merge_types(
         &crate_root,
         &["..", "cuda_types", "src", "cudnn.rs"],
@@ -286,6 +317,7 @@ fn generate_cudnn(crate_root: &PathBuf) {
         &cudnn9_module,
     );
     generate_display_perflib(
+        Some(&result_options),
         &crate_root,
         &["..", "format", "src", "format_generated_dnn9.rs"],
         &["cuda_types", "cudnn9"],
@@ -625,6 +657,7 @@ fn generate_cublas(crate_root: &PathBuf) {
         .allowlist_function("^cublas.*")
         .allowlist_var("^CUBLAS_.*")
         .must_use_type("cublasStatus_t")
+        .constified_enum("cublasStatus_t")
         .allowlist_recursively(false)
         .clang_args(["-I/usr/local/cuda/include", "-x", "c++"])
         .generate()
@@ -637,13 +670,23 @@ fn generate_cublas(crate_root: &PathBuf) {
         &["..", "cuda_macros", "src", "cublas.rs"],
         &module,
     );
+    let result_options = ConvertIntoRustResultOptions {
+        type_: "cublasStatus_t",
+        underlying_type: "cublasStatus_t",
+        new_error_type: "cublasError_t",
+        error_prefix: ("CUBLAS_STATUS_", "ERROR_"),
+        success: ("CUBLAS_STATUS_SUCCESS", "SUCCESS"),
+        hip_type: Some(syn::parse_str("rocblas_sys::rocblas_error").unwrap()),
+    };
     generate_types_library(
+        Some(&result_options),
         None,
         &crate_root,
         &["..", "cuda_types", "src", "cublas.rs"],
         &module,
     );
     generate_display_perflib(
+        Some(&result_options),
         &crate_root,
         &["..", "format", "src", "format_generated_blas.rs"],
         &["cuda_types", "cublas"],
@@ -710,18 +753,21 @@ fn generate_cublaslt(crate_root: &PathBuf) {
         &module_blas,
     );
     generate_types_library(
+        None,
         Some(LibraryOverride::CuBlasLt),
         &crate_root,
         &["..", "cuda_types", "src", "cublaslt.rs"],
         &module_blas,
     );
     generate_display_perflib(
+        None,
         &crate_root,
         &["..", "format", "src", "format_generated_blaslt.rs"],
         &["cuda_types", "cublaslt"],
         &module_blas,
     );
     generate_display_perflib(
+        None,
         &crate_root,
         &["..", "format", "src", "format_generated_blaslt_internal.rs"],
         &["cuda_types", "cublaslt"],
@@ -758,12 +804,22 @@ fn generate_cuda(crate_root: &PathBuf) -> Vec<Ident> {
         &["..", "cuda_macros", "src", "cuda.rs"],
         &module,
     ));
+    let result_options = ConvertIntoRustResultOptions {
+        type_: "CUresult",
+        underlying_type: "cudaError_enum",
+        new_error_type: "CUerror",
+        error_prefix: ("CUDA_ERROR_", "ERROR_"),
+        success: ("CUDA_SUCCESS", "SUCCESS"),
+        hip_type: Some(syn::parse_str("hip_runtime_sys::hipErrorCode_t").unwrap()),
+    };
     generate_types_cuda(
+        &result_options,
         &crate_root,
         &["..", "cuda_types", "src", "cuda.rs"],
         &module,
     );
     generate_display_cuda(
+        &result_options,
         &crate_root,
         &["..", "format", "src", "format_generated.rs"],
         &["cuda_types", "cuda"],
@@ -784,33 +840,23 @@ fn generate_ml(crate_root: &PathBuf) {
         .generate()
         .unwrap()
         .to_string();
-    let mut module: syn::File = syn::parse_str(&ml_header).unwrap();
-    let mut converter = ConvertIntoRustResult {
-        type_: "nvmlReturn_t",
-        underlying_type: "nvmlReturn_enum",
-        new_error_type: "nvmlError_t",
-        error_prefix: ("NVML_ERROR_", "ERROR_"),
-        success: ("NVML_SUCCESS", "SUCCESS"),
-        constants: Vec::new(),
-    };
-    module.items = module
-        .items
-        .into_iter()
-        .filter_map(|item| match item {
-            Item::Const(const_) => converter.get_const(const_).map(Item::Const),
-            Item::Use(use_) => converter.get_use(use_).map(Item::Use),
-            Item::Type(type_) => converter.get_type(type_).map(Item::Type),
-            item => Some(item),
-        })
-        .collect::<Vec<_>>();
-    converter.flush(&mut module.items);
+    let module: syn::File = syn::parse_str(&ml_header).unwrap();
     generate_functions(
         &crate_root,
         "nvml",
         &["..", "cuda_macros", "src", "nvml.rs"],
         &module,
     );
+    let result_options = ConvertIntoRustResultOptions {
+        type_: "nvmlReturn_t",
+        underlying_type: "nvmlReturn_enum",
+        new_error_type: "nvmlError_t",
+        error_prefix: ("NVML_ERROR_", "ERROR_"),
+        success: ("NVML_SUCCESS", "SUCCESS"),
+        hip_type: None,
+    };
     generate_types_library(
+        Some(&result_options),
         None,
         &crate_root,
         &["..", "cuda_types", "src", "nvml.rs"],
@@ -819,12 +865,13 @@ fn generate_ml(crate_root: &PathBuf) {
 }
 
 fn generate_types_library(
+    result_options: Option<&ConvertIntoRustResultOptions>,
     override_: Option<LibraryOverride>,
     crate_root: &PathBuf,
     path: &[&str],
     module: &syn::File,
 ) {
-    let module = generate_types_library_impl(module);
+    let module = generate_types_library_impl(result_options, module);
     let mut output = crate_root.clone();
     output.extend(path);
     let mut text =
@@ -849,7 +896,10 @@ enum LibraryOverride {
     CuFft,
 }
 
-fn generate_types_library_impl(module: &syn::File) -> syn::File {
+fn generate_types_library_impl(
+    result_options: Option<&ConvertIntoRustResultOptions>,
+    module: &syn::File,
+) -> syn::File {
     let known_reexports: Punctuated<syn::Item, syn::parse::Nothing> = parse_quote! {
         pub type __half = u16;
         pub type __nv_bfloat16 = u16;
@@ -863,11 +913,28 @@ fn generate_types_library_impl(module: &syn::File) -> syn::File {
         pub type cudaAsyncNotificationType = super::cuda::CUasyncNotificationType_enum;
         pub type cudaGraph_t = super::cuda::CUgraph;
     };
-    let non_fn = module.items.iter().filter_map(|item| match item {
+    let remove_functions = |item| match item {
         Item::ForeignMod(_) => None,
         _ => Some(item),
-    });
-    let items = known_reexports.iter().chain(non_fn);
+    };
+    let non_fn = if let Some(options) = result_options {
+        let mut converter = ConvertIntoRustResult::new(options.clone());
+        let mut non_fn = converter
+            .convert(module.items.clone())
+            .filter_map(remove_functions)
+            .collect::<Vec<_>>();
+        converter.flush(&mut non_fn);
+        non_fn
+    } else {
+        let non_fn = module
+            .items
+            .clone()
+            .into_iter()
+            .filter_map(remove_functions)
+            .collect::<Vec<_>>();
+        non_fn
+    };
+    let items = known_reexports.into_iter().chain(non_fn);
     parse_quote! {
         #(#items)*
     }
@@ -890,24 +957,15 @@ fn generate_hip_runtime(output: &PathBuf, path: &[&str]) {
         .unwrap()
         .to_string();
     let mut module: syn::File = syn::parse_str(&hiprt_header).unwrap();
-    let mut converter = ConvertIntoRustResult {
+    let mut converter = ConvertIntoRustResult::new(ConvertIntoRustResultOptions {
         type_: "hipError_t",
         underlying_type: "hipError_t",
         new_error_type: "hipErrorCode_t",
         error_prefix: ("hipError", "Error"),
         success: ("hipSuccess", "Success"),
-        constants: Vec::new(),
-    };
-    module.items = module
-        .items
-        .into_iter()
-        .filter_map(|item| match item {
-            Item::Const(const_) => converter.get_const(const_).map(Item::Const),
-            Item::Use(use_) => converter.get_use(use_).map(Item::Use),
-            Item::Type(type_) => converter.get_type(type_).map(Item::Type),
-            item => Some(item),
-        })
-        .collect::<Vec<_>>();
+        hip_type: None,
+    });
+    module.items = converter.convert(module.items).collect::<Vec<Item>>();
     converter.flush(&mut module.items);
     add_send_sync(
         &mut module.items,
@@ -941,30 +999,27 @@ fn generate_rocblas(output: &PathBuf, path: &[&str]) {
     remove_type(&mut module, "ihipStream_t");
     remove_type(&mut module, "hipEvent_t");
     remove_type(&mut module, "ihipEvent_t");
-    let mut converter = ConvertIntoRustResult {
+    let result_options = ConvertIntoRustResultOptions {
         type_: "rocblas_status",
         underlying_type: "rocblas_status_",
         new_error_type: "rocblas_error",
         error_prefix: ("rocblas_status_", "error_"),
         success: ("rocblas_status_success", "success"),
-        constants: Vec::new(),
+        hip_type: None,
     };
-    module.items = module
-        .items
-        .into_iter()
-        .filter_map(|item| match item {
-            Item::Const(const_) => converter.get_const(const_).map(Item::Const),
-            Item::Use(use_) => converter.get_use(use_).map(Item::Use),
-            Item::Type(type_) => converter.get_type(type_).map(Item::Type),
+    let mut converter = ConvertIntoRustResult::new(result_options);
+    module.items = converter
+        .convert(module.items)
+        .map(|item| match item {
             Item::ForeignMod(mut extern_) => {
                 extern_.attrs.push(
                     parse_quote!(#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]),
                 );
-                Some(Item::ForeignMod(extern_))
+                Item::ForeignMod(extern_)
             }
-            item => Some(item),
+            item => item,
         })
-        .collect::<Vec<_>>();
+        .collect();
     converter.flush(&mut module.items);
     add_send_sync(&mut module.items, &["rocblas_handle"]);
     let mut output = output.clone();
@@ -1051,24 +1106,18 @@ fn generate_functions(
      */
 }
 
-fn generate_types_cuda(output: &PathBuf, path: &[&str], module: &syn::File) {
+fn generate_types_cuda(
+    options: &ConvertIntoRustResultOptions,
+    output: &PathBuf,
+    path: &[&str],
+    module: &syn::File,
+) {
     let mut module = module.clone();
-    let mut converter = ConvertIntoRustResult {
-        type_: "CUresult",
-        underlying_type: "cudaError_enum",
-        new_error_type: "CUerror",
-        error_prefix: ("CUDA_ERROR_", "ERROR_"),
-        success: ("CUDA_SUCCESS", "SUCCESS"),
-        constants: Vec::new(),
-    };
-    module.items = module
-        .items
-        .into_iter()
+    let mut converter = ConvertIntoRustResult::new(options.clone());
+    module.items = converter
+        .convert(module.items)
         .filter_map(|item| match item {
             Item::ForeignMod(_) => None,
-            Item::Const(const_) => converter.get_const(const_).map(Item::Const),
-            Item::Use(use_) => converter.get_use(use_).map(Item::Use),
-            Item::Type(type_) => converter.get_type(type_).map(Item::Type),
             Item::Struct(mut struct_) => {
                 let ident_string = struct_.ident.to_string();
                 match &*ident_string {
@@ -1090,13 +1139,6 @@ fn generate_types_cuda(output: &PathBuf, path: &[&str], module: &syn::File) {
         })
         .collect::<Vec<_>>();
     converter.flush(&mut module.items);
-    module.items.push(parse_quote! {
-        impl From<hip_runtime_sys::hipErrorCode_t> for CUerror {
-            fn from(error: hip_runtime_sys::hipErrorCode_t) -> Self {
-                Self(error.0)
-            }
-        }
-    });
     add_send_sync(
         &mut module.items,
         &[
@@ -1121,19 +1163,33 @@ fn write_rust_to_file(path: impl AsRef<std::path::Path>, content: &str) {
     file.write(content.as_bytes()).unwrap();
 }
 
-struct ConvertIntoRustResult {
+#[derive(Clone)]
+struct ConvertIntoRustResultOptions {
     type_: &'static str,
     underlying_type: &'static str,
     new_error_type: &'static str,
     error_prefix: (&'static str, &'static str),
     success: (&'static str, &'static str),
+    // TODO: this should no longer be an Option once all hip perf libraries are present
+    hip_type: Option<Path>,
+}
+
+struct ConvertIntoRustResult {
+    options: ConvertIntoRustResultOptions,
     constants: Vec<syn::ItemConst>,
 }
 
 impl ConvertIntoRustResult {
+    fn new(options: ConvertIntoRustResultOptions) -> Self {
+        Self {
+            options,
+            constants: vec![],
+        }
+    }
+
     fn get_const(&mut self, const_: syn::ItemConst) -> Option<syn::ItemConst> {
         let name = const_.ident.to_string();
-        if name.starts_with(self.underlying_type) {
+        if name.starts_with(self.options.underlying_type) {
             self.constants.push(const_);
             None
         } else {
@@ -1144,7 +1200,7 @@ impl ConvertIntoRustResult {
     fn get_use(&mut self, use_: ItemUse) -> Option<ItemUse> {
         if let UseTree::Path(ref path) = use_.tree {
             if let UseTree::Rename(ref rename) = &*path.tree {
-                if rename.rename == self.type_ {
+                if rename.rename == self.options.type_ {
                     return None;
                 }
             }
@@ -1153,22 +1209,26 @@ impl ConvertIntoRustResult {
     }
 
     fn flush(self, items: &mut Vec<Item>) {
-        let type_ = format_ident!("{}", self.type_);
-        let type_trait = format_ident!("{}Consts", self.type_);
-        let new_error_type = format_ident!("{}", self.new_error_type);
-        let success = format_ident!("{}", self.success.1);
+        let type_ = format_ident!("{}", self.options.type_);
+        let type_trait = format_ident!("{}Consts", self.options.type_);
+        let new_error_type = format_ident!("{}", self.options.new_error_type);
+        let success = format_ident!("{}", self.options.success.1);
         let mut result_variants = Vec::new();
         let mut error_variants = Vec::new();
         for const_ in self.constants.iter() {
             let ident = const_.ident.to_string();
-            if ident.ends_with(self.success.0) {
+            if ident.ends_with(self.options.success.0) {
                 result_variants.push(quote! {
                     const #success: #type_ = #type_::Ok(());
                 });
             } else {
-                let old_prefix_len = self.underlying_type.len() + 1 + self.error_prefix.0.len();
-                let variant_ident =
-                    format_ident!("{}{}", self.error_prefix.1, &ident[old_prefix_len..]);
+                let old_prefix_len =
+                    self.options.underlying_type.len() + 1 + self.options.error_prefix.0.len();
+                let variant_ident = format_ident!(
+                    "{}{}",
+                    self.options.error_prefix.1,
+                    &ident[old_prefix_len..]
+                );
                 let error_ident = format_ident!("r#{}", &ident[old_prefix_len..]);
                 let expr = &const_.expr;
                 result_variants.push(quote! {
@@ -1198,14 +1258,34 @@ impl ConvertIntoRustResult {
             };
         };
         items.extend(extra_items);
+        if let Some(hip_error_path) = self.options.hip_type {
+            items.push(
+                parse_quote! {impl From<#hip_error_path> for #new_error_type {
+                    fn from(error: #hip_error_path) -> Self {
+                        Self(error.0)
+                    }
+                }},
+            );
+        }
     }
 
     fn get_type(&self, type_: syn::ItemType) -> Option<syn::ItemType> {
-        if type_.ident.to_string() == self.type_ {
+        if type_.ident.to_string() == self.options.type_
+            || type_.ident.to_string() == self.options.underlying_type
+        {
             None
         } else {
             Some(type_)
         }
+    }
+
+    fn convert(&mut self, items: Vec<Item>) -> impl Iterator<Item = Item> + use<'_> {
+        items.into_iter().filter_map(|item| match item {
+            Item::Const(const_) => self.get_const(const_).map(Item::Const),
+            Item::Use(use_) => self.get_use(use_).map(Item::Use),
+            Item::Type(type_) => self.get_type(type_).map(Item::Type),
+            item => Some(item),
+        })
     }
 }
 
@@ -1263,6 +1343,7 @@ impl VisitMut for ExplicitReturnType {
 }
 
 fn generate_display_cuda(
+    result_options: &ConvertIntoRustResultOptions,
     output: &PathBuf,
     path: &[&str],
     types_crate: &[&'static str],
@@ -1319,9 +1400,16 @@ fn generate_display_cuda(
     let mut items = module
         .items
         .iter()
-        .filter_map(|i| cuda_derive_display_trait_for_item(types_crate, &mut derive_state, i))
+        .filter_map(|i| {
+            cuda_derive_display_trait_for_item(
+                Some(result_options),
+                types_crate,
+                &mut derive_state,
+                i,
+            )
+        })
         .collect::<Vec<_>>();
-    items.push(curesult_display_trait(&derive_state));
+    items.push(result_display_trait(result_options, &derive_state));
     let mut output = output.clone();
     output.extend(path);
     write_rust_to_file(
@@ -1335,6 +1423,7 @@ fn generate_display_cuda(
 }
 
 fn generate_display_perflib(
+    result_options: Option<&ConvertIntoRustResultOptions>,
     output: &PathBuf,
     path: &[&str],
     types_crate: &[&'static str],
@@ -1361,11 +1450,16 @@ fn generate_display_perflib(
         &ignore_functions,
         &count_selectors,
     );
-    let items = module
+    let mut items = module
         .items
         .iter()
-        .filter_map(|i| cuda_derive_display_trait_for_item(types_crate, &mut derive_state, i))
+        .filter_map(|i| {
+            cuda_derive_display_trait_for_item(result_options, types_crate, &mut derive_state, i)
+        })
         .collect::<Vec<_>>();
+    if let Some(result_options) = result_options {
+        items.push(result_display_trait(result_options, &derive_state));
+    }
     let mut output = output.clone();
     output.extend(path);
     write_rust_to_file(
@@ -1436,6 +1530,7 @@ impl<'a> DeriveDisplayState<'a> {
 }
 
 fn cuda_derive_display_trait_for_item<'a>(
+    result_options: Option<&ConvertIntoRustResultOptions>,
     path: &[&str],
     state: &mut DeriveDisplayState<'a>,
     item: &'a Item,
@@ -1450,8 +1545,10 @@ fn cuda_derive_display_trait_for_item<'a>(
     };
     match item {
         Item::Const(const_) => {
-            if const_.ty.to_token_stream().to_string() == "cudaError_enum" {
-                state.result_variants.push(const_);
+            if let Some(result_options) = result_options {
+                if const_.ty.to_token_stream().to_string() == result_options.underlying_type {
+                    state.result_variants.push(const_);
+                }
             }
             None
         }
@@ -1654,11 +1751,21 @@ fn fn_arg_name(fn_arg: &FnArg) -> &Box<syn::Pat> {
     name
 }
 
-fn curesult_display_trait(derive_state: &DeriveDisplayState) -> syn::Item {
+fn result_display_trait(
+    result_options: &ConvertIntoRustResultOptions,
+    derive_state: &DeriveDisplayState,
+) -> syn::Item {
+    let path = &derive_state.types_crate;
+
+    let type_ = Ident::new(result_options.type_, Span::call_site());
+
+    let success = result_options.success.0;
+    let success_bstr = syn::LitByteStr::new(success.as_bytes(), Span::call_site());
+
     let errors = derive_state.result_variants.iter().filter_map(|const_| {
-        let prefix = "cudaError_enum_";
+        let prefix = format!("{}_", result_options.underlying_type);
         let text = &const_.ident.to_string()[prefix.len()..];
-        if text == "CUDA_SUCCESS" {
+        if text == success {
             return None;
         }
         let expr = &const_.expr;
@@ -1667,10 +1774,10 @@ fn curesult_display_trait(derive_state: &DeriveDisplayState) -> syn::Item {
         })
     });
     parse_quote! {
-        impl crate::CudaDisplay for cuda_types::cuda::CUresult {
+        impl crate::CudaDisplay for #path::#type_ {
             fn write(&self, _fn_name: &'static str, _index: usize, writer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
                 match self {
-                    Ok(()) => writer.write_all(b"CUDA_SUCCESS"),
+                    Ok(()) => writer.write_all(#success_bstr),
                     Err(err) => {
                         match err.0.get() {
                             #(#errors)*

@@ -317,6 +317,7 @@ dependencies = [
  "bitflags 2.9.1",
  "cuda_macros",
  "hip_runtime-sys",
+ "rocblas-sys",
 ]
 
 [[package]]
