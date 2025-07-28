@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 
 #[cfg_attr(windows, path = "os_win.rs")]
+#[cfg_attr(not(windows), path = "os_unix.rs")]
 mod os;
 pub(crate) mod r#impl;
 
