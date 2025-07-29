@@ -491,19 +491,19 @@ impl rocblas_math_mode_ {
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct rocblas_math_mode_(pub ::core::ffi::c_uint);
 pub use self::rocblas_math_mode_ as rocblas_math_mode;
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /// \brief Create handle
     pub fn rocblas_create_handle(handle: *mut rocblas_handle) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /// \brief Destroy handle
     pub fn rocblas_destroy_handle(handle: rocblas_handle) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /// \brief Set stream for handle
@@ -512,7 +512,7 @@ extern "C" {
         stream: hip_runtime_sys::hipStream_t,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /// \brief Get stream [0] from handle
@@ -521,7 +521,7 @@ extern "C" {
         stream: *mut hip_runtime_sys::hipStream_t,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /// \brief Set rocblas_pointer_mode
@@ -530,7 +530,7 @@ extern "C" {
         pointer_mode: rocblas_pointer_mode,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /// \brief Get rocblas_pointer_mode
@@ -539,7 +539,7 @@ extern "C" {
         pointer_mode: *mut rocblas_pointer_mode,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** \brief Set rocblas_atomics_mode
@@ -556,7 +556,7 @@ extern "C" {
         atomics_mode: rocblas_atomics_mode,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /// \brief Get rocblas_atomics_mode
@@ -565,7 +565,7 @@ extern "C" {
         atomics_mode: *mut rocblas_atomics_mode,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /// \brief Set rocblas_math_mode
@@ -574,7 +574,7 @@ extern "C" {
         math_mode: rocblas_math_mode,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /// \brief Get rocblas_math_mode
@@ -583,14 +583,14 @@ extern "C" {
         math_mode: *mut rocblas_math_mode,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     /// \brief  Indicates whether the pointer is on the host or device.
     pub fn rocblas_pointer_to_mode(
         ptr: *mut ::core::ffi::c_void,
     ) -> rocblas_pointer_mode;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** \brief Copy vector from host to device
@@ -619,7 +619,7 @@ specifies the increment for the elements of the vector*/
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_set_vector_64(
@@ -631,7 +631,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** \brief Copy vector from device to host
@@ -660,7 +660,7 @@ specifies the increment for the elements of the vector*/
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_get_vector_64(
@@ -672,7 +672,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** \brief Copy matrix from host to device
@@ -705,7 +705,7 @@ specifies the leading dimension of B, ldb >= rows*/
         ldb: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_set_matrix_64(
@@ -718,7 +718,7 @@ extern "C" {
         ldb: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** \brief Copy matrix from device to host
@@ -751,7 +751,7 @@ specifies the leading dimension of B, ldb >= rows*/
         ldb: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_get_matrix_64(
@@ -764,7 +764,7 @@ extern "C" {
         ldb: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** \brief Asynchronously copy vector from host to device
@@ -799,7 +799,7 @@ stream      specifies the stream into which this transfer request is queued*/
         stream: hip_runtime_sys::hipStream_t,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_set_vector_async_64(
@@ -812,7 +812,7 @@ extern "C" {
         stream: hip_runtime_sys::hipStream_t,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** \brief Asynchronously copy vector from device to host
@@ -847,7 +847,7 @@ stream      specifies the stream into which this transfer request is queued*/
         stream: hip_runtime_sys::hipStream_t,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_get_vector_async_64(
@@ -860,7 +860,7 @@ extern "C" {
         stream: hip_runtime_sys::hipStream_t,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** \brief Asynchronously copy matrix from host to device
@@ -899,7 +899,7 @@ stream      specifies the stream into which this transfer request is queued*/
         stream: hip_runtime_sys::hipStream_t,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_set_matrix_async_64(
@@ -913,7 +913,7 @@ extern "C" {
         stream: hip_runtime_sys::hipStream_t,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** \brief asynchronously copy matrix from device to host
@@ -952,7 +952,7 @@ stream      specifies the stream into which this transfer request is queued*/
         stream: hip_runtime_sys::hipStream_t,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_get_matrix_async_64(
@@ -966,7 +966,7 @@ extern "C" {
         stream: hip_runtime_sys::hipStream_t,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /// Function to set start/stop event handlers (for internal use only)
@@ -976,7 +976,7 @@ extern "C" {
         stopEvent: hip_runtime_sys::hipEvent_t,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_set_solution_fitness_query(
@@ -984,7 +984,7 @@ extern "C" {
         fitness: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** \brief specifies the performance metric that solution selection uses
@@ -1003,7 +1003,7 @@ the performance metric to be used*/
         metric: rocblas_performance_metric,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** \brief returns the performance metric being used for solution selection
@@ -1020,7 +1020,7 @@ pointer to where the metric will be stored*/
         metric: *mut rocblas_performance_metric,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -1053,7 +1053,7 @@ specifies the increment for the elements of x.
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dscal(
@@ -1064,7 +1064,7 @@ extern "C" {
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cscal(
@@ -1075,7 +1075,7 @@ extern "C" {
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zscal(
@@ -1086,7 +1086,7 @@ extern "C" {
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csscal(
@@ -1097,7 +1097,7 @@ extern "C" {
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdscal(
@@ -1108,7 +1108,7 @@ extern "C" {
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sscal_64(
@@ -1119,7 +1119,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dscal_64(
@@ -1130,7 +1130,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cscal_64(
@@ -1141,7 +1141,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zscal_64(
@@ -1152,7 +1152,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csscal_64(
@@ -1163,7 +1163,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdscal_64(
@@ -1174,7 +1174,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -1212,7 +1212,7 @@ specifies the number of batches in x.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dscal_batched(
@@ -1224,7 +1224,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cscal_batched(
@@ -1236,7 +1236,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zscal_batched(
@@ -1248,7 +1248,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csscal_batched(
@@ -1260,7 +1260,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdscal_batched(
@@ -1272,7 +1272,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sscal_batched_64(
@@ -1284,7 +1284,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dscal_batched_64(
@@ -1296,7 +1296,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cscal_batched_64(
@@ -1308,7 +1308,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zscal_batched_64(
@@ -1320,7 +1320,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csscal_batched_64(
@@ -1332,7 +1332,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdscal_batched_64(
@@ -1344,7 +1344,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -1388,7 +1388,7 @@ specifies the number of batches in x.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dscal_strided_batched(
@@ -1401,7 +1401,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cscal_strided_batched(
@@ -1414,7 +1414,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zscal_strided_batched(
@@ -1427,7 +1427,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csscal_strided_batched(
@@ -1440,7 +1440,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdscal_strided_batched(
@@ -1453,7 +1453,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sscal_strided_batched_64(
@@ -1466,7 +1466,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dscal_strided_batched_64(
@@ -1479,7 +1479,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cscal_strided_batched_64(
@@ -1492,7 +1492,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zscal_strided_batched_64(
@@ -1505,7 +1505,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csscal_strided_batched_64(
@@ -1518,7 +1518,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdscal_strided_batched_64(
@@ -1531,7 +1531,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -1568,7 +1568,7 @@ specifies the increment for the elements of y.
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dcopy(
@@ -1580,7 +1580,7 @@ extern "C" {
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ccopy(
@@ -1592,7 +1592,7 @@ extern "C" {
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zcopy(
@@ -1604,7 +1604,7 @@ extern "C" {
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_scopy_64(
@@ -1616,7 +1616,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dcopy_64(
@@ -1628,7 +1628,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ccopy_64(
@@ -1640,7 +1640,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zcopy_64(
@@ -1652,7 +1652,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -1695,7 +1695,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dcopy_batched(
@@ -1708,7 +1708,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ccopy_batched(
@@ -1721,7 +1721,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zcopy_batched(
@@ -1734,7 +1734,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_scopy_batched_64(
@@ -1747,7 +1747,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dcopy_batched_64(
@@ -1760,7 +1760,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ccopy_batched_64(
@@ -1773,7 +1773,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zcopy_batched_64(
@@ -1786,7 +1786,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -1842,7 +1842,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dcopy_strided_batched(
@@ -1857,7 +1857,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ccopy_strided_batched(
@@ -1872,7 +1872,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zcopy_strided_batched(
@@ -1887,7 +1887,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_scopy_strided_batched_64(
@@ -1902,7 +1902,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dcopy_strided_batched_64(
@@ -1917,7 +1917,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ccopy_strided_batched_64(
@@ -1932,7 +1932,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zcopy_strided_batched_64(
@@ -1947,7 +1947,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -1993,7 +1993,7 @@ return is 0.0 if n <= 0.
         result: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ddot(
@@ -2006,7 +2006,7 @@ extern "C" {
         result: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_hdot(
@@ -2019,7 +2019,7 @@ extern "C" {
         result: *mut rocblas_half,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_bfdot(
@@ -2032,7 +2032,7 @@ extern "C" {
         result: *mut rocblas_bfloat16,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cdotu(
@@ -2045,7 +2045,7 @@ extern "C" {
         result: *mut rocblas_float_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdotu(
@@ -2058,7 +2058,7 @@ extern "C" {
         result: *mut rocblas_double_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cdotc(
@@ -2071,7 +2071,7 @@ extern "C" {
         result: *mut rocblas_float_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdotc(
@@ -2084,7 +2084,7 @@ extern "C" {
         result: *mut rocblas_double_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sdot_64(
@@ -2097,7 +2097,7 @@ extern "C" {
         result: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ddot_64(
@@ -2110,7 +2110,7 @@ extern "C" {
         result: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_hdot_64(
@@ -2123,7 +2123,7 @@ extern "C" {
         result: *mut rocblas_half,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_bfdot_64(
@@ -2136,7 +2136,7 @@ extern "C" {
         result: *mut rocblas_bfloat16,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cdotu_64(
@@ -2149,7 +2149,7 @@ extern "C" {
         result: *mut rocblas_float_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdotu_64(
@@ -2162,7 +2162,7 @@ extern "C" {
         result: *mut rocblas_double_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cdotc_64(
@@ -2175,7 +2175,7 @@ extern "C" {
         result: *mut rocblas_float_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdotc_64(
@@ -2188,7 +2188,7 @@ extern "C" {
         result: *mut rocblas_double_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -2240,7 +2240,7 @@ return 0.0 for each element if n <= 0.
         result: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ddot_batched(
@@ -2254,7 +2254,7 @@ extern "C" {
         result: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_hdot_batched(
@@ -2268,7 +2268,7 @@ extern "C" {
         result: *mut rocblas_half,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_bfdot_batched(
@@ -2282,7 +2282,7 @@ extern "C" {
         result: *mut rocblas_bfloat16,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cdotu_batched(
@@ -2296,7 +2296,7 @@ extern "C" {
         result: *mut rocblas_float_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdotu_batched(
@@ -2310,7 +2310,7 @@ extern "C" {
         result: *mut rocblas_double_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cdotc_batched(
@@ -2324,7 +2324,7 @@ extern "C" {
         result: *mut rocblas_float_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdotc_batched(
@@ -2338,7 +2338,7 @@ extern "C" {
         result: *mut rocblas_double_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sdot_batched_64(
@@ -2352,7 +2352,7 @@ extern "C" {
         result: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ddot_batched_64(
@@ -2366,7 +2366,7 @@ extern "C" {
         result: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_hdot_batched_64(
@@ -2380,7 +2380,7 @@ extern "C" {
         result: *mut rocblas_half,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_bfdot_batched_64(
@@ -2394,7 +2394,7 @@ extern "C" {
         result: *mut rocblas_bfloat16,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cdotu_batched_64(
@@ -2408,7 +2408,7 @@ extern "C" {
         result: *mut rocblas_float_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdotu_batched_64(
@@ -2422,7 +2422,7 @@ extern "C" {
         result: *mut rocblas_double_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cdotc_batched_64(
@@ -2436,7 +2436,7 @@ extern "C" {
         result: *mut rocblas_float_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdotc_batched_64(
@@ -2450,7 +2450,7 @@ extern "C" {
         result: *mut rocblas_double_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -2510,7 +2510,7 @@ return 0.0 for each element if n <= 0.
         result: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ddot_strided_batched(
@@ -2526,7 +2526,7 @@ extern "C" {
         result: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_hdot_strided_batched(
@@ -2542,7 +2542,7 @@ extern "C" {
         result: *mut rocblas_half,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_bfdot_strided_batched(
@@ -2558,7 +2558,7 @@ extern "C" {
         result: *mut rocblas_bfloat16,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cdotu_strided_batched(
@@ -2574,7 +2574,7 @@ extern "C" {
         result: *mut rocblas_float_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdotu_strided_batched(
@@ -2590,7 +2590,7 @@ extern "C" {
         result: *mut rocblas_double_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cdotc_strided_batched(
@@ -2606,7 +2606,7 @@ extern "C" {
         result: *mut rocblas_float_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdotc_strided_batched(
@@ -2622,7 +2622,7 @@ extern "C" {
         result: *mut rocblas_double_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sdot_strided_batched_64(
@@ -2638,7 +2638,7 @@ extern "C" {
         result: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ddot_strided_batched_64(
@@ -2654,7 +2654,7 @@ extern "C" {
         result: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_hdot_strided_batched_64(
@@ -2670,7 +2670,7 @@ extern "C" {
         result: *mut rocblas_half,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_bfdot_strided_batched_64(
@@ -2686,7 +2686,7 @@ extern "C" {
         result: *mut rocblas_bfloat16,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cdotu_strided_batched_64(
@@ -2702,7 +2702,7 @@ extern "C" {
         result: *mut rocblas_float_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdotu_strided_batched_64(
@@ -2718,7 +2718,7 @@ extern "C" {
         result: *mut rocblas_double_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cdotc_strided_batched_64(
@@ -2734,7 +2734,7 @@ extern "C" {
         result: *mut rocblas_float_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdotc_strided_batched_64(
@@ -2750,7 +2750,7 @@ extern "C" {
         result: *mut rocblas_double_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -2788,7 +2788,7 @@ specifies the increment for the elements of y.
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dswap(
@@ -2800,7 +2800,7 @@ extern "C" {
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cswap(
@@ -2812,7 +2812,7 @@ extern "C" {
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zswap(
@@ -2824,7 +2824,7 @@ extern "C" {
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sswap_64(
@@ -2836,7 +2836,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dswap_64(
@@ -2848,7 +2848,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cswap_64(
@@ -2860,7 +2860,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zswap_64(
@@ -2872,7 +2872,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -2914,7 +2914,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dswap_batched(
@@ -2927,7 +2927,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cswap_batched(
@@ -2940,7 +2940,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zswap_batched(
@@ -2953,7 +2953,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sswap_batched_64(
@@ -2966,7 +2966,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dswap_batched_64(
@@ -2979,7 +2979,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cswap_batched_64(
@@ -2992,7 +2992,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zswap_batched_64(
@@ -3005,7 +3005,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -3059,7 +3059,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dswap_strided_batched(
@@ -3074,7 +3074,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cswap_strided_batched(
@@ -3089,7 +3089,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zswap_strided_batched(
@@ -3104,7 +3104,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sswap_strided_batched_64(
@@ -3119,7 +3119,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dswap_strided_batched_64(
@@ -3134,7 +3134,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cswap_strided_batched_64(
@@ -3149,7 +3149,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zswap_strided_batched_64(
@@ -3164,7 +3164,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -3204,7 +3204,7 @@ specifies the increment for the elements of y.
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_saxpy(
@@ -3217,7 +3217,7 @@ extern "C" {
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_daxpy(
@@ -3230,7 +3230,7 @@ extern "C" {
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_caxpy(
@@ -3243,7 +3243,7 @@ extern "C" {
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zaxpy(
@@ -3256,7 +3256,7 @@ extern "C" {
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_haxpy_64(
@@ -3269,7 +3269,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_saxpy_64(
@@ -3282,7 +3282,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_daxpy_64(
@@ -3295,7 +3295,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_caxpy_64(
@@ -3308,7 +3308,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zaxpy_64(
@@ -3321,7 +3321,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -3363,7 +3363,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_saxpy_batched(
@@ -3377,7 +3377,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_daxpy_batched(
@@ -3391,7 +3391,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_caxpy_batched(
@@ -3405,7 +3405,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zaxpy_batched(
@@ -3419,7 +3419,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_haxpy_batched_64(
@@ -3433,7 +3433,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_saxpy_batched_64(
@@ -3447,7 +3447,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_daxpy_batched_64(
@@ -3461,7 +3461,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_caxpy_batched_64(
@@ -3475,7 +3475,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zaxpy_batched_64(
@@ -3489,7 +3489,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -3539,7 +3539,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_saxpy_strided_batched(
@@ -3555,7 +3555,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_daxpy_strided_batched(
@@ -3571,7 +3571,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_caxpy_strided_batched(
@@ -3587,7 +3587,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zaxpy_strided_batched(
@@ -3603,7 +3603,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_haxpy_strided_batched_64(
@@ -3619,7 +3619,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_saxpy_strided_batched_64(
@@ -3635,7 +3635,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_daxpy_strided_batched_64(
@@ -3651,7 +3651,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_caxpy_strided_batched_64(
@@ -3667,7 +3667,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zaxpy_strided_batched_64(
@@ -3683,7 +3683,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -3717,7 +3717,7 @@ return is 0.0 if n <= 0.
         result: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dasum(
@@ -3728,7 +3728,7 @@ extern "C" {
         result: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_scasum(
@@ -3739,7 +3739,7 @@ extern "C" {
         result: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dzasum(
@@ -3750,7 +3750,7 @@ extern "C" {
         result: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sasum_64(
@@ -3761,7 +3761,7 @@ extern "C" {
         result: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dasum_64(
@@ -3772,7 +3772,7 @@ extern "C" {
         result: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_scasum_64(
@@ -3783,7 +3783,7 @@ extern "C" {
         result: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dzasum_64(
@@ -3794,7 +3794,7 @@ extern "C" {
         result: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -3833,7 +3833,7 @@ return is 0.0 if n, incx<=0.
         results: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dasum_batched(
@@ -3845,7 +3845,7 @@ extern "C" {
         results: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_scasum_batched(
@@ -3857,7 +3857,7 @@ extern "C" {
         results: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dzasum_batched(
@@ -3869,7 +3869,7 @@ extern "C" {
         results: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sasum_batched_64(
@@ -3881,7 +3881,7 @@ extern "C" {
         results: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dasum_batched_64(
@@ -3893,7 +3893,7 @@ extern "C" {
         results: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_scasum_batched_64(
@@ -3905,7 +3905,7 @@ extern "C" {
         results: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dzasum_batched_64(
@@ -3917,7 +3917,7 @@ extern "C" {
         results: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -3962,7 +3962,7 @@ number of instances in the batch.
         results: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dasum_strided_batched(
@@ -3975,7 +3975,7 @@ extern "C" {
         results: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_scasum_strided_batched(
@@ -3988,7 +3988,7 @@ extern "C" {
         results: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dzasum_strided_batched(
@@ -4001,7 +4001,7 @@ extern "C" {
         results: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sasum_strided_batched_64(
@@ -4014,7 +4014,7 @@ extern "C" {
         results: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dasum_strided_batched_64(
@@ -4027,7 +4027,7 @@ extern "C" {
         results: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_scasum_strided_batched_64(
@@ -4040,7 +4040,7 @@ extern "C" {
         results: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dzasum_strided_batched_64(
@@ -4053,7 +4053,7 @@ extern "C" {
         results: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -4089,7 +4089,7 @@ return is 0.0 if n, incx<=0.
         result: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dnrm2(
@@ -4100,7 +4100,7 @@ extern "C" {
         result: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_scnrm2(
@@ -4111,7 +4111,7 @@ extern "C" {
         result: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dznrm2(
@@ -4122,7 +4122,7 @@ extern "C" {
         result: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_snrm2_64(
@@ -4133,7 +4133,7 @@ extern "C" {
         result: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dnrm2_64(
@@ -4144,7 +4144,7 @@ extern "C" {
         result: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_scnrm2_64(
@@ -4155,7 +4155,7 @@ extern "C" {
         result: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dznrm2_64(
@@ -4166,7 +4166,7 @@ extern "C" {
         result: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -4206,7 +4206,7 @@ return is 0.0 for each element if n <= 0, incx<=0.
         results: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dnrm2_batched(
@@ -4218,7 +4218,7 @@ extern "C" {
         results: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_scnrm2_batched(
@@ -4230,7 +4230,7 @@ extern "C" {
         results: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dznrm2_batched(
@@ -4242,7 +4242,7 @@ extern "C" {
         results: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_snrm2_batched_64(
@@ -4254,7 +4254,7 @@ extern "C" {
         results: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dnrm2_batched_64(
@@ -4266,7 +4266,7 @@ extern "C" {
         results: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_scnrm2_batched_64(
@@ -4278,7 +4278,7 @@ extern "C" {
         results: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dznrm2_batched_64(
@@ -4290,7 +4290,7 @@ extern "C" {
         results: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -4336,7 +4336,7 @@ return is 0.0 for each element if n <= 0, incx<=0.
         results: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dnrm2_strided_batched(
@@ -4349,7 +4349,7 @@ extern "C" {
         results: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_scnrm2_strided_batched(
@@ -4362,7 +4362,7 @@ extern "C" {
         results: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dznrm2_strided_batched(
@@ -4375,7 +4375,7 @@ extern "C" {
         results: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_snrm2_strided_batched_64(
@@ -4388,7 +4388,7 @@ extern "C" {
         results: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dnrm2_strided_batched_64(
@@ -4401,7 +4401,7 @@ extern "C" {
         results: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_scnrm2_strided_batched_64(
@@ -4414,7 +4414,7 @@ extern "C" {
         results: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dznrm2_strided_batched_64(
@@ -4427,7 +4427,7 @@ extern "C" {
         results: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -4460,7 +4460,7 @@ return is 0.0 if n, incx<=0.
         result: *mut rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_idamax(
@@ -4471,7 +4471,7 @@ extern "C" {
         result: *mut rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_icamax(
@@ -4482,7 +4482,7 @@ extern "C" {
         result: *mut rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_izamax(
@@ -4493,7 +4493,7 @@ extern "C" {
         result: *mut rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_isamax_64(
@@ -4504,7 +4504,7 @@ extern "C" {
         result: *mut i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_idamax_64(
@@ -4515,7 +4515,7 @@ extern "C" {
         result: *mut i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_icamax_64(
@@ -4526,7 +4526,7 @@ extern "C" {
         result: *mut i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_izamax_64(
@@ -4537,7 +4537,7 @@ extern "C" {
         result: *mut i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -4574,7 +4574,7 @@ return is 0 if n, incx<=0.
         result: *mut rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_idamax_batched(
@@ -4586,7 +4586,7 @@ extern "C" {
         result: *mut rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_icamax_batched(
@@ -4598,7 +4598,7 @@ extern "C" {
         result: *mut rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_izamax_batched(
@@ -4610,7 +4610,7 @@ extern "C" {
         result: *mut rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_isamax_batched_64(
@@ -4622,7 +4622,7 @@ extern "C" {
         result: *mut i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_idamax_batched_64(
@@ -4634,7 +4634,7 @@ extern "C" {
         result: *mut i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_icamax_batched_64(
@@ -4646,7 +4646,7 @@ extern "C" {
         result: *mut i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_izamax_batched_64(
@@ -4658,7 +4658,7 @@ extern "C" {
         result: *mut i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -4699,7 +4699,7 @@ return is 0 if n <= 0, incx<=0.
         result: *mut rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_idamax_strided_batched(
@@ -4712,7 +4712,7 @@ extern "C" {
         result: *mut rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_icamax_strided_batched(
@@ -4725,7 +4725,7 @@ extern "C" {
         result: *mut rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_izamax_strided_batched(
@@ -4738,7 +4738,7 @@ extern "C" {
         result: *mut rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_isamax_strided_batched_64(
@@ -4751,7 +4751,7 @@ extern "C" {
         result: *mut i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_idamax_strided_batched_64(
@@ -4764,7 +4764,7 @@ extern "C" {
         result: *mut i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_icamax_strided_batched_64(
@@ -4777,7 +4777,7 @@ extern "C" {
         result: *mut i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_izamax_strided_batched_64(
@@ -4790,7 +4790,7 @@ extern "C" {
         result: *mut i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -4823,7 +4823,7 @@ return is 0.0 if n, incx<=0.
         result: *mut rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_idamin(
@@ -4834,7 +4834,7 @@ extern "C" {
         result: *mut rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_icamin(
@@ -4845,7 +4845,7 @@ extern "C" {
         result: *mut rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_izamin(
@@ -4856,7 +4856,7 @@ extern "C" {
         result: *mut rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_isamin_64(
@@ -4867,7 +4867,7 @@ extern "C" {
         result: *mut i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_idamin_64(
@@ -4878,7 +4878,7 @@ extern "C" {
         result: *mut i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_icamin_64(
@@ -4889,7 +4889,7 @@ extern "C" {
         result: *mut i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_izamin_64(
@@ -4900,7 +4900,7 @@ extern "C" {
         result: *mut i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -4937,7 +4937,7 @@ return is 0 if n, incx<=0.
         result: *mut rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_idamin_batched(
@@ -4949,7 +4949,7 @@ extern "C" {
         result: *mut rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_icamin_batched(
@@ -4961,7 +4961,7 @@ extern "C" {
         result: *mut rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_izamin_batched(
@@ -4973,7 +4973,7 @@ extern "C" {
         result: *mut rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_isamin_batched_64(
@@ -4985,7 +4985,7 @@ extern "C" {
         result: *mut i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_idamin_batched_64(
@@ -4997,7 +4997,7 @@ extern "C" {
         result: *mut i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_icamin_batched_64(
@@ -5009,7 +5009,7 @@ extern "C" {
         result: *mut i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_izamin_batched_64(
@@ -5021,7 +5021,7 @@ extern "C" {
         result: *mut i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -5062,7 +5062,7 @@ return is 0 if n <= 0, incx<=0.
         result: *mut rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_idamin_strided_batched(
@@ -5075,7 +5075,7 @@ extern "C" {
         result: *mut rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_icamin_strided_batched(
@@ -5088,7 +5088,7 @@ extern "C" {
         result: *mut rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_izamin_strided_batched(
@@ -5101,7 +5101,7 @@ extern "C" {
         result: *mut rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_isamin_strided_batched_64(
@@ -5114,7 +5114,7 @@ extern "C" {
         result: *mut i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_idamin_strided_batched_64(
@@ -5127,7 +5127,7 @@ extern "C" {
         result: *mut i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_icamin_strided_batched_64(
@@ -5140,7 +5140,7 @@ extern "C" {
         result: *mut i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_izamin_strided_batched_64(
@@ -5153,7 +5153,7 @@ extern "C" {
         result: *mut i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -5195,7 +5195,7 @@ s       device pointer or host pointer storing scalar sine component of the rota
         s: *const f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_drot(
@@ -5209,7 +5209,7 @@ extern "C" {
         s: *const f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_crot(
@@ -5223,7 +5223,7 @@ extern "C" {
         s: *const rocblas_float_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csrot(
@@ -5237,7 +5237,7 @@ extern "C" {
         s: *const f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zrot(
@@ -5251,7 +5251,7 @@ extern "C" {
         s: *const rocblas_double_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdrot(
@@ -5265,7 +5265,7 @@ extern "C" {
         s: *const f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_srot_64(
@@ -5279,7 +5279,7 @@ extern "C" {
         s: *const f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_drot_64(
@@ -5293,7 +5293,7 @@ extern "C" {
         s: *const f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_crot_64(
@@ -5307,7 +5307,7 @@ extern "C" {
         s: *const rocblas_float_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csrot_64(
@@ -5321,7 +5321,7 @@ extern "C" {
         s: *const f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zrot_64(
@@ -5335,7 +5335,7 @@ extern "C" {
         s: *const rocblas_double_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdrot_64(
@@ -5349,7 +5349,7 @@ extern "C" {
         s: *const f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -5395,7 +5395,7 @@ the number of x and y arrays, i.e. the number of batches.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_drot_batched(
@@ -5410,7 +5410,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_crot_batched(
@@ -5425,7 +5425,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csrot_batched(
@@ -5440,7 +5440,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zrot_batched(
@@ -5455,7 +5455,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdrot_batched(
@@ -5470,7 +5470,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_srot_batched_64(
@@ -5485,7 +5485,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_drot_batched_64(
@@ -5500,7 +5500,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_crot_batched_64(
@@ -5515,7 +5515,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csrot_batched_64(
@@ -5530,7 +5530,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zrot_batched_64(
@@ -5545,7 +5545,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdrot_batched_64(
@@ -5560,7 +5560,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -5614,7 +5614,7 @@ the number of x and y arrays, i.e. the number of batches.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_drot_strided_batched(
@@ -5631,7 +5631,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_crot_strided_batched(
@@ -5648,7 +5648,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csrot_strided_batched(
@@ -5665,7 +5665,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zrot_strided_batched(
@@ -5682,7 +5682,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdrot_strided_batched(
@@ -5699,7 +5699,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_srot_strided_batched_64(
@@ -5716,7 +5716,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_drot_strided_batched_64(
@@ -5733,7 +5733,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_crot_strided_batched_64(
@@ -5750,7 +5750,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csrot_strided_batched_64(
@@ -5767,7 +5767,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zrot_strided_batched_64(
@@ -5784,7 +5784,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdrot_strided_batched_64(
@@ -5801,7 +5801,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -5850,7 +5850,7 @@ s       pointer to s, sine element of Givens rotation.
         s: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_drotg(
@@ -5861,7 +5861,7 @@ extern "C" {
         s: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_crotg(
@@ -5872,7 +5872,7 @@ extern "C" {
         s: *mut rocblas_float_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zrotg(
@@ -5883,7 +5883,7 @@ extern "C" {
         s: *mut rocblas_double_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_srotg_64(
@@ -5894,7 +5894,7 @@ extern "C" {
         s: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_drotg_64(
@@ -5905,7 +5905,7 @@ extern "C" {
         s: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_crotg_64(
@@ -5916,7 +5916,7 @@ extern "C" {
         s: *mut rocblas_float_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zrotg_64(
@@ -5927,7 +5927,7 @@ extern "C" {
         s: *mut rocblas_double_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -5962,7 +5962,7 @@ number of batches (length of arrays a, b, c, and s).
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_drotg_batched(
@@ -5974,7 +5974,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_crotg_batched(
@@ -5986,7 +5986,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zrotg_batched(
@@ -5998,7 +5998,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_srotg_batched_64(
@@ -6010,7 +6010,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_drotg_batched_64(
@@ -6022,7 +6022,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_crotg_batched_64(
@@ -6034,7 +6034,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zrotg_batched_64(
@@ -6046,7 +6046,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -6096,7 +6096,7 @@ number of batches (length of arrays a, b, c, and s).
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_drotg_strided_batched(
@@ -6112,7 +6112,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_crotg_strided_batched(
@@ -6128,7 +6128,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zrotg_strided_batched(
@@ -6144,7 +6144,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_srotg_strided_batched_64(
@@ -6160,7 +6160,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_drotg_strided_batched_64(
@@ -6176,7 +6176,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_crotg_strided_batched_64(
@@ -6192,7 +6192,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zrotg_strided_batched_64(
@@ -6208,7 +6208,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -6262,7 +6262,7 @@ location is specified by calling rocblas_set_pointer_mode.
         param: *const f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_drotm(
@@ -6275,7 +6275,7 @@ extern "C" {
         param: *const f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_srotm_64(
@@ -6288,7 +6288,7 @@ extern "C" {
         param: *const f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_drotm_64(
@@ -6301,7 +6301,7 @@ extern "C" {
         param: *const f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -6359,7 +6359,7 @@ the number of x and y arrays, i.e. the number of batches.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_drotm_batched(
@@ -6373,7 +6373,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_srotm_batched_64(
@@ -6387,7 +6387,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_drotm_batched_64(
@@ -6401,7 +6401,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -6472,7 +6472,7 @@ the number of x and y arrays, i.e. the number of batches.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_drotm_strided_batched(
@@ -6489,7 +6489,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_srotm_strided_batched_64(
@@ -6506,7 +6506,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_drotm_strided_batched_64(
@@ -6523,7 +6523,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -6572,7 +6572,7 @@ Location is specified by calling rocblas_set_pointer_mode.
         param: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_drotmg(
@@ -6584,7 +6584,7 @@ extern "C" {
         param: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_srotmg_64(
@@ -6596,7 +6596,7 @@ extern "C" {
         param: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_drotmg_64(
@@ -6608,7 +6608,7 @@ extern "C" {
         param: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -6665,7 +6665,7 @@ the number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_drotmg_batched(
@@ -6678,7 +6678,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_srotmg_batched_64(
@@ -6691,7 +6691,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_drotmg_batched_64(
@@ -6704,7 +6704,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -6780,7 +6780,7 @@ the number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_drotmg_strided_batched(
@@ -6798,7 +6798,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_srotmg_strided_batched_64(
@@ -6816,7 +6816,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_drotmg_strided_batched_64(
@@ -6834,7 +6834,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -6921,7 +6921,7 @@ specifies the increment for the elements of y.
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgbmv(
@@ -6941,7 +6941,7 @@ extern "C" {
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgbmv(
@@ -6961,7 +6961,7 @@ extern "C" {
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgbmv(
@@ -6981,7 +6981,7 @@ extern "C" {
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sgbmv_64(
@@ -7001,7 +7001,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgbmv_64(
@@ -7021,7 +7021,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgbmv_64(
@@ -7041,7 +7041,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgbmv_64(
@@ -7061,7 +7061,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -7154,7 +7154,7 @@ specifies the number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgbmv_batched(
@@ -7175,7 +7175,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgbmv_batched(
@@ -7196,7 +7196,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgbmv_batched(
@@ -7217,7 +7217,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sgbmv_batched_64(
@@ -7238,7 +7238,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgbmv_batched_64(
@@ -7259,7 +7259,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgbmv_batched_64(
@@ -7280,7 +7280,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgbmv_batched_64(
@@ -7301,7 +7301,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -7406,7 +7406,7 @@ specifies the number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgbmv_strided_batched(
@@ -7430,7 +7430,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgbmv_strided_batched(
@@ -7454,7 +7454,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgbmv_strided_batched(
@@ -7478,7 +7478,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sgbmv_strided_batched_64(
@@ -7502,7 +7502,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgbmv_strided_batched_64(
@@ -7526,7 +7526,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgbmv_strided_batched_64(
@@ -7550,7 +7550,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgbmv_strided_batched_64(
@@ -7574,7 +7574,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -7636,7 +7636,7 @@ specifies the increment for the elements of y.
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgemv(
@@ -7654,7 +7654,7 @@ extern "C" {
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgemv(
@@ -7672,7 +7672,7 @@ extern "C" {
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgemv(
@@ -7690,7 +7690,7 @@ extern "C" {
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sgemv_64(
@@ -7708,7 +7708,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgemv_64(
@@ -7726,7 +7726,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgemv_64(
@@ -7744,7 +7744,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgemv_64(
@@ -7762,7 +7762,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -7829,7 +7829,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgemv_batched(
@@ -7848,7 +7848,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgemv_batched(
@@ -7867,7 +7867,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgemv_batched(
@@ -7886,7 +7886,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_hshgemv_batched(
@@ -7905,7 +7905,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_hssgemv_batched(
@@ -7924,7 +7924,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_tstgemv_batched(
@@ -7943,7 +7943,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_tssgemv_batched(
@@ -7962,7 +7962,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sgemv_batched_64(
@@ -7981,7 +7981,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgemv_batched_64(
@@ -8000,7 +8000,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgemv_batched_64(
@@ -8019,7 +8019,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgemv_batched_64(
@@ -8038,7 +8038,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_hshgemv_batched_64(
@@ -8057,7 +8057,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_hssgemv_batched_64(
@@ -8076,7 +8076,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_tstgemv_batched_64(
@@ -8095,7 +8095,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_tssgemv_batched_64(
@@ -8114,7 +8114,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -8197,7 +8197,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgemv_strided_batched(
@@ -8219,7 +8219,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgemv_strided_batched(
@@ -8241,7 +8241,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgemv_strided_batched(
@@ -8263,7 +8263,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_hshgemv_strided_batched(
@@ -8285,7 +8285,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_hssgemv_strided_batched(
@@ -8307,7 +8307,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_tstgemv_strided_batched(
@@ -8329,7 +8329,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_tssgemv_strided_batched(
@@ -8351,7 +8351,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sgemv_strided_batched_64(
@@ -8373,7 +8373,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgemv_strided_batched_64(
@@ -8395,7 +8395,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgemv_strided_batched_64(
@@ -8417,7 +8417,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgemv_strided_batched_64(
@@ -8439,7 +8439,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_hshgemv_strided_batched_64(
@@ -8461,7 +8461,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_hssgemv_strided_batched_64(
@@ -8483,7 +8483,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_tstgemv_strided_batched_64(
@@ -8505,7 +8505,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_tssgemv_strided_batched_64(
@@ -8527,7 +8527,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -8617,7 +8617,7 @@ specifies the increment for the elements of y.
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhbmv(
@@ -8635,7 +8635,7 @@ extern "C" {
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_chbmv_64(
@@ -8653,7 +8653,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhbmv_64(
@@ -8671,7 +8671,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -8765,7 +8765,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhbmv_batched(
@@ -8784,7 +8784,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_chbmv_batched_64(
@@ -8803,7 +8803,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhbmv_batched_64(
@@ -8822,7 +8822,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -8928,7 +8928,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhbmv_strided_batched(
@@ -8950,7 +8950,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_chbmv_strided_batched_64(
@@ -8972,7 +8972,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhbmv_strided_batched_64(
@@ -8994,7 +8994,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -9063,7 +9063,7 @@ specifies the increment for the elements of y.
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhemv(
@@ -9080,7 +9080,7 @@ extern "C" {
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_chemv_64(
@@ -9097,7 +9097,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhemv_64(
@@ -9114,7 +9114,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -9187,7 +9187,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhemv_batched(
@@ -9205,7 +9205,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_chemv_batched_64(
@@ -9223,7 +9223,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhemv_batched_64(
@@ -9241,7 +9241,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -9326,7 +9326,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhemv_strided_batched(
@@ -9347,7 +9347,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_chemv_strided_batched_64(
@@ -9368,7 +9368,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhemv_strided_batched_64(
@@ -9389,7 +9389,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -9448,7 +9448,7 @@ specifies the leading dimension of A. Must be at least max(1, n).*/
         lda: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zher(
@@ -9462,7 +9462,7 @@ extern "C" {
         lda: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cher_64(
@@ -9476,7 +9476,7 @@ extern "C" {
         lda: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zher_64(
@@ -9490,7 +9490,7 @@ extern "C" {
         lda: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -9553,7 +9553,7 @@ number of instances in the batch.*/
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zher_batched(
@@ -9568,7 +9568,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cher_batched_64(
@@ -9583,7 +9583,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zher_batched_64(
@@ -9598,7 +9598,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -9669,7 +9669,7 @@ number of instances in the batch.*/
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zher_strided_batched(
@@ -9686,7 +9686,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cher_strided_batched_64(
@@ -9703,7 +9703,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zher_strided_batched_64(
@@ -9720,7 +9720,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -9786,7 +9786,7 @@ specifies the leading dimension of A. Must be at least max(lda, 1).*/
         lda: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zher2(
@@ -9802,7 +9802,7 @@ extern "C" {
         lda: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cher2_64(
@@ -9818,7 +9818,7 @@ extern "C" {
         lda: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zher2_64(
@@ -9834,7 +9834,7 @@ extern "C" {
         lda: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -9904,7 +9904,7 @@ number of instances in the batch.*/
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zher2_batched(
@@ -9921,7 +9921,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cher2_batched_64(
@@ -9938,7 +9938,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zher2_batched_64(
@@ -9955,7 +9955,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -10037,7 +10037,7 @@ number of instances in the batch.*/
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zher2_strided_batched(
@@ -10057,7 +10057,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cher2_strided_batched_64(
@@ -10077,7 +10077,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zher2_strided_batched_64(
@@ -10097,7 +10097,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -10179,7 +10179,7 @@ specifies the increment for the elements of y.
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhpmv(
@@ -10195,7 +10195,7 @@ extern "C" {
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_chpmv_64(
@@ -10211,7 +10211,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhpmv_64(
@@ -10227,7 +10227,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -10314,7 +10314,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhpmv_batched(
@@ -10331,7 +10331,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_chpmv_batched_64(
@@ -10348,7 +10348,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhpmv_batched_64(
@@ -10365,7 +10365,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -10464,7 +10464,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhpmv_strided_batched(
@@ -10484,7 +10484,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_chpmv_strided_batched_64(
@@ -10504,7 +10504,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhpmv_strided_batched_64(
@@ -10524,7 +10524,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -10597,7 +10597,7 @@ and are assumed to be 0.*/
         AP: *mut rocblas_float_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhpr(
@@ -10610,7 +10610,7 @@ extern "C" {
         AP: *mut rocblas_double_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_chpr_64(
@@ -10623,7 +10623,7 @@ extern "C" {
         AP: *mut rocblas_float_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhpr_64(
@@ -10636,7 +10636,7 @@ extern "C" {
         AP: *mut rocblas_double_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -10713,7 +10713,7 @@ number of instances in the batch.*/
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhpr_batched(
@@ -10727,7 +10727,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_chpr_batched_64(
@@ -10741,7 +10741,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhpr_batched_64(
@@ -10755,7 +10755,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -10840,7 +10840,7 @@ number of instances in the batch.*/
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhpr_strided_batched(
@@ -10856,7 +10856,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_chpr_strided_batched_64(
@@ -10872,7 +10872,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhpr_strided_batched_64(
@@ -10888,7 +10888,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -10968,7 +10968,7 @@ and are assumed to be 0.*/
         AP: *mut rocblas_float_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhpr2(
@@ -10983,7 +10983,7 @@ extern "C" {
         AP: *mut rocblas_double_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_chpr2_64(
@@ -10998,7 +10998,7 @@ extern "C" {
         AP: *mut rocblas_float_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhpr2_64(
@@ -11013,7 +11013,7 @@ extern "C" {
         AP: *mut rocblas_double_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -11097,7 +11097,7 @@ number of instances in the batch.*/
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhpr2_batched(
@@ -11113,7 +11113,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_chpr2_batched_64(
@@ -11129,7 +11129,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhpr2_batched_64(
@@ -11145,7 +11145,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -11241,7 +11241,7 @@ number of instances in the batch.*/
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhpr2_strided_batched(
@@ -11260,7 +11260,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_chpr2_strided_batched_64(
@@ -11279,7 +11279,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhpr2_strided_batched_64(
@@ -11298,7 +11298,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -11362,7 +11362,7 @@ specifies the increment for the elements of x.
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrmv(
@@ -11377,7 +11377,7 @@ extern "C" {
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrmv(
@@ -11392,7 +11392,7 @@ extern "C" {
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrmv(
@@ -11407,7 +11407,7 @@ extern "C" {
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_strmv_64(
@@ -11422,7 +11422,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrmv_64(
@@ -11437,7 +11437,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrmv_64(
@@ -11452,7 +11452,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrmv_64(
@@ -11467,7 +11467,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -11538,7 +11538,7 @@ The number of batched matrices/vectors.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrmv_batched(
@@ -11554,7 +11554,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrmv_batched(
@@ -11570,7 +11570,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrmv_batched(
@@ -11586,7 +11586,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_strmv_batched_64(
@@ -11602,7 +11602,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrmv_batched_64(
@@ -11618,7 +11618,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrmv_batched_64(
@@ -11634,7 +11634,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrmv_batched_64(
@@ -11650,7 +11650,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -11733,7 +11733,7 @@ The number of batched matrices/vectors.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrmv_strided_batched(
@@ -11751,7 +11751,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrmv_strided_batched(
@@ -11769,7 +11769,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrmv_strided_batched(
@@ -11787,7 +11787,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_strmv_strided_batched_64(
@@ -11805,7 +11805,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrmv_strided_batched_64(
@@ -11823,7 +11823,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrmv_strided_batched_64(
@@ -11841,7 +11841,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrmv_strided_batched_64(
@@ -11859,7 +11859,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -11935,7 +11935,7 @@ specifies the increment for the elements of x. incx must not be zero.
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtpmv(
@@ -11949,7 +11949,7 @@ extern "C" {
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctpmv(
@@ -11963,7 +11963,7 @@ extern "C" {
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztpmv(
@@ -11977,7 +11977,7 @@ extern "C" {
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_stpmv_64(
@@ -11991,7 +11991,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtpmv_64(
@@ -12005,7 +12005,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctpmv_64(
@@ -12019,7 +12019,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztpmv_64(
@@ -12033,7 +12033,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -12099,7 +12099,7 @@ The number of batched matrices/vectors.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtpmv_batched(
@@ -12114,7 +12114,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctpmv_batched(
@@ -12129,7 +12129,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztpmv_batched(
@@ -12144,7 +12144,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_stpmv_batched_64(
@@ -12159,7 +12159,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtpmv_batched_64(
@@ -12174,7 +12174,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctpmv_batched_64(
@@ -12189,7 +12189,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztpmv_batched_64(
@@ -12204,7 +12204,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -12281,7 +12281,7 @@ The number of batched matrices/vectors.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtpmv_strided_batched(
@@ -12298,7 +12298,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctpmv_strided_batched(
@@ -12315,7 +12315,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztpmv_strided_batched(
@@ -12332,7 +12332,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_stpmv_strided_batched_64(
@@ -12349,7 +12349,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtpmv_strided_batched_64(
@@ -12366,7 +12366,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctpmv_strided_batched_64(
@@ -12383,7 +12383,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztpmv_strided_batched_64(
@@ -12400,7 +12400,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -12492,7 +12492,7 @@ specifies the increment for the elements of x.
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtbmv(
@@ -12508,7 +12508,7 @@ extern "C" {
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctbmv(
@@ -12524,7 +12524,7 @@ extern "C" {
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztbmv(
@@ -12540,7 +12540,7 @@ extern "C" {
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_stbmv_64(
@@ -12556,7 +12556,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtbmv_64(
@@ -12572,7 +12572,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctbmv_64(
@@ -12588,7 +12588,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztbmv_64(
@@ -12604,7 +12604,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -12701,7 +12701,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtbmv_batched(
@@ -12718,7 +12718,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctbmv_batched(
@@ -12735,7 +12735,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztbmv_batched(
@@ -12752,7 +12752,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_stbmv_batched_64(
@@ -12769,7 +12769,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtbmv_batched_64(
@@ -12786,7 +12786,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctbmv_batched_64(
@@ -12803,7 +12803,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztbmv_batched_64(
@@ -12820,7 +12820,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -12925,7 +12925,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtbmv_strided_batched(
@@ -12944,7 +12944,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctbmv_strided_batched(
@@ -12963,7 +12963,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztbmv_strided_batched(
@@ -12982,7 +12982,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_stbmv_strided_batched_64(
@@ -13001,7 +13001,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtbmv_strided_batched_64(
@@ -13020,7 +13020,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctbmv_strided_batched_64(
@@ -13039,7 +13039,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztbmv_strided_batched_64(
@@ -13058,7 +13058,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -13133,7 +13133,7 @@ specifies the increment for the elements of x.
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtbsv(
@@ -13149,7 +13149,7 @@ extern "C" {
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctbsv(
@@ -13165,7 +13165,7 @@ extern "C" {
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztbsv(
@@ -13181,7 +13181,7 @@ extern "C" {
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_stbsv_64(
@@ -13197,7 +13197,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtbsv_64(
@@ -13213,7 +13213,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctbsv_64(
@@ -13229,7 +13229,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztbsv_64(
@@ -13245,7 +13245,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -13327,7 +13327,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtbsv_batched(
@@ -13344,7 +13344,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctbsv_batched(
@@ -13361,7 +13361,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztbsv_batched(
@@ -13378,7 +13378,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_stbsv_batched_64(
@@ -13395,7 +13395,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtbsv_batched_64(
@@ -13412,7 +13412,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctbsv_batched_64(
@@ -13429,7 +13429,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztbsv_batched_64(
@@ -13446,7 +13446,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -13535,7 +13535,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtbsv_strided_batched(
@@ -13554,7 +13554,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctbsv_strided_batched(
@@ -13573,7 +13573,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztbsv_strided_batched(
@@ -13592,7 +13592,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_stbsv_strided_batched_64(
@@ -13611,7 +13611,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtbsv_strided_batched_64(
@@ -13630,7 +13630,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctbsv_strided_batched_64(
@@ -13649,7 +13649,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztbsv_strided_batched_64(
@@ -13668,7 +13668,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -13736,7 +13736,7 @@ specifies the increment for the elements of x.
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrsv(
@@ -13751,7 +13751,7 @@ extern "C" {
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrsv(
@@ -13766,7 +13766,7 @@ extern "C" {
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrsv(
@@ -13781,7 +13781,7 @@ extern "C" {
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_strsv_64(
@@ -13796,7 +13796,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrsv_64(
@@ -13811,7 +13811,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrsv_64(
@@ -13826,7 +13826,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrsv_64(
@@ -13841,7 +13841,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -13914,7 +13914,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrsv_batched(
@@ -13930,7 +13930,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrsv_batched(
@@ -13946,7 +13946,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrsv_batched(
@@ -13962,7 +13962,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_strsv_batched_64(
@@ -13978,7 +13978,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrsv_batched_64(
@@ -13994,7 +13994,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrsv_batched_64(
@@ -14010,7 +14010,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrsv_batched_64(
@@ -14026,7 +14026,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -14108,7 +14108,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrsv_strided_batched(
@@ -14126,7 +14126,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrsv_strided_batched(
@@ -14144,7 +14144,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrsv_strided_batched(
@@ -14162,7 +14162,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_strsv_strided_batched_64(
@@ -14180,7 +14180,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrsv_strided_batched_64(
@@ -14198,7 +14198,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrsv_strided_batched_64(
@@ -14216,7 +14216,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrsv_strided_batched_64(
@@ -14234,7 +14234,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -14297,7 +14297,7 @@ specifies the increment for the elements of x.
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtpsv(
@@ -14311,7 +14311,7 @@ extern "C" {
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctpsv(
@@ -14325,7 +14325,7 @@ extern "C" {
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztpsv(
@@ -14339,7 +14339,7 @@ extern "C" {
         incx: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_stpsv_64(
@@ -14353,7 +14353,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtpsv_64(
@@ -14367,7 +14367,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctpsv_64(
@@ -14381,7 +14381,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztpsv_64(
@@ -14395,7 +14395,7 @@ extern "C" {
         incx: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -14463,7 +14463,7 @@ specifies the number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtpsv_batched(
@@ -14478,7 +14478,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctpsv_batched(
@@ -14493,7 +14493,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztpsv_batched(
@@ -14508,7 +14508,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_stpsv_batched_64(
@@ -14523,7 +14523,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtpsv_batched_64(
@@ -14538,7 +14538,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctpsv_batched_64(
@@ -14553,7 +14553,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztpsv_batched_64(
@@ -14568,7 +14568,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -14645,7 +14645,7 @@ specifies the number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtpsv_strided_batched(
@@ -14662,7 +14662,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctpsv_strided_batched(
@@ -14679,7 +14679,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztpsv_strided_batched(
@@ -14696,7 +14696,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_stpsv_strided_batched_64(
@@ -14713,7 +14713,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtpsv_strided_batched_64(
@@ -14730,7 +14730,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctpsv_strided_batched_64(
@@ -14747,7 +14747,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztpsv_strided_batched_64(
@@ -14764,7 +14764,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -14825,7 +14825,7 @@ specifies the increment for the elements of y.
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsymv(
@@ -14842,7 +14842,7 @@ extern "C" {
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csymv(
@@ -14859,7 +14859,7 @@ extern "C" {
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsymv(
@@ -14876,7 +14876,7 @@ extern "C" {
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ssymv_64(
@@ -14893,7 +14893,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsymv_64(
@@ -14910,7 +14910,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csymv_64(
@@ -14927,7 +14927,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsymv_64(
@@ -14944,7 +14944,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -15010,7 +15010,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsymv_batched(
@@ -15028,7 +15028,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csymv_batched(
@@ -15046,7 +15046,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsymv_batched(
@@ -15064,7 +15064,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ssymv_batched_64(
@@ -15082,7 +15082,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsymv_batched_64(
@@ -15100,7 +15100,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csymv_batched_64(
@@ -15118,7 +15118,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsymv_batched_64(
@@ -15136,7 +15136,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -15218,7 +15218,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsymv_strided_batched(
@@ -15239,7 +15239,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csymv_strided_batched(
@@ -15260,7 +15260,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsymv_strided_batched(
@@ -15281,7 +15281,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ssymv_strided_batched_64(
@@ -15302,7 +15302,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsymv_strided_batched_64(
@@ -15323,7 +15323,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csymv_strided_batched_64(
@@ -15344,7 +15344,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsymv_strided_batched_64(
@@ -15365,7 +15365,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -15419,7 +15419,7 @@ specifies the increment for the elements of y.
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dspmv(
@@ -15435,7 +15435,7 @@ extern "C" {
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sspmv_64(
@@ -15451,7 +15451,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dspmv_64(
@@ -15467,7 +15467,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -15528,7 +15528,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dspmv_batched(
@@ -15545,7 +15545,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sspmv_batched_64(
@@ -15562,7 +15562,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dspmv_batched_64(
@@ -15579,7 +15579,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -15656,7 +15656,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dspmv_strided_batched(
@@ -15676,7 +15676,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sspmv_strided_batched_64(
@@ -15696,7 +15696,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dspmv_strided_batched_64(
@@ -15716,7 +15716,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -15778,7 +15778,7 @@ specifies the increment for the elements of y.
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsbmv(
@@ -15796,7 +15796,7 @@ extern "C" {
         incy: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ssbmv_64(
@@ -15814,7 +15814,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsbmv_64(
@@ -15832,7 +15832,7 @@ extern "C" {
         incy: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -15901,7 +15901,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsbmv_batched(
@@ -15920,7 +15920,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ssbmv_batched_64(
@@ -15939,7 +15939,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsbmv_batched_64(
@@ -15958,7 +15958,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -16043,7 +16043,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsbmv_strided_batched(
@@ -16065,7 +16065,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ssbmv_strided_batched_64(
@@ -16087,7 +16087,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsbmv_strided_batched_64(
@@ -16109,7 +16109,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -16164,7 +16164,7 @@ specifies the leading dimension of A.
         lda: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dger(
@@ -16180,7 +16180,7 @@ extern "C" {
         lda: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgeru(
@@ -16196,7 +16196,7 @@ extern "C" {
         lda: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgeru(
@@ -16212,7 +16212,7 @@ extern "C" {
         lda: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgerc(
@@ -16228,7 +16228,7 @@ extern "C" {
         lda: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgerc(
@@ -16244,7 +16244,7 @@ extern "C" {
         lda: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sger_64(
@@ -16260,7 +16260,7 @@ extern "C" {
         lda: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dger_64(
@@ -16276,7 +16276,7 @@ extern "C" {
         lda: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgeru_64(
@@ -16292,7 +16292,7 @@ extern "C" {
         lda: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgeru_64(
@@ -16308,7 +16308,7 @@ extern "C" {
         lda: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgerc_64(
@@ -16324,7 +16324,7 @@ extern "C" {
         lda: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgerc_64(
@@ -16340,7 +16340,7 @@ extern "C" {
         lda: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -16400,7 +16400,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dger_batched(
@@ -16417,7 +16417,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgeru_batched(
@@ -16434,7 +16434,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgeru_batched(
@@ -16451,7 +16451,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgerc_batched(
@@ -16468,7 +16468,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgerc_batched(
@@ -16485,7 +16485,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sger_batched_64(
@@ -16502,7 +16502,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dger_batched_64(
@@ -16519,7 +16519,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgeru_batched_64(
@@ -16536,7 +16536,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgeru_batched_64(
@@ -16553,7 +16553,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgerc_batched_64(
@@ -16570,7 +16570,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgerc_batched_64(
@@ -16587,7 +16587,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -16663,7 +16663,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dger_strided_batched(
@@ -16683,7 +16683,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgeru_strided_batched(
@@ -16703,7 +16703,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgeru_strided_batched(
@@ -16723,7 +16723,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgerc_strided_batched(
@@ -16743,7 +16743,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgerc_strided_batched(
@@ -16763,7 +16763,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sger_strided_batched_64(
@@ -16783,7 +16783,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dger_strided_batched_64(
@@ -16803,7 +16803,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgeru_strided_batched_64(
@@ -16823,7 +16823,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgeru_strided_batched_64(
@@ -16843,7 +16843,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgerc_strided_batched_64(
@@ -16863,7 +16863,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgerc_strided_batched_64(
@@ -16883,7 +16883,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -16956,7 +16956,7 @@ Ex: (rocblas_fill_lower; n = 4)
         AP: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dspr(
@@ -16969,7 +16969,7 @@ extern "C" {
         AP: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cspr(
@@ -16982,7 +16982,7 @@ extern "C" {
         AP: *mut rocblas_float_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zspr(
@@ -16995,7 +16995,7 @@ extern "C" {
         AP: *mut rocblas_double_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sspr_64(
@@ -17008,7 +17008,7 @@ extern "C" {
         AP: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dspr_64(
@@ -17021,7 +17021,7 @@ extern "C" {
         AP: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cspr_64(
@@ -17034,7 +17034,7 @@ extern "C" {
         AP: *mut rocblas_float_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zspr_64(
@@ -17047,7 +17047,7 @@ extern "C" {
         AP: *mut rocblas_double_complex,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -17124,7 +17124,7 @@ number of instances in the batch.*/
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dspr_batched(
@@ -17138,7 +17138,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cspr_batched(
@@ -17152,7 +17152,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zspr_batched(
@@ -17166,7 +17166,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sspr_batched_64(
@@ -17180,7 +17180,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dspr_batched_64(
@@ -17194,7 +17194,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cspr_batched_64(
@@ -17208,7 +17208,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zspr_batched_64(
@@ -17222,7 +17222,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -17307,7 +17307,7 @@ number of instances in the batch.*/
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dspr_strided_batched(
@@ -17323,7 +17323,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cspr_strided_batched(
@@ -17339,7 +17339,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zspr_strided_batched(
@@ -17355,7 +17355,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sspr_strided_batched_64(
@@ -17371,7 +17371,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dspr_strided_batched_64(
@@ -17387,7 +17387,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cspr_strided_batched_64(
@@ -17403,7 +17403,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zspr_strided_batched_64(
@@ -17419,7 +17419,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -17499,7 +17499,7 @@ Ex: (rocblas_fill_lower; n = 4)
         AP: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dspr2(
@@ -17514,7 +17514,7 @@ extern "C" {
         AP: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sspr2_64(
@@ -17529,7 +17529,7 @@ extern "C" {
         AP: *mut f32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dspr2_64(
@@ -17544,7 +17544,7 @@ extern "C" {
         AP: *mut f64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -17628,7 +17628,7 @@ number of instances in the batch.*/
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dspr2_batched(
@@ -17644,7 +17644,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sspr2_batched_64(
@@ -17660,7 +17660,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dspr2_batched_64(
@@ -17676,7 +17676,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -17772,7 +17772,7 @@ number of instances in the batch.*/
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dspr2_strided_batched(
@@ -17791,7 +17791,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sspr2_strided_batched_64(
@@ -17810,7 +17810,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dspr2_strided_batched_64(
@@ -17829,7 +17829,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -17879,7 +17879,7 @@ specifies the leading dimension of A.
         lda: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyr(
@@ -17893,7 +17893,7 @@ extern "C" {
         lda: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyr(
@@ -17907,7 +17907,7 @@ extern "C" {
         lda: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyr(
@@ -17921,7 +17921,7 @@ extern "C" {
         lda: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ssyr_64(
@@ -17935,7 +17935,7 @@ extern "C" {
         lda: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyr_64(
@@ -17949,7 +17949,7 @@ extern "C" {
         lda: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyr_64(
@@ -17963,7 +17963,7 @@ extern "C" {
         lda: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyr_64(
@@ -17977,7 +17977,7 @@ extern "C" {
         lda: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -18030,7 +18030,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyr_batched(
@@ -18045,7 +18045,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyr_batched(
@@ -18060,7 +18060,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyr_batched(
@@ -18075,7 +18075,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ssyr_batched_64(
@@ -18090,7 +18090,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyr_batched_64(
@@ -18105,7 +18105,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyr_batched_64(
@@ -18120,7 +18120,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyr_batched_64(
@@ -18135,7 +18135,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -18196,7 +18196,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyr_strided_batched(
@@ -18213,7 +18213,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyr_strided_batched(
@@ -18230,7 +18230,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyr_strided_batched(
@@ -18247,7 +18247,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ssyr_strided_batched_64(
@@ -18264,7 +18264,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyr_strided_batched_64(
@@ -18281,7 +18281,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyr_strided_batched_64(
@@ -18298,7 +18298,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyr_strided_batched_64(
@@ -18315,7 +18315,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -18372,7 +18372,7 @@ specifies the leading dimension of A.
         lda: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyr2(
@@ -18388,7 +18388,7 @@ extern "C" {
         lda: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyr2(
@@ -18404,7 +18404,7 @@ extern "C" {
         lda: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyr2(
@@ -18420,7 +18420,7 @@ extern "C" {
         lda: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ssyr2_64(
@@ -18436,7 +18436,7 @@ extern "C" {
         lda: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyr2_64(
@@ -18452,7 +18452,7 @@ extern "C" {
         lda: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyr2_64(
@@ -18468,7 +18468,7 @@ extern "C" {
         lda: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyr2_64(
@@ -18484,7 +18484,7 @@ extern "C" {
         lda: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -18544,7 +18544,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyr2_batched(
@@ -18561,7 +18561,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyr2_batched(
@@ -18578,7 +18578,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyr2_batched(
@@ -18595,7 +18595,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ssyr2_batched_64(
@@ -18612,7 +18612,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyr2_batched_64(
@@ -18629,7 +18629,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyr2_batched_64(
@@ -18646,7 +18646,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyr2_batched_64(
@@ -18663,7 +18663,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -18735,7 +18735,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyr2_strided_batched(
@@ -18755,7 +18755,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyr2_strided_batched(
@@ -18775,7 +18775,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyr2_strided_batched(
@@ -18795,7 +18795,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ssyr2_strided_batched_64(
@@ -18815,7 +18815,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyr2_strided_batched_64(
@@ -18835,7 +18835,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyr2_strided_batched_64(
@@ -18855,7 +18855,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyr2_strided_batched_64(
@@ -18875,7 +18875,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -18968,7 +18968,7 @@ ldc specifies the first dimension of C. ldc >= max( 1, m ).
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhemm(
@@ -18987,7 +18987,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_chemm_64(
@@ -19006,7 +19006,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhemm_64(
@@ -19025,7 +19025,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -19123,7 +19123,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhemm_batched(
@@ -19143,7 +19143,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_chemm_batched_64(
@@ -19163,7 +19163,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhemm_batched_64(
@@ -19183,7 +19183,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -19297,7 +19297,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhemm_strided_batched(
@@ -19320,7 +19320,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_chemm_strided_batched_64(
@@ -19343,7 +19343,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zhemm_strided_batched_64(
@@ -19366,7 +19366,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -19450,7 +19450,7 @@ ldc specifies the first dimension of C. ldc >= max( 1, n ).
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zherk(
@@ -19467,7 +19467,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cherk_64(
@@ -19484,7 +19484,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zherk_64(
@@ -19501,7 +19501,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -19589,7 +19589,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zherk_batched(
@@ -19607,7 +19607,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cherk_batched_64(
@@ -19625,7 +19625,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zherk_batched_64(
@@ -19643,7 +19643,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -19743,7 +19743,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zherk_strided_batched(
@@ -19763,7 +19763,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cherk_strided_batched_64(
@@ -19783,7 +19783,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zherk_strided_batched_64(
@@ -19803,7 +19803,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -19900,7 +19900,7 @@ ldc specifies the first dimension of C. ldc >= max( 1, n ).
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zher2k(
@@ -19919,7 +19919,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cher2k_64(
@@ -19938,7 +19938,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zher2k_64(
@@ -19957,7 +19957,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -20056,7 +20056,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zher2k_batched(
@@ -20076,7 +20076,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cher2k_batched_64(
@@ -20096,7 +20096,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zher2k_batched_64(
@@ -20116,7 +20116,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -20233,7 +20233,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zher2k_strided_batched(
@@ -20256,7 +20256,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cher2k_strided_batched_64(
@@ -20279,7 +20279,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zher2k_strided_batched_64(
@@ -20302,7 +20302,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -20400,7 +20400,7 @@ ldc specifies the first dimension of C. ldc >= max( 1, n ).
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zherkx(
@@ -20419,7 +20419,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cherkx_64(
@@ -20438,7 +20438,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zherkx_64(
@@ -20457,7 +20457,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -20561,7 +20561,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zherkx_batched(
@@ -20581,7 +20581,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cherkx_batched_64(
@@ -20601,7 +20601,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zherkx_batched_64(
@@ -20621,7 +20621,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -20740,7 +20740,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zherkx_strided_batched(
@@ -20763,7 +20763,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cherkx_strided_batched_64(
@@ -20786,7 +20786,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zherkx_strided_batched_64(
@@ -20809,7 +20809,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -20901,7 +20901,7 @@ ldc specifies the first dimension of C. ldc >= max( 1, m ).
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsymm(
@@ -20920,7 +20920,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csymm(
@@ -20939,7 +20939,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsymm(
@@ -20958,7 +20958,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ssymm_64(
@@ -20977,7 +20977,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsymm_64(
@@ -20996,7 +20996,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csymm_64(
@@ -21015,7 +21015,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsymm_64(
@@ -21034,7 +21034,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -21131,7 +21131,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsymm_batched(
@@ -21151,7 +21151,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csymm_batched(
@@ -21171,7 +21171,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsymm_batched(
@@ -21191,7 +21191,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ssymm_batched_64(
@@ -21211,7 +21211,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsymm_batched_64(
@@ -21231,7 +21231,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csymm_batched_64(
@@ -21251,7 +21251,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsymm_batched_64(
@@ -21271,7 +21271,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -21380,7 +21380,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsymm_strided_batched(
@@ -21403,7 +21403,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csymm_strided_batched(
@@ -21426,7 +21426,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsymm_strided_batched(
@@ -21449,7 +21449,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ssymm_strided_batched_64(
@@ -21472,7 +21472,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsymm_strided_batched_64(
@@ -21495,7 +21495,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csymm_strided_batched_64(
@@ -21518,7 +21518,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsymm_strided_batched_64(
@@ -21541,7 +21541,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -21628,7 +21628,7 @@ ldc specifies the first dimension of C. ldc >= max( 1, n ).
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyrk(
@@ -21645,7 +21645,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyrk(
@@ -21662,7 +21662,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyrk(
@@ -21679,7 +21679,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ssyrk_64(
@@ -21696,7 +21696,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyrk_64(
@@ -21713,7 +21713,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyrk_64(
@@ -21730,7 +21730,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyrk_64(
@@ -21747,7 +21747,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -21838,7 +21838,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyrk_batched(
@@ -21856,7 +21856,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyrk_batched(
@@ -21874,7 +21874,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyrk_batched(
@@ -21892,7 +21892,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ssyrk_batched_64(
@@ -21910,7 +21910,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyrk_batched_64(
@@ -21928,7 +21928,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyrk_batched_64(
@@ -21946,7 +21946,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyrk_batched_64(
@@ -21964,7 +21964,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -22066,7 +22066,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyrk_strided_batched(
@@ -22086,7 +22086,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyrk_strided_batched(
@@ -22106,7 +22106,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyrk_strided_batched(
@@ -22126,7 +22126,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ssyrk_strided_batched_64(
@@ -22146,7 +22146,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyrk_strided_batched_64(
@@ -22166,7 +22166,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyrk_strided_batched_64(
@@ -22186,7 +22186,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyrk_strided_batched_64(
@@ -22206,7 +22206,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -22305,7 +22305,7 @@ ldc specifies the first dimension of C. ldc >= max( 1, n ).
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyr2k(
@@ -22324,7 +22324,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyr2k(
@@ -22343,7 +22343,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyr2k(
@@ -22362,7 +22362,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ssyr2k_64(
@@ -22381,7 +22381,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyr2k_64(
@@ -22400,7 +22400,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyr2k_64(
@@ -22419,7 +22419,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyr2k_64(
@@ -22438,7 +22438,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -22537,7 +22537,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyr2k_batched(
@@ -22557,7 +22557,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyr2k_batched(
@@ -22577,7 +22577,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyr2k_batched(
@@ -22597,7 +22597,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ssyr2k_batched_64(
@@ -22617,7 +22617,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyr2k_batched_64(
@@ -22637,7 +22637,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyr2k_batched_64(
@@ -22657,7 +22657,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyr2k_batched_64(
@@ -22677,7 +22677,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -22796,7 +22796,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyr2k_strided_batched(
@@ -22819,7 +22819,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyr2k_strided_batched(
@@ -22842,7 +22842,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyr2k_strided_batched(
@@ -22865,7 +22865,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ssyr2k_strided_batched_64(
@@ -22888,7 +22888,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyr2k_strided_batched_64(
@@ -22911,7 +22911,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyr2k_strided_batched_64(
@@ -22934,7 +22934,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyr2k_strided_batched_64(
@@ -22957,7 +22957,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -23059,7 +23059,7 @@ ldc specifies the first dimension of C. ldc >= max( 1, n ).
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyrkx(
@@ -23078,7 +23078,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyrkx(
@@ -23097,7 +23097,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyrkx(
@@ -23116,7 +23116,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ssyrkx_64(
@@ -23135,7 +23135,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyrkx_64(
@@ -23154,7 +23154,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyrkx_64(
@@ -23173,7 +23173,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyrkx_64(
@@ -23192,7 +23192,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -23299,7 +23299,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyrkx_batched(
@@ -23319,7 +23319,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyrkx_batched(
@@ -23339,7 +23339,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyrkx_batched(
@@ -23359,7 +23359,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ssyrkx_batched_64(
@@ -23379,7 +23379,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyrkx_batched_64(
@@ -23399,7 +23399,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyrkx_batched_64(
@@ -23419,7 +23419,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyrkx_batched_64(
@@ -23439,7 +23439,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -23561,7 +23561,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyrkx_strided_batched(
@@ -23584,7 +23584,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyrkx_strided_batched(
@@ -23607,7 +23607,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyrkx_strided_batched(
@@ -23630,7 +23630,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ssyrkx_strided_batched_64(
@@ -23653,7 +23653,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dsyrkx_strided_batched_64(
@@ -23676,7 +23676,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_csyrkx_strided_batched_64(
@@ -23699,7 +23699,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zsyrkx_strided_batched_64(
@@ -23722,7 +23722,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -23865,7 +23865,7 @@ rocblas_status_invalid_value will be returned.
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrmm(
@@ -23885,7 +23885,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrmm(
@@ -23905,7 +23905,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrmm(
@@ -23925,7 +23925,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_strmm_64(
@@ -23945,7 +23945,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrmm_64(
@@ -23965,7 +23965,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrmm_64(
@@ -23985,7 +23985,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrmm_64(
@@ -24005,7 +24005,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -24152,7 +24152,7 @@ number of instances i in the batch.*/
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrmm_batched(
@@ -24173,7 +24173,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrmm_batched(
@@ -24194,7 +24194,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrmm_batched(
@@ -24215,7 +24215,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_strmm_batched_64(
@@ -24236,7 +24236,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrmm_batched_64(
@@ -24257,7 +24257,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrmm_batched_64(
@@ -24278,7 +24278,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrmm_batched_64(
@@ -24299,7 +24299,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -24463,7 +24463,7 @@ number of instances i in the batch.*/
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrmm_strided_batched(
@@ -24487,7 +24487,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrmm_strided_batched(
@@ -24511,7 +24511,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrmm_strided_batched(
@@ -24535,7 +24535,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_strmm_strided_batched_64(
@@ -24559,7 +24559,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrmm_strided_batched_64(
@@ -24583,7 +24583,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrmm_strided_batched_64(
@@ -24607,7 +24607,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrmm_strided_batched_64(
@@ -24631,7 +24631,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -24685,7 +24685,7 @@ specifies the leading dimension of invA.*/
         ldinvA: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrtri(
@@ -24699,7 +24699,7 @@ extern "C" {
         ldinvA: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrtri(
@@ -24713,7 +24713,7 @@ extern "C" {
         ldinvA: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrtri(
@@ -24727,7 +24727,7 @@ extern "C" {
         ldinvA: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -24782,7 +24782,7 @@ numbers of matrices in the batch.*/
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrtri_batched(
@@ -24797,7 +24797,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrtri_batched(
@@ -24812,7 +24812,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrtri_batched(
@@ -24827,7 +24827,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -24892,7 +24892,7 @@ numbers of matrices in the batch.*/
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrtri_strided_batched(
@@ -24909,7 +24909,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrtri_strided_batched(
@@ -24926,7 +24926,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrtri_strided_batched(
@@ -24943,7 +24943,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -25050,7 +25050,7 @@ ldb specifies the first dimension of B. ldb >= max( 1, m ).
         ldb: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrsm(
@@ -25068,7 +25068,7 @@ extern "C" {
         ldb: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrsm(
@@ -25086,7 +25086,7 @@ extern "C" {
         ldb: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrsm(
@@ -25104,7 +25104,7 @@ extern "C" {
         ldb: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_strsm_64(
@@ -25122,7 +25122,7 @@ extern "C" {
         ldb: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrsm_64(
@@ -25140,7 +25140,7 @@ extern "C" {
         ldb: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrsm_64(
@@ -25158,7 +25158,7 @@ extern "C" {
         ldb: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrsm_64(
@@ -25176,7 +25176,7 @@ extern "C" {
         ldb: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -25274,7 +25274,7 @@ number of trsm operatons in the batch.*/
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrsm_batched(
@@ -25293,7 +25293,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrsm_batched(
@@ -25312,7 +25312,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrsm_batched(
@@ -25331,7 +25331,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_strsm_batched_64(
@@ -25350,7 +25350,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrsm_batched_64(
@@ -25369,7 +25369,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrsm_batched_64(
@@ -25388,7 +25388,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrsm_batched_64(
@@ -25407,7 +25407,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -25513,7 +25513,7 @@ number of trsm operatons in the batch.*/
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrsm_strided_batched(
@@ -25534,7 +25534,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrsm_strided_batched(
@@ -25555,7 +25555,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrsm_strided_batched(
@@ -25576,7 +25576,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_strsm_strided_batched_64(
@@ -25597,7 +25597,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dtrsm_strided_batched_64(
@@ -25618,7 +25618,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ctrsm_strided_batched_64(
@@ -25639,7 +25639,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ztrsm_strided_batched_64(
@@ -25660,7 +25660,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -25691,7 +25691,7 @@ Returns rocblas_status_not_implemented.*/
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sgemm_kernel_name(
@@ -25715,7 +25715,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgemm_kernel_name(
@@ -25739,7 +25739,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -25817,7 +25817,7 @@ specifies the leading dimension of C.
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgemm(
@@ -25837,7 +25837,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_hgemm(
@@ -25857,7 +25857,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgemm(
@@ -25877,7 +25877,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgemm(
@@ -25897,7 +25897,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sgemm_64(
@@ -25917,7 +25917,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgemm_64(
@@ -25937,7 +25937,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_hgemm_64(
@@ -25957,7 +25957,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgemm_64(
@@ -25977,7 +25977,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgemm_64(
@@ -25997,7 +25997,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -26079,7 +26079,7 @@ number of gemm operations in the batch.*/
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgemm_batched(
@@ -26100,7 +26100,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_hgemm_batched(
@@ -26121,7 +26121,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgemm_batched(
@@ -26142,7 +26142,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgemm_batched(
@@ -26163,7 +26163,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sgemm_batched_64(
@@ -26184,7 +26184,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgemm_batched_64(
@@ -26205,7 +26205,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_hgemm_batched_64(
@@ -26226,7 +26226,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgemm_batched_64(
@@ -26247,7 +26247,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgemm_batched_64(
@@ -26268,7 +26268,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -26362,7 +26362,7 @@ number of gemm operatons in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgemm_strided_batched(
@@ -26386,7 +26386,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_hgemm_strided_batched(
@@ -26410,7 +26410,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgemm_strided_batched(
@@ -26434,7 +26434,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgemm_strided_batched(
@@ -26458,7 +26458,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sgemm_strided_batched_64(
@@ -26482,7 +26482,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgemm_strided_batched_64(
@@ -26506,7 +26506,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_hgemm_strided_batched_64(
@@ -26530,7 +26530,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgemm_strided_batched_64(
@@ -26554,7 +26554,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgemm_strided_batched_64(
@@ -26578,7 +26578,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -26636,7 +26636,7 @@ specifies the leading dimension of C.
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ddgmm(
@@ -26652,7 +26652,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cdgmm(
@@ -26668,7 +26668,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdgmm(
@@ -26684,7 +26684,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sdgmm_64(
@@ -26700,7 +26700,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ddgmm_64(
@@ -26716,7 +26716,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cdgmm_64(
@@ -26732,7 +26732,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdgmm_64(
@@ -26748,7 +26748,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -26813,7 +26813,7 @@ number of instances in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ddgmm_batched(
@@ -26830,7 +26830,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cdgmm_batched(
@@ -26847,7 +26847,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdgmm_batched(
@@ -26864,7 +26864,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sdgmm_batched_64(
@@ -26881,7 +26881,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ddgmm_batched_64(
@@ -26898,7 +26898,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cdgmm_batched_64(
@@ -26915,7 +26915,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdgmm_batched_64(
@@ -26932,7 +26932,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -27009,7 +27009,7 @@ number of instances i in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ddgmm_strided_batched(
@@ -27029,7 +27029,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cdgmm_strided_batched(
@@ -27049,7 +27049,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdgmm_strided_batched(
@@ -27069,7 +27069,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sdgmm_strided_batched_64(
@@ -27089,7 +27089,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_ddgmm_strided_batched_64(
@@ -27109,7 +27109,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cdgmm_strided_batched_64(
@@ -27129,7 +27129,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zdgmm_strided_batched_64(
@@ -27149,7 +27149,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -27220,7 +27220,7 @@ specifies the leading dimension of C.
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgeam(
@@ -27239,7 +27239,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgeam(
@@ -27258,7 +27258,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgeam(
@@ -27277,7 +27277,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sgeam_64(
@@ -27296,7 +27296,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgeam_64(
@@ -27315,7 +27315,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgeam_64(
@@ -27334,7 +27334,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgeam_64(
@@ -27353,7 +27353,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -27433,7 +27433,7 @@ number of instances i in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgeam_batched(
@@ -27453,7 +27453,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgeam_batched(
@@ -27473,7 +27473,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgeam_batched(
@@ -27493,7 +27493,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sgeam_batched_64(
@@ -27513,7 +27513,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgeam_batched_64(
@@ -27533,7 +27533,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgeam_batched_64(
@@ -27553,7 +27553,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgeam_batched_64(
@@ -27573,7 +27573,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -27680,7 +27680,7 @@ number of instances i in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgeam_strided_batched(
@@ -27703,7 +27703,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgeam_strided_batched(
@@ -27726,7 +27726,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgeam_strided_batched(
@@ -27749,7 +27749,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sgeam_strided_batched_64(
@@ -27772,7 +27772,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgeam_strided_batched_64(
@@ -27795,7 +27795,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgeam_strided_batched_64(
@@ -27818,7 +27818,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgeam_strided_batched_64(
@@ -27841,7 +27841,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -27988,7 +27988,7 @@ optional gemm flags.
         flags: u32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_gemm_ex_64(
@@ -28018,7 +28018,7 @@ extern "C" {
         flags: u32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -28163,7 +28163,7 @@ optional gemm flags.
         flags: u32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_gemm_batched_ex_64(
@@ -28194,7 +28194,7 @@ extern "C" {
         flags: u32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -28360,7 +28360,7 @@ optional gemm flags.
         flags: u32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_gemm_strided_batched_ex_64(
@@ -28395,7 +28395,7 @@ extern "C" {
         flags: u32,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -28475,7 +28475,7 @@ specifies the leading dimension of C. Must have ldc >= max(1, n).
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgemmt(
@@ -28495,7 +28495,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgemmt(
@@ -28515,7 +28515,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgemmt(
@@ -28535,7 +28535,7 @@ extern "C" {
         ldc: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sgemmt_64(
@@ -28555,7 +28555,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgemmt_64(
@@ -28575,7 +28575,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgemmt_64(
@@ -28595,7 +28595,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgemmt_64(
@@ -28615,7 +28615,7 @@ extern "C" {
         ldc: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -28702,7 +28702,7 @@ number of gemm operations in the batch.*/
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgemmt_batched(
@@ -28723,7 +28723,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgemmt_batched(
@@ -28744,7 +28744,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgemmt_batched(
@@ -28765,7 +28765,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sgemmt_batched_64(
@@ -28786,7 +28786,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgemmt_batched_64(
@@ -28807,7 +28807,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgemmt_batched_64(
@@ -28828,7 +28828,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgemmt_batched_64(
@@ -28849,7 +28849,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -28948,7 +28948,7 @@ number of gemm operatons in the batch.
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgemmt_strided_batched(
@@ -28972,7 +28972,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgemmt_strided_batched(
@@ -28996,7 +28996,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgemmt_strided_batched(
@@ -29020,7 +29020,7 @@ extern "C" {
         batch_count: rocblas_int,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_sgemmt_strided_batched_64(
@@ -29044,7 +29044,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dgemmt_strided_batched_64(
@@ -29068,7 +29068,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_cgemmt_strided_batched_64(
@@ -29092,7 +29092,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_zgemmt_strided_batched_64(
@@ -29116,7 +29116,7 @@ extern "C" {
         batch_count: i64,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -29242,7 +29242,7 @@ enumerant specifying the operation type, support for rocblas_geam_ex_operation_m
         geam_ex_op: rocblas_geam_ex_operation,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -29388,7 +29388,7 @@ specifies the datatype of computation.
         compute_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -29537,7 +29537,7 @@ specifies the datatype of computation.
         compute_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -29702,7 +29702,7 @@ specifies the datatype of computation.
         compute_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -29774,7 +29774,7 @@ specifies the datatype of computation.
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_axpy_ex_64(
@@ -29791,7 +29791,7 @@ extern "C" {
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -29868,7 +29868,7 @@ specifies the datatype of computation.
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_axpy_batched_ex_64(
@@ -29886,7 +29886,7 @@ extern "C" {
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -29975,7 +29975,7 @@ specifies the datatype of computation.
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_axpy_strided_batched_ex_64(
@@ -29995,7 +29995,7 @@ extern "C" {
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -30072,7 +30072,7 @@ specifies the datatype of computation.
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dotc_ex(
@@ -30089,7 +30089,7 @@ extern "C" {
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dot_ex_64(
@@ -30106,7 +30106,7 @@ extern "C" {
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dotc_ex_64(
@@ -30123,7 +30123,7 @@ extern "C" {
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -30207,7 +30207,7 @@ specifies the datatype of computation.
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dotc_batched_ex(
@@ -30225,7 +30225,7 @@ extern "C" {
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dot_batched_ex_64(
@@ -30243,7 +30243,7 @@ extern "C" {
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dotc_batched_ex_64(
@@ -30261,7 +30261,7 @@ extern "C" {
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -30353,7 +30353,7 @@ specifies the datatype of computation.
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dotc_strided_batched_ex(
@@ -30373,7 +30373,7 @@ extern "C" {
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dot_strided_batched_ex_64(
@@ -30393,7 +30393,7 @@ extern "C" {
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_dotc_strided_batched_ex_64(
@@ -30413,7 +30413,7 @@ extern "C" {
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -30474,7 +30474,7 @@ specifies the datatype of computation.
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_nrm2_ex_64(
@@ -30488,7 +30488,7 @@ extern "C" {
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -30553,7 +30553,7 @@ specifies the datatype of computation.
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_nrm2_batched_ex_64(
@@ -30568,7 +30568,7 @@ extern "C" {
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -30639,7 +30639,7 @@ specifies the datatype of computation.
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_nrm2_strided_batched_ex_64(
@@ -30655,7 +30655,7 @@ extern "C" {
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -30738,7 +30738,7 @@ specifies the datatype of computation.
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_rot_ex_64(
@@ -30756,7 +30756,7 @@ extern "C" {
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -30843,7 +30843,7 @@ specifies the datatype of computation.
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_rot_batched_ex_64(
@@ -30862,7 +30862,7 @@ extern "C" {
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -30957,7 +30957,7 @@ specifies the datatype of computation.
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_rot_strided_batched_ex_64(
@@ -30978,7 +30978,7 @@ extern "C" {
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -31041,7 +31041,7 @@ specifies the datatype of computation.
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_scal_ex_64(
@@ -31055,7 +31055,7 @@ extern "C" {
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -31122,7 +31122,7 @@ specifies the datatype of computation.
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_scal_batched_ex_64(
@@ -31137,7 +31137,7 @@ extern "C" {
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @{
@@ -31212,7 +31212,7 @@ specifies the datatype of computation.
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_scal_strided_batched_ex_64(
@@ -31228,7 +31228,7 @@ extern "C" {
         execution_type: rocblas_datatype,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     /** BLAS Auxiliary API
 
@@ -31244,7 +31244,7 @@ rocBLAS status to convert to string*/
         status: rocblas_status,
     ) -> *const ::core::ffi::c_char;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     /** \brief Initialize rocBLAS on the current HIP device, to avoid costly startup time at the first call on that device.
 \details
@@ -31254,7 +31254,7 @@ Otherwise this function is automatically called on the first function call that 
 */
     pub fn rocblas_initialize();
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** \brief   Loads char* buf with the rocblas library version. size_t len
@@ -31272,7 +31272,7 @@ len             length of buf
         len: usize,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** \brief   Queries the minimum buffer size for a successful call to
@@ -31284,7 +31284,7 @@ len             pointer to size_t for storing the length
 */
     pub fn rocblas_get_version_string_size(len: *mut usize) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** \brief
@@ -31299,7 +31299,7 @@ handle          rocblas handle*/
         handle: rocblas_handle,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** \brief
@@ -31316,11 +31316,11 @@ size            maximum of the optimal sizes collected*/
         size: *mut usize,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     pub fn rocblas_is_device_memory_size_query(handle: rocblas_handle) -> bool;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_set_optimal_device_memory_size_impl(
@@ -31329,7 +31329,7 @@ extern "C" {
         ...
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_device_malloc_alloc(
@@ -31339,11 +31339,11 @@ extern "C" {
         ...
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     pub fn rocblas_device_malloc_success(ptr: *mut rocblas_device_malloc_base) -> bool;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_device_malloc_ptr(
@@ -31351,7 +31351,7 @@ extern "C" {
         res: *mut *mut ::core::ffi::c_void,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_device_malloc_get(
@@ -31360,18 +31360,18 @@ extern "C" {
         res: *mut *mut ::core::ffi::c_void,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn rocblas_device_malloc_free(
         ptr: *mut rocblas_device_malloc_base,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     pub fn rocblas_device_malloc_set_default_memory_size(size: usize);
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** \brief
@@ -31387,7 +31387,7 @@ size            current device memory size for the handle*/
         size: *mut usize,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** \brief
@@ -31408,7 +31408,7 @@ size            size of allocated device memory*/
         size: usize,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** \brief
@@ -31431,7 +31431,7 @@ size            size of workspace memory
         size: usize,
     ) -> rocblas_status;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     /** \brief
 \details
@@ -31440,7 +31440,7 @@ Returns true when device memory in handle is managed by rocBLAS
 handle          rocblas handle*/
     pub fn rocblas_is_managing_device_memory(handle: rocblas_handle) -> bool;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     /** \brief
 \details
@@ -31449,7 +31449,7 @@ Returns true when device memory in handle is managed by the user
 handle          rocblas handle*/
     pub fn rocblas_is_user_managing_device_memory(handle: rocblas_handle) -> bool;
 }
-#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]
+#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]
 extern "C" {
     pub fn rocblas_abort() -> !;
 }

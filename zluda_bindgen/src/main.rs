@@ -958,7 +958,7 @@ fn generate_rocblas(output: &PathBuf, path: &[&str]) {
             Item::Type(type_) => converter.get_type(type_).map(Item::Type),
             Item::ForeignMod(mut extern_) => {
                 extern_.attrs.push(
-                    parse_quote!(#[cfg_attr(windows, link = "rocblas", kind = "raw-dylib")]),
+                    parse_quote!(#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]),
                 );
                 Some(Item::ForeignMod(extern_))
             }
