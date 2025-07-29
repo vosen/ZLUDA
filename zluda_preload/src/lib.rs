@@ -2,7 +2,7 @@ use std::{
     ffi::{c_char, c_int, c_void, CStr},
     mem,
     path::PathBuf,
-    ptr::NonNull,
+    ptr::{self, NonNull},
     sync::LazyLock,
 };
 
@@ -38,7 +38,7 @@ static FILES_FOR_REDIRECT: &[&'static str] = &[
     "libnvidia-ml.so.1",
 ];
 
-static CACHED_RESOLVE: LazyLock<(
+static GLOBALS: LazyLock<(
     Option<unsafe extern "C" fn(*const c_char, c_int) -> DlopenReturn>,
     Option<PathBuf>,
 )> = LazyLock::new(|| {
@@ -70,12 +70,20 @@ const _: fn() = || {
 
 #[no_mangle]
 unsafe extern "C" fn dlopen(filename: *const c_char, flags: c_int) -> DlopenReturn {
-    match &*CACHED_RESOLVE {
-        (Some(dlopen_next), self_dir) => dlopen_redirect(*dlopen_next, self_dir, filename, flags)
-            .or_else(|| dlopen_next(filename, flags).ok())
-            .ok_or(()),
-        (None, _) => Err(()),
-    }
+    let (dlopen_next, self_dir) = &*GLOBALS;
+    let dlopen_next = dlopen_next.ok_or(())?;
+    dlopen_redirect(dlopen_next, self_dir, filename, flags)
+        .or_else(|| dlopen_next(filename, flags).ok())
+        .ok_or(())
+}
+
+#[no_mangle]
+unsafe extern "C" fn zluda_dlopen_noredirect(
+    filename: *const c_char,
+    flags: c_int,
+) -> DlopenReturn {
+    let dlopen_next = GLOBALS.0.ok_or(())?;
+    dlopen_next(filename, flags)
 }
 
 unsafe fn dlopen_redirect(
@@ -84,6 +92,9 @@ unsafe fn dlopen_redirect(
     input_path: *const c_char,
     flags: c_int,
 ) -> Option<NonNull<c_void>> {
+    if input_path == ptr::null() {
+        return None;
+    }
     let input_path = CStr::from_ptr(input_path).to_str().ok()?;
     let replaced_file = FILES_FOR_REDIRECT.into_iter().find_map(|file| {
         if input_path.ends_with(file) {
