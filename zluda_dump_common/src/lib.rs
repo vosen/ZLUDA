@@ -33,20 +33,47 @@ fn open_driver() -> Result<libloading::Library, libloading::Error> {
     os::open_driver()
 }
 
+pub fn dlopen_local_noredirect(
+    path: String,
+) -> Result<libloading::Library, libloading::Error> {
+    unsafe { os::dlopen_local_noredirect(path) }
+}
+
 #[cfg(unix)]
 pub(crate) mod os {
+    use libc::{c_char, c_int};
     use libloading::os;
-
-    const RTLD_NOLOAD: i32 = 0x4;
+    use std::{ffi::c_void, mem};
 
     pub fn open_driver() -> Result<libloading::Library, libloading::Error> {
         unsafe {
-            os::unix::Library::open(Some("libcuda.so.1"), RTLD_NOLOAD | os::unix::RTLD_LAZY)
-                .or_else(|_| {
-                    os::unix::Library::open(Some("libcuda.so"), RTLD_NOLOAD | os::unix::RTLD_LAZY)
-                })
-                .map(Into::into)
+            os::unix::Library::open(
+                Some("libcuda.so.1"),
+                libc::RTLD_NOLOAD | os::unix::RTLD_LAZY,
+            )
+            .or_else(|_| {
+                os::unix::Library::open(Some("libcuda.so"), libc::RTLD_NOLOAD | os::unix::RTLD_LAZY)
+            })
+            .map(Into::into)
         }
+    }
+
+    pub unsafe fn dlopen_local_noredirect(
+        mut path: String,
+    ) -> Result<libloading::Library, libloading::Error> {
+        let zluda_dlopen_noredirect =
+            unsafe { libc::dlsym(libc::RTLD_DEFAULT, c"zluda_dlopen_noredirect".as_ptr()) };
+        let zluda_dlopen_noredirect = mem::transmute::<
+            _,
+            Option<unsafe extern "C" fn(*const c_char, c_int) -> *mut c_void>,
+        >(zluda_dlopen_noredirect);
+        let dlopen = zluda_dlopen_noredirect.unwrap_or(libc::dlopen);
+        path.push('\0');
+        Ok(libloading::os::unix::Library::from_raw(dlopen(
+            path.as_ptr().cast(),
+            os::unix::RTLD_LOCAL | os::unix::RTLD_LAZY,
+        ))
+        .into())
     }
 }
 

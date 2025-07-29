@@ -7,7 +7,7 @@ fn get_library() -> Option<Library> {
     let cuda_lib = std::env::var("ZLUDA_SPARSE_LIB")
         .ok()
         .unwrap_or_else(|| "/usr/local/cuda/lib64/libcusparse.so".to_string());
-    unsafe { Library::new(cuda_lib) }.ok()
+    zluda_dump_common::dlopen_local_noredirect(cuda_lib).ok()
 }
 
 macro_rules! unimplemented {

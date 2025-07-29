@@ -1897,6 +1897,7 @@ dependencies = [
  "cuda_types",
  "dark_api",
  "format",
+ "libc",
  "libloading",
 ]
 
