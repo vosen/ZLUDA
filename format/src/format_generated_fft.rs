@@ -61,69 +61,6 @@ impl crate::CudaDisplay for cuda_types::cufft::cudaLibXtDesc_t {
         writer.write_all(b" }")
     }
 }
-impl crate::CudaDisplay for cuda_types::cufft::cufftResult_t {
-    fn write(
-        &self,
-        _fn_name: &'static str,
-        _index: usize,
-        writer: &mut (impl std::io::Write + ?Sized),
-    ) -> std::io::Result<()> {
-        match self {
-            &cuda_types::cufft::cufftResult_t::CUFFT_SUCCESS => {
-                writer.write_all(stringify!(CUFFT_SUCCESS).as_bytes())
-            }
-            &cuda_types::cufft::cufftResult_t::CUFFT_INVALID_PLAN => {
-                writer.write_all(stringify!(CUFFT_INVALID_PLAN).as_bytes())
-            }
-            &cuda_types::cufft::cufftResult_t::CUFFT_ALLOC_FAILED => {
-                writer.write_all(stringify!(CUFFT_ALLOC_FAILED).as_bytes())
-            }
-            &cuda_types::cufft::cufftResult_t::CUFFT_INVALID_TYPE => {
-                writer.write_all(stringify!(CUFFT_INVALID_TYPE).as_bytes())
-            }
-            &cuda_types::cufft::cufftResult_t::CUFFT_INVALID_VALUE => {
-                writer.write_all(stringify!(CUFFT_INVALID_VALUE).as_bytes())
-            }
-            &cuda_types::cufft::cufftResult_t::CUFFT_INTERNAL_ERROR => {
-                writer.write_all(stringify!(CUFFT_INTERNAL_ERROR).as_bytes())
-            }
-            &cuda_types::cufft::cufftResult_t::CUFFT_EXEC_FAILED => {
-                writer.write_all(stringify!(CUFFT_EXEC_FAILED).as_bytes())
-            }
-            &cuda_types::cufft::cufftResult_t::CUFFT_SETUP_FAILED => {
-                writer.write_all(stringify!(CUFFT_SETUP_FAILED).as_bytes())
-            }
-            &cuda_types::cufft::cufftResult_t::CUFFT_INVALID_SIZE => {
-                writer.write_all(stringify!(CUFFT_INVALID_SIZE).as_bytes())
-            }
-            &cuda_types::cufft::cufftResult_t::CUFFT_UNALIGNED_DATA => {
-                writer.write_all(stringify!(CUFFT_UNALIGNED_DATA).as_bytes())
-            }
-            &cuda_types::cufft::cufftResult_t::CUFFT_INCOMPLETE_PARAMETER_LIST => {
-                writer.write_all(stringify!(CUFFT_INCOMPLETE_PARAMETER_LIST).as_bytes())
-            }
-            &cuda_types::cufft::cufftResult_t::CUFFT_INVALID_DEVICE => {
-                writer.write_all(stringify!(CUFFT_INVALID_DEVICE).as_bytes())
-            }
-            &cuda_types::cufft::cufftResult_t::CUFFT_PARSE_ERROR => {
-                writer.write_all(stringify!(CUFFT_PARSE_ERROR).as_bytes())
-            }
-            &cuda_types::cufft::cufftResult_t::CUFFT_NO_WORKSPACE => {
-                writer.write_all(stringify!(CUFFT_NO_WORKSPACE).as_bytes())
-            }
-            &cuda_types::cufft::cufftResult_t::CUFFT_NOT_IMPLEMENTED => {
-                writer.write_all(stringify!(CUFFT_NOT_IMPLEMENTED).as_bytes())
-            }
-            &cuda_types::cufft::cufftResult_t::CUFFT_LICENSE_ERROR => {
-                writer.write_all(stringify!(CUFFT_LICENSE_ERROR).as_bytes())
-            }
-            &cuda_types::cufft::cufftResult_t::CUFFT_NOT_SUPPORTED => {
-                writer.write_all(stringify!(CUFFT_NOT_SUPPORTED).as_bytes())
-            }
-            _ => write!(writer, "{}", self.0),
-        }
-    }
-}
 impl crate::CudaDisplay for cuda_types::cufft::cufftType_t {
     fn write(
         &self,
@@ -2231,4 +2168,37 @@ pub fn write_cufftXtSetWorkAreaPolicy(
     writer.write_all(concat!(stringify!(workSize), ": ").as_bytes())?;
     crate::CudaDisplay::write(&workSize, "cufftXtSetWorkAreaPolicy", arg_idx, writer)?;
     writer.write_all(b")")
+}
+impl crate::CudaDisplay for cuda_types::cufft::cufftResult {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        match self {
+            Ok(()) => writer.write_all(b"CUFFT_SUCCESS"),
+            Err(err) => {
+                match err.0.get() {
+                    1 => writer.write_all("CUFFT_INVALID_PLAN".as_bytes()),
+                    2 => writer.write_all("CUFFT_ALLOC_FAILED".as_bytes()),
+                    3 => writer.write_all("CUFFT_INVALID_TYPE".as_bytes()),
+                    4 => writer.write_all("CUFFT_INVALID_VALUE".as_bytes()),
+                    5 => writer.write_all("CUFFT_INTERNAL_ERROR".as_bytes()),
+                    6 => writer.write_all("CUFFT_EXEC_FAILED".as_bytes()),
+                    7 => writer.write_all("CUFFT_SETUP_FAILED".as_bytes()),
+                    8 => writer.write_all("CUFFT_INVALID_SIZE".as_bytes()),
+                    9 => writer.write_all("CUFFT_UNALIGNED_DATA".as_bytes()),
+                    10 => writer.write_all("CUFFT_INCOMPLETE_PARAMETER_LIST".as_bytes()),
+                    11 => writer.write_all("CUFFT_INVALID_DEVICE".as_bytes()),
+                    12 => writer.write_all("CUFFT_PARSE_ERROR".as_bytes()),
+                    13 => writer.write_all("CUFFT_NO_WORKSPACE".as_bytes()),
+                    14 => writer.write_all("CUFFT_NOT_IMPLEMENTED".as_bytes()),
+                    15 => writer.write_all("CUFFT_LICENSE_ERROR".as_bytes()),
+                    16 => writer.write_all("CUFFT_NOT_SUPPORTED".as_bytes()),
+                    err => write!(writer, "{}", err),
+                }
+            }
+        }
+    }
 }

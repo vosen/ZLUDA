@@ -4333,9 +4333,6 @@ pub struct CUlibraryHostUniversalFunctionAndDataTable_st {
     pub dataWindowSize: usize,
 }
 pub type CUlibraryHostUniversalFunctionAndDataTable = CUlibraryHostUniversalFunctionAndDataTable_st;
-/// Error codes
-#[must_use]
-pub type cudaError_enum = ::core::ffi::c_uint;
 impl CUdevice_P2PAttribute_enum {
     ///< A relative value indicating the performance of the link between two devices
     pub const CU_DEVICE_P2P_ATTRIBUTE_PERFORMANCE_RANK: CUdevice_P2PAttribute_enum = CUdevice_P2PAttribute_enum(

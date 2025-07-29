@@ -1,48 +1,6 @@
 // Generated automatically by zluda_bindgen
 // DO NOT EDIT MANUALLY
 #![allow(warnings)]
-impl crate::CudaDisplay for cuda_types::cublas::cublasStatus_t {
-    fn write(
-        &self,
-        _fn_name: &'static str,
-        _index: usize,
-        writer: &mut (impl std::io::Write + ?Sized),
-    ) -> std::io::Result<()> {
-        match self {
-            &cuda_types::cublas::cublasStatus_t::CUBLAS_STATUS_SUCCESS => {
-                writer.write_all(stringify!(CUBLAS_STATUS_SUCCESS).as_bytes())
-            }
-            &cuda_types::cublas::cublasStatus_t::CUBLAS_STATUS_NOT_INITIALIZED => {
-                writer.write_all(stringify!(CUBLAS_STATUS_NOT_INITIALIZED).as_bytes())
-            }
-            &cuda_types::cublas::cublasStatus_t::CUBLAS_STATUS_ALLOC_FAILED => {
-                writer.write_all(stringify!(CUBLAS_STATUS_ALLOC_FAILED).as_bytes())
-            }
-            &cuda_types::cublas::cublasStatus_t::CUBLAS_STATUS_INVALID_VALUE => {
-                writer.write_all(stringify!(CUBLAS_STATUS_INVALID_VALUE).as_bytes())
-            }
-            &cuda_types::cublas::cublasStatus_t::CUBLAS_STATUS_ARCH_MISMATCH => {
-                writer.write_all(stringify!(CUBLAS_STATUS_ARCH_MISMATCH).as_bytes())
-            }
-            &cuda_types::cublas::cublasStatus_t::CUBLAS_STATUS_MAPPING_ERROR => {
-                writer.write_all(stringify!(CUBLAS_STATUS_MAPPING_ERROR).as_bytes())
-            }
-            &cuda_types::cublas::cublasStatus_t::CUBLAS_STATUS_EXECUTION_FAILED => {
-                writer.write_all(stringify!(CUBLAS_STATUS_EXECUTION_FAILED).as_bytes())
-            }
-            &cuda_types::cublas::cublasStatus_t::CUBLAS_STATUS_INTERNAL_ERROR => {
-                writer.write_all(stringify!(CUBLAS_STATUS_INTERNAL_ERROR).as_bytes())
-            }
-            &cuda_types::cublas::cublasStatus_t::CUBLAS_STATUS_NOT_SUPPORTED => {
-                writer.write_all(stringify!(CUBLAS_STATUS_NOT_SUPPORTED).as_bytes())
-            }
-            &cuda_types::cublas::cublasStatus_t::CUBLAS_STATUS_LICENSE_ERROR => {
-                writer.write_all(stringify!(CUBLAS_STATUS_LICENSE_ERROR).as_bytes())
-            }
-            _ => write!(writer, "{}", self.0),
-        }
-    }
-}
 impl crate::CudaDisplay for cuda_types::cublas::cublasFillMode_t {
     fn write(
         &self,
@@ -30266,4 +30224,30 @@ pub fn write_cublasUint8gemmBias(
     writer.write_all(concat!(stringify!(C_shift), ": ").as_bytes())?;
     crate::CudaDisplay::write(&C_shift, "cublasUint8gemmBias", arg_idx, writer)?;
     writer.write_all(b")")
+}
+impl crate::CudaDisplay for cuda_types::cublas::cublasStatus_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        match self {
+            Ok(()) => writer.write_all(b"CUBLAS_STATUS_SUCCESS"),
+            Err(err) => {
+                match err.0.get() {
+                    1 => writer.write_all("CUBLAS_STATUS_NOT_INITIALIZED".as_bytes()),
+                    3 => writer.write_all("CUBLAS_STATUS_ALLOC_FAILED".as_bytes()),
+                    7 => writer.write_all("CUBLAS_STATUS_INVALID_VALUE".as_bytes()),
+                    8 => writer.write_all("CUBLAS_STATUS_ARCH_MISMATCH".as_bytes()),
+                    11 => writer.write_all("CUBLAS_STATUS_MAPPING_ERROR".as_bytes()),
+                    13 => writer.write_all("CUBLAS_STATUS_EXECUTION_FAILED".as_bytes()),
+                    14 => writer.write_all("CUBLAS_STATUS_INTERNAL_ERROR".as_bytes()),
+                    15 => writer.write_all("CUBLAS_STATUS_NOT_SUPPORTED".as_bytes()),
+                    16 => writer.write_all("CUBLAS_STATUS_LICENSE_ERROR".as_bytes()),
+                    err => write!(writer, "{}", err),
+                }
+            }
+        }
+    }
 }

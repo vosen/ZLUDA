@@ -50,62 +50,6 @@ pub struct cudaLibXtDesc_t {
     pub libDescriptor: *mut ::core::ffi::c_void,
 }
 pub type cudaLibXtDesc = cudaLibXtDesc_t;
-impl cufftResult_t {
-    pub const CUFFT_SUCCESS: cufftResult_t = cufftResult_t(0);
-}
-impl cufftResult_t {
-    pub const CUFFT_INVALID_PLAN: cufftResult_t = cufftResult_t(1);
-}
-impl cufftResult_t {
-    pub const CUFFT_ALLOC_FAILED: cufftResult_t = cufftResult_t(2);
-}
-impl cufftResult_t {
-    pub const CUFFT_INVALID_TYPE: cufftResult_t = cufftResult_t(3);
-}
-impl cufftResult_t {
-    pub const CUFFT_INVALID_VALUE: cufftResult_t = cufftResult_t(4);
-}
-impl cufftResult_t {
-    pub const CUFFT_INTERNAL_ERROR: cufftResult_t = cufftResult_t(5);
-}
-impl cufftResult_t {
-    pub const CUFFT_EXEC_FAILED: cufftResult_t = cufftResult_t(6);
-}
-impl cufftResult_t {
-    pub const CUFFT_SETUP_FAILED: cufftResult_t = cufftResult_t(7);
-}
-impl cufftResult_t {
-    pub const CUFFT_INVALID_SIZE: cufftResult_t = cufftResult_t(8);
-}
-impl cufftResult_t {
-    pub const CUFFT_UNALIGNED_DATA: cufftResult_t = cufftResult_t(9);
-}
-impl cufftResult_t {
-    pub const CUFFT_INCOMPLETE_PARAMETER_LIST: cufftResult_t = cufftResult_t(10);
-}
-impl cufftResult_t {
-    pub const CUFFT_INVALID_DEVICE: cufftResult_t = cufftResult_t(11);
-}
-impl cufftResult_t {
-    pub const CUFFT_PARSE_ERROR: cufftResult_t = cufftResult_t(12);
-}
-impl cufftResult_t {
-    pub const CUFFT_NO_WORKSPACE: cufftResult_t = cufftResult_t(13);
-}
-impl cufftResult_t {
-    pub const CUFFT_NOT_IMPLEMENTED: cufftResult_t = cufftResult_t(14);
-}
-impl cufftResult_t {
-    pub const CUFFT_LICENSE_ERROR: cufftResult_t = cufftResult_t(15);
-}
-impl cufftResult_t {
-    pub const CUFFT_NOT_SUPPORTED: cufftResult_t = cufftResult_t(16);
-}
-#[repr(transparent)]
-#[must_use]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct cufftResult_t(pub ::core::ffi::c_uint);
-pub use self::cufftResult_t as cufftResult;
 pub type cufftReal = f32;
 pub type cufftDoubleReal = f64;
 pub type cufftComplex = super::cuda::cuComplex;
@@ -425,3 +369,109 @@ pub type cufftJITCallbackStoreD = ::core::option::Option<
         sharedPointer: *mut ::core::ffi::c_void,
     ),
 >;
+impl cufftError_t {
+    pub const r#INVALID_PLAN: cufftError_t = cufftError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(1)
+    });
+    pub const r#ALLOC_FAILED: cufftError_t = cufftError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(2)
+    });
+    pub const r#INVALID_TYPE: cufftError_t = cufftError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(3)
+    });
+    pub const r#INVALID_VALUE: cufftError_t = cufftError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(4)
+    });
+    pub const r#INTERNAL_ERROR: cufftError_t = cufftError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(5)
+    });
+    pub const r#EXEC_FAILED: cufftError_t = cufftError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(6)
+    });
+    pub const r#SETUP_FAILED: cufftError_t = cufftError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(7)
+    });
+    pub const r#INVALID_SIZE: cufftError_t = cufftError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(8)
+    });
+    pub const r#UNALIGNED_DATA: cufftError_t = cufftError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(9)
+    });
+    pub const r#INCOMPLETE_PARAMETER_LIST: cufftError_t = cufftError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(10)
+    });
+    pub const r#INVALID_DEVICE: cufftError_t = cufftError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(11)
+    });
+    pub const r#PARSE_ERROR: cufftError_t = cufftError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(12)
+    });
+    pub const r#NO_WORKSPACE: cufftError_t = cufftError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(13)
+    });
+    pub const r#NOT_IMPLEMENTED: cufftError_t = cufftError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(14)
+    });
+    pub const r#LICENSE_ERROR: cufftError_t = cufftError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(15)
+    });
+    pub const r#NOT_SUPPORTED: cufftError_t = cufftError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(16)
+    });
+}
+#[repr(transparent)]
+#[derive(Debug, Hash, Copy, Clone, PartialEq, Eq)]
+pub struct cufftError_t(pub ::core::num::NonZeroU32);
+pub trait cufftResultConsts {
+    const SUCCESS: cufftResult = cufftResult::Ok(());
+    const ERROR_INVALID_PLAN: cufftResult = cufftResult::Err(
+        cufftError_t::r#INVALID_PLAN,
+    );
+    const ERROR_ALLOC_FAILED: cufftResult = cufftResult::Err(
+        cufftError_t::r#ALLOC_FAILED,
+    );
+    const ERROR_INVALID_TYPE: cufftResult = cufftResult::Err(
+        cufftError_t::r#INVALID_TYPE,
+    );
+    const ERROR_INVALID_VALUE: cufftResult = cufftResult::Err(
+        cufftError_t::r#INVALID_VALUE,
+    );
+    const ERROR_INTERNAL_ERROR: cufftResult = cufftResult::Err(
+        cufftError_t::r#INTERNAL_ERROR,
+    );
+    const ERROR_EXEC_FAILED: cufftResult = cufftResult::Err(cufftError_t::r#EXEC_FAILED);
+    const ERROR_SETUP_FAILED: cufftResult = cufftResult::Err(
+        cufftError_t::r#SETUP_FAILED,
+    );
+    const ERROR_INVALID_SIZE: cufftResult = cufftResult::Err(
+        cufftError_t::r#INVALID_SIZE,
+    );
+    const ERROR_UNALIGNED_DATA: cufftResult = cufftResult::Err(
+        cufftError_t::r#UNALIGNED_DATA,
+    );
+    const ERROR_INCOMPLETE_PARAMETER_LIST: cufftResult = cufftResult::Err(
+        cufftError_t::r#INCOMPLETE_PARAMETER_LIST,
+    );
+    const ERROR_INVALID_DEVICE: cufftResult = cufftResult::Err(
+        cufftError_t::r#INVALID_DEVICE,
+    );
+    const ERROR_PARSE_ERROR: cufftResult = cufftResult::Err(cufftError_t::r#PARSE_ERROR);
+    const ERROR_NO_WORKSPACE: cufftResult = cufftResult::Err(
+        cufftError_t::r#NO_WORKSPACE,
+    );
+    const ERROR_NOT_IMPLEMENTED: cufftResult = cufftResult::Err(
+        cufftError_t::r#NOT_IMPLEMENTED,
+    );
+    const ERROR_LICENSE_ERROR: cufftResult = cufftResult::Err(
+        cufftError_t::r#LICENSE_ERROR,
+    );
+    const ERROR_NOT_SUPPORTED: cufftResult = cufftResult::Err(
+        cufftError_t::r#NOT_SUPPORTED,
+    );
+}
+impl cufftResultConsts for cufftResult {}
+#[must_use]
+pub type cufftResult = ::core::result::Result<(), cufftError_t>;
+const _: fn() = || {
+    let _ = std::mem::transmute::<cufftResult, u32>;
+};

@@ -17,40 +17,6 @@ pub const CUBLAS_VER_MINOR: u32 = 8;
 pub const CUBLAS_VER_PATCH: u32 = 4;
 pub const CUBLAS_VER_BUILD: u32 = 1;
 pub const CUBLAS_VERSION: u32 = 120804;
-impl cublasStatus_t {
-    pub const CUBLAS_STATUS_SUCCESS: cublasStatus_t = cublasStatus_t(0);
-}
-impl cublasStatus_t {
-    pub const CUBLAS_STATUS_NOT_INITIALIZED: cublasStatus_t = cublasStatus_t(1);
-}
-impl cublasStatus_t {
-    pub const CUBLAS_STATUS_ALLOC_FAILED: cublasStatus_t = cublasStatus_t(3);
-}
-impl cublasStatus_t {
-    pub const CUBLAS_STATUS_INVALID_VALUE: cublasStatus_t = cublasStatus_t(7);
-}
-impl cublasStatus_t {
-    pub const CUBLAS_STATUS_ARCH_MISMATCH: cublasStatus_t = cublasStatus_t(8);
-}
-impl cublasStatus_t {
-    pub const CUBLAS_STATUS_MAPPING_ERROR: cublasStatus_t = cublasStatus_t(11);
-}
-impl cublasStatus_t {
-    pub const CUBLAS_STATUS_EXECUTION_FAILED: cublasStatus_t = cublasStatus_t(13);
-}
-impl cublasStatus_t {
-    pub const CUBLAS_STATUS_INTERNAL_ERROR: cublasStatus_t = cublasStatus_t(14);
-}
-impl cublasStatus_t {
-    pub const CUBLAS_STATUS_NOT_SUPPORTED: cublasStatus_t = cublasStatus_t(15);
-}
-impl cublasStatus_t {
-    pub const CUBLAS_STATUS_LICENSE_ERROR: cublasStatus_t = cublasStatus_t(16);
-}
-#[repr(transparent)]
-#[must_use]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct cublasStatus_t(pub ::core::ffi::c_uint);
 impl cublasFillMode_t {
     pub const CUBLAS_FILL_MODE_LOWER: cublasFillMode_t = cublasFillMode_t(0);
 }
@@ -322,3 +288,76 @@ pub type cublasHandle_t = *mut cublasContext;
 pub type cublasLogCallback = ::core::option::Option<
     unsafe extern "C" fn(msg: *const ::core::ffi::c_char),
 >;
+impl cublasError_t {
+    pub const r#NOT_INITIALIZED: cublasError_t = cublasError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(1)
+    });
+    pub const r#ALLOC_FAILED: cublasError_t = cublasError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(3)
+    });
+    pub const r#INVALID_VALUE: cublasError_t = cublasError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(7)
+    });
+    pub const r#ARCH_MISMATCH: cublasError_t = cublasError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(8)
+    });
+    pub const r#MAPPING_ERROR: cublasError_t = cublasError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(11)
+    });
+    pub const r#EXECUTION_FAILED: cublasError_t = cublasError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(13)
+    });
+    pub const r#INTERNAL_ERROR: cublasError_t = cublasError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(14)
+    });
+    pub const r#NOT_SUPPORTED: cublasError_t = cublasError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(15)
+    });
+    pub const r#LICENSE_ERROR: cublasError_t = cublasError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(16)
+    });
+}
+#[repr(transparent)]
+#[derive(Debug, Hash, Copy, Clone, PartialEq, Eq)]
+pub struct cublasError_t(pub ::core::num::NonZeroU32);
+pub trait cublasStatus_tConsts {
+    const SUCCESS: cublasStatus_t = cublasStatus_t::Ok(());
+    const ERROR_NOT_INITIALIZED: cublasStatus_t = cublasStatus_t::Err(
+        cublasError_t::r#NOT_INITIALIZED,
+    );
+    const ERROR_ALLOC_FAILED: cublasStatus_t = cublasStatus_t::Err(
+        cublasError_t::r#ALLOC_FAILED,
+    );
+    const ERROR_INVALID_VALUE: cublasStatus_t = cublasStatus_t::Err(
+        cublasError_t::r#INVALID_VALUE,
+    );
+    const ERROR_ARCH_MISMATCH: cublasStatus_t = cublasStatus_t::Err(
+        cublasError_t::r#ARCH_MISMATCH,
+    );
+    const ERROR_MAPPING_ERROR: cublasStatus_t = cublasStatus_t::Err(
+        cublasError_t::r#MAPPING_ERROR,
+    );
+    const ERROR_EXECUTION_FAILED: cublasStatus_t = cublasStatus_t::Err(
+        cublasError_t::r#EXECUTION_FAILED,
+    );
+    const ERROR_INTERNAL_ERROR: cublasStatus_t = cublasStatus_t::Err(
+        cublasError_t::r#INTERNAL_ERROR,
+    );
+    const ERROR_NOT_SUPPORTED: cublasStatus_t = cublasStatus_t::Err(
+        cublasError_t::r#NOT_SUPPORTED,
+    );
+    const ERROR_LICENSE_ERROR: cublasStatus_t = cublasStatus_t::Err(
+        cublasError_t::r#LICENSE_ERROR,
+    );
+}
+impl cublasStatus_tConsts for cublasStatus_t {}
+#[must_use]
+pub type cublasStatus_t = ::core::result::Result<(), cublasError_t>;
+const _: fn() = || {
+    let _ = std::mem::transmute::<cublasStatus_t, u32>;
+};
+impl From<rocblas_sys::rocblas_error> for cublasError_t {
+    fn from(error: rocblas_sys::rocblas_error) -> Self {
+        Self(error.0)
+    }
+}

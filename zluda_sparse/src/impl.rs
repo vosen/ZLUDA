@@ -1,4 +1,4 @@
-use cuda_types::cusparse::cusparseStatus_t;
+use cuda_types::cusparse::*;
 
 #[cfg(debug_assertions)]
 pub(crate) fn unimplemented() -> cusparseStatus_t {
@@ -7,7 +7,7 @@ pub(crate) fn unimplemented() -> cusparseStatus_t {
 
 #[cfg(not(debug_assertions))]
 pub(crate) fn unimplemented() -> cusparseStatus_t {
-    cusparseStatus_t::CUSPARSE_STATUS_NOT_SUPPORTED
+    cusparseStatus_t::ERROR_NOT_SUPPORTED
 }
 
 #[allow(non_snake_case)]

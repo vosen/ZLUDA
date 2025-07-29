@@ -254,8 +254,6 @@ impl rocblas_computetype_ {
 pub struct rocblas_computetype_(pub ::core::ffi::c_uint);
 /// \brief Indicates the compute precision mode.
 pub use self::rocblas_computetype_ as rocblas_computetype;
-///   @brief rocblas status codes definition
-pub type rocblas_status_ = ::core::ffi::c_uint;
 impl rocblas_pointer_mode_ {
     /// \brief Scalar values affected by this variable are located on the host.
     pub const rocblas_pointer_mode_host: rocblas_pointer_mode_ = rocblas_pointer_mode_(
