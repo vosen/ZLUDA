@@ -32,6 +32,7 @@ members = [
     "zluda_fft",
     "zluda_inject",
     "zluda_ml",
+    "zluda_preload",
     "zluda_redirect",
     "zluda_sparse",
 ]
