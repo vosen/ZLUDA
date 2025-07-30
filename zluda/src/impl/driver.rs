@@ -2,13 +2,13 @@ use crate::r#impl::{context, device};
 use comgr::Comgr;
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
-use zluda_common::{FromCuda, LiveCheck};
 use std::{
     ffi::{c_void, CStr, CString},
     mem, ptr, slice,
     sync::OnceLock,
     usize,
 };
+use zluda_common::{FromCuda, LiveCheck};
 
 #[cfg_attr(windows, path = "os_win.rs")]
 #[cfg_attr(not(windows), path = "os_unix.rs")]
