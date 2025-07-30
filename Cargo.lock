@@ -1834,6 +1834,7 @@ version = "0.1.0"
 dependencies = [
  "cuda_types",
  "hip_runtime-sys",
+ "rocblas-sys",
 ]
 
 [[package]]

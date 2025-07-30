@@ -62,3 +62,94 @@ pub(crate) fn xerbla(_sr_name: *const ::core::ffi::c_char, _info: ::core::ffi::c
 pub(crate) fn get_cudart_version() -> usize {
     todo!()
 }
+
+pub(crate) fn set_math_mode(_handle: &Handle, _mode: cublasMath_t) -> cublasStatus_t {
+    // TODO: hipblas implements this but rocblas does not
+    Ok(())
+}
+
+pub(crate) fn sgemm_strided_batched(
+    handle: &Handle,
+    transa: rocblas_operation,
+    transb: rocblas_operation,
+    m: ::core::ffi::c_int,
+    n: ::core::ffi::c_int,
+    k: ::core::ffi::c_int,
+    alpha: *const f32,
+    a: *const f32,
+    lda: ::core::ffi::c_int,
+    stride_a: ::core::ffi::c_longlong,
+    b: *const f32,
+    ldb: ::core::ffi::c_int,
+    stride_b: ::core::ffi::c_longlong,
+    beta: *const f32,
+    c: *mut f32,
+    ldc: ::core::ffi::c_int,
+    stride_c: ::core::ffi::c_longlong,
+    batch_count: ::core::ffi::c_int,
+) -> cublasStatus_t {
+    unsafe {
+        rocblas_sgemm_strided_batched(
+            handle.handle,
+            transa,
+            transb,
+            m,
+            n,
+            k,
+            alpha,
+            a,
+            lda,
+            stride_a,
+            b,
+            ldb,
+            stride_b,
+            beta,
+            c,
+            ldc,
+            stride_c,
+            batch_count,
+        )
+    }?;
+    Ok(())
+}
+
+pub(crate) fn sgemm_v2(
+    handle: &Handle,
+    transa: rocblas_operation,
+    transb: rocblas_operation,
+    m: ::core::ffi::c_int,
+    n: ::core::ffi::c_int,
+    k: ::core::ffi::c_int,
+    alpha: *const f32,
+    a: *const f32,
+    lda: ::core::ffi::c_int,
+    b: *const f32,
+    ldb: ::core::ffi::c_int,
+    beta: *const f32,
+    c: *mut f32,
+    ldc: ::core::ffi::c_int,
+) -> cublasStatus_t {
+    unsafe {
+        rocblas_sgemm(
+            handle.handle,
+            transa,
+            transb,
+            m,
+            n,
+            k,
+            alpha,
+            a,
+            lda,
+            b,
+            ldb,
+            beta,
+            c,
+            ldc,
+        )
+    }?;
+    Ok(())
+}
+
+pub(crate) fn destroy_v2(handle: cublasHandle_t) -> cublasStatus_t {
+    zluda_common::drop_checked::<Handle>(handle)
+}

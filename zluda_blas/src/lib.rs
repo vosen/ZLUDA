@@ -44,7 +44,14 @@ macro_rules! implemented_and_always_succeeds {
 
 cuda_macros::cublas_function_declarations!(
     unimplemented,
-    implemented <= [cublasCreate_v2],
+    implemented
+        <= [
+            cublasCreate_v2,
+            cublasSetMathMode,
+            cublasSgemmStridedBatched,
+            cublasSgemm_v2,
+            cublasDestroy_v2
+        ],
     implemented_and_always_succeeds
         <= [
             cublasGetStatusName,

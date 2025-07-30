@@ -1,5 +1,6 @@
 use cuda_types::{cublas::*, cuda::*};
 use hip_runtime_sys::*;
+use rocblas_sys::*;
 use std::{
     ffi::CStr,
     mem::{self, ManuallyDrop, MaybeUninit},
@@ -110,6 +111,8 @@ from_cuda_nop!(
     *mut i8,
     *mut i32,
     *mut usize,
+    *const f32,
+    *mut f32,
     *const ::core::ffi::c_void,
     *const ::core::ffi::c_char,
     *mut ::core::ffi::c_void,
@@ -118,6 +121,7 @@ from_cuda_nop!(
     i32,
     u32,
     u64,
+    i64,
     usize,
     cuda_types::cuda::CUdevprop,
     CUdevice_attribute,
@@ -130,7 +134,8 @@ from_cuda_nop!(
     CUmodule,
     CUcontext,
     cublasHandle_t,
-    cublasStatus_t
+    cublasStatus_t,
+    cublasMath_t
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,
@@ -168,6 +173,19 @@ impl<'a, E: CudaErrorType> FromCuda<'a, *const ::core::ffi::c_void, E> for &'a :
             Some(x) => Ok(x),
             None => Err(E::INVALID_VALUE),
         }
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cublasOperation_t, E> for rocblas_operation {
+    fn from_cuda(t: &'a cublasOperation_t) -> Result<Self, E> {
+        Ok(match *t {
+            cublasOperation_t::CUBLAS_OP_N => rocblas_operation::rocblas_operation_none,
+            cublasOperation_t::CUBLAS_OP_T => rocblas_operation::rocblas_operation_transpose,
+            cublasOperation_t::CUBLAS_OP_C => {
+                rocblas_operation::rocblas_operation_conjugate_transpose
+            }
+            _ => return Err(E::NOT_SUPPORTED),
+        })
     }
 }
 
