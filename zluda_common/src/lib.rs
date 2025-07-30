@@ -16,7 +16,11 @@ impl CudaErrorType for CUerror {
     const NOT_SUPPORTED: Self = Self::NOT_SUPPORTED;
 }
 
+/// Used to try to convert CUDA API values into our internal representation.
+///
+/// Similar to [`TryFrom`], but we can implement this for primitive types. We also provide conversions from pointers to references.
 pub trait FromCuda<'a, T, E: CudaErrorType>: Sized {
+    /// Tries to convert to this type.
     fn from_cuda(t: &'a T) -> Result<Self, E>;
 }
 
@@ -83,6 +87,7 @@ macro_rules! from_cuda_transmute {
     };
 }
 
+/// Implement the [`FromCuda`] trait for a [`ZludaObject`].
 #[macro_export]
 macro_rules! from_cuda_object {
     ($($type_:ty),*) => {
@@ -116,7 +121,6 @@ from_cuda_nop!(
     CUlibraryOption,
     CUmoduleLoadingMode,
     CUuuid,
-
     CUlibrary,
     CUmodule,
     CUcontext
@@ -160,27 +164,57 @@ impl<'a, E: CudaErrorType> FromCuda<'a, *const ::core::ffi::c_void, E> for &'a :
     }
 }
 
+/// Represents an object that can be sent across the API boundary.
+///
+/// Some CUDA calls operate on an opaque handle. For example, `cuModuleLoadData` will load a
+/// module's data and set the `module` output argument to a new `CUmodule`. Then, other functions
+/// like `cuModuleGetFunction` can take that `CUmodule` as an argument.
 pub trait ZludaObject: Sized + Send + Sync {
+    /// This is a unique identifier used by [`LiveCheck`] for runtime type and lifetime checking.
+    ///
+    /// You can generate a new one with Python:
+    ///
+    /// ```python
+    /// import random
+    /// hex(random.getrandbits(64))
+    /// ```
     const COOKIE: usize;
+
+    /// The value of [`Self::Error`] used to represent a type check failure or use after free.
     const LIVENESS_FAIL: Self::Error = Self::Error::INVALID_VALUE;
 
+    /// The error type that should be used. This is generally specific to the library this trait
+    /// is being implemented in – for example, a [`ZludaObject`] in `zluda` should use the
+    /// [`CUerror`] type, and a [`ZludaObject`] in `zluda_blas` should use the [`cublasStatus_t`]
+    /// type.
     type Error: CudaErrorType;
+    /// The handle type that an object of this trait should should be wrapped as.
     type CudaHandle: Sized;
 
+    /// Executes the destructor for this type.
     fn drop_checked(&mut self) -> Result<(), Self::Error>;
 
+    /// Wraps an object of this trait in a [`LiveCheck`] that can be used for runtime type and
+    /// lifetime checking, and returns it as an opaque [`Self::CudaHandle`] that can be passed to
+    /// the API caller.
     fn wrap(self) -> Self::CudaHandle {
         unsafe { mem::transmute_copy(&LiveCheck::wrap(self)) }
     }
 }
 
+/// Wraps a [`ZludaObject`] and provides runtime type and lifetime checking.
+///
+/// Arbitrary memory can be cast to a value of this type, and then [`LiveCheck::as_result`] can be
+/// used to get the wrapped [`ZludaObject`] value, if it is valid.
 #[repr(C)]
 pub struct LiveCheck<T: ZludaObject> {
     cookie: usize,
+    /// The wrapped [`ZludaObject`].
     pub data: MaybeUninit<T>,
 }
 
 impl<T: ZludaObject> LiveCheck<T> {
+    /// Wraps `data` as a valid, initialized `LiveCheck`.
     pub fn new(data: T) -> Self {
         LiveCheck {
             cookie: T::COOKIE,
@@ -188,6 +222,7 @@ impl<T: ZludaObject> LiveCheck<T> {
         }
     }
 
+    /// Returns this value as an opaque `T::CudaHandle`.
     pub fn as_handle(&self) -> T::CudaHandle {
         unsafe { mem::transmute_copy(&self) }
     }
@@ -196,6 +231,8 @@ impl<T: ZludaObject> LiveCheck<T> {
         Box::into_raw(Box::new(Self::new(data)))
     }
 
+    /// Checks if this value represents a valid and initialized value of `T` and returns it.
+    /// Returns `T::LIVENESS_FAIL` if it does not.
     pub fn as_result(&self) -> Result<&T, T::Error> {
         if self.cookie == T::COOKIE {
             Ok(unsafe { self.data.assume_init_ref() })
@@ -221,26 +258,21 @@ impl<T: ZludaObject> LiveCheck<T> {
     }
 }
 
+/// Cast arbitrary memory to a [`LiveCheck`] value.
 pub fn as_ref<'a, T: ZludaObject>(
     handle: &'a T::CudaHandle,
 ) -> &'a ManuallyDrop<Box<LiveCheck<T>>> {
     unsafe { mem::transmute(handle) }
 }
 
+/// Try to drop `handle`.
+///
+/// Returns an error if `handle` is not initialized, not a value of `T`, or if `T::drop_checked`
+/// returns an error.
 pub fn drop_checked<T: ZludaObject>(handle: T::CudaHandle) -> Result<(), T::Error> {
     let mut wrapped_object: ManuallyDrop<Box<LiveCheck<T>>> =
         unsafe { mem::transmute_copy(&handle) };
     let underlying_error = LiveCheck::drop_checked(&mut wrapped_object)?;
     unsafe { ManuallyDrop::drop(&mut wrapped_object) };
     underlying_error
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        assert_eq!(4, 4);
-    }
 }
