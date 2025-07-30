@@ -33,9 +33,7 @@ fn open_driver() -> Result<libloading::Library, libloading::Error> {
     os::open_driver()
 }
 
-pub fn dlopen_local_noredirect(
-    path: String,
-) -> Result<libloading::Library, libloading::Error> {
+pub fn dlopen_local_noredirect(path: String) -> Result<libloading::Library, libloading::Error> {
     unsafe { os::dlopen_local_noredirect(path) }
 }
 
@@ -82,7 +80,26 @@ pub(crate) mod os {
     use libloading::os;
 
     pub fn open_driver() -> Result<libloading::Library, libloading::Error> {
-        unsafe { os::windows::Library::open_already_loaded("nvcuda").map(Into::into) }
+        os::windows::Library::open_already_loaded("nvcuda").map(Into::into)
+    }
+
+    pub unsafe fn dlopen_local_noredirect(
+        path: String,
+    ) -> Result<libloading::Library, libloading::Error> {
+        let driver = open_driver()?;
+        match driver.get::<unsafe extern "C" fn(*const u16) -> isize>(
+            c"ZludaLoadLibraryW_NoRedirect".to_bytes_with_nul(),
+        ) {
+            Ok(load_library) => {
+                let symbol = load_library(path.encode_utf16().collect::<Vec<u16>>().as_ptr());
+                if symbol == 0 {
+                    Err(libloading::Error::LoadLibraryExWUnknown)
+                } else {
+                    Ok(libloading::os::windows::Library::from_raw(symbol).into())
+                }
+            }
+            Err(_) => libloading::Library::new(path),
+        }
     }
 }
 

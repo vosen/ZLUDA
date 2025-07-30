@@ -40,7 +40,7 @@ static FILES_FOR_REDIRECT: [&'static str; 14] = [
 ];
 
 static GLOBALS: LazyLock<(
-    Option<unsafe extern "C" fn(*const c_char, c_int) -> DlopenReturn>,
+    Option<unsafe extern "C" fn(*const c_char, c_int) -> DlopenResult>,
     Option<[Vec<u8>; FILES_FOR_REDIRECT.len()]>,
 )> = LazyLock::new(|| {
     let dlopen_next = unsafe { mem::transmute(dlsym(RTLD_NEXT, c"dlopen".as_ptr())) };
@@ -79,14 +79,14 @@ unsafe fn ctor() {
     }
 }
 
-type DlopenReturn = Result<NonNull<c_void>, ()>;
+type DlopenResult = Result<NonNull<c_void>, ()>;
 
 const _: fn() = || {
-    let _ = std::mem::transmute::<*mut c_void, DlopenReturn>;
+    let _ = std::mem::transmute::<*mut c_void, DlopenResult>;
 };
 
 #[no_mangle]
-unsafe extern "C" fn dlopen(filename: *const c_char, flags: c_int) -> DlopenReturn {
+unsafe extern "C" fn dlopen(filename: *const c_char, flags: c_int) -> DlopenResult {
     let (dlopen_next, replacement_paths) = &*GLOBALS;
     let dlopen_next = dlopen_next.ok_or(())?;
     dlopen_redirect(dlopen_next, replacement_paths, filename, flags)
@@ -98,13 +98,13 @@ unsafe extern "C" fn dlopen(filename: *const c_char, flags: c_int) -> DlopenRetu
 unsafe extern "C" fn zluda_dlopen_noredirect(
     filename: *const c_char,
     flags: c_int,
-) -> DlopenReturn {
+) -> DlopenResult {
     let dlopen_next = GLOBALS.0.ok_or(())?;
     dlopen_next(filename, flags)
 }
 
 unsafe fn dlopen_redirect<'a>(
-    dlopen_next: unsafe extern "C" fn(*const c_char, c_int) -> DlopenReturn,
+    dlopen_next: unsafe extern "C" fn(*const c_char, c_int) -> DlopenResult,
     replacement_paths: &'a Option<[Vec<u8>; FILES_FOR_REDIRECT.len()]>,
     input_path: *const c_char,
     flags: c_int,
