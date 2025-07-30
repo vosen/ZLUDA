@@ -11,13 +11,13 @@ pub(crate) fn unimplemented() -> cublasStatus_t {
 }
 
 pub(crate) fn get_status_name(
-    _status: cuda_types::cublas::cublasStatus_t,
+    _status: cublasStatus_t,
 ) -> *const ::core::ffi::c_char {
     todo!()
 }
 
 pub(crate) fn get_status_string(
-    _status: cuda_types::cublas::cublasStatus_t,
+    _status: cublasStatus_t,
 ) -> *const ::core::ffi::c_char {
     todo!()
 }
