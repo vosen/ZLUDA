@@ -7,6 +7,10 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib"]
 
+[dependencies]
+ctor = "0.4.3"
+unwrap_or = "1.0.1"
+
 [package.metadata.zluda]
 linux_only = true
 linux_symlinks = [

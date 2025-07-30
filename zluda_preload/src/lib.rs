@@ -5,6 +5,7 @@ use std::{
     ptr::{self, NonNull},
     sync::LazyLock,
 };
+use unwrap_or::unwrap_some_or;
 
 const RTLD_NEXT: *mut c_void = -1isize as _;
 
@@ -21,7 +22,7 @@ struct DLInfo {
     dli_saddr: *mut c_void,
 }
 
-static FILES_FOR_REDIRECT: &[&'static str] = &[
+static FILES_FOR_REDIRECT: [&'static str; 14] = [
     "libcublas.so",
     "libcublas.so.12",
     "libcublasLt.so",
@@ -40,27 +41,43 @@ static FILES_FOR_REDIRECT: &[&'static str] = &[
 
 static GLOBALS: LazyLock<(
     Option<unsafe extern "C" fn(*const c_char, c_int) -> DlopenReturn>,
-    Option<PathBuf>,
+    Option<[Vec<u8>; FILES_FOR_REDIRECT.len()]>,
 )> = LazyLock::new(|| {
     let dlopen_next = unsafe { mem::transmute(dlsym(RTLD_NEXT, c"dlopen".as_ptr())) };
-    let mut dl_info = unsafe { mem::zeroed::<DLInfo>() };
-    let self_dir = if unsafe { dladdr(dlopen as _, &mut dl_info) } != 0 {
-        unsafe { CStr::from_ptr(dl_info.dli_fname) }
+    let mut self_dlinfo = unsafe { mem::zeroed::<DLInfo>() };
+    let self_dir = if unsafe { dladdr(dlopen as _, &mut self_dlinfo) } != 0 {
+        unsafe { CStr::from_ptr(self_dlinfo.dli_fname) }
             .to_str()
             .ok()
             .and_then(|path| {
                 let mut pathbuf = PathBuf::from(path);
-                if pathbuf.pop() {
-                    Some(pathbuf)
-                } else {
-                    None
+                if !pathbuf.pop() {
+                    return None;
                 }
+                Some(FILES_FOR_REDIRECT.map(|file| {
+                    let mut buffer = pathbuf.join(file).into_os_string().into_encoded_bytes();
+                    buffer.push(0);
+                    buffer
+                }))
             })
     } else {
         None
     };
     (dlopen_next, self_dir)
 });
+
+pub const RTLD_GLOBAL: c_int = 0x100;
+pub const RTLD_LAZY: c_int = 1;
+
+#[ctor::ctor]
+unsafe fn ctor() {
+    let (dlopen_next, replacement_paths) = &*GLOBALS;
+    let dlopen_next = unwrap_some_or!(dlopen_next, return);
+    let replacement_paths = unwrap_some_or!(replacement_paths, return);
+    for replacement in replacement_paths.into_iter() {
+        dlopen_next(replacement.as_ptr().cast(), RTLD_GLOBAL | RTLD_LAZY).ok();
+    }
+}
 
 type DlopenReturn = Result<NonNull<c_void>, ()>;
 
@@ -70,9 +87,9 @@ const _: fn() = || {
 
 #[no_mangle]
 unsafe extern "C" fn dlopen(filename: *const c_char, flags: c_int) -> DlopenReturn {
-    let (dlopen_next, self_dir) = &*GLOBALS;
+    let (dlopen_next, replacement_paths) = &*GLOBALS;
     let dlopen_next = dlopen_next.ok_or(())?;
-    dlopen_redirect(dlopen_next, self_dir, filename, flags)
+    dlopen_redirect(dlopen_next, replacement_paths, filename, flags)
         .or_else(|| dlopen_next(filename, flags).ok())
         .ok_or(())
 }
@@ -86,9 +103,9 @@ unsafe extern "C" fn zluda_dlopen_noredirect(
     dlopen_next(filename, flags)
 }
 
-unsafe fn dlopen_redirect(
+unsafe fn dlopen_redirect<'a>(
     dlopen_next: unsafe extern "C" fn(*const c_char, c_int) -> DlopenReturn,
-    basedir: &Option<PathBuf>,
+    replacement_paths: &'a Option<[Vec<u8>; FILES_FOR_REDIRECT.len()]>,
     input_path: *const c_char,
     flags: c_int,
 ) -> Option<NonNull<c_void>> {
@@ -96,16 +113,16 @@ unsafe fn dlopen_redirect(
         return None;
     }
     let input_path = CStr::from_ptr(input_path).to_str().ok()?;
-    let replaced_file = FILES_FOR_REDIRECT.into_iter().find_map(|file| {
-        if input_path.ends_with(file) {
-            Some(file)
-        } else {
-            None
-        }
-    })?;
-    let mut path = basedir.as_ref()?.clone();
-    path.push(replaced_file);
-    let mut path = path.into_os_string().into_string().ok()?.into_bytes();
-    path.push(0);
-    unsafe { dlopen_next(path.as_ptr() as _, flags) }.ok()
+    let replacement_paths = replacement_paths.as_ref()?;
+    let replacement_path = FILES_FOR_REDIRECT
+        .into_iter()
+        .zip(replacement_paths.into_iter())
+        .find_map(|(file, path)| {
+            if input_path.ends_with(file) {
+                Some(path)
+            } else {
+                None
+            }
+        })?;
+    unsafe { dlopen_next(replacement_path.as_ptr() as _, flags) }.ok()
 }

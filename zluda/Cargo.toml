@@ -28,7 +28,7 @@ winapi = { version = "0.3", features = ["heapapi", "std"] }
 
 [target.'cfg(not(windows))'.dependencies]
 libc = "0.2"
-dtor = "0.0.6"
+dtor = "0.0.7"
 
 [package.metadata.zluda]
 linux_symlinks = [
