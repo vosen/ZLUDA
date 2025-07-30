@@ -31,8 +31,6 @@ pub(crate) fn get_cudart_version() -> usize {
 }
 
 #[allow(non_snake_case)]
-pub(crate) fn disable_cpu_instructions_set_mask(
-    _mask: ::core::ffi::c_uint,
-) -> ::core::ffi::c_uint {
+pub(crate) fn disable_cpu_instructions_set_mask(_mask: ::core::ffi::c_uint) -> ::core::ffi::c_uint {
     todo!()
 }

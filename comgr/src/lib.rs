@@ -184,7 +184,8 @@ pub fn compile_bitcode(
     let bitcode_data_set = DataSet::new(comgr)?;
     let main_bitcode_data = Data::new(comgr, DataKind::Bc, c"zluda.bc", main_buffer)?;
     bitcode_data_set.add(&main_bitcode_data)?;
-    let attributes_bitcode_data = Data::new(comgr, DataKind::Bc, c"attributes.bc", attributes_buffer)?;
+    let attributes_bitcode_data =
+        Data::new(comgr, DataKind::Bc, c"attributes.bc", attributes_buffer)?;
     bitcode_data_set.add(&attributes_bitcode_data)?;
     let stdlib_bitcode_data = Data::new(comgr, DataKind::Bc, c"ptx_impl.bc", ptx_impl)?;
     bitcode_data_set.add(&stdlib_bitcode_data)?;

@@ -2,7 +2,7 @@ use super::{
     AtomSemantics, MemScope, RawRoundingMode, RawSetpCompareOp, ScalarType, SetpBoolPostOp,
     StateSpace, VectorPrefix,
 };
-use crate::{Mul24Control, Reduction, PtxError, PtxParserState, ShuffleMode};
+use crate::{Mul24Control, PtxError, PtxParserState, Reduction, ShuffleMode};
 use bitflags::bitflags;
 use std::{alloc::Layout, cmp::Ordering, num::NonZeroU8};
 
@@ -1417,7 +1417,6 @@ impl SetpData {
         }
     }
 }
-
 
 pub struct SetBoolData {
     pub dtype: ScalarType,

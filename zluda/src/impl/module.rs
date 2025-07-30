@@ -68,7 +68,9 @@ pub(crate) fn load_hip_module(image: *const std::ffi::c_void) -> Result<hipModul
     unsafe { hipCtxGetDevice(&mut dev) }?;
     let mut props = unsafe { mem::zeroed() };
     unsafe { hipGetDevicePropertiesR0600(&mut props, dev) }?;
-    let attributes = ptx::Attributes { clock_rate: props.clockRate as u32 };
+    let attributes = ptx::Attributes {
+        clock_rate: props.clockRate as u32,
+    };
     let llvm_module = ptx::to_llvm_module(ast, attributes).map_err(|_| CUerror::UNKNOWN)?;
     let elf_module = comgr::compile_bitcode(
         &global_state.comgr,
@@ -91,7 +93,6 @@ pub(crate) fn load_data(module: &mut CUmodule, image: &std::ffi::c_void) -> CUre
 
 pub(crate) fn unload(hmod: CUmodule) -> CUresult {
     super::drop_checked::<Module>(hmod)
-    
 }
 
 pub(crate) fn get_function(

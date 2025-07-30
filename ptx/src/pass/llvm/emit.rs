@@ -88,7 +88,11 @@ struct ModuleEmitContext<'a, 'input> {
 }
 
 impl<'a, 'input> ModuleEmitContext<'a, 'input> {
-    fn new(context: &Context, module: &llvm::Module, id_defs: &'a GlobalStringIdentResolver2<'input>) -> Self {
+    fn new(
+        context: &Context,
+        module: &llvm::Module,
+        id_defs: &'a GlobalStringIdentResolver2<'input>,
+    ) -> Self {
         ModuleEmitContext {
             context: context.get(),
             module: module.get(),
@@ -516,7 +520,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Trap {} => Err(error_todo_msg("Trap is not implemented yet")),
             ast::Instruction::Tanh { data, arguments } => self.emit_tanh(data, arguments),
             ast::Instruction::CpAsync { data, arguments } => self.emit_cp_async(data, arguments),
-            ast::Instruction::CpAsyncCommitGroup { } => Ok(()), // nop
+            ast::Instruction::CpAsyncCommitGroup {} => Ok(()), // nop
             ast::Instruction::CpAsyncWaitGroup { .. } => Ok(()), // nop
             ast::Instruction::CpAsyncWaitAll { .. } => Ok(()), // nop
             // replaced by a function call
@@ -764,7 +768,9 @@ impl<'a> MethodEmitContext<'a> {
             todo!()
         }
         let store = unsafe { LLVMBuildStore(self.builder, value, ptr) };
-        unsafe { LLVMSetAlignment(store, data.typ.layout().align() as u32); }
+        unsafe {
+            LLVMSetAlignment(store, data.typ.layout().align() as u32);
+        }
         Ok(())
     }
 
@@ -2586,7 +2592,6 @@ impl<'a> MethodEmitContext<'a> {
         }
         Ok(())
     }
-
 
     fn flush_denormals(
         &mut self,

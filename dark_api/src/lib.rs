@@ -259,12 +259,12 @@ dark_api! {
     "{C693336E-1121-DF11-A8C3-68F355D89593}" => CONTEXT_LOCAL_STORAGE_INTERFACE_V0301[4] {
         [0] = context_local_storage_put(
             context: cuda_types::cuda::CUcontext,
-            key: *mut std::ffi::c_void, 
-            value: *mut std::ffi::c_void, 
+            key: *mut std::ffi::c_void,
+            value: *mut std::ffi::c_void,
             // clsContextDestroyCallback, have to be called on cuDevicePrimaryCtxReset
             dtor_cb: Option<extern "system" fn(
                 cuda_types::cuda::CUcontext,
-                *mut std::ffi::c_void, 
+                *mut std::ffi::c_void,
                 *mut std::ffi::c_void,
             )>
         ) -> cuda_types::cuda::CUresult,
