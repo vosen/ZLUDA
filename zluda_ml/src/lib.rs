@@ -18,7 +18,7 @@ macro_rules! implemented_fn {
             #[no_mangle]
             #[allow(improper_ctypes_definitions)]
             pub extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
-                r#impl::$fn_name($($arg_id),*)
+                cuda_macros::nvml_normalize_fn!( crate::r#impl::$fn_name ) ( $( $arg_id ),* )
             }
         )*
     };
