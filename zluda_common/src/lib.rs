@@ -1,4 +1,4 @@
-use cuda_types::cuda::*;
+use cuda_types::{cublas::*, cuda::*};
 use hip_runtime_sys::*;
 use std::{
     ffi::CStr,
@@ -12,6 +12,11 @@ pub trait CudaErrorType {
 }
 
 impl CudaErrorType for CUerror {
+    const INVALID_VALUE: Self = Self::INVALID_VALUE;
+    const NOT_SUPPORTED: Self = Self::NOT_SUPPORTED;
+}
+
+impl CudaErrorType for cublasError_t {
     const INVALID_VALUE: Self = Self::INVALID_VALUE;
     const NOT_SUPPORTED: Self = Self::NOT_SUPPORTED;
 }
@@ -123,7 +128,9 @@ from_cuda_nop!(
     CUuuid,
     CUlibrary,
     CUmodule,
-    CUcontext
+    CUcontext,
+    cublasHandle_t,
+    cublasStatus_t
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,
