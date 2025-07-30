@@ -258,7 +258,7 @@ impl<T: ZludaObject> LiveCheck<T> {
     }
 }
 
-/// Cast arbitrary memory to a [`LiveCheck`] value.
+/// Cast a `T::CudaHandle` reference to a [`LiveCheck`] reference, preserving the lifetime.
 pub fn as_ref<'a, T: ZludaObject>(
     handle: &'a T::CudaHandle,
 ) -> &'a ManuallyDrop<Box<LiveCheck<T>>> {
