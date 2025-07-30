@@ -1,5 +1,5 @@
-pub(super) mod emit;
 pub(super) mod attributes;
+pub(super) mod emit;
 
 use std::ffi::CStr;
 use std::ops::Deref;
@@ -44,9 +44,7 @@ pub struct Module(LLVMModuleRef);
 
 impl Module {
     fn new(ctx: &Context, name: &CStr) -> Self {
-        Self(
-            unsafe { LLVMModuleCreateWithNameInContext(name.as_ptr(), ctx.get()) },
-        )
+        Self(unsafe { LLVMModuleCreateWithNameInContext(name.as_ptr(), ctx.get()) })
     }
 
     fn get(&self) -> LLVMModuleRef {

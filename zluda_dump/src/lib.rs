@@ -420,13 +420,13 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApiDump {
         CONTEXT_LOCAL_STORAGE_INTERFACE_V0301 {
             [0] = context_local_storage_put(
                 context: cuda_types::cuda::CUcontext,
-                key: *mut std::ffi::c_void, 
+                key: *mut std::ffi::c_void,
                 value: *mut std::ffi::c_void,
                 // clsContextDestroyCallback, have to be called on cuDevicePrimaryCtxReset
                 dtor_cb: Option<extern "system" fn(
                     cuda_types::cuda::CUcontext,
-                    *mut std::ffi::c_void, 
-                    *mut std::ffi::c_void, 
+                    *mut std::ffi::c_void,
+                    *mut std::ffi::c_void,
                 )>
             ) -> cuda_types::cuda::CUresult,
             [1] = context_local_storage_delete(
@@ -434,9 +434,9 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApiDump {
                 key: *mut std::ffi::c_void
             ) -> cuda_types::cuda::CUresult,
             [2] = context_local_storage_get(
-                value: *mut *mut std::ffi::c_void, 
+                value: *mut *mut std::ffi::c_void,
                 cu_ctx: cuda_types::cuda::CUcontext,
-                key: *mut std::ffi::c_void 
+                key: *mut std::ffi::c_void
             ) -> cuda_types::cuda::CUresult
         }
     }

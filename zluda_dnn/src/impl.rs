@@ -10,25 +10,20 @@ pub(crate) fn unimplemented() -> cudnnStatus_t {
     cudnnStatus_t::CUDNN_STATUS_NOT_SUPPORTED
 }
 
-#[allow(non_snake_case)]
-pub(crate) fn cudnnGetVersion() -> usize {
+pub(crate) fn get_version() -> usize {
     todo!()
 }
-#[allow(non_snake_case)]
-pub(crate) fn cudnnGetMaxDeviceVersion() -> usize {
+pub(crate) fn get_max_device_version() -> usize {
     todo!()
 }
-#[allow(non_snake_case)]
-pub(crate) fn cudnnGetCudartVersion() -> usize {
+pub(crate) fn get_cudart_version() -> usize {
     todo!()
 }
-#[allow(non_snake_case)]
-pub(crate) fn cudnnGetErrorString(
+pub(crate) fn get_error_string(
     _status: cuda_types::cudnn9::cudnnStatus_t,
 ) -> *const ::core::ffi::c_char {
     todo!()
 }
-#[allow(non_snake_case)]
-pub(crate) fn cudnnGetLastErrorString(_message: *mut ::core::ffi::c_char, _max_size: usize) -> () {
+pub(crate) fn get_last_error_string(_message: *mut ::core::ffi::c_char, _max_size: usize) -> () {
     todo!()
 }
