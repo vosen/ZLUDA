@@ -1,6 +1,6 @@
 use either::Either;
-use ptx_parser_macros_impl::parser;
 use proc_macro2::{Span, TokenStream};
+use ptx_parser_macros_impl::parser;
 use quote::{format_ident, quote, ToTokens};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::{collections::hash_map, hash::Hash, iter, rc::Rc};
@@ -359,7 +359,8 @@ fn gather_rules(
 
 #[proc_macro]
 pub fn derive_parser(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let parse_definitions = parse_macro_input!(tokens as ptx_parser_macros_impl::parser::ParseDefinitions);
+    let parse_definitions =
+        parse_macro_input!(tokens as ptx_parser_macros_impl::parser::ParseDefinitions);
     let mut definitions = FxHashMap::default();
     let mut special_definitions = FxHashMap::default();
     let types = OpcodeDefinitions::get_enum_types(&parse_definitions.definitions);
@@ -384,7 +385,13 @@ pub fn derive_parser(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream
         special_definitions.keys(),
         &mut token_enum.variants,
     );
-    let token_impl = emit_parse_function(&token_enum.ident, &definitions, &special_definitions, all_opcode, all_modifier);
+    let token_impl = emit_parse_function(
+        &token_enum.ident,
+        &definitions,
+        &special_definitions,
+        all_opcode,
+        all_modifier,
+    );
     let tokens = quote! {
         #enum_types_tokens
 
@@ -846,7 +853,8 @@ fn emit_definition_parser(
         (pattern, parser)
     });
 
-    let arguments_parse = quote! { let #arguments_pattern = ( #arguments_parser ).parse_next(stream)?; };
+    let arguments_parse =
+        quote! { let #arguments_pattern = ( #arguments_parser ).parse_next(stream)?; };
 
     let fn_args = definition.function_arguments();
     let fn_name = format_ident!("{}_{}", opcode, fn_idx);

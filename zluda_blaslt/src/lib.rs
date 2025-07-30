@@ -28,11 +28,12 @@ macro_rules! implemented {
 
 cuda_macros::cublaslt_function_declarations!(
     unimplemented,
-    implemented <= [
-        cublasLtGetStatusName,
-        cublasLtGetStatusString,
-        cublasLtDisableCpuInstructionsSetMask,
-        cublasLtGetVersion,
-        cublasLtGetCudartVersion
-    ]
+    implemented
+        <= [
+            cublasLtGetStatusName,
+            cublasLtGetStatusString,
+            cublasLtDisableCpuInstructionsSetMask,
+            cublasLtGetVersion,
+            cublasLtGetCudartVersion
+        ]
 );

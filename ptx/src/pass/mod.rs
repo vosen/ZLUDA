@@ -52,7 +52,10 @@ pub struct Attributes {
     pub clock_rate: u32,
 }
 
-pub fn to_llvm_module<'input>(ast: ast::Module<'input>, attributes: Attributes) -> Result<Module, TranslateError> {
+pub fn to_llvm_module<'input>(
+    ast: ast::Module<'input>,
+    attributes: Attributes,
+) -> Result<Module, TranslateError> {
     let mut flat_resolver = GlobalStringIdentResolver2::<'input>::new(SpirvWord(1));
     let mut scoped_resolver = ScopedResolver::new(&mut flat_resolver);
     let sreg_map = SpecialRegistersMap2::new(&mut scoped_resolver)?;

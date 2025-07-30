@@ -1,10 +1,13 @@
 use std::ffi::CStr;
 
-use super::*;
 use super::super::*;
-use llvm_zluda::{core::*};
+use super::*;
+use llvm_zluda::core::*;
 
-pub(crate) fn run(context: &Context, attributes: Attributes) -> Result<llvm::Module, TranslateError> {
+pub(crate) fn run(
+    context: &Context,
+    attributes: Attributes,
+) -> Result<llvm::Module, TranslateError> {
     let module = llvm::Module::new(context, LLVM_UNNAMED);
 
     emit_attribute(context, &module, "clock_rate", attributes.clock_rate)?;
@@ -16,7 +19,12 @@ pub(crate) fn run(context: &Context, attributes: Attributes) -> Result<llvm::Mod
     Ok(module)
 }
 
-fn emit_attribute(context: &Context, module: &llvm::Module, name: &str, attribute: u32) -> Result<(), TranslateError> {
+fn emit_attribute(
+    context: &Context,
+    module: &llvm::Module,
+    name: &str,
+    attribute: u32,
+) -> Result<(), TranslateError> {
     let name = format!("{}attribute_{}\0", ZLUDA_PTX_PREFIX, name).to_ascii_uppercase();
     let name = unsafe { CStr::from_bytes_with_nul_unchecked(name.as_bytes()) };
     let attribute_type = get_scalar_type(context.get(), ast::ScalarType::U32);

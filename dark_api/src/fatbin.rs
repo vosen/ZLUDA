@@ -77,21 +77,22 @@ impl<'a> Fatbin<'a> {
 
     pub fn get_submodules(&self) -> Result<FatbinIter<'a>, FatbinError> {
         match self.wrapper.version {
-            FatbincWrapper::VERSION_V2 => 
-                Ok(FatbinIter::V2(FatbinSubmoduleIterator {
-                    fatbins: self.wrapper.filename_or_fatbins as *const *const std::ffi::c_void,
-                    _phantom: std::marker::PhantomData,
-                })),
+            FatbincWrapper::VERSION_V2 => Ok(FatbinIter::V2(FatbinSubmoduleIterator {
+                fatbins: self.wrapper.filename_or_fatbins as *const *const std::ffi::c_void,
+                _phantom: std::marker::PhantomData,
+            })),
             FatbincWrapper::VERSION_V1 => {
-                let header = parse_fatbin_header(&self.wrapper.data)
-                    .map_err(FatbinError::ParseFailure)?;
+                let header =
+                    parse_fatbin_header(&self.wrapper.data).map_err(FatbinError::ParseFailure)?;
                 Ok(FatbinIter::V1(Some(FatbinSubmodule::new(header))))
             }
-            version => Err(FatbinError::ParseFailure(ParseError::UnexpectedBinaryField{
-                field_name: "FATBINC_VERSION",
-                observed: version,
-                expected: [FatbincWrapper::VERSION_V1, FatbincWrapper::VERSION_V2].into(),
-            })),
+            version => Err(FatbinError::ParseFailure(
+                ParseError::UnexpectedBinaryField {
+                    field_name: "FATBINC_VERSION",
+                    observed: version,
+                    expected: [FatbincWrapper::VERSION_V1, FatbincWrapper::VERSION_V2].into(),
+                },
+            )),
         }
     }
 }
@@ -176,7 +177,6 @@ impl<'a> FatbinFile<'a> {
             unsafe { self.get_payload().to_vec() }
         };
 
-        
         while payload.last() == Some(&0) {
             // remove trailing zeros
             payload.pop();

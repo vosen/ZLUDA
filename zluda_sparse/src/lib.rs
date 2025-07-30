@@ -28,12 +28,13 @@ macro_rules! implemented {
 
 cuda_macros::cusparse_function_declarations!(
     unimplemented,
-    implemented <= [
-        cusparseGetErrorName,
-        cusparseGetErrorString,
-        cusparseGetMatIndexBase,
-        cusparseGetMatDiagType,
-        cusparseGetMatFillMode,
-        cusparseGetMatType
-    ]
+    implemented
+        <= [
+            cusparseGetErrorName,
+            cusparseGetErrorString,
+            cusparseGetMatIndexBase,
+            cusparseGetMatDiagType,
+            cusparseGetMatFillMode,
+            cusparseGetMatType
+        ]
 );

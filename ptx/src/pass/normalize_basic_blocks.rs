@@ -21,7 +21,9 @@ pub(crate) fn run(
     for directive in directives.iter_mut() {
         let (body_ref, is_kernel) = match directive {
             Directive2::Method(Function2 {
-                body: Some(body), is_kernel, ..
+                body: Some(body),
+                is_kernel,
+                ..
             }) => (body, *is_kernel),
             _ => continue,
         };

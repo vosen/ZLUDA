@@ -38,10 +38,7 @@ pub(crate) unsafe fn unload(library: CUlibrary) -> CUresult {
     super::drop_checked::<Library>(library)
 }
 
-pub(crate) unsafe fn get_module(
-    out: &mut CUmodule,
-    library: &Library,
-) -> CUresult {
-    *out = module::Module{base: library.base}.wrap();
+pub(crate) unsafe fn get_module(out: &mut CUmodule, library: &Library) -> CUresult {
+    *out = module::Module { base: library.base }.wrap();
     Ok(())
 }

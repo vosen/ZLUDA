@@ -412,7 +412,7 @@ impl HyphenatedIdent {
 impl std::fmt::Display for HyphenatedIdent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut idents = self.idents.iter();
-        
+
         if let Some(id) = idents.next() {
             write!(f, "{}", id)?;
         }
@@ -423,7 +423,6 @@ impl std::fmt::Display for HyphenatedIdent {
 
         Ok(())
     }
-    
 }
 
 impl Parse for HyphenatedIdent {

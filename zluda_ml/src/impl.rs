@@ -11,9 +11,7 @@ pub(crate) fn unimplemented() -> nvmlReturn_t {
     nvmlReturn_t::ERROR_NOT_SUPPORTED
 }
 
-pub(crate) fn error_string(
-    _result: cuda_types::nvml::nvmlReturn_t,
-) -> *const ::core::ffi::c_char {
+pub(crate) fn error_string(_result: cuda_types::nvml::nvmlReturn_t) -> *const ::core::ffi::c_char {
     c"".as_ptr()
 }
 
