@@ -1,8 +1,9 @@
-use super::{module, FromCuda, ZludaObject};
+use super::module;
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::{cell::RefCell, ffi::c_void, ptr, sync::Mutex};
+use zluda_common::{FromCuda, ZludaObject};
 
 thread_local! {
     pub(crate) static STACK: RefCell<Vec<(CUcontext, hipDevice_t)>> = RefCell::new(Vec::new());
@@ -48,7 +49,7 @@ impl ContextState {
         self.flags = 0;
         // drop all modules and return first error if any
         let result = self.modules.drain().fold(Ok(()), |res: CUresult, hmod| {
-            match (res, super::drop_checked::<module::Module>(hmod)) {
+            match (res, zluda_common::drop_checked::<module::Module>(hmod)) {
                 (Err(e), _) => Err(e),
                 (_, Err(e)) => Err(e),
                 _ => Ok(()),
@@ -88,6 +89,7 @@ impl Context {
 impl ZludaObject for Context {
     const COOKIE: usize = 0x5f867c6d9cb73315;
 
+    type Error = CUerror;
     type CudaHandle = CUcontext;
 
     fn drop_checked(&mut self) -> CUresult {
@@ -128,7 +130,7 @@ pub(crate) fn set_current(raw_ctx: CUcontext) -> CUresult {
             None
         })
     } else {
-        let ctx: &Context = FromCuda::from_cuda(&raw_ctx)?;
+        let ctx: &Context = FromCuda::<_, CUerror>::from_cuda(&raw_ctx)?;
         let device = ctx.device;
         STACK.with(move |stack| {
             let mut stack = stack.borrow_mut();
@@ -157,7 +159,7 @@ pub(crate) fn get_current(pctx: &mut CUcontext) -> CUresult {
 
 pub(crate) fn get_device(dev: &mut hipDevice_t) -> CUresult {
     let cu_ctx = get_current_context()?;
-    let ctx: &Context = FromCuda::from_cuda(&cu_ctx)?;
+    let ctx: &Context = FromCuda::<_, CUerror>::from_cuda(&cu_ctx)?;
     *dev = ctx.device;
     Ok(())
 }
@@ -195,7 +197,7 @@ pub(crate) unsafe fn create_v2(
 }
 
 pub(crate) unsafe fn destroy_v2(ctx: CUcontext) -> CUresult {
-    super::drop_checked::<Context>(ctx)
+    zluda_common::drop_checked::<Context>(ctx)
 }
 
 pub(crate) unsafe fn pop_current_v2(ctx: &mut CUcontext) -> CUresult {
