@@ -11,22 +11,17 @@ pub(crate) fn unimplemented() -> nvmlReturn_t {
     nvmlReturn_t::ERROR_NOT_SUPPORTED
 }
 
-#[allow(non_snake_case)]
-pub(crate) fn nvmlErrorString(
-    _result: cuda_types::nvml::nvmlReturn_t,
-) -> *const ::core::ffi::c_char {
+pub(crate) fn error_string(_result: cuda_types::nvml::nvmlReturn_t) -> *const ::core::ffi::c_char {
     c"".as_ptr()
 }
 
-#[allow(non_snake_case)]
-pub(crate) fn nvmlInit_v2() -> cuda_types::nvml::nvmlReturn_t {
+pub(crate) fn init_v2() -> cuda_types::nvml::nvmlReturn_t {
     nvmlReturn_t::SUCCESS
 }
 
 const VERSION: &'static CStr = c"550.77";
 
-#[allow(non_snake_case)]
-pub(crate) fn nvmlSystemGetDriverVersion(
+pub(crate) fn system_get_driver_version(
     result: *mut ::core::ffi::c_char,
     length: ::core::ffi::c_uint,
 ) -> cuda_types::nvml::nvmlReturn_t {

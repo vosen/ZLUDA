@@ -10,33 +10,27 @@ pub(crate) fn unimplemented() -> cublasStatus_t {
     cublasStatus_t::ERROR_NOT_SUPPORTED
 }
 
-#[allow(non_snake_case)]
-pub(crate) fn cublasLtGetStatusName(
+pub(crate) fn get_status_name(
     _status: cuda_types::cublas::cublasStatus_t,
 ) -> *const ::core::ffi::c_char {
     todo!()
 }
 
-#[allow(non_snake_case)]
-pub(crate) fn cublasLtGetStatusString(
+pub(crate) fn get_status_string(
     _status: cuda_types::cublas::cublasStatus_t,
 ) -> *const ::core::ffi::c_char {
     todo!()
 }
 
-#[allow(non_snake_case)]
-pub(crate) fn cublasLtGetVersion() -> usize {
+pub(crate) fn get_version() -> usize {
+    todo!()
+}
+
+pub(crate) fn get_cudart_version() -> usize {
     todo!()
 }
 
 #[allow(non_snake_case)]
-pub(crate) fn cublasLtGetCudartVersion() -> usize {
-    todo!()
-}
-
-#[allow(non_snake_case)]
-pub(crate) fn cublasLtDisableCpuInstructionsSetMask(
-    _mask: ::core::ffi::c_uint,
-) -> ::core::ffi::c_uint {
+pub(crate) fn disable_cpu_instructions_set_mask(_mask: ::core::ffi::c_uint) -> ::core::ffi::c_uint {
     todo!()
 }
