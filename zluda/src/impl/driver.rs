@@ -4,7 +4,7 @@ use comgr::Comgr;
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
 use std::{
-    ffi::{CStr, CString, c_void},
+    ffi::{c_void, CStr, CString},
     mem, ptr, slice,
     sync::OnceLock,
     usize,
@@ -166,13 +166,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         cu_ctx: CUcontext,
         key: *mut c_void,
         value: *mut c_void,
-        dtor_cb: Option<
-            extern "system" fn(
-                CUcontext,
-                *mut c_void,
-                *mut c_void,
-            ),
-        >,
+        dtor_cb: Option<extern "system" fn(CUcontext, *mut c_void, *mut c_void)>,
     ) -> CUresult {
         let _ctx = if cu_ctx.0 != ptr::null_mut() {
             cu_ctx
@@ -223,7 +217,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         ctx_obj.with_state(|state: &context::ContextState| {
             match state.storage.get(&(key as usize)) {
                 Some(data) => *value = data.value as *mut c_void,
-                None => return CUresult::ERROR_INVALID_HANDLE
+                None => return CUresult::ERROR_INVALID_HANDLE,
             }
             Ok(())
         })?;
