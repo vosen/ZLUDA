@@ -1,4 +1,4 @@
-use super::{driver, ZludaObject};
+use super::driver;
 use cuda_types::{
     cuda::*,
     dark_api::{FatbinFileHeader, FatbincWrapper},
@@ -6,6 +6,7 @@ use cuda_types::{
 use dark_api::fatbin::Fatbin;
 use hip_runtime_sys::*;
 use std::{ffi::CStr, mem};
+use zluda_common::ZludaObject;
 
 pub(crate) struct Module {
     pub(crate) base: hipModule_t,
@@ -14,6 +15,7 @@ pub(crate) struct Module {
 impl ZludaObject for Module {
     const COOKIE: usize = 0xe9138bd040487d4a;
 
+    type Error = CUerror;
     type CudaHandle = CUmodule;
 
     fn drop_checked(&mut self) -> CUresult {
@@ -68,7 +70,9 @@ pub(crate) fn load_hip_module(image: *const std::ffi::c_void) -> Result<hipModul
     unsafe { hipCtxGetDevice(&mut dev) }?;
     let mut props = unsafe { mem::zeroed() };
     unsafe { hipGetDevicePropertiesR0600(&mut props, dev) }?;
-    let attributes = ptx::Attributes { clock_rate: props.clockRate as u32 };
+    let attributes = ptx::Attributes {
+        clock_rate: props.clockRate as u32,
+    };
     let llvm_module = ptx::to_llvm_module(ast, attributes).map_err(|_| CUerror::UNKNOWN)?;
     let elf_module = comgr::compile_bitcode(
         &global_state.comgr,
@@ -90,8 +94,7 @@ pub(crate) fn load_data(module: &mut CUmodule, image: &std::ffi::c_void) -> CUre
 }
 
 pub(crate) fn unload(hmod: CUmodule) -> CUresult {
-    super::drop_checked::<Module>(hmod)
-    
+    zluda_common::drop_checked::<Module>(hmod)
 }
 
 pub(crate) fn get_function(

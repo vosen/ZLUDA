@@ -333,6 +333,7 @@ dependencies = [
  "bitflags 2.9.1",
  "cuda_macros",
  "hip_runtime-sys",
+ "rocblas-sys",
 ]
 
 [[package]]
@@ -1823,6 +1824,7 @@ dependencies = [
  "rustc-hash 1.1.0",
  "tempfile",
  "winapi",
+ "zluda_common",
 ]
 
 [[package]]
@@ -1853,6 +1855,14 @@ version = "0.0.0"
 dependencies = [
  "cuda_macros",
  "cuda_types",
+]
+
+[[package]]
+name = "zluda_common"
+version = "0.1.0"
+dependencies = [
+ "cuda_types",
+ "hip_runtime-sys",
 ]
 
 [[package]]

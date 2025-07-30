@@ -11,6 +11,15 @@ env:
   ROCM_VERSION: "6.3.1"
 
 jobs:
+  formatting:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: rustfmt
+      - name: Check Rust formatting
+        uses: actions-rust-lang/rustfmt@v1
   build_linux:
     name: Build (Linux)
     runs-on: ubuntu-22.04

@@ -3581,7 +3581,7 @@ derive_parser!(
                 state.errors.push(PtxError::SyntaxError);
                 CpAsyncCpSize::Bytes4
             });
-        
+
         let src_size = src_size
             .and_then(|op| op.as_immediate())
             .and_then(|imm| imm.as_u64());

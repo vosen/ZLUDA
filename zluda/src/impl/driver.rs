@@ -1,14 +1,14 @@
-use super::{FromCuda, LiveCheck};
 use crate::r#impl::{context, device};
 use comgr::Comgr;
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
 use std::{
-    ffi::{CStr, CString, c_void},
+    ffi::{c_void, CStr, CString},
     mem, ptr, slice,
     sync::OnceLock,
     usize,
 };
+use zluda_common::{FromCuda, LiveCheck};
 
 #[cfg_attr(windows, path = "os_win.rs")]
 #[cfg_attr(not(windows), path = "os_unix.rs")]
@@ -166,13 +166,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         cu_ctx: CUcontext,
         key: *mut c_void,
         value: *mut c_void,
-        dtor_cb: Option<
-            extern "system" fn(
-                CUcontext,
-                *mut c_void,
-                *mut c_void,
-            ),
-        >,
+        dtor_cb: Option<extern "system" fn(CUcontext, *mut c_void, *mut c_void)>,
     ) -> CUresult {
         let _ctx = if cu_ctx.0 != ptr::null_mut() {
             cu_ctx
@@ -181,7 +175,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
             context::get_current(&mut current_ctx)?;
             current_ctx
         };
-        let ctx_obj: &context::Context = FromCuda::from_cuda(&_ctx)?;
+        let ctx_obj: &context::Context = FromCuda::<_, CUerror>::from_cuda(&_ctx)?;
         ctx_obj.with_state_mut(|state: &mut context::ContextState| {
             state.storage.insert(
                 key as usize,
@@ -200,7 +194,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         cu_ctx: CUcontext,
         key: *mut c_void,
     ) -> CUresult {
-        let ctx_obj: &context::Context = FromCuda::from_cuda(&cu_ctx)?;
+        let ctx_obj: &context::Context = FromCuda::<_, CUerror>::from_cuda(&cu_ctx)?;
         ctx_obj.with_state_mut(|state: &mut context::ContextState| {
             state.storage.remove(&(key as usize));
             Ok(())
@@ -219,11 +213,11 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         } else {
             _ctx = cu_ctx
         };
-        let ctx_obj: &context::Context = FromCuda::from_cuda(&_ctx)?;
+        let ctx_obj: &context::Context = FromCuda::<_, CUerror>::from_cuda(&_ctx)?;
         ctx_obj.with_state(|state: &context::ContextState| {
             match state.storage.get(&(key as usize)) {
                 Some(data) => *value = data.value as *mut c_void,
-                None => return CUresult::ERROR_INVALID_HANDLE
+                None => return CUresult::ERROR_INVALID_HANDLE,
             }
             Ok(())
         })?;
