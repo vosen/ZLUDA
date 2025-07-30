@@ -28,11 +28,12 @@ macro_rules! implemented {
 
 cuda_macros::cudnn9_function_declarations!(
     unimplemented,
-    implemented <= [
-        cudnnGetVersion,
-        cudnnGetMaxDeviceVersion,
-        cudnnGetCudartVersion,
-        cudnnGetErrorString,
-        cudnnGetLastErrorString
-    ]
+    implemented
+        <= [
+            cudnnGetVersion,
+            cudnnGetMaxDeviceVersion,
+            cudnnGetCudartVersion,
+            cudnnGetErrorString,
+            cudnnGetLastErrorString
+        ]
 );

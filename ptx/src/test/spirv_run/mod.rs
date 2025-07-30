@@ -46,7 +46,7 @@ macro_rules! test_ptx_llvm {
                 test_llvm_assert(stringify!($fn_name), &ptx, ll.trim())
             }
         }
-    }
+    };
 }
 
 macro_rules! test_ptx {
@@ -309,48 +309,77 @@ test_ptx!(assertfail);
 test_ptx!(lanemask_lt);
 test_ptx!(extern_func);
 
-test_ptx_warp!(tid, [
-     0u8,  1u8,  2u8,  3u8,  4u8,  5u8,  6u8,  7u8,  8u8,  9u8, 10u8, 11u8, 12u8, 13u8, 14u8, 15u8,
-    16u8, 17u8, 18u8, 19u8, 20u8, 21u8, 22u8, 23u8, 24u8, 25u8, 26u8, 27u8, 28u8, 29u8, 30u8, 31u8,
-    32u8, 33u8, 34u8, 35u8, 36u8, 37u8, 38u8, 39u8, 40u8, 41u8, 42u8, 43u8, 44u8, 45u8, 46u8, 47u8,
-    48u8, 49u8, 50u8, 51u8, 52u8, 53u8, 54u8, 55u8, 56u8, 57u8, 58u8, 59u8, 60u8, 61u8, 62u8, 63u8,
-]);
-test_ptx_warp!(bar_red_and_pred, [
-    2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32,
-    2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32,
-    2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32,
-    2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32,
-]);
-test_ptx_warp!(shfl_sync_up_b32_pred, [
-    1000u32, 1001u32, 1002u32,    0u32,    1u32,    2u32,    3u32,    4u32,    5u32,    6u32,    7u32,    8u32,    9u32,   10u32,   11u32,   12u32,
-      13u32,   14u32,   15u32,   16u32,   17u32,   18u32,   19u32,   20u32,   21u32,   22u32,   23u32,   24u32,   25u32,   26u32,   27u32,   28u32,
-    1032u32, 1033u32, 1034u32,   32u32,   33u32,   34u32,   35u32,   36u32,   37u32,   38u32,   39u32,   40u32,   41u32,   42u32,   43u32,   44u32,
-      45u32,   46u32,   47u32,   48u32,   49u32,   50u32,   51u32,   52u32,   53u32,   54u32,   55u32,   56u32,   57u32,   58u32,   59u32,   60u32,
-]);
-test_ptx_warp!(shfl_sync_down_b32_pred, [
-     3u32,    4u32,    5u32,    6u32,    7u32,    8u32,    9u32,   10u32,   11u32,   12u32,   13u32,   14u32,   15u32,   16u32,   17u32,   18u32,
-    19u32,   20u32,   21u32,   22u32,   23u32,   24u32,   25u32,   26u32,   27u32,   28u32,   29u32,   30u32,   31u32, 1029u32, 1030u32, 1031u32,
-    35u32,   36u32,   37u32,   38u32,   39u32,   40u32,   41u32,   42u32,   43u32,   44u32,   45u32,   46u32,   47u32,   48u32,   49u32,   50u32,
-    51u32,   52u32,   53u32,   54u32,   55u32,   56u32,   57u32,   58u32,   59u32,   60u32,   61u32,   62u32,   63u32, 1061u32, 1062u32, 1063u32,
-]);
-test_ptx_warp!(shfl_sync_bfly_b32_pred, [
-     3u32,  2u32,  1u32,  0u32,  7u32,  6u32,  5u32,  4u32, 11u32, 10u32,  9u32,  8u32, 15u32, 14u32, 13u32, 12u32,
-    19u32, 18u32, 17u32, 16u32, 23u32, 22u32, 21u32, 20u32, 27u32, 26u32, 25u32, 24u32, 31u32, 30u32, 29u32, 28u32,
-    35u32, 34u32, 33u32, 32u32, 39u32, 38u32, 37u32, 36u32, 43u32, 42u32, 41u32, 40u32, 47u32, 46u32, 45u32, 44u32,
-    51u32, 50u32, 49u32, 48u32, 55u32, 54u32, 53u32, 52u32, 59u32, 58u32, 57u32, 56u32, 63u32, 62u32, 61u32, 60u32,
-]);
-test_ptx_warp!(shfl_sync_idx_b32_pred, [
-    12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32,
-    12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32,
-    44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32,
-    44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32,
-]);
-test_ptx_warp!(shfl_sync_mode_b32, [
-      9u32,   7u32,   8u32,   9u32,  21u32,  19u32,  20u32,  21u32,  33u32,  31u32,  32u32,  33u32,  45u32,  43u32,  44u32,  45u32,  
-     73u32,  71u32,  72u32,  73u32,  85u32,  83u32,  84u32,  85u32,  97u32,  95u32,  96u32,  97u32, 109u32, 107u32, 108u32, 109u32,
-    137u32, 135u32, 136u32, 137u32, 149u32, 147u32, 148u32, 149u32, 161u32, 159u32, 160u32, 161u32, 173u32, 171u32, 172u32, 173u32,
-    201u32, 199u32, 200u32, 201u32, 213u32, 211u32, 212u32, 213u32, 225u32, 223u32, 224u32, 225u32, 237u32, 235u32, 236u32, 237u32,
-]);
+test_ptx_warp!(
+    tid,
+    [
+        0u8, 1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8, 10u8, 11u8, 12u8, 13u8, 14u8, 15u8, 16u8,
+        17u8, 18u8, 19u8, 20u8, 21u8, 22u8, 23u8, 24u8, 25u8, 26u8, 27u8, 28u8, 29u8, 30u8, 31u8,
+        32u8, 33u8, 34u8, 35u8, 36u8, 37u8, 38u8, 39u8, 40u8, 41u8, 42u8, 43u8, 44u8, 45u8, 46u8,
+        47u8, 48u8, 49u8, 50u8, 51u8, 52u8, 53u8, 54u8, 55u8, 56u8, 57u8, 58u8, 59u8, 60u8, 61u8,
+        62u8, 63u8,
+    ]
+);
+test_ptx_warp!(
+    bar_red_and_pred,
+    [
+        2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32,
+        2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32,
+        2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32,
+        2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32,
+        2u32, 2u32, 2u32, 2u32,
+    ]
+);
+test_ptx_warp!(
+    shfl_sync_up_b32_pred,
+    [
+        1000u32, 1001u32, 1002u32, 0u32, 1u32, 2u32, 3u32, 4u32, 5u32, 6u32, 7u32, 8u32, 9u32,
+        10u32, 11u32, 12u32, 13u32, 14u32, 15u32, 16u32, 17u32, 18u32, 19u32, 20u32, 21u32, 22u32,
+        23u32, 24u32, 25u32, 26u32, 27u32, 28u32, 1032u32, 1033u32, 1034u32, 32u32, 33u32, 34u32,
+        35u32, 36u32, 37u32, 38u32, 39u32, 40u32, 41u32, 42u32, 43u32, 44u32, 45u32, 46u32, 47u32,
+        48u32, 49u32, 50u32, 51u32, 52u32, 53u32, 54u32, 55u32, 56u32, 57u32, 58u32, 59u32, 60u32,
+    ]
+);
+test_ptx_warp!(
+    shfl_sync_down_b32_pred,
+    [
+        3u32, 4u32, 5u32, 6u32, 7u32, 8u32, 9u32, 10u32, 11u32, 12u32, 13u32, 14u32, 15u32, 16u32,
+        17u32, 18u32, 19u32, 20u32, 21u32, 22u32, 23u32, 24u32, 25u32, 26u32, 27u32, 28u32, 29u32,
+        30u32, 31u32, 1029u32, 1030u32, 1031u32, 35u32, 36u32, 37u32, 38u32, 39u32, 40u32, 41u32,
+        42u32, 43u32, 44u32, 45u32, 46u32, 47u32, 48u32, 49u32, 50u32, 51u32, 52u32, 53u32, 54u32,
+        55u32, 56u32, 57u32, 58u32, 59u32, 60u32, 61u32, 62u32, 63u32, 1061u32, 1062u32, 1063u32,
+    ]
+);
+test_ptx_warp!(
+    shfl_sync_bfly_b32_pred,
+    [
+        3u32, 2u32, 1u32, 0u32, 7u32, 6u32, 5u32, 4u32, 11u32, 10u32, 9u32, 8u32, 15u32, 14u32,
+        13u32, 12u32, 19u32, 18u32, 17u32, 16u32, 23u32, 22u32, 21u32, 20u32, 27u32, 26u32, 25u32,
+        24u32, 31u32, 30u32, 29u32, 28u32, 35u32, 34u32, 33u32, 32u32, 39u32, 38u32, 37u32, 36u32,
+        43u32, 42u32, 41u32, 40u32, 47u32, 46u32, 45u32, 44u32, 51u32, 50u32, 49u32, 48u32, 55u32,
+        54u32, 53u32, 52u32, 59u32, 58u32, 57u32, 56u32, 63u32, 62u32, 61u32, 60u32,
+    ]
+);
+test_ptx_warp!(
+    shfl_sync_idx_b32_pred,
+    [
+        12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32,
+        12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 12u32,
+        12u32, 12u32, 12u32, 12u32, 12u32, 12u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32,
+        44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32,
+        44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32, 44u32,
+    ]
+);
+test_ptx_warp!(
+    shfl_sync_mode_b32,
+    [
+        9u32, 7u32, 8u32, 9u32, 21u32, 19u32, 20u32, 21u32, 33u32, 31u32, 32u32, 33u32, 45u32,
+        43u32, 44u32, 45u32, 73u32, 71u32, 72u32, 73u32, 85u32, 83u32, 84u32, 85u32, 97u32, 95u32,
+        96u32, 97u32, 109u32, 107u32, 108u32, 109u32, 137u32, 135u32, 136u32, 137u32, 149u32,
+        147u32, 148u32, 149u32, 161u32, 159u32, 160u32, 161u32, 173u32, 171u32, 172u32, 173u32,
+        201u32, 199u32, 200u32, 201u32, 213u32, 211u32, 212u32, 213u32, 225u32, 223u32, 224u32,
+        225u32, 237u32, 235u32, 236u32, 237u32,
+    ]
+);
 
 struct DisplayError<T: Debug> {
     err: T,
@@ -381,10 +410,16 @@ fn test_hip_assert<
     block_dim_x: u32,
 ) -> Result<(), Box<dyn error::Error>> {
     let ast = ptx_parser::parse_module_checked(ptx_text).unwrap();
-    let llvm_ir = pass::to_llvm_module(ast, pass::Attributes { clock_rate: 2124000 }).unwrap();
+    let llvm_ir = pass::to_llvm_module(
+        ast,
+        pass::Attributes {
+            clock_rate: 2124000,
+        },
+    )
+    .unwrap();
     let name = CString::new(name)?;
-    let result =
-        run_hip(name.as_c_str(), llvm_ir, input, output, block_dim_x).map_err(|err| DisplayError { err })?;
+    let result = run_hip(name.as_c_str(), llvm_ir, input, output, block_dim_x)
+        .map_err(|err| DisplayError { err })?;
     assert_eq!(result.as_slice(), output);
     Ok(())
 }
@@ -395,7 +430,13 @@ fn test_llvm_assert(
     expected_ll: &str,
 ) -> Result<(), Box<dyn error::Error>> {
     let ast = ptx_parser::parse_module_checked(ptx_text).unwrap();
-    let llvm_ir = pass::to_llvm_module(ast, pass::Attributes { clock_rate: 2124000 }).unwrap();
+    let llvm_ir = pass::to_llvm_module(
+        ast,
+        pass::Attributes {
+            clock_rate: 2124000,
+        },
+    )
+    .unwrap();
     let actual_ll = llvm_ir.llvm_ir.print_module_to_string();
     let actual_ll = actual_ll.to_str();
     compare_llvm(name, actual_ll, expected_ll);
@@ -607,7 +648,7 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
             .unwrap();
         }
         unsafe { hipMemset(out_b, 0, output.len() * mem::size_of::<Output>()) }.unwrap();
-        let mut args = if input.is_some() { 
+        let mut args = if input.is_some() {
             [&inp_b, &out_b]
         } else {
             [&out_b, &out_b]

@@ -28,10 +28,11 @@ macro_rules! implemented {
 
 cuda_macros::cublas_function_declarations!(
     unimplemented,
-    implemented <= [
-        cublasGetStatusName,
-        cublasGetStatusString,
-        cublasXerbla,
-        cublasGetCudartVersion
-    ]
+    implemented
+        <= [
+            cublasGetStatusName,
+            cublasGetStatusString,
+            cublasXerbla,
+            cublasGetCudartVersion
+        ]
 );
