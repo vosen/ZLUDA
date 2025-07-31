@@ -13,7 +13,7 @@ pub fn get_export_table() -> Option<::dark_api::zluda_trace::ZludaTraceInternal>
             unsafe extern "system" fn(*mut *const ::core::ffi::c_void, *const CUuuid) -> CUresult,
             libloading::Error,
         >,
-    > = LazyLock::new(|| unsafe { get_dump_table_impl() });
+    > = LazyLock::new(|| unsafe { get_export_table_impl() });
     let cu_get_export_table = CU_GET_EXPORT_TABLE.as_ref().ok()?;
     let mut ptr = ptr::null();
     unsafe { (cu_get_export_table)(&mut ptr, &::dark_api::zluda_trace::ZludaTraceInternal::GUID) }
@@ -21,7 +21,7 @@ pub fn get_export_table() -> Option<::dark_api::zluda_trace::ZludaTraceInternal>
     Some(unsafe { ::dark_api::zluda_trace::ZludaTraceInternal::new(ptr) })
 }
 
-unsafe fn get_dump_table_impl() -> Result<
+unsafe fn get_export_table_impl() -> Result<
     unsafe extern "system" fn(*mut *const ::core::ffi::c_void, *const CUuuid) -> CUresult,
     libloading::Error,
 > {
