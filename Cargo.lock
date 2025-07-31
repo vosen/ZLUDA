@@ -1843,119 +1843,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zluda_dump"
-version = "0.0.0"
-dependencies = [
- "cglue",
- "cuda_macros",
- "cuda_types",
- "dark_api",
- "detours-sys",
- "dynasm",
- "dynasmrt",
- "format",
- "goblin",
- "libc",
- "parking_lot",
- "paste",
- "ptx",
- "ptx_parser",
- "regex",
- "rustc-hash 1.1.0",
- "unwrap_or",
- "wchar",
- "winapi",
- "zluda_dump_common",
- "zstd-safe",
-]
-
-[[package]]
-name = "zluda_dump_blas"
-version = "0.0.0"
-dependencies = [
- "cglue",
- "cuda_macros",
- "cuda_types",
- "dark_api",
- "format",
- "libloading",
- "paste",
- "unwrap_or",
- "zluda_dump_common",
-]
-
-[[package]]
-name = "zluda_dump_blaslt"
-version = "0.0.0"
-dependencies = [
- "cglue",
- "cuda_macros",
- "cuda_types",
- "dark_api",
- "format",
- "libloading",
- "paste",
- "unwrap_or",
- "zluda_dump_common",
-]
-
-[[package]]
-name = "zluda_dump_common"
-version = "0.1.0"
-dependencies = [
- "cglue",
- "cuda_types",
- "dark_api",
- "format",
- "libloading",
-]
-
-[[package]]
-name = "zluda_dump_dnn"
-version = "0.0.0"
-dependencies = [
- "cglue",
- "cuda_macros",
- "cuda_types",
- "dark_api",
- "format",
- "libloading",
- "paste",
- "unwrap_or",
- "zluda_dump_common",
-]
-
-[[package]]
-name = "zluda_dump_fft"
-version = "0.0.0"
-dependencies = [
- "cglue",
- "cuda_macros",
- "cuda_types",
- "dark_api",
- "format",
- "libloading",
- "paste",
- "unwrap_or",
- "zluda_dump_common",
-]
-
-[[package]]
-name = "zluda_dump_sparse"
-version = "0.0.0"
-dependencies = [
- "cglue",
- "cuda_macros",
- "cuda_types",
- "dark_api",
- "format",
- "libloading",
- "paste",
- "unwrap_or",
- "zluda_dump_common",
-]
-
-[[package]]
 name = "zluda_fft"
 version = "0.0.0"
 dependencies = [
@@ -1971,9 +1858,9 @@ dependencies = [
  "detours-sys",
  "tempfile",
  "winapi",
- "zluda_dump",
  "zluda_ml",
  "zluda_redirect",
+ "zluda_trace",
 ]
 
 [[package]]
@@ -1999,6 +1886,119 @@ version = "0.0.0"
 dependencies = [
  "cuda_macros",
  "cuda_types",
+]
+
+[[package]]
+name = "zluda_trace"
+version = "0.0.0"
+dependencies = [
+ "cglue",
+ "cuda_macros",
+ "cuda_types",
+ "dark_api",
+ "detours-sys",
+ "dynasm",
+ "dynasmrt",
+ "format",
+ "goblin",
+ "libc",
+ "parking_lot",
+ "paste",
+ "ptx",
+ "ptx_parser",
+ "regex",
+ "rustc-hash 1.1.0",
+ "unwrap_or",
+ "wchar",
+ "winapi",
+ "zluda_trace_common",
+ "zstd-safe",
+]
+
+[[package]]
+name = "zluda_trace_blas"
+version = "0.0.0"
+dependencies = [
+ "cglue",
+ "cuda_macros",
+ "cuda_types",
+ "dark_api",
+ "format",
+ "libloading",
+ "paste",
+ "unwrap_or",
+ "zluda_trace_common",
+]
+
+[[package]]
+name = "zluda_trace_blaslt"
+version = "0.0.0"
+dependencies = [
+ "cglue",
+ "cuda_macros",
+ "cuda_types",
+ "dark_api",
+ "format",
+ "libloading",
+ "paste",
+ "unwrap_or",
+ "zluda_trace_common",
+]
+
+[[package]]
+name = "zluda_trace_common"
+version = "0.1.0"
+dependencies = [
+ "cglue",
+ "cuda_types",
+ "dark_api",
+ "format",
+ "libloading",
+]
+
+[[package]]
+name = "zluda_trace_dnn"
+version = "0.0.0"
+dependencies = [
+ "cglue",
+ "cuda_macros",
+ "cuda_types",
+ "dark_api",
+ "format",
+ "libloading",
+ "paste",
+ "unwrap_or",
+ "zluda_trace_common",
+]
+
+[[package]]
+name = "zluda_trace_fft"
+version = "0.0.0"
+dependencies = [
+ "cglue",
+ "cuda_macros",
+ "cuda_types",
+ "dark_api",
+ "format",
+ "libloading",
+ "paste",
+ "unwrap_or",
+ "zluda_trace_common",
+]
+
+[[package]]
+name = "zluda_trace_sparse"
+version = "0.0.0"
+dependencies = [
+ "cglue",
+ "cuda_macros",
+ "cuda_types",
+ "dark_api",
+ "format",
+ "libloading",
+ "paste",
+ "unwrap_or",
+ "zluda_trace_common",
 ]
 
 [[package]]

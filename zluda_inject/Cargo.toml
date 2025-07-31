@@ -17,7 +17,7 @@ detours-sys = { path = "../detours-sys" }
 [dev-dependencies]
 # all of those are used in integration tests
 zluda_redirect = { path = "../zluda_redirect" }
-zluda_dump = { path = "../zluda_dump" }
+zluda_trace = { path = "../zluda_trace" }
 zluda_ml = { path = "../zluda_ml" }
 
 [package.metadata.zluda]
