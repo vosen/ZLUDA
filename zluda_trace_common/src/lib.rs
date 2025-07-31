@@ -86,7 +86,6 @@ pub(crate) mod os {
 
     pub fn open_driver() -> Result<libloading::Library, libloading::Error> {
         os::windows::Library::open_already_loaded("nvcuda").map(Into::into)
-<<<<<<< HEAD:zluda_dump_common/src/lib.rs
     }
 
     pub unsafe fn dlopen_local_noredirect(
@@ -106,8 +105,6 @@ pub(crate) mod os {
             }
             Err(_) => libloading::Library::new(path),
         }
-=======
->>>>>>> 99c36092bea198c90fd00f6eea83c728e497ff35:zluda_trace_common/src/lib.rs
     }
 }
 

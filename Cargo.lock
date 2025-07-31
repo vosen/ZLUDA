@@ -1904,6 +1904,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "zluda_preload"
+version = "0.0.0"
+dependencies = [
+ "ctor",
+ "unwrap_or",
+]
+
+[[package]]
 name = "zluda_redirect"
 version = "0.0.0"
 dependencies = [
@@ -2032,60 +2040,6 @@ dependencies = [
  "paste",
  "unwrap_or",
  "zluda_trace_common",
-]
-
-[[package]]
-name = "zluda_fft"
-version = "0.0.0"
-dependencies = [
- "cuda_macros",
- "cuda_types",
-]
-
-[[package]]
-name = "zluda_inject"
-version = "0.0.0"
-dependencies = [
- "argh",
- "detours-sys",
- "tempfile",
- "winapi",
- "zluda_dump",
- "zluda_ml",
- "zluda_redirect",
-]
-
-[[package]]
-name = "zluda_ml"
-version = "0.0.0"
-dependencies = [
- "cuda_macros",
- "cuda_types",
-]
-
-[[package]]
-name = "zluda_preload"
-version = "0.0.0"
-dependencies = [
- "ctor",
- "unwrap_or",
-]
-
-[[package]]
-name = "zluda_redirect"
-version = "0.0.0"
-dependencies = [
- "detours-sys",
- "wchar",
- "winapi",
-]
-
-[[package]]
-name = "zluda_sparse"
-version = "0.0.0"
-dependencies = [
- "cuda_macros",
- "cuda_types",
 ]
 
 [[package]]

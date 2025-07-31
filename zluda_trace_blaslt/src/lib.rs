@@ -7,7 +7,7 @@ fn get_library() -> Option<Library> {
     let cuda_lib = std::env::var("ZLUDA_BLASLT_LIB")
         .ok()
         .unwrap_or_else(|| "/usr/local/cuda/lib64/libcublasLt.so".to_string());
-    zluda_dump_common::dlopen_local_noredirect(cuda_lib).ok()
+    zluda_trace_common::dlopen_local_noredirect(cuda_lib).ok()
 }
 
 macro_rules! unimplemented {
