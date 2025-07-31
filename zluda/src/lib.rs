@@ -160,3 +160,6 @@ cuda_macros::cuda_function_declarations!(
         ],
     implemented_in_function <= [cuLaunchKernel,]
 );
+
+#[cfg(test)]
+mod tests;

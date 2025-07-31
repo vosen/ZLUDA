@@ -308,3 +308,39 @@ fn join(
     }
     
 }
+
+#[proc_macro]
+pub fn generate_api_macro(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as ApiMacroInput);
+    let ApiMacroInput(macro_name, _, trait_name, _, type_name) = input;
+    let expanded = quote! {
+        struct #type_name;
+        macro_rules! #macro_name {
+            ($($abi:literal fn $fn_name:ident( $( $arg_id:ident : $arg_type:ty ),* ) -> $ret_type:ty;)*) => {
+                impl #trait_name for #type_name {
+                    fn new() -> Self { Self }
+                    $(
+                        #[inline(always)]
+                        fn $fn_name(&self, $( $arg_id : $arg_type ),* ) -> $ret_type {
+                            unsafe { super::$fn_name( $( $arg_id ),* ) }
+                        }
+                    )*
+                }
+            };
+        }
+    };
+    TokenStream::from(expanded)
+}
+#[allow(dead_code)]
+struct ApiMacroInput(Ident, Token![,], Path, Token![,], Path);
+impl syn::parse::Parse for ApiMacroInput {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        Ok(ApiMacroInput(
+            input.parse()?, // macro name
+            input.parse()?, // comma
+            input.parse()?, // trait name
+            input.parse()?, // comma
+            input.parse()?  // type name
+        ))
+    }
+}
