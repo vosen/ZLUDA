@@ -63,8 +63,8 @@ pub(crate) fn get_cudart_version() -> usize {
     todo!()
 }
 
-pub(crate) fn set_math_mode(_handle: &Handle, _mode: cublasMath_t) -> cublasStatus_t {
-    // TODO: hipblas implements this but rocblas does not
+pub(crate) fn set_math_mode(handle: &Handle, mode: rocblas_math_mode) -> cublasStatus_t {
+    unsafe { rocblas_set_math_mode(handle.handle, mode) }?;
     Ok(())
 }
 
