@@ -1816,6 +1816,7 @@ version = "0.0.0"
 dependencies = [
  "cuda_macros",
  "cuda_types",
+ "zluda_common",
 ]
 
 [[package]]

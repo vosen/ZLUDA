@@ -284,7 +284,9 @@ pub struct cublasComputeType_t(pub ::core::ffi::c_uint);
 pub struct cublasContext {
     _unused: [u8; 0],
 }
-pub type cublasHandle_t = *mut cublasContext;
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct cublasHandle_t(pub *mut cublasContext);
 pub type cublasLogCallback = ::core::option::Option<
     unsafe extern "C" fn(msg: *const ::core::ffi::c_char),
 >;

@@ -348,11 +348,7 @@ impl crate::CudaDisplay for cuda_types::cublas::cublasHandle_t {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        if self.is_null() {
-            writer.write_all(b"NULL")
-        } else {
-            write!(writer, "{:p}", *self)
-        }
+        write!(writer, "{:p}", self.0)
     }
 }
 pub fn write_cublasCreate_v2(
