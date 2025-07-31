@@ -1,4 +1,4 @@
-// TODO: remove duplication with zluda_dump
+// TODO: remove duplication with zluda_trace
 #[link(name = "pthread")]
 unsafe extern "C" {
     fn pthread_self() -> std::os::unix::thread::RawPthread;

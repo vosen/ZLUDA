@@ -332,10 +332,10 @@ dark_api! {
     }
 }
 
-// Purely for internal use by ZLUDA dump
+// Purely for internal use by ZLUDA trace
 dark_api! {
-    zluda_dump;
-    "{0B7A5827-AF98-46AB-A951-22D19BDF5C08}" => ZLUDA_DUMP_INTERNAL[1] {
+    zluda_trace;
+    "{0B7A5827-AF98-46AB-A951-22D19BDF5C08}" => ZLUDA_TRACE_INTERNAL[1] {
         #[noformat]
         [0] = logged_call(
             fn_name: cglue::slice::CSliceRef<'static, u8>,

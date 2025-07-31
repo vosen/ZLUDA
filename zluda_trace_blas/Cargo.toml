@@ -1,0 +1,26 @@
+[package]
+name = "zluda_trace_blas"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2021"
+
+[lib]
+name = "zluda_trace_blas"
+crate-type = ["cdylib"]
+
+[dependencies]
+format = { path = "../format" }
+dark_api = { path = "../dark_api" }
+cuda_macros = { path = "../cuda_macros" }
+cuda_types = { path = "../cuda_types" }
+zluda_trace_common = { path = "../zluda_trace_common" }
+libloading = "0.8"
+paste = "1.0"
+unwrap_or = "1.0.1"
+cglue = "0.3.5"
+
+[package.metadata.zluda]
+linux_symlinks = [
+    "trace/libcublas.so",
+    "trace/libcublas.so.12"
+]

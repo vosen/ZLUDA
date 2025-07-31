@@ -1,4 +1,4 @@
-// TODO: remove duplication with zluda_dump
+// TODO: remove duplication with zluda_trace
 #[link(name = "kernel32")]
 unsafe extern "system" {
     fn GetCurrentThreadId() -> u32;
