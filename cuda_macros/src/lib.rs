@@ -10,7 +10,7 @@ use syn::punctuated::Punctuated;
 use syn::visit_mut::VisitMut;
 use syn::{
     bracketed, parse_macro_input, File, ForeignItem, ForeignItemFn, Ident, Item, Path, Signature,
-    Token,
+    Token, token
 };
 
 const CUDA_RS: &'static str = include_str! {"cuda.rs"};
@@ -312,7 +312,7 @@ fn join(
 #[proc_macro]
 pub fn generate_api_macro(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ApiMacroInput);
-    let ApiMacroInput(macro_name, _, trait_name, _, type_name) = input;
+    let ApiMacroInput(_, trait_name, _, type_name, _, macro_name) = input;
     let expanded = quote! {
         struct #type_name;
         macro_rules! #macro_name {
@@ -332,15 +332,16 @@ pub fn generate_api_macro(input: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 #[allow(dead_code)]
-struct ApiMacroInput(Ident, Token![,], Path, Token![,], Path);
+struct ApiMacroInput(token::Impl, Path, token::For, Path, token::Use, Ident);
 impl syn::parse::Parse for ApiMacroInput {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         Ok(ApiMacroInput(
-            input.parse()?, // macro name
-            input.parse()?, // comma
-            input.parse()?, // trait name
-            input.parse()?, // comma
-            input.parse()?  // type name
+            input.parse()?, // impl 
+            input.parse()?, // trait
+            input.parse()?, // for
+            input.parse()?, // type
+            input.parse()?, // using
+            input.parse()?  // macro
         ))
     }
 }
