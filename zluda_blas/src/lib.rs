@@ -1,7 +1,5 @@
 mod r#impl;
 
-use cuda_types::cublas::cublasError_t;
-
 macro_rules! unimplemented {
     ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
         $(
@@ -36,7 +34,7 @@ macro_rules! implemented_and_always_succeeds {
             #[allow(improper_ctypes)]
             #[allow(improper_ctypes_definitions)]
             pub unsafe extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
-                cuda_macros::cublas_normalize_fn!( crate::r#impl::$fn_name ) ($(zluda_common::FromCuda::<_, cublasError_t>::from_cuda(&$arg_id).ok()),*)
+                cuda_macros::cublas_normalize_fn!( crate::r#impl::$fn_name ) ( $( $arg_id ),* )
             }
         )*
     };
