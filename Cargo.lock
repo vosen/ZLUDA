@@ -1847,6 +1847,7 @@ version = "0.0.0"
 dependencies = [
  "cuda_macros",
  "cuda_types",
+ "zluda_common",
 ]
 
 [[package]]
@@ -1874,7 +1875,53 @@ dependencies = [
 ]
 
 [[package]]
-name = "zluda_dump"
+name = "zluda_fft"
+version = "0.0.0"
+dependencies = [
+ "cuda_macros",
+ "cuda_types",
+]
+
+[[package]]
+name = "zluda_inject"
+version = "0.0.0"
+dependencies = [
+ "argh",
+ "detours-sys",
+ "tempfile",
+ "winapi",
+ "zluda_ml",
+ "zluda_redirect",
+ "zluda_trace",
+]
+
+[[package]]
+name = "zluda_ml"
+version = "0.0.0"
+dependencies = [
+ "cuda_macros",
+ "cuda_types",
+]
+
+[[package]]
+name = "zluda_redirect"
+version = "0.0.0"
+dependencies = [
+ "detours-sys",
+ "wchar",
+ "winapi",
+]
+
+[[package]]
+name = "zluda_sparse"
+version = "0.0.0"
+dependencies = [
+ "cuda_macros",
+ "cuda_types",
+]
+
+[[package]]
+name = "zluda_trace"
 version = "0.0.0"
 dependencies = [
  "cglue",
@@ -1896,12 +1943,12 @@ dependencies = [
  "unwrap_or",
  "wchar",
  "winapi",
- "zluda_dump_common",
+ "zluda_trace_common",
  "zstd-safe",
 ]
 
 [[package]]
-name = "zluda_dump_blas"
+name = "zluda_trace_blas"
 version = "0.0.0"
 dependencies = [
  "cglue",
@@ -1912,11 +1959,11 @@ dependencies = [
  "libloading",
  "paste",
  "unwrap_or",
- "zluda_dump_common",
+ "zluda_trace_common",
 ]
 
 [[package]]
-name = "zluda_dump_blaslt"
+name = "zluda_trace_blaslt"
 version = "0.0.0"
 dependencies = [
  "cglue",
@@ -1927,11 +1974,11 @@ dependencies = [
  "libloading",
  "paste",
  "unwrap_or",
- "zluda_dump_common",
+ "zluda_trace_common",
 ]
 
 [[package]]
-name = "zluda_dump_common"
+name = "zluda_trace_common"
 version = "0.1.0"
 dependencies = [
  "cglue",
@@ -1943,7 +1990,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zluda_dump_dnn"
+name = "zluda_trace_dnn"
 version = "0.0.0"
 dependencies = [
  "cglue",
@@ -1954,11 +2001,11 @@ dependencies = [
  "libloading",
  "paste",
  "unwrap_or",
- "zluda_dump_common",
+ "zluda_trace_common",
 ]
 
 [[package]]
-name = "zluda_dump_fft"
+name = "zluda_trace_fft"
 version = "0.0.0"
 dependencies = [
  "cglue",
@@ -1969,11 +2016,11 @@ dependencies = [
  "libloading",
  "paste",
  "unwrap_or",
- "zluda_dump_common",
+ "zluda_trace_common",
 ]
 
 [[package]]
-name = "zluda_dump_sparse"
+name = "zluda_trace_sparse"
 version = "0.0.0"
 dependencies = [
  "cglue",
@@ -1984,7 +2031,7 @@ dependencies = [
  "libloading",
  "paste",
  "unwrap_or",
- "zluda_dump_common",
+ "zluda_trace_common",
 ]
 
 [[package]]

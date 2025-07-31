@@ -658,6 +658,7 @@ fn generate_cublas(crate_root: &PathBuf) {
         .allowlist_var("^CUBLAS_.*")
         .must_use_type("cublasStatus_t")
         .constified_enum("cublasStatus_t")
+        .new_type_alias(r"^cublasHandle_t$")
         .allowlist_recursively(false)
         .clang_args(["-I/usr/local/cuda/include", "-x", "c++"])
         .generate()

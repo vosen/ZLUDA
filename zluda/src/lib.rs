@@ -112,6 +112,7 @@ cuda_macros::cuda_function_declarations!(
             cuMemsetD32_v2,
             cuMemsetD8_v2,
             cuModuleGetFunction,
+            cuModuleGetGlobal_v2,
             cuModuleGetLoadingMode,
             cuModuleLoadData,
             cuModuleUnload,
