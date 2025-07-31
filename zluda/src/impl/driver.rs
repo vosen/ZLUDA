@@ -385,7 +385,7 @@ pub(crate) unsafe fn get_proc_address_v2(
     flags: cuda_types::cuda::cuuint64_t,
     symbol_status: Option<&mut cuda_types::cuda::CUdriverProcAddressQueryResult>,
 ) -> CUresult {
-    // This implementation is mostly the same as cuGetProcAddress_v2 in zluda_dump. We may want to factor out the duplication at some point.
+    // This implementation is mostly the same as cuGetProcAddress_v2 in zluda_trace. We may want to factor out the duplication at some point.
     fn raw_match(name: &[u8], flag: u64, version: i32) -> *mut ::core::ffi::c_void {
         use crate::*;
         include!("../../../zluda_bindgen/src/process_table.rs")
