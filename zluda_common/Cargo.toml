@@ -7,3 +7,4 @@ edition = "2021"
 [dependencies]
 cuda_types = { path = "../cuda_types" }
 hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
+rocblas-sys = { path = "../ext/rocblas-sys" }
