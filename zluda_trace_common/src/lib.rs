@@ -100,15 +100,23 @@ pub(crate) mod os {
         os::windows::Library::open_already_loaded("nvcuda").map(Into::into)
     }
 
-    pub unsafe fn dlopen_local_noredirect(
+    pub unsafe fn dlopen_local_noredirect<'a>(
         path: Cow<'a, str>,
     ) -> Result<libloading::Library, libloading::Error> {
+        fn terminate_with_nul(mut path: Vec<u16>) -> Vec<u16> {
+            if !path.ends_with(0) {
+                path.push(0);
+            }
+            path
+        }
         let driver = open_driver()?;
         match driver.get::<unsafe extern "C" fn(*const u16) -> isize>(
             c"ZludaLoadLibraryW_NoRedirect".to_bytes_with_nul(),
         ) {
             Ok(load_library) => {
-                let symbol = load_library(path.encode_utf16().collect::<Vec<u16>>().as_ptr());
+                let symbol = load_library(
+                    terminate_with_nul(path.encode_utf16().collect::<Vec<u16>>()).as_ptr(),
+                );
                 if symbol == 0 {
                     Err(libloading::Error::LoadLibraryExWUnknown)
                 } else {
