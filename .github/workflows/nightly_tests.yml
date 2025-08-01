@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 env:
-  ROCM_VERSION: "6.3.1"
+  ROCM_VERSION: "6.3.4"
   TEST_THREADS: 24
 
 jobs:
