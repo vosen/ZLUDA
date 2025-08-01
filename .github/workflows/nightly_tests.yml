@@ -31,6 +31,8 @@ jobs:
         fileName: 'zluda-linux-*.tar.gz'
     - name: Build and run
       run: |
+        DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends curl
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain nightly --profile minimal -y
         pids=()
         exit_codes=()
         for i in $(seq 0 $((${{ env.TEST_THREADS }} - 1))); do
