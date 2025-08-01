@@ -15,6 +15,6 @@ unwrap_or = "1.0.1"
 linux_only = true
 linux_symlinks = [
     "zluda_preload",
-    "dump/zluda_preload",
-    "dump_nvidia/zluda_preload",
+    "trace/zluda_preload",
+    "trace_nvidia/zluda_preload",
 ]

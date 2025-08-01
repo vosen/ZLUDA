@@ -1,23 +1,8 @@
 use cuda_types::cuda::CUuuid;
-use std::ffi::{c_char, c_int, c_void, CStr, CString};
+use std::ffi::{c_void, CStr};
 use std::mem;
 
 pub(crate) const LIBCUDA_DEFAULT_PATH: &str = "/usr/lib/x86_64-linux-gnu/libcuda.so.1";
-
-pub unsafe fn load_library(libcuda_path: &str) -> *mut c_void {
-    let zluda_dlopen_noredirect =
-        libc::dlsym(libc::RTLD_DEFAULT, c"zluda_dlopen_noredirect".as_ptr());
-    let zluda_dlopen_noredirect = mem::transmute::<
-        _,
-        Option<unsafe extern "C" fn(*const c_char, c_int) -> *mut c_void>,
-    >(zluda_dlopen_noredirect);
-    let dlopen = zluda_dlopen_noredirect.unwrap_or(libc::dlopen);
-    let libcuda_path = CString::new(libcuda_path).unwrap();
-    dlopen(
-        libcuda_path.as_ptr() as *const _,
-        libc::RTLD_LOCAL | libc::RTLD_NOW,
-    )
-}
 
 pub unsafe fn get_proc_address(handle: *mut c_void, func: &CStr) -> *mut c_void {
     libc::dlsym(handle, func.as_ptr() as *const _)

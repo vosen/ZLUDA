@@ -2,7 +2,7 @@ This crate is a last resort Linux-specific solution.
 Most of the time we can inject ourselves into a process by having users
 set `LD_LIBRARY_PATH`.
 Unfortunately, there is software out there which dynamically links to CUDA and
-and CUDA performance libraries using RPATH. On Linux, dynamic linker operates
+CUDA performance libraries using RPATH. On Linux, dynamic linker operates
 using approximately this algorithm:
 * If path contains `/` treat the name as a (possibly relative) path and just use it
 * Otherwise return the first that succeeds:

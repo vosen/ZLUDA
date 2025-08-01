@@ -1,17 +1,15 @@
+use cuda_types::cuda::CUuuid;
+use std::os::windows::io::AsRawHandle;
 use std::{
     ffi::{c_void, CStr},
     mem, ptr,
     sync::LazyLock,
 };
-
-use std::os::windows::io::AsRawHandle;
 use winapi::{
     shared::minwindef::{FARPROC, HMODULE},
     um::debugapi::OutputDebugStringA,
     um::libloaderapi::{GetProcAddress, LoadLibraryW},
 };
-
-use cuda_types::cuda::CUuuid;
 
 pub(crate) const LIBCUDA_DEFAULT_PATH: &'static str = "C:\\Windows\\System32\\nvcuda.dll";
 const LOAD_LIBRARY_NO_REDIRECT: &'static [u8] = b"ZludaLoadLibraryW_NoRedirect\0";
@@ -71,14 +69,6 @@ impl PlatformLibrary {
         }
         None
     }
-}
-
-pub unsafe fn load_library(libcuda_path: &str) -> *mut c_void {
-    let libcuda_path_uf16 = libcuda_path
-        .encode_utf16()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
-    (PLATFORM_LIBRARY.LoadLibraryW)(libcuda_path_uf16.as_ptr()) as _
 }
 
 pub unsafe fn get_proc_address(handle: *mut c_void, func: &CStr) -> *mut c_void {

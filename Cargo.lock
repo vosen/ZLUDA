@@ -1942,6 +1942,7 @@ dependencies = [
  "format",
  "goblin",
  "libc",
+ "libloading",
  "parking_lot",
  "paste",
  "ptx",
