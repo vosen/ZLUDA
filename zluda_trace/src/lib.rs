@@ -56,8 +56,8 @@ pub(crate) struct CudaDynamicFns {
 
 impl CudaDynamicFns {
     pub(crate) unsafe fn load_library(path: &str) -> Option<Self> {
-        let lib_handle = NonNull::new(os::load_library(path));
-        lib_handle.map(|lib_handle| CudaDynamicFns {
+        let lib_handle = os::dlopen_local_noredirect(path).ok()?;
+        Some(CudaDynamicFns {
             lib_handle,
             fn_table: CudaFnTable::default(),
         })
