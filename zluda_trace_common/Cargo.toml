@@ -11,3 +11,6 @@ cuda_types = { path = "../cuda_types" }
 dark_api = { path = "../dark_api" }
 format = { path = "../format" }
 cglue = "0.3.5"
+
+[target.'cfg(not(windows))'.dependencies]
+libc = "0.2"

@@ -5,7 +5,7 @@ use cuda_types::{
     cusparse::cusparseStatus_tConsts,
 };
 use dark_api::ByteVecFfi;
-use std::{ffi::c_void, num::NonZero, ptr, sync::LazyLock};
+use std::{borrow::Cow, ffi::c_void, num::NonZero, ptr, sync::LazyLock};
 
 pub fn get_export_table() -> Option<::dark_api::zluda_trace::ZludaTraceInternal> {
     static CU_GET_EXPORT_TABLE: LazyLock<
@@ -38,29 +38,94 @@ fn open_driver() -> Result<libloading::Library, libloading::Error> {
     os::open_driver()
 }
 
+pub fn dlopen_local_noredirect<'a>(
+    path: impl Into<Cow<'a, str>>,
+) -> Result<libloading::Library, libloading::Error> {
+    unsafe { os::dlopen_local_noredirect(path.into()) }
+}
+
 #[cfg(unix)]
 pub(crate) mod os {
+    use libc::{c_char, c_int};
     use libloading::os;
-
-    const RTLD_NOLOAD: i32 = 0x4;
+    use std::{borrow::Cow, ffi::c_void, mem};
 
     pub fn open_driver() -> Result<libloading::Library, libloading::Error> {
         unsafe {
-            os::unix::Library::open(Some("libcuda.so.1"), RTLD_NOLOAD | os::unix::RTLD_LAZY)
-                .or_else(|_| {
-                    os::unix::Library::open(Some("libcuda.so"), RTLD_NOLOAD | os::unix::RTLD_LAZY)
-                })
-                .map(Into::into)
+            os::unix::Library::open(
+                Some("libcuda.so.1"),
+                libc::RTLD_NOLOAD | os::unix::RTLD_LAZY,
+            )
+            .or_else(|_| {
+                os::unix::Library::open(Some("libcuda.so"), libc::RTLD_NOLOAD | os::unix::RTLD_LAZY)
+            })
+            .map(Into::into)
         }
+    }
+
+    pub unsafe fn dlopen_local_noredirect<'a>(
+        path: Cow<'a, str>,
+    ) -> Result<libloading::Library, libloading::Error> {
+        fn terminate_with_nul<'a>(path: Cow<'a, str>) -> Cow<'a, str> {
+            let path = if !path.ends_with('\0') {
+                let mut path = path.into_owned();
+                path.push('\0');
+                Cow::Owned(path)
+            } else {
+                path
+            };
+            path
+        }
+        let zluda_dlopen_noredirect =
+            unsafe { libc::dlsym(libc::RTLD_DEFAULT, c"zluda_dlopen_noredirect".as_ptr()) };
+        let zluda_dlopen_noredirect = mem::transmute::<
+            _,
+            Option<unsafe extern "C" fn(*const c_char, c_int) -> *mut c_void>,
+        >(zluda_dlopen_noredirect);
+        let dlopen = zluda_dlopen_noredirect.unwrap_or(libc::dlopen);
+        let path = terminate_with_nul(path);
+        Ok(libloading::os::unix::Library::from_raw(dlopen(
+            path.as_ptr().cast(),
+            os::unix::RTLD_LOCAL | os::unix::RTLD_LAZY,
+        ))
+        .into())
     }
 }
 
 #[cfg(windows)]
 pub(crate) mod os {
     use libloading::os;
+    use std::borrow::Cow;
 
     pub fn open_driver() -> Result<libloading::Library, libloading::Error> {
         os::windows::Library::open_already_loaded("nvcuda").map(Into::into)
+    }
+
+    pub unsafe fn dlopen_local_noredirect<'a>(
+        path: Cow<'a, str>,
+    ) -> Result<libloading::Library, libloading::Error> {
+        fn terminate_with_nul(mut path: Vec<u16>) -> Vec<u16> {
+            if path.last().copied() == Some(0) {
+                path.push(0);
+            }
+            path
+        }
+        let driver = open_driver()?;
+        match driver.get::<unsafe extern "C" fn(*const u16) -> isize>(
+            c"ZludaLoadLibraryW_NoRedirect".to_bytes_with_nul(),
+        ) {
+            Ok(load_library) => {
+                let symbol = load_library(
+                    terminate_with_nul(path.encode_utf16().collect::<Vec<u16>>()).as_ptr(),
+                );
+                if symbol == 0 {
+                    Err(libloading::Error::LoadLibraryExWUnknown)
+                } else {
+                    Ok(libloading::os::windows::Library::from_raw(symbol).into())
+                }
+            }
+            Err(_) => libloading::Library::new(&*path),
+        }
     }
 }
 

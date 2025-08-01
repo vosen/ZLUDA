@@ -156,6 +156,8 @@ struct Metadata {
 #[serde(deny_unknown_fields)]
 struct ZludaMetadata {
     #[serde(default)]
+    linux_only: bool,
+    #[serde(default)]
     windows_only: bool,
     #[serde(default)]
     debug_only: bool,
@@ -192,6 +194,9 @@ fn compile(b: Build) -> (PathBuf, String, Vec<Project>) {
         .into_iter()
         .filter_map(Project::try_new)
         .filter(|project| {
+            if project.meta.linux_only && cfg!(windows) {
+                return false;
+            }
             if project.meta.windows_only && cfg!(not(windows)) {
                 return false;
             }

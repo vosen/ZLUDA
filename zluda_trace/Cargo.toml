@@ -27,6 +27,7 @@ rustc-hash = "1.1.0"
 cglue = "0.3.5"
 zstd-safe = { version = "7.2.4", features = ["std"] }
 unwrap_or = "1.0.1"
+libloading = "0.8"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["libloaderapi", "debugapi", "std"] }
