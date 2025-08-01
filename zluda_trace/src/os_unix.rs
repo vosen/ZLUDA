@@ -1,6 +1,8 @@
 use cuda_types::cuda::CUuuid;
+use std::borrow::Cow;
 use std::ffi::{c_void, CStr};
 use std::mem;
+use std::ptr::NonNull;
 
 pub(crate) const LIBCUDA_DEFAULT_PATH: &str = "/usr/lib/x86_64-linux-gnu/libcuda.so.1";
 
