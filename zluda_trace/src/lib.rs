@@ -56,10 +56,7 @@ pub(crate) struct CudaDynamicFns {
 
 impl CudaDynamicFns {
     pub(crate) unsafe fn load_library(path: &str) -> Option<Self> {
-        let lib: libloading::os::unix::Library = zluda_trace_common::dlopen_local_noredirect(path)
-            .ok()?
-            .into();
-        let lib_handle = NonNull::new(lib.into_raw())?;
+        let lib_handle = os::dlopen_local_noredirect(path).ok()?;
         Some(CudaDynamicFns {
             lib_handle,
             fn_table: CudaFnTable::default(),

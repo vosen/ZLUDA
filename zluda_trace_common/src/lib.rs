@@ -95,6 +95,7 @@ pub(crate) mod os {
 #[cfg(windows)]
 pub(crate) mod os {
     use libloading::os;
+    use std::borrow::Cow;
 
     pub fn open_driver() -> Result<libloading::Library, libloading::Error> {
         os::windows::Library::open_already_loaded("nvcuda").map(Into::into)
@@ -104,7 +105,7 @@ pub(crate) mod os {
         path: Cow<'a, str>,
     ) -> Result<libloading::Library, libloading::Error> {
         fn terminate_with_nul(mut path: Vec<u16>) -> Vec<u16> {
-            if !path.ends_with(0) {
+            if path.last().copied() == Some(0) {
                 path.push(0);
             }
             path
@@ -123,7 +124,7 @@ pub(crate) mod os {
                     Ok(libloading::os::windows::Library::from_raw(symbol).into())
                 }
             }
-            Err(_) => libloading::Library::new(path),
+            Err(_) => libloading::Library::new(&*path),
         }
     }
 }

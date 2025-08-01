@@ -4,6 +4,14 @@ use std::mem;
 
 pub(crate) const LIBCUDA_DEFAULT_PATH: &str = "/usr/lib/x86_64-linux-gnu/libcuda.so.1";
 
+pub fn dlopen_local_noredirect<'a>(
+    path: impl Into<Cow<'a, str>>,
+) -> Result<NonNull<c_void>, libloading::Error> {
+    let lib: libloading::os::unix::Library =
+        zluda_trace_common::dlopen_local_noredirect(path)?.into();
+    NonNull::new(lib.into_raw()).ok_or(libloading::Error::DlOpenUnknown)
+}
+
 pub unsafe fn get_proc_address(handle: *mut c_void, func: &CStr) -> *mut c_void {
     libc::dlsym(handle, func.as_ptr() as *const _)
 }

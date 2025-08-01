@@ -1,5 +1,7 @@
 use cuda_types::cuda::CUuuid;
+use std::borrow::Cow;
 use std::os::windows::io::AsRawHandle;
+use std::ptr::NonNull;
 use std::{
     ffi::{c_void, CStr},
     mem, ptr,
@@ -14,6 +16,14 @@ use winapi::{
 pub(crate) const LIBCUDA_DEFAULT_PATH: &'static str = "C:\\Windows\\System32\\nvcuda.dll";
 const LOAD_LIBRARY_NO_REDIRECT: &'static [u8] = b"ZludaLoadLibraryW_NoRedirect\0";
 const GET_PROC_ADDRESS_NO_REDIRECT: &'static [u8] = b"ZludaGetProcAddress_NoRedirect\0";
+
+pub fn dlopen_local_noredirect<'a>(
+    path: impl Into<Cow<'a, str>>,
+) -> Result<NonNull<c_void>, libloading::Error> {
+    let lib: libloading::os::windows::Library =
+        zluda_trace_common::dlopen_local_noredirect(path)?.into();
+    NonNull::new(lib.into_raw() as *mut _).ok_or(libloading::Error::DlOpenUnknown)
+}
 
 static PLATFORM_LIBRARY: LazyLock<PlatformLibrary> =
     LazyLock::new(|| unsafe { PlatformLibrary::new() });
