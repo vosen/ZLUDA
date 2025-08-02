@@ -226,6 +226,11 @@ ptx_parser_macros::generate_instruction_type!(
                     type: { Type::Scalar(data.from) },
                     relaxed_type_check: true,
                 },
+                src2: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(data.from) },
+                    relaxed_type_check: true,
+                },
             }
         },
         Cvta {
@@ -973,7 +978,9 @@ impl ScalarType {
             | ScalarType::S16
             | ScalarType::B16
             | ScalarType::F16
-            | ScalarType::BF16 => 2,
+            | ScalarType::BF16
+            | ScalarType::E4m3x2
+            | ScalarType::E5m2x2 => 2,
             ScalarType::U32
             | ScalarType::S32
             | ScalarType::B32
@@ -995,7 +1002,9 @@ impl ScalarType {
             | ScalarType::S16
             | ScalarType::B16
             | ScalarType::F16
-            | ScalarType::BF16 => Layout::new::<u16>(),
+            | ScalarType::BF16
+            | ScalarType::E4m3x2
+            | ScalarType::E5m2x2 => Layout::new::<u16>(),
             ScalarType::U32
             | ScalarType::S32
             | ScalarType::B32
@@ -1036,6 +1045,8 @@ impl ScalarType {
             ScalarType::F64 => ScalarKind::Float,
             ScalarType::BF16 => ScalarKind::Float,
             ScalarType::BF16x2 => ScalarKind::Float,
+            ScalarType::E4m3x2 => ScalarKind::Float,
+            ScalarType::E5m2x2 => ScalarKind::Float,
             ScalarType::Pred => ScalarKind::Pred,
         }
     }
