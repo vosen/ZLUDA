@@ -304,10 +304,26 @@ test_ptx!(cp_async, [0u32], [1u32, 2u32, 3u32, 0u32]);
 test_ptx!(nanosleep, [0u64], [0u64]);
 test_ptx!(shf_l, [0x12345678u32, 0x9abcdef0u32, 12], [0xcdef0123u32]);
 test_ptx!(shf_r, [0x12345678u32, 0x9abcdef0u32, 12], [0xef012345u32]);
-test_ptx!(shf_l_clamp, [0x12345678u32, 0x9abcdef0u32, 44], [0x12345678u32]);
-test_ptx!(shf_r_clamp, [0x12345678u32, 0x9abcdef0u32, 44], [0x9abcdef0u32]);
-test_ptx!(shf_l_wrap, [0x12345678u32, 0x9abcdef0u32, 44], [0xcdef0123u32]);
-test_ptx!(shf_r_wrap, [0x12345678u32, 0x9abcdef0u32, 44], [0xef012345u32]);
+test_ptx!(
+    shf_l_clamp,
+    [0x12345678u32, 0x9abcdef0u32, 44],
+    [0x12345678u32]
+);
+test_ptx!(
+    shf_r_clamp,
+    [0x12345678u32, 0x9abcdef0u32, 44],
+    [0x9abcdef0u32]
+);
+test_ptx!(
+    shf_l_wrap,
+    [0x12345678u32, 0x9abcdef0u32, 44],
+    [0xcdef0123u32]
+);
+test_ptx!(
+    shf_r_wrap,
+    [0x12345678u32, 0x9abcdef0u32, 44],
+    [0xef012345u32]
+);
 
 test_ptx!(assertfail);
 // TODO: not yet supported
