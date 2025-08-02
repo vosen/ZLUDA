@@ -2,7 +2,9 @@ use super::{
     AtomSemantics, MemScope, RawRoundingMode, RawSetpCompareOp, ScalarType, SetpBoolPostOp,
     StateSpace, VectorPrefix,
 };
-use crate::{Mul24Control, PtxError, PtxParserState, Reduction, ShuffleMode};
+use crate::{
+    FunnelShiftMode, Mul24Control, PtxError, PtxParserState, Reduction, ShiftDirection, ShuffleMode,
+};
 use bitflags::bitflags;
 use std::{alloc::Layout, cmp::Ordering, num::NonZeroU8};
 
@@ -547,6 +549,16 @@ ptx_parser_macros::generate_instruction_type!(
                 src_lane: T,
                 src_opts: T,
                 src_membermask: T
+            }
+        },
+        Shf {
+            data: ShfDetails,
+            type: Type::Scalar(ScalarType::B32),
+            arguments<T>: {
+                dst: T,
+                src_a: T,
+                src_b: T,
+                src_c: T
             }
         },
         Shl {
@@ -1101,6 +1113,11 @@ pub struct CpAsyncDetails {
     pub space: StateSpace,
     pub cp_size: CpAsyncCpSize,
     pub src_size: Option<u64>,
+}
+
+pub struct ShfDetails {
+    pub direction: ShiftDirection,
+    pub mode: FunnelShiftMode,
 }
 
 #[derive(Clone)]
