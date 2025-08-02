@@ -189,21 +189,26 @@ fn run_instruction<'input>(
             data:
                 ptx_parser::CvtDetails {
                     from: ast::ScalarType::F32,
-                    to: ast::ScalarType::E4m3x2,
+                    to: to @ (ast::ScalarType::E4m3x2 | ast::ScalarType::E5m2x2),
                     mode: _,
                 },
             arguments: _,
         } => {
+            let to = match to {
+                ptx_parser::ScalarType::E4m3x2 => "e4m3",
+                ptx_parser::ScalarType::E5m2x2 => "e5m2",
+                _ => unreachable!()
+            };
             // Conversions from f32 to f8 must have two source arguments.
             // satfinite is mandatory for conversions to e4m3x2.
             to_call(
                 resolver,
                 fn_declarations,
-                "cvt_f32_to_e4m3_satfinite".into(),
+                format!("cvt_f32_to_{}_satfinite", to).into(),
                 i,
             )?
         }
-        i => i
+        i => i,
     })
 }
 

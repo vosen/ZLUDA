@@ -339,7 +339,6 @@ extern "C"
         else
             return value;
     }
-
     struct PackedF8
     {
         __hip_fp8_storage_t fp8_1 : 8;
@@ -352,5 +351,13 @@ extern "C"
         return {
             __hip_cvt_float_to_fp8(b, __HIP_SATFINITE, __HIP_E4M3),
             __hip_cvt_float_to_fp8(a, __HIP_SATFINITE, __HIP_E4M3)};
+    }
+
+    PackedF8 FUNC(cvt_f32_to_e5m2_satfinite)(float a, float b)
+    {
+        // If built-in support for fp8 formats is added to LLVM IR we should switch to use that.
+        return {
+            __hip_cvt_float_to_fp8(b, __HIP_SATFINITE, __HIP_E5M2),
+            __hip_cvt_float_to_fp8(a, __HIP_SATFINITE, __HIP_E5M2)};
     }
 }
