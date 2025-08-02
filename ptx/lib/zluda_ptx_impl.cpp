@@ -1,16 +1,19 @@
 // Every time this file changes it must te rebuilt, you need `rocm-llvm-dev` and `llvm-17`
 // `fdenormal-fp-math=dynamic` is required to make functions eligible for inlining
-//  /opt/rocm/llvm/bin/clang -std=c++20 -Xclang -fdenormal-fp-math=dynamic  -Wall -Wextra -Wsign-compare -Wconversion -x hip zluda_ptx_impl.cpp -nogpulib -O3 -mno-wavefrontsize64 -o zluda_ptx_impl.bc -emit-llvm -c --offload-device-only --offload-arch=gfx1010 && /opt/rocm/llvm/bin/llvm-dis zluda_ptx_impl.bc -o - | sed '/@llvm.used/d' | sed '/wchar_size/d' | sed '/llvm.module.flags/d' | sed 's/define hidden/define linkonce_odr/g' | sed 's/\"target-cpu\"=\"gfx1010\"//g' | sed -E 's/\"target-features\"=\"[^\"]+\"//g' | sed 's/ nneg / /g' | sed 's/ disjoint / /g' | llvm-as-17 - -o  zluda_ptx_impl.bc && /opt/rocm/llvm/bin/llvm-dis zluda_ptx_impl.bc
+//  /opt/rocm/llvm/bin/clang -std=c++20 -Xclang -fdenormal-fp-math=dynamic  -Wall -Wextra -Wsign-compare -Wconversion -x hip zluda_ptx_impl.cpp -nogpulib -O3 -mno-wavefrontsize64 -o zluda_ptx_impl.bc -emit-llvm -c --offload-device-only --offload-arch=gfx1010 && /opt/rocm/llvm/bin/llvm-dis zluda_ptx_impl.bc -o - | sed '/@llvm.used/d' | sed '/wchar_size/d' | sed '/llvm.module.flags/d' | sed 's/define hidden/define linkonce_odr/g' | sed 's/\"target-cpu\"=\"gfx1010\"//g' | sed -E 's/\"target-features\"=\"[^\"]+\"//g' | sed 's/ nneg / /g' | sed 's/ disjoint / /g' | sed 's/trunc nuw/trunc/' | sed 's/trunc nsw/trunc/' | llvm-as-17 - -o  zluda_ptx_impl.bc && /opt/rocm/llvm/bin/llvm-dis zluda_ptx_impl.bc
 
 #include <cstddef>
 #include <cstdint>
 #include <bit>
 #include <cmath>
 #include <hip/amd_detail/amd_device_functions.h>
+#include <hip/hip_fp8.h>
 
 #define FUNC(NAME) __device__ __attribute__((retain)) __zluda_ptx_impl_##NAME
 #define ATTR(NAME) __ZLUDA_PTX_IMPL_ATTRIBUTE_##NAME
-#define DECLARE_ATTR(TYPE, NAME) extern const TYPE ATTR(NAME) __device__
+#define DECLARE_ATTR(TYPE, NAME) \
+    extern const TYPE ATTR(NAME) \
+    __device__
 
 extern "C"
 {
@@ -226,7 +229,8 @@ extern "C"
     SHFL_SYNC_IMPL(idx, (delta & ~section_mask) | subsection, >);
 
     DECLARE_ATTR(uint32_t, CLOCK_RATE);
-    void FUNC(nanosleep_u32)(uint32_t nanoseconds) {
+    void FUNC(nanosleep_u32)(uint32_t nanoseconds)
+    {
         // clock_rate is in kHz
         uint64_t cycles_per_ns = ATTR(CLOCK_RATE) / 1000000;
         uint64_t cycles = nanoseconds * cycles_per_ns;
@@ -334,5 +338,19 @@ extern "C"
             return value - 24.0f;
         else
             return value;
+    }
+
+    struct PackedF8
+    {
+        __hip_fp8_storage_t fp8_1 : 8;
+        __hip_fp8_storage_t fp8_2 : 8;
+    };
+
+    PackedF8 FUNC(cvt_f32_to_e4m3_satfinite)(float a, float b)
+    {
+        // If built-in support for fp8 formats is added to LLVM IR we should switch to use that.
+        return {
+            __hip_cvt_float_to_fp8(b, __HIP_SATFINITE, __HIP_E4M3),
+            __hip_cvt_float_to_fp8(a, __HIP_SATFINITE, __HIP_E4M3)};
     }
 }

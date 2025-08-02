@@ -133,9 +133,11 @@ fn get_scalar_type(context: LLVMContextRef, type_: ast::ScalarType) -> LLVMTypeR
         ast::ScalarType::S8 | ast::ScalarType::B8 | ast::ScalarType::U8 => unsafe {
             LLVMInt8TypeInContext(context)
         },
-        ast::ScalarType::B16 | ast::ScalarType::U16 | ast::ScalarType::S16 => unsafe {
-            LLVMInt16TypeInContext(context)
-        },
+        ast::ScalarType::B16
+        | ast::ScalarType::U16
+        | ast::ScalarType::S16
+        | ast::ScalarType::E4m3x2
+        | ast::ScalarType::E5m2x2 => unsafe { LLVMInt16TypeInContext(context) },
         ast::ScalarType::S32 | ast::ScalarType::B32 | ast::ScalarType::U32 => unsafe {
             LLVMInt32TypeInContext(context)
         },

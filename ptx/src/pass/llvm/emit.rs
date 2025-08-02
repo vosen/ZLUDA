@@ -294,7 +294,9 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             },
             ptx_parser::ScalarType::S16
             | ptx_parser::ScalarType::B16
-            | ptx_parser::ScalarType::U16 => unsafe {
+            | ptx_parser::ScalarType::U16
+            | ptx_parser::ScalarType::E4m3x2
+            | ptx_parser::ScalarType::E5m2x2 => unsafe {
                 LLVMConstInt(llvm_type, u16::from_le_bytes(bytes.try_into()?) as u64, 0)
             },
             ptx_parser::ScalarType::S32
@@ -1606,6 +1608,15 @@ impl<'a> MethodEmitContext<'a> {
         data: ptx_parser::CvtDetails,
         arguments: ptx_parser::CvtArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
+        // Conversions to FP8 types should be replaced by a function call. 
+        match data {
+            ptx_parser::CvtDetails {
+                to: ast::ScalarType::E4m3x2 | ast::ScalarType::E5m2x2,
+                ..
+            } => return Err(error_unreachable()),
+            _ => {}
+        }
+
         let dst_type = get_scalar_type(self.context, data.to);
         let llvm_fn = match data.mode {
             ptx_parser::CvtMode::ZeroExtend => LLVMBuildZExt,
@@ -3053,7 +3064,11 @@ impl std::fmt::Display for LLVMTypeDisplay {
         match self.0 {
             ast::ScalarType::Pred => write!(f, "i1"),
             ast::ScalarType::B8 | ast::ScalarType::U8 | ast::ScalarType::S8 => write!(f, "i8"),
-            ast::ScalarType::B16 | ast::ScalarType::U16 | ast::ScalarType::S16 => write!(f, "i16"),
+            ast::ScalarType::B16
+            | ast::ScalarType::U16
+            | ast::ScalarType::S16
+            | ast::ScalarType::E4m3x2
+            | ast::ScalarType::E5m2x2 => write!(f, "i16"),
             ast::ScalarType::B32 | ast::ScalarType::U32 | ast::ScalarType::S32 => write!(f, "i32"),
             ast::ScalarType::B64 | ast::ScalarType::U64 | ast::ScalarType::S64 => write!(f, "i64"),
             ptx_parser::ScalarType::B128 => write!(f, "i128"),

@@ -185,7 +185,25 @@ fn run_instruction<'input>(
         i @ ptx_parser::Instruction::Nanosleep { .. } => {
             to_call(resolver, fn_declarations, "nanosleep_u32".into(), i)?
         }
-        i => i,
+        i @ ptx_parser::Instruction::Cvt {
+            data:
+                ptx_parser::CvtDetails {
+                    from: ast::ScalarType::F32,
+                    to: ast::ScalarType::E4m3x2,
+                    mode: _,
+                },
+            arguments: _,
+        } => {
+            // Conversions from f32 to f8 must have two source arguments.
+            // satfinite is mandatory for conversions to e4m3x2.
+            to_call(
+                resolver,
+                fn_declarations,
+                "cvt_f32_to_e4m3_satfinite".into(),
+                i,
+            )?
+        }
+        i => i
     })
 }
 
