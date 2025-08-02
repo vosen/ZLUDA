@@ -15,7 +15,7 @@
     ld.param.u64 	out_addr, [output];
 
     ld.f32          temp1, [in_addr];
-	sqrt.approx.f32	temp1, temp1;
+	sqrt.rn.f32	temp1, temp1;
     st.f32          [out_addr], temp1;
 	ret;
 }
