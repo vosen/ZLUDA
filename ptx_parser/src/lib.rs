@@ -1739,6 +1739,12 @@ derive_parser!(
     #[derive(Copy, Clone, PartialEq, Eq, Hash)]
     pub enum ShuffleMode { }
 
+    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    pub enum ShiftDirection { }
+
+    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    pub enum FunnelShiftMode { }
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
     mov{.vec}.type  d, a => {
         Instruction::Mov {
@@ -3625,6 +3631,17 @@ derive_parser!(
     cp.async.wait_all => {
         Instruction::CpAsyncWaitAll {}
     }
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#logic-and-shift-instructions-shf
+    shf.dir.mode.b32  d, a, b, c => {
+        Instruction::Shf {
+            data: ShfDetails { direction: dir, mode: mode },
+            arguments: ShfArgs { dst: d, src_a: a, src_b: b, src_c: c }
+        }
+    }
+
+    .dir: ShiftDirection = { .l, .r };
+    .mode: FunnelShiftMode = { .clamp, .wrap };
 );
 
 #[cfg(test)]
