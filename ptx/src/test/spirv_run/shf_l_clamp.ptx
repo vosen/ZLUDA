@@ -1,0 +1,28 @@
+.version 6.5
+.target sm_32
+.address_size 64
+
+.visible .entry shf_l_clamp(
+    .param .u64 input,
+    .param .u64 output
+)
+{
+    .reg .u64       in_addr;
+    .reg .u64       out_addr;
+    .reg .b32       in_a;
+    .reg .b32       in_b;
+    .reg .b32       in_c;
+    .reg .u32       result;
+
+    ld.param.u64    in_addr, [input];
+    ld.param.u64    out_addr, [output];
+
+    ld.b32          in_a, [in_addr];
+    ld.b32          in_b, [in_addr+4];
+    ld.b32          in_c, [in_addr+8];
+
+    shf.l.clamp.b32 result, in_a, in_b, in_c;
+
+    st.b32          [out_addr], result;
+    ret;
+}
