@@ -2397,7 +2397,16 @@ derive_parser!(
         }
     }
     // cvt.rn.satfinite{.relu}.f8x2type.f16x2     d, a;
-    // cvt.rn.{.relu}.f16x2.f8x2type              d, a;
+    cvt.rn{.relu}.f16x2.f8x2type              d, a => {
+        if relu {
+            state.errors.push(PtxError::Todo);
+        }
+        let data = ast::CvtDetails::new(&mut state.errors, Some(rn), false, false, ScalarType::F16x2, f8x2type);
+        ast::Instruction::Cvt {
+            data,
+            arguments: ast::CvtArgs { dst: d, src: a, src2: None }
+        }
+    }
 
     .ifrnd: RawRoundingMode =   { .rn,  .rz,  .rm,  .rp,  .rni, .rzi, .rmi, .rpi };
     .frnd2: RawRoundingMode =   { .rn,  .rz };

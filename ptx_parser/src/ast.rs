@@ -1817,7 +1817,9 @@ impl CvtDetails {
                     saturate,
                 },
                 Ordering::Greater => {
-                    if rounding.is_some() {
+                    if rounding.is_some()
+                        && !(src == ScalarType::E4m3x2 || src == ScalarType::E5m2x2)
+                    {
                         errors.push(PtxError::SyntaxError(
                             "should not have rounding mode when dst is larger than src in cvt"
                                 .to_string(),

@@ -138,9 +138,10 @@ fn get_scalar_type(context: LLVMContextRef, type_: ast::ScalarType) -> LLVMTypeR
         | ast::ScalarType::S16
         | ast::ScalarType::E4m3x2
         | ast::ScalarType::E5m2x2 => unsafe { LLVMInt16TypeInContext(context) },
-        ast::ScalarType::S32 | ast::ScalarType::B32 | ast::ScalarType::U32 => unsafe {
-            LLVMInt32TypeInContext(context)
-        },
+        ast::ScalarType::S32
+        | ast::ScalarType::B32
+        | ast::ScalarType::U32
+        | ast::ScalarType::F16x2 => unsafe { LLVMInt32TypeInContext(context) },
         ast::ScalarType::U64 | ast::ScalarType::S64 | ast::ScalarType::B64 => unsafe {
             LLVMInt64TypeInContext(context)
         },
@@ -151,7 +152,6 @@ fn get_scalar_type(context: LLVMContextRef, type_: ast::ScalarType) -> LLVMTypeR
         ast::ScalarType::BF16 => unsafe { LLVMBFloatTypeInContext(context) },
         ast::ScalarType::U16x2 => todo!(),
         ast::ScalarType::S16x2 => todo!(),
-        ast::ScalarType::F16x2 => todo!(),
         ast::ScalarType::BF16x2 => todo!(),
     }
 }
