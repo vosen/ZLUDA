@@ -1,5 +1,5 @@
 use crate::schema::modules;
-use diesel::prelude::*;
+use diesel::{connection::SimpleConnection, prelude::*};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use std::time::Duration;
 
@@ -20,11 +20,18 @@ pub struct ModuleKey<'a> {
 pub struct ModuleCache(SqliteConnection);
 
 impl ModuleCache {
-    pub fn open(database_url: &str) -> Result<Self, diesel::ConnectionError> {
-        let mut conn = SqliteConnection::establish(database_url)?;
-        conn.run_pending_migrations(MIGRATIONS)
-            .map_err(|err| diesel::ConnectionError::BadConnection(err.to_string()))?;
-        Ok(Self(conn))
+    pub fn open() -> Option<Self> {
+        let mut cache_dir = dirs::cache_dir()?;
+        cache_dir.extend(["zluda", "ComputeCache", "zluda.db"]);
+        Self::open_from_file(cache_dir.to_str()?)
+    }
+
+    fn open_from_file(file_path: &str) -> Option<Self> {
+        let mut conn = SqliteConnection::establish(file_path).ok()?;
+        conn.batch_execute("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;")
+            .ok()?;
+        conn.run_pending_migrations(MIGRATIONS).ok()?;
+        Some(Self(conn))
     }
 
     pub fn get_module_binary(&mut self, key: ModuleKey) -> Option<Vec<u8>> {
@@ -58,7 +65,7 @@ impl ModuleCache {
         use std::time::{SystemTime, UNIX_EPOCH};
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap_or(Duration::default())
+            .unwrap_or(Duration::ZERO)
             .as_millis() as i64
     }
 }
@@ -91,7 +98,7 @@ mod tests {
 
     #[test]
     fn empty_db_returns_no_module() {
-        let mut db = ModuleCache::open(":memory:").unwrap();
+        let mut db = ModuleCache::open_from_file(":memory:").unwrap();
         let module_binary = db.get_module_binary(super::ModuleKey {
             hash: "test_hash",
             compiler_version: "1.0.0",
@@ -110,7 +117,7 @@ mod tests {
 
     #[test]
     fn newly_inserted_module_increments_total_size() {
-        let mut db = ModuleCache::open(":memory:").unwrap();
+        let mut db = ModuleCache::open_from_file(":memory:").unwrap();
         db.insert_module(
             super::ModuleKey {
                 hash: "test_hash1",
@@ -149,7 +156,7 @@ mod tests {
 
     #[test]
     fn get_bumps_last_access() {
-        let mut db = ModuleCache::open(":memory:").unwrap();
+        let mut db = ModuleCache::open_from_file(":memory:").unwrap();
         db.insert_module(
             super::ModuleKey {
                 hash: "test_hash",
@@ -183,7 +190,7 @@ mod tests {
 
     #[test]
     fn double_insert_does_not_override() {
-        let mut db = ModuleCache::open(":memory:").unwrap();
+        let mut db = ModuleCache::open_from_file(":memory:").unwrap();
         db.insert_module(
             super::ModuleKey {
                 hash: "test_hash",
