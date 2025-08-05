@@ -1145,7 +1145,7 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ParsedOperand::Reg(id) => write!(f, "{}", id)?,
-            ParsedOperand::RegOffset(id, o) => write!(f, "[{}+{}]", id, o)?,
+            ParsedOperand::RegOffset(id, o) => write!(f, "{}+{}", id, o)?,
             ParsedOperand::Imm(imm) => write!(f, "{}", imm)?,
             ParsedOperand::VecMember(id, idx) => {
                 let suffix = match idx {
