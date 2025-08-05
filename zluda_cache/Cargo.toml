@@ -1,0 +1,9 @@
+[package]
+name = "zluda_cache"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+diesel = { version = "2.2.12", features = ["sqlite", "returning_clauses_for_sqlite_3_35"] }
+diesel_migrations = "2.2.0"
+libsqlite3-sys = { version = "0.35", features = ["bundled"] }

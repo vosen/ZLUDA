@@ -21,6 +21,7 @@ members = [
     "zluda_bindgen",
     "zluda_blas",
     "zluda_blaslt",
+    "zluda_cache",
     "zluda_common",
     "zluda_dnn",
     "zluda_trace",
