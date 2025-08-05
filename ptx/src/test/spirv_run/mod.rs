@@ -643,7 +643,7 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
         unsafe { hipGetDevicePropertiesR0600(&mut dev_props, dev) }.unwrap();
         let elf_module = comgr::compile_bitcode(
             &comgr,
-            unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) },
+            unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) }.to_str().unwrap(),
             &*module.llvm_ir.write_bitcode_to_memory(),
             &*module.attributes_ir.write_bitcode_to_memory(),
             module.linked_bitcode(),
