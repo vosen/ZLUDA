@@ -141,18 +141,18 @@ fn run_instruction<'input>(
             let name = ["bfe_", scalar_to_ptx_name(data)].concat();
             to_call(resolver, fn_declarations, name.into(), i)?
         }
-        // i @ ptx_parser::Instruction::Sqrt {
-        //     data:
-        //         ast::RcpData {
-        //             kind: ast::RcpKind::Compliant(ast::RoundingMode::NearestEven),
-        //             flush_to_zero: Some(true),
-        //             ..
-        //         },
-        //     ..
-        // } => {
-        //     let name = ["sqrt_rn_ftz_f32"].concat();
-        //     to_call(resolver, fn_declarations, name.into(), i)?
-        // }
+        i @ ptx_parser::Instruction::Sqrt {
+            data:
+                ast::RcpData {
+                    kind: ast::RcpKind::Compliant(ast::RoundingMode::NearestEven),
+                    flush_to_zero: Some(true),
+                    ..
+                },
+            ..
+        } => {
+            let name = ["sqrt_rn_ftz_f32"].concat();
+            to_call(resolver, fn_declarations, name.into(), i)?
+        }
         //i @ ptx_parser::Instruction::Sqrt {
         //    data:
         //        ast::RcpData {
