@@ -4,12 +4,12 @@ CREATE TABLE modules (
     compiler_version TEXT NOT NULL,
     zluda_version TEXT NOT NULL,
     device TEXT NOT NULL,
-    flags BIGINT NOT NULL,
+    backend_key TEXT NOT NULL,
     binary BLOB NOT NULL,
     last_access BIGINT NOT NULL
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS modules_index ON modules (hash, compiler_version, zluda_version, device, flags);
+CREATE UNIQUE INDEX IF NOT EXISTS modules_index ON modules (hash, compiler_version, zluda_version, device, backend_key);
 
 CREATE TABLE IF NOT EXISTS globals (
     key TEXT PRIMARY KEY,

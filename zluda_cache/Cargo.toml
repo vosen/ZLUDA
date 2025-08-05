@@ -11,3 +11,4 @@ diesel = { version = "2.2.12", features = [
 diesel_migrations = "2.2.0"
 libsqlite3-sys = { version = "0.35", features = ["bundled"] }
 dirs = "6.0.0"
+arrayvec = "0.7.6"

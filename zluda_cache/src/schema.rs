@@ -14,7 +14,7 @@ diesel::table! {
         compiler_version -> Text,
         zluda_version -> Text,
         device -> Text,
-        flags -> BigInt,
+        backend_key -> Text,
         binary -> Binary,
         last_access -> BigInt,
     }
