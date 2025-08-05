@@ -1297,8 +1297,8 @@ pub enum PtxError<'input> {
     Parser(ContextError),
     #[error("")]
     Todo,
-    #[error("")]
-    SyntaxError,
+    #[error("Syntax error: {0}")]
+    SyntaxError(String),
     #[error("")]
     NonF32Ftz,
     #[error("")]
@@ -1931,8 +1931,10 @@ derive_parser!(
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld-global-nc
     ld.global{.cop}.nc{.level::eviction_priority}{.level::cache_hint}{.level::prefetch_size}{.vec}.type  d, [a]{, cache_policy} => {
-        if cop.is_some() && level_eviction_priority.is_some() {
-            state.errors.push(PtxError::SyntaxError);
+        if let Some(cop) = cop {
+            if let Some(level_eviction_priority) = level_eviction_priority {
+                state.errors.push(PtxError::SyntaxError(format!("cannot have both {} and {} in {:?}", cop, level_eviction_priority, state.text)));
+            }
         }
         if level_eviction_priority.is_some() || level_cache_hint || level_prefetch_size.is_some() || cache_policy.is_some() {
             state.errors.push(PtxError::Todo);
@@ -3584,7 +3586,7 @@ derive_parser!(
             .and_then(|imm| imm.as_u64())
             .and_then(|n| CpAsyncCpSize::from_u64(n))
             .unwrap_or_else(|| {
-                state.errors.push(PtxError::SyntaxError);
+                state.errors.push(PtxError::SyntaxError(format!("invalid cp.async cp-size {} in {:?}", cp_size, state.text)));
                 CpAsyncCpSize::Bytes4
             });
 
