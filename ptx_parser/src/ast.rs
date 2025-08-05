@@ -1138,7 +1138,10 @@ impl<Ident> ParsedOperand<Ident> {
     }
 }
 
-impl<Ident> std::fmt::Display for ParsedOperand<Ident> where Ident: std::fmt::Display {
+impl<Ident> std::fmt::Display for ParsedOperand<Ident>
+where
+    Ident: std::fmt::Display,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ParsedOperand::Reg(id) => write!(f, "{}", id)?,
@@ -1153,7 +1156,7 @@ impl<Ident> std::fmt::Display for ParsedOperand<Ident> where Ident: std::fmt::Di
                     _ => "INVALID",
                 };
                 write!(f, "{}.{}", id, suffix)?
-            },
+            }
             ParsedOperand::VecPack(items) => {
                 f.write_char('{')?;
                 for (idx, item) in items.iter().enumerate() {
@@ -1163,7 +1166,7 @@ impl<Ident> std::fmt::Display for ParsedOperand<Ident> where Ident: std::fmt::Di
                     write!(f, "{}", item)?;
                 }
                 f.write_char('}')?
-            },
+            }
         }
         Ok(())
     }
@@ -1774,9 +1777,14 @@ impl CvtDetails {
             Some((rnd, is_integer)) => (rnd, is_integer),
             None => {
                 if let Some(rnd) = rnd {
-                    errors.push(PtxError::SyntaxError(format!("invalid rounding mode {} for cvt", rnd)));
+                    errors.push(PtxError::SyntaxError(format!(
+                        "invalid rounding mode {} for cvt",
+                        rnd
+                    )));
                 } else {
-                    errors.push(PtxError::SyntaxError(format!("missing rounding mode for cvt")));
+                    errors.push(PtxError::SyntaxError(format!(
+                        "missing rounding mode for cvt"
+                    )));
                 }
                 (RoundingMode::NearestEven, false)
             }
@@ -1799,7 +1807,10 @@ impl CvtDetails {
                 },
                 Ordering::Greater => {
                     if rounding.is_some() {
-                        errors.push(PtxError::SyntaxError("should not have rounding mode when dst is larger than src in cvt".to_string()));
+                        errors.push(PtxError::SyntaxError(
+                            "should not have rounding mode when dst is larger than src in cvt"
+                                .to_string(),
+                        ));
                     }
                     CvtMode::FPExtend {
                         flush_to_zero,
@@ -1859,7 +1870,9 @@ impl CvtDetails {
                 }
             },
             (_, _) => {
-                errors.push(PtxError::SyntaxError("unexpected pairing of dst and src types in cvt".to_string()));
+                errors.push(PtxError::SyntaxError(
+                    "unexpected pairing of dst and src types in cvt".to_string(),
+                ));
                 CvtMode::Bitcast
             }
         };
