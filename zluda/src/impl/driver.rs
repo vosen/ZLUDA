@@ -54,7 +54,8 @@ pub(crate) fn global_state() -> Result<&'static GlobalState, CUerror> {
             let mut device_count = 0;
             unsafe { hipGetDeviceCount(&mut device_count) }?;
             let comgr = Comgr::new().map_err(|_| CUerror::UNKNOWN)?;
-            let comgr_clang_version = comgr::get_clang_version(&comgr).map_err(|_| CUerror::UNKNOWN)?;
+            let comgr_clang_version =
+                comgr::get_clang_version(&comgr).map_err(|_| CUerror::UNKNOWN)?;
             Ok(GlobalState {
                 comgr,
                 comgr_clang_version,
