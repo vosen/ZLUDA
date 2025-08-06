@@ -150,7 +150,7 @@ fn run_instruction<'input>(
                 },
             ..
         } => {
-            let name = ["sqrt_rn_ftz_f32"].concat();
+            let name = "sqrt_rn_ftz_f32";
             to_call(resolver, fn_declarations, name.into(), i)?
         }
         i @ ptx_parser::Instruction::Sqrt {
@@ -161,7 +161,7 @@ fn run_instruction<'input>(
                 },
             ..
         } => {
-            let name = ["sqrt_rn_f32"].concat();
+            let name = "sqrt_rn_f32";
             to_call(resolver, fn_declarations, name.into(), i)?
         }
         i @ ptx_parser::Instruction::Bfi { data, .. } => {
