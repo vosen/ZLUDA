@@ -6,7 +6,7 @@ use crate::{
     FunnelShiftMode, Mul24Control, PtxError, PtxParserState, Reduction, ShiftDirection, ShuffleMode,
 };
 use bitflags::bitflags;
-use std::{alloc::Layout, cmp::Ordering, num::NonZeroU8};
+use std::{alloc::Layout, cmp::Ordering, fmt::Write, num::NonZeroU8};
 
 pub enum Statement<P: Operand> {
     Label(P::Ident),
@@ -1138,6 +1138,40 @@ impl<Ident> ParsedOperand<Ident> {
     }
 }
 
+impl<Ident> std::fmt::Display for ParsedOperand<Ident>
+where
+    Ident: std::fmt::Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParsedOperand::Reg(id) => write!(f, "{}", id)?,
+            ParsedOperand::RegOffset(id, o) => write!(f, "{}+{}", id, o)?,
+            ParsedOperand::Imm(imm) => write!(f, "{}", imm)?,
+            ParsedOperand::VecMember(id, idx) => {
+                let suffix = match idx {
+                    0 => "x",
+                    1 => "y",
+                    2 => "z",
+                    3 => "w",
+                    _ => "INVALID",
+                };
+                write!(f, "{}.{}", id, suffix)?
+            }
+            ParsedOperand::VecPack(items) => {
+                f.write_char('{')?;
+                for (idx, item) in items.iter().enumerate() {
+                    if idx != 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", item)?;
+                }
+                f.write_char('}')?
+            }
+        }
+        Ok(())
+    }
+}
+
 impl<Ident: Copy> Operand for ParsedOperand<Ident> {
     type Ident = Ident;
 
@@ -1168,6 +1202,18 @@ impl ImmediateValue {
             ImmediateValue::S64(n) => Some(n as u64),
             ImmediateValue::F32(_) | ImmediateValue::F64(_) => None,
         }
+    }
+}
+
+impl std::fmt::Display for ImmediateValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ImmediateValue::U64(n) => write!(f, "{}", n)?,
+            ImmediateValue::S64(n) => write!(f, "{}", n)?,
+            ImmediateValue::F32(n) => write!(f, "{}", n)?,
+            ImmediateValue::F64(n) => write!(f, "{}", n)?,
+        }
+        Ok(())
     }
 }
 
@@ -1730,7 +1776,16 @@ impl CvtDetails {
         let mut unwrap_rounding = || match rounding {
             Some((rnd, is_integer)) => (rnd, is_integer),
             None => {
-                errors.push(PtxError::SyntaxError);
+                if let Some(rnd) = rnd {
+                    errors.push(PtxError::SyntaxError(format!(
+                        "invalid rounding mode {} for cvt",
+                        rnd
+                    )));
+                } else {
+                    errors.push(PtxError::SyntaxError(format!(
+                        "missing rounding mode for cvt"
+                    )));
+                }
                 (RoundingMode::NearestEven, false)
             }
         };
@@ -1752,7 +1807,10 @@ impl CvtDetails {
                 },
                 Ordering::Greater => {
                     if rounding.is_some() {
-                        errors.push(PtxError::SyntaxError);
+                        errors.push(PtxError::SyntaxError(
+                            "should not have rounding mode when dst is larger than src in cvt"
+                                .to_string(),
+                        ));
                     }
                     CvtMode::FPExtend {
                         flush_to_zero,
@@ -1812,7 +1870,9 @@ impl CvtDetails {
                 }
             },
             (_, _) => {
-                errors.push(PtxError::SyntaxError);
+                errors.push(PtxError::SyntaxError(
+                    "unexpected pairing of dst and src types in cvt".to_string(),
+                ));
                 CvtMode::Bitcast
             }
         };
