@@ -230,15 +230,30 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
 
     fn vec_pack(
         &mut self,
-        vector_elements: Vec<SpirvWord>,
+        vector_elements: Vec<ast::RegOrImmediate<SpirvWord>>,
         type_space: Option<(&ast::Type, ast::StateSpace)>,
         is_dst: bool,
         relaxed_type_check: bool,
     ) -> Result<SpirvWord, TranslateError> {
         let (width, scalar_t, state_space) = match type_space {
             Some((ast::Type::Vector(width, scalar_t), space)) => (*width, *scalar_t, space),
+            Some((ast::Type::Scalar(scalar_t), space)) => {
+                let type_ =
+                    ast::ScalarType::from_size(scalar_t.size_of() / (vector_elements.len() as u8)).ok_or_else(|| error_mismatched_type())?;
+                (vector_elements.len() as u8, type_, space)
+            }
             _ => return Err(error_mismatched_type()),
         };
+        let vector_elements = vector_elements
+            .into_iter()
+            .map(|element| match element {
+                ast::RegOrImmediate::Reg(name) => self.reg(name),
+                ast::RegOrImmediate::Imm(immediate_value) => self.immediate(
+                    immediate_value,
+                    Some((&ast::Type::Scalar(scalar_t), state_space)),
+                ),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         let temporary_vector = self
             .resolver
             .register_unnamed(Some((ast::Type::Vector(width, scalar_t), state_space)));

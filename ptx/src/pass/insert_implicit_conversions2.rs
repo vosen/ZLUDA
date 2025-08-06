@@ -208,7 +208,8 @@ fn default_implicit_conversion_type(
         if should_bitcast(instruction_type, operand_type) {
             Ok(Some(ConversionKind::Default))
         } else {
-            Err(TranslateError::MismatchedType)
+            println!("{} {} {}", space, operand_type, instruction_type);
+            Err(error_mismatched_type())
         }
     } else {
         Ok(Some(ConversionKind::PtrToPtr))
@@ -264,14 +265,14 @@ pub(crate) fn should_convert_relaxed_dst_wrapper(
     (instruction_space, instruction_type): (ast::StateSpace, &ast::Type),
 ) -> Result<Option<ConversionKind>, TranslateError> {
     if operand_space != instruction_space {
-        return Err(TranslateError::MismatchedType);
+        return Err(error_mismatched_type());
     }
     if operand_type == instruction_type {
         return Ok(None);
     }
     match should_convert_relaxed_dst(operand_type, instruction_type) {
         conv @ Some(_) => Ok(conv),
-        None => Err(TranslateError::MismatchedType),
+        None => Err(error_mismatched_type()),
     }
 }
 
