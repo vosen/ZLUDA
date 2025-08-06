@@ -10,7 +10,9 @@
 
 #define FUNC(NAME) __device__ __attribute__((retain)) __zluda_ptx_impl_##NAME
 #define ATTR(NAME) __ZLUDA_PTX_IMPL_ATTRIBUTE_##NAME
-#define DECLARE_ATTR(TYPE, NAME) extern const TYPE ATTR(NAME) __device__
+#define DECLARE_ATTR(TYPE, NAME) \
+    extern const TYPE ATTR(NAME) \
+    __device__
 
 extern "C"
 {
@@ -100,19 +102,6 @@ extern "C"
         }
     }
 
-    static __device__ uint32_t sub_sat(uint32_t x, uint32_t y)
-    {
-        uint32_t result;
-        if (__builtin_sub_overflow(x, y, &result))
-        {
-            return 0;
-        }
-        else
-        {
-            return result;
-        }
-    }
-
     int64_t FUNC(bfe_s64)(int64_t base, uint32_t pos, uint32_t len)
     {
         // NVIDIA docs are incorrect. In 64 bit `bfe` both `pos` and `len`
@@ -122,7 +111,7 @@ extern "C"
         if (pos >= 64)
             return (base >> 63U);
         if (add_sat(pos, len) >= 64)
-            len = sub_sat(64, pos);
+            len = 64 - pos;
         return (base << (64U - pos - len)) >> (64U - len);
     }
 
@@ -226,7 +215,8 @@ extern "C"
     SHFL_SYNC_IMPL(idx, (delta & ~section_mask) | subsection, >);
 
     DECLARE_ATTR(uint32_t, CLOCK_RATE);
-    void FUNC(nanosleep_u32)(uint32_t nanoseconds) {
+    void FUNC(nanosleep_u32)(uint32_t nanoseconds)
+    {
         // clock_rate is in kHz
         uint64_t cycles_per_ns = ATTR(CLOCK_RATE) / 1000000;
         uint64_t cycles = nanoseconds * cycles_per_ns;
@@ -336,100 +326,107 @@ extern "C"
             return value;
     }
 
-    __device__ static float preciseSquareRoot(float x, bool needsDenormHandling) {
+    // The logic here is taken from legalizeFSQRTF32/lowerFSQRTF32 in LLVM
+    // AMDGPU target
+    __device__ static float precise_square_root(float x, bool needs_denorm_handling)
+    {
 
         // Constants for denormal handling
-        const float scaleThreshold = 0x1.0p-96f;  // Very small value threshold
-        const float scaleUpFactor = 0x1.0p+32f;   // 2^32
-        const float scaleDownFactor = 0x1.0p-16f; // 2^-16
-        
-        // Check if input needs scaling (for very small values)
-        bool needScale = scaleThreshold > x;
-        auto scaled = scaleUpFactor * x;
-        
-        // Scale up input if needed
-        float sqrtX = needScale ? scaled : x;
+        const float scale_threshold = 0x1.0p-96f;   // Very small value threshold
+        const float scale_up_factor = 0x1.0p+32f;   // 2^32
+        const float scale_down_factor = 0x1.0p-16f; // 2^-16
 
-        float sqrtS;
+        // Check if input needs scaling (for very small values)
+        bool need_scale = scale_threshold > x;
+        auto scaled = scale_up_factor * x;
+
+        // Scale up input if needed
+        float sqrt_x = need_scale ? scaled : x;
+
+        float sqrt_s;
 
         // Check if we need special denormal handling
-        
-        if (needsDenormHandling) {
+
+        if (needs_denorm_handling)
+        {
             // Use hardware sqrt as initial approximation
-            sqrtS = __builtin_sqrtf(sqrtX);  // Or equivalent hardware instruction
-            
+            sqrt_s = __builtin_sqrtf(sqrt_x); // Or equivalent hardware instruction
+
             // Bit manipulations to get next values up/down
-            uint32_t sqrtSBits = std::bit_cast<uint32_t>(sqrtS);
-            
+            uint32_t sqrt_s_bits = std::bit_cast<uint32_t>(sqrt_s);
+
             // Next value down (subtract 1 from bit pattern)
-            uint32_t sqrtSNextDownBits = sqrtSBits - 1;
-            float sqrtSNextDown = std::bit_cast<float>(sqrtSNextDownBits);
-            
+            uint32_t sqrt_s_next_down_bits = sqrt_s_bits - 1;
+            float sqrt_s_next_down = std::bit_cast<float>(sqrt_s_next_down_bits);
+
             // Calculate residual: x - sqrt_next_down * sqrt
-            float negSqrtSNextDown = -sqrtSNextDown;
-            float sqrtVP = std::fma(negSqrtSNextDown, sqrtS, sqrtX);
-            
+            float neg_sqrt_s_next_down = -sqrt_s_next_down;
+            float sqrt_vp = std::fma(neg_sqrt_s_next_down, sqrt_s, sqrt_x);
+
             // Next value up (add 1 to bit pattern)
-            uint32_t sqrtSNextUpBits = sqrtSBits + 1;
-            float sqrtSNextUp = std::bit_cast<float>(sqrtSNextUpBits);
-            
+            uint32_t sqrt_s_next_up_bits = sqrt_s_bits + 1;
+            float sqrt_s_next_up = std::bit_cast<float>(sqrt_s_next_up_bits);
+
             // Calculate residual: x - sqrt_next_up * sqrt
-            float negSqrtSNextUp = -sqrtSNextUp;
-            float sqrtVS = std::fma(negSqrtSNextUp, sqrtS, sqrtX);
-            
+            float neg_sqrt_s_next_up = -sqrt_s_next_up;
+            float sqrt_vs = std::fma(neg_sqrt_s_next_up, sqrt_s, sqrt_x);
+
             // Select correctly rounded result
-            if (sqrtVP <= 0.0f) {
-                sqrtS = sqrtSNextDown;
+            if (sqrt_vp <= 0.0f)
+            {
+                sqrt_s = sqrt_s_next_down;
             }
-            
-            if (sqrtVS > 0.0f) {
-                sqrtS = sqrtSNextUp;
+
+            if (sqrt_vs > 0.0f)
+            {
+                sqrt_s = sqrt_s_next_up;
             }
-        } else {
+        }
+        else
+        {
             // Use Newton-Raphson method with reciprocal square root
-            
+
             // Initial approximation
-            float sqrtR = __builtin_amdgcn_rsqf(sqrtX);  // Or equivalent hardware 1/sqrt instruction
-            sqrtS = sqrtX * sqrtR;
-            
+            float sqrt_r = __builtin_amdgcn_rsqf(sqrt_x); // Or equivalent hardware 1/sqrt instruction
+            sqrt_s = sqrt_x * sqrt_r;
+
             // Refine approximation
             float half = 0.5f;
-            float sqrtH = sqrtR * half;
-            float negSqrtH = -sqrtH;
-            
+            float sqrt_h = sqrt_r * half;
+            float neg_sqrt_h = -sqrt_h;
+
             // Calculate error term
-            float sqrtE = std::fma(negSqrtH, sqrtS, half);
-            
+            float sqrt_e = std::fma(neg_sqrt_h, sqrt_s, half);
+
             // First refinement
-            sqrtH = std::fma(sqrtH, sqrtE, sqrtH);
-            sqrtS = std::fma(sqrtS, sqrtE, sqrtS);
-            
+            sqrt_h = std::fma(sqrt_h, sqrt_e, sqrt_h);
+            sqrt_s = std::fma(sqrt_s, sqrt_e, sqrt_s);
+
             // Second refinement
-            float negSqrtS = -sqrtS;
-            float sqrtD = std::fma(negSqrtS, sqrtS, sqrtX);
-            sqrtS = std::fma(sqrtD, sqrtH, sqrtS);
+            float neg_sqrt_s = -sqrt_s;
+            float sqrt_d = std::fma(neg_sqrt_s, sqrt_s, sqrt_x);
+            sqrt_s = std::fma(sqrt_d, sqrt_h, sqrt_s);
         }
-        
+
         // Scale back if input was scaled
-        if (needScale) {
-            sqrtS *= scaleDownFactor;
+        if (need_scale)
+        {
+            sqrt_s *= scale_down_factor;
         }
-        
+
         // Special case handling for zero and infinity
-        bool isZeroOrInf = __builtin_isfpclass(x, __FPCLASS_POSINF | __FPCLASS_POSZERO | __FPCLASS_NEGZERO);
-        
-        return isZeroOrInf ? sqrtX : sqrtS;
+        bool is_zero_or_inf = __builtin_isfpclass(sqrt_x, __FPCLASS_POSINF | __FPCLASS_POSZERO | __FPCLASS_NEGZERO);
+
+        return is_zero_or_inf ? sqrt_x : sqrt_s;
     }
-
-
 
     float FUNC(sqrt_rn_f32)(float x)
     {
-        return preciseSquareRoot(x, true);
+        return precise_square_root(x, true);
     }
 
     float FUNC(sqrt_rn_ftz_f32)(float x)
     {
-        return preciseSquareRoot(x, false);
+        return precise_square_root(x, false);
     }
 }

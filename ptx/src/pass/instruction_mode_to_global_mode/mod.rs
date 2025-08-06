@@ -238,7 +238,6 @@ impl InstructionModes {
             // which must preserve denormals
             (true, false) => Some(DenormalMode::Preserve),
             // For full precision we set denormal mode accordingly
-            
             (false, ftz) => Some(DenormalMode::from_ftz(ftz)),
             //(false, ftz) => Some(DenormalMode::Preserve),
         };
