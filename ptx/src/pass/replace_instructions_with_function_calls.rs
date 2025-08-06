@@ -197,7 +197,7 @@ fn run_instruction<'input>(
             let to = match to {
                 ptx_parser::ScalarType::E4m3x2 => "e4m3",
                 ptx_parser::ScalarType::E5m2x2 => "e5m2",
-                _ => unreachable!()
+                _ => unreachable!(),
             };
             // Conversions from f32 to f8 must have two source arguments.
             // satfinite is mandatory for conversions to e4m3x2.
@@ -220,7 +220,7 @@ fn run_instruction<'input>(
             let from = match from {
                 ptx_parser::ScalarType::E4m3x2 => "e4m3x2",
                 ptx_parser::ScalarType::E5m2x2 => "e5m2x2",
-                _ => unreachable!()
+                _ => unreachable!(),
             };
             to_call(
                 resolver,

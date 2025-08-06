@@ -1608,7 +1608,7 @@ impl<'a> MethodEmitContext<'a> {
         data: ptx_parser::CvtDetails,
         arguments: ptx_parser::CvtArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        // Conversions to FP8 types should be replaced by a function call. 
+        // Conversions to FP8 types should be replaced by a function call.
         match data {
             ptx_parser::CvtDetails {
                 to: ast::ScalarType::E4m3x2 | ast::ScalarType::E5m2x2,
