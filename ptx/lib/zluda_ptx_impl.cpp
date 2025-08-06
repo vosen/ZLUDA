@@ -354,7 +354,13 @@ extern "C"
                        a);
     }
 
-    __half2 FUNC(cvt_e4m3x2_to_f16x2)(__hip_fp8x2_e4m3 in) {
+    __half2 FUNC(cvt_e4m3x2_to_f16x2)(__hip_fp8x2_e4m3 in)
+    {
+        return in;
+    }
+
+    __half2 FUNC(cvt_e5m2x2_to_f16x2)(__hip_fp8x2_e5m2 in)
+    {
         return in;
     }
 }

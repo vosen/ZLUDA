@@ -222,8 +222,6 @@ fn run_instruction<'input>(
                 ptx_parser::ScalarType::E5m2x2 => "e5m2x2",
                 _ => unreachable!()
             };
-            // Conversions from f32 to f8 must have two source arguments.
-            // satfinite is mandatory for conversions to e4m3x2.
             to_call(
                 resolver,
                 fn_declarations,
