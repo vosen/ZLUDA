@@ -574,7 +574,7 @@ fn emit_parse_function(
 
         #(#fns_)*
 
-        fn parse_instruction<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> winnow::error::PResult<Instruction<ParsedOperandStr<'input>>>
+        fn parse_instruction_impl<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> winnow::error::PResult<Instruction<ParsedOperandStr<'input>>>
         {
             use winnow::Parser;
             use winnow::token::*;
@@ -587,6 +587,11 @@ fn emit_parse_function(
                 )*
                 _ => return Err(winnow::error::ErrMode::from_error_kind(stream, winnow::error::ErrorKind::Token))
             })
+        }
+
+        fn parse_instruction<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> winnow::error::PResult<Instruction<ParsedOperandStr<'input>>>
+        {
+            trace("parse_instruction", parse_instruction_impl).parse_next(stream)
         }
     }
 }
