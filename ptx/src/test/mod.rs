@@ -1,7 +1,29 @@
 use crate::pass::{self, TranslateError};
 use ptx_parser as ast;
 
+mod parse_fail;
 mod spirv_run;
+
+#[macro_export]
+macro_rules! read_test_file {
+    ($file:expr) => {
+        {
+            if cfg!(feature = "ci_build") {
+                include_str!($file).to_string()
+            } else {
+                use std::path::PathBuf;
+                // CARGO_MANIFEST_DIR is the crate directory (ptx), but file! is relative to the workspace root (and therefore also includes ptx).
+                let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+                path.pop();
+                path.push(file!());
+                path.pop();
+                path.push($file);
+                std::fs::read_to_string(path).unwrap()
+            }
+        }
+    };
+}
+pub(crate) use read_test_file;
 
 fn parse_and_assert(ptx_text: &str) {
     ast::parse_module_checked(ptx_text).unwrap();

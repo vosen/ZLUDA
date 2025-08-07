@@ -723,78 +723,51 @@ fn statement<'a, 'input>(
             pragma.map(|_| None),
             block_statement.map(Some),
         )),
-        take_till_inclusive(
-            |(t, _)| *t == Token::RBrace,
-            |(t, _)| match t {
-                Token::Semicolon | Token::Colon => true,
-                _ => false,
-            },
-        ),
+        take_till_end_of_statement(),
         |text| PtxError::UnrecognizedStatement(text.unwrap_or("")),
     )
     .map(Option::flatten)
     .parse_next(stream)
 }
 
-fn take_till_inclusive<I: Stream, E: ParserError<I>>(
-    backtrack_token: impl Fn(&I::Token) -> bool,
-    end_token: impl Fn(&I::Token) -> bool,
-) -> impl Parser<I, <I as Stream>::Slice, E> {
-    fn get_offset<I: Stream, E: ParserError<I>>(
-        input: &mut I,
-        backtrack_token: &impl Fn(&I::Token) -> bool,
-        end_token: &impl Fn(&I::Token) -> bool,
-        should_backtrack: &mut bool,
-    ) -> Result<usize, E> {
-        *should_backtrack = false;
-        let mut hit = false;
-        for (offset, token) in input.iter_offsets() {
-            if hit {
-                return Ok(offset);
-            } else {
-                if backtrack_token(&token) {
-                    *should_backtrack = true;
-                    return Ok(offset);
+fn take_till_end_of_statement<
+    'a,
+    I: Stream<Token = (Token<'a>, std::ops::Range<usize>)>,
+    E: ParserError<I>,
+>() -> impl Parser<I, <I as Stream>::Slice, E> {
+    trace("take_till_end_of_statement", move |stream: &mut I| {
+        let mut depth = 0;
+
+        let mut iterator = stream.iter_offsets().peekable();
+        while let Some((current_offset, (token, _))) = iterator.next() {
+            match token {
+                Token::LBrace => {
+                    depth += 1;
                 }
-                if end_token(&token) {
-                    hit = true;
+                Token::RBrace => {
+                    if depth == 0 {
+                        return Err(ErrMode::from_error_kind(
+                            stream,
+                            winnow::error::ErrorKind::Token,
+                        ));
+                    }
+                    depth -= 1;
                 }
+                Token::Semicolon | Token::Colon => {
+                    let offset = if let Some((next_offset, _)) = iterator.peek() {
+                        *next_offset
+                    } else {
+                        current_offset
+                    };
+                    return Ok(stream.next_slice(offset));
+                }
+                _ => {}
             }
         }
-        Err(ParserError::from_error_kind(input, ErrorKind::Eof))
-    }
-    trace("take_till_inclusive", move |stream: &mut I| {
-        let mut should_backtrack = false;
-        let offset = get_offset(stream, &backtrack_token, &end_token, &mut should_backtrack)?;
-        let result = stream.next_slice(offset);
-        if should_backtrack {
-            Err(ErrMode::from_error_kind(
-                stream,
-                winnow::error::ErrorKind::Token,
-            ))
-        } else {
-            Ok(result)
-        }
+
+        Err(ParserError::from_error_kind(stream, ErrorKind::Eof))
     })
 }
-
-/*
-pub fn take_till_or_backtrack_eof<Set, Input, Error>(
-    set: Set,
-) -> impl Parser<Input, <Input as Stream>::Slice, Error>
-where
-    Input: StreamIsPartial + Stream,
-    Set: winnow::stream::ContainsToken<<Input as Stream>::Token>,
-    Error: ParserError<Input>,
-{
-    move |stream: &mut Input| {
-        if stream.eof_offset() == 0 {
-            return ;
-        }
-        take_till(0.., set)
-    }
-}
-     */
 
 fn with_recovery<'a, 'input: 'a, T>(
     mut parser: impl Parser<PtxParser<'a, 'input>, T, ContextError>,
@@ -1324,7 +1297,7 @@ impl<Ident> ast::ParsedOperand<Ident> {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, PartialEq)]
 pub enum PtxError<'input> {
     #[error("{source}")]
     ParseInt {
