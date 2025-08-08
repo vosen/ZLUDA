@@ -152,26 +152,32 @@ type PtxParser<'a, 'input> =
     Stateful<&'a [(Token<'input>, logos::Span)], PtxParserState<'a, 'input>>;
 
 fn ident<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<&'input str> {
-    any.verify_map(|(t, _)| {
-        if let Token::Ident(text) = t {
-            Some(text)
-        } else if let Some(text) = t.opcode_text() {
-            Some(text)
-        } else {
-            None
-        }
-    })
+    trace(
+        "ident",
+        any.verify_map(|(t, _)| {
+            if let Token::Ident(text) = t {
+                Some(text)
+            } else if let Some(text) = t.opcode_text() {
+                Some(text)
+            } else {
+                None
+            }
+        }),
+    )
     .parse_next(stream)
 }
 
 fn dot_ident<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<&'input str> {
-    any.verify_map(|(t, _)| {
-        if let Token::DotIdent(text) = t {
-            Some(text)
-        } else {
-            None
-        }
-    })
+    trace(
+        "dot_ident",
+        any.verify_map(|(t, _)| {
+            if let Token::DotIdent(text) = t {
+                Some(text)
+            } else {
+                None
+            }
+        }),
+    )
     .parse_next(stream)
 }
 
@@ -308,12 +314,15 @@ fn constant<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::Imme
 }
 
 fn immediate_value<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::ImmediateValue> {
-    alt((
-        int_immediate,
-        f32.map(ast::ImmediateValue::F32),
-        f64.map(ast::ImmediateValue::F64),
-        constant,
-    ))
+    trace(
+        "immediate_value",
+        alt((
+            int_immediate,
+            f32.map(ast::ImmediateValue::F32),
+            f64.map(ast::ImmediateValue::F64),
+            constant,
+        )),
+    )
     .parse_next(stream)
 }
 
@@ -798,9 +807,10 @@ where
 
 fn with_recovery<'a, 'input: 'a, T>(
     mut parser: impl Parser<PtxParser<'a, 'input>, T, ContextError>,
-    mut recovery: impl Parser<PtxParser<'a, 'input>, &'a [(Token<'input>, logos::Span)], ContextError>,
+    recovery: impl Parser<PtxParser<'a, 'input>, &'a [(Token<'input>, logos::Span)], ContextError>,
     mut error: impl FnMut(Option<&'input str>) -> PtxError<'input>,
 ) -> impl Parser<PtxParser<'a, 'input>, Option<T>, ContextError> {
+    let mut recovery = trace("recovery", recovery);
     trace(
         "with_recovery",
         move |stream: &mut PtxParser<'a, 'input>| {
@@ -828,9 +838,11 @@ fn with_recovery<'a, 'input: 'a, T>(
 }
 
 fn pragma<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()> {
-    (Token::DotPragma, Token::String, Token::Semicolon)
-        .void()
-        .parse_next(stream)
+    trace(
+        "pragma",
+        (Token::DotPragma, Token::String, Token::Semicolon).void(),
+    )
+    .parse_next(stream)
 }
 
 fn method_parameter<'a, 'input: 'a>(
@@ -1181,18 +1193,23 @@ fn scalar_type<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<Scalar
 fn predicated_instruction<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<ast::Statement<ParsedOperandStr<'input>>> {
-    (opt(pred_at), parse_instruction, Token::Semicolon)
-        .map(|(p, i, _)| ast::Statement::Instruction(p, i))
-        .parse_next(stream)
+    trace(
+        "predicated_instruction",
+        (opt(pred_at), parse_instruction, Token::Semicolon)
+            .map(|(p, i, _)| ast::Statement::Instruction(p, i)),
+    )
+    .parse_next(stream)
 }
 
 fn pred_at<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::PredAt<&'input str>> {
-    (Token::At, opt(Token::Exclamation), ident)
-        .map(|(_, not, label)| ast::PredAt {
+    trace(
+        "pred_at",
+        (Token::At, opt(Token::Exclamation), ident).map(|(_, not, label)| ast::PredAt {
             not: not.is_some(),
             label,
-        })
-        .parse_next(stream)
+        }),
+    )
+    .parse_next(stream)
 }
 
 fn label<'a, 'input>(
@@ -1315,9 +1332,12 @@ impl<Ident> ast::ParsedOperand<Ident> {
         trace(
             "operand",
             alt((
-                ident_operands,
+                trace("ident_operands", ident_operands),
                 immediate_value.map(ast::ParsedOperand::Imm),
-                vector_operand.map(ast::ParsedOperand::VecPack),
+                trace(
+                    "vector_operand",
+                    vector_operand.map(ast::ParsedOperand::VecPack),
+                ),
             )),
         )
         .parse_next(stream)
