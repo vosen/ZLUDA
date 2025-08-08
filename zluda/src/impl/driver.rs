@@ -17,6 +17,8 @@ mod os;
 pub(crate) struct GlobalState {
     pub devices: Vec<Device>,
     pub comgr: Comgr,
+    pub comgr_clang_version: String,
+    pub cache_path: Option<String>,
 }
 
 pub(crate) struct Device {
@@ -52,8 +54,11 @@ pub(crate) fn global_state() -> Result<&'static GlobalState, CUerror> {
             let mut device_count = 0;
             unsafe { hipGetDeviceCount(&mut device_count) }?;
             let comgr = Comgr::new().map_err(|_| CUerror::UNKNOWN)?;
+            let comgr_clang_version =
+                comgr::get_clang_version(&comgr).map_err(|_| CUerror::UNKNOWN)?;
             Ok(GlobalState {
                 comgr,
+                comgr_clang_version,
                 devices: (0..device_count)
                     .map(|i| {
                         let mut props = unsafe { mem::zeroed() };
@@ -68,6 +73,7 @@ pub(crate) fn global_state() -> Result<&'static GlobalState, CUerror> {
                         })
                     })
                     .collect::<Result<Vec<_>, _>>()?,
+                cache_path: zluda_cache::ModuleCache::create_cache_dir_and_get_path(),
             })
         })
         .as_ref()
