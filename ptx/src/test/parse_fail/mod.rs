@@ -15,7 +15,10 @@ macro_rules! test_ptx_parse_fails {
     };
 }
 
-test_ptx_parse_fails!(unrecognized_braces, vec![PtxError::UnrecognizedStatement("mov.u32 foo, {} {};")]);
+test_ptx_parse_fails!(
+    unrecognized_braces,
+    vec![PtxError::UnrecognizedStatement("mov.u32 foo, {} {};")]
+);
 
 fn test_parse_fails(
     ptx_text: &str,
