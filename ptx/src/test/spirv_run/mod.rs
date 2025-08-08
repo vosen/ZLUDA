@@ -1,3 +1,4 @@
+use super::read_test_file;
 use crate::pass;
 use comgr::Comgr;
 use cuda_types::cuda::CUstream;
@@ -10,31 +11,9 @@ use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::{self, File};
 use std::io::Write;
 use std::mem;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::ptr;
 use std::str;
-
-#[cfg(not(feature = "ci_build"))]
-macro_rules! read_test_file {
-    ($file:expr) => {
-        {
-            // CARGO_MANIFEST_DIR is the crate directory (ptx), but file! is relative to the workspace root (and therefore also includes ptx).
-            let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            path.pop();
-            path.push(file!());
-            path.pop();
-            path.push($file);
-            std::fs::read_to_string(path).unwrap()
-        }
-    };
-}
-
-#[cfg(feature = "ci_build")]
-macro_rules! read_test_file {
-    ($file:expr) => {
-        include_str!($file).to_string()
-    };
-}
 
 macro_rules! test_ptx_llvm {
     ($fn_name:ident) => {
