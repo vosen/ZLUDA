@@ -185,6 +185,50 @@ fn run_instruction<'input>(
         i @ ptx_parser::Instruction::Nanosleep { .. } => {
             to_call(resolver, fn_declarations, "nanosleep_u32".into(), i)?
         }
+        i @ ptx_parser::Instruction::Cvt {
+            data:
+                ptx_parser::CvtDetails {
+                    from: ast::ScalarType::F32,
+                    to: to @ (ast::ScalarType::E4m3x2 | ast::ScalarType::E5m2x2),
+                    mode: _,
+                },
+            arguments: _,
+        } => {
+            let to = match to {
+                ptx_parser::ScalarType::E4m3x2 => "e4m3",
+                ptx_parser::ScalarType::E5m2x2 => "e5m2",
+                _ => unreachable!(),
+            };
+            // Conversions from f32 to f8 must have two source arguments.
+            // satfinite is mandatory for conversions to e4m3x2.
+            to_call(
+                resolver,
+                fn_declarations,
+                format!("cvt_f32_to_{}_satfinite", to).into(),
+                i,
+            )?
+        }
+        i @ ptx_parser::Instruction::Cvt {
+            data:
+                ptx_parser::CvtDetails {
+                    from: from @ (ast::ScalarType::E4m3x2 | ast::ScalarType::E5m2x2),
+                    to: ast::ScalarType::F16x2,
+                    mode: _,
+                },
+            arguments: _,
+        } => {
+            let from = match from {
+                ptx_parser::ScalarType::E4m3x2 => "e4m3x2",
+                ptx_parser::ScalarType::E5m2x2 => "e5m2x2",
+                _ => unreachable!(),
+            };
+            to_call(
+                resolver,
+                fn_declarations,
+                format!("cvt_{}_to_f16x2", from).into(),
+                i,
+            )?
+        }
         i => i,
     })
 }
