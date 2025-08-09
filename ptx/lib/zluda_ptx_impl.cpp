@@ -163,11 +163,8 @@ extern "C"
     BAR_RED_IMPL(and);
     BAR_RED_IMPL(or);
 
-    struct ShflSyncResult
-    {
-        uint32_t output;
-        bool in_bounds;
-    };
+
+typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
 
     // shfl.sync opts consists of two values, the warp end ID and the subsection mask.
     //
@@ -181,7 +178,6 @@ extern "C"
     // The warp end ID is the max lane ID for a specific mode. For the CUDA __shfl_sync
     // intrinsics, it is always 31 for idx, bfly, and down, and 0 for up. This is used for the
     // bounds check.
-
 #define SHFL_SYNC_IMPL(mode, calculate_index, CMP)                                                                                              \
     ShflSyncResult FUNC(shfl_sync_##mode##_b32_pred)(uint32_t input, int32_t delta, uint32_t opts, uint32_t membermask __attribute__((unused))) \
     {                                                                                                                                           \
@@ -197,12 +193,12 @@ extern "C"
             idx = self;                                                                                                                         \
         }                                                                                                                                       \
         int32_t output = __builtin_amdgcn_ds_bpermute(idx << 2, (int32_t)input);                                                                \
-        return {(uint32_t)output, !out_of_bounds};                                                                                              \
+        return {(uint32_t)output, uint32_t(!out_of_bounds)};                                                                                              \
     }                                                                                                                                           \
                                                                                                                                                 \
     uint32_t FUNC(shfl_sync_##mode##_b32)(uint32_t input, int32_t delta, uint32_t opts, uint32_t membermask)                                    \
     {                                                                                                                                           \
-        return __zluda_ptx_impl_shfl_sync_##mode##_b32_pred(input, delta, opts, membermask).output;                                             \
+        return __zluda_ptx_impl_shfl_sync_##mode##_b32_pred(input, delta, opts, membermask).x;                                             \
     }
 
     // We are using the HIP __shfl intrinsics to implement these, rather than the __shfl_sync
@@ -326,8 +322,7 @@ extern "C"
             return value;
     }
 
-    // The logic here is taken from legalizeFSQRTF32/lowerFSQRTF32 in LLVM
-    // AMDGPU target
+    // Logic taken from legalizeFSQRTF32/lowerFSQRTF32 in LLVM AMDGPU target
     __device__ static float precise_square_root(float x, bool needs_denorm_handling)
     {
 
@@ -429,4 +424,118 @@ extern "C"
     {
         return precise_square_root(x, false);
     }
+
+    // Logic taken from legalizeFDIV32 in LLVM AMDGPU target
+    __device__ static float perform_division(float lhs, float rhs, bool needs_denorm_handling __attribute__((unused)))
+    {
+
+        if (!needs_denorm_handling)
+        {
+            __builtin_amdgcn_s_setreg(6401, 15); // preserve denorms
+        }
+        float one = 1.0f;
+
+        // Division scale operations
+        bool denominator_scaled_flag;
+        float denominator_scaled = __builtin_amdgcn_div_scalef(lhs, rhs, false, &denominator_scaled_flag);
+
+        bool numerator_scaled_flag;
+        float numerator_scaled = __builtin_amdgcn_div_scalef(lhs, rhs, true, &numerator_scaled_flag);
+
+        // Reciprocal approximation
+        float approx_rcp = __builtin_amdgcn_rcpf(denominator_scaled);
+        float neg_div_scale0 = -denominator_scaled;
+
+        // Perform division approximation steps
+        float fma_0 = fmaf(neg_div_scale0, approx_rcp, one);
+        float fma_1 = fmaf(fma_0, approx_rcp, approx_rcp);
+        float mul = numerator_scaled * fma_1;
+        float fma_2 = fmaf(neg_div_scale0, mul, numerator_scaled);
+        float fma_3 = fmaf(fma_2, fma_1, mul);
+        float fma_4 = fmaf(neg_div_scale0, fma_3, numerator_scaled);
+
+        if (!needs_denorm_handling)
+        {
+            __builtin_amdgcn_s_setreg(6401, 0); // flush denorms to zero
+        }
+
+        // Final division steps
+        float fmas = __builtin_amdgcn_div_fmasf(fma_4, fma_1, fma_3, numerator_scaled_flag);
+        float result = __builtin_amdgcn_div_fixupf(fmas, rhs, lhs);
+
+        return result;
+    }
+
+    struct DivRnFtzF32Part1Result
+    {
+        uint32_t fma_4;
+        uint32_t fma_1;
+        uint32_t fma_3;
+        bool numerator_scaled_flag;
+    };
+
+    __device__ static DivRnFtzF32Part1Result div_rn_ftz_f32_part1(float lhs, float rhs)
+    {
+        float one = 1.0f;
+
+        // Division scale operations
+        bool denominator_scaled_flag;
+        float denominator_scaled = __builtin_amdgcn_div_scalef(lhs, rhs, false, &denominator_scaled_flag);
+
+        bool numerator_scaled_flag;
+        float numerator_scaled = __builtin_amdgcn_div_scalef(lhs, rhs, true, &numerator_scaled_flag);
+
+        // Reciprocal approximation
+        float approx_rcp = __builtin_amdgcn_rcpf(denominator_scaled);
+        float neg_div_scale0 = -denominator_scaled;
+
+        // Perform division approximation steps
+        float fma_0 = fmaf(neg_div_scale0, approx_rcp, one);
+        float fma_1 = fmaf(fma_0, approx_rcp, approx_rcp);
+        float mul = numerator_scaled * fma_1;
+        float fma_2 = fmaf(neg_div_scale0, mul, numerator_scaled);
+        float fma_3 = fmaf(fma_2, fma_1, mul);
+        float fma_4 = fmaf(neg_div_scale0, fma_3, numerator_scaled);
+        return {std::bit_cast<uint32_t>(fma_4), std::bit_cast<uint32_t>(fma_1), std::bit_cast<uint32_t>(fma_3), numerator_scaled_flag};
+    }
+
+    __device__ static float div_rn_ftz_f32_part2(float x, float y, DivRnFtzF32Part1Result part1)
+    {
+        float fmas = __builtin_amdgcn_div_fmasf(std::bit_cast<float>(part1.fma_4), std::bit_cast<float>(part1.fma_1), std::bit_cast<float>(part1.fma_3), part1.numerator_scaled_flag);
+        float result = __builtin_amdgcn_div_fixupf(fmas, y, x);
+
+        return result;
+    }
+
+    float FUNC(div_rn_f32)(float x, float y)
+    {
+        return perform_division(x, y, true);
+    }
+
+    DivRnFtzF32Part1Result FUNC(div_rn_ftz_f32_part1)(float x, float y)
+    {
+        return div_rn_ftz_f32_part1(x, y);
+    }
+
+    float FUNC(div_rn_ftz_f32_part2)(float x, float y,
+                                     float fma_4,
+                                     float fma_1,
+                                     float fma_3,
+                                     bool numerator_scaled_flag)
+    {
+        return div_rn_ftz_f32_part2(x, y, {std::bit_cast<uint32_t>(fma_4), std::bit_cast<uint32_t>(fma_1), std::bit_cast<uint32_t>(fma_3), numerator_scaled_flag});
+    }
+
+    struct ShflSyncResult2
+    {
+        uint32_t output;
+        uint32_t output2;
+        bool in_bounds;
+    };
+
+    ShflSyncResult2 FUNC(foo)(uint32_t input)
+    {                                          
+        printf("asdf")                                                                                           ;
+        return {input, input, true}; // Dummy implementation for testing
+    }  
 }

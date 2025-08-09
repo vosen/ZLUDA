@@ -301,6 +301,15 @@ test_ptx!(multiple_return, [5u32], [6u32, 123u32]);
 test_ptx!(warp_sz, [0u8], [32u8]);
 test_ptx!(tanh, [f32::INFINITY], [1.0f32]);
 test_ptx!(cp_async, [0u32], [1u32, 2u32, 3u32, 0u32]);
+// Two test below test very important compiler feature, make sure that you
+// understand fully what's going on before you touch it.
+// The problem is that the full-precision division gets legalized by LLVM
+// using __module attribute__.
+// In the two tests below we deliberately force our compiler to emit
+// different a module that has a different module-level denormal attribute
+// from the denormal attribute of the instruction to catch cases like this
+test_ptx!(div_ftz, [0x16A2028Du32, 0x5E89F6AE], [0x0, 900636404u32]);
+test_ptx!(div_noftz, [0x16A2028Du32, 0x5E89F6AE], [0x26u32, 900636404u32]);
 
 test_ptx!(nanosleep, [0u64], [0u64]);
 

@@ -397,6 +397,8 @@ impl<'a> MethodEmitContext<'a> {
             Statement::VectorWrite(vector_write) => self.emit_vector_write(vector_write)?,
             Statement::SetMode(mode_reg) => self.emit_set_mode(mode_reg)?,
             Statement::FpSaturate { dst, src, type_ } => self.emit_fp_saturate(type_, dst, src)?,
+            // No-op
+            Statement::FpModeRequired { .. } => {}
         })
     }
 
@@ -824,25 +826,20 @@ impl<'a> MethodEmitContext<'a> {
         match &*arguments.return_arguments {
             [] => {}
             [name] => self.resolver.register(*name, llvm_call),
-            [b32, pred] => {
-                self.resolver.with_result(*b32, |name| unsafe {
-                    LLVMBuildExtractValue(self.builder, llvm_call, 0, name)
-                });
-                self.resolver.with_result(*pred, |name| unsafe {
-                    let extracted =
-                        LLVMBuildExtractValue(self.builder, llvm_call, 1, LLVM_UNNAMED.as_ptr());
-                    LLVMBuildTrunc(
-                        self.builder,
-                        extracted,
-                        get_scalar_type(self.context, ast::ScalarType::Pred),
-                        name,
-                    )
-                });
-            }
-            _ => {
-                return Err(error_todo_msg(
-                    "Only two return arguments (.b32, .pred) currently supported",
-                ))
+            args => {
+                for (i, (arg, (type_, _))) in args
+                    .iter()
+                    .copied()
+                    .zip(data.return_arguments.iter())
+                    .enumerate()
+                {
+                    let temp_arg =
+                        unsafe { LLVMBuildExtractValue(self.builder, llvm_call, i as u32, name) };
+                    let type_ = get_type(self.context, type_)?;
+                    self.resolver.with_result(arg, |name| unsafe {
+                        LLVMBuildTruncOrBitCast(self.builder, temp_arg, type_, name)
+                    });
+                }
             }
         }
         Ok(())
@@ -2882,35 +2879,40 @@ fn get_array_type<'a>(
 }
 
 fn check_multiple_return_types<'a>(
-    mut return_args: impl ExactSizeIterator<Item = &'a ast::Type>,
+    return_args: impl DoubleEndedIterator<Item = &'a ast::Type>,
 ) -> Result<(), TranslateError> {
-    let err_msg = "Only (.b32, .pred) multiple return types are supported";
-
-    let first = return_args.next().ok_or_else(|| error_todo_msg(err_msg))?;
-    let second = return_args.next().ok_or_else(|| error_todo_msg(err_msg))?;
-    match (first, second) {
-        (ast::Type::Scalar(first), ast::Type::Scalar(second)) => {
-            if first.size_of() != 4 || second.size_of() != 1 {
-                return Err(error_todo_msg(err_msg));
-            }
+    let err_msg = "Only (.b32+, .pred?) multiple return types are supported";
+    let mut return_args_rev = return_args.rev();
+    if let Some(last) = return_args_rev.next() {
+        if last.layout().size() != 4 && !matches!(last, ast::Type::Scalar(ast::ScalarType::Pred)) {
+            return Err(error_todo_msg(err_msg));
         }
-        _ => return Err(error_todo_msg(err_msg)),
+    }
+    for arg in return_args_rev {
+        if arg.layout().size() != 4 {
+            return Err(error_todo_msg(err_msg));
+        }
     }
     Ok(())
 }
 
 fn get_function_type<'a>(
     context: LLVMContextRef,
-    mut return_args: impl ExactSizeIterator<Item = &'a ast::Type>,
+    mut return_args: impl DoubleEndedIterator<Item = &'a ast::Type>
+        + ExactSizeIterator<Item = &'a ast::Type>,
     input_args: impl ExactSizeIterator<Item = Result<LLVMTypeRef, TranslateError>>,
 ) -> Result<LLVMTypeRef, TranslateError> {
     let mut input_args = input_args.collect::<Result<Vec<_>, _>>()?;
     let return_type = match return_args.len() {
         0 => unsafe { LLVMVoidTypeInContext(context) },
         1 => get_type(context, &return_args.next().unwrap())?,
-        _ => {
+        count => {
             check_multiple_return_types(return_args)?;
-            get_array_type(context, &ast::Type::Scalar(ast::ScalarType::B32), 2)?
+            get_array_type(
+                context,
+                &ast::Type::Scalar(ast::ScalarType::B32),
+                count as u64,
+            )?
         }
     };
 
