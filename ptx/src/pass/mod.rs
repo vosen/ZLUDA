@@ -24,7 +24,8 @@ mod normalize_basic_blocks;
 mod normalize_identifiers2;
 mod normalize_predicates2;
 mod remove_unreachable_basic_blocks;
-mod replace_instructions_with_function_calls;
+mod replace_instructions_with_functions;
+mod replace_instructions_with_functions_fp_required;
 mod replace_known_functions;
 mod resolve_function_pointers;
 
@@ -67,12 +68,14 @@ pub fn to_llvm_module<'input>(
     let directives = expand_operands::run(&mut flat_resolver, directives)?;
     let directives = insert_post_saturation::run(&mut flat_resolver, directives)?;
     let directives = deparamize_functions::run(&mut flat_resolver, directives)?;
+    let directives =
+        replace_instructions_with_functions_fp_required::run(&mut flat_resolver, directives)?;
     let directives = normalize_basic_blocks::run(&mut flat_resolver, directives)?;
     let directives = remove_unreachable_basic_blocks::run(directives)?;
     let directives = instruction_mode_to_global_mode::run(&mut flat_resolver, directives)?;
     let directives = insert_explicit_load_store::run(&mut flat_resolver, directives)?;
     let directives = insert_implicit_conversions2::run(&mut flat_resolver, directives)?;
-    let directives = replace_instructions_with_function_calls::run(&mut flat_resolver, directives)?;
+    let directives = replace_instructions_with_functions::run(&mut flat_resolver, directives)?;
     let directives = hoist_globals::run(directives)?;
 
     let context = llvm::Context::new();
@@ -234,6 +237,17 @@ enum Statement<I, P: ast::Operand> {
     VectorRead(VectorRead),
     VectorWrite(VectorWrite),
     SetMode(ModeRegister),
+    // This instruction is a nop, it serves as a marker to indicate that the
+    // next instruction requires certain floating-point modes to be set.
+    // Some transcendentals compile to a sequence of instructions that
+    // require certain modes to be set _mid-function_.
+    // See replace_instructions_with_functions_fp_required pass for details
+    FpModeRequired {
+        ftz_f32: Option<bool>,
+        ftz_f16f64: Option<bool>,
+        rounding_mode_f32: Option<ast::RoundingMode>,
+        rounding_mode_f16f64: Option<ast::RoundingMode>,
+    },
     FpSaturate {
         dst: SpirvWord,
         src: SpirvWord,
@@ -540,6 +554,17 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                 )?;
                 Statement::FpSaturate { dst, src, type_ }
             }
+            Statement::FpModeRequired {
+                ftz_f32,
+                ftz_f16f64,
+                rounding_mode_f32,
+                rounding_mode_f16f64,
+            } => Statement::FpModeRequired {
+                ftz_f32,
+                ftz_f16f64,
+                rounding_mode_f32,
+                rounding_mode_f16f64,
+            },
         })
     }
 }
