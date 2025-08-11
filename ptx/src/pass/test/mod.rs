@@ -162,7 +162,7 @@ impl<'a> ast::VisitorMap<SpirvWord, SpirvWord, ()> for StatementFormatter<'a> {
         arg: SpirvWord,
         type_space: Option<(&ptx_parser::Type, ptx_parser::StateSpace)>,
         is_dst: bool,
-        relaxed_type_check: bool,
+        _relaxed_type_check: bool,
     ) -> Result<SpirvWord, ()> {
         if is_dst {
             if let Some(IdentEntry { name: None, .. }) = self.resolver.ident_map.get(&arg) {
@@ -205,7 +205,7 @@ fn statement_to_string(
         _ => todo!(),
     };
     let mut args_formatter = StatementFormatter::new(resolver);
-    stmt.visit_map(&mut args_formatter);
+    stmt.visit_map(&mut args_formatter).unwrap();
     args_formatter.format(&op)
 }
 

@@ -139,28 +139,8 @@ fn run_statements<'input>(
                         Statement::Instruction::<_, SpirvWord>(ast::Instruction::Call {
                             data: ptx_parser::CallDetails {
                                 uniform: false,
-                                return_arguments: vec![(
-                                    ast::Type::Vector(2, ast::ScalarType::U32),
-                                    ptx_parser::StateSpace::Reg,
-                                )],
-                                input_arguments: vec![
-                                    (
-                                        ast::Type::Scalar(ast::ScalarType::U32),
-                                        ptx_parser::StateSpace::Reg,
-                                    ),
-                                    (
-                                        ast::Type::Scalar(ast::ScalarType::U32),
-                                        ptx_parser::StateSpace::Reg,
-                                    ),
-                                    (
-                                        ast::Type::Scalar(ast::ScalarType::U32),
-                                        ptx_parser::StateSpace::Reg,
-                                    ),
-                                    (
-                                        ast::Type::Scalar(ast::ScalarType::U32),
-                                        ptx_parser::StateSpace::Reg,
-                                    ),
-                                ],
+                                return_arguments,
+                                input_arguments
                             },
                             arguments: ptx_parser::CallArgs {
                                 return_arguments: vec![packed_var],
@@ -184,6 +164,81 @@ fn run_statements<'input>(
                             arguments: ast::CvtArgs {
                                 dst: dst_pred,
                                 src: dst_pred_wide,
+                                src2: None,
+                            },
+                        })
+                    ]
+                }
+                Statement::Instruction(ast::Instruction::Cvt {
+                    data:
+                        ast::CvtDetails {
+                            from: from @ (ast::ScalarType::E4m3x2 | ast::ScalarType::E5m2x2),
+                            to: ast::ScalarType::F16x2,
+                            mode: _,
+                        },
+                    arguments:
+                        ast::CvtArgs {
+                            dst,
+                            src,
+                            src2: None,
+                        },
+                }) => {
+                    let from_str = match from {
+                        ast::ScalarType::E4m3x2 => "e4m3x2",
+                        ast::ScalarType::E5m2x2 => "e5m2x2",
+                        _ => unreachable!(),
+                    };
+                    let packed_output = resolver.register_unnamed(Some((
+                        ast::Type::Scalar(ast::ScalarType::B32),
+                        ast::StateSpace::Reg,
+                    )));
+                    let name = format!("cvt_rn_f16x2_{}", from_str).into();
+                    let return_arguments = vec![(
+                        ast::Type::Scalar(ast::ScalarType::B32),
+                        ast::StateSpace::Reg,
+                    )];
+                    let input_arguments = vec![(
+                        ast::Type::Scalar(ast::ScalarType::B16),
+                        ast::StateSpace::Reg,
+                    )];
+                    // TODO: fill out above
+                    // TODO: refactor common bits
+                    let func = match fn_declarations.entry(name) {
+                        hash_map::Entry::Occupied(occupied_entry) => occupied_entry.get().1,
+                        hash_map::Entry::Vacant(vacant_entry) => {
+                            let name = vacant_entry.key().clone();
+                            let full_name = [ZLUDA_PTX_PREFIX, &*name].concat();
+                            let name = resolver.register_named(Cow::Owned(full_name.clone()), None);
+                            vacant_entry.insert((
+                                to_variables(resolver, &return_arguments),
+                                name,
+                                to_variables(resolver, &input_arguments),
+                            ));
+                            name
+                        }
+                    };
+                    smallvec![
+                        Statement::Instruction::<_, SpirvWord>(ast::Instruction::Call {
+                            data: ptx_parser::CallDetails {
+                                uniform: false,
+                                return_arguments,
+                                input_arguments,
+                            },
+                            arguments: ptx_parser::CallArgs {
+                                return_arguments: vec![packed_output],
+                                func,
+                                input_arguments: vec![src],
+                            },
+                        }),
+                        Statement::Instruction(ast::Instruction::Cvt {
+                            data: ast::CvtDetails {
+                                from: ast::ScalarType::B32,
+                                to: ast::ScalarType::F16x2,
+                                mode: ast::CvtMode::Bitcast
+                            },
+                            arguments: ast::CvtArgs {
+                                dst,
+                                src: packed_output,
                                 src2: None,
                             },
                         })
@@ -356,27 +411,6 @@ fn run_instruction<'input>(
                 resolver,
                 fn_declarations,
                 format!("cvt_rn_satfinite_{}_f32", to).into(),
-                i,
-            )?
-        }
-        i @ ptx_parser::Instruction::Cvt {
-            data:
-                ptx_parser::CvtDetails {
-                    from: from @ (ast::ScalarType::E4m3x2 | ast::ScalarType::E5m2x2),
-                    to: ast::ScalarType::F16x2,
-                    mode: _,
-                },
-            arguments: _,
-        } => {
-            let from = match from {
-                ptx_parser::ScalarType::E4m3x2 => "e4m3x2",
-                ptx_parser::ScalarType::E5m2x2 => "e5m2x2",
-                _ => unreachable!(),
-            };
-            to_call(
-                resolver,
-                fn_declarations,
-                format!("cvt_rn_f16x2_{}", from).into(),
                 i,
             )?
         }
