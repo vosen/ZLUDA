@@ -1,0 +1,22 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry cvt_rni_u16_f32(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .f32 	    temp_f32;
+    .reg .u16 	    temp_u16;
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.global.f32   temp_f32, [in_addr];
+	cvt.rni.u16.f32 temp_u16, temp_f32;
+    st.u16          [out_addr], temp_u16;
+	ret;
+}

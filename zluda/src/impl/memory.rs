@@ -1,5 +1,4 @@
 use hip_runtime_sys::*;
-use std::mem;
 
 pub(crate) fn alloc_v2(dptr: *mut hipDeviceptr_t, bytesize: usize) -> hipError_t {
     unsafe { hipMalloc(dptr.cast(), bytesize) }?;
@@ -36,9 +35,24 @@ pub(crate) fn get_address_range_v2(
 }
 
 pub(crate) fn set_d32_v2(dst: hipDeviceptr_t, ui: ::core::ffi::c_uint, n: usize) -> hipError_t {
-    unsafe { hipMemsetD32(dst, mem::transmute(ui), n) }
+    unsafe { hipMemsetD32(dst, ui as std::ffi::c_int, n) }
 }
 
 pub(crate) fn set_d8_v2(dst: hipDeviceptr_t, value: ::core::ffi::c_uchar, n: usize) -> hipError_t {
     unsafe { hipMemsetD8(dst, value, n) }
+}
+pub(crate) fn get_info_v2(free: *mut usize, total: *mut usize) -> hipError_t {
+    unsafe { hipMemGetInfo(free, total) }
+}
+
+pub(crate) unsafe fn free_host(ptr: *mut ::core::ffi::c_void) -> hipError_t {
+    hipFreeHost(ptr)
+}
+
+pub(crate) unsafe fn host_alloc(
+    pp: *mut *mut ::core::ffi::c_void,
+    bytesize: usize,
+    flags: ::std::os::raw::c_uint,
+) -> hipError_t {
+    hipHostMalloc(pp, bytesize, flags)
 }

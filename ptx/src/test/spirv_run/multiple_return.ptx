@@ -1,0 +1,33 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.func (.reg .u32 a, .reg .pred b) do_something(
+    .reg .u32 x
+)
+{
+    add.u32     a, x, 1;
+    setp.eq.u32 b, 0, 0;
+    ret;
+}
+
+.visible .entry multiple_return(
+    .param .u64 input,
+    .param .u64 output
+)
+{
+    .reg .u64      in_addr;
+    .reg .u64      out_addr;
+    .reg .u32      temp;
+    .reg .u32      temp2;
+    .reg .pred     temp3;
+
+    ld.param.u64   in_addr, [input];
+    ld.param.u64   out_addr, [output];
+
+    ld.u32         temp, [in_addr];
+    call           (temp2, temp3), do_something, (temp);
+    st.u32         [out_addr], temp2;
+    @temp3  st.u32 [out_addr+4], 123;
+    ret;
+}

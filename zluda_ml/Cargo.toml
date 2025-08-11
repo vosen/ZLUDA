@@ -9,13 +9,13 @@ name = "nvml"
 crate-type = ["cdylib"]
 
 [dependencies]
-cuda_base = { path = "../cuda_base" }
+cuda_macros = { path = "../cuda_macros" }
 cuda_types = { path = "../cuda_types" }
 
 [package.metadata.zluda]
 linux_symlinks = [
     "libnvidia-ml.so",
     "libnvidia-ml.so.1",
-    "dump/libnvidia-ml.so",
-    "dump/libnvidia-ml.so.1",
+    "trace/libnvidia-ml.so",
+    "trace/libnvidia-ml.so.1",
 ]

@@ -1,0 +1,17 @@
+[package]
+name = "zluda_sparse"
+version = "0.0.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+name = "cusparse"
+
+[dependencies]
+cuda_macros = { path = "../cuda_macros" }
+cuda_types = { path = "../cuda_types" }
+
+[package.metadata.zluda]
+linux_symlinks = [
+    "libcusparse.so.12",
+]

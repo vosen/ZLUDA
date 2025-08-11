@@ -1,3 +1,4 @@
-#![allow(warnings)]
-pub mod amd_comgr;
-pub use amd_comgr::*;
+#[allow(warnings)]
+pub mod comgr2;
+#[allow(warnings)]
+pub mod comgr3;

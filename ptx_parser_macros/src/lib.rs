@@ -1,6 +1,6 @@
 use either::Either;
-use ptx_parser_macros_impl::parser;
 use proc_macro2::{Span, TokenStream};
+use ptx_parser_macros_impl::parser;
 use quote::{format_ident, quote, ToTokens};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::{collections::hash_map, hash::Hash, iter, rc::Rc};
@@ -197,7 +197,7 @@ impl SingleOpcodeDefinition {
                 })
             })
             .chain(self.arguments.0.iter().map(|arg| {
-                let name = &arg.ident;
+                let name = &arg.ident.ident();
                 let arg_type = if arg.unified {
                     quote! { (ParsedOperandStr<'input>, bool) }
                 } else if arg.can_be_negated {
@@ -225,7 +225,7 @@ impl SingleOpcodeDefinition {
                 })
             })
             .chain(self.arguments.0.iter().map(|arg| {
-                let name = &arg.ident;
+                let name = &arg.ident.ident();
                 quote! { #name }
             }))
     }
@@ -359,7 +359,8 @@ fn gather_rules(
 
 #[proc_macro]
 pub fn derive_parser(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let parse_definitions = parse_macro_input!(tokens as ptx_parser_macros_impl::parser::ParseDefinitions);
+    let parse_definitions =
+        parse_macro_input!(tokens as ptx_parser_macros_impl::parser::ParseDefinitions);
     let mut definitions = FxHashMap::default();
     let mut special_definitions = FxHashMap::default();
     let types = OpcodeDefinitions::get_enum_types(&parse_definitions.definitions);
@@ -384,7 +385,13 @@ pub fn derive_parser(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream
         special_definitions.keys(),
         &mut token_enum.variants,
     );
-    let token_impl = emit_parse_function(&token_enum.ident, &definitions, &special_definitions, all_opcode, all_modifier);
+    let token_impl = emit_parse_function(
+        &token_enum.ident,
+        &definitions,
+        &special_definitions,
+        all_opcode,
+        all_modifier,
+    );
     let tokens = quote! {
         #enum_types_tokens
 
@@ -420,11 +427,27 @@ fn emit_enum_types(
             }
             _ => {}
         }
-        let variants = variants.iter().map(|v| v.variant_capitalized());
+        let variants_capitalized = variants.iter().map(|v| v.variant_capitalized());
+        let display_cases = variants.iter().map(|v| {
+            let capitalized = v.variant_capitalized();
+            let v_string = format!("{}", v);
+            quote! {
+                Self::#capitalized => write!(f, #v_string)?
+            }
+        });
         Some(quote! {
             #[derive(Copy, Clone, PartialEq, Eq, Hash)]
             enum #type_ {
-                #(#variants),*
+                #(#variants_capitalized),*
+            }
+
+            impl std::fmt::Display for #type_ {
+                fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    match self {
+                        #(#display_cases),*
+                    }
+                    Ok(())
+                }
             }
         })
     });
@@ -551,7 +574,7 @@ fn emit_parse_function(
 
         #(#fns_)*
 
-        fn parse_instruction<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> winnow::error::PResult<Instruction<ParsedOperandStr<'input>>>
+        fn parse_instruction_impl<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> winnow::error::PResult<Instruction<ParsedOperandStr<'input>>>
         {
             use winnow::Parser;
             use winnow::token::*;
@@ -564,6 +587,11 @@ fn emit_parse_function(
                 )*
                 _ => return Err(winnow::error::ErrMode::from_error_kind(stream, winnow::error::ErrorKind::Token))
             })
+        }
+
+        fn parse_instruction<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> winnow::error::PResult<Instruction<ParsedOperandStr<'input>>>
+        {
+            trace("parse_instruction", parse_instruction_impl).parse_next(stream)
         }
     }
 }
@@ -757,12 +785,13 @@ fn emit_definition_parser(
                 DotModifierRef::Direct { optional: true, .. }
                 | DotModifierRef::Indirect { optional: true, .. } => TokenStream::new(),
             });
-    let arguments_parse = definition.arguments.0.iter().enumerate().map(|(idx, arg)| {
+    let (arguments_pattern, arguments_parser) = definition.arguments.0.iter().enumerate().rfold((quote! { () }, quote! { empty }), |(emitted_pattern, emitted_parser), (idx, arg)| {
         let comma = if idx == 0 || arg.pre_pipe {
             quote! { empty }
         } else {
             quote! { any.verify(|(t, _)| *t == #token_type::Comma).void() }
         };
+
         let pre_bracket = if arg.pre_bracket {
             quote! {
                 any.verify(|(t, _)| *t == #token_type::LBracket).void()
@@ -783,7 +812,7 @@ fn emit_definition_parser(
         };
         let can_be_negated = if arg.can_be_negated {
             quote! {
-                opt(any.verify(|(t, _)| *t == #token_type::Not)).map(|o| o.is_some())
+                opt(any.verify(|(t, _)| *t == #token_type::Exclamation)).map(|o| o.is_some())
             }
         } else {
             quote! {
@@ -816,7 +845,7 @@ fn emit_definition_parser(
         let pattern = quote! {
             (#comma, #pre_bracket, #pre_pipe, #can_be_negated, #operand, #post_bracket, #unified)
         };
-        let arg_name = &arg.ident;
+        let arg_name = &arg.ident.ident();
         if arg.unified && arg.can_be_negated {
             panic!("TODO: argument can't be both prefixed by `!` and suffixed by  `.unified`")
         }
@@ -833,16 +862,21 @@ fn emit_definition_parser(
                 #pattern.map(|(_, _, _, _, name, _, _)| name)
             }
         };
-        if arg.optional {
-            quote! {
-                let #arg_name = opt(#inner_parser).parse_next(stream)?;
-            }
+
+        let parser = if arg.optional {
+            quote! { first_optional(#inner_parser, #emitted_parser) }
         } else {
-            quote! {
-                let #arg_name = #inner_parser.parse_next(stream)?;
-            }
-        }
+            quote! { (#inner_parser, #emitted_parser) }
+        };
+
+        let pattern = quote! { ( #arg_name, #emitted_pattern ) };
+
+        (pattern, parser)
     });
+
+    let arguments_parse =
+        quote! { let #arguments_pattern = ( #arguments_parser ).parse_next(stream)?; };
+
     let fn_args = definition.function_arguments();
     let fn_name = format_ident!("{}_{}", opcode, fn_idx);
     let fn_call = quote! {
@@ -863,7 +897,7 @@ fn emit_definition_parser(
             }
         }
         #(#unordered_parse_validations)*
-        #(#arguments_parse)*
+        #arguments_parse
         #fn_call
     }
 }

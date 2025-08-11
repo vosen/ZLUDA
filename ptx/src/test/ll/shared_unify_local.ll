@@ -10,14 +10,14 @@ define i64 @add(i64 %"10") #0 {
   br label %"42"
 
 "42":                                             ; preds = %1
-  store i64 %"10", ptr addrspace(3) @shared_mod, align 4
-  %"49" = load i64, ptr addrspace(3) @shared_mod, align 4
-  store i64 %"49", ptr addrspace(5) %"48", align 4
-  %"101" = load i64, ptr addrspace(3) @shared_ex, align 4
-  %"51" = load i64, ptr addrspace(5) %"48", align 4
+  store i64 %"10", ptr addrspace(3) @shared_mod, align 8
+  %"49" = load i64, ptr addrspace(3) @shared_mod, align 8
+  store i64 %"49", ptr addrspace(5) %"48", align 8
+  %"101" = load i64, ptr addrspace(3) @shared_ex, align 8
+  %"51" = load i64, ptr addrspace(5) %"48", align 8
   %"72" = add i64 %"101", %"51"
-  store i64 %"72", ptr addrspace(5) %"47", align 4
-  %2 = load i64, ptr addrspace(5) %"47", align 4
+  store i64 %"72", ptr addrspace(5) %"47", align 8
+  %2 = load i64, ptr addrspace(5) %"47", align 8
   ret i64 %2
 }
 
@@ -29,13 +29,13 @@ define i64 @set_shared_temp1(i64 %"15", i64 %"16") #0 {
   br label %"43"
 
 "43":                                             ; preds = %1
-  store i64 %"15", ptr addrspace(3) @shared_ex, align 4
+  store i64 %"15", ptr addrspace(3) @shared_ex, align 8
   %"53" = call i64 @add(i64 %"16")
-  store i64 %"53", ptr addrspace(5) %"52", align 4
+  store i64 %"53", ptr addrspace(5) %"52", align 8
   br label %"44"
 
 "44":                                             ; preds = %"43"
-  %2 = load i64, ptr addrspace(5) %"52", align 4
+  %2 = load i64, ptr addrspace(5) %"52", align 8
   ret i64 %2
 }
 
@@ -50,30 +50,30 @@ define amdgpu_kernel void @shared_unify_local(ptr addrspace(4) byref(i64) %"54",
   br label %"45"
 
 "45":                                             ; preds = %1
-  %"60" = load i64, ptr addrspace(4) %"54", align 4
-  store i64 %"60", ptr addrspace(5) %"56", align 4
-  %"61" = load i64, ptr addrspace(4) %"55", align 4
-  store i64 %"61", ptr addrspace(5) %"57", align 4
-  %"63" = load i64, ptr addrspace(5) %"56", align 4
+  %"60" = load i64, ptr addrspace(4) %"54", align 8
+  store i64 %"60", ptr addrspace(5) %"56", align 8
+  %"61" = load i64, ptr addrspace(4) %"55", align 8
+  store i64 %"61", ptr addrspace(5) %"57", align 8
+  %"63" = load i64, ptr addrspace(5) %"56", align 8
   %"75" = inttoptr i64 %"63" to ptr addrspace(1)
-  %"62" = load i64, ptr addrspace(1) %"75", align 4
-  store i64 %"62", ptr addrspace(5) %"58", align 4
-  %"64" = load i64, ptr addrspace(5) %"56", align 4
+  %"62" = load i64, ptr addrspace(1) %"75", align 8
+  store i64 %"62", ptr addrspace(5) %"58", align 8
+  %"64" = load i64, ptr addrspace(5) %"56", align 8
   %"76" = inttoptr i64 %"64" to ptr addrspace(1)
   %"41" = getelementptr inbounds i8, ptr addrspace(1) %"76", i64 8
-  %"65" = load i64, ptr addrspace(1) %"41", align 4
-  store i64 %"65", ptr addrspace(5) %"59", align 4
-  %"67" = load i64, ptr addrspace(5) %"58", align 4
-  %"68" = load i64, ptr addrspace(5) %"59", align 4
+  %"65" = load i64, ptr addrspace(1) %"41", align 8
+  store i64 %"65", ptr addrspace(5) %"59", align 8
+  %"67" = load i64, ptr addrspace(5) %"58", align 8
+  %"68" = load i64, ptr addrspace(5) %"59", align 8
   %"77" = call i64 @set_shared_temp1(i64 %"67", i64 %"68")
-  store i64 %"77", ptr addrspace(5) %"59", align 4
+  store i64 %"77", ptr addrspace(5) %"59", align 8
   br label %"46"
 
 "46":                                             ; preds = %"45"
-  %"69" = load i64, ptr addrspace(5) %"57", align 4
-  %"70" = load i64, ptr addrspace(5) %"59", align 4
+  %"69" = load i64, ptr addrspace(5) %"57", align 8
+  %"70" = load i64, ptr addrspace(5) %"59", align 8
   %"79" = inttoptr i64 %"69" to ptr
-  store i64 %"70", ptr %"79", align 4
+  store i64 %"70", ptr %"79", align 8
   ret void
 }
 

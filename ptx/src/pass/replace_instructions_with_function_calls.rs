@@ -94,6 +94,46 @@ fn run_instruction<'input>(
     instruction: ptx_parser::Instruction<SpirvWord>,
 ) -> Result<ptx_parser::Instruction<SpirvWord>, TranslateError> {
     Ok(match instruction {
+        i @ ptx_parser::Instruction::Sqrt {
+            data:
+                ast::RcpData {
+                    kind: ast::RcpKind::Approx,
+                    type_: ast::ScalarType::F32,
+                    flush_to_zero: None | Some(false),
+                },
+            ..
+        } => to_call(resolver, fn_declarations, "sqrt_approx_f32".into(), i)?,
+        i @ ptx_parser::Instruction::Rsqrt {
+            data:
+                ast::TypeFtz {
+                    type_: ast::ScalarType::F32,
+                    flush_to_zero: None | Some(false),
+                },
+            ..
+        } => to_call(resolver, fn_declarations, "rsqrt_approx_f32".into(), i)?,
+        i @ ptx_parser::Instruction::Rcp {
+            data:
+                ast::RcpData {
+                    kind: ast::RcpKind::Approx,
+                    type_: ast::ScalarType::F32,
+                    flush_to_zero: None | Some(false),
+                },
+            ..
+        } => to_call(resolver, fn_declarations, "rcp_approx_f32".into(), i)?,
+        i @ ptx_parser::Instruction::Ex2 {
+            data:
+                ast::TypeFtz {
+                    type_: ast::ScalarType::F32,
+                    flush_to_zero: None | Some(false),
+                },
+            ..
+        } => to_call(resolver, fn_declarations, "ex2_approx_f32".into(), i)?,
+        i @ ptx_parser::Instruction::Lg2 {
+            data: ast::FlushToZero {
+                flush_to_zero: false,
+            },
+            ..
+        } => to_call(resolver, fn_declarations, "lg2_approx_f32".into(), i)?,
         i @ ptx_parser::Instruction::Activemask { .. } => {
             to_call(resolver, fn_declarations, "activemask".into(), i)?
         }
@@ -107,6 +147,43 @@ fn run_instruction<'input>(
         }
         i @ ptx_parser::Instruction::Bar { .. } => {
             to_call(resolver, fn_declarations, "bar_sync".into(), i)?
+        }
+        ptx_parser::Instruction::BarRed { data, arguments } => {
+            if arguments.src_threadcount.is_some() {
+                return Err(error_todo());
+            }
+            let name = match data.pred_reduction {
+                ptx_parser::Reduction::And => "bar_red_and_pred",
+                ptx_parser::Reduction::Or => "bar_red_or_pred",
+            };
+            to_call(
+                resolver,
+                fn_declarations,
+                name.into(),
+                ptx_parser::Instruction::BarRed { data, arguments },
+            )?
+        }
+        ptx_parser::Instruction::ShflSync { data, arguments } => {
+            let mode = match data.mode {
+                ptx_parser::ShuffleMode::Up => "up",
+                ptx_parser::ShuffleMode::Down => "down",
+                ptx_parser::ShuffleMode::BFly => "bfly",
+                ptx_parser::ShuffleMode::Idx => "idx",
+            };
+            let pred = if arguments.dst_pred.is_some() {
+                "_pred"
+            } else {
+                ""
+            };
+            to_call(
+                resolver,
+                fn_declarations,
+                format!("shfl_sync_{}_b32{}", mode, pred).into(),
+                ptx_parser::Instruction::ShflSync { data, arguments },
+            )?
+        }
+        i @ ptx_parser::Instruction::Nanosleep { .. } => {
+            to_call(resolver, fn_declarations, "nanosleep_u32".into(), i)?
         }
         i => i,
     })

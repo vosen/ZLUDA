@@ -1,4 +1,20 @@
+use cuda_types::cuda::CUerror;
+use std::sync::atomic::{AtomicBool, Ordering};
+
 pub(crate) mod r#impl;
+#[cfg_attr(windows, path = "os_win.rs")]
+#[cfg_attr(not(windows), path = "os_unix.rs")]
+mod os;
+
+static INITIALIZED: AtomicBool = AtomicBool::new(true);
+pub(crate) fn initialized() -> bool {
+    INITIALIZED.load(Ordering::SeqCst)
+}
+
+#[cfg_attr(not(windows), dtor::dtor)]
+fn deinitialize() {
+    INITIALIZED.store(false, Ordering::SeqCst);
+}
 
 macro_rules! unimplemented {
     ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
@@ -20,7 +36,10 @@ macro_rules! implemented {
             #[allow(improper_ctypes)]
             #[allow(improper_ctypes_definitions)]
             pub unsafe extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
-                cuda_base::cuda_normalize_fn!( crate::r#impl::$fn_name ) ($(crate::r#impl::FromCuda::from_cuda(&$arg_id)?),*)?;
+                if !initialized() {
+                    return Err(CUerror::DEINITIALIZED);
+                }
+                cuda_macros::cuda_normalize_fn!( crate::r#impl::$fn_name ) ($(zluda_common::FromCuda::<_, CUerror>::from_cuda(&$arg_id)?),*)?;
                 Ok(())
             }
         )*
@@ -34,48 +53,73 @@ macro_rules! implemented_in_function {
             #[allow(improper_ctypes)]
             #[allow(improper_ctypes_definitions)]
             pub unsafe extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
-                cuda_base::cuda_normalize_fn!( crate::r#impl::function::$fn_name ) ($(crate::r#impl::FromCuda::from_cuda(&$arg_id)?),*)?;
+                if !initialized() {
+                    return Err(CUerror::DEINITIALIZED);
+                }
+                cuda_macros::cuda_normalize_fn!( crate::r#impl::function::$fn_name ) ($(zluda_common::FromCuda::<_, CUerror>::from_cuda(&$arg_id)?),*)?;
                 Ok(())
             }
         )*
     };
 }
 
-cuda_base::cuda_function_declarations!(
+cuda_macros::cuda_function_declarations!(
     unimplemented,
-    implemented <= [
-        cuCtxGetLimit,
-        cuCtxSetCurrent,
-        cuCtxSetLimit,
-        cuCtxSynchronize,
-        cuDeviceComputeCapability,
-        cuDeviceGet,
-        cuDeviceGetAttribute,
-        cuDeviceGetCount,
-        cuDeviceGetLuid,
-        cuDeviceGetName,
-        cuDevicePrimaryCtxRelease,
-        cuDevicePrimaryCtxRetain,
-        cuDeviceGetProperties,
-        cuDeviceGetUuid,
-        cuDeviceGetUuid_v2,
-        cuDeviceTotalMem_v2,
-        cuDriverGetVersion,
-        cuFuncGetAttribute,
-        cuInit,
-        cuMemAlloc_v2,
-        cuMemFree_v2,
-        cuMemcpyDtoH_v2,
-        cuMemcpyHtoD_v2,
-        cuModuleGetFunction,
-        cuModuleLoadData,
-        cuModuleUnload,
-        cuPointerGetAttribute,
-        cuMemGetAddressRange_v2,
-        cuMemsetD32_v2,
-        cuMemsetD8_v2
-    ],
-    implemented_in_function <= [
-        cuLaunchKernel,
-    ]
+    implemented
+        <= [
+            cuCtxCreate_v2,
+            cuCtxDestroy_v2,
+            cuCtxGetLimit,
+            cuCtxSetCurrent,
+            cuCtxGetCurrent,
+            cuCtxGetDevice,
+            cuCtxSetLimit,
+            cuCtxSynchronize,
+            cuCtxPushCurrent,
+            cuCtxPushCurrent_v2,
+            cuCtxPopCurrent,
+            cuCtxPopCurrent_v2,
+            cuDeviceComputeCapability,
+            cuDeviceGet,
+            cuDeviceGetAttribute,
+            cuDeviceGetCount,
+            cuDeviceGetLuid,
+            cuDeviceGetName,
+            cuDeviceGetProperties,
+            cuDeviceGetUuid,
+            cuDeviceGetUuid_v2,
+            cuDevicePrimaryCtxRelease,
+            cuDevicePrimaryCtxRetain,
+            cuDevicePrimaryCtxReset,
+            cuDeviceTotalMem_v2,
+            cuDriverGetVersion,
+            cuFuncGetAttribute,
+            cuGetExportTable,
+            cuGetProcAddress,
+            cuGetProcAddress_v2,
+            cuInit,
+            cuLibraryLoadData,
+            cuLibraryGetModule,
+            cuLibraryUnload,
+            cuMemAlloc_v2,
+            cuMemFree_v2,
+            cuMemHostAlloc,
+            cuMemFreeHost,
+            cuMemGetAddressRange_v2,
+            cuMemGetInfo_v2,
+            cuMemcpyDtoH_v2,
+            cuMemcpyHtoD_v2,
+            cuMemsetD32_v2,
+            cuMemsetD8_v2,
+            cuModuleGetFunction,
+            cuModuleGetGlobal_v2,
+            cuModuleGetLoadingMode,
+            cuModuleLoadData,
+            cuModuleUnload,
+            cuPointerGetAttribute,
+            cuStreamSynchronize,
+            cuProfilerStart,
+            cuProfilerStop,
+        ],
+    implemented_in_function <= [cuLaunchKernel,]
 );

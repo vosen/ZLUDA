@@ -12,13 +12,14 @@ use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
 mod deparamize_functions;
-pub(crate) mod emit_llvm;
 mod expand_operands;
 mod fix_special_registers2;
 mod hoist_globals;
 mod insert_explicit_load_store;
 mod insert_implicit_conversions2;
+mod insert_post_saturation;
 mod instruction_mode_to_global_mode;
+mod llvm;
 mod normalize_basic_blocks;
 mod normalize_identifiers2;
 mod normalize_predicates2;
@@ -33,15 +34,28 @@ const ZLUDA_PTX_PREFIX: &'static str = "__zluda_ptx_impl_";
 quick_error! {
     #[derive(Debug, strum_macros::AsRefStr)]
     pub enum TranslateError {
-        UnknownSymbol {}
+        UnknownSymbol(symbol: String) {
+            display("Unknown symbol: \"{}\"", symbol)
+        }
         UntypedSymbol {}
         MismatchedType {}
         Unreachable {}
-        Todo {}
+        Todo(msg: String) {
+            display("TODO: {}", msg)
+        }
     }
 }
 
-pub fn to_llvm_module<'input>(ast: ast::Module<'input>) -> Result<Module, TranslateError> {
+/// GPU attributes needed at compile time.
+pub struct Attributes {
+    /// Clock frequency in kHz.
+    pub clock_rate: u32,
+}
+
+pub fn to_llvm_module<'input>(
+    ast: ast::Module<'input>,
+    attributes: Attributes,
+) -> Result<Module, TranslateError> {
     let mut flat_resolver = GlobalStringIdentResolver2::<'input>::new(SpirvWord(1));
     let mut scoped_resolver = ScopedResolver::new(&mut flat_resolver);
     let sreg_map = SpecialRegistersMap2::new(&mut scoped_resolver)?;
@@ -51,6 +65,7 @@ pub fn to_llvm_module<'input>(ast: ast::Module<'input>) -> Result<Module, Transl
     let directives = resolve_function_pointers::run(directives)?;
     let directives = fix_special_registers2::run(&mut flat_resolver, &sreg_map, directives)?;
     let directives = expand_operands::run(&mut flat_resolver, directives)?;
+    let directives = insert_post_saturation::run(&mut flat_resolver, directives)?;
     let directives = deparamize_functions::run(&mut flat_resolver, directives)?;
     let directives = normalize_basic_blocks::run(&mut flat_resolver, directives)?;
     let directives = remove_unreachable_basic_blocks::run(directives)?;
@@ -59,16 +74,23 @@ pub fn to_llvm_module<'input>(ast: ast::Module<'input>) -> Result<Module, Transl
     let directives = insert_implicit_conversions2::run(&mut flat_resolver, directives)?;
     let directives = replace_instructions_with_function_calls::run(&mut flat_resolver, directives)?;
     let directives = hoist_globals::run(directives)?;
-    let llvm_ir = emit_llvm::run(flat_resolver, directives)?;
+
+    let context = llvm::Context::new();
+    let llvm_ir = llvm::emit::run(&context, flat_resolver, directives)?;
+    let attributes_ir = llvm::attributes::run(&context, attributes)?;
     Ok(Module {
         llvm_ir,
+        attributes_ir,
         kernel_info: HashMap::new(),
+        _context: context,
     })
 }
 
 pub struct Module {
-    pub llvm_ir: emit_llvm::Module,
+    pub llvm_ir: llvm::Module,
+    pub attributes_ir: llvm::Module,
     pub kernel_info: HashMap<String, KernelInfo>,
+    _context: llvm::Context,
 }
 
 impl Module {
@@ -158,23 +180,33 @@ fn error_unreachable() -> TranslateError {
 }
 
 #[cfg(debug_assertions)]
+fn error_todo_msg<T: Into<String>>(msg: T) -> TranslateError {
+    unreachable!("{}", msg.into())
+}
+
+#[cfg(not(debug_assertions))]
+fn error_todo_msg<T: Into<String>>(msg: T) -> TranslateError {
+    TranslateError::Todo(msg.into())
+}
+
+#[cfg(debug_assertions)]
 fn error_todo() -> TranslateError {
     unreachable!()
 }
 
 #[cfg(not(debug_assertions))]
 fn error_todo() -> TranslateError {
-    TranslateError::Todo
+    TranslateError::Todo("".to_string())
 }
 
 #[cfg(debug_assertions)]
-fn error_unknown_symbol() -> TranslateError {
-    panic!()
+fn error_unknown_symbol<T: Into<String>>(symbol: T) -> TranslateError {
+    panic!("Unknown symbol: \"{}\"", symbol.into())
 }
 
 #[cfg(not(debug_assertions))]
-fn error_unknown_symbol() -> TranslateError {
-    TranslateError::UnknownSymbol
+fn error_unknown_symbol<T: Into<String>>(symbol: T) -> TranslateError {
+    TranslateError::UnknownSymbol(symbol.into())
 }
 
 #[cfg(debug_assertions)]
@@ -202,6 +234,11 @@ enum Statement<I, P: ast::Operand> {
     VectorRead(VectorRead),
     VectorWrite(VectorWrite),
     SetMode(ModeRegister),
+    FpSaturate {
+        dst: SpirvWord,
+        src: SpirvWord,
+        type_: ast::ScalarType,
+    },
 }
 
 #[derive(Eq, PartialEq, Clone, Copy)]
@@ -488,6 +525,21 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                 Statement::FunctionPointer(FunctionPointerDetails { dst, src })
             }
             Statement::SetMode(mode_register) => Statement::SetMode(mode_register),
+            Statement::FpSaturate { dst, src, type_ } => {
+                let dst = visitor.visit_ident(
+                    dst,
+                    Some((&type_.into(), ast::StateSpace::Reg)),
+                    true,
+                    false,
+                )?;
+                let src = visitor.visit_ident(
+                    src,
+                    Some((&type_.into(), ast::StateSpace::Reg)),
+                    false,
+                    false,
+                )?;
+                Statement::FpSaturate { dst, src, type_ }
+            }
         })
     }
 }
@@ -669,7 +721,7 @@ impl<'input> GlobalStringIdentResolver2<'input> {
                 type_space: Some(type_space),
                 ..
             }) => Ok(type_space),
-            _ => Err(error_unknown_symbol()),
+            _ => Err(error_unknown_symbol(format!("{:?}", id))),
         }
     }
 }
@@ -715,7 +767,7 @@ impl<'input, 'b> ScopedResolver<'input, 'b> {
                         .get(&ident)
                         .ok_or_else(|| error_unreachable())?;
                     if entry.type_space.is_some() {
-                        return Err(error_unknown_symbol());
+                        return Err(error_unknown_symbol(name));
                     }
                     ident
                 }
@@ -749,7 +801,7 @@ impl<'input, 'b> ScopedResolver<'input, 'b> {
             .insert(name.clone(), result)
             .is_some()
         {
-            return Err(error_unknown_symbol());
+            return Err(error_unknown_symbol(name));
         }
         current_scope.ident_map.insert(
             result,
@@ -766,7 +818,7 @@ impl<'input, 'b> ScopedResolver<'input, 'b> {
             .iter()
             .rev()
             .find_map(|resolver| resolver.name_to_ident.get(name).copied())
-            .ok_or_else(|| error_unreachable())
+            .ok_or_else(|| error_unknown_symbol(name))
     }
 
     fn get_in_current_scope(&self, label: &'input str) -> Result<SpirvWord, TranslateError> {

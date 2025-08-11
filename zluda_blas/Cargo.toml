@@ -1,0 +1,19 @@
+[package]
+name = "zluda_blas"
+version = "0.0.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+name = "cublas"
+
+[dependencies]
+cuda_macros = { path = "../cuda_macros" }
+cuda_types = { path = "../cuda_types" }
+zluda_common = { path = "../zluda_common" }
+rocblas-sys = { path = "../ext/rocblas-sys" }
+
+[package.metadata.zluda]
+linux_symlinks = [
+    "libcublas.so.12",
+]

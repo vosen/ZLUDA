@@ -11,15 +11,15 @@ define amdgpu_kernel void @setp_gt(ptr addrspace(4) byref(i64) %"39", ptr addrsp
   br label %"38"
 
 "38":                                             ; preds = %1
-  %"47" = load i64, ptr addrspace(4) %"39", align 4
-  store i64 %"47", ptr addrspace(5) %"41", align 4
-  %"48" = load i64, ptr addrspace(4) %"40", align 4
-  store i64 %"48", ptr addrspace(5) %"42", align 4
-  %"50" = load i64, ptr addrspace(5) %"41", align 4
+  %"47" = load i64, ptr addrspace(4) %"39", align 8
+  store i64 %"47", ptr addrspace(5) %"41", align 8
+  %"48" = load i64, ptr addrspace(4) %"40", align 8
+  store i64 %"48", ptr addrspace(5) %"42", align 8
+  %"50" = load i64, ptr addrspace(5) %"41", align 8
   %"64" = inttoptr i64 %"50" to ptr
   %"49" = load float, ptr %"64", align 4
   store float %"49", ptr addrspace(5) %"43", align 4
-  %"51" = load i64, ptr addrspace(5) %"41", align 4
+  %"51" = load i64, ptr addrspace(5) %"41", align 8
   %"65" = inttoptr i64 %"51" to ptr
   %"37" = getelementptr inbounds i8, ptr %"65", i64 4
   %"52" = load float, ptr %"37", align 4
@@ -46,7 +46,7 @@ define amdgpu_kernel void @setp_gt(ptr addrspace(4) byref(i64) %"39", ptr addrsp
   br label %"19"
 
 "19":                                             ; preds = %"18", %"17"
-  %"62" = load i64, ptr addrspace(5) %"42", align 4
+  %"62" = load i64, ptr addrspace(5) %"42", align 8
   %"63" = load float, ptr addrspace(5) %"45", align 4
   %"66" = inttoptr i64 %"62" to ptr
   store float %"63", ptr %"66", align 4

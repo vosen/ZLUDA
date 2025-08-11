@@ -1,7 +1,7 @@
 // Generated automatically by zluda_bindgen
 // DO NOT EDIT MANUALLY
 #![allow(warnings)]
-pub const CUDA_VERSION: u32 = 12040;
+pub const CUDA_VERSION: u32 = 12080;
 pub const CU_IPC_HANDLE_SIZE: u32 = 64;
 pub const CU_COMPUTE_ACCELERATED_TARGET_BASE: u32 = 65536;
 pub const CU_GRAPH_COND_ASSIGN_DEFAULT: u32 = 1;
@@ -23,6 +23,8 @@ pub const CUDA_EXTERNAL_SEMAPHORE_WAIT_SKIP_NVSCIBUF_MEMSYNC: u32 = 2;
 pub const CUDA_NVSCISYNC_ATTR_SIGNAL: u32 = 1;
 pub const CUDA_NVSCISYNC_ATTR_WAIT: u32 = 2;
 pub const CU_MEM_CREATE_USAGE_TILE_POOL: u32 = 1;
+pub const CU_MEM_CREATE_USAGE_HW_DECOMPRESS: u32 = 2;
+pub const CU_MEM_POOL_CREATE_USAGE_HW_DECOMPRESS: u32 = 2;
 pub const CUDA_COOPERATIVE_LAUNCH_MULTI_DEVICE_NO_PRE_LAUNCH_SYNC: u32 = 1;
 pub const CUDA_COOPERATIVE_LAUNCH_MULTI_DEVICE_NO_POST_LAUNCH_SYNC: u32 = 2;
 pub const CUDA_ARRAY3D_LAYERED: u32 = 1;
@@ -34,6 +36,7 @@ pub const CUDA_ARRAY3D_DEPTH_TEXTURE: u32 = 16;
 pub const CUDA_ARRAY3D_COLOR_ATTACHMENT: u32 = 32;
 pub const CUDA_ARRAY3D_SPARSE: u32 = 64;
 pub const CUDA_ARRAY3D_DEFERRED_MAPPING: u32 = 128;
+pub const CUDA_ARRAY3D_VIDEO_ENCODE_DECODE: u32 = 256;
 pub const CU_TRSA_OVERRIDE_FORMAT: u32 = 1;
 pub const CU_TRSF_READ_AS_INTEGER: u32 = 1;
 pub const CU_TRSF_NORMALIZED_COORDINATES: u32 = 2;
@@ -194,6 +197,15 @@ pub struct CUasyncCallbackEntry_st {
     _unused: [u8; 0],
 }
 pub type CUasyncCallbackHandle = *mut CUasyncCallbackEntry_st;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct CUgreenCtx_st {
+    _unused: [u8; 0],
+}
+/** \typedef typedef struct CUgreenCtx_st* CUgreenCtx
+ A green context handle. This handle can be used safely from only one CPU thread at a time.
+ Created via ::cuGreenCtxCreate*/
+pub type CUgreenCtx = *mut CUgreenCtx_st;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUuuid_st {
@@ -870,6 +882,79 @@ impl CUarray_format_enum {
     pub const CU_AD_FORMAT_BC7_UNORM_SRGB: CUarray_format_enum = CUarray_format_enum(
         158,
     );
+}
+impl CUarray_format_enum {
+    ///< 10-bit YUV planar format, with 4:2:0 sampling
+    pub const CU_AD_FORMAT_P010: CUarray_format_enum = CUarray_format_enum(159);
+}
+impl CUarray_format_enum {
+    ///< 16-bit YUV planar format, with 4:2:0 sampling
+    pub const CU_AD_FORMAT_P016: CUarray_format_enum = CUarray_format_enum(161);
+}
+impl CUarray_format_enum {
+    ///< 8-bit YUV planar format, with 4:2:2 sampling
+    pub const CU_AD_FORMAT_NV16: CUarray_format_enum = CUarray_format_enum(162);
+}
+impl CUarray_format_enum {
+    ///< 10-bit YUV planar format, with 4:2:2 sampling
+    pub const CU_AD_FORMAT_P210: CUarray_format_enum = CUarray_format_enum(163);
+}
+impl CUarray_format_enum {
+    ///< 16-bit YUV planar format, with 4:2:2 sampling
+    pub const CU_AD_FORMAT_P216: CUarray_format_enum = CUarray_format_enum(164);
+}
+impl CUarray_format_enum {
+    ///< 2 channel, 8-bit YUV packed planar format, with 4:2:2 sampling
+    pub const CU_AD_FORMAT_YUY2: CUarray_format_enum = CUarray_format_enum(165);
+}
+impl CUarray_format_enum {
+    ///< 2 channel, 10-bit YUV packed planar format, with 4:2:2 sampling
+    pub const CU_AD_FORMAT_Y210: CUarray_format_enum = CUarray_format_enum(166);
+}
+impl CUarray_format_enum {
+    ///< 2 channel, 16-bit YUV packed planar format, with 4:2:2 sampling
+    pub const CU_AD_FORMAT_Y216: CUarray_format_enum = CUarray_format_enum(167);
+}
+impl CUarray_format_enum {
+    ///< 4 channel, 8-bit YUV packed planar format, with 4:4:4 sampling
+    pub const CU_AD_FORMAT_AYUV: CUarray_format_enum = CUarray_format_enum(168);
+}
+impl CUarray_format_enum {
+    ///< 10-bit YUV packed planar format, with 4:4:4 sampling
+    pub const CU_AD_FORMAT_Y410: CUarray_format_enum = CUarray_format_enum(169);
+}
+impl CUarray_format_enum {
+    ///< 4 channel, 12-bit YUV packed planar format, with 4:4:4 sampling
+    pub const CU_AD_FORMAT_Y416: CUarray_format_enum = CUarray_format_enum(177);
+}
+impl CUarray_format_enum {
+    ///< 3 channel 8-bit YUV planar format, with 4:4:4 sampling
+    pub const CU_AD_FORMAT_Y444_PLANAR8: CUarray_format_enum = CUarray_format_enum(178);
+}
+impl CUarray_format_enum {
+    ///< 3 channel 10-bit YUV planar format, with 4:4:4 sampling
+    pub const CU_AD_FORMAT_Y444_PLANAR10: CUarray_format_enum = CUarray_format_enum(179);
+}
+impl CUarray_format_enum {
+    ///< 3 channel 8-bit YUV semi-planar format, with 4:4:4 sampling
+    pub const CU_AD_FORMAT_YUV444_8bit_SemiPlanar: CUarray_format_enum = CUarray_format_enum(
+        180,
+    );
+}
+impl CUarray_format_enum {
+    ///< 3 channel 16-bit YUV semi-planar format, with 4:4:4 sampling
+    pub const CU_AD_FORMAT_YUV444_16bit_SemiPlanar: CUarray_format_enum = CUarray_format_enum(
+        181,
+    );
+}
+impl CUarray_format_enum {
+    ///< 4 channel unorm R10G10B10A2 RGB format
+    pub const CU_AD_FORMAT_UNORM_INT_101010_2: CUarray_format_enum = CUarray_format_enum(
+        80,
+    );
+}
+impl CUarray_format_enum {
+    pub const CU_AD_FORMAT_MAX: CUarray_format_enum = CUarray_format_enum(2147483647);
 }
 #[repr(transparent)]
 /// Array formats
@@ -1724,11 +1809,13 @@ impl CUdevice_attribute_enum {
     );
 }
 impl CUdevice_attribute_enum {
+    ///< NUMA configuration of a device: value is of type ::CUdeviceNumaConfig enum
     pub const CU_DEVICE_ATTRIBUTE_NUMA_CONFIG: CUdevice_attribute_enum = CUdevice_attribute_enum(
         130,
     );
 }
 impl CUdevice_attribute_enum {
+    ///< NUMA node ID of the GPU memory
     pub const CU_DEVICE_ATTRIBUTE_NUMA_ID: CUdevice_attribute_enum = CUdevice_attribute_enum(
         131,
     );
@@ -1752,8 +1839,44 @@ impl CUdevice_attribute_enum {
     );
 }
 impl CUdevice_attribute_enum {
-    pub const CU_DEVICE_ATTRIBUTE_MAX: CUdevice_attribute_enum = CUdevice_attribute_enum(
+    ///< Device supports CIG with D3D12.
+    pub const CU_DEVICE_ATTRIBUTE_D3D12_CIG_SUPPORTED: CUdevice_attribute_enum = CUdevice_attribute_enum(
         135,
+    );
+}
+impl CUdevice_attribute_enum {
+    ///< The returned valued shall be interpreted as a bitmask, where the individual bits are described by the ::CUmemDecompressAlgorithm enum.
+    pub const CU_DEVICE_ATTRIBUTE_MEM_DECOMPRESS_ALGORITHM_MASK: CUdevice_attribute_enum = CUdevice_attribute_enum(
+        136,
+    );
+}
+impl CUdevice_attribute_enum {
+    ///< The returned valued is the maximum length in bytes of a single decompress operation that is allowed.
+    pub const CU_DEVICE_ATTRIBUTE_MEM_DECOMPRESS_MAXIMUM_LENGTH: CUdevice_attribute_enum = CUdevice_attribute_enum(
+        137,
+    );
+}
+impl CUdevice_attribute_enum {
+    ///< The combined 16-bit PCI device ID and 16-bit PCI vendor ID.
+    pub const CU_DEVICE_ATTRIBUTE_GPU_PCI_DEVICE_ID: CUdevice_attribute_enum = CUdevice_attribute_enum(
+        139,
+    );
+}
+impl CUdevice_attribute_enum {
+    ///< The combined 16-bit PCI subsystem ID and 16-bit PCI subsystem vendor ID.
+    pub const CU_DEVICE_ATTRIBUTE_GPU_PCI_SUBSYSTEM_ID: CUdevice_attribute_enum = CUdevice_attribute_enum(
+        140,
+    );
+}
+impl CUdevice_attribute_enum {
+    ///< Device supports HOST_NUMA location IPC between nodes in a multi-node system.
+    pub const CU_DEVICE_ATTRIBUTE_HOST_NUMA_MULTINODE_IPC_SUPPORTED: CUdevice_attribute_enum = CUdevice_attribute_enum(
+        143,
+    );
+}
+impl CUdevice_attribute_enum {
+    pub const CU_DEVICE_ATTRIBUTE_MAX: CUdevice_attribute_enum = CUdevice_attribute_enum(
+        144,
     );
 }
 #[repr(transparent)]
@@ -1909,6 +2032,12 @@ impl CUpointer_attribute_enum {
     ///< A process-wide unique id corresponding to the physical allocation the pointer belongs to
     pub const CU_POINTER_ATTRIBUTE_MEMORY_BLOCK_ID: CUpointer_attribute_enum = CUpointer_attribute_enum(
         20,
+    );
+}
+impl CUpointer_attribute_enum {
+    ///< Returns in \p *data a boolean that indicates whether the pointer points to memory that is capable to be used for hardware accelerated decompression.
+    pub const CU_POINTER_ATTRIBUTE_IS_HW_DECOMPRESS_CAPABLE: CUpointer_attribute_enum = CUpointer_attribute_enum(
+        21,
     );
 }
 #[repr(transparent)]
@@ -2707,7 +2836,28 @@ impl CUjit_target_enum {
     pub const CU_TARGET_COMPUTE_90: CUjit_target_enum = CUjit_target_enum(90);
 }
 impl CUjit_target_enum {
+    ///< Compute device class 10.0.
+    pub const CU_TARGET_COMPUTE_100: CUjit_target_enum = CUjit_target_enum(100);
+}
+impl CUjit_target_enum {
+    ///< Compute device class 10.1.
+    pub const CU_TARGET_COMPUTE_101: CUjit_target_enum = CUjit_target_enum(101);
+}
+impl CUjit_target_enum {
+    ///< Compute device class 12.0.
+    pub const CU_TARGET_COMPUTE_120: CUjit_target_enum = CUjit_target_enum(120);
+}
+impl CUjit_target_enum {
     pub const CU_TARGET_COMPUTE_90A: CUjit_target_enum = CUjit_target_enum(65626);
+}
+impl CUjit_target_enum {
+    pub const CU_TARGET_COMPUTE_100A: CUjit_target_enum = CUjit_target_enum(65636);
+}
+impl CUjit_target_enum {
+    pub const CU_TARGET_COMPUTE_101A: CUjit_target_enum = CUjit_target_enum(65637);
+}
+impl CUjit_target_enum {
+    pub const CU_TARGET_COMPUTE_120A: CUjit_target_enum = CUjit_target_enum(65656);
 }
 #[repr(transparent)]
 /// Online compilation targets
@@ -2923,7 +3073,19 @@ impl CUlimit_enum {
     pub const CU_LIMIT_PERSISTING_L2_CACHE_SIZE: CUlimit_enum = CUlimit_enum(6);
 }
 impl CUlimit_enum {
-    pub const CU_LIMIT_MAX: CUlimit_enum = CUlimit_enum(7);
+    ///< A maximum size in bytes of shared memory available to CUDA kernels on a CIG context. Can only be queried, cannot be set
+    pub const CU_LIMIT_SHMEM_SIZE: CUlimit_enum = CUlimit_enum(7);
+}
+impl CUlimit_enum {
+    ///< A non-zero value indicates this CUDA context is a CIG-enabled context. Can only be queried, cannot be set
+    pub const CU_LIMIT_CIG_ENABLED: CUlimit_enum = CUlimit_enum(8);
+}
+impl CUlimit_enum {
+    ///< When set to zero, CUDA will fail to launch a kernel on a CIG context, instead of using the fallback path, if the kernel uses more shared memory than available
+    pub const CU_LIMIT_CIG_SHMEM_FALLBACK_ENABLED: CUlimit_enum = CUlimit_enum(9);
+}
+impl CUlimit_enum {
+    pub const CU_LIMIT_MAX: CUlimit_enum = CUlimit_enum(10);
 }
 #[repr(transparent)]
 /// Limits
@@ -3179,7 +3341,7 @@ pub struct CUDA_HOST_NODE_PARAMS_v2_st {
 /// Host node parameters
 pub type CUDA_HOST_NODE_PARAMS_v2 = CUDA_HOST_NODE_PARAMS_v2_st;
 impl CUgraphConditionalNodeType_enum {
-    ///< Conditional 'if' Node. Body executed once if condition value is non-zero.
+    ///< Conditional 'if/else' Node. Body[0] executed if condition is non-zero.  If \p size == 2, an optional ELSE graph is created and this is executed if the condition is zero.
     pub const CU_GRAPH_COND_TYPE_IF: CUgraphConditionalNodeType_enum = CUgraphConditionalNodeType_enum(
         0,
     );
@@ -3188,6 +3350,12 @@ impl CUgraphConditionalNodeType_enum {
     ///< Conditional 'while' Node. Body executed repeatedly while condition value is non-zero.
     pub const CU_GRAPH_COND_TYPE_WHILE: CUgraphConditionalNodeType_enum = CUgraphConditionalNodeType_enum(
         1,
+    );
+}
+impl CUgraphConditionalNodeType_enum {
+    ///< Conditional 'switch' Node. Body[n] is executed once, where 'n' is the value of the condition. If the condition does not match a body index, no body is launched.
+    pub const CU_GRAPH_COND_TYPE_SWITCH: CUgraphConditionalNodeType_enum = CUgraphConditionalNodeType_enum(
+        2,
     );
 }
 #[repr(transparent)]
@@ -3206,7 +3374,8 @@ using ::cuGraphConditionalHandleCreate.*/
     pub handle: CUgraphConditionalHandle,
     ///< Type of conditional node.
     pub type_: CUgraphConditionalNodeType,
-    ///< Size of graph output array.  Must be 1.
+    /**< Size of graph output array.  Allowed values are 1 for CU_GRAPH_COND_TYPE_WHILE, 1 or 2
+for CU_GRAPH_COND_TYPE_IF, or any value greater than zero for CU_GRAPH_COND_TYPE_SWITCH.*/
     pub size: ::core::ffi::c_uint,
     /**< CUDA-owned array populated with conditional node child graphs during creation of the node.
 Valid for the lifetime of the conditional node.
@@ -3217,7 +3386,16 @@ memcopies, and conditionals. This applies recursively to child graphs and condit
 - All kernels, including kernels in nested conditionals or child graphs at any level,
 must belong to the same CUDA context.
 
-These graphs may be populated using graph node creation APIs or ::cuStreamBeginCaptureToGraph.*/
+These graphs may be populated using graph node creation APIs or ::cuStreamBeginCaptureToGraph.
+
+CU_GRAPH_COND_TYPE_IF:
+phGraph_out[0] is executed when the condition is non-zero.  If \p size == 2, phGraph_out[1] will
+be executed when the condition is zero.
+CU_GRAPH_COND_TYPE_WHILE:
+phGraph_out[0] is executed as long as the condition is non-zero.
+CU_GRAPH_COND_TYPE_SWITCH:
+phGraph_out[n] is executed when the condition is equal to n.  If the condition >= \p size,
+no body graph is executed.*/
     pub phGraph_out: *mut CUgraph,
     ///< Context on which to run the node.  Must match context used to create the handle and all body nodes.
     pub ctx: CUcontext,
@@ -3403,6 +3581,12 @@ impl CUgraphInstantiateResult_enum {
     ///< Instantiation for device launch failed due to the nodes belonging to different contexts
     pub const CUDA_GRAPH_INSTANTIATE_MULTIPLE_CTXS_NOT_SUPPORTED: CUgraphInstantiateResult_enum = CUgraphInstantiateResult_enum(
         4,
+    );
+}
+impl CUgraphInstantiateResult_enum {
+    ///< One or more conditional handles are not associated with conditional nodes
+    pub const CUDA_GRAPH_INSTANTIATE_CONDITIONAL_HANDLE_UNUSED: CUgraphInstantiateResult_enum = CUgraphInstantiateResult_enum(
+        5,
     );
 }
 #[repr(transparent)]
@@ -3655,6 +3839,47 @@ impl CUlaunchAttributeID_enum {
     );
 }
 impl CUlaunchAttributeID_enum {
+    /**< Valid for graph nodes, launches. Set
+::CUlaunchAttributeValue::preferredClusterDim
+to allow the kernel launch to specify a preferred substitute
+cluster dimension. Blocks may be grouped according to either
+the dimensions specified with this attribute (grouped into a
+"preferred substitute cluster"), or the one specified with
+::CU_LAUNCH_ATTRIBUTE_CLUSTER_DIMENSION attribute (grouped
+into a "regular cluster"). The cluster dimensions of a
+"preferred substitute cluster" shall be an integer multiple
+greater than zero of the regular cluster dimensions. The
+device will attempt - on a best-effort basis - to group
+thread blocks into preferred clusters over grouping them
+into regular clusters. When it deems necessary (primarily
+when the device temporarily runs out of physical resources
+to launch the larger preferred clusters), the device may
+switch to launch the regular clusters instead to attempt to
+utilize as much of the physical device resources as possible.
+<br>
+Each type of cluster will have its enumeration / coordinate
+setup as if the grid consists solely of its type of cluster.
+For example, if the preferred substitute cluster dimensions
+double the regular cluster dimensions, there might be
+simultaneously a regular cluster indexed at (1,0,0), and a
+preferred cluster indexed at (1,0,0). In this example, the
+preferred substitute cluster (1,0,0) replaces regular
+clusters (2,0,0) and (3,0,0) and groups their blocks.
+<br>
+This attribute will only take effect when a regular cluster
+dimension has been specified. The preferred substitute
+cluster dimension must be an integer multiple greater than
+zero of the regular cluster dimension and must divide the
+grid. It must also be no more than `maxBlocksPerCluster`, if
+it is set in the kernel's `__launch_bounds__`. Otherwise it
+must be less than the maximum value the driver can support.
+Otherwise, setting this attribute to a value physically
+unable to fit on any particular device is permitted.*/
+    pub const CU_LAUNCH_ATTRIBUTE_PREFERRED_CLUSTER_DIMENSION: CUlaunchAttributeID_enum = CUlaunchAttributeID_enum(
+        11,
+    );
+}
+impl CUlaunchAttributeID_enum {
     /**< Valid for launches. Set
 ::CUlaunchAttributeValue::launchCompletionEvent to record the
 event.
@@ -3715,8 +3940,20 @@ device-updatable nodes, the graph must be uploaded before it is launched again.*
     );
 }
 impl CUlaunchAttributeID_enum {
-    pub const CU_LAUNCH_ATTRIBUTE_MAX: CUlaunchAttributeID_enum = CUlaunchAttributeID_enum(
+    /**< Valid for launches. On devices where the L1 cache and shared memory use the
+same hardware resources, setting ::CUlaunchAttributeValue::sharedMemCarveout to a
+percentage between 0-100 signals the CUDA driver to set the shared memory carveout
+preference, in percent of the total shared memory for that kernel launch.
+This attribute takes precedence over ::CU_FUNC_ATTRIBUTE_PREFERRED_SHARED_MEMORY_CARVEOUT.
+This is only a hint, and the CUDA driver can choose a different configuration if
+required for the launch.*/
+    pub const CU_LAUNCH_ATTRIBUTE_PREFERRED_SHARED_MEMORY_CARVEOUT: CUlaunchAttributeID_enum = CUlaunchAttributeID_enum(
         14,
+    );
+}
+impl CUlaunchAttributeID_enum {
+    pub const CU_LAUNCH_ATTRIBUTE_MAX: CUlaunchAttributeID_enum = CUlaunchAttributeID_enum(
+        15,
     );
 }
 #[repr(transparent)]
@@ -3747,9 +3984,7 @@ scheduling policy preference for the kernel.*/
     /**< Value of launch attribute
 ::CU_LAUNCH_ATTRIBUTE_PROGRAMMATIC_STREAM_SERIALIZATION.*/
     pub programmaticStreamSerializationAllowed: ::core::ffi::c_int,
-    ///< Value of launch attribute ::CU_LAUNCH_ATTRIBUTE_PROGRAMMATIC_EVENT.
     pub programmaticEvent: CUlaunchAttributeValue_union__bindgen_ty_2,
-    ///< Value of launch attribute ::CU_LAUNCH_ATTRIBUTE_LAUNCH_COMPLETION_EVENT.
     pub launchCompletionEvent: CUlaunchAttributeValue_union__bindgen_ty_3,
     ///< Value of launch attribute ::CU_LAUNCH_ATTRIBUTE_PRIORITY. Execution priority of the kernel.
     pub priority: ::core::ffi::c_int,
@@ -3760,8 +3995,10 @@ scheduling policy preference for the kernel.*/
     /**< Value of launch attribute
 ::CU_LAUNCH_ATTRIBUTE_MEM_SYNC_DOMAIN. See::CUlaunchMemSyncDomain*/
     pub memSyncDomain: CUlaunchMemSyncDomain,
-    ///< Value of launch attribute ::CU_LAUNCH_ATTRIBUTE_DEVICE_UPDATABLE_KERNEL_NODE.
-    pub deviceUpdatableKernelNode: CUlaunchAttributeValue_union__bindgen_ty_4,
+    pub preferredClusterDim: CUlaunchAttributeValue_union__bindgen_ty_4,
+    pub deviceUpdatableKernelNode: CUlaunchAttributeValue_union__bindgen_ty_5,
+    ///< Value of launch attribute ::CU_LAUNCH_ATTRIBUTE_PREFERRED_SHARED_MEMORY_CARVEOUT.
+    pub sharedMemCarveout: ::core::ffi::c_uint,
 }
 /**  Value of launch attribute ::CU_LAUNCH_ATTRIBUTE_CLUSTER_DIMENSION that
   represents the desired cluster dimensions for the kernel. Opaque type
@@ -3779,31 +4016,54 @@ pub struct CUlaunchAttributeValue_union__bindgen_ty_1 {
     pub y: ::core::ffi::c_uint,
     pub z: ::core::ffi::c_uint,
 }
+/**  Value of launch attribute ::CU_LAUNCH_ATTRIBUTE_PROGRAMMATIC_EVENT
+  with the following fields:
+      - \p CUevent event - Event to fire when all blocks trigger it.
+      - \p Event record flags, see ::cuEventRecordWithFlags. Does not accept :CU_EVENT_RECORD_EXTERNAL.
+      - \p triggerAtBlockStart - If this is set to non-0, each block launch will automatically trigger the event.*/
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUlaunchAttributeValue_union__bindgen_ty_2 {
-    ///< Event to fire when all blocks trigger it
     pub event: CUevent,
-    /**< Event record flags, see ::cuEventRecordWithFlags. Does not accept
-::CU_EVENT_RECORD_EXTERNAL.*/
     pub flags: ::core::ffi::c_int,
-    ///< If this is set to non-0, each block launch will automatically trigger the event
     pub triggerAtBlockStart: ::core::ffi::c_int,
 }
+/** Value of launch attribute ::CU_LAUNCH_ATTRIBUTE_LAUNCH_COMPLETION_EVENT
+ with the following fields:
+     - \p CUevent event - Event to fire when the last block launches
+     - \p int flags; - Event record flags, see ::cuEventRecordWithFlags. Does not accept ::CU_EVENT_RECORD_EXTERNAL.*/
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUlaunchAttributeValue_union__bindgen_ty_3 {
-    ///< Event to fire when the last block launches
     pub event: CUevent,
-    ///< Event record flags, see ::cuEventRecordWithFlags. Does not accept ::CU_EVENT_RECORD_EXTERNAL.
     pub flags: ::core::ffi::c_int,
 }
+/**  Value of launch attribute ::CU_LAUNCH_ATTRIBUTE_PREFERRED_CLUSTER_DIMENSION
+  that represents the desired preferred cluster dimensions for the kernel.
+  Opaque type with the following fields:
+      - \p x - The X dimension of the preferred cluster, in blocks. Must
+               be a divisor of the grid X dimension, and must be a
+               multiple of the \p x field of ::CUlaunchAttributeValue::clusterDim.
+      - \p y - The Y dimension of the preferred cluster, in blocks. Must
+               be a divisor of the grid Y dimension, and must be a
+               multiple of the \p y field of ::CUlaunchAttributeValue::clusterDim.
+      - \p z - The Z dimension of the preferred cluster, in blocks. Must be
+               equal to the \p z field of ::CUlaunchAttributeValue::clusterDim.*/
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUlaunchAttributeValue_union__bindgen_ty_4 {
-    ///< Whether or not the resulting kernel node should be device-updatable.
+    pub x: ::core::ffi::c_uint,
+    pub y: ::core::ffi::c_uint,
+    pub z: ::core::ffi::c_uint,
+}
+/**  Value of launch attribute ::CU_LAUNCH_ATTRIBUTE_DEVICE_UPDATABLE_KERNEL_NODE.
+  with the following fields:
+      - \p int deviceUpdatable - Whether or not the resulting kernel node should be device-updatable.
+      - \p CUgraphDeviceNode devNode - Returns a handle to pass to the various device-side update functions.*/
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUlaunchAttributeValue_union__bindgen_ty_5 {
     pub deviceUpdatable: ::core::ffi::c_int,
-    ///< Returns a handle to pass to the various device-side update functions.
     pub devNode: CUgraphDeviceNode,
 }
 /// Launch attributes union; used as value field of ::CUlaunchAttribute
@@ -3999,6 +4259,38 @@ pub union CUexecAffinityParam_st__bindgen_ty_1 {
 pub type CUexecAffinityParam_v1 = CUexecAffinityParam_st;
 /// Execution Affinity Parameters
 pub type CUexecAffinityParam = CUexecAffinityParam_v1;
+impl CUcigDataType_enum {
+    pub const CIG_DATA_TYPE_D3D12_COMMAND_QUEUE: CUcigDataType_enum = CUcigDataType_enum(
+        1,
+    );
+}
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUcigDataType_enum(pub ::core::ffi::c_uint);
+pub use self::CUcigDataType_enum as CUcigDataType;
+/// CIG Context Create Params
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUctxCigParam_st {
+    pub sharedDataType: CUcigDataType,
+    pub sharedData: *mut ::core::ffi::c_void,
+}
+/// CIG Context Create Params
+pub type CUctxCigParam = CUctxCigParam_st;
+/** Params for creating CUDA context
+ Exactly one of execAffinityParams and cigParams
+ must be non-NULL.*/
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUctxCreateParams_st {
+    pub execAffinityParams: *mut CUexecAffinityParam,
+    pub numExecAffinityParams: ::core::ffi::c_int,
+    pub cigParams: *mut CUctxCigParam,
+}
+/** Params for creating CUDA context
+ Exactly one of execAffinityParams and cigParams
+ must be non-NULL.*/
+pub type CUctxCreateParams = CUctxCreateParams_st;
 impl CUlibraryOption_enum {
     pub const CU_LIBRARY_HOST_UNIVERSAL_FUNCTION_AND_DATA_TABLE: CUlibraryOption_enum = CUlibraryOption_enum(
         0,
@@ -4041,9 +4333,6 @@ pub struct CUlibraryHostUniversalFunctionAndDataTable_st {
     pub dataWindowSize: usize,
 }
 pub type CUlibraryHostUniversalFunctionAndDataTable = CUlibraryHostUniversalFunctionAndDataTable_st;
-/// Error codes
-#[must_use]
-pub type cudaError_enum = ::core::ffi::c_uint;
 impl CUdevice_P2PAttribute_enum {
     ///< A relative value indicating the performance of the link between two devices
     pub const CU_DEVICE_P2P_ATTRIBUTE_PERFORMANCE_RANK: CUdevice_P2PAttribute_enum = CUdevice_P2PAttribute_enum(
@@ -4763,6 +5052,21 @@ impl CUtensorMapDataType_enum {
         12,
     );
 }
+impl CUtensorMapDataType_enum {
+    pub const CU_TENSOR_MAP_DATA_TYPE_16U4_ALIGN8B: CUtensorMapDataType_enum = CUtensorMapDataType_enum(
+        13,
+    );
+}
+impl CUtensorMapDataType_enum {
+    pub const CU_TENSOR_MAP_DATA_TYPE_16U4_ALIGN16B: CUtensorMapDataType_enum = CUtensorMapDataType_enum(
+        14,
+    );
+}
+impl CUtensorMapDataType_enum {
+    pub const CU_TENSOR_MAP_DATA_TYPE_16U6_ALIGN16B: CUtensorMapDataType_enum = CUtensorMapDataType_enum(
+        15,
+    );
+}
 #[repr(transparent)]
 /// Tensor map data type
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -4808,6 +5112,21 @@ impl CUtensorMapSwizzle_enum {
 impl CUtensorMapSwizzle_enum {
     pub const CU_TENSOR_MAP_SWIZZLE_128B: CUtensorMapSwizzle_enum = CUtensorMapSwizzle_enum(
         3,
+    );
+}
+impl CUtensorMapSwizzle_enum {
+    pub const CU_TENSOR_MAP_SWIZZLE_128B_ATOM_32B: CUtensorMapSwizzle_enum = CUtensorMapSwizzle_enum(
+        4,
+    );
+}
+impl CUtensorMapSwizzle_enum {
+    pub const CU_TENSOR_MAP_SWIZZLE_128B_ATOM_32B_FLIP_8B: CUtensorMapSwizzle_enum = CUtensorMapSwizzle_enum(
+        5,
+    );
+}
+impl CUtensorMapSwizzle_enum {
+    pub const CU_TENSOR_MAP_SWIZZLE_128B_ATOM_64B: CUtensorMapSwizzle_enum = CUtensorMapSwizzle_enum(
+        6,
     );
 }
 #[repr(transparent)]
@@ -4858,6 +5177,22 @@ impl CUtensorMapFloatOOBfill_enum {
 pub struct CUtensorMapFloatOOBfill_enum(pub ::core::ffi::c_uint);
 /// Tensor map out-of-bounds fill type
 pub use self::CUtensorMapFloatOOBfill_enum as CUtensorMapFloatOOBfill;
+impl CUtensorMapIm2ColWideMode_enum {
+    pub const CU_TENSOR_MAP_IM2COL_WIDE_MODE_W: CUtensorMapIm2ColWideMode_enum = CUtensorMapIm2ColWideMode_enum(
+        0,
+    );
+}
+impl CUtensorMapIm2ColWideMode_enum {
+    pub const CU_TENSOR_MAP_IM2COL_WIDE_MODE_W128: CUtensorMapIm2ColWideMode_enum = CUtensorMapIm2ColWideMode_enum(
+        1,
+    );
+}
+#[repr(transparent)]
+/// Tensor map Im2Col wide mode
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUtensorMapIm2ColWideMode_enum(pub ::core::ffi::c_uint);
+/// Tensor map Im2Col wide mode
+pub use self::CUtensorMapIm2ColWideMode_enum as CUtensorMapIm2ColWideMode;
 /// GPU Direct v3 tokens
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -5505,6 +5840,18 @@ impl CUmemRangeHandleType_enum {
 pub struct CUmemRangeHandleType_enum(pub ::core::ffi::c_uint);
 /// Specifies the handle type for address range
 pub use self::CUmemRangeHandleType_enum as CUmemRangeHandleType;
+impl CUmemRangeFlags_enum {
+    ///< Indicates that DMA_BUF handle should be mapped via PCIe BAR1
+    pub const CU_MEM_RANGE_FLAG_DMA_BUF_MAPPING_TYPE_PCIE: CUmemRangeFlags_enum = CUmemRangeFlags_enum(
+        1,
+    );
+}
+#[repr(transparent)]
+/// Flag for requesting handle type for address range.
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUmemRangeFlags_enum(pub ::core::ffi::c_uint);
+/// Flag for requesting handle type for address range.
+pub use self::CUmemRangeFlags_enum as CUmemRangeFlags;
 impl CUarraySparseSubresourceType_enum {
     pub const CU_ARRAY_SPARSE_SUBRESOURCE_TYPE_SPARSE_LEVEL: CUarraySparseSubresourceType_enum = CUarraySparseSubresourceType_enum(
         0,
@@ -5911,8 +6258,10 @@ pub struct CUmemPoolProps_st {
     pub win32SecurityAttributes: *mut ::core::ffi::c_void,
     ///< Maximum pool size. When set to 0, defaults to a system dependent value.
     pub maxSize: usize,
+    ///< Bitmask indicating intended usage for the pool.
+    pub usage: ::core::ffi::c_ushort,
     ///< reserved for future use, must be 0
-    pub reserved: [::core::ffi::c_uchar; 56usize],
+    pub reserved: [::core::ffi::c_uchar; 54usize],
 }
 /// Specifies the properties of allocations made from the pool.
 pub type CUmemPoolProps_v1 = CUmemPoolProps_st;
@@ -6330,9 +6679,258 @@ impl CUdeviceNumaConfig_enum {
     );
 }
 #[repr(transparent)]
+/// CUDA device NUMA configuration
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUdeviceNumaConfig_enum(pub ::core::ffi::c_uint);
+/// CUDA device NUMA configuration
 pub use self::CUdeviceNumaConfig_enum as CUdeviceNumaConfig;
+impl CUprocessState_enum {
+    ///< Default process state
+    pub const CU_PROCESS_STATE_RUNNING: CUprocessState_enum = CUprocessState_enum(0);
+}
+impl CUprocessState_enum {
+    ///< CUDA API locks are taken so further CUDA API calls will block
+    pub const CU_PROCESS_STATE_LOCKED: CUprocessState_enum = CUprocessState_enum(1);
+}
+impl CUprocessState_enum {
+    ///< Application memory contents have been checkpointed and underlying allocations and device handles have been released
+    pub const CU_PROCESS_STATE_CHECKPOINTED: CUprocessState_enum = CUprocessState_enum(
+        2,
+    );
+}
+impl CUprocessState_enum {
+    ///< Application entered an uncorrectable error during the checkpoint/restore process
+    pub const CU_PROCESS_STATE_FAILED: CUprocessState_enum = CUprocessState_enum(3);
+}
+#[repr(transparent)]
+/// CUDA Process States
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUprocessState_enum(pub ::core::ffi::c_uint);
+/// CUDA Process States
+pub use self::CUprocessState_enum as CUprocessState;
+/// CUDA checkpoint optional lock arguments
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUcheckpointLockArgs_st {
+    ///< Timeout in milliseconds to attempt to lock the process, 0 indicates no timeout
+    pub timeoutMs: ::core::ffi::c_uint,
+    ///< Reserved for future use, must be zero
+    pub reserved0: ::core::ffi::c_uint,
+    ///< Reserved for future use, must be zeroed
+    pub reserved1: [cuuint64_t; 7usize],
+}
+/// CUDA checkpoint optional lock arguments
+pub type CUcheckpointLockArgs = CUcheckpointLockArgs_st;
+/// CUDA checkpoint optional checkpoint arguments
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUcheckpointCheckpointArgs_st {
+    ///< Reserved for future use, must be zeroed
+    pub reserved: [cuuint64_t; 8usize],
+}
+/// CUDA checkpoint optional checkpoint arguments
+pub type CUcheckpointCheckpointArgs = CUcheckpointCheckpointArgs_st;
+/// CUDA checkpoint optional restore arguments
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUcheckpointRestoreArgs_st {
+    ///< Reserved for future use, must be zeroed
+    pub reserved: [cuuint64_t; 8usize],
+}
+/// CUDA checkpoint optional restore arguments
+pub type CUcheckpointRestoreArgs = CUcheckpointRestoreArgs_st;
+/// CUDA checkpoint optional unlock arguments
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUcheckpointUnlockArgs_st {
+    ///< Reserved for future use, must be zeroed
+    pub reserved: [cuuint64_t; 8usize],
+}
+/// CUDA checkpoint optional unlock arguments
+pub type CUcheckpointUnlockArgs = CUcheckpointUnlockArgs_st;
+impl CUmemcpyFlags_enum {
+    pub const CU_MEMCPY_FLAG_DEFAULT: CUmemcpyFlags_enum = CUmemcpyFlags_enum(0);
+}
+impl CUmemcpyFlags_enum {
+    /// Hint to the driver to try and overlap the copy with compute work on the SMs.
+    pub const CU_MEMCPY_FLAG_PREFER_OVERLAP_WITH_COMPUTE: CUmemcpyFlags_enum = CUmemcpyFlags_enum(
+        1,
+    );
+}
+#[repr(transparent)]
+/// Flags to specify for copies within a batch. For more details see ::cuMemcpyBatchAsync.
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUmemcpyFlags_enum(pub ::core::ffi::c_uint);
+/// Flags to specify for copies within a batch. For more details see ::cuMemcpyBatchAsync.
+pub use self::CUmemcpyFlags_enum as CUmemcpyFlags;
+impl CUmemcpySrcAccessOrder_enum {
+    /// Default invalid.
+    pub const CU_MEMCPY_SRC_ACCESS_ORDER_INVALID: CUmemcpySrcAccessOrder_enum = CUmemcpySrcAccessOrder_enum(
+        0,
+    );
+}
+impl CUmemcpySrcAccessOrder_enum {
+    /// Indicates that access to the source pointer must be in stream order.
+    pub const CU_MEMCPY_SRC_ACCESS_ORDER_STREAM: CUmemcpySrcAccessOrder_enum = CUmemcpySrcAccessOrder_enum(
+        1,
+    );
+}
+impl CUmemcpySrcAccessOrder_enum {
+    /** Indicates that access to the source pointer can be out of stream order and
+ all accesses must be complete before the API call returns. This flag is suited for
+ ephemeral sources (ex., stack variables) when it's known that no prior operations
+ in the stream can be accessing the memory and also that the lifetime of the memory
+ is limited to the scope that the source variable was declared in. Specifying
+ this flag allows the driver to optimize the copy and removes the need for the user
+ to synchronize the stream after the API call.*/
+    pub const CU_MEMCPY_SRC_ACCESS_ORDER_DURING_API_CALL: CUmemcpySrcAccessOrder_enum = CUmemcpySrcAccessOrder_enum(
+        2,
+    );
+}
+impl CUmemcpySrcAccessOrder_enum {
+    /** Indicates that access to the source pointer can be out of stream order and the accesses
+ can happen even after the API call returns. This flag is suited for host pointers
+ allocated outside CUDA (ex., via malloc) when it's known that no prior operations
+ in the stream can be accessing the memory. Specifying this flag allows the driver
+ to optimize the copy on certain platforms.*/
+    pub const CU_MEMCPY_SRC_ACCESS_ORDER_ANY: CUmemcpySrcAccessOrder_enum = CUmemcpySrcAccessOrder_enum(
+        3,
+    );
+}
+impl CUmemcpySrcAccessOrder_enum {
+    /** Indicates that access to the source pointer can be out of stream order and the accesses
+ can happen even after the API call returns. This flag is suited for host pointers
+ allocated outside CUDA (ex., via malloc) when it's known that no prior operations
+ in the stream can be accessing the memory. Specifying this flag allows the driver
+ to optimize the copy on certain platforms.*/
+    pub const CU_MEMCPY_SRC_ACCESS_ORDER_MAX: CUmemcpySrcAccessOrder_enum = CUmemcpySrcAccessOrder_enum(
+        2147483647,
+    );
+}
+#[repr(transparent)]
+/** These flags allow applications to convey the source access ordering CUDA must maintain.
+ The destination will always be accessed in stream order.*/
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUmemcpySrcAccessOrder_enum(pub ::core::ffi::c_uint);
+/** These flags allow applications to convey the source access ordering CUDA must maintain.
+ The destination will always be accessed in stream order.*/
+pub use self::CUmemcpySrcAccessOrder_enum as CUmemcpySrcAccessOrder;
+/// Attributes specific to copies within a batch. For more details on usage see ::cuMemcpyBatchAsync.
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUmemcpyAttributes_st {
+    ///< Source access ordering to be observed for copies with this attribute.
+    pub srcAccessOrder: CUmemcpySrcAccessOrder,
+    ///< Hint location for the source operand. Ignored when the pointers are not managed memory or memory allocated outside CUDA.
+    pub srcLocHint: CUmemLocation,
+    ///< Hint location for the destination operand. Ignored when the pointers are not managed memory or memory allocated outside CUDA.
+    pub dstLocHint: CUmemLocation,
+    ///< Additional flags for copies with this attribute. See ::CUmemcpyFlags
+    pub flags: ::core::ffi::c_uint,
+}
+/// Attributes specific to copies within a batch. For more details on usage see ::cuMemcpyBatchAsync.
+pub type CUmemcpyAttributes_v1 = CUmemcpyAttributes_st;
+/// Attributes specific to copies within a batch. For more details on usage see ::cuMemcpyBatchAsync.
+pub type CUmemcpyAttributes = CUmemcpyAttributes_v1;
+impl CUmemcpy3DOperandType_enum {
+    ///< Memcpy operand is a valid pointer.
+    pub const CU_MEMCPY_OPERAND_TYPE_POINTER: CUmemcpy3DOperandType_enum = CUmemcpy3DOperandType_enum(
+        1,
+    );
+}
+impl CUmemcpy3DOperandType_enum {
+    ///< Memcpy operand is a CUarray.
+    pub const CU_MEMCPY_OPERAND_TYPE_ARRAY: CUmemcpy3DOperandType_enum = CUmemcpy3DOperandType_enum(
+        2,
+    );
+}
+impl CUmemcpy3DOperandType_enum {
+    pub const CU_MEMCPY_OPERAND_TYPE_MAX: CUmemcpy3DOperandType_enum = CUmemcpy3DOperandType_enum(
+        2147483647,
+    );
+}
+#[repr(transparent)]
+/// These flags allow applications to convey the operand type for individual copies specified in ::cuMemcpy3DBatchAsync.
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUmemcpy3DOperandType_enum(pub ::core::ffi::c_uint);
+/// These flags allow applications to convey the operand type for individual copies specified in ::cuMemcpy3DBatchAsync.
+pub use self::CUmemcpy3DOperandType_enum as CUmemcpy3DOperandType;
+/// Struct representing offset into a CUarray in elements
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUoffset3D_st {
+    pub x: usize,
+    pub y: usize,
+    pub z: usize,
+}
+/// Struct representing offset into a CUarray in elements
+pub type CUoffset3D_v1 = CUoffset3D_st;
+/// Struct representing offset into a CUarray in elements
+pub type CUoffset3D = CUoffset3D_v1;
+/// Struct representing width/height/depth of a CUarray in elements
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUextent3D_st {
+    pub width: usize,
+    pub height: usize,
+    pub depth: usize,
+}
+/// Struct representing width/height/depth of a CUarray in elements
+pub type CUextent3D_v1 = CUextent3D_st;
+/// Struct representing width/height/depth of a CUarray in elements
+pub type CUextent3D = CUextent3D_v1;
+/// Struct representing an operand for copy with ::cuMemcpy3DBatchAsync
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct CUmemcpy3DOperand_st {
+    pub type_: CUmemcpy3DOperandType,
+    pub op: CUmemcpy3DOperand_st__bindgen_ty_1,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union CUmemcpy3DOperand_st__bindgen_ty_1 {
+    pub ptr: CUmemcpy3DOperand_st__bindgen_ty_1__bindgen_ty_1,
+    pub array: CUmemcpy3DOperand_st__bindgen_ty_1__bindgen_ty_2,
+}
+/// Struct representing an operand when ::CUmemcpy3DOperand::type is ::CU_MEMCPY_OPERAND_TYPE_POINTER
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUmemcpy3DOperand_st__bindgen_ty_1__bindgen_ty_1 {
+    pub ptr: CUdeviceptr,
+    ///< Length of each row in elements.
+    pub rowLength: usize,
+    ///< Height of each layer in elements.
+    pub layerHeight: usize,
+    ///< Hint location for the operand. Ignored when the pointers are not managed memory or memory allocated outside CUDA.
+    pub locHint: CUmemLocation,
+}
+/// Struct representing an operand when ::CUmemcpy3DOperand::type is ::CU_MEMCPY_OPERAND_TYPE_ARRAY
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUmemcpy3DOperand_st__bindgen_ty_1__bindgen_ty_2 {
+    pub array: CUarray,
+    pub offset: CUoffset3D,
+}
+/// Struct representing an operand for copy with ::cuMemcpy3DBatchAsync
+pub type CUmemcpy3DOperand_v1 = CUmemcpy3DOperand_st;
+/// Struct representing an operand for copy with ::cuMemcpy3DBatchAsync
+pub type CUmemcpy3DOperand = CUmemcpy3DOperand_v1;
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct CUDA_MEMCPY3D_BATCH_OP_st {
+    ///< Source memcpy operand.
+    pub src: CUmemcpy3DOperand,
+    ///< Destination memcpy operand.
+    pub dst: CUmemcpy3DOperand,
+    ///< Extents of the memcpy between src and dst. The width, height and depth components must not be 0.
+    pub extent: CUextent3D,
+    ///< Source access ordering to be observed for copy from src to dst.
+    pub srcAccessOrder: CUmemcpySrcAccessOrder,
+    ///< Additional flags for copies with this attribute. See ::CUmemcpyFlags
+    pub flags: ::core::ffi::c_uint,
+}
+pub type CUDA_MEMCPY3D_BATCH_OP_v1 = CUDA_MEMCPY3D_BATCH_OP_st;
+pub type CUDA_MEMCPY3D_BATCH_OP = CUDA_MEMCPY3D_BATCH_OP_v1;
 impl CUmoduleLoadingMode_enum {
     ///< Lazy Kernel Loading is not enabled
     pub const CU_MODULE_EAGER_LOADING: CUmoduleLoadingMode_enum = CUmoduleLoadingMode_enum(
@@ -6351,6 +6949,61 @@ impl CUmoduleLoadingMode_enum {
 pub struct CUmoduleLoadingMode_enum(pub ::core::ffi::c_uint);
 /// CUDA Lazy Loading status
 pub use self::CUmoduleLoadingMode_enum as CUmoduleLoadingMode;
+impl CUmemDecompressAlgorithm_enum {
+    ///< Decompression is unsupported.
+    pub const CU_MEM_DECOMPRESS_UNSUPPORTED: CUmemDecompressAlgorithm_enum = CUmemDecompressAlgorithm_enum(
+        0,
+    );
+}
+impl CUmemDecompressAlgorithm_enum {
+    ///< Deflate is supported.
+    pub const CU_MEM_DECOMPRESS_ALGORITHM_DEFLATE: CUmemDecompressAlgorithm_enum = CUmemDecompressAlgorithm_enum(
+        1,
+    );
+}
+impl CUmemDecompressAlgorithm_enum {
+    ///< Snappy is supported.
+    pub const CU_MEM_DECOMPRESS_ALGORITHM_SNAPPY: CUmemDecompressAlgorithm_enum = CUmemDecompressAlgorithm_enum(
+        2,
+    );
+}
+#[repr(transparent)]
+/// \brief Bitmasks for CU_DEVICE_ATTRIBUTE_MEM_DECOMPRESS_ALGORITHM_MASK.
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUmemDecompressAlgorithm_enum(pub ::core::ffi::c_uint);
+/// \brief Bitmasks for CU_DEVICE_ATTRIBUTE_MEM_DECOMPRESS_ALGORITHM_MASK.
+pub use self::CUmemDecompressAlgorithm_enum as CUmemDecompressAlgorithm;
+/** \brief Structure describing the parameters that compose a single
+        decompression operation.*/
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUmemDecompressParams_st {
+    /** The number of bytes to be read and decompressed from
+  ::CUmemDecompressParams_st.src.*/
+    pub srcNumBytes: usize,
+    /** The number of bytes that the decompression operation will be expected to
+  write to ::CUmemDecompressParams_st.dst. This value is optional; if
+  present, it may be used by the CUDA driver as a heuristic for scheduling
+  the individual decompression operations.*/
+    pub dstNumBytes: usize,
+    /** After the decompression operation has completed, the actual number of
+ bytes written to ::CUmemDecompressParams.dst will be recorded as a 32-bit
+ unsigned integer in the memory at this address.*/
+    pub dstActBytes: *mut cuuint32_t,
+    /** Pointer to a buffer of at least ::CUmemDecompressParams_st.srcNumBytes
+ compressed bytes.*/
+    pub src: *const ::core::ffi::c_void,
+    /** Pointer to a buffer where the decompressed data will be written. The
+ number of bytes written to this location will be recorded in the memory
+ pointed to by ::CUmemDecompressParams_st.dstActBytes*/
+    pub dst: *mut ::core::ffi::c_void,
+    /// The decompression algorithm to use.
+    pub algo: CUmemDecompressAlgorithm,
+    pub padding: [::core::ffi::c_uchar; 20usize],
+}
+/** \brief Structure describing the parameters that compose a single
+        decompression operation.*/
+pub type CUmemDecompressParams = CUmemDecompressParams_st;
 impl CUfunctionLoadingState_enum {
     pub const CU_FUNCTION_LOADING_STATE_UNLOADED: CUfunctionLoadingState_enum = CUfunctionLoadingState_enum(
         0,
@@ -6397,7 +7050,12 @@ impl CUcoredumpSettings_enum {
     pub const CU_COREDUMP_PIPE: CUcoredumpSettings_enum = CUcoredumpSettings_enum(6);
 }
 impl CUcoredumpSettings_enum {
-    pub const CU_COREDUMP_MAX: CUcoredumpSettings_enum = CUcoredumpSettings_enum(7);
+    pub const CU_COREDUMP_GENERATION_FLAGS: CUcoredumpSettings_enum = CUcoredumpSettings_enum(
+        7,
+    );
+}
+impl CUcoredumpSettings_enum {
+    pub const CU_COREDUMP_MAX: CUcoredumpSettings_enum = CUcoredumpSettings_enum(8);
 }
 #[repr(transparent)]
 /// Flags for choosing a coredump attribute to get/set
@@ -6405,15 +7063,50 @@ impl CUcoredumpSettings_enum {
 pub struct CUcoredumpSettings_enum(pub ::core::ffi::c_uint);
 /// Flags for choosing a coredump attribute to get/set
 pub use self::CUcoredumpSettings_enum as CUcoredumpSettings;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct CUgreenCtx_st {
-    _unused: [u8; 0],
+impl CUCoredumpGenerationFlags {
+    pub const CU_COREDUMP_DEFAULT_FLAGS: CUCoredumpGenerationFlags = CUCoredumpGenerationFlags(
+        0,
+    );
 }
-/** \typedef typedef struct CUgreenCtx_st* CUgreenCtx
- A green context handle. This handle can be used safely from only one CPU thread at a time.
- Created via ::cuGreenCtxCreate*/
-pub type CUgreenCtx = *mut CUgreenCtx_st;
+impl CUCoredumpGenerationFlags {
+    pub const CU_COREDUMP_SKIP_NONRELOCATED_ELF_IMAGES: CUCoredumpGenerationFlags = CUCoredumpGenerationFlags(
+        1,
+    );
+}
+impl CUCoredumpGenerationFlags {
+    pub const CU_COREDUMP_SKIP_GLOBAL_MEMORY: CUCoredumpGenerationFlags = CUCoredumpGenerationFlags(
+        2,
+    );
+}
+impl CUCoredumpGenerationFlags {
+    pub const CU_COREDUMP_SKIP_SHARED_MEMORY: CUCoredumpGenerationFlags = CUCoredumpGenerationFlags(
+        4,
+    );
+}
+impl CUCoredumpGenerationFlags {
+    pub const CU_COREDUMP_SKIP_LOCAL_MEMORY: CUCoredumpGenerationFlags = CUCoredumpGenerationFlags(
+        8,
+    );
+}
+impl CUCoredumpGenerationFlags {
+    pub const CU_COREDUMP_SKIP_ABORT: CUCoredumpGenerationFlags = CUCoredumpGenerationFlags(
+        16,
+    );
+}
+impl CUCoredumpGenerationFlags {
+    pub const CU_COREDUMP_SKIP_CONSTBANK_MEMORY: CUCoredumpGenerationFlags = CUCoredumpGenerationFlags(
+        32,
+    );
+}
+impl CUCoredumpGenerationFlags {
+    pub const CU_COREDUMP_LIGHTWEIGHT_FLAGS: CUCoredumpGenerationFlags = CUCoredumpGenerationFlags(
+        47,
+    );
+}
+#[repr(transparent)]
+/// Flags for controlling coredump contents
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUCoredumpGenerationFlags(pub ::core::ffi::c_uint);
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct CUdevResourceDesc_st {
@@ -6432,6 +7125,19 @@ impl CUgreenCtxCreate_flags {
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUgreenCtxCreate_flags(pub ::core::ffi::c_uint);
+impl CUdevSmResourceSplit_flags {
+    pub const CU_DEV_SM_RESOURCE_SPLIT_IGNORE_SM_COSCHEDULING: CUdevSmResourceSplit_flags = CUdevSmResourceSplit_flags(
+        1,
+    );
+}
+impl CUdevSmResourceSplit_flags {
+    pub const CU_DEV_SM_RESOURCE_SPLIT_MAX_POTENTIAL_CLUSTER_SIZE: CUdevSmResourceSplit_flags = CUdevSmResourceSplit_flags(
+        2,
+    );
+}
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUdevSmResourceSplit_flags(pub ::core::ffi::c_uint);
 impl CUdevResourceType {
     pub const CU_DEV_RESOURCE_TYPE_INVALID: CUdevResourceType = CUdevResourceType(0);
 }
@@ -7432,8 +8138,26 @@ impl CUeglColorFormat_enum {
     );
 }
 impl CUeglColorFormat_enum {
-    pub const CU_EGL_COLOR_FORMAT_MAX: CUeglColorFormat_enum = CUeglColorFormat_enum(
+    ///< Y, U, V in one surface, interleaved as UYVY in one channel.
+    pub const CU_EGL_COLOR_FORMAT_UYVY_709: CUeglColorFormat_enum = CUeglColorFormat_enum(
         114,
+    );
+}
+impl CUeglColorFormat_enum {
+    ///< Extended Range Y, U, V in one surface, interleaved as UYVY in one channel.
+    pub const CU_EGL_COLOR_FORMAT_UYVY_709_ER: CUeglColorFormat_enum = CUeglColorFormat_enum(
+        115,
+    );
+}
+impl CUeglColorFormat_enum {
+    ///< Y, U, V in one surface, interleaved as UYVY in one channel.
+    pub const CU_EGL_COLOR_FORMAT_UYVY_2020: CUeglColorFormat_enum = CUeglColorFormat_enum(
+        116,
+    );
+}
+impl CUeglColorFormat_enum {
+    pub const CU_EGL_COLOR_FORMAT_MAX: CUeglColorFormat_enum = CUeglColorFormat_enum(
+        117,
     );
 }
 #[repr(transparent)]
@@ -7587,293 +8311,441 @@ pub type VdpGetProcAddress = ::core::option::Option<
         function_pointer: *mut *mut ::core::ffi::c_void,
     ) -> VdpStatus,
 >;
+impl cudaDataType_t {
+    pub const CUDA_R_16F: cudaDataType_t = cudaDataType_t(2);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_16F: cudaDataType_t = cudaDataType_t(6);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_16BF: cudaDataType_t = cudaDataType_t(14);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_16BF: cudaDataType_t = cudaDataType_t(15);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_32F: cudaDataType_t = cudaDataType_t(0);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_32F: cudaDataType_t = cudaDataType_t(4);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_64F: cudaDataType_t = cudaDataType_t(1);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_64F: cudaDataType_t = cudaDataType_t(5);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_4I: cudaDataType_t = cudaDataType_t(16);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_4I: cudaDataType_t = cudaDataType_t(17);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_4U: cudaDataType_t = cudaDataType_t(18);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_4U: cudaDataType_t = cudaDataType_t(19);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_8I: cudaDataType_t = cudaDataType_t(3);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_8I: cudaDataType_t = cudaDataType_t(7);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_8U: cudaDataType_t = cudaDataType_t(8);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_8U: cudaDataType_t = cudaDataType_t(9);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_16I: cudaDataType_t = cudaDataType_t(20);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_16I: cudaDataType_t = cudaDataType_t(21);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_16U: cudaDataType_t = cudaDataType_t(22);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_16U: cudaDataType_t = cudaDataType_t(23);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_32I: cudaDataType_t = cudaDataType_t(10);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_32I: cudaDataType_t = cudaDataType_t(11);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_32U: cudaDataType_t = cudaDataType_t(12);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_32U: cudaDataType_t = cudaDataType_t(13);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_64I: cudaDataType_t = cudaDataType_t(24);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_64I: cudaDataType_t = cudaDataType_t(25);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_64U: cudaDataType_t = cudaDataType_t(26);
+}
+impl cudaDataType_t {
+    pub const CUDA_C_64U: cudaDataType_t = cudaDataType_t(27);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_8F_E4M3: cudaDataType_t = cudaDataType_t(28);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_8F_UE4M3: cudaDataType_t = cudaDataType_t(28);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_8F_E5M2: cudaDataType_t = cudaDataType_t(29);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_8F_UE8M0: cudaDataType_t = cudaDataType_t(30);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_6F_E2M3: cudaDataType_t = cudaDataType_t(31);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_6F_E3M2: cudaDataType_t = cudaDataType_t(32);
+}
+impl cudaDataType_t {
+    pub const CUDA_R_4F_E2M1: cudaDataType_t = cudaDataType_t(33);
+}
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct cudaDataType_t(pub ::core::ffi::c_uint);
+pub use self::cudaDataType_t as cudaDataType;
+impl libraryPropertyType_t {
+    pub const MAJOR_VERSION: libraryPropertyType_t = libraryPropertyType_t(0);
+}
+impl libraryPropertyType_t {
+    pub const MINOR_VERSION: libraryPropertyType_t = libraryPropertyType_t(1);
+}
+impl libraryPropertyType_t {
+    pub const PATCH_LEVEL: libraryPropertyType_t = libraryPropertyType_t(2);
+}
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct libraryPropertyType_t(pub ::core::ffi::c_uint);
+pub use self::libraryPropertyType_t as libraryPropertyType;
+#[repr(C)]
+#[repr(align(8))]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct float2 {
+    pub x: f32,
+    pub y: f32,
+}
+#[repr(C)]
+#[repr(align(16))]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct double2 {
+    pub x: f64,
+    pub y: f64,
+}
+pub type cuFloatComplex = float2;
+pub type cuDoubleComplex = double2;
+pub type cuComplex = cuFloatComplex;
 impl CUerror {
-    pub const INVALID_VALUE: CUerror = CUerror(unsafe {
+    pub const r#INVALID_VALUE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(1)
     });
-    pub const OUT_OF_MEMORY: CUerror = CUerror(unsafe {
+    pub const r#OUT_OF_MEMORY: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(2)
     });
-    pub const NOT_INITIALIZED: CUerror = CUerror(unsafe {
+    pub const r#NOT_INITIALIZED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(3)
     });
-    pub const DEINITIALIZED: CUerror = CUerror(unsafe {
+    pub const r#DEINITIALIZED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(4)
     });
-    pub const PROFILER_DISABLED: CUerror = CUerror(unsafe {
+    pub const r#PROFILER_DISABLED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(5)
     });
-    pub const PROFILER_NOT_INITIALIZED: CUerror = CUerror(unsafe {
+    pub const r#PROFILER_NOT_INITIALIZED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(6)
     });
-    pub const PROFILER_ALREADY_STARTED: CUerror = CUerror(unsafe {
+    pub const r#PROFILER_ALREADY_STARTED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(7)
     });
-    pub const PROFILER_ALREADY_STOPPED: CUerror = CUerror(unsafe {
+    pub const r#PROFILER_ALREADY_STOPPED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(8)
     });
-    pub const STUB_LIBRARY: CUerror = CUerror(unsafe {
+    pub const r#STUB_LIBRARY: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(34)
     });
-    pub const DEVICE_UNAVAILABLE: CUerror = CUerror(unsafe {
+    pub const r#DEVICE_UNAVAILABLE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(46)
     });
-    pub const NO_DEVICE: CUerror = CUerror(unsafe {
+    pub const r#NO_DEVICE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(100)
     });
-    pub const INVALID_DEVICE: CUerror = CUerror(unsafe {
+    pub const r#INVALID_DEVICE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(101)
     });
-    pub const DEVICE_NOT_LICENSED: CUerror = CUerror(unsafe {
+    pub const r#DEVICE_NOT_LICENSED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(102)
     });
-    pub const INVALID_IMAGE: CUerror = CUerror(unsafe {
+    pub const r#INVALID_IMAGE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(200)
     });
-    pub const INVALID_CONTEXT: CUerror = CUerror(unsafe {
+    pub const r#INVALID_CONTEXT: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(201)
     });
-    pub const CONTEXT_ALREADY_CURRENT: CUerror = CUerror(unsafe {
+    pub const r#CONTEXT_ALREADY_CURRENT: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(202)
     });
-    pub const MAP_FAILED: CUerror = CUerror(unsafe {
+    pub const r#MAP_FAILED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(205)
     });
-    pub const UNMAP_FAILED: CUerror = CUerror(unsafe {
+    pub const r#UNMAP_FAILED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(206)
     });
-    pub const ARRAY_IS_MAPPED: CUerror = CUerror(unsafe {
+    pub const r#ARRAY_IS_MAPPED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(207)
     });
-    pub const ALREADY_MAPPED: CUerror = CUerror(unsafe {
+    pub const r#ALREADY_MAPPED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(208)
     });
-    pub const NO_BINARY_FOR_GPU: CUerror = CUerror(unsafe {
+    pub const r#NO_BINARY_FOR_GPU: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(209)
     });
-    pub const ALREADY_ACQUIRED: CUerror = CUerror(unsafe {
+    pub const r#ALREADY_ACQUIRED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(210)
     });
-    pub const NOT_MAPPED: CUerror = CUerror(unsafe {
+    pub const r#NOT_MAPPED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(211)
     });
-    pub const NOT_MAPPED_AS_ARRAY: CUerror = CUerror(unsafe {
+    pub const r#NOT_MAPPED_AS_ARRAY: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(212)
     });
-    pub const NOT_MAPPED_AS_POINTER: CUerror = CUerror(unsafe {
+    pub const r#NOT_MAPPED_AS_POINTER: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(213)
     });
-    pub const ECC_UNCORRECTABLE: CUerror = CUerror(unsafe {
+    pub const r#ECC_UNCORRECTABLE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(214)
     });
-    pub const UNSUPPORTED_LIMIT: CUerror = CUerror(unsafe {
+    pub const r#UNSUPPORTED_LIMIT: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(215)
     });
-    pub const CONTEXT_ALREADY_IN_USE: CUerror = CUerror(unsafe {
+    pub const r#CONTEXT_ALREADY_IN_USE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(216)
     });
-    pub const PEER_ACCESS_UNSUPPORTED: CUerror = CUerror(unsafe {
+    pub const r#PEER_ACCESS_UNSUPPORTED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(217)
     });
-    pub const INVALID_PTX: CUerror = CUerror(unsafe {
+    pub const r#INVALID_PTX: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(218)
     });
-    pub const INVALID_GRAPHICS_CONTEXT: CUerror = CUerror(unsafe {
+    pub const r#INVALID_GRAPHICS_CONTEXT: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(219)
     });
-    pub const NVLINK_UNCORRECTABLE: CUerror = CUerror(unsafe {
+    pub const r#NVLINK_UNCORRECTABLE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(220)
     });
-    pub const JIT_COMPILER_NOT_FOUND: CUerror = CUerror(unsafe {
+    pub const r#JIT_COMPILER_NOT_FOUND: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(221)
     });
-    pub const UNSUPPORTED_PTX_VERSION: CUerror = CUerror(unsafe {
+    pub const r#UNSUPPORTED_PTX_VERSION: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(222)
     });
-    pub const JIT_COMPILATION_DISABLED: CUerror = CUerror(unsafe {
+    pub const r#JIT_COMPILATION_DISABLED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(223)
     });
-    pub const UNSUPPORTED_EXEC_AFFINITY: CUerror = CUerror(unsafe {
+    pub const r#UNSUPPORTED_EXEC_AFFINITY: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(224)
     });
-    pub const UNSUPPORTED_DEVSIDE_SYNC: CUerror = CUerror(unsafe {
+    pub const r#UNSUPPORTED_DEVSIDE_SYNC: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(225)
     });
-    pub const INVALID_SOURCE: CUerror = CUerror(unsafe {
+    pub const r#CONTAINED: CUerror = CUerror(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(226)
+    });
+    pub const r#INVALID_SOURCE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(300)
     });
-    pub const FILE_NOT_FOUND: CUerror = CUerror(unsafe {
+    pub const r#FILE_NOT_FOUND: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(301)
     });
-    pub const SHARED_OBJECT_SYMBOL_NOT_FOUND: CUerror = CUerror(unsafe {
+    pub const r#SHARED_OBJECT_SYMBOL_NOT_FOUND: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(302)
     });
-    pub const SHARED_OBJECT_INIT_FAILED: CUerror = CUerror(unsafe {
+    pub const r#SHARED_OBJECT_INIT_FAILED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(303)
     });
-    pub const OPERATING_SYSTEM: CUerror = CUerror(unsafe {
+    pub const r#OPERATING_SYSTEM: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(304)
     });
-    pub const INVALID_HANDLE: CUerror = CUerror(unsafe {
+    pub const r#INVALID_HANDLE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(400)
     });
-    pub const ILLEGAL_STATE: CUerror = CUerror(unsafe {
+    pub const r#ILLEGAL_STATE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(401)
     });
-    pub const LOSSY_QUERY: CUerror = CUerror(unsafe {
+    pub const r#LOSSY_QUERY: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(402)
     });
-    pub const NOT_FOUND: CUerror = CUerror(unsafe {
+    pub const r#NOT_FOUND: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(500)
     });
-    pub const NOT_READY: CUerror = CUerror(unsafe {
+    pub const r#NOT_READY: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(600)
     });
-    pub const ILLEGAL_ADDRESS: CUerror = CUerror(unsafe {
+    pub const r#ILLEGAL_ADDRESS: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(700)
     });
-    pub const LAUNCH_OUT_OF_RESOURCES: CUerror = CUerror(unsafe {
+    pub const r#LAUNCH_OUT_OF_RESOURCES: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(701)
     });
-    pub const LAUNCH_TIMEOUT: CUerror = CUerror(unsafe {
+    pub const r#LAUNCH_TIMEOUT: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(702)
     });
-    pub const LAUNCH_INCOMPATIBLE_TEXTURING: CUerror = CUerror(unsafe {
+    pub const r#LAUNCH_INCOMPATIBLE_TEXTURING: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(703)
     });
-    pub const PEER_ACCESS_ALREADY_ENABLED: CUerror = CUerror(unsafe {
+    pub const r#PEER_ACCESS_ALREADY_ENABLED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(704)
     });
-    pub const PEER_ACCESS_NOT_ENABLED: CUerror = CUerror(unsafe {
+    pub const r#PEER_ACCESS_NOT_ENABLED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(705)
     });
-    pub const PRIMARY_CONTEXT_ACTIVE: CUerror = CUerror(unsafe {
+    pub const r#PRIMARY_CONTEXT_ACTIVE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(708)
     });
-    pub const CONTEXT_IS_DESTROYED: CUerror = CUerror(unsafe {
+    pub const r#CONTEXT_IS_DESTROYED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(709)
     });
-    pub const ASSERT: CUerror = CUerror(unsafe {
+    pub const r#ASSERT: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(710)
     });
-    pub const TOO_MANY_PEERS: CUerror = CUerror(unsafe {
+    pub const r#TOO_MANY_PEERS: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(711)
     });
-    pub const HOST_MEMORY_ALREADY_REGISTERED: CUerror = CUerror(unsafe {
+    pub const r#HOST_MEMORY_ALREADY_REGISTERED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(712)
     });
-    pub const HOST_MEMORY_NOT_REGISTERED: CUerror = CUerror(unsafe {
+    pub const r#HOST_MEMORY_NOT_REGISTERED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(713)
     });
-    pub const HARDWARE_STACK_ERROR: CUerror = CUerror(unsafe {
+    pub const r#HARDWARE_STACK_ERROR: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(714)
     });
-    pub const ILLEGAL_INSTRUCTION: CUerror = CUerror(unsafe {
+    pub const r#ILLEGAL_INSTRUCTION: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(715)
     });
-    pub const MISALIGNED_ADDRESS: CUerror = CUerror(unsafe {
+    pub const r#MISALIGNED_ADDRESS: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(716)
     });
-    pub const INVALID_ADDRESS_SPACE: CUerror = CUerror(unsafe {
+    pub const r#INVALID_ADDRESS_SPACE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(717)
     });
-    pub const INVALID_PC: CUerror = CUerror(unsafe {
+    pub const r#INVALID_PC: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(718)
     });
-    pub const LAUNCH_FAILED: CUerror = CUerror(unsafe {
+    pub const r#LAUNCH_FAILED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(719)
     });
-    pub const COOPERATIVE_LAUNCH_TOO_LARGE: CUerror = CUerror(unsafe {
+    pub const r#COOPERATIVE_LAUNCH_TOO_LARGE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(720)
     });
-    pub const NOT_PERMITTED: CUerror = CUerror(unsafe {
+    pub const r#TENSOR_MEMORY_LEAK: CUerror = CUerror(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(721)
+    });
+    pub const r#NOT_PERMITTED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(800)
     });
-    pub const NOT_SUPPORTED: CUerror = CUerror(unsafe {
+    pub const r#NOT_SUPPORTED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(801)
     });
-    pub const SYSTEM_NOT_READY: CUerror = CUerror(unsafe {
+    pub const r#SYSTEM_NOT_READY: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(802)
     });
-    pub const SYSTEM_DRIVER_MISMATCH: CUerror = CUerror(unsafe {
+    pub const r#SYSTEM_DRIVER_MISMATCH: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(803)
     });
-    pub const COMPAT_NOT_SUPPORTED_ON_DEVICE: CUerror = CUerror(unsafe {
+    pub const r#COMPAT_NOT_SUPPORTED_ON_DEVICE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(804)
     });
-    pub const MPS_CONNECTION_FAILED: CUerror = CUerror(unsafe {
+    pub const r#MPS_CONNECTION_FAILED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(805)
     });
-    pub const MPS_RPC_FAILURE: CUerror = CUerror(unsafe {
+    pub const r#MPS_RPC_FAILURE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(806)
     });
-    pub const MPS_SERVER_NOT_READY: CUerror = CUerror(unsafe {
+    pub const r#MPS_SERVER_NOT_READY: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(807)
     });
-    pub const MPS_MAX_CLIENTS_REACHED: CUerror = CUerror(unsafe {
+    pub const r#MPS_MAX_CLIENTS_REACHED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(808)
     });
-    pub const MPS_MAX_CONNECTIONS_REACHED: CUerror = CUerror(unsafe {
+    pub const r#MPS_MAX_CONNECTIONS_REACHED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(809)
     });
-    pub const MPS_CLIENT_TERMINATED: CUerror = CUerror(unsafe {
+    pub const r#MPS_CLIENT_TERMINATED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(810)
     });
-    pub const CDP_NOT_SUPPORTED: CUerror = CUerror(unsafe {
+    pub const r#CDP_NOT_SUPPORTED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(811)
     });
-    pub const CDP_VERSION_MISMATCH: CUerror = CUerror(unsafe {
+    pub const r#CDP_VERSION_MISMATCH: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(812)
     });
-    pub const STREAM_CAPTURE_UNSUPPORTED: CUerror = CUerror(unsafe {
+    pub const r#STREAM_CAPTURE_UNSUPPORTED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(900)
     });
-    pub const STREAM_CAPTURE_INVALIDATED: CUerror = CUerror(unsafe {
+    pub const r#STREAM_CAPTURE_INVALIDATED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(901)
     });
-    pub const STREAM_CAPTURE_MERGE: CUerror = CUerror(unsafe {
+    pub const r#STREAM_CAPTURE_MERGE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(902)
     });
-    pub const STREAM_CAPTURE_UNMATCHED: CUerror = CUerror(unsafe {
+    pub const r#STREAM_CAPTURE_UNMATCHED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(903)
     });
-    pub const STREAM_CAPTURE_UNJOINED: CUerror = CUerror(unsafe {
+    pub const r#STREAM_CAPTURE_UNJOINED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(904)
     });
-    pub const STREAM_CAPTURE_ISOLATION: CUerror = CUerror(unsafe {
+    pub const r#STREAM_CAPTURE_ISOLATION: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(905)
     });
-    pub const STREAM_CAPTURE_IMPLICIT: CUerror = CUerror(unsafe {
+    pub const r#STREAM_CAPTURE_IMPLICIT: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(906)
     });
-    pub const CAPTURED_EVENT: CUerror = CUerror(unsafe {
+    pub const r#CAPTURED_EVENT: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(907)
     });
-    pub const STREAM_CAPTURE_WRONG_THREAD: CUerror = CUerror(unsafe {
+    pub const r#STREAM_CAPTURE_WRONG_THREAD: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(908)
     });
-    pub const TIMEOUT: CUerror = CUerror(unsafe {
+    pub const r#TIMEOUT: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(909)
     });
-    pub const GRAPH_EXEC_UPDATE_FAILURE: CUerror = CUerror(unsafe {
+    pub const r#GRAPH_EXEC_UPDATE_FAILURE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(910)
     });
-    pub const EXTERNAL_DEVICE: CUerror = CUerror(unsafe {
+    pub const r#EXTERNAL_DEVICE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(911)
     });
-    pub const INVALID_CLUSTER_SIZE: CUerror = CUerror(unsafe {
+    pub const r#INVALID_CLUSTER_SIZE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(912)
     });
-    pub const FUNCTION_NOT_LOADED: CUerror = CUerror(unsafe {
+    pub const r#FUNCTION_NOT_LOADED: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(913)
     });
-    pub const INVALID_RESOURCE_TYPE: CUerror = CUerror(unsafe {
+    pub const r#INVALID_RESOURCE_TYPE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(914)
     });
-    pub const INVALID_RESOURCE_CONFIGURATION: CUerror = CUerror(unsafe {
+    pub const r#INVALID_RESOURCE_CONFIGURATION: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(915)
     });
-    pub const UNKNOWN: CUerror = CUerror(unsafe {
+    pub const r#KEY_ROTATION: CUerror = CUerror(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(916)
+    });
+    pub const r#UNKNOWN: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(999)
     });
 }
@@ -7882,208 +8754,223 @@ impl CUerror {
 pub struct CUerror(pub ::core::num::NonZeroU32);
 pub trait CUresultConsts {
     const SUCCESS: CUresult = CUresult::Ok(());
-    const ERROR_INVALID_VALUE: CUresult = CUresult::Err(CUerror::INVALID_VALUE);
-    const ERROR_OUT_OF_MEMORY: CUresult = CUresult::Err(CUerror::OUT_OF_MEMORY);
-    const ERROR_NOT_INITIALIZED: CUresult = CUresult::Err(CUerror::NOT_INITIALIZED);
-    const ERROR_DEINITIALIZED: CUresult = CUresult::Err(CUerror::DEINITIALIZED);
-    const ERROR_PROFILER_DISABLED: CUresult = CUresult::Err(CUerror::PROFILER_DISABLED);
+    const ERROR_INVALID_VALUE: CUresult = CUresult::Err(CUerror::r#INVALID_VALUE);
+    const ERROR_OUT_OF_MEMORY: CUresult = CUresult::Err(CUerror::r#OUT_OF_MEMORY);
+    const ERROR_NOT_INITIALIZED: CUresult = CUresult::Err(CUerror::r#NOT_INITIALIZED);
+    const ERROR_DEINITIALIZED: CUresult = CUresult::Err(CUerror::r#DEINITIALIZED);
+    const ERROR_PROFILER_DISABLED: CUresult = CUresult::Err(
+        CUerror::r#PROFILER_DISABLED,
+    );
     const ERROR_PROFILER_NOT_INITIALIZED: CUresult = CUresult::Err(
-        CUerror::PROFILER_NOT_INITIALIZED,
+        CUerror::r#PROFILER_NOT_INITIALIZED,
     );
     const ERROR_PROFILER_ALREADY_STARTED: CUresult = CUresult::Err(
-        CUerror::PROFILER_ALREADY_STARTED,
+        CUerror::r#PROFILER_ALREADY_STARTED,
     );
     const ERROR_PROFILER_ALREADY_STOPPED: CUresult = CUresult::Err(
-        CUerror::PROFILER_ALREADY_STOPPED,
+        CUerror::r#PROFILER_ALREADY_STOPPED,
     );
-    const ERROR_STUB_LIBRARY: CUresult = CUresult::Err(CUerror::STUB_LIBRARY);
+    const ERROR_STUB_LIBRARY: CUresult = CUresult::Err(CUerror::r#STUB_LIBRARY);
     const ERROR_DEVICE_UNAVAILABLE: CUresult = CUresult::Err(
-        CUerror::DEVICE_UNAVAILABLE,
+        CUerror::r#DEVICE_UNAVAILABLE,
     );
-    const ERROR_NO_DEVICE: CUresult = CUresult::Err(CUerror::NO_DEVICE);
-    const ERROR_INVALID_DEVICE: CUresult = CUresult::Err(CUerror::INVALID_DEVICE);
+    const ERROR_NO_DEVICE: CUresult = CUresult::Err(CUerror::r#NO_DEVICE);
+    const ERROR_INVALID_DEVICE: CUresult = CUresult::Err(CUerror::r#INVALID_DEVICE);
     const ERROR_DEVICE_NOT_LICENSED: CUresult = CUresult::Err(
-        CUerror::DEVICE_NOT_LICENSED,
+        CUerror::r#DEVICE_NOT_LICENSED,
     );
-    const ERROR_INVALID_IMAGE: CUresult = CUresult::Err(CUerror::INVALID_IMAGE);
-    const ERROR_INVALID_CONTEXT: CUresult = CUresult::Err(CUerror::INVALID_CONTEXT);
+    const ERROR_INVALID_IMAGE: CUresult = CUresult::Err(CUerror::r#INVALID_IMAGE);
+    const ERROR_INVALID_CONTEXT: CUresult = CUresult::Err(CUerror::r#INVALID_CONTEXT);
     const ERROR_CONTEXT_ALREADY_CURRENT: CUresult = CUresult::Err(
-        CUerror::CONTEXT_ALREADY_CURRENT,
+        CUerror::r#CONTEXT_ALREADY_CURRENT,
     );
-    const ERROR_MAP_FAILED: CUresult = CUresult::Err(CUerror::MAP_FAILED);
-    const ERROR_UNMAP_FAILED: CUresult = CUresult::Err(CUerror::UNMAP_FAILED);
-    const ERROR_ARRAY_IS_MAPPED: CUresult = CUresult::Err(CUerror::ARRAY_IS_MAPPED);
-    const ERROR_ALREADY_MAPPED: CUresult = CUresult::Err(CUerror::ALREADY_MAPPED);
-    const ERROR_NO_BINARY_FOR_GPU: CUresult = CUresult::Err(CUerror::NO_BINARY_FOR_GPU);
-    const ERROR_ALREADY_ACQUIRED: CUresult = CUresult::Err(CUerror::ALREADY_ACQUIRED);
-    const ERROR_NOT_MAPPED: CUresult = CUresult::Err(CUerror::NOT_MAPPED);
+    const ERROR_MAP_FAILED: CUresult = CUresult::Err(CUerror::r#MAP_FAILED);
+    const ERROR_UNMAP_FAILED: CUresult = CUresult::Err(CUerror::r#UNMAP_FAILED);
+    const ERROR_ARRAY_IS_MAPPED: CUresult = CUresult::Err(CUerror::r#ARRAY_IS_MAPPED);
+    const ERROR_ALREADY_MAPPED: CUresult = CUresult::Err(CUerror::r#ALREADY_MAPPED);
+    const ERROR_NO_BINARY_FOR_GPU: CUresult = CUresult::Err(
+        CUerror::r#NO_BINARY_FOR_GPU,
+    );
+    const ERROR_ALREADY_ACQUIRED: CUresult = CUresult::Err(CUerror::r#ALREADY_ACQUIRED);
+    const ERROR_NOT_MAPPED: CUresult = CUresult::Err(CUerror::r#NOT_MAPPED);
     const ERROR_NOT_MAPPED_AS_ARRAY: CUresult = CUresult::Err(
-        CUerror::NOT_MAPPED_AS_ARRAY,
+        CUerror::r#NOT_MAPPED_AS_ARRAY,
     );
     const ERROR_NOT_MAPPED_AS_POINTER: CUresult = CUresult::Err(
-        CUerror::NOT_MAPPED_AS_POINTER,
+        CUerror::r#NOT_MAPPED_AS_POINTER,
     );
-    const ERROR_ECC_UNCORRECTABLE: CUresult = CUresult::Err(CUerror::ECC_UNCORRECTABLE);
-    const ERROR_UNSUPPORTED_LIMIT: CUresult = CUresult::Err(CUerror::UNSUPPORTED_LIMIT);
+    const ERROR_ECC_UNCORRECTABLE: CUresult = CUresult::Err(
+        CUerror::r#ECC_UNCORRECTABLE,
+    );
+    const ERROR_UNSUPPORTED_LIMIT: CUresult = CUresult::Err(
+        CUerror::r#UNSUPPORTED_LIMIT,
+    );
     const ERROR_CONTEXT_ALREADY_IN_USE: CUresult = CUresult::Err(
-        CUerror::CONTEXT_ALREADY_IN_USE,
+        CUerror::r#CONTEXT_ALREADY_IN_USE,
     );
     const ERROR_PEER_ACCESS_UNSUPPORTED: CUresult = CUresult::Err(
-        CUerror::PEER_ACCESS_UNSUPPORTED,
+        CUerror::r#PEER_ACCESS_UNSUPPORTED,
     );
-    const ERROR_INVALID_PTX: CUresult = CUresult::Err(CUerror::INVALID_PTX);
+    const ERROR_INVALID_PTX: CUresult = CUresult::Err(CUerror::r#INVALID_PTX);
     const ERROR_INVALID_GRAPHICS_CONTEXT: CUresult = CUresult::Err(
-        CUerror::INVALID_GRAPHICS_CONTEXT,
+        CUerror::r#INVALID_GRAPHICS_CONTEXT,
     );
     const ERROR_NVLINK_UNCORRECTABLE: CUresult = CUresult::Err(
-        CUerror::NVLINK_UNCORRECTABLE,
+        CUerror::r#NVLINK_UNCORRECTABLE,
     );
     const ERROR_JIT_COMPILER_NOT_FOUND: CUresult = CUresult::Err(
-        CUerror::JIT_COMPILER_NOT_FOUND,
+        CUerror::r#JIT_COMPILER_NOT_FOUND,
     );
     const ERROR_UNSUPPORTED_PTX_VERSION: CUresult = CUresult::Err(
-        CUerror::UNSUPPORTED_PTX_VERSION,
+        CUerror::r#UNSUPPORTED_PTX_VERSION,
     );
     const ERROR_JIT_COMPILATION_DISABLED: CUresult = CUresult::Err(
-        CUerror::JIT_COMPILATION_DISABLED,
+        CUerror::r#JIT_COMPILATION_DISABLED,
     );
     const ERROR_UNSUPPORTED_EXEC_AFFINITY: CUresult = CUresult::Err(
-        CUerror::UNSUPPORTED_EXEC_AFFINITY,
+        CUerror::r#UNSUPPORTED_EXEC_AFFINITY,
     );
     const ERROR_UNSUPPORTED_DEVSIDE_SYNC: CUresult = CUresult::Err(
-        CUerror::UNSUPPORTED_DEVSIDE_SYNC,
+        CUerror::r#UNSUPPORTED_DEVSIDE_SYNC,
     );
-    const ERROR_INVALID_SOURCE: CUresult = CUresult::Err(CUerror::INVALID_SOURCE);
-    const ERROR_FILE_NOT_FOUND: CUresult = CUresult::Err(CUerror::FILE_NOT_FOUND);
+    const ERROR_CONTAINED: CUresult = CUresult::Err(CUerror::r#CONTAINED);
+    const ERROR_INVALID_SOURCE: CUresult = CUresult::Err(CUerror::r#INVALID_SOURCE);
+    const ERROR_FILE_NOT_FOUND: CUresult = CUresult::Err(CUerror::r#FILE_NOT_FOUND);
     const ERROR_SHARED_OBJECT_SYMBOL_NOT_FOUND: CUresult = CUresult::Err(
-        CUerror::SHARED_OBJECT_SYMBOL_NOT_FOUND,
+        CUerror::r#SHARED_OBJECT_SYMBOL_NOT_FOUND,
     );
     const ERROR_SHARED_OBJECT_INIT_FAILED: CUresult = CUresult::Err(
-        CUerror::SHARED_OBJECT_INIT_FAILED,
+        CUerror::r#SHARED_OBJECT_INIT_FAILED,
     );
-    const ERROR_OPERATING_SYSTEM: CUresult = CUresult::Err(CUerror::OPERATING_SYSTEM);
-    const ERROR_INVALID_HANDLE: CUresult = CUresult::Err(CUerror::INVALID_HANDLE);
-    const ERROR_ILLEGAL_STATE: CUresult = CUresult::Err(CUerror::ILLEGAL_STATE);
-    const ERROR_LOSSY_QUERY: CUresult = CUresult::Err(CUerror::LOSSY_QUERY);
-    const ERROR_NOT_FOUND: CUresult = CUresult::Err(CUerror::NOT_FOUND);
-    const ERROR_NOT_READY: CUresult = CUresult::Err(CUerror::NOT_READY);
-    const ERROR_ILLEGAL_ADDRESS: CUresult = CUresult::Err(CUerror::ILLEGAL_ADDRESS);
+    const ERROR_OPERATING_SYSTEM: CUresult = CUresult::Err(CUerror::r#OPERATING_SYSTEM);
+    const ERROR_INVALID_HANDLE: CUresult = CUresult::Err(CUerror::r#INVALID_HANDLE);
+    const ERROR_ILLEGAL_STATE: CUresult = CUresult::Err(CUerror::r#ILLEGAL_STATE);
+    const ERROR_LOSSY_QUERY: CUresult = CUresult::Err(CUerror::r#LOSSY_QUERY);
+    const ERROR_NOT_FOUND: CUresult = CUresult::Err(CUerror::r#NOT_FOUND);
+    const ERROR_NOT_READY: CUresult = CUresult::Err(CUerror::r#NOT_READY);
+    const ERROR_ILLEGAL_ADDRESS: CUresult = CUresult::Err(CUerror::r#ILLEGAL_ADDRESS);
     const ERROR_LAUNCH_OUT_OF_RESOURCES: CUresult = CUresult::Err(
-        CUerror::LAUNCH_OUT_OF_RESOURCES,
+        CUerror::r#LAUNCH_OUT_OF_RESOURCES,
     );
-    const ERROR_LAUNCH_TIMEOUT: CUresult = CUresult::Err(CUerror::LAUNCH_TIMEOUT);
+    const ERROR_LAUNCH_TIMEOUT: CUresult = CUresult::Err(CUerror::r#LAUNCH_TIMEOUT);
     const ERROR_LAUNCH_INCOMPATIBLE_TEXTURING: CUresult = CUresult::Err(
-        CUerror::LAUNCH_INCOMPATIBLE_TEXTURING,
+        CUerror::r#LAUNCH_INCOMPATIBLE_TEXTURING,
     );
     const ERROR_PEER_ACCESS_ALREADY_ENABLED: CUresult = CUresult::Err(
-        CUerror::PEER_ACCESS_ALREADY_ENABLED,
+        CUerror::r#PEER_ACCESS_ALREADY_ENABLED,
     );
     const ERROR_PEER_ACCESS_NOT_ENABLED: CUresult = CUresult::Err(
-        CUerror::PEER_ACCESS_NOT_ENABLED,
+        CUerror::r#PEER_ACCESS_NOT_ENABLED,
     );
     const ERROR_PRIMARY_CONTEXT_ACTIVE: CUresult = CUresult::Err(
-        CUerror::PRIMARY_CONTEXT_ACTIVE,
+        CUerror::r#PRIMARY_CONTEXT_ACTIVE,
     );
     const ERROR_CONTEXT_IS_DESTROYED: CUresult = CUresult::Err(
-        CUerror::CONTEXT_IS_DESTROYED,
+        CUerror::r#CONTEXT_IS_DESTROYED,
     );
-    const ERROR_ASSERT: CUresult = CUresult::Err(CUerror::ASSERT);
-    const ERROR_TOO_MANY_PEERS: CUresult = CUresult::Err(CUerror::TOO_MANY_PEERS);
+    const ERROR_ASSERT: CUresult = CUresult::Err(CUerror::r#ASSERT);
+    const ERROR_TOO_MANY_PEERS: CUresult = CUresult::Err(CUerror::r#TOO_MANY_PEERS);
     const ERROR_HOST_MEMORY_ALREADY_REGISTERED: CUresult = CUresult::Err(
-        CUerror::HOST_MEMORY_ALREADY_REGISTERED,
+        CUerror::r#HOST_MEMORY_ALREADY_REGISTERED,
     );
     const ERROR_HOST_MEMORY_NOT_REGISTERED: CUresult = CUresult::Err(
-        CUerror::HOST_MEMORY_NOT_REGISTERED,
+        CUerror::r#HOST_MEMORY_NOT_REGISTERED,
     );
     const ERROR_HARDWARE_STACK_ERROR: CUresult = CUresult::Err(
-        CUerror::HARDWARE_STACK_ERROR,
+        CUerror::r#HARDWARE_STACK_ERROR,
     );
     const ERROR_ILLEGAL_INSTRUCTION: CUresult = CUresult::Err(
-        CUerror::ILLEGAL_INSTRUCTION,
+        CUerror::r#ILLEGAL_INSTRUCTION,
     );
     const ERROR_MISALIGNED_ADDRESS: CUresult = CUresult::Err(
-        CUerror::MISALIGNED_ADDRESS,
+        CUerror::r#MISALIGNED_ADDRESS,
     );
     const ERROR_INVALID_ADDRESS_SPACE: CUresult = CUresult::Err(
-        CUerror::INVALID_ADDRESS_SPACE,
+        CUerror::r#INVALID_ADDRESS_SPACE,
     );
-    const ERROR_INVALID_PC: CUresult = CUresult::Err(CUerror::INVALID_PC);
-    const ERROR_LAUNCH_FAILED: CUresult = CUresult::Err(CUerror::LAUNCH_FAILED);
+    const ERROR_INVALID_PC: CUresult = CUresult::Err(CUerror::r#INVALID_PC);
+    const ERROR_LAUNCH_FAILED: CUresult = CUresult::Err(CUerror::r#LAUNCH_FAILED);
     const ERROR_COOPERATIVE_LAUNCH_TOO_LARGE: CUresult = CUresult::Err(
-        CUerror::COOPERATIVE_LAUNCH_TOO_LARGE,
+        CUerror::r#COOPERATIVE_LAUNCH_TOO_LARGE,
     );
-    const ERROR_NOT_PERMITTED: CUresult = CUresult::Err(CUerror::NOT_PERMITTED);
-    const ERROR_NOT_SUPPORTED: CUresult = CUresult::Err(CUerror::NOT_SUPPORTED);
-    const ERROR_SYSTEM_NOT_READY: CUresult = CUresult::Err(CUerror::SYSTEM_NOT_READY);
+    const ERROR_TENSOR_MEMORY_LEAK: CUresult = CUresult::Err(
+        CUerror::r#TENSOR_MEMORY_LEAK,
+    );
+    const ERROR_NOT_PERMITTED: CUresult = CUresult::Err(CUerror::r#NOT_PERMITTED);
+    const ERROR_NOT_SUPPORTED: CUresult = CUresult::Err(CUerror::r#NOT_SUPPORTED);
+    const ERROR_SYSTEM_NOT_READY: CUresult = CUresult::Err(CUerror::r#SYSTEM_NOT_READY);
     const ERROR_SYSTEM_DRIVER_MISMATCH: CUresult = CUresult::Err(
-        CUerror::SYSTEM_DRIVER_MISMATCH,
+        CUerror::r#SYSTEM_DRIVER_MISMATCH,
     );
     const ERROR_COMPAT_NOT_SUPPORTED_ON_DEVICE: CUresult = CUresult::Err(
-        CUerror::COMPAT_NOT_SUPPORTED_ON_DEVICE,
+        CUerror::r#COMPAT_NOT_SUPPORTED_ON_DEVICE,
     );
     const ERROR_MPS_CONNECTION_FAILED: CUresult = CUresult::Err(
-        CUerror::MPS_CONNECTION_FAILED,
+        CUerror::r#MPS_CONNECTION_FAILED,
     );
-    const ERROR_MPS_RPC_FAILURE: CUresult = CUresult::Err(CUerror::MPS_RPC_FAILURE);
+    const ERROR_MPS_RPC_FAILURE: CUresult = CUresult::Err(CUerror::r#MPS_RPC_FAILURE);
     const ERROR_MPS_SERVER_NOT_READY: CUresult = CUresult::Err(
-        CUerror::MPS_SERVER_NOT_READY,
+        CUerror::r#MPS_SERVER_NOT_READY,
     );
     const ERROR_MPS_MAX_CLIENTS_REACHED: CUresult = CUresult::Err(
-        CUerror::MPS_MAX_CLIENTS_REACHED,
+        CUerror::r#MPS_MAX_CLIENTS_REACHED,
     );
     const ERROR_MPS_MAX_CONNECTIONS_REACHED: CUresult = CUresult::Err(
-        CUerror::MPS_MAX_CONNECTIONS_REACHED,
+        CUerror::r#MPS_MAX_CONNECTIONS_REACHED,
     );
     const ERROR_MPS_CLIENT_TERMINATED: CUresult = CUresult::Err(
-        CUerror::MPS_CLIENT_TERMINATED,
+        CUerror::r#MPS_CLIENT_TERMINATED,
     );
-    const ERROR_CDP_NOT_SUPPORTED: CUresult = CUresult::Err(CUerror::CDP_NOT_SUPPORTED);
+    const ERROR_CDP_NOT_SUPPORTED: CUresult = CUresult::Err(
+        CUerror::r#CDP_NOT_SUPPORTED,
+    );
     const ERROR_CDP_VERSION_MISMATCH: CUresult = CUresult::Err(
-        CUerror::CDP_VERSION_MISMATCH,
+        CUerror::r#CDP_VERSION_MISMATCH,
     );
     const ERROR_STREAM_CAPTURE_UNSUPPORTED: CUresult = CUresult::Err(
-        CUerror::STREAM_CAPTURE_UNSUPPORTED,
+        CUerror::r#STREAM_CAPTURE_UNSUPPORTED,
     );
     const ERROR_STREAM_CAPTURE_INVALIDATED: CUresult = CUresult::Err(
-        CUerror::STREAM_CAPTURE_INVALIDATED,
+        CUerror::r#STREAM_CAPTURE_INVALIDATED,
     );
     const ERROR_STREAM_CAPTURE_MERGE: CUresult = CUresult::Err(
-        CUerror::STREAM_CAPTURE_MERGE,
+        CUerror::r#STREAM_CAPTURE_MERGE,
     );
     const ERROR_STREAM_CAPTURE_UNMATCHED: CUresult = CUresult::Err(
-        CUerror::STREAM_CAPTURE_UNMATCHED,
+        CUerror::r#STREAM_CAPTURE_UNMATCHED,
     );
     const ERROR_STREAM_CAPTURE_UNJOINED: CUresult = CUresult::Err(
-        CUerror::STREAM_CAPTURE_UNJOINED,
+        CUerror::r#STREAM_CAPTURE_UNJOINED,
     );
     const ERROR_STREAM_CAPTURE_ISOLATION: CUresult = CUresult::Err(
-        CUerror::STREAM_CAPTURE_ISOLATION,
+        CUerror::r#STREAM_CAPTURE_ISOLATION,
     );
     const ERROR_STREAM_CAPTURE_IMPLICIT: CUresult = CUresult::Err(
-        CUerror::STREAM_CAPTURE_IMPLICIT,
+        CUerror::r#STREAM_CAPTURE_IMPLICIT,
     );
-    const ERROR_CAPTURED_EVENT: CUresult = CUresult::Err(CUerror::CAPTURED_EVENT);
+    const ERROR_CAPTURED_EVENT: CUresult = CUresult::Err(CUerror::r#CAPTURED_EVENT);
     const ERROR_STREAM_CAPTURE_WRONG_THREAD: CUresult = CUresult::Err(
-        CUerror::STREAM_CAPTURE_WRONG_THREAD,
+        CUerror::r#STREAM_CAPTURE_WRONG_THREAD,
     );
-    const ERROR_TIMEOUT: CUresult = CUresult::Err(CUerror::TIMEOUT);
+    const ERROR_TIMEOUT: CUresult = CUresult::Err(CUerror::r#TIMEOUT);
     const ERROR_GRAPH_EXEC_UPDATE_FAILURE: CUresult = CUresult::Err(
-        CUerror::GRAPH_EXEC_UPDATE_FAILURE,
+        CUerror::r#GRAPH_EXEC_UPDATE_FAILURE,
     );
-    const ERROR_EXTERNAL_DEVICE: CUresult = CUresult::Err(CUerror::EXTERNAL_DEVICE);
+    const ERROR_EXTERNAL_DEVICE: CUresult = CUresult::Err(CUerror::r#EXTERNAL_DEVICE);
     const ERROR_INVALID_CLUSTER_SIZE: CUresult = CUresult::Err(
-        CUerror::INVALID_CLUSTER_SIZE,
+        CUerror::r#INVALID_CLUSTER_SIZE,
     );
     const ERROR_FUNCTION_NOT_LOADED: CUresult = CUresult::Err(
-        CUerror::FUNCTION_NOT_LOADED,
+        CUerror::r#FUNCTION_NOT_LOADED,
     );
     const ERROR_INVALID_RESOURCE_TYPE: CUresult = CUresult::Err(
-        CUerror::INVALID_RESOURCE_TYPE,
+        CUerror::r#INVALID_RESOURCE_TYPE,
     );
     const ERROR_INVALID_RESOURCE_CONFIGURATION: CUresult = CUresult::Err(
-        CUerror::INVALID_RESOURCE_CONFIGURATION,
+        CUerror::r#INVALID_RESOURCE_CONFIGURATION,
     );
-    const ERROR_UNKNOWN: CUresult = CUresult::Err(CUerror::UNKNOWN);
+    const ERROR_KEY_ROTATION: CUresult = CUresult::Err(CUerror::r#KEY_ROTATION);
+    const ERROR_UNKNOWN: CUresult = CUresult::Err(CUerror::r#UNKNOWN);
 }
 impl CUresultConsts for CUresult {}
 #[must_use]

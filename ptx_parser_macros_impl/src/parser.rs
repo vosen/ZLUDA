@@ -22,14 +22,23 @@ impl Parse for ParseDefinitions {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let token_type = input.parse::<ItemEnum>()?;
         let mut additional_enums = FxHashMap::default();
-        while input.peek(Token![#]) {
-            let enum_ = input.parse::<ItemEnum>()?;
-            additional_enums.insert(enum_.ident.clone(), enum_);
-        }
         let mut definitions = Vec::new();
-        while !input.is_empty() {
-            definitions.push(input.parse::<OpcodeDefinition>()?);
+        loop {
+            if input.is_empty() {
+                break;
+            }
+
+            let lookahead = input.lookahead1();
+            if lookahead.peek(Token![#]) {
+                let enum_ = input.parse::<ItemEnum>()?;
+                additional_enums.insert(enum_.ident.clone(), enum_);
+            } else if lookahead.peek(Ident) {
+                definitions.push(input.parse::<OpcodeDefinition>()?);
+            } else {
+                return Err(lookahead.error());
+            }
         }
+
         Ok(Self {
             token_type,
             additional_enums,
@@ -318,7 +327,7 @@ impl DotModifier {
             write!(&mut result, "_{}", part2.0).unwrap();
         } else {
             match self.part1 {
-                IdentLike::Type(_) | IdentLike::Const(_) => result.push('_'),
+                IdentLike::Type(_) | IdentLike::Const(_) | IdentLike::Async(_) => result.push('_'),
                 IdentLike::Ident(_) | IdentLike::Integer(_) => {}
             }
         }
@@ -385,10 +394,49 @@ impl Parse for DotModifier {
     }
 }
 
+#[derive(PartialEq, Eq)]
+pub struct HyphenatedIdent {
+    idents: Punctuated<Ident, Token![-]>,
+}
+
+impl HyphenatedIdent {
+    fn span(&self) -> Span {
+        self.idents.span()
+    }
+
+    pub fn ident(&self) -> Ident {
+        Ident::new(&self.to_string().to_string(), self.span())
+    }
+}
+
+impl std::fmt::Display for HyphenatedIdent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut idents = self.idents.iter();
+
+        if let Some(id) = idents.next() {
+            write!(f, "{}", id)?;
+        }
+
+        for id in idents {
+            write!(f, "_{}", id)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl Parse for HyphenatedIdent {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let idents = Punctuated::parse_separated_nonempty(input)?;
+        Ok(Self { idents })
+    }
+}
+
 #[derive(PartialEq, Eq, Hash, Clone)]
 enum IdentLike {
     Type(Token![type]),
     Const(Token![const]),
+    Async(Token![async]),
     Ident(Ident),
     Integer(LitInt),
 }
@@ -398,6 +446,7 @@ impl IdentLike {
         match self {
             IdentLike::Type(c) => c.span(),
             IdentLike::Const(t) => t.span(),
+            IdentLike::Async(a) => a.span(),
             IdentLike::Ident(i) => i.span(),
             IdentLike::Integer(l) => l.span(),
         }
@@ -409,6 +458,7 @@ impl std::fmt::Display for IdentLike {
         match self {
             IdentLike::Type(_) => f.write_str("type"),
             IdentLike::Const(_) => f.write_str("const"),
+            IdentLike::Async(_) => f.write_str("async"),
             IdentLike::Ident(ident) => write!(f, "{}", ident),
             IdentLike::Integer(integer) => write!(f, "{}", integer),
         }
@@ -420,6 +470,7 @@ impl ToTokens for IdentLike {
         match self {
             IdentLike::Type(_) => quote! { type }.to_tokens(tokens),
             IdentLike::Const(_) => quote! { const }.to_tokens(tokens),
+            IdentLike::Async(_) => quote! { async }.to_tokens(tokens),
             IdentLike::Ident(ident) => quote! { #ident }.to_tokens(tokens),
             IdentLike::Integer(int) => quote! { #int }.to_tokens(tokens),
         }
@@ -433,6 +484,8 @@ impl Parse for IdentLike {
             IdentLike::Const(input.parse::<Token![const]>()?)
         } else if lookahead.peek(Token![type]) {
             IdentLike::Type(input.parse::<Token![type]>()?)
+        } else if lookahead.peek(Token![async]) {
+            IdentLike::Async(input.parse::<Token![async]>()?)
         } else if lookahead.peek(Ident) {
             IdentLike::Ident(input.parse::<Ident>()?)
         } else if lookahead.peek(LitInt) {
@@ -443,7 +496,7 @@ impl Parse for IdentLike {
     }
 }
 
-// Arguments decalaration can loook like this:
+// Arguments declaration can loook like this:
 //  a{, b}
 // That's why we don't parse Arguments as Punctuated<Argument, Token![,]>
 #[derive(PartialEq, Eq)]
@@ -468,11 +521,11 @@ impl Parse for Arguments {
                 if lookahead.peek(Token![!]) {
                     content.parse::<Token![!]>()?;
                     can_be_negated = true;
-                    ident = input.parse::<Ident>()?;
+                    ident = input.parse::<HyphenatedIdent>()?;
                 } else if lookahead.peek(Token![,]) {
                     optional = true;
                     content.parse::<Token![,]>()?;
-                    ident = content.parse::<Ident>()?;
+                    ident = content.parse::<HyphenatedIdent>()?;
                 } else {
                     return Err(lookahead.error());
                 }
@@ -483,7 +536,7 @@ impl Parse for Arguments {
                     optional = true;
                     bracketed.parse::<Token![|]>()?;
                     pre_pipe = true;
-                    ident = bracketed.parse::<Ident>()?;
+                    ident = bracketed.parse::<HyphenatedIdent>()?;
                 } else {
                     let mut sub_args = Self::parse(&bracketed)?;
                     sub_args.0.first_mut().unwrap().pre_bracket = true;
@@ -496,7 +549,7 @@ impl Parse for Arguments {
                         if unified_ident.to_string() != "unified" {
                             return Err(syn::Error::new(
                                 unified_ident.span(),
-                                format!("Exptected `unified`, got `{}`", unified_ident),
+                                format!("Expected `unified`, got `{}`", unified_ident),
                             ));
                         }
                         for a in sub_args.0.iter_mut() {
@@ -507,11 +560,11 @@ impl Parse for Arguments {
                     continue;
                 }
             } else if lookahead.peek(Ident) {
-                ident = input.parse::<Ident>()?;
+                ident = input.parse::<HyphenatedIdent>()?;
             } else if lookahead.peek(Token![|]) {
                 input.parse::<Token![|]>()?;
                 pre_pipe = true;
-                ident = input.parse::<Ident>()?;
+                ident = input.parse::<HyphenatedIdent>()?;
             } else {
                 break;
             }
@@ -546,7 +599,7 @@ pub struct Argument {
     pub pre_bracket: bool,
     pub pre_pipe: bool,
     pub can_be_negated: bool,
-    pub ident: Ident,
+    pub ident: HyphenatedIdent,
     pub post_bracket: bool,
     pub unified: bool,
 }
@@ -832,6 +885,22 @@ mod tests {
         assert!(a.post_bracket);
         assert!(!a.can_be_negated);
         assert!(a.unified);
+    }
+
+    #[test]
+    fn args_hyphenated() {
+        let input = quote! {
+            d, cp-size, b
+        };
+        let args = syn::parse2::<super::Arguments>(input).unwrap();
+        let cp_size = &args.0[1];
+        assert!(!cp_size.optional);
+        assert_eq!("cp_size", cp_size.ident.to_string());
+        assert!(!cp_size.pre_bracket);
+        assert!(!cp_size.pre_pipe);
+        assert!(!cp_size.post_bracket);
+        assert!(!cp_size.can_be_negated);
+        assert!(!cp_size.unified);
     }
 
     #[test]

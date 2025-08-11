@@ -1,0 +1,46 @@
+[package]
+name = "zluda_trace"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2021"
+
+[lib]
+name = "zluda_trace"
+crate-type = ["cdylib"]
+
+[dependencies]
+ptx = { path = "../ptx" }
+ptx_parser = { path = "../ptx_parser" }
+zluda_trace_common = { path = "../zluda_trace_common" }
+format = { path = "../format" }
+dark_api = { path = "../dark_api" }
+regex = "1.4"
+dynasm = "1.2"
+dynasmrt = "1.2"
+# we don't need elf32, but goblin has a bug where elf64 does not build without elf32
+goblin = { version = "0.4", default-features = false, features = ["elf64", "elf32", "archive"] }
+paste = "1.0"
+cuda_macros = { path = "../cuda_macros" }
+cuda_types = { path = "../cuda_types" }
+parking_lot = "0.12.3"
+rustc-hash = "1.1.0"
+cglue = "0.3.5"
+zstd-safe = { version = "7.2.4", features = ["std"] }
+unwrap_or = "1.0.1"
+libloading = "0.8"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["libloaderapi", "debugapi", "std"] }
+wchar = "0.6"
+detours-sys = { path = "../detours-sys" }
+
+[target.'cfg(not(windows))'.dependencies]
+libc = "0.2"
+
+[package.metadata.zluda]
+linux_symlinks = [
+    "trace/libcuda.so",
+    "trace/libcuda.so.1",
+    "trace_nvidia/libcuda.so",
+    "trace_nvidia/libcuda.so.1",
+]

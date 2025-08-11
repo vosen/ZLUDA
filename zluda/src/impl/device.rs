@@ -1,8 +1,7 @@
+use super::{context, driver};
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
 use std::{mem, ptr};
-
-use super::context;
 
 const PROJECT_SUFFIX: &[u8] = b" [ZLUDA]\0";
 pub const COMPUTE_CAPABILITY_MAJOR: i32 = 8;
@@ -53,14 +52,19 @@ trait DeviceAttributeNames {
 impl DeviceAttributeNames for hipDeviceAttribute_t {}
 
 macro_rules! remap_attribute {
-    ($attrib:expr => $([ $($word:expr)* ]),*,) => {
+    ($attrib:expr => { $([ $($word:expr)* ]),*, }, { $( $exactWord:expr => $hipWord:expr ),*, }) => {
         match $attrib {
             $(
                 paste::paste! { CUdevice_attribute:: [< CU_DEVICE_ATTRIBUTE $(_ $word:upper)* >] } => {
                     paste::paste! { hipDeviceAttribute_t:: [< hipDeviceAttribute $($word:camel)* >] }
                 }
             )*
-            _ => return Err(hipErrorCode_t::NotSupported)
+            $(
+                paste::paste! { CUdevice_attribute:: [< CU_DEVICE_ATTRIBUTE_ $exactWord >] } => {
+                    paste::paste! { hipDeviceAttribute_t:: [< hipDeviceAttribute $hipWord >] }
+                }
+            )*
+            _ => return Err(hipErrorCode_t::InvalidValue)
         }
     }
 }
@@ -204,146 +208,177 @@ pub(crate) fn get_attribute(
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE1D_MIPMAPPED_WIDTH => {
             return get_device_prop(pi, dev_idx, |props| props.maxTexture1DMipmap)
         }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_PERSISTING_L2_CACHE_SIZE => {
+            return get_device_prop(pi, dev_idx, |props| props.persistingL2CacheMaxSize)
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_SINGLE_TO_DOUBLE_PRECISION_PERF_RATIO => {
+            return get_device_prop(pi, dev_idx, |props| props.singleToDoublePrecisionPerfRatio)
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_ACCESS_POLICY_WINDOW_SIZE => {
+            return get_device_prop(pi, dev_idx, |props| props.accessPolicyMaxWindowSize)
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_SPARSE_CUDA_ARRAY_SUPPORTED => {
+            return get_device_prop(pi, dev_idx, |props| props.sparseHipArraySupported)
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_READ_ONLY_HOST_REGISTER_SUPPORTED => {
+            return get_device_prop(pi, dev_idx, |props| props.hostRegisterReadOnlySupported)
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_TIMELINE_SEMAPHORE_INTEROP_SUPPORTED => {
+            return get_device_prop(pi, dev_idx, |props| props.timelineSemaphoreInteropSupported)
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_SUPPORTED => {
+            return get_device_prop(pi, dev_idx, |props| props.gpuDirectRDMASupported)
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_FLUSH_WRITES_OPTIONS => {
+            return get_device_prop(pi, dev_idx, |props| {
+                props.gpuDirectRDMAFlushWritesOptions as i32
+            })
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WRITES_ORDERING => {
+            return get_device_prop(pi, dev_idx, |props| props.gpuDirectRDMAWritesOrdering)
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_CLUSTER_LAUNCH => {
+            return get_device_prop(pi, dev_idx, |props| props.clusterLaunch)
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_DEFERRED_MAPPING_CUDA_ARRAY_SUPPORTED => {
+            return get_device_prop(pi, dev_idx, |props| props.deferredMappingHipArraySupported)
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_IPC_EVENT_SUPPORTED => {
+            return get_device_prop(pi, dev_idx, |props| props.ipcEventSupported)
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_UNIFIED_FUNCTION_POINTERS => {
+            return get_device_prop(pi, dev_idx, |props| props.unifiedFunctionPointers)
+        }
         _ => {}
     }
     let attrib = remap_attribute! {
-        attrib =>
-        [MAX THREADS PER BLOCK],
-        [MAX BLOCK DIM X],
-        [MAX BLOCK DIM Y],
-        [MAX BLOCK DIM Z],
-        [MAX GRID DIM X],
-        [MAX GRID DIM Y],
-        [MAX GRID DIM Z],
-        [MAX SHARED MEMORY PER BLOCK],
-        [TOTAL CONSTANT MEMORY],
-        //[WARP SIZE],
-        [MAX PITCH],
-        [MAX REGISTERS PER BLOCK],
-        [CLOCK RATE],
-        [TEXTURE ALIGNMENT],
-        [GPU OVERLAP],
-        [MULTIPROCESSOR COUNT],
-        [KERNEL EXEC TIMEOUT],
-        [INTEGRATED],
-        [CAN MAP HOST MEMORY],
-        [COMPUTE MODE],
-        [MAXIMUM TEXTURE1D WIDTH],
-        [MAXIMUM TEXTURE2D WIDTH],
-        [MAXIMUM TEXTURE2D HEIGHT],
-        [MAXIMUM TEXTURE3D WIDTH],
-        [MAXIMUM TEXTURE3D HEIGHT],
-        [MAXIMUM TEXTURE3D DEPTH],
-        //[MAXIMUM TEXTURE2D LAYERED WIDTH],
-        //[MAXIMUM TEXTURE2D LAYERED HEIGHT],
-        //[MAXIMUM TEXTURE2D LAYERED LAYERS],
-        //[MAXIMUM TEXTURE2D ARRAY WIDTH],
-        //[MAXIMUM TEXTURE2D ARRAY HEIGHT],
-        //[MAXIMUM TEXTURE2D ARRAY NUMSLICES],
-        [SURFACE ALIGNMENT],
-        [CONCURRENT KERNELS],
-        [ECC ENABLED],
-        [PCI BUS ID],
-        [PCI DEVICE ID],
-        //[TCC DRIVER],
-        [MEMORY CLOCK RATE],
-        [GLOBAL MEMORY BUS WIDTH],
-        [L2 CACHE SIZE],
-        [MAX THREADS PER MULTIPROCESSOR],
-        [ASYNC ENGINE COUNT],
-        [UNIFIED ADDRESSING],
-        //[MAXIMUM TEXTURE1D LAYERED WIDTH],
-        //[MAXIMUM TEXTURE1D LAYERED LAYERS],
-        //[CAN TEX2D GATHER],
-        //[MAXIMUM TEXTURE2D GATHER WIDTH],
-        //[MAXIMUM TEXTURE2D GATHER HEIGHT],
-        //[MAXIMUM TEXTURE3D WIDTH ALTERNATE],
-        //[MAXIMUM TEXTURE3D HEIGHT ALTERNATE],
-        //[MAXIMUM TEXTURE3D DEPTH ALTERNATE],
-        [PCI DOMAIN ID],
-        [TEXTURE PITCH ALIGNMENT],
-        //[MAXIMUM TEXTURECUBEMAP WIDTH],
-        //[MAXIMUM TEXTURECUBEMAP LAYERED WIDTH],
-        //[MAXIMUM TEXTURECUBEMAP LAYERED LAYERS],
-        //[MAXIMUM SURFACE1D WIDTH],
-        //[MAXIMUM SURFACE2D WIDTH],
-        //[MAXIMUM SURFACE2D HEIGHT],
-        //[MAXIMUM SURFACE3D WIDTH],
-        //[MAXIMUM SURFACE3D HEIGHT],
-        //[MAXIMUM SURFACE3D DEPTH],
-        //[MAXIMUM SURFACE1D LAYERED WIDTH],
-        //[MAXIMUM SURFACE1D LAYERED LAYERS],
-        //[MAXIMUM SURFACE2D LAYERED WIDTH],
-        //[MAXIMUM SURFACE2D LAYERED HEIGHT],
-        //[MAXIMUM SURFACE2D LAYERED LAYERS],
-        //[MAXIMUM SURFACECUBEMAP WIDTH],
-        //[MAXIMUM SURFACECUBEMAP LAYERED WIDTH],
-        //[MAXIMUM SURFACECUBEMAP LAYERED LAYERS],
-        //[MAXIMUM TEXTURE1D LINEAR WIDTH],
-        //[MAXIMUM TEXTURE2D LINEAR WIDTH],
-        //[MAXIMUM TEXTURE2D LINEAR HEIGHT],
-        //[MAXIMUM TEXTURE2D LINEAR PITCH],
-        //[MAXIMUM TEXTURE2D MIPMAPPED WIDTH],
-        //[MAXIMUM TEXTURE2D MIPMAPPED HEIGHT],
-        //[COMPUTE CAPABILITY MAJOR],
-        //[COMPUTE CAPABILITY MINOR],
-        //[MAXIMUM TEXTURE1D MIPMAPPED WIDTH],
-        [STREAM PRIORITIES SUPPORTED],
-        [GLOBAL L1 CACHE SUPPORTED],
-        [LOCAL L1 CACHE SUPPORTED],
-        [MAX SHARED MEMORY PER MULTIPROCESSOR],
-        [MAX REGISTERS PER MULTIPROCESSOR],
-        [MANAGED MEMORY],
-        [MULTI GPU BOARD],
-        [MULTI GPU BOARD GROUP ID],
-        [HOST NATIVE ATOMIC SUPPORTED],
-        [SINGLE TO DOUBLE PRECISION PERF RATIO],
-        [PAGEABLE MEMORY ACCESS],
-        [CONCURRENT MANAGED ACCESS],
-        [COMPUTE PREEMPTION SUPPORTED],
-        [CAN USE HOST POINTER FOR REGISTERED MEM],
-        //[CAN USE STREAM MEM OPS],
-        [COOPERATIVE LAUNCH],
-        [COOPERATIVE MULTI DEVICE LAUNCH],
-        [MAX SHARED MEMORY PER BLOCK OPTIN],
-        //[CAN FLUSH REMOTE WRITES],
-        [HOST REGISTER SUPPORTED],
-        [PAGEABLE MEMORY ACCESS USES HOST PAGE TABLES],
-        [DIRECT MANAGED MEM ACCESS FROM HOST],
-        //[VIRTUAL ADDRESS MANAGEMENT SUPPORTED],
-        [VIRTUAL MEMORY MANAGEMENT SUPPORTED],
-        //[HANDLE TYPE POSIX FILE DESCRIPTOR SUPPORTED],
-        //[HANDLE TYPE WIN32 HANDLE SUPPORTED],
-        //[HANDLE TYPE WIN32 KMT HANDLE SUPPORTED],
-        //[MAX BLOCKS PER MULTIPROCESSOR],
-        //[GENERIC COMPRESSION SUPPORTED],
-        //[MAX PERSISTING L2 CACHE SIZE],
-        //[MAX ACCESS POLICY WINDOW SIZE],
-        //[GPU DIRECT RDMA WITH CUDA VMM SUPPORTED],
-        //[RESERVED SHARED MEMORY PER BLOCK],
-        //[SPARSE CUDA ARRAY SUPPORTED],
-        //[READ ONLY HOST REGISTER SUPPORTED],
-        //[TIMELINE SEMAPHORE INTEROP SUPPORTED],
-        [MEMORY POOLS SUPPORTED],
-        //[GPU DIRECT RDMA SUPPORTED],
-        //[GPU DIRECT RDMA FLUSH WRITES OPTIONS],
-        //[GPU DIRECT RDMA WRITES ORDERING],
-        //[MEMPOOL SUPPORTED HANDLE TYPES],
-        //[CLUSTER LAUNCH],
-        //[DEFERRED MAPPING CUDA ARRAY SUPPORTED],
-        //[CAN USE 64 BIT STREAM MEM OPS],
-        //[CAN USE STREAM WAIT VALUE NOR],
-        //[DMA BUF SUPPORTED],
-        //[IPC EVENT SUPPORTED],
-        //[MEM SYNC DOMAIN COUNT],
-        //[TENSOR MAP ACCESS SUPPORTED],
-        //[HANDLE TYPE FABRIC SUPPORTED],
-        //[UNIFIED FUNCTION POINTERS],
-        //[NUMA CONFIG],
-        //[NUMA ID],
-        //[MULTICAST SUPPORTED],
-        //[MPS ENABLED],
-        //[HOST NUMA ID],
+        attrib => {
+            [MAX THREADS PER BLOCK],
+            [MAX BLOCK DIM X],
+            [MAX BLOCK DIM Y],
+            [MAX BLOCK DIM Z],
+            [MAX GRID DIM X],
+            [MAX GRID DIM Y],
+            [MAX GRID DIM Z],
+            [MAX SHARED MEMORY PER BLOCK],
+            [TOTAL CONSTANT MEMORY],
+            //[WARP SIZE],
+            [MAX PITCH],
+            [MAX REGISTERS PER BLOCK],
+            [CLOCK RATE],
+            [TEXTURE ALIGNMENT],
+            [GPU OVERLAP],
+            [MULTIPROCESSOR COUNT],
+            [KERNEL EXEC TIMEOUT],
+            [INTEGRATED],
+            [CAN MAP HOST MEMORY],
+            [COMPUTE MODE],
+            [MAXIMUM TEXTURE1D WIDTH],
+            [MAXIMUM TEXTURE2D WIDTH],
+            [MAXIMUM TEXTURE2D HEIGHT],
+            [MAXIMUM TEXTURE3D WIDTH],
+            [MAXIMUM TEXTURE3D HEIGHT],
+            [MAXIMUM TEXTURE3D DEPTH],
+            //[MAXIMUM TEXTURE2D LAYERED WIDTH],
+            //[MAXIMUM TEXTURE2D LAYERED HEIGHT],
+            //[MAXIMUM TEXTURE2D LAYERED LAYERS],
+            //[MAXIMUM TEXTURE2D ARRAY WIDTH],
+            //[MAXIMUM TEXTURE2D ARRAY HEIGHT],
+            //[MAXIMUM TEXTURE2D ARRAY NUMSLICES],
+            [SURFACE ALIGNMENT],
+            [CONCURRENT KERNELS],
+            [ECC ENABLED],
+            [PCI BUS ID],
+            [PCI DEVICE ID],
+            //[TCC DRIVER],
+            [MEMORY CLOCK RATE],
+            [GLOBAL MEMORY BUS WIDTH],
+            [L2 CACHE SIZE],
+            [MAX THREADS PER MULTIPROCESSOR],
+            [ASYNC ENGINE COUNT],
+            [UNIFIED ADDRESSING],
+            //[MAXIMUM TEXTURE1D LAYERED WIDTH],
+            //[MAXIMUM TEXTURE1D LAYERED LAYERS],
+            //[CAN TEX2D GATHER],
+            //[MAXIMUM TEXTURE2D GATHER WIDTH],
+            //[MAXIMUM TEXTURE2D GATHER HEIGHT],
+            //[MAXIMUM TEXTURE3D WIDTH ALTERNATE],
+            //[MAXIMUM TEXTURE3D HEIGHT ALTERNATE],
+            //[MAXIMUM TEXTURE3D DEPTH ALTERNATE],
+            [PCI DOMAIN ID],
+            [TEXTURE PITCH ALIGNMENT],
+            //[MAXIMUM TEXTURECUBEMAP WIDTH],
+            //[MAXIMUM TEXTURECUBEMAP LAYERED WIDTH],
+            //[MAXIMUM TEXTURECUBEMAP LAYERED LAYERS],
+            //[MAXIMUM SURFACE1D WIDTH],
+            //[MAXIMUM SURFACE2D WIDTH],
+            //[MAXIMUM SURFACE2D HEIGHT],
+            //[MAXIMUM SURFACE3D WIDTH],
+            //[MAXIMUM SURFACE3D HEIGHT],
+            //[MAXIMUM SURFACE3D DEPTH],
+            //[MAXIMUM SURFACE1D LAYERED WIDTH],
+            //[MAXIMUM SURFACE1D LAYERED LAYERS],
+            //[MAXIMUM SURFACE2D LAYERED WIDTH],
+            //[MAXIMUM SURFACE2D LAYERED HEIGHT],
+            //[MAXIMUM SURFACE2D LAYERED LAYERS],
+            //[MAXIMUM SURFACECUBEMAP WIDTH],
+            //[MAXIMUM SURFACECUBEMAP LAYERED WIDTH],
+            //[MAXIMUM SURFACECUBEMAP LAYERED LAYERS],
+            //[MAXIMUM TEXTURE1D LINEAR WIDTH],
+            //[MAXIMUM TEXTURE2D LINEAR WIDTH],
+            //[MAXIMUM TEXTURE2D LINEAR HEIGHT],
+            //[MAXIMUM TEXTURE2D LINEAR PITCH],
+            //[MAXIMUM TEXTURE2D MIPMAPPED WIDTH],
+            //[MAXIMUM TEXTURE2D MIPMAPPED HEIGHT],
+            //[COMPUTE CAPABILITY MAJOR],
+            //[COMPUTE CAPABILITY MINOR],
+            //[MAXIMUM TEXTURE1D MIPMAPPED WIDTH],
+            [STREAM PRIORITIES SUPPORTED],
+            [GLOBAL L1 CACHE SUPPORTED],
+            [LOCAL L1 CACHE SUPPORTED],
+            [MAX SHARED MEMORY PER MULTIPROCESSOR],
+            [MAX REGISTERS PER MULTIPROCESSOR],
+            [MANAGED MEMORY],
+            [MULTI GPU BOARD],
+            [MULTI GPU BOARD GROUP ID],
+            [HOST NATIVE ATOMIC SUPPORTED],
+            // [SINGLE TO DOUBLE PRECISION PERF RATIO], // not supported by hipDeviceGetAttribute
+            [PAGEABLE MEMORY ACCESS],
+            [CONCURRENT MANAGED ACCESS],
+            [COMPUTE PREEMPTION SUPPORTED],
+            [CAN USE HOST POINTER FOR REGISTERED MEM],
+            //[CAN USE STREAM MEM OPS],
+            [COOPERATIVE LAUNCH],
+            [COOPERATIVE MULTI DEVICE LAUNCH],
+            [MAX SHARED MEMORY PER BLOCK OPTIN],
+            //[CAN FLUSH REMOTE WRITES],
+            [HOST REGISTER SUPPORTED],
+            [PAGEABLE MEMORY ACCESS USES HOST PAGE TABLES],
+            [DIRECT MANAGED MEM ACCESS FROM HOST],
+            //[VIRTUAL ADDRESS MANAGEMENT SUPPORTED],
+            [VIRTUAL MEMORY MANAGEMENT SUPPORTED],
+            //[HANDLE TYPE POSIX FILE DESCRIPTOR SUPPORTED],
+            //[HANDLE TYPE WIN32 HANDLE SUPPORTED],
+            //[HANDLE TYPE WIN32 KMT HANDLE SUPPORTED],
+            //[GENERIC COMPRESSION SUPPORTED],
+            //[GPU DIRECT RDMA WITH CUDA VMM SUPPORTED],
+            [MEMORY POOLS SUPPORTED],
+            //[CAN USE 64 BIT STREAM MEM OPS],
+            //[CAN USE STREAM WAIT VALUE NOR],
+            //[DMA BUF SUPPORTED],
+            //[MEM SYNC DOMAIN COUNT],
+            //[TENSOR MAP ACCESS SUPPORTED],
+            //[HANDLE TYPE FABRIC SUPPORTED],
+            //[NUMA CONFIG],
+            //[NUMA ID],
+            //[MULTICAST SUPPORTED],
+            //[MPS ENABLED],
+            //[HOST NUMA ID],
+        }, {
+            MAX_BLOCKS_PER_MULTIPROCESSOR => MaxBlocksPerMultiProcessor,
+            RESERVED_SHARED_MEMORY_PER_BLOCK => ReservedSharedMemPerBlock,
+            MEMPOOL_SUPPORTED_HANDLE_TYPES => MemoryPoolSupportedHandleTypes,
+        }
     };
     unsafe { hipDeviceGetAttribute(pi, attrib, dev_idx) }
 }
@@ -427,30 +462,40 @@ fn clamp_usize(x: usize) -> i32 {
     usize::min(x, i32::MAX as usize) as i32
 }
 
-pub(crate) fn primary_context_retain(
-    pctx: &mut CUcontext,
+pub(crate) fn get_primary_context(
     hip_dev: hipDevice_t,
-) -> Result<(), CUerror> {
-    let (ctx, raw_ctx) = context::get_primary(hip_dev)?;
-    {
-        let mut mutable_ctx = ctx.mutable.lock().map_err(|_| CUerror::UNKNOWN)?;
-        mutable_ctx.ref_count += 1;
-    }
-    *pctx = raw_ctx;
+) -> Result<(&'static context::Context, CUcontext), CUerror> {
+    let dev: &'static driver::Device = driver::device(hip_dev)?;
+    Ok(dev.primary_context())
+}
+
+pub(crate) fn primary_context_retain(pctx: &mut CUcontext, hip_dev: hipDevice_t) -> CUresult {
+    let (ctx, cu_ctx) = get_primary_context(hip_dev)?;
+
+    ctx.with_state_mut(|state: &mut context::ContextState| {
+        state.ref_count += 1;
+        Ok(())
+    })?;
+
+    *pctx = cu_ctx;
     Ok(())
 }
 
-pub(crate) fn primary_context_release(hip_dev: hipDevice_t) -> Result<(), CUerror> {
-    let (ctx, _) = context::get_primary(hip_dev)?;
-    {
-        let mut mutable_ctx = ctx.mutable.lock().map_err(|_| CUerror::UNKNOWN)?;
-        if mutable_ctx.ref_count == 0 {
-            return Err(CUerror::INVALID_CONTEXT);
+pub(crate) fn primary_context_release(hip_dev: hipDevice_t) -> CUresult {
+    let (ctx, _) = get_primary_context(hip_dev)?;
+
+    ctx.with_state_mut(|state| {
+        state.ref_count -= 1;
+        if state.ref_count == 0 {
+            return state.reset();
         }
-        mutable_ctx.ref_count -= 1;
-        if mutable_ctx.ref_count == 0 {
-            // TODO: drop all children
-        }
-    }
+        Ok(())
+    })?;
+    Ok(())
+}
+
+pub(crate) fn primary_context_reset(hip_dev: hipDevice_t) -> CUresult {
+    let (ctx, _) = get_primary_context(hip_dev)?;
+    ctx.with_state_mut(|state| state.reset())?;
     Ok(())
 }

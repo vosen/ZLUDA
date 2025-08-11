@@ -167,24 +167,40 @@ impl InstructionModes {
         }
     }
 
-    fn mixed_ftz_f32(
-        type_: ast::ScalarType,
-        denormal: Option<DenormalMode>,
-        rounding: Option<RoundingMode>,
+    fn from_typed_denormal_rounding(
+        from_type: ast::ScalarType,
+        to_type: ast::ScalarType,
+        denormal: DenormalMode,
+        rounding: RoundingMode,
     ) -> Self {
-        if type_ != ast::ScalarType::F32 {
-            Self {
-                denormal_f16f64: denormal,
-                rounding_f32: rounding,
-                ..Self::none()
-            }
-        } else {
-            Self {
-                denormal_f32: denormal,
-                rounding_f32: rounding,
-                ..Self::none()
-            }
+        Self {
+            rounding_f32: Some(rounding),
+            rounding_f16f64: Some(rounding),
+            ..Self::from_typed_denormal(from_type, to_type, denormal)
         }
+    }
+
+    // This function accepts DenormalMode and not Option<DenormalMode> because
+    // the semantics are slightly different.
+    // * In instructions `None` means: flush-to-zero has not been explicitly requested
+    // * In this pass `None` means: neither flush-to-zero, nor preserve is applicable
+    fn from_typed_denormal(
+        from_type: ast::ScalarType,
+        to_type: ast::ScalarType,
+        denormal: DenormalMode,
+    ) -> Self {
+        let mut result = Self::none();
+        if from_type == ast::ScalarType::F32 || to_type == ast::ScalarType::F32 {
+            result.denormal_f32 = if denormal == DenormalMode::FlushToZero {
+                Some(DenormalMode::FlushToZero)
+            } else {
+                Some(DenormalMode::Preserve)
+            };
+        }
+        if !(from_type == ast::ScalarType::F32 && to_type == ast::ScalarType::F32) {
+            result.denormal_f16f64 = Some(DenormalMode::Preserve);
+        }
+        result
     }
 
     fn from_arith_float(arith: &ast::ArithFloat) -> InstructionModes {
@@ -205,12 +221,25 @@ impl InstructionModes {
         )
     }
 
-    fn from_rcp(data: ast::RcpData) -> InstructionModes {
+    fn from_rtz_special(data: ast::RcpData) -> InstructionModes {
         let rounding = match data.kind {
             ast::RcpKind::Approx => None,
             ast::RcpKind::Compliant(rnd) => Some(RoundingMode::from_ast(rnd)),
         };
-        let denormal = data.flush_to_zero.map(DenormalMode::from_ftz);
+        let denormal = match (
+            data.kind == ast::RcpKind::Approx,
+            data.flush_to_zero == Some(true),
+        ) {
+            // If we are approximate and flushing then we compile to V_RSQ_F32
+            // or V_SQRT_F32 which ignores prevailing denormal mode and flushes anyway
+            (true, true) => None,
+            // If we are approximate and flushing the V_RSQ_F32/V_SQRT_F32
+            // ignores ftz mode, but we implement instruction in terms of fmuls
+            // which must preserve denormals
+            (true, false) => Some(DenormalMode::Preserve),
+            // For full precision we set denormal mode accordingly
+            (false, ftz) => Some(DenormalMode::from_ftz(ftz)),
+        };
         InstructionModes::new(data.type_, denormal, rounding)
     }
 
@@ -220,31 +249,52 @@ impl InstructionModes {
             | ast::CvtMode::SignExtend
             | ast::CvtMode::Truncate
             | ast::CvtMode::Bitcast
-            | ast::CvtMode::SaturateUnsignedToSigned
-            | ast::CvtMode::SaturateSignedToUnsigned => Self::none(),
-            ast::CvtMode::FPExtend { flush_to_zero } => {
-                Self::from_ftz(ast::ScalarType::F32, flush_to_zero)
-            }
+            | ast::CvtMode::IntSaturateToSigned
+            | ast::CvtMode::IntSaturateToUnsigned => Self::none(),
+            ast::CvtMode::FPExtend { flush_to_zero, .. } => Self::from_typed_denormal(
+                cvt.from,
+                cvt.to,
+                flush_to_zero
+                    .map(DenormalMode::from_ftz)
+                    .unwrap_or(DenormalMode::Preserve),
+            ),
             ast::CvtMode::FPTruncate {
                 rounding,
                 flush_to_zero,
+                is_integer_rounding,
+                ..
+            } => {
+                let denormal_mode = match (is_integer_rounding, flush_to_zero) {
+                    (true, Some(true)) => DenormalMode::FlushToZero,
+                    _ => DenormalMode::Preserve,
+                };
+                Self::from_typed_denormal_rounding(
+                    cvt.from,
+                    cvt.to,
+                    denormal_mode,
+                    RoundingMode::from_ast(rounding),
+                )
             }
-            | ast::CvtMode::FPRound {
-                integer_rounding: rounding,
-                flush_to_zero,
-            } => Self::mixed_ftz_f32(
+            ast::CvtMode::FPRound { flush_to_zero, .. } => Self::from_typed_denormal(
+                cvt.from,
                 cvt.to,
-                flush_to_zero.map(DenormalMode::from_ftz),
-                Some(RoundingMode::from_ast(rounding)),
+                flush_to_zero
+                    .map(DenormalMode::from_ftz)
+                    .unwrap_or(DenormalMode::Preserve),
             ),
             // float to int contains rounding field, but it's not a rounding
             // mode but rather round-to-int operation that will be applied
             ast::CvtMode::SignedFromFP { flush_to_zero, .. }
-            | ast::CvtMode::UnsignedFromFP { flush_to_zero, .. } => {
-                Self::new(cvt.from, flush_to_zero.map(DenormalMode::from_ftz), None)
-            }
-            ast::CvtMode::FPFromSigned(rnd) | ast::CvtMode::FPFromUnsigned(rnd) => {
-                Self::new(cvt.to, None, Some(RoundingMode::from_ast(rnd)))
+            | ast::CvtMode::UnsignedFromFP { flush_to_zero, .. } => Self::from_typed_denormal(
+                cvt.from,
+                cvt.from,
+                flush_to_zero
+                    .map(DenormalMode::from_ftz)
+                    .unwrap_or(DenormalMode::Preserve),
+            ),
+            ast::CvtMode::FPFromSigned { rounding, .. }
+            | ast::CvtMode::FPFromUnsigned { rounding, .. } => {
+                Self::new(cvt.to, None, Some(RoundingMode::from_ast(rounding)))
             }
         }
     }
@@ -1743,6 +1793,11 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
     match inst {
         // TODO: review it when implementing virtual calls
         ast::Instruction::Call { .. }
+        // abs and neg have special handling in AMD GPU ISA. They get compiled
+        // down to instruction argument modifiers, floating point flags have no
+        // effect on it. We handle it during LLVM bitcode emission
+        | ast::Instruction::Abs { .. }
+        | ast::Instruction::Neg {.. }
         | ast::Instruction::Mov { .. }
         | ast::Instruction::Ld { .. }
         | ast::Instruction::St { .. }
@@ -1763,13 +1818,21 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::Bfe { .. }
         | ast::Instruction::Bfi { .. }
         | ast::Instruction::Shr { .. }
+        | ast::Instruction::ShflSync { .. }
+        | ast::Instruction::CpAsync { .. }
+        | ast::Instruction::CpAsyncCommitGroup { .. }
+        | ast::Instruction::CpAsyncWaitGroup { .. }
+        | ast::Instruction::CpAsyncWaitAll { .. }
+        | ast::Instruction::Shf { .. }
         | ast::Instruction::Shl { .. }
         | ast::Instruction::Selp { .. }
         | ast::Instruction::Ret { .. }
         | ast::Instruction::Bar { .. }
+        | ast::Instruction::BarRed { .. }
         | ast::Instruction::Cvta { .. }
         | ast::Instruction::Atom { .. }
         | ast::Instruction::Mul24 { .. }
+        | ast::Instruction::Nanosleep { .. }
         | ast::Instruction::AtomCas { .. } => InstructionModes::none(),
         ast::Instruction::Add {
             data: ast::ArithDetails::Integer(_),
@@ -1816,7 +1879,31 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
             data: ast::ArithDetails::Float(data),
             ..
         } => InstructionModes::from_arith_float(data),
-        ast::Instruction::Setp {
+        ast::Instruction::Set {
+            data: ast::SetData{
+                base: ast::SetpData {
+                    type_,
+                    flush_to_zero,
+                    ..
+                },
+                ..
+            },
+            ..
+        }
+        | ast::Instruction::SetBool {
+            data: ast::SetBoolData {
+                base: ast::SetpBoolData {
+                    base: ast::SetpData {
+                        type_,
+                        flush_to_zero,
+                            ..
+                        },
+                    ..
+                },
+            ..
+            }, ..
+        }
+        | ast::Instruction::Setp {
             data:
                 ast::SetpData {
                     type_,
@@ -1838,34 +1925,6 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
                 },
             ..
         }
-        | ast::Instruction::Neg {
-            data: ast::TypeFtz {
-                type_,
-                flush_to_zero,
-            },
-            ..
-        }
-        | ast::Instruction::Ex2 {
-            data: ast::TypeFtz {
-                type_,
-                flush_to_zero,
-            },
-            ..
-        }
-        | ast::Instruction::Rsqrt {
-            data: ast::TypeFtz {
-                type_,
-                flush_to_zero,
-            },
-            ..
-        }
-        | ast::Instruction::Abs {
-            data: ast::TypeFtz {
-                type_,
-                flush_to_zero,
-            },
-            ..
-        }
         | ast::Instruction::Min {
             data:
                 ast::MinMaxDetails::Float(ast::MinMaxFloat {
@@ -1883,23 +1942,51 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
                     ..
                 }),
             ..
-        }
-        | ast::Instruction::Div {
+        } => InstructionModes::from_ftz(*type_, *flush_to_zero),
+        ast::Instruction::Div {
             data:
                 ast::DivDetails::Float(ast::DivFloatDetails {
                     type_,
                     flush_to_zero,
-                    ..
+                    kind,
                 }),
             ..
-        } => InstructionModes::from_ftz(*type_, *flush_to_zero),
-        ast::Instruction::Sin { data, .. }
-        | ast::Instruction::Cos { data, .. }
-        | ast::Instruction::Lg2 { data, .. } => InstructionModes::from_ftz_f32(data.flush_to_zero),
-        ast::Instruction::Rcp { data, .. } | ast::Instruction::Sqrt { data, .. } => {
-            InstructionModes::from_rcp(*data)
+        } => {
+            let rounding = match kind {
+                ast::DivFloatKind::Rounding(rnd) => RoundingMode::from_ast(*rnd),
+                ast::DivFloatKind::Approx => RoundingMode::NearestEven,
+                ast::DivFloatKind::ApproxFull => RoundingMode::NearestEven,
+            };
+            InstructionModes::new(
+                *type_,
+                flush_to_zero.map(DenormalMode::from_ftz),
+                Some(rounding),
+            )
         }
+        ast::Instruction::Sin { data, .. }
+        | ast::Instruction::Cos { data, .. } => InstructionModes::from_ftz_f32(data.flush_to_zero),
+        ast::Instruction::Rcp { data, .. } | ast::Instruction::Sqrt { data, .. } => {
+            InstructionModes::from_rtz_special(*data)
+        }
+        ast::Instruction::Rsqrt { data, .. }
+        | ast::Instruction::Ex2 { data, .. } => {
+            let data = ast::RcpData {
+                type_: data.type_,
+                flush_to_zero: data.flush_to_zero,
+                kind: ast::RcpKind::Approx,
+            };
+            InstructionModes::from_rtz_special(data)
+        },
+        ast::Instruction::Lg2 { data, .. } => {
+            let data = ast::RcpData {
+                type_: ast::ScalarType::F32,
+                flush_to_zero: Some(data.flush_to_zero),
+                kind: ast::RcpKind::Approx,
+            };
+            InstructionModes::from_rtz_special(data)
+        },
         ast::Instruction::Cvt { data, .. } => InstructionModes::from_cvt(data),
+        ast::Instruction::Tanh { data, .. } => InstructionModes::from_ftz(*data, Some(false)),
     }
 }
 
