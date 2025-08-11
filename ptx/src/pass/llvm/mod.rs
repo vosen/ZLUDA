@@ -2,11 +2,13 @@ pub(super) mod attributes;
 pub(super) mod emit;
 
 use std::ffi::CStr;
+use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::ptr;
 
 use crate::pass::*;
 use llvm_zluda::analysis::{LLVMVerifierFailureAction, LLVMVerifyModule};
+use llvm_zluda::bit_reader::LLVMParseBitcodeInContext2;
 use llvm_zluda::bit_writer::LLVMWriteBitcodeToMemoryBuffer;
 use llvm_zluda::core::*;
 use llvm_zluda::prelude::*;
@@ -86,6 +88,24 @@ impl Drop for Module {
     }
 }
 
+impl From<MemoryBuffer> for Module {
+    fn from(memory_buffer: MemoryBuffer) -> Self {
+        let context = Context::new();
+        let mut module: MaybeUninit<LLVMModuleRef> = MaybeUninit::uninit();
+        unsafe {
+            LLVMParseBitcodeInContext2(context.get(), memory_buffer.get(), module.as_mut_ptr());
+        }
+        let module = unsafe { module.assume_init() };
+        Self(module)
+    }
+}
+
+pub fn bitcode_to_ir(bitcode: Vec<u8>) -> Vec<u8> {
+    let memory_buffer: MemoryBuffer = bitcode.into();
+    let module: Module = memory_buffer.into();
+    module.print_module_to_string().to_bytes().to_vec()
+}
+
 pub struct Message(&'static CStr);
 
 impl Drop for Message {
@@ -103,11 +123,21 @@ impl std::fmt::Debug for Message {
 }
 
 impl Message {
+    pub fn to_bytes(&self) -> &[u8] {
+        self.0.to_bytes()
+    }
+    
     pub fn to_str(&self) -> &str {
         self.0.to_str().unwrap().trim()
     }
 }
 pub struct MemoryBuffer(LLVMMemoryBufferRef);
+
+impl MemoryBuffer {
+    fn get(&self) -> LLVMMemoryBufferRef {
+        self.0
+    }
+}
 
 impl Drop for MemoryBuffer {
     fn drop(&mut self) {
@@ -124,6 +154,26 @@ impl Deref for MemoryBuffer {
         let data = unsafe { LLVMGetBufferStart(self.0) };
         let len = unsafe { LLVMGetBufferSize(self.0) };
         unsafe { std::slice::from_raw_parts(data.cast(), len) }
+    }
+}
+
+impl From<Vec<i8>> for MemoryBuffer {
+    fn from(value: Vec<i8>) -> Self {
+        let memory_buffer: LLVMMemoryBufferRef = unsafe {
+            LLVMCreateMemoryBufferWithMemoryRangeCopy(
+                value.as_ptr(),
+                value.len(),
+                ptr::null()
+            )
+        };
+        Self(memory_buffer)
+    }
+}
+
+impl From<Vec<u8>> for MemoryBuffer {
+    fn from(value: Vec<u8>) -> Self {
+        let value: Vec<i8> = value.iter().map(|&v| i8::from_ne_bytes([v])).collect();
+        value.into()
     }
 }
 

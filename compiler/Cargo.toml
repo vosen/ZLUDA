@@ -17,3 +17,6 @@ hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
 ptx = { path = "../ptx" }
 ptx_parser = { path = "../ptx_parser" }
 thiserror = "2.0.12"
+
+[package.metadata.zluda]
+debug_only = true

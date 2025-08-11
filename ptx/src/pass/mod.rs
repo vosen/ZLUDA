@@ -19,7 +19,7 @@ mod insert_explicit_load_store;
 mod insert_implicit_conversions2;
 mod insert_post_saturation;
 mod instruction_mode_to_global_mode;
-mod llvm;
+pub mod llvm;
 mod normalize_basic_blocks;
 mod normalize_identifiers2;
 mod normalize_predicates2;
