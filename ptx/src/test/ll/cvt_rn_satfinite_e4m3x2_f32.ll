@@ -1,4 +1,4 @@
-declare i16 @__zluda_ptx_impl_cvt_f32_to_e4m3_satfinite(float, float) #0
+declare i16 @__zluda_ptx_impl_cvt_rn_satfinite_e4m3x2_f32(float, float) #0
 
 define amdgpu_kernel void @cvt_rn_satfinite_e4m3x2_f32(ptr addrspace(4) byref(i64) %"34", ptr addrspace(4) byref(i64) %"35") #1 {
   %"36" = alloca i64, align 8, addrspace(5)
@@ -27,7 +27,7 @@ define amdgpu_kernel void @cvt_rn_satfinite_e4m3x2_f32(ptr addrspace(4) byref(i6
   store float %"46", ptr addrspace(5) %"39", align 4
   %"48" = load float, ptr addrspace(5) %"38", align 4
   %"49" = load float, ptr addrspace(5) %"39", align 4
-  %"54" = call i16 @__zluda_ptx_impl_cvt_f32_to_e4m3_satfinite(float %"48", float %"49")
+  %"54" = call i16 @__zluda_ptx_impl_cvt_rn_satfinite_e4m3x2_f32(float %"48", float %"49")
   store i16 %"54", ptr addrspace(5) %"40", align 2
   %"50" = load i64, ptr addrspace(5) %"37", align 8
   %"51" = load i16, ptr addrspace(5) %"40", align 2

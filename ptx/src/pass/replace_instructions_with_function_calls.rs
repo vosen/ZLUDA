@@ -195,8 +195,8 @@ fn run_instruction<'input>(
             arguments: _,
         } => {
             let to = match to {
-                ptx_parser::ScalarType::E4m3x2 => "e4m3",
-                ptx_parser::ScalarType::E5m2x2 => "e5m2",
+                ptx_parser::ScalarType::E4m3x2 => "e4m3x2",
+                ptx_parser::ScalarType::E5m2x2 => "e5m2x2",
                 _ => unreachable!(),
             };
             // Conversions from f32 to f8 must have two source arguments.
@@ -204,7 +204,7 @@ fn run_instruction<'input>(
             to_call(
                 resolver,
                 fn_declarations,
-                format!("cvt_f32_to_{}_satfinite", to).into(),
+                format!("cvt_rn_satfinite_{}_f32", to).into(),
                 i,
             )?
         }
@@ -225,7 +225,7 @@ fn run_instruction<'input>(
             to_call(
                 resolver,
                 fn_declarations,
-                format!("cvt_{}_to_f16x2", from).into(),
+                format!("cvt_rn_f16x2_{}", from).into(),
                 i,
             )?
         }

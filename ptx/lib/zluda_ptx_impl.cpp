@@ -340,7 +340,7 @@ extern "C"
             return value;
     }
 
-    __hip_fp8x2_e4m3 FUNC(cvt_f32_to_e4m3_satfinite)(float a, float b)
+    __hip_fp8x2_e4m3 FUNC(cvt_rn_satfinite_e4m3x2_f32)(float a, float b)
     {
         // If built-in support for fp8 formats is added to LLVM IR we should switch to use that.
         // __hip_fp8x2_e4m3 defaults to using __HIP_SATFINITE
@@ -348,18 +348,18 @@ extern "C"
                        a);
     }
 
-    __hip_fp8x2_e5m2 FUNC(cvt_f32_to_e5m2_satfinite)(float a, float b)
+    __hip_fp8x2_e5m2 FUNC(cvt_rn_satfinite_e5m2x2_f32)(float a, float b)
     {
         return float2(b,
                        a);
     }
 
-    __half2 FUNC(cvt_e4m3x2_to_f16x2)(__hip_fp8x2_e4m3 in)
+    __half2 FUNC(cvt_rn_f16x2_e4m3x2)(__hip_fp8x2_e4m3 in)
     {
         return in;
     }
 
-    __half2 FUNC(cvt_e5m2x2_to_f16x2)(__hip_fp8x2_e5m2 in)
+    __half2 FUNC(cvt_rn_f16x2_e5m2x2)(__hip_fp8x2_e5m2 in)
     {
         return in;
     }

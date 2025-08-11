@@ -1,4 +1,4 @@
-declare i32 @__zluda_ptx_impl_cvt_e4m3x2_to_f16x2(i16) #0
+declare i32 @__zluda_ptx_impl_cvt_rn_f16x2_e4m3x2(i16) #0
 
 define amdgpu_kernel void @cvt_rn_f16x2_e4m3x2(ptr addrspace(4) byref(i64) %"31", ptr addrspace(4) byref(i64) %"32") #1 {
   %"33" = alloca i64, align 8, addrspace(5)
@@ -20,7 +20,7 @@ define amdgpu_kernel void @cvt_rn_f16x2_e4m3x2(ptr addrspace(4) byref(i64) %"31"
   %"39" = load i16, ptr %"45", align 2
   store i16 %"39", ptr addrspace(5) %"35", align 2
   %"42" = load i16, ptr addrspace(5) %"35", align 2
-  %"46" = call i32 @__zluda_ptx_impl_cvt_e4m3x2_to_f16x2(i16 %"42")
+  %"46" = call i32 @__zluda_ptx_impl_cvt_rn_f16x2_e4m3x2(i16 %"42")
   store i32 %"46", ptr addrspace(5) %"36", align 4
   %"43" = load i64, ptr addrspace(5) %"34", align 8
   %"44" = load i32, ptr addrspace(5) %"36", align 4
