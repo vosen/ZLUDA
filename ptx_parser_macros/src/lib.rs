@@ -416,7 +416,9 @@ fn emit_enum_types(
                     if let Some(enum_) = existing_enums.get_mut(ident) {
                         enum_.variants.extend(variants.into_iter().map(|modifier| {
                             let ident = modifier.variant_capitalized();
+                            let m_string = format!("{}", modifier);
                             let variant: syn::Variant = syn::parse_quote! {
+                                #[display(#m_string)]
                                 #ident
                             };
                             variant
@@ -1050,6 +1052,7 @@ pub fn generate_instruction_type(tokens: proc_macro::TokenStream) -> proc_macro:
     let mut result = proc_macro2::TokenStream::new();
     input.emit_arg_types(&mut result);
     input.emit_instruction_type(&mut result);
+    input.emit_instruction_display(&mut result);
     input.emit_visit(&mut result);
     input.emit_visit_mut(&mut result);
     input.emit_visit_map(&mut result);

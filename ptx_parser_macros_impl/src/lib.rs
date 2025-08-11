@@ -35,6 +35,32 @@ impl GenerateInstructionType {
         .to_tokens(tokens);
     }
 
+    pub fn emit_instruction_display(&self, tokens: &mut TokenStream) {
+        let type_name = &self.name;
+        let type_parameters = &self.type_parameters;
+        let type_arguments = self.type_parameters.iter().map(|p| p.ident.clone());
+        let variants = self
+            .variants
+            .iter()
+            .map(|v| v.emit_display(&self.name))
+            .filter_map(|v| v);
+        quote! {
+            impl<#type_parameters> std::fmt::Display for #type_name<#(#type_arguments),*>
+            where
+                T: std::fmt::Display,
+                <T as Operand>::Ident: std::fmt::Display
+            {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    match self {
+                        #(#variants),*
+                    }
+                    Ok(())
+                }
+            }
+        }
+        .to_tokens(tokens);
+    }
+
     pub fn emit_visit(&self, tokens: &mut TokenStream) {
         self.emit_visit_impl(VisitKind::Ref, tokens, InstructionVariant::emit_visit)
     }
@@ -163,6 +189,7 @@ pub struct InstructionVariant {
     pub arguments: Option<Arguments>,
     pub visit: Option<Expr>,
     pub visit_mut: Option<Expr>,
+    pub display: Option<Expr>,
     pub map: Option<Expr>,
 }
 
@@ -212,6 +239,38 @@ impl InstructionVariant {
         quote! {
             #name { #data #arguments }
         }
+    }
+
+    fn emit_display(&self, enum_: &Ident) -> Option<TokenStream> {
+        let name = &self.name;
+        let enum_ = enum_;
+        let arguments = self.arguments.as_ref().map(|_| quote! { arguments });
+        let data = &self.data.as_ref().map(|_| quote! { data,});
+
+        let display_op = self
+            .display
+            .as_ref()
+            .map(|d| quote! {#d})
+            .unwrap_or(quote! { write!(f, "<{}>", stringify!(#name))? });
+
+        let display_arguments = match &self.arguments {
+            None => quote! {},
+            Some(Arguments::Decl(_)) => quote! {},
+            Some(Arguments::Def(args)) => {
+                let display = args.emit_display();
+                quote! {
+                    write!(f, " ")?;
+                    #display
+                }
+            }
+        };
+
+        Some(quote! {
+            instr @ #enum_ :: #name { #data #arguments } => {
+                #display_op;
+                #display_arguments;
+            }
+        })
     }
 
     fn emit_visit(&self, enum_: &Ident, tokens: &mut TokenStream) {
@@ -332,6 +391,7 @@ impl Parse for InstructionVariant {
         let mut arguments = None;
         let mut visit = None;
         let mut visit_mut = None;
+        let mut display = None;
         let mut map = None;
         for property in properties {
             match property {
@@ -341,6 +401,7 @@ impl Parse for InstructionVariant {
                 VariantProperty::Arguments(a) => arguments = Some(a),
                 VariantProperty::Visit(e) => visit = Some(e),
                 VariantProperty::VisitMut(e) => visit_mut = Some(e),
+                VariantProperty::Display(e) => display = Some(e),
                 VariantProperty::Map(e) => map = Some(e),
             }
         }
@@ -352,6 +413,7 @@ impl Parse for InstructionVariant {
             arguments,
             visit,
             visit_mut,
+            display,
             map,
         })
     }
@@ -364,6 +426,7 @@ enum VariantProperty {
     Arguments(Arguments),
     Visit(Expr),
     VisitMut(Expr),
+    Display(Expr),
     Map(Expr),
 }
 
@@ -419,6 +482,10 @@ impl VariantProperty {
                     input.parse::<Token![:]>()?;
                     VariantProperty::VisitMut(input.parse::<Expr>()?)
                 }
+                "display" => {
+                    input.parse::<Token![:]>()?;
+                    VariantProperty::Display(input.parse::<Expr>()?)
+                }
                 "map" => {
                     input.parse::<Token![:]>()?;
                     VariantProperty::Map(input.parse::<Expr>()?)
@@ -459,6 +526,28 @@ impl InstructionArguments {
             ArgumentField::parse,
         )?;
         Ok(Self { generic, fields })
+    }
+
+    fn emit_display(&self) -> TokenStream {
+        let is_ident = if let Some(ref generic) = self.generic {
+            generic.len() > 1
+        } else {
+            false
+        };
+        let fields = self.fields.iter().enumerate().map(|(idx, f)| {
+            let display_field = f.emit_display(is_ident);
+            if idx != 0 {
+                quote! {
+                    write!(f, ", ")?;
+                    #display_field
+                }
+            } else {
+                display_field
+            }
+        });
+        quote! {
+            #(#fields)*
+        }
     }
 
     fn emit_visit(
@@ -571,6 +660,19 @@ impl ArgumentField {
 
     fn parse_basic(input: &syn::parse::ParseBuffer) -> syn::Result<Type> {
         input.parse::<Type>()
+    }
+
+    fn emit_display(&self, is_ident: bool) -> TokenStream {
+        let name = &self.name;
+        if is_ident {
+            quote! {
+                todo!("Handle display for ident");
+            }
+        } else {
+            quote! {
+                VisitOperand::visit(&arguments.#name, |op| write!(f, "{}", op))?;
+            }
+        }
     }
 
     fn emit_visit(
