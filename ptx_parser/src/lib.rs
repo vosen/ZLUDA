@@ -3821,6 +3821,23 @@ mod tests {
     }
 
     #[test]
+    fn report_unknown_instruction_with_braces() {
+        let text = "
+            .version 6.5
+            .target sm_60
+            .address_size 64
+
+            .visible .entry unrecognized_braces(
+            )
+            {
+                mov.u32 foo, {} {};
+                ret;
+            }";
+        let errors = parse_module_checked(text).err().unwrap();
+        assert_eq!(errors, vec![PtxError::UnrecognizedStatement("mov.u32 foo, {} {};")]);
+    }
+
+    #[test]
     fn report_unknown_directive() {
         let text = "
             .version 6.5
