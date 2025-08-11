@@ -16,6 +16,7 @@ cuda_types = { path = "../cuda_types" }
 cuda_macros = { path = "../cuda_macros" }
 hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
 dark_api = { path = "../dark_api" }
+zluda_cache = { path = "../zluda_cache" }
 lazy_static = "1.4"
 num_enum = "0.4"
 lz4-sys = "1.9"
@@ -23,6 +24,9 @@ tempfile = "3"
 paste = "1.0"
 rustc-hash = "1.1"
 zluda_common = { path = "../zluda_common" }
+blake3 = "1.8.2"
+serde = "1.0.219"
+serde_json = "1.0.142"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["heapapi", "std"] }
@@ -30,6 +34,9 @@ winapi = { version = "0.3", features = ["heapapi", "std"] }
 [target.'cfg(not(windows))'.dependencies]
 libc = "0.2"
 dtor = "0.0.7"
+
+[build-dependencies]
+vergen-gix = "1.0.9"
 
 [package.metadata.zluda]
 linux_symlinks = [
