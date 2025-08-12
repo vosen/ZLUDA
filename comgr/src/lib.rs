@@ -196,7 +196,7 @@ pub fn link_bitcode<'a>(
 pub fn compile_bitcode<'a>(
     comgr: &'a Comgr,
     linked_data_set: DataSet,
-    gcn_arch: &'a CStr,
+    gcn_arch: &'a str,
 ) -> Result<DataSet<'a>, Error> {
     let compile_to_exec = ActionInfo::new(comgr)?;
     compile_to_exec.set_isa_name(gcn_arch)?;
@@ -240,7 +240,7 @@ pub fn compile_bitcode<'a>(
 fn disassemble_exec<'a>(
     comgr: &'a Comgr,
     exec_data_set: &'a DataSet,
-    gcn_arch: &'a CStr,
+    gcn_arch: &'a str,
 ) -> Result<DataSet<'a>, Error> {
     let action_info = ActionInfo::new(comgr)?;
     action_info.set_isa_name(gcn_arch)?;
@@ -265,7 +265,7 @@ pub fn get_linked_bitcode_as_bytes(
 
 fn get_executable<'a>(
     comgr: &'a Comgr,
-    gcn_arch: &'a CStr,
+    gcn_arch: &'a str,
     main_buffer: &'a [u8],
     attributes_buffer: &'a [u8],
     ptx_impl: &'a [u8],
@@ -277,7 +277,7 @@ fn get_executable<'a>(
 
 pub fn get_executable_as_bytes(
     comgr: &Comgr,
-    gcn_arch: &CStr,
+    gcn_arch: &str,
     main_buffer: &[u8],
     attributes_buffer: &[u8],
     ptx_impl: &[u8],
@@ -290,7 +290,7 @@ pub fn get_executable_as_bytes(
 
 pub fn get_assembly_as_bytes(
     comgr: &Comgr,
-    gcn_arch: &CStr,
+    gcn_arch: &str,
     main_buffer: &[u8],
     attributes_buffer: &[u8],
     ptx_impl: &[u8],

@@ -141,7 +141,7 @@ fn compile_from_ptx_and_cache(
 ) -> Result<Vec<u8>, CUerror> {
     let ast = ptx_parser::parse_module_checked(text).map_err(|_| CUerror::NO_BINARY_FOR_GPU)?;
     let llvm_module = ptx::to_llvm_module(ast, attributes).map_err(|_| CUerror::UNKNOWN)?;
-    let elf_module = comgr::compile_bitcode(
+    let elf_module = comgr::get_executable_as_bytes(
         comgr,
         gcn_arch,
         &*llvm_module.llvm_ir.write_bitcode_to_memory(),

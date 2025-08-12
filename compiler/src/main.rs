@@ -1,5 +1,5 @@
 use std::{env, mem};
-use std::ffi::{c_char, CStr, CString, OsStr};
+use std::ffi::{CStr, OsStr};
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -104,15 +104,15 @@ struct LLVMArtifacts {
     llvm_ir: Vec<u8>,
 }
 
-fn get_arch() -> Result<CString, CompilerError> {
+fn get_arch() -> Result<String, CompilerError> {
     use hip_runtime_sys::*;
     unsafe { hipInit(0) }?;
     let mut dev_props: hipDeviceProp_tR0600 = unsafe { mem::zeroed() };
     unsafe { hipGetDevicePropertiesR0600(&mut dev_props, 0) }?;
-    let gcnArchName = &dev_props.gcnArchName;
-    let gcnArchName = unsafe { CStr::from_ptr(gcnArchName.as_ptr() as *const c_char) };
-    let gcnArchName = gcnArchName.to_owned();
-    Ok(gcnArchName)
+    let gcn_arch_name = &dev_props.gcnArchName;
+    let gcn_arch_name = unsafe { CStr::from_ptr(gcn_arch_name.as_ptr()) };
+    let gcn_arch_name = gcn_arch_name.to_str();
+    gcn_arch_name.map(String::from).map_err(CompilerError::from)
 }
 
 fn get_linked_bitcode(comgr: &Comgr, llvm: &LLVMArtifacts) -> Result<Vec<u8>, CompilerError> {
