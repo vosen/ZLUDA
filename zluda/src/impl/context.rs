@@ -97,6 +97,15 @@ impl ZludaObject for Context {
     }
 }
 
+pub(crate) fn get_current_device() -> Result<hipDevice_t, CUerror> {
+    STACK.with(|stack| {
+        stack
+            .try_borrow()
+            .map_err(|_| CUerror::UNKNOWN)
+            .and_then(|s| s.last().ok_or(CUerror::UNKNOWN).map(|(_, dev)| *dev))
+    })
+}
+
 pub(crate) fn get_current_context() -> Result<CUcontext, CUerror> {
     if let Some(ctx) = STACK.with(|stack| stack.borrow().last().copied().map(|(ctx, _)| ctx)) {
         return Ok(ctx);

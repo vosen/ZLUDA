@@ -1,5 +1,5 @@
 use amd_comgr_sys::*;
-use std::{ffi::CStr, mem, ptr};
+use std::{ffi::CStr, iter, mem, ptr};
 
 macro_rules! call_dispatch_arg {
     (2, $arg:ident) => {
@@ -105,9 +105,10 @@ comgr_owned!(
 );
 
 impl<'a> ActionInfo<'a> {
-    fn set_isa_name(&self, isa: &CStr) -> Result<(), Error> {
+    fn set_isa_name(&self, isa: &str) -> Result<(), Error> {
         let mut full_isa = "amdgcn-amd-amdhsa--".to_string().into_bytes();
-        full_isa.extend(isa.to_bytes_with_nul());
+        full_isa.extend(isa.as_bytes());
+        full_isa.push(0);
         call_dispatch!(self.comgr => amd_comgr_action_info_set_isa_name(self, { full_isa.as_ptr().cast() }));
         Ok(())
     }
@@ -301,6 +302,48 @@ pub fn get_assembly_as_bytes(
     assembly.copy_content(comgr)
 }
 
+pub fn get_clang_version(comgr: &Comgr) -> Result<String, Error> {
+    let version_string_set = DataSet::new(comgr)?;
+    let version_string = Data::new(
+        comgr,
+        DataKind::Source,
+        c"version.cpp",
+        b"__clang_version__",
+    )?;
+    version_string_set.add(&version_string)?;
+    let preprocessor_info = ActionInfo::new(comgr)?;
+    preprocessor_info.set_language(Language::Hip)?;
+    preprocessor_info.set_options(iter::once(c"-P"))?;
+    let preprocessed = comgr.do_action(
+        ActionKind::SourceToPreprocessor,
+        &preprocessor_info,
+        &version_string_set,
+    )?;
+    let data = preprocessed.get_data(DataKind::Source, 0)?;
+    String::from_utf8(trim_whitespace_and_quotes(data.copy_content(comgr)?)?)
+        .map_err(|_| Error::UNKNOWN)
+}
+
+// When running the preprocessor to expand the macro the output is surrounded by
+// quotes (because it is a string literal) and has a trailing newline.
+// This function is not strictly necessary, but it makes the output cleaner
+fn trim_whitespace_and_quotes(data: Vec<u8>) -> Result<Vec<u8>, Error> {
+    fn is_not_whitespace_or_quote(b: u8) -> bool {
+        !(b.is_ascii_whitespace() || b == b'"')
+    }
+    let prefix_length = data
+        .iter()
+        .copied()
+        .position(is_not_whitespace_or_quote)
+        .ok_or(Error::UNKNOWN)?;
+    let last_letter = data
+        .iter()
+        .copied()
+        .rposition(is_not_whitespace_or_quote)
+        .ok_or(Error::UNKNOWN)?;
+    Ok(data[prefix_length..=last_letter].to_vec())
+}
+
 pub enum Comgr {
     V2(amd_comgr_sys::comgr2::Comgr2),
     V3(amd_comgr_sys::comgr3::Comgr3),
@@ -426,7 +469,8 @@ impl_into!(
     [
         LinkBcToBc => AMD_COMGR_ACTION_LINK_BC_TO_BC,
         CompileSourceToExecutable => AMD_COMGR_ACTION_COMPILE_SOURCE_TO_EXECUTABLE,
-        DisassembleExecutableToSource => AMD_COMGR_ACTION_DISASSEMBLE_EXECUTABLE_TO_SOURCE
+        DisassembleExecutableToSource => AMD_COMGR_ACTION_DISASSEMBLE_EXECUTABLE_TO_SOURCE,
+        SourceToPreprocessor => AMD_COMGR_ACTION_SOURCE_TO_PREPROCESSOR
     ]
 );
 

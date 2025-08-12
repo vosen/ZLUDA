@@ -65,26 +65,95 @@ fn get_ptx(image: *const ::core::ffi::c_void) -> Result<String, CUerror> {
 pub(crate) fn load_hip_module(image: *const std::ffi::c_void) -> Result<hipModule_t, CUerror> {
     let global_state = driver::global_state()?;
     let text = get_ptx(image)?;
-    let ast = ptx_parser::parse_module_checked(&text).map_err(|_| CUerror::NO_BINARY_FOR_GPU)?;
-    let mut dev = 0;
-    unsafe { hipCtxGetDevice(&mut dev) }?;
-    let mut props = unsafe { mem::zeroed() };
-    unsafe { hipGetDevicePropertiesR0600(&mut props, dev) }?;
+    let hip_properties = get_hip_properties()?;
+    let gcn_arch = get_gcn_arch(&hip_properties)?;
     let attributes = ptx::Attributes {
-        clock_rate: props.clockRate as u32,
+        clock_rate: hip_properties.clockRate as u32,
     };
+    let mut cache_with_key = global_state.cache_path.as_ref().and_then(|p| {
+        let cache = zluda_cache::ModuleCache::open(p)?;
+        let key = get_cache_key(global_state, gcn_arch, &text, &attributes)?;
+        Some((cache, key))
+    });
+    let cached_binary = load_cached_binary(&mut cache_with_key);
+    let elf_module = cached_binary.ok_or(CUerror::UNKNOWN).or_else(|_| {
+        compile_from_ptx_and_cache(
+            &global_state.comgr,
+            gcn_arch,
+            attributes,
+            &text,
+            &mut cache_with_key,
+        )
+    })?;
+    let mut hip_module = unsafe { mem::zeroed() };
+    unsafe { hipModuleLoadData(&mut hip_module, elf_module.as_ptr().cast()) }?;
+    Ok(hip_module)
+}
+
+fn get_hip_properties<'a>() -> Result<hipDeviceProp_tR0600, CUerror> {
+    let hip_dev = super::context::get_current_device()?;
+    let mut props = unsafe { mem::zeroed() };
+    unsafe { hipGetDevicePropertiesR0600(&mut props, hip_dev) }?;
+    Ok(props)
+}
+
+fn get_gcn_arch<'a>(props: &'a hipDeviceProp_tR0600) -> Result<&'a str, CUerror> {
+    let gcn_arch = unsafe { CStr::from_ptr(props.gcnArchName.as_ptr()) };
+    gcn_arch.to_str().map_err(|_| CUerror::UNKNOWN)
+}
+
+fn get_cache_key<'a, 'b>(
+    global_state: &'static driver::GlobalState,
+    isa: &'a str,
+    text: &str,
+    attributes: &ptx::Attributes,
+) -> Option<zluda_cache::ModuleKey<'a>> {
+    // Serialization here is deterministic. When marking a type with
+    // #[derive(serde::Serialize)] the derived implementation will just write
+    // fields in the order of their declaration. It's not explictly guaranteed
+    // by serde, but it is the only sensible thing to do, so I feel safe
+    // to rely on it
+    let serialized_attributes = serde_json::to_string(attributes).ok()?;
+    Some(zluda_cache::ModuleKey {
+        hash: blake3::hash(text.as_bytes()).to_hex(),
+        compiler_version: &*global_state.comgr_clang_version,
+        zluda_version: env!("VERGEN_GIT_SHA"),
+        device: isa,
+        backend_key: serialized_attributes,
+        last_access: zluda_cache::ModuleCache::time_now(),
+    })
+}
+
+fn load_cached_binary(
+    cache_with_key: &mut Option<(zluda_cache::ModuleCache, zluda_cache::ModuleKey)>,
+) -> Option<Vec<u8>> {
+    cache_with_key
+        .as_mut()
+        .and_then(|(c, key)| c.get_module_binary(key))
+}
+
+fn compile_from_ptx_and_cache(
+    comgr: &comgr::Comgr,
+    gcn_arch: &str,
+    attributes: ptx::Attributes,
+    text: &str,
+    cache_with_key: &mut Option<(zluda_cache::ModuleCache, zluda_cache::ModuleKey)>,
+) -> Result<Vec<u8>, CUerror> {
+    let ast = ptx_parser::parse_module_checked(text).map_err(|_| CUerror::NO_BINARY_FOR_GPU)?;
     let llvm_module = ptx::to_llvm_module(ast, attributes).map_err(|_| CUerror::UNKNOWN)?;
-    let elf_module = comgr::get_executable_as_bytes(
-        &global_state.comgr,
-        unsafe { CStr::from_ptr(props.gcnArchName.as_ptr()) },
+    let elf_module = comgr::compile_bitcode(
+        comgr,
+        gcn_arch,
         &*llvm_module.llvm_ir.write_bitcode_to_memory(),
         &*llvm_module.attributes_ir.write_bitcode_to_memory(),
         llvm_module.linked_bitcode(),
     )
     .map_err(|_| CUerror::UNKNOWN)?;
-    let mut hip_module = unsafe { mem::zeroed() };
-    unsafe { hipModuleLoadData(&mut hip_module, elf_module.as_ptr().cast()) }?;
-    Ok(hip_module)
+    if let Some((cache, key)) = cache_with_key {
+        key.last_access = zluda_cache::ModuleCache::time_now();
+        cache.insert_module(key, &elf_module);
+    }
+    Ok(elf_module)
 }
 
 pub(crate) fn load_data(module: &mut CUmodule, image: &std::ffi::c_void) -> CUresult {
