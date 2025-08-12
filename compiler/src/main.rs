@@ -1,5 +1,5 @@
 use std::{env, mem};
-use std::ffi::{CStr, CString, OsStr};
+use std::ffi::{c_char, CStr, CString, OsStr};
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -7,6 +7,8 @@ use std::process::ExitCode;
 use std::str::{self, FromStr};
 
 use bpaf::Bpaf;
+
+use comgr::Comgr;
 
 mod error;
 use error::CompilerError;
@@ -31,7 +33,7 @@ pub struct Options {
 }
 
 fn main() -> ExitCode {
-    main_core().map_or(
+    main_core().map_or_else(
         |e| {
             eprintln!("Error: {}", e);
             ExitCode::FAILURE
@@ -42,6 +44,7 @@ fn main() -> ExitCode {
 
 fn main_core() -> Result<(), CompilerError> {
     let opts = options().run();
+    let comgr = comgr::Comgr::new()?;
 
     let output_type = opts.output_type.unwrap_or_default();
 
@@ -63,13 +66,13 @@ fn main_core() -> Result<(), CompilerError> {
     let output = match output_type {
         OutputType::LlvmIr => {
             if opts.linked {
-                get_linked_bitcode(&llvm)?
+                get_linked_bitcode(&comgr, &llvm)?
             } else {
                 llvm.llvm_ir
             }
         }
-        OutputType::Elf => get_elf(&llvm)?,
-        OutputType::Assembly => get_assembly(&llvm)?,
+        OutputType::Elf => get_elf(&comgr, &llvm)?,
+        OutputType::Assembly => get_assembly(&comgr, &llvm)?,
     };
 
     write_to_file(&output, &output_path).map_err(CompilerError::from)?;
@@ -78,15 +81,17 @@ fn main_core() -> Result<(), CompilerError> {
 
 fn ptx_to_llvm(ptx: &str) -> Result<LLVMArtifacts, CompilerError> {
     let ast = ptx_parser::parse_module_checked(ptx).map_err(CompilerError::from)?;
-    let module = ptx::to_llvm_module(ast, ptx::pass::Attributes {
+    let module = ptx::to_llvm_module(ast, ptx::Attributes {
             clock_rate: 2124000,
         }).map_err(CompilerError::from)?;
     let bitcode = module.llvm_ir.write_bitcode_to_memory().to_vec();
     let linked_bitcode = module.linked_bitcode().to_vec();
+    let attributes_bitcode = module.attributes_ir.write_bitcode_to_memory().to_vec();
     let llvm_ir = module.llvm_ir.print_module_to_string().to_bytes().to_vec();
     Ok(LLVMArtifacts {
         bitcode,
         linked_bitcode,
+        attributes_bitcode,
         llvm_ir,
     })
 }
@@ -95,6 +100,7 @@ fn ptx_to_llvm(ptx: &str) -> Result<LLVMArtifacts, CompilerError> {
 struct LLVMArtifacts {
     bitcode: Vec<u8>,
     linked_bitcode: Vec<u8>,
+    attributes_bitcode: Vec<u8>,
     llvm_ir: Vec<u8>,
 }
 
@@ -102,25 +108,28 @@ fn get_arch() -> Result<CString, CompilerError> {
     use hip_runtime_sys::*;
     unsafe { hipInit(0) }?;
     let mut dev_props: hipDeviceProp_tR0600 = unsafe { mem::zeroed() };
-    unsafe { hipGetDevicePropertiesR0600(dev_props.as_mut_ptr(), 0) }?;
-    let dev_props = unsafe { dev_props.assume_init() };
-    CStr::from_bytes_until_nul(&dev_props.gcnArchName)
+    unsafe { hipGetDevicePropertiesR0600(&mut dev_props, 0) }?;
+    let gcnArchName = &dev_props.gcnArchName;
+    let gcnArchName = unsafe { CStr::from_ptr(gcnArchName.as_ptr() as *const c_char) };
+    let gcnArchName = gcnArchName.to_owned();
+    Ok(gcnArchName)
 }
 
-fn get_linked_bitcode(llvm: &LLVMArtifacts) -> Result<Vec<u8>, CompilerError> {
-    let linked_bitcode = comgr::get_linked_bitcode_as_bytes(&llvm.bitcode, &llvm.linked_bitcode)?;
+fn get_linked_bitcode(comgr: &Comgr, llvm: &LLVMArtifacts) -> Result<Vec<u8>, CompilerError> {
+    let linked_bitcode = comgr::get_linked_bitcode_as_bytes(comgr, &llvm.bitcode, &llvm.attributes_bitcode
+        , &llvm.linked_bitcode)?;
     Ok(ptx::bitcode_to_ir(linked_bitcode))
 }
 
-fn get_elf(llvm: &LLVMArtifacts) -> Result<Vec<u8>, CompilerError> {
+fn get_elf(comgr: &Comgr, llvm: &LLVMArtifacts) -> Result<Vec<u8>, CompilerError> {
     let arch = get_arch()?;
-    comgr::get_executable_as_bytes(&arch, &llvm.bitcode, &llvm.linked_bitcode)
+    comgr::get_executable_as_bytes(comgr, &arch, &llvm.bitcode, &llvm.attributes_bitcode, &llvm.linked_bitcode)
         .map_err(CompilerError::from)
 }
 
-fn get_assembly(llvm: &LLVMArtifacts) -> Result<Vec<u8>, CompilerError> {
+fn get_assembly(comgr: &Comgr, llvm: &LLVMArtifacts) -> Result<Vec<u8>, CompilerError> {
     let arch = get_arch()?;
-    comgr::get_assembly_as_bytes(comgr, &arch, &llvm.bitcode, &llvm.linked_bitcode)
+    comgr::get_assembly_as_bytes(comgr, &arch, &llvm.bitcode, &llvm.attributes_bitcode, &llvm.linked_bitcode)
         .map_err(CompilerError::from)
 }
 

@@ -2,17 +2,16 @@ use std::ffi::FromBytesUntilNulError;
 use std::io;
 use std::str::Utf8Error;
 
-use amd_comgr_sys::amd_comgr_status_s;
 use hip_runtime_sys::hipErrorCode_t;
-use ptx::TranslateError;
 use ptx_parser::PtxError;
+use ptx::TranslateError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CompilerError {
     #[error("HIP error code: {0:?}")]
     HipError(hipErrorCode_t),
-    #[error("amd_comgr status code: {0:?}")]
-    ComgrError(amd_comgr_status_s),
+    #[error(transparent)]
+    ComgrError(#[from] comgr::Error),
     #[error(transparent)]
     IoError(#[from] io::Error),
     #[error(transparent)]
@@ -33,12 +32,6 @@ impl From<hipErrorCode_t> for CompilerError {
     }
 }
 
-impl From<amd_comgr_status_s> for CompilerError {
-    fn from(error_code: amd_comgr_status_s) -> Self {
-        CompilerError::ComgrError(error_code)
-    }
-}
-
 impl From<Vec<PtxError<'_>>> for CompilerError {
     fn from(causes: Vec<PtxError>) -> Self {
         let errors: Vec<String> = causes
@@ -46,7 +39,7 @@ impl From<Vec<PtxError<'_>>> for CompilerError {
             .map(|e| {
                 let msg = match e {
                     PtxError::UnrecognizedStatement(value)
-                    | PtxError::UnrecognizedDirective(value) => value.unwrap_or("").to_string(),
+                    | PtxError::UnrecognizedDirective(value) => value.to_string(),
                     other => other.to_string(),
                 };
                 format!("PtxError::{}: {}", e.as_ref(), msg)

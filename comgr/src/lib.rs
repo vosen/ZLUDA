@@ -359,7 +359,8 @@ impl Comgr {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
+#[error("Comgr error: {0:?}")]
 pub struct Error(pub ::std::num::NonZeroU32);
 
 impl Error {
