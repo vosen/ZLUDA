@@ -1344,7 +1344,7 @@ impl<Ident> ast::ParsedOperand<Ident> {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, strum::AsRefStr)]
 pub enum PtxError<'input> {
     #[error("{source}")]
     ParseInt {

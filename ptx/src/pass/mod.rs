@@ -19,7 +19,7 @@ mod insert_explicit_load_store;
 mod insert_implicit_conversions2;
 mod insert_post_saturation;
 mod instruction_mode_to_global_mode;
-mod llvm;
+pub mod llvm;
 mod normalize_basic_blocks;
 mod normalize_identifiers2;
 mod normalize_predicates2;
@@ -32,7 +32,7 @@ static ZLUDA_PTX_IMPL: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.
 const ZLUDA_PTX_PREFIX: &'static str = "__zluda_ptx_impl_";
 
 quick_error! {
-    #[derive(Debug)]
+    #[derive(Debug, strum_macros::AsRefStr)]
     pub enum TranslateError {
         UnknownSymbol(symbol: String) {
             display("Unknown symbol: \"{}\"", symbol)

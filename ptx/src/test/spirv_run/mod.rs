@@ -649,6 +649,7 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
             &*module.llvm_ir.write_bitcode_to_memory(),
             &*module.attributes_ir.write_bitcode_to_memory(),
             module.linked_bitcode(),
+            None,
         )
         .unwrap();
         let mut module = unsafe { mem::zeroed() };

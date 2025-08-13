@@ -2,11 +2,13 @@ pub(super) mod attributes;
 pub(super) mod emit;
 
 use std::ffi::CStr;
+use std::mem;
 use std::ops::Deref;
 use std::ptr;
 
 use crate::pass::*;
 use llvm_zluda::analysis::{LLVMVerifierFailureAction, LLVMVerifyModule};
+use llvm_zluda::bit_reader::LLVMParseBitcodeInContext2;
 use llvm_zluda::bit_writer::LLVMWriteBitcodeToMemoryBuffer;
 use llvm_zluda::core::*;
 use llvm_zluda::prelude::*;
@@ -86,6 +88,20 @@ impl Drop for Module {
     }
 }
 
+pub fn bitcode_to_ir(bitcode: Vec<u8>) -> Vec<u8> {
+    let bitcode: Vec<i8> = bitcode.iter().map(|&v| i8::from_ne_bytes([v])).collect();
+    let memory_buffer: LLVMMemoryBufferRef = unsafe {
+        LLVMCreateMemoryBufferWithMemoryRangeCopy(bitcode.as_ptr(), bitcode.len(), ptr::null())
+    };
+    let context = Context::new();
+    let mut module: LLVMModuleRef = unsafe { mem::zeroed() };
+    unsafe {
+        LLVMParseBitcodeInContext2(context.get(), memory_buffer, &mut module);
+    }
+    let module = Module(module);
+    module.print_module_to_string().to_bytes().to_vec()
+}
+
 pub struct Message(&'static CStr);
 
 impl Drop for Message {
@@ -103,6 +119,10 @@ impl std::fmt::Debug for Message {
 }
 
 impl Message {
+    pub fn to_bytes(&self) -> &[u8] {
+        self.0.to_bytes()
+    }
+
     pub fn to_str(&self) -> &str {
         self.0.to_str().unwrap().trim()
     }

@@ -1,0 +1,22 @@
+[package]
+name = "compiler"
+description = "ZLUDA offline compiler"
+version = "0.0.0"
+authors = ["Joëlle van Essen <joelle@v-essen.nl>"]
+edition = "2021"
+
+[[bin]]
+name = "zoc"
+path = "src/main.rs"
+
+[dependencies]
+amd_comgr-sys = { path = "../ext/amd_comgr-sys" }
+bpaf = { version = "0.9.19", features = ["derive"] }
+comgr = { path = "../comgr" }
+hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
+ptx = { path = "../ptx" }
+ptx_parser = { path = "../ptx_parser" }
+thiserror = "2.0.12"
+
+[package.metadata.zluda]
+debug_only = true
