@@ -1,7 +1,7 @@
-use std::{env, mem};
-use std::ffi::{CStr, OsStr};
+use std::ffi::CStr;
 use std::fs::{self, File};
 use std::io::{self, Write};
+use std::mem;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::str::{self, FromStr};
@@ -12,6 +12,8 @@ use comgr::Comgr;
 
 mod error;
 use error::CompilerError;
+
+const DEFAULT_ARCH: &'static str = "gfx1100";
 
 #[derive(Debug, Clone, Bpaf)]
 #[bpaf(options, version)]
@@ -27,19 +29,21 @@ pub struct Options {
     /// Output path
     output_path: Option<PathBuf>,
 
+    #[bpaf(long("arch"))]
+    /// Target architecture
+    arch: Option<String>,
+
     #[bpaf(positional("filename"))]
     /// PTX file
     ptx_path: String,
 }
 
 fn main() -> ExitCode {
-    main_core().map_or_else(
-        |e| {
-            eprintln!("Error: {}", e);
-            ExitCode::FAILURE
-        },
-        |_| ExitCode::SUCCESS,
-    )
+    if let Err(e) = main_core() {
+        eprintln!("Error: {}", e);
+        return ExitCode::FAILURE;
+    }
+    ExitCode::SUCCESS
 }
 
 fn main_core() -> Result<(), CompilerError> {
@@ -56,7 +60,12 @@ fn main_core() -> Result<(), CompilerError> {
 
     let output_path = match opts.output_path {
         Some(value) => value,
-        None => get_output_path(&ptx_path, &output_type)?,
+        None => ptx_path.with_extension(output_type.extension()),
+    };
+
+    let arch: String = match opts.arch {
+        Some(s) => s,
+        None => get_gpu_arch().map(String::from).unwrap_or(DEFAULT_ARCH.to_owned())
     };
 
     let ptx = fs::read(&ptx_path).map_err(CompilerError::from)?;
@@ -71,8 +80,8 @@ fn main_core() -> Result<(), CompilerError> {
                 llvm.llvm_ir
             }
         }
-        OutputType::Elf => get_elf(&comgr, &llvm)?,
-        OutputType::Assembly => get_assembly(&comgr, &llvm)?,
+        OutputType::Elf => get_elf(&comgr, &llvm, &arch)?,
+        OutputType::Assembly => get_assembly(&comgr, &llvm, &arch)?,
     };
 
     write_to_file(&output, &output_path).map_err(CompilerError::from)?;
@@ -81,9 +90,13 @@ fn main_core() -> Result<(), CompilerError> {
 
 fn ptx_to_llvm(ptx: &str) -> Result<LLVMArtifacts, CompilerError> {
     let ast = ptx_parser::parse_module_checked(ptx).map_err(CompilerError::from)?;
-    let module = ptx::to_llvm_module(ast, ptx::Attributes {
+    let module = ptx::to_llvm_module(
+        ast,
+        ptx::Attributes {
             clock_rate: 2124000,
-        }).map_err(CompilerError::from)?;
+        },
+    )
+    .map_err(CompilerError::from)?;
     let bitcode = module.llvm_ir.write_bitcode_to_memory().to_vec();
     let linked_bitcode = module.linked_bitcode().to_vec();
     let attributes_bitcode = module.attributes_ir.write_bitcode_to_memory().to_vec();
@@ -104,7 +117,7 @@ struct LLVMArtifacts {
     llvm_ir: Vec<u8>,
 }
 
-fn get_arch() -> Result<String, CompilerError> {
+fn get_gpu_arch() -> Result<&'static str, CompilerError> {
     use hip_runtime_sys::*;
     unsafe { hipInit(0) }?;
     let mut dev_props: hipDeviceProp_tR0600 = unsafe { mem::zeroed() };
@@ -112,37 +125,39 @@ fn get_arch() -> Result<String, CompilerError> {
     let gcn_arch_name = &dev_props.gcnArchName;
     let gcn_arch_name = unsafe { CStr::from_ptr(gcn_arch_name.as_ptr()) };
     let gcn_arch_name = gcn_arch_name.to_str();
-    gcn_arch_name.map(String::from).map_err(CompilerError::from)
+    gcn_arch_name.map_err(CompilerError::from)
 }
 
 fn get_linked_bitcode(comgr: &Comgr, llvm: &LLVMArtifacts) -> Result<Vec<u8>, CompilerError> {
-    let linked_bitcode = comgr::get_linked_bitcode_as_bytes(comgr, &llvm.bitcode, &llvm.attributes_bitcode
-        , &llvm.linked_bitcode)?;
+    let linked_bitcode = comgr::get_linked_bitcode_as_bytes(
+        comgr,
+        &llvm.bitcode,
+        &llvm.attributes_bitcode,
+        &llvm.linked_bitcode,
+    )?;
     Ok(ptx::bitcode_to_ir(linked_bitcode))
 }
 
-fn get_elf(comgr: &Comgr, llvm: &LLVMArtifacts) -> Result<Vec<u8>, CompilerError> {
-    let arch = get_arch()?;
-    comgr::get_executable_as_bytes(comgr, &arch, &llvm.bitcode, &llvm.attributes_bitcode, &llvm.linked_bitcode)
-        .map_err(CompilerError::from)
+fn get_elf(comgr: &Comgr, llvm: &LLVMArtifacts, arch: &str) -> Result<Vec<u8>, CompilerError> {
+    comgr::get_executable_as_bytes(
+        comgr,
+        &arch,
+        &llvm.bitcode,
+        &llvm.attributes_bitcode,
+        &llvm.linked_bitcode,
+    )
+    .map_err(CompilerError::from)
 }
 
-fn get_assembly(comgr: &Comgr, llvm: &LLVMArtifacts) -> Result<Vec<u8>, CompilerError> {
-    let arch = get_arch()?;
-    comgr::get_assembly_as_bytes(comgr, &arch, &llvm.bitcode, &llvm.attributes_bitcode, &llvm.linked_bitcode)
-        .map_err(CompilerError::from)
-}
-
-fn get_output_path(ptx_path: &PathBuf, output_type: &OutputType) -> Result<PathBuf, CompilerError> {
-    let current_dir = env::current_dir().map_err(CompilerError::from)?;
-    let output_path = current_dir.join(
-        ptx_path
-            .as_path()
-            .file_stem()
-            .unwrap_or(OsStr::new("output")),
-    );
-    let output_path = output_path.with_extension(output_type.extension());
-    Ok(output_path)
+fn get_assembly(comgr: &Comgr, llvm: &LLVMArtifacts, arch: &str) -> Result<Vec<u8>, CompilerError> {
+    comgr::get_assembly_as_bytes(
+        comgr,
+        &arch,
+        &llvm.bitcode,
+        &llvm.attributes_bitcode,
+        &llvm.linked_bitcode,
+    )
+    .map_err(CompilerError::from)
 }
 
 fn write_to_file(content: &[u8], path: &Path) -> io::Result<()> {
