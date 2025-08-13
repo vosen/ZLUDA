@@ -21,6 +21,7 @@ members = [
     "zluda_bindgen",
     "zluda_blas",
     "zluda_blaslt",
+    "zluda_cache",
     "zluda_common",
     "zluda_dnn",
     "zluda_trace",
@@ -36,9 +37,10 @@ members = [
     "zluda_preload",
     "zluda_redirect",
     "zluda_sparse",
+    "compiler",
 ]
 
-default-members = ["zluda", "zluda_ml", "zluda_inject", "zluda_redirect"]
+default-members = ["zluda", "zluda_ml", "zluda_inject", "zluda_redirect", "compiler"]
 
 [profile.release-lto]
 inherits = "release"

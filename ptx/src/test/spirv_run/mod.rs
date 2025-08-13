@@ -312,6 +312,28 @@ test_ptx!(div_ftz, [0x16A2028Du32, 0x5E89F6AE], [0x0, 900636404u32]);
 test_ptx!(div_noftz, [0x16A2028Du32, 0x5E89F6AE], [0x26u32, 900636404u32]);
 
 test_ptx!(nanosleep, [0u64], [0u64]);
+test_ptx!(shf_l, [0x12345678u32, 0x9abcdef0u32, 12], [0xcdef0123u32]);
+test_ptx!(shf_r, [0x12345678u32, 0x9abcdef0u32, 12], [0xef012345u32]);
+test_ptx!(
+    shf_l_clamp,
+    [0x12345678u32, 0x9abcdef0u32, 44],
+    [0x12345678u32]
+);
+test_ptx!(
+    shf_r_clamp,
+    [0x12345678u32, 0x9abcdef0u32, 44],
+    [0x9abcdef0u32]
+);
+test_ptx!(
+    shf_l_wrap,
+    [0x12345678u32, 0x9abcdef0u32, 44],
+    [0xcdef0123u32]
+);
+test_ptx!(
+    shf_r_wrap,
+    [0x12345678u32, 0x9abcdef0u32, 44],
+    [0xef012345u32]
+);
 
 test_ptx!(assertfail);
 // TODO: not yet supported
@@ -631,10 +653,13 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
         unsafe { hipGetDevicePropertiesR0600(&mut dev_props, dev) }.unwrap();
         let elf_module = comgr::compile_bitcode(
             &comgr,
-            unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) },
+            unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) }
+                .to_str()
+                .unwrap(),
             &*module.llvm_ir.write_bitcode_to_memory(),
             &*module.attributes_ir.write_bitcode_to_memory(),
             module.linked_bitcode(),
+            None,
         )
         .unwrap();
         let mut module = unsafe { mem::zeroed() };

@@ -152,26 +152,32 @@ type PtxParser<'a, 'input> =
     Stateful<&'a [(Token<'input>, logos::Span)], PtxParserState<'a, 'input>>;
 
 fn ident<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<&'input str> {
-    any.verify_map(|(t, _)| {
-        if let Token::Ident(text) = t {
-            Some(text)
-        } else if let Some(text) = t.opcode_text() {
-            Some(text)
-        } else {
-            None
-        }
-    })
+    trace(
+        "ident",
+        any.verify_map(|(t, _)| {
+            if let Token::Ident(text) = t {
+                Some(text)
+            } else if let Some(text) = t.opcode_text() {
+                Some(text)
+            } else {
+                None
+            }
+        }),
+    )
     .parse_next(stream)
 }
 
 fn dot_ident<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<&'input str> {
-    any.verify_map(|(t, _)| {
-        if let Token::DotIdent(text) = t {
-            Some(text)
-        } else {
-            None
-        }
-    })
+    trace(
+        "dot_ident",
+        any.verify_map(|(t, _)| {
+            if let Token::DotIdent(text) = t {
+                Some(text)
+            } else {
+                None
+            }
+        }),
+    )
     .parse_next(stream)
 }
 
@@ -308,12 +314,15 @@ fn constant<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::Imme
 }
 
 fn immediate_value<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::ImmediateValue> {
-    alt((
-        int_immediate,
-        f32.map(ast::ImmediateValue::F32),
-        f64.map(ast::ImmediateValue::F64),
-        constant,
-    ))
+    trace(
+        "immediate_value",
+        alt((
+            int_immediate,
+            f32.map(ast::ImmediateValue::F32),
+            f64.map(ast::ImmediateValue::F64),
+            constant,
+        )),
+    )
     .parse_next(stream)
 }
 
@@ -396,18 +405,21 @@ pub fn parse_module_checked<'input>(
 }
 
 fn module<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::Module<'input>> {
-    (
-        version,
-        target,
-        opt(address_size),
-        repeat_without_none(directive),
-        eof,
-    )
-        .map(|(version, _, _, directives, _)| ast::Module {
+    trace(
+        "module",
+        (
             version,
-            directives,
-        })
-        .parse_next(stream)
+            target,
+            opt(address_size),
+            repeat_without_none(directive),
+            eof,
+        )
+            .map(|(version, _, _, directives, _)| ast::Module {
+                version,
+                directives,
+            }),
+    )
+    .parse_next(stream)
 }
 
 fn address_size<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()> {
@@ -440,18 +452,20 @@ fn shader_model<'a>(stream: &mut &str) -> PResult<(u32, Option<char>)> {
 fn directive<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<Option<ast::Directive<'input, ast::ParsedOperand<&'input str>>>> {
-    with_recovery(
-        alt((
-            // When adding a new variant here remember to add its first token into recovery parser down below
-            function.map(|(linking, func)| Some(ast::Directive::Method(linking, func))),
-            file.map(|_| None),
-            section.map(|_| None),
-            (module_variable, Token::Semicolon)
-                .map(|((linking, var), _)| Some(ast::Directive::Variable(linking, var))),
-        )),
-        (
-            any,
-            take_till(1.., |(token, _)| match token {
+    trace(
+        "directive",
+        with_recovery(
+            alt((
+                // When adding a new variant here remember to add its first token into recovery parser down below
+                function.map(|(linking, func)| Some(ast::Directive::Method(linking, func))),
+                file.map(|_| None),
+                section.map(|_| None),
+                (module_variable, Token::Semicolon)
+                    .map(|((linking, var), _)| Some(ast::Directive::Variable(linking, var))),
+            )),
+            (
+                any,
+                take_till(1.., |(token, _)| match token {
             // visibility
             Token::DotExtern | Token::DotVisible | Token::DotWeak
             // methods
@@ -462,11 +476,12 @@ fn directive<'a, 'input>(
             | Token::DotFile | Token::DotSection => true,
             _ => false,
         }),
+            )
+                .map(|(_, x)| x),
+            |text| PtxError::UnrecognizedDirective(text.unwrap_or("")),
         )
-            .map(|(_, x)| x),
-        |text| PtxError::UnrecognizedDirective(text.unwrap_or("")),
+        .map(Option::flatten),
     )
-    .map(Option::flatten)
     .parse_next(stream)
 }
 
@@ -483,26 +498,32 @@ fn module_variable<'a, 'input>(
 }
 
 fn file<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()> {
-    (
-        Token::DotFile,
-        u32,
-        Token::String,
-        opt((Token::Comma, u32, Token::Comma, u32)),
+    trace(
+        "file",
+        (
+            Token::DotFile,
+            u32,
+            Token::String,
+            opt((Token::Comma, u32, Token::Comma, u32)),
+        )
+            .void(),
     )
-        .void()
-        .parse_next(stream)
+    .parse_next(stream)
 }
 
 fn section<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()> {
-    (
-        Token::DotSection.void(),
-        dot_ident.void(),
-        Token::LBrace.void(),
-        repeat::<_, _, (), _, _>(0.., section_dwarf_line),
-        Token::RBrace.void(),
+    trace(
+        "section",
+        (
+            Token::DotSection.void(),
+            dot_ident.void(),
+            Token::LBrace.void(),
+            repeat::<_, _, (), _, _>(0.., section_dwarf_line),
+            Token::RBrace.void(),
+        )
+            .void(),
     )
-        .void()
-        .parse_next(stream)
+    .parse_next(stream)
 }
 
 fn section_dwarf_line<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()> {
@@ -535,23 +556,26 @@ fn function<'a, 'input>(
     ast::LinkingDirective,
     ast::Function<'input, &'input str, ast::Statement<ParsedOperand<&'input str>>>,
 )> {
-    let (linking, function) = (
-        linking_directives,
-        method_declaration,
-        repeat(0.., tuning_directive),
-        function_body,
+    let (linking, function) = trace(
+        "function",
+        (
+            linking_directives,
+            method_declaration,
+            repeat(0.., tuning_directive),
+            function_body,
+        )
+            .map(|(linking, func_directive, tuning, body)| {
+                (
+                    linking,
+                    ast::Function {
+                        func_directive,
+                        tuning,
+                        body,
+                    },
+                )
+            }),
     )
-        .map(|(linking, func_directive, tuning, body)| {
-            (
-                linking,
-                ast::Function {
-                    func_directive,
-                    tuning,
-                    body,
-                },
-            )
-        })
-        .parse_next(stream)?;
+    .parse_next(stream)?;
     stream.state.record_function(&function.func_directive);
     Ok((linking, function))
 }
@@ -559,16 +583,19 @@ fn function<'a, 'input>(
 fn linking_directives<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<ast::LinkingDirective> {
-    repeat(
-        0..,
-        dispatch! { any;
-            (Token::DotExtern, _) => empty.value(ast::LinkingDirective::EXTERN),
-            (Token::DotVisible, _) => empty.value(ast::LinkingDirective::VISIBLE),
-            (Token::DotWeak, _) => empty.value(ast::LinkingDirective::WEAK),
-            _ => fail
-        },
+    trace(
+        "linking_directives",
+        repeat(
+            0..,
+            dispatch! { any;
+                (Token::DotExtern, _) => empty.value(ast::LinkingDirective::EXTERN),
+                (Token::DotVisible, _) => empty.value(ast::LinkingDirective::VISIBLE),
+                (Token::DotWeak, _) => empty.value(ast::LinkingDirective::WEAK),
+                _ => fail
+            },
+        )
+        .fold(|| ast::LinkingDirective::NONE, |x, y| x | y),
     )
-    .fold(|| ast::LinkingDirective::NONE, |x, y| x | y)
     .parse_next(stream)
 }
 
@@ -680,11 +707,11 @@ fn tuple1to3_u32<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<(u32
 fn function_body<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<Option<Vec<ast::Statement<ParsedOperandStr<'input>>>>> {
-    dispatch! {any;
+    trace("function_body", dispatch! {any;
         (Token::LBrace, _) => terminated(repeat_without_none(statement), Token::RBrace).map(Some),
         (Token::Semicolon, _) => empty.map(|_| None),
         _ => fail
-    }
+    })
     .parse_next(stream)
 }
 
@@ -745,7 +772,7 @@ fn take_till_inclusive<I: Stream, E: ParserError<I>>(
         }
         Err(ParserError::from_error_kind(input, ErrorKind::Eof))
     }
-    move |stream: &mut I| {
+    trace("take_till_inclusive", move |stream: &mut I| {
         let mut should_backtrack = false;
         let offset = get_offset(stream, &backtrack_token, &end_token, &mut should_backtrack)?;
         let result = stream.next_slice(offset);
@@ -757,7 +784,7 @@ fn take_till_inclusive<I: Stream, E: ParserError<I>>(
         } else {
             Ok(result)
         }
-    }
+    })
 }
 
 /*
@@ -780,242 +807,266 @@ where
 
 fn with_recovery<'a, 'input: 'a, T>(
     mut parser: impl Parser<PtxParser<'a, 'input>, T, ContextError>,
-    mut recovery: impl Parser<PtxParser<'a, 'input>, &'a [(Token<'input>, logos::Span)], ContextError>,
+    recovery: impl Parser<PtxParser<'a, 'input>, &'a [(Token<'input>, logos::Span)], ContextError>,
     mut error: impl FnMut(Option<&'input str>) -> PtxError<'input>,
 ) -> impl Parser<PtxParser<'a, 'input>, Option<T>, ContextError> {
-    move |stream: &mut PtxParser<'a, 'input>| {
-        let input_start = stream.input.first().map(|(_, s)| s).cloned();
-        let stream_start = stream.checkpoint();
-        match parser.parse_next(stream) {
-            Ok(value) => Ok(Some(value)),
-            Err(_) => {
-                stream.reset(&stream_start);
-                let tokens = recovery.parse_next(stream)?;
-                let range = match input_start {
-                    Some(start) => {
-                        Some(&stream.state.text[start.start..tokens.last().unwrap().1.end])
-                    }
-                    // We could handle `(Some(start), None)``, but this whole error recovery is to
-                    // recover from unknown instructions, so we don't care about early end of stream
-                    _ => None,
-                };
-                stream.state.errors.push(error(range));
-                Ok(None)
+    let mut recovery = trace("recovery", recovery);
+    trace(
+        "with_recovery",
+        move |stream: &mut PtxParser<'a, 'input>| {
+            let input_start = stream.input.first().map(|(_, s)| s).cloned();
+            let stream_start = stream.checkpoint();
+            match parser.parse_next(stream) {
+                Ok(value) => Ok(Some(value)),
+                Err(_) => {
+                    stream.reset(&stream_start);
+                    let tokens = recovery.parse_next(stream)?;
+                    let range = match input_start {
+                        Some(start) => {
+                            Some(&stream.state.text[start.start..tokens.last().unwrap().1.end])
+                        }
+                        // We could handle `(Some(start), None)``, but this whole error recovery is to
+                        // recover from unknown instructions, so we don't care about early end of stream
+                        _ => None,
+                    };
+                    stream.state.errors.push(error(range));
+                    Ok(None)
+                }
             }
-        }
-    }
+        },
+    )
 }
 
 fn pragma<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()> {
-    (Token::DotPragma, Token::String, Token::Semicolon)
-        .void()
-        .parse_next(stream)
+    trace(
+        "pragma",
+        (Token::DotPragma, Token::String, Token::Semicolon).void(),
+    )
+    .parse_next(stream)
 }
 
 fn method_parameter<'a, 'input: 'a>(
     state_space: StateSpace,
 ) -> impl Parser<PtxParser<'a, 'input>, Variable<&'input str>, ContextError> {
-    move |stream: &mut PtxParser<'a, 'input>| {
-        let (align, vector, type_, name) = variable_declaration.parse_next(stream)?;
-        let array_dimensions = if state_space != StateSpace::Reg {
-            opt(array_dimensions).parse_next(stream)?
-        } else {
-            None
-        };
-        // TODO: push this check into array_dimensions(...)
-        if let Some(ref dims) = array_dimensions {
-            if dims[0] == 0 {
-                return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+    trace(
+        "method_parameter",
+        move |stream: &mut PtxParser<'a, 'input>| {
+            let (align, vector, type_, name) = variable_declaration.parse_next(stream)?;
+            let array_dimensions = if state_space != StateSpace::Reg {
+                opt(array_dimensions).parse_next(stream)?
+            } else {
+                None
+            };
+            // TODO: push this check into array_dimensions(...)
+            if let Some(ref dims) = array_dimensions {
+                if dims[0] == 0 {
+                    return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+                }
             }
-        }
-        Ok(Variable {
-            align,
-            v_type: Type::maybe_array(vector, type_, array_dimensions),
-            state_space,
-            name,
-            array_init: Vec::new(),
-        })
-    }
+            Ok(Variable {
+                align,
+                v_type: Type::maybe_array(vector, type_, array_dimensions),
+                state_space,
+                name,
+                array_init: Vec::new(),
+            })
+        },
+    )
 }
 
 // TODO: split to a separate type
 fn variable_declaration<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<(Option<u32>, Option<NonZeroU8>, ScalarType, &'input str)> {
-    (
-        opt(align.verify(|x| x.count_ones() == 1)),
-        vector_prefix,
-        scalar_type,
-        ident,
+    trace(
+        "variable_declaration",
+        (
+            opt(align.verify(|x| x.count_ones() == 1)),
+            vector_prefix,
+            scalar_type,
+            ident,
+        ),
     )
-        .parse_next(stream)
+    .parse_next(stream)
 }
 
 fn multi_variable<'a, 'input: 'a>(
     extern_: bool,
     state_space: StateSpace,
 ) -> impl Parser<PtxParser<'a, 'input>, MultiVariable<&'input str>, ContextError> {
-    move |stream: &mut PtxParser<'a, 'input>| {
-        let ((align, vector, type_, name), count) = (
-            variable_declaration,
-            // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parameterized-variable-names
-            opt(delimited(Token::Lt, u32.verify(|x| *x != 0), Token::Gt)),
-        )
-            .parse_next(stream)?;
-        if count.is_some() {
-            return Ok(MultiVariable {
+    trace(
+        "multi_variable",
+        move |stream: &mut PtxParser<'a, 'input>| {
+            let ((align, vector, type_, name), count) = (
+                variable_declaration,
+                // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parameterized-variable-names
+                opt(delimited(Token::Lt, u32.verify(|x| *x != 0), Token::Gt)),
+            )
+                .parse_next(stream)?;
+            if count.is_some() {
+                return Ok(MultiVariable {
+                    var: Variable {
+                        align,
+                        v_type: Type::maybe_vector_parsed(vector, type_),
+                        state_space,
+                        name,
+                        array_init: Vec::new(),
+                    },
+                    count,
+                });
+            }
+            let mut array_dimensions = if state_space != StateSpace::Reg {
+                opt(array_dimensions).parse_next(stream)?
+            } else {
+                None
+            };
+            let initializer = match state_space {
+                StateSpace::Global | StateSpace::Const => match array_dimensions {
+                    Some(ref mut dimensions) => {
+                        opt(array_initializer(vector, type_, dimensions)).parse_next(stream)?
+                    }
+                    None => opt(value_initializer(vector, type_)).parse_next(stream)?,
+                },
+                _ => None,
+            };
+            if let Some(ref dims) = array_dimensions {
+                if !extern_ && dims[0] == 0 {
+                    return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+                }
+            }
+            Ok(MultiVariable {
                 var: Variable {
                     align,
-                    v_type: Type::maybe_vector_parsed(vector, type_),
+                    v_type: Type::maybe_array(vector, type_, array_dimensions),
                     state_space,
                     name,
-                    array_init: Vec::new(),
+                    array_init: initializer.unwrap_or(Vec::new()),
                 },
                 count,
-            });
-        }
-        let mut array_dimensions = if state_space != StateSpace::Reg {
-            opt(array_dimensions).parse_next(stream)?
-        } else {
-            None
-        };
-        let initializer = match state_space {
-            StateSpace::Global | StateSpace::Const => match array_dimensions {
-                Some(ref mut dimensions) => {
-                    opt(array_initializer(vector, type_, dimensions)).parse_next(stream)?
-                }
-                None => opt(value_initializer(vector, type_)).parse_next(stream)?,
-            },
-            _ => None,
-        };
-        if let Some(ref dims) = array_dimensions {
-            if !extern_ && dims[0] == 0 {
-                return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
-            }
-        }
-        Ok(MultiVariable {
-            var: Variable {
-                align,
-                v_type: Type::maybe_array(vector, type_, array_dimensions),
-                state_space,
-                name,
-                array_init: initializer.unwrap_or(Vec::new()),
-            },
-            count,
-        })
-    }
+            })
+        },
+    )
 }
 
-fn array_initializer<'a, 'input: 'a>(
+fn array_initializer<'b, 'a: 'b, 'input: 'a>(
     vector: Option<NonZeroU8>,
     type_: ScalarType,
-    array_dimensions: &mut Vec<u32>,
-) -> impl Parser<PtxParser<'a, 'input>, Vec<u8>, ContextError> + '_ {
-    move |stream: &mut PtxParser<'a, 'input>| {
-        Token::Eq.parse_next(stream)?;
-        let mut result = Vec::new();
-        // TODO: vector constants and multi dim arrays
-        if vector.is_some() || array_dimensions[0] == 0 || array_dimensions.len() > 1 {
-            return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
-        }
-        delimited(
-            Token::LBrace,
-            separated::<_, (), (), _, _, _, _>(
-                0..=array_dimensions[0] as usize,
-                single_value_append(&mut result, type_),
-                Token::Comma,
-            ),
-            Token::RBrace,
-        )
-        .parse_next(stream)?;
-        // pad with zeros
-        let result_size = type_.size_of() as usize * array_dimensions[0] as usize;
-        result.extend(iter::repeat(0u8).take(result_size - result.len()));
-        Ok(result)
-    }
+    array_dimensions: &'b mut Vec<u32>,
+) -> impl Parser<PtxParser<'a, 'input>, Vec<u8>, ContextError> + 'b {
+    trace(
+        "array_initializer",
+        move |stream: &mut PtxParser<'a, 'input>| {
+            Token::Eq.parse_next(stream)?;
+            let mut result = Vec::new();
+            // TODO: vector constants and multi dim arrays
+            if vector.is_some() || array_dimensions[0] == 0 || array_dimensions.len() > 1 {
+                return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+            }
+            delimited(
+                Token::LBrace,
+                separated::<_, (), (), _, _, _, _>(
+                    0..=array_dimensions[0] as usize,
+                    single_value_append(&mut result, type_),
+                    Token::Comma,
+                ),
+                Token::RBrace,
+            )
+            .parse_next(stream)?;
+            // pad with zeros
+            let result_size = type_.size_of() as usize * array_dimensions[0] as usize;
+            result.extend(iter::repeat(0u8).take(result_size - result.len()));
+            Ok(result)
+        },
+    )
 }
 
 fn value_initializer<'a, 'input: 'a>(
     vector: Option<NonZeroU8>,
     type_: ScalarType,
 ) -> impl Parser<PtxParser<'a, 'input>, Vec<u8>, ContextError> {
-    move |stream: &mut PtxParser<'a, 'input>| {
-        Token::Eq.parse_next(stream)?;
-        let mut result = Vec::new();
-        // TODO: vector constants
-        if vector.is_some() {
-            return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
-        }
-        single_value_append(&mut result, type_).parse_next(stream)?;
-        Ok(result)
-    }
+    trace(
+        "value_initializer",
+        move |stream: &mut PtxParser<'a, 'input>| {
+            Token::Eq.parse_next(stream)?;
+            let mut result = Vec::new();
+            // TODO: vector constants
+            if vector.is_some() {
+                return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+            }
+            single_value_append(&mut result, type_).parse_next(stream)?;
+            Ok(result)
+        },
+    )
 }
 
-fn single_value_append<'a, 'input: 'a>(
-    accumulator: &mut Vec<u8>,
+fn single_value_append<'b, 'a: 'b, 'input: 'a>(
+    accumulator: &'b mut Vec<u8>,
     type_: ScalarType,
-) -> impl Parser<PtxParser<'a, 'input>, (), ContextError> + '_ {
-    move |stream: &mut PtxParser<'a, 'input>| {
-        let value = immediate_value.parse_next(stream)?;
-        match (type_, value) {
-            (ScalarType::U8 | ScalarType::B8, ImmediateValue::U64(x)) => {
-                accumulator.extend_from_slice(&(x as u8).to_le_bytes())
+) -> impl Parser<PtxParser<'a, 'input>, (), ContextError> + 'b {
+    trace(
+        "single_value_append",
+        move |stream: &mut PtxParser<'a, 'input>| {
+            let value = immediate_value.parse_next(stream)?;
+            match (type_, value) {
+                (ScalarType::U8 | ScalarType::B8, ImmediateValue::U64(x)) => {
+                    accumulator.extend_from_slice(&(x as u8).to_le_bytes())
+                }
+                (ScalarType::U8 | ScalarType::B8, ImmediateValue::S64(x)) => {
+                    accumulator.extend_from_slice(&(x as u8).to_le_bytes())
+                }
+                (ScalarType::U16 | ScalarType::B16, ImmediateValue::U64(x)) => {
+                    accumulator.extend_from_slice(&(x as u16).to_le_bytes())
+                }
+                (ScalarType::U16 | ScalarType::B16, ImmediateValue::S64(x)) => {
+                    accumulator.extend_from_slice(&(x as u16).to_le_bytes())
+                }
+                (ScalarType::U32 | ScalarType::B32, ImmediateValue::U64(x)) => {
+                    accumulator.extend_from_slice(&(x as u32).to_le_bytes())
+                }
+                (ScalarType::U32 | ScalarType::B32, ImmediateValue::S64(x)) => {
+                    accumulator.extend_from_slice(&(x as u32).to_le_bytes())
+                }
+                (ScalarType::U64 | ScalarType::B64, ImmediateValue::U64(x)) => {
+                    accumulator.extend_from_slice(&(x as u64).to_le_bytes())
+                }
+                (ScalarType::U64 | ScalarType::B64, ImmediateValue::S64(x)) => {
+                    accumulator.extend_from_slice(&(x as u64).to_le_bytes())
+                }
+                (ScalarType::S8, ImmediateValue::U64(x)) => {
+                    accumulator.extend_from_slice(&(x as i8).to_le_bytes())
+                }
+                (ScalarType::S8, ImmediateValue::S64(x)) => {
+                    accumulator.extend_from_slice(&(x as i8).to_le_bytes())
+                }
+                (ScalarType::S16, ImmediateValue::U64(x)) => {
+                    accumulator.extend_from_slice(&(x as i16).to_le_bytes())
+                }
+                (ScalarType::S16, ImmediateValue::S64(x)) => {
+                    accumulator.extend_from_slice(&(x as i16).to_le_bytes())
+                }
+                (ScalarType::S32, ImmediateValue::U64(x)) => {
+                    accumulator.extend_from_slice(&(x as i32).to_le_bytes())
+                }
+                (ScalarType::S32, ImmediateValue::S64(x)) => {
+                    accumulator.extend_from_slice(&(x as i32).to_le_bytes())
+                }
+                (ScalarType::S64, ImmediateValue::U64(x)) => {
+                    accumulator.extend_from_slice(&(x as i64).to_le_bytes())
+                }
+                (ScalarType::S64, ImmediateValue::S64(x)) => {
+                    accumulator.extend_from_slice(&(x as i64).to_le_bytes())
+                }
+                (ScalarType::F32, ImmediateValue::F32(x)) => {
+                    accumulator.extend_from_slice(&x.to_le_bytes())
+                }
+                (ScalarType::F64, ImmediateValue::F64(x)) => {
+                    accumulator.extend_from_slice(&x.to_le_bytes())
+                }
+                _ => return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify)),
             }
-            (ScalarType::U8 | ScalarType::B8, ImmediateValue::S64(x)) => {
-                accumulator.extend_from_slice(&(x as u8).to_le_bytes())
-            }
-            (ScalarType::U16 | ScalarType::B16, ImmediateValue::U64(x)) => {
-                accumulator.extend_from_slice(&(x as u16).to_le_bytes())
-            }
-            (ScalarType::U16 | ScalarType::B16, ImmediateValue::S64(x)) => {
-                accumulator.extend_from_slice(&(x as u16).to_le_bytes())
-            }
-            (ScalarType::U32 | ScalarType::B32, ImmediateValue::U64(x)) => {
-                accumulator.extend_from_slice(&(x as u32).to_le_bytes())
-            }
-            (ScalarType::U32 | ScalarType::B32, ImmediateValue::S64(x)) => {
-                accumulator.extend_from_slice(&(x as u32).to_le_bytes())
-            }
-            (ScalarType::U64 | ScalarType::B64, ImmediateValue::U64(x)) => {
-                accumulator.extend_from_slice(&(x as u64).to_le_bytes())
-            }
-            (ScalarType::U64 | ScalarType::B64, ImmediateValue::S64(x)) => {
-                accumulator.extend_from_slice(&(x as u64).to_le_bytes())
-            }
-            (ScalarType::S8, ImmediateValue::U64(x)) => {
-                accumulator.extend_from_slice(&(x as i8).to_le_bytes())
-            }
-            (ScalarType::S8, ImmediateValue::S64(x)) => {
-                accumulator.extend_from_slice(&(x as i8).to_le_bytes())
-            }
-            (ScalarType::S16, ImmediateValue::U64(x)) => {
-                accumulator.extend_from_slice(&(x as i16).to_le_bytes())
-            }
-            (ScalarType::S16, ImmediateValue::S64(x)) => {
-                accumulator.extend_from_slice(&(x as i16).to_le_bytes())
-            }
-            (ScalarType::S32, ImmediateValue::U64(x)) => {
-                accumulator.extend_from_slice(&(x as i32).to_le_bytes())
-            }
-            (ScalarType::S32, ImmediateValue::S64(x)) => {
-                accumulator.extend_from_slice(&(x as i32).to_le_bytes())
-            }
-            (ScalarType::S64, ImmediateValue::U64(x)) => {
-                accumulator.extend_from_slice(&(x as i64).to_le_bytes())
-            }
-            (ScalarType::S64, ImmediateValue::S64(x)) => {
-                accumulator.extend_from_slice(&(x as i64).to_le_bytes())
-            }
-            (ScalarType::F32, ImmediateValue::F32(x)) => {
-                accumulator.extend_from_slice(&x.to_le_bytes())
-            }
-            (ScalarType::F64, ImmediateValue::F64(x)) => {
-                accumulator.extend_from_slice(&x.to_le_bytes())
-            }
-            _ => return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify)),
-        }
-        Ok(())
-    }
+            Ok(())
+        },
+    )
 }
 
 fn array_dimensions<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<Vec<u32>> {
@@ -1142,18 +1193,23 @@ fn scalar_type<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<Scalar
 fn predicated_instruction<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<ast::Statement<ParsedOperandStr<'input>>> {
-    (opt(pred_at), parse_instruction, Token::Semicolon)
-        .map(|(p, i, _)| ast::Statement::Instruction(p, i))
-        .parse_next(stream)
+    trace(
+        "predicated_instruction",
+        (opt(pred_at), parse_instruction, Token::Semicolon)
+            .map(|(p, i, _)| ast::Statement::Instruction(p, i)),
+    )
+    .parse_next(stream)
 }
 
 fn pred_at<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::PredAt<&'input str>> {
-    (Token::At, opt(Token::Exclamation), ident)
-        .map(|(_, not, label)| ast::PredAt {
+    trace(
+        "pred_at",
+        (Token::At, opt(Token::Exclamation), ident).map(|(_, not, label)| ast::PredAt {
             not: not.is_some(),
             label,
-        })
-        .parse_next(stream)
+        }),
+    )
+    .parse_next(stream)
 }
 
 fn label<'a, 'input>(
@@ -1188,20 +1244,26 @@ fn debug_directive<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()
 fn block_statement<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<ast::Statement<ParsedOperandStr<'input>>> {
-    delimited(Token::LBrace, repeat_without_none(statement), Token::RBrace)
-        .map(|s| ast::Statement::Block(s))
-        .parse_next(stream)
+    trace(
+        "block_statement",
+        delimited(Token::LBrace, repeat_without_none(statement), Token::RBrace)
+            .map(|s| ast::Statement::Block(s)),
+    )
+    .parse_next(stream)
 }
 
 fn repeat_without_none<Input: Stream, Output, Error: ParserError<Input>>(
     parser: impl Parser<Input, Option<Output>, Error>,
 ) -> impl Parser<Input, Vec<Output>, Error> {
-    repeat(0.., parser).fold(Vec::new, |mut acc: Vec<_>, item| {
-        if let Some(item) = item {
-            acc.push(item);
-        }
-        acc
-    })
+    trace(
+        "repeat_without_none",
+        repeat(0.., parser).fold(Vec::new, |mut acc: Vec<_>, item| {
+            if let Some(item) = item {
+                acc.push(item);
+            }
+            acc
+        }),
+    )
 }
 
 fn ident_literal<
@@ -1267,16 +1329,22 @@ impl<Ident> ast::ParsedOperand<Ident> {
             }
             .parse_next(stream)
         }
-        alt((
-            ident_operands,
-            immediate_value.map(ast::ParsedOperand::Imm),
-            vector_operand.map(ast::ParsedOperand::VecPack),
-        ))
+        trace(
+            "operand",
+            alt((
+                trace("ident_operands", ident_operands),
+                immediate_value.map(ast::ParsedOperand::Imm),
+                trace(
+                    "vector_operand",
+                    vector_operand.map(ast::ParsedOperand::VecPack),
+                ),
+            )),
+        )
         .parse_next(stream)
     }
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, strum::AsRefStr)]
 pub enum PtxError<'input> {
     #[error("{source}")]
     ParseInt {
@@ -1297,8 +1365,8 @@ pub enum PtxError<'input> {
     Parser(ContextError),
     #[error("")]
     Todo,
-    #[error("")]
-    SyntaxError,
+    #[error("Syntax error: {0}")]
+    SyntaxError(String),
     #[error("")]
     NonF32Ftz,
     #[error("")]
@@ -1445,25 +1513,29 @@ fn bra<'a, 'input>(
 fn call<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
-    let (uni, return_arguments, name, input_arguments) = (
-        opt(Token::DotUni),
-        opt((
-            Token::LParen,
-            separated(1.., ident, Token::Comma).map(|x: Vec<_>| x),
-            Token::RParen,
-            Token::Comma,
-        )
-            .map(|(_, arguments, _, _)| arguments)),
-        ident,
-        opt((
-            Token::Comma.void(),
-            Token::LParen.void(),
-            separated(1.., ParsedOperand::<&'input str>::parse, Token::Comma).map(|x: Vec<_>| x),
-            Token::RParen.void(),
-        )
-            .map(|(_, _, arguments, _)| arguments)),
+    let (uni, return_arguments, name, input_arguments) = trace(
+        "call",
+        (
+            opt(Token::DotUni),
+            opt((
+                Token::LParen,
+                separated(1.., ident, Token::Comma).map(|x: Vec<_>| x),
+                Token::RParen,
+                Token::Comma,
+            )
+                .map(|(_, arguments, _, _)| arguments)),
+            ident,
+            opt((
+                Token::Comma.void(),
+                Token::LParen.void(),
+                separated(1.., ParsedOperand::<&'input str>::parse, Token::Comma)
+                    .map(|x: Vec<_>| x),
+                Token::RParen.void(),
+            )
+                .map(|(_, _, arguments, _)| arguments)),
+        ),
     )
-        .parse_next(stream)?;
+    .parse_next(stream)?;
     let uniform = uni.is_some();
     let recorded_fn = match stream.state.function_declarations.get(name) {
         Some(decl) => decl,
@@ -1536,7 +1608,7 @@ where
     ParseRequired: Parser<Input, RequiredOutput, Error>,
     Error: ParserError<Input>,
 {
-    move |input: &mut Input| -> Result<(Option<OptionalOutput>, RequiredOutput), ErrMode<Error>> {
+    trace("first_optional", move |input: &mut Input| -> Result<(Option<OptionalOutput>, RequiredOutput), ErrMode<Error>> {
         let start = input.checkpoint();
 
         let parsed_optional = match optional.parse_next(input) {
@@ -1555,7 +1627,7 @@ where
         };
 
         Ok((None, required.parse_next(input)?))
-    }
+    })
 }
 
 // This macro is responsible for generating parser code for instruction parser.
@@ -1738,6 +1810,12 @@ derive_parser!(
 
     #[derive(Copy, Clone, PartialEq, Eq, Hash)]
     pub enum ShuffleMode { }
+
+    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    pub enum ShiftDirection { }
+
+    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    pub enum FunnelShiftMode { }
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
     mov{.vec}.type  d, a => {
@@ -1925,8 +2003,10 @@ derive_parser!(
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld-global-nc
     ld.global{.cop}.nc{.level::eviction_priority}{.level::cache_hint}{.level::prefetch_size}{.vec}.type  d, [a]{, cache_policy} => {
-        if cop.is_some() && level_eviction_priority.is_some() {
-            state.errors.push(PtxError::SyntaxError);
+        if let Some(cop) = cop {
+            if let Some(level_eviction_priority) = level_eviction_priority {
+                state.errors.push(PtxError::SyntaxError(format!("cannot have both {} and {} in {:?}", cop, level_eviction_priority, state.text)));
+            }
         }
         if level_eviction_priority.is_some() || level_cache_hint || level_prefetch_size.is_some() || cache_policy.is_some() {
             state.errors.push(PtxError::Todo);
@@ -3578,7 +3658,7 @@ derive_parser!(
             .and_then(|imm| imm.as_u64())
             .and_then(|n| CpAsyncCpSize::from_u64(n))
             .unwrap_or_else(|| {
-                state.errors.push(PtxError::SyntaxError);
+                state.errors.push(PtxError::SyntaxError(format!("invalid cp.async cp-size {} in {:?}", cp_size, state.text)));
                 CpAsyncCpSize::Bytes4
             });
 
@@ -3625,6 +3705,17 @@ derive_parser!(
     cp.async.wait_all => {
         Instruction::CpAsyncWaitAll {}
     }
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#logic-and-shift-instructions-shf
+    shf.dir.mode.b32  d, a, b, c => {
+        Instruction::Shf {
+            data: ShfDetails { direction: dir, mode: mode },
+            arguments: ShfArgs { dst: d, src_a: a, src_b: b, src_c: c }
+        }
+    }
+
+    .dir: ShiftDirection = { .l, .r };
+    .mode: FunnelShiftMode = { .clamp, .wrap };
 );
 
 #[cfg(test)]

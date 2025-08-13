@@ -34,7 +34,7 @@ use crate::pass::*;
 use llvm_zluda::{core::*, *};
 use llvm_zluda::{prelude::*, LLVMZludaBuildAtomicRMW};
 use llvm_zluda::{LLVMCallConv, LLVMZludaBuildAlloca};
-use ptx_parser::{CpAsyncArgs, CpAsyncDetails, Mul24Control};
+use ptx_parser::{CpAsyncArgs, CpAsyncDetails, FunnelShiftMode, Mul24Control, ShfArgs};
 
 struct Builder(LLVMBuilderRef);
 
@@ -487,6 +487,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Bra { arguments } => self.emit_bra(arguments),
             ast::Instruction::Call { data, arguments } => self.emit_call(data, arguments),
             ast::Instruction::Cvt { data, arguments } => self.emit_cvt(data, arguments),
+            ast::Instruction::Shf { data, arguments } => self.emit_shf(data, arguments),
             ast::Instruction::Shr { data, arguments } => self.emit_shr(data, arguments),
             ast::Instruction::Shl { data, arguments } => self.emit_shl(data, arguments),
             ast::Instruction::Ret { data } => Ok(self.emit_ret(data)),
@@ -1960,6 +1961,61 @@ impl<'a> MethodEmitContext<'a> {
             LLVMBuildFDiv(self.builder, one, src, dst)
         });
         unsafe { LLVMZludaSetFastMathFlags(rcp, LLVMZludaFastMathAllowReciprocal) };
+        Ok(())
+    }
+
+    fn emit_shf(
+        &mut self,
+        data: ptx_parser::ShfDetails,
+        arguments: ShfArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let lsb = self.resolver.value(arguments.src_a)?;
+        let msb = self.resolver.value(arguments.src_b)?;
+        let shift_amount = self.resolver.value(arguments.src_c)?;
+
+        let llvm_i32 = get_scalar_type(self.context, ast::ScalarType::B32);
+        let const_32 = unsafe { LLVMConstInt(llvm_i32, 32, 0) };
+
+        let intrinsic = match data.direction {
+            ptx_parser::ShiftDirection::R => c"llvm.fshr.i32",
+            ptx_parser::ShiftDirection::L => c"llvm.fshl.i32",
+        };
+
+        let shifted = self.emit_intrinsic(
+            intrinsic,
+            None,
+            Some(&ast::Type::Scalar(ptx_parser::ScalarType::B32)),
+            vec![(msb, llvm_i32), (lsb, llvm_i32), (shift_amount, llvm_i32)],
+        )?;
+
+        if data.mode == FunnelShiftMode::Clamp {
+            // `llvm.fsh*` acts like `shf.*.wrap`. To implement clamp, we must conditionally return
+            // the left or right-most 32 bits if `shift_amount` is greater than or equal to 32.
+
+            let should_clamp = unsafe {
+                LLVMBuildICmp(
+                    self.builder,
+                    LLVMIntPredicate::LLVMIntUGE,
+                    shift_amount,
+                    const_32,
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            };
+
+            let max_shift = match data.direction {
+                ptx_parser::ShiftDirection::R => msb,
+                ptx_parser::ShiftDirection::L => lsb,
+            };
+
+            self.resolver.with_result(arguments.dst, |dst| unsafe {
+                LLVMBuildSelect(self.builder, should_clamp, max_shift, shifted, dst)
+            });
+        } else {
+            let name = self.resolver.get_or_add(arguments.dst);
+            unsafe { LLVMSetValueName2(shifted, name.as_ptr().cast(), name.len()) };
+            self.resolver.register(arguments.dst, shifted);
+        }
+
         Ok(())
     }
 

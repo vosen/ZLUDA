@@ -427,11 +427,27 @@ fn emit_enum_types(
             }
             _ => {}
         }
-        let variants = variants.iter().map(|v| v.variant_capitalized());
+        let variants_capitalized = variants.iter().map(|v| v.variant_capitalized());
+        let display_cases = variants.iter().map(|v| {
+            let capitalized = v.variant_capitalized();
+            let v_string = format!("{}", v);
+            quote! {
+                Self::#capitalized => write!(f, #v_string)?
+            }
+        });
         Some(quote! {
             #[derive(Copy, Clone, PartialEq, Eq, Hash)]
             enum #type_ {
-                #(#variants),*
+                #(#variants_capitalized),*
+            }
+
+            impl std::fmt::Display for #type_ {
+                fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    match self {
+                        #(#display_cases),*
+                    }
+                    Ok(())
+                }
             }
         })
     });
@@ -558,7 +574,7 @@ fn emit_parse_function(
 
         #(#fns_)*
 
-        fn parse_instruction<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> winnow::error::PResult<Instruction<ParsedOperandStr<'input>>>
+        fn parse_instruction_impl<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> winnow::error::PResult<Instruction<ParsedOperandStr<'input>>>
         {
             use winnow::Parser;
             use winnow::token::*;
@@ -571,6 +587,11 @@ fn emit_parse_function(
                 )*
                 _ => return Err(winnow::error::ErrMode::from_error_kind(stream, winnow::error::ErrorKind::Token))
             })
+        }
+
+        fn parse_instruction<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> winnow::error::PResult<Instruction<ParsedOperandStr<'input>>>
+        {
+            trace("parse_instruction", parse_instruction_impl).parse_next(stream)
         }
     }
 }
