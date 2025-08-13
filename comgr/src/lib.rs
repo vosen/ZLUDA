@@ -181,6 +181,7 @@ pub fn compile_bitcode(
     main_buffer: &[u8],
     attributes_buffer: &[u8],
     ptx_impl: &[u8],
+    compiler_hook: Option<&dyn Fn(&Vec<u8>, String)>,
 ) -> Result<Vec<u8>, Error> {
     let bitcode_data_set = DataSet::new(comgr)?;
     let main_bitcode_data = Data::new(comgr, DataKind::Bc, c"zluda.bc", main_buffer)?;
@@ -193,6 +194,14 @@ pub fn compile_bitcode(
     let linking_info = ActionInfo::new(comgr)?;
     let linked_data_set =
         comgr.do_action(ActionKind::LinkBcToBc, &linking_info, &bitcode_data_set)?;
+    if let Some(hook) = compiler_hook {
+        // Run compiler hook on human-readable LLVM IR
+        let data = linked_data_set.get_data(DataKind::Bc, 0)?;
+        let data = data.copy_content(comgr)?;
+        let data = ptx::bitcode_to_ir(data);
+        hook(&data, String::from("linked.ll"));
+    }
+
     let compile_to_exec = ActionInfo::new(comgr)?;
     compile_to_exec.set_isa_name(gcn_arch)?;
     compile_to_exec.set_language(Language::LlvmIr)?;
@@ -231,7 +240,27 @@ pub fn compile_bitcode(
         &linked_data_set,
     )?;
     let executable = exec_data_set.get_data(DataKind::Executable, 0)?;
-    executable.copy_content(comgr)
+    let executable = executable.copy_content(comgr);
+    if let Some(hook) = compiler_hook {
+        // Run compiler hook for executable
+        hook(
+            executable.as_ref().unwrap_or(&Vec::new()),
+            String::from("elf"),
+        );
+
+        // Disassemble executable and run compiler hook
+        let action_info = ActionInfo::new(comgr)?;
+        action_info.set_isa_name(gcn_arch)?;
+        let disassembly = comgr.do_action(
+            ActionKind::DisassembleExecutableToSource,
+            &action_info,
+            &exec_data_set,
+        )?;
+        let disassembly = disassembly.get_data(DataKind::Source, 0)?;
+        let disassembly = disassembly.copy_content(comgr);
+        hook(&disassembly.unwrap_or(Vec::new()), String::from("asm"))
+    }
+    executable
 }
 
 pub fn get_clang_version(comgr: &Comgr) -> Result<String, Error> {
@@ -334,7 +363,8 @@ impl Comgr {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
+#[error("Comgr error: {0:?}")]
 pub struct Error(pub ::std::num::NonZeroU32);
 
 impl Error {
@@ -400,6 +430,7 @@ impl_into!(
     [
         LinkBcToBc => AMD_COMGR_ACTION_LINK_BC_TO_BC,
         CompileSourceToExecutable => AMD_COMGR_ACTION_COMPILE_SOURCE_TO_EXECUTABLE,
+        DisassembleExecutableToSource => AMD_COMGR_ACTION_DISASSEMBLE_EXECUTABLE_TO_SOURCE,
         SourceToPreprocessor => AMD_COMGR_ACTION_SOURCE_TO_PREPROCESSOR
     ]
 );
