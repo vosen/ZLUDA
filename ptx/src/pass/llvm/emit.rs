@@ -827,17 +827,9 @@ impl<'a> MethodEmitContext<'a> {
             [] => {}
             [name] => self.resolver.register(*name, llvm_call),
             args => {
-                for (i, (arg, (type_, _))) in args
-                    .iter()
-                    .copied()
-                    .zip(data.return_arguments.iter())
-                    .enumerate()
-                {
-                    let temp_arg =
-                        unsafe { LLVMBuildExtractValue(self.builder, llvm_call, i as u32, name) };
-                    let type_ = get_type(self.context, type_)?;
+                for (i, arg) in args.iter().copied().enumerate() {
                     self.resolver.with_result(arg, |name| unsafe {
-                        LLVMBuildTruncOrBitCast(self.builder, temp_arg, type_, name)
+                        LLVMBuildExtractValue(self.builder, llvm_call, i as u32, name)
                     });
                 }
             }
@@ -988,44 +980,28 @@ impl<'a> MethodEmitContext<'a> {
                 unsafe {
                     LLVMSetAlignment(load, type_.layout().align() as u32);
                 }
-                Ok(load)
+                Ok((load, type_))
             })
             .collect::<Result<Vec<_>, _>>()?;
-
         match &*loads {
             [] => unsafe { LLVMBuildRetVoid(self.builder) },
-            [value] => unsafe { LLVMBuildRet(self.builder, *value) },
-            _ => {
-                check_multiple_return_types(values.iter().map(|(_, type_)| type_))?;
-                let array_ty =
-                    get_array_type(self.context, &ast::Type::Scalar(ast::ScalarType::B32), 2)?;
-                let insert_b32 = unsafe {
-                    LLVMBuildInsertValue(
-                        self.builder,
-                        LLVMGetPoison(array_ty),
-                        loads[0],
-                        0,
-                        LLVM_UNNAMED.as_ptr(),
-                    )
-                };
-                let zext_pred = unsafe {
-                    LLVMBuildZExt(
-                        self.builder,
-                        loads[1],
-                        get_type(self.context, &ast::Type::Scalar(ast::ScalarType::B32))?,
-                        LLVM_UNNAMED.as_ptr(),
-                    )
-                };
-                let insert_pred = unsafe {
-                    LLVMBuildInsertValue(
-                        self.builder,
-                        insert_b32,
-                        zext_pred,
-                        1,
-                        LLVM_UNNAMED.as_ptr(),
-                    )
-                };
-                unsafe { LLVMBuildRet(self.builder, insert_pred) }
+            [(value, _)] => unsafe { LLVMBuildRet(self.builder, *value) },
+            loads => {
+                let struct_type =
+                    get_struct_type(self.context, loads.iter().map(|(_, type_)| *type_))?;
+                let mut value = unsafe { LLVMGetUndef(struct_type) };
+                for (i, (load, _)) in loads.iter().enumerate() {
+                    value = unsafe {
+                        LLVMBuildInsertValue(
+                            self.builder,
+                            value,
+                            *load,
+                            i as u32,
+                            LLVM_UNNAMED.as_ptr(),
+                        )
+                    };
+                }
+                unsafe { LLVMBuildRet(self.builder, value) }
             }
         };
         Ok(())
@@ -2869,6 +2845,18 @@ fn get_type(context: LLVMContextRef, type_: &ast::Type) -> Result<LLVMTypeRef, T
     })
 }
 
+fn get_struct_type<'a>(
+    context: LLVMContextRef,
+    elem_types: impl Iterator<Item = &'a ast::Type>,
+) -> Result<LLVMTypeRef, TranslateError> {
+    let mut elem_types = elem_types
+        .map(|t| get_type(context, t))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(unsafe {
+        LLVMStructTypeInContext(context, elem_types.as_mut_ptr(), elem_types.len() as u32, 0)
+    })
+}
+
 fn get_array_type<'a>(
     context: LLVMContextRef,
     elem_type: &'a ast::Type,
@@ -2906,14 +2894,7 @@ fn get_function_type<'a>(
     let return_type = match return_args.len() {
         0 => unsafe { LLVMVoidTypeInContext(context) },
         1 => get_type(context, &return_args.next().unwrap())?,
-        count => {
-            check_multiple_return_types(return_args)?;
-            get_array_type(
-                context,
-                &ast::Type::Scalar(ast::ScalarType::B32),
-                count as u64,
-            )?
-        }
+        _ => get_struct_type(context, return_args)?,
     };
 
     Ok(unsafe {

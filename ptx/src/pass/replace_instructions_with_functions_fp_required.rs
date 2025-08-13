@@ -243,9 +243,6 @@ fn run_statement<'input>(
             smallvec![
                 Statement::FpModeRequired {
                     ftz_f32: Some(false),
-                    ftz_f16f64: None,
-                    rounding_mode_f32: None,
-                    rounding_mode_f16f64: None
                 },
                 Statement::Instruction(ast::Instruction::Call {
                     arguments: ast::CallArgs {
@@ -287,9 +284,6 @@ fn run_statement<'input>(
                 }),
                 Statement::FpModeRequired {
                     ftz_f32: Some(true),
-                    ftz_f16f64: None,
-                    rounding_mode_f32: None,
-                    rounding_mode_f16f64: None
                 },
                 Statement::Instruction(ast::Instruction::Call {
                     arguments: ast::CallArgs {
