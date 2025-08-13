@@ -258,10 +258,7 @@ pub fn compile_bitcode(
         )?;
         let disassembly = disassembly.get_data(DataKind::Source, 0)?;
         let disassembly = disassembly.copy_content(comgr);
-        hook(
-            disassembly.as_ref().unwrap_or(&Vec::new()),
-            String::from("asm"),
-        )
+        hook(&disassembly.unwrap_or(Vec::new()), String::from("asm"))
     }
     executable
 }

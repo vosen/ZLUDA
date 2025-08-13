@@ -147,7 +147,7 @@ fn compile_from_ptx_and_cache(
         &*llvm_module.llvm_ir.write_bitcode_to_memory(),
         &*llvm_module.attributes_ir.write_bitcode_to_memory(),
         llvm_module.linked_bitcode(),
-        None
+        None,
     )
     .map_err(|_| CUerror::UNKNOWN)?;
     if let Some((cache, key)) = cache_with_key {
