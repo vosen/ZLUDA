@@ -3834,7 +3834,10 @@ mod tests {
                 ret;
             }";
         let errors = parse_module_checked(text).err().unwrap();
-        assert_eq!(errors, vec![PtxError::UnrecognizedStatement("mov.u32 foo, {} {};")]);
+        assert_eq!(
+            errors,
+            vec![PtxError::UnrecognizedStatement("mov.u32 foo, {} {};")]
+        );
     }
 
     #[test]

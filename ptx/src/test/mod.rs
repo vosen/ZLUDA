@@ -1,7 +1,6 @@
 use crate::pass::{self, TranslateError};
 use ptx_parser as ast;
 
-mod parse_fail;
 mod spirv_run;
 
 #[macro_export]
