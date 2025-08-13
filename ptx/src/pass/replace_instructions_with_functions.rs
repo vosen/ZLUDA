@@ -1,7 +1,5 @@
 use super::*;
-use ptx_parser::Instruction;
 use smallvec::*;
-use std::num::NonZeroU8;
 
 pub(super) fn run<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,

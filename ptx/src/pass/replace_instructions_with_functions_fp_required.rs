@@ -1,3 +1,13 @@
+// This pass exists specifically to replace the `div.rn.ftz.f32` instruction
+// with a function call. One inherent weirdness of the replacement function is
+// that it requires different rounding mode for the first part of the
+// division and the second part. The first part is executed with FTZ disabled
+// and the second part with FTZ enabled.
+// For this reason we can't handle this past FTZ mode insertion without making
+// the function read and restore the FTZ mode. For this reason we split the
+// replacement function in two functions and prefix them with a noop
+// (FpModeRequired) that carries the FTZ mode information.
+
 use super::*;
 use ptx_parser as ast;
 use smallvec::smallvec;
@@ -50,11 +60,11 @@ pub(crate) fn run<'input>(
                         },
                         ast::Variable {
                             name: resolver.register_unnamed(Some((
-                                ast::Type::Scalar(ast::ScalarType::Pred),
+                                ast::Type::Scalar(ast::ScalarType::U8),
                                 ast::StateSpace::Reg,
                             ))),
                             align: None,
-                            v_type: ast::Type::Scalar(ast::ScalarType::Pred),
+                            v_type: ast::Type::Scalar(ast::ScalarType::U8),
                             state_space: ast::StateSpace::Reg,
                             array_init: Vec::new(),
                         },
@@ -157,11 +167,11 @@ pub(crate) fn run<'input>(
                         },
                         ast::Variable {
                             name: resolver.register_unnamed(Some((
-                                ast::Type::Scalar(ast::ScalarType::Pred),
+                                ast::Type::Scalar(ast::ScalarType::U8),
                                 ast::StateSpace::Reg,
                             ))),
                             align: None,
-                            v_type: ast::Type::Scalar(ast::ScalarType::Pred),
+                            v_type: ast::Type::Scalar(ast::ScalarType::U8),
                             state_space: ast::StateSpace::Reg,
                             array_init: Vec::new(),
                         },
@@ -237,7 +247,7 @@ fn run_statement<'input>(
                 ast::StateSpace::Reg,
             )));
             let numerator_scaled_flag = resolver.register_unnamed(Some((
-                ast::Type::Scalar(ast::ScalarType::Pred),
+                ast::Type::Scalar(ast::ScalarType::U8),
                 ast::StateSpace::Reg,
             )));
             smallvec![
@@ -265,10 +275,7 @@ fn run_statement<'input>(
                                 ast::Type::Scalar(ast::ScalarType::F32),
                                 ast::StateSpace::Reg,
                             ),
-                            (
-                                ast::Type::Scalar(ast::ScalarType::Pred),
-                                ast::StateSpace::Reg,
-                            )
+                            (ast::Type::Scalar(ast::ScalarType::U8), ast::StateSpace::Reg,)
                         ],
                         input_arguments: vec![
                             (
@@ -325,10 +332,7 @@ fn run_statement<'input>(
                                 ast::Type::Scalar(ast::ScalarType::F32),
                                 ast::StateSpace::Reg,
                             ),
-                            (
-                                ast::Type::Scalar(ast::ScalarType::Pred),
-                                ast::StateSpace::Reg,
-                            )
+                            (ast::Type::Scalar(ast::ScalarType::U8), ast::StateSpace::Reg,)
                         ]
                     }
                 })
@@ -341,9 +345,7 @@ fn run_statement<'input>(
 #[derive(Clone)]
 struct FunctionImports {
     part1: SpirvWord,
-    part1_name: String,
     part2: SpirvWord,
-    part2_name: String,
 }
 
 impl FunctionImports {
@@ -353,15 +355,10 @@ impl FunctionImports {
     ) -> &'a FunctionImports {
         this.get_or_insert_with(|| {
             let part1_name = [ZLUDA_PTX_PREFIX, "div_rn_ftz_f32_part1"].concat();
-            let part1 = resolver.register_named(part1_name.clone().into(), None);
+            let part1 = resolver.register_named(part1_name.into(), None);
             let part2_name = [ZLUDA_PTX_PREFIX, "div_rn_ftz_f32_part2"].concat();
-            let part2 = resolver.register_named(part2_name.clone().into(), None);
-            FunctionImports {
-                part1,
-                part1_name,
-                part2,
-                part2_name,
-            }
+            let part2 = resolver.register_named(part2_name.into(), None);
+            FunctionImports { part1, part2 }
         })
     }
 }

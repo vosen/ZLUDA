@@ -803,6 +803,12 @@ fn create_control_flow_graph(
                             let modes = get_modes(instruction);
                             bb_state.append(modes);
                         }
+                        Statement::FpModeRequired { ftz_f32 } => {
+                            bb_state.append(InstructionModes::from_ftz(
+                                ast::ScalarType::F32,
+                                *ftz_f32,
+                            ));
+                        }
                         _ => {}
                     }
                 }

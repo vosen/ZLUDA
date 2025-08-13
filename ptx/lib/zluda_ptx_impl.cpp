@@ -468,10 +468,10 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
 
     struct DivRnFtzF32Part1Result
     {
-        uint32_t fma_4;
-        uint32_t fma_1;
-        uint32_t fma_3;
-        bool numerator_scaled_flag;
+        float fma_4;
+        float fma_1;
+        float fma_3;
+        uint8_t numerator_scaled_flag;
     };
 
     __device__ static DivRnFtzF32Part1Result div_rn_ftz_f32_part1(float lhs, float rhs)
@@ -496,12 +496,12 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
         float fma_2 = fmaf(neg_div_scale0, mul, numerator_scaled);
         float fma_3 = fmaf(fma_2, fma_1, mul);
         float fma_4 = fmaf(neg_div_scale0, fma_3, numerator_scaled);
-        return {std::bit_cast<uint32_t>(fma_4), std::bit_cast<uint32_t>(fma_1), std::bit_cast<uint32_t>(fma_3), numerator_scaled_flag};
+        return {fma_4, fma_1, fma_3, numerator_scaled_flag};
     }
 
     __device__ static float div_rn_ftz_f32_part2(float x, float y, DivRnFtzF32Part1Result part1)
     {
-        float fmas = __builtin_amdgcn_div_fmasf(std::bit_cast<float>(part1.fma_4), std::bit_cast<float>(part1.fma_1), std::bit_cast<float>(part1.fma_3), part1.numerator_scaled_flag);
+        float fmas = __builtin_amdgcn_div_fmasf(part1.fma_4, part1.fma_1, part1.fma_3, part1.numerator_scaled_flag);
         float result = __builtin_amdgcn_div_fixupf(fmas, y, x);
 
         return result;
@@ -521,9 +521,9 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
                                      float fma_4,
                                      float fma_1,
                                      float fma_3,
-                                     bool numerator_scaled_flag)
+                                     uint8_t numerator_scaled_flag)
     {
-        return div_rn_ftz_f32_part2(x, y, {std::bit_cast<uint32_t>(fma_4), std::bit_cast<uint32_t>(fma_1), std::bit_cast<uint32_t>(fma_3), numerator_scaled_flag});
+        return div_rn_ftz_f32_part2(x, y, {fma_4, fma_1, fma_3, numerator_scaled_flag});
     }
 
     struct ShflSyncResult2

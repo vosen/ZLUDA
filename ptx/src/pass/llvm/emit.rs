@@ -988,7 +988,7 @@ impl<'a> MethodEmitContext<'a> {
             [(value, _)] => unsafe { LLVMBuildRet(self.builder, *value) },
             loads => {
                 let struct_type =
-                    get_struct_type(self.context, loads.iter().map(|(_, type_)| *type_))?;
+                    get_or_create_struct_type(self.context, loads.iter().map(|(_, type_)| *type_))?;
                 let mut value = unsafe { LLVMGetUndef(struct_type) };
                 for (i, (load, _)) in loads.iter().enumerate() {
                     value = unsafe {
@@ -1870,10 +1870,10 @@ impl<'a> MethodEmitContext<'a> {
         to: ptx_parser::ScalarType,
         arguments: ptx_parser::CvtArgs<SpirvWord>,
         llvm_func: unsafe extern "C" fn(
-            arg1: LLVMBuilderRef,
-            Val: LLVMValueRef,
-            DestTy: LLVMTypeRef,
-            Name: *const i8,
+            LLVMBuilderRef,
+            LLVMValueRef,
+            LLVMTypeRef,
+            *const i8,
         ) -> LLVMValueRef,
     ) -> Result<(), TranslateError> {
         let type_ = get_scalar_type(self.context, to);
@@ -2845,43 +2845,47 @@ fn get_type(context: LLVMContextRef, type_: &ast::Type) -> Result<LLVMTypeRef, T
     })
 }
 
-fn get_struct_type<'a>(
+fn get_or_create_struct_type<'a>(
     context: LLVMContextRef,
-    elem_types: impl Iterator<Item = &'a ast::Type>,
+    mut elem_types: impl Iterator<Item = &'a ast::Type>,
 ) -> Result<LLVMTypeRef, TranslateError> {
-    let mut elem_types = elem_types
-        .map(|t| get_type(context, t))
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(unsafe {
-        LLVMStructTypeInContext(context, elem_types.as_mut_ptr(), elem_types.len() as u32, 0)
-    })
+    use std::fmt::Write;
+    let (mut name, types) = elem_types.try_fold(
+        ("struct".to_string(), Vec::new()),
+        |(mut name, mut types), t| {
+            name.push('.');
+            if let ast::Type::Scalar(scalar) = t {
+                write!(name, "{}", LLVMTypeDisplay(*scalar)).ok();
+            } else {
+                return Err(error_unreachable());
+            }
+            types.push(get_type(context, t)?);
+            Ok((name, types))
+        },
+    )?;
+    name.push('\0');
+    let mut struct_type = unsafe { LLVMGetTypeByName2(context, name.as_ptr().cast()) };
+    if struct_type.is_null() {
+        struct_type = create_struct_type(context, name, types);
+    }
+    Ok(struct_type)
 }
 
-fn get_array_type<'a>(
+fn create_struct_type(
     context: LLVMContextRef,
-    elem_type: &'a ast::Type,
-    count: u64,
-) -> Result<LLVMTypeRef, TranslateError> {
-    let elem_type = get_type(context, elem_type)?;
-    Ok(unsafe { LLVMArrayType2(elem_type, count) })
-}
-
-fn check_multiple_return_types<'a>(
-    return_args: impl DoubleEndedIterator<Item = &'a ast::Type>,
-) -> Result<(), TranslateError> {
-    let err_msg = "Only (.b32+, .pred?) multiple return types are supported";
-    let mut return_args_rev = return_args.rev();
-    if let Some(last) = return_args_rev.next() {
-        if last.layout().size() != 4 && !matches!(last, ast::Type::Scalar(ast::ScalarType::Pred)) {
-            return Err(error_todo_msg(err_msg));
-        }
+    name: String,
+    mut elem_types: Vec<LLVMTypeRef>,
+) -> LLVMTypeRef {
+    let llvm_type = unsafe { LLVMStructCreateNamed(context, name.as_ptr().cast()) };
+    unsafe {
+        LLVMStructSetBody(
+            llvm_type,
+            elem_types.as_mut_ptr(),
+            elem_types.len() as u32,
+            0,
+        )
     }
-    for arg in return_args_rev {
-        if arg.layout().size() != 4 {
-            return Err(error_todo_msg(err_msg));
-        }
-    }
-    Ok(())
+    llvm_type
 }
 
 fn get_function_type<'a>(
@@ -2894,7 +2898,7 @@ fn get_function_type<'a>(
     let return_type = match return_args.len() {
         0 => unsafe { LLVMVoidTypeInContext(context) },
         1 => get_type(context, &return_args.next().unwrap())?,
-        _ => get_struct_type(context, return_args)?,
+        _ => get_or_create_struct_type(context, return_args)?,
     };
 
     Ok(unsafe {
