@@ -355,6 +355,7 @@ version = "0.0.0"
 dependencies = [
  "amd_comgr-sys",
  "libloading",
+ "ptx",
  "thiserror 2.0.12",
 ]
 

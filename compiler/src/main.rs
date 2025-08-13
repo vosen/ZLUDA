@@ -1,14 +1,12 @@
 use std::ffi::CStr;
 use std::fs::{self, File};
 use std::io::{self, Write};
-use std::mem;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
-use std::str::{self, FromStr};
+use std::str;
+use std::{env, mem};
 
 use bpaf::Bpaf;
-
-use comgr::Comgr;
 
 mod error;
 use error::CompilerError;
@@ -18,16 +16,9 @@ const DEFAULT_ARCH: &'static str = "gfx1100";
 #[derive(Debug, Clone, Bpaf)]
 #[bpaf(options, version)]
 pub struct Options {
-    #[bpaf(external(output_type), optional)]
-    output_type: Option<OutputType>,
-
-    #[bpaf(long("linked"))]
-    /// Produce linked LLVM IR (in combination with --ll)
-    linked: bool,
-
-    #[bpaf(short('o'), argument("file"))]
-    /// Output path
-    output_path: Option<PathBuf>,
+    #[bpaf(argument("output-dir"))]
+    /// Output directory
+    output_dir: Option<PathBuf>,
 
     #[bpaf(long("arch"))]
     /// Target architecture
@@ -50,41 +41,49 @@ fn main_core() -> Result<(), CompilerError> {
     let opts = options().run();
     let comgr = comgr::Comgr::new()?;
 
-    let output_type = opts.output_type.unwrap_or_default();
-
-    if opts.linked && output_type != OutputType::LlvmIr {
-        println!("Warning: option --linked only makes sense when combined with --ll. Ignoring.");
-    }
-
     let ptx_path = Path::new(&opts.ptx_path).to_path_buf();
+    let filename_base = ptx_path
+        .file_name()
+        .map(|osstr| osstr.to_str().unwrap_or("output"))
+        .unwrap_or("output");
 
-    let output_path = match opts.output_path {
+    let mut output_path = match opts.output_dir {
         Some(value) => value,
-        None => ptx_path.with_extension(output_type.extension()),
+        None => match ptx_path.parent() {
+            Some(dir) => dir.to_path_buf(),
+            None => env::current_dir()?,
+        },
     };
+    output_path.push(filename_base);
 
     let arch: String = match opts.arch {
         Some(s) => s,
-        None => get_gpu_arch().map(String::from).unwrap_or(DEFAULT_ARCH.to_owned())
+        None => get_gpu_arch()
+            .map(String::from)
+            .unwrap_or(DEFAULT_ARCH.to_owned()),
     };
 
     let ptx = fs::read(&ptx_path).map_err(CompilerError::from)?;
     let ptx = str::from_utf8(&ptx).map_err(CompilerError::from)?;
     let llvm = ptx_to_llvm(ptx).map_err(CompilerError::from)?;
 
-    let output = match output_type {
-        OutputType::LlvmIr => {
-            if opts.linked {
-                get_linked_bitcode(&comgr, &llvm)?
-            } else {
-                llvm.llvm_ir
-            }
-        }
-        OutputType::Elf => get_elf(&comgr, &llvm, &arch)?,
-        OutputType::Assembly => get_assembly(&comgr, &llvm, &arch)?,
+    write_to_file(&llvm.llvm_ir, output_path.with_extension("ll").as_path())?;
+
+    let comgr_hook = |bytes: &Vec<u8>, extension: String| {
+        let output_path = output_path.with_extension(extension);
+        write_to_file(bytes, &output_path).unwrap();
     };
 
-    write_to_file(&output, &output_path).map_err(CompilerError::from)?;
+    comgr::compile_bitcode(
+        &comgr,
+        &arch,
+        &llvm.bitcode,
+        &llvm.attributes_bitcode,
+        &llvm.linked_bitcode,
+        Some(&comgr_hook),
+    )
+    .map_err(CompilerError::from)?;
+
     Ok(())
 }
 
@@ -128,85 +127,10 @@ fn get_gpu_arch() -> Result<&'static str, CompilerError> {
     gcn_arch_name.map_err(CompilerError::from)
 }
 
-fn get_linked_bitcode(comgr: &Comgr, llvm: &LLVMArtifacts) -> Result<Vec<u8>, CompilerError> {
-    let linked_bitcode = comgr::get_linked_bitcode_as_bytes(
-        comgr,
-        &llvm.bitcode,
-        &llvm.attributes_bitcode,
-        &llvm.linked_bitcode,
-    )?;
-    Ok(ptx::bitcode_to_ir(linked_bitcode))
-}
-
-fn get_elf(comgr: &Comgr, llvm: &LLVMArtifacts, arch: &str) -> Result<Vec<u8>, CompilerError> {
-    comgr::get_executable_as_bytes(
-        comgr,
-        &arch,
-        &llvm.bitcode,
-        &llvm.attributes_bitcode,
-        &llvm.linked_bitcode,
-    )
-    .map_err(CompilerError::from)
-}
-
-fn get_assembly(comgr: &Comgr, llvm: &LLVMArtifacts, arch: &str) -> Result<Vec<u8>, CompilerError> {
-    comgr::get_assembly_as_bytes(
-        comgr,
-        &arch,
-        &llvm.bitcode,
-        &llvm.attributes_bitcode,
-        &llvm.linked_bitcode,
-    )
-    .map_err(CompilerError::from)
-}
-
 fn write_to_file(content: &[u8], path: &Path) -> io::Result<()> {
     let mut file = File::create(path)?;
     file.write_all(content)?;
     file.flush()?;
     println!("Wrote to {}", path.to_str().unwrap());
     Ok(())
-}
-
-#[derive(Bpaf, Clone, Copy, Debug, Default, PartialEq)]
-enum OutputType {
-    /// Produce LLVM IR
-    #[bpaf(long("ll"))]
-    LlvmIr,
-    /// Produce ELF binary (default)
-    #[default]
-    Elf,
-    /// Produce assembly
-    #[bpaf(long("asm"))]
-    Assembly,
-}
-
-impl OutputType {
-    fn extension(self) -> String {
-        match self {
-            OutputType::LlvmIr => "ll",
-            OutputType::Assembly => "asm",
-            OutputType::Elf => "elf",
-        }
-        .into()
-    }
-}
-
-impl FromStr for OutputType {
-    type Err = CompilerError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "ll" => Ok(Self::LlvmIr),
-            "elf" => Ok(Self::Elf),
-            "asm" => Ok(Self::Assembly),
-            _ => {
-                let message = format!("Not a valid output type: {}", s);
-                Err(CompilerError::GenericError {
-                    cause: None,
-                    message,
-                })
-            }
-        }
-    }
 }

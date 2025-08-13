@@ -1,7 +1,7 @@
 [package]
 name = "comgr"
 version = "0.0.0"
-authors = ["Andrzej Janik <vosen@vosen.pl>", "Joëlle van Essen <joelle@v-essen.nl>"]
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
 edition = "2021"
 
 [lib]
@@ -9,4 +9,5 @@ edition = "2021"
 [dependencies]
 amd_comgr-sys = { path = "../ext/amd_comgr-sys" }
 libloading = "0.8"
+ptx = { path = "../ptx" }
 thiserror = "2.0.12"

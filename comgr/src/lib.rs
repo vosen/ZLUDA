@@ -175,12 +175,17 @@ impl Data {
     }
 }
 
-pub fn link_bitcode<'a>(
-    comgr: &'a Comgr,
-    main_buffer: &'a [u8],
-    attributes_buffer: &'a [u8],
-    ptx_impl: &'a [u8],
-) -> Result<DataSet<'a>, Error> {
+pub fn compile_bitcode<F>(
+    comgr: &Comgr,
+    gcn_arch: &str,
+    main_buffer: &[u8],
+    attributes_buffer: &[u8],
+    ptx_impl: &[u8],
+    compiler_hook: Option<&F>,
+) -> Result<Vec<u8>, Error>
+where
+    F: Fn(&Vec<u8>, String) -> (),
+{
     let bitcode_data_set = DataSet::new(comgr)?;
     let main_bitcode_data = Data::new(comgr, DataKind::Bc, c"zluda.bc", main_buffer)?;
     bitcode_data_set.add(&main_bitcode_data)?;
@@ -190,14 +195,16 @@ pub fn link_bitcode<'a>(
     let stdlib_bitcode_data = Data::new(comgr, DataKind::Bc, c"ptx_impl.bc", ptx_impl)?;
     bitcode_data_set.add(&stdlib_bitcode_data)?;
     let linking_info = ActionInfo::new(comgr)?;
-    comgr.do_action(ActionKind::LinkBcToBc, &linking_info, &bitcode_data_set)
-}
+    let linked_data_set =
+        comgr.do_action(ActionKind::LinkBcToBc, &linking_info, &bitcode_data_set)?;
+    if let Some(hook) = compiler_hook {
+        // Run compiler hook on human-readable LLVM IR
+        let data = linked_data_set.get_data(DataKind::Bc, 0)?;
+        let data = data.copy_content(comgr)?;
+        let data = ptx::bitcode_to_ir(data);
+        hook(&data, String::from("linked.ll"));
+    }
 
-pub fn compile_bitcode<'a>(
-    comgr: &'a Comgr,
-    linked_data_set: DataSet,
-    gcn_arch: &'a str,
-) -> Result<DataSet<'a>, Error> {
     let compile_to_exec = ActionInfo::new(comgr)?;
     compile_to_exec.set_isa_name(gcn_arch)?;
     compile_to_exec.set_language(Language::LlvmIr)?;
@@ -230,76 +237,36 @@ pub fn compile_bitcode<'a>(
         ]
     };
     compile_to_exec.set_options(common_options.chain(opt_options))?;
-    comgr.do_action(
+    let exec_data_set = comgr.do_action(
         ActionKind::CompileSourceToExecutable,
         &compile_to_exec,
         &linked_data_set,
+    )?;
+    let executable = exec_data_set.get_data(DataKind::Executable, 0)?;
+    let executable = executable.copy_content(comgr);
+    if let Some(hook) = compiler_hook {
+        // Run compiler hook for executable
+        hook(
+            executable.as_ref().unwrap_or(&Vec::new()),
+            String::from("elf"),
+        );
+
+        // Disassemble executable and run compiler hook
+        let action_info = ActionInfo::new(comgr)?;
+        action_info.set_isa_name(gcn_arch)?;
+        let disassembly = comgr.do_action(
+            ActionKind::DisassembleExecutableToSource,
+            &action_info,
+            &exec_data_set,
+        )?;
+        let disassembly = disassembly.get_data(DataKind::Source, 0)?;
+        let disassembly = disassembly.copy_content(comgr);
+        hook(
+            disassembly.as_ref().unwrap_or(&Vec::new()),
+            String::from("asm"),
         )
-}
-
-fn disassemble_exec<'a>(
-    comgr: &'a Comgr,
-    exec_data_set: &'a DataSet,
-    gcn_arch: &'a str,
-) -> Result<DataSet<'a>, Error> {
-    let action_info = ActionInfo::new(comgr)?;
-    action_info.set_isa_name(gcn_arch)?;
-    comgr.do_action(
-        ActionKind::DisassembleExecutableToSource,
-        &action_info,
-        &exec_data_set,
-    )
-}
-
-pub fn get_linked_bitcode_as_bytes(
-    comgr: &Comgr,
-    main_buffer: &[u8],
-    attributes_buffer: &[u8],
-    ptx_impl: &[u8],
-) -> Result<Vec<u8>, Error> {
-    let linked_data_set = link_bitcode(comgr, main_buffer, attributes_buffer, ptx_impl)?;
-    let linked_bitcode =
-        linked_data_set.get_data(DataKind::Bc, 0)?;
-    linked_bitcode.copy_content(comgr)
-}
-
-fn get_executable<'a>(
-    comgr: &'a Comgr,
-    gcn_arch: &'a str,
-    main_buffer: &'a [u8],
-    attributes_buffer: &'a [u8],
-    ptx_impl: &'a [u8],
-) -> Result<DataSet<'a>, Error> {
-    let linked_data_set = link_bitcode(comgr, main_buffer, attributes_buffer, ptx_impl)?;
-    let exec_data_set = compile_bitcode(comgr, linked_data_set, gcn_arch)?;
-    Ok(exec_data_set)
-}
-
-pub fn get_executable_as_bytes(
-    comgr: &Comgr,
-    gcn_arch: &str,
-    main_buffer: &[u8],
-    attributes_buffer: &[u8],
-    ptx_impl: &[u8],
-) -> Result<Vec<u8>, Error> {
-    let exec_data_set = get_executable(comgr, gcn_arch, main_buffer, attributes_buffer, ptx_impl)?;
-    let executable =
-        exec_data_set.get_data(DataKind::Executable, 0)?;
-    executable.copy_content(comgr)
-}
-
-pub fn get_assembly_as_bytes(
-    comgr: &Comgr,
-    gcn_arch: &str,
-    main_buffer: &[u8],
-    attributes_buffer: &[u8],
-    ptx_impl: &[u8],
-) -> Result<Vec<u8>, Error> {
-    let exec_data_set = get_executable(comgr, gcn_arch, main_buffer, attributes_buffer, ptx_impl)?;
-    let disassembled_data_set = disassemble_exec(comgr, &exec_data_set, gcn_arch)?;
-    let assembly =
-        disassembled_data_set.get_data(DataKind::Source, 0)?;
-    assembly.copy_content(comgr)
+    }
+    executable
 }
 
 pub fn get_clang_version(comgr: &Comgr) -> Result<String, Error> {
