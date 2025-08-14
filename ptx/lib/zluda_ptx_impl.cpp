@@ -425,47 +425,6 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
         return precise_square_root(x, false);
     }
 
-    // Logic taken from legalizeFDIV32 in LLVM AMDGPU target
-    __device__ static float perform_division(float lhs, float rhs, bool needs_denorm_handling __attribute__((unused)))
-    {
-
-        if (!needs_denorm_handling)
-        {
-            __builtin_amdgcn_s_setreg(6401, 15); // preserve denorms
-        }
-        float one = 1.0f;
-
-        // Division scale operations
-        bool denominator_scaled_flag;
-        float denominator_scaled = __builtin_amdgcn_div_scalef(lhs, rhs, false, &denominator_scaled_flag);
-
-        bool numerator_scaled_flag;
-        float numerator_scaled = __builtin_amdgcn_div_scalef(lhs, rhs, true, &numerator_scaled_flag);
-
-        // Reciprocal approximation
-        float approx_rcp = __builtin_amdgcn_rcpf(denominator_scaled);
-        float neg_div_scale0 = -denominator_scaled;
-
-        // Perform division approximation steps
-        float fma_0 = fmaf(neg_div_scale0, approx_rcp, one);
-        float fma_1 = fmaf(fma_0, approx_rcp, approx_rcp);
-        float mul = numerator_scaled * fma_1;
-        float fma_2 = fmaf(neg_div_scale0, mul, numerator_scaled);
-        float fma_3 = fmaf(fma_2, fma_1, mul);
-        float fma_4 = fmaf(neg_div_scale0, fma_3, numerator_scaled);
-
-        if (!needs_denorm_handling)
-        {
-            __builtin_amdgcn_s_setreg(6401, 0); // flush denorms to zero
-        }
-
-        // Final division steps
-        float fmas = __builtin_amdgcn_div_fmasf(fma_4, fma_1, fma_3, numerator_scaled_flag);
-        float result = __builtin_amdgcn_div_fixupf(fmas, rhs, lhs);
-
-        return result;
-    }
-
     struct DivRnFtzF32Part1Result
     {
         float fma_4;
@@ -474,7 +433,7 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
         uint8_t numerator_scaled_flag;
     };
 
-    __device__ static DivRnFtzF32Part1Result div_rn_ftz_f32_part1(float lhs, float rhs)
+    DivRnFtzF32Part1Result FUNC(div_f32_part1)(float lhs, float rhs)
     {
         float one = 1.0f;
 
@@ -499,7 +458,7 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
         return {fma_4, fma_1, fma_3, numerator_scaled_flag};
     }
 
-    __device__ static float div_rn_ftz_f32_part2(float x, float y, DivRnFtzF32Part1Result part1)
+    __device__ static float div_f32_part2(float x, float y, DivRnFtzF32Part1Result part1)
     {
         float fmas = __builtin_amdgcn_div_fmasf(part1.fma_4, part1.fma_1, part1.fma_3, part1.numerator_scaled_flag);
         float result = __builtin_amdgcn_div_fixupf(fmas, y, x);
@@ -507,35 +466,12 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
         return result;
     }
 
-    float FUNC(div_rn_f32)(float x, float y)
-    {
-        return perform_division(x, y, true);
-    }
-
-    DivRnFtzF32Part1Result FUNC(div_rn_ftz_f32_part1)(float x, float y)
-    {
-        return div_rn_ftz_f32_part1(x, y);
-    }
-
-    float FUNC(div_rn_ftz_f32_part2)(float x, float y,
+    float FUNC(div_f32_part2)(float x, float y,
                                      float fma_4,
                                      float fma_1,
                                      float fma_3,
                                      uint8_t numerator_scaled_flag)
     {
-        return div_rn_ftz_f32_part2(x, y, {fma_4, fma_1, fma_3, numerator_scaled_flag});
+        return div_f32_part2(x, y, {fma_4, fma_1, fma_3, numerator_scaled_flag});
     }
-
-    struct ShflSyncResult2
-    {
-        uint32_t output;
-        uint32_t output2;
-        bool in_bounds;
-    };
-
-    ShflSyncResult2 FUNC(foo)(uint32_t input)
-    {                                          
-        printf("asdf")                                                                                           ;
-        return {input, input, true}; // Dummy implementation for testing
-    }  
 }

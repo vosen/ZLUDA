@@ -245,6 +245,7 @@ enum Statement<I, P: ast::Operand> {
     // See replace_instructions_with_functions_fp_required pass for details
     FpModeRequired {
         ftz_f32: Option<bool>,
+        rnd_f32: Option<ast::RoundingMode>,
     },
     FpSaturate {
         dst: SpirvWord,
@@ -552,7 +553,9 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                 )?;
                 Statement::FpSaturate { dst, src, type_ }
             }
-            Statement::FpModeRequired { ftz_f32 } => Statement::FpModeRequired { ftz_f32 },
+            Statement::FpModeRequired { ftz_f32, rnd_f32 } => {
+                Statement::FpModeRequired { ftz_f32, rnd_f32 }
+            }
         })
     }
 }

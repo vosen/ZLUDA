@@ -227,12 +227,13 @@ fn run_statement<'input>(
         Statement::Instruction(ast::Instruction::Div {
             data:
                 ast::DivDetails::Float(ast::DivFloatDetails {
-                    flush_to_zero: Some(true),
-                    kind: ast::DivFloatKind::Rounding(_),
+                    flush_to_zero,
+                    kind: ast::DivFloatKind::Rounding(rnd),
                     type_: ast::ScalarType::F32,
                 }),
             arguments,
         }) => {
+            let ftz = flush_to_zero.unwrap_or(false);
             let FunctionImports { part1, part2, .. } = FunctionImports::init(imports, resolver);
             let fma_4 = resolver.register_unnamed(Some((
                 ast::Type::Scalar(ast::ScalarType::F32),
@@ -253,6 +254,7 @@ fn run_statement<'input>(
             smallvec![
                 Statement::FpModeRequired {
                     ftz_f32: Some(false),
+                    rnd_f32: Some(ast::RoundingMode::NearestEven),
                 },
                 Statement::Instruction(ast::Instruction::Call {
                     arguments: ast::CallArgs {
@@ -290,7 +292,8 @@ fn run_statement<'input>(
                     }
                 }),
                 Statement::FpModeRequired {
-                    ftz_f32: Some(true),
+                    ftz_f32: Some(ftz),
+                    rnd_f32: Some(rnd),
                 },
                 Statement::Instruction(ast::Instruction::Call {
                     arguments: ast::CallArgs {
@@ -354,9 +357,9 @@ impl FunctionImports {
         resolver: &mut GlobalStringIdentResolver2,
     ) -> &'a FunctionImports {
         this.get_or_insert_with(|| {
-            let part1_name = [ZLUDA_PTX_PREFIX, "div_rn_ftz_f32_part1"].concat();
+            let part1_name = [ZLUDA_PTX_PREFIX, "div_f32_part1"].concat();
             let part1 = resolver.register_named(part1_name.into(), None);
-            let part2_name = [ZLUDA_PTX_PREFIX, "div_rn_ftz_f32_part2"].concat();
+            let part2_name = [ZLUDA_PTX_PREFIX, "div_f32_part2"].concat();
             let part2 = resolver.register_named(part2_name.into(), None);
             FunctionImports { part1, part2 }
         })
