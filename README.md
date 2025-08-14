@@ -2,5 +2,5 @@
 
 ZLUDA is a drop-in replacement for CUDA on non-NVIDIA GPUs. ZLUDA allows running unmodified CUDA applications using non-NVIDIA GPUs with near-native performance.
 
-<center><font size=100px><b>DOCS</b></font></center>
-<center><font size=100px><b>NEWS</b></font></center>
+<p align="center"><font size=100px><b>DOCS</b></font></p>
+<p align="center"><font size=100px><b>NEWS</b></font></p>
