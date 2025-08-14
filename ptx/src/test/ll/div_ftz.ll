@@ -1,8 +1,8 @@
 %struct.f32.f32.f32.i8 = type { float, float, float, i8 }
 
-declare %struct.f32.f32.f32.i8 @__zluda_ptx_impl_div_rn_ftz_f32_part1(float, float) #0
+declare %struct.f32.f32.f32.i8 @__zluda_ptx_impl_div_f32_part1(float, float) #0
 
-declare float @__zluda_ptx_impl_div_rn_ftz_f32_part2(float, float, float, float, float, i8) #0
+declare float @__zluda_ptx_impl_div_f32_part2(float, float, float, float, float, i8) #0
 
 define amdgpu_kernel void @div_ftz(ptr addrspace(4) byref(i64) %"63", ptr addrspace(4) byref(i64) %"64") #1 {
   %"65" = alloca i64, align 8, addrspace(5)
@@ -35,7 +35,7 @@ define amdgpu_kernel void @div_ftz(ptr addrspace(4) byref(i64) %"63", ptr addrsp
   store float %"76", ptr addrspace(5) %"69", align 4
   %"79" = load float, ptr addrspace(5) %"67", align 4
   %"80" = load float, ptr addrspace(5) %"68", align 4
-  %2 = call %struct.f32.f32.f32.i8 @__zluda_ptx_impl_div_rn_ftz_f32_part1(float %"79", float %"80")
+  %2 = call %struct.f32.f32.f32.i8 @__zluda_ptx_impl_div_f32_part1(float %"79", float %"80")
   %"37" = extractvalue %struct.f32.f32.f32.i8 %2, 0
   %"38" = extractvalue %struct.f32.f32.f32.i8 %2, 1
   %"39" = extractvalue %struct.f32.f32.f32.i8 %2, 2
@@ -49,7 +49,7 @@ define amdgpu_kernel void @div_ftz(ptr addrspace(4) byref(i64) %"63", ptr addrsp
 "55":                                             ; preds = %"57"
   %"82" = load float, ptr addrspace(5) %"67", align 4
   %"83" = load float, ptr addrspace(5) %"68", align 4
-  %"81" = call float @__zluda_ptx_impl_div_rn_ftz_f32_part2(float %"82", float %"83", float %"37", float %"38", float %"39", i8 %"40")
+  %"81" = call float @__zluda_ptx_impl_div_f32_part2(float %"82", float %"83", float %"37", float %"38", float %"39", i8 %"40")
   store float %"81", ptr addrspace(5) %"67", align 4
   br label %"56"
 

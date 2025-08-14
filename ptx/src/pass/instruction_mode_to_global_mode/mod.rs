@@ -1028,6 +1028,16 @@ fn apply_global_mode_controls(
                         let modes = get_modes(&instruction);
                         bb_state.insert(&mut result, modes)?;
                     }
+                    Statement::FpModeRequired { ftz_f32, rnd_f32 } => {
+                        bb_state.insert(
+                            &mut result,
+                            InstructionModes::new(
+                                ast::ScalarType::F32,
+                                ftz_f32.map(DenormalMode::from_ftz),
+                                rnd_f32.map(RoundingMode::from_ast),
+                            ),
+                        )?;
+                    }
                     _ => {}
                 }
                 result.push(statement);
