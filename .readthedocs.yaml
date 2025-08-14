@@ -1,0 +1,11 @@
+version: 2
+build:
+  os: ubuntu-lts-latest
+  tools:
+    rust: latest
+  jobs:
+    install:
+      - cargo install mdbook
+    build:
+      html:
+        - mdbook build docs --dest-dir $READTHEDOCS_OUTPUT/html
