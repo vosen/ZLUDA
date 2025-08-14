@@ -8,4 +8,4 @@ build:
       - cargo install mdbook --root .
     build:
       html:
-        - ./mdbook build docs --dest-dir $READTHEDOCS_OUTPUT/html
+        - ./bin/mdbook build docs --dest-dir $READTHEDOCS_OUTPUT/html
