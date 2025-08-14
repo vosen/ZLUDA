@@ -1063,7 +1063,7 @@ pub struct MovDetails {
 impl MovDetails {
     pub(crate) fn new(vector: Option<VectorPrefix>, scalar: ScalarType) -> Self {
         MovDetails {
-            typ: Type::maybe_vector(vector, scalar)
+            typ: Type::maybe_vector(vector, scalar),
         }
     }
 }

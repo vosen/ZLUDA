@@ -309,7 +309,11 @@ test_ptx!(cp_async, [0u32], [1u32, 2u32, 3u32, 0u32]);
 // different a module that has a different module-level denormal attribute
 // from the denormal attribute of the instruction to catch cases like this
 test_ptx!(div_ftz, [0x16A2028Du32, 0x5E89F6AE], [0x0, 900636404u32]);
-test_ptx!(div_noftz, [0x16A2028Du32, 0x5E89F6AE], [0x26u32, 900636404u32]);
+test_ptx!(
+    div_noftz,
+    [0x16A2028Du32, 0x5E89F6AE],
+    [0x26u32, 900636404u32]
+);
 
 test_ptx!(nanosleep, [0u64], [0u64]);
 test_ptx!(shf_l, [0x12345678u32, 0x9abcdef0u32, 12], [0xcdef0123u32]);
