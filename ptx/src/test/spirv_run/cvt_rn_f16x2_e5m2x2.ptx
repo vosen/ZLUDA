@@ -1,0 +1,23 @@
+.version 7.8
+.target sm_90
+.address_size 64
+
+.visible .entry cvt_rn_f16x2_e5m2x2(
+    .param .u64 input,
+    .param .u64 output
+)
+{
+    .reg .u64           in_addr;
+    .reg .u64           out_addr;
+    .reg .b16           in;
+    .reg .b32           result;
+
+    ld.param.u64        in_addr, [input];
+    ld.param.u64        out_addr, [output];
+
+    ld.b16              in, [in_addr];
+
+    cvt.rn.f16x2.e5m2x2 result, in;
+    st.b32              [out_addr], result;
+    ret;
+}
