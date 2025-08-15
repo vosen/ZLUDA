@@ -1,0 +1,8 @@
+[book]
+authors = ["Andrzej Janik"]
+language = "en"
+multilingual = false
+src = "src"
+title = "ZLUDA"
+
+[preprocessor.alerts]
