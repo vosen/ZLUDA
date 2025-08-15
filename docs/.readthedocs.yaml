@@ -8,4 +8,4 @@ build:
       - cargo install mdbook mdbook-alerts --root .
     build:
       html:
-        - ./bin/mdbook build docs --dest-dir $READTHEDOCS_OUTPUT/html
+        - PATH=$PATH:/bin mdbook build docs --dest-dir $READTHEDOCS_OUTPUT/html
