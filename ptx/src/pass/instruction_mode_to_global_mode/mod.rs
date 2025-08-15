@@ -803,6 +803,13 @@ fn create_control_flow_graph(
                             let modes = get_modes(instruction);
                             bb_state.append(modes);
                         }
+                        Statement::FpModeRequired { ftz_f32, rnd_f32 } => {
+                            bb_state.append(InstructionModes::new(
+                                ast::ScalarType::F32,
+                                ftz_f32.map(DenormalMode::from_ftz),
+                                rnd_f32.map(RoundingMode::from_ast),
+                            ));
+                        }
                         _ => {}
                     }
                 }
@@ -1020,6 +1027,16 @@ fn apply_global_mode_controls(
                     Statement::Instruction(instruction) => {
                         let modes = get_modes(&instruction);
                         bb_state.insert(&mut result, modes)?;
+                    }
+                    Statement::FpModeRequired { ftz_f32, rnd_f32 } => {
+                        bb_state.insert(
+                            &mut result,
+                            InstructionModes::new(
+                                ast::ScalarType::F32,
+                                ftz_f32.map(DenormalMode::from_ftz),
+                                rnd_f32.map(RoundingMode::from_ast),
+                            ),
+                        )?;
                     }
                     _ => {}
                 }

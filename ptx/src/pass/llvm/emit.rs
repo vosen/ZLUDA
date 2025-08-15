@@ -397,6 +397,8 @@ impl<'a> MethodEmitContext<'a> {
             Statement::VectorWrite(vector_write) => self.emit_vector_write(vector_write)?,
             Statement::SetMode(mode_reg) => self.emit_set_mode(mode_reg)?,
             Statement::FpSaturate { dst, src, type_ } => self.emit_fp_saturate(type_, dst, src)?,
+            // No-op
+            Statement::FpModeRequired { .. } => {}
         })
     }
 
@@ -825,25 +827,12 @@ impl<'a> MethodEmitContext<'a> {
         match &*arguments.return_arguments {
             [] => {}
             [name] => self.resolver.register(*name, llvm_call),
-            [b32, pred] => {
-                self.resolver.with_result(*b32, |name| unsafe {
-                    LLVMBuildExtractValue(self.builder, llvm_call, 0, name)
-                });
-                self.resolver.with_result(*pred, |name| unsafe {
-                    let extracted =
-                        LLVMBuildExtractValue(self.builder, llvm_call, 1, LLVM_UNNAMED.as_ptr());
-                    LLVMBuildTrunc(
-                        self.builder,
-                        extracted,
-                        get_scalar_type(self.context, ast::ScalarType::Pred),
-                        name,
-                    )
-                });
-            }
-            _ => {
-                return Err(error_todo_msg(
-                    "Only two return arguments (.b32, .pred) currently supported",
-                ))
+            args => {
+                for (i, arg) in args.iter().copied().enumerate() {
+                    self.resolver.with_result(arg, |name| unsafe {
+                        LLVMBuildExtractValue(self.builder, llvm_call, i as u32, name)
+                    });
+                }
             }
         }
         Ok(())
@@ -992,44 +981,28 @@ impl<'a> MethodEmitContext<'a> {
                 unsafe {
                     LLVMSetAlignment(load, type_.layout().align() as u32);
                 }
-                Ok(load)
+                Ok((load, type_))
             })
             .collect::<Result<Vec<_>, _>>()?;
-
         match &*loads {
             [] => unsafe { LLVMBuildRetVoid(self.builder) },
-            [value] => unsafe { LLVMBuildRet(self.builder, *value) },
-            _ => {
-                check_multiple_return_types(values.iter().map(|(_, type_)| type_))?;
-                let array_ty =
-                    get_array_type(self.context, &ast::Type::Scalar(ast::ScalarType::B32), 2)?;
-                let insert_b32 = unsafe {
-                    LLVMBuildInsertValue(
-                        self.builder,
-                        LLVMGetPoison(array_ty),
-                        loads[0],
-                        0,
-                        LLVM_UNNAMED.as_ptr(),
-                    )
-                };
-                let zext_pred = unsafe {
-                    LLVMBuildZExt(
-                        self.builder,
-                        loads[1],
-                        get_type(self.context, &ast::Type::Scalar(ast::ScalarType::B32))?,
-                        LLVM_UNNAMED.as_ptr(),
-                    )
-                };
-                let insert_pred = unsafe {
-                    LLVMBuildInsertValue(
-                        self.builder,
-                        insert_b32,
-                        zext_pred,
-                        1,
-                        LLVM_UNNAMED.as_ptr(),
-                    )
-                };
-                unsafe { LLVMBuildRet(self.builder, insert_pred) }
+            [(value, _)] => unsafe { LLVMBuildRet(self.builder, *value) },
+            loads => {
+                let struct_type =
+                    get_or_create_struct_type(self.context, loads.iter().map(|(_, type_)| *type_))?;
+                let mut value = unsafe { LLVMGetUndef(struct_type) };
+                for (i, (load, _)) in loads.iter().enumerate() {
+                    value = unsafe {
+                        LLVMBuildInsertValue(
+                            self.builder,
+                            value,
+                            *load,
+                            i as u32,
+                            LLVM_UNNAMED.as_ptr(),
+                        )
+                    };
+                }
+                unsafe { LLVMBuildRet(self.builder, value) }
             }
         };
         Ok(())
@@ -1898,10 +1871,10 @@ impl<'a> MethodEmitContext<'a> {
         to: ptx_parser::ScalarType,
         arguments: ptx_parser::CvtArgs<SpirvWord>,
         llvm_func: unsafe extern "C" fn(
-            arg1: LLVMBuilderRef,
-            Val: LLVMValueRef,
-            DestTy: LLVMTypeRef,
-            Name: *const i8,
+            LLVMBuilderRef,
+            LLVMValueRef,
+            LLVMTypeRef,
+            *const i8,
         ) -> LLVMValueRef,
     ) -> Result<(), TranslateError> {
         let type_ = get_scalar_type(self.context, to);
@@ -2928,46 +2901,60 @@ fn get_type(context: LLVMContextRef, type_: &ast::Type) -> Result<LLVMTypeRef, T
     })
 }
 
-fn get_array_type<'a>(
+fn get_or_create_struct_type<'a>(
     context: LLVMContextRef,
-    elem_type: &'a ast::Type,
-    count: u64,
+    mut elem_types: impl Iterator<Item = &'a ast::Type>,
 ) -> Result<LLVMTypeRef, TranslateError> {
-    let elem_type = get_type(context, elem_type)?;
-    Ok(unsafe { LLVMArrayType2(elem_type, count) })
+    use std::fmt::Write;
+    let (mut name, types) = elem_types.try_fold(
+        ("struct".to_string(), Vec::new()),
+        |(mut name, mut types), t| {
+            name.push('.');
+            if let ast::Type::Scalar(scalar) = t {
+                write!(name, "{}", LLVMTypeDisplay(*scalar)).ok();
+            } else {
+                return Err(error_unreachable());
+            }
+            types.push(get_type(context, t)?);
+            Ok((name, types))
+        },
+    )?;
+    name.push('\0');
+    let mut struct_type = unsafe { LLVMGetTypeByName2(context, name.as_ptr().cast()) };
+    if struct_type.is_null() {
+        struct_type = create_struct_type(context, name, types);
+    }
+    Ok(struct_type)
 }
 
-fn check_multiple_return_types<'a>(
-    mut return_args: impl ExactSizeIterator<Item = &'a ast::Type>,
-) -> Result<(), TranslateError> {
-    let err_msg = "Only (.b32, .pred) multiple return types are supported";
-
-    let first = return_args.next().ok_or_else(|| error_todo_msg(err_msg))?;
-    let second = return_args.next().ok_or_else(|| error_todo_msg(err_msg))?;
-    match (first, second) {
-        (ast::Type::Scalar(first), ast::Type::Scalar(second)) => {
-            if first.size_of() != 4 || second.size_of() != 1 {
-                return Err(error_todo_msg(err_msg));
-            }
-        }
-        _ => return Err(error_todo_msg(err_msg)),
+fn create_struct_type(
+    context: LLVMContextRef,
+    name: String,
+    mut elem_types: Vec<LLVMTypeRef>,
+) -> LLVMTypeRef {
+    let llvm_type = unsafe { LLVMStructCreateNamed(context, name.as_ptr().cast()) };
+    unsafe {
+        LLVMStructSetBody(
+            llvm_type,
+            elem_types.as_mut_ptr(),
+            elem_types.len() as u32,
+            0,
+        )
     }
-    Ok(())
+    llvm_type
 }
 
 fn get_function_type<'a>(
     context: LLVMContextRef,
-    mut return_args: impl ExactSizeIterator<Item = &'a ast::Type>,
+    mut return_args: impl DoubleEndedIterator<Item = &'a ast::Type>
+        + ExactSizeIterator<Item = &'a ast::Type>,
     input_args: impl ExactSizeIterator<Item = Result<LLVMTypeRef, TranslateError>>,
 ) -> Result<LLVMTypeRef, TranslateError> {
     let mut input_args = input_args.collect::<Result<Vec<_>, _>>()?;
     let return_type = match return_args.len() {
         0 => unsafe { LLVMVoidTypeInContext(context) },
         1 => get_type(context, &return_args.next().unwrap())?,
-        _ => {
-            check_multiple_return_types(return_args)?;
-            get_array_type(context, &ast::Type::Scalar(ast::ScalarType::B32), 2)?
-        }
+        _ => get_or_create_struct_type(context, return_args)?,
     };
 
     Ok(unsafe {
