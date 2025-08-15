@@ -1,4 +1,5 @@
 use super::*;
+use smallvec::*;
 
 pub(super) fn run<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
@@ -71,12 +72,135 @@ fn run_statements<'input>(
     statements
         .into_iter()
         .map(|statement| {
-            Ok(match statement {
-                Statement::Instruction(instruction) => {
-                    Statement::Instruction(run_instruction(resolver, fn_declarations, instruction)?)
+            Ok::<SmallVec<[_; 3]>, _>(match statement {
+                Statement::Instruction(ast::Instruction::ShflSync {
+                    data,
+                    arguments:
+                        ast::ShflSyncArgs {
+                            dst_pred: Some(dst_pred),
+                            dst,
+                            src,
+                            src_lane,
+                            src_opts,
+                            src_membermask,
+                        },
+                }) => {
+                    let mode = match data.mode {
+                        ptx_parser::ShuffleMode::Up => "up",
+                        ptx_parser::ShuffleMode::Down => "down",
+                        ptx_parser::ShuffleMode::BFly => "bfly",
+                        ptx_parser::ShuffleMode::Idx => "idx",
+                    };
+                    let packed_var = resolver.register_unnamed(Some((
+                        ast::Type::Vector(2, ast::ScalarType::U32),
+                        ptx_parser::StateSpace::Reg,
+                    )));
+                    let dst_pred_wide = resolver.register_unnamed(Some((
+                        ast::Type::Scalar(ast::ScalarType::U32),
+                        ptx_parser::StateSpace::Reg,
+                    )));
+                    let full_name = [ZLUDA_PTX_PREFIX, "shfl_sync_", mode, "_b32_pred"].concat();
+                    let return_arguments = vec![(
+                        ast::Type::Vector(2, ast::ScalarType::U32),
+                        ptx_parser::StateSpace::Reg,
+                    )];
+                    let input_arguments = vec![
+                        (
+                            ast::Type::Scalar(ast::ScalarType::U32),
+                            ptx_parser::StateSpace::Reg,
+                        ),
+                        (
+                            ast::Type::Scalar(ast::ScalarType::U32),
+                            ptx_parser::StateSpace::Reg,
+                        ),
+                        (
+                            ast::Type::Scalar(ast::ScalarType::U32),
+                            ptx_parser::StateSpace::Reg,
+                        ),
+                        (
+                            ast::Type::Scalar(ast::ScalarType::U32),
+                            ptx_parser::StateSpace::Reg,
+                        ),
+                    ];
+                    let func = match fn_declarations.entry(full_name.into()) {
+                        hash_map::Entry::Occupied(occupied_entry) => occupied_entry.get().1,
+                        hash_map::Entry::Vacant(vacant_entry) => {
+                            let name = vacant_entry.key().clone();
+                            let name = resolver.register_named(name, None);
+                            vacant_entry.insert((
+                                to_variables(resolver, &return_arguments),
+                                name,
+                                to_variables(resolver, &input_arguments),
+                            ));
+                            name
+                        }
+                    };
+                    smallvec![
+                        Statement::Instruction::<_, SpirvWord>(ast::Instruction::Call {
+                            data: ptx_parser::CallDetails {
+                                uniform: false,
+                                return_arguments: vec![(
+                                    ast::Type::Vector(2, ast::ScalarType::U32),
+                                    ptx_parser::StateSpace::Reg,
+                                )],
+                                input_arguments: vec![
+                                    (
+                                        ast::Type::Scalar(ast::ScalarType::U32),
+                                        ptx_parser::StateSpace::Reg,
+                                    ),
+                                    (
+                                        ast::Type::Scalar(ast::ScalarType::U32),
+                                        ptx_parser::StateSpace::Reg,
+                                    ),
+                                    (
+                                        ast::Type::Scalar(ast::ScalarType::U32),
+                                        ptx_parser::StateSpace::Reg,
+                                    ),
+                                    (
+                                        ast::Type::Scalar(ast::ScalarType::U32),
+                                        ptx_parser::StateSpace::Reg,
+                                    ),
+                                ],
+                            },
+                            arguments: ptx_parser::CallArgs {
+                                return_arguments: vec![packed_var],
+                                func,
+                                input_arguments: vec![src, src_lane, src_opts, src_membermask],
+                            },
+                        }),
+                        Statement::RepackVector(RepackVectorDetails {
+                            is_extract: true,
+                            typ: ast::ScalarType::U32,
+                            packed: packed_var,
+                            unpacked: vec![dst, dst_pred_wide],
+                            relaxed_type_check: false,
+                        }),
+                        Statement::Instruction(ast::Instruction::Cvt {
+                            data: ast::CvtDetails {
+                                from: ast::ScalarType::U32,
+                                to: ast::ScalarType::Pred,
+                                mode: ast::CvtMode::Truncate
+                            },
+                            arguments: ast::CvtArgs {
+                                dst: dst_pred,
+                                src: dst_pred_wide,
+                            },
+                        })
+                    ]
                 }
-                s => s,
+                Statement::<ast::Instruction<SpirvWord>, SpirvWord>::Instruction(instruction) => {
+                    smallvec![
+                        Statement::<ast::Instruction<SpirvWord>, SpirvWord>::Instruction(
+                            run_instruction(resolver, fn_declarations, instruction)?
+                        )
+                    ]
+                }
+                s => smallvec![s],
             })
+        })
+        .flat_map(|result| match result {
+            Ok(vec) => vec.into_iter().map(|item| Ok(item)).collect(),
+            Err(er) => vec![Err(er)],
         })
         .collect::<Result<Vec<_>, _>>()
 }
@@ -141,6 +265,52 @@ fn run_instruction<'input>(
             let name = ["bfe_", scalar_to_ptx_name(data)].concat();
             to_call(resolver, fn_declarations, name.into(), i)?
         }
+        i @ ptx_parser::Instruction::Sqrt {
+            data:
+                ast::RcpData {
+                    kind: ast::RcpKind::Compliant(ast::RoundingMode::NearestEven),
+                    flush_to_zero: Some(true),
+                    ..
+                },
+            ..
+        } => {
+            let name = "sqrt_rn_ftz_f32";
+            to_call(resolver, fn_declarations, name.into(), i)?
+        }
+        i @ ptx_parser::Instruction::Sqrt {
+            data:
+                ast::RcpData {
+                    kind: ast::RcpKind::Compliant(ast::RoundingMode::NearestEven),
+                    ..
+                },
+            ..
+        } => {
+            let name = "sqrt_rn_f32";
+            to_call(resolver, fn_declarations, name.into(), i)?
+        }
+        i @ ptx_parser::Instruction::Div {
+            data:
+                ast::DivDetails::Float(ast::DivFloatDetails {
+                    kind: ast::DivFloatKind::Rounding(_),
+                    flush_to_zero: Some(true),
+                    ..
+                }),
+            ..
+        } => {
+            let name = "div_rn_ftz_f32";
+            to_call(resolver, fn_declarations, name.into(), i)?
+        }
+        i @ ptx_parser::Instruction::Div {
+            data:
+                ast::DivDetails::Float(ast::DivFloatDetails {
+                    kind: ast::DivFloatKind::Rounding(_),
+                    ..
+                }),
+            ..
+        } => {
+            let name = "div_rn_f32";
+            to_call(resolver, fn_declarations, name.into(), i)?
+        }
         i @ ptx_parser::Instruction::Bfi { data, .. } => {
             let name = ["bfi_", scalar_to_ptx_name(data)].concat();
             to_call(resolver, fn_declarations, name.into(), i)?
@@ -163,23 +333,24 @@ fn run_instruction<'input>(
                 ptx_parser::Instruction::BarRed { data, arguments },
             )?
         }
-        ptx_parser::Instruction::ShflSync { data, arguments } => {
+        ptx_parser::Instruction::ShflSync {
+            data,
+            arguments: orig_arguments @ ast::ShflSyncArgs { dst_pred: None, .. },
+        } => {
             let mode = match data.mode {
                 ptx_parser::ShuffleMode::Up => "up",
                 ptx_parser::ShuffleMode::Down => "down",
                 ptx_parser::ShuffleMode::BFly => "bfly",
                 ptx_parser::ShuffleMode::Idx => "idx",
             };
-            let pred = if arguments.dst_pred.is_some() {
-                "_pred"
-            } else {
-                ""
-            };
             to_call(
                 resolver,
                 fn_declarations,
-                format!("shfl_sync_{}_b32{}", mode, pred).into(),
-                ptx_parser::Instruction::ShflSync { data, arguments },
+                format!("shfl_sync_{}_b32", mode).into(),
+                ptx_parser::Instruction::ShflSync {
+                    data,
+                    arguments: orig_arguments,
+                },
             )?
         }
         i @ ptx_parser::Instruction::Nanosleep { .. } => {
