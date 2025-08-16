@@ -89,6 +89,13 @@ ptx_parser_macros::generate_instruction_type!(
                 src3: T,
             }
         },
+        BarWarp {
+            type: Type::Scalar(ScalarType::U32),
+            data: (),
+            arguments<T>: {
+                src: T,
+            }
+        },
         Bar {
             type: Type::Scalar(ScalarType::U32),
             data: BarData,
@@ -243,6 +250,27 @@ ptx_parser_macros::generate_instruction_type!(
                 dst: T,
                 src1: T,
                 src2: T,
+            }
+        },
+        Dp4a {
+            data: Dp4aDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::B32) },
+                },
+                src1: {
+                    repr: T,
+                    type: { Type::Scalar(data.atype) },
+                },
+                src2: {
+                    repr: T,
+                    type: { Type::Scalar(data.btype) },
+                },
+                src3: {
+                    repr: T,
+                    type: { Type::Scalar(data.ctype()) },
+                },
             }
         },
         Ex2 {
@@ -2057,6 +2085,21 @@ pub enum DivDetails {
     Unsigned(ScalarType),
     Signed(ScalarType),
     Float(DivFloatDetails),
+}
+
+#[derive(Copy, Clone)]
+pub struct Dp4aDetails {
+    pub atype: ScalarType,
+    pub btype: ScalarType,
+}
+
+impl Dp4aDetails {
+    pub fn ctype(self) -> ScalarType {
+        match (self.atype, self.btype) {
+            (ScalarType::U32, ScalarType::U32) => ScalarType::U32,
+            _ => ScalarType::S32,
+        }
+    }
 }
 
 impl DivDetails {

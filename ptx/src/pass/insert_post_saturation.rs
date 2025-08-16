@@ -74,6 +74,7 @@ fn run_instruction<'input>(
         | ast::Instruction::And { .. }
         | ast::Instruction::Atom { .. }
         | ast::Instruction::AtomCas { .. }
+        | ast::Instruction::BarWarp { .. }
         | ast::Instruction::Bar { .. }
         | ast::Instruction::BarRed { .. }
         | ast::Instruction::Bfe { .. }
@@ -120,6 +121,7 @@ fn run_instruction<'input>(
         }
         | ast::Instruction::Cvta { .. }
         | ast::Instruction::Div { .. }
+        | ast::Instruction::Dp4a { .. }
         | ast::Instruction::Ex2 { .. }
         | ast::Instruction::Fma {
             data: ast::ArithFloat {

@@ -1,6 +1,7 @@
 use ::dark_api::fatbin::FatbinFileIterator;
 use ::dark_api::FnFfi;
 use cuda_types::cuda::*;
+use cuda_types::dark_api::FatbinHeader;
 use dark_api::DarkApiState2;
 use log::{CudaFunctionName, ErrorEntry};
 use parking_lot::ReentrantMutex;
@@ -368,7 +369,7 @@ impl DarkApiTrace {
                 FatbinFileIterator::new(
                     fatbin_header
                         .as_ref()
-                        .ok_or(ErrorEntry::NullPointer("get_module_from_cubin_ext2_post"))?,
+                        .ok_or(ErrorEntry::NullPointer("FatbinHeader"))?,
                 ),
             )
         });
@@ -1232,9 +1233,9 @@ impl Settings {
         fn parse_compute_capability(env_string: &str) -> Option<(u32, u32)> {
             let regex = Regex::new(r"(\d+)\.(\d+)").unwrap();
             let captures = regex.captures(&env_string)?;
-            let major = captures.get(0)?;
+            let major = captures.get(1)?;
             let major = str::parse::<u32>(major.as_str()).ok()?;
-            let minor = captures.get(1)?;
+            let minor = captures.get(2)?;
             let minor = str::parse::<u32>(minor.as_str()).ok()?;
             Some((major, minor))
         }
@@ -1353,13 +1354,27 @@ pub(crate) fn cuModuleGetFunction_Post(
 
 #[allow(non_snake_case)]
 pub(crate) fn cuDeviceGetAttribute_Post(
-    _pi: *mut ::std::os::raw::c_int,
-    _attrib: CUdevice_attribute,
+    pi: *mut ::std::os::raw::c_int,
+    attrib: CUdevice_attribute,
     _dev: CUdevice,
-    _state: &mut trace::StateTracker,
+    state: &mut trace::StateTracker,
     _fn_logger: &mut FnCallLog,
     _result: CUresult,
 ) {
+    if attrib == CUdevice_attribute::CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR {
+        if let Some((major_override, _)) = state.override_cc {
+            unsafe {
+                *pi = major_override as i32;
+            };
+        }
+    }
+    if attrib == CUdevice_attribute::CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR {
+        if let Some((_, minor_override)) = state.override_cc {
+            unsafe {
+                *pi = minor_override as i32;
+            };
+        }
+    }
 }
 
 #[allow(non_snake_case)]
@@ -1381,12 +1396,25 @@ pub(crate) fn cuDeviceComputeCapability_Post(
 
 #[allow(non_snake_case)]
 pub(crate) fn cuModuleLoadFatBinary_Post(
-    _module: *mut CUmodule,
-    _fatCubin: *const ::std::os::raw::c_void,
-    _state: &mut trace::StateTracker,
-    _fn_logger: &mut FnCallLog,
+    module: *mut CUmodule,
+    fatbin_header: *const ::std::os::raw::c_void,
+    state: &mut trace::StateTracker,
+    fn_logger: &mut FnCallLog,
     _result: CUresult,
 ) {
+    fn_logger.try_(|fn_logger| unsafe {
+        trace::record_submodules(
+            *module,
+            fn_logger,
+            state,
+            FatbinFileIterator::new(
+                fatbin_header
+                    .cast::<FatbinHeader>()
+                    .as_ref()
+                    .ok_or(ErrorEntry::NullPointer("FatbinHeader"))?,
+            ),
+        )
+    });
 }
 
 #[allow(non_snake_case)]

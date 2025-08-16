@@ -3150,6 +3150,13 @@ derive_parser!(
     }
     .op: Reduction = { .and, .or };
 
+    bar.warp.sync membermask => {
+        ast::Instruction::BarWarp {
+            data: (),
+            arguments: BarWarpArgs { src: membermask }
+        }
+    }
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-atom
     atom{.sem}{.scope}{.space}.op{.level::cache_hint}.type                                      d, [a], b{, cache_policy} => {
         if level_cache_hint || cache_policy.is_some() {
@@ -3689,6 +3696,25 @@ derive_parser!(
 
     .dir: ShiftDirection = { .l, .r };
     .mode: FunnelShiftMode = { .clamp, .wrap };
+
+    trap => {
+        Instruction::Trap {}
+    }
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#integer-arithmetic-instructions-dp4a
+
+    dp4a.atype.btype  d, a, b, c => {
+        Instruction::Dp4a {
+            data: Dp4aDetails {
+                atype,
+                btype
+            },
+            arguments: Dp4aArgs { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+
+    .atype: ScalarType = { .u32, .s32 };
+    .btype: ScalarType = { .u32, .s32 };
 );
 
 #[cfg(test)]

@@ -9,7 +9,6 @@ define amdgpu_kernel void @cvt_rzi(ptr addrspace(4) byref(i64) %"35", ptr addrsp
   br label %"34"
 
 "34":                                             ; preds = %1
-  call void @llvm.amdgcn.s.setreg(i32 6145, i32 3)
   %"41" = load i64, ptr addrspace(4) %"35", align 8
   store i64 %"41", ptr addrspace(5) %"37", align 8
   %"42" = load i64, ptr addrspace(4) %"36", align 8
@@ -25,12 +24,10 @@ define amdgpu_kernel void @cvt_rzi(ptr addrspace(4) byref(i64) %"35", ptr addrsp
   store float %"46", ptr addrspace(5) %"40", align 4
   %"48" = load float, ptr addrspace(5) %"39", align 4
   %2 = call float @llvm.trunc.f32(float %"48")
-  %"47" = freeze float %2
-  store float %"47", ptr addrspace(5) %"39", align 4
+  store float %2, ptr addrspace(5) %"39", align 4
   %"50" = load float, ptr addrspace(5) %"40", align 4
   %3 = call float @llvm.trunc.f32(float %"50")
-  %"49" = freeze float %3
-  store float %"49", ptr addrspace(5) %"40", align 4
+  store float %3, ptr addrspace(5) %"40", align 4
   %"51" = load i64, ptr addrspace(5) %"38", align 8
   %"52" = load float, ptr addrspace(5) %"39", align 4
   %"57" = inttoptr i64 %"51" to ptr
@@ -43,12 +40,8 @@ define amdgpu_kernel void @cvt_rzi(ptr addrspace(4) byref(i64) %"35", ptr addrsp
   ret void
 }
 
-; Function Attrs: nocallback nofree nosync nounwind willreturn
-declare void @llvm.amdgcn.s.setreg(i32 immarg, i32) #1
-
 ; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
-declare float @llvm.trunc.f32(float) #2
+declare float @llvm.trunc.f32(float) #1
 
 attributes #0 = { "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="preserve-sign" "denormal-fp-math-f32"="ieee" "no-trapping-math"="true" "uniform-work-group-size"="true" }
-attributes #1 = { nocallback nofree nosync nounwind willreturn }
-attributes #2 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
+attributes #1 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }

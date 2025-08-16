@@ -1,4 +1,4 @@
-declare [16 x i8] @foobar(i64) #0
+declare hidden [16 x i8] @foobar(i64) #0
 
 define amdgpu_kernel void @extern_func(ptr addrspace(4) byref(i64) %"44", ptr addrspace(4) byref(i64) %"45") #1 {
   %"46" = alloca i64, align 8, addrspace(5)

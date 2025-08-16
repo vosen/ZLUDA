@@ -26,8 +26,8 @@ define amdgpu_kernel void @setp_leu(ptr addrspace(4) byref(i64) %"39", ptr addrs
   store float %"52", ptr addrspace(5) %"44", align 4
   %"54" = load float, ptr addrspace(5) %"43", align 4
   %"55" = load float, ptr addrspace(5) %"44", align 4
-  %"53" = fcmp ule float %"54", %"55"
-  store i1 %"53", ptr addrspace(5) %"46", align 1
+  %2 = fcmp ule float %"54", %"55"
+  store i1 %2, ptr addrspace(5) %"46", align 1
   %"56" = load i1, ptr addrspace(5) %"46", align 1
   br i1 %"56", label %"16", label %"17"
 

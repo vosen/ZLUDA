@@ -1829,6 +1829,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::Bra { .. }
         | ast::Instruction::Clz { .. }
         | ast::Instruction::Brev { .. }
+        | ast::Instruction::Dp4a { .. }
         | ast::Instruction::Popc { .. }
         | ast::Instruction::Xor { .. }
         | ast::Instruction::Rem { .. }
@@ -1844,6 +1845,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::Shl { .. }
         | ast::Instruction::Selp { .. }
         | ast::Instruction::Ret { .. }
+        | ast::Instruction::BarWarp { .. }
         | ast::Instruction::Bar { .. }
         | ast::Instruction::BarRed { .. }
         | ast::Instruction::Cvta { .. }
