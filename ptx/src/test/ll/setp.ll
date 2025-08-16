@@ -26,8 +26,8 @@ define amdgpu_kernel void @setp(ptr addrspace(4) byref(i64) %"41", ptr addrspace
   store i64 %"54", ptr addrspace(5) %"46", align 8
   %"56" = load i64, ptr addrspace(5) %"45", align 8
   %"57" = load i64, ptr addrspace(5) %"46", align 8
-  %"55" = icmp ult i64 %"56", %"57"
-  store i1 %"55", ptr addrspace(5) %"48", align 1
+  %2 = icmp ult i64 %"56", %"57"
+  store i1 %2, ptr addrspace(5) %"48", align 1
   %"58" = load i1, ptr addrspace(5) %"48", align 1
   br i1 %"58", label %"16", label %"17"
 

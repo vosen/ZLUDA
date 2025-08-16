@@ -1,8 +1,8 @@
 %struct.f32.f32.f32.i8 = type { float, float, float, i8 }
 
-declare %struct.f32.f32.f32.i8 @__zluda_ptx_impl_div_f32_part1(float, float) #0
+declare hidden %struct.f32.f32.f32.i8 @__zluda_ptx_impl_div_f32_part1(float, float) #0
 
-declare float @__zluda_ptx_impl_div_f32_part2(float, float, float, float, float, i8) #0
+declare hidden float @__zluda_ptx_impl_div_f32_part2(float, float, float, float, float, i8) #0
 
 define amdgpu_kernel void @div_noftz(ptr addrspace(4) byref(i64) %"62", ptr addrspace(4) byref(i64) %"63") #1 {
   %"64" = alloca i64, align 8, addrspace(5)

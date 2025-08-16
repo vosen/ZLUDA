@@ -1,4 +1,4 @@
-define float @add_rm(float %"79", float %"80") #0 {
+define hidden float @add_rm(float %"79", float %"80") #0 {
   %"128" = alloca float, align 4, addrspace(5)
   %"129" = alloca float, align 4, addrspace(5)
   %"130" = alloca float, align 4, addrspace(5)
@@ -33,7 +33,7 @@ define float @add_rm(float %"79", float %"80") #0 {
   ret float %2
 }
 
-define float @add_rp(float %"82", float %"83") #0 {
+define hidden float @add_rp(float %"82", float %"83") #0 {
   %"141" = alloca float, align 4, addrspace(5)
   %"142" = alloca float, align 4, addrspace(5)
   %"143" = alloca float, align 4, addrspace(5)

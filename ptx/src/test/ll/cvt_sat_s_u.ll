@@ -20,7 +20,7 @@ define amdgpu_kernel void @cvt_sat_s_u(ptr addrspace(4) byref(i64) %"32", ptr ad
   store i32 %"41", ptr addrspace(5) %"36", align 4
   %"44" = load i32, ptr addrspace(5) %"36", align 4
   %2 = call i32 @llvm.smax.i32(i32 %"44", i32 0)
-  %3 = call i32 @llvm.umin.i32(i32 %2, i32 -1)
+  %3 = call i32 @llvm.smin.i32(i32 %2, i32 2147483647)
   store i32 %3, ptr addrspace(5) %"37", align 4
   %"46" = load i32, ptr addrspace(5) %"37", align 4
   store i32 %"46", ptr addrspace(5) %"38", align 4
@@ -35,7 +35,7 @@ define amdgpu_kernel void @cvt_sat_s_u(ptr addrspace(4) byref(i64) %"32", ptr ad
 declare i32 @llvm.smax.i32(i32, i32) #1
 
 ; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
-declare i32 @llvm.umin.i32(i32, i32) #1
+declare i32 @llvm.smin.i32(i32, i32) #1
 
 attributes #0 = { "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="preserve-sign" "denormal-fp-math-f32"="preserve-sign" "no-trapping-math"="true" "uniform-work-group-size"="true" }
 attributes #1 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }

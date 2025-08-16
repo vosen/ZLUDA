@@ -1,8 +1,8 @@
-declare i1 @__zluda_ptx_impl_bar_red_and_pred(i32, i1, i1) #0
+declare hidden i1 @__zluda_ptx_impl_bar_red_and_pred(i32, i1, i1) #0
 
-declare i1 @__zluda_ptx_impl_bar_red_or_pred(i32, i1, i1) #0
+declare hidden i1 @__zluda_ptx_impl_bar_red_or_pred(i32, i1, i1) #0
 
-declare i32 @__zluda_ptx_impl_sreg_tid(i8) #0
+declare hidden i32 @__zluda_ptx_impl_sreg_tid(i8) #0
 
 define amdgpu_kernel void @bar_red_and_pred(ptr addrspace(4) byref(i64) %"73", ptr addrspace(4) byref(i64) %"74") #1 {
   %"75" = alloca i64, align 8, addrspace(5)
@@ -29,8 +29,8 @@ define amdgpu_kernel void @bar_red_and_pred(ptr addrspace(4) byref(i64) %"73", p
   %"84" = urem i32 %"85", 2
   store i32 %"84", ptr addrspace(5) %"78", align 4
   %"87" = load i32, ptr addrspace(5) %"78", align 4
-  %"86" = icmp eq i32 %"87", 0
-  store i1 %"86", ptr addrspace(5) %"80", align 1
+  %2 = icmp eq i32 %"87", 0
+  store i1 %2, ptr addrspace(5) %"80", align 1
   store i32 0, ptr addrspace(5) %"81", align 4
   %"90" = load i1, ptr addrspace(5) %"80", align 1
   %"89" = call i1 @__zluda_ptx_impl_bar_red_and_pred(i32 1, i1 %"90", i1 false)

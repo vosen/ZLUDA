@@ -170,6 +170,11 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                 unsafe { LLVMAddAttributeAtIndex(fn_, i as u32 + 1, attr) };
             }
         }
+        if !method.is_kernel {
+            unsafe {
+                LLVMSetVisibility(fn_, llvm_zluda::LLVMVisibility::LLVMHiddenVisibility);
+            }
+        }
         let call_conv = if method.is_kernel {
             Self::kernel_call_convention()
         } else {
@@ -474,6 +479,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Mov { data: _, arguments } => self.emit_mov(arguments),
             ast::Instruction::Ld { data, arguments } => self.emit_ld(data, arguments),
             ast::Instruction::Add { data, arguments } => self.emit_add(data, arguments),
+            ast::Instruction::Dp4a { data, arguments } => self.emit_dp4a(data, arguments),
             ast::Instruction::St { data, arguments } => self.emit_st(data, arguments),
             ast::Instruction::Mul { data, arguments } => self.emit_mul(data, arguments),
             ast::Instruction::Mul24 { data, arguments } => self.emit_mul24(data, arguments),
@@ -515,12 +521,13 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Popc { data, arguments } => self.emit_popc(data, arguments),
             ast::Instruction::Xor { data, arguments } => self.emit_xor(data, arguments),
             ast::Instruction::Rem { data, arguments } => self.emit_rem(data, arguments),
+            ast::Instruction::BarWarp { .. } => self.emit_bar_warp(),
             ast::Instruction::PrmtSlow { .. } => {
                 Err(error_todo_msg("PrmtSlow is not implemented yet"))
             }
             ast::Instruction::Prmt { data, arguments } => self.emit_prmt(data, arguments),
             ast::Instruction::Membar { data } => self.emit_membar(data),
-            ast::Instruction::Trap {} => Err(error_todo_msg("Trap is not implemented yet")),
+            ast::Instruction::Trap {} => self.emit_trap(),
             ast::Instruction::Tanh { data, arguments } => self.emit_tanh(data, arguments),
             ast::Instruction::CpAsync { data, arguments } => self.emit_cp_async(data, arguments),
             ast::Instruction::CpAsyncCommitGroup {} => Ok(()), // nop
@@ -2198,6 +2205,11 @@ impl<'a> MethodEmitContext<'a> {
         Ok(())
     }
 
+    fn emit_bar_warp(&mut self) -> Result<(), TranslateError> {
+        self.emit_intrinsic(c"llvm.amdgcn.barrier.warp", None, None, vec![])?;
+        Ok(())
+    }
+
     fn emit_popc(
         &mut self,
         type_: ptx_parser::ScalarType,
@@ -2761,6 +2773,50 @@ impl<'a> MethodEmitContext<'a> {
         )?;
         // Not sure if it ultimately does anything
         unsafe { LLVMZludaSetFastMathFlags(tanh, LLVMZludaFastMathApproxFunc) }
+        Ok(())
+    }
+
+    fn emit_dp4a(
+        &mut self,
+        data: ast::Dp4aDetails,
+        arguments: ast::Dp4aArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let intrinsic = match (data.atype, data.btype) {
+            (ast::ScalarType::U32, ast::ScalarType::U32) => c"llvm.amdgcn.udot4",
+            (ast::ScalarType::S32, ast::ScalarType::S32) => c"llvm.amdgcn.sdot4",
+            (ast::ScalarType::U32, ast::ScalarType::S32)
+            | (ast::ScalarType::S32, ast::ScalarType::U32) => {
+                return Err(error_todo_msg("dp4a with mixed types is not yet supported"))
+            }
+            _ => return Err(error_unreachable()),
+        };
+        let pred = get_scalar_type(self.context, ast::ScalarType::Pred);
+        let zero = unsafe { LLVMConstInt(pred, 0, 0) };
+        self.emit_intrinsic(
+            intrinsic,
+            Some(arguments.dst),
+            Some(&data.ctype().into()),
+            vec![
+                (
+                    self.resolver.value(arguments.src1)?,
+                    get_scalar_type(self.context, data.ctype()),
+                ),
+                (
+                    self.resolver.value(arguments.src2)?,
+                    get_scalar_type(self.context, data.ctype()),
+                ),
+                (
+                    self.resolver.value(arguments.src3)?,
+                    get_scalar_type(self.context, data.ctype()),
+                ),
+                (zero, pred),
+            ],
+        )?;
+        Ok(())
+    }
+
+    fn emit_trap(&mut self) -> Result<(), TranslateError> {
+        self.emit_intrinsic(c"llvm.trap", None, None, vec![])?;
         Ok(())
     }
 

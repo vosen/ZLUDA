@@ -1,4 +1,4 @@
-declare i32 @__zluda_ptx_impl_sreg_ntid(i8) #0
+declare hidden i32 @__zluda_ptx_impl_sreg_ntid(i8) #0
 
 define amdgpu_kernel void @ntid(ptr addrspace(4) byref(i64) %"35", ptr addrspace(4) byref(i64) %"36") #1 {
   %"37" = alloca i64, align 8, addrspace(5)

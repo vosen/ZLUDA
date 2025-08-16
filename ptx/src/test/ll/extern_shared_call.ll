@@ -1,6 +1,6 @@
 @shared_mem = external addrspace(3) global [0 x i32], align 4
 
-define void @incr_shared_2_global() #0 {
+define hidden void @incr_shared_2_global() #0 {
   %"36" = alloca i64, align 8, addrspace(5)
   br label %1
 
