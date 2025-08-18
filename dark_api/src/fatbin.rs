@@ -106,7 +106,7 @@ impl<'a> FatbinSubmodule<'a> {
         FatbinSubmodule { header }
     }
 
-    pub fn get_files(&self) -> FatbinFileIterator {
+    pub fn get_files(&self) -> FatbinFileIterator<'a> {
         unsafe { FatbinFileIterator::new(self.header) }
     }
 }
@@ -200,7 +200,7 @@ impl<'a> FatbinFileIterator<'a> {
         Self { file_buffer }
     }
 
-    pub unsafe fn next(&mut self) -> Result<Option<FatbinFile>, ParseError> {
+    pub unsafe fn next(&mut self) -> Result<Option<FatbinFile<'a>>, ParseError> {
         if self.file_buffer.len() < std::mem::size_of::<FatbinFileHeader>() {
             return Ok(None);
         }

@@ -1,4 +1,4 @@
-declare float @__zluda_ptx_impl_sqrt_approx_f32(float) #0
+declare hidden float @__zluda_ptx_impl_sqrt_approx_f32(float) #0
 
 define amdgpu_kernel void @sqrt(ptr addrspace(4) byref(i64) %"30", ptr addrspace(4) byref(i64) %"31") #1 {
   %"32" = alloca i64, align 8, addrspace(5)

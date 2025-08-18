@@ -317,12 +317,18 @@ test_ptx!(
     [0x12345678u32, 0x9abcdef0u32, 44],
     [0xef012345u32]
 );
+test_ptx!(
+    dp4a,
+    [0x8e2da590u32, 0xedeaee14, 0x248a9f70],
+    [613065134u32]
+);
 
 test_ptx!(assertfail);
 // TODO: not yet supported
 //test_ptx!(func_ptr);
 test_ptx!(lanemask_lt);
 test_ptx!(extern_func);
+test_ptx!(trap);
 
 test_ptx_warp!(
     tid,
@@ -640,11 +646,15 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
                 .to_str()
                 .unwrap(),
             &*module.llvm_ir.write_bitcode_to_memory(),
-            &*module.attributes_ir.write_bitcode_to_memory(),
             module.linked_bitcode(),
+            &*module.attributes_ir.write_bitcode_to_memory(),
             None,
         )
         .unwrap();
+        // TODO: Re-enable when we are able to privatize function-scoped
+        // globals and constants
+        // let fns = comgr::get_symbols(&comgr, &elf_module).unwrap();
+        // verify_symbols(fns);
         let mut module = unsafe { mem::zeroed() };
         unsafe { hipModuleLoadData(&mut module, elf_module.as_ptr() as _) }.unwrap();
         let mut kernel = unsafe { mem::zeroed() };
@@ -704,3 +714,30 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
     }
     Ok(result)
 }
+
+// TODO: Re-enable when we are able to privatize function-scoped
+// globals and constants
+/*
+fn verify_symbols(mut symbols: Vec<(u32, String)>) {
+    symbols.sort();
+    if symbols.len() != 2 {
+        panic!("Expected exactly two symbols, found: {:?}", symbols);
+    }
+    assert_eq!(
+        symbols[0].0, 1,
+        "Wrong symbols exported from binary: {:?}",
+        symbols
+    );
+    assert_eq!(
+        symbols[1].0, 2,
+        "Wrong symbols exported from binary: {:?}",
+        symbols
+    );
+    assert_eq!(
+        symbols[0].1,
+        format!("{}.kd", symbols[1].1),
+        "Wrong symbols exported from binary: {:?}",
+        symbols
+    );
+}
+ */

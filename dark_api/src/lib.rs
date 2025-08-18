@@ -124,7 +124,7 @@ macro_rules! dark_api {
                 result
             }
 
-            pub fn get(&self, key: &cuda_types::cuda::CUuuid) -> Option<crate::DarkApiTable> {
+            pub fn get(&self, key: &cuda_types::cuda::CUuuid) -> Option<crate::DarkApiTable<'_>> {
                 match key {
                     $(
                         &Self::$name => {
