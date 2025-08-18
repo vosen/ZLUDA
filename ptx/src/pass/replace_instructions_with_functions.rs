@@ -269,6 +269,7 @@ fn run_instruction<'input>(
             data:
                 ast::RcpData {
                     kind: ast::RcpKind::Compliant(ast::RoundingMode::NearestEven),
+                    type_: ast::ScalarType::F32,
                     flush_to_zero: Some(true),
                     ..
                 },
@@ -281,34 +282,12 @@ fn run_instruction<'input>(
             data:
                 ast::RcpData {
                     kind: ast::RcpKind::Compliant(ast::RoundingMode::NearestEven),
+                    type_: ast::ScalarType::F32,
                     ..
                 },
             ..
         } => {
             let name = "sqrt_rn_f32";
-            to_call(resolver, fn_declarations, name.into(), i)?
-        }
-        i @ ptx_parser::Instruction::Div {
-            data:
-                ast::DivDetails::Float(ast::DivFloatDetails {
-                    kind: ast::DivFloatKind::Rounding(_),
-                    flush_to_zero: Some(true),
-                    ..
-                }),
-            ..
-        } => {
-            let name = "div_rn_ftz_f32";
-            to_call(resolver, fn_declarations, name.into(), i)?
-        }
-        i @ ptx_parser::Instruction::Div {
-            data:
-                ast::DivDetails::Float(ast::DivFloatDetails {
-                    kind: ast::DivFloatKind::Rounding(_),
-                    ..
-                }),
-            ..
-        } => {
-            let name = "div_rn_f32";
             to_call(resolver, fn_declarations, name.into(), i)?
         }
         i @ ptx_parser::Instruction::Bfi { data, .. } => {
