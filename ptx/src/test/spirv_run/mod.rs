@@ -714,3 +714,30 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
     }
     Ok(result)
 }
+
+// TODO: Re-enable when we are able to privatize function-scoped
+// globals and constants
+/*
+fn verify_symbols(mut symbols: Vec<(u32, String)>) {
+    symbols.sort();
+    if symbols.len() != 2 {
+        panic!("Expected exactly two symbols, found: {:?}", symbols);
+    }
+    assert_eq!(
+        symbols[0].0, 1,
+        "Wrong symbols exported from binary: {:?}",
+        symbols
+    );
+    assert_eq!(
+        symbols[1].0, 2,
+        "Wrong symbols exported from binary: {:?}",
+        symbols
+    );
+    assert_eq!(
+        symbols[0].1,
+        format!("{}.kd", symbols[1].1),
+        "Wrong symbols exported from binary: {:?}",
+        symbols
+    );
+}
+ */
