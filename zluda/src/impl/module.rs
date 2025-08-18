@@ -145,8 +145,8 @@ fn compile_from_ptx_and_cache(
         comgr,
         gcn_arch,
         &*llvm_module.llvm_ir.write_bitcode_to_memory(),
-        &*llvm_module.attributes_ir.write_bitcode_to_memory(),
         llvm_module.linked_bitcode(),
+        &*llvm_module.attributes_ir.write_bitcode_to_memory(),
         None,
     )
     .map_err(|_| CUerror::UNKNOWN)?;

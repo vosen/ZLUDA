@@ -1,4 +1,4 @@
-declare i32 @__zluda_ptx_impl_bfi_b32(i32, i32, i32, i32) #0
+declare hidden i32 @__zluda_ptx_impl_bfi_b32(i32, i32, i32, i32) #0
 
 define amdgpu_kernel void @bfi(ptr addrspace(4) byref(i64) %"39", ptr addrspace(4) byref(i64) %"40") #1 {
   %"41" = alloca i64, align 8, addrspace(5)

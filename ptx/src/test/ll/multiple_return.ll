@@ -1,4 +1,6 @@
-define [2 x i32] @do_something(i32 %"10") #0 {
+%struct.i32.i1 = type { i32, i1 }
+
+define hidden %struct.i32.i1 @do_something(i32 %"10") #0 {
   %"46" = alloca i32, align 4, addrspace(5)
   %"47" = alloca i1, align 1, addrspace(5)
   br label %1
@@ -12,10 +14,9 @@ define [2 x i32] @do_something(i32 %"10") #0 {
   store i1 true, ptr addrspace(5) %"47", align 1
   %2 = load i32, ptr addrspace(5) %"46", align 4
   %3 = load i1, ptr addrspace(5) %"47", align 1
-  %4 = insertvalue [2 x i32] poison, i32 %2, 0
-  %5 = zext i1 %3 to i32
-  %6 = insertvalue [2 x i32] %4, i32 %5, 1
-  ret [2 x i32] %6
+  %4 = insertvalue %struct.i32.i1 undef, i32 %2, 0
+  %5 = insertvalue %struct.i32.i1 %4, i1 %3, 1
+  ret %struct.i32.i1 %5
 }
 
 define amdgpu_kernel void @multiple_return(ptr addrspace(4) byref(i64) %"50", ptr addrspace(4) byref(i64) %"51") #1 {
@@ -39,10 +40,9 @@ define amdgpu_kernel void @multiple_return(ptr addrspace(4) byref(i64) %"50", pt
   %"59" = load i32, ptr %"68", align 4
   store i32 %"59", ptr addrspace(5) %"54", align 4
   %"63" = load i32, ptr addrspace(5) %"54", align 4
-  %2 = call [2 x i32] @do_something(i32 %"63")
-  %"61" = extractvalue [2 x i32] %2, 0
-  %3 = extractvalue [2 x i32] %2, 1
-  %"62" = trunc i32 %3 to i1
+  %2 = call %struct.i32.i1 @do_something(i32 %"63")
+  %"61" = extractvalue %struct.i32.i1 %2, 0
+  %"62" = extractvalue %struct.i32.i1 %2, 1
   store i32 %"61", ptr addrspace(5) %"55", align 4
   store i1 %"62", ptr addrspace(5) %"56", align 1
   br label %"45"

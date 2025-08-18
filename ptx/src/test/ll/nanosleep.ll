@@ -1,4 +1,4 @@
-declare void @__zluda_ptx_impl_nanosleep_u32(i32) #0
+declare hidden void @__zluda_ptx_impl_nanosleep_u32(i32) #0
 
 define amdgpu_kernel void @nanosleep(ptr addrspace(4) byref(i64) %"28", ptr addrspace(4) byref(i64) %"29") #1 {
   br label %1

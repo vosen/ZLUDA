@@ -1,4 +1,4 @@
-declare i32 @__zluda_ptx_impl_activemask() #0
+declare hidden i32 @__zluda_ptx_impl_activemask() #0
 
 define amdgpu_kernel void @activemask(ptr addrspace(4) byref(i64) %"29", ptr addrspace(4) byref(i64) %"30") #1 {
   %"31" = alloca i64, align 8, addrspace(5)

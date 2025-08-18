@@ -62,8 +62,8 @@ define amdgpu_kernel void @setp_nan(ptr addrspace(4) byref(i64) %"83", ptr addrs
   store float %"114", ptr addrspace(5) %"94", align 4
   %"116" = load float, ptr addrspace(5) %"87", align 4
   %"117" = load float, ptr addrspace(5) %"88", align 4
-  %"115" = fcmp uno float %"116", %"117"
-  store i1 %"115", ptr addrspace(5) %"96", align 1
+  %2 = fcmp uno float %"116", %"117"
+  store i1 %2, ptr addrspace(5) %"96", align 1
   %"118" = load i1, ptr addrspace(5) %"96", align 1
   br i1 %"118", label %"22", label %"23"
 
@@ -86,8 +86,8 @@ define amdgpu_kernel void @setp_nan(ptr addrspace(4) byref(i64) %"83", ptr addrs
   store i32 %"123", ptr %"159", align 4
   %"125" = load float, ptr addrspace(5) %"89", align 4
   %"126" = load float, ptr addrspace(5) %"90", align 4
-  %"124" = fcmp uno float %"125", %"126"
-  store i1 %"124", ptr addrspace(5) %"96", align 1
+  %3 = fcmp uno float %"125", %"126"
+  store i1 %3, ptr addrspace(5) %"96", align 1
   %"127" = load i1, ptr addrspace(5) %"96", align 1
   br i1 %"127", label %"26", label %"27"
 
@@ -111,8 +111,8 @@ define amdgpu_kernel void @setp_nan(ptr addrspace(4) byref(i64) %"83", ptr addrs
   store i32 %"132", ptr %"73", align 4
   %"134" = load float, ptr addrspace(5) %"91", align 4
   %"135" = load float, ptr addrspace(5) %"92", align 4
-  %"133" = fcmp uno float %"134", %"135"
-  store i1 %"133", ptr addrspace(5) %"96", align 1
+  %4 = fcmp uno float %"134", %"135"
+  store i1 %4, ptr addrspace(5) %"96", align 1
   %"136" = load i1, ptr addrspace(5) %"96", align 1
   br i1 %"136", label %"30", label %"31"
 
@@ -136,8 +136,8 @@ define amdgpu_kernel void @setp_nan(ptr addrspace(4) byref(i64) %"83", ptr addrs
   store i32 %"141", ptr %"77", align 4
   %"143" = load float, ptr addrspace(5) %"93", align 4
   %"144" = load float, ptr addrspace(5) %"94", align 4
-  %"142" = fcmp uno float %"143", %"144"
-  store i1 %"142", ptr addrspace(5) %"96", align 1
+  %5 = fcmp uno float %"143", %"144"
+  store i1 %5, ptr addrspace(5) %"96", align 1
   %"145" = load i1, ptr addrspace(5) %"96", align 1
   br i1 %"145", label %"34", label %"35"
 

@@ -1,4 +1,4 @@
-define <2 x i32> @impl(<2 x i32> %"9") #0 {
+define hidden <2 x i32> @impl(<2 x i32> %"9") #0 {
   %"47" = alloca <2 x i32>, align 8, addrspace(5)
   %"48" = alloca <2 x i32>, align 8, addrspace(5)
   %"49" = alloca i32, align 4, addrspace(5)

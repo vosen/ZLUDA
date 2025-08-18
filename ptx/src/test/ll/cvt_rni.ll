@@ -24,12 +24,10 @@ define amdgpu_kernel void @cvt_rni(ptr addrspace(4) byref(i64) %"35", ptr addrsp
   store float %"46", ptr addrspace(5) %"40", align 4
   %"48" = load float, ptr addrspace(5) %"39", align 4
   %2 = call float @llvm.roundeven.f32(float %"48")
-  %"47" = freeze float %2
-  store float %"47", ptr addrspace(5) %"39", align 4
+  store float %2, ptr addrspace(5) %"39", align 4
   %"50" = load float, ptr addrspace(5) %"40", align 4
   %3 = call float @llvm.roundeven.f32(float %"50")
-  %"49" = freeze float %3
-  store float %"49", ptr addrspace(5) %"40", align 4
+  store float %3, ptr addrspace(5) %"40", align 4
   %"51" = load i64, ptr addrspace(5) %"38", align 8
   %"52" = load float, ptr addrspace(5) %"39", align 4
   %"57" = inttoptr i64 %"51" to ptr

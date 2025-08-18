@@ -1,4 +1,4 @@
-define i64 @incr(i64 %"43") #0 {
+define hidden i64 @incr(i64 %"43") #0 {
   %"63" = alloca i64, align 8, addrspace(5)
   %"64" = alloca i64, align 8, addrspace(5)
   %"65" = alloca i64, align 8, addrspace(5)
