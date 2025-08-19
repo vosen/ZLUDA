@@ -63,10 +63,12 @@ where
     F: FnOnce(ptx_parser::Module) -> D,
     D: Display,
 {
-    let actual_ptx_out = ptx_parser::parse_module_checked(ptx_in).map(|ast| {
-        let result = run_pass(ast);
-        result.to_string()
-    }).unwrap_or("".to_string());
+    let actual_ptx_out = ptx_parser::parse_module_checked(ptx_in)
+        .map(|ast| {
+            let result = run_pass(ast);
+            result.to_string()
+        })
+        .unwrap_or("".to_string());
     compare_ptx(name, ptx_in, &actual_ptx_out, expected_ptx_out);
     Ok(())
 }

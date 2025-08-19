@@ -1,5 +1,5 @@
-use crate::pass::*;
 use super::DisplayDirective2Vec;
+use crate::pass::*;
 
 use super::test_pass;
 
