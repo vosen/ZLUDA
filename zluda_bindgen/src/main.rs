@@ -837,7 +837,10 @@ fn generate_ml(crate_root: &PathBuf) {
         .allowlist_var("^NVML.*")
         .must_use_type("nvmlReturn_t")
         .constified_enum("nvmlReturn_enum")
-        .clang_args(["-I/usr/local/cuda/include"])
+        .clang_args([
+            "-I/usr/local/cuda/include",
+            "-DNVML_NO_UNVERSIONED_FUNC_DEFS",
+        ])
         .generate()
         .unwrap()
         .to_string();
