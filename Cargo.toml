@@ -30,6 +30,7 @@ members = [
     "zluda_trace_common",
     "zluda_trace_dnn",
     "zluda_trace_fft",
+    "zluda_trace_nvml",
     "zluda_trace_sparse",
     "zluda_fft",
     "zluda_inject",
