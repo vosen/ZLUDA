@@ -53,9 +53,9 @@ fn generate_process_address_table(crate_root: &PathBuf, mut cuda_fns: Vec<Ident>
         library.get::<unsafe extern "system" fn(
             symbol: *const ::core::ffi::c_char,
             pfn: *mut *mut ::core::ffi::c_void,
-            cudaVersion: ::core::ffi::c_int,
+            cuda_version: ::core::ffi::c_int,
             flags: cuda_types::cuda::cuuint64_t,
-            symbolStatus: *mut cuda_types::cuda::CUdriverProcAddressQueryResult,
+            symbol_status: *mut cuda_types::cuda::CUdriverProcAddressQueryResult,
         ) -> cuda_types::cuda::CUresult>(b"cuGetProcAddress_v2\0")
     }
     .unwrap();
@@ -863,6 +863,13 @@ fn generate_ml(crate_root: &PathBuf) {
         &["..", "cuda_types", "src", "nvml.rs"],
         &module,
     );
+    generate_display_perflib(
+        Some(&result_options),
+        &crate_root,
+        &["..", "format", "src", "format_generated_nvml.rs"],
+        &["cuda_types", "nvml"],
+        &module,
+    );
 }
 
 fn generate_types_library(
@@ -1439,6 +1446,13 @@ fn generate_display_perflib(
         "cudnnBackendDescriptor_t",
         "cublasLtLoggerCallback_t",
         "cusparseLoggerCallback_t",
+        "nvmlSample_st",
+        "nvmlVgpuInstanceUtilizationSample_st",
+        "nvmlVgpuInstanceUtilizationInfo_v1_t",
+        "nvmlFieldValue_st",
+        "nvmlVgpuSchedulerSetState_st",
+        "nvmlVgpuSchedulerLog_st",
+        "nvmlVgpuSchedulerGetState_st",
     ];
     let ignore_functions = [];
     let count_selectors = [

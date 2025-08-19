@@ -3945,6 +3945,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "zluda_trace_ml"
+version = "0.0.0"
+dependencies = [
+ "cglue",
+ "cuda_macros",
+ "cuda_types",
+ "dark_api",
+ "format",
+ "libloading",
+ "paste",
+ "unwrap_or",
+ "zluda_trace_common",
+]
+
+[[package]]
 name = "zluda_trace_sparse"
 version = "0.0.0"
 dependencies = [
