@@ -3,6 +3,7 @@ use cuda_types::{
     cuda::{CUerror, CUresult, CUresultConsts, CUuuid},
     cufft::cufftResultConsts,
     cusparse::cusparseStatus_tConsts,
+    nvml::nvmlReturn_tConsts,
 };
 use dark_api::ByteVecFfi;
 use std::{borrow::Cow, ffi::c_void, num::NonZero, ptr, sync::LazyLock};
@@ -431,6 +432,30 @@ impl ReprUsize for cuda_types::cusparse::cusparseMatrixType_t {
     }
 
     const INTERNAL_ERROR: usize = 0;
+
+    extern "C" fn format_status(x: usize) -> ByteVecFfi {
+        let mut writer = Vec::new();
+        format::CudaDisplay::write(&Self::from_usize(x), "", 0, &mut writer).ok();
+        ByteVecFfi::new(writer)
+    }
+}
+
+impl ReprUsize for cuda_types::nvml::nvmlReturn_t {
+    fn to_usize(self) -> usize {
+        match self {
+            cuda_types::nvml::nvmlReturn_t::SUCCESS => 0,
+            Err(err) => err.0.get() as usize,
+        }
+    }
+
+    fn from_usize(x: usize) -> Self {
+        match NonZero::new(x as u32) {
+            None => Ok(()),
+            Some(err) => Err(cuda_types::nvml::nvmlError_t(err)),
+        }
+    }
+
+    const INTERNAL_ERROR: usize = cuda_types::nvml::nvmlError_t::UNKNOWN.0.get() as usize;
 
     extern "C" fn format_status(x: usize) -> ByteVecFfi {
         let mut writer = Vec::new();

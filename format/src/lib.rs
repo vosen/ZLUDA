@@ -788,6 +788,26 @@ impl<T: CudaDisplay, const N: usize> CudaDisplay for [T; N] {
     }
 }
 
+impl<const N: usize> CudaDisplay for [i8; N] {
+    fn write(
+        &self,
+        fn_name: &'static str,
+        index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        let slice = unsafe { std::slice::from_raw_parts(self.as_ptr().cast::<u8>(), N) };
+        match CStr::from_bytes_until_nul(slice) {
+            Ok(cstr) => writer.write_all(cstr.to_bytes()),
+            Err(_) => CudaDisplay::write(
+                slice,
+                fn_name,
+                index,
+                writer,
+            ),
+        }
+    }
+}
+
 impl<T: CudaDisplay> CudaDisplay for [T] {
     fn write(
         &self,
@@ -1301,6 +1321,196 @@ fn cudnn9_print_elements(
     }
 }
 
+fn write_nvml_value(
+    writer: &mut (impl std::io::Write + ?Sized),
+    type_: Option<cuda_types::nvml::nvmlValueType_t>,
+    value: cuda_types::nvml::nvmlValue_t) -> std::io::Result<()> {
+    match type_ {
+        Some(cuda_types::nvml::nvmlValueType_t::NVML_VALUE_TYPE_DOUBLE) => {
+            writer.write_fmt(format_args!("{}", unsafe { value.dVal } ))
+        }
+        Some(cuda_types::nvml::nvmlValueType_t::NVML_VALUE_TYPE_UNSIGNED_INT) => {
+            writer.write_fmt(format_args!("{}", unsafe { value.uiVal }))
+        }
+        Some(cuda_types::nvml::nvmlValueType_t::NVML_VALUE_TYPE_UNSIGNED_LONG) => {
+            writer.write_fmt(format_args!("{}", unsafe { value.ulVal }))
+        }
+        Some(cuda_types::nvml::nvmlValueType_t::NVML_VALUE_TYPE_UNSIGNED_LONG_LONG) => {
+            writer.write_fmt(format_args!("{}", unsafe { value.ullVal }))
+        }
+        Some(cuda_types::nvml::nvmlValueType_t::NVML_VALUE_TYPE_SIGNED_LONG_LONG) => {
+            writer.write_fmt(format_args!("{}", unsafe { value.sllVal }))
+        }
+        Some(cuda_types::nvml::nvmlValueType_t::NVML_VALUE_TYPE_SIGNED_INT) => {
+            writer.write_fmt(format_args!("{}", unsafe { value.siVal }))
+        }
+        Some(cuda_types::nvml::nvmlValueType_t::NVML_VALUE_TYPE_UNSIGNED_SHORT) => {
+            writer.write_fmt(format_args!("{}", unsafe { value.usVal }))
+        }
+        Some(_) | None => {
+            CudaDisplay::write(&unsafe { mem::transmute::<_, [u8;8]>(value) }, "", 0, writer)
+        },
+    }
+}
+
+impl crate::CudaDisplay for cuda_types::nvml::nvmlSample_st {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(timeStamp), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.timeStamp, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(sampleValue), ": ").as_bytes())?;
+        write_nvml_value(writer, None, self.sampleValue)?;
+        writer.write_all(b" }")
+    }
+}
+
+impl crate::CudaDisplay for cuda_types::nvml::nvmlVgpuInstanceUtilizationSample_st {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(vgpuInstance), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.vgpuInstance, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(timeStamp), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.timeStamp, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(smUtil), ": ").as_bytes())?;
+        write_nvml_value(writer, None, self.smUtil)?;
+        writer.write_all(concat!(", ", stringify!(memUtil), ": ").as_bytes())?;
+        write_nvml_value(writer, None, self.memUtil)?;
+        writer.write_all(concat!(", ", stringify!(encUtil), ": ").as_bytes())?;
+        write_nvml_value(writer, None, self.encUtil)?;
+        writer.write_all(concat!(", ", stringify!(decUtil), ": ").as_bytes())?;
+        write_nvml_value(writer, None, self.decUtil)?;
+        writer.write_all(b" }")
+    }
+}
+
+impl crate::CudaDisplay for cuda_types::nvml::nvmlVgpuInstanceUtilizationInfo_v1_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(timeStamp), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.timeStamp, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(vgpuInstance), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.vgpuInstance, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(smUtil), ": ").as_bytes())?;
+        write_nvml_value(writer, None, self.smUtil)?;
+        writer.write_all(concat!(", ", stringify!(memUtil), ": ").as_bytes())?;
+        write_nvml_value(writer, None, self.memUtil)?;
+        writer.write_all(concat!(", ", stringify!(encUtil), ": ").as_bytes())?;
+        write_nvml_value(writer, None, self.encUtil)?;
+        writer.write_all(concat!(", ", stringify!(decUtil), ": ").as_bytes())?;
+        write_nvml_value(writer, None, self.decUtil)?;
+        writer.write_all(concat!(", ", stringify!(jpgUtil), ": ").as_bytes())?;
+        write_nvml_value(writer, None, self.jpgUtil)?;
+        writer.write_all(concat!(", ", stringify!(ofaUtil), ": ").as_bytes())?;
+        write_nvml_value(writer, None, self.ofaUtil)?;
+        writer.write_all(b" }")
+    }
+}
+
+impl crate::CudaDisplay for cuda_types::nvml::nvmlFieldValue_st {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(fieldId), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.fieldId, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(scopeId), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.scopeId, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(timestamp), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.timestamp, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(latencyUsec), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.latencyUsec, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(valueType), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.valueType, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(nvmlReturn), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.nvmlReturn, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(value), ": ").as_bytes())?;
+        write_nvml_value(writer, Some(self.valueType), self.value)?;
+        writer.write_all(b" }")
+    }
+}
+
+impl crate::CudaDisplay for cuda_types::nvml::nvmlVgpuSchedulerSetState_st {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(schedulerPolicy), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.schedulerPolicy, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(enableARRMode), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.enableARRMode, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(schedulerParams), ": ").as_bytes())?;
+        if self.enableARRMode != 0 {
+            crate::CudaDisplay::write(&unsafe { self.schedulerParams.vgpuSchedDataWithARR }, "", 0, writer)?;
+        } else {
+            crate::CudaDisplay::write(&unsafe { self.schedulerParams.vgpuSchedData } , "", 0, writer)?;
+        }
+        writer.write_all(b" }")
+    }
+}
+
+impl crate::CudaDisplay for cuda_types::nvml::nvmlVgpuSchedulerLog_st {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(engineId), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.engineId, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(schedulerPolicy), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.schedulerPolicy, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(arrMode), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.arrMode, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(schedulerParams), ": ").as_bytes())?;        if self.arrMode != 0 {
+            crate::CudaDisplay::write(&unsafe { self.schedulerParams.vgpuSchedDataWithARR }, "", 0, writer)?;
+        } else {
+            crate::CudaDisplay::write(&unsafe { self.schedulerParams.vgpuSchedData } , "", 0, writer)?;
+        }
+        writer.write_all(concat!(", ", stringify!(entriesCount), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.entriesCount, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(logEntries), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.logEntries, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
+
+impl crate::CudaDisplay for cuda_types::nvml::nvmlVgpuSchedulerGetState_st {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(schedulerPolicy), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.schedulerPolicy, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(arrMode), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.arrMode, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(schedulerParams), ": ").as_bytes())?;
+        if self.arrMode != 0 {
+            crate::CudaDisplay::write(&unsafe { self.schedulerParams.vgpuSchedDataWithARR }, "", 0, writer)?;
+        } else {
+            crate::CudaDisplay::write(&unsafe { self.schedulerParams.vgpuSchedData } , "", 0, writer)?;
+        }
+        writer.write_all(b" }")
+    }
+}
+
 mod dark_api;
 mod format_generated;
 pub use format_generated::*;
@@ -1314,5 +1524,7 @@ mod format_generated_dnn9;
 pub use format_generated_dnn9::*;
 mod format_generated_fft;
 pub use format_generated_fft::*;
+mod format_generated_nvml;
+pub use format_generated_nvml::*;
 mod format_generated_sparse;
 pub use format_generated_sparse::*;

@@ -16,6 +16,4 @@ cuda_types = { path = "../cuda_types" }
 linux_symlinks = [
     "libnvidia-ml.so",
     "libnvidia-ml.so.1",
-    "trace/libnvidia-ml.so",
-    "trace/libnvidia-ml.so.1",
 ]
