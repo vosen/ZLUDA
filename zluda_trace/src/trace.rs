@@ -15,6 +15,7 @@ use std::{
     ffi::{c_void, CStr, CString},
     fs::{self, File},
     io::{self, Read, Write},
+    mem,
     path::PathBuf,
 };
 use unwrap_or::unwrap_some_or;
@@ -123,12 +124,18 @@ impl StateTracker {
         self.module_counter += 1;
         if unsafe { *(raw_image as *const [u8; 4]) } == *goblin::elf64::header::ELFMAG {
             self.saved_modules.insert(module);
-            // TODO: Parse ELF and write it to disk
-            fn_logger.log(log::ErrorEntry::UnsupportedModule {
-                module,
-                raw_image,
-                kind: "ELF",
-            })
+            match unsafe { get_elf_size(raw_image) } {
+                Some(len) => {
+                    let elf_image =
+                        unsafe { std::slice::from_raw_parts(raw_image.cast::<u8>(), len) };
+                    self.record_new_submodule(module, elf_image, fn_logger, "elf");
+                }
+                None => fn_logger.log(log::ErrorEntry::UnsupportedModule {
+                    module,
+                    raw_image,
+                    kind: "ELF",
+                }),
+            }
         } else if unsafe { *(raw_image as *const [u8; 8]) } == *goblin::archive::MAGIC {
             self.saved_modules.insert(module);
             // TODO: Figure out how to get size of archive module and write it to disk
@@ -196,6 +203,107 @@ impl StateTracker {
             ));
         }
     }
+}
+
+unsafe fn get_elf_size(start: *const c_void) -> Option<usize> {
+    let start = start.cast::<u8>();
+    let ei_class = start.add(mem::size_of_val(goblin::elf::header::ELFMAG));
+    let (header, header_size, is_64bit): (goblin::elf::header::Header, _, _) = match *ei_class {
+        goblin::elf::header::ELFCLASS32 => (
+            (*start.cast::<goblin::elf32::header::Header>()).into(),
+            mem::size_of::<goblin::elf32::header::Header>() as u64,
+            false,
+        ),
+        goblin::elf::header::ELFCLASS64 => (
+            (*start.cast::<goblin::elf64::header::Header>()).into(),
+            mem::size_of::<goblin::elf64::header::Header>() as u64,
+            true,
+        ),
+        _ => return None,
+    };
+    let mut max_end = header_size;
+    let ph_table_end = header
+        .e_phoff
+        .checked_add((header.e_phnum as u64).checked_mul(header.e_phentsize as u64)?)?;
+    max_end = max_end.max(ph_table_end);
+    max_end = max_end.max(get_elf_program_headers_size(start, header, is_64bit)?);
+    max_end = max_end.max(get_elf_section_headers_size(start, header, is_64bit)?);
+    Some(max_end as usize)
+}
+
+unsafe fn get_elf_program_headers_size(
+    start: *const u8,
+    header: goblin::elf::header::Header,
+    is_64bit: bool,
+) -> Option<u64> {
+    use goblin::elf::program_header::ProgramHeader;
+    use goblin::elf32::program_header::program_header32::ProgramHeader as ProgramHeader32;
+    use goblin::elf64::program_header::program_header64::ProgramHeader as ProgramHeader64;
+    if is_64bit && !header.e_phentsize as usize == mem::size_of::<ProgramHeader64>() {
+        return None;
+    }
+    if !is_64bit && !header.e_phentsize as usize == mem::size_of::<ProgramHeader32>() {
+        return None;
+    }
+    let prog_headers_start = start.add(header.e_phoff as usize);
+    let mut max_end = 0;
+    for prog_header_idx in 0..header.e_phnum as usize {
+        let program_header: ProgramHeader = if is_64bit {
+            (*(prog_headers_start
+                .add(prog_header_idx.checked_mul(header.e_phentsize as usize)?)
+                .cast::<ProgramHeader64>()))
+            .into()
+        } else {
+            (*(prog_headers_start
+                .add(prog_header_idx.checked_mul(header.e_phentsize as usize)?)
+                .cast::<ProgramHeader32>()))
+            .into()
+        };
+        if program_header.p_filesz != program_header.p_memsz {
+            return None;
+        }
+        let program_end = program_header
+            .p_offset
+            .checked_add(program_header.p_filesz)?;
+        max_end = max_end.max(program_end);
+    }
+    Some(max_end)
+}
+
+unsafe fn get_elf_section_headers_size(
+    start: *const u8,
+    header: goblin::elf::header::Header,
+    is_64bit: bool,
+) -> Option<u64> {
+    use goblin::elf::section_header::SectionHeader;
+    use goblin::elf32::section_header::section_header32::SectionHeader as SectionHeader32;
+    use goblin::elf64::section_header::section_header64::SectionHeader as SectionHeader64;
+    if is_64bit && !header.e_shentsize as usize == mem::size_of::<SectionHeader64>() {
+        return None;
+    }
+    if !is_64bit && !header.e_shentsize as usize == mem::size_of::<SectionHeader32>() {
+        return None;
+    }
+    let section_headers_start = start.add(header.e_shoff as usize);
+    let mut max_end = 0;
+    for section_header_idx in 0..header.e_shnum as usize {
+        let section_header: SectionHeader = if is_64bit {
+            (*(section_headers_start
+                .add(section_header_idx.checked_mul(header.e_shentsize as usize)?)
+                .cast::<SectionHeader64>()))
+            .into()
+        } else {
+            (*(section_headers_start
+                .add(section_header_idx.checked_mul(header.e_shentsize as usize)?)
+                .cast::<SectionHeader32>()))
+            .into()
+        };
+        let program_end = section_header
+            .sh_offset
+            .checked_add(section_header.sh_size)?;
+        max_end = max_end.max(program_end);
+    }
+    Some(max_end)
 }
 
 // This structs writes out information about CUDA execution to the trace dir
