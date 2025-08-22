@@ -999,4 +999,4 @@ fn scalar_to_ptx_name(this: ast::ScalarType) -> &'static str {
 }
 
 type UnconditionalStatement =
-     Statement<ast::Instruction<ast::ParsedOperand<SpirvWord>>, ast::ParsedOperand<SpirvWord>>;
+    Statement<ast::Instruction<ast::ParsedOperand<SpirvWord>>, ast::ParsedOperand<SpirvWord>>;
