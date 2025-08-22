@@ -29,6 +29,9 @@ mod replace_instructions_with_functions_fp_required;
 mod replace_known_functions;
 mod resolve_function_pointers;
 
+#[cfg(test)]
+mod test;
+
 static ZLUDA_PTX_IMPL: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.bc");
 const ZLUDA_PTX_PREFIX: &'static str = "__zluda_ptx_impl_";
 
@@ -577,7 +580,18 @@ struct ImplicitConversion {
     kind: ConversionKind,
 }
 
-#[derive(PartialEq, Clone)]
+impl std::fmt::Display for ImplicitConversion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "zluda.convert_implicit{}{}{}{}{}",
+            self.kind, self.to_space, self.to_type, self.from_space, self.from_type
+        )
+    }
+}
+
+#[derive(PartialEq, Clone, strum_macros::Display)]
+#[strum(serialize_all = "snake_case", prefix = ".")]
 enum ConversionKind {
     Default,
     // zero-extend/chop/bitcast depending on types
@@ -616,6 +630,12 @@ struct FunctionPointerDetails {
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 pub struct SpirvWord(u32);
+
+impl std::fmt::Display for SpirvWord {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "%{}", self.0)
+    }
+}
 
 impl From<u32> for SpirvWord {
     fn from(value: u32) -> Self {
