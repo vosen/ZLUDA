@@ -151,26 +151,46 @@ pub fn get_thunk(
     use dynasmrt::{dynasm, DynasmApi};
     let mut ops = dynasmrt::x86::Assembler::new().unwrap();
     let start = ops.offset();
-    // Let's hope there's never more than 4 arguments
+    // Source: https://www.ired.team/miscellaneous-reversing-forensics/windows-kernel-internals/windows-x64-calling-convention-stack-frame
     dynasm!(ops
         ; .arch x64
-        ; push rbp
-        ; mov rbp, rsp
-        ; push rcx
-        ; push rdx
-        ; push r8
-        ; push r9
+        // tuck args in shadow space
+        ; mov [rsp+0x20], r9
+        ; mov [rsp+0x18], r8
+        ; mov [rsp+0x10], rdx
+        ; mov [rsp+0x08], rcx
+        // 0x20 for shadow space, 0x48 for 9 stack args
+        // `call` instruction will push rsp making this aligned to 16 bytes
+        ; sub rsp, 0x68
         ; mov rcx, QWORD guid as i64
         ; mov rdx, QWORD idx as i64
         ; mov rax, QWORD report_fn as i64
         ; call rax
-        ; pop r9
-        ; pop r8
-        ; pop rdx
-        ; pop rcx
+        ; mov rax, [rsp+0x68+0x68]
+        ; mov [rsp+0x60], rax
+        ; mov rax, [rsp+0x60+0x68]
+        ; mov [rsp+0x58], rax
+        ; mov rax, [rsp+0x58+0x68]
+        ; mov [rsp+0x50], rax
+        ; mov rax, [rsp+0x50+0x68]
+        ; mov [rsp+0x48], rax
+        ; mov rax, [rsp+0x48+0x68]
+        ; mov [rsp+0x40], rax
+        ; mov rax, [rsp+0x40+0x68]
+        ; mov [rsp+0x38], rax
+        ; mov rax, [rsp+0x38+0x68]
+        ; mov [rsp+0x30], rax
+        ; mov rax, [rsp+0x30+0x68]
+        ; mov [rsp+0x28], rax
+        ; mov rax, [rsp+0x28+0x68]
+        ; mov [rsp+0x20], rax
+        ; mov r9,  [rsp+0x20+0x68]
+        ; mov r8,  [rsp+0x18+0x68]
+        ; mov rdx, [rsp+0x10+0x68]
+        ; mov rcx, [rsp+0x08+0x68]
         ; mov rax, QWORD original_fn as i64
         ; call rax
-        ; pop rbp
+        ; add rsp, 0x68
         ; ret
         ; int 3
     );

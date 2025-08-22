@@ -49,6 +49,7 @@ include!("payload_guid.rs");
 
 const NVCUDA_UTF8: &'static str = "NVCUDA.DLL";
 const NVCUDA_UTF16: &[u16] = wch!("NVCUDA.DLL");
+const NVCUDA64_UTF16: &[u16] = wch!("NVCUDA64.DLL");
 const NVML_UTF8: &'static str = "NVML.DLL";
 const NVML_UTF16: &[u16] = wch!("NVML.DLL");
 static mut ZLUDA_PATH_UTF8: Option<&'static [u8]> = None;
@@ -580,7 +581,7 @@ fn is_nvcuda_dll_utf8(lib: *const u8) -> bool {
 }
 
 fn is_nvcuda_dll_utf16(lib: *const u16) -> bool {
-    is_dll_utf16(lib, NVCUDA_UTF16)
+    is_dll_utf16(lib, NVCUDA_UTF16) | is_dll_utf16(lib, NVCUDA64_UTF16)
 }
 
 fn is_nvml_dll_utf8(lib: *const u8) -> bool {
