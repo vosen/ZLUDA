@@ -142,7 +142,8 @@ from_cuda_transmute!(
     CUfunction_attribute => hipFunction_attribute,
     CUstream => hipStream_t,
     CUpointer_attribute => hipPointer_attribute,
-    CUdeviceptr_v2 => hipDeviceptr_t
+    CUdeviceptr_v2 => hipDeviceptr_t,
+    CUevent => hipEvent_t
 );
 
 impl<'a, E: CudaErrorType> FromCuda<'a, CUlimit, E> for hipLimit_t {
