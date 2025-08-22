@@ -585,11 +585,7 @@ impl std::fmt::Display for ImplicitConversion {
         write!(
             f,
             "zluda.convert_implicit{}{}{}{}{}",
-            self.kind,
-            self.to_space,
-            self.to_type,
-            self.from_space,
-            self.from_type
+            self.kind, self.to_space, self.to_type, self.from_space, self.from_type
         )
     }
 }
