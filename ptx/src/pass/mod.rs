@@ -590,7 +590,8 @@ impl std::fmt::Display for ImplicitConversion {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, strum_macros::Display)]
+#[strum(serialize_all = "snake_case", prefix = ".")]
 enum ConversionKind {
     Default,
     // zero-extend/chop/bitcast depending on types
@@ -598,19 +599,6 @@ enum ConversionKind {
     BitToPtr,
     PtrToPtr,
     AddressOf,
-}
-
-impl std::fmt::Display for ConversionKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
-            ConversionKind::Default => ".default",
-            ConversionKind::SignExtend => ".sign_extend",
-            ConversionKind::BitToPtr => ".bit_to_ptr",
-            ConversionKind::PtrToPtr => ".ptr_to_ptr",
-            ConversionKind::AddressOf => ".address_of",
-        };
-        write!(f, "{}", s)
-    }
 }
 
 struct ConstantDefinition {
@@ -1011,4 +999,4 @@ fn scalar_to_ptx_name(this: ast::ScalarType) -> &'static str {
 }
 
 type UnconditionalStatement =
-    Statement<ast::Instruction<ast::ParsedOperand<SpirvWord>>, ast::ParsedOperand<SpirvWord>>;
+     Statement<ast::Instruction<ast::ParsedOperand<SpirvWord>>, ast::ParsedOperand<SpirvWord>>;
