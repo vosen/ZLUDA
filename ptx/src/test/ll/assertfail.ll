@@ -1,4 +1,4 @@
-declare void @__zluda_ptx_impl___assertfail(i64, i64, i32, i64, i64) #0
+declare hidden void @__zluda_ptx_impl___assertfail(i64, i64, i32, i64, i64) #0
 
 define amdgpu_kernel void @assertfail(ptr addrspace(4) byref(i64) %"86", ptr addrspace(4) byref(i64) %"87") #1 {
   %"88" = alloca i64, align 8, addrspace(5)

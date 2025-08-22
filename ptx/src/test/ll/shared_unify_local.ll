@@ -1,7 +1,7 @@
 @shared_ex = external addrspace(3) global [0 x i32]
 @shared_mod = external addrspace(3) global i64, align 4
 
-define i64 @add(i64 %"10") #0 {
+define hidden i64 @add(i64 %"10") #0 {
   %"47" = alloca i64, align 8, addrspace(5)
   %"48" = alloca i64, align 8, addrspace(5)
   br label %1
@@ -21,7 +21,7 @@ define i64 @add(i64 %"10") #0 {
   ret i64 %2
 }
 
-define i64 @set_shared_temp1(i64 %"15", i64 %"16") #0 {
+define hidden i64 @set_shared_temp1(i64 %"15", i64 %"16") #0 {
   %"52" = alloca i64, align 8, addrspace(5)
   br label %1
 

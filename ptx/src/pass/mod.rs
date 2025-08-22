@@ -19,20 +19,24 @@ mod insert_explicit_load_store;
 mod insert_implicit_conversions2;
 mod insert_post_saturation;
 mod instruction_mode_to_global_mode;
-mod llvm;
+pub mod llvm;
 mod normalize_basic_blocks;
 mod normalize_identifiers2;
 mod normalize_predicates2;
 mod remove_unreachable_basic_blocks;
-mod replace_instructions_with_function_calls;
+mod replace_instructions_with_functions;
+mod replace_instructions_with_functions_fp_required;
 mod replace_known_functions;
 mod resolve_function_pointers;
+
+#[cfg(test)]
+mod test;
 
 static ZLUDA_PTX_IMPL: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.bc");
 const ZLUDA_PTX_PREFIX: &'static str = "__zluda_ptx_impl_";
 
 quick_error! {
-    #[derive(Debug)]
+    #[derive(Debug, strum_macros::AsRefStr)]
     pub enum TranslateError {
         UnknownSymbol(symbol: String) {
             display("Unknown symbol: \"{}\"", symbol)
@@ -47,6 +51,7 @@ quick_error! {
 }
 
 /// GPU attributes needed at compile time.
+#[derive(serde::Serialize)]
 pub struct Attributes {
     /// Clock frequency in kHz.
     pub clock_rate: u32,
@@ -67,12 +72,14 @@ pub fn to_llvm_module<'input>(
     let directives = expand_operands::run(&mut flat_resolver, directives)?;
     let directives = insert_post_saturation::run(&mut flat_resolver, directives)?;
     let directives = deparamize_functions::run(&mut flat_resolver, directives)?;
+    let directives =
+        replace_instructions_with_functions_fp_required::run(&mut flat_resolver, directives)?;
     let directives = normalize_basic_blocks::run(&mut flat_resolver, directives)?;
     let directives = remove_unreachable_basic_blocks::run(directives)?;
     let directives = instruction_mode_to_global_mode::run(&mut flat_resolver, directives)?;
     let directives = insert_explicit_load_store::run(&mut flat_resolver, directives)?;
     let directives = insert_implicit_conversions2::run(&mut flat_resolver, directives)?;
-    let directives = replace_instructions_with_function_calls::run(&mut flat_resolver, directives)?;
+    let directives = replace_instructions_with_functions::run(&mut flat_resolver, directives)?;
     let directives = hoist_globals::run(directives)?;
 
     let context = llvm::Context::new();
@@ -234,6 +241,15 @@ enum Statement<I, P: ast::Operand> {
     VectorRead(VectorRead),
     VectorWrite(VectorWrite),
     SetMode(ModeRegister),
+    // This instruction is a nop, it serves as a marker to indicate that the
+    // next instruction requires certain floating-point modes to be set.
+    // Some transcendentals compile to a sequence of instructions that
+    // require certain modes to be set _mid-function_.
+    // See replace_instructions_with_functions_fp_required pass for details
+    FpModeRequired {
+        ftz_f32: Option<bool>,
+        rnd_f32: Option<ast::RoundingMode>,
+    },
     FpSaturate {
         dst: SpirvWord,
         src: SpirvWord,
@@ -540,6 +556,9 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                 )?;
                 Statement::FpSaturate { dst, src, type_ }
             }
+            Statement::FpModeRequired { ftz_f32, rnd_f32 } => {
+                Statement::FpModeRequired { ftz_f32, rnd_f32 }
+            }
         })
     }
 }
@@ -561,7 +580,18 @@ struct ImplicitConversion {
     kind: ConversionKind,
 }
 
-#[derive(PartialEq, Clone)]
+impl std::fmt::Display for ImplicitConversion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "zluda.convert_implicit{}{}{}{}{}",
+            self.kind, self.to_space, self.to_type, self.from_space, self.from_type
+        )
+    }
+}
+
+#[derive(PartialEq, Clone, strum_macros::Display)]
+#[strum(serialize_all = "snake_case", prefix = ".")]
 enum ConversionKind {
     Default,
     // zero-extend/chop/bitcast depending on types
@@ -600,6 +630,12 @@ struct FunctionPointerDetails {
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 pub struct SpirvWord(u32);
+
+impl std::fmt::Display for SpirvWord {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "%{}", self.0)
+    }
+}
 
 impl From<u32> for SpirvWord {
     fn from(value: u32) -> Self {

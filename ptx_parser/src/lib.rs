@@ -152,26 +152,32 @@ type PtxParser<'a, 'input> =
     Stateful<&'a [(Token<'input>, logos::Span)], PtxParserState<'a, 'input>>;
 
 fn ident<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<&'input str> {
-    any.verify_map(|(t, _)| {
-        if let Token::Ident(text) = t {
-            Some(text)
-        } else if let Some(text) = t.opcode_text() {
-            Some(text)
-        } else {
-            None
-        }
-    })
+    trace(
+        "ident",
+        any.verify_map(|(t, _)| {
+            if let Token::Ident(text) = t {
+                Some(text)
+            } else if let Some(text) = t.opcode_text() {
+                Some(text)
+            } else {
+                None
+            }
+        }),
+    )
     .parse_next(stream)
 }
 
 fn dot_ident<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<&'input str> {
-    any.verify_map(|(t, _)| {
-        if let Token::DotIdent(text) = t {
-            Some(text)
-        } else {
-            None
-        }
-    })
+    trace(
+        "dot_ident",
+        any.verify_map(|(t, _)| {
+            if let Token::DotIdent(text) = t {
+                Some(text)
+            } else {
+                None
+            }
+        }),
+    )
     .parse_next(stream)
 }
 
@@ -308,12 +314,15 @@ fn constant<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::Imme
 }
 
 fn immediate_value<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::ImmediateValue> {
-    alt((
-        int_immediate,
-        f32.map(ast::ImmediateValue::F32),
-        f64.map(ast::ImmediateValue::F64),
-        constant,
-    ))
+    trace(
+        "immediate_value",
+        alt((
+            int_immediate,
+            f32.map(ast::ImmediateValue::F32),
+            f64.map(ast::ImmediateValue::F64),
+            constant,
+        )),
+    )
     .parse_next(stream)
 }
 
@@ -723,84 +732,58 @@ fn statement<'a, 'input>(
             pragma.map(|_| None),
             block_statement.map(Some),
         )),
-        take_till_inclusive(
-            |(t, _)| *t == Token::RBrace,
-            |(t, _)| match t {
-                Token::Semicolon | Token::Colon => true,
-                _ => false,
-            },
-        ),
+        take_till_end_of_statement(),
         |text| PtxError::UnrecognizedStatement(text.unwrap_or("")),
     )
     .map(Option::flatten)
     .parse_next(stream)
 }
 
-fn take_till_inclusive<I: Stream, E: ParserError<I>>(
-    backtrack_token: impl Fn(&I::Token) -> bool,
-    end_token: impl Fn(&I::Token) -> bool,
-) -> impl Parser<I, <I as Stream>::Slice, E> {
-    fn get_offset<I: Stream, E: ParserError<I>>(
-        input: &mut I,
-        backtrack_token: &impl Fn(&I::Token) -> bool,
-        end_token: &impl Fn(&I::Token) -> bool,
-        should_backtrack: &mut bool,
-    ) -> Result<usize, E> {
-        *should_backtrack = false;
-        let mut hit = false;
-        for (offset, token) in input.iter_offsets() {
-            if hit {
-                return Ok(offset);
-            } else {
-                if backtrack_token(&token) {
-                    *should_backtrack = true;
-                    return Ok(offset);
+fn take_till_end_of_statement<
+    'a,
+    I: Stream<Token = (Token<'a>, std::ops::Range<usize>)>,
+    E: ParserError<I>,
+>() -> impl Parser<I, <I as Stream>::Slice, E> {
+    trace("take_till_end_of_statement", move |stream: &mut I| {
+        let mut depth = 0;
+
+        let mut iterator = stream.iter_offsets().peekable();
+        while let Some((current_offset, (token, _))) = iterator.next() {
+            match token {
+                Token::LBrace => {
+                    depth += 1;
                 }
-                if end_token(&token) {
-                    hit = true;
+                Token::RBrace => {
+                    if depth == 0 {
+                        return Err(ErrMode::from_error_kind(
+                            stream,
+                            winnow::error::ErrorKind::Token,
+                        ));
+                    }
+                    depth -= 1;
                 }
+                Token::Semicolon | Token::Colon => {
+                    let offset = if let Some((next_offset, _)) = iterator.peek() {
+                        *next_offset
+                    } else {
+                        current_offset
+                    };
+                    return Ok(stream.next_slice(offset));
+                }
+                _ => {}
             }
         }
-        Err(ParserError::from_error_kind(input, ErrorKind::Eof))
-    }
-    trace("take_till_inclusive", move |stream: &mut I| {
-        let mut should_backtrack = false;
-        let offset = get_offset(stream, &backtrack_token, &end_token, &mut should_backtrack)?;
-        let result = stream.next_slice(offset);
-        if should_backtrack {
-            Err(ErrMode::from_error_kind(
-                stream,
-                winnow::error::ErrorKind::Token,
-            ))
-        } else {
-            Ok(result)
-        }
+
+        Err(ParserError::from_error_kind(stream, ErrorKind::Eof))
     })
 }
 
-/*
-pub fn take_till_or_backtrack_eof<Set, Input, Error>(
-    set: Set,
-) -> impl Parser<Input, <Input as Stream>::Slice, Error>
-where
-    Input: StreamIsPartial + Stream,
-    Set: winnow::stream::ContainsToken<<Input as Stream>::Token>,
-    Error: ParserError<Input>,
-{
-    move |stream: &mut Input| {
-        if stream.eof_offset() == 0 {
-            return ;
-        }
-        take_till(0.., set)
-    }
-}
-     */
-
 fn with_recovery<'a, 'input: 'a, T>(
     mut parser: impl Parser<PtxParser<'a, 'input>, T, ContextError>,
-    mut recovery: impl Parser<PtxParser<'a, 'input>, &'a [(Token<'input>, logos::Span)], ContextError>,
+    recovery: impl Parser<PtxParser<'a, 'input>, &'a [(Token<'input>, logos::Span)], ContextError>,
     mut error: impl FnMut(Option<&'input str>) -> PtxError<'input>,
 ) -> impl Parser<PtxParser<'a, 'input>, Option<T>, ContextError> {
+    let mut recovery = trace("recovery", recovery);
     trace(
         "with_recovery",
         move |stream: &mut PtxParser<'a, 'input>| {
@@ -828,9 +811,11 @@ fn with_recovery<'a, 'input: 'a, T>(
 }
 
 fn pragma<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()> {
-    (Token::DotPragma, Token::String, Token::Semicolon)
-        .void()
-        .parse_next(stream)
+    trace(
+        "pragma",
+        (Token::DotPragma, Token::String, Token::Semicolon).void(),
+    )
+    .parse_next(stream)
 }
 
 fn method_parameter<'a, 'input: 'a>(
@@ -1181,18 +1166,23 @@ fn scalar_type<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<Scalar
 fn predicated_instruction<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<ast::Statement<ParsedOperandStr<'input>>> {
-    (opt(pred_at), parse_instruction, Token::Semicolon)
-        .map(|(p, i, _)| ast::Statement::Instruction(p, i))
-        .parse_next(stream)
+    trace(
+        "predicated_instruction",
+        (opt(pred_at), parse_instruction, Token::Semicolon)
+            .map(|(p, i, _)| ast::Statement::Instruction(p, i)),
+    )
+    .parse_next(stream)
 }
 
 fn pred_at<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::PredAt<&'input str>> {
-    (Token::At, opt(Token::Exclamation), ident)
-        .map(|(_, not, label)| ast::PredAt {
+    trace(
+        "pred_at",
+        (Token::At, opt(Token::Exclamation), ident).map(|(_, not, label)| ast::PredAt {
             not: not.is_some(),
             label,
-        })
-        .parse_next(stream)
+        }),
+    )
+    .parse_next(stream)
 }
 
 fn label<'a, 'input>(
@@ -1315,16 +1305,19 @@ impl<Ident> ast::ParsedOperand<Ident> {
         trace(
             "operand",
             alt((
-                ident_operands,
+                trace("ident_operands", ident_operands),
                 immediate_value.map(ast::ParsedOperand::Imm),
-                vector_operand.map(ast::ParsedOperand::VecPack),
+                trace(
+                    "vector_operand",
+                    vector_operand.map(ast::ParsedOperand::VecPack),
+                ),
             )),
         )
         .parse_next(stream)
     }
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, PartialEq, strum::AsRefStr)]
 pub enum PtxError<'input> {
     #[error("{source}")]
     ParseInt {
@@ -1764,37 +1757,39 @@ derive_parser!(
         DotFile
     }
 
-    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum StateSpace {
+        #[display(".reg")]
         Reg,
+        #[display("")]
         Generic,
     }
 
-    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum MemScope { }
 
-    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum ScalarType { }
 
-    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum SetpBoolPostOp { }
 
-    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum AtomSemantics { }
 
-    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum Mul24Control { }
 
-    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum Reduction { }
 
-    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum ShuffleMode { }
 
-    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum ShiftDirection { }
 
-    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum FunnelShiftMode { }
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
@@ -3177,6 +3172,13 @@ derive_parser!(
     }
     .op: Reduction = { .and, .or };
 
+    bar.warp.sync membermask => {
+        ast::Instruction::BarWarp {
+            data: (),
+            arguments: BarWarpArgs { src: membermask }
+        }
+    }
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-atom
     atom{.sem}{.scope}{.space}.op{.level::cache_hint}.type                                      d, [a], b{, cache_policy} => {
         if level_cache_hint || cache_policy.is_some() {
@@ -3716,6 +3718,25 @@ derive_parser!(
 
     .dir: ShiftDirection = { .l, .r };
     .mode: FunnelShiftMode = { .clamp, .wrap };
+
+    trap => {
+        Instruction::Trap {}
+    }
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#integer-arithmetic-instructions-dp4a
+
+    dp4a.atype.btype  d, a, b, c => {
+        Instruction::Dp4a {
+            data: Dp4aDetails {
+                atype,
+                btype
+            },
+            arguments: Dp4aArgs { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+
+    .atype: ScalarType = { .u32, .s32 };
+    .btype: ScalarType = { .u32, .s32 };
 );
 
 #[cfg(test)]
@@ -3865,6 +3886,26 @@ mod tests {
             errors[1],
             PtxError::UnrecognizedStatement("unknown_op2 temp2, temp;")
         ));
+    }
+
+    #[test]
+    fn report_unknown_instruction_with_braces() {
+        let text = "
+            .version 6.5
+            .target sm_60
+            .address_size 64
+
+            .visible .entry unrecognized_braces(
+            )
+            {
+                mov.u32 foo, {} {};
+                ret;
+            }";
+        let errors = parse_module_checked(text).err().unwrap();
+        assert_eq!(
+            errors,
+            vec![PtxError::UnrecognizedStatement("mov.u32 foo, {} {};")]
+        );
     }
 
     #[test]

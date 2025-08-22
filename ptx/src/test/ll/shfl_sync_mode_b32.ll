@@ -1,12 +1,12 @@
-declare i32 @__zluda_ptx_impl_shfl_sync_down_b32(i32, i32, i32, i32) #0
+declare hidden i32 @__zluda_ptx_impl_shfl_sync_down_b32(i32, i32, i32, i32) #0
 
-declare i32 @__zluda_ptx_impl_shfl_sync_up_b32(i32, i32, i32, i32) #0
+declare hidden i32 @__zluda_ptx_impl_shfl_sync_up_b32(i32, i32, i32, i32) #0
 
-declare i32 @__zluda_ptx_impl_shfl_sync_bfly_b32(i32, i32, i32, i32) #0
+declare hidden i32 @__zluda_ptx_impl_shfl_sync_bfly_b32(i32, i32, i32, i32) #0
 
-declare i32 @__zluda_ptx_impl_shfl_sync_idx_b32(i32, i32, i32, i32) #0
+declare hidden i32 @__zluda_ptx_impl_shfl_sync_idx_b32(i32, i32, i32, i32) #0
 
-declare i32 @__zluda_ptx_impl_sreg_tid(i8) #0
+declare hidden i32 @__zluda_ptx_impl_sreg_tid(i8) #0
 
 define amdgpu_kernel void @shfl_sync_mode_b32(ptr addrspace(4) byref(i64) %"48") #1 {
   %"49" = alloca i64, align 8, addrspace(5)

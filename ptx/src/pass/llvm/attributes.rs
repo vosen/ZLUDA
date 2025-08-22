@@ -33,9 +33,11 @@ fn emit_attribute(
             module.get(),
             attribute_type,
             name.as_ptr(),
-            get_state_space(ast::StateSpace::Global)?,
+            get_state_space(ast::StateSpace::Const)?,
         )
     };
+    unsafe { LLVMSetLinkage(global, llvm_zluda::LLVMLinkage::LLVMExternalLinkage) };
+    unsafe { LLVMSetVisibility(global, llvm_zluda::LLVMVisibility::LLVMHiddenVisibility) };
     unsafe { LLVMSetInitializer(global, LLVMConstInt(attribute_type, attribute as u64, 0)) };
     unsafe { LLVMSetGlobalConstant(global, 1) };
     Ok(())

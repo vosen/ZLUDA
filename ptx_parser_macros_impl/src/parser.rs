@@ -82,7 +82,7 @@ pub struct OpcodeDecl(pub Instruction, pub Arguments);
 
 impl OpcodeDecl {
     fn peek(input: syn::parse::ParseStream) -> bool {
-        Instruction::peek(input) && !input.peek2(Token![=])
+        Instruction::peek(input)
     }
 }
 
@@ -234,7 +234,13 @@ pub struct Instruction {
 }
 impl Instruction {
     fn peek(input: syn::parse::ParseStream) -> bool {
-        input.peek(Ident)
+        if !input.peek(Ident) {
+            return false;
+        }
+        if input.peek2(Token![=]) && input.peek3(syn::token::Brace) {
+            return false;
+        }
+        true
     }
 }
 
@@ -909,5 +915,25 @@ mod tests {
             bra <= { bra(stream) }
         };
         syn::parse2::<super::OpcodeDefinition>(input).unwrap();
+    }
+
+    #[test]
+    fn instruction_no_options() {
+        let input = quote! {
+            trap => {
+                Instruction::Trap {}
+            }
+            foo.bar => {
+                todo!()
+            }
+            ScalarType = { .f32 };
+        };
+        let args = syn::parse2::<super::OpcodeDefinition>(input).unwrap();
+        assert_eq!(args.1.len(), 1);
+        let (ref opcode1, _) = args.0 .0[0];
+        assert_eq!(opcode1.0.name.to_string(), "trap");
+        let (ref opcode2, _) = args.0 .0[1];
+        assert_eq!(opcode2.0.name.to_string(), "foo");
+        assert_eq!(args.1.len(), 1);
     }
 }

@@ -1,3 +1,4 @@
+use super::read_test_file;
 use crate::pass;
 use comgr::Comgr;
 use cuda_types::cuda::CUstream;
@@ -10,31 +11,9 @@ use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::{self, File};
 use std::io::Write;
 use std::mem;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::ptr;
 use std::str;
-
-#[cfg(not(feature = "ci_build"))]
-macro_rules! read_test_file {
-    ($file:expr) => {
-        {
-            // CARGO_MANIFEST_DIR is the crate directory (ptx), but file! is relative to the workspace root (and therefore also includes ptx).
-            let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            path.pop();
-            path.push(file!());
-            path.pop();
-            path.push($file);
-            std::fs::read_to_string(path).unwrap()
-        }
-    };
-}
-
-#[cfg(feature = "ci_build")]
-macro_rules! read_test_file {
-    ($file:expr) => {
-        include_str!($file).to_string()
-    };
-}
 
 macro_rules! test_ptx_llvm {
     ($fn_name:ident) => {
@@ -194,6 +173,7 @@ test_ptx!(atom_inc, [100u32], [100u32, 101u32, 0u32]);
 test_ptx!(atom_add, [2u32, 4u32], [2u32, 6u32]);
 test_ptx!(div_approx, [1f32, 2f32], [0.5f32]);
 test_ptx!(sqrt, [0.25f32], [0.5f32]);
+test_ptx!(sqrt_rn_ftz, [0x1u32], [0x0u32]);
 test_ptx!(rsqrt, [0.25f64], [2f64]);
 test_ptx!(neg, [181i32], [-181i32]);
 test_ptx!(sin, [std::f32::consts::PI / 2f32], [1f32]);
@@ -308,6 +288,19 @@ test_ptx!(multiple_return, [5u32], [6u32, 123u32]);
 test_ptx!(warp_sz, [0u8], [32u8]);
 test_ptx!(tanh, [f32::INFINITY], [1.0f32]);
 test_ptx!(cp_async, [0u32], [1u32, 2u32, 3u32, 0u32]);
+// Two test below test very important compiler feature, make sure that you
+// understand fully what's going on before you touch it.
+// The problem is that the full-precision division gets legalized by LLVM
+// using __module attribute__.
+// In the two tests below we deliberately force our compiler to emit
+// different a module that has a different module-level denormal attribute
+// from the denormal attribute of the instruction to catch cases like this
+test_ptx!(div_ftz, [0x16A2028Du32, 0x5E89F6AE], [0x0, 900636404u32]);
+test_ptx!(
+    div_noftz,
+    [0x16A2028Du32, 0x5E89F6AE],
+    [0x26u32, 900636404u32]
+);
 
 test_ptx!(nanosleep, [0u64], [0u64]);
 test_ptx!(shf_l, [0x12345678u32, 0x9abcdef0u32, 12], [0xcdef0123u32]);
@@ -332,12 +325,18 @@ test_ptx!(
     [0x12345678u32, 0x9abcdef0u32, 44],
     [0xef012345u32]
 );
+test_ptx!(
+    dp4a,
+    [0x8e2da590u32, 0xedeaee14, 0x248a9f70],
+    [613065134u32]
+);
 
 test_ptx!(assertfail);
 // TODO: not yet supported
 //test_ptx!(func_ptr);
 test_ptx!(lanemask_lt);
 test_ptx!(extern_func);
+test_ptx!(trap);
 
 test_ptx_warp!(
     tid,
@@ -651,12 +650,19 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
         unsafe { hipGetDevicePropertiesR0600(&mut dev_props, dev) }.unwrap();
         let elf_module = comgr::compile_bitcode(
             &comgr,
-            unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) },
+            unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) }
+                .to_str()
+                .unwrap(),
             &*module.llvm_ir.write_bitcode_to_memory(),
-            &*module.attributes_ir.write_bitcode_to_memory(),
             module.linked_bitcode(),
+            &*module.attributes_ir.write_bitcode_to_memory(),
+            None,
         )
         .unwrap();
+        // TODO: Re-enable when we are able to privatize function-scoped
+        // globals and constants
+        // let fns = comgr::get_symbols(&comgr, &elf_module).unwrap();
+        // verify_symbols(fns);
         let mut module = unsafe { mem::zeroed() };
         unsafe { hipModuleLoadData(&mut module, elf_module.as_ptr() as _) }.unwrap();
         let mut kernel = unsafe { mem::zeroed() };
@@ -716,3 +722,30 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
     }
     Ok(result)
 }
+
+// TODO: Re-enable when we are able to privatize function-scoped
+// globals and constants
+/*
+fn verify_symbols(mut symbols: Vec<(u32, String)>) {
+    symbols.sort();
+    if symbols.len() != 2 {
+        panic!("Expected exactly two symbols, found: {:?}", symbols);
+    }
+    assert_eq!(
+        symbols[0].0, 1,
+        "Wrong symbols exported from binary: {:?}",
+        symbols
+    );
+    assert_eq!(
+        symbols[1].0, 2,
+        "Wrong symbols exported from binary: {:?}",
+        symbols
+    );
+    assert_eq!(
+        symbols[0].1,
+        format!("{}.kd", symbols[1].1),
+        "Wrong symbols exported from binary: {:?}",
+        symbols
+    );
+}
+ */
