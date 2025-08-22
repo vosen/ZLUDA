@@ -1757,37 +1757,39 @@ derive_parser!(
         DotFile
     }
 
-    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum StateSpace {
+        #[display(".reg")]
         Reg,
+        #[display("")]
         Generic,
     }
 
-    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum MemScope { }
 
-    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum ScalarType { }
 
-    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum SetpBoolPostOp { }
 
-    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum AtomSemantics { }
 
-    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum Mul24Control { }
 
-    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum Reduction { }
 
-    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum ShuffleMode { }
 
-    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum ShiftDirection { }
 
-    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum FunnelShiftMode { }
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
