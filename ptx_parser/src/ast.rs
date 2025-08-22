@@ -956,7 +956,7 @@ impl<ID: std::fmt::Display> std::fmt::Display for Variable<ID> {
         }
 
         if self.array_init.len() > 0 {
-            todo!("Need to intepret the array initializer data as the appropriate type");
+            todo!("Need to interpret the array initializer data as the appropriate type");
         }
 
         Ok(())
