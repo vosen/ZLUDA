@@ -10,13 +10,13 @@
     ret;
 }
 
-// output:
+// %%% output %%%
 
 .func (.reg .b32 %2) %1 (
     .reg .u32 %3
 )
 {
-    zluda.convert_implicit.default.reg.b32.reg.u32 %4, %3;
+    .b32.reg %4 = zluda.convert_implicit.default.reg.b32.reg.u32 %3;
     mov.b32 %2, %4;
     ret;
 }

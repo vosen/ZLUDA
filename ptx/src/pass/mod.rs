@@ -257,24 +257,6 @@ enum Statement<I, P: ast::Operand> {
     },
 }
 
-impl<Ident, I, P> std::fmt::Display for Statement<I, P>
-where
-    Ident: std::fmt::Display,
-    I: std::fmt::Display,
-    P: ast::Operand<Ident = Ident>,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Statement::Variable(var) => write!(f, "{}", var)?,
-            Statement::Instruction(instr) => write!(f, "{}", instr)?,
-            Statement::Conversion(conv) => write!(f, "{}", conv)?,
-            _ => todo!(),
-        }
-        write!(f, ";")?;
-        Ok(())
-    }
-}
-
 #[derive(Eq, PartialEq, Clone, Copy)]
 #[cfg_attr(test, derive(Debug))]
 enum ModeRegister {
@@ -602,14 +584,12 @@ impl std::fmt::Display for ImplicitConversion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "zluda.convert_implicit{}{}{}{}{} {}, {}",
+            "zluda.convert_implicit{}{}{}{}{}",
             self.kind,
             self.to_space,
             self.to_type,
             self.from_space,
-            self.from_type,
-            self.dst,
-            self.src
+            self.from_type
         )
     }
 }
@@ -707,26 +687,6 @@ enum Directive2<Instruction, Operand: ast::Operand> {
     Method(Function2<Instruction, Operand>),
 }
 
-impl<Ident, Instruction, Operand> std::fmt::Display for Directive2<Instruction, Operand>
-where
-    Ident: std::fmt::Display,
-    Instruction: std::fmt::Display,
-    Operand: ast::Operand<Ident = Ident>,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Directive2::Variable(linking_directive, variable) => {
-                if !linking_directive.is_empty() {
-                    write!(f, "{} ", linking_directive)?;
-                }
-                write!(f, "{};\n", variable)?;
-            }
-            Directive2::Method(function) => write!(f, "{}", function)?,
-        }
-        Ok(())
-    }
-}
-
 struct Function2<Instruction, Operand: ast::Operand> {
     pub return_arguments: Vec<ast::Variable<Operand::Ident>>,
     pub name: Operand::Ident,
@@ -740,69 +700,6 @@ struct Function2<Instruction, Operand: ast::Operand> {
     flush_to_zero_f16f64: bool,
     rounding_mode_f32: ast::RoundingMode,
     rounding_mode_f16f64: ast::RoundingMode,
-}
-
-impl<Ident, Instruction, Operand> std::fmt::Display for Function2<Instruction, Operand>
-where
-    Ident: std::fmt::Display,
-    Instruction: std::fmt::Display,
-    Operand: ast::Operand<Ident = Ident>,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.import_as.is_some()
-            || self.tuning.len() > 0
-            || self.flush_to_zero_f32
-            || self.flush_to_zero_f16f64
-            || self.rounding_mode_f32 != ast::RoundingMode::NearestEven
-            || self.rounding_mode_f16f64 != ast::RoundingMode::NearestEven
-        {
-            todo!("Figure out some way of representing these in text");
-        }
-
-        if !self.linkage.is_empty() {
-            write!(f, "{} ", self.linkage)?;
-        }
-
-        if self.is_kernel {
-            write!(f, ".entry ")?;
-        } else {
-            write!(f, ".func ")?;
-        }
-
-        if self.return_arguments.len() > 0 {
-            write!(f, "(")?;
-
-            for (idx, arg) in self.return_arguments.iter().enumerate() {
-                if idx != 0 {
-                    write!(f, ", ")?;
-                }
-
-                write!(f, "{}", arg)?;
-            }
-
-            write!(f, ") ")?;
-        }
-
-        write!(f, "{} (\n", self.name)?;
-
-        for arg in self.input_arguments.iter() {
-            write!(f, "    {}\n", arg)?;
-        }
-
-        write!(f, ")")?;
-
-        if let Some(stmts) = &self.body {
-            write!(f, "\n{{\n")?;
-            for stmt in stmts {
-                write!(f, "    {}\n", stmt)?;
-            }
-            write!(f, "}}")?;
-        } else {
-            write!(f, ";")?;
-        }
-
-        Ok(())
-    }
 }
 
 type NormalizedDirective2 = Directive2<

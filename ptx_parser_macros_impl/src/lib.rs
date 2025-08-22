@@ -253,22 +253,9 @@ impl InstructionVariant {
             .map(|d| quote! {#d})
             .unwrap_or(quote! { write!(f, "<{}>", stringify!(#name))? });
 
-        let display_arguments = match &self.arguments {
-            None => quote! {},
-            Some(Arguments::Decl(_)) => quote! {},
-            Some(Arguments::Def(args)) => {
-                let display = args.emit_display();
-                quote! {
-                    write!(f, " ")?;
-                    #display
-                }
-            }
-        };
-
         Some(quote! {
             instr @ #enum_ :: #name { #data #arguments } => {
                 #display_op;
-                #display_arguments;
             }
         })
     }
@@ -528,28 +515,6 @@ impl InstructionArguments {
         Ok(Self { generic, fields })
     }
 
-    fn emit_display(&self) -> TokenStream {
-        let is_ident = if let Some(ref generic) = self.generic {
-            generic.len() > 1
-        } else {
-            false
-        };
-        let fields = self.fields.iter().enumerate().map(|(idx, f)| {
-            let display_field = f.emit_display(is_ident);
-            if idx != 0 {
-                quote! {
-                    write!(f, ", ")?;
-                    #display_field
-                }
-            } else {
-                display_field
-            }
-        });
-        quote! {
-            #(#fields)*
-        }
-    }
-
     fn emit_visit(
         &self,
         parent_type: &Option<Option<Expr>>,
@@ -660,19 +625,6 @@ impl ArgumentField {
 
     fn parse_basic(input: &syn::parse::ParseBuffer) -> syn::Result<Type> {
         input.parse::<Type>()
-    }
-
-    fn emit_display(&self, is_ident: bool) -> TokenStream {
-        let name = &self.name;
-        if is_ident {
-            quote! {
-                todo!("Handle display for ident");
-            }
-        } else {
-            quote! {
-                VisitOperand::visit(&arguments.#name, |op| write!(f, "{}", op))?;
-            }
-        }
     }
 
     fn emit_visit(
