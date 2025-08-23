@@ -89,6 +89,12 @@ macro_rules! from_cuda_transmute {
                     Ok(x.cast::<$to>())
                 }
             }
+
+            impl<'a, E: CudaErrorType> FromCuda<'a, *mut *const $from, E> for *mut *const $to {
+                fn from_cuda(x: &'a *mut *const $from) -> Result<Self, E> {
+                    Ok(x.cast::<*const $to>())
+                }
+            }
         )*
     };
 }
@@ -110,6 +116,7 @@ macro_rules! from_cuda_object {
 from_cuda_nop!(
     *mut i8,
     *mut i32,
+    *mut u64,
     *mut usize,
     *const f32,
     *mut f32,
@@ -143,7 +150,13 @@ from_cuda_transmute!(
     CUstream => hipStream_t,
     CUpointer_attribute => hipPointer_attribute,
     CUdeviceptr_v2 => hipDeviceptr_t,
-    CUevent => hipEvent_t
+    CUevent => hipEvent_t,
+    // This is safe because HIP's enum is the subset of CUDA's enum and
+    // this type is used purely as a function result
+    CUstreamCaptureStatus => hipStreamCaptureStatus,
+    CUgraph => hipGraph_t,
+    CUstreamCaptureMode => hipStreamCaptureMode,
+    CUgraphNode => hipGraphNode_t
 );
 
 impl<'a, E: CudaErrorType> FromCuda<'a, CUlimit, E> for hipLimit_t {

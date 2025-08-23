@@ -216,9 +216,8 @@ pub(crate) unsafe fn pop_current_v2(ctx: &mut CUcontext) -> CUresult {
 pub(crate) unsafe fn get_stream_priority_range(
     least_priority: *mut ::core::ffi::c_int,
     greatest_priority: *mut ::core::ffi::c_int,
-) -> CUresult {
-    hipDeviceGetStreamPriorityRange(least_priority, greatest_priority)?;
-    Ok(())
+) -> hipError_t {
+    hipDeviceGetStreamPriorityRange(least_priority, greatest_priority)
 }
 
 pub(crate) unsafe fn set_flags(flags: ::core::ffi::c_uint) -> CUresult {
