@@ -184,6 +184,7 @@ fn run_statements<'input>(
                             arguments: ast::CvtArgs {
                                 dst: dst_pred,
                                 src: dst_pred_wide,
+                                src2: None,
                             },
                         })
                     ]
@@ -334,6 +335,50 @@ fn run_instruction<'input>(
         }
         i @ ptx_parser::Instruction::Nanosleep { .. } => {
             to_call(resolver, fn_declarations, "nanosleep_u32".into(), i)?
+        }
+        i @ ptx_parser::Instruction::Cvt {
+            data:
+                ptx_parser::CvtDetails {
+                    from: ast::ScalarType::F32,
+                    to: to @ (ast::ScalarType::E4m3x2 | ast::ScalarType::E5m2x2),
+                    mode: _,
+                },
+            arguments: _,
+        } => {
+            let to = match to {
+                ptx_parser::ScalarType::E4m3x2 => "e4m3x2",
+                ptx_parser::ScalarType::E5m2x2 => "e5m2x2",
+                _ => unreachable!(),
+            };
+            // Conversions from f32 to f8 must have two source arguments.
+            // satfinite is mandatory for conversions to e4m3x2.
+            to_call(
+                resolver,
+                fn_declarations,
+                format!("cvt_rn_satfinite_{}_f32", to).into(),
+                i,
+            )?
+        }
+        i @ ptx_parser::Instruction::Cvt {
+            data:
+                ptx_parser::CvtDetails {
+                    from: from @ (ast::ScalarType::E4m3x2 | ast::ScalarType::E5m2x2),
+                    to: ast::ScalarType::F16x2,
+                    mode: _,
+                },
+            arguments: _,
+        } => {
+            let from = match from {
+                ptx_parser::ScalarType::E4m3x2 => "e4m3x2",
+                ptx_parser::ScalarType::E5m2x2 => "e5m2x2",
+                _ => unreachable!(),
+            };
+            to_call(
+                resolver,
+                fn_declarations,
+                format!("cvt_rn_f16x2_{}", from).into(),
+                i,
+            )?
         }
         i => i,
     })
