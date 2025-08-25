@@ -1,4 +1,4 @@
-declare i32 @__zluda_ptx_impl_cvt_rn_f16x2_e5m2x2(i16) #0
+declare hidden i32 @__zluda_ptx_impl_cvt_rn_f16x2_e5m2x2(i16) #0
 
 define amdgpu_kernel void @cvt_rn_f16x2_e5m2x2(ptr addrspace(4) byref(i64) %"31", ptr addrspace(4) byref(i64) %"32") #1 {
   %"33" = alloca i64, align 8, addrspace(5)

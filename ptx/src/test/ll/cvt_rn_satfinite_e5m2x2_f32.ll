@@ -1,4 +1,4 @@
-declare i16 @__zluda_ptx_impl_cvt_rn_satfinite_e5m2x2_f32(float, float) #0
+declare hidden i16 @__zluda_ptx_impl_cvt_rn_satfinite_e5m2x2_f32(float, float) #0
 
 define amdgpu_kernel void @cvt_rn_satfinite_e5m2x2_f32(ptr addrspace(4) byref(i64) %"34", ptr addrspace(4) byref(i64) %"35") #1 {
   %"36" = alloca i64, align 8, addrspace(5)
