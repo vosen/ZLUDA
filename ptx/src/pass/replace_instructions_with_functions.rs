@@ -57,6 +57,38 @@ fn run_directive<'input>(
     })
 }
 
+fn get_or_declare_function(
+    resolver: &mut GlobalStringIdentResolver2<'input>,
+    fn_declarations: &mut HashMap<
+        Cow<'input, str>,
+        (
+            Vec<ptx_parser::Variable<SpirvWord>>,
+            SpirvWord,
+            Vec<ptx_parser::Variable<SpirvWord>>,
+        ),
+        rustc_hash::FxBuildHasher,
+    >,
+    name: Cow<'input, str>,
+    return_arguments: &Vec<(ptx_parser::Type, ptx_parser::StateSpace)>,
+    input_arguments: &Vec<(ptx_parser::Type, ptx_parser::StateSpace)>,
+) -> SpirvWord {
+    let func = match fn_declarations.entry(name) {
+        hash_map::Entry::Occupied(occupied_entry) => occupied_entry.get().1,
+        hash_map::Entry::Vacant(vacant_entry) => {
+            let name = vacant_entry.key().clone();
+            let full_name = [ZLUDA_PTX_PREFIX, &*name].concat();
+            let name = resolver.register_named(Cow::Owned(full_name.clone()), None);
+            vacant_entry.insert((
+                to_variables(resolver, return_arguments),
+                name,
+                to_variables(resolver, input_arguments),
+            ));
+            name
+        }
+    };
+    func
+}
+
 fn run_statements<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
     fn_declarations: &mut FxHashMap<
@@ -122,19 +154,13 @@ fn run_statements<'input>(
                             ptx_parser::StateSpace::Reg,
                         ),
                     ];
-                    let func = match fn_declarations.entry(full_name.into()) {
-                        hash_map::Entry::Occupied(occupied_entry) => occupied_entry.get().1,
-                        hash_map::Entry::Vacant(vacant_entry) => {
-                            let name = vacant_entry.key().clone();
-                            let name = resolver.register_named(name, None);
-                            vacant_entry.insert((
-                                to_variables(resolver, &return_arguments),
-                                name,
-                                to_variables(resolver, &input_arguments),
-                            ));
-                            name
-                        }
-                    };
+                    let func = get_or_declare_function(
+                        resolver,
+                        fn_declarations,
+                        full_name,
+                        &return_arguments,
+                        &input_arguments,
+                    );
                     smallvec![
                         Statement::Instruction::<_, SpirvWord>(ast::Instruction::Call {
                             data: ptx_parser::CallDetails {
@@ -201,22 +227,13 @@ fn run_statements<'input>(
                         ast::Type::Scalar(ast::ScalarType::B16),
                         ast::StateSpace::Reg,
                     )];
-                    // TODO: fill out above
-                    // TODO: refactor common bits
-                    let func = match fn_declarations.entry(name) {
-                        hash_map::Entry::Occupied(occupied_entry) => occupied_entry.get().1,
-                        hash_map::Entry::Vacant(vacant_entry) => {
-                            let name = vacant_entry.key().clone();
-                            let full_name = [ZLUDA_PTX_PREFIX, &*name].concat();
-                            let name = resolver.register_named(Cow::Owned(full_name.clone()), None);
-                            vacant_entry.insert((
-                                to_variables(resolver, &return_arguments),
-                                name,
-                                to_variables(resolver, &input_arguments),
-                            ));
-                            name
-                        }
-                    };
+                    let func = get_or_declare_function(
+                        resolver,
+                        fn_declarations,
+                        name,
+                        &return_arguments,
+                        &input_arguments,
+                    );
                     smallvec![
                         Statement::Instruction::<_, SpirvWord>(ast::Instruction::Call {
                             data: ptx_parser::CallDetails {
@@ -452,20 +469,8 @@ fn to_call<'input>(
         };
         Ok::<_, TranslateError>(())
     })?;
-    let fn_name = match fn_declarations.entry(name) {
-        hash_map::Entry::Occupied(occupied_entry) => occupied_entry.get().1,
-        hash_map::Entry::Vacant(vacant_entry) => {
-            let name = vacant_entry.key().clone();
-            let full_name = [ZLUDA_PTX_PREFIX, &*name].concat();
-            let name = resolver.register_named(Cow::Owned(full_name.clone()), None);
-            vacant_entry.insert((
-                to_variables(resolver, &data_return),
-                name,
-                to_variables(resolver, &data_input),
-            ));
-            name
-        }
-    };
+    let fn_name =
+        get_or_declare_function(resolver, fn_declarations, name, &data_return, &data_input);
     Ok(ast::Instruction::Call {
         data: ptx_parser::CallDetails {
             uniform: false,
