@@ -1390,6 +1390,8 @@ fn generate_display_cuda(
         "cuStreamGetAttribute_ptsz",
         "cuGraphKernelNodeGetAttribute",
         "cuGraphKernelNodeSetAttribute",
+        "cuPointerGetAttribute",
+        "cuPointerGetAttributes",
     ];
     let count_selectors = [
         ("cuCtxCreate_v3", 1, 2),

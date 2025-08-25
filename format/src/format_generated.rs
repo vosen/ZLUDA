@@ -10451,26 +10451,6 @@ pub fn write_cuMulticastGetGranularity(
     crate::CudaDisplay::write(&option, "cuMulticastGetGranularity", arg_idx, writer)?;
     writer.write_all(b")")
 }
-pub fn write_cuPointerGetAttribute(
-    writer: &mut (impl std::io::Write + ?Sized),
-    data: *mut ::core::ffi::c_void,
-    attribute: cuda_types::cuda::CUpointer_attribute,
-    ptr: cuda_types::cuda::CUdeviceptr,
-) -> std::io::Result<()> {
-    let mut arg_idx = 0usize;
-    writer.write_all(b"(")?;
-    writer.write_all(concat!(stringify!(data), ": ").as_bytes())?;
-    crate::CudaDisplay::write(&data, "cuPointerGetAttribute", arg_idx, writer)?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(attribute), ": ").as_bytes())?;
-    crate::CudaDisplay::write(&attribute, "cuPointerGetAttribute", arg_idx, writer)?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(ptr), ": ").as_bytes())?;
-    crate::CudaDisplay::write(&ptr, "cuPointerGetAttribute", arg_idx, writer)?;
-    writer.write_all(b")")
-}
 pub fn write_cuMemPrefetchAsync_ptsz(
     writer: &mut (impl std::io::Write + ?Sized),
     devPtr: cuda_types::cuda::CUdeviceptr,
@@ -10664,36 +10644,6 @@ pub fn write_cuPointerSetAttribute(
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(ptr), ": ").as_bytes())?;
     crate::CudaDisplay::write(&ptr, "cuPointerSetAttribute", arg_idx, writer)?;
-    writer.write_all(b")")
-}
-pub fn write_cuPointerGetAttributes(
-    writer: &mut (impl std::io::Write + ?Sized),
-    numAttributes: ::core::ffi::c_uint,
-    attributes: *mut cuda_types::cuda::CUpointer_attribute,
-    data: *mut *mut ::core::ffi::c_void,
-    ptr: cuda_types::cuda::CUdeviceptr,
-) -> std::io::Result<()> {
-    let mut arg_idx = 0usize;
-    writer.write_all(b"(")?;
-    writer.write_all(concat!(stringify!(numAttributes), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &numAttributes,
-        "cuPointerGetAttributes",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(attributes), ": ").as_bytes())?;
-    crate::CudaDisplay::write(&attributes, "cuPointerGetAttributes", arg_idx, writer)?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(data), ": ").as_bytes())?;
-    crate::CudaDisplay::write(&data, "cuPointerGetAttributes", arg_idx, writer)?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(ptr), ": ").as_bytes())?;
-    crate::CudaDisplay::write(&ptr, "cuPointerGetAttributes", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuStreamCreate(
