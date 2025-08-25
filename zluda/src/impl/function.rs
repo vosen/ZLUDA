@@ -7,6 +7,14 @@ pub(crate) fn get_attribute(
 ) -> hipError_t {
     // TODO: implement HIP_FUNC_ATTRIBUTE_PTX_VERSION
     // TODO: implement HIP_FUNC_ATTRIBUTE_BINARY_VERSION
+    match cu_attrib {
+        hipFunction_attribute::HIP_FUNC_ATTRIBUTE_PTX_VERSION
+        | hipFunction_attribute::HIP_FUNC_ATTRIBUTE_BINARY_VERSION => {
+            *pi = 120;
+            return Ok(());
+        }
+        _ => {}
+    }
     unsafe { hipFuncGetAttribute(pi, cu_attrib, func) }?;
     if cu_attrib == hipFunction_attribute::HIP_FUNC_ATTRIBUTE_NUM_REGS {
         *pi = (*pi).max(1);
@@ -43,4 +51,19 @@ pub(crate) fn launch_kernel(
             extra,
         )
     }
+}
+
+pub(crate) unsafe fn set_attribute(
+    func: hipFunction_t,
+    attribute: hipFunction_attribute,
+    value: i32,
+) -> hipError_t {
+    match attribute {
+        hipFunction_attribute::HIP_FUNC_ATTRIBUTE_PTX_VERSION
+        | hipFunction_attribute::HIP_FUNC_ATTRIBUTE_BINARY_VERSION => {
+            return hipError_t::ErrorNotSupported;
+        }
+        _ => {}
+    }
+    hipFuncSetAttribute(func.0.cast(), hipFuncAttribute(attribute.0), value)
 }
