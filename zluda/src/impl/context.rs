@@ -212,3 +212,28 @@ pub(crate) unsafe fn destroy_v2(ctx: CUcontext) -> CUresult {
 pub(crate) unsafe fn pop_current_v2(ctx: &mut CUcontext) -> CUresult {
     pop_current(ctx)
 }
+
+pub(crate) unsafe fn get_stream_priority_range(
+    least_priority: *mut ::core::ffi::c_int,
+    greatest_priority: *mut ::core::ffi::c_int,
+) -> hipError_t {
+    hipDeviceGetStreamPriorityRange(least_priority, greatest_priority)
+}
+
+pub(crate) unsafe fn set_flags(flags: ::core::ffi::c_uint) -> CUresult {
+    let cu_ctx = get_current_context()?;
+    let ctx: &Context = FromCuda::<_, CUerror>::from_cuda(&cu_ctx)?;
+    ctx.with_state_mut(|state| {
+        state.flags = flags;
+        Ok(())
+    })
+}
+
+pub(crate) unsafe fn get_api_version(
+    _ctx: CUcontext,
+    version: &mut ::core::ffi::c_uint,
+) -> CUresult {
+    // That's what original CUDA driver does
+    *version = 3020;
+    Ok(())
+}

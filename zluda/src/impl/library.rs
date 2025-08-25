@@ -44,3 +44,20 @@ pub(crate) unsafe fn get_module(out: &mut CUmodule, library: &Library) -> CUresu
     *out = module::Module { base: library.base }.wrap();
     Ok(())
 }
+
+pub(crate) unsafe fn get_kernel(
+    kernel: *mut hipFunction_t,
+    library: &Library,
+    name: *const ::core::ffi::c_char,
+) -> hipError_t {
+    hipModuleGetFunction(kernel, library.base, name)
+}
+
+pub(crate) unsafe fn get_global(
+    dptr: *mut hipDeviceptr_t,
+    bytes: *mut usize,
+    library: &Library,
+    name: *const ::core::ffi::c_char,
+) -> hipError_t {
+    hipModuleGetGlobal(dptr, bytes, library.base, name)
+}
