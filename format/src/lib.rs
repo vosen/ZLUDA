@@ -981,7 +981,7 @@ fn write_attribute(
             CudaDisplay::write(unsafe { &*(data as *const bool) }, "", 0, writer)
         }
         cuda_types::cuda::CUpointer_attribute::CU_POINTER_ATTRIBUTE_DEVICE_ORDINAL => {
-            CudaDisplay::write(unsafe { &*(data as *const u32) }, "", 0, writer)
+            CudaDisplay::write(unsafe { &*(data as *const i32) }, "", 0, writer)
         }
         cuda_types::cuda::CUpointer_attribute::CU_POINTER_ATTRIBUTE_IS_LEGACY_CUDA_IPC_CAPABLE => {
             CudaDisplay::write(unsafe { &*(data as *const bool) }, "", 0, writer)
