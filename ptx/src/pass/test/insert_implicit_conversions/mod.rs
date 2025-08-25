@@ -20,3 +20,4 @@ fn run_insert_implicit_conversions(ptx: ptx_parser::Module) -> String {
 }
 
 test_insert_implicit_conversions!(default);
+test_insert_implicit_conversions!(default_reg_b32_reg_f16x2);
