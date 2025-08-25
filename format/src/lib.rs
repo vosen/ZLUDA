@@ -937,6 +937,9 @@ pub fn write_cuPointerGetAttributes(
     let data = unsafe { std::slice::from_raw_parts(data, numAttributes as usize) };
     writer.write_all(b"[")?;
     for (i, data_ptr) in data.iter().copied().enumerate() {
+        if i != 0 {
+            writer.write_all(b", ")?;
+        }
         write_attribute(writer, attributes[i], data_ptr)?;
     }
     writer.write_all(b"]")?;
@@ -997,6 +1000,12 @@ fn write_attribute(
         }
         cuda_types::cuda::CUpointer_attribute::CU_POINTER_ATTRIBUTE_IS_GPU_DIRECT_RDMA_CAPABLE => {
             CudaDisplay::write(unsafe { &*(data as *const bool) }, "", 0, writer)
+        }
+        cuda_types::cuda::CUpointer_attribute::CU_POINTER_ATTRIBUTE_ACCESS_FLAGS => {
+            CudaDisplay::write(unsafe { &*(data as *const CUDA_POINTER_ATTRIBUTE_ACCESS_FLAGS) }, "", 0, writer)
+        }
+        cuda_types::cuda::CUpointer_attribute::CU_POINTER_ATTRIBUTE_MEMPOOL_HANDLE => {
+            CudaDisplay::write(unsafe { &*(data as *const CUmemoryPool) }, "", 0, writer)
         }
         cuda_types::cuda::CUpointer_attribute::CU_POINTER_ATTRIBUTE_MAPPING_SIZE => {
             CudaDisplay::write(unsafe { &*(data as *const usize) }, "", 0, writer)
