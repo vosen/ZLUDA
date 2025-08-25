@@ -6,6 +6,7 @@ pub(super) mod device;
 pub(super) mod driver;
 pub(super) mod event;
 pub(super) mod function;
+pub(super) mod graph;
 pub(super) mod library;
 pub(super) mod memory;
 pub(super) mod module;

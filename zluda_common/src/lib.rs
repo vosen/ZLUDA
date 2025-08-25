@@ -156,7 +156,8 @@ from_cuda_transmute!(
     CUstreamCaptureStatus => hipStreamCaptureStatus,
     CUgraph => hipGraph_t,
     CUstreamCaptureMode => hipStreamCaptureMode,
-    CUgraphNode => hipGraphNode_t
+    CUgraphNode => hipGraphNode_t,
+    CUgraphExec => hipGraphExec_t
 );
 
 impl<'a, E: CudaErrorType> FromCuda<'a, CUlimit, E> for hipLimit_t {
