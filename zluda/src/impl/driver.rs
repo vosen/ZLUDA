@@ -478,6 +478,24 @@ pub(crate) unsafe fn thread_exchange_stream_capture_mode(
     hipThreadExchangeStreamCaptureMode(mode)
 }
 
+pub(crate) unsafe fn occupancy_max_active_blocks_per_multiprocessor_with_flags(
+    num_blocks: &mut ::core::ffi::c_int,
+    func: hipFunction_t,
+    block_size: ::core::ffi::c_int,
+    dynamic_smem_size: usize,
+    flags: ::core::ffi::c_uint,
+) -> hipError_t {
+    hipOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
+        num_blocks,
+        func.0.cast(),
+        block_size,
+        dynamic_smem_size,
+        flags,
+    )?;
+    *num_blocks = (*num_blocks).max(1);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use crate::r#impl::driver::AllocationInfo;

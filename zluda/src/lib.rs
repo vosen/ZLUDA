@@ -143,7 +143,7 @@ cuda_macros::cuda_function_declarations!(
             cuModuleGetLoadingMode,
             cuModuleLoadData,
             cuModuleUnload,
-            // cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags,
+            cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags,
             cuPointerGetAttribute,
             cuPointerGetAttributes,
             cuProfilerStart,
