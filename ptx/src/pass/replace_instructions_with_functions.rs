@@ -336,7 +336,7 @@ fn run_instruction<'input>(
         i @ ptx_parser::Instruction::Nanosleep { .. } => {
             to_call(resolver, fn_declarations, "nanosleep_u32".into(), i)?
         }
-                i @ ptx_parser::Instruction::Cvt {
+        i @ ptx_parser::Instruction::Cvt {
             data:
                 ptx_parser::CvtDetails {
                     from: ast::ScalarType::F32,
