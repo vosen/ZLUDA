@@ -1,7 +1,7 @@
 use cuda_types::cuda::*;
 use std::{
     any::TypeId,
-    ffi::{c_void, CStr},
+    ffi::{c_ulonglong, c_void, CStr},
     fmt::LowerHex,
     mem, ptr, slice,
 };
@@ -885,6 +885,134 @@ pub fn write_cuGraphKernelNodeSetAttribute(
     value_out: *const CUkernelNodeAttrValue,
 ) -> std::io::Result<()> {
     write_cuGraphKernelNodeGetAttribute(writer, hNode, attr, value_out as *mut _)
+}
+
+#[allow(non_snake_case)]
+pub fn write_cuPointerGetAttribute(
+    writer: &mut (impl std::io::Write + ?Sized),
+    data: *mut ::core::ffi::c_void,
+    attribute: cuda_types::cuda::CUpointer_attribute,
+    ptr: cuda_types::cuda::CUdeviceptr,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(data), ": ").as_bytes())?;
+    write_attribute(writer, attribute, data)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(attribute), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&attribute, "cuPointerGetAttribute", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(ptr), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&ptr, "cuPointerGetAttribute", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+
+#[allow(non_snake_case)]
+pub fn write_cuPointerGetAttributes(
+    writer: &mut (impl std::io::Write + ?Sized),
+    numAttributes: ::core::ffi::c_uint,
+    attributes: *mut cuda_types::cuda::CUpointer_attribute,
+    data: *mut *mut ::core::ffi::c_void,
+    ptr: cuda_types::cuda::CUdeviceptr,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(numAttributes), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &numAttributes,
+        "cuPointerGetAttributes",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(attributes), ": ").as_bytes())?;
+    let attributes = unsafe { std::slice::from_raw_parts(attributes, numAttributes as usize) };
+    crate::CudaDisplay::write(attributes, "cuPointerGetAttributes", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(data), ": ").as_bytes())?;
+    let data = unsafe { std::slice::from_raw_parts(data, numAttributes as usize) };
+    writer.write_all(b"[")?;
+    for (i, data_ptr) in data.iter().copied().enumerate() {
+        write_attribute(writer, attributes[i], data_ptr)?;
+    }
+    writer.write_all(b"]")?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(ptr), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&ptr, "cuPointerGetAttributes", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+
+fn write_attribute(
+    writer: &mut (impl std::io::Write + ?Sized),
+    attribute: cuda_types::cuda::CUpointer_attribute,
+    data:  *mut ::core::ffi::c_void,
+) -> std::io::Result<()> {
+    match attribute {
+        cuda_types::cuda::CUpointer_attribute::CU_POINTER_ATTRIBUTE_CONTEXT => {
+            CudaDisplay::write(unsafe { &*(data as *const cuda_types::cuda::CUcontext) }, "", 0, writer)
+        }
+        cuda_types::cuda::CUpointer_attribute::CU_POINTER_ATTRIBUTE_MEMORY_TYPE => {
+            CudaDisplay::write(unsafe { &*(data as *const cuda_types::cuda::CUmemorytype) }, "", 0, writer)
+        }
+        cuda_types::cuda::CUpointer_attribute::CU_POINTER_ATTRIBUTE_DEVICE_POINTER => {
+            CudaDisplay::write(unsafe { &*(data as *const cuda_types::cuda::CUdeviceptr) }, "", 0, writer)
+        }
+        cuda_types::cuda::CUpointer_attribute::CU_POINTER_ATTRIBUTE_HOST_POINTER => {
+            CudaDisplay::write(unsafe { &*(data as *const *mut ::core::ffi::c_void) }, "", 0, writer)
+        }
+        cuda_types::cuda::CUpointer_attribute::CU_POINTER_ATTRIBUTE_P2P_TOKENS => {
+            CudaDisplay::write(unsafe { &*(data as *const cuda_types::cuda::CUDA_POINTER_ATTRIBUTE_P2P_TOKENS) }, "", 0, writer)
+        }
+        cuda_types::cuda::CUpointer_attribute::CU_POINTER_ATTRIBUTE_SYNC_MEMOPS => {
+            CudaDisplay::write(unsafe { &*(data as *const bool) }, "", 0, writer)
+        }
+        cuda_types::cuda::CUpointer_attribute::CU_POINTER_ATTRIBUTE_BUFFER_ID => {
+            CudaDisplay::write(unsafe { &*(data as *const c_ulonglong) }, "", 0, writer)
+        }
+        cuda_types::cuda::CUpointer_attribute::CU_POINTER_ATTRIBUTE_IS_MANAGED => {
+            CudaDisplay::write(unsafe { &*(data as *const bool) }, "", 0, writer)
+        }
+        cuda_types::cuda::CUpointer_attribute::CU_POINTER_ATTRIBUTE_DEVICE_ORDINAL => {
+            CudaDisplay::write(unsafe { &*(data as *const u32) }, "", 0, writer)
+        }
+        cuda_types::cuda::CUpointer_attribute::CU_POINTER_ATTRIBUTE_IS_LEGACY_CUDA_IPC_CAPABLE => {
+            CudaDisplay::write(unsafe { &*(data as *const bool) }, "", 0, writer)
+        }
+        cuda_types::cuda::CUpointer_attribute::CU_POINTER_ATTRIBUTE_RANGE_START_ADDR => {
+            CudaDisplay::write(unsafe { &*(data as *const usize) }, "", 0, writer)
+        }
+        cuda_types::cuda::CUpointer_attribute::CU_POINTER_ATTRIBUTE_RANGE_SIZE => {
+            CudaDisplay::write(unsafe { &*(data as *const usize) }, "", 0, writer)
+        }
+        cuda_types::cuda::CUpointer_attribute::CU_POINTER_ATTRIBUTE_MAPPED => {
+            CudaDisplay::write(unsafe { &*(data as *const bool) }, "", 0, writer)
+        }
+        cuda_types::cuda::CUpointer_attribute::CU_POINTER_ATTRIBUTE_ALLOWED_HANDLE_TYPES => {
+            CudaDisplay::write(unsafe { &*(data as *const CUmemAllocationHandleType) }, "", 0, writer)
+        }
+        cuda_types::cuda::CUpointer_attribute::CU_POINTER_ATTRIBUTE_IS_GPU_DIRECT_RDMA_CAPABLE => {
+            CudaDisplay::write(unsafe { &*(data as *const bool) }, "", 0, writer)
+        }
+        cuda_types::cuda::CUpointer_attribute::CU_POINTER_ATTRIBUTE_MAPPING_SIZE => {
+            CudaDisplay::write(unsafe { &*(data as *const usize) }, "", 0, writer)
+        }
+        cuda_types::cuda::CUpointer_attribute::CU_POINTER_ATTRIBUTE_MAPPING_BASE_ADDR => {
+            CudaDisplay::write(unsafe { &*(data as *const usize) }, "", 0, writer)
+        }
+        // We don't know the type of the result
+        // cuda_types::cuda::CUpointer_attribute::CU_POINTER_ATTRIBUTE_MEMORY_BLOCK_ID => {
+        //     CudaDisplay::write(unsafe { &*(data as *const ???) }, "", 0, writer)
+        // }
+        cuda_types::cuda::CUpointer_attribute::CU_POINTER_ATTRIBUTE_IS_HW_DECOMPRESS_CAPABLE => {
+            CudaDisplay::write(unsafe { &*(data as *const bool) }, "", 0, writer)
+        }
+        _ => writer.write_all(b"UNKNOWN ATTRIBUTE"),
+    }
 }
 
 #[allow(non_snake_case)]
