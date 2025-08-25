@@ -57,7 +57,7 @@ fn run_directive<'input>(
     })
 }
 
-fn get_or_declare_function(
+fn get_or_declare_function<'input, S: Into<Cow<'input, str>>>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
     fn_declarations: &mut HashMap<
         Cow<'input, str>,
@@ -68,11 +68,11 @@ fn get_or_declare_function(
         ),
         rustc_hash::FxBuildHasher,
     >,
-    name: Cow<'input, str>,
+    name: S,
     return_arguments: &Vec<(ptx_parser::Type, ptx_parser::StateSpace)>,
     input_arguments: &Vec<(ptx_parser::Type, ptx_parser::StateSpace)>,
 ) -> SpirvWord {
-    let func = match fn_declarations.entry(name) {
+    let func = match fn_declarations.entry(name.into()) {
         hash_map::Entry::Occupied(occupied_entry) => occupied_entry.get().1,
         hash_map::Entry::Vacant(vacant_entry) => {
             let name = vacant_entry.key().clone();
@@ -131,7 +131,7 @@ fn run_statements<'input>(
                         ast::Type::Scalar(ast::ScalarType::U32),
                         ptx_parser::StateSpace::Reg,
                     )));
-                    let full_name = [ZLUDA_PTX_PREFIX, "shfl_sync_", mode, "_b32_pred"].concat();
+                    let name = ["shfl_sync_", mode, "_b32_pred"].concat();
                     let return_arguments = vec![(
                         ast::Type::Vector(2, ast::ScalarType::U32),
                         ptx_parser::StateSpace::Reg,
@@ -157,7 +157,7 @@ fn run_statements<'input>(
                     let func = get_or_declare_function(
                         resolver,
                         fn_declarations,
-                        full_name,
+                        name,
                         &return_arguments,
                         &input_arguments,
                     );
@@ -218,7 +218,7 @@ fn run_statements<'input>(
                         ast::Type::Scalar(ast::ScalarType::B32),
                         ast::StateSpace::Reg,
                     )));
-                    let name = format!("cvt_rn_f16x2_{}", from_str).into();
+                    let name = format!("cvt_rn_f16x2_{}", from_str);
                     let return_arguments = vec![(
                         ast::Type::Scalar(ast::ScalarType::B32),
                         ast::StateSpace::Reg,
