@@ -3,9 +3,10 @@ use comgr::Comgr;
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
 use std::{
+    collections::BTreeMap,
     ffi::{c_void, CStr, CString},
     mem, ptr, slice,
-    sync::OnceLock,
+    sync::{Mutex, OnceLock},
     usize,
 };
 use zluda_common::{FromCuda, LiveCheck};
@@ -19,6 +20,44 @@ pub(crate) struct GlobalState {
     pub comgr: Comgr,
     pub comgr_clang_version: String,
     pub cache_path: Option<String>,
+    pub allocations: Mutex<Allocations>,
+}
+
+pub(crate) struct Allocations {
+    pub pointers: BTreeMap<usize, AllocationInfo>,
+}
+
+impl Allocations {
+    pub fn new() -> Self {
+        Allocations {
+            pointers: BTreeMap::new(),
+        }
+    }
+
+    pub fn insert(&mut self, ptr: usize, size: usize, context: CUcontext) {
+        self.pointers.insert(ptr, AllocationInfo { size, context });
+    }
+
+    pub fn get_offset_and_info(&self, ptr: usize) -> Option<(usize, AllocationInfo)> {
+        // Find last pair where `start <= ptr`
+        let (start, alloc) = self.pointers.range(..=ptr).rev().next()?;
+        // Check if allocation contains the pointer
+        if start + alloc.size > ptr {
+            Some((ptr - start, *alloc))
+        } else {
+            None
+        }
+    }
+
+    pub fn remove(&mut self, ptr: usize) {
+        self.pointers.remove(&ptr);
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub(crate) struct AllocationInfo {
+    pub size: usize,
+    pub context: CUcontext,
 }
 
 pub(crate) struct Device {
@@ -56,9 +95,11 @@ pub(crate) fn global_state() -> Result<&'static GlobalState, CUerror> {
             let comgr = Comgr::new().map_err(|_| CUerror::UNKNOWN)?;
             let comgr_clang_version =
                 comgr::get_clang_version(&comgr).map_err(|_| CUerror::UNKNOWN)?;
+            let allocations = Mutex::new(Allocations::new());
             Ok(GlobalState {
                 comgr,
                 comgr_clang_version,
+                allocations,
                 devices: (0..device_count)
                     .map(|i| {
                         let mut props = unsafe { mem::zeroed() };
@@ -429,4 +470,51 @@ pub(crate) fn profiler_start() -> CUresult {
 
 pub(crate) fn profiler_stop() -> CUresult {
     Ok(())
+}
+
+pub(crate) unsafe fn thread_exchange_stream_capture_mode(
+    mode: *mut hipStreamCaptureMode,
+) -> hipError_t {
+    hipThreadExchangeStreamCaptureMode(mode)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::r#impl::driver::AllocationInfo;
+    use cuda_types::cuda::CUcontext;
+
+    #[test]
+    fn get_allocation() {
+        let ctx1 = CUcontext(0x1234 as _);
+        let ctx2 = CUcontext(0x5678 as _);
+        let mut alloc_info = super::Allocations::new();
+        alloc_info.insert(0x1000, 4, ctx1);
+        alloc_info.insert(0x2000, 8, ctx2);
+        for i in 0..4 {
+            assert_eq!(
+                alloc_info.get_offset_and_info(0x1000 + i),
+                Some((
+                    i,
+                    AllocationInfo {
+                        size: 4,
+                        context: ctx1
+                    }
+                ))
+            );
+        }
+        assert_eq!(alloc_info.get_offset_and_info(0x1000 + 4), None);
+        for i in 0..8 {
+            assert_eq!(
+                alloc_info.get_offset_and_info(0x2000 + i),
+                Some((
+                    i,
+                    AllocationInfo {
+                        size: 8,
+                        context: ctx2
+                    }
+                ))
+            );
+        }
+        assert_eq!(alloc_info.get_offset_and_info(0x2000 + 8), None);
+    }
 }

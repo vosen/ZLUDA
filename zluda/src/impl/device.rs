@@ -499,3 +499,21 @@ pub(crate) fn primary_context_reset(hip_dev: hipDevice_t) -> CUresult {
     ctx.with_state_mut(|state| state.reset())?;
     Ok(())
 }
+
+pub(crate) unsafe fn primary_context_get_state(
+    dev: hipDevice_t,
+    flags_out: &mut ::core::ffi::c_uint,
+    active_out: &mut ::core::ffi::c_int,
+) -> CUresult {
+    let (ctx, _) = get_primary_context(dev)?;
+    let mut flags = 0u32;
+    let mut active = 0i32;
+    ctx.with_state_mut(|state| {
+        flags = state.flags;
+        active = (state.ref_count > 0) as i32;
+        Ok(())
+    })?;
+    *flags_out = flags;
+    *active_out = active;
+    Ok(())
+}

@@ -303,7 +303,8 @@ ptx_parser_macros::generate_instruction_type!(
                     repr: T,
                     space: { data.state_space },
                 }
-            }
+            },
+            display: write!(f, "<TODO:finish ld>")?
         },
         Lg2 {
             type: Type::Scalar(ScalarType::F32),
@@ -356,7 +357,8 @@ ptx_parser_macros::generate_instruction_type!(
             arguments<T>: {
                 dst: T,
                 src: T
-            }
+            },
+            display: write!(f, "mov{}", data.typ)?
         },
         Mul {
             type: { Type::from(data.type_()) },
@@ -457,7 +459,8 @@ ptx_parser_macros::generate_instruction_type!(
             }
         },
         Ret {
-            data: RetData
+            data: RetData,
+            display: write!(f, "ret")?
         },
         Rsqrt {
             type: { Type::from(data.type_) },
@@ -926,6 +929,40 @@ pub struct Variable<ID> {
     pub array_init: Vec<u8>,
 }
 
+impl<ID: std::fmt::Display> std::fmt::Display for Variable<ID> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.state_space)?;
+
+        if let Some(align) = self.align {
+            write!(f, " .align {}", align)?;
+        }
+
+        let (vector_size, scalar_type, array_dims) = match &self.v_type {
+            Type::Scalar(scalar_type) => (None, *scalar_type, &vec![]),
+            Type::Vector(size, scalar_type) => (Some(*size), *scalar_type, &vec![]),
+            Type::Array(vector_size, scalar_type, array_dims) => {
+                (vector_size.map(|s| s.get()), *scalar_type, array_dims)
+            }
+        };
+
+        if let Some(size) = vector_size {
+            write!(f, " .v{}", size)?;
+        }
+
+        write!(f, " {} {}", scalar_type, self.name)?;
+
+        for dim in array_dims {
+            write!(f, "[{}]", dim)?;
+        }
+
+        if self.array_init.len() > 0 {
+            todo!("Need to interpret the array initializer data as the appropriate type");
+        }
+
+        Ok(())
+    }
+}
+
 pub struct PredAt<ID> {
     pub not: bool,
     pub label: ID,
@@ -939,6 +976,15 @@ pub enum Type {
     Vector(u8, ScalarType),
     // .param.b32 foo[4];
     Array(Option<NonZeroU8>, ScalarType, Vec<u32>),
+}
+
+impl std::fmt::Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Type::Scalar(scalar_type) => write!(f, "{}", scalar_type),
+            _ => todo!(),
+        }
+    }
 }
 
 impl Type {
@@ -1384,6 +1430,20 @@ bitflags! {
         const EXTERN = 0b001;
         const VISIBLE = 0b10;
         const WEAK = 0b100;
+    }
+}
+
+impl std::fmt::Display for LinkingDirective {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut directives = vec![];
+        if self.contains(LinkingDirective::EXTERN) {
+            directives.push(".extern");
+        } else if self.contains(LinkingDirective::VISIBLE) {
+            directives.push(".visible");
+        } else if self.contains(LinkingDirective::WEAK) {
+            directives.push(".weak");
+        }
+        write!(f, "{}", directives.join(" "))
     }
 }
 
