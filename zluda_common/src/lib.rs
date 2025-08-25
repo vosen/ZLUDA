@@ -141,7 +141,8 @@ from_cuda_nop!(
     CUmodule,
     CUcontext,
     cublasHandle_t,
-    cublasStatus_t
+    cublasStatus_t,
+    CUlaunchConfig
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,
@@ -157,7 +158,8 @@ from_cuda_transmute!(
     CUgraph => hipGraph_t,
     CUstreamCaptureMode => hipStreamCaptureMode,
     CUgraphNode => hipGraphNode_t,
-    CUgraphExec => hipGraphExec_t
+    CUgraphExec => hipGraphExec_t,
+    CUkernel => hipFunction_t
 );
 
 impl<'a, E: CudaErrorType> FromCuda<'a, CUlimit, E> for hipLimit_t {
