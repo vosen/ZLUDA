@@ -11,6 +11,8 @@ crate-type = ["cdylib"]
 [dependencies]
 cuda_macros = { path = "../cuda_macros" }
 cuda_types = { path = "../cuda_types" }
+zluda_common = { path = "../zluda_common" }
+rocm_smi-sys = { path = "../ext/rocm_smi-sys" }
 
 [package.metadata.zluda]
 linux_symlinks = [

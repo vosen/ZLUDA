@@ -9,3 +9,4 @@ cuda_macros = { path = "../cuda_macros" }
 hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
 bitflags = "2.9.1"
 rocblas-sys = { path = "../ext/rocblas-sys" }
+rocm_smi-sys = { path = "../ext/rocm_smi-sys" }

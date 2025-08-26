@@ -4879,3 +4879,19 @@ pub type nvmlReturn_t = ::core::result::Result<(), nvmlError_t>;
 const _: fn() = || {
     let _ = std::mem::transmute::<nvmlReturn_t, u32>;
 };
+impl From<rocm_smi_sys::rsmi_error> for nvmlError_t {
+    fn from(error: rocm_smi_sys::rsmi_error) -> Self {
+        match error {
+            rocm_smi_sys::rsmi_error::INVALID_ARGS => nvmlError_t::from(nvmlError_t::INVALID_ARGUMENT),
+            rocm_smi_sys::rsmi_error::NOT_SUPPORTED => nvmlError_t::from(nvmlError_t::NOT_SUPPORTED),
+            rocm_smi_sys::rsmi_error::PERMISSION => nvmlError_t::from(nvmlError_t::NO_PERMISSION),
+            rocm_smi_sys::rsmi_error::INPUT_OUT_OF_BOUNDS => nvmlError_t::from(nvmlError_t::INVALID_ARGUMENT),
+            rocm_smi_sys::rsmi_error::INIT_ERROR => nvmlError_t::from(nvmlError_t::UNINITIALIZED),
+            rocm_smi_sys::rsmi_error::NOT_FOUND => nvmlError_t::from(nvmlError_t::GPU_NOT_FOUND),
+            rocm_smi_sys::rsmi_error::INSUFFICIENT_SIZE => nvmlError_t::from(nvmlError_t::INSUFFICIENT_SIZE),
+            rocm_smi_sys::rsmi_error::INTERRUPT => nvmlError_t::from(nvmlError_t::IRQ_ISSUE),
+            rocm_smi_sys::rsmi_error::NO_DATA => nvmlError_t::from(nvmlError_t::NO_DATA),
+            _ => nvmlError_t::from(nvmlError_t::UNKNOWN),
+        }
+    }
+}
