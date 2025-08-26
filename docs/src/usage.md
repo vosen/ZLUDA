@@ -3,11 +3,11 @@
 > [!WARNING]  
 > This version of ZLUDA is under heavy development and will likely not work with your application yet. In the meantime, yuou are encouraged to try it and report results.
 
-## Get it
+## How to get it
 
-ZLUDA evolves quickly. Download the [most recent pre-release version](https://github.com/vosen/ZLUDA/releases). From time to time we arbitrarily pick a pre-release version and we mark it as a new major version, but you don't have to wait for that
+ZLUDA evolves quickly. Download the [most recent pre-release version](https://github.com/vosen/ZLUDA/releases). Periodically, we mark a pre-release version as stable, but you don't have to wait for that.
 
-## Use it
+## Usage
 
 ### Windows
 You should have a recent AMD GPU driver ("AMD Software: Adrenalin Edition") installed.\

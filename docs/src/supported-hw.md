@@ -3,11 +3,12 @@
 1. AMD GPU support?
 
      ZLUDA supports AMD Radeon RX 5000 series and newer GPUs (both desktop and integrated).
-     Older GPUs (Polaris, Vega, etc.) are not supported, server GPUs are not supported; those GPUs are sufficiently different as to require significant effort
+     Older consumer GPUs (Polaris, Vega, etc.) and server‑class GPUs are not supported; these architectures differ significantly from recent desktop GPUs and would require substantial engineering effort.
+     We expect that the near-future unified GPU architecture (UDNA) will be more similar to desktop GPUs.
 
 1. Intel GPU support?
 
-    ZLUDA used to support Intel GPUs, but it does not anymore. It is possible to add an Intel GPU backend again. The development team is focusing on high‑quality AMD GPU support, but we welcome contributions.
+    ZLUDA previously supported Intel GPUs, but not currently. It is possible to revive the Intel backend. The development team is focusing on high‑quality AMD GPU support and welcomes contributions.
 
 1. NVIDIA GPU support?
 
@@ -19,14 +20,14 @@
 
 1. macOS support?
 
-    macOS support is not likely to ever be on the roadmap. There is very little non‑deprecated CUDA software for macOS and what remains will soon be unsupported.
+    Unlikely to ever happen. There is very little non‑deprecated CUDA software for macOS, and what remains will soon be unsupported.
 
 1. ZLUDA on top of OpenCL or Vulkan?
 
-    ZLUDA could be ported to OpenCL or Vulkan, but with drastically reduced functionality. This might be acceptable for a narrow use case, but it would not be as general‑purpose as using the native backend. Here is a sample of hardware/software features available with the current compilation path that are not exposed by either Vulkan or OpenCL:
-    * Disabling FP contraction
+    ZLUDA could be ported to OpenCL or Vulkan, but with significantly reduced functionality. This might be acceptable for a narrow use case, but it would not be as general‑purpose as using the native backend. Examples of features available with the current compilation path that are not exposed by either Vulkan or OpenCL:
+   * Disabling FP contraction
     * Explicit alignment
-    * Some subgroup and group operators
+    * Some subgroup and group operations
     * Bindless images
     * Pointer casts
     * Arbitrary virtual calls
@@ -34,4 +35,4 @@
     * Rounding modes
     * Denormal modes
   
-    Additionally, performance libraries (cuBLAS, cuDNN, etc.) cannot be mapped through Vulkan or OpenCL.
+    Additionally, performance libraries (cuBLAS, cuDNN, etc.) cannot be easily mapped through Vulkan or OpenCL.

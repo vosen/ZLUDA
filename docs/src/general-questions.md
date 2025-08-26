@@ -10,4 +10,5 @@
 
 1. How can I follow ZLUDA's progress
    
-   Every quarter we publish a progress report [ZLUDA's blog](https://vosen.github.io/ZLUDA/)
+   * Join our [Discord](https://discord.gg/sg6BNzXuc7)
+   * Every quarter we publish a progress report on [ZLUDA's blog](https://vosen.github.io/ZLUDA/)
