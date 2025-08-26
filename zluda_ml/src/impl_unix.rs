@@ -1,21 +1,12 @@
 use cuda_types::nvml::*;
 use rocm_smi_sys::*;
-use std::{ffi::CStr, mem, ptr};
+use std::mem;
 use zluda_common::{from_cuda_object, ZludaObject};
 
-const VERSION: &'static CStr = c"550.77";
+pub(crate) use crate::impl_common::system_get_driver_version;
+pub(crate) use crate::impl_common::error_string;
 
-#[cfg(debug_assertions)]
-pub(crate) fn unimplemented() -> nvmlReturn_t {
-    unimplemented!()
-}
-
-#[cfg(not(debug_assertions))]
-pub(crate) fn unimplemented() -> nvmlReturn_t {
-    nvmlReturn_t::ERROR_NOT_SUPPORTED
-}
-
-pub struct Device {
+pub(crate) struct Device {
     _index: u32,
 }
 
@@ -31,27 +22,6 @@ impl ZludaObject for Device {
 }
 
 from_cuda_object!(Device);
-
-pub(crate) fn system_get_driver_version(
-    result: *mut ::core::ffi::c_char,
-    length: ::core::ffi::c_uint,
-) -> nvmlReturn_t {
-    if result == ptr::null_mut() {
-        return nvmlReturn_t::ERROR_INVALID_ARGUMENT;
-    }
-    let version = VERSION.to_bytes_with_nul();
-    let copy_length = usize::min(length as usize, version.len());
-    let slice = unsafe { std::slice::from_raw_parts_mut(result.cast(), copy_length) };
-    slice.copy_from_slice(&version[..copy_length]);
-    if let Some(null) = slice.last_mut() {
-        *null = 0;
-    }
-    nvmlReturn_t::SUCCESS
-}
-
-pub(crate) fn error_string(_result: nvmlReturn_t) -> *const ::core::ffi::c_char {
-    c"".as_ptr()
-}
 
 pub(crate) unsafe fn init() -> rsmi_status_t {
     rsmi_init(0)
