@@ -865,7 +865,8 @@ fn generate_ml(crate_root: &PathBuf) {
         hip_type: None,
     };
     let suffix =
-"impl From<rocm_smi_sys::rsmi_error> for nvmlError_t {
+"#[cfg(unix)]
+impl From<rocm_smi_sys::rsmi_error> for nvmlError_t {
     fn from(error: rocm_smi_sys::rsmi_error) -> Self {
         match error {
             rocm_smi_sys::rsmi_error::INVALID_ARGS => nvmlError_t::from(nvmlError_t::INVALID_ARGUMENT),

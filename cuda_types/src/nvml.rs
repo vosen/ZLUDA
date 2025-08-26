@@ -4879,6 +4879,7 @@ pub type nvmlReturn_t = ::core::result::Result<(), nvmlError_t>;
 const _: fn() = || {
     let _ = std::mem::transmute::<nvmlReturn_t, u32>;
 };
+#[cfg(unix)]
 impl From<rocm_smi_sys::rsmi_error> for nvmlError_t {
     fn from(error: rocm_smi_sys::rsmi_error) -> Self {
         match error {
