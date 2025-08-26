@@ -3,8 +3,8 @@ use rocm_smi_sys::*;
 use std::mem;
 use zluda_common::{from_cuda_object, ZludaObject};
 
-pub(crate) use crate::impl_common::system_get_driver_version;
 pub(crate) use crate::impl_common::error_string;
+pub(crate) use crate::impl_common::system_get_driver_version;
 
 pub(crate) struct Device {
     _index: u32,
