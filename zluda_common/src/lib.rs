@@ -1,4 +1,4 @@
-use cuda_types::{cublas::*, cuda::*};
+use cuda_types::{cublas::*, cuda::*, nvml::*};
 use hip_runtime_sys::*;
 use rocblas_sys::*;
 use std::{
@@ -19,6 +19,16 @@ impl CudaErrorType for CUerror {
 
 impl CudaErrorType for cublasError_t {
     const INVALID_VALUE: Self = Self::INVALID_VALUE;
+    const NOT_SUPPORTED: Self = Self::NOT_SUPPORTED;
+}
+
+impl CudaErrorType for rocblas_error {
+    const INVALID_VALUE: Self = Self::invalid_value;
+    const NOT_SUPPORTED: Self = Self::not_implemented;
+}
+
+impl CudaErrorType for nvmlError_t {
+    const INVALID_VALUE: Self = Self::INVALID_ARGUMENT;
     const NOT_SUPPORTED: Self = Self::NOT_SUPPORTED;
 }
 
@@ -142,7 +152,11 @@ from_cuda_nop!(
     CUcontext,
     cublasHandle_t,
     cublasStatus_t,
-    CUlaunchConfig
+    CUlaunchConfig,
+    cublasMath_t,
+    nvmlDevice_t,
+    nvmlFieldValue_t,
+    nvmlGpuFabricInfo_t
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,
@@ -212,6 +226,76 @@ impl<'a, E: CudaErrorType> FromCuda<'a, cublasMath_t, E> for rocblas_math_mode {
             cublasMath_t::CUBLAS_TF32_TENSOR_OP_MATH => rocblas_math_mode::rocblas_xf32_xdl_math_op,
             _ => return Err(E::NOT_SUPPORTED),
         })
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, rocblas_math_mode, E> for cublasMath_t {
+    fn from_cuda(mode: &'a rocblas_math_mode) -> Result<Self, E> {
+        Ok(match *mode {
+            rocblas_math_mode_::rocblas_default_math => cublasMath_t::CUBLAS_DEFAULT_MATH,
+            rocblas_math_mode::rocblas_xf32_xdl_math_op => cublasMath_t::CUBLAS_TF32_TENSOR_OP_MATH,
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cuda_types::cublas::cudaDataType, E> for rocblas_datatype {
+    fn from_cuda(mode: &'a cuda_types::cublas::cudaDataType) -> Result<Self, E> {
+        Ok(match *mode {
+            cudaDataType_t::CUDA_R_16F => rocblas_datatype::rocblas_datatype_f16_r,
+            cudaDataType_t::CUDA_R_32F => rocblas_datatype::rocblas_datatype_f32_r,
+            cudaDataType_t::CUDA_R_64F => rocblas_datatype::rocblas_datatype_f64_r,
+            cudaDataType_t::CUDA_C_16F => rocblas_datatype::rocblas_datatype_f16_c,
+            cudaDataType_t::CUDA_C_32F => rocblas_datatype::rocblas_datatype_f32_c,
+            cudaDataType_t::CUDA_C_64F => rocblas_datatype::rocblas_datatype_f64_c,
+            cudaDataType_t::CUDA_R_8I => rocblas_datatype::rocblas_datatype_i8_r,
+            cudaDataType_t::CUDA_R_8U => rocblas_datatype::rocblas_datatype_u8_r,
+            cudaDataType_t::CUDA_R_32I => rocblas_datatype::rocblas_datatype_i32_r,
+            cudaDataType_t::CUDA_R_32U => rocblas_datatype::rocblas_datatype_u32_r,
+            cudaDataType_t::CUDA_C_8I => rocblas_datatype::rocblas_datatype_i8_c,
+            cudaDataType_t::CUDA_C_8U => rocblas_datatype::rocblas_datatype_u8_c,
+            cudaDataType_t::CUDA_C_32I => rocblas_datatype::rocblas_datatype_i32_c,
+            cudaDataType_t::CUDA_C_32U => rocblas_datatype::rocblas_datatype_u32_c,
+            cudaDataType_t::CUDA_R_16BF => rocblas_datatype::rocblas_datatype_bf16_r,
+            cudaDataType_t::CUDA_C_16BF => rocblas_datatype::rocblas_datatype_bf16_c,
+            cudaDataType_t::CUDA_R_8F_UE4M3 => rocblas_datatype::rocblas_datatype_f8_r,
+            cudaDataType_t::CUDA_R_8F_E5M2 => rocblas_datatype::rocblas_datatype_bf8_r,
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cuda_types::cublas::cublasComputeType_t, E>
+    for rocblas_computetype
+{
+    fn from_cuda(mode: &'a cuda_types::cublas::cublasComputeType_t) -> Result<Self, E> {
+        Ok(match *mode {
+            cublasComputeType_t::CUBLAS_COMPUTE_32F => {
+                rocblas_computetype::rocblas_compute_type_f32
+            }
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cuda_types::cublas::cublasComputeType_t, E>
+    for rocblas_datatype
+{
+    fn from_cuda(mode: &'a cuda_types::cublas::cublasComputeType_t) -> Result<Self, E> {
+        Ok(match *mode {
+            cublasComputeType_t::CUBLAS_COMPUTE_16F => rocblas_datatype::rocblas_datatype_f16_r,
+            cublasComputeType_t::CUBLAS_COMPUTE_32F => rocblas_datatype::rocblas_datatype_f32_r,
+            cublasComputeType_t::CUBLAS_COMPUTE_64F => rocblas_datatype::rocblas_datatype_f64_r,
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cuda_types::cublas::cublasGemmAlgo_t, E>
+    for rocblas_gemm_algo
+{
+    fn from_cuda(_: &'a cuda_types::cublas::cublasGemmAlgo_t) -> Result<Self, E> {
+        Ok(rocblas_gemm_algo::rocblas_gemm_algo_standard)
     }
 }
 

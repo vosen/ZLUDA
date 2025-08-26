@@ -29,6 +29,7 @@ fn main() {
         &["..", "ext", "hip_runtime-sys", "src", "lib.rs"],
     );
     generate_rocblas(&crate_root, &["..", "ext", "rocblas-sys", "src", "lib.rs"]);
+    generate_rocm_smi(&crate_root, &["..", "ext", "rocm_smi-sys", "src", "lib.rs"]);
     let cuda_functions = generate_cuda(&crate_root);
     generate_process_address_table(&crate_root, cuda_functions);
     generate_ml(&crate_root);
@@ -179,6 +180,7 @@ fn generate_cufft(crate_root: &PathBuf) {
         &crate_root,
         &["..", "cuda_types", "src", "cufft.rs"],
         &module,
+        None,
     );
     generate_display_perflib(
         Some(&result_options),
@@ -245,6 +247,7 @@ fn generate_cusparse(crate_root: &PathBuf) {
         &crate_root,
         &["..", "cuda_types", "src", "cusparse.rs"],
         &module,
+        None,
     );
     generate_display_perflib(
         Some(&result_options),
@@ -685,6 +688,7 @@ fn generate_cublas(crate_root: &PathBuf) {
         &crate_root,
         &["..", "cuda_types", "src", "cublas.rs"],
         &module,
+        None,
     );
     generate_display_perflib(
         Some(&result_options),
@@ -759,6 +763,7 @@ fn generate_cublaslt(crate_root: &PathBuf) {
         &crate_root,
         &["..", "cuda_types", "src", "cublaslt.rs"],
         &module_blas,
+        None,
     );
     generate_display_perflib(
         None,
@@ -837,7 +842,10 @@ fn generate_ml(crate_root: &PathBuf) {
         .allowlist_var("^NVML.*")
         .must_use_type("nvmlReturn_t")
         .constified_enum("nvmlReturn_enum")
-        .clang_args(["-I/usr/local/cuda/include"])
+        .clang_args([
+            "-I/usr/local/cuda/include",
+            "-DNVML_NO_UNVERSIONED_FUNC_DEFS",
+        ])
         .generate()
         .unwrap()
         .to_string();
@@ -856,12 +864,31 @@ fn generate_ml(crate_root: &PathBuf) {
         success: ("NVML_SUCCESS", "SUCCESS"),
         hip_type: None,
     };
+    let suffix =
+"#[cfg(unix)]
+impl From<rocm_smi_sys::rsmi_error> for nvmlError_t {
+    fn from(error: rocm_smi_sys::rsmi_error) -> Self {
+        match error {
+            rocm_smi_sys::rsmi_error::INVALID_ARGS => nvmlError_t::from(nvmlError_t::INVALID_ARGUMENT),
+            rocm_smi_sys::rsmi_error::NOT_SUPPORTED => nvmlError_t::from(nvmlError_t::NOT_SUPPORTED),
+            rocm_smi_sys::rsmi_error::PERMISSION => nvmlError_t::from(nvmlError_t::NO_PERMISSION),
+            rocm_smi_sys::rsmi_error::INPUT_OUT_OF_BOUNDS => nvmlError_t::from(nvmlError_t::INVALID_ARGUMENT),
+            rocm_smi_sys::rsmi_error::INIT_ERROR => nvmlError_t::from(nvmlError_t::UNINITIALIZED),
+            rocm_smi_sys::rsmi_error::NOT_FOUND => nvmlError_t::from(nvmlError_t::GPU_NOT_FOUND),
+            rocm_smi_sys::rsmi_error::INSUFFICIENT_SIZE => nvmlError_t::from(nvmlError_t::INSUFFICIENT_SIZE),
+            rocm_smi_sys::rsmi_error::INTERRUPT => nvmlError_t::from(nvmlError_t::IRQ_ISSUE),
+            rocm_smi_sys::rsmi_error::NO_DATA => nvmlError_t::from(nvmlError_t::NO_DATA),
+            _ => nvmlError_t::from(nvmlError_t::UNKNOWN),
+        }
+    }
+}";
     generate_types_library(
         Some(&result_options),
         None,
         &crate_root,
         &["..", "cuda_types", "src", "nvml.rs"],
         &module,
+        Some(suffix),
     );
     generate_display_perflib(
         Some(&result_options),
@@ -878,6 +905,7 @@ fn generate_types_library(
     crate_root: &PathBuf,
     path: &[&str],
     module: &syn::File,
+    suffix: Option<&str>,
 ) {
     let module = generate_types_library_impl(result_options, module);
     let mut output = crate_root.clone();
@@ -894,6 +922,9 @@ fn generate_types_library(
                 .replace(" cuComplex", " super::cuda::cuComplex")
                 .replace(" cuDoubleComplex", " super::cuda::cuDoubleComplex");
         }
+    }
+    if let Some(suffix) = suffix {
+        text.push_str(suffix);
     }
     write_rust_to_file(output, &text)
 }
@@ -1036,6 +1067,35 @@ fn generate_rocblas(output: &PathBuf, path: &[&str]) {
         .replace("hipStream_t", "hip_runtime_sys::hipStream_t")
         .replace("hipEvent_t", "hip_runtime_sys::hipEvent_t");
     write_rust_to_file(output, text)
+}
+
+fn generate_rocm_smi(output: &PathBuf, path: &[&str]) {
+    let rocm_smi_header = new_builder()
+        .header("/opt/rocm/include/rocm_smi/rocm_smi.h")
+        .allowlist_type("^rsmi.*")
+        .allowlist_function("^rsmi.*")
+        .allowlist_var("^RSMI_.*")
+        .must_use_type("rsmi_status_t")
+        .constified_enum("rsmi_status_t")
+        .clang_args(["-I/opt/rocm/include"])
+        .generate()
+        .unwrap()
+        .to_string();
+    let mut module: syn::File = syn::parse_str(&rocm_smi_header).unwrap();
+    let result_options = ConvertIntoRustResultOptions {
+        type_: "rsmi_status_t",
+        underlying_type: "rsmi_status_t",
+        new_error_type: "rsmi_error",
+        error_prefix: ("RSMI_STATUS_", "ERROR_"),
+        success: ("RSMI_STATUS_SUCCESS", "SUCCESS"),
+        hip_type: None,
+    };
+    let mut converter = ConvertIntoRustResult::new(result_options);
+    module.items = converter.convert(module.items).collect();
+    converter.flush(&mut module.items);
+    let mut output = output.clone();
+    output.extend(path);
+    write_rust_to_file(output, &prettyplease::unparse(&module))
 }
 
 fn add_send_sync(items: &mut Vec<Item>, arg: &[&str]) {

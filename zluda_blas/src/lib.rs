@@ -47,10 +47,16 @@ cuda_macros::cublas_function_declarations!(
     implemented
         <= [
             cublasCreate_v2,
+            cublasDestroy_v2,
+            cublasGemmEx,
+            cublasGetMathMode,
+            cublasLtCreate,
+            cublasLtDestroy,
             cublasSetMathMode,
+            cublasSetStream_v2,
+            cublasSetWorkspace_v2,
             cublasSgemmStridedBatched,
             cublasSgemm_v2,
-            cublasDestroy_v2
         ],
     implemented_and_always_succeeds
         <= [

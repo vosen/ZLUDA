@@ -8498,4 +8498,125 @@ returned in \a sessionCount
         device: cuda_types::nvml::nvmlDevice_t,
         state: *mut cuda_types::nvml::nvmlPowerSmoothingState_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    fn nvmlInit() -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    fn nvmlDeviceGetCount(
+        deviceCount: *mut ::core::ffi::c_uint,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    fn nvmlDeviceGetHandleByIndex(
+        index: ::core::ffi::c_uint,
+        device: *mut cuda_types::nvml::nvmlDevice_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    fn nvmlDeviceGetHandleByPciBusId(
+        pciBusId: *const ::core::ffi::c_char,
+        device: *mut cuda_types::nvml::nvmlDevice_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    fn nvmlDeviceGetPciInfo(
+        device: cuda_types::nvml::nvmlDevice_t,
+        pci: *mut cuda_types::nvml::nvmlPciInfo_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    fn nvmlDeviceGetPciInfo_v2(
+        device: cuda_types::nvml::nvmlDevice_t,
+        pci: *mut cuda_types::nvml::nvmlPciInfo_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    fn nvmlDeviceGetNvLinkRemotePciInfo(
+        device: cuda_types::nvml::nvmlDevice_t,
+        link: ::core::ffi::c_uint,
+        pci: *mut cuda_types::nvml::nvmlPciInfo_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    fn nvmlDeviceGetGridLicensableFeatures(
+        device: cuda_types::nvml::nvmlDevice_t,
+        pGridLicensableFeatures: *mut cuda_types::nvml::nvmlGridLicensableFeatures_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    fn nvmlDeviceGetGridLicensableFeatures_v2(
+        device: cuda_types::nvml::nvmlDevice_t,
+        pGridLicensableFeatures: *mut cuda_types::nvml::nvmlGridLicensableFeatures_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    fn nvmlDeviceGetGridLicensableFeatures_v3(
+        device: cuda_types::nvml::nvmlDevice_t,
+        pGridLicensableFeatures: *mut cuda_types::nvml::nvmlGridLicensableFeatures_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    fn nvmlDeviceRemoveGpu(
+        pciInfo: *mut cuda_types::nvml::nvmlPciInfo_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    fn nvmlEventSetWait(
+        set: cuda_types::nvml::nvmlEventSet_t,
+        data: *mut cuda_types::nvml::nvmlEventData_t,
+        timeoutms: ::core::ffi::c_uint,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    fn nvmlDeviceGetAttributes(
+        device: cuda_types::nvml::nvmlDevice_t,
+        attributes: *mut cuda_types::nvml::nvmlDeviceAttributes_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    fn nvmlComputeInstanceGetInfo(
+        computeInstance: cuda_types::nvml::nvmlComputeInstance_t,
+        info: *mut cuda_types::nvml::nvmlComputeInstanceInfo_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    fn nvmlDeviceGetComputeRunningProcesses(
+        device: cuda_types::nvml::nvmlDevice_t,
+        infoCount: *mut ::core::ffi::c_uint,
+        infos: *mut cuda_types::nvml::nvmlProcessInfo_v1_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    fn nvmlDeviceGetComputeRunningProcesses_v2(
+        device: cuda_types::nvml::nvmlDevice_t,
+        infoCount: *mut ::core::ffi::c_uint,
+        infos: *mut cuda_types::nvml::nvmlProcessInfo_v2_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    fn nvmlDeviceGetGraphicsRunningProcesses(
+        device: cuda_types::nvml::nvmlDevice_t,
+        infoCount: *mut ::core::ffi::c_uint,
+        infos: *mut cuda_types::nvml::nvmlProcessInfo_v1_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    fn nvmlDeviceGetGraphicsRunningProcesses_v2(
+        device: cuda_types::nvml::nvmlDevice_t,
+        infoCount: *mut ::core::ffi::c_uint,
+        infos: *mut cuda_types::nvml::nvmlProcessInfo_v2_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    fn nvmlDeviceGetMPSComputeRunningProcesses(
+        device: cuda_types::nvml::nvmlDevice_t,
+        infoCount: *mut ::core::ffi::c_uint,
+        infos: *mut cuda_types::nvml::nvmlProcessInfo_v1_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    fn nvmlDeviceGetMPSComputeRunningProcesses_v2(
+        device: cuda_types::nvml::nvmlDevice_t,
+        infoCount: *mut ::core::ffi::c_uint,
+        infos: *mut cuda_types::nvml::nvmlProcessInfo_v2_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    fn nvmlDeviceGetGpuInstancePossiblePlacements(
+        device: cuda_types::nvml::nvmlDevice_t,
+        profileId: ::core::ffi::c_uint,
+        placements: *mut cuda_types::nvml::nvmlGpuInstancePlacement_t,
+        count: *mut ::core::ffi::c_uint,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    fn nvmlVgpuInstanceGetLicenseInfo(
+        vgpuInstance: cuda_types::nvml::nvmlVgpuInstance_t,
+        licenseInfo: *mut cuda_types::nvml::nvmlVgpuLicenseInfo_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    fn nvmlDeviceGetDriverModel(
+        device: cuda_types::nvml::nvmlDevice_t,
+        current: *mut cuda_types::nvml::nvmlDriverModel_t,
+        pending: *mut cuda_types::nvml::nvmlDriverModel_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
 }

@@ -455,6 +455,7 @@ dependencies = [
  "cuda_macros",
  "hip_runtime-sys",
  "rocblas-sys",
+ "rocm_smi-sys",
 ]
 
 [[package]]
@@ -2738,6 +2739,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "rocm_smi-sys"
+version = "0.0.0"
+
+[[package]]
 name = "rustc-hash"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3750,6 +3755,7 @@ version = "0.0.0"
 dependencies = [
  "cuda_macros",
  "cuda_types",
+ "hip_runtime-sys",
  "rocblas-sys",
  "zluda_common",
 ]
@@ -3817,6 +3823,8 @@ version = "0.0.0"
 dependencies = [
  "cuda_macros",
  "cuda_types",
+ "rocm_smi-sys",
+ "zluda_common",
 ]
 
 [[package]]
