@@ -1,4 +1,4 @@
-use crate::r#impl::{context, device};
+use crate::r#impl::{context, device, function};
 use comgr::Comgr;
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
@@ -476,6 +476,53 @@ pub(crate) unsafe fn thread_exchange_stream_capture_mode(
     mode: *mut hipStreamCaptureMode,
 ) -> hipError_t {
     hipThreadExchangeStreamCaptureMode(mode)
+}
+
+pub(crate) unsafe fn occupancy_max_active_blocks_per_multiprocessor_with_flags(
+    num_blocks: &mut ::core::ffi::c_int,
+    func: hipFunction_t,
+    block_size: ::core::ffi::c_int,
+    dynamic_smem_size: usize,
+    flags: ::core::ffi::c_uint,
+) -> hipError_t {
+    hipOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
+        num_blocks,
+        func.0.cast(),
+        block_size,
+        dynamic_smem_size,
+        flags,
+    )?;
+    *num_blocks = (*num_blocks).max(1);
+    Ok(())
+}
+
+pub(crate) unsafe fn launch_kernel_ex(
+    config: &cuda_types::cuda::CUlaunchConfig,
+    f: hipFunction_t,
+    kernel_params: *mut *mut ::core::ffi::c_void,
+    extra: *mut *mut ::core::ffi::c_void,
+) -> CUresult {
+    let attrs = std::slice::from_raw_parts(config.attrs, config.numAttrs as usize);
+    if attrs.iter().any(|&attr| {
+        !(attr.id == CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_PROGRAMMATIC_STREAM_SERIALIZATION
+            && attr.value.programmaticStreamSerializationAllowed == 0)
+    }) {
+        return CUresult::ERROR_NOT_SUPPORTED;
+    }
+    function::launch_kernel(
+        f,
+        config.gridDimX,
+        config.gridDimY,
+        config.gridDimZ,
+        config.blockDimX,
+        config.blockDimY,
+        config.blockDimZ,
+        config.sharedMemBytes,
+        FromCuda::<_, CUerror>::from_cuda(&config.hStream)?,
+        kernel_params,
+        extra,
+    )?;
+    Ok(())
 }
 
 #[cfg(test)]
