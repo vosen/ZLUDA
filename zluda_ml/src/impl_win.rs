@@ -1,23 +1,25 @@
+use cuda_types::nvml::*;
+
 pub(crate) use crate::impl_common::error_string;
 pub(crate) use crate::impl_common::system_get_driver_version;
 
-pub(crate) unsafe fn init() -> rsmi_status_t {
+pub(crate) unsafe fn init() -> nvmlReturn_t {
     crate::impl_common::unimplemented()
 }
 
-pub(crate) unsafe fn init_v2() -> rsmi_status_t {
+pub(crate) unsafe fn init_v2() -> nvmlReturn_t {
     crate::impl_common::unimplemented()
 }
 
-pub(crate) unsafe fn init_with_flags(_flags: ::core::ffi::c_uint) -> rsmi_status_t {
+pub(crate) unsafe fn init_with_flags(_flags: ::core::ffi::c_uint) -> nvmlReturn_t {
     crate::impl_common::unimplemented()
 }
 
-pub(crate) unsafe fn shutdown() -> rsmi_status_t {
+pub(crate) unsafe fn shutdown() -> nvmlReturn_t {
     crate::impl_common::unimplemented()
 }
 
-pub(crate) unsafe fn device_get_count_v2(_device_count: &mut ::core::ffi::c_uint) -> rsmi_status_t {
+pub(crate) unsafe fn device_get_count_v2(_device_count: &mut ::core::ffi::c_uint) -> nvmlReturn_t {
     crate::impl_common::unimplemented()
 }
 
