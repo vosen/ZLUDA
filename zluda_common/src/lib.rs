@@ -1,4 +1,4 @@
-use cuda_types::{cublas::*, cuda::*, nvml::*};
+use cuda_types::{cublas::*, cublaslt::cublasLtHandle_t, cuda::*, nvml::*};
 use hip_runtime_sys::*;
 use rocblas_sys::*;
 use std::{
@@ -156,7 +156,8 @@ from_cuda_nop!(
     cublasMath_t,
     nvmlDevice_t,
     nvmlFieldValue_t,
-    nvmlGpuFabricInfo_t
+    nvmlGpuFabricInfo_t,
+    cublasLtHandle_t
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,

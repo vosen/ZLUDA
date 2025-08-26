@@ -20,6 +20,20 @@ macro_rules! implemented {
             #[allow(improper_ctypes)]
             #[allow(improper_ctypes_definitions)]
             pub unsafe extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
+                cuda_macros::cublaslt_normalize_fn!( crate::r#impl::$fn_name )  ($(zluda_common::FromCuda::<_, cuda_types::cublas::cublasError_t>::from_cuda(&$arg_id)?),*)?;
+                Ok(())
+            }
+        )*
+    };
+}
+
+macro_rules! implemented_unmapped {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
+        $(
+            #[cfg_attr(not(test), no_mangle)]
+            #[allow(improper_ctypes)]
+            #[allow(improper_ctypes_definitions)]
+            pub unsafe extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
                 cuda_macros::cublaslt_normalize_fn!( crate::r#impl::$fn_name ) ( $( $arg_id ),* )
             }
         )*
@@ -28,12 +42,13 @@ macro_rules! implemented {
 
 cuda_macros::cublaslt_function_declarations!(
     unimplemented,
-    implemented
+    implemented <= [cublasLtCreate, cublasLtDestroy,],
+    implemented_unmapped
         <= [
+            cublasLtDisableCpuInstructionsSetMask,
+            cublasLtGetCudartVersion,
             cublasLtGetStatusName,
             cublasLtGetStatusString,
-            cublasLtDisableCpuInstructionsSetMask,
             cublasLtGetVersion,
-            cublasLtGetCudartVersion
         ]
 );
