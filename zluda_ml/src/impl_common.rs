@@ -1,6 +1,8 @@
 use cuda_types::nvml::*;
 use std::{ffi::CStr, ptr};
 
+const VERSION: &'static CStr = c"550.77";
+
 #[cfg(debug_assertions)]
 pub(crate) fn unimplemented() -> nvmlReturn_t {
     unimplemented!()
@@ -11,20 +13,10 @@ pub(crate) fn unimplemented() -> nvmlReturn_t {
     nvmlReturn_t::ERROR_NOT_SUPPORTED
 }
 
-pub(crate) fn error_string(_result: cuda_types::nvml::nvmlReturn_t) -> *const ::core::ffi::c_char {
-    c"".as_ptr()
-}
-
-pub(crate) fn init_v2() -> cuda_types::nvml::nvmlReturn_t {
-    nvmlReturn_t::SUCCESS
-}
-
-const VERSION: &'static CStr = c"550.77";
-
 pub(crate) fn system_get_driver_version(
     result: *mut ::core::ffi::c_char,
     length: ::core::ffi::c_uint,
-) -> cuda_types::nvml::nvmlReturn_t {
+) -> nvmlReturn_t {
     if result == ptr::null_mut() {
         return nvmlReturn_t::ERROR_INVALID_ARGUMENT;
     }
@@ -36,4 +28,8 @@ pub(crate) fn system_get_driver_version(
         *null = 0;
     }
     nvmlReturn_t::SUCCESS
+}
+
+pub(crate) fn error_string(_result: nvmlReturn_t) -> *const ::core::ffi::c_char {
+    c"".as_ptr()
 }

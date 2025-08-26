@@ -1,9 +1,8 @@
-use std::mem;
-
 use cuda_types::cublas::*;
-use zluda_common::{from_cuda_object, ZludaObject};
-
+use hip_runtime_sys::*;
 use rocblas_sys::*;
+use std::mem;
+use zluda_common::{from_cuda_object, ZludaObject};
 
 pub struct Handle {
     handle: rocblas_handle,
@@ -152,4 +151,72 @@ pub(crate) fn sgemm_v2(
 
 pub(crate) fn destroy_v2(handle: cublasHandle_t) -> cublasStatus_t {
     zluda_common::drop_checked::<Handle>(handle)
+}
+
+pub(crate) unsafe fn set_stream_v2(handle: &Handle, stream: hipStream_t) -> rocblas_status {
+    rocblas_set_stream(handle.handle, stream)
+}
+
+pub(crate) unsafe fn set_workspace_v2(
+    handle: &Handle,
+    workspace: *mut ::core::ffi::c_void,
+    size: usize,
+) -> rocblas_status {
+    rocblas_set_workspace(handle.handle, workspace, size)
+}
+
+pub(crate) unsafe fn get_math_mode(handle: &Handle, mode: &mut cublasMath_t) -> rocblas_status {
+    let mut roc_mode = mem::zeroed();
+    rocblas_get_math_mode(handle.handle, &mut roc_mode)?;
+    *mode = zluda_common::FromCuda::from_cuda(&roc_mode)?;
+    Ok(())
+}
+
+pub(crate) unsafe fn gemm_ex(
+    handle: &Handle,
+    transa: rocblas_operation,
+    transb: rocblas_operation,
+    m: ::core::ffi::c_int,
+    n: ::core::ffi::c_int,
+    k: ::core::ffi::c_int,
+    alpha: *const ::core::ffi::c_void,
+    a: *const ::core::ffi::c_void,
+    a_type: rocblas_datatype,
+    lda: ::core::ffi::c_int,
+    b: *const ::core::ffi::c_void,
+    b_type: rocblas_datatype,
+    ldb: ::core::ffi::c_int,
+    beta: *const ::core::ffi::c_void,
+    c: *mut ::core::ffi::c_void,
+    c_type: rocblas_datatype,
+    ldc: ::core::ffi::c_int,
+    compute_type: rocblas_datatype,
+    algo: rocblas_gemm_algo,
+) -> rocblas_status {
+    rocblas_gemm_ex(
+        handle.handle,
+        transa,
+        transb,
+        m,
+        n,
+        k,
+        alpha,
+        a,
+        a_type,
+        lda,
+        b,
+        b_type,
+        ldb,
+        beta,
+        c,
+        c_type,
+        ldc,
+        c,
+        c_type,
+        ldc,
+        compute_type,
+        algo,
+        0,
+        0,
+    )
 }
