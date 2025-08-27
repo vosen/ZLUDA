@@ -259,30 +259,74 @@ pub fn compile_bitcode(
             c"-inlinehint-threshold=3250",
         ]
     };
-    let exec_data_set: DataSet;
+    let options = common_options.chain(opt_options);
     let executable: Result<Vec<u8>, Error>;
     if let Some(hook) = compiler_hook {
-        // Run compiler hook for executable
+        // CompileSourceWithDeviceLibsToBc
+        let action_info = ActionInfo::new(comgr)?;
+        action_info.set_isa_name(gcn_arch)?;
+        action_info.set_language(Language::LlvmIr)?;
+        action_info.set_options(options.clone())?;
+        let dataset = comgr.do_action(
+            ActionKind::CompileSourceWithDeviceLibsToBc,
+            &action_info,
+            &linked_data_set,
+        )?;
+        let data = dataset.get_content(comgr, DataKind::Bc, 0)?;
+        let data = ptx::bitcode_to_ir(data);
+        hook(&data, String::from("with-device-libs.ll"));
+
+        // CodegenBcToRelocatable
+        let action_info = ActionInfo::new(comgr)?;
+        action_info.set_isa_name(gcn_arch)?;
+        action_info.set_options(options.clone())?;
+        let dataset =
+            comgr.do_action(ActionKind::CodegenBcToRelocatable, &action_info, &dataset)?;
+        let data = dataset.get_content(comgr, DataKind::Relocatable, 0)?;
+        hook(&data, String::from("relocatable.elf"));
+
+        // Disassemble relocatable
+        let action_info = ActionInfo::new(comgr)?;
+        action_info.set_isa_name(gcn_arch)?;
+        let disassembled_dataset = comgr.do_action(
+            ActionKind::DisassembleRelocatableToSource,
+            &action_info,
+            &dataset,
+        )?;
+        let disassembly = disassembled_dataset.get_content(comgr, DataKind::Source, 0)?;
+        hook(&disassembly, String::from("relocatable.asm"));
+
+        // LinkRelocatableToExecutable
+        let action_info = ActionInfo::new(comgr)?;
+        action_info.set_isa_name(gcn_arch)?;
+        action_info.set_language(Language::LlvmIr)?;
+        action_info.set_options(options.clone())?;
+        let dataset = comgr.do_action(
+            ActionKind::LinkRelocatableToExecutable,
+            &action_info,
+            &dataset,
+        )?;
+        executable = dataset.get_content(comgr, DataKind::Executable, 0);
         hook(
             executable.as_ref().unwrap_or(&Vec::new()),
             String::from("elf"),
         );
 
-        // Disassemble executable and run compiler hook
+        // Disassemble executable
         let action_info = ActionInfo::new(comgr)?;
         action_info.set_isa_name(gcn_arch)?;
-        let disassembly = comgr.do_action(
+        let disassembled_dataset = comgr.do_action(
             ActionKind::DisassembleExecutableToSource,
             &action_info,
-            &exec_data_set,
+            &dataset,
         )?;
-        let disassembly = disassembly.get_content(comgr, DataKind::Source, 0)?;
-        hook(&disassembly, String::from("asm"))
+        let disassembly = disassembled_dataset.get_content(comgr, DataKind::Source, 0)?;
+        hook(&disassembly, String::from("asm"));
     } else {
         let compile_to_exec = ActionInfo::new(comgr)?;
         compile_to_exec.set_isa_name(gcn_arch)?;
         compile_to_exec.set_language(Language::LlvmIr)?;
-        compile_to_exec.set_options(common_options.chain(opt_options))?;
+        compile_to_exec.set_options(options.clone())?;
         let exec_data_set = comgr.do_action(
             ActionKind::CompileSourceToExecutable,
             &compile_to_exec,
@@ -556,6 +600,7 @@ impl_into!(
         CompileSourceToExecutable => AMD_COMGR_ACTION_COMPILE_SOURCE_TO_EXECUTABLE,
         CompileSourceWithDeviceLibsToBc => AMD_COMGR_ACTION_COMPILE_SOURCE_WITH_DEVICE_LIBS_TO_BC,
         CodegenBcToRelocatable => AMD_COMGR_ACTION_CODEGEN_BC_TO_RELOCATABLE,
+        DisassembleRelocatableToSource => AMD_COMGR_ACTION_DISASSEMBLE_RELOCATABLE_TO_SOURCE,
         LinkRelocatableToExecutable => AMD_COMGR_ACTION_LINK_RELOCATABLE_TO_EXECUTABLE,
         DisassembleExecutableToSource => AMD_COMGR_ACTION_DISASSEMBLE_EXECUTABLE_TO_SOURCE,
         SourceToPreprocessor => AMD_COMGR_ACTION_SOURCE_TO_PREPROCESSOR
