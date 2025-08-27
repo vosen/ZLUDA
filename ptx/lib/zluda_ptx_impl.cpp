@@ -478,18 +478,36 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
         return div_f32_part2(x, y, {fma_4, fma_1, fma_3, numerator_scaled_flag});
     }
 
-    __hip_fp8x2_e4m3 FUNC(cvt_rn_satfinite_e4m3x2_f32)(float a, float b)
+    __device__ static __hip_fp8_storage_t cvt_float_to_fp8(float f, __hip_fp8_interpretation_t interp)
     {
-        // If built-in support for fp8 formats is added to LLVM IR we should switch to use that.
-        // __hip_fp8x2_e4m3 defaults to using __HIP_SATFINITE
-        return float2(b,
-                      a);
+        const uint32_t bits = reinterpret_cast<uint32_t &>(f);
+        const uint8_t sign = (bits & 0x80000000) ? 0x80 : 0x0;
+        const uint32_t abs = bits & 0x7fffffff;
+
+        const uint32_t min = interp == __HIP_E4M3 ? 0x3A800000 : 0x37000000;
+        if (abs < min)
+        {
+            return sign; // +/- 0
+        }
+
+        return __hip_cvt_float_to_fp8(f, __HIP_SATFINITE, interp);
     }
 
-    __hip_fp8x2_e5m2 FUNC(cvt_rn_satfinite_e5m2x2_f32)(float a, float b)
+    struct Fp8x2
     {
-        return float2(b,
-                      a);
+        __hip_fp8_storage_t b : 8;
+        __hip_fp8_storage_t a : 8;
+    };
+
+    Fp8x2 FUNC(cvt_rn_satfinite_e4m3x2_f32)(float a, float b)
+    {
+        // If built-in support for fp8 formats is added to LLVM IR we should switch to use that.
+        return {cvt_float_to_fp8(b, __HIP_E4M3), cvt_float_to_fp8(a, __HIP_E4M3)};
+    }
+
+    Fp8x2 FUNC(cvt_rn_satfinite_e5m2x2_f32)(float a, float b)
+    {
+        return {cvt_float_to_fp8(b, __HIP_E5M2), cvt_float_to_fp8(a, __HIP_E5M2)};
     }
 
     __half2 FUNC(cvt_rn_f16x2_e4m3x2)(__hip_fp8x2_e4m3 in)
