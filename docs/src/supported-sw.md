@@ -2,7 +2,7 @@
 
 1. PyTorch support?
 
-    PyTorch support is currently out top priority. We expect to have initial support fourth quarter of 2025.
+    PyTorch support is currently our top priority. We expect to have initial support fourth quarter of 2025.
 
 1. Tensorflow support?
 
