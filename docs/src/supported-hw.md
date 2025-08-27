@@ -26,13 +26,13 @@
 
     ZLUDA could be ported to OpenCL or Vulkan, but with significantly reduced functionality. This might be acceptable for a narrow use case, but it would not be as general‑purpose as using the native backend. Examples of features available with the current compilation path that are not exposed by either Vulkan or OpenCL:
    * Disabling FP contraction
-    * Explicit alignment
-    * Some subgroup and group operations
-    * Bindless images
-    * Pointer casts
-    * Arbitrary virtual calls
-    * Inline assembly
-    * Rounding modes
-    * Denormal modes
+   * Explicit alignment
+   * Some subgroup and group operations
+   * Bindless images
+   * Pointer casts
+   * Arbitrary virtual calls
+   * Inline assembly
+   * Rounding modes
+   * Denormal modes
   
     Additionally, performance libraries (cuBLAS, cuDNN, etc.) cannot be easily mapped through Vulkan or OpenCL.
