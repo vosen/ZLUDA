@@ -10,7 +10,7 @@
 
 1. Blender support
 
-    Blender is not on the roadmap, but it's often requested. Supported might be added aat certain point, but it's a low priority. If ZLUDA supports Blender, it will not support hardware ray-tracing (see _Hardware ray-tracing (OptiX) support?_ section below).
+    Blender is not on the roadmap, but it's often requested. Support might be added at certain point, but it's a low priority. If ZLUDA supports Blender, it will not support hardware ray-tracing (see _Hardware ray-tracing (OptiX) support?_ section below).
 
 1. Hardware ray-tracing (OptiX) support?
 
