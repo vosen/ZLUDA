@@ -1,7 +1,7 @@
 # Usage
 
 > [!WARNING]  
-> This version of ZLUDA is under heavy development and will likely not work with your application yet. In the meantime, yuou are encouraged to try it and report results.
+> This version of ZLUDA is under heavy development and will likely not work with your application yet. In the meantime, you are encouraged to try it and report results.
 
 ## How to get it
 
