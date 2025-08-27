@@ -81,7 +81,7 @@ CUDA driver (`libcuda.so`). In order to use ZLUDA, `ZLUDA_CUDA_LIB` must be set
 to the `libcuda.so` provided by ZLUDA. If `ZLUDA_CUDA_LIB` is not set,
 zluda_trace will use NVIDIA’s `libcuda.so`.
 
-#### `ZLUDA_TRACE_DIR=<LOG_DIRECTORY>`
+#### `ZLUDA_LOG_DIR=<LOG_DIRECTORY>`
 
 By default, zluda_trace prints logs to stderr. In order to save them to a
 file, as well as save other useful information, you must provide a
