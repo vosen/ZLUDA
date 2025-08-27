@@ -299,8 +299,6 @@ pub fn compile_bitcode(
         // LinkRelocatableToExecutable
         let action_info = ActionInfo::new(comgr)?;
         action_info.set_isa_name(gcn_arch)?;
-        action_info.set_language(Language::LlvmIr)?;
-        action_info.set_options(options.clone())?;
         let dataset = comgr.do_action(
             ActionKind::LinkRelocatableToExecutable,
             &action_info,
