@@ -14,7 +14,7 @@
 
 1. Hardware ray-tracing (OptiX) support?
 
-    OptiX support is exceedingly complex. Wile it's built on top of CUDA, it uses its own dialect of PTX, uses its own host code and requires its own specific optimizations. It's unlikely that ZLUDA will ever support OptiX again. OptiX would require a very dedicated contributor (or team of contributors) to step in.
+    OptiX support is exceedingly complex. While it's built on top of CUDA, it uses its own dialect of PTX, uses its own host code and requires its own specific optimizations. It's unlikely that ZLUDA will ever support OptiX again. OptiX would require a very dedicated contributor (or team of contributors) to step in.
 
 1. Support for games using 32 bit PhysX?
 
