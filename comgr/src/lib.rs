@@ -153,7 +153,8 @@ impl<'a> DataSet<'a> {
     }
 
     fn get_content(&self, comgr: &Comgr, kind: DataKind, index: usize) -> Result<Vec<u8>, Error> {
-        self.get_data(kind, index).map(|data| data.copy_content(comgr))?
+        self.get_data(kind, index)
+            .map(|data| data.copy_content(comgr))?
     }
 }
 
@@ -214,7 +215,8 @@ pub fn compile_bitcode(
             Data::new(comgr, DataKind::Bc, c"zluda.bc", main_buffer)?,
             Data::new(comgr, DataKind::Bc, c"ptx_impl.bc", ptx_impl)?,
             Data::new(comgr, DataKind::Bc, c"attributes.bc", attributes_buffer)?,
-        ].into_iter(),
+        ]
+        .into_iter(),
     )?;
     let linking_info = ActionInfo::new(comgr)?;
     let linked_data_set =
@@ -257,16 +259,8 @@ pub fn compile_bitcode(
             c"-inlinehint-threshold=3250",
         ]
     };
-    let compile_to_exec = ActionInfo::new(comgr)?;
-    compile_to_exec.set_isa_name(gcn_arch)?;
-    compile_to_exec.set_language(Language::LlvmIr)?;
-    compile_to_exec.set_options(common_options.chain(opt_options))?;
-    let exec_data_set = comgr.do_action(
-        ActionKind::CompileSourceToExecutable,
-        &compile_to_exec,
-        &linked_data_set,
-    )?;
-    let executable = exec_data_set.get_content(comgr, DataKind::Executable, 0);
+    let exec_data_set: DataSet;
+    let executable: Result<Vec<u8>, Error>;
     if let Some(hook) = compiler_hook {
         // Run compiler hook for executable
         hook(
@@ -284,6 +278,17 @@ pub fn compile_bitcode(
         )?;
         let disassembly = disassembly.get_content(comgr, DataKind::Source, 0)?;
         hook(&disassembly, String::from("asm"))
+    } else {
+        let compile_to_exec = ActionInfo::new(comgr)?;
+        compile_to_exec.set_isa_name(gcn_arch)?;
+        compile_to_exec.set_language(Language::LlvmIr)?;
+        compile_to_exec.set_options(common_options.chain(opt_options))?;
+        let exec_data_set = comgr.do_action(
+            ActionKind::CompileSourceToExecutable,
+            &compile_to_exec,
+            &linked_data_set,
+        )?;
+        executable = exec_data_set.get_content(comgr, DataKind::Executable, 0);
     }
     executable
 }
@@ -323,8 +328,7 @@ pub fn get_clang_version(comgr: &Comgr) -> Result<String, Error> {
         &version_string_set,
     )?;
     let data = preprocessed.get_content(comgr, DataKind::Source, 0)?;
-    String::from_utf8(trim_whitespace_and_quotes(data)?)
-        .map_err(|_| Error::UNKNOWN)
+    String::from_utf8(trim_whitespace_and_quotes(data)?).map_err(|_| Error::UNKNOWN)
 }
 
 // When running the preprocessor to expand the macro the output is surrounded by
@@ -550,6 +554,9 @@ impl_into!(
     [
         LinkBcToBc => AMD_COMGR_ACTION_LINK_BC_TO_BC,
         CompileSourceToExecutable => AMD_COMGR_ACTION_COMPILE_SOURCE_TO_EXECUTABLE,
+        CompileSourceWithDeviceLibsToBc => AMD_COMGR_ACTION_COMPILE_SOURCE_WITH_DEVICE_LIBS_TO_BC,
+        CodegenBcToRelocatable => AMD_COMGR_ACTION_CODEGEN_BC_TO_RELOCATABLE,
+        LinkRelocatableToExecutable => AMD_COMGR_ACTION_LINK_RELOCATABLE_TO_EXECUTABLE,
         DisassembleExecutableToSource => AMD_COMGR_ACTION_DISASSEMBLE_EXECUTABLE_TO_SOURCE,
         SourceToPreprocessor => AMD_COMGR_ACTION_SOURCE_TO_PREPROCESSOR
     ]
