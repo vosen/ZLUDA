@@ -22,7 +22,7 @@
 
 1. Support for games using 64 bit PhysX (GameWorks)?
 
-    It is definietely possible, pre-rollback ZLUDA had this capability. It's not on the roadmap and woulds require outside contributions.
+    It is definitely possible, pre-rollback ZLUDA had this capability. It's not on the roadmap and would require outside contributions.
 
 1. DLSS support?
 
