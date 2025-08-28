@@ -8,24 +8,26 @@ ZLUDA supports AMD Radeon RX 5000 series and newer GPUs (both desktop and integr
 
 ![GeekBench 5.5.1 chart](geekbench.svg)
 
-ZLUDA is a work in progress. Follow development here and say hi on [Discord](https://discord.gg/sg6BNzXuc7). For more details, see the announcement: https://vosen.github.io/ZLUDA/blog/zludas-third-life/
+ZLUDA is a work in progress. Follow development here and say hi on [Discord](https://discord.gg/sg6BNzXuc7). For more details, see the [announcement](https://vosen.github.io/ZLUDA/blog/zludas-third-life/).
 
 ## Usage
-**Warning**: This version ZLUDA is under heavy development (more [here](https://vosen.github.io/ZLUDA/blog/zludas-third-life/)) and right now only supports Geekbench. ZLUDA probably will not work with your application just yet.
+> [!WARNING]
+> This version ZLUDA is under heavy development (more [here](https://vosen.github.io/ZLUDA/blog/zludas-third-life/)) and right now only supports Geekbench.
+> ZLUDA probably will not work with your application just yet.
 
 ### Windows
 You should have a recent AMD GPU driver ("AMD Software: Adrenalin Edition") installed.\
 To run your application, you should either:
 * (Recommended approach) Copy ZLUDA-provided `nvcuda.dll` and `nvml.dll` from `target\release` (if built from sources) or `zluda` (if downloaded a zip package) into a path which your application uses to load CUDA. Paths vary application to application, but usually it's the directory where the .exe file is located
 * Use ZLUDA launcher like below. ZLUDA launcher is known to be buggy and incomplete:
-    ```
+    ```bash
     <ZLUDA_DIRECTORY>\zluda_with.exe -- <APPLICATION> <APPLICATIONS_ARGUMENTS>
     ```
 
 ### Linux
 
 Run your application like this:
-```
+```bash
 LD_LIBRARY_PATH=<ZLUDA_DIRECTORY> <APPLICATION> <APPLICATIONS_ARGUMENTS>
 ```
 
