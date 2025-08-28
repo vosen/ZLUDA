@@ -259,9 +259,8 @@ unsafe fn get_elf_program_headers_size(
                 .cast::<ProgramHeader32>()))
             .into()
         };
-        if program_header.p_filesz != program_header.p_memsz {
-            return None;
-        }
+        // program_header.p_memsz can be higher than p_filesz, but that just 
+        // means it gets padded to zeroes when loaded into memory
         let program_end = program_header
             .p_offset
             .checked_add(program_header.p_filesz)?;
