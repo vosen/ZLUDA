@@ -47,6 +47,11 @@ extern "C"
         return (uint32_t)__ockl_get_num_groups(member);
     }
 
+    uint32_t FUNC(sreg_laneid)()
+    {
+        return __lane_id();
+    }
+
     uint32_t __ockl_bfe_u32(uint32_t, uint32_t, uint32_t) __device__;
     uint32_t FUNC(bfe_u32)(uint32_t base, uint32_t pos_32, uint32_t len_32)
     {
@@ -475,5 +480,43 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
                                      uint8_t numerator_scaled_flag)
     {
         return div_f32_part2(x, y, {fma_4, fma_1, fma_3, numerator_scaled_flag});
+    }
+
+    __device__ static inline uint32_t ballot(bool value, bool negate)
+    {
+        __builtin_amdgcn_wave_barrier();
+        return __builtin_amdgcn_ballot_w32(negate ? !value : value);
+    }
+
+    bool FUNC(vote_sync_any_pred)(bool value, uint32_t membermask __attribute__((unused)))
+    {
+        return ballot(value, false) != 0;
+    }
+
+    bool FUNC(vote_sync_any_pred_negate)(bool value, uint32_t membermask __attribute__((unused)))
+    {
+        return ballot(value, true) != 0;
+    }
+
+    // IMPORTANT: exec mask must be a subset of membermask, the behavior is undefined otherwise
+    bool FUNC(vote_sync_all_pred)(bool value, uint32_t membermask __attribute__((unused)))
+    {
+        return ballot(value, false) == __builtin_amdgcn_read_exec_lo();
+    }
+
+    // also known as "none"
+    bool FUNC(vote_sync_all_pred_negate)(bool value, uint32_t membermask __attribute__((unused)))
+    {
+        return ballot(value, false) == 0;
+    }
+
+    uint32_t FUNC(vote_sync_ballot_b32)(bool value, uint32_t membermask __attribute__((unused)))
+    {
+        return ballot(value, false);
+    }
+
+    uint32_t FUNC(vote_sync_ballot_b32_negate)(bool value, uint32_t membermask __attribute__((unused)))
+    {
+        return ballot(value, true);
     }
 }

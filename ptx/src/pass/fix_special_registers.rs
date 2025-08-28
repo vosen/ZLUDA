@@ -2,13 +2,13 @@ use super::*;
 
 pub(super) fn run<'a, 'input>(
     resolver: &'a mut GlobalStringIdentResolver2<'input>,
-    special_registers: &'a SpecialRegistersMap2,
+    special_registers: &'a SpecialRegistersMap,
     directives: Vec<UnconditionalDirective>,
 ) -> Result<Vec<UnconditionalDirective>, TranslateError> {
-    let mut result = Vec::with_capacity(SpecialRegistersMap2::len() + directives.len());
+    let mut result = Vec::with_capacity(SpecialRegistersMap::len() + directives.len());
     let mut sreg_to_function =
-        FxHashMap::with_capacity_and_hasher(SpecialRegistersMap2::len(), Default::default());
-    SpecialRegistersMap2::foreach_declaration(
+        FxHashMap::with_capacity_and_hasher(SpecialRegistersMap::len(), Default::default());
+    SpecialRegistersMap::foreach_declaration(
         resolver,
         |sreg, (return_arguments, name, input_arguments)| {
             result.push(UnconditionalDirective::Method(UnconditionalFunction {
@@ -80,7 +80,7 @@ fn run_statement<'a, 'input>(
 
 struct SpecialRegisterResolver<'a, 'input> {
     resolver: &'a mut GlobalStringIdentResolver2<'input>,
-    special_registers: &'a SpecialRegistersMap2,
+    special_registers: &'a SpecialRegistersMap,
     sreg_to_function: FxHashMap<PtxSpecialRegister, SpirvWord>,
     result: Vec<UnconditionalStatement>,
 }

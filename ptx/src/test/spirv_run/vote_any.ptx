@@ -1,0 +1,29 @@
+.version 7.0
+.target sm_70
+.address_size 64
+
+.visible .entry vote_any(
+    .param .u64 output
+)
+{
+    .reg .u32   tid;
+    .reg .pred  tid_is_greater_equal_32;
+    .reg .pred  result_pred;
+    .reg .u32   result;
+    .reg .u64   out_ptr;
+
+    ld.param.u64    out_ptr, [output];
+
+    mov.u32         tid, %tid.x;
+    setp.ge.u32     tid_is_greater_equal_32, tid, 32;
+
+    vote.sync.any.pred result_pred, !tid_is_greater_equal_32,  0xFFFFFFFF;
+    selp.u32        result, 1, 0, result_pred;
+    
+    .reg .u64       out_offset;
+    mul.wide.u32    out_offset, tid, 4;
+    add.u64         out_ptr, out_ptr, out_offset;
+    st.u32 [out_ptr], result;
+
+    ret;
+}

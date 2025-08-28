@@ -13,7 +13,7 @@ use strum_macros::EnumIter;
 
 mod deparamize_functions;
 mod expand_operands;
-mod fix_special_registers2;
+mod fix_special_registers;
 mod hoist_globals;
 mod insert_explicit_load_store;
 mod insert_implicit_conversions2;
@@ -63,12 +63,12 @@ pub fn to_llvm_module<'input>(
 ) -> Result<Module, TranslateError> {
     let mut flat_resolver = GlobalStringIdentResolver2::<'input>::new(SpirvWord(1));
     let mut scoped_resolver = ScopedResolver::new(&mut flat_resolver);
-    let sreg_map = SpecialRegistersMap2::new(&mut scoped_resolver)?;
+    let sreg_map = SpecialRegistersMap::new(&mut scoped_resolver)?;
     let directives = normalize_identifiers2::run(&mut scoped_resolver, ast.directives)?;
     let directives = replace_known_functions::run(&mut flat_resolver, directives);
     let directives = normalize_predicates2::run(&mut flat_resolver, directives)?;
     let directives = resolve_function_pointers::run(directives)?;
-    let directives = fix_special_registers2::run(&mut flat_resolver, &sreg_map, directives)?;
+    let directives = fix_special_registers::run(&mut flat_resolver, &sreg_map, directives)?;
     let directives = expand_operands::run(&mut flat_resolver, directives)?;
     let directives = insert_post_saturation::run(&mut flat_resolver, directives)?;
     let directives = deparamize_functions::run(&mut flat_resolver, directives)?;
@@ -119,6 +119,7 @@ enum PtxSpecialRegister {
     Nctaid,
     Clock,
     LanemaskLt,
+    Laneid,
 }
 
 impl PtxSpecialRegister {
@@ -130,6 +131,7 @@ impl PtxSpecialRegister {
             Self::Nctaid => "%nctaid",
             Self::Clock => "%clock",
             Self::LanemaskLt => "%lanemask_lt",
+            Self::Laneid => "%laneid",
         }
     }
 
@@ -151,6 +153,7 @@ impl PtxSpecialRegister {
             PtxSpecialRegister::Nctaid => ast::ScalarType::U32,
             PtxSpecialRegister::Clock => ast::ScalarType::U32,
             PtxSpecialRegister::LanemaskLt => ast::ScalarType::U32,
+            PtxSpecialRegister::Laneid => ast::ScalarType::U32,
         }
     }
 
@@ -160,7 +163,9 @@ impl PtxSpecialRegister {
             | PtxSpecialRegister::Ntid
             | PtxSpecialRegister::Ctaid
             | PtxSpecialRegister::Nctaid => Some(ast::ScalarType::U8),
-            PtxSpecialRegister::Clock | PtxSpecialRegister::LanemaskLt => None,
+            PtxSpecialRegister::Clock
+            | PtxSpecialRegister::LanemaskLt
+            | PtxSpecialRegister::Laneid => None,
         }
     }
 
@@ -172,6 +177,7 @@ impl PtxSpecialRegister {
             PtxSpecialRegister::Nctaid => "sreg_nctaid",
             PtxSpecialRegister::Clock => "sreg_clock",
             PtxSpecialRegister::LanemaskLt => "sreg_lanemask_lt",
+            PtxSpecialRegister::Laneid => "sreg_laneid",
         }
     }
 }
@@ -885,14 +891,14 @@ impl<'input> ScopeMarker<'input> {
     }
 }
 
-struct SpecialRegistersMap2 {
+struct SpecialRegistersMap {
     reg_to_id: FxHashMap<PtxSpecialRegister, SpirvWord>,
     id_to_reg: FxHashMap<SpirvWord, PtxSpecialRegister>,
 }
 
-impl SpecialRegistersMap2 {
+impl SpecialRegistersMap {
     fn new(resolver: &mut ScopedResolver) -> Result<Self, TranslateError> {
-        let mut result = SpecialRegistersMap2 {
+        let mut result = SpecialRegistersMap {
             reg_to_id: FxHashMap::default(),
             id_to_reg: FxHashMap::default(),
         };

@@ -1852,7 +1852,8 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::Atom { .. }
         | ast::Instruction::Mul24 { .. }
         | ast::Instruction::Nanosleep { .. }
-        | ast::Instruction::AtomCas { .. } => InstructionModes::none(),
+        | ast::Instruction::AtomCas { .. }
+        | ast::Instruction::Vote { .. } => InstructionModes::none(),
         ast::Instruction::Add {
             data: ast::ArithDetails::Integer(_),
             ..
