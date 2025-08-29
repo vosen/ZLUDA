@@ -208,7 +208,6 @@ fn default_implicit_conversion_type(
         if should_bitcast(instruction_type, operand_type) {
             Ok(Some(ConversionKind::Default))
         } else {
-            println!("{} {} {}", space, operand_type, instruction_type);
             Err(error_mismatched_type())
         }
     } else {
