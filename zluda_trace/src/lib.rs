@@ -1459,5 +1459,5 @@ pub(crate) fn cuLibraryLoadData_Post(
         .insert(unsafe { *library }, trace::CodePointer(code));
     // TODO: this is not correct, but it's enough for now, we just want to
     // save the binary to disk
-    state.record_new_module(unsafe { CUmodule((*library).0.cast()) }, code, fn_logger); 
+    state.record_new_module(unsafe { CUmodule((*library).0.cast()) }, code, fn_logger);
 }
