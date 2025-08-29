@@ -57,6 +57,38 @@ fn run_directive<'input>(
     })
 }
 
+fn get_or_declare_function<'input, S: Into<Cow<'input, str>>>(
+    resolver: &mut GlobalStringIdentResolver2<'input>,
+    fn_declarations: &mut HashMap<
+        Cow<'input, str>,
+        (
+            Vec<ptx_parser::Variable<SpirvWord>>,
+            SpirvWord,
+            Vec<ptx_parser::Variable<SpirvWord>>,
+        ),
+        rustc_hash::FxBuildHasher,
+    >,
+    name: S,
+    return_arguments: &Vec<(ptx_parser::Type, ptx_parser::StateSpace)>,
+    input_arguments: &Vec<(ptx_parser::Type, ptx_parser::StateSpace)>,
+) -> SpirvWord {
+    let func = match fn_declarations.entry(name.into()) {
+        hash_map::Entry::Occupied(occupied_entry) => occupied_entry.get().1,
+        hash_map::Entry::Vacant(vacant_entry) => {
+            let name = vacant_entry.key().clone();
+            let full_name = [ZLUDA_PTX_PREFIX, &*name].concat();
+            let name = resolver.register_named(Cow::Owned(full_name.clone()), None);
+            vacant_entry.insert((
+                to_variables(resolver, return_arguments),
+                name,
+                to_variables(resolver, input_arguments),
+            ));
+            name
+        }
+    };
+    func
+}
+
 fn run_statements<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
     fn_declarations: &mut FxHashMap<
@@ -99,7 +131,7 @@ fn run_statements<'input>(
                         ast::Type::Scalar(ast::ScalarType::U32),
                         ptx_parser::StateSpace::Reg,
                     )));
-                    let full_name = [ZLUDA_PTX_PREFIX, "shfl_sync_", mode, "_b32_pred"].concat();
+                    let name = ["shfl_sync_", mode, "_b32_pred"].concat();
                     let return_arguments = vec![(
                         ast::Type::Vector(2, ast::ScalarType::U32),
                         ptx_parser::StateSpace::Reg,
@@ -122,45 +154,19 @@ fn run_statements<'input>(
                             ptx_parser::StateSpace::Reg,
                         ),
                     ];
-                    let func = match fn_declarations.entry(full_name.into()) {
-                        hash_map::Entry::Occupied(occupied_entry) => occupied_entry.get().1,
-                        hash_map::Entry::Vacant(vacant_entry) => {
-                            let name = vacant_entry.key().clone();
-                            let name = resolver.register_named(name, None);
-                            vacant_entry.insert((
-                                to_variables(resolver, &return_arguments),
-                                name,
-                                to_variables(resolver, &input_arguments),
-                            ));
-                            name
-                        }
-                    };
+                    let func = get_or_declare_function(
+                        resolver,
+                        fn_declarations,
+                        name,
+                        &return_arguments,
+                        &input_arguments,
+                    );
                     smallvec![
                         Statement::Instruction::<_, SpirvWord>(ast::Instruction::Call {
                             data: ptx_parser::CallDetails {
                                 uniform: false,
-                                return_arguments: vec![(
-                                    ast::Type::Vector(2, ast::ScalarType::U32),
-                                    ptx_parser::StateSpace::Reg,
-                                )],
-                                input_arguments: vec![
-                                    (
-                                        ast::Type::Scalar(ast::ScalarType::U32),
-                                        ptx_parser::StateSpace::Reg,
-                                    ),
-                                    (
-                                        ast::Type::Scalar(ast::ScalarType::U32),
-                                        ptx_parser::StateSpace::Reg,
-                                    ),
-                                    (
-                                        ast::Type::Scalar(ast::ScalarType::U32),
-                                        ptx_parser::StateSpace::Reg,
-                                    ),
-                                    (
-                                        ast::Type::Scalar(ast::ScalarType::U32),
-                                        ptx_parser::StateSpace::Reg,
-                                    ),
-                                ],
+                                return_arguments,
+                                input_arguments
                             },
                             arguments: ptx_parser::CallArgs {
                                 return_arguments: vec![packed_var],
@@ -184,6 +190,73 @@ fn run_statements<'input>(
                             arguments: ast::CvtArgs {
                                 dst: dst_pred,
                                 src: dst_pred_wide,
+                                src2: None,
+                            },
+                        })
+                    ]
+                }
+                Statement::Instruction(ast::Instruction::Cvt {
+                    data:
+                        ast::CvtDetails {
+                            from: from @ (ast::ScalarType::E4m3x2 | ast::ScalarType::E5m2x2),
+                            to: ast::ScalarType::F16x2,
+                            mode: _,
+                        },
+                    arguments:
+                        ast::CvtArgs {
+                            dst,
+                            src,
+                            src2: None,
+                        },
+                }) => {
+                    let from_str = match from {
+                        ast::ScalarType::E4m3x2 => "e4m3x2",
+                        ast::ScalarType::E5m2x2 => "e5m2x2",
+                        _ => unreachable!(),
+                    };
+                    let packed_output = resolver.register_unnamed(Some((
+                        ast::Type::Scalar(ast::ScalarType::B32),
+                        ast::StateSpace::Reg,
+                    )));
+                    let name = format!("cvt_rn_f16x2_{}", from_str);
+                    let return_arguments = vec![(
+                        ast::Type::Scalar(ast::ScalarType::B32),
+                        ast::StateSpace::Reg,
+                    )];
+                    let input_arguments = vec![(
+                        ast::Type::Scalar(ast::ScalarType::B16),
+                        ast::StateSpace::Reg,
+                    )];
+                    let func = get_or_declare_function(
+                        resolver,
+                        fn_declarations,
+                        name,
+                        &return_arguments,
+                        &input_arguments,
+                    );
+                    smallvec![
+                        Statement::Instruction::<_, SpirvWord>(ast::Instruction::Call {
+                            data: ptx_parser::CallDetails {
+                                uniform: false,
+                                return_arguments,
+                                input_arguments,
+                            },
+                            arguments: ptx_parser::CallArgs {
+                                return_arguments: vec![packed_output],
+                                func,
+                                input_arguments: vec![src],
+                            },
+                        }),
+                        Statement::Instruction(ast::Instruction::Cvt {
+                            data: ast::CvtDetails {
+                                from: ast::ScalarType::B32,
+                                to: ast::ScalarType::F16x2,
+                                mode: ast::CvtMode::Bitcast
+                            },
+                            arguments: ast::CvtArgs {
+                                dst,
+                                src: packed_output,
+                                src2: None,
                             },
                         })
                     ]
@@ -350,6 +423,29 @@ fn run_instruction<'input>(
         i @ ptx_parser::Instruction::Nanosleep { .. } => {
             to_call(resolver, fn_declarations, "nanosleep_u32".into(), i)?
         }
+        i @ ptx_parser::Instruction::Cvt {
+            data:
+                ptx_parser::CvtDetails {
+                    from: ast::ScalarType::F32,
+                    to: to @ (ast::ScalarType::E4m3x2 | ast::ScalarType::E5m2x2),
+                    mode: _,
+                },
+            arguments: _,
+        } => {
+            let to = match to {
+                ptx_parser::ScalarType::E4m3x2 => "e4m3x2",
+                ptx_parser::ScalarType::E5m2x2 => "e5m2x2",
+                _ => unreachable!(),
+            };
+            // Conversions from f32 to f8 must have two source arguments.
+            // satfinite is mandatory for conversions to e4m3x2.
+            to_call(
+                resolver,
+                fn_declarations,
+                format!("cvt_rn_satfinite_{}_f32", to).into(),
+                i,
+            )?
+        }
         i => i,
     })
 }
@@ -388,20 +484,8 @@ fn to_call<'input>(
         };
         Ok::<_, TranslateError>(())
     })?;
-    let fn_name = match fn_declarations.entry(name) {
-        hash_map::Entry::Occupied(occupied_entry) => occupied_entry.get().1,
-        hash_map::Entry::Vacant(vacant_entry) => {
-            let name = vacant_entry.key().clone();
-            let full_name = [ZLUDA_PTX_PREFIX, &*name].concat();
-            let name = resolver.register_named(Cow::Owned(full_name.clone()), None);
-            vacant_entry.insert((
-                to_variables(resolver, &data_return),
-                name,
-                to_variables(resolver, &data_input),
-            ));
-            name
-        }
-    };
+    let fn_name =
+        get_or_declare_function(resolver, fn_declarations, name, &data_return, &data_input);
     Ok(ast::Instruction::Call {
         data: ptx_parser::CallDetails {
             uniform: false,

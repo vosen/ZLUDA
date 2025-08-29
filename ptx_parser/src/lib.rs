@@ -2375,7 +2375,7 @@ derive_parser!(
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt
     cvt{.ifrnd}{.ftz}{.sat}.dtype.atype         d, a => {
         let data = ast::CvtDetails::new(&mut state.errors, ifrnd, ftz, sat, dtype, atype);
-        let arguments = ast::CvtArgs { dst: d, src: a };
+        let arguments = ast::CvtArgs { dst: d, src: a, src2: None };
         ast::Instruction::Cvt {
             data, arguments
         }
@@ -2386,18 +2386,38 @@ derive_parser!(
     // cvt.frnd2{.relu}{.satfinite}.bf16x2.f32    d, a, b;
     // cvt.rna{.satfinite}.tf32.f32               d, a;
     // cvt.frnd2{.relu}.tf32.f32                   d, a;
-    // cvt.rn.satfinite{.relu}.f8x2type.f32       d, a, b;
+    cvt.rn.satfinite{.relu}.f8x2type.f32       d, a, b => {
+        if relu {
+            state.errors.push(PtxError::Todo);
+        }
+        let data = ast::CvtDetails::new(&mut state.errors, Some(rn), false, false, f8x2type, ScalarType::F32);
+        ast::Instruction::Cvt {
+            data,
+            arguments: ast::CvtArgs { dst: d, src: a, src2: Some(b) }
+        }
+    }
     // cvt.rn.satfinite{.relu}.f8x2type.f16x2     d, a;
-    // cvt.rn.{.relu}.f16x2.f8x2type              d, a;
+    cvt.rn{.relu}.f16x2.f8x2type              d, a => {
+        if relu {
+            state.errors.push(PtxError::Todo);
+        }
+        let data = ast::CvtDetails::new(&mut state.errors, Some(rn), false, false, ScalarType::F16x2, f8x2type);
+        ast::Instruction::Cvt {
+            data,
+            arguments: ast::CvtArgs { dst: d, src: a, src2: None }
+        }
+    }
 
     .ifrnd: RawRoundingMode =   { .rn,  .rz,  .rm,  .rp,  .rni, .rzi, .rmi, .rpi };
     .frnd2: RawRoundingMode =   { .rn,  .rz };
+    RawRoundingMode =           { .rn };
     .dtype: ScalarType =        { .u8,   .u16, .u32, .u64,
                                   .s8,   .s16, .s32, .s64,
                                   .bf16, .f16, .f32, .f64 };
     .atype: ScalarType =        { .u8,   .u16, .u32, .u64,
                                   .s8,   .s16, .s32, .s64,
                                   .bf16, .f16, .f32, .f64 };
+    .f8x2type: ScalarType =     { .e4m3x2, .e5m2x2 };
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-shl
     shl.type d, a, b => {
         ast::Instruction::Shl { data: type_, arguments: ShlArgs { dst: d, src1: a, src2: b } }
