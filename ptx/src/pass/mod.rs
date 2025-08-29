@@ -644,7 +644,9 @@ impl std::fmt::Display for RepackVectorDetails {
         };
         let relaxed = if self.relaxed_type_check {
             ".relaxed"
-        } else {""};
+        } else {
+            ""
+        };
         write!(f, "zluda.repack_vector{}{}{}", extract, relaxed, self.typ)
     }
 }
