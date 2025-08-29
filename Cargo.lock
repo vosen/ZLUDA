@@ -453,7 +453,7 @@ version = "0.0.0"
 dependencies = [
  "cuda_macros",
  "cuda_types",
- "dtor",
+ "dtor 0.0.6",
  "lazy_static",
  "lz4-sys",
  "num_enum",
