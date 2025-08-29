@@ -1,4 +1,3 @@
-
 #[macro_export]
 macro_rules! api_trait {
     ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
