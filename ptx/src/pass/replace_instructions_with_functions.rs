@@ -385,6 +385,21 @@ fn run_instruction<'input>(
                 ptx_parser::Instruction::BarRed { data, arguments },
             )?
         }
+        ptx_parser::Instruction::Vote { data, arguments } => {
+            let mode = match data.mode {
+                ptx_parser::VoteMode::Any => "any_pred",
+                ptx_parser::VoteMode::All => "all_pred",
+                ptx_parser::VoteMode::Ballot => "ballot_b32",
+            };
+            let negate = if data.negate { "_negate" } else { "" };
+            let name = format!("vote_sync_{mode}{negate}");
+            to_call(
+                resolver,
+                fn_declarations,
+                name.into(),
+                ptx_parser::Instruction::Vote { data, arguments },
+            )?
+        }
         ptx_parser::Instruction::ShflSync {
             data,
             arguments: orig_arguments @ ast::ShflSyncArgs { dst_pred: None, .. },

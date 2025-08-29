@@ -194,7 +194,8 @@ fn run_instruction<'input>(
         }
         | ast::Instruction::Tanh { .. }
         | ast::Instruction::Trap {}
-        | ast::Instruction::Xor { .. } => result.push(Statement::Instruction(instruction)),
+        | ast::Instruction::Xor { .. }
+        | ast::Instruction::Vote { .. } => result.push(Statement::Instruction(instruction)),
         ast::Instruction::Add {
             data:
                 ast::ArithDetails::Float(ast::ArithFloat {

@@ -1792,6 +1792,11 @@ derive_parser!(
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum FunnelShiftMode { }
 
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
+    pub enum VoteMode {
+        Ballot
+    }
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
     mov{.vec}.type  d, a => {
         Instruction::Mov {
@@ -3737,6 +3742,33 @@ derive_parser!(
 
     .atype: ScalarType = { .u32, .s32 };
     .btype: ScalarType = { .u32, .s32 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-vote-sync
+
+    vote.sync.mode.pred  d, {!}a, membermask => {
+        let (negate, a) = a;
+        Instruction::Vote {
+            data: VoteDetails {
+                mode,
+                negate
+            },
+            arguments: VoteArgs { dst: d, src1: a, src2: membermask }
+        }
+    }
+    vote.sync.ballot.b32 d, {!}a, membermask => {
+        let (negate, a) = a;
+        Instruction::Vote {
+            data: VoteDetails {
+                mode: VoteMode::Ballot,
+                negate
+            },
+            arguments: VoteArgs { dst: d, src1: a, src2: membermask }
+        }
+    }
+
+    // .mode: VoteMode = { .all, .any, .uni };
+    .mode: VoteMode = { .all, .any };
+
 );
 
 #[cfg(test)]

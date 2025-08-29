@@ -542,6 +542,7 @@ impl<'a> MethodEmitContext<'a> {
             | ast::Instruction::Bfi { .. }
             | ast::Instruction::Activemask { .. }
             | ast::Instruction::ShflSync { .. }
+            | ast::Instruction::Vote { .. }
             | ast::Instruction::Nanosleep { .. } => return Err(error_unreachable()),
         }
     }

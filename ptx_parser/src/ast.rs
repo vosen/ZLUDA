@@ -3,7 +3,8 @@ use super::{
     StateSpace, VectorPrefix,
 };
 use crate::{
-    FunnelShiftMode, Mul24Control, PtxError, PtxParserState, Reduction, ShiftDirection, ShuffleMode,
+    FunnelShiftMode, Mul24Control, PtxError, PtxParserState, Reduction, ShiftDirection,
+    ShuffleMode, VoteMode,
 };
 use bitflags::bitflags;
 use std::{alloc::Layout, cmp::Ordering, fmt::Write, num::NonZeroU8};
@@ -678,6 +679,22 @@ ptx_parser_macros::generate_instruction_type!(
                 src: T
             }
         },
+        Vote {
+            type: Type::Scalar(data.mode.type_()),
+            data: VoteDetails,
+            arguments<T>: {
+                dst: T,
+                src1: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::Pred) },
+                },
+                src2: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::U32) },
+                }
+            }
+
+        }
     }
 );
 
@@ -2202,4 +2219,18 @@ pub enum DivFloatKind {
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub struct FlushToZero {
     pub flush_to_zero: bool,
+}
+
+pub struct VoteDetails {
+    pub mode: VoteMode,
+    pub negate: bool,
+}
+
+impl VoteMode {
+    fn type_(self) -> ScalarType {
+        match self {
+            VoteMode::All | VoteMode::Any => ScalarType::Pred,
+            VoteMode::Ballot => ScalarType::B32,
+        }
+    }
 }
