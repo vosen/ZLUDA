@@ -1,12 +1,13 @@
 // Every time this file changes it must te rebuilt, you need `rocm-llvm-dev` and `llvm-17`
 // `fdenormal-fp-math=dynamic` is required to make functions eligible for inlining
-//  /opt/rocm/llvm/bin/clang -std=c++20 -Xclang -fdenormal-fp-math=dynamic  -Wall -Wextra -Wsign-compare -Wconversion -x hip zluda_ptx_impl.cpp -nogpulib -O3 -mno-wavefrontsize64 -o zluda_ptx_impl.bc -emit-llvm -c --offload-device-only --offload-arch=gfx1010 && /opt/rocm/llvm/bin/llvm-dis zluda_ptx_impl.bc -o - | sed '/@llvm.used/d' | sed '/wchar_size/d' | sed '/llvm.module.flags/d' | sed 's/define hidden/define linkonce_odr/g' | sed 's/\"target-cpu\"=\"gfx1010\"//g' | sed -E 's/\"target-features\"=\"[^\"]+\"//g' | sed 's/ nneg / /g' | sed 's/ disjoint / /g' | sed '/__hip_cuid/d' | sed 's/external protected/external hidden/g' | llvm-as-17 - -o  zluda_ptx_impl.bc && /opt/rocm/llvm/bin/llvm-dis zluda_ptx_impl.bc
+//  /opt/rocm/llvm/bin/clang -std=c++20 -Xclang -fdenormal-fp-math=dynamic  -Wall -Wextra -Wsign-compare -Wconversion -x hip zluda_ptx_impl.cpp -nogpulib -O3 -mno-wavefrontsize64 -o zluda_ptx_impl.bc -emit-llvm -c --offload-device-only --offload-arch=gfx1010 && /opt/rocm/llvm/bin/llvm-dis zluda_ptx_impl.bc -o - | sed '/@llvm.used/d' | sed '/wchar_size/d' | sed '/llvm.module.flags/d' | sed 's/define hidden/define linkonce_odr/g' | sed 's/\"target-cpu\"=\"gfx1010\"//g' | sed -E 's/\"target-features\"=\"[^\"]+\"//g' | sed 's/ nneg / /g' | sed 's/ disjoint / /g' | sed '/__hip_cuid/d' | sed 's/external protected/external hidden/g' | sed 's/trunc nuw/trunc/' | sed 's/trunc nsw/trunc/' | llvm-as-17 - -o  zluda_ptx_impl.bc && /opt/rocm/llvm/bin/llvm-dis zluda_ptx_impl.bc
 
 #include <cstddef>
 #include <cstdint>
 #include <bit>
 #include <cmath>
 #include <hip/amd_detail/amd_device_functions.h>
+#include <hip/hip_fp8.h>
 
 #define CONSTANT_SPACE __attribute__((address_space(4)))
 
@@ -475,5 +476,47 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
                                      uint8_t numerator_scaled_flag)
     {
         return div_f32_part2(x, y, {fma_4, fma_1, fma_3, numerator_scaled_flag});
+    }
+
+    __device__ static __hip_fp8_storage_t cvt_float_to_fp8(float f, __hip_fp8_interpretation_t interp)
+    {
+        const uint32_t bits = reinterpret_cast<uint32_t &>(f);
+        const uint8_t sign = (bits & 0x80000000) ? 0x80 : 0x0;
+        const uint32_t abs = bits & 0x7fffffff;
+
+        const uint32_t min = interp == __HIP_E4M3 ? 0x3A800000 : 0x37000000;
+        if (abs < min)
+        {
+            return sign; // +/- 0
+        }
+
+        return __hip_cvt_float_to_fp8(f, __HIP_SATFINITE, interp);
+    }
+
+    struct Fp8x2
+    {
+        __hip_fp8_storage_t b : 8;
+        __hip_fp8_storage_t a : 8;
+    };
+
+    Fp8x2 FUNC(cvt_rn_satfinite_e4m3x2_f32)(float a, float b)
+    {
+        // If built-in support for fp8 formats is added to LLVM IR we should switch to use that.
+        return {cvt_float_to_fp8(b, __HIP_E4M3), cvt_float_to_fp8(a, __HIP_E4M3)};
+    }
+
+    Fp8x2 FUNC(cvt_rn_satfinite_e5m2x2_f32)(float a, float b)
+    {
+        return {cvt_float_to_fp8(b, __HIP_E5M2), cvt_float_to_fp8(a, __HIP_E5M2)};
+    }
+
+    __half2 FUNC(cvt_rn_f16x2_e4m3x2)(__hip_fp8x2_e4m3 in)
+    {
+        return in;
+    }
+
+    __half2 FUNC(cvt_rn_f16x2_e5m2x2)(__hip_fp8x2_e5m2 in)
+    {
+        return in;
     }
 }

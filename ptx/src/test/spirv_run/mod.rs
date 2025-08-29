@@ -185,6 +185,14 @@ test_ptx!(cvt_rni, [9.5f32, 10.5f32], [10f32, 10f32]);
 test_ptx!(cvt_rzi, [-13.8f32, 12.9f32], [-13f32, 12f32]);
 test_ptx!(cvt_s32_f32, [-13.8f32, 12.9f32], [-13i32, 13i32]);
 test_ptx!(cvt_rni_u16_f32, [0x477FFF80u32], [65535u16]);
+test_ptx!(cvt_rn_satfinite_e4m3x2_f32, [0.40625, 12.9f32], [0x2D55u16]);
+test_ptx!(
+    cvt_rn_satfinite_e5m2x2_f32,
+    [0.375, -5256.6f32],
+    [0x36EDu16]
+);
+test_ptx!(cvt_rn_f16x2_e4m3x2, [0x2D55u16], [0x36804a80u32]);
+test_ptx!(cvt_rn_f16x2_e5m2x2, [0x36EDu16], [0x3600ED00u32]);
 test_ptx!(clz, [0b00000101_00101101_00010011_10101011u32], [5u32]);
 test_ptx!(popc, [0b10111100_10010010_01001001_10001010u32], [14u32]);
 test_ptx!(
