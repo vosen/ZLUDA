@@ -326,6 +326,16 @@ fn immediate_value<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<as
     .parse_next(stream)
 }
 
+fn ident_or_immediate<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<ast::RegOrImmediate<&'input str>> {
+    alt((
+        ident.map(ast::RegOrImmediate::Reg),
+        immediate_value.map(ast::RegOrImmediate::Imm),
+    ))
+    .parse_next(stream)
+}
+
 pub fn parse_for_errors<'input>(text: &'input str) -> Vec<PtxError<'input>> {
     let (tokens, mut errors) = lex_with_span_unchecked(text);
     let parse_result = {
@@ -1292,12 +1302,18 @@ impl<Ident> ast::ParsedOperand<Ident> {
         }
         fn vector_operand<'a, 'input>(
             stream: &mut PtxParser<'a, 'input>,
-        ) -> PResult<Vec<&'input str>> {
-            let (_, r1, _, r2) = (Token::LBrace, ident, Token::Comma, ident).parse_next(stream)?;
+        ) -> PResult<Vec<ast::RegOrImmediate<&'input str>>> {
+            let (_, r1, _, r2) = (
+                Token::LBrace,
+                ident_or_immediate,
+                Token::Comma,
+                ident_or_immediate,
+            )
+                .parse_next(stream)?;
             // TODO: parse .v8 literals
             dispatch! {any;
                 (Token::RBrace, _) => empty.map(|_| vec![r1, r2]),
-                (Token::Comma, _) => (ident, Token::Comma, ident, Token::RBrace).map(|(r3, _, r4, _)| vec![r1, r2, r3, r4]),
+                (Token::Comma, _) => (ident_or_immediate, Token::Comma, ident_or_immediate, Token::RBrace).map(|(r3, _, r4, _)| vec![r1, r2, r3, r4]),
                 _ => fail
             }
             .parse_next(stream)
@@ -1334,7 +1350,7 @@ pub enum PtxError<'input> {
         #[from]
         source: TokenError,
     },
-    #[error("{0}")]
+    #[error("Context error: {0}")]
     Parser(ContextError),
     #[error("")]
     Todo,
