@@ -9,12 +9,14 @@ use cuda_types::{
 use dark_api::fatbin::{
     decompress_lz4, decompress_zstd, Fatbin, FatbinFileIterator, FatbinSubmodule,
 };
+use goblin::{elf, elf32, elf64};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::{
     borrow::Cow,
     ffi::{c_void, CStr, CString},
     fs::{self, File},
     io::{self, Read, Write},
+    mem,
     path::PathBuf,
 };
 use unwrap_or::unwrap_some_or;
@@ -121,14 +123,20 @@ impl StateTracker {
         fn_logger: &mut FnCallLog,
     ) {
         self.module_counter += 1;
-        if unsafe { *(raw_image as *const [u8; 4]) } == *goblin::elf64::header::ELFMAG {
+        if unsafe { *(raw_image as *const [u8; 4]) } == *elf64::header::ELFMAG {
             self.saved_modules.insert(module);
-            // TODO: Parse ELF and write it to disk
-            fn_logger.log(log::ErrorEntry::UnsupportedModule {
-                module,
-                raw_image,
-                kind: "ELF",
-            })
+            match unsafe { get_elf_size(raw_image) } {
+                Some(len) => {
+                    let elf_image =
+                        unsafe { std::slice::from_raw_parts(raw_image.cast::<u8>(), len) };
+                    self.record_new_submodule(module, elf_image, fn_logger, "elf");
+                }
+                None => fn_logger.log(log::ErrorEntry::UnsupportedModule {
+                    module,
+                    raw_image,
+                    kind: "ELF",
+                }),
+            }
         } else if unsafe { *(raw_image as *const [u8; 8]) } == *goblin::archive::MAGIC {
             self.saved_modules.insert(module);
             // TODO: Figure out how to get size of archive module and write it to disk
@@ -195,6 +203,146 @@ impl StateTracker {
                 &*errors,
             ));
         }
+    }
+}
+
+unsafe fn get_elf_size(start: *const c_void) -> Option<usize> {
+    let start = start.cast::<u8>();
+    let ei_class = start.add(mem::size_of_val(elf::header::ELFMAG));
+    let (header, header_size, is_64bit): (elf::header::Header, _, _) = match *ei_class {
+        elf::header::ELFCLASS32 => (
+            (*start.cast::<elf32::header::Header>()).into(),
+            mem::size_of::<elf32::header::Header>() as u64,
+            false,
+        ),
+        elf::header::ELFCLASS64 => (
+            (*start.cast::<elf64::header::Header>()).into(),
+            mem::size_of::<elf64::header::Header>() as u64,
+            true,
+        ),
+        _ => return None,
+    };
+    let mut max_end = header_size;
+    max_end = max_end.max(get_max_end_for::<elf::program_header::ProgramHeader>(
+        start, header, is_64bit,
+    )?);
+    max_end = max_end.max(get_max_end_for::<elf::section_header::SectionHeader>(
+        start, header, is_64bit,
+    )?);
+    Some(max_end as usize)
+}
+
+unsafe fn get_max_end_for<T: ElfComponent>(
+    elf_start: *const u8,
+    header: elf::header::Header,
+    is_64bit: bool,
+) -> Option<u64> {
+    if is_64bit && T::header_size(&header) as usize != mem::size_of::<T::Component64>() {
+        return None;
+    }
+    if !is_64bit && T::header_size(&header) as usize != mem::size_of::<T::Component32>() {
+        return None;
+    }
+    if T::is_extended_header(&header) {
+        // TODO: support extended headers
+        return None;
+    }
+    let headers_start = T::headers_offset(&header);
+    if headers_start == 0 {
+        return Some(0);
+    }
+    let mut max_end = 0;
+    for entry_idx in 0..T::headers_count(&header) as u64 {
+        let header_start =
+            headers_start.checked_add(entry_idx.checked_mul(T::header_size(&header) as u64)?)?;
+        let header_end = header_start.checked_add(T::header_size(&header) as u64)?;
+        max_end = max_end.max(header_end);
+        let component = if is_64bit {
+            (*elf_start
+                .add(header_start as usize)
+                .cast::<T::Component64>())
+            .into()
+        } else {
+            (*elf_start
+                .add(header_start as usize)
+                .cast::<T::Component32>())
+            .into()
+        };
+        let component_end = component.start().checked_add(component.size())?;
+        max_end = max_end.max(component_end);
+    }
+    Some(max_end)
+}
+
+trait ElfComponent: Sized {
+    type Component32: Into<Self> + Copy;
+    type Component64: Into<Self> + Copy;
+
+    fn is_extended_header(elf_header: &elf::header::Header) -> bool;
+    fn header_size(elf_header: &elf::header::Header) -> u16;
+    fn headers_offset(elf_header: &elf::header::Header) -> u64;
+    fn headers_count(elf_header: &elf::header::Header) -> u64;
+    fn start(&self) -> u64;
+    fn size(&self) -> u64;
+}
+
+impl ElfComponent for elf::program_header::ProgramHeader {
+    type Component32 = elf32::program_header::program_header32::ProgramHeader;
+    type Component64 = elf64::program_header::program_header64::ProgramHeader;
+
+    fn is_extended_header(elf_header: &elf::header::Header) -> bool {
+        const PN_XNUM: u16 = 0xffff;
+        elf_header.e_phnum >= PN_XNUM
+    }
+
+    fn header_size(elf_header: &elf::header::Header) -> u16 {
+        elf_header.e_phentsize
+    }
+
+    fn headers_offset(elf_header: &elf::header::Header) -> u64 {
+        elf_header.e_phoff
+    }
+
+    fn headers_count(elf_header: &elf::header::Header) -> u64 {
+        elf_header.e_phnum as u64
+    }
+
+    fn start(&self) -> u64 {
+        self.p_offset
+    }
+
+    fn size(&self) -> u64 {
+        self.p_filesz
+    }
+}
+
+impl ElfComponent for elf::section_header::SectionHeader {
+    type Component32 = elf32::section_header::section_header32::SectionHeader;
+    type Component64 = elf64::section_header::section_header64::SectionHeader;
+
+    fn is_extended_header(elf_header: &elf::header::Header) -> bool {
+        const SHN_LORESERVE: u16 = 0xff00;
+        elf_header.e_phnum >= SHN_LORESERVE
+    }
+
+    fn header_size(elf_header: &elf::header::Header) -> u16 {
+        elf_header.e_shentsize
+    }
+
+    fn headers_offset(elf_header: &elf::header::Header) -> u64 {
+        elf_header.e_shoff
+    }
+
+    fn headers_count(elf_header: &elf::header::Header) -> u64 {
+        elf_header.e_shnum as u64
+    }
+
+    fn start(&self) -> u64 {
+        self.sh_offset
+    }
+
+    fn size(&self) -> u64 {
+        self.sh_size
     }
 }
 
