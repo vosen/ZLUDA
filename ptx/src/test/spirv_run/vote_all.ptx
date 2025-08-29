@@ -1,0 +1,40 @@
+.version 7.0
+.target sm_70
+.address_size 64
+
+.visible .entry vote_all(
+    .param .u64 output
+)
+{
+    .reg .u32   laneid;
+    .reg .u32   tid;
+    .reg .pred  not_first_lane;
+    .reg .pred  result_pred;
+    .reg .u32   result;
+    .reg .u64   out_ptr;
+
+    ld.param.u64    out_ptr, [output];
+
+    mov.u32         laneid, %laneid;
+    mov.u32         tid, %tid.x;
+    setp.ne.u32     not_first_lane, laneid, 0;
+
+    mov.pred        result_pred, 0;
+    // IMPORTANT:
+    // PTX documentation states:
+    // "The behavior of vote.sync is undefined if the executing thread is not in the membermask."
+    // You might think that means:
+    //   "The value produced by vote.sync is undefined if the if the executing thread is not in the membermask."
+    // But it actually means:
+    //   "The instruction `vote.sync` is _undefined behavior_ (in C/C++ sense) for _all threads in the warp_ if the executing thread is not in the membermask."
+    // Compiler _can_ and _does_ skip vote.sync entirely if it can prove that the membermask does not match execution mask
+    @not_first_lane vote.sync.all.pred result_pred, not_first_lane,  0xFFFFFFFE;
+    selp.u32        result, 1, 0, result_pred;
+    
+    .reg .u64       out_offset;
+    mul.wide.u32    out_offset, tid, 4;
+    add.u64         out_ptr, out_ptr, out_offset;
+    st.u32 [out_ptr], result;
+
+    ret;
+}
