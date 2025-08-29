@@ -1451,11 +1451,13 @@ pub(crate) fn cuLibraryLoadData_Post(
     _library_option_values: *mut *mut ::core::ffi::c_void,
     _num_library_options: ::core::ffi::c_uint,
     state: &mut trace::StateTracker,
-    _fn_logger: &mut FnCallLog,
+    fn_logger: &mut FnCallLog,
     _result: CUresult,
 ) {
-    // TODO: this is not great, the lifetime of `code` is not guaranteed to be 'static
     state
         .libraries
         .insert(unsafe { *library }, trace::CodePointer(code));
+    // TODO: this is not correct, but it's enough for now, we just want to
+    // save the binary to disk
+    state.record_new_module(unsafe { CUmodule((*library).0.cast()) }, code, fn_logger);
 }
