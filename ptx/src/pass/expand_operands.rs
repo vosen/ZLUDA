@@ -111,14 +111,13 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
                 _ => return Err(error_mismatched_type()),
             };
             let reg_type = reg_type.clone();
-            let id_constant_stmt = self
-                .resolver
-                .register_unnamed(Some((reg_type.clone(), ast::StateSpace::Reg)));
-            self.result.push(Statement::Constant(ConstantDefinition {
-                dst: id_constant_stmt,
-                typ: reg_scalar_type,
-                value: ast::ImmediateValue::S64(offset as i64),
-            }));
+            let id_constant_stmt = self.add_constant(
+                ast::Type::Scalar(reg_scalar_type),
+                ast::StateSpace::Reg,
+                vec![ast::RegOrImmediate::Imm(ast::ImmediateValue::S64(
+                    offset as i64,
+                ))],
+            );
             let arith_details = match reg_scalar_type.kind() {
                 ast::ScalarKind::Signed => ast::ArithDetails::Integer(ast::ArithInteger {
                     type_: reg_scalar_type,
@@ -146,15 +145,13 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
                 }));
             Ok(id_add_result)
         } else {
-            let id_constant_stmt = self.resolver.register_unnamed(Some((
+            let id_constant_stmt = self.add_constant(
                 ast::Type::Scalar(ast::ScalarType::S64),
                 ast::StateSpace::Reg,
-            )));
-            self.result.push(Statement::Constant(ConstantDefinition {
-                dst: id_constant_stmt,
-                typ: ast::ScalarType::S64,
-                value: ast::ImmediateValue::S64(offset as i64),
-            }));
+                vec![ast::RegOrImmediate::Imm(ast::ImmediateValue::S64(
+                    offset as i64,
+                ))],
+            );
             let dst = self
                 .resolver
                 .register_unnamed(Some((type_.clone(), state_space)));
@@ -169,6 +166,43 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
         }
     }
 
+    fn add_constant(
+        &mut self,
+        constant_type: ast::Type,
+        state_space: ast::StateSpace,
+        initializer: Vec<ast::RegOrImmediate<SpirvWord>>,
+    ) -> SpirvWord {
+        let constant_id = self
+            .resolver
+            .register_unnamed(Some((constant_type.clone(), ast::StateSpace::Const)));
+        let constant = Statement::Variable(ast::Variable {
+            align: None,
+            v_type: constant_type.clone(),
+            state_space: ast::StateSpace::Const,
+            name: constant_id,
+            array_init: initializer,
+        });
+        self.result.push(constant);
+        let loaded_constant_id = self
+            .resolver
+            .register_unnamed(Some((constant_type.clone(), state_space)));
+        let load = Statement::Instruction(ast::Instruction::Ld {
+            data: ast::LdDetails {
+                qualifier: ast::LdStQualifier::Weak,
+                state_space: ast::StateSpace::Const,
+                caching: ast::LdCacheOperator::Cached,
+                typ: constant_type,
+                non_coherent: false,
+            },
+            arguments: ast::LdArgs {
+                dst: loaded_constant_id,
+                src: constant_id,
+            },
+        });
+        self.result.push(load);
+        loaded_constant_id
+    }
+
     fn immediate(
         &mut self,
         value: ast::ImmediateValue,
@@ -180,14 +214,11 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
             } else {
                 return Err(TranslateError::UntypedSymbol);
             };
-        let id = self
-            .resolver
-            .register_unnamed(Some((ast::Type::Scalar(scalar_t), state_space)));
-        self.result.push(Statement::Constant(ConstantDefinition {
-            dst: id,
-            typ: scalar_t,
-            value,
-        }));
+        let id = self.add_constant(
+            ast::Type::Scalar(scalar_t),
+            state_space,
+            vec![ast::RegOrImmediate::Imm(value)],
+        );
         Ok(id)
     }
 

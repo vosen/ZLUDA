@@ -896,9 +896,9 @@ fn multi_variable<'a, 'input: 'a>(
             let initializer = match state_space {
                 StateSpace::Global | StateSpace::Const => match array_dimensions {
                     Some(ref mut dimensions) => {
-                        opt(array_initializer(vector, type_, dimensions)).parse_next(stream)?
+                        opt(array_initializer(vector, dimensions)).parse_next(stream)?
                     }
-                    None => opt(value_initializer(vector, type_)).parse_next(stream)?,
+                    None => opt(value_initializer(vector)).parse_next(stream)?,
                 },
                 _ => None,
             };
@@ -913,7 +913,12 @@ fn multi_variable<'a, 'input: 'a>(
                     v_type: Type::maybe_array(vector, type_, array_dimensions),
                     state_space,
                     name,
-                    array_init: initializer.unwrap_or(Vec::new()),
+                    // TODO: parse ident or immediate
+                    array_init: initializer
+                        .unwrap_or(Vec::new())
+                        .iter()
+                        .map(|imm| ast::RegOrImmediate::Imm(*imm))
+                        .collect::<Vec<_>>(),
                 },
                 count,
             })
@@ -923,9 +928,8 @@ fn multi_variable<'a, 'input: 'a>(
 
 fn array_initializer<'b, 'a: 'b, 'input: 'a>(
     vector: Option<NonZeroU8>,
-    type_: ScalarType,
     array_dimensions: &'b mut Vec<u32>,
-) -> impl Parser<PtxParser<'a, 'input>, Vec<u8>, ContextError> + 'b {
+) -> impl Parser<PtxParser<'a, 'input>, Vec<ImmediateValue>, ContextError> + 'b {
     trace(
         "array_initializer",
         move |stream: &mut PtxParser<'a, 'input>| {
@@ -939,15 +943,16 @@ fn array_initializer<'b, 'a: 'b, 'input: 'a>(
                 Token::LBrace,
                 separated::<_, (), (), _, _, _, _>(
                     0..=array_dimensions[0] as usize,
-                    single_value_append(&mut result, type_),
+                    single_value_append(&mut result),
                     Token::Comma,
                 ),
                 Token::RBrace,
             )
             .parse_next(stream)?;
             // pad with zeros
-            let result_size = type_.size_of() as usize * array_dimensions[0] as usize;
-            result.extend(iter::repeat(0u8).take(result_size - result.len()));
+            let result_size = array_dimensions[0] as usize;
+            result
+                .extend(iter::repeat(ast::ImmediateValue::U64(0)).take(result_size - result.len()));
             Ok(result)
         },
     )
@@ -955,8 +960,7 @@ fn array_initializer<'b, 'a: 'b, 'input: 'a>(
 
 fn value_initializer<'a, 'input: 'a>(
     vector: Option<NonZeroU8>,
-    type_: ScalarType,
-) -> impl Parser<PtxParser<'a, 'input>, Vec<u8>, ContextError> {
+) -> impl Parser<PtxParser<'a, 'input>, Vec<ImmediateValue>, ContextError> {
     trace(
         "value_initializer",
         move |stream: &mut PtxParser<'a, 'input>| {
@@ -966,77 +970,20 @@ fn value_initializer<'a, 'input: 'a>(
             if vector.is_some() {
                 return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
             }
-            single_value_append(&mut result, type_).parse_next(stream)?;
+            single_value_append(&mut result).parse_next(stream)?;
             Ok(result)
         },
     )
 }
 
 fn single_value_append<'b, 'a: 'b, 'input: 'a>(
-    accumulator: &'b mut Vec<u8>,
-    type_: ScalarType,
+    accumulator: &'b mut Vec<ImmediateValue>,
 ) -> impl Parser<PtxParser<'a, 'input>, (), ContextError> + 'b {
     trace(
         "single_value_append",
         move |stream: &mut PtxParser<'a, 'input>| {
             let value = immediate_value.parse_next(stream)?;
-            match (type_, value) {
-                (ScalarType::U8 | ScalarType::B8, ImmediateValue::U64(x)) => {
-                    accumulator.extend_from_slice(&(x as u8).to_le_bytes())
-                }
-                (ScalarType::U8 | ScalarType::B8, ImmediateValue::S64(x)) => {
-                    accumulator.extend_from_slice(&(x as u8).to_le_bytes())
-                }
-                (ScalarType::U16 | ScalarType::B16, ImmediateValue::U64(x)) => {
-                    accumulator.extend_from_slice(&(x as u16).to_le_bytes())
-                }
-                (ScalarType::U16 | ScalarType::B16, ImmediateValue::S64(x)) => {
-                    accumulator.extend_from_slice(&(x as u16).to_le_bytes())
-                }
-                (ScalarType::U32 | ScalarType::B32, ImmediateValue::U64(x)) => {
-                    accumulator.extend_from_slice(&(x as u32).to_le_bytes())
-                }
-                (ScalarType::U32 | ScalarType::B32, ImmediateValue::S64(x)) => {
-                    accumulator.extend_from_slice(&(x as u32).to_le_bytes())
-                }
-                (ScalarType::U64 | ScalarType::B64, ImmediateValue::U64(x)) => {
-                    accumulator.extend_from_slice(&(x as u64).to_le_bytes())
-                }
-                (ScalarType::U64 | ScalarType::B64, ImmediateValue::S64(x)) => {
-                    accumulator.extend_from_slice(&(x as u64).to_le_bytes())
-                }
-                (ScalarType::S8, ImmediateValue::U64(x)) => {
-                    accumulator.extend_from_slice(&(x as i8).to_le_bytes())
-                }
-                (ScalarType::S8, ImmediateValue::S64(x)) => {
-                    accumulator.extend_from_slice(&(x as i8).to_le_bytes())
-                }
-                (ScalarType::S16, ImmediateValue::U64(x)) => {
-                    accumulator.extend_from_slice(&(x as i16).to_le_bytes())
-                }
-                (ScalarType::S16, ImmediateValue::S64(x)) => {
-                    accumulator.extend_from_slice(&(x as i16).to_le_bytes())
-                }
-                (ScalarType::S32, ImmediateValue::U64(x)) => {
-                    accumulator.extend_from_slice(&(x as i32).to_le_bytes())
-                }
-                (ScalarType::S32, ImmediateValue::S64(x)) => {
-                    accumulator.extend_from_slice(&(x as i32).to_le_bytes())
-                }
-                (ScalarType::S64, ImmediateValue::U64(x)) => {
-                    accumulator.extend_from_slice(&(x as i64).to_le_bytes())
-                }
-                (ScalarType::S64, ImmediateValue::S64(x)) => {
-                    accumulator.extend_from_slice(&(x as i64).to_le_bytes())
-                }
-                (ScalarType::F32, ImmediateValue::F32(x)) => {
-                    accumulator.extend_from_slice(&x.to_le_bytes())
-                }
-                (ScalarType::F64, ImmediateValue::F64(x)) => {
-                    accumulator.extend_from_slice(&x.to_le_bytes())
-                }
-                _ => return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify)),
-            }
+            accumulator.push(value);
             Ok(())
         },
     )

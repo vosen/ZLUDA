@@ -224,7 +224,7 @@ fn error_unknown_symbol<T: Into<String>>(symbol: T) -> TranslateError {
 
 #[cfg(debug_assertions)]
 fn error_mismatched_type() -> TranslateError {
-    panic!()
+    panic!("Mismatched type")
 }
 
 #[cfg(not(debug_assertions))]
@@ -239,7 +239,6 @@ enum Statement<I, P: ast::Operand> {
     // SPIR-V compatible replacement for PTX predicates
     Conditional(BrachCondition),
     Conversion(ImplicitConversion),
-    Constant(ConstantDefinition),
     RetValue(ast::RetData, Vec<(SpirvWord, ast::Type)>),
     PtrAccess(PtrAccess<P>),
     RepackVector(RepackVectorDetails),
@@ -348,15 +347,6 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                     to_space,
                     kind,
                 })
-            }
-            Statement::Constant(ConstantDefinition { dst, typ, value }) => {
-                let dst = visitor.visit_ident(
-                    dst,
-                    Some((&typ.into(), ast::StateSpace::Reg)),
-                    true,
-                    false,
-                )?;
-                Statement::Constant(ConstantDefinition { dst, typ, value })
             }
             Statement::RetValue(data, value) => {
                 let value = value
@@ -605,12 +595,6 @@ enum ConversionKind {
     BitToPtr,
     PtrToPtr,
     AddressOf,
-}
-
-struct ConstantDefinition {
-    pub dst: SpirvWord,
-    pub typ: ast::ScalarType,
-    pub value: ast::ImmediateValue,
 }
 
 pub struct PtrAccess<T> {

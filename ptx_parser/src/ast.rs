@@ -7,6 +7,7 @@ use crate::{
     ShuffleMode, VoteMode,
 };
 use bitflags::bitflags;
+use derive_more::Display;
 use std::{alloc::Layout, cmp::Ordering, fmt::Write, num::NonZeroU8};
 
 pub enum Statement<P: Operand> {
@@ -948,7 +949,7 @@ pub struct Variable<ID> {
     pub v_type: Type,
     pub state_space: StateSpace,
     pub name: ID,
-    pub array_init: Vec<u8>,
+    pub array_init: Vec<RegOrImmediate<ID>>,
 }
 
 impl<ID: std::fmt::Display> std::fmt::Display for Variable<ID> {
@@ -1210,6 +1211,12 @@ pub struct CpAsyncDetails {
 pub struct ShfDetails {
     pub direction: ShiftDirection,
     pub mode: FunnelShiftMode,
+}
+
+#[derive(Clone, Copy, Display)]
+pub enum RegOrImmediate<Ident> {
+    Reg(Ident),
+    Imm(ImmediateValue),
 }
 
 #[derive(Clone)]

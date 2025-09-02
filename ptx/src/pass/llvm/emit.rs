@@ -24,8 +24,6 @@
 // shows it fails inside amdgpu-isel. You can get a little bit furthr with "-mllvm -global-isel",
 // but it will too fail similarly, but with "unable to legalize instruction"
 
-use std::array::TryFromSliceError;
-use std::convert::TryInto;
 use std::ffi::{CStr, NulError};
 use std::{i8, ptr, u64};
 
@@ -254,74 +252,57 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         Ok(())
     }
 
-    // TODO: instead of Vec<u8> we should emit a typed initializer
-    fn emit_array_init(
+    fn emit_array_init<Ident: std::fmt::Display>(
         &mut self,
         type_: &ast::Type,
-        array_init: &[u8],
+        array_init: &[ast::RegOrImmediate<Ident>],
         global: *mut llvm_zluda::LLVMValue,
     ) -> Result<(), TranslateError> {
-        match type_ {
+        let initializer = match type_ {
             ast::Type::Array(None, scalar, dimensions) => {
                 if dimensions.len() != 1 {
                     todo!()
                 }
-                if dimensions[0] as usize * scalar.size_of() as usize != array_init.len() {
+                if dimensions[0] as usize != array_init.len() {
                     return Err(error_unreachable());
                 }
                 let type_ = get_scalar_type(self.context, *scalar);
                 let mut elements = array_init
-                    .chunks(scalar.size_of() as usize)
-                    .map(|chunk| self.constant_from_bytes(*scalar, chunk, type_))
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(|_| error_unreachable())?;
-                let initializer =
-                    unsafe { LLVMConstArray2(type_, elements.as_mut_ptr(), elements.len() as u64) };
-                unsafe { LLVMSetInitializer(global, initializer) };
+                    .iter()
+                    .map(|elem| match elem {
+                        ast::RegOrImmediate::Reg(_) => todo!(),
+                        ast::RegOrImmediate::Imm(imm) => self.emit_immediate_value(scalar, imm),
+                    })
+                    .collect::<Vec<_>>();
+                unsafe { LLVMConstArray2(type_, elements.as_mut_ptr(), elements.len() as u64) }
             }
-            _ => todo!(),
-        }
+            ast::Type::Scalar(scalar) => {
+                let initializer = match array_init {
+                    [ast::RegOrImmediate::Imm(init)] => init,
+                    _ => return Err(error_mismatched_type()),
+                };
+                self.emit_immediate_value(scalar, initializer)
+            }
+            _ => {
+                todo!()
+            }
+        };
+        unsafe { LLVMSetInitializer(global, initializer) };
         Ok(())
     }
 
-    fn constant_from_bytes(
+    fn emit_immediate_value(
         &self,
-        scalar: ast::ScalarType,
-        bytes: &[u8],
-        llvm_type: LLVMTypeRef,
-    ) -> Result<LLVMValueRef, TryFromSliceError> {
-        Ok(match scalar {
-            ptx_parser::ScalarType::Pred
-            | ptx_parser::ScalarType::S8
-            | ptx_parser::ScalarType::B8
-            | ptx_parser::ScalarType::U8 => unsafe {
-                LLVMConstInt(llvm_type, u8::from_le_bytes(bytes.try_into()?) as u64, 0)
-            },
-            ptx_parser::ScalarType::S16
-            | ptx_parser::ScalarType::B16
-            | ptx_parser::ScalarType::U16
-            | ptx_parser::ScalarType::E4m3x2
-            | ptx_parser::ScalarType::E5m2x2 => unsafe {
-                LLVMConstInt(llvm_type, u16::from_le_bytes(bytes.try_into()?) as u64, 0)
-            },
-            ptx_parser::ScalarType::S32
-            | ptx_parser::ScalarType::B32
-            | ptx_parser::ScalarType::U32 => unsafe {
-                LLVMConstInt(llvm_type, u32::from_le_bytes(bytes.try_into()?) as u64, 0)
-            },
-            ptx_parser::ScalarType::F16 => todo!(),
-            ptx_parser::ScalarType::BF16 => todo!(),
-            ptx_parser::ScalarType::U64 => todo!(),
-            ptx_parser::ScalarType::S64 => todo!(),
-            ptx_parser::ScalarType::S16x2 => todo!(),
-            ptx_parser::ScalarType::F32 => todo!(),
-            ptx_parser::ScalarType::B64 => todo!(),
-            ptx_parser::ScalarType::F64 => todo!(),
-            ptx_parser::ScalarType::B128 => todo!(),
-            ptx_parser::ScalarType::U16x2 => todo!(),
-            ptx_parser::ScalarType::F16x2 => todo!(),
-            ptx_parser::ScalarType::BF16x2 => todo!(),
-        })
+        scalar_type: &ast::ScalarType,
+        imm: &ast::ImmediateValue,
+    ) -> *mut LLVMValue {
+        let type_ = get_scalar_type(self.context, *scalar_type);
+        match imm {
+            ast::ImmediateValue::U64(x) => unsafe { LLVMConstInt(type_, *x, 0) },
+            ast::ImmediateValue::S64(x) => unsafe { LLVMConstInt(type_, *x as u64, 0) },
+            ast::ImmediateValue::F32(x) => unsafe { LLVMConstReal(type_, *x as f64) },
+            ast::ImmediateValue::F64(x) => unsafe { LLVMConstReal(type_, *x) },
+        }
     }
 
     fn emit_fn_attribute(&self, llvm_object: LLVMValueRef, key: &str, value: &str) {
@@ -395,7 +376,6 @@ impl<'a> MethodEmitContext<'a> {
             Statement::Instruction(inst) => self.emit_instruction(inst)?,
             Statement::Conditional(cond) => self.emit_conditional(cond)?,
             Statement::Conversion(conversion) => self.emit_conversion(conversion)?,
-            Statement::Constant(constant) => self.emit_constant(constant)?,
             Statement::RetValue(_, values) => self.emit_ret_value(values)?,
             Statement::PtrAccess(ptr_access) => self.emit_ptr_access(ptr_access)?,
             Statement::RepackVector(repack) => self.emit_vector_repack(repack)?,
@@ -719,18 +699,6 @@ impl<'a> MethodEmitContext<'a> {
             }
             _ => todo!(),
         }
-    }
-
-    fn emit_constant(&mut self, constant: ConstantDefinition) -> Result<(), TranslateError> {
-        let type_ = get_scalar_type(self.context, constant.typ);
-        let value = match constant.value {
-            ast::ImmediateValue::U64(x) => unsafe { LLVMConstInt(type_, x, 0) },
-            ast::ImmediateValue::S64(x) => unsafe { LLVMConstInt(type_, x as u64, 0) },
-            ast::ImmediateValue::F32(x) => unsafe { LLVMConstReal(type_, x as f64) },
-            ast::ImmediateValue::F64(x) => unsafe { LLVMConstReal(type_, x) },
-        };
-        self.resolver.register(constant.dst, value);
-        Ok(())
     }
 
     fn emit_add(
