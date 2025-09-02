@@ -4,7 +4,7 @@ use std::{ffi::CStr, mem};
 
 #[derive(Debug, Clone, Bpaf)]
 #[allow(dead_code)]
-#[bpaf(options, version("V12.8.0"))]
+#[bpaf(options, version("Cuda compilation tools, release 12.8, V12.8.0"))]
 pub struct Options {
     #[bpaf(short, long)]
     output: String,
