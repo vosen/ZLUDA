@@ -1,30 +1,35 @@
-define amdgpu_kernel void @shl(ptr addrspace(4) byref(i64) %"35", ptr addrspace(4) byref(i64) %"36") #0 {
-  %"37" = alloca i64, align 8, addrspace(5)
+@0 = addrspace(4) global i32 2
+
+define amdgpu_kernel void @shl(ptr addrspace(4) byref(i64) %"36", ptr addrspace(4) byref(i64) %"37") #0 {
   %"38" = alloca i64, align 8, addrspace(5)
   %"39" = alloca i64, align 8, addrspace(5)
   %"40" = alloca i64, align 8, addrspace(5)
+  %"41" = alloca i64, align 8, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
-  br label %"34"
+  br label %"35"
 
-"34":                                             ; preds = %1
-  %"41" = load i64, ptr addrspace(4) %"35", align 8
-  store i64 %"41", ptr addrspace(5) %"37", align 8
+"35":                                             ; preds = %1
   %"42" = load i64, ptr addrspace(4) %"36", align 8
   store i64 %"42", ptr addrspace(5) %"38", align 8
-  %"44" = load i64, ptr addrspace(5) %"37", align 8
-  %"49" = inttoptr i64 %"44" to ptr
-  %"43" = load i64, ptr %"49", align 8
+  %"43" = load i64, ptr addrspace(4) %"37", align 8
   store i64 %"43", ptr addrspace(5) %"39", align 8
-  %"46" = load i64, ptr addrspace(5) %"39", align 8
-  %2 = shl i64 %"46", 2
-  %"50" = select i1 false, i64 0, i64 %2
-  store i64 %"50", ptr addrspace(5) %"40", align 8
-  %"47" = load i64, ptr addrspace(5) %"38", align 8
-  %"48" = load i64, ptr addrspace(5) %"40", align 8
-  %"52" = inttoptr i64 %"47" to ptr
-  store i64 %"48", ptr %"52", align 8
+  %"45" = load i64, ptr addrspace(5) %"38", align 8
+  %"50" = inttoptr i64 %"45" to ptr
+  %"44" = load i64, ptr %"50", align 8
+  store i64 %"44", ptr addrspace(5) %"40", align 8
+  %"34" = load i32, ptr addrspace(4) @0, align 4
+  %"47" = load i64, ptr addrspace(5) %"40", align 8
+  %2 = icmp uge i32 %"34", 64
+  %3 = zext i32 %"34" to i64
+  %4 = shl i64 %"47", %3
+  %"51" = select i1 %2, i64 0, i64 %4
+  store i64 %"51", ptr addrspace(5) %"41", align 8
+  %"48" = load i64, ptr addrspace(5) %"39", align 8
+  %"49" = load i64, ptr addrspace(5) %"41", align 8
+  %"53" = inttoptr i64 %"48" to ptr
+  store i64 %"49", ptr %"53", align 8
   ret void
 }
 

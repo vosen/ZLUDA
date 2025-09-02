@@ -1,45 +1,50 @@
-define amdgpu_kernel void @shf_l_clamp(ptr addrspace(4) byref(i64) %"40", ptr addrspace(4) byref(i64) %"41") #0 {
-  %"42" = alloca i64, align 8, addrspace(5)
-  %"43" = alloca i64, align 8, addrspace(5)
-  %"44" = alloca i32, align 4, addrspace(5)
-  %"45" = alloca i32, align 4, addrspace(5)
+@0 = addrspace(4) global i64 4
+@1 = addrspace(4) global i64 8
+
+define amdgpu_kernel void @shf_l_clamp(ptr addrspace(4) byref(i64) %"42", ptr addrspace(4) byref(i64) %"43") #0 {
+  %"44" = alloca i64, align 8, addrspace(5)
+  %"45" = alloca i64, align 8, addrspace(5)
   %"46" = alloca i32, align 4, addrspace(5)
   %"47" = alloca i32, align 4, addrspace(5)
+  %"48" = alloca i32, align 4, addrspace(5)
+  %"49" = alloca i32, align 4, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
-  br label %"39"
+  br label %"41"
 
-"39":                                             ; preds = %1
-  %"48" = load i64, ptr addrspace(4) %"40", align 8
-  store i64 %"48", ptr addrspace(5) %"42", align 8
-  %"49" = load i64, ptr addrspace(4) %"41", align 8
-  store i64 %"49", ptr addrspace(5) %"43", align 8
-  %"51" = load i64, ptr addrspace(5) %"42", align 8
-  %"62" = inttoptr i64 %"51" to ptr
-  %"50" = load i32, ptr %"62", align 4
-  store i32 %"50", ptr addrspace(5) %"44", align 4
-  %"52" = load i64, ptr addrspace(5) %"42", align 8
-  %"63" = inttoptr i64 %"52" to ptr
-  %"36" = getelementptr inbounds i8, ptr %"63", i64 4
-  %"53" = load i32, ptr %"36", align 4
-  store i32 %"53", ptr addrspace(5) %"45", align 4
-  %"54" = load i64, ptr addrspace(5) %"42", align 8
-  %"64" = inttoptr i64 %"54" to ptr
-  %"38" = getelementptr inbounds i8, ptr %"64", i64 8
-  %"55" = load i32, ptr %"38", align 4
-  store i32 %"55", ptr addrspace(5) %"46", align 4
-  %"57" = load i32, ptr addrspace(5) %"44", align 4
-  %"58" = load i32, ptr addrspace(5) %"45", align 4
+"41":                                             ; preds = %1
+  %"50" = load i64, ptr addrspace(4) %"42", align 8
+  store i64 %"50", ptr addrspace(5) %"44", align 8
+  %"51" = load i64, ptr addrspace(4) %"43", align 8
+  store i64 %"51", ptr addrspace(5) %"45", align 8
+  %"53" = load i64, ptr addrspace(5) %"44", align 8
+  %"64" = inttoptr i64 %"53" to ptr
+  %"52" = load i32, ptr %"64", align 4
+  store i32 %"52", ptr addrspace(5) %"46", align 4
+  %"36" = load i64, ptr addrspace(4) @0, align 8
+  %"54" = load i64, ptr addrspace(5) %"44", align 8
+  %"65" = inttoptr i64 %"54" to ptr
+  %"37" = getelementptr inbounds i8, ptr %"65", i64 %"36"
+  %"55" = load i32, ptr %"37", align 4
+  store i32 %"55", ptr addrspace(5) %"47", align 4
+  %"39" = load i64, ptr addrspace(4) @1, align 8
+  %"56" = load i64, ptr addrspace(5) %"44", align 8
+  %"66" = inttoptr i64 %"56" to ptr
+  %"40" = getelementptr inbounds i8, ptr %"66", i64 %"39"
+  %"57" = load i32, ptr %"40", align 4
+  store i32 %"57", ptr addrspace(5) %"48", align 4
   %"59" = load i32, ptr addrspace(5) %"46", align 4
-  %2 = call i32 @llvm.fshl.i32(i32 %"58", i32 %"57", i32 %"59")
-  %3 = icmp uge i32 %"59", 32
-  %"65" = select i1 %3, i32 %"57", i32 %2
-  store i32 %"65", ptr addrspace(5) %"47", align 4
-  %"60" = load i64, ptr addrspace(5) %"43", align 8
-  %"61" = load i32, ptr addrspace(5) %"47", align 4
-  %"66" = inttoptr i64 %"60" to ptr
-  store i32 %"61", ptr %"66", align 4
+  %"60" = load i32, ptr addrspace(5) %"47", align 4
+  %"61" = load i32, ptr addrspace(5) %"48", align 4
+  %2 = call i32 @llvm.fshl.i32(i32 %"60", i32 %"59", i32 %"61")
+  %3 = icmp uge i32 %"61", 32
+  %"67" = select i1 %3, i32 %"59", i32 %2
+  store i32 %"67", ptr addrspace(5) %"49", align 4
+  %"62" = load i64, ptr addrspace(5) %"45", align 8
+  %"63" = load i32, ptr addrspace(5) %"49", align 4
+  %"68" = inttoptr i64 %"62" to ptr
+  store i32 %"63", ptr %"68", align 4
   ret void
 }
 

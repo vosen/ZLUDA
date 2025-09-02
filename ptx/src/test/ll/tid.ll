@@ -1,3 +1,5 @@
+@0 = addrspace(4) global i8 0
+
 declare hidden i32 @__zluda_ptx_impl_sreg_tid(i8) #0
 
 define amdgpu_kernel void @tid(ptr addrspace(4) byref(i64) %"37") #1 {
@@ -11,7 +13,7 @@ define amdgpu_kernel void @tid(ptr addrspace(4) byref(i64) %"37") #1 {
   br label %"34"
 
 "34":                                             ; preds = %1
-  %"33" = call i32 @__zluda_ptx_impl_sreg_tid(i8 0)
+  %"33" = call i32 @__zluda_ptx_impl_sreg_tid(i8 ptrtoint (ptr addrspace(4) @0 to i8))
   br label %"35"
 
 "35":                                             ; preds = %"34"
@@ -30,8 +32,8 @@ define amdgpu_kernel void @tid(ptr addrspace(4) byref(i64) %"37") #1 {
   store i64 %"48", ptr addrspace(5) %"38", align 8
   %"51" = load i64, ptr addrspace(5) %"38", align 8
   %"52" = load i8, ptr addrspace(5) %"41", align 1
-  %"53" = inttoptr i64 %"51" to ptr
-  store i8 %"52", ptr %"53", align 1
+  %"54" = inttoptr i64 %"51" to ptr
+  store i8 %"52", ptr %"54", align 1
   ret void
 }
 

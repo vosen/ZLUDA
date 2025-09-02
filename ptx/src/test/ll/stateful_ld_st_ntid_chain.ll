@@ -1,3 +1,5 @@
+@0 = addrspace(4) global i8 0
+
 declare hidden i32 @__zluda_ptx_impl_sreg_tid(i8) #0
 
 define amdgpu_kernel void @stateful_ld_st_ntid_chain(ptr addrspace(4) byref(i64) %"43", ptr addrspace(4) byref(i64) %"44") #1 {
@@ -28,7 +30,7 @@ define amdgpu_kernel void @stateful_ld_st_ntid_chain(ptr addrspace(4) byref(i64)
   %3 = inttoptr i64 %"59" to ptr
   %"58" = addrspacecast ptr %3 to ptr addrspace(1)
   store ptr addrspace(1) %"58", ptr addrspace(5) %"49", align 8
-  %"39" = call i32 @__zluda_ptx_impl_sreg_tid(i8 0)
+  %"39" = call i32 @__zluda_ptx_impl_sreg_tid(i8 ptrtoint (ptr addrspace(4) @0 to i8))
   br label %"41"
 
 "41":                                             ; preds = %"40"
@@ -38,20 +40,20 @@ define amdgpu_kernel void @stateful_ld_st_ntid_chain(ptr addrspace(4) byref(i64)
   store i64 %"61", ptr addrspace(5) %"52", align 8
   %"64" = load i64, ptr addrspace(5) %"46", align 8
   %"65" = load i64, ptr addrspace(5) %"52", align 8
-  %"75" = add i64 %"64", %"65"
-  store i64 %"75", ptr addrspace(5) %"47", align 8
+  %"76" = add i64 %"64", %"65"
+  store i64 %"76", ptr addrspace(5) %"47", align 8
   %"67" = load i64, ptr addrspace(5) %"49", align 8
   %"68" = load i64, ptr addrspace(5) %"52", align 8
-  %"77" = add i64 %"67", %"68"
-  store i64 %"77", ptr addrspace(5) %"50", align 8
+  %"78" = add i64 %"67", %"68"
+  store i64 %"78", ptr addrspace(5) %"50", align 8
   %"70" = load i64, ptr addrspace(5) %"47", align 8
-  %"79" = inttoptr i64 %"70" to ptr addrspace(1)
-  %"69" = load i64, ptr addrspace(1) %"79", align 8
+  %"80" = inttoptr i64 %"70" to ptr addrspace(1)
+  %"69" = load i64, ptr addrspace(1) %"80", align 8
   store i64 %"69", ptr addrspace(5) %"53", align 8
   %"71" = load i64, ptr addrspace(5) %"50", align 8
   %"72" = load i64, ptr addrspace(5) %"53", align 8
-  %"80" = inttoptr i64 %"71" to ptr addrspace(1)
-  store i64 %"72", ptr addrspace(1) %"80", align 8
+  %"81" = inttoptr i64 %"71" to ptr addrspace(1)
+  store i64 %"72", ptr addrspace(1) %"81", align 8
   ret void
 }
 
