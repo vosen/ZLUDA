@@ -1,40 +1,40 @@
-define amdgpu_kernel void @fmax(ptr addrspace(4) byref(i64) %"35", ptr addrspace(4) byref(i64) %"36") #0 {
-  %"37" = alloca i64, align 8, addrspace(5)
-  %"38" = alloca i64, align 8, addrspace(5)
-  %"39" = alloca half, align 2, addrspace(5)
-  %"40" = alloca half, align 2, addrspace(5)
-  %"41" = alloca half, align 2, addrspace(5)
+define amdgpu_kernel void @fmax(ptr addrspace(4) byref(i64) %"38", ptr addrspace(4) byref(i64) %"39") #0 {
+  %"40" = alloca i64, align 8, addrspace(5)
+  %"41" = alloca i64, align 8, addrspace(5)
   %"42" = alloca half, align 2, addrspace(5)
+  %"43" = alloca half, align 2, addrspace(5)
+  %"44" = alloca half, align 2, addrspace(5)
+  %"45" = alloca half, align 2, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
-  br label %"34"
+  br label %"37"
 
-"34":                                             ; preds = %1
-  %"43" = load i64, ptr addrspace(4) %"35", align 8
-  store i64 %"43", ptr addrspace(5) %"37", align 8
-  %"44" = load i64, ptr addrspace(4) %"36", align 8
-  store i64 %"44", ptr addrspace(5) %"38", align 8
-  %"46" = load i64, ptr addrspace(5) %"37", align 8
-  %"55" = inttoptr i64 %"46" to ptr
-  %"54" = load i16, ptr %"55", align 2
-  %"45" = bitcast i16 %"54" to half
-  store half %"45", ptr addrspace(5) %"39", align 2
-  %"47" = load i64, ptr addrspace(5) %"37", align 8
-  %"56" = inttoptr i64 %"47" to ptr
-  %"33" = getelementptr inbounds i8, ptr %"56", i64 2
-  %"57" = load i16, ptr %"33", align 2
+"37":                                             ; preds = %1
+  %"46" = load i64, ptr addrspace(4) %"38", align 8
+  store i64 %"46", ptr addrspace(5) %"40", align 8
+  %"47" = load i64, ptr addrspace(4) %"39", align 8
+  store i64 %"47", ptr addrspace(5) %"41", align 8
+  %"49" = load i64, ptr addrspace(5) %"40", align 8
+  %"58" = inttoptr i64 %"49" to ptr
+  %"57" = load i16, ptr %"58", align 2
   %"48" = bitcast i16 %"57" to half
-  store half %"48", ptr addrspace(5) %"40", align 2
-  %"50" = load half, ptr addrspace(5) %"40", align 2
-  %"51" = load half, ptr addrspace(5) %"39", align 2
-  %"49" = call half @llvm.maxnum.f16(half %"50", half %"51")
-  store half %"49", ptr addrspace(5) %"41", align 2
-  %"52" = load i64, ptr addrspace(5) %"38", align 8
-  %"53" = load half, ptr addrspace(5) %"41", align 2
-  %"58" = inttoptr i64 %"52" to ptr
-  %"59" = bitcast half %"53" to i16
-  store i16 %"59", ptr %"58", align 2
+  store half %"48", ptr addrspace(5) %"42", align 2
+  %"50" = load i64, ptr addrspace(5) %"40", align 8
+  %"59" = inttoptr i64 %"50" to ptr
+  %"36" = getelementptr inbounds i8, ptr %"59", i64 2
+  %"60" = load i16, ptr %"36", align 2
+  %"51" = bitcast i16 %"60" to half
+  store half %"51", ptr addrspace(5) %"43", align 2
+  %"53" = load half, ptr addrspace(5) %"43", align 2
+  %"54" = load half, ptr addrspace(5) %"42", align 2
+  %"52" = call half @llvm.maxnum.f16(half %"53", half %"54")
+  store half %"52", ptr addrspace(5) %"44", align 2
+  %"55" = load i64, ptr addrspace(5) %"41", align 8
+  %"56" = load half, ptr addrspace(5) %"44", align 2
+  %"61" = inttoptr i64 %"55" to ptr
+  %"62" = bitcast half %"56" to i16
+  store i16 %"62", ptr %"61", align 2
   ret void
 }
 

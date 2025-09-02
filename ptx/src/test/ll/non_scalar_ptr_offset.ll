@@ -1,34 +1,34 @@
-define amdgpu_kernel void @non_scalar_ptr_offset(ptr addrspace(4) byref(i64) %"34", ptr addrspace(4) byref(i64) %"35") #0 {
-  %"36" = alloca i64, align 8, addrspace(5)
-  %"37" = alloca i64, align 8, addrspace(5)
-  %"38" = alloca i32, align 4, addrspace(5)
-  %"39" = alloca i32, align 4, addrspace(5)
+define amdgpu_kernel void @non_scalar_ptr_offset(ptr addrspace(4) byref(i64) %"37", ptr addrspace(4) byref(i64) %"38") #0 {
+  %"39" = alloca i64, align 8, addrspace(5)
+  %"40" = alloca i64, align 8, addrspace(5)
+  %"41" = alloca i32, align 4, addrspace(5)
+  %"42" = alloca i32, align 4, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
-  br label %"33"
+  br label %"36"
 
-"33":                                             ; preds = %1
-  %"40" = load i64, ptr addrspace(4) %"34", align 8
-  store i64 %"40", ptr addrspace(5) %"36", align 8
-  %"41" = load i64, ptr addrspace(4) %"35", align 8
-  store i64 %"41", ptr addrspace(5) %"37", align 8
-  %"42" = load i64, ptr addrspace(5) %"36", align 8
-  %"50" = inttoptr i64 %"42" to ptr addrspace(1)
-  %"32" = getelementptr inbounds i8, ptr addrspace(1) %"50", i64 8
-  %"30" = load <2 x i32>, ptr addrspace(1) %"32", align 8
-  %"43" = extractelement <2 x i32> %"30", i8 0
-  %"44" = extractelement <2 x i32> %"30", i8 1
-  store i32 %"43", ptr addrspace(5) %"38", align 4
-  store i32 %"44", ptr addrspace(5) %"39", align 4
-  %"46" = load i32, ptr addrspace(5) %"38", align 4
-  %"47" = load i32, ptr addrspace(5) %"39", align 4
-  %"45" = add i32 %"46", %"47"
-  store i32 %"45", ptr addrspace(5) %"38", align 4
-  %"48" = load i64, ptr addrspace(5) %"37", align 8
-  %"49" = load i32, ptr addrspace(5) %"38", align 4
-  %"51" = inttoptr i64 %"48" to ptr addrspace(1)
-  store i32 %"49", ptr addrspace(1) %"51", align 4
+"36":                                             ; preds = %1
+  %"43" = load i64, ptr addrspace(4) %"37", align 8
+  store i64 %"43", ptr addrspace(5) %"39", align 8
+  %"44" = load i64, ptr addrspace(4) %"38", align 8
+  store i64 %"44", ptr addrspace(5) %"40", align 8
+  %"45" = load i64, ptr addrspace(5) %"39", align 8
+  %"53" = inttoptr i64 %"45" to ptr addrspace(1)
+  %"35" = getelementptr inbounds i8, ptr addrspace(1) %"53", i64 8
+  %"33" = load <2 x i32>, ptr addrspace(1) %"35", align 8
+  %"46" = extractelement <2 x i32> %"33", i8 0
+  %"47" = extractelement <2 x i32> %"33", i8 1
+  store i32 %"46", ptr addrspace(5) %"41", align 4
+  store i32 %"47", ptr addrspace(5) %"42", align 4
+  %"49" = load i32, ptr addrspace(5) %"41", align 4
+  %"50" = load i32, ptr addrspace(5) %"42", align 4
+  %"48" = add i32 %"49", %"50"
+  store i32 %"48", ptr addrspace(5) %"41", align 4
+  %"51" = load i64, ptr addrspace(5) %"40", align 8
+  %"52" = load i32, ptr addrspace(5) %"41", align 4
+  %"54" = inttoptr i64 %"51" to ptr addrspace(1)
+  store i32 %"52", ptr addrspace(1) %"54", align 4
   ret void
 }
 

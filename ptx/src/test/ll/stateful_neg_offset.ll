@@ -1,44 +1,44 @@
-define amdgpu_kernel void @stateful_neg_offset(ptr addrspace(4) byref(i64) %"33", ptr addrspace(4) byref(i64) %"34") #0 {
-  %"35" = alloca i64, align 8, addrspace(5)
-  %"36" = alloca i64, align 8, addrspace(5)
-  %"37" = alloca i64, align 8, addrspace(5)
+define amdgpu_kernel void @stateful_neg_offset(ptr addrspace(4) byref(i64) %"36", ptr addrspace(4) byref(i64) %"37") #0 {
   %"38" = alloca i64, align 8, addrspace(5)
   %"39" = alloca i64, align 8, addrspace(5)
   %"40" = alloca i64, align 8, addrspace(5)
+  %"41" = alloca i64, align 8, addrspace(5)
+  %"42" = alloca i64, align 8, addrspace(5)
+  %"43" = alloca i64, align 8, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
-  br label %"32"
+  br label %"35"
 
-"32":                                             ; preds = %1
-  %"41" = load i64, ptr addrspace(4) %"33", align 8
-  store i64 %"41", ptr addrspace(5) %"35", align 8
-  %"42" = load i64, ptr addrspace(4) %"34", align 8
-  store i64 %"42", ptr addrspace(5) %"36", align 8
-  %"44" = load i64, ptr addrspace(5) %"35", align 8
-  %2 = inttoptr i64 %"44" to ptr
-  %"57" = addrspacecast ptr %2 to ptr addrspace(1)
-  store ptr addrspace(1) %"57", ptr addrspace(5) %"37", align 8
-  %"46" = load i64, ptr addrspace(5) %"36", align 8
-  %3 = inttoptr i64 %"46" to ptr
-  %"59" = addrspacecast ptr %3 to ptr addrspace(1)
-  store ptr addrspace(1) %"59", ptr addrspace(5) %"38", align 8
-  %"48" = load i64, ptr addrspace(5) %"37", align 8
-  %"49" = load i64, ptr addrspace(5) %"38", align 8
-  %"47" = add i64 %"48", %"49"
-  store i64 %"47", ptr addrspace(5) %"39", align 8
-  %"51" = load i64, ptr addrspace(5) %"37", align 8
-  %"52" = load i64, ptr addrspace(5) %"38", align 8
-  %"50" = sub i64 %"51", %"52"
-  store i64 %"50", ptr addrspace(5) %"39", align 8
-  %"54" = load i64, ptr addrspace(5) %"37", align 8
-  %"61" = inttoptr i64 %"54" to ptr addrspace(1)
-  %"53" = load i64, ptr addrspace(1) %"61", align 8
-  store i64 %"53", ptr addrspace(5) %"40", align 8
-  %"55" = load i64, ptr addrspace(5) %"38", align 8
-  %"56" = load i64, ptr addrspace(5) %"40", align 8
-  %"62" = inttoptr i64 %"55" to ptr addrspace(1)
-  store i64 %"56", ptr addrspace(1) %"62", align 8
+"35":                                             ; preds = %1
+  %"44" = load i64, ptr addrspace(4) %"36", align 8
+  store i64 %"44", ptr addrspace(5) %"38", align 8
+  %"45" = load i64, ptr addrspace(4) %"37", align 8
+  store i64 %"45", ptr addrspace(5) %"39", align 8
+  %"47" = load i64, ptr addrspace(5) %"38", align 8
+  %2 = inttoptr i64 %"47" to ptr
+  %"60" = addrspacecast ptr %2 to ptr addrspace(1)
+  store ptr addrspace(1) %"60", ptr addrspace(5) %"40", align 8
+  %"49" = load i64, ptr addrspace(5) %"39", align 8
+  %3 = inttoptr i64 %"49" to ptr
+  %"62" = addrspacecast ptr %3 to ptr addrspace(1)
+  store ptr addrspace(1) %"62", ptr addrspace(5) %"41", align 8
+  %"51" = load i64, ptr addrspace(5) %"40", align 8
+  %"52" = load i64, ptr addrspace(5) %"41", align 8
+  %"50" = add i64 %"51", %"52"
+  store i64 %"50", ptr addrspace(5) %"42", align 8
+  %"54" = load i64, ptr addrspace(5) %"40", align 8
+  %"55" = load i64, ptr addrspace(5) %"41", align 8
+  %"53" = sub i64 %"54", %"55"
+  store i64 %"53", ptr addrspace(5) %"42", align 8
+  %"57" = load i64, ptr addrspace(5) %"40", align 8
+  %"64" = inttoptr i64 %"57" to ptr addrspace(1)
+  %"56" = load i64, ptr addrspace(1) %"64", align 8
+  store i64 %"56", ptr addrspace(5) %"43", align 8
+  %"58" = load i64, ptr addrspace(5) %"41", align 8
+  %"59" = load i64, ptr addrspace(5) %"43", align 8
+  %"65" = inttoptr i64 %"58" to ptr addrspace(1)
+  store i64 %"59", ptr addrspace(1) %"65", align 8
   ret void
 }
 
