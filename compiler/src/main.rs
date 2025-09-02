@@ -10,6 +10,7 @@ use bpaf::Bpaf;
 
 mod error;
 use error::CompilerError;
+use hip_runtime_sys::{hipDeviceProp_tR0600, hipGetDevicePropertiesR0600, hipInit};
 
 const DEFAULT_ARCH: &'static str = "gfx1100";
 
@@ -58,9 +59,14 @@ fn main_core() -> Result<(), CompilerError> {
 
     let arch: String = match opts.arch {
         Some(s) => s,
-        None => get_gpu_arch()
-            .map(String::from)
-            .unwrap_or(DEFAULT_ARCH.to_owned()),
+        None => {
+            unsafe { hipInit(0) }?;
+            let mut dev_props: hipDeviceProp_tR0600 = unsafe { mem::zeroed() };
+            unsafe { hipGetDevicePropertiesR0600(&mut dev_props, 0) }?;
+            get_gpu_arch(&mut dev_props)
+                .map(String::from)
+                .unwrap_or(DEFAULT_ARCH.to_owned())
+        }
     };
 
     let ptx = fs::read(&ptx_path).map_err(CompilerError::from)?;
@@ -78,8 +84,8 @@ fn main_core() -> Result<(), CompilerError> {
         &comgr,
         &arch,
         &llvm.bitcode,
-        &llvm.attributes_bitcode,
         &llvm.linked_bitcode,
+        &llvm.attributes_bitcode,
         Some(&comgr_hook),
     )
     .map_err(CompilerError::from)?;
@@ -116,11 +122,8 @@ struct LLVMArtifacts {
     llvm_ir: Vec<u8>,
 }
 
-fn get_gpu_arch() -> Result<&'static str, CompilerError> {
-    use hip_runtime_sys::*;
-    unsafe { hipInit(0) }?;
-    let mut dev_props: hipDeviceProp_tR0600 = unsafe { mem::zeroed() };
-    unsafe { hipGetDevicePropertiesR0600(&mut dev_props, 0) }?;
+fn get_gpu_arch<'a>(dev_props: &'a mut hipDeviceProp_tR0600) -> Result<&'a str, CompilerError> {
+    unsafe { hipGetDevicePropertiesR0600(dev_props, 0) }?;
     let gcn_arch_name = &dev_props.gcnArchName;
     let gcn_arch_name = unsafe { CStr::from_ptr(gcn_arch_name.as_ptr()) };
     let gcn_arch_name = gcn_arch_name.to_str();

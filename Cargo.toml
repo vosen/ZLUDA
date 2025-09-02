@@ -16,6 +16,7 @@ members = [
     "ptx_parser",
     "ptx_parser_macros",
     "ptx_parser_macros_impl",
+    "ptxas",
     "xtask",
     "zluda",
     "zluda_bindgen",
