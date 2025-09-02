@@ -1,46 +1,46 @@
-define amdgpu_kernel void @add_s32_sat(ptr addrspace(4) byref(i64) %"37", ptr addrspace(4) byref(i64) %"38") #0 {
-  %"39" = alloca i64, align 8, addrspace(5)
-  %"40" = alloca i64, align 8, addrspace(5)
-  %"41" = alloca i32, align 4, addrspace(5)
-  %"42" = alloca i32, align 4, addrspace(5)
-  %"43" = alloca i32, align 4, addrspace(5)
+define amdgpu_kernel void @add_s32_sat(ptr addrspace(4) byref(i64) %"40", ptr addrspace(4) byref(i64) %"41") #0 {
+  %"42" = alloca i64, align 8, addrspace(5)
+  %"43" = alloca i64, align 8, addrspace(5)
   %"44" = alloca i32, align 4, addrspace(5)
+  %"45" = alloca i32, align 4, addrspace(5)
+  %"46" = alloca i32, align 4, addrspace(5)
+  %"47" = alloca i32, align 4, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
-  br label %"36"
+  br label %"39"
 
-"36":                                             ; preds = %1
-  %"45" = load i64, ptr addrspace(4) %"37", align 8
-  store i64 %"45", ptr addrspace(5) %"39", align 8
-  %"46" = load i64, ptr addrspace(4) %"38", align 8
-  store i64 %"46", ptr addrspace(5) %"40", align 8
-  %"48" = load i64, ptr addrspace(5) %"39", align 8
-  %"61" = inttoptr i64 %"48" to ptr
-  %"47" = load i32, ptr %"61", align 4
-  store i32 %"47", ptr addrspace(5) %"41", align 4
-  %"49" = load i64, ptr addrspace(5) %"39", align 8
-  %"62" = inttoptr i64 %"49" to ptr
-  %"33" = getelementptr inbounds i8, ptr %"62", i64 4
-  %"50" = load i32, ptr %"33", align 4
-  store i32 %"50", ptr addrspace(5) %"42", align 4
-  %"52" = load i32, ptr addrspace(5) %"41", align 4
-  %"53" = load i32, ptr addrspace(5) %"42", align 4
-  %"51" = call i32 @llvm.sadd.sat.i32(i32 %"52", i32 %"53")
-  store i32 %"51", ptr addrspace(5) %"43", align 4
-  %"55" = load i32, ptr addrspace(5) %"41", align 4
-  %"56" = load i32, ptr addrspace(5) %"42", align 4
-  %"54" = add i32 %"55", %"56"
-  store i32 %"54", ptr addrspace(5) %"44", align 4
-  %"57" = load i64, ptr addrspace(5) %"40", align 8
-  %"58" = load i32, ptr addrspace(5) %"43", align 4
-  %"63" = inttoptr i64 %"57" to ptr
-  store i32 %"58", ptr %"63", align 4
-  %"59" = load i64, ptr addrspace(5) %"40", align 8
-  %"64" = inttoptr i64 %"59" to ptr
-  %"35" = getelementptr inbounds i8, ptr %"64", i64 4
-  %"60" = load i32, ptr addrspace(5) %"44", align 4
-  store i32 %"60", ptr %"35", align 4
+"39":                                             ; preds = %1
+  %"48" = load i64, ptr addrspace(4) %"40", align 8
+  store i64 %"48", ptr addrspace(5) %"42", align 8
+  %"49" = load i64, ptr addrspace(4) %"41", align 8
+  store i64 %"49", ptr addrspace(5) %"43", align 8
+  %"51" = load i64, ptr addrspace(5) %"42", align 8
+  %"64" = inttoptr i64 %"51" to ptr
+  %"50" = load i32, ptr %"64", align 4
+  store i32 %"50", ptr addrspace(5) %"44", align 4
+  %"52" = load i64, ptr addrspace(5) %"42", align 8
+  %"65" = inttoptr i64 %"52" to ptr
+  %"36" = getelementptr inbounds i8, ptr %"65", i64 4
+  %"53" = load i32, ptr %"36", align 4
+  store i32 %"53", ptr addrspace(5) %"45", align 4
+  %"55" = load i32, ptr addrspace(5) %"44", align 4
+  %"56" = load i32, ptr addrspace(5) %"45", align 4
+  %"54" = call i32 @llvm.sadd.sat.i32(i32 %"55", i32 %"56")
+  store i32 %"54", ptr addrspace(5) %"46", align 4
+  %"58" = load i32, ptr addrspace(5) %"44", align 4
+  %"59" = load i32, ptr addrspace(5) %"45", align 4
+  %"57" = add i32 %"58", %"59"
+  store i32 %"57", ptr addrspace(5) %"47", align 4
+  %"60" = load i64, ptr addrspace(5) %"43", align 8
+  %"61" = load i32, ptr addrspace(5) %"46", align 4
+  %"66" = inttoptr i64 %"60" to ptr
+  store i32 %"61", ptr %"66", align 4
+  %"62" = load i64, ptr addrspace(5) %"43", align 8
+  %"67" = inttoptr i64 %"62" to ptr
+  %"38" = getelementptr inbounds i8, ptr %"67", i64 4
+  %"63" = load i32, ptr addrspace(5) %"47", align 4
+  store i32 %"63", ptr %"38", align 4
   ret void
 }
 
