@@ -111,7 +111,9 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
                 _ => return Err(error_mismatched_type()),
             };
             let reg_type = reg_type.clone();
-            let id_constant_stmt = self.add_constant(
+            let id_constant_stmt = add_constant(
+                self.resolver,
+                self.result,
                 ast::Type::Scalar(reg_scalar_type),
                 ast::StateSpace::Reg,
                 vec![ast::RegOrImmediate::Imm(ast::ImmediateValue::S64(
@@ -145,7 +147,9 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
                 }));
             Ok(id_add_result)
         } else {
-            let id_constant_stmt = self.add_constant(
+            let id_constant_stmt = add_constant(
+                self.resolver,
+                self.result,
                 ast::Type::Scalar(ast::ScalarType::S64),
                 ast::StateSpace::Reg,
                 vec![ast::RegOrImmediate::Imm(ast::ImmediateValue::S64(
@@ -166,43 +170,6 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
         }
     }
 
-    fn add_constant(
-        &mut self,
-        constant_type: ast::Type,
-        state_space: ast::StateSpace,
-        initializer: Vec<ast::RegOrImmediate<SpirvWord>>,
-    ) -> SpirvWord {
-        let constant_id = self
-            .resolver
-            .register_unnamed(Some((constant_type.clone(), ast::StateSpace::Const)));
-        let constant = Statement::Variable(ast::Variable {
-            align: None,
-            v_type: constant_type.clone(),
-            state_space: ast::StateSpace::Const,
-            name: constant_id,
-            array_init: initializer,
-        });
-        self.result.push(constant);
-        let loaded_constant_id = self
-            .resolver
-            .register_unnamed(Some((constant_type.clone(), state_space)));
-        let load = Statement::Instruction(ast::Instruction::Ld {
-            data: ast::LdDetails {
-                qualifier: ast::LdStQualifier::Weak,
-                state_space: ast::StateSpace::Const,
-                caching: ast::LdCacheOperator::Cached,
-                typ: constant_type,
-                non_coherent: false,
-            },
-            arguments: ast::LdArgs {
-                dst: loaded_constant_id,
-                src: constant_id,
-            },
-        });
-        self.result.push(load);
-        loaded_constant_id
-    }
-
     fn immediate(
         &mut self,
         value: ast::ImmediateValue,
@@ -214,7 +181,9 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
             } else {
                 return Err(TranslateError::UntypedSymbol);
             };
-        let id = self.add_constant(
+        let id = add_constant(
+            self.resolver,
+            self.result,
             ast::Type::Scalar(scalar_t),
             state_space,
             vec![ast::RegOrImmediate::Imm(value)],
