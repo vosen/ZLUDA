@@ -5,8 +5,6 @@ define amdgpu_kernel void @fmax(ptr addrspace(4) byref(i64) %"38", ptr addrspace
   %"43" = alloca half, align 2, addrspace(5)
   %"44" = alloca half, align 2, addrspace(5)
   %"45" = alloca half, align 2, addrspace(5)
-  %"50" = alloca i64, align 8, addrspace(5)
-  store i64 2, ptr addrspace(5) %"50", align 4
   br label %1
 
 1:                                                ; preds = %0
@@ -18,26 +16,25 @@ define amdgpu_kernel void @fmax(ptr addrspace(4) byref(i64) %"38", ptr addrspace
   %"47" = load i64, ptr addrspace(4) %"39", align 8
   store i64 %"47", ptr addrspace(5) %"41", align 8
   %"49" = load i64, ptr addrspace(5) %"40", align 8
-  %"60" = inttoptr i64 %"49" to ptr
-  %"59" = load i16, ptr %"60", align 2
-  %"48" = bitcast i16 %"59" to half
+  %"58" = inttoptr i64 %"49" to ptr
+  %"57" = load i16, ptr %"58", align 2
+  %"48" = bitcast i16 %"57" to half
   store half %"48", ptr addrspace(5) %"42", align 2
-  %"51" = load i64, ptr addrspace(5) %"40", align 8
-  %"52" = load i64, ptr addrspace(5) %"50", align 8
-  %"61" = inttoptr i64 %"51" to ptr
-  %"36" = getelementptr inbounds i8, ptr %"61", i64 %"52"
-  %"62" = load i16, ptr %"36", align 2
-  %"53" = bitcast i16 %"62" to half
-  store half %"53", ptr addrspace(5) %"43", align 2
-  %"55" = load half, ptr addrspace(5) %"43", align 2
-  %"56" = load half, ptr addrspace(5) %"42", align 2
-  %"54" = call half @llvm.maxnum.f16(half %"55", half %"56")
-  store half %"54", ptr addrspace(5) %"44", align 2
-  %"57" = load i64, ptr addrspace(5) %"41", align 8
-  %"58" = load half, ptr addrspace(5) %"44", align 2
-  %"63" = inttoptr i64 %"57" to ptr
-  %"64" = bitcast half %"58" to i16
-  store i16 %"64", ptr %"63", align 2
+  %"50" = load i64, ptr addrspace(5) %"40", align 8
+  %"59" = inttoptr i64 %"50" to ptr
+  %"36" = getelementptr inbounds i8, ptr %"59", i64 2
+  %"60" = load i16, ptr %"36", align 2
+  %"51" = bitcast i16 %"60" to half
+  store half %"51", ptr addrspace(5) %"43", align 2
+  %"53" = load half, ptr addrspace(5) %"43", align 2
+  %"54" = load half, ptr addrspace(5) %"42", align 2
+  %"52" = call half @llvm.maxnum.f16(half %"53", half %"54")
+  store half %"52", ptr addrspace(5) %"44", align 2
+  %"55" = load i64, ptr addrspace(5) %"41", align 8
+  %"56" = load half, ptr addrspace(5) %"44", align 2
+  %"61" = inttoptr i64 %"55" to ptr
+  %"62" = bitcast half %"56" to i16
+  store i16 %"62", ptr %"61", align 2
   ret void
 }
 

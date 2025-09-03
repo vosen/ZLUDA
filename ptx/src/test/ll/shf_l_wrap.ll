@@ -5,10 +5,6 @@ define amdgpu_kernel void @shf_l_wrap(ptr addrspace(4) byref(i64) %"40", ptr add
   %"45" = alloca i32, align 4, addrspace(5)
   %"46" = alloca i32, align 4, addrspace(5)
   %"47" = alloca i32, align 4, addrspace(5)
-  %"52" = alloca i64, align 8, addrspace(5)
-  store i64 4, ptr addrspace(5) %"52", align 4
-  %"56" = alloca i64, align 8, addrspace(5)
-  store i64 8, ptr addrspace(5) %"56", align 4
   br label %1
 
 1:                                                ; preds = %0
@@ -20,30 +16,28 @@ define amdgpu_kernel void @shf_l_wrap(ptr addrspace(4) byref(i64) %"40", ptr add
   %"49" = load i64, ptr addrspace(4) %"41", align 8
   store i64 %"49", ptr addrspace(5) %"43", align 8
   %"51" = load i64, ptr addrspace(5) %"42", align 8
-  %"66" = inttoptr i64 %"51" to ptr
-  %"50" = load i32, ptr %"66", align 4
+  %"62" = inttoptr i64 %"51" to ptr
+  %"50" = load i32, ptr %"62", align 4
   store i32 %"50", ptr addrspace(5) %"44", align 4
-  %"53" = load i64, ptr addrspace(5) %"42", align 8
-  %"54" = load i64, ptr addrspace(5) %"52", align 8
-  %"67" = inttoptr i64 %"53" to ptr
-  %"36" = getelementptr inbounds i8, ptr %"67", i64 %"54"
-  %"55" = load i32, ptr %"36", align 4
-  store i32 %"55", ptr addrspace(5) %"45", align 4
-  %"57" = load i64, ptr addrspace(5) %"42", align 8
-  %"58" = load i64, ptr addrspace(5) %"56", align 8
-  %"68" = inttoptr i64 %"57" to ptr
-  %"38" = getelementptr inbounds i8, ptr %"68", i64 %"58"
-  %"59" = load i32, ptr %"38", align 4
-  store i32 %"59", ptr addrspace(5) %"46", align 4
-  %"61" = load i32, ptr addrspace(5) %"44", align 4
-  %"62" = load i32, ptr addrspace(5) %"45", align 4
-  %"63" = load i32, ptr addrspace(5) %"46", align 4
-  %"69" = call i32 @llvm.fshl.i32(i32 %"62", i32 %"61", i32 %"63")
-  store i32 %"69", ptr addrspace(5) %"47", align 4
-  %"64" = load i64, ptr addrspace(5) %"43", align 8
-  %"65" = load i32, ptr addrspace(5) %"47", align 4
-  %"70" = inttoptr i64 %"64" to ptr
-  store i32 %"65", ptr %"70", align 4
+  %"52" = load i64, ptr addrspace(5) %"42", align 8
+  %"63" = inttoptr i64 %"52" to ptr
+  %"36" = getelementptr inbounds i8, ptr %"63", i64 4
+  %"53" = load i32, ptr %"36", align 4
+  store i32 %"53", ptr addrspace(5) %"45", align 4
+  %"54" = load i64, ptr addrspace(5) %"42", align 8
+  %"64" = inttoptr i64 %"54" to ptr
+  %"38" = getelementptr inbounds i8, ptr %"64", i64 8
+  %"55" = load i32, ptr %"38", align 4
+  store i32 %"55", ptr addrspace(5) %"46", align 4
+  %"57" = load i32, ptr addrspace(5) %"44", align 4
+  %"58" = load i32, ptr addrspace(5) %"45", align 4
+  %"59" = load i32, ptr addrspace(5) %"46", align 4
+  %"65" = call i32 @llvm.fshl.i32(i32 %"58", i32 %"57", i32 %"59")
+  store i32 %"65", ptr addrspace(5) %"47", align 4
+  %"60" = load i64, ptr addrspace(5) %"43", align 8
+  %"61" = load i32, ptr addrspace(5) %"47", align 4
+  %"66" = inttoptr i64 %"60" to ptr
+  store i32 %"61", ptr %"66", align 4
   ret void
 }
 

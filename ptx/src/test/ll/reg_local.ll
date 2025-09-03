@@ -3,12 +3,6 @@ define amdgpu_kernel void @reg_local(ptr addrspace(4) byref(i64) %"40", ptr addr
   %"42" = alloca i64, align 8, addrspace(5)
   %"43" = alloca i64, align 8, addrspace(5)
   %"44" = alloca i64, align 8, addrspace(5)
-  %"49" = alloca i64, align 8, addrspace(5)
-  store i64 1, ptr addrspace(5) %"49", align 4
-  %"52" = alloca i64, align 8, addrspace(5)
-  store i64 0, ptr addrspace(5) %"52", align 4
-  %"55" = alloca i64, align 8, addrspace(5)
-  store i64 0, ptr addrspace(5) %"55", align 4
   br label %1
 
 1:                                                ; preds = %0
@@ -20,25 +14,22 @@ define amdgpu_kernel void @reg_local(ptr addrspace(4) byref(i64) %"40", ptr addr
   %"46" = load i64, ptr addrspace(4) %"41", align 8
   store i64 %"46", ptr addrspace(5) %"43", align 8
   %"48" = load i64, ptr addrspace(5) %"42", align 8
-  %"60" = inttoptr i64 %"48" to ptr addrspace(1)
-  %"59" = load i64, ptr addrspace(1) %"60", align 8
-  store i64 %"59", ptr addrspace(5) %"44", align 8
-  %"50" = load i64, ptr addrspace(5) %"44", align 8
-  %"51" = load i64, ptr addrspace(5) %"49", align 8
-  %"34" = add i64 %"50", %"51"
-  %"61" = addrspacecast ptr addrspace(5) %"11" to ptr
-  store i64 %"34", ptr %"61", align 8
-  %"53" = load i64, ptr addrspace(5) %"52", align 8
-  %"63" = addrspacecast ptr addrspace(5) %"11" to ptr
-  %"36" = getelementptr inbounds i8, ptr %"63", i64 %"53"
-  %"64" = load i64, ptr %"36", align 8
-  store i64 %"64", ptr addrspace(5) %"44", align 8
-  %"56" = load i64, ptr addrspace(5) %"43", align 8
-  %"57" = load i64, ptr addrspace(5) %"55", align 8
-  %"65" = inttoptr i64 %"56" to ptr addrspace(1)
-  %"38" = getelementptr inbounds i8, ptr addrspace(1) %"65", i64 %"57"
-  %"58" = load i64, ptr addrspace(5) %"44", align 8
-  store i64 %"58", ptr addrspace(1) %"38", align 8
+  %"54" = inttoptr i64 %"48" to ptr addrspace(1)
+  %"53" = load i64, ptr addrspace(1) %"54", align 8
+  store i64 %"53", ptr addrspace(5) %"44", align 8
+  %"49" = load i64, ptr addrspace(5) %"44", align 8
+  %"34" = add i64 %"49", 1
+  %"55" = addrspacecast ptr addrspace(5) %"11" to ptr
+  store i64 %"34", ptr %"55", align 8
+  %"57" = addrspacecast ptr addrspace(5) %"11" to ptr
+  %"36" = getelementptr inbounds i8, ptr %"57", i64 0
+  %"58" = load i64, ptr %"36", align 8
+  store i64 %"58", ptr addrspace(5) %"44", align 8
+  %"51" = load i64, ptr addrspace(5) %"43", align 8
+  %"59" = inttoptr i64 %"51" to ptr addrspace(1)
+  %"38" = getelementptr inbounds i8, ptr addrspace(1) %"59", i64 0
+  %"52" = load i64, ptr addrspace(5) %"44", align 8
+  store i64 %"52", ptr addrspace(1) %"38", align 8
   ret void
 }
 

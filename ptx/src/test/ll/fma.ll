@@ -4,10 +4,6 @@ define amdgpu_kernel void @fma(ptr addrspace(4) byref(i64) %"39", ptr addrspace(
   %"43" = alloca float, align 4, addrspace(5)
   %"44" = alloca float, align 4, addrspace(5)
   %"45" = alloca float, align 4, addrspace(5)
-  %"50" = alloca i64, align 8, addrspace(5)
-  store i64 4, ptr addrspace(5) %"50", align 4
-  %"54" = alloca i64, align 8, addrspace(5)
-  store i64 8, ptr addrspace(5) %"54", align 4
   br label %1
 
 1:                                                ; preds = %0
@@ -19,30 +15,28 @@ define amdgpu_kernel void @fma(ptr addrspace(4) byref(i64) %"39", ptr addrspace(
   %"47" = load i64, ptr addrspace(4) %"40", align 8
   store i64 %"47", ptr addrspace(5) %"42", align 8
   %"49" = load i64, ptr addrspace(5) %"41", align 8
-  %"64" = inttoptr i64 %"49" to ptr
-  %"48" = load float, ptr %"64", align 4
+  %"60" = inttoptr i64 %"49" to ptr
+  %"48" = load float, ptr %"60", align 4
   store float %"48", ptr addrspace(5) %"43", align 4
-  %"51" = load i64, ptr addrspace(5) %"41", align 8
-  %"52" = load i64, ptr addrspace(5) %"50", align 8
-  %"65" = inttoptr i64 %"51" to ptr
-  %"35" = getelementptr inbounds i8, ptr %"65", i64 %"52"
-  %"53" = load float, ptr %"35", align 4
-  store float %"53", ptr addrspace(5) %"44", align 4
-  %"55" = load i64, ptr addrspace(5) %"41", align 8
-  %"56" = load i64, ptr addrspace(5) %"54", align 8
-  %"66" = inttoptr i64 %"55" to ptr
-  %"37" = getelementptr inbounds i8, ptr %"66", i64 %"56"
-  %"57" = load float, ptr %"37", align 4
-  store float %"57", ptr addrspace(5) %"45", align 4
+  %"50" = load i64, ptr addrspace(5) %"41", align 8
+  %"61" = inttoptr i64 %"50" to ptr
+  %"35" = getelementptr inbounds i8, ptr %"61", i64 4
+  %"51" = load float, ptr %"35", align 4
+  store float %"51", ptr addrspace(5) %"44", align 4
+  %"52" = load i64, ptr addrspace(5) %"41", align 8
+  %"62" = inttoptr i64 %"52" to ptr
+  %"37" = getelementptr inbounds i8, ptr %"62", i64 8
+  %"53" = load float, ptr %"37", align 4
+  store float %"53", ptr addrspace(5) %"45", align 4
+  %"55" = load float, ptr addrspace(5) %"43", align 4
+  %"56" = load float, ptr addrspace(5) %"44", align 4
+  %"57" = load float, ptr addrspace(5) %"45", align 4
+  %"54" = call float @llvm.fma.f32(float %"55", float %"56", float %"57")
+  store float %"54", ptr addrspace(5) %"43", align 4
+  %"58" = load i64, ptr addrspace(5) %"42", align 8
   %"59" = load float, ptr addrspace(5) %"43", align 4
-  %"60" = load float, ptr addrspace(5) %"44", align 4
-  %"61" = load float, ptr addrspace(5) %"45", align 4
-  %"58" = call float @llvm.fma.f32(float %"59", float %"60", float %"61")
-  store float %"58", ptr addrspace(5) %"43", align 4
-  %"62" = load i64, ptr addrspace(5) %"42", align 8
-  %"63" = load float, ptr addrspace(5) %"43", align 4
-  %"67" = inttoptr i64 %"62" to ptr
-  store float %"63", ptr %"67", align 4
+  %"63" = inttoptr i64 %"58" to ptr
+  store float %"59", ptr %"63", align 4
   ret void
 }
 
