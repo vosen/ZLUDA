@@ -1,7 +1,5 @@
 name: Bug Report
 description: Report an issue with ZLUDA
-title: ""
-labels: []
 body:
   - type: markdown
     attributes:
@@ -48,6 +46,14 @@ body:
           4. Build and run the tests:
             make test_gpt2fp32cu
             LD_LIBRARY_PATH=<ZLUDA_TRACE_DIR> ./test_gpt2fp32cu
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: ZLUDA version
+      description: What version of ZLUDA are you using? Due to legal issues **versions older than 4 are not supported**
+      placeholder:  "example: 5-preview.113"
     validations:
       required: true
   - type: input
