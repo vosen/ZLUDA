@@ -92,7 +92,7 @@ fn run_variable<'input, 'b>(
         align: variable.align,
         v_type: variable.v_type,
         state_space: variable.state_space,
-        array_init: run_array_init(resolver, &variable.array_init)?,
+        array_init: variable.array_init,
     })
 }
 
@@ -171,7 +171,7 @@ fn run_multivariable<'input, 'b>(
                     v_type: variable.var.v_type.clone(),
                     state_space: variable.var.state_space,
                     name: ident,
-                    array_init: run_array_init(resolver, &variable.var.array_init)?,
+                    array_init: variable.var.array_init.clone(),
                 }));
             }
         }
@@ -186,22 +186,9 @@ fn run_multivariable<'input, 'b>(
                 v_type: variable.var.v_type.clone(),
                 state_space: variable.var.state_space,
                 name: ident,
-                array_init: run_array_init(resolver, &variable.var.array_init)?,
+                array_init: variable.var.array_init,
             }));
         }
     }
     Ok(())
-}
-
-fn run_array_init<'input, 'b>(
-    resolver: &mut ScopedResolver<'input, 'b>,
-    array_init: &[ast::RegOrImmediate<&'input str>],
-) -> Result<Vec<ast::RegOrImmediate<SpirvWord>>, TranslateError> {
-    Ok(array_init
-        .iter()
-        .map(|elem| match elem {
-            ast::RegOrImmediate::Reg(name) => Ok(ast::RegOrImmediate::Reg(resolver.get(name)?)),
-            ast::RegOrImmediate::Imm(imm) => Ok(ast::RegOrImmediate::Imm(*imm)),
-        })
-        .collect::<Result<Vec<_>, _>>()?)
 }

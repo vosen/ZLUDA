@@ -247,10 +247,44 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             unsafe { LLVMSetAlignment(global, align) };
         }
         if !var.array_init.is_empty() {
-            let initializer = get_array_init(self.context, &var.v_type, &*var.array_init)?;
+            let initializer = self.get_array_init(&var.v_type, &*var.array_init)?;
             unsafe { LLVMSetInitializer(global, initializer) };
         }
         Ok(())
+    }
+
+    fn get_array_init(
+        &self,
+        type_: &ast::Type,
+        array_init: &[ast::ImmediateValue],
+    ) -> Result<*mut LLVMValue, TranslateError> {
+        let initializer = match type_ {
+            ast::Type::Array(None, scalar, dimensions) => {
+                if dimensions.len() != 1 {
+                    todo!()
+                }
+                if dimensions[0] as usize != array_init.len() {
+                    return Err(error_unreachable());
+                }
+                let type_ = get_scalar_type(self.context, *scalar);
+                let mut elements = array_init
+                    .iter()
+                    .map(|imm| get_immediate_value(self.context, scalar, imm))
+                    .collect::<Vec<_>>();
+                unsafe { LLVMConstArray2(type_, elements.as_mut_ptr(), elements.len() as u64) }
+            }
+            ast::Type::Scalar(scalar) => {
+                let initializer = match array_init {
+                    [init] => init,
+                    _ => return Err(error_mismatched_type()),
+                };
+                get_immediate_value(self.context, scalar, initializer)
+            }
+            _ => {
+                todo!()
+            }
+        };
+        Ok(initializer)
     }
 
     fn emit_fn_attribute(&self, llvm_object: LLVMValueRef, key: &str, value: &str) {
@@ -265,43 +299,6 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         };
         unsafe { LLVMAddAttributeAtIndex(llvm_object, LLVMAttributeFunctionIndex, attribute) };
     }
-}
-
-fn get_array_init<Ident>(
-    context: LLVMContextRef,
-    type_: &ast::Type,
-    array_init: &[ast::RegOrImmediate<Ident>],
-) -> Result<*mut LLVMValue, TranslateError> {
-    let initializer = match type_ {
-        ast::Type::Array(None, scalar, dimensions) => {
-            if dimensions.len() != 1 {
-                todo!()
-            }
-            if dimensions[0] as usize != array_init.len() {
-                return Err(error_unreachable());
-            }
-            let type_ = get_scalar_type(context, *scalar);
-            let mut elements = array_init
-                .iter()
-                .map(|elem| match elem {
-                    ast::RegOrImmediate::Reg(_) => todo!(),
-                    ast::RegOrImmediate::Imm(imm) => get_immediate_value(context, scalar, imm),
-                })
-                .collect::<Vec<_>>();
-            unsafe { LLVMConstArray2(type_, elements.as_mut_ptr(), elements.len() as u64) }
-        }
-        ast::Type::Scalar(scalar) => {
-            let initializer = match array_init {
-                [ast::RegOrImmediate::Imm(init)] => init,
-                _ => return Err(error_mismatched_type()),
-            };
-            get_immediate_value(context, scalar, initializer)
-        }
-        _ => {
-            todo!()
-        }
-    };
-    Ok(initializer)
 }
 
 fn get_immediate_value(
@@ -375,6 +372,7 @@ impl<'a> MethodEmitContext<'a> {
             Statement::Instruction(inst) => self.emit_instruction(inst)?,
             Statement::Conditional(cond) => self.emit_conditional(cond)?,
             Statement::Conversion(conversion) => self.emit_conversion(conversion)?,
+            Statement::Constant(constant) => self.emit_constant(constant)?,
             Statement::RetValue(_, values) => self.emit_ret_value(values)?,
             Statement::PtrAccess(ptr_access) => self.emit_ptr_access(ptr_access)?,
             Statement::RepackVector(repack) => self.emit_vector_repack(repack)?,
@@ -383,7 +381,6 @@ impl<'a> MethodEmitContext<'a> {
             Statement::VectorWrite(vector_write) => self.emit_vector_write(vector_write)?,
             Statement::SetMode(mode_reg) => self.emit_set_mode(mode_reg)?,
             Statement::FpSaturate { dst, src, type_ } => self.emit_fp_saturate(type_, dst, src)?,
-            // No-op
             Statement::FpModeRequired { .. } => {}
         })
     }
@@ -424,9 +421,7 @@ impl<'a> MethodEmitContext<'a> {
             unsafe { LLVMSetAlignment(alloca, align) };
         }
         if !var.array_init.is_empty() {
-            let initializer = get_array_init(self.context, &var.v_type, &var.array_init)?;
-            unsafe { LLVMBuildStore(self.variables_builder.get(), initializer, alloca) };
-            return Ok(());
+            return Err(error_unreachable());
         }
         Ok(())
     }
@@ -700,6 +695,12 @@ impl<'a> MethodEmitContext<'a> {
             }
             _ => todo!(),
         }
+    }
+
+    fn emit_constant(&mut self, constant: ConstantDefinition) -> Result<(), TranslateError> {
+        let value = get_immediate_value(self.context, &constant.typ, &constant.value);
+        self.resolver.register(constant.dst, value);
+        Ok(())
     }
 
     fn emit_add(

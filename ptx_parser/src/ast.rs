@@ -949,7 +949,7 @@ pub struct Variable<ID> {
     pub v_type: Type,
     pub state_space: StateSpace,
     pub name: ID,
-    pub array_init: Vec<RegOrImmediate<ID>>,
+    pub array_init: Vec<ImmediateValue>,
 }
 
 impl<ID: std::fmt::Display> std::fmt::Display for Variable<ID> {

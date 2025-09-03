@@ -132,14 +132,10 @@ impl<'a, 'b, 'input> SpecialRegisterResolver<'a, 'input> {
                         ast::Type::Scalar(inp_type),
                         ast::StateSpace::Reg,
                     )));
-                    self.result.push(Statement::Variable(ast::Variable {
-                        align: None,
-                        v_type: ast::Type::Scalar(inp_type),
-                        state_space: ast::StateSpace::Reg,
-                        name: constant,
-                        array_init: vec![ast::RegOrImmediate::Imm(ast::ImmediateValue::U64(
-                            idx as u64,
-                        ))],
+                    self.result.push(Statement::Constant(ConstantDefinition {
+                        dst: constant,
+                        typ: inp_type,
+                        value: ast::ImmediateValue::U64(idx as u64),
                     }));
                     vec![(constant, ast::Type::Scalar(inp_type), ast::StateSpace::Reg)]
                 }

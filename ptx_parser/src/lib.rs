@@ -915,10 +915,7 @@ fn multi_variable<'a, 'input: 'a>(
                     name,
                     // TODO: parse ident or immediate
                     array_init: initializer
-                        .unwrap_or(Vec::new())
-                        .iter()
-                        .map(|imm| ast::RegOrImmediate::Imm(*imm))
-                        .collect::<Vec<_>>(),
+                        .unwrap_or(Vec::new()),
                 },
                 count,
             })
