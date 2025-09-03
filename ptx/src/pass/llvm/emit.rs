@@ -426,7 +426,7 @@ impl<'a> MethodEmitContext<'a> {
         if !var.array_init.is_empty() {
             let initializer = get_array_init(self.context, &var.v_type, &var.array_init)?;
             unsafe { LLVMBuildStore(self.variables_builder.get(), initializer, alloca) };
-            return Ok(())
+            return Ok(());
         }
         Ok(())
     }
