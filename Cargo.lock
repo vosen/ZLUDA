@@ -448,21 +448,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cuda_tests"
-version = "0.0.0"
-dependencies = [
- "cuda_macros",
- "cuda_types",
- "dtor 0.0.6",
- "lazy_static",
- "lz4-sys",
- "num_enum",
- "paste",
- "rustc-hash 1.1.0",
- "tempfile",
-]
-
-[[package]]
 name = "cuda_types"
 version = "0.0.0"
 dependencies = [
@@ -3729,13 +3714,13 @@ dependencies = [
  "blake3",
  "comgr",
  "cuda_macros",
- "cuda_tests",
  "cuda_types",
  "dark_api",
  "dtor 0.0.7",
  "hip_runtime-sys",
  "lazy_static",
  "libc",
+ "libloading",
  "lz4-sys",
  "num_enum",
  "paste",

@@ -6,7 +6,6 @@ members = [
     "comgr",
     "cuda_macros",
     "cuda_types",
-    "cuda_tests",
     "dark_api",
     "detours-sys",
     "ext/amd_comgr-sys",

@@ -2,7 +2,7 @@ extern crate proc_macro;
 
 use proc_macro::TokenStream;
 use proc_macro2::Span;
-use quote::{quote, ToTokens};
+use quote::{format_ident, quote, ToTokens};
 use rustc_hash::FxHashMap;
 use std::iter;
 use syn::parse::{Parse, ParseStream};
@@ -10,7 +10,7 @@ use syn::punctuated::Punctuated;
 use syn::visit_mut::VisitMut;
 use syn::{
     bracketed, parse_macro_input, File, ForeignItem, ForeignItemFn, Ident, Item, Path, Signature,
-    Token, token
+    Token
 };
 
 const CUDA_RS: &'static str = include_str! {"cuda.rs"};
@@ -309,39 +309,22 @@ fn join(
     
 }
 
-#[proc_macro]
-pub fn generate_api_macro(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as ApiMacroInput);
-    let ApiMacroInput(_, trait_name, _, type_name, _, macro_name) = input;
-    let expanded = quote! {
-        struct #type_name;
-        macro_rules! #macro_name {
-            ($($abi:literal fn $fn_name:ident( $( $arg_id:ident : $arg_type:ty ),* ) -> $ret_type:ty;)*) => {
-                impl #trait_name for #type_name {
-                    fn new() -> Self { Self }
-                    $(
-                        #[inline(always)]
-                        fn $fn_name(&self, $( $arg_id : $arg_type ),* ) -> $ret_type {
-                            unsafe { super::$fn_name( $( $arg_id ),* ) }
-                        }
-                    )*
-                }
-            };
+#[proc_macro_attribute]
+pub fn test_cuda(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let fn_ = parse_macro_input!(item as syn::ItemFn);
+    let cuda_fn = format_ident!("{}{}", fn_.sig.ident, "_nvidia");
+    let zluda_fn = format_ident!("{}{}", fn_.sig.ident, "_amdgpu");
+    let fn_name = fn_.sig.ident.clone();
+    quote! { 
+        #[test]
+        fn #cuda_fn() {
+            unsafe { #fn_name(<crate::tests::Cuda>::new()) }
         }
-    };
-    TokenStream::from(expanded)
-}
-#[allow(dead_code)]
-struct ApiMacroInput(token::Impl, Path, token::For, Path, token::Use, Ident);
-impl syn::parse::Parse for ApiMacroInput {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        Ok(ApiMacroInput(
-            input.parse()?, // impl 
-            input.parse()?, // trait
-            input.parse()?, // for
-            input.parse()?, // type
-            input.parse()?, // using
-            input.parse()?  // macro
-        ))
-    }
+        #[test]
+        fn #zluda_fn() {
+            unsafe { #fn_name(<crate::tests::Zluda>::new()) }
+        }
+        
+        #fn_
+    }.into()
 }
