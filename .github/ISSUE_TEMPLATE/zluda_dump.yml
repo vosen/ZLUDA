@@ -6,17 +6,16 @@ body:
   - type: markdown
     attributes:
       value: |
-        If you are reporting an application that is not supported by ZLUDA, please use zluda_dump to
-        create logs that we can use to debug the issue. TODO: We will post a tutorial for creating
-        these logs. Add a link to it here.
+        If you are reporting an application that is not supported by ZLUDA, please use zluda_trace to
+        create logs. See instructions here: https://zluda.readthedocs.io/latest/troubleshooting.html
   - type: textarea
     id: logs
     attributes:
-      label: zluda_dump logs (tarball/zip file)
+      label: zluda_trace logs (tarball/zip file)
       description: |
         Please create a tarball (`.tar.gz`) or zip file (`.zip`) of your log directory and attach
         it here. You can drag and drop files directly into the comment box. Please also include
-        zluda_dump logs using CUDA if you have NVIDIA hardware to test on.
+        zluda_trace logs using CUDA if you have NVIDIA hardware to test on.
       placeholder: Attach file (e.g., drag and drop)
     validations:
       required: false
@@ -48,7 +47,7 @@ body:
             ./train_gpt2fp32cu
           4. Build and run the tests:
             make test_gpt2fp32cu
-            LD_LIBRARY_PATH=<ZLUDA_DUMP_DIR> ./test_gpt2fp32cu
+            LD_LIBRARY_PATH=<ZLUDA_TRACE_DIR> ./test_gpt2fp32cu
     validations:
       required: true
   - type: input
