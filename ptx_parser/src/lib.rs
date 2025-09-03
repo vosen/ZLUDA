@@ -913,7 +913,11 @@ fn multi_variable<'a, 'input: 'a>(
                     v_type: Type::maybe_array(vector, type_, array_dimensions),
                     state_space,
                     name,
-                    array_init: initializer.unwrap_or(Vec::new()),
+                    array_init: initializer
+                        .unwrap_or(Vec::new())
+                        .iter()
+                        .map(|imm| ast::RegOrImmediate::Imm(*imm))
+                        .collect::<Vec<_>>(),
                 },
                 count,
             })

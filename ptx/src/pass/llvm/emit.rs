@@ -256,7 +256,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
     fn get_array_init(
         &self,
         type_: &ast::Type,
-        array_init: &[ast::ImmediateValue],
+        array_init: &[ast::RegOrImmediate<SpirvWord>],
     ) -> Result<*mut LLVMValue, TranslateError> {
         let initializer = match type_ {
             ast::Type::Array(None, scalar, dimensions) => {
@@ -269,13 +269,18 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                 let type_ = get_scalar_type(self.context, *scalar);
                 let mut elements = array_init
                     .iter()
-                    .map(|imm| get_immediate_value(self.context, scalar, imm))
+                    .map(|elem| match elem {
+                        ast::RegOrImmediate::Reg(_) => todo!(),
+                        ast::RegOrImmediate::Imm(imm) => {
+                            get_immediate_value(self.context, scalar, imm)
+                        }
+                    })
                     .collect::<Vec<_>>();
                 unsafe { LLVMConstArray2(type_, elements.as_mut_ptr(), elements.len() as u64) }
             }
             ast::Type::Scalar(scalar) => {
                 let initializer = match array_init {
-                    [init] => init,
+                    [ast::RegOrImmediate::Imm(init)] => init,
                     _ => return Err(error_mismatched_type()),
                 };
                 get_immediate_value(self.context, scalar, initializer)
