@@ -1213,12 +1213,6 @@ pub struct ShfDetails {
     pub mode: FunnelShiftMode,
 }
 
-#[derive(Clone, Copy, Display)]
-pub enum RegOrImmediate<Ident> {
-    Reg(Ident),
-    Imm(ImmediateValue),
-}
-
 #[derive(Clone)]
 pub enum ParsedOperand<Ident> {
     Reg(Ident),

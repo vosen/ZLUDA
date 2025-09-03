@@ -913,7 +913,6 @@ fn multi_variable<'a, 'input: 'a>(
                     v_type: Type::maybe_array(vector, type_, array_dimensions),
                     state_space,
                     name,
-                    // TODO: parse ident or immediate
                     array_init: initializer.unwrap_or(Vec::new()),
                 },
                 count,
