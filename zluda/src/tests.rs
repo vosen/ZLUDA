@@ -26,7 +26,7 @@ macro_rules! implemented_test {
             )*
         }
 
-        
+
 
         impl CudaApi for Cuda {
             fn new() -> Self { Self::load() }
