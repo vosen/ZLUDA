@@ -1,0 +1,68 @@
+name: Bug Report
+description: Report an issue with ZLUDA
+title: ""
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If you are reporting an application that is not supported by ZLUDA, please use zluda_trace to
+        create logs. See instructions here: https://zluda.readthedocs.io/latest/troubleshooting.html
+  - type: textarea
+    id: logs
+    attributes:
+      label: zluda_trace logs (tarball/zip file)
+      description: |
+        Please create a tarball (`.tar.gz`) or zip file (`.zip`) of your log directory and attach
+        it here. You can drag and drop files directly into the comment box. Please also include
+        zluda_trace logs using CUDA if you have NVIDIA hardware to test on.
+      placeholder: Attach file (e.g., drag and drop)
+    validations:
+      required: false
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: |
+        Describe the issue you've encountered. What is the expected behavior? What is the actual
+        behavior?
+      placeholder: Description
+    validations:
+      required: false
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: |
+        Please describe the application you were running and provide clear, step-by-step
+        instructions to run it.
+      placeholder: |
+        example:
+          1. Download llm.c: git clone https://github.com/karpathy/llm.c.git
+          2. Navigate to the directory: cd llm.c
+          3. Download the model and train it:
+            chmod u+x ./dev/download_starter_pack.sh
+            ./dev/download_starter_pack.sh
+            make train_gpt2fp32cu
+            ./train_gpt2fp32cu
+          4. Build and run the tests:
+            make test_gpt2fp32cu
+            LD_LIBRARY_PATH=<ZLUDA_TRACE_DIR> ./test_gpt2fp32cu
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating System
+      description: What operating system are you using? (e.g., distribution and version)
+      placeholder:  "example: Ubuntu 22.04.5 LTS"
+    validations:
+      required: true
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU
+      description: What GPU are you using?
+      placeholder:  "example: AMD Radeon RX 6600"
+    validations:
+      required: true
