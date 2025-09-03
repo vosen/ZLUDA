@@ -914,8 +914,7 @@ fn multi_variable<'a, 'input: 'a>(
                     state_space,
                     name,
                     // TODO: parse ident or immediate
-                    array_init: initializer
-                        .unwrap_or(Vec::new()),
+                    array_init: initializer.unwrap_or(Vec::new()),
                 },
                 count,
             })
