@@ -529,6 +529,13 @@ pub(crate) unsafe fn launch_kernel_ex(
 mod tests {
     use crate::r#impl::driver::AllocationInfo;
     use cuda_types::cuda::CUcontext;
+    use cuda_macros::test_cuda;
+    use crate::tests::CudaApi;
+
+    #[test_cuda]
+    fn init(api: impl CudaApi) {
+        api.cuInit(0);
+    }
 
     #[test]
     fn get_allocation() {
