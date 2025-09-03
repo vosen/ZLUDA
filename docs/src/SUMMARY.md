@@ -1,7 +1,7 @@
 # Summary
 
 # General
-- [Usage](./usage.md)
+- [Quick start](./quick_start.md)
 - [Troubleshooting](./troubleshooting.md)
 - [FAQ](./faq.md)
 # For developers

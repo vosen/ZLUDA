@@ -1,11 +1,12 @@
-# Usage
+# Quick start
 
 > [!WARNING]  
 > This version of ZLUDA is under heavy development and will likely not work with your application yet. In the meantime, you are encouraged to try it and report results.
 
 ## How to get it
 
-ZLUDA evolves quickly. Download the [most recent pre-release version](https://github.com/vosen/ZLUDA/releases). Periodically, we mark a pre-release version as stable, but you don't have to wait for that.
+ZLUDA evolves quickly, we recommend downloading the [most recent pre-release version](https://github.com/vosen/ZLUDA/releases).
+Periodically, we mark a pre-release version as stable, you can download it from the "Releases" section on our [Github page](https://github.com/vosen/ZLUDA).
 
 ## Usage
 
