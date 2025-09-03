@@ -247,62 +247,10 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             unsafe { LLVMSetAlignment(global, align) };
         }
         if !var.array_init.is_empty() {
-            self.emit_array_init(&var.v_type, &*var.array_init, global)?;
+            let initializer = get_array_init(self.context, &var.v_type, &*var.array_init)?;
+            unsafe { LLVMSetInitializer(global, initializer) };
         }
         Ok(())
-    }
-
-    fn emit_array_init<Ident: std::fmt::Display>(
-        &mut self,
-        type_: &ast::Type,
-        array_init: &[ast::RegOrImmediate<Ident>],
-        global: *mut llvm_zluda::LLVMValue,
-    ) -> Result<(), TranslateError> {
-        let initializer = match type_ {
-            ast::Type::Array(None, scalar, dimensions) => {
-                if dimensions.len() != 1 {
-                    todo!()
-                }
-                if dimensions[0] as usize != array_init.len() {
-                    return Err(error_unreachable());
-                }
-                let type_ = get_scalar_type(self.context, *scalar);
-                let mut elements = array_init
-                    .iter()
-                    .map(|elem| match elem {
-                        ast::RegOrImmediate::Reg(_) => todo!(),
-                        ast::RegOrImmediate::Imm(imm) => self.emit_immediate_value(scalar, imm),
-                    })
-                    .collect::<Vec<_>>();
-                unsafe { LLVMConstArray2(type_, elements.as_mut_ptr(), elements.len() as u64) }
-            }
-            ast::Type::Scalar(scalar) => {
-                let initializer = match array_init {
-                    [ast::RegOrImmediate::Imm(init)] => init,
-                    _ => return Err(error_mismatched_type()),
-                };
-                self.emit_immediate_value(scalar, initializer)
-            }
-            _ => {
-                todo!()
-            }
-        };
-        unsafe { LLVMSetInitializer(global, initializer) };
-        Ok(())
-    }
-
-    fn emit_immediate_value(
-        &self,
-        scalar_type: &ast::ScalarType,
-        imm: &ast::ImmediateValue,
-    ) -> *mut LLVMValue {
-        let type_ = get_scalar_type(self.context, *scalar_type);
-        match imm {
-            ast::ImmediateValue::U64(x) => unsafe { LLVMConstInt(type_, *x, 0) },
-            ast::ImmediateValue::S64(x) => unsafe { LLVMConstInt(type_, *x as u64, 0) },
-            ast::ImmediateValue::F32(x) => unsafe { LLVMConstReal(type_, *x as f64) },
-            ast::ImmediateValue::F64(x) => unsafe { LLVMConstReal(type_, *x) },
-        }
     }
 
     fn emit_fn_attribute(&self, llvm_object: LLVMValueRef, key: &str, value: &str) {
@@ -316,6 +264,57 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             )
         };
         unsafe { LLVMAddAttributeAtIndex(llvm_object, LLVMAttributeFunctionIndex, attribute) };
+    }
+}
+
+fn get_array_init<Ident>(
+    context: LLVMContextRef,
+    type_: &ast::Type,
+    array_init: &[ast::RegOrImmediate<Ident>],
+) -> Result<*mut LLVMValue, TranslateError> {
+    let initializer = match type_ {
+        ast::Type::Array(None, scalar, dimensions) => {
+            if dimensions.len() != 1 {
+                todo!()
+            }
+            if dimensions[0] as usize != array_init.len() {
+                return Err(error_unreachable());
+            }
+            let type_ = get_scalar_type(context, *scalar);
+            let mut elements = array_init
+                .iter()
+                .map(|elem| match elem {
+                    ast::RegOrImmediate::Reg(_) => todo!(),
+                    ast::RegOrImmediate::Imm(imm) => get_immediate_value(context, scalar, imm),
+                })
+                .collect::<Vec<_>>();
+            unsafe { LLVMConstArray2(type_, elements.as_mut_ptr(), elements.len() as u64) }
+        }
+        ast::Type::Scalar(scalar) => {
+            let initializer = match array_init {
+                [ast::RegOrImmediate::Imm(init)] => init,
+                _ => return Err(error_mismatched_type()),
+            };
+            get_immediate_value(context, scalar, initializer)
+        }
+        _ => {
+            todo!()
+        }
+    };
+    Ok(initializer)
+}
+
+fn get_immediate_value(
+    context: LLVMContextRef,
+    scalar_type: &ast::ScalarType,
+    imm: &ast::ImmediateValue,
+) -> *mut LLVMValue {
+    let type_ = get_scalar_type(context, *scalar_type);
+    match imm {
+        ast::ImmediateValue::U64(x) => unsafe { LLVMConstInt(type_, *x, 0) },
+        ast::ImmediateValue::S64(x) => unsafe { LLVMConstInt(type_, *x as u64, 0) },
+        ast::ImmediateValue::F32(x) => unsafe { LLVMConstReal(type_, *x as f64) },
+        ast::ImmediateValue::F64(x) => unsafe { LLVMConstReal(type_, *x) },
     }
 }
 
@@ -425,7 +424,9 @@ impl<'a> MethodEmitContext<'a> {
             unsafe { LLVMSetAlignment(alloca, align) };
         }
         if !var.array_init.is_empty() {
-            todo!()
+            let initializer = get_array_init(self.context, &var.v_type, &var.array_init)?;
+            unsafe { LLVMBuildStore(self.variables_builder.get(), initializer, alloca) };
+            return Ok(())
         }
         Ok(())
     }

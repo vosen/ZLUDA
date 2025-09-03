@@ -111,15 +111,20 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
                 _ => return Err(error_mismatched_type()),
             };
             let reg_type = reg_type.clone();
-            let id_constant_stmt = add_constant(
-                self.resolver,
-                self.result,
+            let id_constant_stmt = self.resolver.register_unnamed(Some((
                 ast::Type::Scalar(reg_scalar_type),
                 ast::StateSpace::Reg,
-                vec![ast::RegOrImmediate::Imm(ast::ImmediateValue::S64(
+            )));
+            let constant = Statement::Variable(ast::Variable {
+                align: None,
+                v_type: ast::Type::Scalar(reg_scalar_type),
+                state_space: ast::StateSpace::Reg,
+                name: id_constant_stmt,
+                array_init: vec![ast::RegOrImmediate::Imm(ast::ImmediateValue::S64(
                     offset as i64,
                 ))],
-            );
+            });
+            self.result.push(constant);
             let arith_details = match reg_scalar_type.kind() {
                 ast::ScalarKind::Signed => ast::ArithDetails::Integer(ast::ArithInteger {
                     type_: reg_scalar_type,
@@ -147,15 +152,20 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
                 }));
             Ok(id_add_result)
         } else {
-            let id_constant_stmt = add_constant(
-                self.resolver,
-                self.result,
+            let id_constant_stmt = self.resolver.register_unnamed(Some((
                 ast::Type::Scalar(ast::ScalarType::S64),
                 ast::StateSpace::Reg,
-                vec![ast::RegOrImmediate::Imm(ast::ImmediateValue::S64(
+            )));
+            let constant = Statement::Variable(ast::Variable {
+                align: None,
+                v_type: ast::Type::Scalar(ast::ScalarType::S64),
+                state_space: ast::StateSpace::Reg,
+                name: id_constant_stmt,
+                array_init: vec![ast::RegOrImmediate::Imm(ast::ImmediateValue::S64(
                     offset as i64,
                 ))],
-            );
+            });
+            self.result.push(constant);
             let dst = self
                 .resolver
                 .register_unnamed(Some((type_.clone(), state_space)));
@@ -181,13 +191,17 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
             } else {
                 return Err(TranslateError::UntypedSymbol);
             };
-        let id = add_constant(
-            self.resolver,
-            self.result,
-            ast::Type::Scalar(scalar_t),
-            state_space,
-            vec![ast::RegOrImmediate::Imm(value)],
-        );
+        let id = self
+            .resolver
+            .register_unnamed(Some((ast::Type::Scalar(scalar_t), state_space)));
+        let constant = Statement::Variable(ast::Variable {
+            align: None,
+            v_type: ast::Type::Scalar(scalar_t),
+            state_space: state_space,
+            name: id,
+            array_init: vec![ast::RegOrImmediate::Imm(value)],
+        });
+        self.result.push(constant);
         Ok(id)
     }
 

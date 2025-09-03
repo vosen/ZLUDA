@@ -128,15 +128,19 @@ impl<'a, 'b, 'input> SpecialRegisterResolver<'a, 'input> {
                     if inp_type != ast::ScalarType::U8 {
                         return Err(TranslateError::Unreachable);
                     }
-                    let constant = add_constant(
-                        self.resolver,
-                        &mut self.result,
+                    let constant = self.resolver.register_unnamed(Some((
                         ast::Type::Scalar(inp_type),
                         ast::StateSpace::Reg,
-                        vec![ast::RegOrImmediate::Imm(ast::ImmediateValue::U64(
+                    )));
+                    self.result.push(Statement::Variable(ast::Variable {
+                        align: None,
+                        v_type: ast::Type::Scalar(inp_type),
+                        state_space: ast::StateSpace::Reg,
+                        name: constant,
+                        array_init: vec![ast::RegOrImmediate::Imm(ast::ImmediateValue::U64(
                             idx as u64,
                         ))],
-                    );
+                    }));
                     vec![(constant, ast::Type::Scalar(inp_type), ast::StateSpace::Reg)]
                 }
                 (None, None) => Vec::new(),

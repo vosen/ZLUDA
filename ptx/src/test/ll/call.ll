@@ -1,65 +1,65 @@
-@0 = addrspace(4) global i64 1
-
-define hidden i64 @incr(i64 %"47") #0 {
+define hidden i64 @incr(i64 %"46") #0 {
+  %"66" = alloca i64, align 8, addrspace(5)
   %"67" = alloca i64, align 8, addrspace(5)
   %"68" = alloca i64, align 8, addrspace(5)
   %"69" = alloca i64, align 8, addrspace(5)
-  %"70" = alloca i64, align 8, addrspace(5)
+  %"71" = alloca i64, align 8, addrspace(5)
+  store i64 1, ptr addrspace(5) %"71", align 4
   br label %1
 
 1:                                                ; preds = %0
-  br label %"50"
+  br label %"49"
 
-"50":                                             ; preds = %1
-  store i64 %"47", ptr addrspace(5) %"69", align 8
-  %"71" = load i64, ptr addrspace(5) %"69", align 8
-  store i64 %"71", ptr addrspace(5) %"70", align 8
-  %"41" = load i64, ptr addrspace(4) @0, align 8
-  %"73" = load i64, ptr addrspace(5) %"70", align 8
-  %"72" = add i64 %"73", %"41"
-  store i64 %"72", ptr addrspace(5) %"70", align 8
-  %"74" = load i64, ptr addrspace(5) %"70", align 8
-  store i64 %"74", ptr addrspace(5) %"68", align 8
-  %"75" = load i64, ptr addrspace(5) %"68", align 8
+"49":                                             ; preds = %1
+  store i64 %"46", ptr addrspace(5) %"68", align 8
+  %"70" = load i64, ptr addrspace(5) %"68", align 8
+  store i64 %"70", ptr addrspace(5) %"69", align 8
+  %"73" = load i64, ptr addrspace(5) %"69", align 8
+  %"74" = load i64, ptr addrspace(5) %"71", align 8
+  %"72" = add i64 %"73", %"74"
+  store i64 %"72", ptr addrspace(5) %"69", align 8
+  %"75" = load i64, ptr addrspace(5) %"69", align 8
   store i64 %"75", ptr addrspace(5) %"67", align 8
-  %2 = load i64, ptr addrspace(5) %"67", align 8
+  %"76" = load i64, ptr addrspace(5) %"67", align 8
+  store i64 %"76", ptr addrspace(5) %"66", align 8
+  %2 = load i64, ptr addrspace(5) %"66", align 8
   ret i64 %2
 }
 
-define amdgpu_kernel void @call(ptr addrspace(4) byref(i64) %"52", ptr addrspace(4) byref(i64) %"53") #1 {
+define amdgpu_kernel void @call(ptr addrspace(4) byref(i64) %"51", ptr addrspace(4) byref(i64) %"52") #1 {
+  %"53" = alloca i64, align 8, addrspace(5)
   %"54" = alloca i64, align 8, addrspace(5)
   %"55" = alloca i64, align 8, addrspace(5)
-  %"56" = alloca i64, align 8, addrspace(5)
+  %"60" = alloca i64, align 8, addrspace(5)
   %"61" = alloca i64, align 8, addrspace(5)
-  %"62" = alloca i64, align 8, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
-  br label %"48"
+  br label %"47"
 
-"48":                                             ; preds = %1
+"47":                                             ; preds = %1
+  %"56" = load i64, ptr addrspace(4) %"51", align 8
+  store i64 %"56", ptr addrspace(5) %"53", align 8
   %"57" = load i64, ptr addrspace(4) %"52", align 8
   store i64 %"57", ptr addrspace(5) %"54", align 8
-  %"58" = load i64, ptr addrspace(4) %"53", align 8
+  %"59" = load i64, ptr addrspace(5) %"53", align 8
+  %"77" = inttoptr i64 %"59" to ptr addrspace(1)
+  %"58" = load i64, ptr addrspace(1) %"77", align 8
   store i64 %"58", ptr addrspace(5) %"55", align 8
-  %"60" = load i64, ptr addrspace(5) %"54", align 8
-  %"76" = inttoptr i64 %"60" to ptr addrspace(1)
-  %"59" = load i64, ptr addrspace(1) %"76", align 8
-  store i64 %"59", ptr addrspace(5) %"56", align 8
-  %"63" = load i64, ptr addrspace(5) %"56", align 8
-  store i64 %"63", ptr addrspace(5) %"61", align 8
-  %"44" = load i64, ptr addrspace(5) %"61", align 8
-  %"45" = call i64 @incr(i64 %"44")
-  br label %"49"
+  %"62" = load i64, ptr addrspace(5) %"55", align 8
+  store i64 %"62", ptr addrspace(5) %"60", align 8
+  %"43" = load i64, ptr addrspace(5) %"60", align 8
+  %"44" = call i64 @incr(i64 %"43")
+  br label %"48"
 
-"49":                                             ; preds = %"48"
-  store i64 %"45", ptr addrspace(5) %"62", align 8
-  %"64" = load i64, ptr addrspace(5) %"62", align 8
-  store i64 %"64", ptr addrspace(5) %"56", align 8
+"48":                                             ; preds = %"47"
+  store i64 %"44", ptr addrspace(5) %"61", align 8
+  %"63" = load i64, ptr addrspace(5) %"61", align 8
+  store i64 %"63", ptr addrspace(5) %"55", align 8
+  %"64" = load i64, ptr addrspace(5) %"54", align 8
   %"65" = load i64, ptr addrspace(5) %"55", align 8
-  %"66" = load i64, ptr addrspace(5) %"56", align 8
-  %"79" = inttoptr i64 %"65" to ptr addrspace(1)
-  store i64 %"66", ptr addrspace(1) %"79", align 8
+  %"80" = inttoptr i64 %"64" to ptr addrspace(1)
+  store i64 %"65", ptr addrspace(1) %"80", align 8
   ret void
 }
 

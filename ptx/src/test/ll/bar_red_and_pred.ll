@@ -1,175 +1,200 @@
-@0 = addrspace(4) global i8 0
-@1 = addrspace(4) global i32 2
-@2 = addrspace(4) global i32 0
-@3 = addrspace(4) global i32 0
-@4 = addrspace(4) global i32 1
-@5 = addrspace(4) global i1 false
-@6 = addrspace(4) global i32 1
-@7 = addrspace(4) global i32 1
-@8 = addrspace(4) global i1 false
-@9 = addrspace(4) global i32 1
-@10 = addrspace(4) global i32 1
-@11 = addrspace(4) global i32 1
-@12 = addrspace(4) global i32 1
-@13 = addrspace(4) global i1 false
-@14 = addrspace(4) global i32 1
-@15 = addrspace(4) global i32 1
-@16 = addrspace(4) global i32 0
-@17 = addrspace(4) global i32 1
-@18 = addrspace(4) global i1 false
-@19 = addrspace(4) global i32 1
-@20 = addrspace(4) global i32 1
-@21 = addrspace(4) global i32 1
-@22 = addrspace(4) global i32 1
-@23 = addrspace(4) global i1 true
-@24 = addrspace(4) global i32 1
-@25 = addrspace(4) global i64 4
-
 declare hidden i1 @__zluda_ptx_impl_bar_red_and_pred(i32, i1, i1) #0
 
 declare hidden i1 @__zluda_ptx_impl_bar_red_or_pred(i32, i1, i1) #0
 
 declare hidden i32 @__zluda_ptx_impl_sreg_tid(i8) #0
 
-define amdgpu_kernel void @bar_red_and_pred(ptr addrspace(4) byref(i64) %"102", ptr addrspace(4) byref(i64) %"103") #1 {
-  %"104" = alloca i64, align 8, addrspace(5)
-  %"105" = alloca i64, align 8, addrspace(5)
-  %"106" = alloca i32, align 4, addrspace(5)
+define amdgpu_kernel void @bar_red_and_pred(ptr addrspace(4) byref(i64) %"76", ptr addrspace(4) byref(i64) %"77") #1 {
+  %"78" = alloca i64, align 8, addrspace(5)
+  %"79" = alloca i64, align 8, addrspace(5)
+  %"80" = alloca i32, align 4, addrspace(5)
+  %"81" = alloca i32, align 4, addrspace(5)
+  %"82" = alloca i1, align 1, addrspace(5)
+  %"83" = alloca i1, align 1, addrspace(5)
+  %"84" = alloca i32, align 4, addrspace(5)
+  %"86" = alloca i8, align 1, addrspace(5)
+  store i8 0, ptr addrspace(5) %"86", align 1
+  %"89" = alloca i32, align 4, addrspace(5)
+  store i32 2, ptr addrspace(5) %"89", align 4
+  %"93" = alloca i32, align 4, addrspace(5)
+  store i32 0, ptr addrspace(5) %"93", align 4
+  %"97" = alloca i32, align 4, addrspace(5)
+  store i32 0, ptr addrspace(5) %"97", align 4
+  %"100" = alloca i32, align 4, addrspace(5)
+  store i32 1, ptr addrspace(5) %"100", align 4
+  %"101" = alloca i1, align 1, addrspace(5)
+  store i1 false, ptr addrspace(5) %"101", align 1
   %"107" = alloca i32, align 4, addrspace(5)
-  %"108" = alloca i1, align 1, addrspace(5)
-  %"109" = alloca i1, align 1, addrspace(5)
-  %"110" = alloca i32, align 4, addrspace(5)
+  store i32 1, ptr addrspace(5) %"107", align 4
+  %"111" = alloca i32, align 4, addrspace(5)
+  store i32 1, ptr addrspace(5) %"111", align 4
+  %"112" = alloca i1, align 1, addrspace(5)
+  store i1 false, ptr addrspace(5) %"112", align 1
+  %"118" = alloca i32, align 4, addrspace(5)
+  store i32 1, ptr addrspace(5) %"118", align 4
+  %"122" = alloca i32, align 4, addrspace(5)
+  store i32 1, ptr addrspace(5) %"122", align 4
+  %"123" = alloca i32, align 4, addrspace(5)
+  store i32 1, ptr addrspace(5) %"123", align 4
+  %"127" = alloca i32, align 4, addrspace(5)
+  store i32 1, ptr addrspace(5) %"127", align 4
+  %"128" = alloca i1, align 1, addrspace(5)
+  store i1 false, ptr addrspace(5) %"128", align 1
+  %"134" = alloca i32, align 4, addrspace(5)
+  store i32 1, ptr addrspace(5) %"134", align 4
+  %"138" = alloca i32, align 4, addrspace(5)
+  store i32 1, ptr addrspace(5) %"138", align 4
+  %"139" = alloca i32, align 4, addrspace(5)
+  store i32 0, ptr addrspace(5) %"139", align 4
+  %"143" = alloca i32, align 4, addrspace(5)
+  store i32 1, ptr addrspace(5) %"143", align 4
+  %"144" = alloca i1, align 1, addrspace(5)
+  store i1 false, ptr addrspace(5) %"144", align 1
+  %"150" = alloca i32, align 4, addrspace(5)
+  store i32 1, ptr addrspace(5) %"150", align 4
+  %"154" = alloca i32, align 4, addrspace(5)
+  store i32 1, ptr addrspace(5) %"154", align 4
+  %"155" = alloca i32, align 4, addrspace(5)
+  store i32 1, ptr addrspace(5) %"155", align 4
+  %"159" = alloca i32, align 4, addrspace(5)
+  store i32 1, ptr addrspace(5) %"159", align 4
+  %"160" = alloca i1, align 1, addrspace(5)
+  store i1 true, ptr addrspace(5) %"160", align 1
+  %"166" = alloca i32, align 4, addrspace(5)
+  store i32 1, ptr addrspace(5) %"166", align 4
+  %"172" = alloca i64, align 8, addrspace(5)
+  store i64 4, ptr addrspace(5) %"172", align 4
   br label %1
 
 1:                                                ; preds = %0
-  br label %"99"
+  br label %"73"
 
-"99":                                             ; preds = %1
-  %"111" = load i64, ptr addrspace(4) %"103", align 8
-  store i64 %"111", ptr addrspace(5) %"104", align 8
-  %"47" = load i8, ptr addrspace(4) @0, align 1
-  %"48" = call i32 @__zluda_ptx_impl_sreg_tid(i8 %"47")
-  br label %"100"
+"73":                                             ; preds = %1
+  %"85" = load i64, ptr addrspace(4) %"77", align 8
+  store i64 %"85", ptr addrspace(5) %"78", align 8
+  %"87" = load i8, ptr addrspace(5) %"86", align 1
+  %"47" = call i32 @__zluda_ptx_impl_sreg_tid(i8 %"87")
+  br label %"74"
 
-"100":                                            ; preds = %"99"
-  store i32 %"48", ptr addrspace(5) %"106", align 4
-  %"50" = load i32, ptr addrspace(4) @1, align 4
-  %"114" = load i32, ptr addrspace(5) %"106", align 4
-  %"113" = urem i32 %"114", %"50"
-  store i32 %"113", ptr addrspace(5) %"107", align 4
-  %"52" = load i32, ptr addrspace(4) @2, align 4
-  %"116" = load i32, ptr addrspace(5) %"107", align 4
-  %2 = icmp eq i32 %"116", %"52"
-  store i1 %2, ptr addrspace(5) %"109", align 1
-  %"54" = load i32, ptr addrspace(4) @3, align 4
-  store i32 %"54", ptr addrspace(5) %"110", align 4
-  %"56" = load i32, ptr addrspace(4) @4, align 4
-  %"58" = load i1, ptr addrspace(4) @5, align 1
-  %"119" = load i1, ptr addrspace(5) %"109", align 1
-  %"118" = call i1 @__zluda_ptx_impl_bar_red_and_pred(i32 %"56", i1 %"119", i1 %"58")
-  store i1 %"118", ptr addrspace(5) %"108", align 1
-  %"120" = load i1, ptr addrspace(5) %"108", align 1
-  br i1 %"120", label %"18", label %"19"
+"74":                                             ; preds = %"73"
+  store i32 %"47", ptr addrspace(5) %"80", align 4
+  %"91" = load i32, ptr addrspace(5) %"80", align 4
+  %"92" = load i32, ptr addrspace(5) %"89", align 4
+  %"90" = urem i32 %"91", %"92"
+  store i32 %"90", ptr addrspace(5) %"81", align 4
+  %"95" = load i32, ptr addrspace(5) %"81", align 4
+  %"96" = load i32, ptr addrspace(5) %"93", align 4
+  %2 = icmp eq i32 %"95", %"96"
+  store i1 %2, ptr addrspace(5) %"83", align 1
+  %"99" = load i32, ptr addrspace(5) %"97", align 4
+  store i32 %"99", ptr addrspace(5) %"84", align 4
+  %"103" = load i32, ptr addrspace(5) %"100", align 4
+  %"104" = load i1, ptr addrspace(5) %"83", align 1
+  %"105" = load i1, ptr addrspace(5) %"101", align 1
+  %"102" = call i1 @__zluda_ptx_impl_bar_red_and_pred(i32 %"103", i1 %"104", i1 %"105")
+  store i1 %"102", ptr addrspace(5) %"82", align 1
+  %"106" = load i1, ptr addrspace(5) %"82", align 1
+  br i1 %"106", label %"18", label %"19"
 
-"18":                                             ; preds = %"100"
-  %"60" = load i32, ptr addrspace(4) @6, align 4
-  %"122" = load i32, ptr addrspace(5) %"110", align 4
-  %"121" = add i32 %"122", %"60"
-  store i32 %"121", ptr addrspace(5) %"110", align 4
+"18":                                             ; preds = %"74"
+  %"109" = load i32, ptr addrspace(5) %"84", align 4
+  %"110" = load i32, ptr addrspace(5) %"107", align 4
+  %"108" = add i32 %"109", %"110"
+  store i32 %"108", ptr addrspace(5) %"84", align 4
   br label %"19"
 
-"19":                                             ; preds = %"18", %"100"
-  %"62" = load i32, ptr addrspace(4) @7, align 4
-  %"64" = load i1, ptr addrspace(4) @8, align 1
-  %"124" = load i1, ptr addrspace(5) %"109", align 1
-  %"123" = call i1 @__zluda_ptx_impl_bar_red_or_pred(i32 %"62", i1 %"124", i1 %"64")
-  store i1 %"123", ptr addrspace(5) %"108", align 1
-  %"125" = load i1, ptr addrspace(5) %"108", align 1
-  br i1 %"125", label %"20", label %"21"
+"19":                                             ; preds = %"18", %"74"
+  %"114" = load i32, ptr addrspace(5) %"111", align 4
+  %"115" = load i1, ptr addrspace(5) %"83", align 1
+  %"116" = load i1, ptr addrspace(5) %"112", align 1
+  %"113" = call i1 @__zluda_ptx_impl_bar_red_or_pred(i32 %"114", i1 %"115", i1 %"116")
+  store i1 %"113", ptr addrspace(5) %"82", align 1
+  %"117" = load i1, ptr addrspace(5) %"82", align 1
+  br i1 %"117", label %"20", label %"21"
 
 "20":                                             ; preds = %"19"
-  %"66" = load i32, ptr addrspace(4) @9, align 4
-  %"127" = load i32, ptr addrspace(5) %"110", align 4
-  %"126" = add i32 %"127", %"66"
-  store i32 %"126", ptr addrspace(5) %"110", align 4
+  %"120" = load i32, ptr addrspace(5) %"84", align 4
+  %"121" = load i32, ptr addrspace(5) %"118", align 4
+  %"119" = add i32 %"120", %"121"
+  store i32 %"119", ptr addrspace(5) %"84", align 4
   br label %"21"
 
 "21":                                             ; preds = %"20", %"19"
-  %"68" = load i32, ptr addrspace(4) @10, align 4
-  %"70" = load i32, ptr addrspace(4) @11, align 4
-  %3 = icmp eq i32 %"68", %"70"
-  store i1 %3, ptr addrspace(5) %"109", align 1
-  %"72" = load i32, ptr addrspace(4) @12, align 4
-  %"74" = load i1, ptr addrspace(4) @13, align 1
-  %"130" = load i1, ptr addrspace(5) %"109", align 1
-  %"129" = call i1 @__zluda_ptx_impl_bar_red_and_pred(i32 %"72", i1 %"130", i1 %"74")
-  store i1 %"129", ptr addrspace(5) %"108", align 1
-  %"131" = load i1, ptr addrspace(5) %"108", align 1
-  br i1 %"131", label %"22", label %"23"
+  %"125" = load i32, ptr addrspace(5) %"122", align 4
+  %"126" = load i32, ptr addrspace(5) %"123", align 4
+  %3 = icmp eq i32 %"125", %"126"
+  store i1 %3, ptr addrspace(5) %"83", align 1
+  %"130" = load i32, ptr addrspace(5) %"127", align 4
+  %"131" = load i1, ptr addrspace(5) %"83", align 1
+  %"132" = load i1, ptr addrspace(5) %"128", align 1
+  %"129" = call i1 @__zluda_ptx_impl_bar_red_and_pred(i32 %"130", i1 %"131", i1 %"132")
+  store i1 %"129", ptr addrspace(5) %"82", align 1
+  %"133" = load i1, ptr addrspace(5) %"82", align 1
+  br i1 %"133", label %"22", label %"23"
 
 "22":                                             ; preds = %"21"
-  %"76" = load i32, ptr addrspace(4) @14, align 4
-  %"133" = load i32, ptr addrspace(5) %"110", align 4
-  %"132" = add i32 %"133", %"76"
-  store i32 %"132", ptr addrspace(5) %"110", align 4
+  %"136" = load i32, ptr addrspace(5) %"84", align 4
+  %"137" = load i32, ptr addrspace(5) %"134", align 4
+  %"135" = add i32 %"136", %"137"
+  store i32 %"135", ptr addrspace(5) %"84", align 4
   br label %"23"
 
 "23":                                             ; preds = %"22", %"21"
-  %"78" = load i32, ptr addrspace(4) @15, align 4
-  %"80" = load i32, ptr addrspace(4) @16, align 4
-  %4 = icmp eq i32 %"78", %"80"
-  store i1 %4, ptr addrspace(5) %"109", align 1
-  %"82" = load i32, ptr addrspace(4) @17, align 4
-  %"84" = load i1, ptr addrspace(4) @18, align 1
-  %"136" = load i1, ptr addrspace(5) %"109", align 1
-  %"135" = call i1 @__zluda_ptx_impl_bar_red_or_pred(i32 %"82", i1 %"136", i1 %"84")
-  store i1 %"135", ptr addrspace(5) %"108", align 1
-  %"137" = load i1, ptr addrspace(5) %"108", align 1
-  br i1 %"137", label %"24", label %"25"
+  %"141" = load i32, ptr addrspace(5) %"138", align 4
+  %"142" = load i32, ptr addrspace(5) %"139", align 4
+  %4 = icmp eq i32 %"141", %"142"
+  store i1 %4, ptr addrspace(5) %"83", align 1
+  %"146" = load i32, ptr addrspace(5) %"143", align 4
+  %"147" = load i1, ptr addrspace(5) %"83", align 1
+  %"148" = load i1, ptr addrspace(5) %"144", align 1
+  %"145" = call i1 @__zluda_ptx_impl_bar_red_or_pred(i32 %"146", i1 %"147", i1 %"148")
+  store i1 %"145", ptr addrspace(5) %"82", align 1
+  %"149" = load i1, ptr addrspace(5) %"82", align 1
+  br i1 %"149", label %"24", label %"25"
 
 "24":                                             ; preds = %"23"
-  %"86" = load i32, ptr addrspace(4) @19, align 4
-  %"139" = load i32, ptr addrspace(5) %"110", align 4
-  %"138" = add i32 %"139", %"86"
-  store i32 %"138", ptr addrspace(5) %"110", align 4
+  %"152" = load i32, ptr addrspace(5) %"84", align 4
+  %"153" = load i32, ptr addrspace(5) %"150", align 4
+  %"151" = add i32 %"152", %"153"
+  store i32 %"151", ptr addrspace(5) %"84", align 4
   br label %"25"
 
 "25":                                             ; preds = %"24", %"23"
-  %"88" = load i32, ptr addrspace(4) @20, align 4
-  %"90" = load i32, ptr addrspace(4) @21, align 4
-  %5 = icmp eq i32 %"88", %"90"
-  store i1 %5, ptr addrspace(5) %"109", align 1
-  %"92" = load i32, ptr addrspace(4) @22, align 4
-  %"94" = load i1, ptr addrspace(4) @23, align 1
-  %"142" = load i1, ptr addrspace(5) %"109", align 1
-  %"141" = call i1 @__zluda_ptx_impl_bar_red_and_pred(i32 %"92", i1 %"142", i1 %"94")
-  store i1 %"141", ptr addrspace(5) %"108", align 1
-  %"143" = load i1, ptr addrspace(5) %"108", align 1
-  br i1 %"143", label %"26", label %"27"
+  %"157" = load i32, ptr addrspace(5) %"154", align 4
+  %"158" = load i32, ptr addrspace(5) %"155", align 4
+  %5 = icmp eq i32 %"157", %"158"
+  store i1 %5, ptr addrspace(5) %"83", align 1
+  %"162" = load i32, ptr addrspace(5) %"159", align 4
+  %"163" = load i1, ptr addrspace(5) %"83", align 1
+  %"164" = load i1, ptr addrspace(5) %"160", align 1
+  %"161" = call i1 @__zluda_ptx_impl_bar_red_and_pred(i32 %"162", i1 %"163", i1 %"164")
+  store i1 %"161", ptr addrspace(5) %"82", align 1
+  %"165" = load i1, ptr addrspace(5) %"82", align 1
+  br i1 %"165", label %"26", label %"27"
 
 "26":                                             ; preds = %"25"
-  %"96" = load i32, ptr addrspace(4) @24, align 4
-  %"145" = load i32, ptr addrspace(5) %"110", align 4
-  %"144" = add i32 %"145", %"96"
-  store i32 %"144", ptr addrspace(5) %"110", align 4
+  %"168" = load i32, ptr addrspace(5) %"84", align 4
+  %"169" = load i32, ptr addrspace(5) %"166", align 4
+  %"167" = add i32 %"168", %"169"
+  store i32 %"167", ptr addrspace(5) %"84", align 4
   br label %"27"
 
 "27":                                             ; preds = %"26", %"25"
-  %"147" = load i32, ptr addrspace(5) %"106", align 4
-  %"146" = zext i32 %"147" to i64
-  store i64 %"146", ptr addrspace(5) %"105", align 8
-  %"98" = load i64, ptr addrspace(4) @25, align 8
-  %"149" = load i64, ptr addrspace(5) %"105", align 8
-  %"148" = mul i64 %"149", %"98"
-  store i64 %"148", ptr addrspace(5) %"105", align 8
-  %"151" = load i64, ptr addrspace(5) %"104", align 8
-  %"152" = load i64, ptr addrspace(5) %"105", align 8
-  %"150" = add i64 %"151", %"152"
-  store i64 %"150", ptr addrspace(5) %"104", align 8
-  %"153" = load i64, ptr addrspace(5) %"104", align 8
-  %"154" = load i32, ptr addrspace(5) %"110", align 4
-  %"155" = inttoptr i64 %"153" to ptr
-  store i32 %"154", ptr %"155", align 4
+  %"171" = load i32, ptr addrspace(5) %"80", align 4
+  %"170" = zext i32 %"171" to i64
+  store i64 %"170", ptr addrspace(5) %"79", align 8
+  %"174" = load i64, ptr addrspace(5) %"79", align 8
+  %"175" = load i64, ptr addrspace(5) %"172", align 8
+  %"173" = mul i64 %"174", %"175"
+  store i64 %"173", ptr addrspace(5) %"79", align 8
+  %"177" = load i64, ptr addrspace(5) %"78", align 8
+  %"178" = load i64, ptr addrspace(5) %"79", align 8
+  %"176" = add i64 %"177", %"178"
+  store i64 %"176", ptr addrspace(5) %"78", align 8
+  %"179" = load i64, ptr addrspace(5) %"78", align 8
+  %"180" = load i32, ptr addrspace(5) %"84", align 4
+  %"181" = inttoptr i64 %"179" to ptr
+  store i32 %"180", ptr %"181", align 4
   ret void
 }
 

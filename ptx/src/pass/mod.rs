@@ -752,44 +752,6 @@ impl<'input> GlobalStringIdentResolver2<'input> {
     }
 }
 
-fn add_constant<T>(
-    resolver: &mut GlobalStringIdentResolver2,
-    instructions: &mut Vec<Statement<ast::Instruction<T>, T>>,
-    constant_type: ast::Type,
-    state_space: ast::StateSpace,
-    initializer: Vec<ast::RegOrImmediate<SpirvWord>>,
-) -> SpirvWord
-where
-    T: ast::Operand<Ident = SpirvWord>,
-{
-    let constant_id =
-        resolver.register_unnamed(Some((constant_type.clone(), ast::StateSpace::Const)));
-    let constant = Statement::Variable(ast::Variable {
-        align: None,
-        v_type: constant_type.clone(),
-        state_space: ast::StateSpace::Const,
-        name: constant_id,
-        array_init: initializer,
-    });
-    instructions.push(constant);
-    let loaded_constant_id = resolver.register_unnamed(Some((constant_type.clone(), state_space)));
-    let load = Statement::Instruction(ast::Instruction::Ld {
-        data: ast::LdDetails {
-            qualifier: ast::LdStQualifier::Weak,
-            state_space: ast::StateSpace::Const,
-            caching: ast::LdCacheOperator::Cached,
-            typ: constant_type,
-            non_coherent: false,
-        },
-        arguments: ast::LdArgs {
-            dst: T::from_ident(loaded_constant_id),
-            src: T::from_ident(constant_id),
-        },
-    });
-    instructions.push(load);
-    loaded_constant_id
-}
-
 struct IdentEntry<'input> {
     name: Option<Cow<'input, str>>,
     type_space: Option<(ast::Type, ast::StateSpace)>,
