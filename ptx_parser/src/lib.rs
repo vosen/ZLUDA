@@ -326,6 +326,19 @@ fn immediate_value<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<as
     .parse_next(stream)
 }
 
+fn reg_or_immediate<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<ast::RegOrImmediate<&'input str>> {
+    trace(
+        "reg_or_immediate",
+        alt((
+            immediate_value.map(|imm| ast::RegOrImmediate::Imm(imm)),
+            ident.map(|id| ast::RegOrImmediate::Reg(id)),
+        )),
+    )
+    .parse_next(stream)
+}
+
 pub fn parse_for_errors<'input>(text: &'input str) -> Vec<PtxError<'input>> {
     let (tokens, mut errors) = lex_with_span_unchecked(text);
     let parse_result = {
@@ -913,11 +926,7 @@ fn multi_variable<'a, 'input: 'a>(
                     v_type: Type::maybe_array(vector, type_, array_dimensions),
                     state_space,
                     name,
-                    array_init: initializer
-                        .unwrap_or(Vec::new())
-                        .iter()
-                        .map(|imm| ast::RegOrImmediate::Imm(*imm))
-                        .collect::<Vec<_>>(),
+                    array_init: initializer.unwrap_or(Vec::new()),
                 },
                 count,
             })
@@ -928,7 +937,7 @@ fn multi_variable<'a, 'input: 'a>(
 fn array_initializer<'b, 'a: 'b, 'input: 'a>(
     vector: Option<NonZeroU8>,
     array_dimensions: &'b mut Vec<u32>,
-) -> impl Parser<PtxParser<'a, 'input>, Vec<ImmediateValue>, ContextError> + 'b {
+) -> impl Parser<PtxParser<'a, 'input>, Vec<RegOrImmediate<&'input str>>, ContextError> + 'b {
     trace(
         "array_initializer",
         move |stream: &mut PtxParser<'a, 'input>| {
@@ -950,8 +959,10 @@ fn array_initializer<'b, 'a: 'b, 'input: 'a>(
             .parse_next(stream)?;
             // pad with zeros
             let result_size = array_dimensions[0] as usize;
-            result
-                .extend(iter::repeat(ast::ImmediateValue::U64(0)).take(result_size - result.len()));
+            result.extend(
+                iter::repeat(ast::RegOrImmediate::Imm(ast::ImmediateValue::U64(0)))
+                    .take(result_size - result.len()),
+            );
             Ok(result)
         },
     )
@@ -959,7 +970,7 @@ fn array_initializer<'b, 'a: 'b, 'input: 'a>(
 
 fn value_initializer<'a, 'input: 'a>(
     vector: Option<NonZeroU8>,
-) -> impl Parser<PtxParser<'a, 'input>, Vec<ImmediateValue>, ContextError> {
+) -> impl Parser<PtxParser<'a, 'input>, Vec<RegOrImmediate<&'input str>>, ContextError> {
     trace(
         "value_initializer",
         move |stream: &mut PtxParser<'a, 'input>| {
@@ -976,12 +987,12 @@ fn value_initializer<'a, 'input: 'a>(
 }
 
 fn single_value_append<'b, 'a: 'b, 'input: 'a>(
-    accumulator: &'b mut Vec<ImmediateValue>,
+    accumulator: &'b mut Vec<RegOrImmediate<&'input str>>,
 ) -> impl Parser<PtxParser<'a, 'input>, (), ContextError> + 'b {
     trace(
         "single_value_append",
         move |stream: &mut PtxParser<'a, 'input>| {
-            let value = immediate_value.parse_next(stream)?;
+            let value = reg_or_immediate.parse_next(stream)?;
             accumulator.push(value);
             Ok(())
         },

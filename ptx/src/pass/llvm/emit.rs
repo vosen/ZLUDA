@@ -270,12 +270,14 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                 let mut elements = array_init
                     .iter()
                     .map(|elem| match elem {
-                        ast::RegOrImmediate::Reg(_) => todo!(),
+                        ast::RegOrImmediate::Reg(reg) => {
+                            Ok(unsafe { LLVMConstPtrToInt(self.resolver.value(*reg)?, type_) })
+                        }
                         ast::RegOrImmediate::Imm(imm) => {
-                            get_immediate_value(self.context, scalar, imm)
+                            Ok(get_immediate_value(self.context, scalar, imm))
                         }
                     })
-                    .collect::<Vec<_>>();
+                    .collect::<Result<Vec<_>, _>>()?;
                 unsafe { LLVMConstArray2(type_, elements.as_mut_ptr(), elements.len() as u64) }
             }
             ast::Type::Scalar(scalar) => {
