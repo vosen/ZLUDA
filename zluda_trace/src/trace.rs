@@ -145,7 +145,7 @@ impl StateTracker {
                 raw_image,
                 kind: "archive",
             })
-        } else if unsafe { *(raw_image as *const u32) } == FatbincWrapper::MAGIC {
+        } else if unsafe { *(raw_image as *const [u8; 4]) } == FatbincWrapper::MAGIC {
             unsafe {
                 fn_logger.try_(|fn_logger| {
                     trace::record_submodules_from_wrapped_fatbin(

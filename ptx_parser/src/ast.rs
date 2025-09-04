@@ -1495,6 +1495,16 @@ pub struct Module<'input> {
     pub invalid_directives: usize,
 }
 
+impl Module<'_> {
+    pub fn empty() -> Self {
+        Module {
+            version: (1, 0),
+            directives: Vec::new(),
+            invalid_directives: usize::MAX,
+        }
+    }
+}
+
 #[derive(Copy, Clone)]
 pub enum MulDetails {
     Integer {

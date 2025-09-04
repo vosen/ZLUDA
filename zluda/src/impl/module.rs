@@ -47,7 +47,7 @@ fn get_ptx(image: *const ::core::ffi::c_void) -> Result<String, CUerror> {
         return Err(CUerror::INVALID_VALUE);
     }
 
-    let ptx = if unsafe { *(image as *const u32) } == FatbincWrapper::MAGIC {
+    let ptx = if unsafe { *(image as *const [u8; 4]) } == FatbincWrapper::MAGIC {
         let ptx_bytes = get_ptx_from_wrapped_fatbin(image)?;
         std::str::from_utf8(&ptx_bytes)
             .map_err(|_| CUerror::UNKNOWN)?
@@ -139,7 +139,11 @@ fn compile_from_ptx_and_cache(
     text: &str,
     cache_with_key: &mut Option<(zluda_cache::ModuleCache, zluda_cache::ModuleKey)>,
 ) -> Result<Vec<u8>, CUerror> {
-    let ast = ptx_parser::parse_module_checked(text).map_err(|_| CUerror::NO_BINARY_FOR_GPU)?;
+    let ast = if cfg!(debug_assertions) {
+        ptx_parser::parse_module_checked(text).map_err(|_| CUerror::NO_BINARY_FOR_GPU)?
+    } else {
+        ptx_parser::parse_module_unchecked(text)
+    };
     let llvm_module = ptx::to_llvm_module(ast, attributes).map_err(|_| CUerror::UNKNOWN)?;
     let elf_module = comgr::compile_bitcode(
         comgr,

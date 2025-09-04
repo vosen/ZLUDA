@@ -43,7 +43,11 @@ pub fn parse_fatbinc_wrapper<T: Sized>(ptr: &*const T) -> Result<&FatbincWrapper
     unsafe { ptr.cast::<FatbincWrapper>().as_ref() }
         .ok_or(ParseError::NullPointer("FatbincWrapper"))
         .and_then(|ptr| {
-            ParseError::check_fields("FATBINC_MAGIC", ptr.magic, [FatbincWrapper::MAGIC])?;
+            ParseError::check_fields(
+                "FATBINC_MAGIC",
+                ptr.magic,
+                [u32::from_ne_bytes(FatbincWrapper::MAGIC)],
+            )?;
             ParseError::check_fields(
                 "FATBINC_VERSION",
                 ptr.version,
@@ -57,7 +61,11 @@ fn parse_fatbin_header<T: Sized>(ptr: &*const T) -> Result<&FatbinHeader, ParseE
     unsafe { ptr.cast::<FatbinHeader>().as_ref() }
         .ok_or(ParseError::NullPointer("FatbinHeader"))
         .and_then(|ptr| {
-            ParseError::check_fields("FATBIN_MAGIC", ptr.magic, [FatbinHeader::MAGIC])?;
+            ParseError::check_fields(
+                "FATBIN_MAGIC",
+                ptr.magic,
+                [u32::from_ne_bytes(FatbinHeader::MAGIC)],
+            )?;
             ParseError::check_fields("FATBIN_VERSION", ptr.version, [FatbinHeader::VERSION])?;
             Ok(ptr)
         })

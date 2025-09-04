@@ -3,8 +3,8 @@ use logos::Logos;
 use ptx_parser_macros::derive_parser;
 use rustc_hash::FxHashMap;
 use std::fmt::Debug;
-use std::iter;
 use std::num::{NonZeroU8, ParseFloatError, ParseIntError};
+use std::{iter, usize};
 use winnow::ascii::dec_uint;
 use winnow::combinator::*;
 use winnow::error::{ErrMode, ErrorKind};
@@ -401,13 +401,46 @@ pub fn parse_module_checked<'input>(
             .map_err(|err| PtxError::Parser(err.into_inner()))
     };
     match parse_result {
-        Ok(result) if errors.is_empty() => Ok(result),
+        Ok(result) if errors.is_empty() && result.invalid_directives == 0 => Ok(result),
         Ok(_) => Err(errors),
         Err(err) => {
             errors.push(err);
             Err(errors)
         }
     }
+}
+
+pub fn parse_module_unchecked<'input>(text: &'input str) -> ast::Module<'input> {
+    let mut lexer = Token::lexer(text);
+    let mut errors = Vec::new();
+    let mut tokens = Vec::new();
+    loop {
+        let maybe_token = match lexer.next() {
+            Some(maybe_token) => maybe_token,
+            None => break,
+        };
+        match maybe_token {
+            Ok(token) => tokens.push((token, lexer.span())),
+            Err(mut err) => {
+                err.0 = lexer.span();
+                errors.push(PtxError::from(err))
+            }
+        }
+    }
+    if !errors.is_empty() {
+        return ast::Module::empty();
+    }
+    let parse_result = {
+        let state = PtxParserState::new(text, &mut errors);
+        let parser = PtxParser {
+            state,
+            input: &tokens[..],
+        };
+        module
+            .parse(parser)
+            .map_err(|err| PtxError::Parser(err.into_inner()))
+    };
+    parse_result.unwrap_or(ast::Module::empty())
 }
 
 fn module<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::Module<'input>> {

@@ -24,11 +24,11 @@ impl ZludaObject for Library {
 pub(crate) fn load_data(
     library: &mut CUlibrary,
     code: *const ::core::ffi::c_void,
-    _jit_options: &mut CUjit_option,
-    _jit_options_values: &mut *mut ::core::ffi::c_void,
+    _jit_options: Option<&mut CUjit_option>,
+    _jit_options_values: Option<&mut *mut ::core::ffi::c_void>,
     _num_jit_options: ::core::ffi::c_uint,
-    _library_options: &mut CUlibraryOption,
-    _library_option_values: &mut *mut ::core::ffi::c_void,
+    _library_options: Option<&mut CUlibraryOption>,
+    _library_option_values: Option<&mut *mut ::core::ffi::c_void>,
     _num_library_options: ::core::ffi::c_uint,
 ) -> CUresult {
     let hip_module = module::load_hip_module(code)?;
@@ -60,4 +60,47 @@ pub(crate) unsafe fn get_global(
     name: *const ::core::ffi::c_char,
 ) -> hipError_t {
     hipModuleGetGlobal(dptr, bytes, library.base, name)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::tests::CudaApi;
+    use cuda_macros::test_cuda;
+    use cuda_types::cuda::{CUresult, CUresultConsts};
+    use std::{ffi::CStr, mem, ptr};
+
+    #[test_cuda]
+    unsafe fn library_loads_without_context(api: impl CudaApi) {
+        static PTX: &'static CStr = c"
+            .version 7.0
+            .target sm_70
+            .address_size 64
+
+            .visible .entry foobar() {
+              ret;
+            }
+        ";
+        api.cuInit(0);
+        let mut device = mem::zeroed();
+        assert_eq!(
+            CUresult::ERROR_INVALID_CONTEXT,
+            api.cuCtxGetDevice_unchecked(&mut device)
+        );
+        let mut module = mem::zeroed();
+        assert_eq!(
+            CUresult::ERROR_INVALID_CONTEXT,
+            api.cuModuleLoadData_unchecked(&mut module, PTX.as_ptr().cast())
+        );
+        let mut library = mem::zeroed();
+        api.cuLibraryLoadData(
+            &mut library,
+            PTX.as_ptr().cast(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+            0,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            0,
+        );
+    }
 }
