@@ -1492,6 +1492,7 @@ pub enum Directive<'input, O: Operand> {
 pub struct Module<'input> {
     pub version: (u8, u8),
     pub directives: Vec<Directive<'input, ParsedOperand<&'input str>>>,
+    pub invalid_directives: usize,
 }
 
 #[derive(Copy, Clone)]

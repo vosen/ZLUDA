@@ -417,13 +417,16 @@ fn module<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::Module
             version,
             target,
             opt(address_size),
-            repeat_without_none(directive),
+            repeat_without_none_and_count(directive),
             eof,
         )
-            .map(|(version, _, _, directives, _)| ast::Module {
-                version,
-                directives,
-            }),
+            .map(
+                |(version, _, _, (directives, invalid_directives), _)| ast::Module {
+                    version,
+                    directives,
+                    invalid_directives,
+                },
+            ),
     )
     .parse_next(stream)
 }
@@ -458,7 +461,8 @@ fn shader_model<'a>(stream: &mut &str) -> PResult<(u32, Option<char>)> {
 fn directive<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<Option<ast::Directive<'input, ast::ParsedOperand<&'input str>>>> {
-    trace(
+    let errors = stream.state.errors.len();
+    let directive = trace(
         "directive",
         with_recovery(
             alt((
@@ -488,7 +492,11 @@ fn directive<'a, 'input>(
         )
         .map(Option::flatten),
     )
-    .parse_next(stream)
+    .parse_next(stream)?;
+    if errors != stream.state.errors.len() {
+        return Ok(None);
+    }
+    Ok(directive)
 }
 
 fn module_variable<'a, 'input>(
@@ -1263,6 +1271,25 @@ fn repeat_without_none<Input: Stream, Output, Error: ParserError<Input>>(
             }
             acc
         }),
+    )
+}
+
+fn repeat_without_none_and_count<Input: Stream, Output, Error: ParserError<Input>>(
+    parser: impl Parser<Input, Option<Output>, Error>,
+) -> impl Parser<Input, (Vec<Output>, usize), Error> {
+    trace(
+        "repeat_without_none_and_count",
+        repeat(0.., parser).fold(
+            || (Vec::new(), 0),
+            |(mut accumulator, mut nones): (Vec<_>, usize), item| {
+                if let Some(item) = item {
+                    accumulator.push(item);
+                } else {
+                    nones += 1;
+                }
+                (accumulator, nones)
+            },
+        ),
     )
 }
 
@@ -3803,6 +3830,7 @@ derive_parser!(
 #[cfg(test)]
 mod tests {
     use crate::first_optional;
+    use crate::module;
     use crate::parse_module_checked;
     use crate::section;
     use crate::PtxError;
@@ -4099,5 +4127,39 @@ mod tests {
         };
         assert!(section.parse(stream).is_ok());
         assert_eq!(errors.len(), 0);
+    }
+
+    #[test]
+    fn report_unknown_directives() {
+        let text = "
+            .version 6.5
+            .target sm_30
+            .address_size 64
+            
+            .global .b32 global[4] = {  unknown (1),   2,   3,   4};
+
+            .visible .entry func1()
+            {
+                st.u64          [out_addr], temp2;
+                ret;
+            }
+
+            .visible .entry func1()
+            {
+                broken_instruction;
+                ret;
+            }";
+        let tokens = Token::lexer(text)
+            .map(|t| t.map(|t| (t, Span::default())))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let mut errors = Vec::new();
+        let stream = super::PtxParser {
+            input: &tokens[..],
+            state: PtxParserState::new(text, &mut errors),
+        };
+        let module = module.parse(stream).unwrap();
+        assert_eq!(module.directives.len(), 1);
+        assert_eq!(module.invalid_directives, 2);
     }
 }
