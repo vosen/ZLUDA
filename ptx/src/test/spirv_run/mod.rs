@@ -166,6 +166,7 @@ test_ptx!(and, [6u32, 3u32], [2u32]);
 test_ptx!(selp, [100u16, 200u16], [200u16]);
 test_ptx!(selp_true, [100u16, 200u16], [100u16]);
 test_ptx!(fma, [2f32, 3f32, 5f32], [11f32]);
+test_ptx!(fma_bf16x2, [0x40004040, 0x40404080, 0x40A04040], [0x41304170]);
 test_ptx!(shared_variable, [513u64], [513u64]);
 test_ptx!(shared_ptr_32, [513u64], [513u64]);
 test_ptx!(atom_cas, [91u32, 91u32], [91u32, 100u32]);
