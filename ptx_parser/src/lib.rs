@@ -968,8 +968,7 @@ fn array_initializer<'b, 'a: 'b, 'input: 'a>(
                 ScalarKind::Float => ast::ImmediateValue::F64(0.0),
             };
             result.extend(
-                iter::repeat(ast::RegOrImmediate::Imm(default))
-                    .take(result_size - result.len()),
+                iter::repeat(ast::RegOrImmediate::Imm(default)).take(result_size - result.len()),
             );
             Ok(result)
         },
