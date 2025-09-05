@@ -1,18 +1,11 @@
 use crate::{
-    log::{self, UInt},
-    trace, ErrorEntry, FnCallLog, Settings,
+    log::{self},
+    ErrorEntry, FnCallLog, Settings,
 };
-use cuda_types::{
-    cuda::*,
-    dark_api::{FatbinFileHeader, FatbinFileHeaderFlags, FatbincWrapper},
-};
-use dark_api::fatbin::{
-    decompress_lz4, decompress_zstd, Fatbin, FatbinFileIterator, FatbinSubmodule,
-};
+use cuda_types::cuda::*;
 use goblin::{elf, elf32, elf64};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::{
-    borrow::Cow,
     ffi::{c_void, CStr, CString},
     fs::{self, File},
     io::{self, Read, Write},
@@ -29,8 +22,7 @@ pub(crate) struct StateTracker {
     writer: DumpWriter,
     pub(crate) libraries: FxHashMap<CUlibrary, CodePointer>,
     saved_modules: FxHashSet<CUmodule>,
-    module_counter: usize,
-    submodule_counter: usize,
+    library_counter: usize,
     pub(crate) override_cc: Option<(u32, u32)>,
 }
 
@@ -46,8 +38,7 @@ impl StateTracker {
             writer: DumpWriter::new(settings.dump_dir.clone()),
             libraries: FxHashMap::default(),
             saved_modules: FxHashSet::default(),
-            module_counter: 0,
-            submodule_counter: 0,
+            library_counter: 0,
             override_cc: settings.override_cc,
         }
     }
@@ -78,25 +69,68 @@ impl StateTracker {
         let mut module_file = fs::File::open(file_name)?;
         let mut read_buff = Vec::new();
         module_file.read_to_end(&mut read_buff)?;
-        self.record_new_module(module, read_buff.as_ptr() as *const _, fn_logger);
+        self.record_new_library(module, read_buff.as_ptr() as *const _, fn_logger);
         Ok(())
+    }
+
+    pub(crate) fn record_new_library(
+        &mut self,
+        cu_module: CUmodule,
+        raw_image: *const c_void,
+        fn_logger: &mut FnCallLog,
+    ) {
+        self.saved_modules.insert(cu_module);
+        self.library_counter += 1;
+        let code_ref = fn_logger.try_return(|| {
+            unsafe { zluda_common::CodeLibaryRef::try_load(raw_image) }
+                .map_err(ErrorEntry::NonUtf8ModuleText)
+        });
+        let code_ref = unwrap_some_or!(code_ref, return);
+        unsafe {
+            code_ref.iterate_modules(|index, module| match module {
+                Err(err) => fn_logger.log(ErrorEntry::from(err)),
+                Ok(zluda_common::CodeModule::Elf(elf)) => match get_elf_size(elf) {
+                    Some(len) => {
+                        let elf_image = std::slice::from_raw_parts(elf.cast::<u8>(), len);
+                        self.record_new_submodule(index, elf_image, fn_logger, "elf");
+                    }
+                    None => fn_logger.log(log::ErrorEntry::UnsupportedModule {
+                        module: cu_module,
+                        raw_image: elf,
+                        kind: "ELF",
+                    }),
+                },
+                Ok(zluda_common::CodeModule::Archive(archive)) => {
+                    fn_logger.log(log::ErrorEntry::UnsupportedModule {
+                        module: cu_module,
+                        raw_image: archive,
+                        kind: "archive",
+                    })
+                }
+                Ok(zluda_common::CodeModule::File(file)) => {
+                    if let Some(buffer) = fn_logger
+                        .try_(|_| file.get_or_decompress_content().map_err(ErrorEntry::from))
+                    {
+                        self.record_new_submodule(index, &*buffer, fn_logger, file.kind());
+                    }
+                }
+                Ok(zluda_common::CodeModule::Text(ptx)) => {
+                    self.record_new_submodule(index, ptx.as_bytes(), fn_logger, "ptx");
+                }
+            });
+        };
     }
 
     pub(crate) fn record_new_submodule(
         &mut self,
-        module: CUmodule,
+        index: Option<(usize, Option<usize>)>,
         submodule: &[u8],
         fn_logger: &mut FnCallLog,
         type_: &'static str,
     ) {
-        if self.saved_modules.insert(module) {
-            self.module_counter += 1;
-            self.submodule_counter = 0;
-        }
-        self.submodule_counter += 1;
         fn_logger.log_io_error(self.writer.save_module(
-            self.module_counter,
-            Some(self.submodule_counter),
+            self.library_counter,
+            index,
             submodule,
             type_,
         ));
@@ -107,8 +141,8 @@ impl StateTracker {
                     Err(e) => fn_logger.log(log::ErrorEntry::NonUtf8ModuleText(e)),
                     Ok(submodule_text) => self.try_parse_and_record_kernels(
                         fn_logger,
-                        self.module_counter,
-                        Some(self.submodule_counter),
+                        self.library_counter,
+                        index,
                         submodule_text,
                     ),
                 },
@@ -116,80 +150,11 @@ impl StateTracker {
         }
     }
 
-    pub(crate) fn record_new_module(
-        &mut self,
-        module: CUmodule,
-        raw_image: *const c_void,
-        fn_logger: &mut FnCallLog,
-    ) {
-        self.module_counter += 1;
-        if unsafe { *(raw_image as *const [u8; 4]) } == *elf64::header::ELFMAG {
-            self.saved_modules.insert(module);
-            match unsafe { get_elf_size(raw_image) } {
-                Some(len) => {
-                    let elf_image =
-                        unsafe { std::slice::from_raw_parts(raw_image.cast::<u8>(), len) };
-                    self.record_new_submodule(module, elf_image, fn_logger, "elf");
-                }
-                None => fn_logger.log(log::ErrorEntry::UnsupportedModule {
-                    module,
-                    raw_image,
-                    kind: "ELF",
-                }),
-            }
-        } else if unsafe { *(raw_image as *const [u8; 8]) } == *goblin::archive::MAGIC {
-            self.saved_modules.insert(module);
-            // TODO: Figure out how to get size of archive module and write it to disk
-            fn_logger.log(log::ErrorEntry::UnsupportedModule {
-                module,
-                raw_image,
-                kind: "archive",
-            })
-        } else if unsafe { *(raw_image as *const [u8; 4]) } == FatbincWrapper::MAGIC {
-            unsafe {
-                fn_logger.try_(|fn_logger| {
-                    trace::record_submodules_from_wrapped_fatbin(
-                        module,
-                        raw_image as *const FatbincWrapper,
-                        fn_logger,
-                        self,
-                    )
-                });
-            }
-        } else {
-            self.record_module_ptx(module, raw_image, fn_logger)
-        }
-    }
-
-    fn record_module_ptx(
-        &mut self,
-        module: CUmodule,
-        raw_image: *const c_void,
-        fn_logger: &mut FnCallLog,
-    ) {
-        self.saved_modules.insert(module);
-        let module_text = unsafe { CStr::from_ptr(raw_image as *const _) }.to_str();
-        let module_text = match module_text {
-            Ok(m) => m,
-            Err(utf8_err) => {
-                fn_logger.log(log::ErrorEntry::NonUtf8ModuleText(utf8_err));
-                return;
-            }
-        };
-        fn_logger.log_io_error(self.writer.save_module(
-            self.module_counter,
-            None,
-            module_text.as_bytes(),
-            "ptx",
-        ));
-        self.try_parse_and_record_kernels(fn_logger, self.module_counter, None, module_text);
-    }
-
     fn try_parse_and_record_kernels(
         &mut self,
         fn_logger: &mut FnCallLog,
         module_index: usize,
-        submodule_index: Option<usize>,
+        submodule_index: Option<(usize, Option<usize>)>,
         module_text: &str,
     ) {
         let errors = ptx_parser::parse_for_errors(module_text);
@@ -359,7 +324,7 @@ impl DumpWriter {
     fn save_module(
         &self,
         module_index: usize,
-        submodule_index: Option<usize>,
+        submodule_index: Option<(usize, Option<usize>)>,
         buffer: &[u8],
         kind: &'static str,
     ) -> io::Result<()> {
@@ -368,7 +333,7 @@ impl DumpWriter {
             Some(d) => d.clone(),
         };
         dump_file.push(Self::get_file_name(module_index, submodule_index, kind));
-        let mut file = File::create(dump_file)?;
+        let mut file = File::create_new(dump_file)?;
         file.write_all(buffer)?;
         Ok(())
     }
@@ -376,7 +341,7 @@ impl DumpWriter {
     fn save_module_error_log<'input>(
         &self,
         module_index: usize,
-        submodule_index: Option<usize>,
+        submodule_index: Option<(usize, Option<usize>)>,
         errors: &[ptx_parser::PtxError<'input>],
     ) -> io::Result<()> {
         let mut log_file = match &self.dump_dir {
@@ -391,92 +356,24 @@ impl DumpWriter {
         Ok(())
     }
 
-    fn get_file_name(module_index: usize, submodule_index: Option<usize>, kind: &str) -> String {
+    fn get_file_name(
+        module_index: usize,
+        submodule_index: Option<(usize, Option<usize>)>,
+        kind: &str,
+    ) -> String {
         match submodule_index {
             None => {
                 format!("module_{:04}.{:02}", module_index, kind)
             }
-            Some(submodule_index) => {
-                format!("module_{:04}_{:02}.{}", module_index, submodule_index, kind)
+            Some((sub_index, None)) => {
+                format!("module_{:04}_{:02}.{}", module_index, sub_index, kind)
+            }
+            Some((sub_index, Some(subsub_index))) => {
+                format!(
+                    "module_{:04}_{:02}_{:02}.{}",
+                    module_index, sub_index, subsub_index, kind
+                )
             }
         }
     }
-}
-
-pub(crate) unsafe fn record_submodules_from_wrapped_fatbin(
-    module: CUmodule,
-    fatbinc_wrapper: *const FatbincWrapper,
-    fn_logger: &mut FnCallLog,
-    state: &mut StateTracker,
-) -> Result<(), ErrorEntry> {
-    let fatbin = Fatbin::new(&fatbinc_wrapper).map_err(ErrorEntry::from)?;
-    let mut submodules = fatbin.get_submodules()?;
-    while let Some(current) = submodules.next()? {
-        record_submodules_from_fatbin(module, current, fn_logger, state)?;
-    }
-    Ok(())
-}
-
-pub(crate) unsafe fn record_submodules_from_fatbin(
-    module: CUmodule,
-    submodule: FatbinSubmodule,
-    logger: &mut FnCallLog,
-    state: &mut StateTracker,
-) -> Result<(), ErrorEntry> {
-    record_submodules(module, logger, state, submodule.get_files())?;
-    Ok(())
-}
-
-pub(crate) unsafe fn record_submodules(
-    module: CUmodule,
-    fn_logger: &mut FnCallLog,
-    state: &mut StateTracker,
-    mut files: FatbinFileIterator,
-) -> Result<(), ErrorEntry> {
-    while let Some(file) = files.next()? {
-        let mut payload = if file
-            .header
-            .flags
-            .contains(FatbinFileHeaderFlags::CompressedLz4)
-        {
-            Cow::Owned(unwrap_some_or!(
-                fn_logger.try_return(|| decompress_lz4(&file).map_err(|e| e.into())),
-                continue
-            ))
-        } else if file
-            .header
-            .flags
-            .contains(FatbinFileHeaderFlags::CompressedZstd)
-        {
-            Cow::Owned(unwrap_some_or!(
-                fn_logger.try_return(|| decompress_zstd(&file).map_err(|e| e.into())),
-                continue
-            ))
-        } else {
-            Cow::Borrowed(file.get_payload())
-        };
-        match file.header.kind {
-            FatbinFileHeader::HEADER_KIND_PTX => {
-                while payload.last() == Some(&0) {
-                    // remove trailing zeros
-                    payload.to_mut().pop();
-                }
-                state.record_new_submodule(module, &*payload, fn_logger, "ptx")
-            }
-            FatbinFileHeader::HEADER_KIND_ELF => {
-                state.record_new_submodule(module, &*payload, fn_logger, "elf")
-            }
-            _ => {
-                fn_logger.log(log::ErrorEntry::UnexpectedBinaryField {
-                    field_name: "FATBIN_FILE_HEADER_KIND",
-                    expected: vec![
-                        UInt::U16(FatbinFileHeader::HEADER_KIND_PTX),
-                        UInt::U16(FatbinFileHeader::HEADER_KIND_ELF),
-                    ],
-                    observed: UInt::U16(file.header.kind),
-                });
-            }
-        }
-    }
-    Ok(())
 }

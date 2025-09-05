@@ -2,20 +2,17 @@ use cuda_types::{
     cublas::*,
     cublaslt::cublasLtHandle_t,
     cuda::*,
-    dark_api::{FatbinFileHeaderFlags, FatbinHeader, FatbincWrapper},
+    dark_api::{FatbinHeader, FatbincWrapper},
     nvml::*,
 };
-use dark_api::fatbin::{
-    Fatbin, FatbinError, FatbinFile, FatbinFileIterator, FatbinIter, FatbinSubmodule, ParseError,
-};
+use dark_api::fatbin::{Fatbin, FatbinError, FatbinFile, FatbinSubmodule};
 use hip_runtime_sys::*;
 use rocblas_sys::*;
 use std::{
-    borrow::Cow,
     ffi::{c_void, CStr},
     mem::{self, ManuallyDrop, MaybeUninit},
-    ops::ControlFlow,
     ptr,
+    str::Utf8Error,
 };
 
 pub trait CudaErrorType {
@@ -480,14 +477,16 @@ pub enum CodeLibaryRef<'a> {
     FatbincWrapper(Fatbin<'a>),
     FatbinHeader(FatbinSubmodule<'a>),
     Text(&'a str),
-    Elf(*mut c_void),
+    Elf(*const c_void),
+    Archive(*const c_void),
 }
 
 impl<'a> CodeLibaryRef<'a> {
     const ELFMAG: [u8; 4] = *b"\x7FELF";
+    const AR_MAGIC: [u8; 8] = *b"!<arch>\x0A";
 
-    unsafe fn try_load(ptr: *mut c_void) -> Option<Self> {
-        Some(match *ptr.cast::<[u8; 4]>() {
+    pub unsafe fn try_load(ptr: *const c_void) -> Result<Self, Utf8Error> {
+        Ok(match *ptr.cast::<[u8; 4]>() {
             FatbincWrapper::MAGIC => Self::FatbincWrapper(Fatbin {
                 wrapper: &*(ptr.cast()),
             }),
@@ -495,13 +494,16 @@ impl<'a> CodeLibaryRef<'a> {
                 header: &*(ptr.cast()),
             }),
             Self::ELFMAG => Self::Elf(ptr),
-            _ => CStr::from_ptr(ptr.cast()).to_str().ok().map(Self::Text)?,
+            _ => match *ptr.cast::<[u8; 8]>() {
+                Self::AR_MAGIC => Self::Archive(ptr),
+                _ => CStr::from_ptr(ptr.cast()).to_str().map(Self::Text)?,
+            },
         })
     }
 
-    unsafe fn iterate_modules(
+    pub unsafe fn iterate_modules(
         &self,
-        fn_: &mut impl FnMut((usize, usize), Result<CodeModule, FatbinError>),
+        mut fn_: impl FnMut(Option<(usize, Option<usize>)>, Result<CodeModule, FatbinError>),
     ) {
         match self {
             CodeLibaryRef::FatbincWrapper(fatbin) => {
@@ -511,124 +513,53 @@ impl<'a> CodeLibaryRef<'a> {
                         let mut module_index = 0;
                         while let Some(maybe_submodule) = iter.next() {
                             match maybe_submodule {
-                                Ok(submodule) => Self::iterate_modules(
-                                    &CodeLibaryRef::FatbinHeader(submodule),
-                                    &mut |(_, subindex), module| {
-                                        fn_((module_index, subindex), module)
+                                Ok(submodule) => iterate_modules_fatbin_header(
+                                    &mut |subindex, module| {
+                                        let (subindex, _) = subindex.unwrap();
+                                        fn_(Some((module_index, Some(subindex))), module)
                                     },
+                                    &submodule,
                                 ),
-                                Err(err) => {
-                                    fn_((module_index, 0), Err(FatbinError::ParseFailure(err)))
-                                }
+                                Err(err) => fn_(
+                                    Some((module_index, None)),
+                                    Err(FatbinError::ParseFailure(err)),
+                                ),
                             }
                             module_index += 1;
                         }
                     }
-                    Err(err) => fn_((0, 0), Err(err)),
+                    Err(err) => fn_(None, Err(err)),
                 }
             }
             CodeLibaryRef::FatbinHeader(submodule) => {
-                let mut iter = submodule.get_files();
-                let mut index = 0;
-                while let Some(file) = iter.next() {
-                    fn_(
-                        (0, index),
-                        file.map(CodeModule::File)
-                            .map_err(FatbinError::ParseFailure),
-                    );
-                    index += 1;
-                }
+                iterate_modules_fatbin_header(&mut fn_, submodule);
             }
-            CodeLibaryRef::Text(text) => fn_((0, 0), Ok(CodeModule::Text(*text))),
-            CodeLibaryRef::Elf(elf) => fn_((0, 0), Ok(CodeModule::Elf(*elf))),
+            CodeLibaryRef::Text(text) => fn_(None, Ok(CodeModule::Text(*text))),
+            CodeLibaryRef::Elf(elf) => fn_(None, Ok(CodeModule::Elf(*elf))),
+            CodeLibaryRef::Archive(ar) => fn_(None, Ok(CodeModule::Archive(*ar))),
         }
     }
 }
 
-enum CodeModule<'a> {
+unsafe fn iterate_modules_fatbin_header(
+    fn_: &mut impl FnMut(Option<(usize, Option<usize>)>, Result<CodeModule, FatbinError>),
+    submodule: &FatbinSubmodule<'_>,
+) {
+    let mut iter = submodule.get_files();
+    let mut index = 0;
+    while let Some(file) = iter.next() {
+        fn_(
+            Some((index, None)),
+            file.map(CodeModule::File)
+                .map_err(FatbinError::ParseFailure),
+        );
+        index += 1;
+    }
+}
+
+pub enum CodeModule<'a> {
     File(FatbinFile<'a>),
     Text(&'a str),
-    Elf(*mut c_void),
+    Elf(*const c_void),
+    Archive(*const c_void),
 }
-
-/*
-enum PtxIterator<'a> {
-    FatbincWrapper(FatbinIter<'a>),
-    FatbinHeader(FatbinFileIterator<'a>),
-    Text(std::iter::Once<&'a str>),
-}
-
-impl<'a> PtxIterator<'a> {
-    fn next(&mut self) -> Option<Result<&'a str, ParseError>> {
-        match self {
-            PtxIterator::FatbincWrapper(iter) => {
-                while let Ok(Some(submodule)) = iter.next() {
-                    let mut files = submodule.get_files();
-                    while let Some(file) = unsafe { files.next().ok()? } {
-                        if file.header.kind == FatbinFileHeader::HEADER_KIND_PTX {
-                            return Some(
-                                unsafe { file.decompress().ok()? }
-                                    .as_slice()
-                                    .strip_suffix(&[0])?
-                                    .as_ref()
-                                    .and_then(|s| std::str::from_utf8(s).ok()),
-                            );
-                        }
-                    }
-                }
-                None
-            }
-            PtxIterator::FatbinHeader(iter) => unsafe {
-                iter.next().map(|file| file.map(|file| file.decompress()))
-            },
-            PtxIterator::Text(iter) => iter.next(),
-        }
-    }
-}
-
-fn decompress_payload<'a>(file: &'a FatbinFile) -> Result<Cow<'a, str>, FatbinError> {
-    let mut payload = if file
-        .header
-        .flags
-        .contains(FatbinFileHeaderFlags::CompressedLz4)
-    {
-        Cow::Owned(unwrap_some_or!(
-            fn_logger.try_return(|| decompress_lz4(&file).map_err(|e| e.into())),
-            continue
-        ))
-    } else if file
-        .header
-        .flags
-        .contains(FatbinFileHeaderFlags::CompressedZstd)
-    {
-        Cow::Owned(unwrap_some_or!(
-            fn_logger.try_return(|| decompress_zstd(&file).map_err(|e| e.into())),
-            continue
-        ))
-    } else {
-        Cow::Borrowed(file.get_payload())
-    };
-    match file.header.kind {
-        FatbinFileHeader::HEADER_KIND_PTX => {
-            while payload.last() == Some(&0) {
-                // remove trailing zeros
-                payload.to_mut().pop();
-            }
-            state.record_new_submodule(module, &*payload, fn_logger, "ptx")
-        }
-        FatbinFileHeader::HEADER_KIND_ELF => {
-            state.record_new_submodule(module, &*payload, fn_logger, "elf")
-        }
-        _ => {
-            fn_logger.log(log::ErrorEntry::UnexpectedBinaryField {
-                field_name: "FATBIN_FILE_HEADER_KIND",
-                expected: vec![
-                    UInt::U16(FatbinFileHeader::HEADER_KIND_PTX),
-                    UInt::U16(FatbinFileHeader::HEADER_KIND_ELF),
-                ],
-                observed: UInt::U16(file.header.kind),
-            });
-        }
-    }
-}
-*/

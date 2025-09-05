@@ -1,6 +1,6 @@
 // This file contains a higher-level interface for parsing fatbins
 
-use std::ptr;
+use std::{borrow::Cow, ptr};
 
 use cuda_types::dark_api::*;
 
@@ -125,9 +125,9 @@ pub enum FatbinIter<'a> {
 }
 
 impl<'a> FatbinIter<'a> {
-    pub fn next(&mut self) -> Result<Option<FatbinSubmodule<'a>>, ParseError> {
+    pub fn next(&mut self) -> Option<Result<FatbinSubmodule<'a>, ParseError>> {
         match self {
-            FatbinIter::V1(opt) => Ok(opt.take()),
+            FatbinIter::V1(opt) => Ok(opt.take()).transpose(),
             FatbinIter::V2(iter) => unsafe { iter.next() },
         }
     }
@@ -139,15 +139,18 @@ pub struct FatbinSubmoduleIterator<'a> {
 }
 
 impl<'a> FatbinSubmoduleIterator<'a> {
-    pub unsafe fn next(&mut self) -> Result<Option<FatbinSubmodule<'a>>, ParseError> {
+    pub unsafe fn next(&mut self) -> Option<Result<FatbinSubmodule<'a>, ParseError>> {
         if *self.fatbins != ptr::null() {
             let header = *self.fatbins as *const FatbinHeader;
             self.fatbins = self.fatbins.add(1);
-            Ok(Some(FatbinSubmodule::new(header.as_ref().ok_or(
-                ParseError::NullPointer("FatbinSubmoduleIterator"),
-            )?)))
+            Some(
+                header
+                    .as_ref()
+                    .ok_or(ParseError::NullPointer("FatbinSubmoduleIterator"))
+                    .map(FatbinSubmodule::new),
+            )
         } else {
-            Ok(None)
+            None
         }
     }
 }
@@ -161,6 +164,14 @@ impl<'a> FatbinFile<'a> {
         Self { header }
     }
 
+    pub fn kind(&self) -> &'static str {
+        match self.header.kind {
+            FatbinFileHeader::HEADER_KIND_PTX => "ptx",
+            FatbinFileHeader::HEADER_KIND_ELF => "elf",
+            _ => "bin",
+        }
+    }
+
     pub unsafe fn get_payload(&'a self) -> &'a [u8] {
         let start = std::ptr::from_ref(self.header)
             .cast::<u8>()
@@ -168,28 +179,38 @@ impl<'a> FatbinFile<'a> {
         std::slice::from_raw_parts(start, self.header.payload_size as usize)
     }
 
-    pub unsafe fn decompress(&'a self) -> Result<Vec<u8>, FatbinError> {
+    pub unsafe fn get_or_decompress_content(&'a self) -> Result<Cow<'a, [u8]>, FatbinError> {
         let mut payload = if self
             .header
             .flags
             .contains(FatbinFileHeaderFlags::CompressedLz4)
         {
-            unsafe { decompress_lz4(self) }?
+            Cow::Owned(unsafe { decompress_lz4(self) }?)
         } else if self
             .header
             .flags
             .contains(FatbinFileHeaderFlags::CompressedZstd)
         {
-            unsafe { decompress_zstd(self) }?
+            Cow::Owned(unsafe { decompress_zstd(self) }?)
         } else {
-            unsafe { self.get_payload().to_vec() }
+            Cow::Borrowed(unsafe { self.get_payload() })
         };
 
-        while payload.last() == Some(&0) {
-            // remove trailing zeros
-            payload.pop();
+        // Remove trailing zeros
+        if self.header.kind == FatbinFileHeader::HEADER_KIND_PTX {
+            match payload {
+                Cow::Borrowed(ref mut slice) => {
+                    while slice.last() == Some(&0) {
+                        *slice = &slice[..slice.len() - 1];
+                    }
+                }
+                Cow::Owned(ref mut vec) => {
+                    while vec.last() == Some(&0) {
+                        vec.pop();
+                    }
+                }
+            }
         }
-
         Ok(payload)
     }
 }
@@ -208,9 +229,9 @@ impl<'a> FatbinFileIterator<'a> {
         Self { file_buffer }
     }
 
-    pub unsafe fn next(&mut self) -> Result<Option<FatbinFile<'a>>, ParseError> {
+    pub unsafe fn next(&mut self) -> Option<Result<FatbinFile<'a>, ParseError>> {
         if self.file_buffer.len() < std::mem::size_of::<FatbinFileHeader>() {
-            return Ok(None);
+            return None;
         }
         let this = &*self.file_buffer.as_ptr().cast::<FatbinFileHeader>();
         let next_element = self
@@ -218,12 +239,14 @@ impl<'a> FatbinFileIterator<'a> {
             .split_at_checked(this.header_size as usize + this.padded_payload_size as usize)
             .map(|(_, next)| next);
         self.file_buffer = next_element.unwrap_or(&[]);
-        ParseError::check_fields(
-            "FATBIN_FILE_HEADER_VERSION_CURRENT",
-            this.version,
-            [FatbinFileHeader::HEADER_VERSION_CURRENT],
-        )?;
-        Ok(Some(FatbinFile::new(this)))
+        Some(
+            ParseError::check_fields(
+                "FATBIN_FILE_HEADER_VERSION_CURRENT",
+                this.version,
+                [FatbinFileHeader::HEADER_VERSION_CURRENT],
+            )
+            .map(|_| FatbinFile::new(this)),
+        )
     }
 }
 
