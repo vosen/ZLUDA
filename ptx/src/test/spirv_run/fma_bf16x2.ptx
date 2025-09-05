@@ -1,0 +1,25 @@
+.version 7.0
+.target sm_80
+.address_size 64
+
+.visible .entry fma_bf16x2(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .b32 	    temp1;
+    .reg .b32 	    temp2;
+    .reg .b32 	    temp3;
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.b32          temp1, [in_addr];
+    ld.b32          temp2, [in_addr+4];
+    ld.b32          temp3, [in_addr+8];
+	fma.rn.bf16x2	temp1, temp1, temp2, temp3;
+    st.b32          [out_addr], temp1;
+	ret;
+}
