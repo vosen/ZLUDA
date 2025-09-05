@@ -144,6 +144,7 @@ test_ptx!(sub, [2u64], [1u64]);
 test_ptx!(min, [555i32, 444i32], [444i32]);
 test_ptx!(max, [555i32, 444i32], [555i32]);
 test_ptx!(global_array, [0xDEADu32], [1u32]);
+test_ptx!(global_array_f32, [0x0], [0f32]);
 test_ptx!(extern_shared, [127u64], [127u64]);
 test_ptx!(extern_shared_call, [121u64], [123u64]);
 test_ptx!(rcp, [2f32], [0.5f32]);
@@ -261,6 +262,7 @@ test_ptx!(
 test_ptx!(non_scalar_ptr_offset, [1u32, 2u32, 3u32, 4u32], [7u32]);
 test_ptx!(stateful_neg_offset, [1237518u64], [1237518u64]);
 test_ptx!(const, [0u16], [10u16, 20, 30, 40]);
+test_ptx!(const_ident, [0u16], [0u64, 0u64]);
 test_ptx!(cvt_s16_s8, [0x139231C2u32], [0xFFFFFFC2u32]);
 test_ptx!(cvt_f64_f32, [0.125f32], [0.125f64]);
 test_ptx!(prmt, [0x70c507d6u32, 0x6fbd4b5cu32], [0x6fbdd65cu32]);
