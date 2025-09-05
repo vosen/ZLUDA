@@ -224,7 +224,7 @@ fn error_unknown_symbol<T: Into<String>>(symbol: T) -> TranslateError {
 
 #[cfg(debug_assertions)]
 fn error_mismatched_type() -> TranslateError {
-    panic!()
+    panic!("Mismatched type")
 }
 
 #[cfg(not(debug_assertions))]
