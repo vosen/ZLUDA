@@ -4,7 +4,7 @@
 
 .const .u64 x = 1;
 .const .u64 y[4] = {4,5,6};
-.const .u64 constparams[4] = { x, y };
+.const .u64 constparams[2] = { x, y };
 
 .visible .entry const_ident(
 	.param .u64 input,

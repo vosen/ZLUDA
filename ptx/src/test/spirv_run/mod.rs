@@ -144,6 +144,7 @@ test_ptx!(sub, [2u64], [1u64]);
 test_ptx!(min, [555i32, 444i32], [444i32]);
 test_ptx!(max, [555i32, 444i32], [555i32]);
 test_ptx!(global_array, [0xDEADu32], [1u32]);
+test_ptx!(global_array_f32, [0x0], [0f32]);
 test_ptx!(extern_shared, [127u64], [127u64]);
 test_ptx!(extern_shared_call, [121u64], [123u64]);
 test_ptx!(rcp, [2f32], [0.5f32]);

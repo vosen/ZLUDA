@@ -909,7 +909,7 @@ fn multi_variable<'a, 'input: 'a>(
             let initializer = match state_space {
                 StateSpace::Global | StateSpace::Const => match array_dimensions {
                     Some(ref mut dimensions) => {
-                        opt(array_initializer(vector, dimensions)).parse_next(stream)?
+                        opt(array_initializer(type_, vector, dimensions)).parse_next(stream)?
                     }
                     None => opt(value_initializer(vector)).parse_next(stream)?,
                 },
@@ -935,6 +935,7 @@ fn multi_variable<'a, 'input: 'a>(
 }
 
 fn array_initializer<'b, 'a: 'b, 'input: 'a>(
+    type_: ScalarType,
     vector: Option<NonZeroU8>,
     array_dimensions: &'b mut Vec<u32>,
 ) -> impl Parser<PtxParser<'a, 'input>, Vec<RegOrImmediate<&'input str>>, ContextError> + 'b {
@@ -959,8 +960,15 @@ fn array_initializer<'b, 'a: 'b, 'input: 'a>(
             .parse_next(stream)?;
             // pad with zeros
             let result_size = array_dimensions[0] as usize;
+            let default = match type_.kind() {
+                ScalarKind::Bit | ScalarKind::Unsigned | ScalarKind::Pred => {
+                    ast::ImmediateValue::U64(0)
+                }
+                ScalarKind::Signed => ast::ImmediateValue::S64(0),
+                ScalarKind::Float => ast::ImmediateValue::F64(0.0),
+            };
             result.extend(
-                iter::repeat(ast::RegOrImmediate::Imm(ast::ImmediateValue::U64(0)))
+                iter::repeat(ast::RegOrImmediate::Imm(default))
                     .take(result_size - result.len()),
             );
             Ok(result)
