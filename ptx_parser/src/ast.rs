@@ -7,6 +7,7 @@ use crate::{
     ShuffleMode, VoteMode,
 };
 use bitflags::bitflags;
+use derive_more::derive::Display;
 use std::{alloc::Layout, cmp::Ordering, fmt::Write, num::NonZeroU8};
 
 pub enum Statement<P: Operand> {
@@ -807,7 +808,17 @@ where
             ),
             ParsedOperand::VecPack(vec) => ParsedOperand::VecPack(
                 vec.into_iter()
-                    .map(|ident| (self)(ident, type_space, is_dst, relaxed_type_check))
+                    .map(|reg_or_immediate| {
+                        Ok(match reg_or_immediate {
+                            RegOrImmediate::Reg(ident) => RegOrImmediate::Reg((self)(
+                                ident,
+                                type_space,
+                                is_dst,
+                                relaxed_type_check,
+                            )?),
+                            RegOrImmediate::Imm(imm) => RegOrImmediate::Imm(imm),
+                        })
+                    })
                     .collect::<Result<Vec<_>, _>>()?,
             ),
         })
@@ -1004,6 +1015,7 @@ impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Type::Scalar(scalar_type) => write!(f, "{}", scalar_type),
+            Type::Vector(count, scalar_type) => write!(f, ".v{}{}", count, scalar_type),
             _ => todo!(),
         }
     }
@@ -1062,6 +1074,15 @@ impl Type {
 }
 
 impl ScalarType {
+    pub fn from_size(size: u8) -> Option<Self> {
+        Some(match size {
+            1 => ScalarType::B8,
+            2 => ScalarType::B16,
+            4 => ScalarType::B32,
+            16 => ScalarType::B128,
+            _ => return None,
+        })
+    }
     pub fn size_of(self) -> u8 {
         match self {
             ScalarType::U8 | ScalarType::S8 | ScalarType::B8 => 1,
@@ -1212,13 +1233,19 @@ pub struct ShfDetails {
     pub mode: FunnelShiftMode,
 }
 
+#[derive(Clone, Copy, Display)]
+pub enum RegOrImmediate<Ident> {
+    Reg(Ident),
+    Imm(ImmediateValue),
+}
+
 #[derive(Clone)]
 pub enum ParsedOperand<Ident> {
     Reg(Ident),
     RegOffset(Ident, i32),
     Imm(ImmediateValue),
     VecMember(Ident, u8),
-    VecPack(Vec<Ident>),
+    VecPack(Vec<RegOrImmediate<Ident>>),
 }
 
 impl<Ident> ParsedOperand<Ident> {
