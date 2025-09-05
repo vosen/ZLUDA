@@ -2712,14 +2712,30 @@ derive_parser!(
             arguments: FmaArgs { dst: d, src1: a, src2: b, src3: c  }
         }
     }
+    .rnd: RawRoundingMode = { .rn };
+    ScalarType =            { .f16 };
     //fma.rnd{.ftz}{.sat}.f16x2   d, a, b, c;
     //fma.rnd{.ftz}.relu.f16      d, a, b, c;
     //fma.rnd{.ftz}.relu.f16x2    d, a, b, c;
     //fma.rnd{.relu}.bf16         d, a, b, c;
-    //fma.rnd{.relu}.bf16x2       d, a, b, c;
-    //fma.rnd.oob.{relu}.type     d, a, b, c;
+    fma.rnd{.relu}.bf16x2       d, a, b, c => {
+        if relu {
+            state.errors.push(PtxError::Todo);
+        }
+        ast::Instruction::Fma {
+            data: ast::ArithFloat {
+                type_: bf16x2,
+                rounding: rnd.into(),
+                flush_to_zero: None,
+                saturate: false,
+                is_fusable: false
+            },
+            arguments: FmaArgs { dst: d, src1: a, src2: b, src3: c  }
+        }
+    }
     .rnd: RawRoundingMode = { .rn };
-    ScalarType =            { .f16 };
+    ScalarType =            { .bf16x2 };
+    //fma.rnd.oob.{relu}.type     d, a, b, c;
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-sub
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-sub
