@@ -77,13 +77,13 @@ bitflags! {
 }
 
 impl FatbincWrapper {
-    pub const MAGIC: c_uint = 0x466243B1;
+    pub const MAGIC: [u8; 4] = 0x466243B1u32.to_le_bytes();
     pub const VERSION_V1: c_uint = 0x1;
     pub const VERSION_V2: c_uint = 0x2;
 }
 
 impl FatbinHeader {
-    pub const MAGIC: c_uint = 0xBA55ED50;
+    pub const MAGIC: [u8; 4] = 0xBA55ED50u32.to_le_bytes();
     pub const VERSION: c_ushort = 0x01;
 }
 

@@ -1,10 +1,18 @@
-use cuda_types::{cublas::*, cublaslt::cublasLtHandle_t, cuda::*, nvml::*};
+use cuda_types::{
+    cublas::*,
+    cublaslt::cublasLtHandle_t,
+    cuda::*,
+    dark_api::{FatbinHeader, FatbincWrapper},
+    nvml::*,
+};
+use dark_api::fatbin::{Fatbin, FatbinError, FatbinFile, FatbinSubmodule};
 use hip_runtime_sys::*;
 use rocblas_sys::*;
 use std::{
-    ffi::CStr,
+    ffi::{c_void, CStr},
     mem::{self, ManuallyDrop, MaybeUninit},
     ptr,
+    str::Utf8Error,
 };
 
 pub trait CudaErrorType {
@@ -411,4 +419,157 @@ pub fn drop_checked<T: ZludaObject>(handle: T::CudaHandle) -> Result<(), T::Erro
     let underlying_error = LiveCheck::drop_checked(&mut wrapped_object)?;
     unsafe { ManuallyDrop::drop(&mut wrapped_object) };
     underlying_error
+}
+
+/*
+pub struct CodeModuleRef<'a> {
+    pub kind: CodeModuleKind,
+    pub data: &'a [u8],
+}
+
+impl<'a> CodeModule<'a> {
+    /// Interprets `data` as a code module of some kind.
+    ///
+    /// This does not validate the contents of `data`, it only looks at the headers to determine
+    /// what kind of data it is.
+    pub fn parse(data: *mut c_void) -> Result<Self, CUerror> {
+        if data.len() >= 4 {
+            let kind = match &data[0..4] {
+                FatbincWrapper::MAGIC => CodeModuleKind::FatbincWrapper,
+                FatbinHeader::MAGIC => CodeModuleKind::FatbinHeader,
+                elf64::header::ELFMAG => CodeModuleKind::Elf,
+                _ => {
+                    if data.ends_with(&[0]) && data.iter().all(|&c| c != 0) {
+                        CodeModuleKind::Ptx
+                    } else {
+                        CodeModuleKind::ForeignElf
+                    }
+                }
+            };
+            Ok(CodeModule { kind, data })
+        } else {
+            Err(CUerror::INVALID_VALUE)
+        }
+    }
+}
+     */
+
+// We receive module as an opaque pointer. We want to handle three different
+// lifetime-related scenarios:
+// * The module has a 'static lifetime, but we don't want to use it just yet
+//   (`cuLibraryLoadData` with CU_LIBRARY_BINARY_IS_PRESERVED = 1), we might
+//   never use it.
+//       In this case we just keep the void pointer, we can pass it to
+//       the consuming function later
+// * The module has a non-'static lifetime, and we will use it in the future
+//   (`cuLibraryLoadData` with CU_LIBRARY_BINARY_IS_PRESERVED = 0)
+//       In this case we need to copy the data into its own buffers
+// * The module lifetime is scoped to the current function. E.g. zluda_trace
+//   might to parse a module to inspect and save it or it's cuModuleLoadData
+//        In this case we need to return either the compatible ELF or the
+//        iterator over `Cow` with decompressed PTX strings
+//            Even here there are two cases:
+//            * The consumer is cuModuleLoadData, if it's our ELF then it wants
+//              to load it directly from the pointer
+//            * The consumer is zluda_trace, it wants to compute the length of
+//              the ELF and save it to a file
+#[derive(Clone, Copy)]
+pub enum CodeLibraryRef<'a> {
+    FatbincWrapper(Fatbin<'a>),
+    FatbinHeader(FatbinSubmodule<'a>),
+    Text(&'a str),
+    Elf(&'a c_void),
+    Archive(&'a c_void),
+}
+
+impl<'a> CodeLibraryRef<'a> {
+    const ELFMAG: [u8; 4] = *b"\x7FELF";
+    const AR_MAGIC: [u8; 8] = *b"!<arch>\x0A";
+
+    pub unsafe fn try_load(ptr: *const c_void) -> Result<Self, Utf8Error> {
+        Ok(match *ptr.cast::<[u8; 4]>() {
+            FatbincWrapper::MAGIC => Self::FatbincWrapper(Fatbin {
+                wrapper: &*(ptr.cast()),
+            }),
+            FatbinHeader::MAGIC => Self::FatbinHeader(FatbinSubmodule {
+                header: &*(ptr.cast()),
+            }),
+            Self::ELFMAG => Self::Elf(&*ptr),
+            _ => match *ptr.cast::<[u8; 8]>() {
+                Self::AR_MAGIC => Self::Archive(&*ptr),
+                _ => CStr::from_ptr(ptr.cast()).to_str().map(Self::Text)?,
+            },
+        })
+    }
+
+    pub unsafe fn iterate_modules(
+        self,
+        mut fn_: impl FnMut(Option<(usize, Option<usize>)>, Result<CodeModuleRef<'a>, FatbinError>),
+    ) {
+        match self {
+            CodeLibraryRef::FatbincWrapper(fatbin) => {
+                let module_iter = fatbin.get_submodules();
+                match module_iter {
+                    Ok(mut iter) => {
+                        let mut module_index = if iter.multi_module() {
+                            None
+                        } else {
+                            Some(0usize)
+                        };
+                        while let Some(maybe_submodule) = iter.next() {
+                            match maybe_submodule {
+                                Ok(submodule) => iterate_modules_fatbin_header(
+                                    |subindex, module| {
+                                        let index = match module_index {
+                                            Some(index) => (index, Some(subindex)),
+                                            None => (subindex, None),
+                                        };
+                                        fn_(Some(index), module)
+                                    },
+                                    submodule,
+                                ),
+                                Err(err) => fn_(
+                                    module_index.map(|module_index| (module_index, None)),
+                                    Err(FatbinError::ParseFailure(err)),
+                                ),
+                            }
+                            module_index = module_index.map(|index| index + 1);
+                        }
+                    }
+                    Err(err) => fn_(None, Err(err)),
+                }
+            }
+            CodeLibraryRef::FatbinHeader(submodule) => iterate_modules_fatbin_header(
+                |index, module| fn_(Some((index, None)), module),
+                submodule,
+            ),
+            CodeLibraryRef::Text(text) => fn_(None, Ok(CodeModuleRef::Text(text))),
+            CodeLibraryRef::Elf(elf) => fn_(None, Ok(CodeModuleRef::Elf(elf))),
+            CodeLibraryRef::Archive(ar) => fn_(None, Ok(CodeModuleRef::Archive(ar))),
+        }
+    }
+}
+
+unsafe fn iterate_modules_fatbin_header<'x>(
+    mut fn_: impl FnMut(usize, Result<CodeModuleRef<'x>, FatbinError>),
+    submodule: FatbinSubmodule<'x>,
+) {
+    let mut iter = submodule.get_files();
+    let mut index = 0;
+    while let Some(file) = iter.next() {
+        fn_(
+            index,
+            file.map(CodeModuleRef::File)
+                .map_err(FatbinError::ParseFailure),
+        );
+        index += 1;
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum CodeModuleRef<'a> {
+    File(FatbinFile<'a>),
+    Text(&'a str),
+    Elf(*const c_void),
+    Archive(*const c_void),
 }

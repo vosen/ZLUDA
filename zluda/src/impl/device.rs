@@ -517,3 +517,23 @@ pub(crate) unsafe fn primary_context_get_state(
     *active_out = active;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::tests::CudaApi;
+    use cuda_macros::test_cuda;
+    use std::{mem, ptr};
+
+    #[test_cuda]
+    unsafe fn primary_ctx_retain_does_not_make_it_active(api: impl CudaApi) {
+        api.cuInit(0);
+        let mut current_ctx = mem::zeroed();
+        api.cuCtxGetCurrent(&mut current_ctx);
+        assert_eq!(current_ctx.0, ptr::null_mut());
+        let mut primary_ctx = mem::zeroed();
+        api.cuDevicePrimaryCtxRetain(&mut primary_ctx, 0);
+        assert_ne!(primary_ctx.0, ptr::null_mut());
+        api.cuCtxGetCurrent(&mut current_ctx);
+        assert_eq!(current_ctx.0, ptr::null_mut());
+    }
+}

@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 ptx = { path = "../ptx" }
 ptx_parser = { path = "../ptx_parser" }
 zluda_trace_common = { path = "../zluda_trace_common" }
+zluda_common = { path = "../zluda_common" }
 format = { path = "../format" }
 dark_api = { path = "../dark_api" }
 regex = "1.4"
