@@ -1,10 +1,38 @@
-use super::module;
+use crate::r#impl::{context, driver, module};
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
-use zluda_common::ZludaObject;
+use std::{ffi::c_void, sync::OnceLock};
+use zluda_common::{CodeLibraryRef, ZludaObject};
 
 pub(crate) struct Library {
-    base: hipModule_t,
+    data: LibraryData,
+    modules: Vec<OnceLock<Result<hipModule_t, CUerror>>>,
+}
+
+impl Library {
+    pub(crate) fn get_module_for_device(&self, device: usize) -> Result<hipModule_t, CUerror> {
+        let module_lock = self.modules.get(device).ok_or(CUerror::INVALID_DEVICE)?;
+        *module_lock.get_or_init(|| match self.data {
+            LibraryData::Lazy(lib) => module::load_hip_module(lib),
+            LibraryData::Eager(()) => Err(CUerror::NOT_SUPPORTED),
+        })
+    }
+}
+
+enum LibraryData {
+    Lazy(CodeLibraryRef<'static>),
+    Eager(()),
+}
+
+impl LibraryData {
+    unsafe fn new(ptr: *mut c_void, static_lifetime: bool) -> Result<Self, CUerror> {
+        if static_lifetime {
+            let lib = CodeLibraryRef::try_load(ptr).map_err(|_| CUerror::INVALID_VALUE)?;
+            Ok(LibraryData::Lazy(lib))
+        } else {
+            Err(CUerror::NOT_SUPPORTED)
+        }
+    }
 }
 
 impl ZludaObject for Library {
@@ -14,26 +42,76 @@ impl ZludaObject for Library {
     type CudaHandle = CUlibrary;
 
     fn drop_checked(&mut self) -> CUresult {
-        // TODO: we will want to test that we handle `cuModuleUnload` on a module that came from a library correctly, without calling `hipModuleUnload` twice.
-        unsafe { hipModuleUnload(self.base) }?;
+        // TODO: implement unloading
+        // TODO: we will want to test that we handle `cuModuleUnload` on a module that came from a library correctly, without calling `hipModuleUnload` twice
         Ok(())
     }
 }
 
-/// This implementation simply loads the code as a HIP module for now. The various JIT and library options are ignored.
-pub(crate) fn load_data(
-    library: &mut CUlibrary,
+pub(crate) unsafe fn load_data(
+    result: &mut CUlibrary,
     code: *const ::core::ffi::c_void,
     _jit_options: Option<&mut CUjit_option>,
     _jit_options_values: Option<&mut *mut ::core::ffi::c_void>,
     _num_jit_options: ::core::ffi::c_uint,
-    _library_options: Option<&mut CUlibraryOption>,
-    _library_option_values: Option<&mut *mut ::core::ffi::c_void>,
-    _num_library_options: ::core::ffi::c_uint,
+    library_options: Option<&mut CUlibraryOption>,
+    library_option_values: Option<&mut *mut ::core::ffi::c_void>,
+    num_library_options: ::core::ffi::c_uint,
 ) -> CUresult {
-    let hip_module = module::load_hip_module(code)?;
-    *library = Library { base: hip_module }.wrap();
+    let global_state = driver::global_state()?;
+    let options =
+        LibraryOptions::load(library_options, library_option_values, num_library_options)?;
+    let library = Library {
+        data: LibraryData::new(code as *mut c_void, options.preserve_binary)?,
+        modules: vec![OnceLock::new(); global_state.devices.len()],
+    };
+    *result = library.wrap();
     Ok(())
+}
+
+struct LibraryOptions {
+    preserve_binary: bool,
+}
+
+impl LibraryOptions {
+    unsafe fn load(
+        library_options: Option<&mut CUlibraryOption>,
+        library_option_values: Option<&mut *mut ::core::ffi::c_void>,
+        num_library_options: ::core::ffi::c_uint,
+    ) -> Result<Self, CUerror> {
+        if num_library_options == 0 {
+            return Ok(LibraryOptions {
+                preserve_binary: false,
+            });
+        }
+        let (library_options, library_option_values) =
+            match (library_options, library_option_values) {
+                (Some(library_options), Some(library_option_values)) => {
+                    let library_options =
+                        std::slice::from_raw_parts(library_options, num_library_options as usize);
+                    let library_option_values = std::slice::from_raw_parts(
+                        library_option_values,
+                        num_library_options as usize,
+                    );
+                    (library_options, library_option_values)
+                }
+                _ => return Err(CUerror::INVALID_VALUE),
+            };
+        let mut preserve_binary = false;
+        for (option, value) in library_options
+            .iter()
+            .copied()
+            .zip(library_option_values.iter())
+        {
+            match option {
+                CUlibraryOption::CU_LIBRARY_BINARY_IS_PRESERVED => {
+                    preserve_binary = *(value.cast::<bool>());
+                }
+                _ => return Err(CUerror::NOT_SUPPORTED),
+            }
+        }
+        Ok(LibraryOptions { preserve_binary })
+    }
 }
 
 pub(crate) unsafe fn unload(library: CUlibrary) -> CUresult {
@@ -41,7 +119,12 @@ pub(crate) unsafe fn unload(library: CUlibrary) -> CUresult {
 }
 
 pub(crate) unsafe fn get_module(out: &mut CUmodule, library: &Library) -> CUresult {
-    *out = module::Module { base: library.base }.wrap();
+    let device = context::get_current_device()?;
+    // TODO: lifetime is very wrong here
+    let library = module::Module {
+        base: library.get_module_for_device(device as usize)?,
+    };
+    *out = library.wrap();
     Ok(())
 }
 
@@ -49,8 +132,11 @@ pub(crate) unsafe fn get_kernel(
     kernel: *mut hipFunction_t,
     library: &Library,
     name: *const ::core::ffi::c_char,
-) -> hipError_t {
-    hipModuleGetFunction(kernel, library.base, name)
+) -> CUresult {
+    let device = context::get_current_device()?;
+    let module = library.get_module_for_device(device as usize)?;
+    hipModuleGetFunction(kernel, module, name)?;
+    Ok(())
 }
 
 pub(crate) unsafe fn get_global(
@@ -58,16 +144,22 @@ pub(crate) unsafe fn get_global(
     bytes: *mut usize,
     library: &Library,
     name: *const ::core::ffi::c_char,
-) -> hipError_t {
-    hipModuleGetGlobal(dptr, bytes, library.base, name)
+) -> CUresult {
+    let device = context::get_current_device()?;
+    let module = library.get_module_for_device(device as usize)?;
+    hipModuleGetGlobal(dptr, bytes, module, name)?;
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use crate::tests::CudaApi;
     use cuda_macros::test_cuda;
-    use cuda_types::cuda::{CUresult, CUresultConsts};
-    use std::{ffi::CStr, mem, ptr};
+    use cuda_types::cuda::{CUlibraryOption, CUresult, CUresultConsts};
+    use std::{
+        ffi::{c_void, CStr},
+        mem, ptr,
+    };
 
     #[test_cuda]
     unsafe fn library_loads_without_context(api: impl CudaApi) {
@@ -98,9 +190,13 @@ mod tests {
             ptr::null_mut(),
             ptr::null_mut(),
             0,
-            ptr::null_mut(),
-            ptr::null_mut(),
-            0,
+            [CUlibraryOption::CU_LIBRARY_BINARY_IS_PRESERVED].as_mut_ptr(),
+            [(&true as *const bool) as *mut c_void].as_mut_ptr(),
+            1,
+        );
+        assert_eq!(
+            CUresult::ERROR_INVALID_CONTEXT,
+            api.cuLibraryGetModule_unchecked(&mut mem::zeroed(), library)
         );
     }
 }

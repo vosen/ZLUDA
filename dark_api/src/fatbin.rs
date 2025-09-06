@@ -71,6 +71,7 @@ fn parse_fatbin_header<T: Sized>(ptr: &*const T) -> Result<&FatbinHeader, ParseE
         })
 }
 
+#[derive(Clone, Copy)]
 pub struct Fatbin<'a> {
     pub wrapper: &'a FatbincWrapper,
 }
@@ -83,7 +84,7 @@ impl<'a> Fatbin<'a> {
         Ok(Fatbin { wrapper })
     }
 
-    pub fn get_submodules(&self) -> Result<FatbinIter<'a>, FatbinError> {
+    pub fn get_submodules(self) -> Result<FatbinIter<'a>, FatbinError> {
         match self.wrapper.version {
             FatbincWrapper::VERSION_V2 => Ok(FatbinIter::V2(FatbinSubmoduleIterator {
                 fatbins: self.wrapper.filename_or_fatbins as *const *const std::ffi::c_void,
@@ -105,6 +106,10 @@ impl<'a> Fatbin<'a> {
     }
 }
 
+unsafe impl Send for Fatbin<'static> {}
+unsafe impl Sync for Fatbin<'static> {}
+
+#[derive(Clone, Copy)]
 pub struct FatbinSubmodule<'a> {
     pub header: &'a FatbinHeader, // TODO: maybe make private
 }
@@ -159,6 +164,7 @@ impl<'a> FatbinSubmoduleIterator<'a> {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct FatbinFile<'a> {
     pub header: &'a FatbinFileHeader,
 }
@@ -176,14 +182,14 @@ impl<'a> FatbinFile<'a> {
         }
     }
 
-    pub unsafe fn get_payload(&'a self) -> &'a [u8] {
+    pub unsafe fn get_payload(self) -> &'a [u8] {
         let start = std::ptr::from_ref(self.header)
             .cast::<u8>()
             .add(self.header.header_size as usize);
         std::slice::from_raw_parts(start, self.header.payload_size as usize)
     }
 
-    pub unsafe fn get_or_decompress_content(&'a self) -> Result<Cow<'a, [u8]>, FatbinError> {
+    pub unsafe fn get_or_decompress_content(self) -> Result<Cow<'a, [u8]>, FatbinError> {
         let mut payload = if self
             .header
             .flags
@@ -256,7 +262,7 @@ impl<'a> FatbinFileIterator<'a> {
 
 const MAX_MODULE_DECOMPRESSION_BOUND: usize = 64 * 1024 * 1024;
 
-pub unsafe fn decompress_lz4(file: &FatbinFile) -> Result<Vec<u8>, FatbinError> {
+pub unsafe fn decompress_lz4(file: FatbinFile) -> Result<Vec<u8>, FatbinError> {
     let decompressed_size = usize::max(1024, file.header.uncompressed_payload as usize);
     let mut decompressed_vec = vec![0u8; decompressed_size];
     loop {
@@ -281,7 +287,7 @@ pub unsafe fn decompress_lz4(file: &FatbinFile) -> Result<Vec<u8>, FatbinError> 
     }
 }
 
-pub unsafe fn decompress_zstd(file: &FatbinFile) -> Result<Vec<u8>, FatbinError> {
+pub unsafe fn decompress_zstd(file: FatbinFile) -> Result<Vec<u8>, FatbinError> {
     let mut result = Vec::with_capacity(file.header.uncompressed_payload as usize);
     let payload = file.get_payload();
     match zstd_safe::decompress(&mut result, payload) {

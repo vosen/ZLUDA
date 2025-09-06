@@ -1,12 +1,8 @@
 use super::driver;
-use cuda_types::{
-    cuda::*,
-    dark_api::{FatbinFileHeader, FatbincWrapper},
-};
-use dark_api::fatbin::Fatbin;
+use cuda_types::{cuda::*, dark_api::FatbinFileHeader};
 use hip_runtime_sys::*;
-use std::{ffi::CStr, mem};
-use zluda_common::ZludaObject;
+use std::{borrow::Cow, ffi::CStr, mem};
+use zluda_common::{CodeLibraryRef, CodeModuleRef, ZludaObject};
 
 pub(crate) struct Module {
     pub(crate) base: hipModule_t,
@@ -24,47 +20,45 @@ impl ZludaObject for Module {
     }
 }
 
-fn get_ptx_from_wrapped_fatbin(image: *const ::core::ffi::c_void) -> Result<Vec<u8>, CUerror> {
-    let fatbin = Fatbin::new(&image).map_err(|_| CUerror::UNKNOWN)?;
-    let mut submodules = fatbin.get_submodules().map_err(|_| CUerror::UNKNOWN)?;
-
-    while let Some(current) = submodules.next().map_err(|_| CUerror::UNKNOWN)? {
-        let mut files = current.get_files();
-        while let Some(file) = unsafe { files.next().map_err(|_| CUerror::UNKNOWN)? } {
-            if file.header.kind == FatbinFileHeader::HEADER_KIND_PTX {
-                let decompressed = unsafe { file.decompress() }.map_err(|_| CUerror::UNKNOWN)?;
-                return Ok(decompressed);
+// get_ptx takes an `image` that can be anything we support and returns a
+// String containing a ptx extracted from `image`.
+fn get_ptx<'a>(image: CodeLibraryRef<'a>) -> Result<Cow<'a, str>, CUerror> {
+    let mut ptx_modules = Vec::new();
+    unsafe {
+        CodeLibraryRef::iterate_modules(image, |_, module| match module {
+            Ok(CodeModuleRef::Text(ptx)) => {
+                ptx_modules.push(Cow::<'a, _>::Borrowed(ptx));
             }
-        }
-    }
-
-    Err(CUerror::NO_BINARY_FOR_GPU)
-}
-
-/// get_ptx takes an `image` that can be either a fatbin or a NULL-terminated ptx, and returns a String containing a ptx extracted from `image`.
-fn get_ptx(image: *const ::core::ffi::c_void) -> Result<String, CUerror> {
-    if image.is_null() {
-        return Err(CUerror::INVALID_VALUE);
-    }
-
-    let ptx = if unsafe { *(image as *const [u8; 4]) } == FatbincWrapper::MAGIC {
-        let ptx_bytes = get_ptx_from_wrapped_fatbin(image)?;
-        std::str::from_utf8(&ptx_bytes)
-            .map_err(|_| CUerror::UNKNOWN)?
-            .to_owned()
-    } else {
-        unsafe { CStr::from_ptr(image.cast()) }
-            .to_str()
-            .map_err(|_| CUerror::INVALID_VALUE)?
-            .to_owned()
+            Ok(CodeModuleRef::<'a>::File(file)) => {
+                if file.header.kind != FatbinFileHeader::HEADER_KIND_PTX {
+                    return;
+                }
+                if let Ok(text) = file.get_or_decompress_content() {
+                    if let Some(text) = cow_bytes_to_str(text) {
+                        ptx_modules.push(text);
+                    }
+                }
+            }
+            _ => {}
+        })
     };
-
-    Ok(ptx)
+    // TODO: instead of getting first PTX module, try and get the best match
+    ptx_modules
+        .into_iter()
+        .next()
+        .ok_or(CUerror::NO_BINARY_FOR_GPU)
 }
 
-pub(crate) fn load_hip_module(image: *const std::ffi::c_void) -> Result<hipModule_t, CUerror> {
+fn cow_bytes_to_str<'a>(data: Cow<'a, [u8]>) -> Option<Cow<'a, str>> {
+    match data {
+        Cow::Borrowed(bytes) => std::str::from_utf8(bytes).map(Cow::Borrowed).ok(),
+        Cow::Owned(bytes) => String::from_utf8(bytes).map(Cow::Owned).ok(),
+    }
+}
+
+pub(crate) fn load_hip_module(library: CodeLibraryRef) -> Result<hipModule_t, CUerror> {
     let global_state = driver::global_state()?;
-    let text = get_ptx(image)?;
+    let text = get_ptx(library)?;
     let hip_properties = get_hip_properties()?;
     let gcn_arch = get_gcn_arch(&hip_properties)?;
     let attributes = ptx::Attributes {
@@ -162,7 +156,9 @@ fn compile_from_ptx_and_cache(
 }
 
 pub(crate) fn load_data(module: &mut CUmodule, image: &std::ffi::c_void) -> CUresult {
-    let hip_module = load_hip_module(image)?;
+    let library =
+        unsafe { CodeLibraryRef::try_load(image) }.map_err(|_| CUerror::NO_BINARY_FOR_GPU)?;
+    let hip_module = load_hip_module(library)?;
     *module = Module { base: hip_module }.wrap();
     Ok(())
 }
@@ -189,6 +185,6 @@ pub(crate) fn get_global_v2(
 }
 
 pub(crate) fn get_loading_mode(mode: &mut cuda_types::cuda::CUmoduleLoadingMode) -> CUresult {
-    *mode = cuda_types::cuda::CUmoduleLoadingMode::CU_MODULE_EAGER_LOADING;
+    *mode = cuda_types::cuda::CUmoduleLoadingMode::CU_MODULE_LAZY_LOADING;
     Ok(())
 }

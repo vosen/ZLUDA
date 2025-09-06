@@ -82,14 +82,14 @@ impl StateTracker {
         self.saved_modules.insert(cu_module);
         self.library_counter += 1;
         let code_ref = fn_logger.try_return(|| {
-            unsafe { zluda_common::CodeLibaryRef::try_load(raw_image) }
+            unsafe { zluda_common::CodeLibraryRef::try_load(raw_image) }
                 .map_err(ErrorEntry::NonUtf8ModuleText)
         });
         let code_ref = unwrap_some_or!(code_ref, return);
         unsafe {
             code_ref.iterate_modules(|index, module| match module {
                 Err(err) => fn_logger.log(ErrorEntry::from(err)),
-                Ok(zluda_common::CodeModule::Elf(elf)) => match get_elf_size(elf) {
+                Ok(zluda_common::CodeModuleRef::Elf(elf)) => match get_elf_size(elf) {
                     Some(len) => {
                         let elf_image = std::slice::from_raw_parts(elf.cast::<u8>(), len);
                         self.record_new_submodule(index, elf_image, fn_logger, "elf");
@@ -100,21 +100,21 @@ impl StateTracker {
                         kind: "ELF",
                     }),
                 },
-                Ok(zluda_common::CodeModule::Archive(archive)) => {
+                Ok(zluda_common::CodeModuleRef::Archive(archive)) => {
                     fn_logger.log(log::ErrorEntry::UnsupportedModule {
                         module: cu_module,
                         raw_image: archive,
                         kind: "archive",
                     })
                 }
-                Ok(zluda_common::CodeModule::File(file)) => {
+                Ok(zluda_common::CodeModuleRef::File(file)) => {
                     if let Some(buffer) = fn_logger
                         .try_(|_| file.get_or_decompress_content().map_err(ErrorEntry::from))
                     {
                         self.record_new_submodule(index, &*buffer, fn_logger, file.kind());
                     }
                 }
-                Ok(zluda_common::CodeModule::Text(ptx)) => {
+                Ok(zluda_common::CodeModuleRef::Text(ptx)) => {
                     self.record_new_submodule(index, ptx.as_bytes(), fn_logger, "ptx");
                 }
             });

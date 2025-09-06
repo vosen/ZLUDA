@@ -473,15 +473,16 @@ impl<'a> CodeModule<'a> {
 //              to load it directly from the pointer
 //            * The consumer is zluda_trace, it wants to compute the length of
 //              the ELF and save it to a file
-pub enum CodeLibaryRef<'a> {
+#[derive(Clone, Copy)]
+pub enum CodeLibraryRef<'a> {
     FatbincWrapper(Fatbin<'a>),
     FatbinHeader(FatbinSubmodule<'a>),
     Text(&'a str),
-    Elf(*const c_void),
-    Archive(*const c_void),
+    Elf(&'a c_void),
+    Archive(&'a c_void),
 }
 
-impl<'a> CodeLibaryRef<'a> {
+impl<'a> CodeLibraryRef<'a> {
     const ELFMAG: [u8; 4] = *b"\x7FELF";
     const AR_MAGIC: [u8; 8] = *b"!<arch>\x0A";
 
@@ -493,20 +494,20 @@ impl<'a> CodeLibaryRef<'a> {
             FatbinHeader::MAGIC => Self::FatbinHeader(FatbinSubmodule {
                 header: &*(ptr.cast()),
             }),
-            Self::ELFMAG => Self::Elf(ptr),
+            Self::ELFMAG => Self::Elf(&*ptr),
             _ => match *ptr.cast::<[u8; 8]>() {
-                Self::AR_MAGIC => Self::Archive(ptr),
+                Self::AR_MAGIC => Self::Archive(&*ptr),
                 _ => CStr::from_ptr(ptr.cast()).to_str().map(Self::Text)?,
             },
         })
     }
 
     pub unsafe fn iterate_modules(
-        &self,
-        mut fn_: impl FnMut(Option<(usize, Option<usize>)>, Result<CodeModule, FatbinError>),
+        self,
+        mut fn_: impl FnMut(Option<(usize, Option<usize>)>, Result<CodeModuleRef<'a>, FatbinError>),
     ) {
         match self {
-            CodeLibaryRef::FatbincWrapper(fatbin) => {
+            CodeLibraryRef::FatbincWrapper(fatbin) => {
                 let module_iter = fatbin.get_submodules();
                 match module_iter {
                     Ok(mut iter) => {
@@ -525,7 +526,7 @@ impl<'a> CodeLibaryRef<'a> {
                                         };
                                         fn_(Some(index), module)
                                     },
-                                    &submodule,
+                                    submodule,
                                 ),
                                 Err(err) => fn_(
                                     module_index.map(|module_index| (module_index, None)),
@@ -538,34 +539,35 @@ impl<'a> CodeLibaryRef<'a> {
                     Err(err) => fn_(None, Err(err)),
                 }
             }
-            CodeLibaryRef::FatbinHeader(submodule) => iterate_modules_fatbin_header(
+            CodeLibraryRef::FatbinHeader(submodule) => iterate_modules_fatbin_header(
                 |index, module| fn_(Some((index, None)), module),
                 submodule,
             ),
-            CodeLibaryRef::Text(text) => fn_(None, Ok(CodeModule::Text(*text))),
-            CodeLibaryRef::Elf(elf) => fn_(None, Ok(CodeModule::Elf(*elf))),
-            CodeLibaryRef::Archive(ar) => fn_(None, Ok(CodeModule::Archive(*ar))),
+            CodeLibraryRef::Text(text) => fn_(None, Ok(CodeModuleRef::Text(text))),
+            CodeLibraryRef::Elf(elf) => fn_(None, Ok(CodeModuleRef::Elf(elf))),
+            CodeLibraryRef::Archive(ar) => fn_(None, Ok(CodeModuleRef::Archive(ar))),
         }
     }
 }
 
-unsafe fn iterate_modules_fatbin_header(
-    mut fn_: impl FnMut(usize, Result<CodeModule, FatbinError>),
-    submodule: &FatbinSubmodule<'_>,
+unsafe fn iterate_modules_fatbin_header<'x>(
+    mut fn_: impl FnMut(usize, Result<CodeModuleRef<'x>, FatbinError>),
+    submodule: FatbinSubmodule<'x>,
 ) {
     let mut iter = submodule.get_files();
     let mut index = 0;
     while let Some(file) = iter.next() {
         fn_(
             index,
-            file.map(CodeModule::File)
+            file.map(CodeModuleRef::File)
                 .map_err(FatbinError::ParseFailure),
         );
         index += 1;
     }
 }
 
-pub enum CodeModule<'a> {
+#[derive(Clone, Copy)]
+pub enum CodeModuleRef<'a> {
     File(FatbinFile<'a>),
     Text(&'a str),
     Elf(*const c_void),
