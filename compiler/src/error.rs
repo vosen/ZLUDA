@@ -1,15 +1,15 @@
+use ptx::TranslateError;
+use ptx_parser::PtxError;
 use std::ffi::FromBytesUntilNulError;
 use std::io;
 use std::str::Utf8Error;
 
-use hip_runtime_sys::hipErrorCode_t;
-use ptx::TranslateError;
-use ptx_parser::PtxError;
-
 #[derive(Debug, thiserror::Error)]
 pub enum CompilerError {
     #[error("HIP error code: {0:?}")]
-    HipError(hipErrorCode_t),
+    HipError(u32),
+    #[error(transparent)]
+    Libloading(#[from] libloading::Error),
     #[error(transparent)]
     ComgrError(#[from] comgr::Error),
     #[error(transparent)]
@@ -24,12 +24,6 @@ pub enum CompilerError {
         cause: Option<Box<dyn std::error::Error>>,
         message: String,
     },
-}
-
-impl From<hipErrorCode_t> for CompilerError {
-    fn from(error_code: hipErrorCode_t) -> Self {
-        CompilerError::HipError(error_code)
-    }
 }
 
 impl From<Vec<PtxError<'_>>> for CompilerError {

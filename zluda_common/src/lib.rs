@@ -510,30 +510,38 @@ impl<'a> CodeLibaryRef<'a> {
                 let module_iter = fatbin.get_submodules();
                 match module_iter {
                     Ok(mut iter) => {
-                        let mut module_index = 0;
+                        let mut module_index = if iter.multi_module() {
+                            None
+                        } else {
+                            Some(0usize)
+                        };
                         while let Some(maybe_submodule) = iter.next() {
                             match maybe_submodule {
                                 Ok(submodule) => iterate_modules_fatbin_header(
-                                    &mut |subindex, module| {
-                                        let (subindex, _) = subindex.unwrap();
-                                        fn_(Some((module_index, Some(subindex))), module)
+                                    |subindex, module| {
+                                        let index = match module_index {
+                                            Some(index) => (index, Some(subindex)),
+                                            None => (subindex, None),
+                                        };
+                                        fn_(Some(index), module)
                                     },
                                     &submodule,
                                 ),
                                 Err(err) => fn_(
-                                    Some((module_index, None)),
+                                    module_index.map(|module_index| (module_index, None)),
                                     Err(FatbinError::ParseFailure(err)),
                                 ),
                             }
-                            module_index += 1;
+                            module_index = module_index.map(|index| index + 1);
                         }
                     }
                     Err(err) => fn_(None, Err(err)),
                 }
             }
-            CodeLibaryRef::FatbinHeader(submodule) => {
-                iterate_modules_fatbin_header(&mut fn_, submodule);
-            }
+            CodeLibaryRef::FatbinHeader(submodule) => iterate_modules_fatbin_header(
+                |index, module| fn_(Some((index, None)), module),
+                submodule,
+            ),
             CodeLibaryRef::Text(text) => fn_(None, Ok(CodeModule::Text(*text))),
             CodeLibaryRef::Elf(elf) => fn_(None, Ok(CodeModule::Elf(*elf))),
             CodeLibaryRef::Archive(ar) => fn_(None, Ok(CodeModule::Archive(*ar))),
@@ -542,14 +550,14 @@ impl<'a> CodeLibaryRef<'a> {
 }
 
 unsafe fn iterate_modules_fatbin_header(
-    fn_: &mut impl FnMut(Option<(usize, Option<usize>)>, Result<CodeModule, FatbinError>),
+    mut fn_: impl FnMut(usize, Result<CodeModule, FatbinError>),
     submodule: &FatbinSubmodule<'_>,
 ) {
     let mut iter = submodule.get_files();
     let mut index = 0;
     while let Some(file) = iter.next() {
         fn_(
-            Some((index, None)),
+            index,
             file.map(CodeModule::File)
                 .map_err(FatbinError::ParseFailure),
         );

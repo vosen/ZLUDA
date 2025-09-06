@@ -357,10 +357,9 @@ dependencies = [
 name = "compiler"
 version = "0.0.0"
 dependencies = [
- "amd_comgr-sys",
  "bpaf",
  "comgr",
- "hip_runtime-sys",
+ "libloading",
  "ptx",
  "ptx_parser",
  "thiserror 2.0.12",
@@ -3791,6 +3790,7 @@ name = "zluda_common"
 version = "0.1.0"
 dependencies = [
  "cuda_types",
+ "dark_api",
  "hip_runtime-sys",
  "rocblas-sys",
 ]
@@ -3883,6 +3883,7 @@ dependencies = [
  "unwrap_or",
  "wchar",
  "winapi",
+ "zluda_common",
  "zluda_trace_common",
  "zstd-safe",
 ]

@@ -125,6 +125,10 @@ pub enum FatbinIter<'a> {
 }
 
 impl<'a> FatbinIter<'a> {
+    pub fn multi_module(&self) -> bool {
+        matches!(self, FatbinIter::V2(_))
+    }
+
     pub fn next(&mut self) -> Option<Result<FatbinSubmodule<'a>, ParseError>> {
         match self {
             FatbinIter::V1(opt) => Ok(opt.take()).transpose(),

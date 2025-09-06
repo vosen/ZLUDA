@@ -366,12 +366,15 @@ impl DumpWriter {
                 format!("module_{:04}.{:02}", module_index, kind)
             }
             Some((sub_index, None)) => {
-                format!("module_{:04}_{:02}.{}", module_index, sub_index, kind)
+                format!("module_{:04}_{:02}.{}", module_index, sub_index + 1, kind)
             }
             Some((sub_index, Some(subsub_index))) => {
                 format!(
                     "module_{:04}_{:02}_{:02}.{}",
-                    module_index, sub_index, subsub_index, kind
+                    module_index,
+                    sub_index + 1,
+                    subsub_index + 1,
+                    kind
                 )
             }
         }
