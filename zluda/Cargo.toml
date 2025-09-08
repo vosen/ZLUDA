@@ -38,6 +38,9 @@ dtor = "0.0.7"
 [build-dependencies]
 vergen-gix = "1.0.9"
 
+[dev-dependencies]
+libloading = "0.8"
+
 [package.metadata.zluda]
 linux_symlinks = [
     "libcuda.so",

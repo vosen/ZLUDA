@@ -2,7 +2,7 @@ extern crate proc_macro;
 
 use proc_macro::TokenStream;
 use proc_macro2::Span;
-use quote::{quote, ToTokens};
+use quote::{format_ident, quote, ToTokens};
 use rustc_hash::FxHashMap;
 use std::iter;
 use syn::parse::{Parse, ParseStream};
@@ -10,7 +10,7 @@ use syn::punctuated::Punctuated;
 use syn::visit_mut::VisitMut;
 use syn::{
     bracketed, parse_macro_input, File, ForeignItem, ForeignItemFn, Ident, Item, Path, Signature,
-    Token,
+    Token
 };
 
 const CUDA_RS: &'static str = include_str! {"cuda.rs"};
@@ -307,4 +307,24 @@ fn join(
             .collect();
     }
     
+}
+
+#[proc_macro_attribute]
+pub fn test_cuda(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let fn_ = parse_macro_input!(item as syn::ItemFn);
+    let cuda_fn = format_ident!("{}{}", fn_.sig.ident, "_nvidia");
+    let zluda_fn = format_ident!("{}{}", fn_.sig.ident, "_amdgpu");
+    let fn_name = fn_.sig.ident.clone();
+    quote! { 
+        #[test]
+        fn #cuda_fn() {
+            unsafe { #fn_name(<crate::tests::Cuda>::new()) }
+        }
+        #[test]
+        fn #zluda_fn() {
+            unsafe { #fn_name(<crate::tests::Zluda>::new()) }
+        }
+        
+        #fn_
+    }.into()
 }

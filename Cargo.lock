@@ -2650,6 +2650,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ptxas"
+version = "0.0.0"
+dependencies = [
+ "bpaf",
+ "comgr",
+ "hip_runtime-sys",
+ "ptx",
+ "ptx_parser",
+]
+
+[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3720,6 +3731,7 @@ dependencies = [
  "hip_runtime-sys",
  "lazy_static",
  "libc",
+ "libloading",
  "lz4-sys",
  "num_enum",
  "paste",

@@ -1,41 +1,41 @@
 declare hidden i32 @__zluda_ptx_impl_sreg_lanemask_lt() #0
 
-define amdgpu_kernel void @lanemask_lt(ptr addrspace(4) byref(i64) %"36", ptr addrspace(4) byref(i64) %"37") #1 {
-  %"38" = alloca i64, align 8, addrspace(5)
-  %"39" = alloca i64, align 8, addrspace(5)
-  %"40" = alloca i32, align 4, addrspace(5)
-  %"41" = alloca i32, align 4, addrspace(5)
-  %"42" = alloca i32, align 4, addrspace(5)
+define amdgpu_kernel void @lanemask_lt(ptr addrspace(4) byref(i64) %"39", ptr addrspace(4) byref(i64) %"40") #1 {
+  %"41" = alloca i64, align 8, addrspace(5)
+  %"42" = alloca i64, align 8, addrspace(5)
+  %"43" = alloca i32, align 4, addrspace(5)
+  %"44" = alloca i32, align 4, addrspace(5)
+  %"45" = alloca i32, align 4, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
-  br label %"33"
+  br label %"36"
 
-"33":                                             ; preds = %1
-  %"43" = load i64, ptr addrspace(4) %"36", align 8
-  store i64 %"43", ptr addrspace(5) %"38", align 8
-  %"44" = load i64, ptr addrspace(4) %"37", align 8
-  store i64 %"44", ptr addrspace(5) %"39", align 8
-  %"46" = load i64, ptr addrspace(5) %"38", align 8
-  %"56" = inttoptr i64 %"46" to ptr
-  %"55" = load i32, ptr %"56", align 4
-  store i32 %"55", ptr addrspace(5) %"40", align 4
-  %"48" = load i32, ptr addrspace(5) %"40", align 4
-  %"57" = add i32 %"48", 1
-  store i32 %"57", ptr addrspace(5) %"41", align 4
-  %"31" = call i32 @__zluda_ptx_impl_sreg_lanemask_lt()
-  br label %"34"
+"36":                                             ; preds = %1
+  %"46" = load i64, ptr addrspace(4) %"39", align 8
+  store i64 %"46", ptr addrspace(5) %"41", align 8
+  %"47" = load i64, ptr addrspace(4) %"40", align 8
+  store i64 %"47", ptr addrspace(5) %"42", align 8
+  %"49" = load i64, ptr addrspace(5) %"41", align 8
+  %"59" = inttoptr i64 %"49" to ptr
+  %"58" = load i32, ptr %"59", align 4
+  store i32 %"58", ptr addrspace(5) %"43", align 4
+  %"51" = load i32, ptr addrspace(5) %"43", align 4
+  %"60" = add i32 %"51", 1
+  store i32 %"60", ptr addrspace(5) %"44", align 4
+  %"34" = call i32 @__zluda_ptx_impl_sreg_lanemask_lt()
+  br label %"37"
 
-"34":                                             ; preds = %"33"
-  store i32 %"31", ptr addrspace(5) %"42", align 4
-  %"51" = load i32, ptr addrspace(5) %"41", align 4
-  %"52" = load i32, ptr addrspace(5) %"42", align 4
-  %"60" = add i32 %"51", %"52"
-  store i32 %"60", ptr addrspace(5) %"41", align 4
-  %"53" = load i64, ptr addrspace(5) %"39", align 8
-  %"54" = load i32, ptr addrspace(5) %"41", align 4
-  %"63" = inttoptr i64 %"53" to ptr
-  store i32 %"54", ptr %"63", align 4
+"37":                                             ; preds = %"36"
+  store i32 %"34", ptr addrspace(5) %"45", align 4
+  %"54" = load i32, ptr addrspace(5) %"44", align 4
+  %"55" = load i32, ptr addrspace(5) %"45", align 4
+  %"63" = add i32 %"54", %"55"
+  store i32 %"63", ptr addrspace(5) %"44", align 4
+  %"56" = load i64, ptr addrspace(5) %"42", align 8
+  %"57" = load i32, ptr addrspace(5) %"44", align 4
+  %"66" = inttoptr i64 %"56" to ptr
+  store i32 %"57", ptr %"66", align 4
   ret void
 }
 

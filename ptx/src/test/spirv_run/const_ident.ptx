@@ -1,0 +1,39 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.const .u64 x = 1;
+.const .u64 y[4] = {4,5,6};
+.const .u64 constparams[2] = { x, y };
+
+.visible .entry const_ident(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .u64 	    x_addr;
+    .reg .u64 	    y_addr;
+    .reg .u64 	    constparams_0;
+    .reg .u64 	    constparams_1;
+    .reg .b64       x_equal;
+    .reg .b64       y_equal;
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    mov.u64         x_addr, x;
+    mov.u64         y_addr, y;
+
+    ld.const.u64    constparams_0, [constparams+0];
+    ld.const.u64    constparams_1, [constparams+8];
+
+    xor.b64         x_equal, x_addr, constparams_0;
+    xor.b64         y_equal, y_addr, constparams_1;
+
+    st.u64          [out_addr], x_equal;
+    st.u64          [out_addr+8], y_equal;
+    st.u64          [out_addr+8], y_equal;
+	ret;
+}

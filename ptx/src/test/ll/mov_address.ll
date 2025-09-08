@@ -1,14 +1,14 @@
-define amdgpu_kernel void @mov_address(ptr addrspace(4) byref(i64) %"29", ptr addrspace(4) byref(i64) %"30") #0 {
-  %"10" = alloca [8 x i8], align 1, addrspace(5)
-  %"31" = alloca i64, align 8, addrspace(5)
+define amdgpu_kernel void @mov_address(ptr addrspace(4) byref(i64) %"32", ptr addrspace(4) byref(i64) %"33") #0 {
+  %"11" = alloca [8 x i8], align 1, addrspace(5)
+  %"34" = alloca i64, align 8, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
-  br label %"28"
+  br label %"31"
 
-"28":                                             ; preds = %1
-  %"33" = ptrtoint ptr addrspace(5) %"10" to i64
-  store i64 %"33", ptr addrspace(5) %"31", align 8
+"31":                                             ; preds = %1
+  %"36" = ptrtoint ptr addrspace(5) %"11" to i64
+  store i64 %"36", ptr addrspace(5) %"34", align 8
   ret void
 }
 
