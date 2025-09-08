@@ -408,7 +408,6 @@ fn run_instruction<'input>(
                 ptx_parser::Reduction::Max => "max",
                 _ => return Err(error_unreachable()),
             };
-            data.type_.to_string();
             let name = format!(
                 "redux_sync_{}_{}",
                 op,
