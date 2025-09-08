@@ -1,6 +1,6 @@
 @x = addrspace(4) global i64 1
 @y = addrspace(4) global [4 x i64] [i64 4, i64 5, i64 6, i64 0]
-@constparams = addrspace(4) global [4 x i64] [i64 ptrtoint (ptr addrspace(4) @x to i64), i64 ptrtoint (ptr addrspace(4) @y to i64), i64 0, i64 0]
+@constparams = addrspace(4) global [4 x i64] [i64 ptrtoint (ptr addrspace(4) @x to i64), i64 ptrtoint (ptr addrspace(4) @y to i64)]
 
 define amdgpu_kernel void @const_ident(ptr addrspace(4) byref(i64) %"49", ptr addrspace(4) byref(i64) %"50") #0 {
   %"51" = alloca i64, align 8, addrspace(5)
