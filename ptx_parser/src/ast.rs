@@ -695,6 +695,18 @@ ptx_parser_macros::generate_instruction_type!(
                 }
             }
 
+        },
+        ReduxSync {
+            type: Type::Scalar(data.type_),
+            data: ReduxSyncData,
+            arguments<T>: {
+                dst: T,
+                src: T,
+                src_membermask: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::U32) },
+                }
+            }
         }
     }
 );
@@ -2271,4 +2283,9 @@ impl VoteMode {
             VoteMode::Ballot => ScalarType::B32,
         }
     }
+}
+
+pub struct ReduxSyncData {
+    pub type_: ScalarType,
+    pub reduction: Reduction,
 }
