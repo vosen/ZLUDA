@@ -45,13 +45,14 @@ pub struct FatbinHeader {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct FatbinFileHeader {
     pub kind: c_ushort,
     pub version: c_ushort,
     pub header_size: c_uint,
-    pub padded_payload_size: c_uint,
-    pub unknown0: c_uint, // check if it's written into separately
     pub payload_size: c_uint,
+    pub unknown0: c_uint, // check if it's written into separately
+    pub compressed_size: c_uint,
     pub unknown1: c_uint,
     pub unknown2: c_uint,
     pub sm_version: c_uint,
@@ -63,6 +64,7 @@ pub struct FatbinFileHeader {
 }
 
 bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct FatbinFileHeaderFlags: u64 {
         const Is64Bit = 0x0000000000000001;
         const Debug = 0x0000000000000002;
@@ -77,13 +79,13 @@ bitflags! {
 }
 
 impl FatbincWrapper {
-    pub const MAGIC: c_uint = 0x466243B1;
+    pub const MAGIC: [u8; 4] = 0x466243B1u32.to_le_bytes();
     pub const VERSION_V1: c_uint = 0x1;
     pub const VERSION_V2: c_uint = 0x2;
 }
 
 impl FatbinHeader {
-    pub const MAGIC: c_uint = 0xBA55ED50;
+    pub const MAGIC: [u8; 4] = 0xBA55ED50u32.to_le_bytes();
     pub const VERSION: c_ushort = 0x01;
 }
 

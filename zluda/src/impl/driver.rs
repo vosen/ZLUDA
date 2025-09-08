@@ -1,4 +1,4 @@
-use crate::r#impl::{context, device, function};
+use crate::r#impl::{self, context, device, function};
 use comgr::Comgr;
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
@@ -154,7 +154,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         _module: *mut cuda_types::cuda::CUmodule,
         _fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper,
     ) -> cuda_types::cuda::CUresult {
-        todo!()
+        Err(r#impl::unimplemented())
     }
 
     unsafe extern "system" fn cudart_interface_fn2(
@@ -176,11 +176,11 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         _arg4: *mut std::ffi::c_void,
         _arg5: u32,
     ) -> cuda_types::cuda::CUresult {
-        todo!()
+        Err(r#impl::unimplemented())
     }
 
     unsafe extern "system" fn cudart_interface_fn7(_arg1: usize) -> cuda_types::cuda::CUresult {
-        todo!()
+        Err(r#impl::unimplemented())
     }
 
     unsafe extern "system" fn get_module_from_cubin_ext2(
@@ -190,7 +190,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         _arg4: *mut std::ffi::c_void,
         _arg5: u32,
     ) -> cuda_types::cuda::CUresult {
-        todo!()
+        Err(r#impl::unimplemented())
     }
 
     unsafe extern "system" fn get_unknown_buffer1(
@@ -276,7 +276,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         _flags: ::std::os::raw::c_uint,
         _dev: cuda_types::cuda::CUdevice,
     ) -> cuda_types::cuda::CUresult {
-        todo!()
+        Err(r#impl::unimplemented())
     }
 
     unsafe extern "system" fn heap_alloc(
@@ -284,14 +284,14 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         _arg2: usize,
         _arg3: usize,
     ) -> cuda_types::cuda::CUresult {
-        todo!()
+        Err(r#impl::unimplemented())
     }
 
     unsafe extern "system" fn heap_free(
         _heap_alloc_record_ptr: *const std::ffi::c_void,
         _arg2: *mut usize,
     ) -> cuda_types::cuda::CUresult {
-        todo!()
+        Err(r#impl::unimplemented())
     }
 
     unsafe extern "system" fn device_get_attribute_ext(
@@ -300,14 +300,14 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         _unknown: std::ffi::c_int,
         _result: *mut [usize; 2],
     ) -> cuda_types::cuda::CUresult {
-        todo!()
+        Err(r#impl::unimplemented())
     }
 
     unsafe extern "system" fn device_get_something(
         _result: *mut std::ffi::c_uchar,
         _dev: cuda_types::cuda::CUdevice,
     ) -> cuda_types::cuda::CUresult {
-        todo!()
+        Err(r#impl::unimplemented())
     }
 
     unsafe extern "system" fn integrity_check(
