@@ -237,7 +237,9 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
     ) -> Result<SpirvWord, TranslateError> {
         let (width, scalar_t, state_space) = match type_space {
             Some((ast::Type::Vector(width, scalar_t), space)) => (*width, *scalar_t, space),
-            Some((ast::Type::Scalar(scalar_t), space)) => {
+            Some((ast::Type::Scalar(scalar_t), space))
+                if scalar_t.kind() == ast::ScalarKind::Bit =>
+            {
                 let type_ =
                     ast::ScalarType::from_size(scalar_t.size_of() / (vector_elements.len() as u8))
                         .ok_or_else(|| error_mismatched_type())?;
