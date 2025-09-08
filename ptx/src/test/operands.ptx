@@ -7,6 +7,7 @@
 )
 {
 	.reg .u32 	%reg<10>;
+    .reg .b16   %reg_16;
 	.reg .u64 	%reg_64;
     .reg .pred  p;
     .reg .pred  q;
@@ -30,4 +31,7 @@
 
     // vector index - only supported by mov (maybe: ld, st, tex)
     mov.u32 %reg0, %ntid.x;
+
+    // vector operand
+    mov.u32 %reg0, {0, %reg_16};
 }
