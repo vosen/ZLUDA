@@ -1,6 +1,6 @@
 // This file contains a higher-level interface for parsing fatbins
 
-use std::ptr;
+use std::{borrow::Cow, ptr};
 
 use cuda_types::dark_api::*;
 
@@ -43,7 +43,11 @@ pub fn parse_fatbinc_wrapper<T: Sized>(ptr: &*const T) -> Result<&FatbincWrapper
     unsafe { ptr.cast::<FatbincWrapper>().as_ref() }
         .ok_or(ParseError::NullPointer("FatbincWrapper"))
         .and_then(|ptr| {
-            ParseError::check_fields("FATBINC_MAGIC", ptr.magic, [FatbincWrapper::MAGIC])?;
+            ParseError::check_fields(
+                "FATBINC_MAGIC",
+                ptr.magic,
+                [u32::from_ne_bytes(FatbincWrapper::MAGIC)],
+            )?;
             ParseError::check_fields(
                 "FATBINC_VERSION",
                 ptr.version,
@@ -57,12 +61,17 @@ fn parse_fatbin_header<T: Sized>(ptr: &*const T) -> Result<&FatbinHeader, ParseE
     unsafe { ptr.cast::<FatbinHeader>().as_ref() }
         .ok_or(ParseError::NullPointer("FatbinHeader"))
         .and_then(|ptr| {
-            ParseError::check_fields("FATBIN_MAGIC", ptr.magic, [FatbinHeader::MAGIC])?;
+            ParseError::check_fields(
+                "FATBIN_MAGIC",
+                ptr.magic,
+                [u32::from_ne_bytes(FatbinHeader::MAGIC)],
+            )?;
             ParseError::check_fields("FATBIN_VERSION", ptr.version, [FatbinHeader::VERSION])?;
             Ok(ptr)
         })
 }
 
+#[derive(Clone, Copy)]
 pub struct Fatbin<'a> {
     pub wrapper: &'a FatbincWrapper,
 }
@@ -75,7 +84,7 @@ impl<'a> Fatbin<'a> {
         Ok(Fatbin { wrapper })
     }
 
-    pub fn get_submodules(&self) -> Result<FatbinIter<'a>, FatbinError> {
+    pub fn get_submodules(self) -> Result<FatbinIter<'a>, FatbinError> {
         match self.wrapper.version {
             FatbincWrapper::VERSION_V2 => Ok(FatbinIter::V2(FatbinSubmoduleIterator {
                 fatbins: self.wrapper.filename_or_fatbins as *const *const std::ffi::c_void,
@@ -97,6 +106,10 @@ impl<'a> Fatbin<'a> {
     }
 }
 
+unsafe impl Send for Fatbin<'static> {}
+unsafe impl Sync for Fatbin<'static> {}
+
+#[derive(Clone, Copy)]
 pub struct FatbinSubmodule<'a> {
     pub header: &'a FatbinHeader, // TODO: maybe make private
 }
@@ -117,9 +130,13 @@ pub enum FatbinIter<'a> {
 }
 
 impl<'a> FatbinIter<'a> {
-    pub fn next(&mut self) -> Result<Option<FatbinSubmodule<'a>>, ParseError> {
+    pub fn multi_module(&self) -> bool {
+        matches!(self, FatbinIter::V2(_))
+    }
+
+    pub fn next(&mut self) -> Option<Result<FatbinSubmodule<'a>, ParseError>> {
         match self {
-            FatbinIter::V1(opt) => Ok(opt.take()),
+            FatbinIter::V1(opt) => Ok(opt.take()).transpose(),
             FatbinIter::V2(iter) => unsafe { iter.next() },
         }
     }
@@ -131,19 +148,23 @@ pub struct FatbinSubmoduleIterator<'a> {
 }
 
 impl<'a> FatbinSubmoduleIterator<'a> {
-    pub unsafe fn next(&mut self) -> Result<Option<FatbinSubmodule<'a>>, ParseError> {
+    pub unsafe fn next(&mut self) -> Option<Result<FatbinSubmodule<'a>, ParseError>> {
         if *self.fatbins != ptr::null() {
             let header = *self.fatbins as *const FatbinHeader;
             self.fatbins = self.fatbins.add(1);
-            Ok(Some(FatbinSubmodule::new(header.as_ref().ok_or(
-                ParseError::NullPointer("FatbinSubmoduleIterator"),
-            )?)))
+            Some(
+                header
+                    .as_ref()
+                    .ok_or(ParseError::NullPointer("FatbinSubmoduleIterator"))
+                    .map(FatbinSubmodule::new),
+            )
         } else {
-            Ok(None)
+            None
         }
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct FatbinFile<'a> {
     pub header: &'a FatbinFileHeader,
 }
@@ -153,35 +174,60 @@ impl<'a> FatbinFile<'a> {
         Self { header }
     }
 
-    pub unsafe fn get_payload(&'a self) -> &'a [u8] {
+    pub fn kind(&self) -> &'static str {
+        match self.header.kind {
+            FatbinFileHeader::HEADER_KIND_PTX => "ptx",
+            FatbinFileHeader::HEADER_KIND_ELF => "elf",
+            _ => "bin",
+        }
+    }
+
+    pub unsafe fn get_non_compressed_payload(self) -> &'a [u8] {
         let start = std::ptr::from_ref(self.header)
             .cast::<u8>()
             .add(self.header.header_size as usize);
         std::slice::from_raw_parts(start, self.header.payload_size as usize)
     }
 
-    pub unsafe fn decompress(&'a self) -> Result<Vec<u8>, FatbinError> {
+    pub unsafe fn get_compressed_payload(self) -> &'a [u8] {
+        let start = std::ptr::from_ref(self.header)
+            .cast::<u8>()
+            .add(self.header.header_size as usize);
+        std::slice::from_raw_parts(start, self.header.compressed_size as usize)
+    }
+
+    pub unsafe fn get_or_decompress_content(self) -> Result<Cow<'a, [u8]>, FatbinError> {
         let mut payload = if self
             .header
             .flags
             .contains(FatbinFileHeaderFlags::CompressedLz4)
         {
-            unsafe { decompress_lz4(self) }?
+            Cow::Owned(unsafe { decompress_lz4(self) }?)
         } else if self
             .header
             .flags
             .contains(FatbinFileHeaderFlags::CompressedZstd)
         {
-            unsafe { decompress_zstd(self) }?
+            Cow::Owned(unsafe { decompress_zstd(self) }?)
         } else {
-            unsafe { self.get_payload().to_vec() }
+            Cow::Borrowed(unsafe { self.get_non_compressed_payload() })
         };
 
-        while payload.last() == Some(&0) {
-            // remove trailing zeros
-            payload.pop();
+        // Remove trailing zeros
+        if self.header.kind == FatbinFileHeader::HEADER_KIND_PTX {
+            match payload {
+                Cow::Borrowed(ref mut slice) => {
+                    while slice.last() == Some(&0) {
+                        *slice = &slice[..slice.len() - 1];
+                    }
+                }
+                Cow::Owned(ref mut vec) => {
+                    while vec.last() == Some(&0) {
+                        vec.pop();
+                    }
+                }
+            }
         }
-
         Ok(payload)
     }
 }
@@ -200,35 +246,40 @@ impl<'a> FatbinFileIterator<'a> {
         Self { file_buffer }
     }
 
-    pub unsafe fn next(&mut self) -> Result<Option<FatbinFile<'a>>, ParseError> {
+    pub unsafe fn next(&mut self) -> Option<Result<FatbinFile<'a>, ParseError>> {
         if self.file_buffer.len() < std::mem::size_of::<FatbinFileHeader>() {
-            return Ok(None);
+            return None;
         }
         let this = &*self.file_buffer.as_ptr().cast::<FatbinFileHeader>();
         let next_element = self
             .file_buffer
-            .split_at_checked(this.header_size as usize + this.padded_payload_size as usize)
+            .split_at_checked(
+                this.header_size as usize
+                    + u32::max(this.payload_size, this.compressed_size) as usize,
+            )
             .map(|(_, next)| next);
         self.file_buffer = next_element.unwrap_or(&[]);
-        ParseError::check_fields(
-            "FATBIN_FILE_HEADER_VERSION_CURRENT",
-            this.version,
-            [FatbinFileHeader::HEADER_VERSION_CURRENT],
-        )?;
-        Ok(Some(FatbinFile::new(this)))
+        Some(
+            ParseError::check_fields(
+                "FATBIN_FILE_HEADER_VERSION_CURRENT",
+                this.version,
+                [FatbinFileHeader::HEADER_VERSION_CURRENT],
+            )
+            .map(|_| FatbinFile::new(this)),
+        )
     }
 }
 
 const MAX_MODULE_DECOMPRESSION_BOUND: usize = 64 * 1024 * 1024;
 
-pub unsafe fn decompress_lz4(file: &FatbinFile) -> Result<Vec<u8>, FatbinError> {
+pub unsafe fn decompress_lz4(file: FatbinFile) -> Result<Vec<u8>, FatbinError> {
     let decompressed_size = usize::max(1024, file.header.uncompressed_payload as usize);
     let mut decompressed_vec = vec![0u8; decompressed_size];
     loop {
         match lz4_sys::LZ4_decompress_safe(
-            file.get_payload().as_ptr() as *const _,
+            file.get_compressed_payload().as_ptr() as *const _,
             decompressed_vec.as_mut_ptr() as *mut _,
-            file.header.payload_size as _,
+            file.header.compressed_size as _,
             decompressed_vec.len() as _,
         ) {
             error if error < 0 => {
@@ -246,9 +297,9 @@ pub unsafe fn decompress_lz4(file: &FatbinFile) -> Result<Vec<u8>, FatbinError> 
     }
 }
 
-pub unsafe fn decompress_zstd(file: &FatbinFile) -> Result<Vec<u8>, FatbinError> {
+pub unsafe fn decompress_zstd(file: FatbinFile) -> Result<Vec<u8>, FatbinError> {
     let mut result = Vec::with_capacity(file.header.uncompressed_payload as usize);
-    let payload = file.get_payload();
+    let payload = file.get_compressed_payload();
     match zstd_safe::decompress(&mut result, payload) {
         Ok(actual_size) => {
             result.truncate(actual_size);

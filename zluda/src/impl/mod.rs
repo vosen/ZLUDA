@@ -15,13 +15,13 @@ pub(super) mod pointer;
 pub(super) mod stream;
 
 #[cfg(debug_assertions)]
-pub(crate) fn unimplemented() -> CUresult {
+pub(crate) fn unimplemented() -> CUerror {
     unimplemented!()
 }
 
 #[cfg(not(debug_assertions))]
-pub(crate) fn unimplemented() -> CUresult {
-    CUresult::ERROR_NOT_SUPPORTED
+pub(crate) fn unimplemented() -> CUerror {
+    CUerror::NOT_SUPPORTED
 }
 
 from_cuda_object!(module::Module, context::Context, library::Library);

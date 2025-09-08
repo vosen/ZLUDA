@@ -1,7 +1,5 @@
-use ::dark_api::fatbin::FatbinFileIterator;
 use ::dark_api::FnFfi;
 use cuda_types::cuda::*;
-use cuda_types::dark_api::FatbinHeader;
 use dark_api::DarkApiState2;
 use log::{CudaFunctionName, ErrorEntry};
 use parking_lot::ReentrantMutex;
@@ -289,9 +287,7 @@ impl DarkApiTrace {
         fn_logger: &mut FnCallLog,
         _result: CUresult,
     ) {
-        fn_logger.try_(|fn_logger| unsafe {
-            trace::record_submodules_from_wrapped_fatbin(*module, fatbinc_wrapper, fn_logger, state)
-        });
+        state.record_new_library(unsafe { *module }, fatbinc_wrapper.cast(), fn_logger)
     }
 
     fn get_module_from_cubin_ext1_post(
@@ -325,9 +321,7 @@ impl DarkApiTrace {
                 observed: UInt::U32(arg5),
             });
         }
-        fn_logger.try_(|fn_logger| unsafe {
-            trace::record_submodules_from_wrapped_fatbin(*module, fatbinc_wrapper, fn_logger, state)
-        });
+        state.record_new_library(unsafe { *module }, fatbinc_wrapper.cast(), fn_logger)
     }
 
     fn get_module_from_cubin_ext2_post(
@@ -361,18 +355,7 @@ impl DarkApiTrace {
                 observed: UInt::U32(arg5),
             });
         }
-        fn_logger.try_(|fn_logger| unsafe {
-            trace::record_submodules(
-                *module,
-                fn_logger,
-                state,
-                FatbinFileIterator::new(
-                    fatbin_header
-                        .as_ref()
-                        .ok_or(ErrorEntry::NullPointer("FatbinHeader"))?,
-                ),
-            )
-        });
+        state.record_new_library(unsafe { *module }, fatbin_header.cast(), fn_logger)
     }
 }
 
@@ -1324,7 +1307,7 @@ pub(crate) fn cuModuleLoadData_Post(
     fn_logger: &mut FnCallLog,
     _result: CUresult,
 ) {
-    state.record_new_module(unsafe { *module }, raw_image, fn_logger)
+    state.record_new_library(unsafe { *module }, raw_image, fn_logger)
 }
 
 #[allow(non_snake_case)]
@@ -1402,19 +1385,7 @@ pub(crate) fn cuModuleLoadFatBinary_Post(
     fn_logger: &mut FnCallLog,
     _result: CUresult,
 ) {
-    fn_logger.try_(|fn_logger| unsafe {
-        trace::record_submodules(
-            *module,
-            fn_logger,
-            state,
-            FatbinFileIterator::new(
-                fatbin_header
-                    .cast::<FatbinHeader>()
-                    .as_ref()
-                    .ok_or(ErrorEntry::NullPointer("FatbinHeader"))?,
-            ),
-        )
-    });
+    state.record_new_library(unsafe { *module }, fatbin_header.cast(), fn_logger)
 }
 
 #[allow(non_snake_case)]
@@ -1427,16 +1398,7 @@ pub(crate) fn cuLibraryGetModule_Post(
 ) {
     match state.libraries.get(&library).copied() {
         None => fn_logger.log(log::ErrorEntry::UnknownLibrary(library)),
-        Some(code) => {
-            fn_logger.try_(|fn_logger| unsafe {
-                trace::record_submodules_from_wrapped_fatbin(
-                    *module,
-                    code.0.cast(),
-                    fn_logger,
-                    state,
-                )
-            });
-        }
+        Some(code) => state.record_new_library(unsafe { *module }, code.0, fn_logger),
     }
 }
 
@@ -1459,5 +1421,5 @@ pub(crate) fn cuLibraryLoadData_Post(
         .insert(unsafe { *library }, trace::CodePointer(code));
     // TODO: this is not correct, but it's enough for now, we just want to
     // save the binary to disk
-    state.record_new_module(unsafe { CUmodule((*library).0.cast()) }, code, fn_logger);
+    state.record_new_library(unsafe { CUmodule((*library).0.cast()) }, code, fn_logger);
 }

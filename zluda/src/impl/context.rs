@@ -102,7 +102,11 @@ pub(crate) fn get_current_device() -> Result<hipDevice_t, CUerror> {
         stack
             .try_borrow()
             .map_err(|_| CUerror::UNKNOWN)
-            .and_then(|s| s.last().ok_or(CUerror::UNKNOWN).map(|(_, dev)| *dev))
+            .and_then(|s| {
+                s.last()
+                    .ok_or(CUerror::INVALID_CONTEXT)
+                    .map(|(_, dev)| *dev)
+            })
     })
 }
 
