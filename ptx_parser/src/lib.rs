@@ -1286,15 +1286,15 @@ impl<Ident> ast::ParsedOperand<Ident> {
         ) -> PResult<Vec<ast::RegOrImmediate<&'input str>>> {
             let (_, r1, _, r2) = (
                 Token::LBrace,
-                ident_or_immediate,
+                reg_or_immediate,
                 Token::Comma,
-                ident_or_immediate,
+                reg_or_immediate,
             )
                 .parse_next(stream)?;
             // TODO: parse .v8 literals
             dispatch! {any;
                 (Token::RBrace, _) => empty.map(|_| vec![r1, r2]),
-                (Token::Comma, _) => (ident_or_immediate, Token::Comma, ident_or_immediate, Token::RBrace).map(|(r3, _, r4, _)| vec![r1, r2, r3, r4]),
+                (Token::Comma, _) => (reg_or_immediate, Token::Comma, reg_or_immediate, Token::RBrace).map(|(r3, _, r4, _)| vec![r1, r2, r3, r4]),
                 _ => fail
             }
             .parse_next(stream)
