@@ -137,6 +137,7 @@ test_ptx!(
     [0x1_00_00_00_00_00_00i64]
 );
 test_ptx!(vector_extract, [1u8, 2u8, 3u8, 4u8], [3u8, 4u8, 1u8, 2u8]);
+test_ptx!(vector_operand, [0x1234u16], [0x12345678]);
 test_ptx!(shr, [-2i32], [-1i32]);
 test_ptx!(shr_oob, [-32768i16], [-1i16]);
 test_ptx!(or, [1u64, 2u64], [3u64]);

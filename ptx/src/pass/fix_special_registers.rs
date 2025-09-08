@@ -198,10 +198,15 @@ pub fn map_operand<T: Copy, Err>(
             Some(ident) => ast::ParsedOperand::Reg(ident),
             None => ast::ParsedOperand::VecMember(ident, member),
         },
-        ast::ParsedOperand::VecPack(idents) => ast::ParsedOperand::VecPack(
-            idents
+        ast::ParsedOperand::VecPack(elements) => ast::ParsedOperand::VecPack(
+            elements
                 .into_iter()
-                .map(|ident| Ok(fn_(ident, None)?.unwrap_or(ident)))
+                .map(|element| match element {
+                    ast::RegOrImmediate::Reg(ident) => {
+                        Ok(ast::RegOrImmediate::Reg(fn_(ident, None)?.unwrap_or(ident)))
+                    }
+                    ast::RegOrImmediate::Imm(imm) => Ok(ast::RegOrImmediate::Imm(imm)),
+                })
                 .collect::<Result<Vec<_>, _>>()?,
         ),
     })

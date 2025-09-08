@@ -1,0 +1,23 @@
+.version 6.5
+.target sm_60
+.address_size 64
+
+.func (.reg .b32 output) default (
+    .reg .b16 input
+)
+{
+    mov.b32 output, {0x5678, input};
+    ret;
+}
+
+// %%% output %%%
+
+.func (.reg .b32 %2) %1 (
+    .reg .b16 %3
+)
+{
+    .b16.reg %4 = zluda.constant.b16 22136;
+    .v2.b16.reg %5 = zluda.repack_vector.composite.b16 %4, %3;
+    mov.b32 %2, %5;
+    ret;
+}
