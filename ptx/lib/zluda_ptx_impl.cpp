@@ -562,4 +562,19 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
     {
         return ballot(value, true);
     }
+
+#define REDUX_SYNC_TYPE_IMPL(reducer, ptx_type, amd_type, cpp_type)                                             \
+    cpp_type __ockl_wfred_##reducer##_##amd_type(cpp_type) __device__;                                          \
+    cpp_type FUNC(redux_sync_##reducer##_##ptx_type)(cpp_type src, uint32_t membermask __attribute__((unused))) \
+    {                                                                                                           \
+        return __ockl_wfred_##reducer##_##amd_type(src);                                                        \
+    }
+
+#define REDUX_SYNC_IMPL(reducer)                      \
+    REDUX_SYNC_TYPE_IMPL(reducer, u32, u32, uint32_t) \
+    REDUX_SYNC_TYPE_IMPL(reducer, s32, i32, int32_t)
+
+    REDUX_SYNC_IMPL(add);
+    REDUX_SYNC_IMPL(min);
+    REDUX_SYNC_IMPL(max);
 }

@@ -3784,6 +3784,23 @@ derive_parser!(
     // .mode: VoteMode = { .all, .any, .uni };
     .mode: VoteMode = { .all, .any };
 
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-redux-sync
+
+    redux.sync.op.type dst, src, membermask => {
+        Instruction::ReduxSync {
+            data: ReduxSyncData { type_, reduction: op },
+            arguments: ReduxSyncArgs { dst, src, src_membermask: membermask }
+        }
+    }
+    .op: Reduction = {.add, .min, .max};
+    .type: ScalarType = {.u32, .s32};
+
+    // redux.sync.op.b32 dst, src, membermask;
+    // .op   = {.and, .or, .xor}
+
+    // redux.sync.op{.abs.}{.NaN}.f32 dst, src, membermask;
+    // .op   = { .min, .max }
+
 );
 
 #[cfg(test)]

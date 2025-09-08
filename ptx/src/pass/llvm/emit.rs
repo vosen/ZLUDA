@@ -526,7 +526,8 @@ impl<'a> MethodEmitContext<'a> {
             | ast::Instruction::Activemask { .. }
             | ast::Instruction::ShflSync { .. }
             | ast::Instruction::Vote { .. }
-            | ast::Instruction::Nanosleep { .. } => return Err(error_unreachable()),
+            | ast::Instruction::Nanosleep { .. }
+            | ast::Instruction::ReduxSync { .. } => return Err(error_unreachable()),
         }
     }
 
