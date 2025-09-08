@@ -377,6 +377,7 @@ fn run_instruction<'input>(
             let name = match data.pred_reduction {
                 ptx_parser::Reduction::And => "bar_red_and_pred",
                 ptx_parser::Reduction::Or => "bar_red_or_pred",
+                _ => return Err(error_unreachable()),
             };
             to_call(
                 resolver,
@@ -398,6 +399,25 @@ fn run_instruction<'input>(
                 fn_declarations,
                 name.into(),
                 ptx_parser::Instruction::Vote { data, arguments },
+            )?
+        }
+        ptx_parser::Instruction::ReduxSync { data, arguments } => {
+            let op = match data.reduction {
+                ptx_parser::Reduction::Add => "add",
+                ptx_parser::Reduction::Min => "min",
+                ptx_parser::Reduction::Max => "max",
+                _ => return Err(error_unreachable()),
+            };
+            let name = format!(
+                "redux_sync_{}_{}",
+                op,
+                data.type_.to_string().replace(".", "")
+            );
+            to_call(
+                resolver,
+                fn_declarations,
+                name.into(),
+                ptx_parser::Instruction::ReduxSync { data, arguments },
             )?
         }
         ptx_parser::Instruction::ShflSync {

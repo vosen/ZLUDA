@@ -1,0 +1,34 @@
+.version 7.0
+.target sm_80
+.address_size 64
+
+.visible .entry redux_sync_op_s32(
+    .param .u64 output
+)
+{
+    .reg .u32          tid;
+    .reg .s32          in;
+    .reg .s32          add_out;
+    .reg .s32          min_out;
+    .reg .s32          max_out;
+    .reg .s32          result;
+    .reg .u64          out_ptr;
+
+    ld.param.u64       out_ptr, [output];
+    mov.u32            tid, %tid.x;
+    sub.s32            in, tid, 5;
+
+    redux.sync.add.s32 add_out, in, 0xFFFFFFFF;
+    redux.sync.min.s32 min_out, in, 0xFFFFFFFF;
+    redux.sync.max.s32 max_out, in, 0xFFFFFFFF;
+
+    add.s32            result, add_out, min_out;
+    add.s32            result, result, max_out;
+    
+    .reg .u64          out_offset;
+    mul.wide.u32       out_offset, tid, 4;
+    add.u64            out_ptr, out_ptr, out_offset;
+    st.s32             [out_ptr], result;
+
+    ret;
+}
