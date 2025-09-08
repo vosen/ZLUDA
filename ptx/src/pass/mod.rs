@@ -224,7 +224,7 @@ fn error_unknown_symbol<T: Into<String>>(symbol: T) -> TranslateError {
 
 #[cfg(debug_assertions)]
 fn error_mismatched_type() -> TranslateError {
-    panic!()
+    panic!("Mismatched type")
 }
 
 #[cfg(not(debug_assertions))]
@@ -613,6 +613,12 @@ struct ConstantDefinition {
     pub value: ast::ImmediateValue,
 }
 
+impl std::fmt::Display for ConstantDefinition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "zluda.constant{} {}", self.typ, self.value)
+    }
+}
+
 pub struct PtrAccess<T> {
     underlying_type: ast::Type,
     state_space: ast::StateSpace,
@@ -627,6 +633,22 @@ struct RepackVectorDetails {
     packed: SpirvWord,
     unpacked: Vec<SpirvWord>,
     relaxed_type_check: bool,
+}
+
+impl std::fmt::Display for RepackVectorDetails {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let extract = if self.is_extract {
+            ".extract"
+        } else {
+            ".composite"
+        };
+        let relaxed = if self.relaxed_type_check {
+            ".relaxed"
+        } else {
+            ""
+        };
+        write!(f, "zluda.repack_vector{}{}{}", extract, relaxed, self.typ)
+    }
 }
 
 struct FunctionPointerDetails {

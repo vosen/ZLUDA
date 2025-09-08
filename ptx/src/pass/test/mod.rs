@@ -6,6 +6,7 @@ use std::{
     path::Path,
 };
 
+mod expand_operands;
 mod insert_implicit_conversions;
 
 #[macro_export]
@@ -202,6 +203,8 @@ fn statement_to_string(
         Statement::Variable(var) => format!("{}", var),
         Statement::Instruction(instr) => format!("{}", instr),
         Statement::Conversion(conv) => format!("{}", conv),
+        Statement::Constant(constant) => format!("{}", constant),
+        Statement::RepackVector(repack) => format!("{}", repack),
         _ => todo!(),
     };
     let mut args_formatter = StatementFormatter::new(resolver);
