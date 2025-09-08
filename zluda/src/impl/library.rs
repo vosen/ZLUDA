@@ -30,7 +30,7 @@ impl LibraryData {
             let lib = CodeLibraryRef::try_load(ptr).map_err(|_| CUerror::INVALID_VALUE)?;
             Ok(LibraryData::Lazy(lib))
         } else {
-            Err(CUerror::NOT_SUPPORTED)
+            Ok(LibraryData::Eager(()))
         }
     }
 }
