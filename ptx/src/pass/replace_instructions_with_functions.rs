@@ -483,7 +483,12 @@ fn run_instruction<'input>(
                 _ => return Err(error_unreachable()),
             };
 
-            to_call(resolver, fn_declarations, format!("ldmatrix_{}_{}{}_{}", shape, number, trans, type_str).into(), i)?
+            to_call(
+                resolver,
+                fn_declarations,
+                format!("ldmatrix_{}_{}{}_{}", shape, number, trans, type_str).into(),
+                i,
+            )?
         }
         i => i,
     })

@@ -3879,9 +3879,6 @@ derive_parser!(
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-ldmatrix
     ldmatrix.sync.aligned.shape.num{.trans}{.ss}.type r, [p] => {
         let data = LdMatrixDetails::new(shape, num, trans, ss, type_);
-        if data.get_loaded_type().is_none() {
-            state.errors.push(PtxError::WrongType);
-        }
         Instruction::LdMatrix {
             data,
             arguments: LdMatrixArgs {

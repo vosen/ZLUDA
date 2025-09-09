@@ -709,7 +709,7 @@ ptx_parser_macros::generate_instruction_type!(
             }
         },
         LdMatrix {
-            type: data.get_loaded_type().unwrap_or(Type::from(data.type_)),
+            type: data.get_loaded_type(),
             data: LdMatrixDetails,
             arguments<T>: {
                 dst: {
@@ -1509,9 +1509,9 @@ impl LdMatrixDetails {
             type_,
         }
     }
-    pub fn get_loaded_type(&self) -> Option<Type> {
+    pub fn get_loaded_type(&self) -> Type {
         let count = self.number.get();
-        Some(Type::Vector(count, ScalarType::B32))
+        Type::Vector(count, ScalarType::B32)
     }
 }
 
