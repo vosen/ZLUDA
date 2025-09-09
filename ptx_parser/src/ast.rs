@@ -695,6 +695,18 @@ ptx_parser_macros::generate_instruction_type!(
                 }
             }
 
+        },
+        ReduxSync {
+            type: Type::Scalar(data.type_),
+            data: ReduxSyncData,
+            arguments<T>: {
+                dst: T,
+                src: T,
+                src_membermask: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::U32) },
+                }
+            }
         }
     }
 );
@@ -1160,6 +1172,35 @@ impl ScalarType {
             ScalarType::E4m3x2 => ScalarKind::Float,
             ScalarType::E5m2x2 => ScalarKind::Float,
             ScalarType::Pred => ScalarKind::Pred,
+        }
+    }
+
+    pub fn packed_type(&self) -> Option<ScalarType> {
+        match self {
+            ScalarType::E4m3x2 => Some(ScalarType::B8),
+            ScalarType::E5m2x2 => Some(ScalarType::B8),
+            ScalarType::F16x2 => Some(ScalarType::F16),
+            ScalarType::BF16x2 => Some(ScalarType::BF16),
+            ScalarType::U16x2 => Some(ScalarType::U16),
+            ScalarType::S16x2 => Some(ScalarType::S16),
+            ScalarType::S16
+            | ScalarType::BF16
+            | ScalarType::U32
+            | ScalarType::S8
+            | ScalarType::S32
+            | ScalarType::Pred
+            | ScalarType::B8
+            | ScalarType::U64
+            | ScalarType::B16
+            | ScalarType::S64
+            | ScalarType::B32
+            | ScalarType::U8
+            | ScalarType::F32
+            | ScalarType::B64
+            | ScalarType::B128
+            | ScalarType::U16
+            | ScalarType::F64
+            | ScalarType::F16 => None,
         }
     }
 }
@@ -1933,8 +1974,13 @@ impl CvtDetails {
                 (RoundingMode::NearestEven, false)
             }
         };
+        let dst_size = if dst.packed_type().is_some() {
+            dst.size_of() / 2
+        } else {
+            dst.size_of()
+        };
         let mode = match (dst.kind(), src.kind()) {
-            (ScalarKind::Float, ScalarKind::Float) => match dst.size_of().cmp(&src.size_of()) {
+            (ScalarKind::Float, ScalarKind::Float) => match dst_size.cmp(&src.size_of()) {
                 Ordering::Less => {
                     let (rounding, is_integer_rounding) = unwrap_rounding();
                     CvtMode::FPTruncate {
@@ -2271,4 +2317,9 @@ impl VoteMode {
             VoteMode::Ballot => ScalarType::B32,
         }
     }
+}
+
+pub struct ReduxSyncData {
+    pub type_: ScalarType,
+    pub reduction: Reduction,
 }
