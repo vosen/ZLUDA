@@ -196,7 +196,8 @@ fn run_instruction<'input>(
         | ast::Instruction::Trap {}
         | ast::Instruction::Xor { .. }
         | ast::Instruction::Vote { .. }
-        | ast::Instruction::ReduxSync { .. } => result.push(Statement::Instruction(instruction)),
+        | ast::Instruction::ReduxSync { .. }
+        | ast::Instruction::LdMatrix { .. } => result.push(Statement::Instruction(instruction)),
         ast::Instruction::Add {
             data:
                 ast::ArithDetails::Float(ast::ArithFloat {

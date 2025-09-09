@@ -1856,6 +1856,12 @@ derive_parser!(
         Ballot
     }
 
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
+    pub enum MatrixShape { }
+
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
+    pub enum MatrixNumber { }
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
     mov{.vec}.type  d, a => {
         Instruction::Mov {
@@ -3870,6 +3876,30 @@ derive_parser!(
     // redux.sync.op{.abs.}{.NaN}.f32 dst, src, membermask;
     // .op   = { .min, .max }
 
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-ldmatrix
+    ldmatrix.sync.aligned.shape.num{.trans}{.ss}.type r, [p] => {
+        let data = LdMatrixDetails::new(shape, num, trans, ss, type_);
+        if data.get_loaded_type().is_none() {
+            state.errors.push(PtxError::WrongType);
+        }
+        Instruction::LdMatrix {
+            data,
+            arguments: LdMatrixArgs {
+                dst: r,
+                src: p
+            }
+        }
+    }
+
+    // ldmatrix.sync.aligned.m8n16.num{.ss}.dst_fmt.src_fmt        r, [p];
+    // ldmatrix.sync.aligned.m16n16.num.trans{.ss}.dst_fmt.src_fmt r, [p];
+
+    .shape: MatrixShape = {.m8n8, .m16n16};
+    .num: MatrixNumber = {.x1, .x2, .x4};
+    .ss: StateSpace = {.shared{::cta}};
+    .type: ScalarType = {.b16, .b8};
+    // .dst_fmt = { .b8x16 };
+    // .src_fmt = { .b6x16_p32, .b4x16_p64 };
 );
 
 #[cfg(test)]
