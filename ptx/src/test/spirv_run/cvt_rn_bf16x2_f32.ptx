@@ -1,0 +1,25 @@
+.version 7.8
+.target sm_90
+.address_size 64
+
+.visible .entry cvt_rn_bf16x2_f32(
+    .param .u64 input,
+    .param .u64 output
+)
+{
+    .reg .u64         in_addr;
+    .reg .u64         out_addr;
+    .reg .f32         in_a;
+    .reg .f32         in_b;
+    .reg .b32         result;
+
+    ld.param.u64      in_addr, [input];
+    ld.param.u64      out_addr, [output];
+
+    ld.f32            in_a, [in_addr];
+    ld.f32            in_b, [in_addr + 4];
+
+    cvt.rn.bf16x2.f32 result, in_a, in_b;
+    st.b32            [out_addr], result;
+    ret;
+}

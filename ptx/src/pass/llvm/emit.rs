@@ -1646,9 +1646,39 @@ impl<'a> MethodEmitContext<'a> {
             }
         };
         let src = self.resolver.value(arguments.src)?;
-        self.resolver.with_result(arguments.dst, |dst| unsafe {
-            llvm_fn(self.builder, src, dst_type, dst)
-        });
+        if let Some(src2) = arguments.src2 {
+            let packed_type = get_scalar_type(
+                self.context,
+                data.to
+                    .packed_type()
+                    .ok_or_else(|| error_mismatched_type())?,
+            );
+            let src2 = self.resolver.value(src2)?;
+            self.resolver.with_result(arguments.dst, |dst| {
+                let vec = unsafe {
+                    LLVMBuildInsertElement(
+                        self.builder,
+                        LLVMGetPoison(dst_type),
+                        llvm_fn(self.builder, src, packed_type, LLVM_UNNAMED.as_ptr()),
+                        LLVMConstInt(LLVMInt32TypeInContext(self.context), 1, false as i32),
+                        LLVM_UNNAMED.as_ptr(),
+                    )
+                };
+                unsafe {
+                    LLVMBuildInsertElement(
+                        self.builder,
+                        vec,
+                        llvm_fn(self.builder, src2, packed_type, LLVM_UNNAMED.as_ptr()),
+                        LLVMConstInt(LLVMInt32TypeInContext(self.context), 0, false as i32),
+                        dst,
+                    )
+                }
+            })
+        } else {
+            self.resolver.with_result(arguments.dst, |dst| unsafe {
+                llvm_fn(self.builder, src, dst_type, dst)
+            })
+        };
         Ok(())
     }
 
