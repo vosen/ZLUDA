@@ -153,3 +153,11 @@ pub(crate) unsafe fn set_d8_async(
 ) -> hipError_t {
     hipMemsetD8Async(dst_device, uc, n, stream)
 }
+
+pub(crate) fn get_allocation_granularity(
+    _granularity: &mut usize,
+    _property: &cuda_types::cuda::CUmemAllocationProp,
+    _option: cuda_types::cuda::CUmemAllocationGranularity_flags,
+) -> CUresult {
+    CUresult::ERROR_NOT_SUPPORTED
+}

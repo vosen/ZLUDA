@@ -165,7 +165,10 @@ from_cuda_nop!(
     nvmlDevice_t,
     nvmlFieldValue_t,
     nvmlGpuFabricInfo_t,
-    cublasLtHandle_t
+    cublasLtHandle_t,
+    CUmemAllocationGranularity_flags,
+    CUmemAllocationProp,
+    CUresult
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,

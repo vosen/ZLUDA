@@ -527,6 +527,14 @@ pub(crate) unsafe fn launch_kernel_ex(
     Ok(())
 }
 
+pub(crate) unsafe fn get_error_string(
+    _error: cuda_types::cuda::CUresult,
+    error_string: &mut *const ::core::ffi::c_char,
+) -> CUresult {
+    *error_string = "\0".as_ptr().cast();
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::i32;
