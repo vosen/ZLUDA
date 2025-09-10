@@ -336,7 +336,7 @@ fn get_input_argument_type(
     state_space: ast::StateSpace,
 ) -> Result<LLVMTypeRef, TranslateError> {
     match state_space {
-        ast::StateSpace::ParamEntry => {
+        ast::StateSpace::ParamEntry | ast::StateSpace::Shared => {
             Ok(unsafe { LLVMPointerTypeInContext(context, get_state_space(state_space)?) })
         }
         ast::StateSpace::Reg => get_type(context, v_type),
@@ -527,7 +527,8 @@ impl<'a> MethodEmitContext<'a> {
             | ast::Instruction::ShflSync { .. }
             | ast::Instruction::Vote { .. }
             | ast::Instruction::Nanosleep { .. }
-            | ast::Instruction::ReduxSync { .. } => return Err(error_unreachable()),
+            | ast::Instruction::ReduxSync { .. }
+            | ast::Instruction::LdMatrix { .. } => return Err(error_unreachable()),
         }
     }
 
@@ -693,6 +694,7 @@ impl<'a> MethodEmitContext<'a> {
                 }
             }
             (ast::Type::Vector(..), ast::Type::Scalar(..))
+            | (ast::Type::Scalar(..), ast::Type::Vector(..))
             | (ast::Type::Scalar(..), ast::Type::Array(..))
             | (ast::Type::Array(..), ast::Type::Scalar(..)) => {
                 let dst_type = get_type(self.context, to_type)?;
@@ -776,11 +778,6 @@ impl<'a> MethodEmitContext<'a> {
     ) -> Result<(), TranslateError> {
         if cfg!(debug_assertions) {
             for (_, space) in data.return_arguments.iter() {
-                if *space != ast::StateSpace::Reg {
-                    panic!()
-                }
-            }
-            for (_, space) in data.input_arguments.iter() {
                 if *space != ast::StateSpace::Reg {
                     panic!()
                 }

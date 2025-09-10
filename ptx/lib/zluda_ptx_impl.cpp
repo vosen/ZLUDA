@@ -9,6 +9,7 @@
 #include <hip/amd_detail/amd_device_functions.h>
 #include <hip/hip_fp8.h>
 
+#define SHARED_SPACE __attribute__((address_space(3)))
 #define CONSTANT_SPACE __attribute__((address_space(4)))
 
 #define FUNC(NAME) __device__ __attribute__((retain)) __zluda_ptx_impl_##NAME
@@ -577,4 +578,50 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
     REDUX_SYNC_IMPL(add);
     REDUX_SYNC_IMPL(min);
     REDUX_SYNC_IMPL(max);
+
+    
+    __device__ inline static uint32_t load_single_matrix(void SHARED_SPACE * lds_address, uint32_t warp_offset)
+    {
+        uint32_t laneid = __zluda_ptx_impl_sreg_laneid();
+        int32_t row_address = __builtin_amdgcn_ds_bpermute((int32_t)(warp_offset + (laneid / 4U)) << 2U, (int32_t)lds_address);
+        uint32_t matrix_cell_address = (uint32_t)row_address + ((laneid % 4) * 4);
+        return *((uint32_t SHARED_SPACE*)matrix_cell_address);
+    }
+
+    __device__ inline static uint32_t load_single_matrix_trans(void SHARED_SPACE * lds_address, uint32_t warp_offset)
+    {
+        uint32_t laneid = __zluda_ptx_impl_sreg_laneid();
+        int32_t row_address_lo = __builtin_amdgcn_ds_bpermute((int32_t)(warp_offset + ((laneid % 4U) * 2)) << 2U, (int32_t)lds_address);
+        uint32_t address_lo = (uint32_t)row_address_lo + ((laneid / 4) * 2);
+        uint16_t lo = *((uint16_t SHARED_SPACE*)address_lo);
+        int32_t row_address_hi = __builtin_amdgcn_ds_bpermute((int32_t)(warp_offset + ((laneid % 4U) * 2) + 1) << 2U, (int32_t)lds_address);
+        uint32_t address_hi = (uint32_t)row_address_hi + ((laneid / 4) * 2);
+        uint16_t hi = *((uint16_t SHARED_SPACE*)address_hi);
+        return std::bit_cast<uint32_t>(ushort2::Native_vec_ { lo, hi });
+    }
+
+    uint2::Native_vec_ FUNC(ldmatrix_m8n8_x2_b16)(void SHARED_SPACE * address)
+    {
+        uint32_t x0 = load_single_matrix(address, 0);
+        uint32_t x1 = load_single_matrix(address, 8);
+        return uint2::Native_vec_{x0, x1};
+    }
+
+    uint4::Native_vec_ FUNC(ldmatrix_m8n8_x4_b16)(void SHARED_SPACE * address)
+    {
+        uint32_t x0 = load_single_matrix(address, 0);
+        uint32_t x1 = load_single_matrix(address, 8);
+        uint32_t x2 = load_single_matrix(address, 16);
+        uint32_t x3 = load_single_matrix(address, 24);
+        return uint4::Native_vec_{x0, x1, x2, x3};
+    }
+
+    uint4::Native_vec_ FUNC(ldmatrix_m8n8_x4_trans_b16)(void SHARED_SPACE * address)
+    {
+        uint32_t x0 = load_single_matrix_trans(address, 0);
+        uint32_t x1 = load_single_matrix_trans(address, 8);
+        uint32_t x2 = load_single_matrix_trans(address, 16);
+        uint32_t x3 = load_single_matrix_trans(address, 24);
+        return uint4::Native_vec_{x0, x1, x2, x3};
+    }
 }

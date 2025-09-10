@@ -1,0 +1,50 @@
+.version 6.5
+.target sm_75
+.address_size 64
+
+.global .u32 values_g[64] = {
+    340, 122, 527, 693, 958, 394, 668, 432, 646, 354, 761, 449, 252, 778, 218, 800,
+    656, 493, 659, 787, 672, 203, 343, 845, 318, 286, 206, 253, 194, 489, 29, 323,
+    7, 619, 998, 930, 773, 749, 172, 465, 937, 96, 88, 621, 909, 298, 283, 286,
+    779, 290, 429, 930, 25, 687, 423, 200, 918, 10, 515, 248, 158, 911, 270, 459
+};
+.shared .align 16 .u32 values_s[64];
+
+.visible .entry ldmatrix(
+	.param .u64 output
+)
+{
+    .reg .u64 	        out_addr;
+    .reg .u32 	        tid;
+    .reg .u64 	        tid_64;
+    .reg .u64           values_g_addr;
+    .reg .b32           values_s_addr;
+    .reg .b64           values_s_addr_64;
+    .reg .u32 	        temp;
+    .reg .u32 	        x<2>;
+
+    ld.param.u64 	    out_addr, [output];
+
+    mov.b32             tid, %tid.x;
+    cvt.u64.u32         tid_64, tid;
+
+    mov.b64             values_g_addr, values_g;
+    mad.lo.u64          values_g_addr, tid_64, 4, values_g_addr;
+    ld.global.b32       temp, [values_g_addr];
+    mov.b32             values_s_addr, values_s;
+    mad.lo.u32          values_s_addr, tid, 4, values_s_addr;
+    st.shared.b32       [values_s_addr], temp;
+    ld.global.b32       temp, [values_g_addr+128];
+    st.shared.b32       [values_s_addr+128], temp;
+
+    mov.b64             values_s_addr_64, values_s;
+    cvta.shared.u64     values_s_addr_64, values_s_addr_64;
+    mad.lo.u64          values_s_addr_64, tid_64, 16, values_s_addr_64;
+    ldmatrix.sync.aligned.m8n8.x2.b16 {x0, x1}, [values_s_addr_64];
+
+    mad.lo.u64          out_addr, tid_64, 8, out_addr;
+    st.u32              [out_addr], x0;
+    st.u32              [out_addr+4], x1;
+
+	ret;
+}
