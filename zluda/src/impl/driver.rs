@@ -362,8 +362,8 @@ fn get_device_hash_info() -> Result<Vec<::dark_api::DeviceHashinfo>, CUerror> {
 
     (0..device_count)
         .map(|dev| {
-            let mut guid = CUuuid_st { bytes: [0; 16] };
-            unsafe { crate::cuDeviceGetUuid(&mut guid, dev)? };
+            let mut guid = unsafe { mem::zeroed() };
+            device::get_uuid_v2(&mut guid, dev)?;
 
             let mut pci_domain = 0;
             device::get_attribute(
@@ -387,7 +387,7 @@ fn get_device_hash_info() -> Result<Vec<::dark_api::DeviceHashinfo>, CUerror> {
             )?;
 
             Ok(::dark_api::DeviceHashinfo {
-                guid,
+                guid: unsafe { mem::transmute(guid) },
                 pci_domain,
                 pci_bus,
                 pci_device,
