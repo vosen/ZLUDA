@@ -466,6 +466,30 @@ fn run_instruction<'input>(
                 i,
             )?
         }
+        i @ ptx_parser::Instruction::LdMatrix { data, .. } => {
+            let shape = match data.shape {
+                ptx_parser::MatrixShape::M8n8 => "m8n8",
+                ptx_parser::MatrixShape::M16n16 => return Err(error_todo()),
+            };
+            let number = match data.number {
+                ptx_parser::MatrixNumber::X2 => "x2",
+                ptx_parser::MatrixNumber::X4 => "x4",
+                ptx_parser::MatrixNumber::X1 => return Err(error_todo()),
+            };
+            let trans = if data.transpose { "_trans" } else { "" };
+            let type_str = match data.type_ {
+                ptx_parser::ScalarType::B16 => "b16",
+                ptx_parser::ScalarType::B8 => return Err(error_todo()),
+                _ => return Err(error_unreachable()),
+            };
+
+            to_call(
+                resolver,
+                fn_declarations,
+                format!("ldmatrix_{}_{}{}_{}", shape, number, trans, type_str).into(),
+                i,
+            )?
+        }
         i => i,
     })
 }

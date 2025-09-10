@@ -3,8 +3,8 @@ use super::{
     StateSpace, VectorPrefix,
 };
 use crate::{
-    FunnelShiftMode, Mul24Control, PtxError, PtxParserState, Reduction, ShiftDirection,
-    ShuffleMode, VoteMode,
+    FunnelShiftMode, MatrixNumber, MatrixShape, Mul24Control, PtxError, PtxParserState, Reduction,
+    ShiftDirection, ShuffleMode, VoteMode,
 };
 use bitflags::bitflags;
 use derive_more::Display;
@@ -705,6 +705,20 @@ ptx_parser_macros::generate_instruction_type!(
                 src_membermask: {
                     repr: T,
                     type: { Type::Scalar(ScalarType::U32) },
+                }
+            }
+        },
+        LdMatrix {
+            type: data.get_loaded_type(),
+            data: LdMatrixDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    relaxed_type_check: true,
+                },
+                src: {
+                    repr: T,
+                    space: { data.state_space },
                 }
             }
         }
@@ -1458,6 +1472,47 @@ pub struct LdDetails {
     pub caching: LdCacheOperator,
     pub typ: Type,
     pub non_coherent: bool,
+}
+
+impl MatrixNumber {
+    fn get(&self) -> u8 {
+        match self {
+            MatrixNumber::X1 => 1,
+            MatrixNumber::X2 => 2,
+            MatrixNumber::X4 => 4,
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct LdMatrixDetails {
+    pub shape: MatrixShape,
+    pub number: MatrixNumber,
+    pub transpose: bool,
+    pub state_space: StateSpace,
+    pub type_: ScalarType,
+}
+
+impl LdMatrixDetails {
+    pub fn new(
+        shape: MatrixShape,
+        number: MatrixNumber,
+        transpose: bool,
+        ss: Option<StateSpace>,
+        type_: ScalarType,
+    ) -> Self {
+        Self {
+            shape,
+            number,
+            transpose,
+            state_space: ss.unwrap_or(StateSpace::Shared),
+            type_,
+        }
+    }
+    pub fn get_loaded_type(&self) -> Type {
+        let count = self.number.get();
+        Type::Vector(count, ScalarType::B32)
+    }
 }
 
 pub struct StData {
