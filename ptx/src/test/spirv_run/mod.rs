@@ -522,6 +522,7 @@ fn test_hip_assert<
         pass::Attributes {
             clock_rate: 2124000,
         },
+        |_| {},
     )
     .unwrap();
     let name = CString::new(name)?;
@@ -542,6 +543,7 @@ fn test_llvm_assert(
         pass::Attributes {
             clock_rate: 2124000,
         },
+        |_| {},
     )
     .unwrap();
     let actual_ll = llvm_ir.llvm_ir.print_module_to_string();
