@@ -186,7 +186,7 @@ fn default_implicit_conversion_space(
             ast::Type::Scalar(ast::ScalarType::B32)
             | ast::Type::Scalar(ast::ScalarType::U32)
             | ast::Type::Scalar(ast::ScalarType::S32) => match instruction_space {
-                ast::StateSpace::Const | ast::StateSpace::Local | ast::StateSpace::Shared => {
+                ast::StateSpace::Local | ast::StateSpace::Shared => {
                     Ok(Some(ConversionKind::BitToPtr))
                 }
                 _ => Err(error_mismatched_type()),

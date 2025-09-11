@@ -339,6 +339,7 @@ test_ptx!(
     [0x8e2da590u32, 0xedeaee14, 0x248a9f70],
     [613065134u32]
 );
+test_ptx!(param_is_addressable, [0xDEAD], [0u64]);
 
 test_ptx!(assertfail);
 // TODO: not yet supported
