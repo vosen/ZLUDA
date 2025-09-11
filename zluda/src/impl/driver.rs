@@ -528,10 +528,48 @@ pub(crate) unsafe fn launch_kernel_ex(
 }
 
 pub(crate) unsafe fn get_error_string(
-    _error: cuda_types::cuda::CUresult,
+    error: cuda_types::cuda::CUresult,
     error_string: &mut *const ::core::ffi::c_char,
 ) -> CUresult {
-    *error_string = "\0".as_ptr().cast();
+    // Map known error codes to error strings
+    *error_string = match error {
+        CUresult::SUCCESS => b"no error\0".as_ptr() as *const i8,
+        CUresult::ERROR_INVALID_VALUE => b"invalid value\0".as_ptr() as *const i8,
+        CUresult::ERROR_OUT_OF_MEMORY => b"out of memory\0".as_ptr() as *const i8,
+        CUresult::ERROR_NOT_INITIALIZED => b"driver not initialized\0".as_ptr() as *const i8,
+        CUresult::ERROR_DEINITIALIZED => b"driver deinitialized\0".as_ptr() as *const i8,
+        CUresult::ERROR_NO_DEVICE => b"no CUDA-capable device is detected\0".as_ptr() as *const i8,
+        CUresult::ERROR_INVALID_DEVICE => b"invalid device\0".as_ptr() as *const i8,
+        CUresult::ERROR_INVALID_IMAGE => b"invalid kernel image\0".as_ptr() as *const i8,
+        CUresult::ERROR_INVALID_CONTEXT => b"invalid context\0".as_ptr() as *const i8,
+        CUresult::ERROR_CONTEXT_ALREADY_CURRENT => b"context already current\0".as_ptr() as *const i8,
+        CUresult::ERROR_MAP_FAILED => b"map failed\0".as_ptr() as *const i8,
+        CUresult::ERROR_UNMAP_FAILED => b"unmap failed\0".as_ptr() as *const i8,
+        CUresult::ERROR_ARRAY_IS_MAPPED => b"array is mapped\0".as_ptr() as *const i8,
+        CUresult::ERROR_ALREADY_MAPPED => b"already mapped\0".as_ptr() as *const i8,
+        CUresult::ERROR_NO_BINARY_FOR_GPU => b"no binary for GPU\0".as_ptr() as *const i8,
+        CUresult::ERROR_ALREADY_ACQUIRED => b"already acquired\0".as_ptr() as *const i8,
+        CUresult::ERROR_NOT_MAPPED => b"not mapped\0".as_ptr() as *const i8,
+        CUresult::ERROR_NOT_SUPPORTED => b"operation not supported\0".as_ptr() as *const i8,
+        CUresult::ERROR_INVALID_SOURCE => b"invalid source\0".as_ptr() as *const i8,
+        CUresult::ERROR_FILE_NOT_FOUND => b"file not found\0".as_ptr() as *const i8,
+        CUresult::ERROR_INVALID_HANDLE => b"invalid handle\0".as_ptr() as *const i8,
+        CUresult::ERROR_NOT_READY => b"not ready\0".as_ptr() as *const i8,
+        CUresult::ERROR_ILLEGAL_ADDRESS => b"illegal address\0".as_ptr() as *const i8,
+        CUresult::ERROR_LAUNCH_OUT_OF_RESOURCES => b"launch out of resources\0".as_ptr() as *const i8,
+        CUresult::ERROR_LAUNCH_TIMEOUT => b"launch timeout\0".as_ptr() as *const i8,
+        CUresult::ERROR_LAUNCH_INCOMPATIBLE_TEXTURING => b"launch incompatible texturing\0".as_ptr() as *const i8,
+        CUresult::ERROR_PEER_ACCESS_ALREADY_ENABLED => b"peer access already enabled\0".as_ptr() as *const i8,
+        CUresult::ERROR_PEER_ACCESS_NOT_ENABLED => b"peer access not enabled\0".as_ptr() as *const i8,
+        CUresult::ERROR_PRIMARY_CONTEXT_ACTIVE => b"primary context active\0".as_ptr() as *const i8,
+        CUresult::ERROR_CONTEXT_IS_DESTROYED => b"context is destroyed\0".as_ptr() as *const i8,
+        CUresult::ERROR_ASSERT => b"device-side assert triggered\0".as_ptr() as *const i8,
+        CUresult::ERROR_TOO_MANY_PEERS => b"too many peers\0".as_ptr() as *const i8,
+        CUresult::ERROR_HOST_MEMORY_ALREADY_REGISTERED => b"host memory already registered\0".as_ptr() as *const i8,
+        CUresult::ERROR_HOST_MEMORY_NOT_REGISTERED => b"host memory not registered\0".as_ptr() as *const i8,
+        CUresult::ERROR_UNKNOWN => b"unknown error\0".as_ptr() as *const i8,
+        _ => b"unknown error\0".as_ptr() as *const i8,
+    };
     Ok(())
 }
 
