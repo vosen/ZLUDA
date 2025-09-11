@@ -152,11 +152,11 @@ fn is_addressable(this: ast::StateSpace) -> bool {
         | ast::StateSpace::Generic
         | ast::StateSpace::Global
         | ast::StateSpace::Local
-        | ast::StateSpace::Shared => true,
+        | ast::StateSpace::Shared
+        | ast::StateSpace::ParamEntry => true,
         ast::StateSpace::Param | ast::StateSpace::Reg => false,
         ast::StateSpace::SharedCluster
         | ast::StateSpace::SharedCta
-        | ast::StateSpace::ParamEntry
         | ast::StateSpace::ParamFunc => todo!(),
     }
 }
@@ -180,7 +180,8 @@ fn default_implicit_conversion_space(
                 | ast::StateSpace::Generic
                 | ast::StateSpace::Const
                 | ast::StateSpace::Local
-                | ast::StateSpace::Shared => Ok(Some(ConversionKind::BitToPtr)),
+                | ast::StateSpace::Shared
+                | ast::StateSpace::Param => Ok(Some(ConversionKind::BitToPtr)),
                 _ => Err(error_mismatched_type()),
             },
             ast::Type::Scalar(ast::ScalarType::B32)
@@ -220,7 +221,7 @@ fn coerces_to_generic(this: ast::StateSpace) -> bool {
         ast::StateSpace::Global
         | ast::StateSpace::Const
         | ast::StateSpace::Local
-        | ptx_parser::StateSpace::SharedCta
+        | ast::StateSpace::SharedCta
         | ast::StateSpace::SharedCluster
         | ast::StateSpace::Shared => true,
         ast::StateSpace::Reg

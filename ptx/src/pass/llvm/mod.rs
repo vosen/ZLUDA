@@ -181,7 +181,10 @@ fn get_state_space(space: ast::StateSpace) -> Result<u32, TranslateError> {
     match space {
         ast::StateSpace::Reg => Ok(PRIVATE_ADDRESS_SPACE),
         ast::StateSpace::Generic => Ok(GENERIC_ADDRESS_SPACE),
-        ast::StateSpace::Param => Err(error_todo()),
+        // This is dodgy, we try our best to convert all .param into either
+        // .param::entry or .local, but we can't always succeed.
+        // In those cases we convert .param into generic address space
+        ast::StateSpace::Param => Ok(GENERIC_ADDRESS_SPACE),
         ast::StateSpace::ParamEntry => Ok(CONSTANT_ADDRESS_SPACE),
         ast::StateSpace::ParamFunc => Err(error_todo()),
         ast::StateSpace::Local => Ok(PRIVATE_ADDRESS_SPACE),
