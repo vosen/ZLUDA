@@ -143,6 +143,12 @@ test_ptx!(shr_oob, [-32768i16], [-1i16]);
 test_ptx!(or, [1u64, 2u64], [3u64]);
 test_ptx!(sub, [2u64], [1u64]);
 test_ptx!(min, [555i32, 444i32], [444i32]);
+test_ptx!(
+    min_f16,
+    [half::f16::NAN, half::f16::from_f64(123.0)],
+    [half::f16::from_f64(123.0)]
+);
+test_ptx!(min_nan_f16);
 test_ptx!(max, [555i32, 444i32], [555i32]);
 test_ptx!(global_array, [0xDEADu32], [1u32]);
 test_ptx!(global_array_f32, [0x0], [0f32]);
