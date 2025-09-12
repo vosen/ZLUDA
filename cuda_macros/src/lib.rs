@@ -313,7 +313,7 @@ fn join(
 pub fn test_cuda(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let fn_ = parse_macro_input!(item as syn::ItemFn);
     let cuda_fn = format_ident!("{}{}", fn_.sig.ident, "_nvidia");
-    let zluda_fn = format_ident!("{}{}", fn_.sig.ident, "_amdgpu");
+    let zluda_fn = format_ident!("{}{}", fn_.sig.ident, "_zluda");
     let fn_name = fn_.sig.ident.clone();
     quote! { 
         #[test]

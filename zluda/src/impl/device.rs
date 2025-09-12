@@ -494,6 +494,10 @@ pub(crate) fn primary_context_release(hip_dev: hipDevice_t) -> CUresult {
     Ok(())
 }
 
+pub(crate) fn primary_context_release_v2(hip_dev: hipDevice_t) -> CUresult {
+    primary_context_release(hip_dev)
+}
+
 pub(crate) fn primary_context_reset(hip_dev: hipDevice_t) -> CUresult {
     let (ctx, _) = get_primary_context(hip_dev)?;
     ctx.with_state_mut(|state| state.reset())?;

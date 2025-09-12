@@ -114,6 +114,13 @@ fn run_statement<'a, 'input>(
             result.push(Statement::Instruction(instruction));
             result.extend(visitor.post.drain(..).map(Statement::Instruction));
         }
+        Statement::Instruction(ast::Instruction::Mov { data, arguments }) => {
+            let instruction = visitor.visit_mov(data, arguments);
+            let instruction = ast::visit_map(instruction, visitor)?;
+            result.extend(visitor.pre.drain(..).map(Statement::Instruction));
+            result.push(Statement::Instruction(instruction));
+            result.extend(visitor.post.drain(..).map(Statement::Instruction));
+        }
         Statement::PtrAccess(ptr_access) => {
             let statement = Statement::PtrAccess(visitor.visit_ptr_access(ptr_access)?);
             let statement = statement.visit_map(visitor)?;
@@ -291,6 +298,39 @@ impl<'a, 'input> InsertMemSSAVisitor<'a, 'input> {
             state_space: new_space,
             ..ptr_access
         })
+    }
+
+    fn visit_mov(
+        &mut self,
+        data: ptx_parser::MovDetails,
+        mut arguments: ptx_parser::MovArgs<SpirvWord>,
+    ) -> ast::Instruction<SpirvWord> {
+        if let Some(remap) = self.variables.get(&arguments.src) {
+            match remap {
+                RemapAction::PreLdPostSt { .. } => {}
+                RemapAction::LDStSpaceChange {
+                    name,
+                    new_space,
+                    old_space,
+                } => {
+                    let generic_var = self
+                        .resolver
+                        .register_unnamed(Some((data.typ.clone(), ast::StateSpace::Reg)));
+                    self.pre.push(ast::Instruction::Cvta {
+                        data: ast::CvtaDetails {
+                            state_space: *new_space,
+                            direction: ast::CvtaDirection::ExplicitToGeneric,
+                        },
+                        arguments: ast::CvtaArgs {
+                            dst: generic_var,
+                            src: *name,
+                        },
+                    });
+                    arguments.src = generic_var;
+                }
+            }
+        }
+        ast::Instruction::Mov { data, arguments }
     }
 
     fn visit_variable(&mut self, var: &mut ast::Variable<SpirvWord>) -> Result<(), TranslateError> {

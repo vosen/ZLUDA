@@ -169,8 +169,9 @@ fn get_scalar_type(context: LLVMContextRef, type_: ast::ScalarType) -> LLVMTypeR
         ast::ScalarType::F32 => unsafe { LLVMFloatTypeInContext(context) },
         ast::ScalarType::F64 => unsafe { LLVMDoubleTypeInContext(context) },
         ast::ScalarType::BF16 => unsafe { LLVMBFloatTypeInContext(context) },
-        ast::ScalarType::U16x2 => todo!(),
-        ast::ScalarType::S16x2 => todo!(),
+        ast::ScalarType::U16x2 | ast::ScalarType::S16x2 => unsafe {
+            LLVMVectorType(LLVMInt16TypeInContext(context), 2)
+        },
         ast::ScalarType::F16x2 => unsafe { LLVMVectorType(LLVMHalfTypeInContext(context), 2) },
         ast::ScalarType::BF16x2 => unsafe { LLVMVectorType(LLVMBFloatTypeInContext(context), 2) },
     }
@@ -180,14 +181,17 @@ fn get_state_space(space: ast::StateSpace) -> Result<u32, TranslateError> {
     match space {
         ast::StateSpace::Reg => Ok(PRIVATE_ADDRESS_SPACE),
         ast::StateSpace::Generic => Ok(GENERIC_ADDRESS_SPACE),
-        ast::StateSpace::Param => Err(TranslateError::Todo("".to_string())),
+        // This is dodgy, we try our best to convert all .param into either
+        // .param::entry or .local, but we can't always succeed.
+        // In those cases we convert .param into generic address space
+        ast::StateSpace::Param => Ok(GENERIC_ADDRESS_SPACE),
         ast::StateSpace::ParamEntry => Ok(CONSTANT_ADDRESS_SPACE),
-        ast::StateSpace::ParamFunc => Err(TranslateError::Todo("".to_string())),
+        ast::StateSpace::ParamFunc => Err(error_todo()),
         ast::StateSpace::Local => Ok(PRIVATE_ADDRESS_SPACE),
         ast::StateSpace::Global => Ok(GLOBAL_ADDRESS_SPACE),
         ast::StateSpace::Const => Ok(CONSTANT_ADDRESS_SPACE),
         ast::StateSpace::Shared => Ok(SHARED_ADDRESS_SPACE),
-        ast::StateSpace::SharedCta => Err(TranslateError::Todo("".to_string())),
-        ast::StateSpace::SharedCluster => Err(TranslateError::Todo("".to_string())),
+        ast::StateSpace::SharedCta => Err(error_todo()),
+        ast::StateSpace::SharedCluster => Err(error_todo()),
     }
 }

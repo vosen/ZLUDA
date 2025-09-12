@@ -892,7 +892,7 @@ fn method_parameter<'a, 'input: 'a>(
             (
                 vector_prefix,
                 scalar_type,
-                opt((Token::DotPtr, Token::DotGlobal)),
+                opt((Token::DotPtr, opt(Token::DotGlobal))),
                 opt(align.verify(|x| x.count_ones() == 1)),
                 ident,
             ),

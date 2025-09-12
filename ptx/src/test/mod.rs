@@ -38,7 +38,7 @@ fn compile_and_assert(ptx_text: &str) -> Result<(), TranslateError> {
     let attributes = pass::Attributes {
         clock_rate: 2124000,
     };
-    crate::to_llvm_module(ast, attributes)?;
+    crate::to_llvm_module(ast, attributes, |_| {})?;
     Ok(())
 }
 

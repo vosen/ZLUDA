@@ -138,7 +138,7 @@ fn compile_from_ptx_and_cache(
     } else {
         ptx_parser::parse_module_unchecked(text)
     };
-    let llvm_module = ptx::to_llvm_module(ast, attributes).map_err(|_| CUerror::UNKNOWN)?;
+    let llvm_module = ptx::to_llvm_module(ast, attributes, |_| {}).map_err(|_| CUerror::UNKNOWN)?;
     let elf_module = comgr::compile_bitcode(
         comgr,
         gcn_arch,

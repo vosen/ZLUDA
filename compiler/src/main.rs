@@ -6,6 +6,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::str;
+use std::time::Instant;
 use std::{env, mem};
 
 mod error;
@@ -57,19 +58,12 @@ fn main_core() -> Result<(), CompilerError> {
 
     let arch: String = match opts.arch {
         Some(s) => s,
-        None => {
-            (|| {
-                let runtime = hip::Runtime::load()?;
-                runtime.init()?;
-                get_gpu_arch(&runtime)
-            })()
-            .unwrap_or_else(|_| DEFAULT_ARCH.to_owned())
-            /*
-            get_gpu_arch(&mut dev_props)
-                .map(String::from)
-                .unwrap_or(DEFAULT_ARCH.to_owned())
-             */
-        }
+        None => (|| {
+            let runtime = hip::Runtime::load()?;
+            runtime.init()?;
+            get_gpu_arch(&runtime)
+        })()
+        .unwrap_or_else(|_| DEFAULT_ARCH.to_owned()),
     };
 
     let ptx = fs::read(&ptx_path).map_err(CompilerError::from)?;
@@ -83,6 +77,7 @@ fn main_core() -> Result<(), CompilerError> {
         write_to_file(bytes, &output_path).unwrap();
     };
 
+    let mut start = Instant::now();
     comgr::compile_bitcode(
         &comgr,
         &arch,
@@ -92,16 +87,21 @@ fn main_core() -> Result<(), CompilerError> {
         Some(&comgr_hook),
     )
     .map_err(CompilerError::from)?;
+    report_pass_time("compile_bitcode", &mut start);
 
     Ok(())
 }
 
 fn ptx_to_llvm(ptx: &str) -> Result<LLVMArtifacts, CompilerError> {
     let ast = ptx_parser::parse_module_checked(ptx).map_err(CompilerError::from)?;
+    let mut start = Instant::now();
     let module = ptx::to_llvm_module(
         ast,
         ptx::Attributes {
             clock_rate: 2124000,
+        },
+        |pass| {
+            report_pass_time(pass, &mut start);
         },
     )
     .map_err(CompilerError::from)?;
@@ -115,6 +115,12 @@ fn ptx_to_llvm(ptx: &str) -> Result<LLVMArtifacts, CompilerError> {
         attributes_bitcode,
         llvm_ir,
     })
+}
+
+fn report_pass_time(pass: &str, start: &mut Instant) {
+    let duration = start.elapsed();
+    println!("Pass {:?} took {:?}", pass, duration);
+    *start = Instant::now();
 }
 
 #[derive(Debug)]

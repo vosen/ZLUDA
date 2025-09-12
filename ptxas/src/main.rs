@@ -42,6 +42,7 @@ fn main() {
         ptx::Attributes {
             clock_rate: clock_rate as u32,
         },
+        |_| {},
     )
     .unwrap();
     let elf_binary = comgr::compile_bitcode(
