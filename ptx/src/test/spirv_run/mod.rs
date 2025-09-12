@@ -345,6 +345,7 @@ test_ptx!(
     [0x8e2da590u32, 0xedeaee14, 0x248a9f70],
     [613065134u32]
 );
+test_ptx!(param_is_addressable, [0xDEAD], [0u64]);
 
 test_ptx!(assertfail);
 // TODO: not yet supported
@@ -562,6 +563,7 @@ fn test_hip_assert<
         pass::Attributes {
             clock_rate: 2124000,
         },
+        |_| {},
     )
     .unwrap();
     let name = CString::new(name)?;
@@ -582,6 +584,7 @@ fn test_llvm_assert(
         pass::Attributes {
             clock_rate: 2124000,
         },
+        |_| {},
     )
     .unwrap();
     let actual_ll = llvm_ir.llvm_ir.print_module_to_string();

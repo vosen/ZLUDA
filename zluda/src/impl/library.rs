@@ -55,12 +55,11 @@ pub(crate) unsafe fn load_data(
     _jit_options_values: Option<&mut *mut ::core::ffi::c_void>,
     _num_jit_options: ::core::ffi::c_uint,
     library_options: Option<&mut CUlibraryOption>,
-    library_option_values: Option<&mut *mut ::core::ffi::c_void>,
+    _library_option_values: Option<&mut *mut ::core::ffi::c_void>,
     num_library_options: ::core::ffi::c_uint,
 ) -> CUresult {
     let global_state = driver::global_state()?;
-    let options =
-        LibraryOptions::load(library_options, library_option_values, num_library_options)?;
+    let options = LibraryOptions::load(library_options, num_library_options)?;
     let library = Library {
         data: LibraryData::new(code as *mut c_void, options.preserve_binary)?,
         modules: vec![OnceLock::new(); global_state.devices.len()],
@@ -76,7 +75,6 @@ struct LibraryOptions {
 impl LibraryOptions {
     unsafe fn load(
         library_options: Option<&mut CUlibraryOption>,
-        library_option_values: Option<&mut *mut ::core::ffi::c_void>,
         num_library_options: ::core::ffi::c_uint,
     ) -> Result<Self, CUerror> {
         if num_library_options == 0 {
@@ -84,28 +82,17 @@ impl LibraryOptions {
                 preserve_binary: false,
             });
         }
-        let (library_options, library_option_values) =
-            match (library_options, library_option_values) {
-                (Some(library_options), Some(library_option_values)) => {
-                    let library_options =
-                        std::slice::from_raw_parts(library_options, num_library_options as usize);
-                    let library_option_values = std::slice::from_raw_parts(
-                        library_option_values,
-                        num_library_options as usize,
-                    );
-                    (library_options, library_option_values)
-                }
-                _ => return Err(CUerror::INVALID_VALUE),
-            };
+        let library_options = match library_options {
+            Some(library_options) => {
+                std::slice::from_raw_parts(library_options, num_library_options as usize)
+            }
+            _ => return Err(CUerror::INVALID_VALUE),
+        };
         let mut preserve_binary = false;
-        for (option, value) in library_options
-            .iter()
-            .copied()
-            .zip(library_option_values.iter())
-        {
+        for option in library_options.iter().copied() {
             match option {
                 CUlibraryOption::CU_LIBRARY_BINARY_IS_PRESERVED => {
-                    preserve_binary = *(value.cast::<bool>());
+                    preserve_binary = true;
                 }
                 _ => return Err(CUerror::NOT_SUPPORTED),
             }
@@ -156,10 +143,7 @@ mod tests {
     use crate::tests::CudaApi;
     use cuda_macros::test_cuda;
     use cuda_types::cuda::{CUlibraryOption, CUresult, CUresultConsts};
-    use std::{
-        ffi::{c_void, CStr},
-        mem, ptr,
-    };
+    use std::{ffi::CStr, mem, ptr};
 
     #[test_cuda]
     unsafe fn library_loads_without_context(api: impl CudaApi) {
@@ -191,7 +175,7 @@ mod tests {
             ptr::null_mut(),
             0,
             [CUlibraryOption::CU_LIBRARY_BINARY_IS_PRESERVED].as_mut_ptr(),
-            [(&true as *const bool) as *mut c_void].as_mut_ptr(),
+            ptr::null_mut(),
             1,
         );
         assert_eq!(

@@ -704,7 +704,7 @@ impl<'a> MethodEmitContext<'a> {
                 });
                 Ok(())
             }
-            _ => todo!(),
+            _ => return Err(error_todo()),
         }
     }
 
@@ -2455,7 +2455,7 @@ impl<'a> MethodEmitContext<'a> {
             (control >> 12) & 0b1111,
         ];
         if components.iter().any(|&c| c > 7) {
-            return Err(TranslateError::Todo("".to_string()));
+            return Err(error_todo());
         }
         let u32_type = get_scalar_type(self.context, ast::ScalarType::U32);
         let v4u8_type = get_type(self.context, &ast::Type::Vector(4, ast::ScalarType::U8))?;
