@@ -166,7 +166,9 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
             None => return CUresult::ERROR_INVALID_VALUE,
         };
 
-        device::primary_context_retain(pctx, hip_dev)
+        let (_, cu_ctx) = device::get_primary_context(hip_dev)?;
+        *pctx = cu_ctx;
+        Ok(())
     }
 
     unsafe extern "system" fn get_module_from_cubin_ext1(
@@ -362,8 +364,8 @@ fn get_device_hash_info() -> Result<Vec<::dark_api::DeviceHashinfo>, CUerror> {
 
     (0..device_count)
         .map(|dev| {
-            let mut guid = CUuuid_st { bytes: [0; 16] };
-            unsafe { crate::cuDeviceGetUuid(&mut guid, dev)? };
+            let mut guid = unsafe { mem::zeroed() };
+            device::get_uuid_v2(&mut guid, dev)?;
 
             let mut pci_domain = 0;
             device::get_attribute(
@@ -387,7 +389,7 @@ fn get_device_hash_info() -> Result<Vec<::dark_api::DeviceHashinfo>, CUerror> {
             )?;
 
             Ok(::dark_api::DeviceHashinfo {
-                guid,
+                guid: unsafe { mem::transmute(guid) },
                 pci_domain,
                 pci_bus,
                 pci_device,
@@ -525,8 +527,57 @@ pub(crate) unsafe fn launch_kernel_ex(
     Ok(())
 }
 
+pub(crate) unsafe fn get_error_string(
+    error: cuda_types::cuda::CUresult,
+    error_string: &mut *const ::core::ffi::c_char,
+) -> CUresult {
+    *error_string = match error {
+        CUresult::SUCCESS => c"no error".as_ptr(),
+        CUresult::ERROR_INVALID_VALUE => c"invalid value".as_ptr(),
+        CUresult::ERROR_OUT_OF_MEMORY => c"out of memory".as_ptr(),
+        CUresult::ERROR_NOT_INITIALIZED => c"driver not initialized".as_ptr(),
+        CUresult::ERROR_DEINITIALIZED => c"driver deinitialized".as_ptr(),
+        CUresult::ERROR_NO_DEVICE => c"no CUDA-capable device is detected".as_ptr(),
+        CUresult::ERROR_INVALID_DEVICE => c"invalid device".as_ptr(),
+        CUresult::ERROR_INVALID_IMAGE => c"invalid kernel image".as_ptr(),
+        CUresult::ERROR_INVALID_CONTEXT => c"invalid context".as_ptr(),
+        CUresult::ERROR_CONTEXT_ALREADY_CURRENT => c"context already current".as_ptr(),
+        CUresult::ERROR_MAP_FAILED => c"map failed".as_ptr(),
+        CUresult::ERROR_UNMAP_FAILED => c"unmap failed".as_ptr(),
+        CUresult::ERROR_ARRAY_IS_MAPPED => c"array is mapped".as_ptr(),
+        CUresult::ERROR_ALREADY_MAPPED => c"already mapped".as_ptr(),
+        CUresult::ERROR_NO_BINARY_FOR_GPU => c"no binary for GPU".as_ptr(),
+        CUresult::ERROR_ALREADY_ACQUIRED => c"already acquired".as_ptr(),
+        CUresult::ERROR_NOT_MAPPED => c"not mapped".as_ptr(),
+        CUresult::ERROR_NOT_SUPPORTED => c"operation not supported".as_ptr(),
+        CUresult::ERROR_INVALID_SOURCE => c"invalid source".as_ptr(),
+        CUresult::ERROR_FILE_NOT_FOUND => c"file not found".as_ptr(),
+        CUresult::ERROR_INVALID_HANDLE => c"invalid handle".as_ptr(),
+        CUresult::ERROR_NOT_READY => c"not ready".as_ptr(),
+        CUresult::ERROR_ILLEGAL_ADDRESS => c"illegal address".as_ptr(),
+        CUresult::ERROR_LAUNCH_OUT_OF_RESOURCES => c"launch out of resources".as_ptr(),
+        CUresult::ERROR_LAUNCH_TIMEOUT => c"launch timeout".as_ptr(),
+        CUresult::ERROR_LAUNCH_INCOMPATIBLE_TEXTURING => c"launch incompatible texturing".as_ptr(),
+        CUresult::ERROR_PEER_ACCESS_ALREADY_ENABLED => c"peer access already enabled".as_ptr(),
+        CUresult::ERROR_PEER_ACCESS_NOT_ENABLED => c"peer access not enabled".as_ptr(),
+        CUresult::ERROR_PRIMARY_CONTEXT_ACTIVE => c"primary context active".as_ptr(),
+        CUresult::ERROR_CONTEXT_IS_DESTROYED => c"context is destroyed".as_ptr(),
+        CUresult::ERROR_ASSERT => c"device-side assert triggered".as_ptr(),
+        CUresult::ERROR_TOO_MANY_PEERS => c"too many peers".as_ptr(),
+        CUresult::ERROR_HOST_MEMORY_ALREADY_REGISTERED => {
+            c"host memory already registered".as_ptr()
+        }
+        CUresult::ERROR_HOST_MEMORY_NOT_REGISTERED => c"host memory not registered".as_ptr(),
+        CUresult::ERROR_UNKNOWN => c"unknown error".as_ptr(),
+        _ => c"error".as_ptr(),
+    };
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
+    use std::i32;
+
     use crate::r#impl::driver::AllocationInfo;
     use crate::tests::CudaApi;
     use cuda_macros::test_cuda;
@@ -570,5 +621,35 @@ mod tests {
             );
         }
         assert_eq!(alloc_info.get_offset_and_info(0x2000 + 8), None);
+    }
+
+    #[test_cuda]
+    fn primary_context_is_inactive_on_init(api: impl CudaApi) {
+        api.cuInit(0);
+        let mut flags = u32::MAX;
+        let mut active = i32::MAX;
+        api.cuDevicePrimaryCtxGetState(0, &mut flags, &mut active);
+        assert_eq!(flags, 0);
+        assert_eq!(active, 0);
+    }
+
+    #[test_cuda]
+    unsafe fn cudart_interface_fn2_creates_inactive_primary_ctx(api: impl CudaApi) {
+        api.cuInit(0);
+        let mut table_ptr = std::ptr::null();
+        api.cuGetExportTable(&mut table_ptr, &dark_api::cuda::CudartInterface::GUID);
+        let cuda_rt_iface = dark_api::cuda::CudartInterface::new(table_ptr);
+        let mut dark_ctx = std::mem::zeroed();
+        cuda_rt_iface
+            .cudart_interface_fn2(&mut dark_ctx, 0)
+            .unwrap();
+        let mut flags = u32::MAX;
+        let mut active = i32::MAX;
+        api.cuDevicePrimaryCtxGetState(0, &mut flags, &mut active);
+        assert_eq!(flags, 0);
+        assert_eq!(active, 0);
+        let mut primary_ctx = std::mem::zeroed();
+        api.cuDevicePrimaryCtxRetain(&mut primary_ctx, 0);
+        assert_eq!(dark_ctx.0, primary_ctx.0);
     }
 }

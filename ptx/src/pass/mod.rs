@@ -60,31 +60,48 @@ pub struct Attributes {
 pub fn to_llvm_module<'input>(
     ast: ast::Module<'input>,
     attributes: Attributes,
+    mut on_pass_end: impl FnMut(&str),
 ) -> Result<Module, TranslateError> {
     let mut flat_resolver = GlobalStringIdentResolver2::<'input>::new(SpirvWord(1));
     let mut scoped_resolver = ScopedResolver::new(&mut flat_resolver);
     let sreg_map = SpecialRegistersMap::new(&mut scoped_resolver)?;
     let directives = normalize_identifiers2::run(&mut scoped_resolver, ast.directives)?;
+    on_pass_end("normalize_identifiers2");
     let directives = replace_known_functions::run(&mut flat_resolver, directives);
+    on_pass_end("replace_known_functions");
     let directives = normalize_predicates2::run(&mut flat_resolver, directives)?;
+    on_pass_end("normalize_predicates2");
     let directives = resolve_function_pointers::run(directives)?;
+    on_pass_end("resolve_function_pointers");
     let directives = fix_special_registers::run(&mut flat_resolver, &sreg_map, directives)?;
+    on_pass_end("fix_special_registers");
     let directives = expand_operands::run(&mut flat_resolver, directives)?;
+    on_pass_end("expand_operands");
     let directives = insert_post_saturation::run(&mut flat_resolver, directives)?;
+    on_pass_end("insert_post_saturation");
     let directives = deparamize_functions::run(&mut flat_resolver, directives)?;
+    on_pass_end("deparamize_functions");
     let directives =
         replace_instructions_with_functions_fp_required::run(&mut flat_resolver, directives)?;
+    on_pass_end("replace_instructions_with_functions_fp_required");
     let directives = normalize_basic_blocks::run(&mut flat_resolver, directives)?;
+    on_pass_end("normalize_basic_blocks");
     let directives = remove_unreachable_basic_blocks::run(directives)?;
+    on_pass_end("remove_unreachable_basic_blocks");
     let directives = instruction_mode_to_global_mode::run(&mut flat_resolver, directives)?;
+    on_pass_end("instruction_mode_to_global_mode");
     let directives = insert_explicit_load_store::run(&mut flat_resolver, directives)?;
+    on_pass_end("insert_explicit_load_store");
     let directives = insert_implicit_conversions2::run(&mut flat_resolver, directives)?;
+    on_pass_end("insert_implicit_conversions2");
     let directives = replace_instructions_with_functions::run(&mut flat_resolver, directives)?;
+    on_pass_end("replace_instructions_with_functions");
     let directives = hoist_globals::run(directives)?;
-
+    on_pass_end("hoist_globals");
     let context = llvm::Context::new();
     let llvm_ir = llvm::emit::run(&context, flat_resolver, directives)?;
     let attributes_ir = llvm::attributes::run(&context, attributes)?;
+    on_pass_end("emit_llvm");
     Ok(Module {
         llvm_ir,
         attributes_ir,
