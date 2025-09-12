@@ -24,8 +24,8 @@ define amdgpu_kernel void @min(ptr addrspace(4) byref(i64) %"36", ptr addrspace(
   store i32 %"47", ptr addrspace(5) %"41", align 4
   %"49" = load i32, ptr addrspace(5) %"40", align 4
   %"50" = load i32, ptr addrspace(5) %"41", align 4
-  %"48" = call i32 @llvm.smin.i32(i32 %"49", i32 %"50")
-  store i32 %"48", ptr addrspace(5) %"40", align 4
+  %2 = call i32 @llvm.smin.i32(i32 %"49", i32 %"50")
+  store i32 %2, ptr addrspace(5) %"40", align 4
   %"51" = load i64, ptr addrspace(5) %"39", align 8
   %"52" = load i32, ptr addrspace(5) %"40", align 4
   %"55" = inttoptr i64 %"51" to ptr
@@ -36,5 +36,5 @@ define amdgpu_kernel void @min(ptr addrspace(4) byref(i64) %"36", ptr addrspace(
 ; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
 declare i32 @llvm.smin.i32(i32, i32) #1
 
-attributes #0 = { "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="preserve-sign" "denormal-fp-math-f32"="preserve-sign" "no-trapping-math"="true" "uniform-work-group-size"="true" }
+attributes #0 = { "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="preserve-sign" "denormal-fp-math-f32"="preserve-sign" "no-trapping-math"="true" "uniform-work-group-size"="true" }
 attributes #1 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
