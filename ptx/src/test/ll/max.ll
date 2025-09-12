@@ -24,8 +24,8 @@ define amdgpu_kernel void @max(ptr addrspace(4) byref(i64) %"36", ptr addrspace(
   store i32 %"47", ptr addrspace(5) %"41", align 4
   %"49" = load i32, ptr addrspace(5) %"40", align 4
   %"50" = load i32, ptr addrspace(5) %"41", align 4
-  %"48" = call i32 @llvm.smax.i32(i32 %"49", i32 %"50")
-  store i32 %"48", ptr addrspace(5) %"40", align 4
+  %2 = call i32 @llvm.smax.i32(i32 %"49", i32 %"50")
+  store i32 %2, ptr addrspace(5) %"40", align 4
   %"51" = load i64, ptr addrspace(5) %"39", align 8
   %"52" = load i32, ptr addrspace(5) %"40", align 4
   %"55" = inttoptr i64 %"51" to ptr

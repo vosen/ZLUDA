@@ -26,8 +26,8 @@ define amdgpu_kernel void @min_f16(ptr addrspace(4) byref(i64) %"36", ptr addrsp
   store half %"47", ptr addrspace(5) %"41", align 2
   %"49" = load half, ptr addrspace(5) %"40", align 2
   %"50" = load half, ptr addrspace(5) %"41", align 2
-  %"48" = call half @llvm.minnum.f16(half %"49", half %"50")
-  store half %"48", ptr addrspace(5) %"40", align 2
+  %2 = call half @llvm.minnum.f16(half %"49", half %"50")
+  store half %2, ptr addrspace(5) %"40", align 2
   %"51" = load i64, ptr addrspace(5) %"39", align 8
   %"52" = load half, ptr addrspace(5) %"40", align 2
   %"57" = inttoptr i64 %"51" to ptr

@@ -28,8 +28,8 @@ define amdgpu_kernel void @fmax(ptr addrspace(4) byref(i64) %"38", ptr addrspace
   store half %"51", ptr addrspace(5) %"43", align 2
   %"53" = load half, ptr addrspace(5) %"43", align 2
   %"54" = load half, ptr addrspace(5) %"42", align 2
-  %"52" = call half @llvm.maxnum.f16(half %"53", half %"54")
-  store half %"52", ptr addrspace(5) %"44", align 2
+  %2 = call half @llvm.maxnum.f16(half %"53", half %"54")
+  store half %2, ptr addrspace(5) %"44", align 2
   %"55" = load i64, ptr addrspace(5) %"41", align 8
   %"56" = load half, ptr addrspace(5) %"44", align 2
   %"61" = inttoptr i64 %"55" to ptr

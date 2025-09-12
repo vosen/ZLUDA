@@ -2305,8 +2305,6 @@ impl<'a> MethodEmitContext<'a> {
                 )
             });
         } else {
-            let name = self.resolver.get_or_add(arguments.dst);
-            unsafe { LLVMSetValueName2(min, name.as_ptr().cast(), name.len()) };
             self.resolver.register(arguments.dst, min);
         }
         Ok(())
@@ -2328,7 +2326,7 @@ impl<'a> MethodEmitContext<'a> {
         let a = self.resolver.value(arguments.src1)?;
         let b = self.resolver.value(arguments.src2)?;
 
-        let min = self.emit_intrinsic(
+        let max = self.emit_intrinsic(
             unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
             None,
             Some(&data.type_().into()),
@@ -2353,14 +2351,12 @@ impl<'a> MethodEmitContext<'a> {
                     self.builder,
                     is_nan,
                     LLVMConstReal(get_scalar_type(self.context, type_), f64::NAN),
-                    min,
+                    max,
                     dst,
                 )
             });
         } else {
-            let name = self.resolver.get_or_add(arguments.dst);
-            unsafe { LLVMSetValueName2(min, name.as_ptr().cast(), name.len()) };
-            self.resolver.register(arguments.dst, min);
+            self.resolver.register(arguments.dst, max);
         }
         Ok(())
     }
