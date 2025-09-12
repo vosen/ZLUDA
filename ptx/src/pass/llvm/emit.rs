@@ -149,6 +149,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                 llvm_ftz(method.flush_to_zero_f16f64),
             );
         }
+        self.emit_fn_attribute(fn_, "amdgpu-ieee", "false");
         for (i, param) in method.input_arguments.iter().enumerate() {
             let value = unsafe { LLVMGetParam(fn_, i as u32) };
             let name = self.resolver.get_or_add(param.name);
