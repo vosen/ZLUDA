@@ -29,6 +29,10 @@ fn main() {
         &["..", "ext", "hip_runtime-sys", "src", "lib.rs"],
     );
     generate_rocblas(&crate_root, &["..", "ext", "rocblas-sys", "src", "lib.rs"]);
+    generate_hiplaslt(
+        &crate_root,
+        &["..", "ext", "hipblaslt-sys", "src", "lib.rs"],
+    );
     generate_rocm_smi(&crate_root, &["..", "ext", "rocm_smi-sys", "src", "lib.rs"]);
     let cuda_functions = generate_cuda(&crate_root);
     generate_process_address_table(&crate_root, cuda_functions);
@@ -172,7 +176,7 @@ fn generate_cufft(crate_root: &PathBuf) {
         new_error_type: "cufftError_t",
         error_prefix: ("CUFFT_", "ERROR_"),
         success: ("CUFFT_SUCCESS", "SUCCESS"),
-        hip_type: None,
+        hip_types: vec![],
     };
     generate_types_library(
         Some(&result_options),
@@ -185,6 +189,7 @@ fn generate_cufft(crate_root: &PathBuf) {
     generate_display_perflib(
         Some(&result_options),
         &crate_root,
+        None,
         &["..", "format", "src", "format_generated_fft.rs"],
         &["cuda_types", "cufft"],
         &module,
@@ -239,7 +244,7 @@ fn generate_cusparse(crate_root: &PathBuf) {
         new_error_type: "cusparseError_t",
         error_prefix: ("CUSPARSE_STATUS_", "ERROR_"),
         success: ("CUSPARSE_STATUS_SUCCESS", "SUCCESS"),
-        hip_type: None,
+        hip_types: vec![],
     };
     generate_types_library(
         Some(&result_options),
@@ -252,6 +257,7 @@ fn generate_cusparse(crate_root: &PathBuf) {
     generate_display_perflib(
         Some(&result_options),
         &crate_root,
+        None,
         &["..", "format", "src", "format_generated_sparse.rs"],
         &["cuda_types", "cusparse"],
         &module,
@@ -277,7 +283,7 @@ fn generate_cudnn(crate_root: &PathBuf) {
         new_error_type: "cudnnError_",
         error_prefix: ("CUDNN_STATUS_", "ERROR_"),
         success: ("CUDNN_STATUS_SUCCESS", "SUCCESS"),
-        hip_type: None,
+        hip_types: vec![],
     };
     let cudnn9_module: syn::File = syn::parse_str(&cudnn9).unwrap();
     let cudnn9_types = generate_types_library_impl(Some(&result_options), &cudnn9_module);
@@ -322,6 +328,7 @@ fn generate_cudnn(crate_root: &PathBuf) {
     generate_display_perflib(
         Some(&result_options),
         &crate_root,
+        None,
         &["..", "format", "src", "format_generated_dnn9.rs"],
         &["cuda_types", "cudnn9"],
         &cudnn9_module,
@@ -680,7 +687,10 @@ fn generate_cublas(crate_root: &PathBuf) {
         new_error_type: "cublasError_t",
         error_prefix: ("CUBLAS_STATUS_", "ERROR_"),
         success: ("CUBLAS_STATUS_SUCCESS", "SUCCESS"),
-        hip_type: Some(syn::parse_str("rocblas_sys::rocblas_error").unwrap()),
+        hip_types: vec![
+            syn::parse_str("rocblas_sys::rocblas_error").unwrap(),
+            syn::parse_str("hipblaslt_sys::hipblasLtError").unwrap(),
+        ],
     };
     generate_types_library(
         Some(&result_options),
@@ -693,6 +703,7 @@ fn generate_cublas(crate_root: &PathBuf) {
     generate_display_perflib(
         Some(&result_options),
         &crate_root,
+        None,
         &["..", "format", "src", "format_generated_blas.rs"],
         &["cuda_types", "cublas"],
         &module,
@@ -717,7 +728,7 @@ fn remove_type(module: &mut syn::File, type_name: &str) {
 fn generate_cublaslt(crate_root: &PathBuf) {
     let cublaslt_header = new_builder()
         .header("/usr/local/cuda/include/cublasLt.h")
-        .allowlist_type("^cublas.*")
+        .allowlist_type("^cublasLt.*")
         .allowlist_function("^cublasLt.*")
         .allowlist_var("^CUBLASLT_.*")
         .must_use_type("cublasStatus_t")
@@ -749,8 +760,7 @@ fn generate_cublaslt(crate_root: &PathBuf) {
         cublaslt_internal_header,
     )
     .unwrap();
-    let mut module_blas: syn::File = syn::parse_str(&cublaslt_header).unwrap();
-    remove_type(&mut module_blas, "cublasStatus_t");
+    let module_blas: syn::File = syn::parse_str(&cublaslt_header).unwrap();
     generate_functions(
         &crate_root,
         "cublaslt",
@@ -768,6 +778,7 @@ fn generate_cublaslt(crate_root: &PathBuf) {
     generate_display_perflib(
         None,
         &crate_root,
+        Some(LibraryOverride::CuBlasLt),
         &["..", "format", "src", "format_generated_blaslt.rs"],
         &["cuda_types", "cublaslt"],
         &module_blas,
@@ -775,6 +786,7 @@ fn generate_cublaslt(crate_root: &PathBuf) {
     generate_display_perflib(
         None,
         &crate_root,
+        Some(LibraryOverride::CuBlasLt),
         &["..", "format", "src", "format_generated_blaslt_internal.rs"],
         &["cuda_types", "cublaslt"],
         &module_blaslt_internal,
@@ -816,7 +828,7 @@ fn generate_cuda(crate_root: &PathBuf) -> Vec<Ident> {
         new_error_type: "CUerror",
         error_prefix: ("CUDA_ERROR_", "ERROR_"),
         success: ("CUDA_SUCCESS", "SUCCESS"),
-        hip_type: Some(syn::parse_str("hip_runtime_sys::hipErrorCode_t").unwrap()),
+        hip_types: vec![syn::parse_str("hip_runtime_sys::hipErrorCode_t").unwrap()],
     };
     generate_types_cuda(
         &result_options,
@@ -862,7 +874,7 @@ fn generate_ml(crate_root: &PathBuf) {
         new_error_type: "nvmlError_t",
         error_prefix: ("NVML_ERROR_", "ERROR_"),
         success: ("NVML_SUCCESS", "SUCCESS"),
-        hip_type: None,
+        hip_types: vec![],
     };
     let suffix =
 "#[cfg(unix)]
@@ -893,6 +905,7 @@ impl From<rocm_smi_sys::rsmi_error> for nvmlError_t {
     generate_display_perflib(
         Some(&result_options),
         &crate_root,
+        None,
         &["..", "format", "src", "format_generated_nvml.rs"],
         &["cuda_types", "nvml"],
         &module,
@@ -1002,7 +1015,7 @@ fn generate_hip_runtime(output: &PathBuf, path: &[&str]) {
         new_error_type: "hipErrorCode_t",
         error_prefix: ("hipError", "Error"),
         success: ("hipSuccess", "Success"),
-        hip_type: None,
+        hip_types: vec![],
     });
     module.items = converter.convert(module.items).collect::<Vec<Item>>();
     converter.flush(&mut module.items);
@@ -1044,7 +1057,7 @@ fn generate_rocblas(output: &PathBuf, path: &[&str]) {
         new_error_type: "rocblas_error",
         error_prefix: ("rocblas_status_", "error_"),
         success: ("rocblas_status_success", "success"),
-        hip_type: None,
+        hip_types: vec![],
     };
     let mut converter = ConvertIntoRustResult::new(result_options);
     module.items = converter
@@ -1069,6 +1082,60 @@ fn generate_rocblas(output: &PathBuf, path: &[&str]) {
     write_rust_to_file(output, text)
 }
 
+fn generate_hiplaslt(output: &PathBuf, path: &[&str]) {
+    let rocblas_header = new_builder()
+        .header("/opt/rocm/include/hipblaslt/hipblaslt.h")
+        .allowlist_type("^hipblasLt.*")
+        .allowlist_type("hipblasOperation_t")
+        .allowlist_function("^hipblasLt.*")
+        .allowlist_var("^hipblasLt.*")
+        .must_use_type("hipblasStatus_t")
+        .constified_enum("hipblasStatus_t")
+        .new_type_alias("^hipblasLtHandle_t$")
+        .new_type_alias("^hipblasLtMatmulDesc_t$")
+        .new_type_alias("^hipblasLtMatmulPreference_t$")
+        .new_type_alias("^hipblasLtMatrixLayout_t$")
+        .clang_args(["-I/opt/rocm/include", "-D__HIP_PLATFORM_AMD__", "-x", "c++"])
+        .generate()
+        .unwrap()
+        .to_string();
+    let mut module: syn::File = syn::parse_str(&rocblas_header).unwrap();
+    remove_type(&mut module, "hipStream_t");
+    remove_type(&mut module, "ihipStream_t");
+    let result_options = ConvertIntoRustResultOptions {
+        type_: "hipblasStatus_t",
+        underlying_type: "hipblasStatus_t",
+        new_error_type: "hipblasLtError",
+        error_prefix: ("HIPBLAS_STATUS_", "ERROR_"),
+        success: ("HIPBLAS_STATUS_SUCCESS", "SUCCESS"),
+        // TODO: ?
+        hip_types: vec![],
+    };
+    let mut converter = ConvertIntoRustResult::new(result_options);
+    module.items = converter
+        .convert(module.items)
+        .map(|item| match item {
+            Item::ForeignMod(mut extern_) => {
+                extern_.attrs.push(
+                    parse_quote!(#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]),
+                );
+                Item::ForeignMod(extern_)
+            }
+            item => item,
+        })
+        .collect();
+    converter.flush(&mut module.items);
+    add_send_sync(&mut module.items, &["hipblasLtHandle_t"]);
+    add_send_sync(&mut module.items, &["hipblasLtMatmulDesc_t"]);
+    add_send_sync(&mut module.items, &["hipblasLtMatmulPreference_t"]);
+    add_send_sync(&mut module.items, &["hipblasLtMatrixLayout_t"]);
+    let mut output = output.clone();
+    output.extend(path);
+    let text =
+        &prettyplease::unparse(&module).replace("hipStream_t", "hip_runtime_sys::hipStream_t");
+    write_rust_to_file(output, text)
+}
+
 fn generate_rocm_smi(output: &PathBuf, path: &[&str]) {
     let rocm_smi_header = new_builder()
         .header("/opt/rocm/include/rocm_smi/rocm_smi.h")
@@ -1088,7 +1155,7 @@ fn generate_rocm_smi(output: &PathBuf, path: &[&str]) {
         new_error_type: "rsmi_error",
         error_prefix: ("RSMI_STATUS_", "ERROR_"),
         success: ("RSMI_STATUS_SUCCESS", "SUCCESS"),
-        hip_type: None,
+        hip_types: vec![],
     };
     let mut converter = ConvertIntoRustResult::new(result_options);
     module.items = converter.convert(module.items).collect();
@@ -1114,7 +1181,7 @@ fn add_send_sync(items: &mut Vec<Item>, arg: &[&str]) {
 
 fn generate_functions(
     output: &PathBuf,
-    submodule: &str,
+    submodule_str: &str,
     path: &[&str],
     module: &syn::File,
 ) -> syn::File {
@@ -1141,7 +1208,7 @@ fn generate_functions(
             #(#fns_)*
         }
     };
-    let submodule = Ident::new(submodule, Span::call_site());
+    let submodule = Ident::new(submodule_str, Span::call_site());
     syn::visit_mut::visit_file_mut(
         &mut PrependCudaPath {
             module: vec![Ident::new("cuda_types", Span::call_site()), submodule],
@@ -1152,7 +1219,15 @@ fn generate_functions(
     syn::visit_mut::visit_file_mut(&mut ExplicitReturnType, &mut module);
     let mut output = output.clone();
     output.extend(path);
-    write_rust_to_file(output, &prettyplease::unparse(&module));
+    let text = prettyplease::unparse(&module);
+    let text = match submodule_str {
+        "cublaslt" => text.replace(
+            "cuda_types::cublaslt::cublasComputeType_t",
+            "cuda_types::cublas::cublasComputeType_t",
+        ),
+        _ => text,
+    };
+    write_rust_to_file(output, &text);
     module
     /*
     module
@@ -1239,7 +1314,7 @@ struct ConvertIntoRustResultOptions {
     error_prefix: (&'static str, &'static str),
     success: (&'static str, &'static str),
     // TODO: this should no longer be an Option once all hip perf libraries are present
-    hip_type: Option<Path>,
+    hip_types: Vec<Path>,
 }
 
 struct ConvertIntoRustResult {
@@ -1326,7 +1401,7 @@ impl ConvertIntoRustResult {
             };
         };
         items.extend(extra_items);
-        if let Some(hip_error_path) = self.options.hip_type {
+        for hip_error_path in self.options.hip_types {
             items.push(
                 parse_quote! {impl From<#hip_error_path> for #new_error_type {
                     fn from(error: #hip_error_path) -> Self {
@@ -1495,6 +1570,7 @@ fn generate_display_cuda(
 fn generate_display_perflib(
     result_options: Option<&ConvertIntoRustResultOptions>,
     output: &PathBuf,
+    override_: Option<LibraryOverride>,
     path: &[&str],
     types_crate: &[&'static str],
     module: &syn::File,
@@ -1539,14 +1615,20 @@ fn generate_display_perflib(
     }
     let mut output = output.clone();
     output.extend(path);
-    write_rust_to_file(
-        output,
-        &prettyplease::unparse(&syn::File {
-            shebang: None,
-            attrs: Vec::new(),
-            items,
-        }),
-    );
+    let text = prettyplease::unparse(&syn::File {
+        shebang: None,
+        attrs: Vec::new(),
+        items,
+    });
+    let text = match override_ {
+        None => text,
+        Some(LibraryOverride::CuBlasLt) => text.replace(
+            "cuda_types::cublaslt::cublasComputeType_t",
+            "cuda_types::cublas::cublasComputeType_t",
+        ),
+        Some(LibraryOverride::CuFft) => text,
+    };
+    write_rust_to_file(output, &text);
 }
 
 struct DeriveDisplayState<'a> {
