@@ -309,9 +309,7 @@ impl<'a, 'input> InsertMemSSAVisitor<'a, 'input> {
             match remap {
                 RemapAction::PreLdPostSt { .. } => {}
                 RemapAction::LDStSpaceChange {
-                    name,
-                    new_space,
-                    old_space,
+                    name, new_space, ..
                 } => {
                     let generic_var = self
                         .resolver

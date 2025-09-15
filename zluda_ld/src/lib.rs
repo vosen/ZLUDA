@@ -36,8 +36,10 @@ static FILES_FOR_REDIRECT: [&'static str; 14] = [
 
 // Global state, caching some computations that would be otherwise repeated
 struct GlobalState {
-    /// The full paths of the file names from `FILES_FOR_REDIRECT` that will be used for redirection
+    // The full paths of the file names from `FILES_FOR_REDIRECT` that will be used for redirection
     replacement_paths: Option<[Vec<u8>; FILES_FOR_REDIRECT.len()]>,
+    // List of cookies saved for each redirected file, to avoid self-redirecting
+    // when e.g. zluda_trace_blas (libcuda.so) tries to load the real libcublas.so
     cookies: Mutex<[usize; FILES_FOR_REDIRECT.len() / 2]>,
 }
 
@@ -141,8 +143,7 @@ unsafe fn save_cookie(map: *mut link_map, cookie: *mut usize) -> Option<()> {
         .get_mut(index)
         .map(|saved_cookie| {
             *saved_cookie = cookie as usize;
-        });
-    Some(())
+        })
 }
 
 // Public portion of glibc's struct link_map. Additional private fields omitted.
