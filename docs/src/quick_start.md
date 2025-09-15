@@ -32,7 +32,7 @@ Run your application like this:
 
 * Alternative method
     ```
-    LD_PRELOAD="<ZLUDA_DIRECTORY>/zluda_preload" <APPLICATION> <APPLICATION_ARGUMENTS>
+    LD_AUDIT="<ZLUDA_DIRECTORY>/zluda_ld:$LD_AUDIT" <APPLICATION> <APPLICATION_ARGUMENTS>
     ```
 
     where `<ZLUDA_DIRECTORY>` is the directory which contains ZLUDA-provided `libcuda.so`: `zluda` if you downloaded a prebuilt package or `target/release` if you built from sources.

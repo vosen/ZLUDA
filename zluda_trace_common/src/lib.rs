@@ -47,9 +47,8 @@ pub fn dlopen_local_noredirect<'a>(
 
 #[cfg(unix)]
 pub(crate) mod os {
-    use libc::{c_char, c_int};
     use libloading::os;
-    use std::{borrow::Cow, ffi::c_void, mem};
+    use std::borrow::Cow;
 
     pub fn open_driver() -> Result<libloading::Library, libloading::Error> {
         unsafe {
@@ -67,29 +66,7 @@ pub(crate) mod os {
     pub unsafe fn dlopen_local_noredirect<'a>(
         path: Cow<'a, str>,
     ) -> Result<libloading::Library, libloading::Error> {
-        fn terminate_with_nul<'a>(path: Cow<'a, str>) -> Cow<'a, str> {
-            let path = if !path.ends_with('\0') {
-                let mut path = path.into_owned();
-                path.push('\0');
-                Cow::Owned(path)
-            } else {
-                path
-            };
-            path
-        }
-        let zluda_dlopen_noredirect =
-            unsafe { libc::dlsym(libc::RTLD_DEFAULT, c"zluda_dlopen_noredirect".as_ptr()) };
-        let zluda_dlopen_noredirect = mem::transmute::<
-            _,
-            Option<unsafe extern "C" fn(*const c_char, c_int) -> *mut c_void>,
-        >(zluda_dlopen_noredirect);
-        let dlopen = zluda_dlopen_noredirect.unwrap_or(libc::dlopen);
-        let path = terminate_with_nul(path);
-        Ok(libloading::os::unix::Library::from_raw(dlopen(
-            path.as_ptr().cast(),
-            os::unix::RTLD_LOCAL | os::unix::RTLD_LAZY,
-        ))
-        .into())
+        libloading::Library::new(&*path)
     }
 }
 
