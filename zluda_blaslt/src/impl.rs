@@ -211,7 +211,6 @@ pub(crate) fn matmul_algo_get_heuristic(
     return_algo_count: &mut ::core::ffi::c_int,
 ) -> cublasStatus_t {
     let mut hip_algos = vec![unsafe { mem::zeroed() }; requested_algo_count as usize];
-    *return_algo_count = 123;
     unsafe {
         hipblasLtMatmulAlgoGetHeuristic(
             light_handle.handle,
@@ -306,7 +305,6 @@ pub(crate) fn matmul_desc_set_attribute(
         }?,
         _ => return cublasStatus_t::ERROR_NOT_SUPPORTED,
     }
-    // unsafe { hipblasLtMatmulDescSetAttribute(matmul_desc.desc, hip_attr, buf, size_in_bytes) }?;
     Ok(())
 }
 
