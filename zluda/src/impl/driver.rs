@@ -487,9 +487,9 @@ pub(crate) unsafe fn occupancy_max_active_blocks_per_multiprocessor_with_flags(
     dynamic_smem_size: usize,
     flags: ::core::ffi::c_uint,
 ) -> hipError_t {
-    hipOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
+    hipModuleOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
         num_blocks,
-        func.0.cast(),
+        func,
         block_size,
         dynamic_smem_size,
         flags,
