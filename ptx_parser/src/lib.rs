@@ -3897,6 +3897,14 @@ derive_parser!(
     .type: ScalarType = {.b16, .b8};
     // .dst_fmt = { .b8x16 };
     // .src_fmt = { .b6x16_p32, .b4x16_p64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-griddepcontrol
+    griddepcontrol.action => {
+        Instruction::GridDepControl {
+            data: action
+        }
+    }
+    .action: GridDepControlAction  = { .launch_dependents, .wait };
 );
 
 #[cfg(test)]

@@ -721,6 +721,9 @@ ptx_parser_macros::generate_instruction_type!(
                     space: { data.state_space },
                 }
             }
+        },
+        GridDepControl {
+            data: crate::GridDepControlAction,
         }
     }
 );
