@@ -1108,7 +1108,6 @@ fn generate_hiplaslt(output: &PathBuf, path: &[&str]) {
         new_error_type: "hipblasLtError",
         error_prefix: ("HIPBLAS_STATUS_", "ERROR_"),
         success: ("HIPBLAS_STATUS_SUCCESS", "SUCCESS"),
-        // TODO: ?
         hip_types: vec![],
     };
     let mut converter = ConvertIntoRustResult::new(result_options);
