@@ -45,7 +45,7 @@ body:
             ./train_gpt2fp32cu
           4. Build and run the tests:
             make test_gpt2fp32cu
-            LD_LIBRARY_PATH=<ZLUDA_TRACE_DIR> ./test_gpt2fp32cu
+            LD_LIBRARY_PATH=<ZLUDA_LOG_DIR> ./test_gpt2fp32cu
     validations:
       required: true
   - type: input
