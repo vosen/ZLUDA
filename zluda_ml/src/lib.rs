@@ -48,6 +48,7 @@ cuda_macros::nvml_function_declarations!(
             nvmlDeviceGetFieldValues,
             nvmlDeviceGetGpuFabricInfo,
             nvmlDeviceGetHandleByIndex_v2,
+            nvmlDeviceGetHandleByPciBusId_v2,
             nvmlInit,
             nvmlInitWithFlags,
             nvmlInit_v2,

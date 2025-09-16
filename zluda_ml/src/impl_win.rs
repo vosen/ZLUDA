@@ -23,15 +23,18 @@ pub(crate) unsafe fn device_get_count_v2(_device_count: &mut ::core::ffi::c_uint
     crate::impl_common::unimplemented()
 }
 
+pub(crate) unsafe fn device_get_handle_by_pci_bus_id_v2(
+    pci_bus_id: &std::ffi::CStr,
+    device: &mut cuda_types::nvml::nvmlDevice_t,
+) -> nvmlReturn_t {
+    crate::impl_common::unimplemented()
+}
+
 pub(crate) unsafe fn device_get_field_values(
     _device: cuda_types::nvml::nvmlDevice_t,
     _values_count: ::core::ffi::c_int,
     _values: &mut cuda_types::nvml::nvmlFieldValue_t,
 ) -> nvmlReturn_t {
-    crate::impl_common::unimplemented()
-}
-
-unsafe fn get_field_value(_field: &mut nvmlFieldValue_st) -> Result<(), nvmlError_t> {
     crate::impl_common::unimplemented()
 }
 
