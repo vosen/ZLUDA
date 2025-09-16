@@ -4,6 +4,10 @@ pub(crate) fn synchronize(stream: hipStream_t) -> hipError_t {
     unsafe { hipStreamSynchronize(stream) }
 }
 
+pub(crate) fn create(stream: *mut hipStream_t, flags: ::core::ffi::c_uint) -> hipError_t {
+    unsafe { hipStreamCreateWithFlags(stream, flags) }
+}
+
 pub(crate) fn create_with_priority(
     stream: *mut hipStream_t,
     flags: ::core::ffi::c_uint,

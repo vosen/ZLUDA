@@ -152,6 +152,7 @@ cuda_macros::cuda_function_declarations!(
             cuProfilerStart,
             cuProfilerStop,
             cuStreamBeginCapture_v2,
+            cuStreamCreate,
             cuStreamCreateWithPriority,
             cuStreamDestroy_v2,
             cuStreamEndCapture,
