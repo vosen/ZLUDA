@@ -11,7 +11,7 @@ echo deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.c
 echo -e 'Package: *\nPin: release o=repo.radeon.com\nPin-Priority: 600' \
     | tee /etc/apt/preferences.d/rocm-pin-600
 DEBIAN_FRONTEND=noninteractive apt update -y
-DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends rocm-smi-lib rocm-llvm-dev hip-runtime-amd hip-dev rocblas-dev
+DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends rocm-smi-lib rocm-llvm-dev hip-runtime-amd hip-dev rocblas-dev hipblaslt-dev
 echo 'export PATH="$PATH:/opt/rocm/bin"' |  tee /etc/profile.d/rocm.sh
 echo "/opt/rocm/lib" | tee /etc/ld.so.conf.d/rocm.conf
 ldconfig
