@@ -20,6 +20,10 @@ impl ZludaObject for Module {
     }
 }
 
+static EMPTY_PTX: &str = ".version 6.5
+.target sm_30
+.address_size 64";
+
 // get_ptx takes an `image` that can be anything we support and returns a
 // String containing a ptx extracted from `image`.
 fn get_ptx<'a>(image: CodeLibraryRef<'a>) -> Result<Cow<'a, str>, CUerror> {
@@ -58,7 +62,12 @@ fn cow_bytes_to_str<'a>(data: Cow<'a, [u8]>) -> Option<Cow<'a, str>> {
 
 pub(crate) fn load_hip_module(library: CodeLibraryRef) -> Result<hipModule_t, CUerror> {
     let global_state = driver::global_state()?;
-    let text = get_ptx(library)?;
+    let maybe_ptx = get_ptx(library);
+    let text = if cfg!(debug_assertions) {
+        maybe_ptx?
+    } else {
+        maybe_ptx.unwrap_or_else(|_| Cow::Borrowed(EMPTY_PTX))
+    };
     let hip_properties = get_hip_properties()?;
     let gcn_arch = get_gcn_arch(&hip_properties)?;
     let attributes = ExtraCacheAttributes {
