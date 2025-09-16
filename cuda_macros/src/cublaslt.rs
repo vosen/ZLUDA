@@ -171,7 +171,7 @@ extern "system" {
     fn cublasLtMatmulDescInit_internal(
         matmulDesc: cuda_types::cublaslt::cublasLtMatmulDesc_t,
         size: usize,
-        computeType: cuda_types::cublaslt::cublasComputeType_t,
+        computeType: cuda_types::cublas::cublasComputeType_t,
         scaleType: cuda_types::cublaslt::cudaDataType_t,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -181,7 +181,7 @@ extern "system" {
  \retval     CUBLAS_STATUS_SUCCESS       if desciptor was created successfully*/
     fn cublasLtMatmulDescCreate(
         matmulDesc: *mut cuda_types::cublaslt::cublasLtMatmulDesc_t,
-        computeType: cuda_types::cublaslt::cublasComputeType_t,
+        computeType: cuda_types::cublas::cublasComputeType_t,
         scaleType: cuda_types::cublaslt::cudaDataType_t,
     ) -> cuda_types::cublas::cublasStatus_t;
     #[must_use]
@@ -396,7 +396,7 @@ extern "system" {
                                           available*/
     fn cublasLtMatmulAlgoGetIds(
         lightHandle: cuda_types::cublaslt::cublasLtHandle_t,
-        computeType: cuda_types::cublaslt::cublasComputeType_t,
+        computeType: cuda_types::cublas::cublasComputeType_t,
         scaleType: cuda_types::cublaslt::cudaDataType_t,
         Atype: cuda_types::cublaslt::cudaDataType_t,
         Btype: cuda_types::cublaslt::cudaDataType_t,
@@ -414,7 +414,7 @@ extern "system" {
  \retval     CUBLAS_STATUS_SUCCESS        if the structure was successfully initialized*/
     fn cublasLtMatmulAlgoInit(
         lightHandle: cuda_types::cublaslt::cublasLtHandle_t,
-        computeType: cuda_types::cublaslt::cublasComputeType_t,
+        computeType: cuda_types::cublas::cublasComputeType_t,
         scaleType: cuda_types::cublaslt::cudaDataType_t,
         Atype: cuda_types::cublaslt::cudaDataType_t,
         Btype: cuda_types::cublaslt::cudaDataType_t,

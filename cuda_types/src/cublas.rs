@@ -363,3 +363,8 @@ impl From<rocblas_sys::rocblas_error> for cublasError_t {
         Self(error.0)
     }
 }
+impl From<hipblaslt_sys::hipblasLtError> for cublasError_t {
+    fn from(error: hipblaslt_sys::hipblasLtError) -> Self {
+        Self(error.0)
+    }
+}

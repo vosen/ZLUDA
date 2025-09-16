@@ -431,6 +431,7 @@ dependencies = [
  "bitflags 2.9.1",
  "cuda_macros",
  "hip_runtime-sys",
+ "hipblaslt-sys",
  "rocblas-sys",
  "rocm_smi-sys",
 ]
@@ -1772,6 +1773,13 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 [[package]]
 name = "hip_runtime-sys"
 version = "0.0.0"
+
+[[package]]
+name = "hipblaslt-sys"
+version = "0.1.0"
+dependencies = [
+ "hip_runtime-sys",
+]
 
 [[package]]
 name = "home"
