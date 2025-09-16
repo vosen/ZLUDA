@@ -237,8 +237,8 @@ pub fn compile_bitcode(
     ]
     .into_iter();
     let opt_options = if cfg!(debug_assertions) {
-        //[c"-g", c"-mllvm", c"-print-before-all", c"", c""]
-        [c"-g", c"", c"", c"", c""]
+        //[c"-g", c"-mamdgpu-precise-memory-op", c"-mllvm", c"-print-before-all", c""]
+        [c"-g", c"-mamdgpu-precise-memory-op", c"", c"", c""]
     } else {
         [
             c"-g0",

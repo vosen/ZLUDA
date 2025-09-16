@@ -153,6 +153,9 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         for (i, param) in method.input_arguments.iter().enumerate() {
             let value = unsafe { LLVMGetParam(fn_, i as u32) };
             let name = self.resolver.get_or_add(param.name);
+            if let Some(align) = param.align {
+                unsafe { LLVMSetParamAlignment(value, align) };
+            }
             unsafe { LLVMSetValueName2(value, name.as_ptr().cast(), name.len()) };
             self.resolver.register(param.name, value);
             if method.is_kernel {
