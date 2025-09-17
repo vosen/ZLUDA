@@ -30,5 +30,8 @@
 		"vscode": {
 			"extensions": [ "mhutchie.git-graph" ]
 		}
+	},
+	"containerEnv": {
+		"NVIDIA_DISABLE_REQUIRE": "1"
 	}
 }
