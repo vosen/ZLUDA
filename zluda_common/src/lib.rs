@@ -190,7 +190,10 @@ from_cuda_transmute!(
     CUstreamCaptureMode => hipStreamCaptureMode,
     CUgraphNode => hipGraphNode_t,
     CUgraphExec => hipGraphExec_t,
-    CUkernel => hipFunction_t
+    CUkernel => hipFunction_t,
+    cublasLtMatmulDesc_t => hipblasLtMatmulDesc_t,
+    cublasLtMatmulPreference_t => hipblasLtMatmulPreference_t,
+    cublasLtMatrixLayout_t => hipblasLtMatrixLayout_t
 );
 
 impl<'a, E: CudaErrorType> FromCuda<'a, CUlimit, E> for hipLimit_t {
