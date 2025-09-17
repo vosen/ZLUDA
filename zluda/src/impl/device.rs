@@ -249,6 +249,10 @@ pub(crate) fn get_attribute(
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_UNIFIED_FUNCTION_POINTERS => {
             return get_device_prop(pi, dev_idx, |props| props.unifiedFunctionPointers)
         }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED => {
+            *pi = 0;
+            return Ok(());
+        }
         _ => {}
     }
     let attrib = remap_attribute! {
