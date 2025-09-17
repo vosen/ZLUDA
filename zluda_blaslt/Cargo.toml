@@ -10,6 +10,8 @@ name = "cublaslt"
 [dependencies]
 cuda_macros = { path = "../cuda_macros" }
 cuda_types = { path = "../cuda_types" }
+hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
+hipblaslt-sys = { path = "../ext/hipblaslt-sys" }
 zluda_common = { path = "../zluda_common" }
 
 [package.metadata.zluda]

@@ -42,7 +42,22 @@ macro_rules! implemented_unmapped {
 
 cuda_macros::cublaslt_function_declarations!(
     unimplemented,
-    implemented <= [cublasLtCreate, cublasLtDestroy,],
+    implemented
+        <= [
+            cublasLtCreate,
+            cublasLtDestroy,
+            cublasLtMatmul,
+            cublasLtMatmulAlgoGetHeuristic,
+            cublasLtMatmulDescCreate,
+            cublasLtMatmulDescDestroy,
+            cublasLtMatmulDescSetAttribute,
+            cublasLtMatmulPreferenceCreate,
+            cublasLtMatmulPreferenceDestroy,
+            cublasLtMatmulPreferenceSetAttribute,
+            cublasLtMatrixLayoutCreate,
+            cublasLtMatrixLayoutDestroy,
+            cublasLtMatrixLayoutSetAttribute,
+        ],
     implemented_unmapped
         <= [
             cublasLtDisableCpuInstructionsSetMask,

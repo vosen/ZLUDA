@@ -8,4 +8,5 @@ edition = "2021"
 cuda_types = { path = "../cuda_types" }
 hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
 rocblas-sys = { path = "../ext/rocblas-sys" }
+hipblaslt-sys = { path = "../ext/hipblaslt-sys" }
 dark_api = { path = "../dark_api" }
