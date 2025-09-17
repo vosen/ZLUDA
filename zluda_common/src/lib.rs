@@ -1,12 +1,13 @@
 use cuda_types::{
     cublas::*,
-    cublaslt::cublasLtHandle_t,
+    cublaslt::*,
     cuda::*,
     dark_api::{FatbinHeader, FatbincWrapper},
     nvml::*,
 };
 use dark_api::fatbin::{Fatbin, FatbinError, FatbinFile, FatbinSubmodule};
 use hip_runtime_sys::*;
+use hipblaslt_sys::*;
 use rocblas_sys::*;
 use std::{
     ffi::{c_void, CStr},
@@ -166,6 +167,10 @@ from_cuda_nop!(
     nvmlFieldValue_t,
     nvmlGpuFabricInfo_t,
     cublasLtHandle_t,
+    cublasLtMatmulDesc_t,
+    cublasLtMatmulPreference_t,
+    cublasLtMatrixLayout_t,
+    cublasLtMatmulDescAttributes_t,
     CUmemAllocationGranularity_flags,
     CUmemAllocationProp,
     CUresult
@@ -185,7 +190,10 @@ from_cuda_transmute!(
     CUstreamCaptureMode => hipStreamCaptureMode,
     CUgraphNode => hipGraphNode_t,
     CUgraphExec => hipGraphExec_t,
-    CUkernel => hipFunction_t
+    CUkernel => hipFunction_t,
+    cublasLtMatmulDesc_t => hipblasLtMatmulDesc_t,
+    cublasLtMatmulPreference_t => hipblasLtMatmulPreference_t,
+    cublasLtMatrixLayout_t => hipblasLtMatrixLayout_t
 );
 
 impl<'a, E: CudaErrorType> FromCuda<'a, CUlimit, E> for hipLimit_t {
@@ -308,6 +316,249 @@ impl<'a, E: CudaErrorType> FromCuda<'a, cuda_types::cublas::cublasGemmAlgo_t, E>
 {
     fn from_cuda(_: &'a cuda_types::cublas::cublasGemmAlgo_t) -> Result<Self, E> {
         Ok(rocblas_gemm_algo::rocblas_gemm_algo_standard)
+    }
+}
+
+// These have the same values, so it might be okay to use from_cuda_transmute
+impl<'a, E: CudaErrorType> FromCuda<'a, cudaDataType, E> for hipDataType {
+    fn from_cuda(t: &'a cudaDataType) -> Result<Self, E> {
+        Ok(match *t {
+            cudaDataType::CUDA_R_16F => hipDataType::HIP_R_16F,
+            cudaDataType::CUDA_C_16F => hipDataType::HIP_C_16F,
+            cudaDataType::CUDA_R_16BF => hipDataType::HIP_R_16BF,
+            cudaDataType::CUDA_C_16BF => hipDataType::HIP_C_16BF,
+            cudaDataType::CUDA_R_32F => hipDataType::HIP_R_32F,
+            cudaDataType::CUDA_C_32F => hipDataType::HIP_C_32F,
+            cudaDataType::CUDA_R_64F => hipDataType::HIP_R_64F,
+            cudaDataType::CUDA_C_64F => hipDataType::HIP_C_64F,
+            cudaDataType::CUDA_R_8I => hipDataType::HIP_R_8I,
+            cudaDataType::CUDA_C_8I => hipDataType::HIP_C_8I,
+            cudaDataType::CUDA_R_8U => hipDataType::HIP_R_8U,
+            cudaDataType::CUDA_C_8U => hipDataType::HIP_C_8U,
+            cudaDataType::CUDA_R_32I => hipDataType::HIP_R_32I,
+            cudaDataType::CUDA_C_32I => hipDataType::HIP_C_32I,
+            cudaDataType::CUDA_R_8F_E4M3 => hipDataType::HIP_R_8F_E4M3,
+            cudaDataType::CUDA_R_8F_E5M2 => hipDataType::HIP_R_8F_E5M2,
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cublasComputeType_t, E> for hipblasComputeType_t {
+    fn from_cuda(t: &'a cublasComputeType_t) -> Result<Self, E> {
+        Ok(match *t {
+            cublasComputeType_t::CUBLAS_COMPUTE_16F => hipblasComputeType_t::HIPBLAS_COMPUTE_16F,
+            cublasComputeType_t::CUBLAS_COMPUTE_16F_PEDANTIC => {
+                hipblasComputeType_t::HIPBLAS_COMPUTE_16F_PEDANTIC
+            }
+            cublasComputeType_t::CUBLAS_COMPUTE_32F => hipblasComputeType_t::HIPBLAS_COMPUTE_32F,
+            cublasComputeType_t::CUBLAS_COMPUTE_32F_PEDANTIC => {
+                hipblasComputeType_t::HIPBLAS_COMPUTE_32F_PEDANTIC
+            }
+            cublasComputeType_t::CUBLAS_COMPUTE_32F_FAST_16F => {
+                hipblasComputeType_t::HIPBLAS_COMPUTE_32F_FAST_16F
+            }
+            cublasComputeType_t::CUBLAS_COMPUTE_32F_FAST_16BF => {
+                hipblasComputeType_t::HIPBLAS_COMPUTE_32F_FAST_16BF
+            }
+            cublasComputeType_t::CUBLAS_COMPUTE_32F_FAST_TF32 => {
+                hipblasComputeType_t::HIPBLAS_COMPUTE_32F_FAST_TF32
+            }
+            cublasComputeType_t::CUBLAS_COMPUTE_64F => hipblasComputeType_t::HIPBLAS_COMPUTE_64F,
+            cublasComputeType_t::CUBLAS_COMPUTE_64F_PEDANTIC => {
+                hipblasComputeType_t::HIPBLAS_COMPUTE_64F_PEDANTIC
+            }
+            cublasComputeType_t::CUBLAS_COMPUTE_32I => hipblasComputeType_t::HIPBLAS_COMPUTE_32I,
+            cublasComputeType_t::CUBLAS_COMPUTE_32I_PEDANTIC => {
+                hipblasComputeType_t::HIPBLAS_COMPUTE_32I_PEDANTIC
+            }
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cublasLtMatmulDescAttributes_t, E>
+    for hipblasLtMatmulDescAttributes_t
+{
+    fn from_cuda(t: &'a cuda_types::cublaslt::cublasLtMatmulDescAttributes_t) -> Result<Self, E> {
+        Ok(match *t {
+            cublasLtMatmulDescAttributes_t::CUBLASLT_MATMUL_DESC_TRANSA => {
+                hipblasLtMatmulDescAttributes_t::HIPBLASLT_MATMUL_DESC_TRANSA
+            }
+            cublasLtMatmulDescAttributes_t::CUBLASLT_MATMUL_DESC_TRANSB => {
+                hipblasLtMatmulDescAttributes_t::HIPBLASLT_MATMUL_DESC_TRANSB
+            }
+            cublasLtMatmulDescAttributes_t::CUBLASLT_MATMUL_DESC_EPILOGUE => {
+                hipblasLtMatmulDescAttributes_t::HIPBLASLT_MATMUL_DESC_EPILOGUE
+            }
+            cublasLtMatmulDescAttributes_t::CUBLASLT_MATMUL_DESC_BIAS_POINTER => {
+                hipblasLtMatmulDescAttributes_t::HIPBLASLT_MATMUL_DESC_BIAS_POINTER
+            }
+            cublasLtMatmulDescAttributes_t::CUBLASLT_MATMUL_DESC_BIAS_DATA_TYPE => {
+                hipblasLtMatmulDescAttributes_t::HIPBLASLT_MATMUL_DESC_BIAS_DATA_TYPE
+            }
+            cublasLtMatmulDescAttributes_t::CUBLASLT_MATMUL_DESC_A_SCALE_POINTER => {
+                hipblasLtMatmulDescAttributes_t::HIPBLASLT_MATMUL_DESC_A_SCALE_POINTER
+            }
+            cublasLtMatmulDescAttributes_t::CUBLASLT_MATMUL_DESC_B_SCALE_POINTER => {
+                hipblasLtMatmulDescAttributes_t::HIPBLASLT_MATMUL_DESC_B_SCALE_POINTER
+            }
+            cublasLtMatmulDescAttributes_t::CUBLASLT_MATMUL_DESC_C_SCALE_POINTER => {
+                hipblasLtMatmulDescAttributes_t::HIPBLASLT_MATMUL_DESC_C_SCALE_POINTER
+            }
+            cublasLtMatmulDescAttributes_t::CUBLASLT_MATMUL_DESC_D_SCALE_POINTER => {
+                hipblasLtMatmulDescAttributes_t::HIPBLASLT_MATMUL_DESC_D_SCALE_POINTER
+            }
+            cublasLtMatmulDescAttributes_t::CUBLASLT_MATMUL_DESC_EPILOGUE_AUX_SCALE_POINTER => {
+                hipblasLtMatmulDescAttributes_t::HIPBLASLT_MATMUL_DESC_EPILOGUE_AUX_SCALE_POINTER
+            }
+            cublasLtMatmulDescAttributes_t::CUBLASLT_MATMUL_DESC_EPILOGUE_AUX_POINTER => {
+                hipblasLtMatmulDescAttributes_t::HIPBLASLT_MATMUL_DESC_EPILOGUE_AUX_POINTER
+            }
+            cublasLtMatmulDescAttributes_t::CUBLASLT_MATMUL_DESC_EPILOGUE_AUX_LD => {
+                hipblasLtMatmulDescAttributes_t::HIPBLASLT_MATMUL_DESC_EPILOGUE_AUX_LD
+            }
+            cublasLtMatmulDescAttributes_t::CUBLASLT_MATMUL_DESC_EPILOGUE_AUX_BATCH_STRIDE => {
+                hipblasLtMatmulDescAttributes_t::HIPBLASLT_MATMUL_DESC_EPILOGUE_AUX_BATCH_STRIDE
+            }
+            cublasLtMatmulDescAttributes_t::CUBLASLT_MATMUL_DESC_POINTER_MODE => {
+                hipblasLtMatmulDescAttributes_t::HIPBLASLT_MATMUL_DESC_POINTER_MODE
+            }
+            cublasLtMatmulDescAttributes_t::CUBLASLT_MATMUL_DESC_AMAX_D_POINTER => {
+                hipblasLtMatmulDescAttributes_t::HIPBLASLT_MATMUL_DESC_AMAX_D_POINTER
+            }
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cublasLtMatrixLayoutAttribute_t, E>
+    for hipblasLtMatrixLayoutAttribute_t
+{
+    fn from_cuda(t: &'a cublasLtMatrixLayoutAttribute_t) -> Result<Self, E> {
+        Ok(match *t {
+            cublasLtMatrixLayoutAttribute_t::CUBLASLT_MATRIX_LAYOUT_TYPE => {
+                hipblasLtMatrixLayoutAttribute_t::HIPBLASLT_MATRIX_LAYOUT_TYPE
+            }
+            cublasLtMatrixLayoutAttribute_t::CUBLASLT_MATRIX_LAYOUT_ORDER => {
+                hipblasLtMatrixLayoutAttribute_t::HIPBLASLT_MATRIX_LAYOUT_ORDER
+            }
+            cublasLtMatrixLayoutAttribute_t::CUBLASLT_MATRIX_LAYOUT_ROWS => {
+                hipblasLtMatrixLayoutAttribute_t::HIPBLASLT_MATRIX_LAYOUT_ROWS
+            }
+            cublasLtMatrixLayoutAttribute_t::CUBLASLT_MATRIX_LAYOUT_COLS => {
+                hipblasLtMatrixLayoutAttribute_t::HIPBLASLT_MATRIX_LAYOUT_COLS
+            }
+            cublasLtMatrixLayoutAttribute_t::CUBLASLT_MATRIX_LAYOUT_LD => {
+                hipblasLtMatrixLayoutAttribute_t::HIPBLASLT_MATRIX_LAYOUT_LD
+            }
+            cublasLtMatrixLayoutAttribute_t::CUBLASLT_MATRIX_LAYOUT_BATCH_COUNT => {
+                hipblasLtMatrixLayoutAttribute_t::HIPBLASLT_MATRIX_LAYOUT_BATCH_COUNT
+            }
+            cublasLtMatrixLayoutAttribute_t::CUBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET => {
+                hipblasLtMatrixLayoutAttribute_t::HIPBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET
+            }
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cublasLtMatmulPreferenceAttributes_t, E>
+    for hipblasLtMatmulPreferenceAttributes_t
+{
+    fn from_cuda(t: &'a cublasLtMatmulPreferenceAttributes_t) -> Result<Self, E> {
+        Ok(match *t {
+            cublasLtMatmulPreferenceAttributes_t::CUBLASLT_MATMUL_PREF_SEARCH_MODE => {
+                hipblasLtMatmulPreferenceAttributes_t::HIPBLASLT_MATMUL_PREF_SEARCH_MODE
+            }
+            cublasLtMatmulPreferenceAttributes_t::CUBLASLT_MATMUL_PREF_MAX_WORKSPACE_BYTES => {
+                hipblasLtMatmulPreferenceAttributes_t::HIPBLASLT_MATMUL_PREF_MAX_WORKSPACE_BYTES
+            }
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, *const cublasLtMatmulAlgo_t, E> for hipblasLtMatmulAlgo_t {
+    fn from_cuda(t: &'a *const cublasLtMatmulAlgo_t) -> Result<Self, E> {
+        // We assume the algo came from hip_algo_to_cuda so we can discard the last six bytes
+        let cuda_algo = match unsafe { t.as_ref() } {
+            Some(algo) => algo,
+            None => return Err(E::INVALID_VALUE),
+        };
+        let mut hip = hipblasLtMatmulAlgo_t {
+            data: [0; 16],
+            max_workspace_bytes: cuda_algo.data[2] as usize,
+        };
+        hip.data[..8].copy_from_slice(&cuda_algo.data[0].to_ne_bytes());
+        hip.data[8..].copy_from_slice(&cuda_algo.data[1].to_ne_bytes());
+        Ok(hip)
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cublasOperation_t, E> for hipblasOperation_t {
+    fn from_cuda(t: &'a cublasOperation_t) -> Result<Self, E> {
+        Ok(match *t {
+            cublasOperation_t::CUBLAS_OP_N => hipblasOperation_t::HIPBLAS_OP_N,
+            cublasOperation_t::CUBLAS_OP_T => hipblasOperation_t::HIPBLAS_OP_T,
+            cublasOperation_t::CUBLAS_OP_C => hipblasOperation_t::HIPBLAS_OP_C,
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cublasLtEpilogue_t, E> for hipblasLtEpilogue_t {
+    fn from_cuda(t: &'a cublasLtEpilogue_t) -> Result<Self, E> {
+        Ok(match *t {
+            cublasLtEpilogue_t::CUBLASLT_EPILOGUE_DEFAULT => {
+                hipblasLtEpilogue_t::HIPBLASLT_EPILOGUE_DEFAULT
+            }
+            cublasLtEpilogue_t::CUBLASLT_EPILOGUE_RELU => {
+                hipblasLtEpilogue_t::HIPBLASLT_EPILOGUE_RELU
+            }
+            cublasLtEpilogue_t::CUBLASLT_EPILOGUE_BIAS => {
+                hipblasLtEpilogue_t::HIPBLASLT_EPILOGUE_BIAS
+            }
+            cublasLtEpilogue_t::CUBLASLT_EPILOGUE_RELU_BIAS => {
+                hipblasLtEpilogue_t::HIPBLASLT_EPILOGUE_RELU_BIAS
+            }
+            cublasLtEpilogue_t::CUBLASLT_EPILOGUE_GELU => {
+                hipblasLtEpilogue_t::HIPBLASLT_EPILOGUE_GELU
+            }
+            cublasLtEpilogue_t::CUBLASLT_EPILOGUE_GELU_AUX => {
+                hipblasLtEpilogue_t::HIPBLASLT_EPILOGUE_GELU_AUX
+            }
+            cublasLtEpilogue_t::CUBLASLT_EPILOGUE_GELU_BIAS => {
+                hipblasLtEpilogue_t::HIPBLASLT_EPILOGUE_GELU_BIAS
+            }
+            cublasLtEpilogue_t::CUBLASLT_EPILOGUE_GELU_AUX_BIAS => {
+                hipblasLtEpilogue_t::HIPBLASLT_EPILOGUE_GELU_AUX_BIAS
+            }
+            cublasLtEpilogue_t::CUBLASLT_EPILOGUE_DGELU => {
+                hipblasLtEpilogue_t::HIPBLASLT_EPILOGUE_DGELU
+            }
+            cublasLtEpilogue_t::CUBLASLT_EPILOGUE_DGELU_BGRAD => {
+                hipblasLtEpilogue_t::HIPBLASLT_EPILOGUE_DGELU_BGRAD
+            }
+            cublasLtEpilogue_t::CUBLASLT_EPILOGUE_BGRADA => {
+                hipblasLtEpilogue_t::HIPBLASLT_EPILOGUE_BGRADA
+            }
+            cublasLtEpilogue_t::CUBLASLT_EPILOGUE_BGRADB => {
+                hipblasLtEpilogue_t::HIPBLASLT_EPILOGUE_BGRADB
+            }
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, *mut cublasLtMatmulHeuristicResult_t, E>
+    for &'a mut cublasLtMatmulHeuristicResult_t
+{
+    fn from_cuda(x: &'a *mut cublasLtMatmulHeuristicResult_t) -> Result<Self, E> {
+        match unsafe { x.as_mut() } {
+            Some(x) => Ok(x),
+            None => Err(E::INVALID_VALUE),
+        }
     }
 }
 

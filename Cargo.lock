@@ -3748,6 +3748,8 @@ version = "0.0.0"
 dependencies = [
  "cuda_macros",
  "cuda_types",
+ "hip_runtime-sys",
+ "hipblaslt-sys",
  "zluda_common",
 ]
 
@@ -3769,6 +3771,7 @@ dependencies = [
  "cuda_types",
  "dark_api",
  "hip_runtime-sys",
+ "hipblaslt-sys",
  "rocblas-sys",
 ]
 
