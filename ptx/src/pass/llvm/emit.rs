@@ -533,7 +533,8 @@ impl<'a> MethodEmitContext<'a> {
             | ast::Instruction::Vote { .. }
             | ast::Instruction::Nanosleep { .. }
             | ast::Instruction::ReduxSync { .. }
-            | ast::Instruction::LdMatrix { .. } => return Err(error_unreachable()),
+            | ast::Instruction::LdMatrix { .. }
+            | ast::Instruction::Mma { .. } => return Err(error_unreachable()),
         }
     }
 

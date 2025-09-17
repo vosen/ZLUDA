@@ -1862,6 +1862,9 @@ derive_parser!(
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum MatrixNumber { }
 
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
+    pub enum MatrixLayout { }
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
     mov{.vec}.type  d, a => {
         Instruction::Mov {
@@ -3905,6 +3908,29 @@ derive_parser!(
         }
     }
     .action: GridDepControlAction  = { .launch_dependents, .wait };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-mma
+    mma.sync.aligned.m16n8k16.alayout.blayout.dtype.bf16.bf16.ctype d, a, b, c => {
+        if dtype != ScalarType::F32 || ctype != ScalarType::F32 {
+            state.errors.push(PtxError::Todo);
+        }
+        Instruction::Mma {
+            data: MmaDetails {
+                alayout,
+                blayout,
+                dtype_scalar: dtype,
+                atype_scalar: ScalarType::BF16,
+                btype_scalar: ScalarType::BF16,
+                ctype_scalar: ctype,
+            },
+            arguments: MmaArgs { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+
+    .alayout: MatrixLayout = {.row};
+    .blayout: MatrixLayout = {.col};
+    .ctype: ScalarType = {.f16, .f32};
+    .dtype: ScalarType = {.f16, .f32};
 );
 
 #[cfg(test)]
