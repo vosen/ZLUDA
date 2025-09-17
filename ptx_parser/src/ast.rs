@@ -998,29 +998,38 @@ impl<T: Operand, Err> MapOperand<Err> for Option<T> {
     }
 }
 
-pub struct MultiVariable<ID> {
-    pub var: Variable<ID>,
-    pub count: Option<u32>,
+pub enum MultiVariable<ID> {
+    Parameterized {
+        info: VariableInfo<ID>,
+        name: ID,
+        count: u32,
+    },
+    Names { info: VariableInfo<ID>, names: Vec<ID> },
+}
+
+#[derive(Clone)]
+pub struct VariableInfo<ID> {
+    pub align: Option<u32>,
+    pub v_type: Type,
+    pub state_space: StateSpace,
+    pub array_init: Vec<RegOrImmediate<ID>>,
 }
 
 #[derive(Clone)]
 pub struct Variable<ID> {
-    pub align: Option<u32>,
-    pub v_type: Type,
-    pub state_space: StateSpace,
+    pub info: VariableInfo<ID>,
     pub name: ID,
-    pub array_init: Vec<RegOrImmediate<ID>>,
 }
 
 impl<ID: std::fmt::Display> std::fmt::Display for Variable<ID> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.state_space)?;
+        write!(f, "{}", self.info.state_space)?;
 
-        if let Some(align) = self.align {
+        if let Some(align) = self.info.align {
             write!(f, " .align {}", align)?;
         }
 
-        let (vector_size, scalar_type, array_dims) = match &self.v_type {
+        let (vector_size, scalar_type, array_dims) = match &self.info.v_type {
             Type::Scalar(scalar_type) => (None, *scalar_type, &vec![]),
             Type::Vector(size, scalar_type) => (Some(*size), *scalar_type, &vec![]),
             Type::Array(vector_size, scalar_type, array_dims) => {
@@ -1038,7 +1047,7 @@ impl<ID: std::fmt::Display> std::fmt::Display for Variable<ID> {
             write!(f, "[{}]", dim)?;
         }
 
-        if self.array_init.len() > 0 {
+        if self.info.array_init.len() > 0 {
             todo!("Need to interpret the array initializer data as the appropriate type");
         }
 
