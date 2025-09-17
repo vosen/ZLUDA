@@ -89,7 +89,9 @@ pub(crate) fn get_attribute(
             *pi = 32;
             return Ok(());
         }
-        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_TCC_DRIVER => {
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_TCC_DRIVER
+        | CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MEMORY_POOLS_SUPPORTED
+        | CUdevice_attribute::CU_DEVICE_ATTRIBUTE_DMA_BUF_SUPPORTED => {
             *pi = 0;
             return Ok(());
         }
