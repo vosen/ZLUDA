@@ -13,7 +13,6 @@ use strum_macros::EnumIter;
 
 mod deparamize_functions;
 mod expand_operands;
-mod filter_for_demo;
 mod fix_special_registers;
 mod hoist_globals;
 mod insert_explicit_load_store;
@@ -66,9 +65,7 @@ pub fn to_llvm_module<'input>(
     let mut flat_resolver = GlobalStringIdentResolver2::<'input>::new(SpirvWord(1));
     let mut scoped_resolver = ScopedResolver::new(&mut flat_resolver);
     let sreg_map = SpecialRegistersMap::new(&mut scoped_resolver)?;
-    let directives = filter_for_demo::run(ast.directives);
-    on_pass_end("filter_for_demo");
-    let directives = normalize_identifiers2::run(&mut scoped_resolver, directives)?;
+    let directives = normalize_identifiers2::run(&mut scoped_resolver, ast.directives)?;
     on_pass_end("normalize_identifiers2");
     let directives = replace_known_functions::run(&mut flat_resolver, directives);
     on_pass_end("replace_known_functions");
