@@ -128,12 +128,11 @@ impl StateTracker {
         fn_logger: &mut FnCallLog,
         type_: &'static str,
     ) {
-        fn_logger.log_io_error(self.writer.save_module(
-            self.library_counter,
-            index,
-            submodule,
-            type_,
-        ));
+        fn_logger.try_(|fn_logger| {
+            self.writer
+                .save_module(fn_logger, self.library_counter, index, submodule, type_)
+                .map_err(ErrorEntry::IoError)
+        });
         if type_ == "ptx" {
             match CString::new(submodule) {
                 Err(e) => fn_logger.log(log::ErrorEntry::NulInsideModuleText(e)),
@@ -323,6 +322,7 @@ impl DumpWriter {
 
     fn save_module(
         &self,
+        fn_logger: &mut FnCallLog,
         module_index: usize,
         submodule_index: Option<(usize, Option<usize>)>,
         buffer: &[u8],
@@ -332,9 +332,13 @@ impl DumpWriter {
             None => return Ok(()),
             Some(d) => d.clone(),
         };
-        dump_file.push(Self::get_file_name(module_index, submodule_index, kind));
-        let mut file = File::create_new(dump_file)?;
-        file.write_all(buffer)?;
+        let file_name = Self::get_file_name(module_index, submodule_index, kind);
+        dump_file.push(&file_name);
+        {
+            let mut file = File::create_new(dump_file)?;
+            file.write_all(buffer)?;
+        }
+        fn_logger.log(ErrorEntry::SavedModule(file_name));
         Ok(())
     }
 
@@ -349,7 +353,7 @@ impl DumpWriter {
             Some(d) => d.clone(),
         };
         log_file.push(Self::get_file_name(module_index, submodule_index, "log"));
-        let mut file = File::create(log_file)?;
+        let mut file = File::create_new(log_file)?;
         for error in errors {
             writeln!(file, "{}", error)?;
         }

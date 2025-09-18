@@ -20,6 +20,10 @@ impl ZludaObject for Module {
     }
 }
 
+static EMPTY_PTX: &str = ".version 6.5
+.target sm_30
+.address_size 64";
+
 // get_ptx takes an `image` that can be anything we support and returns a
 // String containing a ptx extracted from `image`.
 fn get_ptx<'a>(image: CodeLibraryRef<'a>) -> Result<Cow<'a, str>, CUerror> {
@@ -58,11 +62,17 @@ fn cow_bytes_to_str<'a>(data: Cow<'a, [u8]>) -> Option<Cow<'a, str>> {
 
 pub(crate) fn load_hip_module(library: CodeLibraryRef) -> Result<hipModule_t, CUerror> {
     let global_state = driver::global_state()?;
-    let text = get_ptx(library)?;
+    let maybe_ptx = get_ptx(library);
+    let text = if cfg!(debug_assertions) {
+        maybe_ptx?
+    } else {
+        maybe_ptx.unwrap_or_else(|_| Cow::Borrowed(EMPTY_PTX))
+    };
     let hip_properties = get_hip_properties()?;
     let gcn_arch = get_gcn_arch(&hip_properties)?;
-    let attributes = ptx::Attributes {
+    let attributes = ExtraCacheAttributes {
         clock_rate: hip_properties.clockRate as u32,
+        is_debug: cfg!(debug_assertions),
     };
     let mut cache_with_key = global_state.cache_path.as_ref().and_then(|p| {
         let cache = zluda_cache::ModuleCache::open(p)?;
@@ -84,6 +94,12 @@ pub(crate) fn load_hip_module(library: CodeLibraryRef) -> Result<hipModule_t, CU
     Ok(hip_module)
 }
 
+#[derive(serde::Serialize)]
+struct ExtraCacheAttributes {
+    is_debug: bool,
+    clock_rate: u32,
+}
+
 fn get_hip_properties<'a>() -> Result<hipDeviceProp_tR0600, CUerror> {
     let hip_dev = super::context::get_current_device()?;
     let mut props = unsafe { mem::zeroed() };
@@ -100,7 +116,7 @@ fn get_cache_key<'a, 'b>(
     global_state: &'static driver::GlobalState,
     isa: &'a str,
     text: &str,
-    attributes: &ptx::Attributes,
+    attributes: &impl serde::Serialize,
 ) -> Option<zluda_cache::ModuleKey<'a>> {
     // Serialization here is deterministic. When marking a type with
     // #[derive(serde::Serialize)] the derived implementation will just write
@@ -129,7 +145,7 @@ fn load_cached_binary(
 fn compile_from_ptx_and_cache(
     comgr: &comgr::Comgr,
     gcn_arch: &str,
-    attributes: ptx::Attributes,
+    attributes: ExtraCacheAttributes,
     text: &str,
     cache_with_key: &mut Option<(zluda_cache::ModuleCache, zluda_cache::ModuleKey)>,
 ) -> Result<Vec<u8>, CUerror> {
@@ -138,7 +154,14 @@ fn compile_from_ptx_and_cache(
     } else {
         ptx_parser::parse_module_unchecked(text)
     };
-    let llvm_module = ptx::to_llvm_module(ast, attributes, |_| {}).map_err(|_| CUerror::UNKNOWN)?;
+    let llvm_module = ptx::to_llvm_module(
+        ast,
+        ptx::Attributes {
+            clock_rate: attributes.clock_rate,
+        },
+        |_| {},
+    )
+    .map_err(|_| CUerror::UNKNOWN)?;
     let elf_module = comgr::compile_bitcode(
         comgr,
         gcn_arch,
