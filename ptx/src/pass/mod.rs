@@ -51,7 +51,7 @@ quick_error! {
 }
 
 /// GPU attributes needed at compile time.
-#[derive(serde::Serialize)]
+#[derive(Copy, Clone)]
 pub struct Attributes {
     /// Clock frequency in kHz.
     pub clock_rate: u32,

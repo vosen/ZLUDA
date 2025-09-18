@@ -116,7 +116,7 @@ in order to demonstrate all of zluda_trace's features.
 
 ```bash
 nvcc add.cu -o add -arch sm_80
-LD_LIBRARY_PATH=~/ZLUDA/target/release/trace/ ZLUDA_TRACE_DIR=/tmp/zluda ./add
+LD_LIBRARY_PATH=~/ZLUDA/target/release/trace/ ZLUDA_LOG_DIR=/tmp/zluda ./add
 ```
 
 The last few lines should look something like:

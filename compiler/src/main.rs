@@ -21,8 +21,13 @@ pub struct Options {
     output_dir: Option<PathBuf>,
 
     #[bpaf(long("arch"))]
-    /// Target architecture
+    /// Target GPU architecture
     arch: Option<String>,
+
+    #[bpaf(long("ignore-errors"))]
+    /// Try to ignore errors. This will try and produce output even if there are
+    /// parsing errors (e.g. an unimplemented instruction)
+    ignore_errors: bool,
 
     #[bpaf(positional("filename"))]
     /// PTX file
@@ -48,7 +53,10 @@ fn main_core() -> Result<(), CompilerError> {
         .unwrap_or("output");
 
     let mut output_path = match opts.output_dir {
-        Some(value) => value,
+        Some(value) => {
+            std::fs::create_dir_all(&value)?;
+            value
+        }
         None => match ptx_path.parent() {
             Some(dir) => dir.to_path_buf(),
             None => env::current_dir()?,
@@ -68,7 +76,7 @@ fn main_core() -> Result<(), CompilerError> {
 
     let ptx = fs::read(&ptx_path).map_err(CompilerError::from)?;
     let ptx = str::from_utf8(&ptx).map_err(CompilerError::from)?;
-    let llvm = ptx_to_llvm(ptx).map_err(CompilerError::from)?;
+    let llvm = ptx_to_llvm(opts.ignore_errors, ptx).map_err(CompilerError::from)?;
 
     write_to_file(&llvm.llvm_ir, output_path.with_extension("ll").as_path())?;
 
@@ -92,8 +100,12 @@ fn main_core() -> Result<(), CompilerError> {
     Ok(())
 }
 
-fn ptx_to_llvm(ptx: &str) -> Result<LLVMArtifacts, CompilerError> {
-    let ast = ptx_parser::parse_module_checked(ptx).map_err(CompilerError::from)?;
+fn ptx_to_llvm(ignore_errors: bool, ptx: &str) -> Result<LLVMArtifacts, CompilerError> {
+    let ast = if ignore_errors {
+        ptx_parser::parse_module_unchecked(ptx)
+    } else {
+        ptx_parser::parse_module_checked(ptx).map_err(CompilerError::from)?
+    };
     let mut start = Instant::now();
     let module = ptx::to_llvm_module(
         ast,

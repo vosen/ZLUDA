@@ -89,7 +89,15 @@ pub(crate) fn get_attribute(
             *pi = 32;
             return Ok(());
         }
-        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_TCC_DRIVER => {
+        // TODO: maintain a table, certain RDNAs are 1/16, some are 1/32
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_SINGLE_TO_DOUBLE_PRECISION_PERF_RATIO => {
+            *pi = 32;
+            return Ok(());
+        }
+        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_TCC_DRIVER
+        | CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MEMORY_POOLS_SUPPORTED
+        | CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MEMPOOL_SUPPORTED_HANDLE_TYPES
+        | CUdevice_attribute::CU_DEVICE_ATTRIBUTE_DMA_BUF_SUPPORTED => {
             *pi = 0;
             return Ok(());
         }
@@ -210,9 +218,6 @@ pub(crate) fn get_attribute(
         }
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_PERSISTING_L2_CACHE_SIZE => {
             return get_device_prop(pi, dev_idx, |props| props.persistingL2CacheMaxSize)
-        }
-        CUdevice_attribute::CU_DEVICE_ATTRIBUTE_SINGLE_TO_DOUBLE_PRECISION_PERF_RATIO => {
-            return get_device_prop(pi, dev_idx, |props| props.singleToDoublePrecisionPerfRatio)
         }
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_ACCESS_POLICY_WINDOW_SIZE => {
             return get_device_prop(pi, dev_idx, |props| props.accessPolicyMaxWindowSize)

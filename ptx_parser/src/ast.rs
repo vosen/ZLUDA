@@ -3,8 +3,8 @@ use super::{
     StateSpace, VectorPrefix,
 };
 use crate::{
-    FunnelShiftMode, MatrixNumber, MatrixShape, Mul24Control, PtxError, PtxParserState, Reduction,
-    ShiftDirection, ShuffleMode, VoteMode,
+    FunnelShiftMode, MatrixLayout, MatrixNumber, MatrixShape, Mul24Control, PtxError,
+    PtxParserState, Reduction, ShiftDirection, ShuffleMode, VoteMode,
 };
 use bitflags::bitflags;
 use derive_more::Display;
@@ -719,6 +719,30 @@ ptx_parser_macros::generate_instruction_type!(
                 src: {
                     repr: T,
                     space: { data.state_space },
+                }
+            }
+        },
+        GridDepControl {
+            data: crate::GridDepControlAction,
+        },
+        Mma {
+            data: MmaDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { data.dtype() },
+                },
+                src1: {
+                    repr: T,
+                    type: { data.atype() },
+                },
+                src2: {
+                    repr: T,
+                    type: { data.btype() },
+                },
+                src3: {
+                    repr: T,
+                    type: { data.ctype() },
                 }
             }
         }
@@ -2377,4 +2401,28 @@ impl VoteMode {
 pub struct ReduxSyncData {
     pub type_: ScalarType,
     pub reduction: Reduction,
+}
+
+pub struct MmaDetails {
+    pub alayout: MatrixLayout,
+    pub blayout: MatrixLayout,
+    pub dtype_scalar: ScalarType,
+    pub atype_scalar: ScalarType,
+    pub btype_scalar: ScalarType,
+    pub ctype_scalar: ScalarType,
+}
+
+impl MmaDetails {
+    pub fn dtype(&self) -> Type {
+        Type::Vector(4, ScalarType::F32)
+    }
+    pub fn atype(&self) -> Type {
+        Type::Vector(4, ScalarType::U32)
+    }
+    pub fn btype(&self) -> Type {
+        Type::Vector(2, ScalarType::U32)
+    }
+    pub fn ctype(&self) -> Type {
+        Type::Vector(4, ScalarType::F32)
+    }
 }

@@ -2573,7 +2573,6 @@ dependencies = [
  "ptx_parser",
  "quick-error",
  "rustc-hash 2.0.0",
- "serde",
  "smallvec",
  "strum 0.26.3",
  "strum_macros 0.26.4",

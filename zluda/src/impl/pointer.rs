@@ -2,7 +2,7 @@ use cuda_types::cuda::*;
 use hip_runtime_sys::*;
 use std::{ffi::c_void, ptr};
 
-use crate::r#impl::driver;
+use crate::r#impl::{driver, hipfix};
 
 // TODO: handlehipMemoryTypeUnregistered
 fn to_cu_memory_type(cu: hipMemoryType) -> Result<CUmemorytype, hipErrorCode_t> {
@@ -59,7 +59,12 @@ pub(crate) unsafe fn get_attributes(
     data: &mut *mut ::core::ffi::c_void,
     ptr: hipDeviceptr_t,
 ) -> CUresult {
-    hipDrvPointerGetAttributes(num_attributes, attributes, data, ptr)?;
+    hipDrvPointerGetAttributes(
+        num_attributes,
+        attributes,
+        data,
+        hipfix::get_attributes(ptr),
+    )?;
     let attributes = std::slice::from_raw_parts_mut(attributes, num_attributes as usize);
     let data = std::slice::from_raw_parts_mut(data, num_attributes as usize);
     for (attr, data_ptr) in attributes.iter().copied().zip(data.iter().copied()) {
@@ -88,7 +93,7 @@ mod tests {
     use crate::tests::CudaApi;
     use cuda_macros::test_cuda;
     use cuda_types::cuda::*;
-    use std::{ffi::c_void, mem, ptr};
+    use std::{ffi::c_void, i32, mem, ptr, usize};
 
     #[test_cuda]
     pub unsafe fn unknown_ptr_attribute(api: impl CudaApi) {
@@ -161,5 +166,48 @@ mod tests {
             )
         );
         assert_eq!(context, CUcontext(ptr::null_mut()));
+    }
+
+    #[test_cuda]
+    pub unsafe fn null_ptr_attributes_success(api: impl CudaApi) {
+        api.cuInit(0);
+        api.cuCtxCreate_v2(&mut mem::zeroed(), 0, 0);
+        let mut context = CUcontext(1 as _);
+        let mut mem_type = mem::transmute::<_, CUmemorytype>(u32::MAX);
+        let mut dev_ptr = mem::transmute::<_, *mut c_void>(usize::MAX);
+        let mut host_ptr = mem::transmute::<_, *mut c_void>(usize::MAX);
+        let mut is_managed = true;
+        let mut ordinal = i32::MAX;
+        let mut attrs = [
+            CUpointer_attribute::CU_POINTER_ATTRIBUTE_CONTEXT,
+            CUpointer_attribute::CU_POINTER_ATTRIBUTE_MEMORY_TYPE,
+            CUpointer_attribute::CU_POINTER_ATTRIBUTE_DEVICE_POINTER,
+            CUpointer_attribute::CU_POINTER_ATTRIBUTE_HOST_POINTER,
+            CUpointer_attribute::CU_POINTER_ATTRIBUTE_IS_MANAGED,
+            CUpointer_attribute::CU_POINTER_ATTRIBUTE_DEVICE_ORDINAL,
+        ];
+        let mut values = [
+            std::ptr::from_mut(&mut context).cast::<c_void>(),
+            std::ptr::from_mut(&mut mem_type).cast::<c_void>(),
+            std::ptr::from_mut(&mut dev_ptr).cast::<c_void>(),
+            std::ptr::from_mut(&mut host_ptr).cast::<c_void>(),
+            std::ptr::from_mut(&mut is_managed).cast::<c_void>(),
+            std::ptr::from_mut(&mut ordinal).cast::<c_void>(),
+        ];
+        assert_eq!(
+            CUresult::SUCCESS,
+            api.cuPointerGetAttributes_unchecked(
+                attrs.len() as u32,
+                attrs.as_mut_ptr(),
+                values.as_mut_ptr(),
+                CUdeviceptr_v2(ptr::null_mut())
+            )
+        );
+        assert_eq!(context, CUcontext(ptr::null_mut()));
+        assert_eq!(mem_type, CUmemorytype(0));
+        assert_eq!(dev_ptr, ptr::null_mut());
+        assert_eq!(host_ptr, ptr::null_mut());
+        assert_eq!(is_managed, false);
+        assert_eq!(ordinal, -2);
     }
 }

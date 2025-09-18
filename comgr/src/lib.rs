@@ -219,6 +219,10 @@ pub fn compile_bitcode(
     compile_to_exec.set_isa_name(gcn_arch)?;
     compile_to_exec.set_language(Language::LlvmIr)?;
     let common_options = [
+        c"-mllvm",
+        c"-ignore-tti-inline-compatible",
+        // c"-mllvm",
+        // c"-amdgpu-early-inline-all=true",
         // This makes no sense, but it makes ockl linking work
         c"-Xclang",
         c"-mno-link-builtin-bitcode-postopt",
@@ -237,8 +241,7 @@ pub fn compile_bitcode(
     ]
     .into_iter();
     let opt_options = if cfg!(debug_assertions) {
-        //[c"-g", c"-mllvm", c"-print-before-all", c"", c""]
-        [c"-g", c"", c"", c"", c""]
+        [c"-g", c"-mamdgpu-precise-memory-op", c"", c"", c""]
     } else {
         [
             c"-g0",
