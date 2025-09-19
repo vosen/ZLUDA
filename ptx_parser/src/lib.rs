@@ -937,21 +937,6 @@ fn method_parameter<'a, 'input: 'a>(
 }
 
 // TODO: split to a separate type
-// fn variable_declaration<'a, 'input>(
-//     stream: &mut PtxParser<'a, 'input>,
-// ) -> PResult<(Option<u32>, Option<NonZeroU8>, ScalarType, &'input str)> {
-//     trace(
-//         "variable_declaration",
-//         (
-//             opt(align.verify(|x| x.count_ones() == 1)),
-//             vector_prefix,
-//             scalar_type,
-//             ident,
-//         ),
-//     )
-//     .parse_next(stream)
-// }
-
 fn variable_info<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<(Option<u32>, Option<NonZeroU8>, ScalarType)> {
