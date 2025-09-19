@@ -2,6 +2,7 @@ use derive_more::Display;
 use logos::Logos;
 use ptx_parser_macros::derive_parser;
 use rustc_hash::FxHashMap;
+use std::alloc::Layout;
 use std::fmt::Debug;
 use std::num::{NonZeroU8, ParseFloatError, ParseIntError};
 use std::{iter, usize};
@@ -345,7 +346,9 @@ fn reg_or_immediate<'a, 'input>(
     .parse_next(stream)
 }
 
-pub fn parse_for_errors<'input>(text: &'input str) -> Vec<PtxError<'input>> {
+pub fn parse_for_errors_and_params<'input>(
+    text: &'input str,
+) -> (Vec<PtxError<'input>>, FxHashMap<String, Vec<Layout>>) {
     let (tokens, mut errors) = lex_with_span_unchecked(text);
     let parse_result = {
         let state = PtxParserState::new(text, &mut errors);
@@ -357,13 +360,30 @@ pub fn parse_for_errors<'input>(text: &'input str) -> Vec<PtxError<'input>> {
             .parse(parser)
             .map_err(|err| PtxError::Parser(err.into_inner()))
     };
-    match parse_result {
-        Ok(_) => {}
+    let params = match parse_result {
+        Ok(module) => module
+            .directives
+            .into_iter()
+            .filter_map(|directive| {
+                if let ast::Directive::Method(_, func) = directive {
+                    let layouts = func
+                        .func_directive
+                        .input_arguments
+                        .iter()
+                        .map(|arg| arg.v_type.layout())
+                        .collect();
+                    Some((func.func_directive.name().to_string(), layouts))
+                } else {
+                    None
+                }
+            })
+            .collect(),
         Err(err) => {
             errors.push(err);
+            FxHashMap::default()
         }
-    }
-    errors
+    };
+    (errors, params)
 }
 
 fn lex_with_span_unchecked<'input>(

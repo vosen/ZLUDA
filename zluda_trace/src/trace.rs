@@ -4,8 +4,9 @@ use crate::{
 };
 use cuda_types::cuda::*;
 use goblin::{elf, elf32, elf64};
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 use std::{
+    alloc::Layout,
     ffi::{c_void, CStr, CString},
     fs::{self, File},
     io::{self, Read, Write},
@@ -20,25 +21,38 @@ use unwrap_or::unwrap_some_or;
 // * writes out relevant state change and details to disk and log
 pub(crate) struct StateTracker {
     writer: DumpWriter,
-    pub(crate) libraries: FxHashMap<CUlibrary, CodePointer>,
-    saved_modules: FxHashSet<CUmodule>,
+    pub(crate) parsed_libraries: FxHashMap<SendablePtr, ParsedModule>,
+    pub(crate) submodules: FxHashMap<CUmodule, CUlibrary>,
+    pub(crate) kernels: FxHashMap<CUfunction, SavedKernel>,
     library_counter: usize,
+    pub(crate) enqueue_counter: usize,
     pub(crate) override_cc: Option<(u32, u32)>,
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct CodePointer(pub *const c_void);
+pub(crate) struct ParsedModule {
+    pub kernels: FxHashMap<String, Vec<Layout>>,
+}
 
-unsafe impl Send for CodePointer {}
-unsafe impl Sync for CodePointer {}
+pub(crate) struct SavedKernel {
+    pub name: String,
+    pub owner: SendablePtr,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct SendablePtr(*mut c_void);
+
+unsafe impl Send for SendablePtr {}
+unsafe impl Sync for SendablePtr {}
 
 impl StateTracker {
     pub(crate) fn new(settings: &Settings) -> Self {
         StateTracker {
             writer: DumpWriter::new(settings.dump_dir.clone()),
-            libraries: FxHashMap::default(),
-            saved_modules: FxHashSet::default(),
+            parsed_libraries: FxHashMap::default(),
+            submodules: FxHashMap::default(),
+            kernels: FxHashMap::default(),
             library_counter: 0,
+            enqueue_counter: 0,
             override_cc: settings.override_cc,
         }
     }
@@ -52,7 +66,7 @@ impl StateTracker {
         let file_name = match unsafe { CStr::from_ptr(file_name) }.to_str() {
             Ok(f) => f,
             Err(err) => {
-                fn_logger.log(log::ErrorEntry::MalformedModulePath(err));
+                fn_logger.log(log::ErrorEntry::Utf8Error(err));
                 return;
             }
         };
@@ -69,21 +83,26 @@ impl StateTracker {
         let mut module_file = fs::File::open(file_name)?;
         let mut read_buff = Vec::new();
         module_file.read_to_end(&mut read_buff)?;
-        self.record_new_library(module, read_buff.as_ptr() as *const _, fn_logger);
+        self.record_new_library(module.0.cast(), read_buff.as_ptr() as *const _, fn_logger);
         Ok(())
     }
 
     pub(crate) fn record_new_library(
         &mut self,
-        cu_module: CUmodule,
+        handle: *mut c_void,
         raw_image: *const c_void,
         fn_logger: &mut FnCallLog,
     ) {
-        self.saved_modules.insert(cu_module);
+        fn overwrite<T>(current: &mut Option<T>, value: Option<T>) {
+            if value.is_some() {
+                *current = value;
+            }
+        }
+        let mut kernel_arguments = None;
         self.library_counter += 1;
         let code_ref = fn_logger.try_return(|| {
             unsafe { zluda_common::CodeLibraryRef::try_load(raw_image) }
-                .map_err(ErrorEntry::NonUtf8ModuleText)
+                .map_err(ErrorEntry::Utf8Error)
         });
         let code_ref = unwrap_some_or!(code_ref, return);
         unsafe {
@@ -92,17 +111,20 @@ impl StateTracker {
                 Ok(zluda_common::CodeModuleRef::Elf(elf)) => match get_elf_size(elf) {
                     Some(len) => {
                         let elf_image = std::slice::from_raw_parts(elf.cast::<u8>(), len);
-                        self.record_new_submodule(index, elf_image, fn_logger, "elf");
+                        overwrite(
+                            &mut kernel_arguments,
+                            self.record_new_submodule(index, elf_image, fn_logger, "elf"),
+                        );
                     }
                     None => fn_logger.log(log::ErrorEntry::UnsupportedModule {
-                        module: cu_module,
+                        handle,
                         raw_image: elf,
                         kind: "ELF",
                     }),
                 },
                 Ok(zluda_common::CodeModuleRef::Archive(archive)) => {
                     fn_logger.log(log::ErrorEntry::UnsupportedModule {
-                        module: cu_module,
+                        handle,
                         raw_image: archive,
                         kind: "archive",
                     })
@@ -111,23 +133,36 @@ impl StateTracker {
                     if let Some(buffer) = fn_logger
                         .try_(|_| file.get_or_decompress_content().map_err(ErrorEntry::from))
                     {
-                        self.record_new_submodule(index, &*buffer, fn_logger, file.kind());
+                        overwrite(
+                            &mut kernel_arguments,
+                            self.record_new_submodule(index, &*buffer, fn_logger, file.kind()),
+                        );
                     }
                 }
                 Ok(zluda_common::CodeModuleRef::Text(ptx)) => {
-                    self.record_new_submodule(index, ptx.as_bytes(), fn_logger, "ptx");
+                    overwrite(
+                        &mut kernel_arguments,
+                        self.record_new_submodule(index, ptx.as_bytes(), fn_logger, "ptx"),
+                    );
                 }
             });
         };
+        self.parsed_libraries.insert(
+            SendablePtr(handle),
+            ParsedModule {
+                kernels: kernel_arguments.unwrap_or_default(),
+            },
+        );
     }
 
+    #[must_use]
     pub(crate) fn record_new_submodule(
         &mut self,
         index: Option<(usize, Option<usize>)>,
         submodule: &[u8],
         fn_logger: &mut FnCallLog,
         type_: &'static str,
-    ) {
+    ) -> Option<FxHashMap<String, Vec<Layout>>> {
         fn_logger.try_(|fn_logger| {
             self.writer
                 .save_module(fn_logger, self.library_counter, index, submodule, type_)
@@ -135,28 +170,36 @@ impl StateTracker {
         });
         if type_ == "ptx" {
             match CString::new(submodule) {
-                Err(e) => fn_logger.log(log::ErrorEntry::NulInsideModuleText(e)),
+                Err(e) => {
+                    fn_logger.log(log::ErrorEntry::NulInsideModuleText(e));
+                    None
+                }
                 Ok(submodule_cstring) => match submodule_cstring.to_str() {
-                    Err(e) => fn_logger.log(log::ErrorEntry::NonUtf8ModuleText(e)),
-                    Ok(submodule_text) => self.try_parse_and_record_kernels(
+                    Err(e) => {
+                        fn_logger.log(log::ErrorEntry::Utf8Error(e));
+                        None
+                    }
+                    Ok(submodule_text) => Some(self.try_parse_and_record_kernels(
                         fn_logger,
                         self.library_counter,
                         index,
                         submodule_text,
-                    ),
+                    )),
                 },
             }
+        } else {
+            None
         }
     }
 
-    fn try_parse_and_record_kernels(
+    fn try_parse_and_record_kernels<'input>(
         &mut self,
         fn_logger: &mut FnCallLog,
         module_index: usize,
         submodule_index: Option<(usize, Option<usize>)>,
-        module_text: &str,
-    ) {
-        let errors = ptx_parser::parse_for_errors(module_text);
+        module_text: &'input str,
+    ) -> FxHashMap<String, Vec<Layout>> {
+        let (errors, params) = ptx_parser::parse_for_errors_and_params(module_text);
         if !errors.is_empty() {
             fn_logger.log(log::ErrorEntry::ModuleParsingError(
                 DumpWriter::get_file_name(module_index, submodule_index, "log"),
@@ -167,6 +210,46 @@ impl StateTracker {
                 &*errors,
             ));
         }
+        params
+    }
+
+    pub(crate) fn record_module_in_library(&mut self, module: CUmodule, library: CUlibrary) {
+        self.submodules.insert(module, library);
+    }
+
+    pub(crate) fn record_function_from_module(
+        &mut self,
+        fn_logger: &mut FnCallLog,
+        func: CUfunction,
+        hmod: CUmodule,
+        name: *const i8,
+    ) {
+        let owner = match self.submodules.get(&hmod) {
+            Some(m) => m.0.cast::<c_void>(),
+            None => hmod.0.cast::<c_void>(),
+        };
+        self.record_function_from_impl(fn_logger, func, owner, name);
+    }
+
+    fn record_function_from_impl(
+        &mut self,
+        fn_logger: &mut FnCallLog,
+        func: CUfunction,
+        owner: *mut c_void,
+        name: *const i8,
+    ) {
+        let name = match unsafe { CStr::from_ptr(name) }.to_str() {
+            Ok(f) => f,
+            Err(err) => {
+                fn_logger.log(log::ErrorEntry::Utf8Error(err));
+                return;
+            }
+        };
+        let saved_kernel = SavedKernel {
+            name: name.to_string(),
+            owner: SendablePtr(owner),
+        };
+        self.kernels.insert(func, saved_kernel);
     }
 }
 

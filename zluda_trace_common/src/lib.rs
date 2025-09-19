@@ -8,6 +8,8 @@ use cuda_types::{
 use dark_api::ByteVecFfi;
 use std::{borrow::Cow, ffi::c_void, num::NonZero, ptr, sync::LazyLock};
 
+pub mod replay;
+
 pub fn get_export_table() -> Option<::dark_api::zluda_trace::ZludaTraceInternal> {
     static CU_GET_EXPORT_TABLE: LazyLock<
         Result<
