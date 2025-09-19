@@ -780,4 +780,9 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
     
         return d_out;
     }
+
+    uint32_t FUNC(prmt_b32)(uint32_t x, uint32_t y, uint32_t s)
+    {
+        return __byte_perm(x, y, s);
+    }
 }
