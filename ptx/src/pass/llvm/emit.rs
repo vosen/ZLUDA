@@ -123,10 +123,9 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             let fn_type = get_function_type(
                 self.context,
                 method.return_arguments.iter().map(|v| &v.info.v_type),
-                method
-                    .input_arguments
-                    .iter()
-                    .map(|v| get_input_argument_type(self.context, &v.info.v_type, v.info.state_space)),
+                method.input_arguments.iter().map(|v| {
+                    get_input_argument_type(self.context, &v.info.v_type, v.info.state_space)
+                }),
             )?;
             fn_ = unsafe { LLVMAddFunction(self.module, name.as_ptr(), fn_type) };
             self.emit_fn_attribute(fn_, "amdgpu-unsafe-fp-atomics", "true");

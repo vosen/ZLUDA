@@ -1004,7 +1004,10 @@ pub enum MultiVariable<ID> {
         name: ID,
         count: u32,
     },
-    Names { info: VariableInfo<ID>, names: Vec<ID> },
+    Names {
+        info: VariableInfo<ID>,
+        names: Vec<ID>,
+    },
 }
 
 #[derive(Clone)]

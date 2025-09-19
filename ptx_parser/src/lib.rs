@@ -993,7 +993,7 @@ fn multi_variable<'a, 'input: 'a>(
                         state_space,
                         array_init: Vec::new(),
                     },
-                    name: name,
+                    name,
                     count,
                 });
             }
@@ -1019,9 +1019,9 @@ fn multi_variable<'a, 'input: 'a>(
             Ok(MultiVariable::Names {
                 info: VariableInfo {
                     align,
-                    v_type: Type::maybe_array(vector, type_, array_dimensions.clone()),
+                    v_type: Type::maybe_array(vector, type_, array_dimensions),
                     state_space,
-                    array_init: initializer.clone().unwrap_or(Vec::new()),
+                    array_init: initializer.unwrap_or(Vec::new()),
                 },
                 names,
             })
