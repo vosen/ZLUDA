@@ -136,7 +136,7 @@ impl<'a, 'input> PtxParserState<'a, 'input> {
     fn get_type_space(input_arguments: &[Variable<&str>]) -> Vec<(Type, StateSpace)> {
         input_arguments
             .iter()
-            .map(|var| (var.v_type.clone(), var.state_space))
+            .map(|var| (var.info.v_type.clone(), var.info.state_space))
             .collect::<Vec<_>>()
     }
 }
@@ -572,7 +572,13 @@ fn module_variable<'a, 'input>(
     let var = global_space
         .flat_map(|space| multi_variable(linking.contains(LinkingDirective::EXTERN), space))
         // TODO: support multi var in globals
-        .map(|multi_var| multi_var.var)
+        .verify_map(|multi_var| match multi_var {
+            MultiVariable::Names { info, names } if names.len() == 1 => Some(ast::Variable {
+                info,
+                name: names[0],
+            }),
+            _ => None,
+        })
         .parse_next(stream)?;
     Ok((linking, var))
 }
@@ -906,7 +912,7 @@ fn method_parameter<'a, 'input: 'a>(
 ) -> impl Parser<PtxParser<'a, 'input>, Variable<&'input str>, ContextError> {
     fn nvptx_kernel_declaration<'a, 'input>(
         stream: &mut PtxParser<'a, 'input>,
-    ) -> PResult<(Option<u32>, Option<NonZeroU8>, ScalarType, &'input str)> {
+    ) -> PResult<((Option<u32>, Option<NonZeroU8>, ScalarType), &'input str)> {
         trace(
             "nvptx_kernel_declaration",
             (
@@ -917,15 +923,15 @@ fn method_parameter<'a, 'input: 'a>(
                 ident,
             ),
         )
-        .map(|(vector, type_, _, align, name)| (align, vector, type_, name))
+        .map(|(vector, type_, _, align, name)| ((align, vector, type_), name))
         .parse_next(stream)
     }
     trace(
         "method_parameter",
         move |stream: &mut PtxParser<'a, 'input>| {
             if kernel_decl_rules {}
-            let (align, vector, type_, name) =
-                alt((variable_declaration, nvptx_kernel_declaration)).parse_next(stream)?;
+            let ((align, vector, type_), name) =
+                alt(((variable_info, ident), nvptx_kernel_declaration)).parse_next(stream)?;
             let array_dimensions = if state_space != StateSpace::Reg {
                 opt(array_dimensions).parse_next(stream)?
             } else {
@@ -938,27 +944,28 @@ fn method_parameter<'a, 'input: 'a>(
                 }
             }
             Ok(Variable {
-                align,
-                v_type: Type::maybe_array(vector, type_, array_dimensions),
-                state_space,
+                info: VariableInfo {
+                    align,
+                    v_type: Type::maybe_array(vector, type_, array_dimensions),
+                    state_space,
+                    array_init: Vec::new(),
+                },
                 name,
-                array_init: Vec::new(),
             })
         },
     )
 }
 
 // TODO: split to a separate type
-fn variable_declaration<'a, 'input>(
+fn variable_info<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
-) -> PResult<(Option<u32>, Option<NonZeroU8>, ScalarType, &'input str)> {
+) -> PResult<(Option<u32>, Option<NonZeroU8>, ScalarType)> {
     trace(
-        "variable_declaration",
+        "variable_info",
         (
             opt(align.verify(|x| x.count_ones() == 1)),
             vector_prefix,
             scalar_type,
-            ident,
         ),
     )
     .parse_next(stream)
@@ -971,21 +978,27 @@ fn multi_variable<'a, 'input: 'a>(
     trace(
         "multi_variable",
         move |stream: &mut PtxParser<'a, 'input>| {
-            let ((align, vector, type_, name), count) = (
-                variable_declaration,
+            let ((align, vector, type_), names, count): (_, Vec<_>, _) = (
+                variable_info,
+                separated(1.., ident, Token::Comma),
                 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parameterized-variable-names
                 opt(delimited(Token::Lt, u32.verify(|x| *x != 0), Token::Gt)),
             )
                 .parse_next(stream)?;
-            if count.is_some() {
-                return Ok(MultiVariable {
-                    var: Variable {
+            if let Some(count) = count {
+                if names.len() > 1 {
+                    // nvcc does not support parameterized variable names in comma-separated lists of names.
+                    return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+                }
+                let name = names[0];
+                return Ok(MultiVariable::Parameterized {
+                    info: VariableInfo {
                         align,
                         v_type: Type::maybe_vector_parsed(vector, type_),
                         state_space,
-                        name,
                         array_init: Vec::new(),
                     },
+                    name,
                     count,
                 });
             }
@@ -1008,15 +1021,14 @@ fn multi_variable<'a, 'input: 'a>(
                     return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
                 }
             }
-            Ok(MultiVariable {
-                var: Variable {
+            Ok(MultiVariable::Names {
+                info: VariableInfo {
                     align,
                     v_type: Type::maybe_array(vector, type_, array_dimensions),
                     state_space,
-                    name,
                     array_init: initializer.unwrap_or(Vec::new()),
                 },
-                count,
+                names,
             })
         },
     )

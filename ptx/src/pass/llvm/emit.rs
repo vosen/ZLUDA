@@ -122,11 +122,10 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         if fn_ == ptr::null_mut() {
             let fn_type = get_function_type(
                 self.context,
-                method.return_arguments.iter().map(|v| &v.v_type),
-                method
-                    .input_arguments
-                    .iter()
-                    .map(|v| get_input_argument_type(self.context, &v.v_type, v.state_space)),
+                method.return_arguments.iter().map(|v| &v.info.v_type),
+                method.input_arguments.iter().map(|v| {
+                    get_input_argument_type(self.context, &v.info.v_type, v.info.state_space)
+                }),
             )?;
             fn_ = unsafe { LLVMAddFunction(self.module, name.as_ptr(), fn_type) };
             self.emit_fn_attribute(fn_, "amdgpu-unsafe-fp-atomics", "true");
@@ -153,7 +152,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         for (i, param) in method.input_arguments.iter().enumerate() {
             let value = unsafe { LLVMGetParam(fn_, i as u32) };
             let name = self.resolver.get_or_add(param.name);
-            if let Some(align) = param.align {
+            if let Some(align) = param.info.align {
                 unsafe { LLVMSetParamAlignment(value, align) };
             }
             unsafe { LLVMSetValueName2(value, name.as_ptr().cast(), name.len()) };
@@ -166,7 +165,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                     LLVMCreateTypeAttribute(
                         self.context,
                         attr_kind,
-                        get_type(self.context, &param.v_type)?,
+                        get_type(self.context, &param.info.v_type)?,
                     )
                 };
                 unsafe { LLVMAddAttributeAtIndex(fn_, i as u32 + 1, attr) };
@@ -241,17 +240,17 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         let global = unsafe {
             LLVMAddGlobalInAddressSpace(
                 self.module,
-                get_type(self.context, &var.v_type)?,
+                get_type(self.context, &var.info.v_type)?,
                 name.as_ptr(),
-                get_state_space(var.state_space)?,
+                get_state_space(var.info.state_space)?,
             )
         };
         self.resolver.register(var.name, global);
-        if let Some(align) = var.align {
+        if let Some(align) = var.info.align {
             unsafe { LLVMSetAlignment(global, align) };
         }
-        if !var.array_init.is_empty() {
-            let initializer = self.get_array_init(&var.v_type, &*var.array_init)?;
+        if !var.info.array_init.is_empty() {
+            let initializer = self.get_array_init(&var.info.v_type, &*var.info.array_init)?;
             unsafe { LLVMSetInitializer(global, initializer) };
         }
         Ok(())
@@ -422,16 +421,16 @@ impl<'a> MethodEmitContext<'a> {
         let alloca = unsafe {
             LLVMZludaBuildAlloca(
                 self.variables_builder.get(),
-                get_type(self.context, &var.v_type)?,
-                get_state_space(var.state_space)?,
+                get_type(self.context, &var.info.v_type)?,
+                get_state_space(var.info.state_space)?,
                 self.resolver.get_or_add_raw(var.name),
             )
         };
         self.resolver.register(var.name, alloca);
-        if let Some(align) = var.align {
+        if let Some(align) = var.info.align {
             unsafe { LLVMSetAlignment(alloca, align) };
         }
-        if !var.array_init.is_empty() {
+        if !var.info.array_init.is_empty() {
             return Err(error_unreachable());
         }
         Ok(())
