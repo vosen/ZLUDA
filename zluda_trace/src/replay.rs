@@ -12,7 +12,7 @@ pub(crate) fn pre_kernel_launch(
     fn_logger: &mut FnCallLog,
     f: CUfunction,
     args: *mut *mut std::ffi::c_void,
-) -> Option<Vec<KernelParameter>> {
+) -> Option<(String, Vec<KernelParameter>)> {
     let SavedKernel { name, owner } = fn_logger.try_return(|| {
         state
             .kernels
@@ -74,7 +74,7 @@ pub(crate) fn pre_kernel_launch(
             device_ptrs: ptr_overrides,
         });
     }
-    Some(all_params)
+    Some((name.to_string(), all_params))
 }
 
 pub(crate) fn post_kernel_launch(
@@ -100,7 +100,7 @@ pub(crate) fn post_kernel_launch(
             })?;
         }
     }
-    let path = format!("kernel_{enqueue_counter}_.tar.zst");
+    let path = format!("kernel_{enqueue_counter}_{kernel_name}.tar.zst");
     let file =
         fn_logger.try_return(|| std::fs::File::create_new(path).map_err(ErrorEntry::IoError))?;
     fn_logger.try_return(|| {
