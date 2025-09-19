@@ -27,6 +27,7 @@ pub(crate) struct StateTracker {
     library_counter: usize,
     pub(crate) enqueue_counter: usize,
     pub(crate) override_cc: Option<(u32, u32)>,
+    pub(crate) kernel_name_filter: Option<regex::Regex>,
 }
 
 pub(crate) struct ParsedModule {
@@ -55,6 +56,7 @@ impl StateTracker {
             library_counter: 0,
             enqueue_counter: 0,
             override_cc: settings.override_cc,
+            kernel_name_filter: settings.kernel_name_filter.clone(),
         }
     }
 

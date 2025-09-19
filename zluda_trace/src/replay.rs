@@ -27,6 +27,10 @@ pub(crate) fn pre_kernel_launch(
             .get(&f)
             .ok_or(ErrorEntry::UnknownFunctionHandle(f))
     })?;
+    let kernel_name_filter = state.kernel_name_filter.as_ref()?;
+    if !kernel_name_filter.is_match(name) {
+        return None;
+    }
     let ParsedModule { source, kernels } = fn_logger.try_return(|| {
         state
             .parsed_libraries

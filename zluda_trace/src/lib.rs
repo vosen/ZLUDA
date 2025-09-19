@@ -1280,6 +1280,7 @@ struct Settings {
     dump_dir: Option<PathBuf>,
     libcuda_path: String,
     override_cc: Option<(u32, u32)>,
+    kernel_name_filter: Option<regex::Regex>,
 }
 
 impl Settings {
@@ -1328,10 +1329,25 @@ impl Settings {
                 })
             }),
         };
+        let kernel_name_filter = match env::var("ZLUDA_SAVE_KERNELS") {
+            Err(env::VarError::NotPresent) => None,
+            Err(e) => {
+                logger.log(log::ErrorEntry::ErrorBox(Box::new(e) as _));
+                None
+            }
+            Ok(env_string) => logger.try_return(|| {
+                regex::Regex::new(&env_string).map_err(|e| ErrorEntry::InvalidEnvVar {
+                    var: "ZLUDA_SAVE_KERNELS",
+                    pattern: "valid regex",
+                    value: format!("{} ({})", env_string, e),
+                })
+            }),
+        };
         Settings {
             dump_dir,
             libcuda_path,
             override_cc,
+            kernel_name_filter,
         }
     }
 
