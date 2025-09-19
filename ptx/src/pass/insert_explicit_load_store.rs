@@ -40,14 +40,14 @@ fn run_method<'a, 'input>(
     if is_kernel {
         for arg in method.input_arguments.iter_mut() {
             let old_name = arg.name;
-            let old_space = arg.state_space;
+            let old_space = arg.info.state_space;
             let new_space = ast::StateSpace::ParamEntry;
             let new_name = visitor
                 .resolver
-                .register_unnamed(Some((arg.v_type.clone(), new_space)));
+                .register_unnamed(Some((arg.info.v_type.clone(), new_space)));
             visitor.input_argument(old_name, new_name, old_space)?;
             arg.name = new_name;
-            arg.state_space = new_space;
+            arg.info.state_space = new_space;
         }
     };
     for arg in method.return_arguments.iter_mut() {
@@ -83,10 +83,10 @@ fn run_statement<'a, 'input>(
                     return_arguments
                         .iter()
                         .map(|arg| {
-                            if arg.state_space != ast::StateSpace::Local {
+                            if arg.info.state_space != ast::StateSpace::Local {
                                 return Err(error_unreachable());
                             }
-                            Ok((arg.name, arg.v_type.clone()))
+                            Ok((arg.name, arg.info.v_type.clone()))
                         })
                         .collect::<Result<Vec<_>, _>>()?,
                 )
@@ -332,7 +332,7 @@ impl<'a, 'input> InsertMemSSAVisitor<'a, 'input> {
     }
 
     fn visit_variable(&mut self, var: &mut ast::Variable<SpirvWord>) -> Result<(), TranslateError> {
-        let old_space = match var.state_space {
+        let old_space = match var.info.state_space {
             space @ (ptx_parser::StateSpace::Reg | ptx_parser::StateSpace::Param) => space,
             // Do nothing
             ptx_parser::StateSpace::Local => return Ok(()),
@@ -350,10 +350,10 @@ impl<'a, 'input> InsertMemSSAVisitor<'a, 'input> {
         let new_space = ast::StateSpace::Local;
         let new_name = self
             .resolver
-            .register_unnamed(Some((var.v_type.clone(), new_space)));
-        self.variable(&var.v_type, old_name, new_name, old_space)?;
+            .register_unnamed(Some((var.info.v_type.clone(), new_space)));
+        self.variable(&var.info.v_type, old_name, new_name, old_space)?;
         var.name = new_name;
-        var.state_space = new_space;
+        var.info.state_space = new_space;
         Ok(())
     }
 }

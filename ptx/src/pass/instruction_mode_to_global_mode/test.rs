@@ -195,7 +195,7 @@ fn compile_methods(ptx: &str) -> Vec<Function2<ast::Instruction<SpirvWord>, Spir
     let module = ptx_parser::parse_module_checked(ptx).unwrap();
     let mut flat_resolver = GlobalStringIdentResolver2::new(SpirvWord(1));
     let mut scoped_resolver = ScopedResolver::new(&mut flat_resolver);
-    let directives = normalize_identifiers2::run(&mut scoped_resolver, module.directives).unwrap();
+    let directives = normalize_identifiers::run(&mut scoped_resolver, module.directives).unwrap();
     let directives = normalize_predicates2::run(&mut flat_resolver, directives).unwrap();
     let directives = expand_operands::run(&mut flat_resolver, directives).unwrap();
     let directives = normalize_basic_blocks::run(&mut flat_resolver, directives).unwrap();

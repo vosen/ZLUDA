@@ -29,22 +29,24 @@ fn run_method<'input>(
     let mut remap_returns = Vec::new();
     if !method.is_kernel {
         for arg in method.return_arguments.iter_mut() {
-            match arg.state_space {
+            match arg.info.state_space {
                 ptx_parser::StateSpace::Param => {
-                    arg.state_space = ptx_parser::StateSpace::Reg;
+                    arg.info.state_space = ptx_parser::StateSpace::Reg;
                     let old_name = arg.name;
-                    arg.name =
-                        resolver.register_unnamed(Some((arg.v_type.clone(), arg.state_space)));
+                    arg.name = resolver
+                        .register_unnamed(Some((arg.info.v_type.clone(), arg.info.state_space)));
                     if is_declaration {
                         continue;
                     }
-                    remap_returns.push((old_name, arg.name, arg.v_type.clone()));
+                    remap_returns.push((old_name, arg.name, arg.info.v_type.clone()));
                     body.push(Statement::Variable(ast::Variable {
-                        align: None,
+                        info: ast::VariableInfo {
+                            align: None,
+                            v_type: arg.info.v_type.clone(),
+                            state_space: ptx_parser::StateSpace::Param,
+                            array_init: Vec::new(),
+                        },
                         name: old_name,
-                        v_type: arg.v_type.clone(),
-                        state_space: ptx_parser::StateSpace::Param,
-                        array_init: Vec::new(),
                     }));
                 }
                 ptx_parser::StateSpace::Reg => {}
@@ -52,28 +54,30 @@ fn run_method<'input>(
             }
         }
         for arg in method.input_arguments.iter_mut() {
-            match arg.state_space {
+            match arg.info.state_space {
                 ptx_parser::StateSpace::Param => {
-                    arg.state_space = ptx_parser::StateSpace::Reg;
+                    arg.info.state_space = ptx_parser::StateSpace::Reg;
                     let old_name = arg.name;
-                    arg.name =
-                        resolver.register_unnamed(Some((arg.v_type.clone(), arg.state_space)));
+                    arg.name = resolver
+                        .register_unnamed(Some((arg.info.v_type.clone(), arg.info.state_space)));
                     if is_declaration {
                         continue;
                     }
                     body.push(Statement::Variable(ast::Variable {
-                        align: None,
+                        info: ast::VariableInfo {
+                            align: None,
+                            v_type: arg.info.v_type.clone(),
+                            state_space: ptx_parser::StateSpace::Param,
+                            array_init: Vec::new(),
+                        },
                         name: old_name,
-                        v_type: arg.v_type.clone(),
-                        state_space: ptx_parser::StateSpace::Param,
-                        array_init: Vec::new(),
                     }));
                     body.push(Statement::Instruction(ast::Instruction::St {
                         data: ast::StData {
                             qualifier: ast::LdStQualifier::Weak,
                             state_space: ast::StateSpace::Param,
                             caching: ast::StCacheOperator::Writethrough,
-                            typ: arg.v_type.clone(),
+                            typ: arg.info.v_type.clone(),
                         },
                         arguments: ast::StArgs {
                             src1: old_name,

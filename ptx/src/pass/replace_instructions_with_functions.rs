@@ -580,11 +580,13 @@ fn to_variables<'input>(
     arguments
         .iter()
         .map(|(type_, space)| ast::Variable {
-            align: None,
-            v_type: type_.clone(),
-            state_space: *space,
+            info: ast::VariableInfo {
+                align: None,
+                v_type: type_.clone(),
+                state_space: *space,
+                array_init: Vec::new(),
+            },
             name: resolver.register_unnamed(Some((type_.clone(), *space))),
-            array_init: Vec::new(),
         })
         .collect::<Vec<_>>()
 }

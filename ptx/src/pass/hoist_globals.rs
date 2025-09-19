@@ -30,11 +30,19 @@ fn run_function<'input>(
         statements
             .into_iter()
             .filter_map(|statement| match statement {
-                Statement::Variable(var @ ast::Variable {
-                    state_space:
-                        ast::StateSpace::Global | ast::StateSpace::Const | ast::StateSpace::Shared,
-                    ..
-                }) => {
+                Statement::Variable(
+                    var @ ast::Variable {
+                        info:
+                            ast::VariableInfo {
+                                state_space:
+                                    ast::StateSpace::Global
+                                    | ast::StateSpace::Const
+                                    | ast::StateSpace::Shared,
+                                ..
+                            },
+                        ..
+                    },
+                ) => {
                     result.push(Directive2::Variable(ast::LinkingDirective::NONE, var));
                     None
                 }
