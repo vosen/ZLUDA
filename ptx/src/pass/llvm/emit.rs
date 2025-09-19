@@ -511,9 +511,6 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Xor { data, arguments } => self.emit_xor(data, arguments),
             ast::Instruction::Rem { data, arguments } => self.emit_rem(data, arguments),
             ast::Instruction::BarWarp { .. } => self.emit_bar_warp(),
-            ast::Instruction::PrmtSlow { .. } => {
-                Err(error_todo_msg("PrmtSlow is not implemented yet"))
-            }
             ast::Instruction::Prmt { data, arguments } => self.emit_prmt(data, arguments),
             ast::Instruction::Membar { data } => self.emit_membar(data),
             ast::Instruction::Trap {} => self.emit_trap(),
@@ -534,7 +531,8 @@ impl<'a> MethodEmitContext<'a> {
             | ast::Instruction::Nanosleep { .. }
             | ast::Instruction::ReduxSync { .. }
             | ast::Instruction::LdMatrix { .. }
-            | ast::Instruction::Mma { .. } => return Err(error_unreachable()),
+            | ast::Instruction::Mma { .. }
+            | ast::Instruction::PrmtSlow { .. } => return Err(error_unreachable()),
         }
     }
 
