@@ -80,19 +80,28 @@ fn run_function_decl<'input, 'b>(
     Ok((return_arguments, input_arguments))
 }
 
+fn run_variable_info<'input, 'b>(
+    resolver: &mut ScopedResolver<'input, 'b>,
+    info: ast::VariableInfo<&'input str>,
+) -> Result<ast::VariableInfo<SpirvWord>, TranslateError> {
+    Ok(ast::VariableInfo {
+        align: info.align,
+        v_type: info.v_type,
+        state_space: info.state_space,
+        array_init: run_array_init(resolver, &info.array_init)?,
+    })
+}
+
 fn run_variable<'input, 'b>(
     resolver: &mut ScopedResolver<'input, 'b>,
     variable: ast::Variable<&'input str>,
 ) -> Result<ast::Variable<SpirvWord>, TranslateError> {
     Ok(ast::Variable {
+        info: run_variable_info(resolver, variable.info.clone())?,
         name: resolver.add(
             Cow::Borrowed(variable.name),
-            Some((variable.v_type.clone(), variable.state_space)),
+            Some((variable.info.v_type.clone(), variable.info.state_space)),
         )?,
-        align: variable.align,
-        v_type: variable.v_type,
-        state_space: variable.state_space,
-        array_init: run_array_init(resolver, &variable.array_init)?,
     })
 }
 
@@ -158,36 +167,26 @@ fn run_multivariable<'input, 'b>(
     result: &mut Vec<NormalizedStatement>,
     variable: ast::MultiVariable<&'input str>,
 ) -> Result<(), TranslateError> {
-    match variable.count {
-        Some(count) => {
+    match variable {
+        ptx_parser::MultiVariable::Parameterized { info, name, count } => {
             for i in 0..count {
-                let name = Cow::Owned(format!("{}{}", variable.var.name, i));
-                let ident = resolver.add(
-                    name,
-                    Some((variable.var.v_type.clone(), variable.var.state_space)),
-                )?;
+                let name = Cow::Owned(format!("{}{}", name, i));
+                let ident = resolver.add(name, Some((info.v_type.clone(), info.state_space)))?;
                 result.push(Statement::Variable(ast::Variable {
-                    align: variable.var.align,
-                    v_type: variable.var.v_type.clone(),
-                    state_space: variable.var.state_space,
+                    info: run_variable_info(resolver, info.clone())?,
                     name: ident,
-                    array_init: run_array_init(resolver, &variable.var.array_init)?,
                 }));
             }
         }
-        None => {
-            let name = Cow::Borrowed(variable.var.name);
-            let ident = resolver.add(
-                name,
-                Some((variable.var.v_type.clone(), variable.var.state_space)),
-            )?;
-            result.push(Statement::Variable(ast::Variable {
-                align: variable.var.align,
-                v_type: variable.var.v_type.clone(),
-                state_space: variable.var.state_space,
-                name: ident,
-                array_init: run_array_init(resolver, &variable.var.array_init)?,
-            }));
+        ptx_parser::MultiVariable::Names { info, names } => {
+            for name in names {
+                let name = Cow::Borrowed(name);
+                let ident = resolver.add(name, Some((info.v_type.clone(), info.state_space)))?;
+                result.push(Statement::Variable(ast::Variable {
+                    info: run_variable_info(resolver, info.clone())?,
+                    name: ident,
+                }));
+            }
         }
     }
     Ok(())
