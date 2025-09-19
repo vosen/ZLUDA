@@ -1504,19 +1504,33 @@ pub(crate) fn cuLaunchKernel_Pre(
     _blockDimY: ::core::ffi::c_uint,
     _blockDimZ: ::core::ffi::c_uint,
     _sharedMemBytes: ::core::ffi::c_uint,
-    _hStream: cuda_types::cuda::CUstream,
+    stream: cuda_types::cuda::CUstream,
     kernel_params: *mut *mut ::core::ffi::c_void,
     _extra: *mut *mut ::core::ffi::c_void,
     libcuda: &mut CudaDynamicFns,
     state: &mut trace::StateTracker,
     fn_logger: &mut FnCallLog,
-) -> Option<(String, Vec<zluda_trace_common::replay::KernelParameter>)> {
+) -> Option<replay::LaunchPreState> {
+    launch_kernel_pre(f, stream, kernel_params, libcuda, state, fn_logger)
+}
+
+fn launch_kernel_pre(
+    f: cuda_types::cuda::CUfunction,
+    stream: cuda_types::cuda::CUstream,
+    kernel_params: *mut *mut ::core::ffi::c_void,
+    libcuda: &mut CudaDynamicFns,
+    state: &mut trace::StateTracker,
+    fn_logger: &mut FnCallLog,
+) -> Option<replay::LaunchPreState> {
     state.enqueue_counter += 1;
     if kernel_params.is_null() {
         fn_logger.log(ErrorEntry::NullPointer("kernel_params"));
         return None;
     }
-    replay::pre_kernel_launch(libcuda, state, fn_logger, f, kernel_params)
+    if state.dump_dir().is_none() {
+        return None;
+    }
+    replay::pre_kernel_launch(libcuda, state, fn_logger, f, stream, kernel_params)
 }
 
 #[allow(non_snake_case)]
@@ -1529,63 +1543,58 @@ pub(crate) fn cuLaunchKernel_Post(
     _blockDimY: ::core::ffi::c_uint,
     _blockDimZ: ::core::ffi::c_uint,
     _sharedMemBytes: ::core::ffi::c_uint,
-    _hStream: cuda_types::cuda::CUstream,
+    stream: cuda_types::cuda::CUstream,
     kernel_params: *mut *mut ::core::ffi::c_void,
     _extra: *mut *mut ::core::ffi::c_void,
-    pre_state: Option<(String, Vec<zluda_trace_common::replay::KernelParameter>)>,
+    pre_state: Option<replay::LaunchPreState>,
     libcuda: &mut CudaDynamicFns,
     state: &mut trace::StateTracker,
     fn_logger: &mut FnCallLog,
     _result: CUresult,
 ) {
-    let (kernel_name, pre_state) = unwrap_some_or!(pre_state, return);
-    replay::post_kernel_launch(
-        libcuda,
-        fn_logger,
-        kernel_params,
-        pre_state,
-        state.enqueue_counter,
-        kernel_name,
-    );
+    let pre_state = unwrap_some_or!(pre_state, return);
+    replay::post_kernel_launch(libcuda, state, fn_logger, stream, kernel_params, pre_state);
 }
 
 #[allow(non_snake_case)]
 pub(crate) fn cuLaunchKernelEx_Pre(
-    _config: *const cuda_types::cuda::CUlaunchConfig,
+    config: *const cuda_types::cuda::CUlaunchConfig,
     f: cuda_types::cuda::CUfunction,
     kernel_params: *mut *mut ::core::ffi::c_void,
     _extra: *mut *mut ::core::ffi::c_void,
     libcuda: &mut CudaDynamicFns,
     state: &mut trace::StateTracker,
     fn_logger: &mut FnCallLog,
-) -> Option<(String, Vec<zluda_trace_common::replay::KernelParameter>)> {
-    state.enqueue_counter += 1;
-    if kernel_params.is_null() {
-        fn_logger.log(ErrorEntry::NullPointer("kernel_params"));
-        return None;
-    }
-    replay::pre_kernel_launch(libcuda, state, fn_logger, f, kernel_params)
+) -> Option<replay::LaunchPreState> {
+    launch_kernel_pre(
+        f,
+        unsafe { *config }.hStream,
+        kernel_params,
+        libcuda,
+        state,
+        fn_logger,
+    )
 }
 
 #[allow(non_snake_case)]
 pub(crate) fn cuLaunchKernelEx_Post(
-    _config: *const cuda_types::cuda::CUlaunchConfig,
+    config: *const cuda_types::cuda::CUlaunchConfig,
     _f: cuda_types::cuda::CUfunction,
     kernel_params: *mut *mut ::core::ffi::c_void,
     _extra: *mut *mut ::core::ffi::c_void,
-    pre_state: Option<(String, Vec<zluda_trace_common::replay::KernelParameter>)>,
+    pre_state: Option<replay::LaunchPreState>,
     libcuda: &mut CudaDynamicFns,
     state: &mut trace::StateTracker,
     fn_logger: &mut FnCallLog,
     _result: CUresult,
 ) {
-    let (kernel_name, pre_state) = unwrap_some_or!(pre_state, return);
+    let pre_state = unwrap_some_or!(pre_state, return);
     replay::post_kernel_launch(
         libcuda,
+        state,
         fn_logger,
+        unsafe { *config }.hStream,
         kernel_params,
         pre_state,
-        state.enqueue_counter,
-        kernel_name,
     );
 }

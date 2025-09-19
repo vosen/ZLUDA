@@ -6,20 +6,28 @@ use crate::{
 use cuda_types::cuda::*;
 use zluda_trace_common::replay::KernelParameter;
 
+pub struct LaunchPreState {
+    kernel_name: String,
+    source: String,
+    kernel_params: Vec<KernelParameter>,
+}
+
 pub(crate) fn pre_kernel_launch(
     libcuda: &mut CudaDynamicFns,
     state: &mut trace::StateTracker,
     fn_logger: &mut FnCallLog,
     f: CUfunction,
+    stream: CUstream,
     args: *mut *mut std::ffi::c_void,
-) -> Option<(String, Vec<KernelParameter>)> {
+) -> Option<LaunchPreState> {
+    fn_logger.try_cuda(|| libcuda.cuStreamSynchronize(stream))?;
     let SavedKernel { name, owner } = fn_logger.try_return(|| {
         state
             .kernels
             .get(&f)
             .ok_or(ErrorEntry::UnknownFunctionHandle(f))
     })?;
-    let ParsedModule { kernels } = fn_logger.try_return(|| {
+    let ParsedModule { source, kernels } = fn_logger.try_return(|| {
         state
             .parsed_libraries
             .get(owner)
@@ -74,19 +82,25 @@ pub(crate) fn pre_kernel_launch(
             device_ptrs: ptr_overrides,
         });
     }
-    Some((name.to_string(), all_params))
+    Some(LaunchPreState {
+        kernel_name: name.to_string(),
+        source: source.to_string(),
+        kernel_params: all_params,
+    })
 }
 
 pub(crate) fn post_kernel_launch(
     libcuda: &mut CudaDynamicFns,
+    state: &trace::StateTracker,
     fn_logger: &mut FnCallLog,
-    args: *mut *mut std::ffi::c_void,
-    mut kernel_params: Vec<KernelParameter>,
-    enqueue_counter: usize,
-    kernel_name: String,
+    stream: CUstream,
+    kernel_params: *mut *mut std::ffi::c_void,
+    mut pre_state: LaunchPreState,
 ) -> Option<()> {
-    let raw_args = unsafe { std::slice::from_raw_parts(args, kernel_params.len()) };
-    for (raw_arg, param) in raw_args.iter().zip(kernel_params.iter_mut()) {
+    fn_logger.try_cuda(|| libcuda.cuStreamSynchronize(stream))?;
+    let raw_args =
+        unsafe { std::slice::from_raw_parts(kernel_params, pre_state.kernel_params.len()) };
+    for (raw_arg, param) in raw_args.iter().zip(pre_state.kernel_params.iter_mut()) {
         for (offset_in_param, offset_in_buffer, _, data_after) in param.device_ptrs.iter_mut() {
             let dev_ptr_param = unsafe { raw_arg.cast::<u8>().add(*offset_in_param) };
             let mut dev_ptr = unsafe { dev_ptr_param.cast::<usize>().read_unaligned() };
@@ -100,11 +114,19 @@ pub(crate) fn post_kernel_launch(
             })?;
         }
     }
-    let path = format!("kernel_{enqueue_counter}_{kernel_name}.tar.zst");
+    let enqueue_counter = state.enqueue_counter;
+    let kernel_name = &pre_state.kernel_name;
+    let mut path = state.dump_dir()?.to_path_buf();
+    path.push(format!("kernel_{enqueue_counter}_{kernel_name}.tar.zst"));
     let file =
         fn_logger.try_return(|| std::fs::File::create_new(path).map_err(ErrorEntry::IoError))?;
     fn_logger.try_return(|| {
-        zluda_trace_common::replay::save(file, kernel_name, kernel_params)
-            .map_err(ErrorEntry::IoError)
+        zluda_trace_common::replay::save(
+            file,
+            pre_state.kernel_name,
+            pre_state.source,
+            pre_state.kernel_params,
+        )
+        .map_err(ErrorEntry::IoError)
     })
 }

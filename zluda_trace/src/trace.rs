@@ -30,6 +30,7 @@ pub(crate) struct StateTracker {
 }
 
 pub(crate) struct ParsedModule {
+    pub source: String,
     pub kernels: FxHashMap<String, Vec<Layout>>,
 }
 
@@ -55,6 +56,10 @@ impl StateTracker {
             enqueue_counter: 0,
             override_cc: settings.override_cc,
         }
+    }
+
+    pub(crate) fn dump_dir(&self) -> Option<&PathBuf> {
+        self.writer.dump_dir.as_ref()
     }
 
     pub(crate) fn record_new_module_file(
@@ -147,12 +152,15 @@ impl StateTracker {
                 }
             });
         };
-        self.parsed_libraries.insert(
-            SendablePtr(handle),
-            ParsedModule {
-                kernels: kernel_arguments.unwrap_or_default(),
-            },
-        );
+        if let Some((source, kernel_arguments)) = kernel_arguments {
+            self.parsed_libraries.insert(
+                SendablePtr(handle),
+                ParsedModule {
+                    source,
+                    kernels: kernel_arguments,
+                },
+            );
+        }
     }
 
     #[must_use]
@@ -162,7 +170,7 @@ impl StateTracker {
         submodule: &[u8],
         fn_logger: &mut FnCallLog,
         type_: &'static str,
-    ) -> Option<FxHashMap<String, Vec<Layout>>> {
+    ) -> Option<(String, FxHashMap<String, Vec<Layout>>)> {
         fn_logger.try_(|fn_logger| {
             self.writer
                 .save_module(fn_logger, self.library_counter, index, submodule, type_)
@@ -198,7 +206,7 @@ impl StateTracker {
         module_index: usize,
         submodule_index: Option<(usize, Option<usize>)>,
         module_text: &'input str,
-    ) -> FxHashMap<String, Vec<Layout>> {
+    ) -> (String, FxHashMap<String, Vec<Layout>>) {
         let (errors, params) = ptx_parser::parse_for_errors_and_params(module_text);
         if !errors.is_empty() {
             fn_logger.log(log::ErrorEntry::ModuleParsingError(
@@ -210,7 +218,7 @@ impl StateTracker {
                 &*errors,
             ));
         }
-        params
+        (module_text.to_string(), params)
     }
 
     pub(crate) fn record_module_in_library(&mut self, module: CUmodule, library: CUlibrary) {

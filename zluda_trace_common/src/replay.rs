@@ -37,6 +37,7 @@ pub struct KernelParameter {
 pub fn save(
     writer: impl Write,
     kernel_name: String,
+    source: String,
     kernel_params: Vec<KernelParameter>,
 ) -> std::io::Result<()> {
     let archive = zstd::Encoder::new(writer, 0)?;
@@ -61,6 +62,9 @@ pub fn save(
     }
     .serialize()?;
     builder.append_data(&mut header, Manifest::PATH, &*manifest)?;
+    let mut header = Header::new_gnu();
+    header.set_size(source.len() as u64);
+    builder.append_data(&mut header, "source.ptx", source.as_bytes())?;
     for (i, param) in kernel_params.into_iter().enumerate() {
         let path = format!("param_{i}.bin");
         let mut header = Header::new_gnu();
