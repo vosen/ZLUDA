@@ -1552,14 +1552,14 @@ fn launch_kernel_pre(
 #[allow(non_snake_case)]
 pub(crate) fn cuLaunchKernel_Post(
     _f: cuda_types::cuda::CUfunction,
-    _gridDimX: ::core::ffi::c_uint,
-    _gridDimY: ::core::ffi::c_uint,
-    _gridDimZ: ::core::ffi::c_uint,
-    _blockDimX: ::core::ffi::c_uint,
-    _blockDimY: ::core::ffi::c_uint,
-    _blockDimZ: ::core::ffi::c_uint,
-    _sharedMemBytes: ::core::ffi::c_uint,
-    stream: cuda_types::cuda::CUstream,
+    gridDimX: ::core::ffi::c_uint,
+    gridDimY: ::core::ffi::c_uint,
+    gridDimZ: ::core::ffi::c_uint,
+    blockDimX: ::core::ffi::c_uint,
+    blockDimY: ::core::ffi::c_uint,
+    blockDimZ: ::core::ffi::c_uint,
+    sharedMemBytes: ::core::ffi::c_uint,
+    hStream: cuda_types::cuda::CUstream,
     kernel_params: *mut *mut ::core::ffi::c_void,
     _extra: *mut *mut ::core::ffi::c_void,
     pre_state: Option<replay::LaunchPreState>,
@@ -1569,7 +1569,25 @@ pub(crate) fn cuLaunchKernel_Post(
     _result: CUresult,
 ) {
     let pre_state = unwrap_some_or!(pre_state, return);
-    replay::post_kernel_launch(libcuda, state, fn_logger, stream, kernel_params, pre_state);
+    replay::post_kernel_launch(
+        libcuda,
+        state,
+        fn_logger,
+        CUlaunchConfig {
+            gridDimX,
+            gridDimY,
+            gridDimZ,
+            blockDimX,
+            blockDimY,
+            blockDimZ,
+            sharedMemBytes,
+            hStream,
+            attrs: ptr::null_mut(),
+            numAttrs: 0,
+        },
+        kernel_params,
+        pre_state,
+    );
 }
 
 #[allow(non_snake_case)]
@@ -1609,7 +1627,7 @@ pub(crate) fn cuLaunchKernelEx_Post(
         libcuda,
         state,
         fn_logger,
-        unsafe { *config }.hStream,
+        unsafe { *config },
         kernel_params,
         pre_state,
     );

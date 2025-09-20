@@ -1,0 +1,17 @@
+[package]
+name = "zluda_replay"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2021"
+
+[[bin]]
+name = "zluda_replay"
+
+[dependencies]
+zluda_trace_common = { path = "../zluda_trace_common" }
+cuda_macros = { path = "../cuda_macros" }
+cuda_types = { path = "../cuda_types" }
+libloading = "0.8"
+
+[package.metadata.zluda]
+debug_only = true

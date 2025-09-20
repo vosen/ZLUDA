@@ -124,6 +124,7 @@ test_ptx!(vector4, [1u32, 2u32, 3u32, 4u32], [4u32]);
 test_ptx!(ld_st_offset, [1u32, 2u32], [2u32, 1u32]);
 test_ptx!(ntid, [3u32], [4u32]);
 test_ptx!(reg_local, [12u64], [13u64]);
+test_ptx!(reg_multi, [123u32, 456u32], [123u32, 456u32]);
 test_ptx!(mov_address, [0xDEADu64], [0u64]);
 test_ptx!(b64tof64, [111u64], [111u64]);
 // This segfaults NV compiler

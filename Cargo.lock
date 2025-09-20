@@ -3827,6 +3827,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "zluda_replay"
+version = "0.0.0"
+dependencies = [
+ "cuda_macros",
+ "cuda_types",
+ "libloading",
+ "zluda_trace_common",
+]
+
+[[package]]
 name = "zluda_sparse"
 version = "0.0.0"
 dependencies = [
@@ -3903,6 +3913,7 @@ dependencies = [
  "format",
  "libc",
  "libloading",
+ "rustc-hash 2.0.0",
  "serde",
  "serde_json",
  "tar",

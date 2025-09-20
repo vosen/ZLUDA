@@ -22,7 +22,7 @@ mod insert_post_saturation;
 mod instruction_mode_to_global_mode;
 pub mod llvm;
 mod normalize_basic_blocks;
-mod normalize_identifiers2;
+mod normalize_identifiers;
 mod normalize_predicates2;
 mod remove_unreachable_basic_blocks;
 mod replace_instructions_with_functions;
@@ -68,8 +68,8 @@ pub fn to_llvm_module<'input>(
     let sreg_map = SpecialRegistersMap::new(&mut scoped_resolver)?;
     let directives = filter_for_demo::run(ast.directives);
     on_pass_end("filter_for_demo");
-    let directives = normalize_identifiers2::run(&mut scoped_resolver, directives)?;
-    on_pass_end("normalize_identifiers2");
+    let directives = normalize_identifiers::run(&mut scoped_resolver, directives)?;
+    on_pass_end("normalize_identifiers");
     let directives = replace_known_functions::run(&mut flat_resolver, directives);
     on_pass_end("replace_known_functions");
     let directives = normalize_predicates2::run(&mut flat_resolver, directives)?;
@@ -311,16 +311,18 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
             Statement::Variable(var) => {
                 let name = visitor.visit_ident(
                     var.name,
-                    Some((&var.v_type, var.state_space)),
+                    Some((&var.info.v_type, var.info.state_space)),
                     true,
                     false,
                 )?;
                 Statement::Variable(ast::Variable {
-                    align: var.align,
-                    v_type: var.v_type,
-                    state_space: var.state_space,
+                    info: ast::VariableInfo {
+                        align: var.info.align,
+                        v_type: var.info.v_type,
+                        state_space: var.info.state_space,
+                        array_init: var.info.array_init,
+                    },
                     name,
-                    array_init: var.array_init,
                 })
             }
             Statement::Conditional(conditional) => {
@@ -981,20 +983,24 @@ impl SpecialRegistersMap {
             let return_type = sreg.get_function_return_type();
             let input_type = sreg.get_function_input_type();
             let return_arguments = vec![ast::Variable {
-                align: None,
-                v_type: return_type.into(),
-                state_space: ast::StateSpace::Reg,
+                info: ast::VariableInfo {
+                    align: None,
+                    v_type: return_type.into(),
+                    state_space: ast::StateSpace::Reg,
+                    array_init: Vec::new(),
+                },
                 name: resolver.register_unnamed(Some((return_type.into(), ast::StateSpace::Reg))),
-                array_init: Vec::new(),
             }];
             let input_arguments = input_type
                 .into_iter()
                 .map(|type_| ast::Variable {
-                    align: None,
-                    v_type: type_.into(),
-                    state_space: ast::StateSpace::Reg,
+                    info: ast::VariableInfo {
+                        align: None,
+                        v_type: type_.into(),
+                        state_space: ast::StateSpace::Reg,
+                        array_init: Vec::new(),
+                    },
                     name: resolver.register_unnamed(Some((type_.into(), ast::StateSpace::Reg))),
-                    array_init: Vec::new(),
                 })
                 .collect::<Vec<_>>();
             fn_(sreg, (return_arguments, name, input_arguments));
