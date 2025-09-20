@@ -781,8 +781,52 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
         return d_out;
     }
 
+    struct byte4
+    {
+        union
+        {
+            uint32_t u32;
+            uint8_t u8x4[4];
+        };
+    } __attribute__((aligned(4)));
+
+    struct byte8
+    {
+        union
+        {
+            uint32_t u32x2[2];
+            uint8_t u8x8[8];
+        };
+    } __attribute__((aligned(8)));
+
     uint32_t FUNC(prmt_b32)(uint32_t x, uint32_t y, uint32_t s)
     {
-        return __byte_perm(x, y, s);
+        byte4 v_perm_selector;
+        v_perm_selector.u32 = 0;
+
+        byte8 input;
+        input.u32x2[0] = x;
+        input.u32x2[1] = y;
+
+        for (size_t i = 0; i < 4; i++)
+        {
+            uint8_t sel = static_cast<uint8_t>(s >> (i * 4));
+            uint8_t addr = sel & 0x7;
+            v_perm_selector.u8x4[i] = addr;
+        }
+
+        byte4 output;
+        output.u32 = __builtin_amdgcn_perm(input.u32x2[1], input.u32x2[0], v_perm_selector.u32);
+
+        for (size_t i = 0; i < 4; i++)
+        {
+            uint8_t sel = static_cast<uint8_t>(s >> (i * 4));
+            if (sel & 0x8)
+            {
+                output.u8x4[i] = (output.u8x4[i] & 0x80) * 0xff;
+            }
+        }
+
+        return output.u32;
     }
 }
