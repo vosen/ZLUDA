@@ -370,7 +370,7 @@ pub fn parse_for_errors_and_params<'input>(
                         .func_directive
                         .input_arguments
                         .iter()
-                        .map(|arg| arg.v_type.layout())
+                        .map(|arg| arg.info.v_type.layout())
                         .collect();
                     Some((func.func_directive.name().to_string(), layouts))
                 } else {

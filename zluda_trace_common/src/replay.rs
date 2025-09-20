@@ -1,21 +1,30 @@
-use std::io::Write;
+use rustc_hash::FxHashMap;
+use std::io::{Read, Write};
 use tar::Header;
 
 #[derive(serde::Serialize, serde::Deserialize)]
-struct Manifest {
-    kernel_name: String,
-    parameters: Vec<Parameter>,
+pub struct Manifest {
+    pub kernel_name: String,
+    pub config: LaunchConfig,
+    pub parameters: Vec<Parameter>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
-struct Parameter {
-    pointer_offsets: Vec<ParameterPointer>,
+pub struct LaunchConfig {
+    pub grid_dim: (u32, u32, u32),
+    pub block_dim: (u32, u32, u32),
+    pub shared_mem_bytes: u32,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
-struct ParameterPointer {
-    offset_in_param: usize,
-    offset_in_buffer: usize,
+pub struct Parameter {
+    pub pointer_offsets: Vec<ParameterPointer>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct ParameterPointer {
+    pub offset_in_param: usize,
+    pub offset_in_buffer: usize,
 }
 
 impl Manifest {
@@ -37,6 +46,7 @@ pub struct KernelParameter {
 pub fn save(
     writer: impl Write,
     kernel_name: String,
+    config: LaunchConfig,
     source: String,
     kernel_params: Vec<KernelParameter>,
 ) -> std::io::Result<()> {
@@ -44,6 +54,7 @@ pub fn save(
     let mut builder = tar::Builder::new(archive);
     let (mut header, manifest) = Manifest {
         kernel_name,
+        config,
         parameters: kernel_params
             .iter()
             .map(|param| Parameter {
@@ -84,4 +95,35 @@ pub fn save(
     builder.finish()?;
     builder.into_inner()?.finish()?;
     Ok(())
+}
+
+pub fn load(reader: impl Read) -> (Manifest, String, FxHashMap<String, Vec<u8>>) {
+    let archive = zstd::Decoder::new(reader).unwrap();
+    let mut archive = tar::Archive::new(archive);
+    let mut manifest = None;
+    let mut source = None;
+    let mut buffers = FxHashMap::default();
+    for entry in archive.entries().unwrap() {
+        let mut entry = entry.unwrap();
+        let path = entry.path().unwrap().to_string_lossy().to_string();
+        match &*path {
+            Manifest::PATH => {
+                manifest = Some(serde_json::from_reader::<_, Manifest>(&mut entry).unwrap());
+            }
+            "source.ptx" => {
+                let mut string = String::new();
+                entry.read_to_string(&mut string).unwrap();
+                dbg!(string.len());
+                source = Some(string);
+            }
+            _ => {
+                let mut buffer = Vec::new();
+                entry.read_to_end(&mut buffer).unwrap();
+                buffers.insert(path, buffer);
+            }
+        }
+    }
+    let manifest = manifest.unwrap();
+    let source = source.unwrap();
+    (manifest, source, buffers)
 }

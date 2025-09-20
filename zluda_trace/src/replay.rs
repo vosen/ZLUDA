@@ -97,11 +97,11 @@ pub(crate) fn post_kernel_launch(
     libcuda: &mut CudaDynamicFns,
     state: &trace::StateTracker,
     fn_logger: &mut FnCallLog,
-    stream: CUstream,
+    config: CUlaunchConfig,
     kernel_params: *mut *mut std::ffi::c_void,
     mut pre_state: LaunchPreState,
 ) -> Option<()> {
-    fn_logger.try_cuda(|| libcuda.cuStreamSynchronize(stream))?;
+    fn_logger.try_cuda(|| libcuda.cuStreamSynchronize(config.hStream))?;
     let raw_args =
         unsafe { std::slice::from_raw_parts(kernel_params, pre_state.kernel_params.len()) };
     for (raw_arg, param) in raw_args.iter().zip(pre_state.kernel_params.iter_mut()) {
@@ -128,6 +128,11 @@ pub(crate) fn post_kernel_launch(
         zluda_trace_common::replay::save(
             file,
             pre_state.kernel_name,
+            zluda_trace_common::replay::LaunchConfig {
+                grid_dim: (config.gridDimX, config.gridDimY, config.gridDimZ),
+                block_dim: (config.blockDimX, config.blockDimY, config.blockDimZ),
+                shared_mem_bytes: config.sharedMemBytes,
+            },
             pre_state.source,
             pre_state.kernel_params,
         )
