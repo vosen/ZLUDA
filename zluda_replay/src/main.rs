@@ -66,6 +66,7 @@ fn main() {
                 });
                 buffer_param_slice.copy_from_slice(&(dev_ptr.0 as usize).to_ne_bytes());
             }
+            buffer
         })
         .collect::<Vec<_>>();
     let mut module = unsafe { mem::zeroed() };
@@ -78,6 +79,10 @@ fn main() {
         libcuda.cuModuleGetFunction(&mut function, module, manifest.kernel_name.as_ptr().cast())
     }
     .unwrap();
+    let mut cuda_args = args
+        .iter_mut()
+        .map(|arg| arg.as_mut_ptr().cast::<std::ffi::c_void>())
+        .collect::<Vec<_>>();
     unsafe {
         libcuda.cuLaunchKernel(
             function,
@@ -89,10 +94,10 @@ fn main() {
             manifest.config.block_dim.2,
             manifest.config.shared_mem_bytes,
             CUstream(std::ptr::null_mut()),
-            args.as_mut_ptr().cast(),
+            cuda_args.as_mut_ptr().cast(),
             std::ptr::null_mut(),
         )
     }
     .unwrap();
-    todo!();
+    unsafe { libcuda.cuCtxSynchronize() }.unwrap();
 }
