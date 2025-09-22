@@ -33,12 +33,12 @@ define amdgpu_kernel void @prmt_slow(ptr addrspace(4) byref(i64) %"39", ptr addr
   %"55" = load i32, ptr addrspace(5) %"43", align 4
   %"56" = load i32, ptr addrspace(5) %"44", align 4
   %"57" = load i32, ptr addrspace(5) %"45", align 4
-  %"54" = call i32 @__zluda_ptx_impl_prmt_b32(i32 %"55", i32 %"56", i32 %"57")
-  store i32 %"54", ptr addrspace(5) %"44", align 4
+  %"63" = call i32 @__zluda_ptx_impl_prmt_b32(i32 %"55", i32 %"56", i32 %"57")
+  store i32 %"63", ptr addrspace(5) %"44", align 4
   %"58" = load i64, ptr addrspace(5) %"42", align 8
   %"59" = load i32, ptr addrspace(5) %"44", align 4
-  %"63" = inttoptr i64 %"58" to ptr
-  store i32 %"59", ptr %"63", align 4
+  %"67" = inttoptr i64 %"58" to ptr
+  store i32 %"59", ptr %"67", align 4
   ret void
 }
 

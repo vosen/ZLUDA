@@ -3659,17 +3659,9 @@ derive_parser!(
     // prmt.b32{.mode}  d, a, b, c;
     // .mode = { .f4e, .b4e, .rc8, .ecl, .ecr, .rc16 };
     prmt.b32  d, a, b, c => {
-        match c {
-            ast::ParsedOperand::Imm(ImmediateValue::S64(control)) => ast::Instruction::Prmt {
-                data: control as u16,
-                arguments: PrmtArgs {
-                    dst: d, src1: a, src2: b
-                }
-            },
-            _ => ast::Instruction::PrmtSlow {
-                arguments: PrmtSlowArgs {
-                    dst: d, src1: a, src2: b, src3: c
-                }
+        ast::Instruction::Prmt {
+            arguments: PrmtArgs {
+                dst: d, src1: a, src2: b, src3: c
             }
         }
     }
