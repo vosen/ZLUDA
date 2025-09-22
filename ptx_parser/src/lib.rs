@@ -227,8 +227,9 @@ fn int_immediate<'a, 'input>(input: &mut PtxParser<'a, 'input>) -> PResult<ast::
     take_error((opt(Token::Minus), num).map(|(neg, x)| {
         let (num, radix, is_unsigned) = x;
         if neg.is_some() {
-            match i64::from_str_radix(num, radix) {
-                Ok(x) => Ok(ast::ImmediateValue::S64(-x)),
+            let full_number = format!("-{num}");
+            match i64::from_str_radix(&full_number, radix) {
+                Ok(x) => Ok(ast::ImmediateValue::S64(x)),
                 Err(err) => Err((ast::ImmediateValue::S64(0), PtxError::from(err))),
             }
         } else if is_unsigned {
