@@ -1281,6 +1281,7 @@ struct Settings {
     libcuda_path: String,
     override_cc: Option<(u32, u32)>,
     kernel_name_filter: Option<regex::Regex>,
+    kernel_no_output: Option<bool>,
 }
 
 impl Settings {
@@ -1343,11 +1344,28 @@ impl Settings {
                 })
             }),
         };
+        let kernel_no_output = match env::var("ZLUDA_SAVE_KERNELS_NO_OUTPUT") {
+            Err(env::VarError::NotPresent) => None,
+            Err(e) => {
+                logger.log(log::ErrorEntry::ErrorBox(Box::new(e) as _));
+                None
+            }
+            Ok(env_string) => logger
+                .try_return(|| {
+                    str::parse::<u8>(&env_string).map_err(|err| ErrorEntry::InvalidEnvVar {
+                        var: "ZLUDA_SAVE_KERNELS_NO_OUTPUT",
+                        pattern: "number",
+                        value: format!("{} ({})", env_string, err),
+                    })
+                })
+                .map(|x| x != 0),
+        };
         Settings {
             dump_dir,
             libcuda_path,
             override_cc,
             kernel_name_filter,
+            kernel_no_output,
         }
     }
 
@@ -1513,25 +1531,45 @@ pub(crate) fn cuLibraryLoadData_Post(
 #[allow(non_snake_case)]
 pub(crate) fn cuLaunchKernel_Pre(
     f: cuda_types::cuda::CUfunction,
-    _gridDimX: ::core::ffi::c_uint,
-    _gridDimY: ::core::ffi::c_uint,
-    _gridDimZ: ::core::ffi::c_uint,
-    _blockDimX: ::core::ffi::c_uint,
-    _blockDimY: ::core::ffi::c_uint,
-    _blockDimZ: ::core::ffi::c_uint,
-    _sharedMemBytes: ::core::ffi::c_uint,
-    stream: cuda_types::cuda::CUstream,
+    gridDimX: ::core::ffi::c_uint,
+    gridDimY: ::core::ffi::c_uint,
+    gridDimZ: ::core::ffi::c_uint,
+    blockDimX: ::core::ffi::c_uint,
+    blockDimY: ::core::ffi::c_uint,
+    blockDimZ: ::core::ffi::c_uint,
+    sharedMemBytes: ::core::ffi::c_uint,
+    hStream: cuda_types::cuda::CUstream,
     kernel_params: *mut *mut ::core::ffi::c_void,
     _extra: *mut *mut ::core::ffi::c_void,
     libcuda: &mut CudaDynamicFns,
     state: &mut trace::StateTracker,
     fn_logger: &mut FnCallLog,
 ) -> Option<replay::LaunchPreState> {
-    launch_kernel_pre(f, stream, kernel_params, libcuda, state, fn_logger)
+    launch_kernel_pre(
+        f,
+        CUlaunchConfig {
+            gridDimX,
+            gridDimY,
+            gridDimZ,
+            blockDimX,
+            blockDimY,
+            blockDimZ,
+            sharedMemBytes,
+            hStream,
+            attrs: ptr::null_mut(),
+            numAttrs: 0,
+        },
+        hStream,
+        kernel_params,
+        libcuda,
+        state,
+        fn_logger,
+    )
 }
 
 fn launch_kernel_pre(
     f: cuda_types::cuda::CUfunction,
+    config: CUlaunchConfig,
     stream: cuda_types::cuda::CUstream,
     kernel_params: *mut *mut ::core::ffi::c_void,
     libcuda: &mut CudaDynamicFns,
@@ -1546,7 +1584,7 @@ fn launch_kernel_pre(
     if state.dump_dir().is_none() {
         return None;
     }
-    replay::pre_kernel_launch(libcuda, state, fn_logger, f, stream, kernel_params)
+    replay::pre_kernel_launch(libcuda, state, fn_logger, config, f, stream, kernel_params)
 }
 
 #[allow(non_snake_case)]
@@ -1602,6 +1640,7 @@ pub(crate) fn cuLaunchKernelEx_Pre(
 ) -> Option<replay::LaunchPreState> {
     launch_kernel_pre(
         f,
+        unsafe { *config },
         unsafe { *config }.hStream,
         kernel_params,
         libcuda,

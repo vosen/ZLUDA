@@ -16,6 +16,7 @@ pub(crate) fn pre_kernel_launch(
     libcuda: &mut CudaDynamicFns,
     state: &mut trace::StateTracker,
     fn_logger: &mut FnCallLog,
+    config: CUlaunchConfig,
     f: CUfunction,
     stream: CUstream,
     args: *mut *mut std::ffi::c_void,
@@ -60,12 +61,15 @@ pub(crate) fn pre_kernel_launch(
                 (&mut start as *mut usize).cast::<std::ffi::c_void>(),
                 (&mut size as *mut usize).cast::<std::ffi::c_void>(),
             ];
-            if let Some(Ok(())) = libcuda.cuPointerGetAttributes(
-                2,
-                attrs.as_mut_ptr(),
-                data.as_mut_ptr(),
-                CUdeviceptr_v2(maybe_ptr as _),
-            ) {
+            fn_logger.try_cuda(|| {
+                libcuda.cuPointerGetAttributes(
+                    2,
+                    attrs.as_mut_ptr(),
+                    data.as_mut_ptr(),
+                    CUdeviceptr_v2(maybe_ptr as _),
+                )
+            })?;
+            if size != 0 {
                 let mut pre_buffer = vec![0u8; size];
                 let post_buffer = vec![0u8; size];
                 fn_logger.try_cuda(|| {
@@ -86,11 +90,36 @@ pub(crate) fn pre_kernel_launch(
             device_ptrs: ptr_overrides,
         });
     }
-    Some(LaunchPreState {
-        kernel_name: name.to_string(),
-        source: source.to_string(),
-        kernel_params: all_params,
-    })
+    if state.kernel_no_output {
+        let enqueue_counter = state.enqueue_counter;
+        let kernel_name = name;
+        let mut path = state.dump_dir()?.to_path_buf();
+        path.push(format!("kernel_{enqueue_counter}_{kernel_name}.tar.zst"));
+        let file = fn_logger
+            .try_return(|| std::fs::File::create_new(path).map_err(ErrorEntry::IoError))?;
+        fn_logger.try_return(|| {
+            zluda_trace_common::replay::save(
+                file,
+                name.to_string(),
+                false,
+                zluda_trace_common::replay::LaunchConfig {
+                    grid_dim: (config.gridDimX, config.gridDimY, config.gridDimZ),
+                    block_dim: (config.blockDimX, config.blockDimY, config.blockDimZ),
+                    shared_mem_bytes: config.sharedMemBytes,
+                },
+                source.to_string(),
+                all_params,
+            )
+            .map_err(ErrorEntry::IoError)
+        });
+        None
+    } else {
+        Some(LaunchPreState {
+            kernel_name: name.to_string(),
+            source: source.to_string(),
+            kernel_params: all_params,
+        })
+    }
 }
 
 pub(crate) fn post_kernel_launch(
@@ -128,6 +157,7 @@ pub(crate) fn post_kernel_launch(
         zluda_trace_common::replay::save(
             file,
             pre_state.kernel_name,
+            true,
             zluda_trace_common::replay::LaunchConfig {
                 grid_dim: (config.gridDimX, config.gridDimY, config.gridDimZ),
                 block_dim: (config.blockDimX, config.blockDimY, config.blockDimZ),

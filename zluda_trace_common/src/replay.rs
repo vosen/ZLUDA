@@ -5,6 +5,7 @@ use tar::Header;
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Manifest {
     pub kernel_name: String,
+    pub outputs: bool,
     pub config: LaunchConfig,
     pub parameters: Vec<Parameter>,
 }
@@ -46,6 +47,7 @@ pub struct KernelParameter {
 pub fn save(
     writer: impl Write,
     kernel_name: String,
+    has_outputs: bool,
     config: LaunchConfig,
     source: String,
     kernel_params: Vec<KernelParameter>,
@@ -54,6 +56,7 @@ pub fn save(
     let mut builder = tar::Builder::new(archive);
     let (mut header, manifest) = Manifest {
         kernel_name,
+        outputs: has_outputs,
         config,
         parameters: kernel_params
             .iter()
@@ -86,6 +89,9 @@ pub fn save(
             let mut header = Header::new_gnu();
             header.set_size(data_before.len() as u64);
             builder.append_data(&mut header, &*path, &*data_before)?;
+            if !has_outputs {
+                continue;
+            }
             let path = format!("param_{i}_ptr_{offset_in_param}_post.bin");
             let mut header = Header::new_gnu();
             header.set_size(data_after.len() as u64);
