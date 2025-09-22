@@ -72,6 +72,7 @@ pub(crate) fn run<'input>(
         }
     }
     if let Err(err) = module.verify() {
+        eprintln!("{}", module.print_module_to_string().to_str());
         panic!("{:?}", err);
     }
     Ok(module)
@@ -2853,6 +2854,7 @@ impl<'a> MethodEmitContext<'a> {
 
     fn emit_trap(&mut self) -> Result<(), TranslateError> {
         self.emit_intrinsic(c"llvm.trap", None, None, vec![])?;
+        unsafe { LLVMBuildUnreachable(self.builder) };
         Ok(())
     }
 
