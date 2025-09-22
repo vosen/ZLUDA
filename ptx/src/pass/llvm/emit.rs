@@ -1672,25 +1672,23 @@ impl<'a> MethodEmitContext<'a> {
                     .ok_or_else(|| error_mismatched_type())?,
             );
             let src2 = self.resolver.value(src2)?;
-            self.resolver.with_result(arguments.dst, |dst| {
-                let vec = unsafe {
-                    LLVMBuildInsertElement(
-                        self.builder,
-                        LLVMGetPoison(dst_type),
-                        llvm_fn(self.builder, src, packed_type, LLVM_UNNAMED.as_ptr()),
-                        LLVMConstInt(LLVMInt32TypeInContext(self.context), 1, false as i32),
-                        LLVM_UNNAMED.as_ptr(),
-                    )
-                };
-                unsafe {
-                    LLVMBuildInsertElement(
-                        self.builder,
-                        vec,
-                        llvm_fn(self.builder, src2, packed_type, LLVM_UNNAMED.as_ptr()),
-                        LLVMConstInt(LLVMInt32TypeInContext(self.context), 0, false as i32),
-                        dst,
-                    )
-                }
+            let vec = unsafe {
+                LLVMBuildInsertElement(
+                    self.builder,
+                    LLVMGetPoison(dst_type),
+                    llvm_fn(self.builder, src, packed_type, LLVM_UNNAMED.as_ptr()),
+                    LLVMConstInt(LLVMInt32TypeInContext(self.context), 1, false as i32),
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            };
+            self.resolver.with_result(arguments.dst, |dst| unsafe {
+                LLVMBuildInsertElement(
+                    self.builder,
+                    vec,
+                    llvm_fn(self.builder, src2, packed_type, LLVM_UNNAMED.as_ptr()),
+                    LLVMConstInt(LLVMInt32TypeInContext(self.context), 0, false as i32),
+                    dst,
+                )
             })
         } else {
             self.resolver.with_result(arguments.dst, |dst| unsafe {
@@ -2216,7 +2214,7 @@ impl<'a> MethodEmitContext<'a> {
             Some(&ast::ScalarType::F32.into()),
             vec![(
                 self.resolver.value(arguments.src)?,
-                get_scalar_type(self.context, ast::ScalarType::F32.into()),
+                get_scalar_type(self.context, ast::ScalarType::F32),
             )],
         )?;
         Ok(())
@@ -2677,14 +2675,14 @@ impl<'a> MethodEmitContext<'a> {
 
         let load = unsafe { LLVMBuildLoad2(self.builder, from_type, from, LLVM_UNNAMED.as_ptr()) };
         unsafe {
-            LLVMSetAlignment(load, (cp_size.as_u64() as u32) * 8);
+            LLVMSetAlignment(load, cp_size.as_u64() as u32);
         }
 
         let extended = unsafe { LLVMBuildZExt(self.builder, load, to_type, LLVM_UNNAMED.as_ptr()) };
 
-        unsafe { LLVMBuildStore(self.builder, extended, to) };
+        let store = unsafe { LLVMBuildStore(self.builder, extended, to) };
         unsafe {
-            LLVMSetAlignment(load, (cp_size.as_u64() as u32) * 8);
+            LLVMSetAlignment(store, cp_size.as_u64() as u32);
         }
         Ok(())
     }
