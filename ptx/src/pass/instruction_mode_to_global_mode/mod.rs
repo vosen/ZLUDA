@@ -1818,7 +1818,6 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::Mov { .. }
         | ast::Instruction::Ld { .. }
         | ast::Instruction::St { .. }
-        | ast::Instruction::PrmtSlow { .. }
         | ast::Instruction::Prmt { .. }
         | ast::Instruction::Activemask { .. }
         | ast::Instruction::Membar { .. }

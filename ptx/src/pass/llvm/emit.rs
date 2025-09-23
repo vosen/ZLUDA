@@ -510,10 +510,6 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Xor { data, arguments } => self.emit_xor(data, arguments),
             ast::Instruction::Rem { data, arguments } => self.emit_rem(data, arguments),
             ast::Instruction::BarWarp { .. } => self.emit_bar_warp(),
-            ast::Instruction::PrmtSlow { .. } => {
-                Err(error_todo_msg("PrmtSlow is not implemented yet"))
-            }
-            ast::Instruction::Prmt { data, arguments } => self.emit_prmt(data, arguments),
             ast::Instruction::Membar { data } => self.emit_membar(data),
             ast::Instruction::Trap {} => self.emit_trap(),
             ast::Instruction::Tanh { data, arguments } => self.emit_tanh(data, arguments),
@@ -533,7 +529,8 @@ impl<'a> MethodEmitContext<'a> {
             | ast::Instruction::Nanosleep { .. }
             | ast::Instruction::ReduxSync { .. }
             | ast::Instruction::LdMatrix { .. }
-            | ast::Instruction::Mma { .. } => return Err(error_unreachable()),
+            | ast::Instruction::Mma { .. }
+            | ast::Instruction::Prmt { .. } => return Err(error_unreachable()),
         }
     }
 
@@ -2444,48 +2441,6 @@ impl<'a> MethodEmitContext<'a> {
                 LLVM_UNNAMED.as_ptr(),
             )
         };
-        Ok(())
-    }
-
-    fn emit_prmt(
-        &mut self,
-        control: u16,
-        arguments: ptx_parser::PrmtArgs<SpirvWord>,
-    ) -> Result<(), TranslateError> {
-        let components = [
-            (control >> 0) & 0b1111,
-            (control >> 4) & 0b1111,
-            (control >> 8) & 0b1111,
-            (control >> 12) & 0b1111,
-        ];
-        if components.iter().any(|&c| c > 7) {
-            return Err(error_todo());
-        }
-        let u32_type = get_scalar_type(self.context, ast::ScalarType::U32);
-        let v4u8_type = get_type(self.context, &ast::Type::Vector(4, ast::ScalarType::U8))?;
-        let mut components = [
-            unsafe { LLVMConstInt(u32_type, components[0] as _, 0) },
-            unsafe { LLVMConstInt(u32_type, components[1] as _, 0) },
-            unsafe { LLVMConstInt(u32_type, components[2] as _, 0) },
-            unsafe { LLVMConstInt(u32_type, components[3] as _, 0) },
-        ];
-        let components_indices =
-            unsafe { LLVMConstVector(components.as_mut_ptr(), components.len() as u32) };
-        let src1 = self.resolver.value(arguments.src1)?;
-        let src1_vector =
-            unsafe { LLVMBuildBitCast(self.builder, src1, v4u8_type, LLVM_UNNAMED.as_ptr()) };
-        let src2 = self.resolver.value(arguments.src2)?;
-        let src2_vector =
-            unsafe { LLVMBuildBitCast(self.builder, src2, v4u8_type, LLVM_UNNAMED.as_ptr()) };
-        self.resolver.with_result(arguments.dst, |dst| unsafe {
-            LLVMBuildShuffleVector(
-                self.builder,
-                src1_vector,
-                src2_vector,
-                components_indices,
-                dst,
-            )
-        });
         Ok(())
     }
 

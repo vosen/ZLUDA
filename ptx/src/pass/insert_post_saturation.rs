@@ -164,7 +164,6 @@ fn run_instruction<'input>(
         | ast::Instruction::Or { .. }
         | ast::Instruction::Popc { .. }
         | ast::Instruction::Prmt { .. }
-        | ast::Instruction::PrmtSlow { .. }
         | ast::Instruction::Rcp { .. }
         | ast::Instruction::Rem { .. }
         | ast::Instruction::Ret { .. }
