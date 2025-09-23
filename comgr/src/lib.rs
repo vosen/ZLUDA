@@ -219,6 +219,8 @@ pub fn compile_bitcode(
     compile_to_exec.set_isa_name(gcn_arch)?;
     compile_to_exec.set_language(Language::LlvmIr)?;
     let common_options = [
+        c"-Xlinker",
+        c"--no-undefined",
         c"-mllvm",
         c"-ignore-tti-inline-compatible",
         // c"-mllvm",
