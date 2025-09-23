@@ -812,6 +812,14 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
         {
             uint8_t sel = static_cast<uint8_t>(s >> (i * 4));
             uint8_t addr = sel & 0x7;
+            if (sel & 0x8)
+            {
+                if (addr % 2 == 1)
+                {
+                    v_perm_selector.u8x4[i] = 0x8 + addr / 2;
+                    continue;
+                }
+            }
             v_perm_selector.u8x4[i] = addr;
         }
 
@@ -821,9 +829,14 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
         for (size_t i = 0; i < 4; i++)
         {
             uint8_t sel = static_cast<uint8_t>(s >> (i * 4));
+            uint8_t addr = sel & 0x7;
             if (sel & 0x8)
             {
-                output.u8x4[i] = (output.u8x4[i] & 0x80) * 0xff;
+                if (addr % 2 != 1)
+                {
+                    output.u8x4[i] = (output.u8x4[i] & 0x80) * 0xff;
+                    continue;
+                }
             }
         }
 
