@@ -70,17 +70,23 @@ pub(crate) fn pre_kernel_launch(
                 )
             })?;
             if size != 0 {
-                let mut pre_buffer = vec![0u8; size];
-                let post_buffer = vec![0u8; size];
-                fn_logger.try_cuda(|| {
-                    libcuda.cuMemcpyDtoH_v2(
-                        pre_buffer.as_mut_ptr().cast(),
-                        CUdeviceptr_v2(start as _),
-                        size,
-                    )
-                })?;
+                let i = all_params.len();
                 let buffer_offset = maybe_ptr - start;
-                ptr_overrides.push((offset, buffer_offset, pre_buffer, post_buffer));
+                eprintln!("[{i}][{offset}] {start:#x}+{buffer_offset}");
+                //fn_logger.log(ErrorEntry::ErrorBox(
+                //    format!("[{i}][{offset}] {start:#x}+{buffer_offset}").into(),
+                //));
+                // let mut pre_buffer = vec![0u8; size];
+                // let post_buffer = vec![0u8; size];
+                // fn_logger.try_cuda(|| {
+                //     libcuda.cuMemcpyDtoH_v2(
+                //         pre_buffer.as_mut_ptr().cast(),
+                //         CUdeviceptr_v2(start as _),
+                //         size,
+                //     )
+                // })?;
+                // let buffer_offset = maybe_ptr - start;
+                // ptr_overrides.push((offset, buffer_offset, pre_buffer, post_buffer));
             }
             offset += std::mem::size_of::<usize>();
         }
@@ -90,6 +96,7 @@ pub(crate) fn pre_kernel_launch(
             device_ptrs: ptr_overrides,
         });
     }
+    return None;
     if state.kernel_no_output {
         let enqueue_counter = state.enqueue_counter;
         let kernel_name = name;
