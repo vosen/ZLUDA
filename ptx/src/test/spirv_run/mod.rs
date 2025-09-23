@@ -275,6 +275,11 @@ test_ptx!(const_ident, [0u16], [0u64, 0u64]);
 test_ptx!(cvt_s16_s8, [0x139231C2u32], [0xFFFFFFC2u32]);
 test_ptx!(cvt_f64_f32, [0.125f32], [0.125f64]);
 test_ptx!(prmt, [0x70c507d6u32, 0x6fbd4b5cu32], [0x6fbdd65cu32]);
+test_ptx!(
+    prmt_slow,
+    [0x70c507d6u32, 0x6fbd4b5cu32, 30212],
+    [0x6fbdd65cu32]
+);
 test_ptx!(activemask, [0u32], [1u32]);
 test_ptx!(membar, [152731u32], [152731u32]);
 test_ptx!(shared_unify_extern, [7681u64, 7682u64], [15363u64]);

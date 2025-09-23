@@ -432,15 +432,6 @@ ptx_parser_macros::generate_instruction_type!(
         },
         Prmt {
             type: Type::Scalar(ScalarType::B32),
-            data: u16,
-            arguments<T>: {
-                dst: T,
-                src1: T,
-                src2: T
-            }
-        },
-        PrmtSlow {
-            type: Type::Scalar(ScalarType::U32),
             arguments<T>: {
                 dst: T,
                 src1: T,
