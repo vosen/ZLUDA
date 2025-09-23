@@ -33,8 +33,7 @@ impl Manifest {
 
     fn serialize(&self) -> std::io::Result<(Header, Vec<u8>)> {
         let vec = serde_json::to_vec(self)?;
-        let mut header = Header::new_gnu();
-        header.set_size(vec.len() as u64);
+        let header = tar_header(vec.len());
         Ok((header, vec))
     }
 }
@@ -76,31 +75,34 @@ pub fn save(
     }
     .serialize()?;
     builder.append_data(&mut header, Manifest::PATH, &*manifest)?;
-    let mut header = Header::new_gnu();
-    header.set_size(source.len() as u64);
+    let mut header = tar_header(source.len());
     builder.append_data(&mut header, "source.ptx", source.as_bytes())?;
     for (i, param) in kernel_params.into_iter().enumerate() {
         let path = format!("param_{i}.bin");
-        let mut header = Header::new_gnu();
-        header.set_size(param.data.len() as u64);
+        let mut header = tar_header(param.data.len());
         builder.append_data(&mut header, &*path, &*param.data)?;
         for (offset_in_param, _, data_before, data_after) in param.device_ptrs {
             let path = format!("param_{i}_ptr_{offset_in_param}_pre.bin");
-            let mut header = Header::new_gnu();
-            header.set_size(data_before.len() as u64);
+            let mut header = tar_header(data_before.len());
             builder.append_data(&mut header, &*path, &*data_before)?;
             if !has_outputs {
                 continue;
             }
             let path = format!("param_{i}_ptr_{offset_in_param}_post.bin");
-            let mut header = Header::new_gnu();
-            header.set_size(data_after.len() as u64);
+            let mut header = tar_header(data_after.len());
             builder.append_data(&mut header, &*path, &*data_after)?;
         }
     }
     builder.finish()?;
     builder.into_inner()?.finish()?;
     Ok(())
+}
+
+fn tar_header(size: usize) -> Header {
+    let mut header = Header::new_gnu();
+    header.set_mode(0o644);
+    header.set_size(size as u64);
+    header
 }
 
 pub fn load(reader: impl Read) -> (Manifest, String, FxHashMap<String, Vec<u8>>) {
