@@ -1,8 +1,8 @@
 use super::Settings;
+use crate::trace::SendablePtr;
 use crate::FnCallLog;
 use crate::LogEntry;
 use cuda_types::cuda::*;
-use format::CudaDisplay;
 use std::error::Error;
 use std::ffi::c_void;
 use std::ffi::NulError;
@@ -267,13 +267,12 @@ pub(crate) enum ErrorEntry {
     CreatedDumpDirectory(PathBuf),
     ErrorBox(Box<dyn Error>),
     UnsupportedModule {
-        module: CUmodule,
+        handle: *mut c_void,
         raw_image: *const c_void,
         kind: &'static str,
     },
     FunctionNotFound(CudaFunctionName),
-    MalformedModulePath(Utf8Error),
-    NonUtf8ModuleText(Utf8Error),
+    Utf8Error(Utf8Error),
     NulInsideModuleText(NulError),
     ModuleParsingError(String),
     Lz4DecompressionFailure,
@@ -302,8 +301,11 @@ pub(crate) enum ErrorEntry {
         overriden: [u64; 2],
     },
     NullPointer(&'static str),
-    UnknownLibrary(CUlibrary),
     SavedModule(String),
+    UnknownFunctionHandle(CUfunction),
+    UnknownLibrary(CUfunction, SendablePtr),
+    UnknownFunction(CUfunction, SendablePtr, String),
+    CudaError(Option<CUerror>),
 }
 
 unsafe impl Send for ErrorEntry {}
@@ -345,94 +347,100 @@ impl Display for ErrorEntry {
         match self {
             ErrorEntry::IoError(e) => e.fmt(f),
             ErrorEntry::CreatedDumpDirectory(dir) => {
-                                                                write!(
-                                                                    f,
-                                                                    "Created trace directory {} ",
-                                                                    dir.as_os_str().to_string_lossy()
-                                                                )
-                                                            }
+                                                                        write!(
+                                                                            f,
+                                                                            "Created trace directory {} ",
+                                                                            dir.as_os_str().to_string_lossy()
+                                                                        )
+                                                                    }
             ErrorEntry::ErrorBox(e) => e.fmt(f),
             ErrorEntry::UnsupportedModule {
-                                                                module,
-                                                                raw_image,
-                                                                kind,
-                                                            } => {
-                                                                write!(
-                                                                    f,
-                                                                    "Unsupported {} module {:?} loaded from module image {:?}",
-                                                                    kind, module, raw_image
-                                                                )
-                                                            }
-            ErrorEntry::MalformedModulePath(e) => e.fmt(f),
-            ErrorEntry::NonUtf8ModuleText(e) => e.fmt(f),
+                                                                        handle,
+                                                                        raw_image,
+                                                                        kind,
+                                                                    } => {
+                                                                        write!(
+                                                                            f,
+                                                                            "Unsupported {} module {:p} loaded from module image {:p}",
+                                                                            kind, handle, raw_image
+                                                                        )
+                                                                    }
+            ErrorEntry::Utf8Error(e) => e.fmt(f),
             ErrorEntry::ModuleParsingError(file_name) => {
-                                                                write!(
-                                                                    f,
-                                                                    "Error parsing module, log has been written to {}",
-                                                                    file_name
-                                                                )
-                                                            }
+                                                                        write!(
+                                                                            f,
+                                                                            "Error parsing module, log has been written to {}",
+                                                                            file_name
+                                                                        )
+                                                                    }
             ErrorEntry::NulInsideModuleText(e) => e.fmt(f),
             ErrorEntry::Lz4DecompressionFailure => write!(f, "LZ4 decompression failure"),
             ErrorEntry::ZstdDecompressionFailure(err_code) => write!(f, "Zstd decompression failure: {}", zstd_safe::get_error_name(*err_code)),
             ErrorEntry::UnexpectedBinaryField {
-                                                                field_name,
-                                                                expected,
-                                                                observed,
-                                                            } => write!(
-                                                                f,
-                                                                "Unexpected field {}. Expected one of: [{}], observed: {}",
-                                                                field_name,
-                                                                expected
-                                                                    .iter()
-                                                                    .map(|x| x.to_string())
-                                                                    .collect::<Vec<_>>()
-                                                                    .join(", "),
-                                                                observed
-                                                            ),
+                                                                        field_name,
+                                                                        expected,
+                                                                        observed,
+                                                                    } => write!(
+                                                                        f,
+                                                                        "Unexpected field {}. Expected one of: [{}], observed: {}",
+                                                                        field_name,
+                                                                        expected
+                                                                            .iter()
+                                                                            .map(|x| x.to_string())
+                                                                            .collect::<Vec<_>>()
+                                                                            .join(", "),
+                                                                        observed
+                                                                    ),
             ErrorEntry::UnexpectedArgument {
-                                                                arg_name,
-                                                                expected,
-                                                                observed,
-                                                            } => write!(
-                                                                f,
-                                                                "Unexpected argument {}. Expected one of: {{{}}}, observed: {}",
-                                                                arg_name,
-                                                                expected
-                                                                    .iter()
-                                                                    .map(|x| x.to_string())
-                                                                    .collect::<Vec<_>>()
-                                                                    .join(", "),
-                                                                observed
-                                                            ),
+                                                                        arg_name,
+                                                                        expected,
+                                                                        observed,
+                                                                    } => write!(
+                                                                        f,
+                                                                        "Unexpected argument {}. Expected one of: {{{}}}, observed: {}",
+                                                                        arg_name,
+                                                                        expected
+                                                                            .iter()
+                                                                            .map(|x| x.to_string())
+                                                                            .collect::<Vec<_>>()
+                                                                            .join(", "),
+                                                                        observed
+                                                                    ),
             ErrorEntry::InvalidEnvVar {
-                                                                var,
-                                                                pattern,
-                                                                value,
-                                                            } => write!(
-                                                                f,
-                                                                "Unexpected value of environment variable {var}. Expected pattern: {pattern}, got value: {value}"
-                                                            ),
+                                                                        var,
+                                                                        pattern,
+                                                                        value,
+                                                                    } => write!(
+                                                                        f,
+                                                                        "Unexpected value of environment variable {var}. Expected pattern: {pattern}, got value: {value}"
+                                                                    ),
             ErrorEntry::FunctionNotFound(cuda_function_name) => write!(
-                                                        f,
-                                                        "No function {cuda_function_name} in the underlying library"
-                                                    ),
+                                                                f,
+                                                                "No function {cuda_function_name} in the underlying library"
+                                                            ),
             ErrorEntry::UnexpectedExportTableSize { expected, computed } => {
-                                                write!(f, "Table length mismatch. Expected: {expected}, got: {computed}")
-                                            }
+                                                        write!(f, "Table length mismatch. Expected: {expected}, got: {computed}")
+                                                    }
             ErrorEntry::IntegrityCheck { original, overriden } => {
-                                                write!(f, "Overriding integrity check hash. Original: {original:?}, overriden: {overriden:?}")
-                                            }
+                                                        write!(f, "Overriding integrity check hash. Original: {original:?}, overriden: {overriden:?}")
+                                                    }
             ErrorEntry::NullPointer(type_) => {
-                                        write!(f, "Null pointer of type {type_} encountered")
-                                    }
-            ErrorEntry::UnknownLibrary(culibrary) => {
-                                        write!(f, "Unknown library: ")?;
-                                        let mut temp_buffer = Vec::new();
-                                        CudaDisplay::write(culibrary, "", 0, &mut temp_buffer).ok();
-                                        f.write_str(&unsafe { String::from_utf8_unchecked(temp_buffer) })
-                            }
+                                                write!(f, "Null pointer of type {type_} encountered")
+                                            }
             ErrorEntry::SavedModule(file) => write!(f, "Saved module to {file}"),
+            ErrorEntry::UnknownFunctionHandle(cuda_function_name) => {
+                        write!(f, "Function with unknown provenance: {cuda_function_name:p}")
+                    }
+            ErrorEntry::UnknownLibrary(cuda_function_name, owner) => {
+                        write!(f, "Function with unknown provenance: {cuda_function_name:p}, owner: {owner:p}")
+                    }
+            ErrorEntry::UnknownFunction(cuda_function_name, owner, name) => {
+                        write!(f, "Function with unknown provenance: {cuda_function_name:p}, owner: {owner:p}, name: {name}")
+                    }
+            ErrorEntry::CudaError(cuerror) => {
+                let cuerror = cuerror.map(|e| e.0);
+                write!(f, "CUDA error encountered: {cuerror:#?}")
+            },
         }
     }
 }

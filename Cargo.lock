@@ -420,7 +420,7 @@ version = "0.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
- "rustc-hash 1.1.0",
+ "rustc-hash 2.0.0",
  "syn 2.0.89",
 ]
 
@@ -3706,7 +3706,7 @@ dependencies = [
  "paste",
  "ptx",
  "ptx_parser",
- "rustc-hash 1.1.0",
+ "rustc-hash 2.0.0",
  "serde",
  "serde_json",
  "tempfile",
@@ -3726,7 +3726,7 @@ dependencies = [
  "prettyplease",
  "proc-macro2",
  "quote",
- "rustc-hash 1.1.0",
+ "rustc-hash 2.0.0",
  "syn 2.0.89",
 ]
 
@@ -3827,6 +3827,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "zluda_replay"
+version = "0.0.0"
+dependencies = [
+ "cuda_macros",
+ "cuda_types",
+ "libloading",
+ "zluda_trace_common",
+]
+
+[[package]]
 name = "zluda_sparse"
 version = "0.0.0"
 dependencies = [
@@ -3854,7 +3864,7 @@ dependencies = [
  "ptx",
  "ptx_parser",
  "regex",
- "rustc-hash 1.1.0",
+ "rustc-hash 2.0.0",
  "unwrap_or",
  "wchar",
  "winapi",
@@ -3903,6 +3913,11 @@ dependencies = [
  "format",
  "libc",
  "libloading",
+ "rustc-hash 2.0.0",
+ "serde",
+ "serde_json",
+ "tar",
+ "zstd",
 ]
 
 [[package]]
@@ -3977,6 +3992,15 @@ dependencies = [
  "log",
  "once_cell",
  "simd-adler32",
+]
+
+[[package]]
+name = "zstd"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e91ee311a569c327171651566e07972200e76fcfe2242a4fa446149a3881c08a"
+dependencies = [
+ "zstd-safe",
 ]
 
 [[package]]
