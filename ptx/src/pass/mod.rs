@@ -139,6 +139,7 @@ enum PtxSpecialRegister {
     Nctaid,
     Clock,
     LanemaskLt,
+    LanemaskGe,
     Laneid,
 }
 
@@ -151,6 +152,7 @@ impl PtxSpecialRegister {
             Self::Nctaid => "%nctaid",
             Self::Clock => "%clock",
             Self::LanemaskLt => "%lanemask_lt",
+            Self::LanemaskGe => "%lanemask_ge",
             Self::Laneid => "%laneid",
         }
     }
@@ -173,6 +175,7 @@ impl PtxSpecialRegister {
             PtxSpecialRegister::Nctaid => ast::ScalarType::U32,
             PtxSpecialRegister::Clock => ast::ScalarType::U32,
             PtxSpecialRegister::LanemaskLt => ast::ScalarType::U32,
+            PtxSpecialRegister::LanemaskGe => ast::ScalarType::U32,
             PtxSpecialRegister::Laneid => ast::ScalarType::U32,
         }
     }
@@ -185,6 +188,7 @@ impl PtxSpecialRegister {
             | PtxSpecialRegister::Nctaid => Some(ast::ScalarType::U8),
             PtxSpecialRegister::Clock
             | PtxSpecialRegister::LanemaskLt
+            | PtxSpecialRegister::LanemaskGe
             | PtxSpecialRegister::Laneid => None,
         }
     }
@@ -197,6 +201,7 @@ impl PtxSpecialRegister {
             PtxSpecialRegister::Nctaid => "sreg_nctaid",
             PtxSpecialRegister::Clock => "sreg_clock",
             PtxSpecialRegister::LanemaskLt => "sreg_lanemask_lt",
+            PtxSpecialRegister::LanemaskGe => "sreg_lanemask_ge",
             PtxSpecialRegister::Laneid => "sreg_laneid",
         }
     }
