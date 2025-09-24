@@ -29,6 +29,7 @@ pub(crate) struct StateTracker {
     pub(crate) override_cc: Option<(u32, u32)>,
     pub(crate) kernel_name_filter: Option<regex::Regex>,
     pub(crate) kernel_no_output: bool,
+    pub(crate) magic_ptr: Option<CUdeviceptr>,
 }
 
 pub(crate) struct ParsedModule {
@@ -59,6 +60,7 @@ impl StateTracker {
             override_cc: settings.override_cc,
             kernel_name_filter: settings.kernel_name_filter.clone(),
             kernel_no_output: settings.kernel_no_output.unwrap_or(false),
+            magic_ptr: None,
         }
     }
 
