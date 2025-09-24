@@ -30,6 +30,7 @@ pub(crate) struct StateTracker {
     pub(crate) kernel_name_filter: Option<regex::Regex>,
     pub(crate) kernel_no_output: bool,
     pub(crate) magic_ptr: Option<CUdeviceptr>,
+    pub(crate) known_enqueue_counter: usize,
 }
 
 pub(crate) struct ParsedModule {
@@ -61,6 +62,7 @@ impl StateTracker {
             kernel_name_filter: settings.kernel_name_filter.clone(),
             kernel_no_output: settings.kernel_no_output.unwrap_or(false),
             magic_ptr: None,
+            known_enqueue_counter: 0,
         }
     }
 

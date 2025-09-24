@@ -1703,6 +1703,7 @@ fn save_magic_ptr(
 ) {
     let magic_ptr = unwrap_some_or!(magic_ptr, return);
     let mut kernel_name = unwrap_some_or!(state.kernels.get(&f), return).name.clone();
+    state.known_enqueue_counter += 1;
     kernel_name.truncate(224);
     libcuda.cuStreamSynchronize(stream).unwrap().unwrap();
     let mut host = vec![0u8; 2097152];
@@ -1715,7 +1716,7 @@ fn save_magic_ptr(
     let mut dump_dir = state.dump_dir().unwrap().clone();
     dump_dir.push(format!(
         "magic_ptr_{}_{}.bin",
-        state.enqueue_counter, kernel_name
+        state.known_enqueue_counter, kernel_name
     ));
     std::fs::write(dump_dir, host).unwrap();
 }
