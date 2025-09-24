@@ -1,6 +1,7 @@
 use std::mem;
 
 use cuda_types::cuda::{CUdeviceptr_v2, CUstream};
+use rustc_hash::FxHashMap;
 
 struct CudaDynamicFns {
     handle: libloading::Library,
@@ -36,6 +37,7 @@ fn main() {
     unsafe { libcuda.cuCtxCreate_v2(&mut mem::zeroed(), 0, 0) }.unwrap();
     let reader = std::fs::File::open(&args[2]).unwrap();
     let (mut manifest, mut source, mut buffers) = zluda_trace_common::replay::load(reader);
+    let mut outputs = FxHashMap::default();
     let mut args = manifest
         .parameters
         .iter()
@@ -53,6 +55,10 @@ fn main() {
                     ))
                     .unwrap();
                 unsafe { libcuda.cuMemAlloc_v2(&mut dev_ptr, host_buffer.len()) }.unwrap();
+                outputs.insert(
+                    format!("param_{i}_ptr_{}_post.bin", param_ptr.offset_in_param),
+                    (dev_ptr, host_buffer.len()),
+                );
                 unsafe {
                     libcuda.cuMemcpyHtoD_v2(dev_ptr, host_buffer.as_ptr().cast(), host_buffer.len())
                 }
@@ -100,4 +106,9 @@ fn main() {
     }
     .unwrap();
     unsafe { libcuda.cuCtxSynchronize() }.unwrap();
+    for (path, (dev_ptr, len)) in outputs {
+        let mut host_buffer = vec![0u8; len];
+        unsafe { libcuda.cuMemcpyDtoH_v2(host_buffer.as_mut_ptr().cast(), dev_ptr, len) }.unwrap();
+        std::fs::write(path, host_buffer).unwrap();
+    }
 }

@@ -3833,6 +3833,7 @@ dependencies = [
  "cuda_macros",
  "cuda_types",
  "libloading",
+ "rustc-hash 2.0.0",
  "zluda_trace_common",
 ]
 
