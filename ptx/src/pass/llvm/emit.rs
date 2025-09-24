@@ -539,17 +539,26 @@ impl<'a> MethodEmitContext<'a> {
         data: ast::LdDetails,
         arguments: ast::LdArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        if data.qualifier != ast::LdStQualifier::Weak {
-            todo!()
-        }
         let builder = self.builder;
-        let type_ = get_type(self.context, &data.typ)?;
-        let ptr = self.resolver.value(arguments.src)?;
-        self.resolver.with_result(arguments.dst, |dst| {
-            let load = unsafe { LLVMBuildLoad2(builder, type_, ptr, dst) };
-            unsafe { LLVMSetAlignment(load, data.typ.layout().align() as u32) };
-            load
-        });
+        let needs_cast = !matches!(data.typ, ast::Type::Scalar(_))
+            && !matches!(data.qualifier, ast::LdStQualifier::Weak);
+        let underlying_type = get_type(self.context, &data.typ)?;
+        let op_type = if needs_cast {
+            unsafe { LLVMIntTypeInContext(self.context, data.typ.layout().size() as u32 * 8) }
+        } else {
+            underlying_type
+        };
+        let src = self.resolver.value(arguments.src)?;
+        let load = unsafe { LLVMBuildLoad2(builder, op_type, src, LLVM_UNNAMED.as_ptr()) };
+        apply_qualifier(load, data.qualifier)?;
+        unsafe { LLVMSetAlignment(load, data.typ.layout().align() as u32) };
+        if needs_cast {
+            self.resolver.with_result(arguments.dst, |dst| unsafe {
+                LLVMBuildBitCast(builder, load, underlying_type, dst)
+            });
+        } else {
+            self.resolver.register(arguments.dst, load);
+        }
         Ok(())
     }
 
@@ -758,11 +767,21 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ast::StArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let ptr = self.resolver.value(arguments.src1)?;
-        let value = self.resolver.value(arguments.src2)?;
-        if data.qualifier != ast::LdStQualifier::Weak {
-            todo!()
+        let needs_cast = !matches!(data.typ, ast::Type::Scalar(_))
+            && !matches!(data.qualifier, ast::LdStQualifier::Weak);
+        let mut value = self.resolver.value(arguments.src2)?;
+        if needs_cast {
+            value = unsafe {
+                LLVMBuildBitCast(
+                    self.builder,
+                    value,
+                    LLVMIntTypeInContext(self.context, data.typ.layout().size() as u32 * 8),
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            };
         }
         let store = unsafe { LLVMBuildStore(self.builder, value, ptr) };
+        apply_qualifier(store, data.qualifier)?;
         unsafe {
             LLVMSetAlignment(store, data.typ.layout().align() as u32);
         }
@@ -2236,7 +2255,7 @@ impl<'a> MethodEmitContext<'a> {
     }
 
     fn emit_bar_warp(&mut self) -> Result<(), TranslateError> {
-        self.emit_intrinsic(c"llvm.amdgcn.barrier.warp", None, None, vec![])?;
+        self.emit_intrinsic(c"llvm.amdgcn.wave.barrier", None, None, vec![])?;
         Ok(())
     }
 
@@ -2923,6 +2942,47 @@ impl<'a> MethodEmitContext<'a> {
      */
 }
 
+fn apply_qualifier(
+    value: LLVMValueRef,
+    qualifier: ptx_parser::LdStQualifier,
+) -> Result<(), TranslateError> {
+    match qualifier {
+        ptx_parser::LdStQualifier::Weak => {}
+        ptx_parser::LdStQualifier::Volatile => unsafe {
+            LLVMSetVolatile(value, 1);
+            // The semantics of volatile operations are equivalent to a relaxed memory operation
+            // with system-scope but with the following extra implementation-specific constraints...
+            LLVMZludaSetAtomic(
+                value,
+                LLVMAtomicOrdering::LLVMAtomicOrderingMonotonic,
+                get_scope(ast::MemScope::Sys)?,
+            );
+        },
+        ptx_parser::LdStQualifier::Relaxed(mem_scope) => unsafe {
+            LLVMZludaSetAtomic(
+                value,
+                LLVMAtomicOrdering::LLVMAtomicOrderingMonotonic,
+                get_scope(mem_scope)?,
+            );
+        },
+        ptx_parser::LdStQualifier::Acquire(mem_scope) => unsafe {
+            LLVMZludaSetAtomic(
+                value,
+                LLVMAtomicOrdering::LLVMAtomicOrderingAcquire,
+                get_scope(mem_scope)?,
+            );
+        },
+        ptx_parser::LdStQualifier::Release(mem_scope) => unsafe {
+            LLVMZludaSetAtomic(
+                value,
+                LLVMAtomicOrdering::LLVMAtomicOrderingRelease,
+                get_scope(mem_scope)?,
+            );
+        },
+    }
+    Ok(())
+}
+
 fn get_pointer_type<'ctx>(
     context: LLVMContextRef,
     to_space: ast::StateSpace,
@@ -2936,7 +2996,7 @@ fn get_scope(scope: ast::MemScope) -> Result<*const i8, TranslateError> {
         ast::MemScope::Cta => c"workgroup-one-as",
         ast::MemScope::Gpu => c"agent-one-as",
         ast::MemScope::Sys => c"one-as",
-        ast::MemScope::Cluster => todo!(),
+        ast::MemScope::Cluster => return Err(error_todo()),
     }
     .as_ptr())
 }
@@ -2945,8 +3005,8 @@ fn get_scope_membar(scope: ast::MemScope) -> Result<*const i8, TranslateError> {
     Ok(match scope {
         ast::MemScope::Cta => c"workgroup",
         ast::MemScope::Gpu => c"agent",
-        ast::MemScope::Sys => c"",
-        ast::MemScope::Cluster => todo!(),
+        ast::MemScope::Sys => c"system",
+        ast::MemScope::Cluster => return Err(error_todo()),
     }
     .as_ptr())
 }

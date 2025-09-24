@@ -1,22 +1,33 @@
+use cuda_types::cuda::CUfunction_attribute;
 use hip_runtime_sys::*;
+use std::mem;
 
 pub(crate) fn get_attribute(
     pi: &mut i32,
-    cu_attrib: hipFunction_attribute,
+    cu_attrib: CUfunction_attribute,
     func: hipFunction_t,
 ) -> hipError_t {
     // TODO: implement HIP_FUNC_ATTRIBUTE_PTX_VERSION
     // TODO: implement HIP_FUNC_ATTRIBUTE_BINARY_VERSION
     match cu_attrib {
-        hipFunction_attribute::HIP_FUNC_ATTRIBUTE_PTX_VERSION
-        | hipFunction_attribute::HIP_FUNC_ATTRIBUTE_BINARY_VERSION => {
+        CUfunction_attribute::CU_FUNC_ATTRIBUTE_PTX_VERSION
+        | CUfunction_attribute::CU_FUNC_ATTRIBUTE_BINARY_VERSION => {
             *pi = 120;
+            return Ok(());
+        }
+        CUfunction_attribute::CU_FUNC_ATTRIBUTE_CLUSTER_SIZE_MUST_BE_SET
+        | CUfunction_attribute::CU_FUNC_ATTRIBUTE_REQUIRED_CLUSTER_WIDTH
+        | CUfunction_attribute::CU_FUNC_ATTRIBUTE_REQUIRED_CLUSTER_HEIGHT
+        | CUfunction_attribute::CU_FUNC_ATTRIBUTE_REQUIRED_CLUSTER_DEPTH
+        | CUfunction_attribute::CU_FUNC_ATTRIBUTE_NON_PORTABLE_CLUSTER_SIZE_ALLOWED
+        | CUfunction_attribute::CU_FUNC_ATTRIBUTE_CLUSTER_SCHEDULING_POLICY_PREFERENCE => {
+            *pi = 0;
             return Ok(());
         }
         _ => {}
     }
-    unsafe { hipFuncGetAttribute(pi, cu_attrib, func) }?;
-    if cu_attrib == hipFunction_attribute::HIP_FUNC_ATTRIBUTE_NUM_REGS {
+    unsafe { hipFuncGetAttribute(pi, mem::transmute(cu_attrib), func) }?;
+    if cu_attrib == CUfunction_attribute::CU_FUNC_ATTRIBUTE_NUM_REGS {
         *pi = (*pi).max(1);
     }
     Ok(())
@@ -55,12 +66,12 @@ pub(crate) fn launch_kernel(
 
 pub(crate) unsafe fn set_attribute(
     func: hipFunction_t,
-    attribute: hipFunction_attribute,
+    attribute: CUfunction_attribute,
     value: i32,
 ) -> hipError_t {
     match attribute {
-        hipFunction_attribute::HIP_FUNC_ATTRIBUTE_PTX_VERSION
-        | hipFunction_attribute::HIP_FUNC_ATTRIBUTE_BINARY_VERSION => {
+        CUfunction_attribute::CU_FUNC_ATTRIBUTE_PTX_VERSION
+        | CUfunction_attribute::CU_FUNC_ATTRIBUTE_BINARY_VERSION => {
             return hipError_t::ErrorNotSupported;
         }
         _ => {}
