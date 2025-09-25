@@ -352,7 +352,11 @@ test_ptx!(
     [613065134u32]
 );
 test_ptx!(param_is_addressable, [0xDEAD], [0u64]);
-test_ptx!(atomics_128, [0xce16728dead1ceb0u64, 0xe7728e3c390b7fb7], [0xce16728dead1ceb1u64, 0xe7728e3c390b7fb8]);
+test_ptx!(
+    atomics_128,
+    [0xce16728dead1ceb0u64, 0xe7728e3c390b7fb7],
+    [0xce16728dead1ceb1u64, 0xe7728e3c390b7fb8]
+);
 
 test_ptx!(assertfail);
 // TODO: not yet supported
