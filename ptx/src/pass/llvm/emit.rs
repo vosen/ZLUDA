@@ -540,9 +540,8 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ast::LdArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let builder = self.builder;
-        let needs_cast = !matches!(data.typ, ast::Type::Scalar(_))
-            && !matches!(data.qualifier, ast::LdStQualifier::Weak);
         let underlying_type = get_type(self.context, &data.typ)?;
+        let needs_cast = not_supported_by_atomics(data.qualifier, underlying_type);
         let op_type = if needs_cast {
             unsafe { LLVMIntTypeInContext(self.context, data.typ.layout().size() as u32 * 8) }
         } else {
@@ -767,8 +766,8 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ast::StArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let ptr = self.resolver.value(arguments.src1)?;
-        let needs_cast = !matches!(data.typ, ast::Type::Scalar(_))
-            && !matches!(data.qualifier, ast::LdStQualifier::Weak);
+        let underlying_type = get_type(self.context, &data.typ)?;
+        let needs_cast = not_supported_by_atomics(data.qualifier, underlying_type);
         let mut value = self.resolver.value(arguments.src2)?;
         if needs_cast {
             value = unsafe {
@@ -2938,6 +2937,20 @@ impl<'a> MethodEmitContext<'a> {
         result
     }
      */
+}
+
+fn not_supported_by_atomics(qualifier: ast::LdStQualifier, underlying_type: *mut LLVMType) -> bool {
+    // This is not meant to be 100% accurate, just a best-effort guess for atomics
+    fn is_non_scalar_type(type_: LLVMTypeRef) -> bool {
+        let kind = unsafe { LLVMGetTypeKind(type_) };
+        matches!(
+            kind,
+            LLVMTypeKind::LLVMArrayTypeKind
+                | LLVMTypeKind::LLVMVectorTypeKind
+                | LLVMTypeKind::LLVMStructTypeKind
+        )
+    }
+    !matches!(qualifier, ast::LdStQualifier::Weak) && is_non_scalar_type(underlying_type)
 }
 
 fn apply_qualifier(
