@@ -24,14 +24,14 @@ jobs:
     name: Build (Linux)
     runs-on: ubuntu-22.04
     steps:
-    - uses: jlumbroso/free-disk-space@main
+    - uses: jlumbroso/free-disk-space@v1.3.1
       with:
-        # Removing Android stuff should be enough
+        # Removing Android, .NET, docker stuff should be enough
         android: true
-        dotnet: false
+        dotnet: true
+        docker-images: true
         haskell: false
         large-packages: false
-        docker-images: false
         swap-storage: false
     - uses: actions/checkout@v4
       with:
@@ -79,14 +79,14 @@ jobs:
     outputs:
       test_package: ${{ steps.upload_artifacts.outputs.artifact-id }}
     steps:
-    - uses: jlumbroso/free-disk-space@main
+    - uses: jlumbroso/free-disk-space@v1.3.1
       with:
-        # Removing Android stuff should be enough
+        # Removing Android, .NET, docker stuff should be enough
         android: true
-        dotnet: false
+        dotnet: true
+        docker-images: true
         haskell: false
         large-packages: false
-        docker-images: false
         swap-storage: false
     - uses: actions/checkout@v4
       with:
