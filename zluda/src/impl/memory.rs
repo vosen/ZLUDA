@@ -70,7 +70,6 @@ pub(crate) unsafe fn host_alloc(
 ) -> CUresult {
     let context = context::get_current_context()?;
     hipHostMalloc(pp, bytesize, flags)?;
-    unsafe { hipMemsetD8(hipDeviceptr_t(*pp), 0, bytesize) }?;
     add_allocation(*pp, bytesize, context)?;
     Ok(())
 }
