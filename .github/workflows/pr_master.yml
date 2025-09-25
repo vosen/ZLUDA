@@ -25,14 +25,6 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
     - uses: jlumbroso/free-disk-space@v1.3.1
-      with:
-        # Removing Android, .NET, docker stuff should be enough
-        android: true
-        dotnet: true
-        docker-images: true
-        haskell: false
-        large-packages: false
-        swap-storage: false
     - uses: actions/checkout@v4
       with:
         submodules: true
@@ -80,14 +72,6 @@ jobs:
       test_package: ${{ steps.upload_artifacts.outputs.artifact-id }}
     steps:
     - uses: jlumbroso/free-disk-space@v1.3.1
-      with:
-        # Removing Android, .NET, docker stuff should be enough
-        android: true
-        dotnet: true
-        docker-images: true
-        haskell: false
-        large-packages: false
-        swap-storage: false
     - uses: actions/checkout@v4
       with:
         submodules: true
