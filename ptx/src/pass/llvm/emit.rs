@@ -3016,7 +3016,8 @@ fn get_scope_membar(scope: ast::MemScope) -> Result<*const i8, TranslateError> {
     Ok(match scope {
         ast::MemScope::Cta => c"workgroup",
         ast::MemScope::Gpu => c"agent",
-        ast::MemScope::Sys => c"system",
+        // Don't change to "system", this is the same as __threadfence_system,  AMDPGU LLVM expects "" here
+        ast::MemScope::Sys => c"",
         ast::MemScope::Cluster => return Err(error_todo()),
     }
     .as_ptr())
