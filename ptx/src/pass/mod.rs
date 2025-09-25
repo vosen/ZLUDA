@@ -68,7 +68,7 @@ pub fn to_llvm_module<'input>(
     let sreg_map = SpecialRegistersMap::new(&mut scoped_resolver)?;
     let directives = filter_for_demo::run(ast.directives);
     on_pass_end("filter_for_demo");
-    let directives = normalize_identifiers2::run(&mut scoped_resolver, directives)?;
+    let directives = normalize_identifiers::run(&mut scoped_resolver, directives)?;
     on_pass_end("normalize_identifiers2");
     let directives = replace_known_functions::run(&mut flat_resolver, directives);
     on_pass_end("replace_known_functions");
