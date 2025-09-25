@@ -173,7 +173,8 @@ from_cuda_nop!(
     cublasLtMatmulDescAttributes_t,
     CUmemAllocationGranularity_flags,
     CUmemAllocationProp,
-    CUresult
+    CUresult,
+    CUgraphExecUpdateResultInfo
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,
