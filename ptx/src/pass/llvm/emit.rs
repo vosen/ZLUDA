@@ -72,7 +72,6 @@ pub(crate) fn run<'input>(
         }
     }
     if let Err(err) = module.verify() {
-        eprintln!("{}", module.print_module_to_string().to_str());
         panic!("{:?}", err);
     }
     Ok(module)
