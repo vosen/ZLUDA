@@ -22,7 +22,7 @@ num_enum = "0.4"
 lz4-sys = "1.9"
 tempfile = "3"
 paste = "1.0"
-rustc-hash = "1.1"
+rustc-hash = "2.0.0"
 zluda_common = { path = "../zluda_common" }
 blake3 = "1.8.2"
 serde = "1.0.219"

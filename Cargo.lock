@@ -420,7 +420,7 @@ version = "0.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
- "rustc-hash 1.1.0",
+ "rustc-hash 2.0.0",
  "syn 2.0.89",
 ]
 
@@ -3706,7 +3706,7 @@ dependencies = [
  "paste",
  "ptx",
  "ptx_parser",
- "rustc-hash 1.1.0",
+ "rustc-hash 2.0.0",
  "serde",
  "serde_json",
  "tempfile",
@@ -3726,7 +3726,7 @@ dependencies = [
  "prettyplease",
  "proc-macro2",
  "quote",
- "rustc-hash 1.1.0",
+ "rustc-hash 2.0.0",
  "syn 2.0.89",
 ]
 
@@ -3854,7 +3854,7 @@ dependencies = [
  "ptx",
  "ptx_parser",
  "regex",
- "rustc-hash 1.1.0",
+ "rustc-hash 2.0.0",
  "unwrap_or",
  "wchar",
  "winapi",

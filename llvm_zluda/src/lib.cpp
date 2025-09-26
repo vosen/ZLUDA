@@ -196,4 +196,24 @@ void LLVMZludaBuildFence(LLVMBuilderRef B, LLVMAtomicOrdering Ordering,
                          Name);
 }
 
+void LLVMZludaSetAtomic(
+    LLVMValueRef AtomicInst,
+    LLVMAtomicOrdering Ordering,
+    char * SSID)
+{
+    auto inst = unwrap(AtomicInst);
+    if (LoadInst *LI = dyn_cast<LoadInst>(inst))
+    {
+        LI->setAtomic(mapFromLLVMOrdering(Ordering), LI->getContext().getOrInsertSyncScopeID(SSID));
+    }
+    else if (StoreInst *SI = dyn_cast<StoreInst>(inst))
+    {
+        SI->setAtomic(mapFromLLVMOrdering(Ordering), SI->getContext().getOrInsertSyncScopeID(SSID));
+    }
+    else
+    {
+        llvm_unreachable("Invalid instruction type for LLVMZludaSetAtomic");
+    }
+}
+
 LLVM_C_EXTERN_C_END
