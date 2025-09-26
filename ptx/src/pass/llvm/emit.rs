@@ -2869,6 +2869,7 @@ impl<'a> MethodEmitContext<'a> {
 
     fn emit_trap(&mut self) -> Result<(), TranslateError> {
         self.emit_intrinsic(c"llvm.trap", None, None, vec![])?;
+        unsafe { LLVMBuildUnreachable(self.builder) };
         Ok(())
     }
 
