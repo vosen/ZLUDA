@@ -174,12 +174,12 @@ from_cuda_nop!(
     CUmemAllocationGranularity_flags,
     CUmemAllocationProp,
     CUresult,
+    CUfunction_attribute,
     CUgraphExecUpdateResultInfo
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,
     CUfunction => hipFunction_t,
-    CUfunction_attribute => hipFunction_attribute,
     CUstream => hipStream_t,
     CUpointer_attribute => hipPointer_attribute,
     CUdeviceptr_v2 => hipDeviceptr_t,
