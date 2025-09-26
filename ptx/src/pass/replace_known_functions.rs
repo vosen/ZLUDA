@@ -21,7 +21,7 @@ fn replace_with_ptx_impl<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
     fn_name: SpirvWord,
 ) {
-    let known_names = ["__assertfail"];
+    let known_names = ["__assertfail", "vprintf"];
     if let Some(super::IdentEntry {
         name: Some(name), ..
     }) = resolver.ident_map.get_mut(&fn_name)
