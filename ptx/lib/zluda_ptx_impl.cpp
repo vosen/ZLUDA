@@ -17,6 +17,7 @@ typedef _Float16 half16 __attribute__((ext_vector_type(16)));
 typedef float    float8 __attribute__((ext_vector_type(8)));
 
 #define FUNC(NAME) __device__ __attribute__((retain)) __zluda_ptx_impl_##NAME
+#define FUNC_CALL(NAME) __zluda_ptx_impl_##NAME
 #define ATTR(NAME) __ZLUDA_PTX_IMPL_ATTRIBUTE_##NAME
 #define DECLARE_ATTR(TYPE, NAME) \
     extern "C" __attribute__((constant)) CONSTANT_SPACE TYPE ATTR(NAME) \
@@ -56,6 +57,18 @@ extern "C"
     uint32_t FUNC(sreg_laneid)()
     {
         return __lane_id();
+    }
+
+    uint32_t FUNC(sreg_lanemask_lt)()
+    {
+        uint32_t lane_idx = FUNC_CALL(sreg_laneid)();
+        return (1U << lane_idx) - 1U;
+    }
+
+    uint32_t FUNC(sreg_lanemask_ge)()
+    {
+        uint32_t lane_idx = FUNC_CALL(sreg_laneid)();
+        return (~0U) << lane_idx;
     }
 
     uint32_t __ockl_bfe_u32(uint32_t, uint32_t, uint32_t) __device__;
@@ -842,8 +855,6 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
 
         return output.u32;
     }
-
-
 
     int FUNC(vprintf)(const char *format __attribute__((unused)), void *vlist __attribute__((unused)))
     {

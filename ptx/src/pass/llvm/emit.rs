@@ -539,17 +539,25 @@ impl<'a> MethodEmitContext<'a> {
         data: ast::LdDetails,
         arguments: ast::LdArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        if data.qualifier != ast::LdStQualifier::Weak {
-            todo!()
-        }
         let builder = self.builder;
-        let type_ = get_type(self.context, &data.typ)?;
-        let ptr = self.resolver.value(arguments.src)?;
-        self.resolver.with_result(arguments.dst, |dst| {
-            let load = unsafe { LLVMBuildLoad2(builder, type_, ptr, dst) };
-            unsafe { LLVMSetAlignment(load, data.typ.layout().align() as u32) };
-            load
-        });
+        let underlying_type = get_type(self.context, &data.typ)?;
+        let needs_cast = not_supported_by_atomics(data.qualifier, underlying_type);
+        let op_type = if needs_cast {
+            unsafe { LLVMIntTypeInContext(self.context, data.typ.layout().size() as u32 * 8) }
+        } else {
+            underlying_type
+        };
+        let src = self.resolver.value(arguments.src)?;
+        let load = unsafe { LLVMBuildLoad2(builder, op_type, src, LLVM_UNNAMED.as_ptr()) };
+        apply_qualifier(load, data.qualifier)?;
+        unsafe { LLVMSetAlignment(load, data.typ.layout().align() as u32) };
+        if needs_cast {
+            self.resolver.with_result(arguments.dst, |dst| unsafe {
+                LLVMBuildBitCast(builder, load, underlying_type, dst)
+            });
+        } else {
+            self.resolver.register(arguments.dst, load);
+        }
         Ok(())
     }
 
@@ -758,11 +766,21 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ast::StArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let ptr = self.resolver.value(arguments.src1)?;
-        let value = self.resolver.value(arguments.src2)?;
-        if data.qualifier != ast::LdStQualifier::Weak {
-            todo!()
+        let underlying_type = get_type(self.context, &data.typ)?;
+        let needs_cast = not_supported_by_atomics(data.qualifier, underlying_type);
+        let mut value = self.resolver.value(arguments.src2)?;
+        if needs_cast {
+            value = unsafe {
+                LLVMBuildBitCast(
+                    self.builder,
+                    value,
+                    LLVMIntTypeInContext(self.context, data.typ.layout().size() as u32 * 8),
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            };
         }
         let store = unsafe { LLVMBuildStore(self.builder, value, ptr) };
+        apply_qualifier(store, data.qualifier)?;
         unsafe {
             LLVMSetAlignment(store, data.typ.layout().align() as u32);
         }
@@ -1653,25 +1671,23 @@ impl<'a> MethodEmitContext<'a> {
                     .ok_or_else(|| error_mismatched_type())?,
             );
             let src2 = self.resolver.value(src2)?;
-            self.resolver.with_result(arguments.dst, |dst| {
-                let vec = unsafe {
-                    LLVMBuildInsertElement(
-                        self.builder,
-                        LLVMGetPoison(dst_type),
-                        llvm_fn(self.builder, src, packed_type, LLVM_UNNAMED.as_ptr()),
-                        LLVMConstInt(LLVMInt32TypeInContext(self.context), 1, false as i32),
-                        LLVM_UNNAMED.as_ptr(),
-                    )
-                };
-                unsafe {
-                    LLVMBuildInsertElement(
-                        self.builder,
-                        vec,
-                        llvm_fn(self.builder, src2, packed_type, LLVM_UNNAMED.as_ptr()),
-                        LLVMConstInt(LLVMInt32TypeInContext(self.context), 0, false as i32),
-                        dst,
-                    )
-                }
+            let vec = unsafe {
+                LLVMBuildInsertElement(
+                    self.builder,
+                    LLVMGetPoison(dst_type),
+                    llvm_fn(self.builder, src, packed_type, LLVM_UNNAMED.as_ptr()),
+                    LLVMConstInt(LLVMInt32TypeInContext(self.context), 1, false as i32),
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            };
+            self.resolver.with_result(arguments.dst, |dst| unsafe {
+                LLVMBuildInsertElement(
+                    self.builder,
+                    vec,
+                    llvm_fn(self.builder, src2, packed_type, LLVM_UNNAMED.as_ptr()),
+                    LLVMConstInt(LLVMInt32TypeInContext(self.context), 0, false as i32),
+                    dst,
+                )
             })
         } else {
             self.resolver.with_result(arguments.dst, |dst| unsafe {
@@ -2197,7 +2213,7 @@ impl<'a> MethodEmitContext<'a> {
             Some(&ast::ScalarType::F32.into()),
             vec![(
                 self.resolver.value(arguments.src)?,
-                get_scalar_type(self.context, ast::ScalarType::F32.into()),
+                get_scalar_type(self.context, ast::ScalarType::F32),
             )],
         )?;
         Ok(())
@@ -2236,7 +2252,7 @@ impl<'a> MethodEmitContext<'a> {
     }
 
     fn emit_bar_warp(&mut self) -> Result<(), TranslateError> {
-        self.emit_intrinsic(c"llvm.amdgcn.barrier.warp", None, None, vec![])?;
+        self.emit_intrinsic(c"llvm.amdgcn.wave.barrier", None, None, vec![])?;
         Ok(())
     }
 
@@ -2658,14 +2674,14 @@ impl<'a> MethodEmitContext<'a> {
 
         let load = unsafe { LLVMBuildLoad2(self.builder, from_type, from, LLVM_UNNAMED.as_ptr()) };
         unsafe {
-            LLVMSetAlignment(load, (cp_size.as_u64() as u32) * 8);
+            LLVMSetAlignment(load, cp_size.as_u64() as u32);
         }
 
         let extended = unsafe { LLVMBuildZExt(self.builder, load, to_type, LLVM_UNNAMED.as_ptr()) };
 
-        unsafe { LLVMBuildStore(self.builder, extended, to) };
+        let store = unsafe { LLVMBuildStore(self.builder, extended, to) };
         unsafe {
-            LLVMSetAlignment(load, (cp_size.as_u64() as u32) * 8);
+            LLVMSetAlignment(store, cp_size.as_u64() as u32);
         }
         Ok(())
     }
@@ -2924,6 +2940,61 @@ impl<'a> MethodEmitContext<'a> {
      */
 }
 
+fn not_supported_by_atomics(qualifier: ast::LdStQualifier, underlying_type: *mut LLVMType) -> bool {
+    // This is not meant to be 100% accurate, just a best-effort guess for atomics
+    fn is_non_scalar_type(type_: LLVMTypeRef) -> bool {
+        let kind = unsafe { LLVMGetTypeKind(type_) };
+        matches!(
+            kind,
+            LLVMTypeKind::LLVMArrayTypeKind
+                | LLVMTypeKind::LLVMVectorTypeKind
+                | LLVMTypeKind::LLVMStructTypeKind
+        )
+    }
+    !matches!(qualifier, ast::LdStQualifier::Weak) && is_non_scalar_type(underlying_type)
+}
+
+fn apply_qualifier(
+    value: LLVMValueRef,
+    qualifier: ptx_parser::LdStQualifier,
+) -> Result<(), TranslateError> {
+    match qualifier {
+        ptx_parser::LdStQualifier::Weak => {}
+        ptx_parser::LdStQualifier::Volatile => unsafe {
+            LLVMSetVolatile(value, 1);
+            // The semantics of volatile operations are equivalent to a relaxed memory operation
+            // with system-scope but with the following extra implementation-specific constraints...
+            LLVMZludaSetAtomic(
+                value,
+                LLVMAtomicOrdering::LLVMAtomicOrderingMonotonic,
+                get_scope(ast::MemScope::Sys)?,
+            );
+        },
+        ptx_parser::LdStQualifier::Relaxed(mem_scope) => unsafe {
+            LLVMZludaSetAtomic(
+                value,
+                LLVMAtomicOrdering::LLVMAtomicOrderingMonotonic,
+                get_scope(mem_scope)?,
+            );
+        },
+        ptx_parser::LdStQualifier::Acquire(mem_scope) => unsafe {
+            LLVMZludaSetAtomic(
+                value,
+                LLVMAtomicOrdering::LLVMAtomicOrderingAcquire,
+                get_scope(mem_scope)?,
+            );
+        },
+        ptx_parser::LdStQualifier::Release(mem_scope) => unsafe {
+            LLVMZludaSetAtomic(
+                value,
+                LLVMAtomicOrdering::LLVMAtomicOrderingRelease,
+                get_scope(mem_scope)?,
+            );
+        },
+    }
+    Ok(())
+}
+
 fn get_pointer_type<'ctx>(
     context: LLVMContextRef,
     to_space: ast::StateSpace,
@@ -2937,7 +3008,7 @@ fn get_scope(scope: ast::MemScope) -> Result<*const i8, TranslateError> {
         ast::MemScope::Cta => c"workgroup-one-as",
         ast::MemScope::Gpu => c"agent-one-as",
         ast::MemScope::Sys => c"one-as",
-        ast::MemScope::Cluster => todo!(),
+        ast::MemScope::Cluster => return Err(error_todo()),
     }
     .as_ptr())
 }
@@ -2946,8 +3017,9 @@ fn get_scope_membar(scope: ast::MemScope) -> Result<*const i8, TranslateError> {
     Ok(match scope {
         ast::MemScope::Cta => c"workgroup",
         ast::MemScope::Gpu => c"agent",
+        // Don't change to "system", this is the same as __threadfence_system,  AMDPGU LLVM expects "" here
         ast::MemScope::Sys => c"",
-        ast::MemScope::Cluster => todo!(),
+        ast::MemScope::Cluster => return Err(error_todo()),
     }
     .as_ptr())
 }

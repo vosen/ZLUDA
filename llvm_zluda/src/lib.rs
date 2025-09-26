@@ -78,4 +78,10 @@ extern "C" {
         scope: *const i8,
         Name: *const i8,
     ) -> LLVMValueRef;
+
+    pub fn LLVMZludaSetAtomic(
+        AtomicInst: LLVMValueRef,
+        Ordering: LLVMAtomicOrdering,
+        SSID: *const i8,
+    );
 }
