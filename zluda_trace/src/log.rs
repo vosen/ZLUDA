@@ -2,7 +2,6 @@ use super::Settings;
 use crate::FnCallLog;
 use crate::LogEntry;
 use cuda_types::cuda::*;
-use format::CudaDisplay;
 use std::error::Error;
 use std::ffi::c_void;
 use std::ffi::NulError;
@@ -302,7 +301,6 @@ pub(crate) enum ErrorEntry {
         overriden: [u64; 2],
     },
     NullPointer(&'static str),
-    UnknownLibrary(CUlibrary),
     SavedModule(String),
 }
 
@@ -426,12 +424,6 @@ impl Display for ErrorEntry {
             ErrorEntry::NullPointer(type_) => {
                                         write!(f, "Null pointer of type {type_} encountered")
                                     }
-            ErrorEntry::UnknownLibrary(culibrary) => {
-                                        write!(f, "Unknown library: ")?;
-                                        let mut temp_buffer = Vec::new();
-                                        CudaDisplay::write(culibrary, "", 0, &mut temp_buffer).ok();
-                                        f.write_str(&unsafe { String::from_utf8_unchecked(temp_buffer) })
-                            }
             ErrorEntry::SavedModule(file) => write!(f, "Saved module to {file}"),
         }
     }
