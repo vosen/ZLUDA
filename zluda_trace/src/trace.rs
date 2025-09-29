@@ -4,7 +4,7 @@ use crate::{
 };
 use cuda_types::cuda::*;
 use goblin::{elf, elf32, elf64};
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashSet;
 use std::{
     ffi::{c_void, CStr, CString},
     fs::{self, File},
@@ -20,23 +20,15 @@ use unwrap_or::unwrap_some_or;
 // * writes out relevant state change and details to disk and log
 pub(crate) struct StateTracker {
     writer: DumpWriter,
-    pub(crate) libraries: FxHashMap<CUlibrary, CodePointer>,
     saved_modules: FxHashSet<CUmodule>,
     library_counter: usize,
     pub(crate) override_cc: Option<(u32, u32)>,
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct CodePointer(pub *const c_void);
-
-unsafe impl Send for CodePointer {}
-unsafe impl Sync for CodePointer {}
-
 impl StateTracker {
     pub(crate) fn new(settings: &Settings) -> Self {
         StateTracker {
             writer: DumpWriter::new(settings.dump_dir.clone()),
-            libraries: FxHashMap::default(),
             saved_modules: FxHashSet::default(),
             library_counter: 0,
             override_cc: settings.override_cc,

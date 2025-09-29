@@ -847,7 +847,6 @@ cuda_function_declarations!(
             cuDeviceGetAttribute,
             cuDeviceComputeCapability,
             cuModuleLoadFatBinary,
-            cuLibraryGetModule,
             cuLibraryLoadData
         ],
     override_fn_core <= [cuGetProcAddress, cuGetProcAddress_v2],
@@ -1389,20 +1388,6 @@ pub(crate) fn cuModuleLoadFatBinary_Post(
 }
 
 #[allow(non_snake_case)]
-pub(crate) fn cuLibraryGetModule_Post(
-    module: *mut cuda_types::cuda::CUmodule,
-    library: cuda_types::cuda::CUlibrary,
-    state: &mut trace::StateTracker,
-    fn_logger: &mut FnCallLog,
-    _result: CUresult,
-) {
-    match state.libraries.get(&library).copied() {
-        None => fn_logger.log(log::ErrorEntry::UnknownLibrary(library)),
-        Some(code) => state.record_new_library(unsafe { *module }, code.0, fn_logger),
-    }
-}
-
-#[allow(non_snake_case)]
 pub(crate) fn cuLibraryLoadData_Post(
     library: *mut cuda_types::cuda::CUlibrary,
     code: *const ::core::ffi::c_void,
@@ -1416,9 +1401,6 @@ pub(crate) fn cuLibraryLoadData_Post(
     fn_logger: &mut FnCallLog,
     _result: CUresult,
 ) {
-    state
-        .libraries
-        .insert(unsafe { *library }, trace::CodePointer(code));
     // TODO: this is not correct, but it's enough for now, we just want to
     // save the binary to disk
     state.record_new_library(unsafe { CUmodule((*library).0.cast()) }, code, fn_logger);
