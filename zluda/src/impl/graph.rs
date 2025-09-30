@@ -1,5 +1,6 @@
-use cuda_types::cuda::CUgraphExecUpdateResult;
+use cuda_types::cuda::{CUerror, CUgraphExecUpdateResult, CUresult, CUresultConsts};
 use hip_runtime_sys::*;
+use zluda_common::FromCuda;
 
 pub(crate) unsafe fn destroy(graph: hipGraph_t) -> hipError_t {
     hipGraphDestroy(graph)
@@ -13,13 +14,15 @@ pub(crate) fn exec_update_v2(
     h_graph_exec: hipGraphExec_t,
     h_graph: hipGraph_t,
     result_info: &mut cuda_types::cuda::CUgraphExecUpdateResultInfo,
-) -> hipError_t {
-    let mut h_error_node: hipGraphNode_t = unsafe { std::mem::zeroed() };
-    let mut update_result: hipGraphExecUpdateResult = unsafe { std::mem::zeroed() };
+) -> CUresult {
+    // We use FromCuda here instead of transmute in case our hipGraphNode_t representation changes
+    // in the future.
+    let mut h_error_node: hipGraphNode_t =
+        FromCuda::<_, CUerror>::from_cuda(&result_info.errorNode)?;
+    let mut update_result: hipGraphExecUpdateResult = hipGraphExecUpdateResult(0);
     unsafe { hipGraphExecUpdate(h_graph_exec, h_graph, &mut h_error_node, &mut update_result) }?;
 
-    result_info.errorNode = unsafe { std::mem::transmute(h_error_node) };
-    result_info.errorFromNode = unsafe { std::mem::transmute(h_error_node) };
+    result_info.errorFromNode = result_info.errorNode;
     result_info.result = match update_result {
         hipGraphExecUpdateResult::hipGraphExecUpdateSuccess => {
             CUgraphExecUpdateResult::CU_GRAPH_EXEC_UPDATE_SUCCESS
@@ -45,7 +48,7 @@ pub(crate) fn exec_update_v2(
         hipGraphExecUpdateResult::hipGraphExecUpdateErrorUnsupportedFunctionChange => {
             CUgraphExecUpdateResult::CU_GRAPH_EXEC_UPDATE_ERROR_UNSUPPORTED_FUNCTION_CHANGE
         }
-        _ => return hipError_t::ErrorNotSupported,
+        _ => return CUresult::ERROR_NOT_SUPPORTED,
     };
 
     Ok(())
