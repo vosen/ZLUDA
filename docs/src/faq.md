@@ -1,6 +1,6 @@
 # FAQ
 
-> [!WARNING]  
+> [!WARNING]
 > For legal reasons we can't help you with the pre-rollback versions (older than 4). See more here: [https://www.theregister.com/2024/08/09/amd_zluda_take_down](https://www.theregister.com/2024/08/09/amd_zluda_take_down/)
 
 ## General
@@ -14,7 +14,7 @@
     This will be revealed in due time.
 
 1. How can I follow ZLUDA's progress
-   
+
    * Join our [Discord](https://discord.gg/sg6BNzXuc7)
    * Every quarter we publish a progress report on [ZLUDA's blog](https://vosen.github.io/ZLUDA/)
 
@@ -55,7 +55,7 @@
    * Inline assembly
    * Rounding modes
    * Denormal modes
-  
+
     Additionally, performance libraries (cuBLAS, cuDNN, etc.) cannot be easily mapped through Vulkan or OpenCL.
 
 # Software

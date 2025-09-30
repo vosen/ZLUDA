@@ -132,7 +132,7 @@ test2: all
 <<
 /Feobj\tbtest.exe /Fd$(@R).pdb $(DET_SRC)
 /link $(LINKFLAGS) /subsystem:console
-/export:DetourFinishHelperProcess,@1 
+/export:DetourFinishHelperProcess,@1
 <<NOKEEP
     type $(BIND)\trcbld.cpp | findstr CreateFile
     echo int main() { return 0; } > obj\test.cpp

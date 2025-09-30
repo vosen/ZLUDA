@@ -5,10 +5,10 @@ has been used by many ISVs and  is also  used by product teams at Microsoft. Det
 a standard open source  license ([MIT](https://github.com/microsoft/Detours/blob/master/LICENSE.md)).  This simplifies licensing for programmers using Detours
 and allows the community to support Detours using open source tools and processes.
 
-Detours is compatible with the Windows NT family of 
+Detours is compatible with the Windows NT family of
 operating systems: Windows NT, Windows XP, Windows Server 2003, Windows 7,
 Windows 8, and Windows 10.  It cannot be used by Windows Store apps
-because Detours requires APIs not available to those applications. 
+because Detours requires APIs not available to those applications.
 This repo contains the source code for version 4.0.1 of Detours.
 
 For technical documentation on Detours, see the [Detours Wiki](https://github.com/microsoft/Detours/wiki).
@@ -41,11 +41,11 @@ This project has adopted the [Microsoft Open Source Code of Conduct](https://ope
 
 ## Mailing list for announcements
 
-The detours-announce mailing list is a low-traffic email list for important announcements 
-about the project, such as the availability of new versions of Detours.  To join it, send 
-an email to listserv@lists.research.microsoft.com with a 
+The detours-announce mailing list is a low-traffic email list for important announcements
+about the project, such as the availability of new versions of Detours.  To join it, send
+an email to listserv@lists.research.microsoft.com with a
 message body containing only the text SUBSCRIBE DETOURS-ANNOUNCE.
-To leave it, send an email to listserv@lists.research.microsoft.com with a 
+To leave it, send an email to listserv@lists.research.microsoft.com with a
 message body containing only the text UNSUBSCRIBE DETOURS-ANNOUNCE.
 
 

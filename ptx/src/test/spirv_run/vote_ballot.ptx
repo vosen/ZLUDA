@@ -17,7 +17,7 @@
     setp.ge.u32     tid_is_greater_equal_34, tid, 34;
 
     vote.sync.ballot.b32 result, tid_is_greater_equal_34,  0xFFFFFFFF;
-    
+
     .reg .u64       out_offset;
     mul.wide.u32    out_offset, tid, 4;
     add.u64         out_ptr, out_ptr, out_offset;

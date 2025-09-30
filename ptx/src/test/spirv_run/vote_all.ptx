@@ -30,7 +30,7 @@
     // Compiler _can_ and _does_ skip vote.sync entirely if it can prove that the membermask does not match execution mask
     @not_first_lane vote.sync.all.pred result_pred, not_first_lane,  0xFFFFFFFE;
     selp.u32        result, 1, 0, result_pred;
-    
+
     .reg .u64       out_offset;
     mul.wide.u32    out_offset, tid, 4;
     add.u64         out_ptr, out_ptr, out_offset;

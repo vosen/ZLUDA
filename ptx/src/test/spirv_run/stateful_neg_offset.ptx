@@ -19,7 +19,7 @@
 
     cvta.to.global.u64  in_addr2, in_addr;
     cvta.to.global.u64  out_addr2, out_addr;
-    
+
     add.u64             offset, in_addr2, out_addr2;
     sub.u64             offset, in_addr2, out_addr2;
 

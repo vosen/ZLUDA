@@ -90,7 +90,7 @@ static BOOL UPDATE_IMPORTS_XX(HANDLE hProcess,
         }
 
         DETOUR_TRACE(("ish[%d] : va=%08x sr=%d\n", i, ish.VirtualAddress, ish.SizeOfRawData));
-        
+
         // If the linker didn't suggest an IAT in the data directories, the
         // loader will look for the section of the import directory to be used
         // for this instead. Since we put out new IMPORT_DIRECTORY outside any
@@ -188,7 +188,7 @@ static BOOL UPDATE_IMPORTS_XX(HANDLE hProcess,
 
         DWORD nOffset = obTab + (sizeof(IMAGE_THUNK_DATAXX) * (4 * n));
         piid[n].OriginalFirstThunk = obBase + nOffset;
-      
+
         // We need 2 thunks for the import table and 2 thunks for the IAT.
         // One for an ordinal import and one to mark the end of the list.
 	  pt = ((IMAGE_THUNK_DATAXX*)(pbNew + nOffset));

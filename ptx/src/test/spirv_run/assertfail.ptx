@@ -49,16 +49,16 @@
 	st.param.b64	[param3+0], in_addr;
 	.param .b64 param4;
 	st.param.b64	[param4+0], in_addr;
-	call.uni 
-	__assertfail, 
+	call.uni
+	__assertfail,
 	(
-	param0, 
-	param1, 
-	param2, 
-	param3, 
+	param0,
+	param1,
+	param2,
+	param3,
 	param4
 	);
-	
+
 	//{
 	}
 

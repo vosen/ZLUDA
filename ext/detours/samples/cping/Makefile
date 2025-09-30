@@ -31,7 +31,7 @@ CFLAGS = $(CFLAGS) /Fd$(OBJD)\vc.pdb \
         /DCONST_VTABLE \
         /DCOBJMACROS -DWIN32 -DNT
 
-C__FLAGS=-DENTRY_PREFIX=iping_ -DREGISTER_PROXY_DLL 
+C__FLAGS=-DENTRY_PREFIX=iping_ -DREGISTER_PROXY_DLL
 CPPFLAGS=
 
 ##############################################################################
@@ -54,7 +54,7 @@ CPPFLAGS=
 
 ##############################################################################
 ##
-C__FLAGS=-DENTRY_PREFIX=iping_ -DREGISTER_PROXY_DLL 
+C__FLAGS=-DENTRY_PREFIX=iping_ -DREGISTER_PROXY_DLL
 CPPFLAGS=
 
 

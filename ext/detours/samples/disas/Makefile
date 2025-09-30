@@ -22,7 +22,7 @@ all: dirs \
 
 clean:
     -del *~ *.obj *.sbr *.lst 2>nul
-    -del $(BIND)\disas.* 2> nul 
+    -del $(BIND)\disas.* 2> nul
     -rmdir /q /s $(OBJD) 2>nul
 
 realclean: clean

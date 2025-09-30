@@ -959,7 +959,7 @@ PBYTE detour_gen_jmp_indirect(BYTE *pbCode, ULONG64 *pbJmpVal)
     struct ARM64_INDIRECT_JMP *pIndJmp;
     union ARM64_INDIRECT_IMM jmpIndAddr;
 
-    jmpIndAddr.value = (((LONG64)pbJmpVal) & 0xFFFFFFFFFFFFF000) - 
+    jmpIndAddr.value = (((LONG64)pbJmpVal) & 0xFFFFFFFFFFFFF000) -
                        (((LONG64)pbCode) & 0xFFFFFFFFFFFFF000);
 
     pIndJmp = (struct ARM64_INDIRECT_JMP *)pbCode;

@@ -19,23 +19,23 @@ CREATE TABLE IF NOT EXISTS globals (
 INSERT OR IGNORE INTO globals (key, value) VALUES ('total_size', 0);
 
 CREATE TRIGGER IF NOT EXISTS update_size_on_delete
-AFTER 
-    DELETE ON modules FOR EACH ROW BEGIN 
-UPDATE 
-    globals 
-SET 
-    value = value - length(OLD.binary) 
-WHERE 
+AFTER
+    DELETE ON modules FOR EACH ROW BEGIN
+UPDATE
+    globals
+SET
+    value = value - length(OLD.binary)
+WHERE
     key = 'total_size';
 END;
 
 CREATE TRIGGER IF NOT EXISTS update_size_on_insert
-AFTER 
-    INSERT ON modules FOR EACH ROW BEGIN 
-UPDATE 
-    globals 
-SET 
-    value = value + length(NEW.binary) 
-WHERE 
+AFTER
+    INSERT ON modules FOR EACH ROW BEGIN
+UPDATE
+    globals
+SET
+    value = value + length(NEW.binary)
+WHERE
     key = 'total_size';
 END;
