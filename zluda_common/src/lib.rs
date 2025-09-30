@@ -227,6 +227,64 @@ impl<'a, E: CudaErrorType> FromCuda<'a, *const ::core::ffi::c_void, E> for &'a :
     }
 }
 
+pub struct ZludaGraphExecUpdateResultInfo<'a> {
+    cuda_result_info: &'a mut CUgraphExecUpdateResultInfo
+}
+
+impl ZludaGraphExecUpdateResultInfo<'_> {
+    pub fn set_error_node(&mut self, h_error_node: hipGraphNode_t) {
+        self.cuda_result_info.errorNode = unsafe { std::mem::transmute(h_error_node) };
+    }
+
+    pub fn set_error_from_node(&mut self, h_error_node: hipGraphNode_t) {
+        self.cuda_result_info.errorFromNode = unsafe { std::mem::transmute(h_error_node) };
+    }
+
+    pub fn set_result<E: CudaErrorType>(&mut self, update_result: hipGraphExecUpdateResult) -> Result<(), E> {
+        self.cuda_result_info.result = match update_result {
+        hipGraphExecUpdateResult::hipGraphExecUpdateSuccess => {
+            CUgraphExecUpdateResult::CU_GRAPH_EXEC_UPDATE_SUCCESS
+        }
+        hipGraphExecUpdateResult::hipGraphExecUpdateError => {
+            CUgraphExecUpdateResult::CU_GRAPH_EXEC_UPDATE_ERROR
+        }
+        hipGraphExecUpdateResult::hipGraphExecUpdateErrorTopologyChanged => {
+            CUgraphExecUpdateResult::CU_GRAPH_EXEC_UPDATE_ERROR_TOPOLOGY_CHANGED
+        }
+        hipGraphExecUpdateResult::hipGraphExecUpdateErrorNodeTypeChanged => {
+            CUgraphExecUpdateResult::CU_GRAPH_EXEC_UPDATE_ERROR_NODE_TYPE_CHANGED
+        }
+        hipGraphExecUpdateResult::hipGraphExecUpdateErrorFunctionChanged => {
+            CUgraphExecUpdateResult::CU_GRAPH_EXEC_UPDATE_ERROR_FUNCTION_CHANGED
+        }
+        hipGraphExecUpdateResult::hipGraphExecUpdateErrorParametersChanged => {
+            CUgraphExecUpdateResult::CU_GRAPH_EXEC_UPDATE_ERROR_PARAMETERS_CHANGED
+        }
+        hipGraphExecUpdateResult::hipGraphExecUpdateErrorNotSupported => {
+            CUgraphExecUpdateResult::CU_GRAPH_EXEC_UPDATE_ERROR_NOT_SUPPORTED
+        }
+        hipGraphExecUpdateResult::hipGraphExecUpdateErrorUnsupportedFunctionChange => {
+            CUgraphExecUpdateResult::CU_GRAPH_EXEC_UPDATE_ERROR_UNSUPPORTED_FUNCTION_CHANGE
+        }
+        _ => return Err(E::NOT_SUPPORTED),
+    };
+    Ok(())
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, *mut CUgraphExecUpdateResultInfo, E>
+    for ZludaGraphExecUpdateResultInfo<'a>
+{
+    fn from_cuda(result_info: &'a *mut CUgraphExecUpdateResultInfo) -> Result<Self, E> {
+        let result_info = match unsafe { result_info.as_mut() } {
+            Some(x) => x,
+            None => return Err(E::INVALID_VALUE),
+        };
+
+        Ok(ZludaGraphExecUpdateResultInfo { cuda_result_info: result_info })
+    }
+}
+
 impl<'a, E: CudaErrorType> FromCuda<'a, cublasOperation_t, E> for rocblas_operation {
     fn from_cuda(t: &'a cublasOperation_t) -> Result<Self, E> {
         Ok(match *t {

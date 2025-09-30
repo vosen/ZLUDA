@@ -1,5 +1,6 @@
-use cuda_types::cuda::CUgraphExecUpdateResult;
+use cuda_types::cuda::{CUerror, CUresult};
 use hip_runtime_sys::*;
+use zluda_common::ZludaGraphExecUpdateResultInfo;
 
 pub(crate) unsafe fn destroy(graph: hipGraph_t) -> hipError_t {
     hipGraphDestroy(graph)
@@ -12,41 +13,16 @@ pub(crate) unsafe fn exec_destroy(graph_exec: hipGraphExec_t) -> hipError_t {
 pub(crate) fn exec_update_v2(
     h_graph_exec: hipGraphExec_t,
     h_graph: hipGraph_t,
-    result_info: &mut cuda_types::cuda::CUgraphExecUpdateResultInfo,
-) -> hipError_t {
+    mut result_info: ZludaGraphExecUpdateResultInfo,
+) -> CUresult {
     let mut h_error_node: hipGraphNode_t = unsafe { std::mem::zeroed() };
     let mut update_result: hipGraphExecUpdateResult = unsafe { std::mem::zeroed() };
     unsafe { hipGraphExecUpdate(h_graph_exec, h_graph, &mut h_error_node, &mut update_result) }?;
 
-    result_info.errorNode = unsafe { std::mem::transmute(h_error_node) };
-    result_info.errorFromNode = unsafe { std::mem::transmute(h_error_node) };
-    result_info.result = match update_result {
-        hipGraphExecUpdateResult::hipGraphExecUpdateSuccess => {
-            CUgraphExecUpdateResult::CU_GRAPH_EXEC_UPDATE_SUCCESS
-        }
-        hipGraphExecUpdateResult::hipGraphExecUpdateError => {
-            CUgraphExecUpdateResult::CU_GRAPH_EXEC_UPDATE_ERROR
-        }
-        hipGraphExecUpdateResult::hipGraphExecUpdateErrorTopologyChanged => {
-            CUgraphExecUpdateResult::CU_GRAPH_EXEC_UPDATE_ERROR_TOPOLOGY_CHANGED
-        }
-        hipGraphExecUpdateResult::hipGraphExecUpdateErrorNodeTypeChanged => {
-            CUgraphExecUpdateResult::CU_GRAPH_EXEC_UPDATE_ERROR_NODE_TYPE_CHANGED
-        }
-        hipGraphExecUpdateResult::hipGraphExecUpdateErrorFunctionChanged => {
-            CUgraphExecUpdateResult::CU_GRAPH_EXEC_UPDATE_ERROR_FUNCTION_CHANGED
-        }
-        hipGraphExecUpdateResult::hipGraphExecUpdateErrorParametersChanged => {
-            CUgraphExecUpdateResult::CU_GRAPH_EXEC_UPDATE_ERROR_PARAMETERS_CHANGED
-        }
-        hipGraphExecUpdateResult::hipGraphExecUpdateErrorNotSupported => {
-            CUgraphExecUpdateResult::CU_GRAPH_EXEC_UPDATE_ERROR_NOT_SUPPORTED
-        }
-        hipGraphExecUpdateResult::hipGraphExecUpdateErrorUnsupportedFunctionChange => {
-            CUgraphExecUpdateResult::CU_GRAPH_EXEC_UPDATE_ERROR_UNSUPPORTED_FUNCTION_CHANGE
-        }
-        _ => return hipError_t::ErrorNotSupported,
-    };
+    result_info.set_error_node(h_error_node);
+    result_info.set_error_from_node(h_error_node);
+
+    result_info.set_result::<CUerror>(update_result)?;
 
     Ok(())
 }
