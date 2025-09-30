@@ -21,11 +21,12 @@ pub(crate) fn exec_update_v2(
 
     // We use FromCuda here instead of transmute in case our hipGraphNode_t representation changes
     // in the future.
-    let error_node: *mut hipGraphNode_t = FromCuda::<_, CUerror>::from_cuda(&std::ptr::from_mut(&mut result_info.errorNode))?;
-    let error_from_node: *mut hipGraphNode_t = FromCuda::<_, CUerror>::from_cuda(&std::ptr::from_mut(&mut result_info.errorFromNode))?;
+    let error_node: *mut hipGraphNode_t =
+        FromCuda::<_, CUerror>::from_cuda(&std::ptr::from_mut(&mut result_info.errorNode))?;
+    let error_from_node: *mut hipGraphNode_t =
+        FromCuda::<_, CUerror>::from_cuda(&std::ptr::from_mut(&mut result_info.errorFromNode))?;
     unsafe { *error_node = h_error_node };
     unsafe { *error_from_node = h_error_node };
-
 
     result_info.errorFromNode = result_info.errorNode;
     result_info.result = match update_result {
