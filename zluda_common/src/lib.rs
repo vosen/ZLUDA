@@ -174,7 +174,8 @@ from_cuda_nop!(
     CUmemAllocationGranularity_flags,
     CUmemAllocationProp,
     CUresult,
-    CUfunction_attribute
+    CUfunction_attribute,
+    CUgraphExecUpdateResultInfo
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,

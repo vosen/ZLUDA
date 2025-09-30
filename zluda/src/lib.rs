@@ -111,6 +111,7 @@ cuda_macros::cuda_function_declarations!(
             cuGetProcAddress_v2,
             cuGraphDestroy,
             cuGraphExecDestroy,
+            cuGraphExecUpdate_v2,
             cuGraphGetNodes,
             cuGraphInstantiateWithFlags,
             cuGraphLaunch,
