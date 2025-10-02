@@ -164,6 +164,7 @@ from_cuda_nop!(
     CUlaunchConfig,
     cublasMath_t,
     nvmlDevice_t,
+    nvmlProcessInfo_v1_t,
     nvmlFieldValue_t,
     nvmlGpuFabricInfo_t,
     cublasLtHandle_t,

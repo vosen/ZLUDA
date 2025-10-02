@@ -54,6 +54,7 @@ cuda_macros::nvml_function_declarations!(
             nvmlInit_v2,
             nvmlShutdown,
             nvmlSystemGetDriverVersion,
+            nvmlDeviceGetComputeRunningProcesses
         ],
     implemented_unnormalized <= [nvmlErrorString,]
 );

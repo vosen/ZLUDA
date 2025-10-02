@@ -80,46 +80,40 @@ impl PciBusId {
 
 fn parse_pci_bus_id(id: &std::ffi::CStr) -> Option<PciBusId> {
     let s = id.to_str().ok()?.trim();
-    let mut domain: u16 = 0;
-    let mut rest = s;
-    if let Some(colon1) = s.find(':') {
-        if colon1 == 4 {
-            domain = hex_u16(&s[..4])?;
-            rest = &s[5..];
-        }
-    }
-    let mut parts = rest.split(':');
-    let bus_part = parts.next()?;
-    let tail = parts.next()?;
-    if parts.next().is_some() {
-        return None;
-    }
-    let mut dev_func = tail.split('.');
-    let dev_part = dev_func.next()?;
-    let func_part = dev_func.next();
-    let function = match func_part {
+    let mut segments = s.split(':').rev();
+    let func_dev = segments.next()?;
+    let mut function_dev = func_dev.split('.');
+    let device = function_dev.next()?;
+    let function = function_dev.next();
+    let function = match function {
         Some(f) => hex_u8(f)?,
         None => 0,
     };
+    if function_dev.next().is_some() {
+        return None;
+    }
+    let bus = segments.next()?;
+    let domain = segments.next();
+    let domain = match domain {
+        Some(d) => hex_u16(d)?,
+        None => 0,
+    };
+    if segments.next().is_some() {
+        return None;
+    }
     Some(PciBusId {
         domain,
-        bus: hex_u8(bus_part)?,
-        device: hex_u8(dev_part)?,
+        bus: hex_u8(bus)?,
+        device: hex_u8(device)?,
         function,
     })
 }
 
 fn hex_u16(s: &str) -> Option<u16> {
-    if s.len() > 4 {
-        return None;
-    }
     u16::from_str_radix(s, 16).ok()
 }
 
 fn hex_u8(s: &str) -> Option<u8> {
-    if s.len() > 2 {
-        return None;
-    }
     u8::from_str_radix(s, 16).ok()
 }
 
@@ -156,6 +150,15 @@ pub(crate) fn device_get_handle_by_index_v2(
     nvmlReturn_t::SUCCESS
 }
 
+pub(crate) fn device_get_compute_running_processes(
+    _device: cuda_types::nvml::nvmlDevice_t,
+    info_count: &mut ::core::ffi::c_uint,
+    _infos: Option<&mut cuda_types::nvml::nvmlProcessInfo_v1_t>,
+) -> nvmlReturn_t {
+    *info_count = 0;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -186,5 +189,15 @@ mod tests {
         assert_eq!(parsed.bus, 0x65);
         assert_eq!(parsed.device, 0xa0);
         assert_eq!(parsed.function, 0xf);
+    }
+
+    #[test]
+    fn parse_long_pci_bus_id() {
+        let id = std::ffi::CString::new("00000002:00:00.0").unwrap();
+        let parsed = super::parse_pci_bus_id(&id).unwrap();
+        assert_eq!(parsed.domain, 0x0002);
+        assert_eq!(parsed.bus, 0x00);
+        assert_eq!(parsed.device, 0x00);
+        assert_eq!(parsed.function, 0x00);
     }
 }
