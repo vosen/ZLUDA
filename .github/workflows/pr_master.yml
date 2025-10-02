@@ -11,6 +11,26 @@ env:
   ROCM_VERSION: "6.3.1"
 
 jobs:
+  check_whitespace:
+    name: Check Whitespace
+    runs-on: ubuntu-22.04
+    steps:
+      - run: |
+          fd \
+            --exclude '*.bc' \
+            --exclude '*.exe' \
+            --exclude '*.lib' \
+            --exclude ext/detours \
+            --strip-cwd-prefix \
+            --type file \
+            --exec bash -c '
+              diff \
+                --unified \
+                --label "a/$0" \
+                --label "b/$0" \
+                <(cat "$0") \
+                <(sed --regexp-extended "s/\s+$//; \$a\\" "$0")
+            '
   formatting:
     runs-on: ubuntu-22.04
     steps:
