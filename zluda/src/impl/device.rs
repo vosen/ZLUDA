@@ -4,8 +4,8 @@ use hip_runtime_sys::*;
 use std::{mem, ptr};
 
 const PROJECT_SUFFIX: &[u8] = b" [ZLUDA]\0";
-pub const COMPUTE_CAPABILITY_MAJOR: i32 = 8;
-pub const COMPUTE_CAPABILITY_MINOR: i32 = 8;
+pub const COMPUTE_CAPABILITY_MAJOR: i32 = 12;
+pub const COMPUTE_CAPABILITY_MINOR: i32 = 0;
 
 pub(crate) fn compute_capability(major: &mut i32, minor: &mut i32, _dev: hipDevice_t) -> CUresult {
     *major = COMPUTE_CAPABILITY_MAJOR;
