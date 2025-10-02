@@ -12,7 +12,7 @@
 
 ## Build steps
 
-* Git clone the repo (make sure to use `--recursive` option to fetch submodules):
+* Git clone the repo (make sure to use `--recursive` option to fetch submodules):\
 `git clone --recursive https://github.com/vosen/ZLUDA.git`
 * Enter freshly cloned `ZLUDA` directory and build with cargo (this takes a while):
   * `cargo xtask --release` for Release build
