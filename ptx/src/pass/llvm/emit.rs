@@ -519,6 +519,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::CpAsyncWaitGroup { .. } => Ok(()), // nop
             ast::Instruction::CpAsyncWaitAll { .. } => Ok(()), // nop
             ast::Instruction::GridDepControl { .. } => Ok(()), // nop
+            ast::Instruction::Mma { data, arguments } => self.emit_mma(data, arguments),
             // replaced by a function call
             ast::Instruction::Bfe { .. }
             | ast::Instruction::Bar { .. }
@@ -530,7 +531,6 @@ impl<'a> MethodEmitContext<'a> {
             | ast::Instruction::Nanosleep { .. }
             | ast::Instruction::ReduxSync { .. }
             | ast::Instruction::LdMatrix { .. }
-            | ast::Instruction::Mma { .. }
             | ast::Instruction::Prmt { .. } => return Err(error_unreachable()),
         }
     }
@@ -2684,6 +2684,72 @@ impl<'a> MethodEmitContext<'a> {
         unsafe {
             LLVMSetAlignment(store, cp_size.as_u64() as u32);
         }
+        Ok(())
+    }
+
+    fn emit_mma(
+        &mut self,
+        data: ast::MmaDetails,
+        arguments: ast::MmaArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let ast::MmaDetails {
+            alayout,
+            blayout,
+            dtype_scalar,
+            atype_scalar,
+            btype_scalar,
+            ctype_scalar,
+        } = data;
+
+        if alayout != ast::MatrixLayout::Row || blayout != ast::MatrixLayout::Col {
+            return Err(error_unreachable());
+        }
+
+        if atype_scalar != ast::ScalarType::BF16 || btype_scalar != ast::ScalarType::BF16 {
+            return Err(error_unreachable());
+        }
+
+        let atype_str = "bf16";
+
+        let ctype_str = match ctype_scalar {
+            ast::ScalarType::F16 => "f16",
+            ast::ScalarType::F32 => "f32",
+            _ => return Err(error_unreachable()),
+        };
+
+        let dtype_str = match dtype_scalar {
+            ast::ScalarType::F16 => "f16",
+            ast::ScalarType::F32 => "f32",
+            _ => return Err(error_unreachable()),
+        };
+
+        // Hard-coding .m16n8k16
+        let atype = &ast::Type::Vector(4, ast::ScalarType::B32);
+        let btype = &ast::Type::Vector(2, ast::ScalarType::B32);
+        let ctype = &ast::Type::Vector(4, ast::ScalarType::F32);
+        let dtype = &ast::Type::Vector(4, ast::ScalarType::F32);
+
+        let a = self.resolver.value(arguments.src1)?;
+        let b = self.resolver.value(arguments.src2)?;
+        let c = self.resolver.value(arguments.src3)?;
+
+        let b16_16_type = &ast::Type::Vector(16, ast::ScalarType::B16);
+        let float_8_type = &ast::Type::Vector(8, ast::ScalarType::F32);
+
+        // TODO: maybe try to unify these into a single intrinsic, or at least one that's more
+        // self-explanatory
+
+        let d_frag = self.emit_intrinsic(
+            c"llvm.zluda.mma.m16n8k16",
+            Some(arguments.dst),
+            Some(dtype),
+            vec![
+                (a, get_type(self.context, atype)?),
+                (b, get_type(self.context, btype)?),
+                (c, get_type(self.context, ctype)?),
+            ],
+        )?;
+
         Ok(())
     }
 
