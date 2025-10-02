@@ -9,7 +9,7 @@ assignees: ''
 
 **Describe the bug**
 A clear and concise description of what the bug is. Please check that you've
-read the guidelines for submitting a bug report in the
+read the guidelines for submitting a bug report in the 
 [Bug Reports](https://github.com/microsoft/Detours/wiki/FAQ#bug-reports) section
 of the FAQ.
 

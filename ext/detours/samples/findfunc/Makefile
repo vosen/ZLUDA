@@ -99,7 +99,7 @@ $(OBJD)\symtest.bsc : $(OBJD)\symtest.obj
 
 # We try to get the 64-bit dbghelp first because it is a lot more useful.
 $(BIND)\dbghelp.dll : {"$(PROGRAMFILES)\Debugging Tools for Windows 64-bit";$(PATH)}dbghelp.dll
-    -copy $** $(BIND)\dbghelp.dll
+    -copy $** $(BIND)\dbghelp.dll 
 
 ##############################################################################
 

@@ -493,9 +493,9 @@ nearby:
         jmp     faraway                                 ; e9xxxxxxxx
 
         int 3
-        lea     rax,[rsp]                               ; 488d0424
+        lea     rax,[rsp]                               ; 488d0424        
         int 3
-        mov rcx,0BADC0DEBA5Eh                           ;  48b95ebadec0ad0b0000
+        mov rcx,0BADC0DEBA5Eh                           ;  48b95ebadec0ad0b0000 
         int 3
         cmp     rax,rcx                                 ;  483bc1
 
