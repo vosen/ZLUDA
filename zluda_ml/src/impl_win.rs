@@ -51,3 +51,12 @@ pub(crate) fn device_get_handle_by_index_v2(
 ) -> nvmlReturn_t {
     crate::impl_common::unimplemented()
 }
+
+pub(crate) fn device_get_compute_running_processes(
+    _device: cuda_types::nvml::nvmlDevice_t,
+    info_count: &mut ::core::ffi::c_uint,
+    _infos: Option<&mut cuda_types::nvml::nvmlProcessInfo_v1_t>,
+) -> nvmlReturn_t {
+    *info_count = 0;
+    Ok(())
+}
