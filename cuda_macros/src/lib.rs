@@ -306,7 +306,7 @@ fn join(
             .into_iter()
             .collect();
     }
-    
+
 }
 
 #[proc_macro_attribute]
@@ -315,7 +315,7 @@ pub fn test_cuda(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let cuda_fn = format_ident!("{}{}", fn_.sig.ident, "_nvidia");
     let zluda_fn = format_ident!("{}{}", fn_.sig.ident, "_zluda");
     let fn_name = fn_.sig.ident.clone();
-    quote! { 
+    quote! {
         #[test]
         fn #cuda_fn() {
             unsafe { #fn_name(<crate::tests::Cuda>::new()) }
@@ -324,7 +324,7 @@ pub fn test_cuda(_attr: TokenStream, item: TokenStream) -> TokenStream {
         fn #zluda_fn() {
             unsafe { #fn_name(<crate::tests::Zluda>::new()) }
         }
-        
+
         #fn_
     }.into()
 }

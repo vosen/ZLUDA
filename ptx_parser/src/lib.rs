@@ -4246,7 +4246,7 @@ mod tests {
             .version 6.5
             .target sm_30
             .address_size 64
-            
+
             .global .b32 global[4] = {  unknown (1),   2,   3,   4};
 
             .visible .entry func1()

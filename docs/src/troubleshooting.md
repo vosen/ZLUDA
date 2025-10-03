@@ -71,7 +71,7 @@ and various other libraries). It will be `target/release` if you built from
 source, or `zluda` if you downloaded one of the release packages. `<ZLUDA_DIRECTORY>/trace`
 contains tracing shims for `libcuda.so` (zluda_trace) and other CUDA libraries.
 
-> [!NOTE]  
+> [!NOTE]
 > `LD_LIBRARY_PATH` is an environment variable used by `ld`, Linux's dynamic linker. It tells `ld` that when it's looking for a shared library – for example, `libcuda.so` – it should first look in a specific list of directories, before system paths. It's just like `PATH`, but for shared libraries instead of executables.
 
 #### `ZLUDA_CUDA_LIB=<ZLUDA_DIRECTORY>/libcuda.so`

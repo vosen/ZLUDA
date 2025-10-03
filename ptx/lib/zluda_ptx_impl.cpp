@@ -596,7 +596,7 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
     REDUX_SYNC_IMPL(min);
     REDUX_SYNC_IMPL(max);
 
-    
+
     __device__ inline static uint32_t load_single_matrix(void SHARED_SPACE * lds_address, uint32_t warp_offset)
     {
         uint32_t laneid = __zluda_ptx_impl_sreg_laneid();
@@ -662,7 +662,7 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
         const unsigned lIdx = threadIdx.x;
         const int lane = lIdx % 16; // Lanes 0-15 (the other 16 lanes are a duplicate in w32 mode)
         half16 aFrag;
-    
+
         for (int vGPR = 0; vGPR < 8; ++vGPR) {
             int cudaChunk = (vGPR / 4) * 2;  // will be 0 or 2
             int cudaTID   = (vGPR % 4 + lane * 4) % 32;
@@ -683,12 +683,12 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
         }
         return aFrag;
     }
-    
+
     static __device__ half16 shuffle_b(uint2::Native_vec_ b_reg) {
         const unsigned lIdx = threadIdx.x;
         const int lane = lIdx % 16;
         half16 bFrag;
-    
+
         for (int vGPR = 0; vGPR < 8; ++vGPR) {
             int cudaChunk = vGPR / 4;  // will be 0 or 1
             int cudaTID   = vGPR % 4 + (lane * 4) % 64;
@@ -704,18 +704,18 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
         }
         return bFrag;
     }
-    
+
     static __device__ float8 shuffle_c(float4::Native_vec_ c_reg) {
         const int lIdx = (int)threadIdx.x;
         float8 cFrag;
-    
+
         // Loop over the eight vector GPRs.
         for (int vGPR = 0; vGPR < 8; ++vGPR) {
             int cudaChunk = (vGPR / 4) * 2;  // will be 0 or 2: selects which pair of components to use.
             int lIdx8     = (lIdx < 8) ? lIdx : lIdx - 8;
             int cudaTID   = (vGPR % 4) * 8 + lIdx8 / 2;
             float ctmp0, ctmp1;
-    
+
             if (cudaChunk == 0) {
                 ctmp0 = bpermute_lane(cudaTID, c_reg.x);
                 ctmp1 = bpermute_lane(cudaTID, c_reg.y);
@@ -723,10 +723,10 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
                 ctmp0 = bpermute_lane(cudaTID, c_reg.z);
                 ctmp1 = bpermute_lane(cudaTID, c_reg.w);
             }
-    
+
             // Select one of the two values based on the thread index's LSB.
             cFrag[vGPR] = (lIdx & 1) ? ctmp1 : ctmp0;
-            
+
             // Zero out for specific thread indices.
             if ((lIdx > 7 && lIdx < 16) || (lIdx > 23 && lIdx < 32))
                 cFrag[vGPR] = 0.0f;
@@ -737,7 +737,7 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
     static inline __device__ float4::Native_vec_ shuffle_d(float8 dFrag) {
         const int lIdx = (int)threadIdx.x;
         float4::Native_vec_ d_out;
-    
+
         for (int cChunk = 0; cChunk < 4; ++cChunk) {
             int r_vGPR = (cChunk / 2) * 4;
             int add8   = (lIdx & 0x4) ? 8 : 0;
@@ -769,13 +769,13 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
         half16  aFrag = shuffle_a(a_reg);
         half16  bFrag = shuffle_b(b_reg);
         float8  cFrag = shuffle_c(c_reg);
-    
+
         // Call the (built‐in) 16x16 MMA instruction. It returns a float8.
         float8 dFrag = __builtin_amdgcn_wmma_f32_16x16x16_f16_w32(aFrag, bFrag, cFrag);
-    
+
         // Unshuffle back into Nvidia expected float4 result
         float4::Native_vec_ d_out = shuffle_d(dFrag);
-    
+
         return d_out;
     }
 
@@ -784,13 +784,13 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
         half16  aFrag = shuffle_a(a_reg);
         half16  bFrag = shuffle_b(b_reg);
         float8  cFrag = shuffle_c(c_reg);
-    
+
         // Call the (built‐in) 16x16 MMA instruction. It returns a float8.
         float8 dFrag = __builtin_amdgcn_wmma_f32_16x16x16_bf16_w32(aFrag, bFrag, cFrag);
-    
+
         // Unshuffle back into Nvidia expected float4 result
         float4::Native_vec_ d_out = shuffle_d(dFrag);
-    
+
         return d_out;
     }
 
