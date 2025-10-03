@@ -1,7 +1,7 @@
 use std::{
     ffi::{c_char, c_int, c_long, c_uint, c_void, CStr},
     mem,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{LazyLock, Mutex},
 };
 
@@ -91,15 +91,12 @@ unsafe fn la_objsearch_impl(
     name: *const c_char,
     requesting_cookie: *mut usize,
 ) -> Option<&'static [u8]> {
-    let input_path = CStr::from_ptr(name).to_str().ok()?;
-    if is_libc(input_path) {
-        return None;
-    }
     let GlobalState {
         replacement_paths,
         cookies,
     } = &*GLOBAL_STATE;
     let requesting_cookie = requesting_cookie as usize;
+    let input_path = CStr::from_ptr(name).to_str().ok()?;
     let replacement_paths = replacement_paths.as_ref()?;
     let index = FILES_FOR_REDIRECT
         .into_iter()
@@ -116,12 +113,6 @@ unsafe fn la_objsearch_impl(
         return None;
     }
     Some(&*replacement_paths[index])
-}
-
-fn is_libc(input_path: &str) -> bool {
-    Path::new(input_path)
-        .file_stem()
-        .map_or(false, |f| f == "libc.so")
 }
 
 type Lmid = c_long;
