@@ -16,7 +16,8 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - run: |
-          fd \
+          sudo apt install fd-find
+          fdfind \
             --exclude '*.bc' \
             --exclude '*.exe' \
             --exclude '*.lib' \
