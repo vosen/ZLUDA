@@ -18,7 +18,7 @@
     bra BB0;
 // this basic block does not start with a label
     ld.u64          temp, [out_addr];
-    
+
 BB0:
     ld.u64          temp, [in_addr];
 	add.u64		    temp2, temp, 1;

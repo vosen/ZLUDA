@@ -8,7 +8,7 @@
 
     add.ftz.f16     temp2, temp1, temp0;
     add.ftz.f32     temp2, temp1, temp0;
-    
+
     add.f16     temp2, temp1, temp0;
     add.f32     temp2, temp1, temp0;
 	ret;

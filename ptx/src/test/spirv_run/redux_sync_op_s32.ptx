@@ -24,7 +24,7 @@
 
     add.s32            result, add_out, min_out;
     add.s32            result, result, max_out;
-    
+
     .reg .u64          out_offset;
     mul.wide.u32       out_offset, tid, 4;
     add.u64            out_ptr, out_ptr, out_offset;

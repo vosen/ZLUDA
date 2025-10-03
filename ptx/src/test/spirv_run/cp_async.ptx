@@ -29,7 +29,7 @@
     ld.b32                     temp2, [to+4];
     ld.b32                     temp3, [to+8];
     ld.b32                     temp4, [to+12];
-    
+
     st.b32                     [out_addr],    temp1;
     st.b32                     [out_addr+4],  temp2;
     st.b32                     [out_addr+8],  temp3;

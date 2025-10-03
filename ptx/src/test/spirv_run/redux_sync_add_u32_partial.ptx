@@ -21,7 +21,7 @@
 
     mov.u32               result, 0;
     @p redux.sync.add.u32 result, tid, 0x55555555;
-    
+
     .reg .u64             out_offset;
     mul.wide.u32          out_offset, tid, 4;
     add.u64               out_ptr, out_ptr, out_offset;
