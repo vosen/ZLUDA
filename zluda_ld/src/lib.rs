@@ -1,20 +1,22 @@
 use std::{
-    ffi::{c_char, c_int, c_long, c_uint, c_void, CStr},
-    mem,
-    path::PathBuf,
+    ffi::{c_char, c_int, c_long, c_uint, c_void, CStr, OsStr},
+    path::Path,
     sync::{LazyLock, Mutex},
 };
 
 unsafe extern "C" {
-    fn dladdr(addr: *const c_void, info: *mut DLInfo) -> c_int;
+    fn dl_iterate_phdr(
+        callback: extern "C" fn(info: *mut DlPhdrInfo, size: usize, data: *mut c_void) -> c_int,
+        data: *mut c_void,
+    ) -> c_int;
 }
 
 #[repr(C)]
-struct DLInfo {
-    dli_fname: *const c_char,
-    dli_fbase: *mut c_void,
-    dli_sname: *const c_char,
-    dli_saddr: *mut c_void,
+struct DlPhdrInfo {
+    dlpi_addr: usize,
+    dlpi_name: *const c_char,
+    dlpi_phdr: *const c_void,
+    dlpi_phnum: u16,
 }
 
 static FILES_FOR_REDIRECT: [&'static str; 14] = [
@@ -44,22 +46,14 @@ struct GlobalState {
 }
 
 static GLOBAL_STATE: LazyLock<GlobalState> = LazyLock::new(|| {
-    let mut self_dlinfo = unsafe { mem::zeroed::<DLInfo>() };
-    let replacement_paths = if unsafe { dladdr(la_version as _, &mut self_dlinfo) } != 0 {
-        unsafe { CStr::from_ptr(self_dlinfo.dli_fname) }
-            .to_str()
-            .ok()
-            .and_then(|path| {
-                let mut pathbuf = PathBuf::from(path);
-                if !pathbuf.pop() {
-                    return None;
-                }
-                Some(FILES_FOR_REDIRECT.map(|file| {
-                    let mut buffer = pathbuf.join(file).into_os_string().into_encoded_bytes();
-                    buffer.push(0);
-                    buffer
-                }))
-            })
+    let replacement_paths = if let Some(self_path) = get_self_path() {
+        self_path.parent().and_then(|path| {
+            Some(FILES_FOR_REDIRECT.map(|file| {
+                let mut buffer = path.join(file).into_os_string().into_encoded_bytes();
+                buffer.push(0);
+                buffer
+            }))
+        })
     } else {
         None
     };
@@ -68,6 +62,37 @@ static GLOBAL_STATE: LazyLock<GlobalState> = LazyLock::new(|| {
         cookies: Mutex::new([0; FILES_FOR_REDIRECT.len() / 2]),
     }
 });
+
+// I would prefer to just use dladdr(...), but for some reason it segfaults on
+// Ubuntu 22.04, even though it works just fine on Ubuntu 24.04
+fn get_self_path() -> Option<&'static Path> {
+    type IteratorResult = &'static Path;
+    fn get_self_path(info: *mut DlPhdrInfo) -> Option<IteratorResult> {
+        let info = unsafe { info.as_ref() }?;
+        if info.dlpi_addr > la_version as usize {
+            return None;
+        }
+        let path = Path::new(unsafe { CStr::from_ptr(info.dlpi_name) }.to_str().ok()?);
+        if path.file_stem() == Some(OsStr::new("zluda_ld")) {
+            Some(path)
+        } else {
+            None
+        }
+    }
+    extern "C" fn iterator(info: *mut DlPhdrInfo, _size: usize, data: *mut c_void) -> c_int {
+        if let Some(path) = get_self_path(info) {
+            if let Some(output) = unsafe { data.cast::<IteratorResult>().as_mut() } {
+                *output = path;
+            }
+            1
+        } else {
+            0
+        }
+    }
+    let mut result: Option<IteratorResult> = None;
+    unsafe { dl_iterate_phdr(iterator, std::ptr::from_mut(&mut result).cast()) };
+    result
+}
 
 #[no_mangle]
 unsafe extern "C" fn la_version(_: std::ffi::c_uint) -> std::ffi::c_uint {
