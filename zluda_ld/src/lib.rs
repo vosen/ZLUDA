@@ -91,13 +91,8 @@ unsafe fn la_objsearch_impl(
     name: *const c_char,
     requesting_cookie: *mut usize,
 ) -> Option<&'static [u8]> {
-    let GlobalState {
-        replacement_paths,
-        cookies,
-    } = &*GLOBAL_STATE;
     let requesting_cookie = requesting_cookie as usize;
     let input_path = CStr::from_ptr(name).to_str().ok()?;
-    let replacement_paths = replacement_paths.as_ref()?;
     let index = FILES_FOR_REDIRECT
         .into_iter()
         .enumerate()
@@ -108,6 +103,11 @@ unsafe fn la_objsearch_impl(
                 None
             }
         })?;
+    let GlobalState {
+        replacement_paths,
+        cookies,
+    } = &*GLOBAL_STATE;
+    let replacement_paths = replacement_paths.as_ref()?;
     let known_cookie = { cookies.lock().ok()?[index / 2] };
     if known_cookie == requesting_cookie {
         return None;
