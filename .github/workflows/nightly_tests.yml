@@ -5,6 +5,7 @@ on:
 
 env:
   ROCM_VERSION: "6.3.4"
+  AMDGPU_VERSION: "6.4.4"
   TEST_THREADS: 24
 
 jobs:
@@ -18,7 +19,7 @@ jobs:
         sparse-checkout: |
           .github/workflows/rocm_setup_run.sh
     - name: Install ROCm
-      run: sudo bash zluda-src/.github/workflows/rocm_setup_run.sh ${{ env.ROCM_VERSION }}
+      run: sudo bash zluda-src/.github/workflows/rocm_setup_run.sh ${{ env.ROCM_VERSION }} ${{ env.AMDGPU_VERSION }}
     - uses: actions/checkout@v4
       with:
         repository: 'vosen/ptx_tests'
