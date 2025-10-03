@@ -144,7 +144,7 @@ jobs:
         submodules: false
         sparse-checkout: .github
     - name: Install ROCm
-      run: sudo bash .github/workflows/rocm_setup_run.sh ${{ env.ROCM_VERSION }}
+      run: sudo bash .github/workflows/rocm_setup_run.sh ${{ env.ROCM_VERSION }} ${{ env.AMDGPU_VERSION }}
     - uses: actions/download-artifact@v4
       with:
         artifact-ids: ${{ needs.build_tests.outputs.test_package }}
