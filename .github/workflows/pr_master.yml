@@ -8,7 +8,8 @@ env:
   CARGO_PROFILE: release
   SCCACHE_GHA_ENABLED: "true"
   RUSTC_WRAPPER: "sccache"
-  ROCM_VERSION: "6.3.1"
+  ROCM_VERSION: "6.3.4"
+  AMDGPU_VERSION: "6.4.4"
 
 jobs:
   formatting:
@@ -105,7 +106,7 @@ jobs:
         submodules: false
         sparse-checkout: .github
     - name: Install ROCm
-      run: sudo bash .github/workflows/rocm_setup_run.sh ${{ env.ROCM_VERSION }}
+      run: sudo bash .github/workflows/rocm_setup_run.sh ${{ env.ROCM_VERSION }} ${{ env.AMDGPU_VERSION }}
     - uses: actions/download-artifact@v4
       with:
         artifact-ids: ${{ needs.build_tests.outputs.test_package }}
