@@ -1,6 +1,7 @@
 use cuda_types::{
     cublas::cublasStatus_tConsts,
     cuda::{CUerror, CUresult, CUresultConsts, CUuuid},
+    cudnn9::cudnnStatus_tConsts,
     cufft::cufftResultConsts,
     cusparse::cusparseStatus_tConsts,
     nvml::nvmlReturn_tConsts,
@@ -197,11 +198,17 @@ impl ReprUsize for cuda_types::cublas::cublasStatus_t {
 
 impl ReprUsize for cuda_types::cudnn9::cudnnStatus_t {
     fn to_usize(self) -> usize {
-        self.0 as usize
+        match self {
+            cuda_types::cudnn9::cudnnStatus_t::SUCCESS => 0,
+            Err(err) => err.0.get() as usize,
+        }
     }
 
     fn from_usize(x: usize) -> Self {
-        Self(x as u32)
+        match NonZero::new(x as u32) {
+            None => Ok(()),
+            Some(err) => Err(cuda_types::cudnn9::cudnnError_t(err)),
+        }
     }
 
     // TODO: handle this after cudnn fix

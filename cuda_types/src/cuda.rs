@@ -1,9 +1,10 @@
 // Generated automatically by zluda_bindgen
 // DO NOT EDIT MANUALLY
 #![allow(warnings)]
-pub const CUDA_VERSION: u32 = 12080;
+pub const CUDA_VERSION: u32 = 12090;
 pub const CU_IPC_HANDLE_SIZE: u32 = 64;
 pub const CU_COMPUTE_ACCELERATED_TARGET_BASE: u32 = 65536;
+pub const CU_COMPUTE_FAMILY_TARGET_BASE: u32 = 131072;
 pub const CU_GRAPH_COND_ASSIGN_DEFAULT: u32 = 1;
 pub const CU_GRAPH_KERNEL_NODE_PORT_DEFAULT: u32 = 0;
 pub const CU_GRAPH_KERNEL_NODE_PORT_PROGRAMMATIC: u32 = 1;
@@ -43,6 +44,7 @@ pub const CU_TRSF_NORMALIZED_COORDINATES: u32 = 2;
 pub const CU_TRSF_SRGB: u32 = 16;
 pub const CU_TRSF_DISABLE_TRILINEAR_OPTIMIZATION: u32 = 32;
 pub const CU_TRSF_SEAMLESS_CUBEMAP: u32 = 64;
+pub const CU_LAUNCH_KERNEL_REQUIRED_BLOCK_DIM: u32 = 1;
 pub const CU_LAUNCH_PARAM_END_AS_INT: u32 = 0;
 pub const CU_LAUNCH_PARAM_BUFFER_POINTER_AS_INT: u32 = 1;
 pub const CU_LAUNCH_PARAM_BUFFER_SIZE_AS_INT: u32 = 2;
@@ -571,10 +573,10 @@ impl CUstreamMemoryBarrier_flags_enum {
     );
 }
 #[repr(transparent)]
-/// Flags for ::cuStreamMemoryBarrier
+/// Flags for ::CUstreamBatchMemOpParams::memoryBarrier
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUstreamMemoryBarrier_flags_enum(pub ::core::ffi::c_uint);
-/// Flags for ::cuStreamMemoryBarrier
+/// Flags for ::CUstreamBatchMemOpParams::memoryBarrier
 pub use self::CUstreamMemoryBarrier_flags_enum as CUstreamMemoryBarrier_flags;
 /// Per-operation parameters for ::cuStreamBatchMemOp
 #[repr(C)]
@@ -629,6 +631,7 @@ pub struct CUstreamBatchMemOpParams_union_CUstreamMemOpFlushRemoteWritesParams_s
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUstreamBatchMemOpParams_union_CUstreamMemOpMemoryBarrierParams_st {
     pub operation: CUstreamBatchMemOpType,
+    ///< See ::CUstreamMemoryBarrier_flags
     pub flags: ::core::ffi::c_uint,
 }
 /// Per-operation parameters for ::cuStreamBatchMemOp
@@ -695,6 +698,7 @@ pub struct CUstreamUpdateCaptureDependencies_flags_enum(pub ::core::ffi::c_uint)
 /// Flags for ::cuStreamUpdateCaptureDependencies
 pub use self::CUstreamUpdateCaptureDependencies_flags_enum as CUstreamUpdateCaptureDependencies_flags;
 impl CUasyncNotificationType_enum {
+    ///< Sent when the process has exceeded its device memory budget
     pub const CU_ASYNC_NOTIFICATION_TYPE_OVER_BUDGET: CUasyncNotificationType_enum = CUasyncNotificationType_enum(
         1,
     );
@@ -709,24 +713,28 @@ pub use self::CUasyncNotificationType_enum as CUasyncNotificationType;
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct CUasyncNotificationInfo_st {
+    ///< The type of notification being sent
     pub type_: CUasyncNotificationType,
+    ///< Information about the notification. \p type must be checked in order to interpret this field.
     pub info: CUasyncNotificationInfo_st__bindgen_ty_1,
 }
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union CUasyncNotificationInfo_st__bindgen_ty_1 {
+    ///< Information about notifications of type \p CU_ASYNC_NOTIFICATION_TYPE_OVER_BUDGET
     pub overBudget: CUasyncNotificationInfo_st__bindgen_ty_1__bindgen_ty_1,
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUasyncNotificationInfo_st__bindgen_ty_1__bindgen_ty_1 {
+    ///< The number of bytes that the process has allocated above its device memory budget
     pub bytesOverBudget: ::core::ffi::c_ulonglong,
 }
 /// Information passed to the user via the async notification callback
 pub type CUasyncNotificationInfo = CUasyncNotificationInfo_st;
 /** CUDA async notification callback
- \param info Information describing what actions to take as a result of this trim notification.
- \param userData Pointer to user defined data provided at registration.
+ \param info Information describing what actions to take as a result of this notification.
+ \param userData Pointer to user defined data provided at callback registration.
  \param callback The callback handle associated with this specific callback.*/
 pub type CUasyncCallback = ::core::option::Option<
     unsafe extern "system" fn(
@@ -1539,7 +1547,7 @@ impl CUdevice_attribute_enum {
     );
 }
 impl CUdevice_attribute_enum {
-    ///< Link between the device and the host supports native atomic operations (this is a placeholder attribute, and is not supported on any current hardware)
+    ///< Link between the device and the host supports native atomic operations
     pub const CU_DEVICE_ATTRIBUTE_HOST_NATIVE_ATOMIC_SUPPORTED: CUdevice_attribute_enum = CUdevice_attribute_enum(
         86,
     );
@@ -1857,6 +1865,12 @@ impl CUdevice_attribute_enum {
     );
 }
 impl CUdevice_attribute_enum {
+    ///< Device supports CIG with Vulkan.
+    pub const CU_DEVICE_ATTRIBUTE_VULKAN_CIG_SUPPORTED: CUdevice_attribute_enum = CUdevice_attribute_enum(
+        138,
+    );
+}
+impl CUdevice_attribute_enum {
     ///< The combined 16-bit PCI device ID and 16-bit PCI vendor ID.
     pub const CU_DEVICE_ATTRIBUTE_GPU_PCI_DEVICE_ID: CUdevice_attribute_enum = CUdevice_attribute_enum(
         139,
@@ -1866,6 +1880,18 @@ impl CUdevice_attribute_enum {
     ///< The combined 16-bit PCI subsystem ID and 16-bit PCI subsystem vendor ID.
     pub const CU_DEVICE_ATTRIBUTE_GPU_PCI_SUBSYSTEM_ID: CUdevice_attribute_enum = CUdevice_attribute_enum(
         140,
+    );
+}
+impl CUdevice_attribute_enum {
+    ///< Device supports HOST_NUMA location with the virtual memory management APIs like ::cuMemCreate, ::cuMemMap and related APIs
+    pub const CU_DEVICE_ATTRIBUTE_HOST_NUMA_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED: CUdevice_attribute_enum = CUdevice_attribute_enum(
+        141,
+    );
+}
+impl CUdevice_attribute_enum {
+    ///< Device supports HOST_NUMA location with the ::cuMemAllocAsync and ::cuMemPool family of APIs
+    pub const CU_DEVICE_ATTRIBUTE_HOST_NUMA_MEMORY_POOLS_SUPPORTED: CUdevice_attribute_enum = CUdevice_attribute_enum(
+        142,
     );
 }
 impl CUdevice_attribute_enum {
@@ -2844,8 +2870,16 @@ impl CUjit_target_enum {
     pub const CU_TARGET_COMPUTE_101: CUjit_target_enum = CUjit_target_enum(101);
 }
 impl CUjit_target_enum {
+    ///< Compute device class 10.3.
+    pub const CU_TARGET_COMPUTE_103: CUjit_target_enum = CUjit_target_enum(103);
+}
+impl CUjit_target_enum {
     ///< Compute device class 12.0.
     pub const CU_TARGET_COMPUTE_120: CUjit_target_enum = CUjit_target_enum(120);
+}
+impl CUjit_target_enum {
+    ///< Compute device class 12.1.
+    pub const CU_TARGET_COMPUTE_121: CUjit_target_enum = CUjit_target_enum(121);
 }
 impl CUjit_target_enum {
     pub const CU_TARGET_COMPUTE_90A: CUjit_target_enum = CUjit_target_enum(65626);
@@ -2857,7 +2891,28 @@ impl CUjit_target_enum {
     pub const CU_TARGET_COMPUTE_101A: CUjit_target_enum = CUjit_target_enum(65637);
 }
 impl CUjit_target_enum {
+    pub const CU_TARGET_COMPUTE_103A: CUjit_target_enum = CUjit_target_enum(65639);
+}
+impl CUjit_target_enum {
     pub const CU_TARGET_COMPUTE_120A: CUjit_target_enum = CUjit_target_enum(65656);
+}
+impl CUjit_target_enum {
+    pub const CU_TARGET_COMPUTE_121A: CUjit_target_enum = CUjit_target_enum(65657);
+}
+impl CUjit_target_enum {
+    pub const CU_TARGET_COMPUTE_100F: CUjit_target_enum = CUjit_target_enum(131172);
+}
+impl CUjit_target_enum {
+    pub const CU_TARGET_COMPUTE_101F: CUjit_target_enum = CUjit_target_enum(131173);
+}
+impl CUjit_target_enum {
+    pub const CU_TARGET_COMPUTE_103F: CUjit_target_enum = CUjit_target_enum(131175);
+}
+impl CUjit_target_enum {
+    pub const CU_TARGET_COMPUTE_120F: CUjit_target_enum = CUjit_target_enum(131192);
+}
+impl CUjit_target_enum {
+    pub const CU_TARGET_COMPUTE_121F: CUjit_target_enum = CUjit_target_enum(131193);
 }
 #[repr(transparent)]
 /// Online compilation targets
@@ -4263,6 +4318,10 @@ impl CUcigDataType_enum {
     pub const CIG_DATA_TYPE_D3D12_COMMAND_QUEUE: CUcigDataType_enum = CUcigDataType_enum(
         1,
     );
+}
+impl CUcigDataType_enum {
+    /// D3D12 Command Queue Handle
+    pub const CIG_DATA_TYPE_NV_BLOB: CUcigDataType_enum = CUcigDataType_enum(2);
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -6277,6 +6336,189 @@ pub struct CUmemPoolPtrExportData_st {
 pub type CUmemPoolPtrExportData_v1 = CUmemPoolPtrExportData_st;
 /// Opaque data for exporting a pool allocation
 pub type CUmemPoolPtrExportData = CUmemPoolPtrExportData_v1;
+impl CUmemcpyFlags_enum {
+    pub const CU_MEMCPY_FLAG_DEFAULT: CUmemcpyFlags_enum = CUmemcpyFlags_enum(0);
+}
+impl CUmemcpyFlags_enum {
+    /// Hint to the driver to try and overlap the copy with compute work on the SMs.
+    pub const CU_MEMCPY_FLAG_PREFER_OVERLAP_WITH_COMPUTE: CUmemcpyFlags_enum = CUmemcpyFlags_enum(
+        1,
+    );
+}
+#[repr(transparent)]
+/// Flags to specify for copies within a batch. For more details see ::cuMemcpyBatchAsync.
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUmemcpyFlags_enum(pub ::core::ffi::c_uint);
+/// Flags to specify for copies within a batch. For more details see ::cuMemcpyBatchAsync.
+pub use self::CUmemcpyFlags_enum as CUmemcpyFlags;
+impl CUmemcpySrcAccessOrder_enum {
+    /// Default invalid.
+    pub const CU_MEMCPY_SRC_ACCESS_ORDER_INVALID: CUmemcpySrcAccessOrder_enum = CUmemcpySrcAccessOrder_enum(
+        0,
+    );
+}
+impl CUmemcpySrcAccessOrder_enum {
+    /// Indicates that access to the source pointer must be in stream order.
+    pub const CU_MEMCPY_SRC_ACCESS_ORDER_STREAM: CUmemcpySrcAccessOrder_enum = CUmemcpySrcAccessOrder_enum(
+        1,
+    );
+}
+impl CUmemcpySrcAccessOrder_enum {
+    /** Indicates that access to the source pointer can be out of stream order and
+ all accesses must be complete before the API call returns. This flag is suited for
+ ephemeral sources (ex., stack variables) when it's known that no prior operations
+ in the stream can be accessing the memory and also that the lifetime of the memory
+ is limited to the scope that the source variable was declared in. Specifying
+ this flag allows the driver to optimize the copy and removes the need for the user
+ to synchronize the stream after the API call.*/
+    pub const CU_MEMCPY_SRC_ACCESS_ORDER_DURING_API_CALL: CUmemcpySrcAccessOrder_enum = CUmemcpySrcAccessOrder_enum(
+        2,
+    );
+}
+impl CUmemcpySrcAccessOrder_enum {
+    /** Indicates that access to the source pointer can be out of stream order and the accesses
+ can happen even after the API call returns. This flag is suited for host pointers
+ allocated outside CUDA (ex., via malloc) when it's known that no prior operations
+ in the stream can be accessing the memory. Specifying this flag allows the driver
+ to optimize the copy on certain platforms.*/
+    pub const CU_MEMCPY_SRC_ACCESS_ORDER_ANY: CUmemcpySrcAccessOrder_enum = CUmemcpySrcAccessOrder_enum(
+        3,
+    );
+}
+impl CUmemcpySrcAccessOrder_enum {
+    /** Indicates that access to the source pointer can be out of stream order and the accesses
+ can happen even after the API call returns. This flag is suited for host pointers
+ allocated outside CUDA (ex., via malloc) when it's known that no prior operations
+ in the stream can be accessing the memory. Specifying this flag allows the driver
+ to optimize the copy on certain platforms.*/
+    pub const CU_MEMCPY_SRC_ACCESS_ORDER_MAX: CUmemcpySrcAccessOrder_enum = CUmemcpySrcAccessOrder_enum(
+        2147483647,
+    );
+}
+#[repr(transparent)]
+/** These flags allow applications to convey the source access ordering CUDA must maintain.
+ The destination will always be accessed in stream order.*/
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUmemcpySrcAccessOrder_enum(pub ::core::ffi::c_uint);
+/** These flags allow applications to convey the source access ordering CUDA must maintain.
+ The destination will always be accessed in stream order.*/
+pub use self::CUmemcpySrcAccessOrder_enum as CUmemcpySrcAccessOrder;
+/// Attributes specific to copies within a batch. For more details on usage see ::cuMemcpyBatchAsync.
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUmemcpyAttributes_st {
+    ///< Source access ordering to be observed for copies with this attribute.
+    pub srcAccessOrder: CUmemcpySrcAccessOrder,
+    ///< Hint location for the source operand. Ignored when the pointers are not managed memory or memory allocated outside CUDA.
+    pub srcLocHint: CUmemLocation,
+    ///< Hint location for the destination operand. Ignored when the pointers are not managed memory or memory allocated outside CUDA.
+    pub dstLocHint: CUmemLocation,
+    ///< Additional flags for copies with this attribute. See ::CUmemcpyFlags
+    pub flags: ::core::ffi::c_uint,
+}
+/// Attributes specific to copies within a batch. For more details on usage see ::cuMemcpyBatchAsync.
+pub type CUmemcpyAttributes_v1 = CUmemcpyAttributes_st;
+/// Attributes specific to copies within a batch. For more details on usage see ::cuMemcpyBatchAsync.
+pub type CUmemcpyAttributes = CUmemcpyAttributes_v1;
+impl CUmemcpy3DOperandType_enum {
+    ///< Memcpy operand is a valid pointer.
+    pub const CU_MEMCPY_OPERAND_TYPE_POINTER: CUmemcpy3DOperandType_enum = CUmemcpy3DOperandType_enum(
+        1,
+    );
+}
+impl CUmemcpy3DOperandType_enum {
+    ///< Memcpy operand is a CUarray.
+    pub const CU_MEMCPY_OPERAND_TYPE_ARRAY: CUmemcpy3DOperandType_enum = CUmemcpy3DOperandType_enum(
+        2,
+    );
+}
+impl CUmemcpy3DOperandType_enum {
+    pub const CU_MEMCPY_OPERAND_TYPE_MAX: CUmemcpy3DOperandType_enum = CUmemcpy3DOperandType_enum(
+        2147483647,
+    );
+}
+#[repr(transparent)]
+/// These flags allow applications to convey the operand type for individual copies specified in ::cuMemcpy3DBatchAsync.
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUmemcpy3DOperandType_enum(pub ::core::ffi::c_uint);
+/// These flags allow applications to convey the operand type for individual copies specified in ::cuMemcpy3DBatchAsync.
+pub use self::CUmemcpy3DOperandType_enum as CUmemcpy3DOperandType;
+/// Struct representing offset into a CUarray in elements
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUoffset3D_st {
+    pub x: usize,
+    pub y: usize,
+    pub z: usize,
+}
+/// Struct representing offset into a CUarray in elements
+pub type CUoffset3D_v1 = CUoffset3D_st;
+/// Struct representing offset into a CUarray in elements
+pub type CUoffset3D = CUoffset3D_v1;
+/// Struct representing width/height/depth of a CUarray in elements
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUextent3D_st {
+    pub width: usize,
+    pub height: usize,
+    pub depth: usize,
+}
+/// Struct representing width/height/depth of a CUarray in elements
+pub type CUextent3D_v1 = CUextent3D_st;
+/// Struct representing width/height/depth of a CUarray in elements
+pub type CUextent3D = CUextent3D_v1;
+/// Struct representing an operand for copy with ::cuMemcpy3DBatchAsync
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct CUmemcpy3DOperand_st {
+    pub type_: CUmemcpy3DOperandType,
+    pub op: CUmemcpy3DOperand_st__bindgen_ty_1,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union CUmemcpy3DOperand_st__bindgen_ty_1 {
+    pub ptr: CUmemcpy3DOperand_st__bindgen_ty_1__bindgen_ty_1,
+    pub array: CUmemcpy3DOperand_st__bindgen_ty_1__bindgen_ty_2,
+}
+/// Struct representing an operand when ::CUmemcpy3DOperand::type is ::CU_MEMCPY_OPERAND_TYPE_POINTER
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUmemcpy3DOperand_st__bindgen_ty_1__bindgen_ty_1 {
+    pub ptr: CUdeviceptr,
+    ///< Length of each row in elements.
+    pub rowLength: usize,
+    ///< Height of each layer in elements.
+    pub layerHeight: usize,
+    ///< Hint location for the operand. Ignored when the pointers are not managed memory or memory allocated outside CUDA.
+    pub locHint: CUmemLocation,
+}
+/// Struct representing an operand when ::CUmemcpy3DOperand::type is ::CU_MEMCPY_OPERAND_TYPE_ARRAY
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUmemcpy3DOperand_st__bindgen_ty_1__bindgen_ty_2 {
+    pub array: CUarray,
+    pub offset: CUoffset3D,
+}
+/// Struct representing an operand for copy with ::cuMemcpy3DBatchAsync
+pub type CUmemcpy3DOperand_v1 = CUmemcpy3DOperand_st;
+/// Struct representing an operand for copy with ::cuMemcpy3DBatchAsync
+pub type CUmemcpy3DOperand = CUmemcpy3DOperand_v1;
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct CUDA_MEMCPY3D_BATCH_OP_st {
+    ///< Source memcpy operand.
+    pub src: CUmemcpy3DOperand,
+    ///< Destination memcpy operand.
+    pub dst: CUmemcpy3DOperand,
+    ///< Extents of the memcpy between src and dst. The width, height and depth components must not be 0.
+    pub extent: CUextent3D,
+    ///< Source access ordering to be observed for copy from src to dst.
+    pub srcAccessOrder: CUmemcpySrcAccessOrder,
+    ///< Additional flags for copies with this attribute. See ::CUmemcpyFlags
+    pub flags: ::core::ffi::c_uint,
+}
+pub type CUDA_MEMCPY3D_BATCH_OP_v1 = CUDA_MEMCPY3D_BATCH_OP_st;
+pub type CUDA_MEMCPY3D_BATCH_OP = CUDA_MEMCPY3D_BATCH_OP_v1;
 /// Memory allocation node parameters
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -6359,13 +6601,46 @@ impl CUgraphMem_attribute_enum {
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUgraphMem_attribute_enum(pub ::core::ffi::c_uint);
 pub use self::CUgraphMem_attribute_enum as CUgraphMem_attribute;
+impl CUgraphChildGraphNodeOwnership_enum {
+    /**< Default behavior for a child graph node. Child graph is cloned
+into the parent and memory allocation/free nodes can't be present
+in the child graph.*/
+    pub const CU_GRAPH_CHILD_GRAPH_OWNERSHIP_CLONE: CUgraphChildGraphNodeOwnership_enum = CUgraphChildGraphNodeOwnership_enum(
+        0,
+    );
+}
+impl CUgraphChildGraphNodeOwnership_enum {
+    /**< The child graph is moved to the parent. The handle to the child graph
+is owned by the parent and will be destroyed when the parent is
+destroyed.
+
+The following restrictions apply to child graphs after they have been moved:
+Cannot be independently instantiated or destroyed;
+Cannot be added as a child graph of a separate parent graph;
+Cannot be used as an argument to cuGraphExecUpdate;
+Cannot have additional memory allocation or free nodes added.*/
+    pub const CU_GRAPH_CHILD_GRAPH_OWNERSHIP_MOVE: CUgraphChildGraphNodeOwnership_enum = CUgraphChildGraphNodeOwnership_enum(
+        1,
+    );
+}
+#[repr(transparent)]
+/// Child graph node ownership
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUgraphChildGraphNodeOwnership_enum(pub ::core::ffi::c_uint);
+/// Child graph node ownership
+pub use self::CUgraphChildGraphNodeOwnership_enum as CUgraphChildGraphNodeOwnership;
 /// Child graph node parameters
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_CHILD_GRAPH_NODE_PARAMS_st {
     /**< The child graph to clone into the node for node creation, or
-a handle to the graph owned by the node for node query*/
+   a handle to the graph owned by the node for node query.
+   The graph must not contain conditional nodes. Graphs
+   containing memory allocation or memory free nodes must
+   set the ownership to be moved to the parent.*/
     pub graph: CUgraph,
+    ///< The ownership relationship of the child graph node.
+    pub ownership: CUgraphChildGraphNodeOwnership,
 }
 /// Child graph node parameters
 pub type CUDA_CHILD_GRAPH_NODE_PARAMS = CUDA_CHILD_GRAPH_NODE_PARAMS_st;
@@ -6748,189 +7023,6 @@ pub struct CUcheckpointUnlockArgs_st {
 }
 /// CUDA checkpoint optional unlock arguments
 pub type CUcheckpointUnlockArgs = CUcheckpointUnlockArgs_st;
-impl CUmemcpyFlags_enum {
-    pub const CU_MEMCPY_FLAG_DEFAULT: CUmemcpyFlags_enum = CUmemcpyFlags_enum(0);
-}
-impl CUmemcpyFlags_enum {
-    /// Hint to the driver to try and overlap the copy with compute work on the SMs.
-    pub const CU_MEMCPY_FLAG_PREFER_OVERLAP_WITH_COMPUTE: CUmemcpyFlags_enum = CUmemcpyFlags_enum(
-        1,
-    );
-}
-#[repr(transparent)]
-/// Flags to specify for copies within a batch. For more details see ::cuMemcpyBatchAsync.
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct CUmemcpyFlags_enum(pub ::core::ffi::c_uint);
-/// Flags to specify for copies within a batch. For more details see ::cuMemcpyBatchAsync.
-pub use self::CUmemcpyFlags_enum as CUmemcpyFlags;
-impl CUmemcpySrcAccessOrder_enum {
-    /// Default invalid.
-    pub const CU_MEMCPY_SRC_ACCESS_ORDER_INVALID: CUmemcpySrcAccessOrder_enum = CUmemcpySrcAccessOrder_enum(
-        0,
-    );
-}
-impl CUmemcpySrcAccessOrder_enum {
-    /// Indicates that access to the source pointer must be in stream order.
-    pub const CU_MEMCPY_SRC_ACCESS_ORDER_STREAM: CUmemcpySrcAccessOrder_enum = CUmemcpySrcAccessOrder_enum(
-        1,
-    );
-}
-impl CUmemcpySrcAccessOrder_enum {
-    /** Indicates that access to the source pointer can be out of stream order and
- all accesses must be complete before the API call returns. This flag is suited for
- ephemeral sources (ex., stack variables) when it's known that no prior operations
- in the stream can be accessing the memory and also that the lifetime of the memory
- is limited to the scope that the source variable was declared in. Specifying
- this flag allows the driver to optimize the copy and removes the need for the user
- to synchronize the stream after the API call.*/
-    pub const CU_MEMCPY_SRC_ACCESS_ORDER_DURING_API_CALL: CUmemcpySrcAccessOrder_enum = CUmemcpySrcAccessOrder_enum(
-        2,
-    );
-}
-impl CUmemcpySrcAccessOrder_enum {
-    /** Indicates that access to the source pointer can be out of stream order and the accesses
- can happen even after the API call returns. This flag is suited for host pointers
- allocated outside CUDA (ex., via malloc) when it's known that no prior operations
- in the stream can be accessing the memory. Specifying this flag allows the driver
- to optimize the copy on certain platforms.*/
-    pub const CU_MEMCPY_SRC_ACCESS_ORDER_ANY: CUmemcpySrcAccessOrder_enum = CUmemcpySrcAccessOrder_enum(
-        3,
-    );
-}
-impl CUmemcpySrcAccessOrder_enum {
-    /** Indicates that access to the source pointer can be out of stream order and the accesses
- can happen even after the API call returns. This flag is suited for host pointers
- allocated outside CUDA (ex., via malloc) when it's known that no prior operations
- in the stream can be accessing the memory. Specifying this flag allows the driver
- to optimize the copy on certain platforms.*/
-    pub const CU_MEMCPY_SRC_ACCESS_ORDER_MAX: CUmemcpySrcAccessOrder_enum = CUmemcpySrcAccessOrder_enum(
-        2147483647,
-    );
-}
-#[repr(transparent)]
-/** These flags allow applications to convey the source access ordering CUDA must maintain.
- The destination will always be accessed in stream order.*/
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct CUmemcpySrcAccessOrder_enum(pub ::core::ffi::c_uint);
-/** These flags allow applications to convey the source access ordering CUDA must maintain.
- The destination will always be accessed in stream order.*/
-pub use self::CUmemcpySrcAccessOrder_enum as CUmemcpySrcAccessOrder;
-/// Attributes specific to copies within a batch. For more details on usage see ::cuMemcpyBatchAsync.
-#[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct CUmemcpyAttributes_st {
-    ///< Source access ordering to be observed for copies with this attribute.
-    pub srcAccessOrder: CUmemcpySrcAccessOrder,
-    ///< Hint location for the source operand. Ignored when the pointers are not managed memory or memory allocated outside CUDA.
-    pub srcLocHint: CUmemLocation,
-    ///< Hint location for the destination operand. Ignored when the pointers are not managed memory or memory allocated outside CUDA.
-    pub dstLocHint: CUmemLocation,
-    ///< Additional flags for copies with this attribute. See ::CUmemcpyFlags
-    pub flags: ::core::ffi::c_uint,
-}
-/// Attributes specific to copies within a batch. For more details on usage see ::cuMemcpyBatchAsync.
-pub type CUmemcpyAttributes_v1 = CUmemcpyAttributes_st;
-/// Attributes specific to copies within a batch. For more details on usage see ::cuMemcpyBatchAsync.
-pub type CUmemcpyAttributes = CUmemcpyAttributes_v1;
-impl CUmemcpy3DOperandType_enum {
-    ///< Memcpy operand is a valid pointer.
-    pub const CU_MEMCPY_OPERAND_TYPE_POINTER: CUmemcpy3DOperandType_enum = CUmemcpy3DOperandType_enum(
-        1,
-    );
-}
-impl CUmemcpy3DOperandType_enum {
-    ///< Memcpy operand is a CUarray.
-    pub const CU_MEMCPY_OPERAND_TYPE_ARRAY: CUmemcpy3DOperandType_enum = CUmemcpy3DOperandType_enum(
-        2,
-    );
-}
-impl CUmemcpy3DOperandType_enum {
-    pub const CU_MEMCPY_OPERAND_TYPE_MAX: CUmemcpy3DOperandType_enum = CUmemcpy3DOperandType_enum(
-        2147483647,
-    );
-}
-#[repr(transparent)]
-/// These flags allow applications to convey the operand type for individual copies specified in ::cuMemcpy3DBatchAsync.
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct CUmemcpy3DOperandType_enum(pub ::core::ffi::c_uint);
-/// These flags allow applications to convey the operand type for individual copies specified in ::cuMemcpy3DBatchAsync.
-pub use self::CUmemcpy3DOperandType_enum as CUmemcpy3DOperandType;
-/// Struct representing offset into a CUarray in elements
-#[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct CUoffset3D_st {
-    pub x: usize,
-    pub y: usize,
-    pub z: usize,
-}
-/// Struct representing offset into a CUarray in elements
-pub type CUoffset3D_v1 = CUoffset3D_st;
-/// Struct representing offset into a CUarray in elements
-pub type CUoffset3D = CUoffset3D_v1;
-/// Struct representing width/height/depth of a CUarray in elements
-#[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct CUextent3D_st {
-    pub width: usize,
-    pub height: usize,
-    pub depth: usize,
-}
-/// Struct representing width/height/depth of a CUarray in elements
-pub type CUextent3D_v1 = CUextent3D_st;
-/// Struct representing width/height/depth of a CUarray in elements
-pub type CUextent3D = CUextent3D_v1;
-/// Struct representing an operand for copy with ::cuMemcpy3DBatchAsync
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CUmemcpy3DOperand_st {
-    pub type_: CUmemcpy3DOperandType,
-    pub op: CUmemcpy3DOperand_st__bindgen_ty_1,
-}
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub union CUmemcpy3DOperand_st__bindgen_ty_1 {
-    pub ptr: CUmemcpy3DOperand_st__bindgen_ty_1__bindgen_ty_1,
-    pub array: CUmemcpy3DOperand_st__bindgen_ty_1__bindgen_ty_2,
-}
-/// Struct representing an operand when ::CUmemcpy3DOperand::type is ::CU_MEMCPY_OPERAND_TYPE_POINTER
-#[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct CUmemcpy3DOperand_st__bindgen_ty_1__bindgen_ty_1 {
-    pub ptr: CUdeviceptr,
-    ///< Length of each row in elements.
-    pub rowLength: usize,
-    ///< Height of each layer in elements.
-    pub layerHeight: usize,
-    ///< Hint location for the operand. Ignored when the pointers are not managed memory or memory allocated outside CUDA.
-    pub locHint: CUmemLocation,
-}
-/// Struct representing an operand when ::CUmemcpy3DOperand::type is ::CU_MEMCPY_OPERAND_TYPE_ARRAY
-#[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct CUmemcpy3DOperand_st__bindgen_ty_1__bindgen_ty_2 {
-    pub array: CUarray,
-    pub offset: CUoffset3D,
-}
-/// Struct representing an operand for copy with ::cuMemcpy3DBatchAsync
-pub type CUmemcpy3DOperand_v1 = CUmemcpy3DOperand_st;
-/// Struct representing an operand for copy with ::cuMemcpy3DBatchAsync
-pub type CUmemcpy3DOperand = CUmemcpy3DOperand_v1;
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CUDA_MEMCPY3D_BATCH_OP_st {
-    ///< Source memcpy operand.
-    pub src: CUmemcpy3DOperand,
-    ///< Destination memcpy operand.
-    pub dst: CUmemcpy3DOperand,
-    ///< Extents of the memcpy between src and dst. The width, height and depth components must not be 0.
-    pub extent: CUextent3D,
-    ///< Source access ordering to be observed for copy from src to dst.
-    pub srcAccessOrder: CUmemcpySrcAccessOrder,
-    ///< Additional flags for copies with this attribute. See ::CUmemcpyFlags
-    pub flags: ::core::ffi::c_uint,
-}
-pub type CUDA_MEMCPY3D_BATCH_OP_v1 = CUDA_MEMCPY3D_BATCH_OP_st;
-pub type CUDA_MEMCPY3D_BATCH_OP = CUDA_MEMCPY3D_BATCH_OP_v1;
 impl CUmoduleLoadingMode_enum {
     ///< Lazy Kernel Loading is not enabled
     pub const CU_MODULE_EAGER_LOADING: CUmoduleLoadingMode_enum = CUmoduleLoadingMode_enum(
@@ -6965,6 +7057,12 @@ impl CUmemDecompressAlgorithm_enum {
     ///< Snappy is supported.
     pub const CU_MEM_DECOMPRESS_ALGORITHM_SNAPPY: CUmemDecompressAlgorithm_enum = CUmemDecompressAlgorithm_enum(
         2,
+    );
+}
+impl CUmemDecompressAlgorithm_enum {
+    ///< LZ4 is supported.
+    pub const CU_MEM_DECOMPRESS_ALGORITHM_LZ4: CUmemDecompressAlgorithm_enum = CUmemDecompressAlgorithm_enum(
+        4,
     );
 }
 #[repr(transparent)]
@@ -7188,7 +7286,7 @@ pub struct CUdevResource_st {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union CUdevResource_st__bindgen_ty_1 {
-    ///< Resource corresponding to CU_DEV_RESOURCE_TYPE_SM \p. type.
+    ///< Resource corresponding to CU_DEV_RESOURCE_TYPE_SM \p type.
     pub sm: CUdevSmResource,
     pub _oversize: [::core::ffi::c_uchar; 48usize],
 }
@@ -7220,6 +7318,49 @@ pub type CUdevResource_v1 = CUdevResource_st;
  - If \p type is \p CU_DEV_RESOURCE_TYPE_SM, the ::CUdevSmResource structure \p sm is filled in. For example,
  \p sm.smCount will reflect the amount of streaming multiprocessors available in this resource.*/
 pub type CUdevResource = CUdevResource_v1;
+impl CUlogLevel_enum {
+    pub const CU_LOG_LEVEL_ERROR: CUlogLevel_enum = CUlogLevel_enum(0);
+}
+impl CUlogLevel_enum {
+    pub const CU_LOG_LEVEL_WARNING: CUlogLevel_enum = CUlogLevel_enum(1);
+}
+#[repr(transparent)]
+/** \defgroup CUDA_LOGS Error Log Management Functions
+
+ ___MANBRIEF___ error log management functions for the low-level CUDA API
+ (___CURRENT_FILE___) ___ENDMANBRIEF___
+
+ This section describes the error log management functions of the low-level CUDA
+ driver application programming interface.
+
+ @{*/
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUlogLevel_enum(pub ::core::ffi::c_uint);
+/** \defgroup CUDA_LOGS Error Log Management Functions
+
+ ___MANBRIEF___ error log management functions for the low-level CUDA API
+ (___CURRENT_FILE___) ___ENDMANBRIEF___
+
+ This section describes the error log management functions of the low-level CUDA
+ driver application programming interface.
+
+ @{*/
+pub use self::CUlogLevel_enum as CUlogLevel;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct CUlogsCallbackEntry_st {
+    _unused: [u8; 0],
+}
+pub type CUlogsCallbackHandle = *mut CUlogsCallbackEntry_st;
+pub type CUlogsCallback = ::core::option::Option<
+    unsafe extern "system" fn(
+        data: *mut ::core::ffi::c_void,
+        logLevel: CUlogLevel,
+        message: *mut ::core::ffi::c_char,
+        length: usize,
+    ),
+>;
+pub type CUlogIterator = ::core::ffi::c_uint;
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUdeviceptr_v1(pub ::core::ffi::c_uint);

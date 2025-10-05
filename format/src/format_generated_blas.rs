@@ -285,6 +285,9 @@ impl crate::CudaDisplay for cuda_types::cublas::cublasMath_t {
             &cuda_types::cublas::cublasMath_t::CUBLAS_TF32_TENSOR_OP_MATH => {
                 writer.write_all(stringify!(CUBLAS_TF32_TENSOR_OP_MATH).as_bytes())
             }
+            &cuda_types::cublas::cublasMath_t::CUBLAS_FP32_EMULATED_BF16X9_MATH => {
+                writer.write_all(stringify!(CUBLAS_FP32_EMULATED_BF16X9_MATH).as_bytes())
+            }
             &cuda_types::cublas::cublasMath_t::CUBLAS_MATH_DISALLOW_REDUCED_PRECISION_REDUCTION => {
                 writer
                     .write_all(
@@ -325,6 +328,10 @@ impl crate::CudaDisplay for cuda_types::cublas::cublasComputeType_t {
             &cuda_types::cublas::cublasComputeType_t::CUBLAS_COMPUTE_32F_FAST_TF32 => {
                 writer.write_all(stringify!(CUBLAS_COMPUTE_32F_FAST_TF32).as_bytes())
             }
+            &cuda_types::cublas::cublasComputeType_t::CUBLAS_COMPUTE_32F_EMULATED_16BFX9 => {
+                writer
+                    .write_all(stringify!(CUBLAS_COMPUTE_32F_EMULATED_16BFX9).as_bytes())
+            }
             &cuda_types::cublas::cublasComputeType_t::CUBLAS_COMPUTE_64F => {
                 writer.write_all(stringify!(CUBLAS_COMPUTE_64F).as_bytes())
             }
@@ -336,6 +343,31 @@ impl crate::CudaDisplay for cuda_types::cublas::cublasComputeType_t {
             }
             &cuda_types::cublas::cublasComputeType_t::CUBLAS_COMPUTE_32I_PEDANTIC => {
                 writer.write_all(stringify!(CUBLAS_COMPUTE_32I_PEDANTIC).as_bytes())
+            }
+            _ => write!(writer, "{}", self.0),
+        }
+    }
+}
+impl crate::CudaDisplay for cuda_types::cublas::cublasEmulationStrategy_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        match self {
+            &cuda_types::cublas::cublasEmulationStrategy_t::CUBLAS_EMULATION_STRATEGY_DEFAULT => {
+                writer
+                    .write_all(stringify!(CUBLAS_EMULATION_STRATEGY_DEFAULT).as_bytes())
+            }
+            &cuda_types::cublas::cublasEmulationStrategy_t::CUBLAS_EMULATION_STRATEGY_PERFORMANT => {
+                writer
+                    .write_all(
+                        stringify!(CUBLAS_EMULATION_STRATEGY_PERFORMANT).as_bytes(),
+                    )
+            }
+            &cuda_types::cublas::cublasEmulationStrategy_t::CUBLAS_EMULATION_STRATEGY_EAGER => {
+                writer.write_all(stringify!(CUBLAS_EMULATION_STRATEGY_EAGER).as_bytes())
             }
             _ => write!(writer, "{}", self.0),
         }
@@ -586,6 +618,46 @@ pub fn write_cublasSetSmCountTarget(
     crate::CudaDisplay::write(
         &smCountTarget,
         "cublasSetSmCountTarget",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_cublasGetEmulationStrategy(
+    writer: &mut (impl std::io::Write + ?Sized),
+    handle: cuda_types::cublas::cublasHandle_t,
+    emulationStrategy: *mut cuda_types::cublas::cublasEmulationStrategy_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(handle), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&handle, "cublasGetEmulationStrategy", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(emulationStrategy), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &emulationStrategy,
+        "cublasGetEmulationStrategy",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_cublasSetEmulationStrategy(
+    writer: &mut (impl std::io::Write + ?Sized),
+    handle: cuda_types::cublas::cublasHandle_t,
+    emulationStrategy: cuda_types::cublas::cublasEmulationStrategy_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(handle), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&handle, "cublasSetEmulationStrategy", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(emulationStrategy), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &emulationStrategy,
+        "cublasSetEmulationStrategy",
         arg_idx,
         writer,
     )?;

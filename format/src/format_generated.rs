@@ -1921,6 +1921,12 @@ impl crate::CudaDisplay for cuda_types::cuda::CUdevice_attribute_enum {
                             .as_bytes(),
                     )
             }
+            &cuda_types::cuda::CUdevice_attribute_enum::CU_DEVICE_ATTRIBUTE_VULKAN_CIG_SUPPORTED => {
+                writer
+                    .write_all(
+                        stringify!(CU_DEVICE_ATTRIBUTE_VULKAN_CIG_SUPPORTED).as_bytes(),
+                    )
+            }
             &cuda_types::cuda::CUdevice_attribute_enum::CU_DEVICE_ATTRIBUTE_GPU_PCI_DEVICE_ID => {
                 writer
                     .write_all(
@@ -1931,6 +1937,22 @@ impl crate::CudaDisplay for cuda_types::cuda::CUdevice_attribute_enum {
                 writer
                     .write_all(
                         stringify!(CU_DEVICE_ATTRIBUTE_GPU_PCI_SUBSYSTEM_ID).as_bytes(),
+                    )
+            }
+            &cuda_types::cuda::CUdevice_attribute_enum::CU_DEVICE_ATTRIBUTE_HOST_NUMA_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED => {
+                writer
+                    .write_all(
+                        stringify!(
+                            CU_DEVICE_ATTRIBUTE_HOST_NUMA_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED
+                        )
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::cuda::CUdevice_attribute_enum::CU_DEVICE_ATTRIBUTE_HOST_NUMA_MEMORY_POOLS_SUPPORTED => {
+                writer
+                    .write_all(
+                        stringify!(CU_DEVICE_ATTRIBUTE_HOST_NUMA_MEMORY_POOLS_SUPPORTED)
+                            .as_bytes(),
                     )
             }
             &cuda_types::cuda::CUdevice_attribute_enum::CU_DEVICE_ATTRIBUTE_HOST_NUMA_MULTINODE_IPC_SUPPORTED => {
@@ -2598,8 +2620,14 @@ impl crate::CudaDisplay for cuda_types::cuda::CUjit_target_enum {
             &cuda_types::cuda::CUjit_target_enum::CU_TARGET_COMPUTE_101 => {
                 writer.write_all(stringify!(CU_TARGET_COMPUTE_101).as_bytes())
             }
+            &cuda_types::cuda::CUjit_target_enum::CU_TARGET_COMPUTE_103 => {
+                writer.write_all(stringify!(CU_TARGET_COMPUTE_103).as_bytes())
+            }
             &cuda_types::cuda::CUjit_target_enum::CU_TARGET_COMPUTE_120 => {
                 writer.write_all(stringify!(CU_TARGET_COMPUTE_120).as_bytes())
+            }
+            &cuda_types::cuda::CUjit_target_enum::CU_TARGET_COMPUTE_121 => {
+                writer.write_all(stringify!(CU_TARGET_COMPUTE_121).as_bytes())
             }
             &cuda_types::cuda::CUjit_target_enum::CU_TARGET_COMPUTE_90A => {
                 writer.write_all(stringify!(CU_TARGET_COMPUTE_90A).as_bytes())
@@ -2610,8 +2638,29 @@ impl crate::CudaDisplay for cuda_types::cuda::CUjit_target_enum {
             &cuda_types::cuda::CUjit_target_enum::CU_TARGET_COMPUTE_101A => {
                 writer.write_all(stringify!(CU_TARGET_COMPUTE_101A).as_bytes())
             }
+            &cuda_types::cuda::CUjit_target_enum::CU_TARGET_COMPUTE_103A => {
+                writer.write_all(stringify!(CU_TARGET_COMPUTE_103A).as_bytes())
+            }
             &cuda_types::cuda::CUjit_target_enum::CU_TARGET_COMPUTE_120A => {
                 writer.write_all(stringify!(CU_TARGET_COMPUTE_120A).as_bytes())
+            }
+            &cuda_types::cuda::CUjit_target_enum::CU_TARGET_COMPUTE_121A => {
+                writer.write_all(stringify!(CU_TARGET_COMPUTE_121A).as_bytes())
+            }
+            &cuda_types::cuda::CUjit_target_enum::CU_TARGET_COMPUTE_100F => {
+                writer.write_all(stringify!(CU_TARGET_COMPUTE_100F).as_bytes())
+            }
+            &cuda_types::cuda::CUjit_target_enum::CU_TARGET_COMPUTE_101F => {
+                writer.write_all(stringify!(CU_TARGET_COMPUTE_101F).as_bytes())
+            }
+            &cuda_types::cuda::CUjit_target_enum::CU_TARGET_COMPUTE_103F => {
+                writer.write_all(stringify!(CU_TARGET_COMPUTE_103F).as_bytes())
+            }
+            &cuda_types::cuda::CUjit_target_enum::CU_TARGET_COMPUTE_120F => {
+                writer.write_all(stringify!(CU_TARGET_COMPUTE_120F).as_bytes())
+            }
+            &cuda_types::cuda::CUjit_target_enum::CU_TARGET_COMPUTE_121F => {
+                writer.write_all(stringify!(CU_TARGET_COMPUTE_121F).as_bytes())
             }
             _ => write!(writer, "{}", self.0),
         }
@@ -3727,6 +3776,9 @@ impl crate::CudaDisplay for cuda_types::cuda::CUcigDataType_enum {
             &cuda_types::cuda::CUcigDataType_enum::CIG_DATA_TYPE_D3D12_COMMAND_QUEUE => {
                 writer
                     .write_all(stringify!(CIG_DATA_TYPE_D3D12_COMMAND_QUEUE).as_bytes())
+            }
+            &cuda_types::cuda::CUcigDataType_enum::CIG_DATA_TYPE_NV_BLOB => {
+                writer.write_all(stringify!(CIG_DATA_TYPE_NV_BLOB).as_bytes())
             }
             _ => write!(writer, "{}", self.0),
         }
@@ -5654,6 +5706,184 @@ impl crate::CudaDisplay for cuda_types::cuda::CUmemPoolProps_st {
         writer.write_all(b" }")
     }
 }
+impl crate::CudaDisplay for cuda_types::cuda::CUmemcpyFlags_enum {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        match self {
+            &cuda_types::cuda::CUmemcpyFlags_enum::CU_MEMCPY_FLAG_DEFAULT => {
+                writer.write_all(stringify!(CU_MEMCPY_FLAG_DEFAULT).as_bytes())
+            }
+            &cuda_types::cuda::CUmemcpyFlags_enum::CU_MEMCPY_FLAG_PREFER_OVERLAP_WITH_COMPUTE => {
+                writer
+                    .write_all(
+                        stringify!(CU_MEMCPY_FLAG_PREFER_OVERLAP_WITH_COMPUTE).as_bytes(),
+                    )
+            }
+            _ => write!(writer, "{}", self.0),
+        }
+    }
+}
+impl crate::CudaDisplay for cuda_types::cuda::CUmemcpySrcAccessOrder_enum {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        match self {
+            &cuda_types::cuda::CUmemcpySrcAccessOrder_enum::CU_MEMCPY_SRC_ACCESS_ORDER_INVALID => {
+                writer
+                    .write_all(stringify!(CU_MEMCPY_SRC_ACCESS_ORDER_INVALID).as_bytes())
+            }
+            &cuda_types::cuda::CUmemcpySrcAccessOrder_enum::CU_MEMCPY_SRC_ACCESS_ORDER_STREAM => {
+                writer
+                    .write_all(stringify!(CU_MEMCPY_SRC_ACCESS_ORDER_STREAM).as_bytes())
+            }
+            &cuda_types::cuda::CUmemcpySrcAccessOrder_enum::CU_MEMCPY_SRC_ACCESS_ORDER_DURING_API_CALL => {
+                writer
+                    .write_all(
+                        stringify!(CU_MEMCPY_SRC_ACCESS_ORDER_DURING_API_CALL).as_bytes(),
+                    )
+            }
+            &cuda_types::cuda::CUmemcpySrcAccessOrder_enum::CU_MEMCPY_SRC_ACCESS_ORDER_ANY => {
+                writer.write_all(stringify!(CU_MEMCPY_SRC_ACCESS_ORDER_ANY).as_bytes())
+            }
+            &cuda_types::cuda::CUmemcpySrcAccessOrder_enum::CU_MEMCPY_SRC_ACCESS_ORDER_MAX => {
+                writer.write_all(stringify!(CU_MEMCPY_SRC_ACCESS_ORDER_MAX).as_bytes())
+            }
+            _ => write!(writer, "{}", self.0),
+        }
+    }
+}
+impl crate::CudaDisplay for cuda_types::cuda::CUmemcpyAttributes_st {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(srcAccessOrder), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.srcAccessOrder, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(srcLocHint), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.srcLocHint, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(dstLocHint), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.dstLocHint, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(flags), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.flags, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
+impl crate::CudaDisplay for cuda_types::cuda::CUmemcpy3DOperandType_enum {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        match self {
+            &cuda_types::cuda::CUmemcpy3DOperandType_enum::CU_MEMCPY_OPERAND_TYPE_POINTER => {
+                writer.write_all(stringify!(CU_MEMCPY_OPERAND_TYPE_POINTER).as_bytes())
+            }
+            &cuda_types::cuda::CUmemcpy3DOperandType_enum::CU_MEMCPY_OPERAND_TYPE_ARRAY => {
+                writer.write_all(stringify!(CU_MEMCPY_OPERAND_TYPE_ARRAY).as_bytes())
+            }
+            &cuda_types::cuda::CUmemcpy3DOperandType_enum::CU_MEMCPY_OPERAND_TYPE_MAX => {
+                writer.write_all(stringify!(CU_MEMCPY_OPERAND_TYPE_MAX).as_bytes())
+            }
+            _ => write!(writer, "{}", self.0),
+        }
+    }
+}
+impl crate::CudaDisplay for cuda_types::cuda::CUoffset3D_st {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(x), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.x, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(y), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.y, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(z), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.z, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
+impl crate::CudaDisplay for cuda_types::cuda::CUextent3D_st {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(width), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.width, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(height), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.height, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(depth), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.depth, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
+impl crate::CudaDisplay
+for cuda_types::cuda::CUmemcpy3DOperand_st__bindgen_ty_1__bindgen_ty_1 {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(ptr), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.ptr, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(rowLength), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.rowLength, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(layerHeight), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.layerHeight, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(locHint), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.locHint, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
+impl crate::CudaDisplay
+for cuda_types::cuda::CUmemcpy3DOperand_st__bindgen_ty_1__bindgen_ty_2 {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(array), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.array, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(offset), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.offset, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
+impl crate::CudaDisplay for cuda_types::cuda::CUDA_MEMCPY3D_BATCH_OP_st {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(src), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.src, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(dst), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.dst, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(extent), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.extent, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(srcAccessOrder), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.srcAccessOrder, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(flags), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.flags, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
 impl crate::CudaDisplay for cuda_types::cuda::CUDA_MEM_ALLOC_NODE_PARAMS_v1_st {
     fn write(
         &self,
@@ -5737,6 +5967,30 @@ impl crate::CudaDisplay for cuda_types::cuda::CUgraphMem_attribute_enum {
         }
     }
 }
+impl crate::CudaDisplay for cuda_types::cuda::CUgraphChildGraphNodeOwnership_enum {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        match self {
+            &cuda_types::cuda::CUgraphChildGraphNodeOwnership_enum::CU_GRAPH_CHILD_GRAPH_OWNERSHIP_CLONE => {
+                writer
+                    .write_all(
+                        stringify!(CU_GRAPH_CHILD_GRAPH_OWNERSHIP_CLONE).as_bytes(),
+                    )
+            }
+            &cuda_types::cuda::CUgraphChildGraphNodeOwnership_enum::CU_GRAPH_CHILD_GRAPH_OWNERSHIP_MOVE => {
+                writer
+                    .write_all(
+                        stringify!(CU_GRAPH_CHILD_GRAPH_OWNERSHIP_MOVE).as_bytes(),
+                    )
+            }
+            _ => write!(writer, "{}", self.0),
+        }
+    }
+}
 impl crate::CudaDisplay for cuda_types::cuda::CUDA_CHILD_GRAPH_NODE_PARAMS_st {
     fn write(
         &self,
@@ -5746,6 +6000,8 @@ impl crate::CudaDisplay for cuda_types::cuda::CUDA_CHILD_GRAPH_NODE_PARAMS_st {
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(graph), ": ").as_bytes())?;
         crate::CudaDisplay::write(&self.graph, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(ownership), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.ownership, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
@@ -6104,184 +6360,6 @@ impl crate::CudaDisplay for cuda_types::cuda::CUcheckpointLockArgs_st {
     ) -> std::io::Result<()> {
         writer.write_all(concat!("{ ", stringify!(timeoutMs), ": ").as_bytes())?;
         crate::CudaDisplay::write(&self.timeoutMs, "", 0, writer)?;
-        writer.write_all(b" }")
-    }
-}
-impl crate::CudaDisplay for cuda_types::cuda::CUmemcpyFlags_enum {
-    fn write(
-        &self,
-        _fn_name: &'static str,
-        _index: usize,
-        writer: &mut (impl std::io::Write + ?Sized),
-    ) -> std::io::Result<()> {
-        match self {
-            &cuda_types::cuda::CUmemcpyFlags_enum::CU_MEMCPY_FLAG_DEFAULT => {
-                writer.write_all(stringify!(CU_MEMCPY_FLAG_DEFAULT).as_bytes())
-            }
-            &cuda_types::cuda::CUmemcpyFlags_enum::CU_MEMCPY_FLAG_PREFER_OVERLAP_WITH_COMPUTE => {
-                writer
-                    .write_all(
-                        stringify!(CU_MEMCPY_FLAG_PREFER_OVERLAP_WITH_COMPUTE).as_bytes(),
-                    )
-            }
-            _ => write!(writer, "{}", self.0),
-        }
-    }
-}
-impl crate::CudaDisplay for cuda_types::cuda::CUmemcpySrcAccessOrder_enum {
-    fn write(
-        &self,
-        _fn_name: &'static str,
-        _index: usize,
-        writer: &mut (impl std::io::Write + ?Sized),
-    ) -> std::io::Result<()> {
-        match self {
-            &cuda_types::cuda::CUmemcpySrcAccessOrder_enum::CU_MEMCPY_SRC_ACCESS_ORDER_INVALID => {
-                writer
-                    .write_all(stringify!(CU_MEMCPY_SRC_ACCESS_ORDER_INVALID).as_bytes())
-            }
-            &cuda_types::cuda::CUmemcpySrcAccessOrder_enum::CU_MEMCPY_SRC_ACCESS_ORDER_STREAM => {
-                writer
-                    .write_all(stringify!(CU_MEMCPY_SRC_ACCESS_ORDER_STREAM).as_bytes())
-            }
-            &cuda_types::cuda::CUmemcpySrcAccessOrder_enum::CU_MEMCPY_SRC_ACCESS_ORDER_DURING_API_CALL => {
-                writer
-                    .write_all(
-                        stringify!(CU_MEMCPY_SRC_ACCESS_ORDER_DURING_API_CALL).as_bytes(),
-                    )
-            }
-            &cuda_types::cuda::CUmemcpySrcAccessOrder_enum::CU_MEMCPY_SRC_ACCESS_ORDER_ANY => {
-                writer.write_all(stringify!(CU_MEMCPY_SRC_ACCESS_ORDER_ANY).as_bytes())
-            }
-            &cuda_types::cuda::CUmemcpySrcAccessOrder_enum::CU_MEMCPY_SRC_ACCESS_ORDER_MAX => {
-                writer.write_all(stringify!(CU_MEMCPY_SRC_ACCESS_ORDER_MAX).as_bytes())
-            }
-            _ => write!(writer, "{}", self.0),
-        }
-    }
-}
-impl crate::CudaDisplay for cuda_types::cuda::CUmemcpyAttributes_st {
-    fn write(
-        &self,
-        _fn_name: &'static str,
-        _index: usize,
-        writer: &mut (impl std::io::Write + ?Sized),
-    ) -> std::io::Result<()> {
-        writer.write_all(concat!("{ ", stringify!(srcAccessOrder), ": ").as_bytes())?;
-        crate::CudaDisplay::write(&self.srcAccessOrder, "", 0, writer)?;
-        writer.write_all(concat!(", ", stringify!(srcLocHint), ": ").as_bytes())?;
-        crate::CudaDisplay::write(&self.srcLocHint, "", 0, writer)?;
-        writer.write_all(concat!(", ", stringify!(dstLocHint), ": ").as_bytes())?;
-        crate::CudaDisplay::write(&self.dstLocHint, "", 0, writer)?;
-        writer.write_all(concat!(", ", stringify!(flags), ": ").as_bytes())?;
-        crate::CudaDisplay::write(&self.flags, "", 0, writer)?;
-        writer.write_all(b" }")
-    }
-}
-impl crate::CudaDisplay for cuda_types::cuda::CUmemcpy3DOperandType_enum {
-    fn write(
-        &self,
-        _fn_name: &'static str,
-        _index: usize,
-        writer: &mut (impl std::io::Write + ?Sized),
-    ) -> std::io::Result<()> {
-        match self {
-            &cuda_types::cuda::CUmemcpy3DOperandType_enum::CU_MEMCPY_OPERAND_TYPE_POINTER => {
-                writer.write_all(stringify!(CU_MEMCPY_OPERAND_TYPE_POINTER).as_bytes())
-            }
-            &cuda_types::cuda::CUmemcpy3DOperandType_enum::CU_MEMCPY_OPERAND_TYPE_ARRAY => {
-                writer.write_all(stringify!(CU_MEMCPY_OPERAND_TYPE_ARRAY).as_bytes())
-            }
-            &cuda_types::cuda::CUmemcpy3DOperandType_enum::CU_MEMCPY_OPERAND_TYPE_MAX => {
-                writer.write_all(stringify!(CU_MEMCPY_OPERAND_TYPE_MAX).as_bytes())
-            }
-            _ => write!(writer, "{}", self.0),
-        }
-    }
-}
-impl crate::CudaDisplay for cuda_types::cuda::CUoffset3D_st {
-    fn write(
-        &self,
-        _fn_name: &'static str,
-        _index: usize,
-        writer: &mut (impl std::io::Write + ?Sized),
-    ) -> std::io::Result<()> {
-        writer.write_all(concat!("{ ", stringify!(x), ": ").as_bytes())?;
-        crate::CudaDisplay::write(&self.x, "", 0, writer)?;
-        writer.write_all(concat!(", ", stringify!(y), ": ").as_bytes())?;
-        crate::CudaDisplay::write(&self.y, "", 0, writer)?;
-        writer.write_all(concat!(", ", stringify!(z), ": ").as_bytes())?;
-        crate::CudaDisplay::write(&self.z, "", 0, writer)?;
-        writer.write_all(b" }")
-    }
-}
-impl crate::CudaDisplay for cuda_types::cuda::CUextent3D_st {
-    fn write(
-        &self,
-        _fn_name: &'static str,
-        _index: usize,
-        writer: &mut (impl std::io::Write + ?Sized),
-    ) -> std::io::Result<()> {
-        writer.write_all(concat!("{ ", stringify!(width), ": ").as_bytes())?;
-        crate::CudaDisplay::write(&self.width, "", 0, writer)?;
-        writer.write_all(concat!(", ", stringify!(height), ": ").as_bytes())?;
-        crate::CudaDisplay::write(&self.height, "", 0, writer)?;
-        writer.write_all(concat!(", ", stringify!(depth), ": ").as_bytes())?;
-        crate::CudaDisplay::write(&self.depth, "", 0, writer)?;
-        writer.write_all(b" }")
-    }
-}
-impl crate::CudaDisplay
-for cuda_types::cuda::CUmemcpy3DOperand_st__bindgen_ty_1__bindgen_ty_1 {
-    fn write(
-        &self,
-        _fn_name: &'static str,
-        _index: usize,
-        writer: &mut (impl std::io::Write + ?Sized),
-    ) -> std::io::Result<()> {
-        writer.write_all(concat!("{ ", stringify!(ptr), ": ").as_bytes())?;
-        crate::CudaDisplay::write(&self.ptr, "", 0, writer)?;
-        writer.write_all(concat!(", ", stringify!(rowLength), ": ").as_bytes())?;
-        crate::CudaDisplay::write(&self.rowLength, "", 0, writer)?;
-        writer.write_all(concat!(", ", stringify!(layerHeight), ": ").as_bytes())?;
-        crate::CudaDisplay::write(&self.layerHeight, "", 0, writer)?;
-        writer.write_all(concat!(", ", stringify!(locHint), ": ").as_bytes())?;
-        crate::CudaDisplay::write(&self.locHint, "", 0, writer)?;
-        writer.write_all(b" }")
-    }
-}
-impl crate::CudaDisplay
-for cuda_types::cuda::CUmemcpy3DOperand_st__bindgen_ty_1__bindgen_ty_2 {
-    fn write(
-        &self,
-        _fn_name: &'static str,
-        _index: usize,
-        writer: &mut (impl std::io::Write + ?Sized),
-    ) -> std::io::Result<()> {
-        writer.write_all(concat!("{ ", stringify!(array), ": ").as_bytes())?;
-        crate::CudaDisplay::write(&self.array, "", 0, writer)?;
-        writer.write_all(concat!(", ", stringify!(offset), ": ").as_bytes())?;
-        crate::CudaDisplay::write(&self.offset, "", 0, writer)?;
-        writer.write_all(b" }")
-    }
-}
-impl crate::CudaDisplay for cuda_types::cuda::CUDA_MEMCPY3D_BATCH_OP_st {
-    fn write(
-        &self,
-        _fn_name: &'static str,
-        _index: usize,
-        writer: &mut (impl std::io::Write + ?Sized),
-    ) -> std::io::Result<()> {
-        writer.write_all(concat!("{ ", stringify!(src), ": ").as_bytes())?;
-        crate::CudaDisplay::write(&self.src, "", 0, writer)?;
-        writer.write_all(concat!(", ", stringify!(dst), ": ").as_bytes())?;
-        crate::CudaDisplay::write(&self.dst, "", 0, writer)?;
-        writer.write_all(concat!(", ", stringify!(extent), ": ").as_bytes())?;
-        crate::CudaDisplay::write(&self.extent, "", 0, writer)?;
-        writer.write_all(concat!(", ", stringify!(srcAccessOrder), ": ").as_bytes())?;
-        crate::CudaDisplay::write(&self.srcAccessOrder, "", 0, writer)?;
-        writer.write_all(concat!(", ", stringify!(flags), ": ").as_bytes())?;
-        crate::CudaDisplay::write(&self.flags, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
@@ -9560,6 +9638,9 @@ impl crate::CudaDisplay for cuda_types::cuda::CUmemDecompressAlgorithm_enum {
             &cuda_types::cuda::CUmemDecompressAlgorithm_enum::CU_MEM_DECOMPRESS_ALGORITHM_SNAPPY => {
                 writer
                     .write_all(stringify!(CU_MEM_DECOMPRESS_ALGORITHM_SNAPPY).as_bytes())
+            }
+            &cuda_types::cuda::CUmemDecompressAlgorithm_enum::CU_MEM_DECOMPRESS_ALGORITHM_LZ4 => {
+                writer.write_all(stringify!(CU_MEM_DECOMPRESS_ALGORITHM_LZ4).as_bytes())
             }
             _ => write!(writer, "{}", self.0),
         }
@@ -16865,6 +16946,147 @@ pub fn write_cuGreenCtxStreamCreate(
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(priority), ": ").as_bytes())?;
     crate::CudaDisplay::write(&priority, "cuGreenCtxStreamCreate", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+impl crate::CudaDisplay for cuda_types::cuda::CUlogLevel_enum {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        match self {
+            &cuda_types::cuda::CUlogLevel_enum::CU_LOG_LEVEL_ERROR => {
+                writer.write_all(stringify!(CU_LOG_LEVEL_ERROR).as_bytes())
+            }
+            &cuda_types::cuda::CUlogLevel_enum::CU_LOG_LEVEL_WARNING => {
+                writer.write_all(stringify!(CU_LOG_LEVEL_WARNING).as_bytes())
+            }
+            _ => write!(writer, "{}", self.0),
+        }
+    }
+}
+impl crate::CudaDisplay for cuda_types::cuda::CUlogsCallbackHandle {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
+    }
+}
+impl crate::CudaDisplay for cuda_types::cuda::CUlogsCallback {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        write!(
+            writer,
+            "{:p}",
+            unsafe {
+                std::mem::transmute::<
+                    cuda_types::cuda::CUlogsCallback,
+                    *mut ::std::ffi::c_void,
+                >(*self)
+            },
+        )
+    }
+}
+pub fn write_cuLogsRegisterCallback(
+    writer: &mut (impl std::io::Write + ?Sized),
+    callbackFunc: cuda_types::cuda::CUlogsCallback,
+    userData: *mut ::core::ffi::c_void,
+    callback_out: *mut cuda_types::cuda::CUlogsCallbackHandle,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(callbackFunc), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&callbackFunc, "cuLogsRegisterCallback", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(userData), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&userData, "cuLogsRegisterCallback", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(callback_out), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&callback_out, "cuLogsRegisterCallback", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuLogsUnregisterCallback(
+    writer: &mut (impl std::io::Write + ?Sized),
+    callback: cuda_types::cuda::CUlogsCallbackHandle,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(callback), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&callback, "cuLogsUnregisterCallback", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuLogsCurrent(
+    writer: &mut (impl std::io::Write + ?Sized),
+    iterator_out: *mut cuda_types::cuda::CUlogIterator,
+    flags: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(iterator_out), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&iterator_out, "cuLogsCurrent", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&flags, "cuLogsCurrent", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuLogsDumpToFile(
+    writer: &mut (impl std::io::Write + ?Sized),
+    iterator: *mut cuda_types::cuda::CUlogIterator,
+    pathToFile: *const ::core::ffi::c_char,
+    flags: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(iterator), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&iterator, "cuLogsDumpToFile", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pathToFile), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pathToFile, "cuLogsDumpToFile", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&flags, "cuLogsDumpToFile", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuLogsDumpToMemory(
+    writer: &mut (impl std::io::Write + ?Sized),
+    iterator: *mut cuda_types::cuda::CUlogIterator,
+    buffer: *mut ::core::ffi::c_char,
+    size: *mut usize,
+    flags: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(iterator), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&iterator, "cuLogsDumpToMemory", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(buffer), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&buffer, "cuLogsDumpToMemory", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(size), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&size, "cuLogsDumpToMemory", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&flags, "cuLogsDumpToMemory", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cuMemHostRegister(

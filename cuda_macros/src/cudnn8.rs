@@ -113,6 +113,7 @@ extern "system" {
         tensorDesc: cuda_types::cudnn8::cudnnTensorDescriptor_t,
     ) -> cuda_types::cudnn8::cudnnStatus_t;
     #[must_use]
+    /// Create a destination descriptor for cudnnTransformTensor
     fn cudnnInitTransformDest(
         transformDesc: cuda_types::cudnn8::cudnnTensorTransformDescriptor_t,
         srcDesc: cuda_types::cudnn8::cudnnTensorDescriptor_t,
@@ -120,10 +121,12 @@ extern "system" {
         destSizeInBytes: *mut usize,
     ) -> cuda_types::cudnn8::cudnnStatus_t;
     #[must_use]
+    /// Create an empty tensor transform descriptor
     fn cudnnCreateTensorTransformDescriptor(
         transformDesc: *mut cuda_types::cudnn8::cudnnTensorTransformDescriptor_t,
     ) -> cuda_types::cudnn8::cudnnStatus_t;
     #[must_use]
+    /// Initialize a previously created tensor transform descriptor.
     fn cudnnSetTensorTransformDescriptor(
         transformDesc: cuda_types::cudnn8::cudnnTensorTransformDescriptor_t,
         nbDims: u32,
@@ -134,6 +137,8 @@ extern "system" {
         direction: cuda_types::cudnn8::cudnnFoldingDirection_t,
     ) -> cuda_types::cudnn8::cudnnStatus_t;
     #[must_use]
+    /** Retrieves the values stored in a previously initialized tensor transform
+ descriptor.*/
     fn cudnnGetTensorTransformDescriptor(
         transformDesc: cuda_types::cudnn8::cudnnTensorTransformDescriptor_t,
         nbDimsRequested: u32,
@@ -144,6 +149,7 @@ extern "system" {
         direction: *mut cuda_types::cudnn8::cudnnFoldingDirection_t,
     ) -> cuda_types::cudnn8::cudnnStatus_t;
     #[must_use]
+    /// Destroys a previously created tensor transform descriptor.
     fn cudnnDestroyTensorTransformDescriptor(
         transformDesc: cuda_types::cudnn8::cudnnTensorTransformDescriptor_t,
     ) -> cuda_types::cudnn8::cudnnStatus_t;

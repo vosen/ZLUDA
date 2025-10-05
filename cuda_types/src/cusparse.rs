@@ -14,9 +14,9 @@ pub type cudaAsyncNotificationType = super::cuda::CUasyncNotificationType_enum;
 pub type cudaGraph_t = super::cuda::CUgraph;
 pub const CUSPARSE_VER_MAJOR: u32 = 12;
 pub const CUSPARSE_VER_MINOR: u32 = 5;
-pub const CUSPARSE_VER_PATCH: u32 = 8;
-pub const CUSPARSE_VER_BUILD: u32 = 93;
-pub const CUSPARSE_VERSION: u32 = 12508;
+pub const CUSPARSE_VER_PATCH: u32 = 10;
+pub const CUSPARSE_VER_BUILD: u32 = 65;
+pub const CUSPARSE_VERSION: u32 = 12510;
 /// Result information returned by cudaGraphExecUpdate
 pub type cudaGraphExecUpdateResultInfo = cudaGraphExecUpdateResultInfo_st;
 #[repr(C)]

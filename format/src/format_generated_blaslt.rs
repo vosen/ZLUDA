@@ -2473,6 +2473,25 @@ impl crate::CudaDisplay for cuda_types::cublaslt::cublasLtMatmulMatrixScale_t {
                         stringify!(CUBLASLT_MATMUL_MATRIX_SCALE_VEC32_UE8M0).as_bytes(),
                     )
             }
+            &cuda_types::cublaslt::cublasLtMatmulMatrixScale_t::CUBLASLT_MATMUL_MATRIX_SCALE_OUTER_VEC_32F => {
+                writer
+                    .write_all(
+                        stringify!(CUBLASLT_MATMUL_MATRIX_SCALE_OUTER_VEC_32F).as_bytes(),
+                    )
+            }
+            &cuda_types::cublaslt::cublasLtMatmulMatrixScale_t::CUBLASLT_MATMUL_MATRIX_SCALE_VEC128_32F => {
+                writer
+                    .write_all(
+                        stringify!(CUBLASLT_MATMUL_MATRIX_SCALE_VEC128_32F).as_bytes(),
+                    )
+            }
+            &cuda_types::cublaslt::cublasLtMatmulMatrixScale_t::CUBLASLT_MATMUL_MATRIX_SCALE_BLK128x128_32F => {
+                writer
+                    .write_all(
+                        stringify!(CUBLASLT_MATMUL_MATRIX_SCALE_BLK128x128_32F)
+                            .as_bytes(),
+                    )
+            }
             &cuda_types::cublaslt::cublasLtMatmulMatrixScale_t::CUBLASLT_MATMUL_MATRIX_SCALE_END => {
                 writer.write_all(stringify!(CUBLASLT_MATMUL_MATRIX_SCALE_END).as_bytes())
             }
@@ -2738,6 +2757,25 @@ impl crate::CudaDisplay for cuda_types::cublaslt::cublasLtOrder_t {
         }
     }
 }
+impl crate::CudaDisplay for cuda_types::cublaslt::cublasLtBatchMode_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        match self {
+            &cuda_types::cublaslt::cublasLtBatchMode_t::CUBLASLT_BATCH_MODE_STRIDED => {
+                writer.write_all(stringify!(CUBLASLT_BATCH_MODE_STRIDED).as_bytes())
+            }
+            &cuda_types::cublaslt::cublasLtBatchMode_t::CUBLASLT_BATCH_MODE_POINTER_ARRAY => {
+                writer
+                    .write_all(stringify!(CUBLASLT_BATCH_MODE_POINTER_ARRAY).as_bytes())
+            }
+            _ => write!(writer, "{}", self.0),
+        }
+    }
+}
 impl crate::CudaDisplay for cuda_types::cublaslt::cublasLtMatrixLayoutAttribute_t {
     fn write(
         &self,
@@ -2777,6 +2815,10 @@ impl crate::CudaDisplay for cuda_types::cublaslt::cublasLtMatrixLayoutAttribute_
                     .write_all(
                         stringify!(CUBLASLT_MATRIX_LAYOUT_PLANE_OFFSET).as_bytes(),
                     )
+            }
+            &cuda_types::cublaslt::cublasLtMatrixLayoutAttribute_t::CUBLASLT_MATRIX_LAYOUT_BATCH_MODE => {
+                writer
+                    .write_all(stringify!(CUBLASLT_MATRIX_LAYOUT_BATCH_MODE).as_bytes())
             }
             _ => write!(writer, "{}", self.0),
         }
@@ -4329,6 +4371,20 @@ impl crate::CudaDisplay for cuda_types::cublaslt::cublasLtMatmulAlgoCapAttribute
             }
             &cuda_types::cublaslt::cublasLtMatmulAlgoCapAttributes_t::CUBLASLT_ALGO_CAP_ATOMIC_SYNC => {
                 writer.write_all(stringify!(CUBLASLT_ALGO_CAP_ATOMIC_SYNC).as_bytes())
+            }
+            &cuda_types::cublaslt::cublasLtMatmulAlgoCapAttributes_t::CUBLASLT_ALGO_CAP_POINTER_ARRAY_BATCH_SUPPORT => {
+                writer
+                    .write_all(
+                        stringify!(CUBLASLT_ALGO_CAP_POINTER_ARRAY_BATCH_SUPPORT)
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::cublaslt::cublasLtMatmulAlgoCapAttributes_t::CUBLASLT_ALGO_CAP_FLOATING_POINT_EMULATION_SUPPORT => {
+                writer
+                    .write_all(
+                        stringify!(CUBLASLT_ALGO_CAP_FLOATING_POINT_EMULATION_SUPPORT)
+                            .as_bytes(),
+                    )
             }
             _ => write!(writer, "{}", self.0),
         }

@@ -15,6 +15,20 @@ impl crate::CudaDisplay for cuda_types::nvml::nvmlDevice_t {
         }
     }
 }
+impl crate::CudaDisplay for cuda_types::nvml::nvmlGpuInstance_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
+    }
+}
 impl crate::CudaDisplay for cuda_types::nvml::nvmlPciInfoExt_v1_t {
     fn write(
         &self,
@@ -1031,6 +1045,27 @@ impl crate::CudaDisplay for cuda_types::nvml::nvmlCoolerInfo_v1_t {
         writer.write_all(concat!(", ", stringify!(target), ": ").as_bytes())?;
         crate::CudaDisplay::write(&self.target, "", 0, writer)?;
         writer.write_all(b" }")
+    }
+}
+impl crate::CudaDisplay for cuda_types::nvml::nvmlUUIDType_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        match self {
+            &cuda_types::nvml::nvmlUUIDType_t::NVML_UUID_TYPE_NONE => {
+                writer.write_all(stringify!(NVML_UUID_TYPE_NONE).as_bytes())
+            }
+            &cuda_types::nvml::nvmlUUIDType_t::NVML_UUID_TYPE_ASCII => {
+                writer.write_all(stringify!(NVML_UUID_TYPE_ASCII).as_bytes())
+            }
+            &cuda_types::nvml::nvmlUUIDType_t::NVML_UUID_TYPE_BINARY => {
+                writer.write_all(stringify!(NVML_UUID_TYPE_BINARY).as_bytes())
+            }
+            _ => write!(writer, "{}", self.0),
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::nvml::nvmlEnableState_enum {
@@ -2247,6 +2282,20 @@ impl crate::CudaDisplay for cuda_types::nvml::nvmlDeviceVgpuCapability_enum {
                             .as_bytes(),
                     )
             }
+            &cuda_types::nvml::nvmlDeviceVgpuCapability_enum::NVML_DEVICE_VGPU_CAP_MIG_TIMESLICING_SUPPORTED => {
+                writer
+                    .write_all(
+                        stringify!(NVML_DEVICE_VGPU_CAP_MIG_TIMESLICING_SUPPORTED)
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlDeviceVgpuCapability_enum::NVML_DEVICE_VGPU_CAP_MIG_TIMESLICING_ENABLED => {
+                writer
+                    .write_all(
+                        stringify!(NVML_DEVICE_VGPU_CAP_MIG_TIMESLICING_ENABLED)
+                            .as_bytes(),
+                    )
+            }
             &cuda_types::nvml::nvmlDeviceVgpuCapability_enum::NVML_DEVICE_VGPU_CAP_COUNT => {
                 writer.write_all(stringify!(NVML_DEVICE_VGPU_CAP_COUNT).as_bytes())
             }
@@ -2699,6 +2748,74 @@ impl crate::CudaDisplay for cuda_types::nvml::nvmlDeviceGpuRecoveryAction_s {
         }
     }
 }
+impl crate::CudaDisplay for cuda_types::nvml::nvmlVgpuTypeIdInfo_v1_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(version), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.version, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(vgpuCount), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.vgpuCount, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(vgpuTypeIds), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.vgpuTypeIds, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
+impl crate::CudaDisplay for cuda_types::nvml::nvmlVgpuTypeMaxInstance_v1_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(version), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.version, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(vgpuTypeId), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.vgpuTypeId, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(maxInstancePerGI), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.maxInstancePerGI, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
+impl crate::CudaDisplay for cuda_types::nvml::nvmlActiveVgpuInstanceInfo_v1_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(version), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.version, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(vgpuCount), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.vgpuCount, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(vgpuInstances), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.vgpuInstances, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
+impl crate::CudaDisplay for cuda_types::nvml::nvmlVgpuCreatablePlacementInfo_v1_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(version), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.version, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(vgpuTypeId), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.vgpuTypeId, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(count), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.count, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(placementIds), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.placementIds, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(placementSize), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.placementSize, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
 impl crate::CudaDisplay for cuda_types::nvml::nvmlNvLinkPowerThres_st {
     fn write(
         &self,
@@ -2884,6 +3001,100 @@ impl crate::CudaDisplay for cuda_types::nvml::nvmlEventData_st {
         crate::CudaDisplay::write(&self.gpuInstanceId, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(computeInstanceId), ": ").as_bytes())?;
         crate::CudaDisplay::write(&self.computeInstanceId, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
+impl crate::CudaDisplay for cuda_types::nvml::nvmlSystemEventSet_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
+    }
+}
+impl crate::CudaDisplay for cuda_types::nvml::nvmlSystemEventSetCreateRequest_v1_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(version), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.version, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(set), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.set, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
+impl crate::CudaDisplay for cuda_types::nvml::nvmlSystemEventSetFreeRequest_v1_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(version), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.version, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(set), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.set, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
+impl crate::CudaDisplay for cuda_types::nvml::nvmlSystemRegisterEventRequest_v1_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(version), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.version, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(eventTypes), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.eventTypes, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(set), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.set, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
+impl crate::CudaDisplay for cuda_types::nvml::nvmlSystemEventData_v1_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(eventType), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.eventType, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(gpuId), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.gpuId, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
+impl crate::CudaDisplay for cuda_types::nvml::nvmlSystemEventSetWaitRequest_v1_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(version), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.version, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(timeoutms), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.timeoutms, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(set), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.set, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(data), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.data, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(dataSize), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.dataSize, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(numEvent), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.numEvent, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
@@ -3663,6 +3874,21 @@ pub fn write_nvmlDeviceGetHandleByUUID(
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
     crate::CudaDisplay::write(&device, "nvmlDeviceGetHandleByUUID", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_nvmlDeviceGetHandleByUUIDV(
+    writer: &mut (impl std::io::Write + ?Sized),
+    uuid: *const cuda_types::nvml::nvmlUUID_t,
+    device: *mut cuda_types::nvml::nvmlDevice_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(uuid), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&uuid, "nvmlDeviceGetHandleByUUIDV", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&device, "nvmlDeviceGetHandleByUUIDV", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_nvmlDeviceGetHandleByPciBusId_v2(
@@ -8843,6 +9069,46 @@ pub fn write_nvmlEventSetFree(
     crate::CudaDisplay::write(&set, "nvmlEventSetFree", arg_idx, writer)?;
     writer.write_all(b")")
 }
+pub fn write_nvmlSystemEventSetCreate(
+    writer: &mut (impl std::io::Write + ?Sized),
+    request: *mut cuda_types::nvml::nvmlSystemEventSetCreateRequest_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(request), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&request, "nvmlSystemEventSetCreate", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_nvmlSystemEventSetFree(
+    writer: &mut (impl std::io::Write + ?Sized),
+    request: *mut cuda_types::nvml::nvmlSystemEventSetFreeRequest_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(request), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&request, "nvmlSystemEventSetFree", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_nvmlSystemRegisterEvents(
+    writer: &mut (impl std::io::Write + ?Sized),
+    request: *mut cuda_types::nvml::nvmlSystemRegisterEventRequest_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(request), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&request, "nvmlSystemRegisterEvents", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_nvmlSystemEventSetWait(
+    writer: &mut (impl std::io::Write + ?Sized),
+    request: *mut cuda_types::nvml::nvmlSystemEventSetWaitRequest_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(request), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&request, "nvmlSystemEventSetWait", arg_idx, writer)?;
+    writer.write_all(b")")
+}
 pub fn write_nvmlDeviceModifyDrainState(
     writer: &mut (impl std::io::Write + ?Sized),
     pciInfo: *mut cuda_types::nvml::nvmlPciInfo_t,
@@ -10248,6 +10514,221 @@ pub fn write_nvmlVgpuInstanceGetMdevUUID(
     crate::CudaDisplay::write(&size, "nvmlVgpuInstanceGetMdevUUID", arg_idx, writer)?;
     writer.write_all(b")")
 }
+pub fn write_nvmlGpuInstanceGetCreatableVgpus(
+    writer: &mut (impl std::io::Write + ?Sized),
+    gpuInstance: cuda_types::nvml::nvmlGpuInstance_t,
+    pVgpus: *mut cuda_types::nvml::nvmlVgpuTypeIdInfo_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(gpuInstance), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &gpuInstance,
+        "nvmlGpuInstanceGetCreatableVgpus",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pVgpus), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pVgpus,
+        "nvmlGpuInstanceGetCreatableVgpus",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_nvmlVgpuTypeGetMaxInstancesPerGpuInstance(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pMaxInstance: *mut cuda_types::nvml::nvmlVgpuTypeMaxInstance_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pMaxInstance), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pMaxInstance,
+        "nvmlVgpuTypeGetMaxInstancesPerGpuInstance",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_nvmlGpuInstanceGetActiveVgpus(
+    writer: &mut (impl std::io::Write + ?Sized),
+    gpuInstance: cuda_types::nvml::nvmlGpuInstance_t,
+    pVgpuInstanceInfo: *mut cuda_types::nvml::nvmlActiveVgpuInstanceInfo_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(gpuInstance), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &gpuInstance,
+        "nvmlGpuInstanceGetActiveVgpus",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pVgpuInstanceInfo), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pVgpuInstanceInfo,
+        "nvmlGpuInstanceGetActiveVgpus",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_nvmlGpuInstanceSetVgpuSchedulerState(
+    writer: &mut (impl std::io::Write + ?Sized),
+    gpuInstance: cuda_types::nvml::nvmlGpuInstance_t,
+    pScheduler: *mut cuda_types::nvml::nvmlVgpuSchedulerState_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(gpuInstance), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &gpuInstance,
+        "nvmlGpuInstanceSetVgpuSchedulerState",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pScheduler), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pScheduler,
+        "nvmlGpuInstanceSetVgpuSchedulerState",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_nvmlGpuInstanceGetVgpuSchedulerState(
+    writer: &mut (impl std::io::Write + ?Sized),
+    gpuInstance: cuda_types::nvml::nvmlGpuInstance_t,
+    pSchedulerStateInfo: *mut cuda_types::nvml::nvmlVgpuSchedulerStateInfo_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(gpuInstance), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &gpuInstance,
+        "nvmlGpuInstanceGetVgpuSchedulerState",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pSchedulerStateInfo), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pSchedulerStateInfo,
+        "nvmlGpuInstanceGetVgpuSchedulerState",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_nvmlGpuInstanceGetVgpuSchedulerLog(
+    writer: &mut (impl std::io::Write + ?Sized),
+    gpuInstance: cuda_types::nvml::nvmlGpuInstance_t,
+    pSchedulerLogInfo: *mut cuda_types::nvml::nvmlVgpuSchedulerLogInfo_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(gpuInstance), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &gpuInstance,
+        "nvmlGpuInstanceGetVgpuSchedulerLog",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pSchedulerLogInfo), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pSchedulerLogInfo,
+        "nvmlGpuInstanceGetVgpuSchedulerLog",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_nvmlGpuInstanceGetVgpuTypeCreatablePlacements(
+    writer: &mut (impl std::io::Write + ?Sized),
+    gpuInstance: cuda_types::nvml::nvmlGpuInstance_t,
+    pCreatablePlacementInfo: *mut cuda_types::nvml::nvmlVgpuCreatablePlacementInfo_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(gpuInstance), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &gpuInstance,
+        "nvmlGpuInstanceGetVgpuTypeCreatablePlacements",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pCreatablePlacementInfo), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pCreatablePlacementInfo,
+        "nvmlGpuInstanceGetVgpuTypeCreatablePlacements",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_nvmlGpuInstanceGetVgpuHeterogeneousMode(
+    writer: &mut (impl std::io::Write + ?Sized),
+    gpuInstance: cuda_types::nvml::nvmlGpuInstance_t,
+    pHeterogeneousMode: *mut cuda_types::nvml::nvmlVgpuHeterogeneousMode_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(gpuInstance), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &gpuInstance,
+        "nvmlGpuInstanceGetVgpuHeterogeneousMode",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pHeterogeneousMode), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pHeterogeneousMode,
+        "nvmlGpuInstanceGetVgpuHeterogeneousMode",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_nvmlGpuInstanceSetVgpuHeterogeneousMode(
+    writer: &mut (impl std::io::Write + ?Sized),
+    gpuInstance: cuda_types::nvml::nvmlGpuInstance_t,
+    pHeterogeneousMode: *const cuda_types::nvml::nvmlVgpuHeterogeneousMode_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(gpuInstance), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &gpuInstance,
+        "nvmlGpuInstanceSetVgpuHeterogeneousMode",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pHeterogeneousMode), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pHeterogeneousMode,
+        "nvmlGpuInstanceSetVgpuHeterogeneousMode",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
 impl crate::CudaDisplay for cuda_types::nvml::nvmlVgpuVersion_st {
     fn write(
         &self,
@@ -11141,20 +11622,6 @@ impl crate::CudaDisplay for cuda_types::nvml::nvmlGpuInstanceInfo_st {
         writer.write_all(concat!(", ", stringify!(placement), ": ").as_bytes())?;
         crate::CudaDisplay::write(&self.placement, "", 0, writer)?;
         writer.write_all(b" }")
-    }
-}
-impl crate::CudaDisplay for cuda_types::nvml::nvmlGpuInstance_t {
-    fn write(
-        &self,
-        _fn_name: &'static str,
-        _index: usize,
-        writer: &mut (impl std::io::Write + ?Sized),
-    ) -> std::io::Result<()> {
-        if self.is_null() {
-            writer.write_all(b"NULL")
-        } else {
-            write!(writer, "{:p}", *self)
-        }
     }
 }
 impl crate::CudaDisplay for cuda_types::nvml::nvmlComputeInstancePlacement_st {
@@ -12502,6 +12969,632 @@ impl crate::CudaDisplay for cuda_types::nvml::nvmlGpmMetricId_t {
                 writer
                     .write_all(
                         stringify!(NVML_GPM_METRIC_NVLINK_L17_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_TOTAL_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_TOTAL_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_TOTAL_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_TOTAL_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_DATA_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_DATA_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_DATA_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_DATA_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK0_TOTAL_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK0_TOTAL_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK0_TOTAL_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK0_TOTAL_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK0_DATA_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK0_DATA_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK0_DATA_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK0_DATA_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK1_TOTAL_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK1_TOTAL_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK1_TOTAL_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK1_TOTAL_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK1_DATA_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK1_DATA_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK1_DATA_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK1_DATA_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK2_TOTAL_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK2_TOTAL_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK2_TOTAL_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK2_TOTAL_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK2_DATA_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK2_DATA_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK2_DATA_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK2_DATA_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK3_TOTAL_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK3_TOTAL_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK3_TOTAL_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK3_TOTAL_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK3_DATA_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK3_DATA_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK3_DATA_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK3_DATA_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK4_TOTAL_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK4_TOTAL_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK4_TOTAL_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK4_TOTAL_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK4_DATA_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK4_DATA_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK4_DATA_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK4_DATA_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK5_TOTAL_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK5_TOTAL_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK5_TOTAL_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK5_TOTAL_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK5_DATA_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK5_DATA_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK5_DATA_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK5_DATA_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK6_TOTAL_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK6_TOTAL_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK6_TOTAL_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK6_TOTAL_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK6_DATA_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK6_DATA_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK6_DATA_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK6_DATA_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK7_TOTAL_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK7_TOTAL_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK7_TOTAL_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK7_TOTAL_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK7_DATA_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK7_DATA_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK7_DATA_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK7_DATA_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK8_TOTAL_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK8_TOTAL_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK8_TOTAL_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK8_TOTAL_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK8_DATA_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK8_DATA_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK8_DATA_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK8_DATA_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK9_TOTAL_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK9_TOTAL_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK9_TOTAL_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK9_TOTAL_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK9_DATA_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK9_DATA_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK9_DATA_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK9_DATA_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK10_TOTAL_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK10_TOTAL_TX_PER_SEC)
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK10_TOTAL_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK10_TOTAL_RX_PER_SEC)
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK10_DATA_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK10_DATA_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK10_DATA_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK10_DATA_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK11_TOTAL_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK11_TOTAL_TX_PER_SEC)
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK11_TOTAL_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK11_TOTAL_RX_PER_SEC)
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK11_DATA_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK11_DATA_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK11_DATA_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK11_DATA_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK12_TOTAL_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK12_TOTAL_TX_PER_SEC)
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK12_TOTAL_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK12_TOTAL_RX_PER_SEC)
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK12_DATA_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK12_DATA_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK12_DATA_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK12_DATA_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK13_TOTAL_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK13_TOTAL_TX_PER_SEC)
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK13_TOTAL_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK13_TOTAL_RX_PER_SEC)
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK13_DATA_TX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK13_DATA_TX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_C2C_LINK13_DATA_RX_PER_SEC => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_C2C_LINK13_DATA_RX_PER_SEC).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_HOSTMEM_CACHE_HIT => {
+                writer
+                    .write_all(stringify!(NVML_GPM_METRIC_HOSTMEM_CACHE_HIT).as_bytes())
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_HOSTMEM_CACHE_MISS => {
+                writer
+                    .write_all(stringify!(NVML_GPM_METRIC_HOSTMEM_CACHE_MISS).as_bytes())
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_PEERMEM_CACHE_HIT => {
+                writer
+                    .write_all(stringify!(NVML_GPM_METRIC_PEERMEM_CACHE_HIT).as_bytes())
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_PEERMEM_CACHE_MISS => {
+                writer
+                    .write_all(stringify!(NVML_GPM_METRIC_PEERMEM_CACHE_MISS).as_bytes())
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_DRAM_CACHE_HIT => {
+                writer.write_all(stringify!(NVML_GPM_METRIC_DRAM_CACHE_HIT).as_bytes())
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_DRAM_CACHE_MISS => {
+                writer.write_all(stringify!(NVML_GPM_METRIC_DRAM_CACHE_MISS).as_bytes())
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_NVENC_0_UTIL => {
+                writer.write_all(stringify!(NVML_GPM_METRIC_NVENC_0_UTIL).as_bytes())
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_NVENC_1_UTIL => {
+                writer.write_all(stringify!(NVML_GPM_METRIC_NVENC_1_UTIL).as_bytes())
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_NVENC_2_UTIL => {
+                writer.write_all(stringify!(NVML_GPM_METRIC_NVENC_2_UTIL).as_bytes())
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_NVENC_3_UTIL => {
+                writer.write_all(stringify!(NVML_GPM_METRIC_NVENC_3_UTIL).as_bytes())
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR0_CTXSW_CYCLES_ELAPSED => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR0_CTXSW_CYCLES_ELAPSED).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR0_CTXSW_CYCLES_ACTIVE => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR0_CTXSW_CYCLES_ACTIVE).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR0_CTXSW_REQUESTS => {
+                writer
+                    .write_all(stringify!(NVML_GPM_METRIC_GR0_CTXSW_REQUESTS).as_bytes())
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR0_CTXSW_CYCLES_PER_REQ => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR0_CTXSW_CYCLES_PER_REQ).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR0_CTXSW_ACTIVE_PCT => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR0_CTXSW_ACTIVE_PCT).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR1_CTXSW_CYCLES_ELAPSED => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR1_CTXSW_CYCLES_ELAPSED).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR1_CTXSW_CYCLES_ACTIVE => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR1_CTXSW_CYCLES_ACTIVE).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR1_CTXSW_REQUESTS => {
+                writer
+                    .write_all(stringify!(NVML_GPM_METRIC_GR1_CTXSW_REQUESTS).as_bytes())
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR1_CTXSW_CYCLES_PER_REQ => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR1_CTXSW_CYCLES_PER_REQ).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR1_CTXSW_ACTIVE_PCT => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR1_CTXSW_ACTIVE_PCT).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR2_CTXSW_CYCLES_ELAPSED => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR2_CTXSW_CYCLES_ELAPSED).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR2_CTXSW_CYCLES_ACTIVE => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR2_CTXSW_CYCLES_ACTIVE).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR2_CTXSW_REQUESTS => {
+                writer
+                    .write_all(stringify!(NVML_GPM_METRIC_GR2_CTXSW_REQUESTS).as_bytes())
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR2_CTXSW_CYCLES_PER_REQ => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR2_CTXSW_CYCLES_PER_REQ).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR2_CTXSW_ACTIVE_PCT => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR2_CTXSW_ACTIVE_PCT).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR3_CTXSW_CYCLES_ELAPSED => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR3_CTXSW_CYCLES_ELAPSED).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR3_CTXSW_CYCLES_ACTIVE => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR3_CTXSW_CYCLES_ACTIVE).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR3_CTXSW_REQUESTS => {
+                writer
+                    .write_all(stringify!(NVML_GPM_METRIC_GR3_CTXSW_REQUESTS).as_bytes())
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR3_CTXSW_CYCLES_PER_REQ => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR3_CTXSW_CYCLES_PER_REQ).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR3_CTXSW_ACTIVE_PCT => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR3_CTXSW_ACTIVE_PCT).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR4_CTXSW_CYCLES_ELAPSED => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR4_CTXSW_CYCLES_ELAPSED).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR4_CTXSW_CYCLES_ACTIVE => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR4_CTXSW_CYCLES_ACTIVE).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR4_CTXSW_REQUESTS => {
+                writer
+                    .write_all(stringify!(NVML_GPM_METRIC_GR4_CTXSW_REQUESTS).as_bytes())
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR4_CTXSW_CYCLES_PER_REQ => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR4_CTXSW_CYCLES_PER_REQ).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR4_CTXSW_ACTIVE_PCT => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR4_CTXSW_ACTIVE_PCT).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR5_CTXSW_CYCLES_ELAPSED => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR5_CTXSW_CYCLES_ELAPSED).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR5_CTXSW_CYCLES_ACTIVE => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR5_CTXSW_CYCLES_ACTIVE).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR5_CTXSW_REQUESTS => {
+                writer
+                    .write_all(stringify!(NVML_GPM_METRIC_GR5_CTXSW_REQUESTS).as_bytes())
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR5_CTXSW_CYCLES_PER_REQ => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR5_CTXSW_CYCLES_PER_REQ).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR5_CTXSW_ACTIVE_PCT => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR5_CTXSW_ACTIVE_PCT).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR6_CTXSW_CYCLES_ELAPSED => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR6_CTXSW_CYCLES_ELAPSED).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR6_CTXSW_CYCLES_ACTIVE => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR6_CTXSW_CYCLES_ACTIVE).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR6_CTXSW_REQUESTS => {
+                writer
+                    .write_all(stringify!(NVML_GPM_METRIC_GR6_CTXSW_REQUESTS).as_bytes())
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR6_CTXSW_CYCLES_PER_REQ => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR6_CTXSW_CYCLES_PER_REQ).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR6_CTXSW_ACTIVE_PCT => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR6_CTXSW_ACTIVE_PCT).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR7_CTXSW_CYCLES_ELAPSED => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR7_CTXSW_CYCLES_ELAPSED).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR7_CTXSW_CYCLES_ACTIVE => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR7_CTXSW_CYCLES_ACTIVE).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR7_CTXSW_REQUESTS => {
+                writer
+                    .write_all(stringify!(NVML_GPM_METRIC_GR7_CTXSW_REQUESTS).as_bytes())
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR7_CTXSW_CYCLES_PER_REQ => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR7_CTXSW_CYCLES_PER_REQ).as_bytes(),
+                    )
+            }
+            &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_GR7_CTXSW_ACTIVE_PCT => {
+                writer
+                    .write_all(
+                        stringify!(NVML_GPM_METRIC_GR7_CTXSW_ACTIVE_PCT).as_bytes(),
                     )
             }
             &cuda_types::nvml::nvmlGpmMetricId_t::NVML_GPM_METRIC_MAX => {

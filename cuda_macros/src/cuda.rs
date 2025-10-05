@@ -64,7 +64,7 @@ extern "system" {
 
  Returns in \p *driverVersion the version of CUDA supported by
  the driver.  The version is returned as
- (1000 &times; major + 10 &times; minor). For example, CUDA 9.2
+ (1000 * major + 10 * minor). For example, CUDA 9.2
  would be represented by 9020.
 
  This function automatically returns ::CUDA_ERROR_INVALID_VALUE if
@@ -142,7 +142,7 @@ extern "system" {
 
  Returns an ASCII string identifying the device \p dev in the NULL-terminated
  string pointed to by \p name. \p len specifies the maximum length of the
- string that may be returned.
+ string that may be returned. \p name is shortened to the specified \p len, if \p len is less than the device name
 
  \param name - Returned identifier string for the device
  \param len  - Maximum length of string to store in \p name
@@ -527,6 +527,8 @@ extern "system" {
  - ::CU_DEVICE_ATTRIBUTE_GPU_PCI_DEVICE_ID: The combined 16-bit PCI device ID and 16-bit PCI vendor ID.
  - ::CU_DEVICE_ATTRIBUTE_GPU_PCI_SUBSYSTEM_ID: The combined 16-bit PCI subsystem ID and 16-bit PCI subsystem vendor ID.
 ID.
+ - ::CU_DEVICE_ATTRIBUTE_HOST_NUMA_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED: Device supports HOST_NUMA location with the virtual memory management APIs like ::cuMemCreate, ::cuMemMap and related APIs
+ - ::CU_DEVICE_ATTRIBUTE_HOST_NUMA_MEMORY_POOLS_SUPPORTED: Device supports HOST_NUMA location with the ::cuMemAllocAsync and ::cuMemPool family of APIs
 
  \param pi     - Returned device attribute value
  \param attrib - Device attribute to query
@@ -1388,6 +1390,9 @@ in \p execAffinity. The \p paramsArray is an array of \p CUexecAffinityParam and
  Data from graphics client is shared with CUDA via the \p sharedData in \p cigParams.
  Support for D3D12 graphics client can be determined using ::cuDeviceGetAttribute() with
  ::CU_DEVICE_ATTRIBUTE_D3D12_CIG_SUPPORTED. \p sharedData is a ID3D12CommandQueue handle.
+ Support for Vulkan graphics client can be determined using ::cuDeviceGetAttribute() with
+ ::CU_DEVICE_ATTRIBUTE_VULKAN_CIG_SUPPORTED. \p sharedData is a Nvidia specific data blob
+ populated by calling vkGetExternalComputeQueueDataNV().
  Either \p execAffinityParams or \p cigParams can be set to a non-null value. Setting both to a
  non-null value will result in an undefined behavior.
 
@@ -2196,7 +2201,7 @@ in \p execAffinity. The \p paramsArray is an array of \p CUexecAffinityParam and
  \param hEvent - Event to record
 
  \return
- ::CUDA_SUCCESS
+ ::CUDA_SUCCESS,
  ::CUDA_ERROR_DEINITIALIZED,
  ::CUDA_ERROR_NOT_INITIALIZED,
  ::CUDA_ERROR_INVALID_CONTEXT,
@@ -4232,11 +4237,11 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  \param callback - A handle representing the registered callback instance
 
  \return
- ::CUDA_SUCCESS
- ::CUDA_ERROR_NOT_SUPPORTED
- ::CUDA_ERROR_INVALID_DEVICE
- ::CUDA_ERROR_INVALID_VALUE
- ::CUDA_ERROR_NOT_PERMITTED
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_NOT_SUPPORTED,
+ ::CUDA_ERROR_INVALID_DEVICE,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_NOT_PERMITTED,
  ::CUDA_ERROR_UNKNOWN
  \notefnerr
 
@@ -4257,11 +4262,11 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  \param callback - The callback instance to unregister from receiving async notifications.
 
  \return
- ::CUDA_SUCCESS
- ::CUDA_ERROR_NOT_SUPPORTED
- ::CUDA_ERROR_INVALID_DEVICE
- ::CUDA_ERROR_INVALID_VALUE
- ::CUDA_ERROR_NOT_PERMITTED
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_NOT_SUPPORTED,
+ ::CUDA_ERROR_INVALID_DEVICE,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_NOT_PERMITTED,
  ::CUDA_ERROR_UNKNOWN
  \notefnerr
 
@@ -4352,7 +4357,7 @@ T* pElement = (T*)((char*)BaseAddress + Row * Pitch) + Column;
  IPC functionality on Windows is supported for compatibility purposes
  but not recommended as it comes with performance cost.
  Users can test their device for IPC functionality by calling
- ::cuapiDeviceGetAttribute with ::CU_DEVICE_ATTRIBUTE_IPC_EVENT_SUPPORTED
+ ::cuDeviceGetAttribute with ::CU_DEVICE_ATTRIBUTE_IPC_EVENT_SUPPORTED
 
  \param pHandle - Pointer to a user allocated CUipcEventHandle
                     in which to return the opaque event handle
@@ -6315,9 +6320,9 @@ The value will be SIZE_MAX if the error doesn't pertain to any specific copy.
  \param hStream       - The stream to enqueue the operations in. Must not be legacy NULL stream.
 
  \return
- ::CUDA_SUCCESS
- ::CUDA_ERROR_DEINITIALIZED
- ::CUDA_ERROR_NOT_INITIALIZED
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
  ::CUDA_ERROR_INVALID_VALUE
  \notefnerr
  \note_async
@@ -6392,9 +6397,9 @@ The value will be SIZE_MAX if the error doesn't pertain to any specific copy.
  \param hStream    - The stream to enqueue the operations in. Must not be default NULL stream.
 
  \return
- ::CUDA_SUCCESS
- ::CUDA_ERROR_DEINITIALIZED
- ::CUDA_ERROR_NOT_INITIALIZED
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
  ::CUDA_ERROR_INVALID_VALUE
  \notefnerr
  \note_async
@@ -7778,9 +7783,9 @@ CU_AD_FORMAT_UNORM_INT_101010_2 = 0x50,
                           ::CU_MEM_RANGE_FLAG_DMA_BUF_MAPPING_TYPE_PCIE, otherwise 0.
 
  \return
- CUDA_SUCCESS
- CUDA_ERROR_INVALID_VALUE
- CUDA_ERROR_NOT_SUPPORTED*/
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_NOT_SUPPORTED*/
     fn cuMemGetHandleForAddressRange(
         handle: *mut ::core::ffi::c_void,
         dptr: cuda_types::cuda::CUdeviceptr,
@@ -7857,12 +7862,14 @@ CU_AD_FORMAT_UNORM_INT_101010_2 = 0x50,
  the starting address of the range in \p ptr.  This API requires a system that
  supports UVA.  The size and address parameters must be a multiple of the
  host page size and the alignment must be a power of two or zero for default
- alignment.
+ alignment. If \p addr is 0, then the driver chooses the address at which to
+ place the start of the reservation whereas when it is non-zero then the driver
+ treats it as a hint about where to place the reservation.
 
  \param[out] ptr       - Resulting pointer to start of virtual address range allocated
  \param[in]  size      - Size of the reserved virtual address range requested
  \param[in]  alignment - Alignment of the reserved virtual address range requested
- \param[in]  addr      - Fixed starting address range requested
+ \param[in]  addr      - Hint address for the start of the address range
  \param[in]  flags     - Currently unused, must be zero
  \return
  ::CUDA_SUCCESS,
@@ -8006,6 +8013,12 @@ CU_AD_FORMAT_UNORM_INT_101010_2 = 0x50,
  returned by ::cuMulticastGetGranularity with the flag
  ::CU_MULTICAST_RECOMMENDED_GRANULARITY.
 
+ When \p handle represents a multicast object, this call may return
+ CUDA_ERROR_ILLEGAL_STATE if the system configuration is in an illegal state.
+ In such cases, to continue using multicast, verify that the system
+ configuration is in a valid state and all required driver daemons are
+ running properly.
+
  Please note calling ::cuMemMap does not make the address accessible,
  the caller needs to update accessibility of a contiguous mapped VA
  range by calling ::cuMemSetAccess.
@@ -8033,7 +8046,8 @@ CU_AD_FORMAT_UNORM_INT_101010_2 = 0x50,
  ::CUDA_ERROR_NOT_INITIALIZED,
  ::CUDA_ERROR_DEINITIALIZED,
  ::CUDA_ERROR_NOT_PERMITTED,
- ::CUDA_ERROR_NOT_SUPPORTED
+ ::CUDA_ERROR_NOT_SUPPORTED,
+ ::CUDA_ERROR_ILLEGAL_STATE
  \notefnerr
 
  \sa ::cuMemUnmap, ::cuMemSetAccess, ::cuMemCreate, ::cuMemAddressReserve, ::cuMemImportFromShareableHandle*/
@@ -8641,7 +8655,7 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::CUDA_ERROR_NOT_INITIALIZED,
  ::CUDA_ERROR_INVALID_VALUE,
  ::CUDA_ERROR_OUT_OF_MEMORY,
- ::CUDA_ERROR_NOT_PERMITTED
+ ::CUDA_ERROR_NOT_PERMITTED,
  ::CUDA_ERROR_NOT_SUPPORTED
 
  \sa ::cuDeviceSetMemPool, ::cuDeviceGetMemPool, ::cuDeviceGetDefaultMemPool,
@@ -8925,6 +8939,11 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  return CUDA_ERROR_SYSTEM_NOT_READY if the necessary system software is not
  initialized or running.
 
+ This call may return CUDA_ERROR_ILLEGAL_STATE if the system configuration
+ is in an illegal state. In such cases, to continue using multicast, verify
+ that the system configuration is in a valid state and all required driver
+ daemons are running properly.
+
  \param[in]  mcHandle     Handle representing a multicast object.
  \param[in]  mcOffset     Offset into the multicast object for attachment.
  \param[in]  memHandle    Handle representing a memory allocation.
@@ -8942,7 +8961,8 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::CUDA_ERROR_NOT_PERMITTED,
  ::CUDA_ERROR_NOT_SUPPORTED,
  ::CUDA_ERROR_OUT_OF_MEMORY,
- ::CUDA_ERROR_SYSTEM_NOT_READY
+ ::CUDA_ERROR_SYSTEM_NOT_READY,
+ ::CUDA_ERROR_ILLEGAL_STATE
 
  \sa ::cuMulticastCreate, ::cuMulticastAddDevice, ::cuMemCreate*/
     fn cuMulticastBindMem(
@@ -8977,6 +8997,11 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  return CUDA_ERROR_SYSTEM_NOT_READY if the necessary system software is not
  initialized or running.
 
+ This call may return CUDA_ERROR_ILLEGAL_STATE if the system configuration
+ is in an illegal state. In such cases, to continue using multicast, verify
+ that the system configuration is in a valid state and all required driver
+ daemons are running properly.
+
  \param[in]  mcHandle     Handle representing a multicast object.
  \param[in]  mcOffset     Offset into multicast va range for attachment.
  \param[in]  memptr       Virtual address of the memory allocation.
@@ -8993,7 +9018,8 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::CUDA_ERROR_NOT_PERMITTED,
  ::CUDA_ERROR_NOT_SUPPORTED,
  ::CUDA_ERROR_OUT_OF_MEMORY,
- ::CUDA_ERROR_SYSTEM_NOT_READY
+ ::CUDA_ERROR_SYSTEM_NOT_READY,
+ ::CUDA_ERROR_ILLEGAL_STATE
 
  \sa ::cuMulticastCreate, ::cuMulticastAddDevice, ::cuMemCreate*/
     fn cuMulticastBindAddr(
@@ -9394,7 +9420,7 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
 
  \param devPtr    - Pointer to be prefetched
  \param count     - Size in bytes
- \param dstDevice - Destination device to prefetch to
+ \param location  - Location to prefetch to
  \param flags     - flags for future use, must be zero now.
  \param hStream   - Stream to enqueue prefetch operation
 
@@ -9407,7 +9433,7 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  \note_null_stream
 
  \sa ::cuMemcpy, ::cuMemcpyPeer, ::cuMemcpyAsync,
- ::cuMemcpy3DPeerAsync, ::cuMemAdvise, ::cuMemPrefetchAsync
+ ::cuMemcpy3DPeerAsync, ::cuMemAdvise, ::cuMemPrefetchAsync,
  ::cudaMemPrefetchAsync_v2*/
     fn cuMemPrefetchAsync_v2_ptsz(
         devPtr: cuda_types::cuda::CUdeviceptr,
@@ -9525,7 +9551,7 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  \note_null_stream
 
  \sa ::cuMemcpy, ::cuMemcpyPeer, ::cuMemcpyAsync,
- ::cuMemcpy3DPeerAsync, ::cuMemPrefetchAsync, ::cuMemAdvise_v2
+ ::cuMemcpy3DPeerAsync, ::cuMemPrefetchAsync, ::cuMemAdvise_v2,
  ::cudaMemAdvise*/
     fn cuMemAdvise(
         devPtr: cuda_types::cuda::CUdeviceptr,
@@ -9648,7 +9674,7 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  \note_null_stream
 
  \sa ::cuMemcpy, ::cuMemcpyPeer, ::cuMemcpyAsync,
- ::cuMemcpy3DPeerAsync, ::cuMemPrefetchAsync, ::cuMemAdvise
+ ::cuMemcpy3DPeerAsync, ::cuMemPrefetchAsync, ::cuMemAdvise,
  ::cudaMemAdvise*/
     fn cuMemAdvise_v2(
         devPtr: cuda_types::cuda::CUdeviceptr,
@@ -9965,7 +9991,7 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::cuStreamGetPriority,
  ::cuCtxGetStreamPriorityRange,
  ::cuStreamGetFlags,
- ::cuStreamGetDevice
+ ::cuStreamGetDevice,
  ::cuStreamWaitEvent,
  ::cuStreamQuery,
  ::cuStreamSynchronize,
@@ -10002,7 +10028,7 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::cuGreenCtxStreamCreate,
  ::cuCtxGetStreamPriorityRange,
  ::cuStreamGetFlags,
- ::cuStreamGetDevice
+ ::cuStreamGetDevice,
  ::cudaStreamGetPriority*/
     fn cuStreamGetPriority_ptsz(
         hStream: cuda_types::cuda::CUstream,
@@ -10058,7 +10084,7 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::cuStreamCreate,
  ::cuGreenCtxStreamCreate,
  ::cuStreamGetPriority,
- ::cudaStreamGetFlags
+ ::cudaStreamGetFlags,
  ::cuStreamGetDevice*/
     fn cuStreamGetFlags_ptsz(
         hStream: cuda_types::cuda::CUstream,
@@ -10195,7 +10221,7 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::cuGreenCtxStreamCreate,
  ::cuStreamGetPriority,
  ::cuStreamGetFlags,
- ::cuStreamGetDevice
+ ::cuStreamGetDevice,
  ::cuStreamWaitEvent,
  ::cuStreamQuery,
  ::cuStreamSynchronize,
@@ -10401,7 +10427,7 @@ CU_MEM_OPERATION_TYPE_UNMAP = 2
  ::cuStreamIsCapturing,
  ::cuStreamEndCapture,
  ::cuThreadExchangeStreamCaptureMode,
- ::cuGraphAddNode,*/
+ ::cuGraphAddNode*/
     fn cuStreamBeginCaptureToGraph_ptsz(
         hStream: cuda_types::cuda::CUstream,
         hGraph: cuda_types::cuda::CUgraph,
@@ -10638,7 +10664,7 @@ cuThreadExchangeStreamCaptureMode(&mode); // restore previous mode
  \notefnerr
 
  \sa
- ::cuStreamGetCaptureInfo
+ ::cuStreamGetCaptureInfo,
  ::cuStreamBeginCapture,
  ::cuStreamIsCapturing,
  ::cuStreamUpdateCaptureDependencies*/
@@ -10719,7 +10745,7 @@ cuThreadExchangeStreamCaptureMode(&mode); // restore previous mode
 
  \sa
  ::cuStreamBeginCapture,
- ::cuStreamGetCaptureInfo,*/
+ ::cuStreamGetCaptureInfo*/
     fn cuStreamUpdateCaptureDependencies_v2_ptsz(
         hStream: cuda_types::cuda::CUstream,
         dependencies: *mut cuda_types::cuda::CUgraphNode,
@@ -12727,7 +12753,7 @@ status = cuLaunchKernel(f, gx, gy, gz, bx, by, bz, sh, s, NULL, config);
  complete. Alternatively, blocks of B may begin before all blocks of A have
  begun, for example:
 
-  - If B can claim execution resources unavaiable to A, for example if they
+  - If B can claim execution resources unavailable to A, for example if they
     run on different GPUs.
   - If B is a higher priority than A.
 
@@ -14095,7 +14121,8 @@ void **kernelParams;
  at the root of the graph. \p dependencies may not have any duplicate entries.
  A handle to the new node will be returned in \p phGraphNode.
 
- If \p hGraph contains allocation or free nodes, this call will return an error.
+ If \p childGraph contains allocation nodes, free nodes, or conditional nodes, this call will
+ return an error.
 
  The node executes an embedded child graph. The child graph is cloned in this call.
 
@@ -14810,7 +14837,7 @@ void **kernelParams;
 
  The following restrictions apply to graphs which contain allocation and/or memory free nodes:
  - Nodes and edges of the graph cannot be deleted.
- - The graph cannot be used in a child node.
+ - The graph can only be used in a child node if the ownership is moved to the parent.
  - Only one instantiation of the graph may exist at any point in time.
  - The graph cannot be cloned.
 
@@ -14896,7 +14923,7 @@ void **kernelParams;
 
  The following restrictions apply to graphs which contain allocation and/or memory free nodes:
  - Nodes and edges of the graph cannot be deleted.
- - The graph cannot be used in a child node.
+ - The graph can only be used in a child node if the ownership is moved to the parent.
  - Only one instantiation of the graph may exist at any point in time.
  - The graph cannot be cloned.
 
@@ -15039,6 +15066,9 @@ void **kernelParams;
  after this call without affecting the clone.
 
  Child graph nodes in the original graph are recursively copied into the clone.
+
+ \note: Cloning is not supported for graphs which contain memory allocation nodes,
+        memory free nodes, or conditional nodes.
 
  \param phGraphClone  - Returns newly created cloned graph
  \param originalGraph - Graph to clone
@@ -15886,7 +15916,7 @@ CUgraphInstantiateResult result_out;
  Both the value and pointer address may be updated.
  Changing other aspects of the memset (width, height, element size or pitch) may cause the update to be rejected.
  Specifically, for 2d memsets, all dimension changes are rejected.
- For 1d memsets, changes in height are explicitly rejected and other changes are oportunistically allowed
+ For 1d memsets, changes in height are explicitly rejected and other changes are opportunistically allowed
  if the resulting work maps onto the work resources already allocated for the node.
 
  The modifications only affect future launches of \p hGraphExec.  Already enqueued
@@ -16380,7 +16410,7 @@ CUgraphInstantiateResult result_out;
    - The CUDA device(s) to which the operand(s) was allocated/mapped cannot change.
    - The source/destination memory must be allocated from the same contexts as the original
      source/destination memory.
-   - For 2d memsets, only address and assinged value may be updated.
+   - For 2d memsets, only address and assigned value may be updated.
    - For 1d memsets, updating dimensions is also allowed, but may fail if the resulting operation doesn't
      map onto the work resources already allocated for the node.
  - Additional memcpy node restrictions:
@@ -16390,7 +16420,7 @@ CUgraphInstantiateResult result_out;
    - Changing the number of semaphores is not supported.
  - Conditional nodes:
    - Changing node parameters is not supported.
-   - Changeing parameters of nodes within the conditional body graph is subject to the rules above.
+   - Changing parameters of nodes within the conditional body graph is subject to the rules above.
    - Conditional handle flags and default values are updated as part of the graph update.
 
  Note:  The API may add further restrictions in future releases.  The return code should always be checked.
@@ -19063,7 +19093,7 @@ CU_TENSOR_MAP_FLOAT_OOB_FILL_NAN_REQUEST_ZERO_FMA
 
  \sa
  ::cuTensorMapEncodeTiled,
- ::cuTensorMapEncodeIm2col
+ ::cuTensorMapEncodeIm2col,
  ::cuTensorMapEncodeIm2colWide*/
     fn cuTensorMapReplaceAddress(
         tensorMap: *mut cuda_types::cuda::CUtensorMap,
@@ -20122,7 +20152,7 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  \param hEvent  - Event to record
 
  \return
- ::CUDA_SUCCESS
+ ::CUDA_SUCCESS,
  ::CUDA_ERROR_DEINITIALIZED,
  ::CUDA_ERROR_NOT_INITIALIZED,
  ::CUDA_ERROR_INVALID_CONTEXT,
@@ -20165,7 +20195,7 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
 
  \sa
  ::cuGreenCtxRecordEvent,
- ::cuStreamWaitEvent
+ ::cuStreamWaitEvent,
  ::cuCtxRecordEvent,
  ::cuCtxWaitEvent*/
     fn cuGreenCtxWaitEvent(
@@ -20214,7 +20244,7 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuGreenCtxStreamCreate,
  ::cuStreamGetPriority,
  ::cuStreamGetFlags,
- ::cuStreamGetDevice
+ ::cuStreamGetDevice,
  ::cuStreamWaitEvent,
  ::cuStreamQuery,
  ::cuStreamSynchronize,
@@ -20271,7 +20301,7 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
  ::cuStreamGetPriority,
  ::cuCtxGetStreamPriorityRange,
  ::cuStreamGetFlags,
- ::cuStreamGetDevice
+ ::cuStreamGetDevice,
  ::cuStreamWaitEvent,
  ::cuStreamQuery,
  ::cuStreamSynchronize,
@@ -20282,6 +20312,105 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
         greenCtx: cuda_types::cuda::CUgreenCtx,
         flags: ::core::ffi::c_uint,
         priority: ::core::ffi::c_int,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Register a callback function to receive error log messages
+
+ \param callbackFunc  - The function to register as a callback
+ \param userData      - A generic pointer to user data. This is passed into the callback function.
+ \param callback_out  - Optional location to store the callback handle after it is registered
+
+ \return
+ ::CUDA_SUCCESS
+ ::CUDA_ERROR_INVALID_VALUE*/
+    fn cuLogsRegisterCallback(
+        callbackFunc: cuda_types::cuda::CUlogsCallback,
+        userData: *mut ::core::ffi::c_void,
+        callback_out: *mut cuda_types::cuda::CUlogsCallbackHandle,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Unregister a log message callback
+
+ \param callback  - The callback instance to unregister from receiving log messages
+
+ \return
+ ::CUDA_SUCCESS
+ ::CUDA_ERROR_INVALID_VALUE*/
+    fn cuLogsUnregisterCallback(
+        callback: cuda_types::cuda::CUlogsCallbackHandle,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Sets log iterator to point to the end of log buffer, where the next message would be written.
+
+ \param iterator_out - Location to store an iterator to the current tail of the logs
+ \param flags        - Reserved for future use, must be 0
+
+ \return
+ ::CUDA_SUCCESS
+ ::CUDA_ERROR_INVALID_VALUE*/
+    fn cuLogsCurrent(
+        iterator_out: *mut cuda_types::cuda::CUlogIterator,
+        flags: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Dump accumulated driver logs into a file
+
+ Logs generated by the driver are stored in an internal buffer and can be copied out using this API.
+ This API dumps all driver logs starting from \p iterator into \p pathToFile provided.
+
+ \note \p iterator is auto-advancing. Dumping logs will update the value of
+       \p iterator to receive the next generated log.
+
+ \note The driver reserves limited memory for storing logs.
+       The oldest logs may be overwritten and become unrecoverable. An indication will appear in the
+       destination outupt if the logs have been truncated. Call dump after each failed API to mitigate this
+       risk.
+
+ \param iterator   - Optional auto-advancing iterator specifying the starting log to read. NULL value dumps all logs.
+ \param pathToFile - Path to output file for dumping logs
+ \param flags      - Reserved for future use, must be 0
+
+ \return
+ ::CUDA_SUCCESS
+ ::CUDA_ERROR_INVALID_VALUE*/
+    fn cuLogsDumpToFile(
+        iterator: *mut cuda_types::cuda::CUlogIterator,
+        pathToFile: *const ::core::ffi::c_char,
+        flags: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Dump accumulated driver logs into a buffer
+
+ Logs generated by the driver are stored in an internal buffer and can be copied out using this API.
+ This API dumps driver logs from \p iterator into \p buffer up to the size specified in \p *size.
+ The driver will always null terminate the buffer but there will not be a null character between log
+ entries, only a newline \\n. The driver will then return the actual number of bytes written in
+ \p *size, excluding the null terminator. If there are no messages to dump, \p *size will be set to 0
+ and the function will return ::CUDA_SUCCESS.
+ If the provided \p buffer is not large enough to hold any messages, \p *size will be set to 0 and
+ the function will return ::CUDA_ERROR_INVALID_VALUE.
+
+ \note \p iterator is auto-advancing. Dumping logs will update the value of
+       \p iterator to receive the next generated log.
+
+ \note The driver reserves limited memory for storing logs. The maximum size of the buffer is 25600 bytes.
+       The oldest logs may be overwritten and become unrecoverable. An indication will appear in the
+       destination outupt if the logs have been truncated. Call dump after each failed API to mitigate this
+       risk.
+
+ \note If the provided value in \p *size is not large enough to hold all buffered messages, a message will
+       be added at the head of the buffer indicating this. The driver then computes the number of messages
+       it is able to store in \p buffer and writes it out. The final message in \p buffer will always be
+       the most recent log message as of when the API is called.
+
+ \param iterator  - Optional auto-advancing iterator specifying the starting log to read. NULL value dumps all logs.
+ \param buffer    - Pointer to dump logs
+ \param size      - See description
+ \param flags     - Reserved for future use, must be 0
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_INVALID_VALUE*/
+    fn cuLogsDumpToMemory(
+        iterator: *mut cuda_types::cuda::CUlogIterator,
+        buffer: *mut ::core::ffi::c_char,
+        size: *mut usize,
+        flags: ::core::ffi::c_uint,
     ) -> cuda_types::cuda::CUresult;
     fn cuMemHostRegister(
         p: *mut ::core::ffi::c_void,

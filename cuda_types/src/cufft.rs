@@ -13,10 +13,10 @@ pub type cudaGraphExecUpdateResultInfo_st = super::cuda::CUgraphExecUpdateResult
 pub type cudaAsyncNotificationType = super::cuda::CUasyncNotificationType_enum;
 pub type cudaGraph_t = super::cuda::CUgraph;
 pub const CUFFT_VER_MAJOR: u32 = 11;
-pub const CUFFT_VER_MINOR: u32 = 3;
-pub const CUFFT_VER_PATCH: u32 = 3;
-pub const CUFFT_VER_BUILD: u32 = 83;
-pub const CUFFT_VERSION: u32 = 11303;
+pub const CUFFT_VER_MINOR: u32 = 4;
+pub const CUFFT_VER_PATCH: u32 = 1;
+pub const CUFFT_VER_BUILD: u32 = 4;
+pub const CUFFT_VERSION: u32 = 11401;
 pub const CUFFT_FORWARD: i32 = -1;
 pub const CUFFT_INVERSE: u32 = 1;
 impl libFormat_t {
