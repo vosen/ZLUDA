@@ -1,4 +1,4 @@
-use cuda_types::cudnn9::cudnnStatus_t;
+use cuda_types::cudnn9::*;
 
 #[cfg(debug_assertions)]
 pub(crate) fn unimplemented() -> cudnnStatus_t {
@@ -7,7 +7,7 @@ pub(crate) fn unimplemented() -> cudnnStatus_t {
 
 #[cfg(not(debug_assertions))]
 pub(crate) fn unimplemented() -> cudnnStatus_t {
-    cudnnStatus_t::CUDNN_STATUS_NOT_SUPPORTED
+    cudnnStatus_t::ERROR_NOT_SUPPORTED
 }
 
 pub(crate) fn get_version() -> usize {
