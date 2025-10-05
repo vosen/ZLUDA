@@ -1611,10 +1611,7 @@ fn generate_display_perflib(
         "nvmlVgpuSchedulerLogInfo_v1_t",
         "nvmlUUID_v1_t",
     ];
-    let ignore_functions = [
-        "cudnnBackendGetAttribute",
-        "cudnnBackendSetAttribute"
-    ];
+    let ignore_functions = ["cudnnBackendGetAttribute", "cudnnBackendSetAttribute"];
     let count_selectors = [];
     let mut derive_state = DeriveDisplayState::new(
         &ignore_types,
