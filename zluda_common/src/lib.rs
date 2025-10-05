@@ -2,6 +2,7 @@ use cuda_types::{
     cublas::*,
     cublaslt::*,
     cuda::*,
+    cudnn9,
     dark_api::{FatbinHeader, FatbincWrapper},
     nvml::*,
 };
@@ -38,6 +39,11 @@ impl CudaErrorType for rocblas_error {
 
 impl CudaErrorType for nvmlError_t {
     const INVALID_VALUE: Self = Self::INVALID_ARGUMENT;
+    const NOT_SUPPORTED: Self = Self::NOT_SUPPORTED;
+}
+
+impl CudaErrorType for cudnn9::cudnnError_t {
+    const INVALID_VALUE: Self = Self::INVALID_VALUE;
     const NOT_SUPPORTED: Self = Self::NOT_SUPPORTED;
 }
 
@@ -176,7 +182,9 @@ from_cuda_nop!(
     CUmemAllocationProp,
     CUresult,
     CUfunction_attribute,
-    CUgraphExecUpdateResultInfo
+    CUgraphExecUpdateResultInfo,
+    *mut cudnn9::cudnnHandle_t,
+    cudnn9::cudnnHandle_t
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,

@@ -619,3 +619,53 @@ pub type cudnnStatus_t = ::core::result::Result<(), cudnnError_t>;
 const _: fn() = || {
     let _ = std::mem::transmute::<cudnnStatus_t, u32>;
 };
+
+impl From<crate::cudnn9::cudnnError_t> for cudnnError_t {
+    fn from(err: crate::cudnn9::cudnnError_t) -> Self {
+        match err {
+            crate::cudnn9::cudnnError_t::NOT_INITIALIZED => {
+                crate::cudnn8::cudnnError_t::NOT_INITIALIZED
+            }
+            crate::cudnn9::cudnnError_t::ALLOC_FAILED => {
+                crate::cudnn8::cudnnError_t::ALLOC_FAILED
+            }
+            crate::cudnn9::cudnnError_t::BAD_PARAM => {
+                crate::cudnn8::cudnnError_t::BAD_PARAM
+            }
+            crate::cudnn9::cudnnError_t::INTERNAL_ERROR => {
+                crate::cudnn8::cudnnError_t::INTERNAL_ERROR
+            }
+            crate::cudnn9::cudnnError_t::INVALID_VALUE => {
+                crate::cudnn8::cudnnError_t::INVALID_VALUE
+            }
+            crate::cudnn9::cudnnError_t::ARCH_MISMATCH => {
+                crate::cudnn8::cudnnError_t::ARCH_MISMATCH
+            }
+            crate::cudnn9::cudnnError_t::MAPPING_ERROR => {
+                crate::cudnn8::cudnnError_t::MAPPING_ERROR
+            }
+            crate::cudnn9::cudnnError_t::EXECUTION_FAILED => {
+                crate::cudnn8::cudnnError_t::EXECUTION_FAILED
+            }
+            crate::cudnn9::cudnnError_t::NOT_SUPPORTED => {
+                crate::cudnn8::cudnnError_t::NOT_SUPPORTED
+            }
+            crate::cudnn9::cudnnError_t::LICENSE_ERROR => {
+                crate::cudnn8::cudnnError_t::LICENSE_ERROR
+            }
+            crate::cudnn9::cudnnError_t::RUNTIME_PREREQUISITE_MISSING => {
+                crate::cudnn8::cudnnError_t::RUNTIME_PREREQUISITE_MISSING
+            }
+            crate::cudnn9::cudnnError_t::RUNTIME_IN_PROGRESS => {
+                crate::cudnn8::cudnnError_t::RUNTIME_IN_PROGRESS
+            }
+            crate::cudnn9::cudnnError_t::RUNTIME_FP_OVERFLOW => {
+                crate::cudnn8::cudnnError_t::RUNTIME_FP_OVERFLOW
+            }
+            crate::cudnn9::cudnnError_t::VERSION_MISMATCH => {
+                crate::cudnn8::cudnnError_t::VERSION_MISMATCH
+            }
+            _ => crate::cudnn8::cudnnError_t::INTERNAL_ERROR,
+        }
+    }
+}
