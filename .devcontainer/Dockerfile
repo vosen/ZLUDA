@@ -20,8 +20,8 @@ RUN wget https://apt.llvm.org/llvm.sh && \
 # Feel free to change to a newer version if you have a newer verison on your host
 ARG CUDA_PKG_VERSION=13-0
 # Docker <-> host  driver version compatiblity is newer host <-> older docker
-# We don't care about a specific driver version, so pick oldest 5XX compatible
-ARG CUDA_DRIVER=570
+# Driver 580+ is required for CUDA 13
+ARG CUDA_DRIVER=580
 RUN wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/libcudnn8-dev_8.9.7.29-1+cuda12.2_amd64.deb && \
     dpkg-deb -R libcudnn8-dev_8.9.7.29-1+cuda12.2_amd64.deb /opt && \
     rm libcudnn8-dev_8.9.7.29-1+cuda12.2_amd64.deb
