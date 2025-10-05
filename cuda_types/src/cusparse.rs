@@ -13,10 +13,10 @@ pub type cudaGraphExecUpdateResultInfo_st = super::cuda::CUgraphExecUpdateResult
 pub type cudaAsyncNotificationType = super::cuda::CUasyncNotificationType_enum;
 pub type cudaGraph_t = super::cuda::CUgraph;
 pub const CUSPARSE_VER_MAJOR: u32 = 12;
-pub const CUSPARSE_VER_MINOR: u32 = 5;
-pub const CUSPARSE_VER_PATCH: u32 = 10;
-pub const CUSPARSE_VER_BUILD: u32 = 65;
-pub const CUSPARSE_VERSION: u32 = 12510;
+pub const CUSPARSE_VER_MINOR: u32 = 6;
+pub const CUSPARSE_VER_PATCH: u32 = 3;
+pub const CUSPARSE_VER_BUILD: u32 = 3;
+pub const CUSPARSE_VERSION: u32 = 12603;
 /// Result information returned by cudaGraphExecUpdate
 pub type cudaGraphExecUpdateResultInfo = cudaGraphExecUpdateResultInfo_st;
 #[repr(C)]
@@ -350,6 +350,9 @@ impl cusparseSpMVAlg_t {
 }
 impl cusparseSpMVAlg_t {
     pub const CUSPARSE_SPMV_SELL_ALG1: cusparseSpMVAlg_t = cusparseSpMVAlg_t(5);
+}
+impl cusparseSpMVAlg_t {
+    pub const CUSPARSE_SPMV_BSR_ALG1: cusparseSpMVAlg_t = cusparseSpMVAlg_t(6);
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]

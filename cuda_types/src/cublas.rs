@@ -12,11 +12,11 @@ pub use super::cuda::libraryPropertyType;
 pub type cudaGraphExecUpdateResultInfo_st = super::cuda::CUgraphExecUpdateResultInfo_st;
 pub type cudaAsyncNotificationType = super::cuda::CUasyncNotificationType_enum;
 pub type cudaGraph_t = super::cuda::CUgraph;
-pub const CUBLAS_VER_MAJOR: u32 = 12;
-pub const CUBLAS_VER_MINOR: u32 = 9;
-pub const CUBLAS_VER_PATCH: u32 = 1;
-pub const CUBLAS_VER_BUILD: u32 = 4;
-pub const CUBLAS_VERSION: u32 = 120901;
+pub const CUBLAS_VER_MAJOR: u32 = 13;
+pub const CUBLAS_VER_MINOR: u32 = 0;
+pub const CUBLAS_VER_PATCH: u32 = 2;
+pub const CUBLAS_VER_BUILD: u32 = 14;
+pub const CUBLAS_VERSION: u32 = 130002;
 impl cublasFillMode_t {
     pub const CUBLAS_FILL_MODE_LOWER: cublasFillMode_t = cublasFillMode_t(0);
 }
@@ -214,6 +214,9 @@ impl cublasGemmAlgo_t {
 }
 impl cublasGemmAlgo_t {
     pub const CUBLAS_GEMM_ALGO15_TENSOR_OP: cublasGemmAlgo_t = cublasGemmAlgo_t(115);
+}
+impl cublasGemmAlgo_t {
+    pub const CUBLAS_GEMM_AUTOTUNE: cublasGemmAlgo_t = cublasGemmAlgo_t(999);
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]

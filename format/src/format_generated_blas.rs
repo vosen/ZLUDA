@@ -261,6 +261,9 @@ impl crate::CudaDisplay for cuda_types::cublas::cublasGemmAlgo_t {
             &cuda_types::cublas::cublasGemmAlgo_t::CUBLAS_GEMM_ALGO15_TENSOR_OP => {
                 writer.write_all(stringify!(CUBLAS_GEMM_ALGO15_TENSOR_OP).as_bytes())
             }
+            &cuda_types::cublas::cublasGemmAlgo_t::CUBLAS_GEMM_AUTOTUNE => {
+                writer.write_all(stringify!(CUBLAS_GEMM_AUTOTUNE).as_bytes())
+            }
             _ => write!(writer, "{}", self.0),
         }
     }

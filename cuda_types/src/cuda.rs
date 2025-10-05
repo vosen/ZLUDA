@@ -1,7 +1,7 @@
 // Generated automatically by zluda_bindgen
 // DO NOT EDIT MANUALLY
 #![allow(warnings)]
-pub const CUDA_VERSION: u32 = 12090;
+pub const CUDA_VERSION: u32 = 13000;
 pub const CU_IPC_HANDLE_SIZE: u32 = 64;
 pub const CU_COMPUTE_ACCELERATED_TARGET_BASE: u32 = 65536;
 pub const CU_COMPUTE_FAMILY_TARGET_BASE: u32 = 131072;
@@ -582,10 +582,15 @@ pub use self::CUstreamMemoryBarrier_flags_enum as CUstreamMemoryBarrier_flags;
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union CUstreamBatchMemOpParams_union {
+    ///< Operation. This is the first field of all the union elemets and acts as a TAG to determine which union member is valid.
     pub operation: CUstreamBatchMemOpType,
+    ///< Params for ::CU_STREAM_MEM_OP_WAIT_VALUE_32 and ::CU_STREAM_MEM_OP_WAIT_VALUE_64 operations.
     pub waitValue: CUstreamBatchMemOpParams_union_CUstreamMemOpWaitValueParams_st,
+    ///< Params for ::CU_STREAM_MEM_OP_WRITE_VALUE_32 and ::CU_STREAM_MEM_OP_WRITE_VALUE_64 operations.
     pub writeValue: CUstreamBatchMemOpParams_union_CUstreamMemOpWriteValueParams_st,
+    ///< Params for ::CU_STREAM_MEM_OP_FLUSH_REMOTE_WRITES operations.
     pub flushRemoteWrites: CUstreamBatchMemOpParams_union_CUstreamMemOpFlushRemoteWritesParams_st,
+    ///< Params for ::CU_STREAM_MEM_OP_BARRIER operations.
     pub memoryBarrier: CUstreamBatchMemOpParams_union_CUstreamMemOpMemoryBarrierParams_st,
     pub pad: [cuuint64_t; 6usize],
 }
@@ -595,6 +600,7 @@ pub struct CUstreamBatchMemOpParams_union_CUstreamMemOpWaitValueParams_st {
     pub operation: CUstreamBatchMemOpType,
     pub address: CUdeviceptr,
     pub __bindgen_anon_1: CUstreamBatchMemOpParams_union_CUstreamMemOpWaitValueParams_st__bindgen_ty_1,
+    ///< See ::CUstreamWaitValue_flags.
     pub flags: ::core::ffi::c_uint,
     ///< For driver internal use. Initial value is unimportant.
     pub alias: CUdeviceptr,
@@ -611,6 +617,7 @@ pub struct CUstreamBatchMemOpParams_union_CUstreamMemOpWriteValueParams_st {
     pub operation: CUstreamBatchMemOpType,
     pub address: CUdeviceptr,
     pub __bindgen_anon_1: CUstreamBatchMemOpParams_union_CUstreamMemOpWriteValueParams_st__bindgen_ty_1,
+    ///< See ::CUstreamWriteValue_flags.
     pub flags: ::core::ffi::c_uint,
     ///< For driver internal use. Initial value is unimportant.
     pub alias: CUdeviceptr,
@@ -625,6 +632,7 @@ pub union CUstreamBatchMemOpParams_union_CUstreamMemOpWriteValueParams_st__bindg
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUstreamBatchMemOpParams_union_CUstreamMemOpFlushRemoteWritesParams_st {
     pub operation: CUstreamBatchMemOpType,
+    ///< Must be 0.
     pub flags: ::core::ffi::c_uint,
 }
 #[repr(C)]
@@ -638,6 +646,10 @@ pub struct CUstreamBatchMemOpParams_union_CUstreamMemOpMemoryBarrierParams_st {
 pub type CUstreamBatchMemOpParams_v1 = CUstreamBatchMemOpParams_union;
 /// Per-operation parameters for ::cuStreamBatchMemOp
 pub type CUstreamBatchMemOpParams = CUstreamBatchMemOpParams_v1;
+/** Batch memory operation node parameters
+
+ Used in the legacy ::cuGraphAddBatchMemOpNode api.
+ New code should use ::cuGraphAddNode()*/
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUDA_BATCH_MEM_OP_NODE_PARAMS_v1_st {
@@ -646,7 +658,15 @@ pub struct CUDA_BATCH_MEM_OP_NODE_PARAMS_v1_st {
     pub paramArray: *mut CUstreamBatchMemOpParams,
     pub flags: ::core::ffi::c_uint,
 }
+/** Batch memory operation node parameters
+
+ Used in the legacy ::cuGraphAddBatchMemOpNode api.
+ New code should use ::cuGraphAddNode()*/
 pub type CUDA_BATCH_MEM_OP_NODE_PARAMS_v1 = CUDA_BATCH_MEM_OP_NODE_PARAMS_v1_st;
+/** Batch memory operation node parameters
+
+ Used in the legacy ::cuGraphAddBatchMemOpNode api.
+ New code should use ::cuGraphAddNode()*/
 pub type CUDA_BATCH_MEM_OP_NODE_PARAMS = CUDA_BATCH_MEM_OP_NODE_PARAMS_v1;
 /// Batch memory operation node parameters
 #[repr(C)]
@@ -1547,7 +1567,7 @@ impl CUdevice_attribute_enum {
     );
 }
 impl CUdevice_attribute_enum {
-    ///< Link between the device and the host supports native atomic operations
+    ///< Link between the device and the host supports all native atomic operations
     pub const CU_DEVICE_ATTRIBUTE_HOST_NATIVE_ATOMIC_SUPPORTED: CUdevice_attribute_enum = CUdevice_attribute_enum(
         86,
     );
@@ -1901,8 +1921,32 @@ impl CUdevice_attribute_enum {
     );
 }
 impl CUdevice_attribute_enum {
-    pub const CU_DEVICE_ATTRIBUTE_MAX: CUdevice_attribute_enum = CUdevice_attribute_enum(
+    ///< Device suports HOST location with the ::cuMemAllocAsync and ::cuMemPool family of APIs
+    pub const CU_DEVICE_ATTRIBUTE_HOST_MEMORY_POOLS_SUPPORTED: CUdevice_attribute_enum = CUdevice_attribute_enum(
         144,
+    );
+}
+impl CUdevice_attribute_enum {
+    ///< Device supports HOST location with the virtual memory management APIs like ::cuMemCreate, ::cuMemMap and related APIs
+    pub const CU_DEVICE_ATTRIBUTE_HOST_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED: CUdevice_attribute_enum = CUdevice_attribute_enum(
+        145,
+    );
+}
+impl CUdevice_attribute_enum {
+    ///< Device supports page-locked host memory buffer sharing with dma_buf mechanism.
+    pub const CU_DEVICE_ATTRIBUTE_HOST_ALLOC_DMA_BUF_SUPPORTED: CUdevice_attribute_enum = CUdevice_attribute_enum(
+        146,
+    );
+}
+impl CUdevice_attribute_enum {
+    ///< Link between the device and the host supports only some native atomic operations
+    pub const CU_DEVICE_ATTRIBUTE_ONLY_PARTIAL_HOST_NATIVE_ATOMIC_SUPPORTED: CUdevice_attribute_enum = CUdevice_attribute_enum(
+        147,
+    );
+}
+impl CUdevice_attribute_enum {
+    pub const CU_DEVICE_ATTRIBUTE_MAX: CUdevice_attribute_enum = CUdevice_attribute_enum(
+        148,
     );
 }
 #[repr(transparent)]
@@ -2138,6 +2182,12 @@ impl CUfunction_attribute_enum {
     /** The maximum size in bytes of dynamically-allocated shared memory that can be used by
  this function. If the user-specified dynamic shared memory size is larger than this
  value, the launch will fail.
+ The default value of this attribute is
+ ::CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK - ::CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES,
+ except when ::CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES is greater than
+ ::CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK, then the default value of this attribute is 0.
+ The value can be increased to ::CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK_OPTIN -
+ ::CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES.
  See ::cuFuncSetAttribute, ::cuKernelSetAttribute*/
     pub const CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES: CUfunction_attribute_enum = CUfunction_attribute_enum(
         8,
@@ -2775,13 +2825,24 @@ impl CUjit_option_enum {
     );
 }
 impl CUjit_option_enum {
-    /** This option lets the values specified using ::CU_JIT_MAX_REGISTERS,
- ::CU_JIT_THREADS_PER_BLOCK, ::CU_JIT_MAX_THREADS_PER_BLOCK and
- ::CU_JIT_MIN_CTA_PER_SM take precedence over any PTX directives.
- (0: Disable, default; 1: Enable)
- Option type: int\n
+    /** This option specifies the maximum number of concurrent threads to use
+ when running compiler optimizations. If the specified value is 1, the
+ option will be ignored. If the specified value is 0, the number of
+ threads will match the number of CPUs on the underlying machine.
+ Otherwise, if the option is N, then up to N threads will be used.
+ Option type: unsigned int\n
  Applies to: compiler only*/
-    pub const CU_JIT_NUM_OPTIONS: CUjit_option_enum = CUjit_option_enum(34);
+    pub const CU_JIT_SPLIT_COMPILE: CUjit_option_enum = CUjit_option_enum(34);
+}
+impl CUjit_option_enum {
+    /** This option specifies the maximum number of concurrent threads to use
+ when running compiler optimizations. If the specified value is 1, the
+ option will be ignored. If the specified value is 0, the number of
+ threads will match the number of CPUs on the underlying machine.
+ Otherwise, if the option is N, then up to N threads will be used.
+ Option type: unsigned int\n
+ Applies to: compiler only*/
+    pub const CU_JIT_NUM_OPTIONS: CUjit_option_enum = CUjit_option_enum(35);
 }
 #[repr(transparent)]
 /// Online compiler and linker options
@@ -2866,8 +2927,8 @@ impl CUjit_target_enum {
     pub const CU_TARGET_COMPUTE_100: CUjit_target_enum = CUjit_target_enum(100);
 }
 impl CUjit_target_enum {
-    ///< Compute device class 10.1.
-    pub const CU_TARGET_COMPUTE_101: CUjit_target_enum = CUjit_target_enum(101);
+    ///< Compute device class 11.0.
+    pub const CU_TARGET_COMPUTE_110: CUjit_target_enum = CUjit_target_enum(110);
 }
 impl CUjit_target_enum {
     ///< Compute device class 10.3.
@@ -2888,7 +2949,7 @@ impl CUjit_target_enum {
     pub const CU_TARGET_COMPUTE_100A: CUjit_target_enum = CUjit_target_enum(65636);
 }
 impl CUjit_target_enum {
-    pub const CU_TARGET_COMPUTE_101A: CUjit_target_enum = CUjit_target_enum(65637);
+    pub const CU_TARGET_COMPUTE_110A: CUjit_target_enum = CUjit_target_enum(65646);
 }
 impl CUjit_target_enum {
     pub const CU_TARGET_COMPUTE_103A: CUjit_target_enum = CUjit_target_enum(65639);
@@ -2903,7 +2964,7 @@ impl CUjit_target_enum {
     pub const CU_TARGET_COMPUTE_100F: CUjit_target_enum = CUjit_target_enum(131172);
 }
 impl CUjit_target_enum {
-    pub const CU_TARGET_COMPUTE_101F: CUjit_target_enum = CUjit_target_enum(131173);
+    pub const CU_TARGET_COMPUTE_110F: CUjit_target_enum = CUjit_target_enum(131182);
 }
 impl CUjit_target_enum {
     pub const CU_TARGET_COMPUTE_103F: CUjit_target_enum = CUjit_target_enum(131175);
@@ -3516,7 +3577,8 @@ impl CUgraphNodeType_enum {
     );
 }
 impl CUgraphNodeType_enum {
-    ///< Batch MemOp Node
+    /**< Batch MemOp Node
+See ::cuStreamBatchMemOp and ::CUstreamBatchMemOpType for what these nodes can do.*/
     pub const CU_GRAPH_NODE_TYPE_BATCH_MEM_OP: CUgraphNodeType_enum = CUgraphNodeType_enum(
         12,
     );
@@ -4007,8 +4069,26 @@ required for the launch.*/
     );
 }
 impl CUlaunchAttributeID_enum {
+    /**< Valid for streams, graph nodes, launches. This attribute is a hint to the CUDA runtime that the
+launch should attempt to make the kernel maximize its NVLINK utilization.
+<br>
+When possible to honor this hint, CUDA will assume each block in the grid launch will carry out an even amount
+of NVLINK traffic, and make a best-effort attempt to adjust the kernel launch based on that assumption.
+<br>
+This attribute is a hint only. CUDA makes no functional or performance guarantee. Its applicability can be
+affected by many different factors, including driver version (i.e. CUDA doesn't guarantee the performance
+characteristics will be maintained between driver versions or a driver update could alter or regress
+previously observed perf characteristics.) It also doesn't guarantee a successful result, i.e. applying
+the attribute may not improve the performance of either the targeted kernel or the encapsulating application.
+<br>
+Valid values for ::CUlaunchAttributeValue::nvlinkUtilCentricScheduling are 0 (disabled) and 1 (enabled).*/
+    pub const CU_LAUNCH_ATTRIBUTE_NVLINK_UTIL_CENTRIC_SCHEDULING: CUlaunchAttributeID_enum = CUlaunchAttributeID_enum(
+        16,
+    );
+}
+impl CUlaunchAttributeID_enum {
     pub const CU_LAUNCH_ATTRIBUTE_MAX: CUlaunchAttributeID_enum = CUlaunchAttributeID_enum(
-        15,
+        17,
     );
 }
 #[repr(transparent)]
@@ -4054,6 +4134,7 @@ scheduling policy preference for the kernel.*/
     pub deviceUpdatableKernelNode: CUlaunchAttributeValue_union__bindgen_ty_5,
     ///< Value of launch attribute ::CU_LAUNCH_ATTRIBUTE_PREFERRED_SHARED_MEMORY_CARVEOUT.
     pub sharedMemCarveout: ::core::ffi::c_uint,
+    pub nvlinkUtilCentricScheduling: ::core::ffi::c_uint,
 }
 /**  Value of launch attribute ::CU_LAUNCH_ATTRIBUTE_CLUSTER_DIMENSION that
   represents the desired cluster dimensions for the kernel. Opaque type
@@ -4405,7 +4486,7 @@ impl CUdevice_P2PAttribute_enum {
     );
 }
 impl CUdevice_P2PAttribute_enum {
-    ///< Atomic operation over the link supported
+    ///< All CUDA-valid atomic operation over the link are supported
     pub const CU_DEVICE_P2P_ATTRIBUTE_NATIVE_ATOMIC_SUPPORTED: CUdevice_P2PAttribute_enum = CUdevice_P2PAttribute_enum(
         3,
     );
@@ -4422,12 +4503,133 @@ impl CUdevice_P2PAttribute_enum {
         4,
     );
 }
+impl CUdevice_P2PAttribute_enum {
+    ///< Only some CUDA-valid atomic operations over the link are supported.
+    pub const CU_DEVICE_P2P_ATTRIBUTE_ONLY_PARTIAL_NATIVE_ATOMIC_SUPPORTED: CUdevice_P2PAttribute_enum = CUdevice_P2PAttribute_enum(
+        5,
+    );
+}
 #[repr(transparent)]
 /// P2P Attributes
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUdevice_P2PAttribute_enum(pub ::core::ffi::c_uint);
 /// P2P Attributes
 pub use self::CUdevice_P2PAttribute_enum as CUdevice_P2PAttribute;
+impl CUatomicOperation_enum {
+    pub const CU_ATOMIC_OPERATION_INTEGER_ADD: CUatomicOperation_enum = CUatomicOperation_enum(
+        0,
+    );
+}
+impl CUatomicOperation_enum {
+    pub const CU_ATOMIC_OPERATION_INTEGER_MIN: CUatomicOperation_enum = CUatomicOperation_enum(
+        1,
+    );
+}
+impl CUatomicOperation_enum {
+    pub const CU_ATOMIC_OPERATION_INTEGER_MAX: CUatomicOperation_enum = CUatomicOperation_enum(
+        2,
+    );
+}
+impl CUatomicOperation_enum {
+    pub const CU_ATOMIC_OPERATION_INTEGER_INCREMENT: CUatomicOperation_enum = CUatomicOperation_enum(
+        3,
+    );
+}
+impl CUatomicOperation_enum {
+    pub const CU_ATOMIC_OPERATION_INTEGER_DECREMENT: CUatomicOperation_enum = CUatomicOperation_enum(
+        4,
+    );
+}
+impl CUatomicOperation_enum {
+    pub const CU_ATOMIC_OPERATION_AND: CUatomicOperation_enum = CUatomicOperation_enum(
+        5,
+    );
+}
+impl CUatomicOperation_enum {
+    pub const CU_ATOMIC_OPERATION_OR: CUatomicOperation_enum = CUatomicOperation_enum(6);
+}
+impl CUatomicOperation_enum {
+    pub const CU_ATOMIC_OPERATION_XOR: CUatomicOperation_enum = CUatomicOperation_enum(
+        7,
+    );
+}
+impl CUatomicOperation_enum {
+    pub const CU_ATOMIC_OPERATION_EXCHANGE: CUatomicOperation_enum = CUatomicOperation_enum(
+        8,
+    );
+}
+impl CUatomicOperation_enum {
+    pub const CU_ATOMIC_OPERATION_CAS: CUatomicOperation_enum = CUatomicOperation_enum(
+        9,
+    );
+}
+impl CUatomicOperation_enum {
+    pub const CU_ATOMIC_OPERATION_FLOAT_ADD: CUatomicOperation_enum = CUatomicOperation_enum(
+        10,
+    );
+}
+impl CUatomicOperation_enum {
+    pub const CU_ATOMIC_OPERATION_FLOAT_MIN: CUatomicOperation_enum = CUatomicOperation_enum(
+        11,
+    );
+}
+impl CUatomicOperation_enum {
+    pub const CU_ATOMIC_OPERATION_FLOAT_MAX: CUatomicOperation_enum = CUatomicOperation_enum(
+        12,
+    );
+}
+impl CUatomicOperation_enum {
+    pub const CU_ATOMIC_OPERATION_MAX: CUatomicOperation_enum = CUatomicOperation_enum(
+        13,
+    );
+}
+#[repr(transparent)]
+/// CUDA-valid Atomic Operations
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUatomicOperation_enum(pub ::core::ffi::c_uint);
+/// CUDA-valid Atomic Operations
+pub use self::CUatomicOperation_enum as CUatomicOperation;
+impl CUatomicOperationCapability_enum {
+    pub const CU_ATOMIC_CAPABILITY_SIGNED: CUatomicOperationCapability_enum = CUatomicOperationCapability_enum(
+        1,
+    );
+}
+impl CUatomicOperationCapability_enum {
+    pub const CU_ATOMIC_CAPABILITY_UNSIGNED: CUatomicOperationCapability_enum = CUatomicOperationCapability_enum(
+        2,
+    );
+}
+impl CUatomicOperationCapability_enum {
+    pub const CU_ATOMIC_CAPABILITY_REDUCTION: CUatomicOperationCapability_enum = CUatomicOperationCapability_enum(
+        4,
+    );
+}
+impl CUatomicOperationCapability_enum {
+    pub const CU_ATOMIC_CAPABILITY_SCALAR_32: CUatomicOperationCapability_enum = CUatomicOperationCapability_enum(
+        8,
+    );
+}
+impl CUatomicOperationCapability_enum {
+    pub const CU_ATOMIC_CAPABILITY_SCALAR_64: CUatomicOperationCapability_enum = CUatomicOperationCapability_enum(
+        16,
+    );
+}
+impl CUatomicOperationCapability_enum {
+    pub const CU_ATOMIC_CAPABILITY_SCALAR_128: CUatomicOperationCapability_enum = CUatomicOperationCapability_enum(
+        32,
+    );
+}
+impl CUatomicOperationCapability_enum {
+    pub const CU_ATOMIC_CAPABILITY_VECTOR_32x4: CUatomicOperationCapability_enum = CUatomicOperationCapability_enum(
+        64,
+    );
+}
+#[repr(transparent)]
+/// CUDA-valid Atomic Operation capabilities
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUatomicOperationCapability_enum(pub ::core::ffi::c_uint);
+/// CUDA-valid Atomic Operation capabilities
+pub use self::CUatomicOperationCapability_enum as CUatomicOperationCapability;
 /** CUDA stream callback
  \param hStream The stream the callback was added to, as passed to ::cuStreamAddCallback.  May be NULL.
  \param status ::CUDA_SUCCESS or any persistent error on the stream.
@@ -5037,14 +5239,14 @@ pub struct CUDA_RESOURCE_VIEW_DESC_st {
 pub type CUDA_RESOURCE_VIEW_DESC_v1 = CUDA_RESOURCE_VIEW_DESC_st;
 /// Resource view descriptor
 pub type CUDA_RESOURCE_VIEW_DESC = CUDA_RESOURCE_VIEW_DESC_v1;
-/// Tensor map descriptor. Requires compiler support for aligning to 64 bytes.
+/// Tensor map descriptor. Requires compiler support for aligning to 128 bytes.
 #[repr(C)]
-#[repr(align(64))]
+#[repr(align(128))]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUtensorMap_st {
     pub opaque: [cuuint64_t; 16usize],
 }
-/// Tensor map descriptor. Requires compiler support for aligning to 64 bytes.
+/// Tensor map descriptor. Requires compiler support for aligning to 128 bytes.
 pub type CUtensorMap = CUtensorMap_st;
 impl CUtensorMapDataType_enum {
     pub const CU_TENSOR_MAP_DATA_TYPE_UINT8: CUtensorMapDataType_enum = CUtensorMapDataType_enum(
@@ -5364,6 +5566,12 @@ impl CUexternalMemoryHandleType_enum {
     /// Handle is an NvSciBuf object
     pub const CU_EXTERNAL_MEMORY_HANDLE_TYPE_NVSCIBUF: CUexternalMemoryHandleType_enum = CUexternalMemoryHandleType_enum(
         8,
+    );
+}
+impl CUexternalMemoryHandleType_enum {
+    /// Handle is a dma_buf file descriptor
+    pub const CU_EXTERNAL_MEMORY_HANDLE_TYPE_DMABUF_FD: CUexternalMemoryHandleType_enum = CUexternalMemoryHandleType_enum(
+        9,
     );
 }
 #[repr(transparent)]
@@ -5806,6 +6014,12 @@ impl CUmemLocationType_enum {
     );
 }
 impl CUmemLocationType_enum {
+    ///< Location is unspecified. This is used when creating a managed memory pool to indicate no preferred location for the pool
+    pub const CU_MEM_LOCATION_TYPE_NONE: CUmemLocationType_enum = CUmemLocationType_enum(
+        0,
+    );
+}
+impl CUmemLocationType_enum {
     ///< Location is a device location, thus id is a device ordinal
     pub const CU_MEM_LOCATION_TYPE_DEVICE: CUmemLocationType_enum = CUmemLocationType_enum(
         1,
@@ -5853,8 +6067,13 @@ impl CUmemAllocationType_enum {
     );
 }
 impl CUmemAllocationType_enum {
-    /** This allocation type is 'pinned', i.e. cannot migrate from its current
- location while the application is actively using it*/
+    /// This allocation type is managed memory
+    pub const CU_MEM_ALLOCATION_TYPE_MANAGED: CUmemAllocationType_enum = CUmemAllocationType_enum(
+        2,
+    );
+}
+impl CUmemAllocationType_enum {
+    /// This allocation type is managed memory
     pub const CU_MEM_ALLOCATION_TYPE_MAX: CUmemAllocationType_enum = CUmemAllocationType_enum(
         2147483647,
     );
@@ -6248,7 +6467,7 @@ impl CUmemPool_attribute_enum {
     /** (value type = int)
  Allow cuMemAllocAsync to insert new stream dependencies
  in order to establish the stream ordering required to reuse
- a piece of memory released by cuFreeAsync (default enabled).*/
+ a piece of memory released by cuMemFreeAsync (default enabled).*/
     pub const CU_MEMPOOL_ATTR_REUSE_ALLOW_INTERNAL_DEPENDENCIES: CUmemPool_attribute_enum = CUmemPool_attribute_enum(
         3,
     );
@@ -7005,12 +7224,29 @@ pub struct CUcheckpointCheckpointArgs_st {
 }
 /// CUDA checkpoint optional checkpoint arguments
 pub type CUcheckpointCheckpointArgs = CUcheckpointCheckpointArgs_st;
+/// CUDA checkpoint GPU UUID pairs for device remapping during restore
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUcheckpointGpuPair_st {
+    ///< UUID of the GPU that was checkpointed
+    pub oldUuid: CUuuid,
+    ///< UUID of the GPU to restore onto
+    pub newUuid: CUuuid,
+}
+/// CUDA checkpoint GPU UUID pairs for device remapping during restore
+pub type CUcheckpointGpuPair = CUcheckpointGpuPair_st;
 /// CUDA checkpoint optional restore arguments
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUcheckpointRestoreArgs_st {
+    ///< Pointer to array of gpu pairs that indicate how to remap GPUs during restore
+    pub gpuPairs: *mut CUcheckpointGpuPair,
+    ///< Number of gpu pairs to remap
+    pub gpuPairsCount: ::core::ffi::c_uint,
     ///< Reserved for future use, must be zeroed
-    pub reserved: [cuuint64_t; 8usize],
+    pub reserved: [::core::ffi::c_char; 44usize],
+    ///< Reserved for future use, must be zeroed
+    pub reserved1: cuuint64_t,
 }
 /// CUDA checkpoint optional restore arguments
 pub type CUcheckpointRestoreArgs = CUcheckpointRestoreArgs_st;
@@ -7258,6 +7494,13 @@ pub struct CUdevResourceType(pub ::core::ffi::c_uint);
 pub struct CUdevSmResource_st {
     ///< The amount of streaming multiprocessors available in this resource. This is an output parameter only, do not write to this field.
     pub smCount: ::core::ffi::c_uint,
+    /**< The minimum number of streaming multiprocessors required to partition this resource.
+This is an output parameter only, do not write to this field.*/
+    pub minSmPartitionSize: ::core::ffi::c_uint,
+    /**< The number of streaming multiprocessors in this resource that are guaranteed to
+be co-scheduled on the same GPU processing cluster. smCount is a multiple of this value.
+This is an output parameter only, do not write to this field.*/
+    pub smCoscheduledAlignment: ::core::ffi::c_uint,
 }
 /** \struct CUdevSmResource
  Data for SM-related resources*/
@@ -8561,6 +8804,34 @@ impl cudaDataType_t {
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct cudaDataType_t(pub ::core::ffi::c_uint);
 pub use self::cudaDataType_t as cudaDataType;
+impl cudaEmulationStrategy_t {
+    /** The default emulation strategy.  For emulated computations, this is
+  equivalent to CUDA_EMULATION_STRATEGY_PERFORMANT, unless a library
+  dependent environment variable is set*/
+    pub const CUDA_EMULATION_STRATEGY_DEFAULT: cudaEmulationStrategy_t = cudaEmulationStrategy_t(
+        0,
+    );
+}
+impl cudaEmulationStrategy_t {
+    /** An emulation strategy which configures libraries to use emulation
+  when it provides a performance benefit*/
+    pub const CUDA_EMULATION_STRATEGY_PERFORMANT: cudaEmulationStrategy_t = cudaEmulationStrategy_t(
+        1,
+    );
+}
+impl cudaEmulationStrategy_t {
+    /** An emulation strategy which configures libraries to use emulation
+  whenever possible*/
+    pub const CUDA_EMULATION_STRATEGY_EAGER: cudaEmulationStrategy_t = cudaEmulationStrategy_t(
+        2,
+    );
+}
+#[repr(transparent)]
+/// Enum for specifying how to leverage floating-point emulation algorithms
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct cudaEmulationStrategy_t(pub ::core::ffi::c_uint);
+/// Enum for specifying how to leverage floating-point emulation algorithms
+pub use self::cudaEmulationStrategy_t as cudaEmulationStrategy;
 impl libraryPropertyType_t {
     pub const MAJOR_VERSION: libraryPropertyType_t = libraryPropertyType_t(0);
 }
@@ -8618,6 +8889,9 @@ impl CUerror {
     });
     pub const r#STUB_LIBRARY: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(34)
+    });
+    pub const r#CALL_REQUIRES_NEWER_DRIVER: CUerror = CUerror(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(36)
     });
     pub const r#DEVICE_UNAVAILABLE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(46)
@@ -8912,6 +9186,9 @@ pub trait CUresultConsts {
         CUerror::r#PROFILER_ALREADY_STOPPED,
     );
     const ERROR_STUB_LIBRARY: CUresult = CUresult::Err(CUerror::r#STUB_LIBRARY);
+    const ERROR_CALL_REQUIRES_NEWER_DRIVER: CUresult = CUresult::Err(
+        CUerror::r#CALL_REQUIRES_NEWER_DRIVER,
+    );
     const ERROR_DEVICE_UNAVAILABLE: CUresult = CUresult::Err(
         CUerror::r#DEVICE_UNAVAILABLE,
     );

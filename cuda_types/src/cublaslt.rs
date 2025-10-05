@@ -3426,8 +3426,13 @@ impl cublasLtMatmulStages_t {
     );
 }
 impl cublasLtMatmulStages_t {
-    pub const CUBLASLT_MATMUL_STAGES_END: cublasLtMatmulStages_t = cublasLtMatmulStages_t(
+    pub const CUBLASLT_MATMUL_STAGES_768xAUTO: cublasLtMatmulStages_t = cublasLtMatmulStages_t(
         38,
+    );
+}
+impl cublasLtMatmulStages_t {
+    pub const CUBLASLT_MATMUL_STAGES_END: cublasLtMatmulStages_t = cublasLtMatmulStages_t(
+        39,
     );
 }
 #[repr(transparent)]
@@ -4403,38 +4408,6 @@ impl cublasLtMatmulDescAttributes_t {
     );
 }
 impl cublasLtMatmulDescAttributes_t {
-    /** EXPERIMENTAL, DEPRECATED: Number of atomic synchronization chunks in the row dimension of the output matrix D.
-
- int32_t, default 0 (atomic synchronization disabled)*/
-    pub const CUBLASLT_MATMUL_DESC_ATOMIC_SYNC_NUM_CHUNKS_D_ROWS: cublasLtMatmulDescAttributes_t = cublasLtMatmulDescAttributes_t(
-        27,
-    );
-}
-impl cublasLtMatmulDescAttributes_t {
-    /** EXPERIMENTAL, DEPRECATED: Number of atomic synchronization chunks in the column dimension of the output matrix D.
-
- int32_t, default 0 (atomic synchronization disabled)*/
-    pub const CUBLASLT_MATMUL_DESC_ATOMIC_SYNC_NUM_CHUNKS_D_COLS: cublasLtMatmulDescAttributes_t = cublasLtMatmulDescAttributes_t(
-        28,
-    );
-}
-impl cublasLtMatmulDescAttributes_t {
-    /** EXPERIMENTAL: Pointer to a device array of input atomic counters consumed by a matmul.
-
- int32_t *, default: NULL*/
-    pub const CUBLASLT_MATMUL_DESC_ATOMIC_SYNC_IN_COUNTERS_POINTER: cublasLtMatmulDescAttributes_t = cublasLtMatmulDescAttributes_t(
-        29,
-    );
-}
-impl cublasLtMatmulDescAttributes_t {
-    /** EXPERIMENTAL: Pointer to a device array of output atomic counters produced by a matmul.
-
- int32_t *, default: NULL*/
-    pub const CUBLASLT_MATMUL_DESC_ATOMIC_SYNC_OUT_COUNTERS_POINTER: cublasLtMatmulDescAttributes_t = cublasLtMatmulDescAttributes_t(
-        30,
-    );
-}
-impl cublasLtMatmulDescAttributes_t {
     /** Scaling mode that defines how the matrix scaling factor for matrix A is interpreted
 
  int32_t, default: 0*/
@@ -5024,14 +4997,6 @@ impl cublasLtMatmulAlgoCapAttributes_t {
  uint32_t*/
     pub const CUBLASLT_ALGO_CAP_MIN_ALIGNMENT_D_BYTES: cublasLtMatmulAlgoCapAttributes_t = cublasLtMatmulAlgoCapAttributes_t(
         19,
-    );
-}
-impl cublasLtMatmulAlgoCapAttributes_t {
-    /** EXPERIMENTAL: support for synchronization via atomic counters
-
- int32_t*/
-    pub const CUBLASLT_ALGO_CAP_ATOMIC_SYNC: cublasLtMatmulAlgoCapAttributes_t = cublasLtMatmulAlgoCapAttributes_t(
-        20,
     );
 }
 impl cublasLtMatmulAlgoCapAttributes_t {

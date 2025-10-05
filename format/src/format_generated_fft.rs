@@ -1949,6 +1949,56 @@ pub fn write_cufftXtSetCallbackSharedSize(
     )?;
     writer.write_all(b")")
 }
+pub fn write_cufftXtSetJITCallback(
+    writer: &mut (impl std::io::Write + ?Sized),
+    plan: cuda_types::cufft::cufftHandle,
+    lto_callback_symbol_name: *const ::core::ffi::c_char,
+    lto_callback_fatbin: *const ::core::ffi::c_void,
+    lto_callback_fatbin_size: usize,
+    type_: cuda_types::cufft::cufftXtCallbackType,
+    caller_info: *mut *mut ::core::ffi::c_void,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(plan), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&plan, "cufftXtSetJITCallback", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(lto_callback_symbol_name), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &lto_callback_symbol_name,
+        "cufftXtSetJITCallback",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(lto_callback_fatbin), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &lto_callback_fatbin,
+        "cufftXtSetJITCallback",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(lto_callback_fatbin_size), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &lto_callback_fatbin_size,
+        "cufftXtSetJITCallback",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(type_), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&type_, "cufftXtSetJITCallback", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(caller_info), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&caller_info, "cufftXtSetJITCallback", arg_idx, writer)?;
+    writer.write_all(b")")
+}
 pub fn write_cufftXtMakePlanMany(
     writer: &mut (impl std::io::Write + ?Sized),
     plan: cuda_types::cufft::cufftHandle,
@@ -2189,13 +2239,14 @@ impl crate::CudaDisplay for cuda_types::cufft::cufftResult {
                     7 => writer.write_all("CUFFT_SETUP_FAILED".as_bytes()),
                     8 => writer.write_all("CUFFT_INVALID_SIZE".as_bytes()),
                     9 => writer.write_all("CUFFT_UNALIGNED_DATA".as_bytes()),
-                    10 => writer.write_all("CUFFT_INCOMPLETE_PARAMETER_LIST".as_bytes()),
                     11 => writer.write_all("CUFFT_INVALID_DEVICE".as_bytes()),
-                    12 => writer.write_all("CUFFT_PARSE_ERROR".as_bytes()),
                     13 => writer.write_all("CUFFT_NO_WORKSPACE".as_bytes()),
                     14 => writer.write_all("CUFFT_NOT_IMPLEMENTED".as_bytes()),
-                    15 => writer.write_all("CUFFT_LICENSE_ERROR".as_bytes()),
                     16 => writer.write_all("CUFFT_NOT_SUPPORTED".as_bytes()),
+                    17 => writer.write_all("CUFFT_MISSING_DEPENDENCY".as_bytes()),
+                    18 => writer.write_all("CUFFT_NVRTC_FAILURE".as_bytes()),
+                    19 => writer.write_all("CUFFT_NVJITLINK_FAILURE".as_bytes()),
+                    20 => writer.write_all("CUFFT_NVSHMEM_FAILURE".as_bytes()),
                     err => write!(writer, "{}", err),
                 }
             }

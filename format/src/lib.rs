@@ -377,17 +377,6 @@ impl CudaDisplay for CUstreamBatchMemOpParams {
     }
 }
 
-impl CudaDisplay for CUcheckpointRestoreArgs_st {
-    fn write(
-        &self,
-        fn_name: &'static str,
-        index: usize,
-        writer: &mut (impl std::io::Write + ?Sized),
-    ) -> std::io::Result<()> {
-        CudaDisplay::write(&self.reserved, fn_name, index, writer)
-    }
-}
-
 impl CudaDisplay for CUcheckpointUnlockArgs_st {
     fn write(
         &self,
@@ -1746,6 +1735,23 @@ impl crate::CudaDisplay for cuda_types::nvml::nvmlVgpuSchedulerStateInfo_v1_t {
         } else {
             crate::CudaDisplay::write(&unsafe { self.schedulerParams.vgpuSchedDataWithARR }, "", 0, writer)?;
         }
+        writer.write_all(b" }")
+    }
+}
+
+impl crate::CudaDisplay for cuda_types::nvml::nvmlPRMTLV_v1_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(dataSize), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.dataSize, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(status), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.status, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(__bindgen_anon_1), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&unsafe { mem::transmute::<_, [u8; 496]>(self.__bindgen_anon_1) }[..], "", 0, writer)?;
         writer.write_all(b" }")
     }
 }

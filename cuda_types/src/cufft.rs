@@ -12,13 +12,14 @@ pub use super::cuda::libraryPropertyType;
 pub type cudaGraphExecUpdateResultInfo_st = super::cuda::CUgraphExecUpdateResultInfo_st;
 pub type cudaAsyncNotificationType = super::cuda::CUasyncNotificationType_enum;
 pub type cudaGraph_t = super::cuda::CUgraph;
-pub const CUFFT_VER_MAJOR: u32 = 11;
-pub const CUFFT_VER_MINOR: u32 = 4;
-pub const CUFFT_VER_PATCH: u32 = 1;
-pub const CUFFT_VER_BUILD: u32 = 4;
-pub const CUFFT_VERSION: u32 = 11401;
+pub const CUFFT_VER_MAJOR: u32 = 12;
+pub const CUFFT_VER_MINOR: u32 = 0;
+pub const CUFFT_VER_PATCH: u32 = 0;
+pub const CUFFT_VER_BUILD: u32 = 61;
+pub const CUFFT_VERSION: u32 = 12000;
 pub const CUFFT_FORWARD: i32 = -1;
 pub const CUFFT_INVERSE: u32 = 1;
+pub const CUFFT_PLAN_NULL: i32 = -1;
 impl libFormat_t {
     pub const LIB_FORMAT_CUFFT: libFormat_t = libFormat_t(0);
 }
@@ -397,14 +398,8 @@ impl cufftError_t {
     pub const r#UNALIGNED_DATA: cufftError_t = cufftError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(9)
     });
-    pub const r#INCOMPLETE_PARAMETER_LIST: cufftError_t = cufftError_t(unsafe {
-        ::core::num::NonZeroU32::new_unchecked(10)
-    });
     pub const r#INVALID_DEVICE: cufftError_t = cufftError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(11)
-    });
-    pub const r#PARSE_ERROR: cufftError_t = cufftError_t(unsafe {
-        ::core::num::NonZeroU32::new_unchecked(12)
     });
     pub const r#NO_WORKSPACE: cufftError_t = cufftError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(13)
@@ -412,11 +407,20 @@ impl cufftError_t {
     pub const r#NOT_IMPLEMENTED: cufftError_t = cufftError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(14)
     });
-    pub const r#LICENSE_ERROR: cufftError_t = cufftError_t(unsafe {
-        ::core::num::NonZeroU32::new_unchecked(15)
-    });
     pub const r#NOT_SUPPORTED: cufftError_t = cufftError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(16)
+    });
+    pub const r#MISSING_DEPENDENCY: cufftError_t = cufftError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(17)
+    });
+    pub const r#NVRTC_FAILURE: cufftError_t = cufftError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(18)
+    });
+    pub const r#NVJITLINK_FAILURE: cufftError_t = cufftError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(19)
+    });
+    pub const r#NVSHMEM_FAILURE: cufftError_t = cufftError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(20)
     });
 }
 #[repr(transparent)]
@@ -449,24 +453,29 @@ pub trait cufftResultConsts {
     const ERROR_UNALIGNED_DATA: cufftResult = cufftResult::Err(
         cufftError_t::r#UNALIGNED_DATA,
     );
-    const ERROR_INCOMPLETE_PARAMETER_LIST: cufftResult = cufftResult::Err(
-        cufftError_t::r#INCOMPLETE_PARAMETER_LIST,
-    );
     const ERROR_INVALID_DEVICE: cufftResult = cufftResult::Err(
         cufftError_t::r#INVALID_DEVICE,
     );
-    const ERROR_PARSE_ERROR: cufftResult = cufftResult::Err(cufftError_t::r#PARSE_ERROR);
     const ERROR_NO_WORKSPACE: cufftResult = cufftResult::Err(
         cufftError_t::r#NO_WORKSPACE,
     );
     const ERROR_NOT_IMPLEMENTED: cufftResult = cufftResult::Err(
         cufftError_t::r#NOT_IMPLEMENTED,
     );
-    const ERROR_LICENSE_ERROR: cufftResult = cufftResult::Err(
-        cufftError_t::r#LICENSE_ERROR,
-    );
     const ERROR_NOT_SUPPORTED: cufftResult = cufftResult::Err(
         cufftError_t::r#NOT_SUPPORTED,
+    );
+    const ERROR_MISSING_DEPENDENCY: cufftResult = cufftResult::Err(
+        cufftError_t::r#MISSING_DEPENDENCY,
+    );
+    const ERROR_NVRTC_FAILURE: cufftResult = cufftResult::Err(
+        cufftError_t::r#NVRTC_FAILURE,
+    );
+    const ERROR_NVJITLINK_FAILURE: cufftResult = cufftResult::Err(
+        cufftError_t::r#NVJITLINK_FAILURE,
+    );
+    const ERROR_NVSHMEM_FAILURE: cufftResult = cufftResult::Err(
+        cufftError_t::r#NVSHMEM_FAILURE,
     );
 }
 impl cufftResultConsts for cufftResult {}

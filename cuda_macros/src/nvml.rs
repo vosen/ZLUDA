@@ -891,6 +891,49 @@ extern "system" {
         node: *mut ::core::ffi::c_uint,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
+    /** Get the addressing mode for a given GPU. Addressing modes can be one of:
+ 1. HMM:  System allocated memory (malloc, mmap) is addressable from the device (GPU),
+          via software-based mirroring of the CPU's page tables, on the GPU.
+ 2. ATS:  System allocated memory (malloc, mmap) is addressable from the device (GPU),
+          via Address Translation Services. This means that there is (effectively)
+          a single set of page tables, and the CPU and GPU both use them.
+ 3. None: Neither HMM nor ATS is active.
+
+ For Turing &tm; or newer fully supported devices.
+ Supported on Linux only.
+
+ @param[in]      device                  The device handle
+ @param[out]     mode                    Pointer to addressing mode of the device
+
+ @returns
+         - \ref NVML_SUCCESS                          if \a mode is retrieved successfully
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH  if the provided version is invalid/unsupported
+         - \ref NVML_ERROR_NOT_SUPPORTED              if request is not supported on the current platform
+         - \ref NVML_ERROR_INVALID_ARGUMENT           if \a device \a node is invalid*/
+    fn nvmlDeviceGetAddressingMode(
+        device: cuda_types::nvml::nvmlDevice_t,
+        mode: *mut cuda_types::nvml::nvmlDeviceAddressingMode_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Get the repair status for TPC/Channel repair
+
+ For Ampere &tm; or newer fully supported devices.
+
+ @param[in] device                               The identifier of the target device
+ @param[out] repairStatus                         Reference to \a nvmlRepairStatus_t
+
+ @return
+         - \ref NVML_SUCCESS                          if the query was successful
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH  if the provided version is invalid/unsupported
+         - \ref NVML_ERROR_UNINITIALIZED              if the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT           if \a device is invalid
+         - \ref NVML_ERROR_NOT_SUPPORTED              if the device does not support this feature
+         - \ref NVML_ERROR_UNKNOWN                    on any unexpected error*/
+    fn nvmlDeviceGetRepairStatus(
+        device: cuda_types::nvml::nvmlDevice_t,
+        repairStatus: *mut cuda_types::nvml::nvmlRepairStatus_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
     /// @}
     fn nvmlDeviceGetTopologyCommonAncestor(
         device1: cuda_types::nvml::nvmlDevice_t,
@@ -1426,8 +1469,8 @@ extern "system" {
 
  See \ref nvmlClockType_t for details on available clock information.
 
- \note On GPUs from Fermi family current P0 clocks (reported by \ref nvmlDeviceGetClockInfo) can differ from max clocks
-       by few MHz.
+ \note Current P0 clocks (reported by \ref nvmlDeviceGetClockInfo) can differ from max clocks
+       by a few MHz.
 
  @param device                               The identifier of the target device
  @param type                                 Identify which clock domain to query
@@ -1461,46 +1504,14 @@ extern "system" {
         offset: *mut ::core::ffi::c_int,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** Retrieves the current setting of a clock that applications will use unless an overspec situation occurs.
- Can be changed using \ref nvmlDeviceSetApplicationsClocks.
-
- For Kepler &tm; or newer fully supported devices.
-
- @param device                               The identifier of the target device
- @param clockType                            Identify which clock domain to query
- @param clockMHz                             Reference in which to return the clock in MHz
-
- @return
-         - \ref NVML_SUCCESS                 if \a clockMHz has been set
-         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
-         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid or \a clockMHz is NULL or \a clockType is invalid
-         - \ref NVML_ERROR_NOT_SUPPORTED     if the device does not support this feature
-         - \ref NVML_ERROR_GPU_IS_LOST       if the target GPU has fallen off the bus or is otherwise inaccessible
-         - \ref NVML_ERROR_UNKNOWN           on any unexpected error*/
+    /// @deprecated Applications clocks are deprecated and will be removed in CUDA 14.0.
     fn nvmlDeviceGetApplicationsClock(
         device: cuda_types::nvml::nvmlDevice_t,
         clockType: cuda_types::nvml::nvmlClockType_t,
         clockMHz: *mut ::core::ffi::c_uint,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** Retrieves the default applications clock that GPU boots with or
- defaults to after \ref nvmlDeviceResetApplicationsClocks call.
-
- For Kepler &tm; or newer fully supported devices.
-
- @param device                               The identifier of the target device
- @param clockType                            Identify which clock domain to query
- @param clockMHz                             Reference in which to return the default clock in MHz
-
- @return
-         - \ref NVML_SUCCESS                 if \a clockMHz has been set
-         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
-         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid or \a clockMHz is NULL or \a clockType is invalid
-         - \ref NVML_ERROR_NOT_SUPPORTED     if the device does not support this feature
-         - \ref NVML_ERROR_GPU_IS_LOST       if the target GPU has fallen off the bus or is otherwise inaccessible
-         - \ref NVML_ERROR_UNKNOWN           on any unexpected error
-
- \see nvmlDeviceGetApplicationsClock*/
+    /// @deprecated Applications clocks are deprecated and will be removed in CUDA 14.0.
     fn nvmlDeviceGetDefaultApplicationsClock(
         device: cuda_types::nvml::nvmlDevice_t,
         clockType: cuda_types::nvml::nvmlClockType_t,
@@ -1551,7 +1562,7 @@ extern "system" {
         clockMHz: *mut ::core::ffi::c_uint,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** Retrieves the list of possible memory clocks that can be used as an argument for \ref nvmlDeviceSetApplicationsClocks.
+    /** Retrieves the list of possible memory clocks that can be used as an argument for \ref nvmlDeviceSetMemoryLockedClocks.
 
  For Kepler &tm; or newer fully supported devices.
 
@@ -1570,15 +1581,14 @@ extern "system" {
          - \ref NVML_ERROR_GPU_IS_LOST       if the target GPU has fallen off the bus or is otherwise inaccessible
          - \ref NVML_ERROR_UNKNOWN           on any unexpected error
 
- @see nvmlDeviceSetApplicationsClocks
- @see nvmlDeviceGetSupportedGraphicsClocks*/
+ @see nvmlDeviceSetMemoryLockedClocks*/
     fn nvmlDeviceGetSupportedMemoryClocks(
         device: cuda_types::nvml::nvmlDevice_t,
         count: *mut ::core::ffi::c_uint,
         clocksMHz: *mut ::core::ffi::c_uint,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** Retrieves the list of possible graphics clocks that can be used as an argument for \ref nvmlDeviceSetApplicationsClocks.
+    /** Retrieves the list of possible graphics clocks that can be used as an argument for \ref nvmlDeviceSetGpuLockedClocks.
 
  For Kepler &tm; or newer fully supported devices.
 
@@ -1598,8 +1608,7 @@ extern "system" {
          - \ref NVML_ERROR_GPU_IS_LOST       if the target GPU has fallen off the bus or is otherwise inaccessible
          - \ref NVML_ERROR_UNKNOWN           on any unexpected error
 
- @see nvmlDeviceSetApplicationsClocks
- @see nvmlDeviceGetSupportedMemoryClocks*/
+ @see nvmlDeviceSetGpuLockedClocks*/
     fn nvmlDeviceGetSupportedGraphicsClocks(
         device: cuda_types::nvml::nvmlDevice_t,
         memoryClockMHz: ::core::ffi::c_uint,
@@ -2007,7 +2016,7 @@ extern "system" {
         supportedClocksThrottleReasons: *mut ::core::ffi::c_ulonglong,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** Deprecated: Use \ref nvmlDeviceGetPerformanceState. This function exposes an incorrect generalization.
+    /** @deprecated Use \ref nvmlDeviceGetPerformanceState. This function exposes an incorrect generalization.
 
  Retrieve the current performance state for the device.
 
@@ -2073,9 +2082,9 @@ extern "system" {
  @return
          - \ref NVML_SUCCESS                 if everything worked
          - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
-         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device, \a type or \a pstate are invalid or both
-                                                  \a minClockMHz and \a maxClockMHz are NULL
-         - \ref NVML_ERROR_NOT_SUPPORTED     if the device does not support this feature*/
+         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device, \a type or \a minClockMHz and \a maxClockMHz are NULL
+         - \ref NVML_ERROR_NOT_SUPPORTED     if the device does not support this feature
+         - \ref NVML_ERROR_UNKNOWN           if \a type or \a pstate are invalid or any unexpected error*/
     fn nvmlDeviceGetMinMaxClockOfPState(
         device: cuda_types::nvml::nvmlDevice_t,
         type_: cuda_types::nvml::nvmlClockType_t,
@@ -2302,7 +2311,7 @@ Use \ref nvmlDeviceGetClockOffsets instead.
         currentClockFreqs: *mut cuda_types::nvml::nvmlDeviceCurrentClockFreqs_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** This API has been deprecated.
+    /** @deprecated This API has been deprecated.
 
  Retrieves the power management mode associated with this device.
 
@@ -2429,6 +2438,55 @@ Use \ref nvmlDeviceGetClockOffsets instead.
         power: *mut ::core::ffi::c_uint,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
+    /** Retrieves current power mizer mode on this device.
+
+ PowerMizerMode provides a hint to the driver as to how to manage the performance of the GPU.
+
+ For Maxwell &tm; or newer fully supported devices.
+
+ @param device                               The identifier of the target device
+ @param powerMizerMode                       Reference in which to return the power mizer mode
+ @param supportedPowerMizerModes             Reference in which to return the bitmask of supported power mizer modes on this device.
+                                             The supported modes can be combined using the bitwise OR operator '|'.
+                                             For example, if a device supports all PowerMizer modes, the bitmask would be:
+                                             supportedPowerMizerModes = ((1 << NVML_POWER_MIZER_MODE_ADAPTIVE) |
+                                                                         (1 << NVML_POWER_MIZER_MODE_PREFER_MAXIMUM_PERFORMANCE) |
+                                                                         (1 << NVML_POWER_MIZER_MODE_AUTO) |
+                                                                         (1 << NVML_POWER_MIZER_MODE_PREFER_CONSISTENT_PERFORMANCE));
+                                             This bitmask can be used to check which power mizer modes are available on the device by performing
+                                             a bitwise AND operation with the specific mode you want to check.
+
+ @return
+         - \ref NVML_SUCCESS                 if \a powerMizerMode has been populated
+         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid or \a powerMizerMode is NULL
+         - \ref NVML_ERROR_NOT_SUPPORTED     if the device does not support powerMizerMode readings
+         - \ref NVML_ERROR_GPU_IS_LOST       if the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_UNKNOWN           on any unexpected error*/
+    fn nvmlDeviceGetPowerMizerMode_v1(
+        device: cuda_types::nvml::nvmlDevice_t,
+        powerMizerMode: *mut cuda_types::nvml::nvmlDevicePowerMizerModes_v1_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Sets the new power mizer mode.
+
+ For Maxwell &tm; or newer fully supported devices.
+
+ @param device                               The identifier of the target device
+ @param powerMizerMode                       Reference in which to set the power mizer mode.
+
+ @return
+         - \ref NVML_SUCCESS                 if \a powerMizerMode has been populated
+         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid or \a powerMizerMode is NULL
+         - \ref NVML_ERROR_NOT_SUPPORTED     if the device does not support powerMizerMode readings
+         - \ref NVML_ERROR_GPU_IS_LOST       if the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_UNKNOWN           on any unexpected error*/
+    fn nvmlDeviceSetPowerMizerMode_v1(
+        device: cuda_types::nvml::nvmlDevice_t,
+        powerMizerMode: *mut cuda_types::nvml::nvmlDevicePowerMizerModes_v1_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
     /** Retrieves total energy consumption for this GPU in millijoules (mJ) since the driver was last reloaded
 
  For Volta &tm; or newer fully supported devices.
@@ -2523,6 +2581,10 @@ Use \ref nvmlDeviceGetClockOffsets instead.
        the operating system is under memory pressure, it may resort to utilizing FB memory.
        Such actions can result in discrepancies in the accuracy of memory reporting.
 
+ @note On certain SOC platforms, the integrated GPU (iGPU) does not use a dedicated framebuffer
+       but instead shares memory with the system. As a result, \ref NVML_ERROR_NOT_SUPPORTED
+       will be returned in this case.
+
  @param device                               The identifier of the target device
  @param memory                               Reference in which to return the memory information
 
@@ -2532,6 +2594,7 @@ Use \ref nvmlDeviceGetClockOffsets instead.
          - \ref NVML_ERROR_NO_PERMISSION     if the user doesn't have permission to perform this operation
          - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid or \a memory is NULL
          - \ref NVML_ERROR_GPU_IS_LOST       if the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_NOT_SUPPORTED     if video memory is unsupported on the device
          - \ref NVML_ERROR_UNKNOWN           on any unexpected error*/
     fn nvmlDeviceGetMemoryInfo(
         device: cuda_types::nvml::nvmlDevice_t,
@@ -2595,7 +2658,7 @@ Use \ref nvmlDeviceGetClockOffsets instead.
     #[must_use]
     /** Retrieves the current and pending DRAM Encryption modes for the device.
 
- %BLACKWELL_OR_NEWER%
+ For Blackwell &tm; or newer fully supported devices.
  Only applicable to devices that support DRAM Encryption
  Requires \a NVML_INFOROM_DEN version 1.0 or higher.
 
@@ -3024,7 +3087,7 @@ Use \ref nvmlDeviceGetClockOffsets instead.
     #[must_use]
     /** Retrieves the current utilization and sampling size in microseconds for the JPG
 
- %TURING_OR_NEWER%
+ For Turing &tm; or newer fully supported devices.
 
  @note On MIG-enabled GPUs, querying decoder utilization is not currently supported.
 
@@ -3047,7 +3110,7 @@ Use \ref nvmlDeviceGetClockOffsets instead.
     #[must_use]
     /** Retrieves the current utilization and sampling size in microseconds for the OFA (Optical Flow Accelerator)
 
- %TURING_OR_NEWER%
+ For Turing &tm; or newer fully supported devices.
 
  @note On MIG-enabled GPUs, querying decoder utilization is not currently supported.
 
@@ -3507,28 +3570,20 @@ Use \ref nvmlDeviceGetClockOffsets instead.
         bar1Memory: *mut cuda_types::nvml::nvmlBAR1Memory_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** Gets the duration of time during which the device was throttled (lower than requested clocks) due to power
- or thermal constraints.
+    /** @deprecated Use \ref nvmlDeviceGetFieldValues to query this data.
+ This API will be removed in CUDA 14.0.
 
- The method is important to users who are tying to understand if their GPUs throttle at any point during their applications. The
- difference in violation times at two different reference times gives the indication of GPU throttling event.
-
- Violation for thermal capping is not supported at this time.
-
- For Kepler &tm; or newer fully supported devices.
-
- @param device                               The identifier of the target device
- @param perfPolicyType                       Represents Performance policy which can trigger GPU throttling
- @param violTime                             Reference to which violation time related information is returned
+ Translations are as follows:
 
 
- @return
-         - \ref NVML_SUCCESS                 if violation time is successfully retrieved
-         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
-         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid, \a perfPolicyType is invalid, or \a violTime is NULL
-         - \ref NVML_ERROR_NOT_SUPPORTED     if this query is not supported by the device
-         - \ref NVML_ERROR_GPU_IS_LOST       if the target GPU has fallen off the bus or is otherwise inaccessible
-*/
+ NVML_PERF_POLICY_POWER             -> NVML_FI_DEV_CLOCKS_EVENT_REASON_SW_POWER_CAP
+ NVML_PERF_POLICY_THERMAL           -> NVML_FI_DEV_CLOCKS_EVENT_REASON_SW_THERM_SLOWDOWN
+ NVML_PERF_POLICY_SYNC_BOOST        -> NVML_FI_DEV_CLOCKS_EVENT_REASON_SYNC_BOOST
+ NVML_PERF_POLICY_BOARD_LIMIT       -> NVML_FI_DEV_PERF_POLICY_BOARD_LIMIT
+ NVML_PERF_POLICY_LOW_UTILIZATION   -> NVML_FI_DEV_PERF_POLICY_LOW_UTILIZATION
+ NVML_PERF_POLICY_RELIABILITY       -> NVML_FI_DEV_PERF_POLICY_RELIABILITY
+ NVML_PERF_POLICY_TOTAL_APP_CLOCKS  -> DEPRECATED, Do not use
+ NVML_PERF_POLICY_TOTAL_BASE_CLOCKS -> NVML_FI_DEV_PERF_POLICY_TOTAL_BASE_CLOCKS*/
     fn nvmlDeviceGetViolationStatus(
         device: cuda_types::nvml::nvmlDevice_t,
         perfPolicyType: cuda_types::nvml::nvmlPerfPolicyType_t,
@@ -3554,6 +3609,9 @@ Use \ref nvmlDeviceGetClockOffsets instead.
     #[must_use]
     /** Gets the device's core count
 
+ @note On MIG-enabled GPUs, querying the device's core count is currently not supported using this API.
+       Please use \ref nvmlDeviceGetGpuInstanceProfileInfo to fetch the MIG device's core count.
+
  @param device                               The identifier of the target device
  @param numCores                             The number of cores for the specified device
 
@@ -3561,7 +3619,7 @@ Use \ref nvmlDeviceGetClockOffsets instead.
          - \ref NVML_SUCCESS                 if GPU core count is successfully retrieved
          - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
          - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid, or \a numCores is NULL
-         - \ref NVML_ERROR_NOT_SUPPORTED     if this query is not supported by the device
+         - \ref NVML_ERROR_NOT_SUPPORTED     if this query is not supported by the device or a mig device.
          - \ref NVML_ERROR_GPU_IS_LOST       if the target GPU has fallen off the bus or is otherwise inaccessible
 */
     fn nvmlDeviceGetNumGpuCores(
@@ -3670,7 +3728,7 @@ Use \ref nvmlDeviceGetClockOffsets instead.
         type_: *mut cuda_types::nvml::nvmlBusType_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** Deprecated: Will be deprecated in a future release. Use \ref nvmlDeviceGetGpuFabricInfoV instead
+    /** @deprecated Will be deprecated in a future release. Use \ref nvmlDeviceGetGpuFabricInfoV instead
 
  Get fabric information associated with the device.
 
@@ -3998,6 +4056,41 @@ Use \ref nvmlDeviceGetClockOffsets instead.
         status: *mut cuda_types::nvml::nvmlEccSramErrorStatus_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
+    /** Set new power limit of this device.
+
+ For Kepler &tm; or newer fully supported devices.
+ Requires root/admin permissions.
+
+ See \ref nvmlDeviceGetPowerManagementLimitConstraints to check the allowed ranges of values.
+
+ See \ref nvmlPowerValue_v2_t for more information on the struct.
+
+ \note Limit is not persistent across reboots or driver unloads.
+ Enable persistent mode to prevent driver from unloading when no application is using the device.
+
+ This API replaces nvmlDeviceSetPowerManagementLimit. It can be used as a drop-in replacement for the older version.
+
+ @param device                               The identifier of the target device
+ @param powerValue                           Power management limit in milliwatts to set
+
+ @return
+         - \ref NVML_SUCCESS                 if \a limit has been set
+         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid or \a powerValue is NULL or contains invalid values
+         - \ref NVML_ERROR_NOT_SUPPORTED     if the device does not support this feature
+         - \ref NVML_ERROR_GPU_IS_LOST       if the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_UNKNOWN           on any unexpected error
+
+ @see NVML_FI_DEV_POWER_AVERAGE
+ @see NVML_FI_DEV_POWER_INSTANT
+ @see NVML_FI_DEV_POWER_MIN_LIMIT
+ @see NVML_FI_DEV_POWER_MAX_LIMIT
+ @see NVML_FI_DEV_POWER_CURRENT_LIMIT*/
+    fn nvmlDeviceSetPowerManagementLimit_v2(
+        device: cuda_types::nvml::nvmlDevice_t,
+        powerValue: *mut cuda_types::nvml::nvmlPowerValue_v2_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
     /** Queries the state of per process accounting mode.
 
  For Kepler &tm; or newer fully supported devices.
@@ -4154,7 +4247,7 @@ Use \ref nvmlDeviceGetClockOffsets instead.
  that this does not match the virtual address used in CUDA, but will match the address information in Xid 63
 
  \note nvmlDeviceGetRetiredPages_v2 adds an additional timestamps parameter to return the time of each page's
-       retirement.
+       retirement. This is supported for Pascal and newer architecture.
 
  For Kepler &tm; or newer fully supported devices.
 
@@ -4382,7 +4475,7 @@ Use \ref nvmlDeviceGetClockOffsets instead.
     #[must_use]
     /** Get platform information of this device.
 
- %BLACKWELL_OR_NEWER%
+ For Blackwell &tm; or newer fully supported devices.
 
  See \ref nvmlPlatformInfo_v2_t for more information on the struct.
 
@@ -4399,6 +4492,80 @@ Use \ref nvmlDeviceGetClockOffsets instead.
     fn nvmlDeviceGetPlatformInfo(
         device: cuda_types::nvml::nvmlDevice_t,
         platformInfo: *mut cuda_types::nvml::nvmlPlatformInfo_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Retrieves the Per Device Identifier (PDI) associated with this device.
+
+ For Pascal &tm; or newer fully supported devices.
+
+ See \ref nvmlPdi_v1_t for more information on the struct.
+
+ @param[in]  device                              The identifier of the target device
+ @param[out] pdi                                 Reference to the caller-provided structure to return the GPU PDI
+
+ @return
+         - \ref NVML_SUCCESS                          if \a pdi has been set
+         - \ref NVML_ERROR_UNINITIALIZED              if the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT           if \a device is invalid, or \a pdi is NULL
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH  if the version is invalid/unsupported
+         - \ref NVML_ERROR_NOT_SUPPORTED              if the device does not support this feature
+         - \ref NVML_ERROR_GPU_IS_LOST                if the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_UNKNOWN                    on any unexpected error*/
+    fn nvmlDeviceGetPdi(
+        device: cuda_types::nvml::nvmlDevice_t,
+        pdi: *mut cuda_types::nvml::nvmlPdi_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Set the hostname for the device.
+
+ For Blackwell &tm; or newer fully supported devices.
+ Requires root/admin permissions.
+ Supported on Linux only.
+
+ Sets a hostname string for the GPU device. This operation takes effect immediately.
+
+ The hostname is not stored persistently across GPU resets or driver reloads.
+
+ @param device                               The identifier of the target device
+ @param hostname                             Reference to the caller-provided \ref nvmlHostname_v1_t struct containing the hostname
+
+ @return
+         - \ref NVML_SUCCESS                          if the hostname was set successfully
+         - \ref NVML_ERROR_UNINITIALIZED              if the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT           if \a device is invalid or \a hostname is NULL or contains invalid characters
+         - \ref NVML_ERROR_NOT_SUPPORTED              if the device does not support this feature
+         - \ref NVML_ERROR_NO_PERMISSION              if the user doesn't have permission to perform this operation
+         - \ref NVML_ERROR_GPU_IS_LOST                if the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_UNKNOWN                    on any unexpected error
+
+ @see nvmlDeviceGetHostname_v1()*/
+    fn nvmlDeviceSetHostname_v1(
+        device: cuda_types::nvml::nvmlDevice_t,
+        hostname: *mut cuda_types::nvml::nvmlHostname_v1_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Get the hostname for the device.
+
+ For Blackwell &tm; or newer fully supported devices.
+ Supported on Linux only.
+
+ Retrieves the hostname string for the GPU device that was set using \ref nvmlDeviceSetHostname_v1().
+
+ @param device                               The identifier of the target device
+ @param hostname                             Reference to the caller-provided \ref nvmlHostname_v1_t struct to return the hostname
+
+ @return
+         - \ref NVML_SUCCESS                          if the hostname was retrieved successfully
+         - \ref NVML_ERROR_UNINITIALIZED              if the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT           if \a device is invalid or \a hostname is NULL
+         - \ref NVML_ERROR_NOT_SUPPORTED              if the device does not support this feature
+         - \ref NVML_ERROR_GPU_IS_LOST                if the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_UNKNOWN                    on any unexpected error
+
+ @see nvmlDeviceSetHostname_v1()*/
+    fn nvmlDeviceGetHostname_v1(
+        device: cuda_types::nvml::nvmlDevice_t,
+        hostname: *mut cuda_types::nvml::nvmlHostname_v1_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
     /** Set the LED state for the unit. The LED can be either green (0) or amber (1).
@@ -4616,8 +4783,6 @@ Use \ref nvmlDeviceGetClockOffsets instead.
     /** Set clocks that device will lock to.
 
  Sets the clocks that the device will be running at to the value in the range of minGpuClockMHz to maxGpuClockMHz.
- Setting this will supersede application clock values and take effect regardless if a cuda app is running.
- See /ref nvmlDeviceSetApplicationsClocks
 
  Can be used as a setting to request constant performance.
 
@@ -4636,7 +4801,7 @@ Use \ref nvmlDeviceGetClockOffsets instead.
 
  Requires root/admin permissions.
 
- After system reboot or driver reload applications clocks go back to their default value.
+ After system reboot or driver reload GPU clocks go back to their default value.
  See \ref nvmlDeviceResetGpuLockedClocks.
 
  For Volta &tm; or newer fully supported devices.
@@ -4663,7 +4828,7 @@ Use \ref nvmlDeviceGetClockOffsets instead.
     /** Resets the gpu clock to the default value
 
  This is the gpu clock that will be used after system reboot or driver reload.
- Default values are idle clocks, but the current values can be changed using \ref nvmlDeviceSetApplicationsClocks.
+ Default values are idle clocks.
 
  @see nvmlDeviceSetGpuLockedClocks
 
@@ -4685,14 +4850,12 @@ Use \ref nvmlDeviceGetClockOffsets instead.
     /** Set memory clocks that device will lock to.
 
  Sets the device's memory clocks to the value in the range of minMemClockMHz to maxMemClockMHz.
- Setting this will supersede application clock values and take effect regardless of whether a cuda app is running.
- See /ref nvmlDeviceSetApplicationsClocks
 
  Can be used as a setting to request constant performance.
 
  Requires root/admin permissions.
 
- After system reboot or driver reload applications clocks go back to their default value.
+ After system reboot or driver reload memory clocks go back to their default value.
  See \ref nvmlDeviceResetMemoryLockedClocks.
 
  For Ampere &tm; or newer fully supported devices.
@@ -4719,7 +4882,7 @@ Use \ref nvmlDeviceGetClockOffsets instead.
     /** Resets the memory clock to the default value
 
  This is the memory clock that will be used after system reboot or driver reload.
- Default values are idle clocks, but the current values can be changed using \ref nvmlDeviceSetApplicationsClocks.
+ Default values are idle clocks.
 
  @see nvmlDeviceSetMemoryLockedClocks
 
@@ -4738,72 +4901,20 @@ Use \ref nvmlDeviceGetClockOffsets instead.
         device: cuda_types::nvml::nvmlDevice_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** Set clocks that applications will lock to.
+    /** @deprecated Applications clocks are deprecated and will be removed in CUDA 14.0.
 
- Sets the clocks that compute and graphics applications will be running at.
- e.g. CUDA driver requests these clocks during context creation which means this property
- defines clocks at which CUDA applications will be running unless some overspec event
- occurs (e.g. over power, over thermal or external HW brake).
-
- Can be used as a setting to request constant performance.
-
- On Pascal and newer hardware, this will automatically disable automatic boosting of clocks.
-
- On K80 and newer Kepler and Maxwell GPUs, users desiring fixed performance should also call
- \ref nvmlDeviceSetAutoBoostedClocksEnabled to prevent clocks from automatically boosting
- above the clock value being set.
-
- For Kepler &tm; or newer non-GeForce fully supported devices and Maxwell or newer GeForce devices.
- Requires root/admin permissions.
-
- See \ref nvmlDeviceGetSupportedMemoryClocks and \ref nvmlDeviceGetSupportedGraphicsClocks
- for details on how to list available clocks combinations.
-
- After system reboot or driver reload applications clocks go back to their default value.
- See \ref nvmlDeviceResetApplicationsClocks.
-
- @param device                               The identifier of the target device
- @param memClockMHz                          Requested memory clock in MHz
- @param graphicsClockMHz                     Requested graphics clock in MHz
-
- @return
-         - \ref NVML_SUCCESS                 if new settings were successfully set
-         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
-         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid or \a memClockMHz and \a graphicsClockMHz
-                                                 is not a valid clock combination
-         - \ref NVML_ERROR_NO_PERMISSION     if the user doesn't have permission to perform this operation
-         - \ref NVML_ERROR_NOT_SUPPORTED     if the device doesn't support this feature
-         - \ref NVML_ERROR_GPU_IS_LOST       if the target GPU has fallen off the bus or is otherwise inaccessible
-         - \ref NVML_ERROR_UNKNOWN           on any unexpected error*/
+ Please use \ref nvmlDeviceSetMemoryLockedClocks for Memory Clocks and
+ \ref nvmlDeviceSetGpuLockedClocks for Graphics Clocks.*/
     fn nvmlDeviceSetApplicationsClocks(
         device: cuda_types::nvml::nvmlDevice_t,
         memClockMHz: ::core::ffi::c_uint,
         graphicsClockMHz: ::core::ffi::c_uint,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** Resets the application clock to the default value
+    /** @deprecated Applications clocks are deprecated and will be removed in CUDA 14.0.
 
- This is the applications clock that will be used after system reboot or driver reload.
- Default value is constant, but the current value an be changed using \ref nvmlDeviceSetApplicationsClocks.
-
- On Pascal and newer hardware, if clocks were previously locked with \ref nvmlDeviceSetApplicationsClocks,
- this call will unlock clocks. This returns clocks their default behavior ofautomatically boosting above
- base clocks as thermal limits allow.
-
- @see nvmlDeviceGetApplicationsClock
- @see nvmlDeviceSetApplicationsClocks
-
- For Fermi &tm; or newer non-GeForce fully supported devices and Maxwell or newer GeForce devices.
-
- @param device                               The identifier of the target device
-
- @return
-         - \ref NVML_SUCCESS                 if new settings were successfully set
-         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
-         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid
-         - \ref NVML_ERROR_NOT_SUPPORTED     if the device does not support this feature
-         - \ref NVML_ERROR_GPU_IS_LOST       if the target GPU has fallen off the bus or is otherwise inaccessible
-         - \ref NVML_ERROR_UNKNOWN           on any unexpected error*/
+ Please use \ref nvmlDeviceResetMemoryLockedClocks for Memory Clocks and
+ \ref nvmlDeviceResetGpuLockedClocks for Graphics Clocks.*/
     fn nvmlDeviceResetApplicationsClocks(
         device: cuda_types::nvml::nvmlDevice_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
@@ -5054,7 +5165,7 @@ Use \ref nvmlDeviceGetClockOffsets instead.
         speed: ::core::ffi::c_uint,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** Deprecated: Will be deprecated in a future release. Use \ref nvmlDeviceSetClockOffsets instead. It works
+    /** @deprecated Will be deprecated in a future release. Use \ref nvmlDeviceSetClockOffsets instead. It works
              on Maxwell onwards GPU architectures.
 
  Set the GPCCLK VF offset value
@@ -5073,7 +5184,7 @@ Use \ref nvmlDeviceGetClockOffsets instead.
         offset: ::core::ffi::c_int,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** Deprecated: Will be deprecated in a future release. Use \ref nvmlDeviceSetClockOffsets instead. It works
+    /** @deprecated Will be deprecated in a future release. Use \ref nvmlDeviceSetClockOffsets instead. It works
              on Maxwell onwards GPU architectures.
 
  Set the MemClk (Memory Clock) VF offset value. It requires elevated privileges.
@@ -5145,41 +5256,6 @@ Use \ref nvmlDeviceGetClockOffsets instead.
          - \ref NVML_ERROR_UNKNOWN           on any unexpected error*/
     fn nvmlDeviceClearAccountingPids(
         device: cuda_types::nvml::nvmlDevice_t,
-    ) -> cuda_types::nvml::nvmlReturn_t;
-    #[must_use]
-    /** Set new power limit of this device.
-
- For Kepler &tm; or newer fully supported devices.
- Requires root/admin permissions.
-
- See \ref nvmlDeviceGetPowerManagementLimitConstraints to check the allowed ranges of values.
-
- See \ref nvmlPowerValue_v2_t for more information on the struct.
-
- \note Limit is not persistent across reboots or driver unloads.
- Enable persistent mode to prevent driver from unloading when no application is using the device.
-
- This API replaces nvmlDeviceSetPowerManagementLimit. It can be used as a drop-in replacement for the older version.
-
- @param device                               The identifier of the target device
- @param powerValue                           Power management limit in milliwatts to set
-
- @return
-         - \ref NVML_SUCCESS                 if \a limit has been set
-         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
-         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid or \a powerValue is NULL or contains invalid values
-         - \ref NVML_ERROR_NOT_SUPPORTED     if the device does not support this feature
-         - \ref NVML_ERROR_GPU_IS_LOST       if the target GPU has fallen off the bus or is otherwise inaccessible
-         - \ref NVML_ERROR_UNKNOWN           on any unexpected error
-
- @see NVML_FI_DEV_POWER_AVERAGE
- @see NVML_FI_DEV_POWER_INSTANT
- @see NVML_FI_DEV_POWER_MIN_LIMIT
- @see NVML_FI_DEV_POWER_MAX_LIMIT
- @see NVML_FI_DEV_POWER_CURRENT_LIMIT*/
-    fn nvmlDeviceSetPowerManagementLimit_v2(
-        device: cuda_types::nvml::nvmlDevice_t,
-        powerValue: *mut cuda_types::nvml::nvmlPowerValue_v2_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
     /** Retrieves the state of the device's NvLink for the link specified
@@ -5311,7 +5387,7 @@ Use \ref nvmlDeviceGetClockOffsets instead.
         link: ::core::ffi::c_uint,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** Deprecated: Setting utilization counter control is no longer supported.
+    /** @deprecated Setting utilization counter control is no longer supported.
 
  Set the NVLINK utilization counter control information for the specified counter, 0 or 1.
  Please refer to \a nvmlNvLinkUtilizationControl_t for the structure definition.  Performs a reset
@@ -5339,7 +5415,7 @@ Use \ref nvmlDeviceGetClockOffsets instead.
         reset: ::core::ffi::c_uint,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** Deprecated: Getting utilization counter control is no longer supported.
+    /** @deprecated Getting utilization counter control is no longer supported.
 
  Get the NVLINK utilization counter control information for the specified counter, 0 or 1.
  Please refer to \a nvmlNvLinkUtilizationControl_t for the structure definition
@@ -5364,7 +5440,7 @@ Use \ref nvmlDeviceGetClockOffsets instead.
         control: *mut cuda_types::nvml::nvmlNvLinkUtilizationControl_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** Deprecated: Use \ref nvmlDeviceGetFieldValues with NVML_FI_DEV_NVLINK_THROUGHPUT_* as field values instead.
+    /** @deprecated Use \ref nvmlDeviceGetFieldValues with NVML_FI_DEV_NVLINK_THROUGHPUT_* as field values instead.
 
  Retrieve the NVLINK utilization counter based on the current control for a specified counter.
  In general it is good practice to use \a nvmlDeviceSetNvLinkUtilizationControl
@@ -5392,7 +5468,7 @@ Use \ref nvmlDeviceGetClockOffsets instead.
         txcounter: *mut ::core::ffi::c_ulonglong,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** Deprecated: Freezing NVLINK utilization counters is no longer supported.
+    /** @deprecated Freezing NVLINK utilization counters is no longer supported.
 
  Freeze the NVLINK utilization counters
  Both the receive and transmit counters are operated on by this function
@@ -5418,7 +5494,7 @@ Use \ref nvmlDeviceGetClockOffsets instead.
         freeze: cuda_types::nvml::nvmlEnableState_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
-    /** Deprecated: Resetting NVLINK utilization counters is no longer supported.
+    /** @deprecated Resetting NVLINK utilization counters is no longer supported.
 
  Reset the NVLINK utilization counters
  Both the receive and transmit counters are operated on by this function
@@ -5509,7 +5585,7 @@ Use \ref nvmlDeviceGetClockOffsets instead.
     #[must_use]
     /** Get the supported NvLink Reduced Bandwidth Modes of the device
 
- %BLACKWELL_OR_NEWER%
+ For Blackwell &tm; or newer fully supported devices.
 
  @param device                                      The identifier of the target device
  @param supportedBwMode                             Reference to \a nvmlNvlinkSupportedBwModes_t
@@ -5526,7 +5602,7 @@ Use \ref nvmlDeviceGetClockOffsets instead.
     #[must_use]
     /** Get the NvLink Reduced Bandwidth Mode for the device
 
- %BLACKWELL_OR_NEWER%
+ For Blackwell &tm; or newer fully supported devices.
 
  @param device                                      The identifier of the target device
  @param getBwMode                                   Reference to \a nvmlNvlinkGetBwMode_t
@@ -5543,7 +5619,7 @@ Use \ref nvmlDeviceGetClockOffsets instead.
     #[must_use]
     /** Set the NvLink Reduced Bandwidth Mode for the device
 
- %BLACKWELL_OR_NEWER%
+ For Blackwell &tm; or newer fully supported devices.
 
  @param device                                      The identifier of the target device
  @param setBwMode                                   Reference to \a nvmlNvlinkSetBwMode_t
@@ -5557,6 +5633,24 @@ Use \ref nvmlDeviceGetClockOffsets instead.
     fn nvmlDeviceSetNvlinkBwMode(
         device: cuda_types::nvml::nvmlDevice_t,
         setBwMode: *mut cuda_types::nvml::nvmlNvlinkSetBwMode_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Query NVLINK information associated with this device.
+
+ @param[in]  device                              The identifier of the target device
+ @param[out] info                                Reference to \a nvmlNvLinkInfo_t
+
+ @return
+         - \ref NVML_SUCCESS                          if query is success
+         - \ref NVML_ERROR_UNINITIALIZED              if the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT           if \a device is invalid, or \a info is NULL
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH  if the version is invalid/unsupported
+         - \ref NVML_ERROR_NOT_SUPPORTED              if the device does not support this feature
+         - \ref NVML_ERROR_GPU_IS_LOST                if the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_UNKNOWN                    on any unexpected error*/
+    fn nvmlDeviceGetNvLinkInfo(
+        device: cuda_types::nvml::nvmlDevice_t,
+        info: *mut cuda_types::nvml::nvmlNvLinkInfo_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
     /** Create an empty set of events.
@@ -5694,6 +5788,20 @@ Use \ref nvmlDeviceGetClockOffsets instead.
         set: cuda_types::nvml::nvmlEventSet_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
+    /** Create an empty set of system events.
+ Event set should be freed by \ref nvmlSystemEventSetFree
+
+ For Fermi &tm; or newer fully supported devices.
+ @param request                              Reference to nvmlSystemEventSetCreateRequest_t
+
+ @return
+         - \ref NVML_SUCCESS                         if the event has been set
+         - \ref NVML_ERROR_UNINITIALIZED             if the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT          if request is NULL
+         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH for unsupported version
+         - \ref NVML_ERROR_UNKNOWN                   on any unexpected error
+
+ @see nvmlSystemEventSetFree*/
     fn nvmlSystemEventSetCreate(
         request: *mut cuda_types::nvml::nvmlSystemEventSetCreateRequest_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
@@ -5702,7 +5810,7 @@ Use \ref nvmlDeviceGetClockOffsets instead.
 
  For Fermi &tm; or newer fully supported devices.
 
- @param set                                  Reference to nvmlSystemEventSetFreeRequest_t
+ @param request                                  Reference to nvmlSystemEventSetFreeRequest_t
 
  @return
          - \ref NVML_SUCCESS                         if the event has been set
@@ -7064,7 +7172,7 @@ returned in \a sessionCount
     #[must_use]
     /** Set vGPU scheduler state for the given GPU instance
 
- %GB20X_OR_NEWER%
+ For Blackwell &tm GB20x; or newer fully supported devices.
 
  Scheduler state and params will be allowed to set only when no VM is running within the GPU instance.
  In \a nvmlVgpuSchedulerState_t, IFF enableARRMode is enabled then provide the avgFactor and frequency
@@ -7091,7 +7199,7 @@ returned in \a sessionCount
     /** Returns the vGPU scheduler state for the given GPU instance.
  The information returned in \a nvmlVgpuSchedulerStateInfo_t is not relevant if the BEST EFFORT policy is set.
 
- %GB20X_OR_NEWER%
+ For Blackwell &tm GB20x; or newer fully supported devices.
 
  @param gpuInstance                The GPU instance handle
  @param pSchedulerStateInfo        Reference in which \a pSchedulerStateInfo is returned
@@ -7115,7 +7223,7 @@ returned in \a sessionCount
 
  To get the entire logs, call the function atleast 5 times a second.
 
- %GB20X_OR_NEWER%
+ For Blackwell &tm GB20x; or newer fully supported devices.
 
  @param gpuInstance               The GPU instance handle
  @param pSchedulerLogInfo         Reference in which \a pSchedulerLogInfo is written
@@ -7135,7 +7243,7 @@ returned in \a sessionCount
     #[must_use]
     /** Query the creatable vGPU placement ID of the vGPU type within a GPU instance.
 
- %GB20X_OR_NEWER%
+ For Blackwell &tm GB20x; or newer fully supported devices.
 
  An array of creatable vGPU placement IDs for the vGPU type ID indicated by \a pCreatablePlacementInfo->vgpuTypeId
  is returned in the caller-supplied buffer of \a pCreatablePlacementInfo->placementIds. Memory needed for the
@@ -7173,7 +7281,7 @@ returned in \a sessionCount
  set the correct version number to retrieve the vGPU heterogeneous mode.
  \a pHeterogeneousMode->mode can either be \ref NVML_FEATURE_ENABLED or \ref NVML_FEATURE_DISABLED.
 
- %GB20X_OR_NEWER%
+ For Blackwell &tm GB20x; or newer fully supported devices.
 
  @param gpuInstance               The GPU instance handle
  @param pHeterogeneousMode        Pointer to the caller-provided structure of nvmlVgpuHeterogeneousMode_t
@@ -7201,8 +7309,6 @@ returned in \a sessionCount
  On successful return, the function updates the vGPU heterogeneous mode with the user provided \a pHeterogeneousMode->mode.
  \a pHeterogeneousMode->version is the version number of the structure nvmlVgpuHeterogeneousMode_t, the caller should
  set the correct version number to set the vGPU heterogeneous mode.
-
- %GB20X_OR_NEWER%
 
  @param gpuInstance               The GPU instance handle
  @param pHeterogeneousMode        Pointer to the caller-provided structure of nvmlVgpuHeterogeneousMode_t
@@ -7818,6 +7924,30 @@ returned in \a sessionCount
         info: *mut cuda_types::nvml::nvmlExcludedDeviceInfo_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
+    /** Read or write a GPU PRM register. The input is assumed to be in TLV format in
+ network byte order.
+
+ For Blackwell &tm; or newer fully supported devices.
+
+ Supported on Linux only.
+
+ @param device                                        Identifer of target GPU device
+ @param buffer                                        Structure holding the input data in TLV format as well as
+                                                      the PRM register contents in TLV format (in the case of a successful
+                                                      read operation).
+                                                      Note: the input data and any returned data shall be in network byte order.
+
+ @return
+        - \ref NVML_SUCCESS                           on success
+        - \ref NVML_ERROR_INVALID_ARGUMENT            if \p device or \p buffer are invalid
+        - \ref NVML_ERROR_NO_PERMISSION               if user does not have permission to perform this operation
+        - \ref NVML_ERROR_NOT_SUPPORTED               if this feature is not supported by the device
+        - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH   if the version specified in \p buffer is not supported*/
+    fn nvmlDeviceReadWritePRM_v1(
+        device: cuda_types::nvml::nvmlDevice_t,
+        buffer: *mut cuda_types::nvml::nvmlPRMTLV_v1_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
     /** Set MIG mode for the device.
 
  For Ampere &tm; or newer fully supported devices.
@@ -7872,7 +8002,8 @@ returned in \a sessionCount
          - \ref NVML_SUCCESS                 Upon success
          - \ref NVML_ERROR_UNINITIALIZED     If library has not been successfully initialized
          - \ref NVML_ERROR_INVALID_ARGUMENT  If \a device, \a currentMode or \a pendingMode are invalid
-         - \ref NVML_ERROR_NOT_SUPPORTED     If \a device doesn't support MIG mode*/
+         - \ref NVML_ERROR_NOT_SUPPORTED     If \a device doesn't support MIG mode
+         - \ref NVML_ERROR_UNKNOWN           on any unexpected error*/
     fn nvmlDeviceGetMigMode(
         device: cuda_types::nvml::nvmlDevice_t,
         currentMode: *mut ::core::ffi::c_uint,
@@ -7934,6 +8065,38 @@ returned in \a sessionCount
     fn nvmlDeviceGetGpuInstanceProfileInfoV(
         device: cuda_types::nvml::nvmlDevice_t,
         profile: ::core::ffi::c_uint,
+        info: *mut cuda_types::nvml::nvmlGpuInstanceProfileInfo_v2_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** GPU instance profile query function that accepts profile ID, instead of profile name.
+ It accepts a versioned \ref nvmlGpuInstanceProfileInfo_v2_t or later output structure.
+
+ @note The caller must set the \ref nvmlGpuInstanceProfileInfo_v2_t.version field to the
+ appropriate version prior to calling this function. For example:
+ \code
+     nvmlGpuInstanceProfileInfo_v2_t profileInfo =
+         { .version = nvmlGpuInstanceProfileInfo_v2 };
+     nvmlReturn_t result = nvmlDeviceGetGpuInstanceProfileInfoV(device,
+                                                                profile,
+                                                                &profileInfo);
+ \endcode
+
+ For Ampere &tm; or newer fully supported devices.
+ Supported on Linux only.
+
+ @param device                               The identifier of the target device
+ @param profileId                            One of the profile IDs.
+ @param info                                 Returns detailed profile information
+
+ @return
+         - \ref NVML_SUCCESS                 Upon success
+         - \ref NVML_ERROR_UNINITIALIZED     If library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT  If \a device, \a profileId, \a info, or \a info->version are invalid
+         - \ref NVML_ERROR_NOT_SUPPORTED     If \a device doesn't have MIG mode enabled or \a profile isn't supported
+         - \ref NVML_ERROR_NO_PERMISSION     If user doesn't have permission to perform the operation*/
+    fn nvmlDeviceGetGpuInstanceProfileInfoByIdV(
+        device: cuda_types::nvml::nvmlDevice_t,
+        profileId: ::core::ffi::c_uint,
         info: *mut cuda_types::nvml::nvmlGpuInstanceProfileInfo_v2_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
@@ -8539,9 +8702,12 @@ returned in \a sessionCount
  and \a metricsGet->sample2 by calling \a nvmlGpmSampleAlloc(). Next, the user should fill in the ID of each metric
  in \a metricsGet->metrics[i].metricId and specify the total number of metrics to retrieve in \a metricsGet->numMetrics,
  The version should be set to NVML_GPM_METRICS_GET_VERSION in \a metricsGet->version. The user then calls the
- \a nvmlGpmSampleGet() API twice to obtain 2 samples of counters. \note that the interval between these
- two \a nvmlGpmSampleGet() calls should be greater than 100ms due to the internal sample refresh rate.
- Finally, the user calls \a nvmlGpmMetricsGet to retrieve the metrics, which will be stored at \a metricsGet->metrics
+ \a nvmlGpmSampleGet() API twice to obtain 2 samples of counters.
+
+ @note The interval between these two \a nvmlGpmSampleGet() calls should be greater than 100ms due to the
+ internal sample refresh rate. Finally, the user calls \a nvmlGpmMetricsGet to retrieve the metrics, which will
+ be stored at \a metricsGet->metrics
+
 
  @param metricsGet             IN/OUT: populated \a nvmlGpmMetricsGet_t struct
 
@@ -8699,7 +8865,7 @@ returned in \a sessionCount
     #[must_use]
     /** Get Performance Profiles Information
 
- %BLACKWELL_OR_NEWER%
+ For Blackwell &tm; or newer fully supported devices.
  See \ref nvmlWorkloadPowerProfileProfilesInfo_v1_t for more information on the struct.
  The mask \a perfProfilesMask is bitmask of all supported mode indices where the
  mode is supported if the index is 1. Each supported mode will have a corresponding
@@ -8727,7 +8893,7 @@ returned in \a sessionCount
     #[must_use]
     /** Get Current Performance Profiles
 
- %BLACKWELL_OR_NEWER%
+ For Blackwell &tm; or newer fully supported devices.
  See \ref nvmlWorkloadPowerProfileCurrentProfiles_v1_t for more information on the struct.
  This API returns a stuct which contains the current \a perfProfilesMask,
  \a requestedProfilesMask and \a enforcedProfilesMask. Each bit set in each
@@ -8752,7 +8918,7 @@ returned in \a sessionCount
     #[must_use]
     /** Set Requested Performance Profiles
 
- %BLACKWELL_OR_NEWER%
+ For Blackwell &tm; or newer fully supported devices.
  See \ref nvmlWorkloadPowerProfileRequestedProfiles_v1_t for more information on the struct.
  Reuqest one or more performance profiles be activated using the input bitmask
  \a requestedProfilesMask, where each bit set corresponds to a supported bit from
@@ -8778,7 +8944,7 @@ returned in \a sessionCount
     #[must_use]
     /** Clear Requested Performance Profiles
 
- %BLACKWELL_OR_NEWER%
+ For Blackwell &tm; or newer fully supported devices.
  See \ref nvmlWorkloadPowerProfileRequestedProfiles_v1_t for more information on the struct.
  Clear one or more performance profiles be using the input bitmask
  \a requestedProfilesMask, where each bit set corresponds to a supported bit from
@@ -8807,7 +8973,7 @@ returned in \a sessionCount
  and ignores the other parameters of the structure.
  Requires root/admin permissions.
 
- %BLACKWELL_OR_NEWER%
+ For Blackwell &tm; or newer fully supported devices.
 
  @param device                                The identifier of the target device
  @param profile                               Reference to \ref nvmlPowerSmoothingProfile_v1_t.
@@ -8828,7 +8994,7 @@ returned in \a sessionCount
     /** Update the value of a specific profile parameter contained within \ref nvmlPowerSmoothingProfile_v1_t.
  Requires root/admin permissions.
 
- %BLACKWELL_OR_NEWER%
+ For Blackwell &tm; or newer fully supported devices.
 
  NVML_POWER_SMOOTHING_PROFILE_PARAM_PERCENT_TMP_FLOOR expects a value as a percentage from 00.00-100.00%
  NVML_POWER_SMOOTHING_PROFILE_PARAM_RAMP_UP_RATE expects a value in W/s
@@ -8852,7 +9018,7 @@ returned in \a sessionCount
     /** Enable or disable the Power Smoothing Feature.
  Requires root/admin permissions.
 
- %BLACKWELL_OR_NEWER%
+ For Blackwell &tm; or newer fully supported devices.
 
  See \ref nvmlEnableState_t for details on allowed states
 
@@ -8868,6 +9034,45 @@ returned in \a sessionCount
     fn nvmlDevicePowerSmoothingSetState(
         device: cuda_types::nvml::nvmlDevice_t,
         state: *mut cuda_types::nvml::nvmlPowerSmoothingState_t,
+    ) -> cuda_types::nvml::nvmlReturn_t;
+    #[must_use]
+    /** Retrieves the counts of SRAM unique uncorrected ECC errors
+
+ For Blackwell &tm; or newer fully supported devices.
+
+ Reads SRAM unique uncorrected ECC error counts. The total number of unique errors is returned by
+ \a errorCounts->entryCount. Error counts are returned as an array of in the caller-supplied buffer pointed at by
+ \a errorCounts->entries. Each error count entry holds the location/address of the unique error, the error count and
+ whether the error is parity or not.
+
+ To read SRAM unique uncorrected ECC error counts, first determine the size of buffer required to hold the error
+ counts by invoking the function with \a errorCounts->entries set to NULL. The required array size is returned in
+ \a errorCounts->entryCount. The caller should allocate a buffer of size "errorCounts->entryCount *
+ sizeof(nvmlEccSramUniqueUncorrectedErrorCounts_t)". Invoke the function again with the allocated buffer passed in
+ \a errorCounts->entries. This time \a errorCounts->entryCount will be taken as the entry array size that caller
+ allocates for \a errorCounts->entries.
+
+ On successful return of the second query, the function updates \a errorCounts->entries with all unique errors. This
+ may fail if \a errorCounts->entryCount is smaller than the actual number of unique errors. This can happen in cases
+ like new errors occur since the previous query of \a errorCounts->entryCount. No matter the query succeeds or not,
+ the latest number of unique errors will be returned in \a errorCounts->entryCount.
+
+ @note The query is only supported when ECC mode is enabled.
+
+ @param device                    The identifier of the target device
+ @param errorCounts               Pointer to caller-supplied array which returns the unique error count entries
+
+ @return
+         - \ref NVML_SUCCESS                 if \a utilization has been populated
+         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
+         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid, \a errorCounts->entryCount is NULL
+         - \ref NVML_ERROR_NOT_SUPPORTED     if the device does not support this feature or ECC mods is not enabled
+         - \ref NVML_ERROR_INSUFFICIENT_SIZE if the allocated error entry array is not big enough
+         - \ref NVML_ERROR_GPU_IS_LOST       if the target GPU has fallen off the bus or is otherwise inaccessible
+         - \ref NVML_ERROR_UNKNOWN           on any unexpected error*/
+    fn nvmlDeviceGetSramUniqueUncorrectedEccErrorCounts(
+        device: cuda_types::nvml::nvmlDevice_t,
+        errorCounts: *mut cuda_types::nvml::nvmlEccSramUniqueUncorrectedErrorCounts_t,
     ) -> cuda_types::nvml::nvmlReturn_t;
     #[must_use]
     fn nvmlInit() -> cuda_types::nvml::nvmlReturn_t;

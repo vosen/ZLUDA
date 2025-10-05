@@ -289,6 +289,60 @@ impl crate::CudaDisplay for cuda_types::nvml::nvmlC2cModeInfo_v1_t {
         writer.write_all(b" }")
     }
 }
+impl crate::CudaDisplay for cuda_types::nvml::nvmlDeviceAddressingModeType_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        match self {
+            &cuda_types::nvml::nvmlDeviceAddressingModeType_t::NVML_DEVICE_ADDRESSING_MODE_NONE => {
+                writer.write_all(stringify!(NVML_DEVICE_ADDRESSING_MODE_NONE).as_bytes())
+            }
+            &cuda_types::nvml::nvmlDeviceAddressingModeType_t::NVML_DEVICE_ADDRESSING_MODE_HMM => {
+                writer.write_all(stringify!(NVML_DEVICE_ADDRESSING_MODE_HMM).as_bytes())
+            }
+            &cuda_types::nvml::nvmlDeviceAddressingModeType_t::NVML_DEVICE_ADDRESSING_MODE_ATS => {
+                writer.write_all(stringify!(NVML_DEVICE_ADDRESSING_MODE_ATS).as_bytes())
+            }
+            _ => write!(writer, "{}", self.0),
+        }
+    }
+}
+impl crate::CudaDisplay for cuda_types::nvml::nvmlDeviceAddressingMode_v1_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(version), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.version, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(value), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.value, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
+impl crate::CudaDisplay for cuda_types::nvml::nvmlRepairStatus_v1_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(version), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.version, "", 0, writer)?;
+        writer
+            .write_all(
+                concat!(", ", stringify!(bChannelRepairPending), ": ").as_bytes(),
+            )?;
+        crate::CudaDisplay::write(&self.bChannelRepairPending, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(bTpcRepairPending), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.bTpcRepairPending, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
 impl crate::CudaDisplay for cuda_types::nvml::nvmlRowRemapperHistogramValues_st {
     fn write(
         &self,
@@ -1068,6 +1122,20 @@ impl crate::CudaDisplay for cuda_types::nvml::nvmlUUIDType_t {
         }
     }
 }
+impl crate::CudaDisplay for cuda_types::nvml::nvmlPdi_v1_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(version), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.version, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(value), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.value, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
 impl crate::CudaDisplay for cuda_types::nvml::nvmlEnableState_enum {
     fn write(
         &self,
@@ -1603,6 +1671,25 @@ impl crate::CudaDisplay for cuda_types::nvml::nvmlDeviceCurrentClockFreqs_v1_t {
         writer.write_all(b" }")
     }
 }
+impl crate::CudaDisplay for cuda_types::nvml::nvmlDevicePowerMizerModes_v1_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(currentMode), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.currentMode, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(mode), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.mode, "", 0, writer)?;
+        writer
+            .write_all(
+                concat!(", ", stringify!(supportedPowerMizerModes), ": ").as_bytes(),
+            )?;
+        crate::CudaDisplay::write(&self.supportedPowerMizerModes, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
 impl crate::CudaDisplay for cuda_types::nvml::nvmlGom_enum {
     fn write(
         &self,
@@ -1931,6 +2018,60 @@ impl crate::CudaDisplay for cuda_types::nvml::nvmlPlatformInfo_v2_t {
         crate::CudaDisplay::write(&self.peerType, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(moduleId), ": ").as_bytes())?;
         crate::CudaDisplay::write(&self.moduleId, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
+impl crate::CudaDisplay for cuda_types::nvml::nvmlHostname_v1_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(value), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.value, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
+impl crate::CudaDisplay
+for cuda_types::nvml::nvmlEccSramUniqueUncorrectedErrorEntry_v1_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(unit), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.unit, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(location), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.location, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(sublocation), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.sublocation, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(extlocation), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.extlocation, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(address), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.address, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(isParity), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.isParity, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(count), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.count, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
+impl crate::CudaDisplay
+for cuda_types::nvml::nvmlEccSramUniqueUncorrectedErrorCounts_v1_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(version), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.version, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(entryCount), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.entryCount, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(entries), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.entries, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
@@ -3482,6 +3623,30 @@ impl crate::CudaDisplay for cuda_types::nvml::nvmlGpuFabricInfo_v2_t {
         writer.write_all(b" }")
     }
 }
+impl crate::CudaDisplay for cuda_types::nvml::nvmlGpuFabricInfo_v3_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(version), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.version, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(clusterUuid), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.clusterUuid, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(status), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.status, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(cliqueId), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.cliqueId, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(state), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.state, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(healthMask), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.healthMask, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(healthSummary), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.healthSummary, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
 pub fn write_nvmlInit_v2(
     writer: &mut (impl std::io::Write + ?Sized),
 ) -> std::io::Result<()> {
@@ -4149,6 +4314,41 @@ pub fn write_nvmlDeviceGetNumaNodeId(
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(node), ": ").as_bytes())?;
     crate::CudaDisplay::write(&node, "nvmlDeviceGetNumaNodeId", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_nvmlDeviceGetAddressingMode(
+    writer: &mut (impl std::io::Write + ?Sized),
+    device: cuda_types::nvml::nvmlDevice_t,
+    mode: *mut cuda_types::nvml::nvmlDeviceAddressingMode_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&device, "nvmlDeviceGetAddressingMode", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(mode), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&mode, "nvmlDeviceGetAddressingMode", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_nvmlDeviceGetRepairStatus(
+    writer: &mut (impl std::io::Write + ?Sized),
+    device: cuda_types::nvml::nvmlDevice_t,
+    repairStatus: *mut cuda_types::nvml::nvmlRepairStatus_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&device, "nvmlDeviceGetRepairStatus", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(repairStatus), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &repairStatus,
+        "nvmlDeviceGetRepairStatus",
+        arg_idx,
+        writer,
+    )?;
     writer.write_all(b")")
 }
 pub fn write_nvmlDeviceGetTopologyCommonAncestor(
@@ -5860,6 +6060,56 @@ pub fn write_nvmlDeviceGetPowerUsage(
     crate::CudaDisplay::write(&power, "nvmlDeviceGetPowerUsage", arg_idx, writer)?;
     writer.write_all(b")")
 }
+pub fn write_nvmlDeviceGetPowerMizerMode_v1(
+    writer: &mut (impl std::io::Write + ?Sized),
+    device: cuda_types::nvml::nvmlDevice_t,
+    powerMizerMode: *mut cuda_types::nvml::nvmlDevicePowerMizerModes_v1_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &device,
+        "nvmlDeviceGetPowerMizerMode_v1",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(powerMizerMode), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &powerMizerMode,
+        "nvmlDeviceGetPowerMizerMode_v1",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_nvmlDeviceSetPowerMizerMode_v1(
+    writer: &mut (impl std::io::Write + ?Sized),
+    device: cuda_types::nvml::nvmlDevice_t,
+    powerMizerMode: *mut cuda_types::nvml::nvmlDevicePowerMizerModes_v1_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &device,
+        "nvmlDeviceSetPowerMizerMode_v1",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(powerMizerMode), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &powerMizerMode,
+        "nvmlDeviceSetPowerMizerMode_v1",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
 pub fn write_nvmlDeviceGetTotalEnergyConsumption(
     writer: &mut (impl std::io::Write + ?Sized),
     device: cuda_types::nvml::nvmlDevice_t,
@@ -7420,6 +7670,31 @@ pub fn write_nvmlDeviceGetSramEccErrorStatus(
     )?;
     writer.write_all(b")")
 }
+pub fn write_nvmlDeviceSetPowerManagementLimit_v2(
+    writer: &mut (impl std::io::Write + ?Sized),
+    device: cuda_types::nvml::nvmlDevice_t,
+    powerValue: *mut cuda_types::nvml::nvmlPowerValue_v2_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &device,
+        "nvmlDeviceSetPowerManagementLimit_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(powerValue), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &powerValue,
+        "nvmlDeviceSetPowerManagementLimit_v2",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
 pub fn write_nvmlDeviceGetAccountingMode(
     writer: &mut (impl std::io::Write + ?Sized),
     device: cuda_types::nvml::nvmlDevice_t,
@@ -7773,6 +8048,51 @@ pub fn write_nvmlDeviceGetPlatformInfo(
         arg_idx,
         writer,
     )?;
+    writer.write_all(b")")
+}
+pub fn write_nvmlDeviceGetPdi(
+    writer: &mut (impl std::io::Write + ?Sized),
+    device: cuda_types::nvml::nvmlDevice_t,
+    pdi: *mut cuda_types::nvml::nvmlPdi_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&device, "nvmlDeviceGetPdi", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pdi), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pdi, "nvmlDeviceGetPdi", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_nvmlDeviceSetHostname_v1(
+    writer: &mut (impl std::io::Write + ?Sized),
+    device: cuda_types::nvml::nvmlDevice_t,
+    hostname: *mut cuda_types::nvml::nvmlHostname_v1_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&device, "nvmlDeviceSetHostname_v1", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(hostname), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&hostname, "nvmlDeviceSetHostname_v1", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_nvmlDeviceGetHostname_v1(
+    writer: &mut (impl std::io::Write + ?Sized),
+    device: cuda_types::nvml::nvmlDevice_t,
+    hostname: *mut cuda_types::nvml::nvmlHostname_v1_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&device, "nvmlDeviceGetHostname_v1", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(hostname), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&hostname, "nvmlDeviceGetHostname_v1", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_nvmlUnitSetLedState(
@@ -8346,31 +8666,6 @@ pub fn write_nvmlDeviceClearAccountingPids(
     )?;
     writer.write_all(b")")
 }
-pub fn write_nvmlDeviceSetPowerManagementLimit_v2(
-    writer: &mut (impl std::io::Write + ?Sized),
-    device: cuda_types::nvml::nvmlDevice_t,
-    powerValue: *mut cuda_types::nvml::nvmlPowerValue_v2_t,
-) -> std::io::Result<()> {
-    let mut arg_idx = 0usize;
-    writer.write_all(b"(")?;
-    writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &device,
-        "nvmlDeviceSetPowerManagementLimit_v2",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(powerValue), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &powerValue,
-        "nvmlDeviceSetPowerManagementLimit_v2",
-        arg_idx,
-        writer,
-    )?;
-    writer.write_all(b")")
-}
 impl crate::CudaDisplay for cuda_types::nvml::nvmlNvlinkSupportedBwModes_v1_t {
     fn write(
         &self,
@@ -8416,6 +8711,68 @@ impl crate::CudaDisplay for cuda_types::nvml::nvmlNvlinkSetBwMode_v1_t {
         crate::CudaDisplay::write(&self.bSetBest, "", 0, writer)?;
         writer.write_all(concat!(", ", stringify!(bwMode), ": ").as_bytes())?;
         crate::CudaDisplay::write(&self.bwMode, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
+impl crate::CudaDisplay for cuda_types::nvml::nvmlNvLinkInfo_v1_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(version), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.version, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(isNvleEnabled), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.isNvleEnabled, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
+impl crate::CudaDisplay for cuda_types::nvml::nvmlNvlinkFirmwareVersion_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(ucodeType), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.ucodeType, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(major), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.major, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(minor), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.minor, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(subMinor), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.subMinor, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
+impl crate::CudaDisplay for cuda_types::nvml::nvmlNvlinkFirmwareInfo_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(firmwareVersion), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.firmwareVersion, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(numValidEntries), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.numValidEntries, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
+impl crate::CudaDisplay for cuda_types::nvml::nvmlNvLinkInfo_v2_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(version), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.version, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(isNvleEnabled), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.isNvleEnabled, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(firmwareInfo), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.firmwareInfo, "", 0, writer)?;
         writer.write_all(b" }")
     }
 }
@@ -8982,6 +9339,21 @@ pub fn write_nvmlDeviceSetNvlinkBwMode(
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(setBwMode), ": ").as_bytes())?;
     crate::CudaDisplay::write(&setBwMode, "nvmlDeviceSetNvlinkBwMode", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_nvmlDeviceGetNvLinkInfo(
+    writer: &mut (impl std::io::Write + ?Sized),
+    device: cuda_types::nvml::nvmlDevice_t,
+    info: *mut cuda_types::nvml::nvmlNvLinkInfo_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&device, "nvmlDeviceGetNvLinkInfo", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(info), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&info, "nvmlDeviceGetNvLinkInfo", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_nvmlEventSetCreate(
@@ -11485,6 +11857,21 @@ pub fn write_nvmlGetExcludedDeviceInfoByIndex(
     )?;
     writer.write_all(b")")
 }
+pub fn write_nvmlDeviceReadWritePRM_v1(
+    writer: &mut (impl std::io::Write + ?Sized),
+    device: cuda_types::nvml::nvmlDevice_t,
+    buffer: *mut cuda_types::nvml::nvmlPRMTLV_v1_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&device, "nvmlDeviceReadWritePRM_v1", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(buffer), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&buffer, "nvmlDeviceReadWritePRM_v1", arg_idx, writer)?;
+    writer.write_all(b")")
+}
 impl crate::CudaDisplay for cuda_types::nvml::nvmlGpuInstancePlacement_st {
     fn write(
         &self,
@@ -11894,6 +12281,41 @@ pub fn write_nvmlDeviceGetGpuInstanceProfileInfoV(
     crate::CudaDisplay::write(
         &info,
         "nvmlDeviceGetGpuInstanceProfileInfoV",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_nvmlDeviceGetGpuInstanceProfileInfoByIdV(
+    writer: &mut (impl std::io::Write + ?Sized),
+    device: cuda_types::nvml::nvmlDevice_t,
+    profileId: ::core::ffi::c_uint,
+    info: *mut cuda_types::nvml::nvmlGpuInstanceProfileInfo_v2_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &device,
+        "nvmlDeviceGetGpuInstanceProfileInfoByIdV",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(profileId), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &profileId,
+        "nvmlDeviceGetGpuInstanceProfileInfoByIdV",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(info), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &info,
+        "nvmlDeviceGetGpuInstanceProfileInfoByIdV",
         arg_idx,
         writer,
     )?;
@@ -14196,6 +14618,31 @@ pub fn write_nvmlDevicePowerSmoothingSetState(
     )?;
     writer.write_all(b")")
 }
+pub fn write_nvmlDeviceGetSramUniqueUncorrectedEccErrorCounts(
+    writer: &mut (impl std::io::Write + ?Sized),
+    device: cuda_types::nvml::nvmlDevice_t,
+    errorCounts: *mut cuda_types::nvml::nvmlEccSramUniqueUncorrectedErrorCounts_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(device), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &device,
+        "nvmlDeviceGetSramUniqueUncorrectedEccErrorCounts",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(errorCounts), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &errorCounts,
+        "nvmlDeviceGetSramUniqueUncorrectedEccErrorCounts",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
 pub fn write_nvmlInit(
     writer: &mut (impl std::io::Write + ?Sized),
 ) -> std::io::Result<()> {
@@ -14805,6 +15252,10 @@ impl crate::CudaDisplay for cuda_types::nvml::nvmlReturn_t {
                     27 => writer.write_all("NVML_ERROR_NOT_READY".as_bytes()),
                     28 => writer.write_all("NVML_ERROR_GPU_NOT_FOUND".as_bytes()),
                     29 => writer.write_all("NVML_ERROR_INVALID_STATE".as_bytes()),
+                    30 => {
+                        writer
+                            .write_all("NVML_ERROR_RESET_TYPE_NOT_SUPPORTED".as_bytes())
+                    }
                     999 => writer.write_all("NVML_ERROR_UNKNOWN".as_bytes()),
                     err => write!(writer, "{}", err),
                 }

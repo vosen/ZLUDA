@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.9.1-base-ubuntu24.04
+FROM nvidia/cuda:13.0.1-base-ubuntu24.04
 
 RUN DEBIAN_FRONTEND=noninteractive apt update -y && DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
     wget \
@@ -18,7 +18,7 @@ RUN wget https://apt.llvm.org/llvm.sh && \
     ./llvm.sh ${LLVM_VERSION}
 
 # Feel free to change to a newer version if you have a newer verison on your host
-ARG CUDA_PKG_VERSION=12-9
+ARG CUDA_PKG_VERSION=13-0
 # Docker <-> host  driver version compatiblity is newer host <-> older docker
 # We don't care about a specific driver version, so pick oldest 5XX compatible
 ARG CUDA_DRIVER=570

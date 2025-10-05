@@ -14,4 +14,5 @@ cuda_types = { path = "../cuda_types" }
 [package.metadata.zluda]
 linux_symlinks = [
     "libcusparse.so.12",
+    "libcusparse.so.13",
 ]

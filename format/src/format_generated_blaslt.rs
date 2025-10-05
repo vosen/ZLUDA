@@ -2229,6 +2229,9 @@ impl crate::CudaDisplay for cuda_types::cublaslt::cublasLtMatmulStages_t {
             &cuda_types::cublaslt::cublasLtMatmulStages_t::CUBLASLT_MATMUL_STAGES_256xAUTO => {
                 writer.write_all(stringify!(CUBLASLT_MATMUL_STAGES_256xAUTO).as_bytes())
             }
+            &cuda_types::cublaslt::cublasLtMatmulStages_t::CUBLASLT_MATMUL_STAGES_768xAUTO => {
+                writer.write_all(stringify!(CUBLASLT_MATMUL_STAGES_768xAUTO).as_bytes())
+            }
             &cuda_types::cublaslt::cublasLtMatmulStages_t::CUBLASLT_MATMUL_STAGES_END => {
                 writer.write_all(stringify!(CUBLASLT_MATMUL_STAGES_END).as_bytes())
             }
@@ -3173,34 +3176,6 @@ impl crate::CudaDisplay for cuda_types::cublaslt::cublasLtMatmulDescAttributes_t
                 writer
                     .write_all(
                         stringify!(CUBLASLT_MATMUL_DESC_BIAS_DATA_TYPE).as_bytes(),
-                    )
-            }
-            &cuda_types::cublaslt::cublasLtMatmulDescAttributes_t::CUBLASLT_MATMUL_DESC_ATOMIC_SYNC_NUM_CHUNKS_D_ROWS => {
-                writer
-                    .write_all(
-                        stringify!(CUBLASLT_MATMUL_DESC_ATOMIC_SYNC_NUM_CHUNKS_D_ROWS)
-                            .as_bytes(),
-                    )
-            }
-            &cuda_types::cublaslt::cublasLtMatmulDescAttributes_t::CUBLASLT_MATMUL_DESC_ATOMIC_SYNC_NUM_CHUNKS_D_COLS => {
-                writer
-                    .write_all(
-                        stringify!(CUBLASLT_MATMUL_DESC_ATOMIC_SYNC_NUM_CHUNKS_D_COLS)
-                            .as_bytes(),
-                    )
-            }
-            &cuda_types::cublaslt::cublasLtMatmulDescAttributes_t::CUBLASLT_MATMUL_DESC_ATOMIC_SYNC_IN_COUNTERS_POINTER => {
-                writer
-                    .write_all(
-                        stringify!(CUBLASLT_MATMUL_DESC_ATOMIC_SYNC_IN_COUNTERS_POINTER)
-                            .as_bytes(),
-                    )
-            }
-            &cuda_types::cublaslt::cublasLtMatmulDescAttributes_t::CUBLASLT_MATMUL_DESC_ATOMIC_SYNC_OUT_COUNTERS_POINTER => {
-                writer
-                    .write_all(
-                        stringify!(CUBLASLT_MATMUL_DESC_ATOMIC_SYNC_OUT_COUNTERS_POINTER)
-                            .as_bytes(),
                     )
             }
             &cuda_types::cublaslt::cublasLtMatmulDescAttributes_t::CUBLASLT_MATMUL_DESC_A_SCALE_MODE => {
@@ -4368,9 +4343,6 @@ impl crate::CudaDisplay for cuda_types::cublaslt::cublasLtMatmulAlgoCapAttribute
                     .write_all(
                         stringify!(CUBLASLT_ALGO_CAP_MIN_ALIGNMENT_D_BYTES).as_bytes(),
                     )
-            }
-            &cuda_types::cublaslt::cublasLtMatmulAlgoCapAttributes_t::CUBLASLT_ALGO_CAP_ATOMIC_SYNC => {
-                writer.write_all(stringify!(CUBLASLT_ALGO_CAP_ATOMIC_SYNC).as_bytes())
             }
             &cuda_types::cublaslt::cublasLtMatmulAlgoCapAttributes_t::CUBLASLT_ALGO_CAP_POINTER_ARRAY_BATCH_SUPPORT => {
                 writer
