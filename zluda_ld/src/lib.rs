@@ -19,17 +19,22 @@ struct DlPhdrInfo {
     dlpi_phnum: u16,
 }
 
-static FILES_FOR_REDIRECT: [&'static str; 14] = [
+static FILES_FOR_REDIRECT: [&'static str; 19] = [
+    "libcublas.so.13",
     "libcublas.so.12",
     "libcublas.so",
+    "libcublasLt.so.13",
     "libcublasLt.so.12",
     "libcublasLt.so",
     "libcuda.so.1",
     "libcuda.so",
     "libcudnn.so.9",
+    "libcudnn.so.8",
     "libcudnn.so",
+    "libcufft.so.12",
     "libcufft.so.11",
     "libcufft.so",
+    "libcusparse.so.13",
     "libcusparse.so.12",
     "libcusparse.so",
     "libnvidia-ml.so.1",
@@ -42,7 +47,7 @@ struct GlobalState {
     replacement_paths: Option<[Vec<u8>; FILES_FOR_REDIRECT.len()]>,
     // List of cookies saved for each redirected file, to avoid self-redirecting
     // when e.g. zluda_trace_blas (libcuda.so) tries to load the real libcublas.so
-    cookies: Mutex<[usize; FILES_FOR_REDIRECT.len() / 2]>,
+    cookies: Mutex<[usize; FILES_FOR_REDIRECT.len()]>,
 }
 
 static GLOBAL_STATE: LazyLock<GlobalState> = LazyLock::new(|| {
@@ -59,7 +64,7 @@ static GLOBAL_STATE: LazyLock<GlobalState> = LazyLock::new(|| {
     };
     GlobalState {
         replacement_paths,
-        cookies: Mutex::new([0; FILES_FOR_REDIRECT.len() / 2]),
+        cookies: Mutex::new([0; FILES_FOR_REDIRECT.len()]),
     }
 });
 
@@ -132,11 +137,16 @@ unsafe fn la_objsearch_impl(
         replacement_paths,
         cookies,
     } = &*GLOBAL_STATE;
-    let replacement_paths = replacement_paths.as_ref()?;
-    let known_cookie = { cookies.lock().ok()?[index / 2] };
-    if known_cookie == requesting_cookie {
-        return None;
+    {
+        let cookies = cookies.lock().ok()?;
+        if cookies
+            .into_iter()
+            .any(|known_cookie| known_cookie == requesting_cookie)
+        {
+            return None;
+        }
     }
+    let replacement_paths = replacement_paths.as_ref()?;
     Some(&*replacement_paths[index])
 }
 
@@ -156,7 +166,7 @@ unsafe fn save_cookie(map: *mut link_map, cookie: *mut usize) -> Option<()> {
         .enumerate()
         .find_map(|(index, file)| {
             if obj_name.ends_with(file) {
-                Some(index / 2)
+                Some(index)
             } else {
                 None
             }
