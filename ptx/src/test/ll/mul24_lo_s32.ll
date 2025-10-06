@@ -1,34 +1,34 @@
-define amdgpu_kernel void @mul24_lo_s32(ptr addrspace(4) byref(i64) %"35", ptr addrspace(4) byref(i64) %"36") #0 {
-  %"37" = alloca i64, align 8, addrspace(5)
-  %"38" = alloca i64, align 8, addrspace(5)
-  %"39" = alloca i32, align 4, addrspace(5)
-  %"40" = alloca i32, align 4, addrspace(5)
-  %"41" = alloca i32, align 4, addrspace(5)
+define amdgpu_kernel void @mul24_lo_s32(ptr addrspace(4) byref(i64) %"38", ptr addrspace(4) byref(i64) %"39") #0 {
+  %"40" = alloca i64, align 8, addrspace(5)
+  %"41" = alloca i64, align 8, addrspace(5)
+  %"42" = alloca i32, align 4, addrspace(5)
+  %"43" = alloca i32, align 4, addrspace(5)
+  %"44" = alloca i32, align 4, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
-  br label %"34"
+  br label %"37"
 
-"34":                                             ; preds = %1
-  %"42" = load i64, ptr addrspace(4) %"35", align 8
-  store i64 %"42", ptr addrspace(5) %"37", align 8
-  %"43" = load i64, ptr addrspace(4) %"36", align 8
-  store i64 %"43", ptr addrspace(5) %"38", align 8
-  %"45" = load i64, ptr addrspace(5) %"37", align 8
-  %"53" = inttoptr i64 %"45" to ptr
-  %"44" = load i32, ptr %"53", align 4
-  store i32 %"44", ptr addrspace(5) %"39", align 4
-  %"47" = load i32, ptr addrspace(5) %"39", align 4
-  %"46" = sub i32 0, %"47"
-  store i32 %"46", ptr addrspace(5) %"40", align 4
-  %"49" = load i32, ptr addrspace(5) %"40", align 4
-  %"50" = load i32, ptr addrspace(5) %"39", align 4
-  %"48" = call i32 @llvm.amdgcn.mul.i24(i32 %"49", i32 %"50")
-  store i32 %"48", ptr addrspace(5) %"41", align 4
-  %"51" = load i64, ptr addrspace(5) %"38", align 8
-  %"52" = load i32, ptr addrspace(5) %"41", align 4
-  %"54" = inttoptr i64 %"51" to ptr
-  store i32 %"52", ptr %"54", align 4
+"37":                                             ; preds = %1
+  %2 = load i64, ptr addrspace(4) %"38", align 8
+  store i64 %2, ptr addrspace(5) %"40", align 8
+  %3 = load i64, ptr addrspace(4) %"39", align 8
+  store i64 %3, ptr addrspace(5) %"41", align 8
+  %4 = load i64, ptr addrspace(5) %"40", align 8
+  %"56" = inttoptr i64 %4 to ptr
+  %5 = load i32, ptr %"56", align 4
+  store i32 %5, ptr addrspace(5) %"42", align 4
+  %6 = load i32, ptr addrspace(5) %"42", align 4
+  %"49" = sub i32 0, %6
+  store i32 %"49", ptr addrspace(5) %"43", align 4
+  %7 = load i32, ptr addrspace(5) %"43", align 4
+  %8 = load i32, ptr addrspace(5) %"42", align 4
+  %"51" = call i32 @llvm.amdgcn.mul.i24(i32 %7, i32 %8)
+  store i32 %"51", ptr addrspace(5) %"44", align 4
+  %9 = load i64, ptr addrspace(5) %"41", align 8
+  %10 = load i32, ptr addrspace(5) %"44", align 4
+  %"57" = inttoptr i64 %9 to ptr
+  store i32 %10, ptr %"57", align 4
   ret void
 }
 

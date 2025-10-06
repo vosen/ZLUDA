@@ -5,93 +5,93 @@ declare hidden <2 x i32> @__zluda_ptx_impl_ldmatrix_m8n8_x2_b16(ptr addrspace(3)
 
 declare hidden i32 @__zluda_ptx_impl_sreg_tid(i8) #0
 
-define amdgpu_kernel void @ldmatrix(ptr addrspace(4) byref(i64) %"55") #1 {
-  %"56" = alloca i64, align 8, addrspace(5)
-  %"57" = alloca i32, align 4, addrspace(5)
-  %"58" = alloca i64, align 8, addrspace(5)
+define amdgpu_kernel void @ldmatrix(ptr addrspace(4) byref(i64) %"58") #1 {
   %"59" = alloca i64, align 8, addrspace(5)
   %"60" = alloca i32, align 4, addrspace(5)
   %"61" = alloca i64, align 8, addrspace(5)
-  %"62" = alloca i32, align 4, addrspace(5)
+  %"62" = alloca i64, align 8, addrspace(5)
   %"63" = alloca i32, align 4, addrspace(5)
-  %"64" = alloca i32, align 4, addrspace(5)
+  %"64" = alloca i64, align 8, addrspace(5)
+  %"65" = alloca i32, align 4, addrspace(5)
+  %"66" = alloca i32, align 4, addrspace(5)
+  %"67" = alloca i32, align 4, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
-  br label %"52"
+  br label %"55"
 
-"52":                                             ; preds = %1
-  %"65" = load i64, ptr addrspace(4) %"55", align 8
-  store i64 %"65", ptr addrspace(5) %"56", align 8
-  %"40" = call i32 @__zluda_ptx_impl_sreg_tid(i8 0)
-  br label %"53"
+"55":                                             ; preds = %1
+  %2 = load i64, ptr addrspace(4) %"58", align 8
+  store i64 %2, ptr addrspace(5) %"59", align 8
+  %"43" = call i32 @__zluda_ptx_impl_sreg_tid(i8 0)
+  br label %"56"
 
-"53":                                             ; preds = %"52"
-  store i32 %"40", ptr addrspace(5) %"57", align 4
-  %"68" = load i32, ptr addrspace(5) %"57", align 4
-  %"67" = zext i32 %"68" to i64
-  store i64 %"67", ptr addrspace(5) %"58", align 8
-  store i64 ptrtoint (ptr addrspace(1) @values_g to i64), ptr addrspace(5) %"59", align 8
-  %"71" = load i64, ptr addrspace(5) %"58", align 8
-  %"72" = load i64, ptr addrspace(5) %"59", align 8
-  %2 = mul i64 %"71", 4
-  %"70" = add i64 %2, %"72"
-  store i64 %"70", ptr addrspace(5) %"59", align 8
-  %"74" = load i64, ptr addrspace(5) %"59", align 8
-  %"106" = inttoptr i64 %"74" to ptr addrspace(1)
-  %"105" = load i32, ptr addrspace(1) %"106", align 4
-  store i32 %"105", ptr addrspace(5) %"62", align 4
-  store i32 ptrtoint (ptr addrspace(3) @values_s to i32), ptr addrspace(5) %"60", align 4
-  %"77" = load i32, ptr addrspace(5) %"57", align 4
-  %"78" = load i32, ptr addrspace(5) %"60", align 4
-  %3 = mul i32 %"77", 4
-  %"108" = add i32 %3, %"78"
-  store i32 %"108", ptr addrspace(5) %"60", align 4
-  %"79" = load i32, ptr addrspace(5) %"60", align 4
-  %"80" = load i32, ptr addrspace(5) %"62", align 4
-  %"110" = inttoptr i32 %"79" to ptr addrspace(3)
-  store i32 %"80", ptr addrspace(3) %"110", align 4
-  %"81" = load i64, ptr addrspace(5) %"59", align 8
-  %"112" = inttoptr i64 %"81" to ptr addrspace(1)
-  %"44" = getelementptr inbounds i8, ptr addrspace(1) %"112", i64 128
-  %"113" = load i32, ptr addrspace(1) %"44", align 4
-  store i32 %"113", ptr addrspace(5) %"62", align 4
-  %"83" = load i32, ptr addrspace(5) %"60", align 4
-  %"114" = inttoptr i32 %"83" to ptr addrspace(3)
-  %"46" = getelementptr inbounds i8, ptr addrspace(3) %"114", i64 128
-  %"84" = load i32, ptr addrspace(5) %"62", align 4
-  store i32 %"84", ptr addrspace(3) %"46", align 4
-  store i64 ptrtoint (ptr addrspace(3) @values_s to i64), ptr addrspace(5) %"61", align 8
-  %"87" = load i64, ptr addrspace(5) %"61", align 8
-  %4 = inttoptr i64 %"87" to ptr addrspace(3)
-  %"86" = addrspacecast ptr addrspace(3) %4 to ptr
-  store ptr %"86", ptr addrspace(5) %"61", align 8
-  %"89" = load i64, ptr addrspace(5) %"58", align 8
-  %"90" = load i64, ptr addrspace(5) %"61", align 8
-  %5 = mul i64 %"89", 16
-  %"117" = add i64 %5, %"90"
-  store i64 %"117", ptr addrspace(5) %"61", align 8
-  %"91" = load i64, ptr addrspace(5) %"61", align 8
-  %"119" = inttoptr i64 %"91" to ptr addrspace(3)
-  %"48" = call <2 x i32> @__zluda_ptx_impl_ldmatrix_m8n8_x2_b16(ptr addrspace(3) %"119")
-  %"120" = extractelement <2 x i32> %"48", i8 0
-  %"121" = extractelement <2 x i32> %"48", i8 1
-  store i32 %"120", ptr addrspace(5) %"63", align 4
-  store i32 %"121", ptr addrspace(5) %"64", align 4
-  %"95" = load i64, ptr addrspace(5) %"58", align 8
-  %"96" = load i64, ptr addrspace(5) %"56", align 8
-  %6 = mul i64 %"95", 8
-  %"94" = add i64 %6, %"96"
-  store i64 %"94", ptr addrspace(5) %"56", align 8
-  %"97" = load i64, ptr addrspace(5) %"56", align 8
-  %"98" = load i32, ptr addrspace(5) %"63", align 4
-  %"122" = inttoptr i64 %"97" to ptr
-  store i32 %"98", ptr %"122", align 4
-  %"99" = load i64, ptr addrspace(5) %"56", align 8
-  %"123" = inttoptr i64 %"99" to ptr
-  %"51" = getelementptr inbounds i8, ptr %"123", i64 4
-  %"100" = load i32, ptr addrspace(5) %"64", align 4
-  store i32 %"100", ptr %"51", align 4
+"56":                                             ; preds = %"55"
+  store i32 %"43", ptr addrspace(5) %"60", align 4
+  %3 = load i32, ptr addrspace(5) %"60", align 4
+  %"70" = zext i32 %3 to i64
+  store i64 %"70", ptr addrspace(5) %"61", align 8
+  store i64 ptrtoint (ptr addrspace(1) @values_g to i64), ptr addrspace(5) %"62", align 8
+  %4 = load i64, ptr addrspace(5) %"61", align 8
+  %5 = load i64, ptr addrspace(5) %"62", align 8
+  %6 = mul i64 %4, 4
+  %"73" = add i64 %6, %5
+  store i64 %"73", ptr addrspace(5) %"62", align 8
+  %7 = load i64, ptr addrspace(5) %"62", align 8
+  %"109" = inttoptr i64 %7 to ptr addrspace(1)
+  %8 = load i32, ptr addrspace(1) %"109", align 4
+  store i32 %8, ptr addrspace(5) %"65", align 4
+  store i32 ptrtoint (ptr addrspace(3) @values_s to i32), ptr addrspace(5) %"63", align 4
+  %9 = load i32, ptr addrspace(5) %"60", align 4
+  %10 = load i32, ptr addrspace(5) %"63", align 4
+  %11 = mul i32 %9, 4
+  %"111" = add i32 %11, %10
+  store i32 %"111", ptr addrspace(5) %"63", align 4
+  %12 = load i32, ptr addrspace(5) %"63", align 4
+  %13 = load i32, ptr addrspace(5) %"65", align 4
+  %"113" = inttoptr i32 %12 to ptr addrspace(3)
+  store i32 %13, ptr addrspace(3) %"113", align 4
+  %14 = load i64, ptr addrspace(5) %"62", align 8
+  %"115" = inttoptr i64 %14 to ptr addrspace(1)
+  %"47" = getelementptr inbounds i8, ptr addrspace(1) %"115", i64 128
+  %15 = load i32, ptr addrspace(1) %"47", align 4
+  store i32 %15, ptr addrspace(5) %"65", align 4
+  %16 = load i32, ptr addrspace(5) %"63", align 4
+  %"117" = inttoptr i32 %16 to ptr addrspace(3)
+  %"49" = getelementptr inbounds i8, ptr addrspace(3) %"117", i64 128
+  %17 = load i32, ptr addrspace(5) %"65", align 4
+  store i32 %17, ptr addrspace(3) %"49", align 4
+  store i64 ptrtoint (ptr addrspace(3) @values_s to i64), ptr addrspace(5) %"64", align 8
+  %18 = load i64, ptr addrspace(5) %"64", align 8
+  %19 = inttoptr i64 %18 to ptr addrspace(3)
+  %"89" = addrspacecast ptr addrspace(3) %19 to ptr
+  store ptr %"89", ptr addrspace(5) %"64", align 8
+  %20 = load i64, ptr addrspace(5) %"61", align 8
+  %21 = load i64, ptr addrspace(5) %"64", align 8
+  %22 = mul i64 %20, 16
+  %"120" = add i64 %22, %21
+  store i64 %"120", ptr addrspace(5) %"64", align 8
+  %23 = load i64, ptr addrspace(5) %"64", align 8
+  %"122" = inttoptr i64 %23 to ptr addrspace(3)
+  %"51" = call <2 x i32> @__zluda_ptx_impl_ldmatrix_m8n8_x2_b16(ptr addrspace(3) %"122")
+  %"123" = extractelement <2 x i32> %"51", i8 0
+  %"124" = extractelement <2 x i32> %"51", i8 1
+  store i32 %"123", ptr addrspace(5) %"66", align 4
+  store i32 %"124", ptr addrspace(5) %"67", align 4
+  %24 = load i64, ptr addrspace(5) %"61", align 8
+  %25 = load i64, ptr addrspace(5) %"59", align 8
+  %26 = mul i64 %24, 8
+  %"97" = add i64 %26, %25
+  store i64 %"97", ptr addrspace(5) %"59", align 8
+  %27 = load i64, ptr addrspace(5) %"59", align 8
+  %28 = load i32, ptr addrspace(5) %"66", align 4
+  %"125" = inttoptr i64 %27 to ptr
+  store i32 %28, ptr %"125", align 4
+  %29 = load i64, ptr addrspace(5) %"59", align 8
+  %"126" = inttoptr i64 %29 to ptr
+  %"54" = getelementptr inbounds i8, ptr %"126", i64 4
+  %30 = load i32, ptr addrspace(5) %"67", align 4
+  store i32 %30, ptr %"54", align 4
   ret void
 }
 
