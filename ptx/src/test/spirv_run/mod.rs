@@ -358,7 +358,7 @@ test_ptx!(param_is_addressable, [0xDEAD], [0u64]);
 //    [0xce16728dead1ceb0u64, 0xe7728e3c390b7fb7],
 //    [0xce16728dead1ceb1u64, 0xe7728e3c390b7fb8]
 //);
-test_ptx!(copysign, [0x8bda2a2cu32, 0xe31a8fd7u32], [0x8bda2a2cu32]);
+test_ptx!(copysign, [0x0BDA2A2Cu32, 0xe31a8fd7u32], [0x631A8FD7u32]);
 
 test_ptx!(assertfail);
 // TODO: not yet supported

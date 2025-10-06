@@ -2887,8 +2887,8 @@ impl<'a> MethodEmitContext<'a> {
             Some(arguments.dst),
             Some(&type_.into()),
             vec![
-                (src1, get_scalar_type(self.context, type_)),
                 (src2, get_scalar_type(self.context, type_)),
+                (src1, get_scalar_type(self.context, type_)),
             ],
         )?;
         Ok(())
