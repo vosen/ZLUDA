@@ -72,6 +72,7 @@ cuda_macros::cuda_function_declarations!(
             cuCtxGetApiVersion,
             cuCtxGetCurrent,
             cuCtxGetDevice,
+            cuCtxGetDevice_v2,
             cuCtxGetLimit,
             cuCtxGetStreamPriorityRange,
             cuCtxPopCurrent,

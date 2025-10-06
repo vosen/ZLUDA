@@ -131,9 +131,15 @@ macro_rules! from_cuda_object {
         $(
             impl<'a> zluda_common::FromCuda<'a, <$type_ as zluda_common::ZludaObject>::CudaHandle, <$type_ as zluda_common::ZludaObject>::Error> for &'a $type_ {
                 fn from_cuda(handle: &'a <$type_ as zluda_common::ZludaObject>::CudaHandle) -> Result<&'a $type_, <$type_ as zluda_common::ZludaObject>::Error> {
-                    Ok(zluda_common::as_ref(handle).as_result()?)
+                    use zluda_common::CudaErrorType;
+                    Ok(zluda_common::as_ref(handle).ok_or(<$type_ as zluda_common::ZludaObject>::Error::INVALID_VALUE)?.as_result()?)
                 }
             }
+
+            // If the CUDA handle is not pointer sized it will break assumptions in `as_ref`
+            const _: fn() = || {
+                let _ = std::mem::transmute::<<$type_ as zluda_common::ZludaObject>::CudaHandle, usize>;
+            };
         )*
     };
 }
@@ -667,10 +673,12 @@ impl<T: ZludaObject> LiveCheck<T> {
 }
 
 /// Cast a `T::CudaHandle` reference to a [`LiveCheck`] reference, preserving the lifetime.
-pub fn as_ref<'a, T: ZludaObject>(
-    handle: &'a T::CudaHandle,
-) -> &'a ManuallyDrop<Box<LiveCheck<T>>> {
-    unsafe { mem::transmute(handle) }
+pub fn as_ref<'a, T: ZludaObject>(handle: &'a T::CudaHandle) -> Option<&'a LiveCheck<T>> {
+    if unsafe { mem::transmute_copy::<_, usize>(handle) } == 0 {
+        return None;
+    }
+    let option_box = unsafe { mem::transmute::<_, &'a ManuallyDrop<Box<LiveCheck<T>>>>(handle) };
+    Some(option_box)
 }
 
 /// Try to drop `handle`.

@@ -97,7 +97,14 @@ pub(crate) fn get_attribute(
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_TCC_DRIVER
         | CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MEMORY_POOLS_SUPPORTED
         | CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MEMPOOL_SUPPORTED_HANDLE_TYPES
-        | CUdevice_attribute::CU_DEVICE_ATTRIBUTE_DMA_BUF_SUPPORTED => {
+        | CUdevice_attribute::CU_DEVICE_ATTRIBUTE_DMA_BUF_SUPPORTED
+        | CUdevice_attribute::CU_DEVICE_ATTRIBUTE_NUMA_CONFIG
+        | CUdevice_attribute::CU_DEVICE_ATTRIBUTE_NUMA_ID
+        | CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MPS_ENABLED
+        | CUdevice_attribute::CU_DEVICE_ATTRIBUTE_HOST_NUMA_ID
+        | CUdevice_attribute::CU_DEVICE_ATTRIBUTE_GPU_PCI_DEVICE_ID // todo: check
+        | CUdevice_attribute::CU_DEVICE_ATTRIBUTE_GPU_PCI_SUBSYSTEM_ID // todo: check
+        | CUdevice_attribute::CU_DEVICE_ATTRIBUTE_HOST_NUMA_MULTINODE_IPC_SUPPORTED => {
             *pi = 0;
             return Ok(());
         }
