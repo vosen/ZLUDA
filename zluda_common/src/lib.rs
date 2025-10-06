@@ -9,8 +9,8 @@ use cuda_types::{
 use dark_api::fatbin::{Fatbin, FatbinError, FatbinFile, FatbinSubmodule};
 use hip_runtime_sys::*;
 use hipblaslt_sys::*;
-use rocblas_sys::*;
 use miopen_sys::*;
+use rocblas_sys::*;
 use std::{
     ffi::{c_void, CStr},
     mem::{self, ManuallyDrop, MaybeUninit},
