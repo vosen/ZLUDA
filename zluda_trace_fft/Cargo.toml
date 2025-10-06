@@ -22,5 +22,6 @@ cglue = "0.3.5"
 [package.metadata.zluda]
 linux_symlinks = [
     "trace/libcufft.so",
-    "trace/libcufft.so.11"
+    "trace/libcufft.so.11",
+    "trace/libcufft.so.12"
 ]

@@ -84,6 +84,7 @@ fn run_instruction<'input>(
         | ast::Instruction::Call { .. }
         | ast::Instruction::Clz { .. }
         | ast::Instruction::Cos { .. }
+        | ast::Instruction::Copysign { .. }
         | ast::Instruction::CpAsync { .. }
         | ast::Instruction::CpAsyncCommitGroup { .. }
         | ast::Instruction::CpAsyncWaitGroup { .. }

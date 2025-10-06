@@ -20,6 +20,7 @@ const CUBLASLT_RS: &'static str = include_str! {"cublaslt.rs"};
 const CUBLASLT_INTERNAL_RS: &'static str = include_str! {"cublaslt_internal.rs"};
 const CUFFT_RS: &'static str = include_str! {"cufft.rs"};
 const CUSPARSE_RS: &'static str = include_str! {"cusparse.rs"};
+const CUDNN8_RS: &'static str = include_str! {"cudnn8.rs"};
 const CUDNN9_RS: &'static str = include_str! {"cudnn9.rs"};
 
 // This macro accepts following arguments:
@@ -64,6 +65,11 @@ pub fn cufft_function_declarations(tokens: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn cusparse_function_declarations(tokens: TokenStream) -> TokenStream {
     function_declarations(tokens, CUSPARSE_RS)
+}
+
+#[proc_macro]
+pub fn cudnn8_function_declarations(tokens: TokenStream) -> TokenStream {
+    function_declarations(tokens, CUDNN8_RS)
 }
 
 #[proc_macro]

@@ -69,57 +69,6 @@ pub const CUDNN_CNN_TRAIN_MINOR: u32 = 9;
 pub const CUDNN_CNN_TRAIN_PATCH: u32 = 7;
 pub use super::cudnn::cudnnContext;
 pub type cudnnHandle_t = *mut cudnnContext;
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_SUCCESS: cudnnStatus_t = cudnnStatus_t(0);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_NOT_INITIALIZED: cudnnStatus_t = cudnnStatus_t(1);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_ALLOC_FAILED: cudnnStatus_t = cudnnStatus_t(2);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_BAD_PARAM: cudnnStatus_t = cudnnStatus_t(3);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_INTERNAL_ERROR: cudnnStatus_t = cudnnStatus_t(4);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_INVALID_VALUE: cudnnStatus_t = cudnnStatus_t(5);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_ARCH_MISMATCH: cudnnStatus_t = cudnnStatus_t(6);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_MAPPING_ERROR: cudnnStatus_t = cudnnStatus_t(7);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_EXECUTION_FAILED: cudnnStatus_t = cudnnStatus_t(8);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_NOT_SUPPORTED: cudnnStatus_t = cudnnStatus_t(9);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_LICENSE_ERROR: cudnnStatus_t = cudnnStatus_t(10);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_RUNTIME_PREREQUISITE_MISSING: cudnnStatus_t = cudnnStatus_t(
-        11,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_RUNTIME_IN_PROGRESS: cudnnStatus_t = cudnnStatus_t(12);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_RUNTIME_FP_OVERFLOW: cudnnStatus_t = cudnnStatus_t(13);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_VERSION_MISMATCH: cudnnStatus_t = cudnnStatus_t(14);
-}
-#[repr(transparent)]
-#[must_use]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct cudnnStatus_t(pub ::core::ffi::c_uint);
 pub use super::cudnn::cudnnRuntimeTag_t;
 pub use super::cudnn::cudnnErrQueryMode_t;
 pub use super::cudnn::cudnnTensorStruct;
@@ -574,3 +523,149 @@ pub use super::cudnn9::cudnnBackendTensorReordering_t;
 pub use super::cudnn::cudnnPaddingMode_t;
 pub use super::cudnn9::cudnnBackendNormMode_t;
 pub use super::cudnn::cudnnBackendNormFwdPhase_t;
+impl cudnnError_t {
+    pub const r#NOT_INITIALIZED: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(1)
+    });
+    pub const r#ALLOC_FAILED: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(2)
+    });
+    pub const r#BAD_PARAM: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(3)
+    });
+    pub const r#INTERNAL_ERROR: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(4)
+    });
+    pub const r#INVALID_VALUE: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(5)
+    });
+    pub const r#ARCH_MISMATCH: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(6)
+    });
+    pub const r#MAPPING_ERROR: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(7)
+    });
+    pub const r#EXECUTION_FAILED: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(8)
+    });
+    pub const r#NOT_SUPPORTED: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(9)
+    });
+    pub const r#LICENSE_ERROR: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(10)
+    });
+    pub const r#RUNTIME_PREREQUISITE_MISSING: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(11)
+    });
+    pub const r#RUNTIME_IN_PROGRESS: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(12)
+    });
+    pub const r#RUNTIME_FP_OVERFLOW: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(13)
+    });
+    pub const r#VERSION_MISMATCH: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(14)
+    });
+}
+#[repr(transparent)]
+#[derive(Debug, Hash, Copy, Clone, PartialEq, Eq)]
+pub struct cudnnError_t(pub ::core::num::NonZeroU32);
+pub trait cudnnStatus_tConsts {
+    const SUCCESS: cudnnStatus_t = cudnnStatus_t::Ok(());
+    const ERROR_NOT_INITIALIZED: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#NOT_INITIALIZED,
+    );
+    const ERROR_ALLOC_FAILED: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#ALLOC_FAILED,
+    );
+    const ERROR_BAD_PARAM: cudnnStatus_t = cudnnStatus_t::Err(cudnnError_t::r#BAD_PARAM);
+    const ERROR_INTERNAL_ERROR: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#INTERNAL_ERROR,
+    );
+    const ERROR_INVALID_VALUE: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#INVALID_VALUE,
+    );
+    const ERROR_ARCH_MISMATCH: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#ARCH_MISMATCH,
+    );
+    const ERROR_MAPPING_ERROR: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#MAPPING_ERROR,
+    );
+    const ERROR_EXECUTION_FAILED: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#EXECUTION_FAILED,
+    );
+    const ERROR_NOT_SUPPORTED: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#NOT_SUPPORTED,
+    );
+    const ERROR_LICENSE_ERROR: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#LICENSE_ERROR,
+    );
+    const ERROR_RUNTIME_PREREQUISITE_MISSING: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#RUNTIME_PREREQUISITE_MISSING,
+    );
+    const ERROR_RUNTIME_IN_PROGRESS: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#RUNTIME_IN_PROGRESS,
+    );
+    const ERROR_RUNTIME_FP_OVERFLOW: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#RUNTIME_FP_OVERFLOW,
+    );
+    const ERROR_VERSION_MISMATCH: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#VERSION_MISMATCH,
+    );
+}
+impl cudnnStatus_tConsts for cudnnStatus_t {}
+#[must_use]
+pub type cudnnStatus_t = ::core::result::Result<(), cudnnError_t>;
+const _: fn() = || {
+    let _ = std::mem::transmute::<cudnnStatus_t, u32>;
+};
+
+impl From<crate::cudnn9::cudnnError_t> for cudnnError_t {
+    fn from(err: crate::cudnn9::cudnnError_t) -> Self {
+        match err {
+            crate::cudnn9::cudnnError_t::NOT_INITIALIZED => {
+                crate::cudnn8::cudnnError_t::NOT_INITIALIZED
+            }
+            crate::cudnn9::cudnnError_t::ALLOC_FAILED => {
+                crate::cudnn8::cudnnError_t::ALLOC_FAILED
+            }
+            crate::cudnn9::cudnnError_t::BAD_PARAM => {
+                crate::cudnn8::cudnnError_t::BAD_PARAM
+            }
+            crate::cudnn9::cudnnError_t::INTERNAL_ERROR => {
+                crate::cudnn8::cudnnError_t::INTERNAL_ERROR
+            }
+            crate::cudnn9::cudnnError_t::INVALID_VALUE => {
+                crate::cudnn8::cudnnError_t::INVALID_VALUE
+            }
+            crate::cudnn9::cudnnError_t::ARCH_MISMATCH => {
+                crate::cudnn8::cudnnError_t::ARCH_MISMATCH
+            }
+            crate::cudnn9::cudnnError_t::MAPPING_ERROR => {
+                crate::cudnn8::cudnnError_t::MAPPING_ERROR
+            }
+            crate::cudnn9::cudnnError_t::EXECUTION_FAILED => {
+                crate::cudnn8::cudnnError_t::EXECUTION_FAILED
+            }
+            crate::cudnn9::cudnnError_t::NOT_SUPPORTED => {
+                crate::cudnn8::cudnnError_t::NOT_SUPPORTED
+            }
+            crate::cudnn9::cudnnError_t::LICENSE_ERROR => {
+                crate::cudnn8::cudnnError_t::LICENSE_ERROR
+            }
+            crate::cudnn9::cudnnError_t::RUNTIME_PREREQUISITE_MISSING => {
+                crate::cudnn8::cudnnError_t::RUNTIME_PREREQUISITE_MISSING
+            }
+            crate::cudnn9::cudnnError_t::RUNTIME_IN_PROGRESS => {
+                crate::cudnn8::cudnnError_t::RUNTIME_IN_PROGRESS
+            }
+            crate::cudnn9::cudnnError_t::RUNTIME_FP_OVERFLOW => {
+                crate::cudnn8::cudnnError_t::RUNTIME_FP_OVERFLOW
+            }
+            crate::cudnn9::cudnnError_t::VERSION_MISMATCH => {
+                crate::cudnn8::cudnnError_t::VERSION_MISMATCH
+            }
+            _ => crate::cudnn8::cudnnError_t::INTERNAL_ERROR,
+        }
+    }
+}

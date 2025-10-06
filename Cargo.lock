@@ -3780,6 +3780,25 @@ version = "0.0.0"
 dependencies = [
  "cuda_macros",
  "cuda_types",
+ "zluda_common",
+]
+
+[[package]]
+name = "zluda_dnn8"
+version = "0.0.0"
+dependencies = [
+ "cuda_macros",
+ "cuda_types",
+ "zluda_dnn",
+]
+
+[[package]]
+name = "zluda_dnn9"
+version = "0.0.0"
+dependencies = [
+ "cuda_macros",
+ "cuda_types",
+ "zluda_dnn",
 ]
 
 [[package]]

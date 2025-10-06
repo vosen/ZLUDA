@@ -13,27 +13,27 @@ pub type cudaGraphExecUpdateResultInfo_st = super::cuda::CUgraphExecUpdateResult
 pub type cudaAsyncNotificationType = super::cuda::CUasyncNotificationType_enum;
 pub type cudaGraph_t = super::cuda::CUgraph;
 pub const CUDNN_MAJOR: u32 = 9;
-pub const CUDNN_MINOR: u32 = 8;
-pub const CUDNN_PATCHLEVEL: u32 = 0;
-pub const CUDNN_VERSION: u32 = 90800;
+pub const CUDNN_MINOR: u32 = 13;
+pub const CUDNN_PATCHLEVEL: u32 = 1;
+pub const CUDNN_VERSION: u32 = 91301;
 pub const CUDNN_MAX_SM_MAJOR_NUMBER: u32 = 12;
-pub const CUDNN_MAX_SM_MINOR_NUMBER: u32 = 0;
-pub const CUDNN_MAX_DEVICE_VERSION: u32 = 1200;
+pub const CUDNN_MAX_SM_MINOR_NUMBER: u32 = 1;
+pub const CUDNN_MAX_DEVICE_VERSION: u32 = 1210;
 pub const CUDNN_GRAPH_MAJOR: u32 = 9;
-pub const CUDNN_GRAPH_MINOR: u32 = 8;
-pub const CUDNN_GRAPH_PATCH: u32 = 0;
+pub const CUDNN_GRAPH_MINOR: u32 = 13;
+pub const CUDNN_GRAPH_PATCH: u32 = 1;
 pub const CUDNN_DIM_MAX: u32 = 8;
 pub const CUDNN_OPS_MAJOR: u32 = 9;
-pub const CUDNN_OPS_MINOR: u32 = 8;
-pub const CUDNN_OPS_PATCH: u32 = 0;
+pub const CUDNN_OPS_MINOR: u32 = 13;
+pub const CUDNN_OPS_PATCH: u32 = 1;
 pub const CUDNN_LRN_MIN_N: u32 = 1;
 pub const CUDNN_LRN_MAX_N: u32 = 16;
 pub const CUDNN_LRN_MIN_K: f64 = 0.00001;
 pub const CUDNN_LRN_MIN_BETA: f64 = 0.01;
 pub const CUDNN_BN_MIN_EPSILON: f64 = 0.0;
 pub const CUDNN_ADV_MAJOR: u32 = 9;
-pub const CUDNN_ADV_MINOR: u32 = 8;
-pub const CUDNN_ADV_PATCH: u32 = 0;
+pub const CUDNN_ADV_MINOR: u32 = 13;
+pub const CUDNN_ADV_PATCH: u32 = 1;
 pub const CUDNN_RNN_PADDED_IO_DISABLED: u32 = 0;
 pub const CUDNN_RNN_PADDED_IO_ENABLED: u32 = 1;
 pub const CUDNN_SEQDATA_DIM_COUNT: u32 = 4;
@@ -43,225 +43,10 @@ pub const CUDNN_ATTN_DISABLE_PROJ_BIASES: u32 = 0;
 pub const CUDNN_ATTN_ENABLE_PROJ_BIASES: u32 = 2;
 pub const CUDNN_ATTN_WKIND_COUNT: u32 = 8;
 pub const CUDNN_CNN_MAJOR: u32 = 9;
-pub const CUDNN_CNN_MINOR: u32 = 8;
-pub const CUDNN_CNN_PATCH: u32 = 0;
+pub const CUDNN_CNN_MINOR: u32 = 13;
+pub const CUDNN_CNN_PATCH: u32 = 1;
 pub use super::cudnn::cudnnContext;
 pub type cudnnHandle_t = *mut cudnnContext;
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_SUCCESS: cudnnStatus_t = cudnnStatus_t(0);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_NOT_INITIALIZED: cudnnStatus_t = cudnnStatus_t(1001);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_SUBLIBRARY_VERSION_MISMATCH: cudnnStatus_t = cudnnStatus_t(
-        1002,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_SERIALIZATION_VERSION_MISMATCH: cudnnStatus_t = cudnnStatus_t(
-        1003,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_DEPRECATED: cudnnStatus_t = cudnnStatus_t(1004);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_LICENSE_ERROR: cudnnStatus_t = cudnnStatus_t(1005);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_RUNTIME_IN_PROGRESS: cudnnStatus_t = cudnnStatus_t(1006);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_RUNTIME_FP_OVERFLOW: cudnnStatus_t = cudnnStatus_t(1007);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_SUBLIBRARY_LOADING_FAILED: cudnnStatus_t = cudnnStatus_t(
-        1008,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_BAD_PARAM: cudnnStatus_t = cudnnStatus_t(2000);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_BAD_PARAM_NULL_POINTER: cudnnStatus_t = cudnnStatus_t(2002);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_BAD_PARAM_MISALIGNED_POINTER: cudnnStatus_t = cudnnStatus_t(
-        2003,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_BAD_PARAM_NOT_FINALIZED: cudnnStatus_t = cudnnStatus_t(2004);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_BAD_PARAM_OUT_OF_BOUND: cudnnStatus_t = cudnnStatus_t(2005);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_BAD_PARAM_SIZE_INSUFFICIENT: cudnnStatus_t = cudnnStatus_t(
-        2006,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_BAD_PARAM_STREAM_MISMATCH: cudnnStatus_t = cudnnStatus_t(
-        2007,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_BAD_PARAM_SHAPE_MISMATCH: cudnnStatus_t = cudnnStatus_t(2008);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_BAD_PARAM_DUPLICATED_ENTRIES: cudnnStatus_t = cudnnStatus_t(
-        2009,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_BAD_PARAM_ATTRIBUTE_TYPE: cudnnStatus_t = cudnnStatus_t(2010);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_BAD_PARAM_CUDA_GRAPH_MISMATCH: cudnnStatus_t = cudnnStatus_t(
-        2011,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_BAD_PARAM_DESCRIPTOR_TYPE: cudnnStatus_t = cudnnStatus_t(
-        2012,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_NOT_SUPPORTED: cudnnStatus_t = cudnnStatus_t(3000);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_NOT_SUPPORTED_GRAPH_PATTERN: cudnnStatus_t = cudnnStatus_t(
-        3001,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_NOT_SUPPORTED_SHAPE: cudnnStatus_t = cudnnStatus_t(3002);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_NOT_SUPPORTED_DATA_TYPE: cudnnStatus_t = cudnnStatus_t(3003);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_NOT_SUPPORTED_LAYOUT: cudnnStatus_t = cudnnStatus_t(3004);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_NOT_SUPPORTED_INCOMPATIBLE_CUDA_DRIVER: cudnnStatus_t = cudnnStatus_t(
-        3005,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_NOT_SUPPORTED_INCOMPATIBLE_CUDART: cudnnStatus_t = cudnnStatus_t(
-        3006,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_NOT_SUPPORTED_ARCH_MISMATCH: cudnnStatus_t = cudnnStatus_t(
-        3007,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_NOT_SUPPORTED_RUNTIME_PREREQUISITE_MISSING: cudnnStatus_t = cudnnStatus_t(
-        3008,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_NOT_SUPPORTED_SUBLIBRARY_UNAVAILABLE: cudnnStatus_t = cudnnStatus_t(
-        3009,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_NOT_SUPPORTED_SHARED_MEMORY_INSUFFICIENT: cudnnStatus_t = cudnnStatus_t(
-        3010,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_NOT_SUPPORTED_PADDING: cudnnStatus_t = cudnnStatus_t(3011);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_NOT_SUPPORTED_BAD_LAUNCH_PARAM: cudnnStatus_t = cudnnStatus_t(
-        3012,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_NOT_SUPPORTED_CUDA_GRAPH_NATIVE_API: cudnnStatus_t = cudnnStatus_t(
-        3013,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_INTERNAL_ERROR: cudnnStatus_t = cudnnStatus_t(4000);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_INTERNAL_ERROR_COMPILATION_FAILED: cudnnStatus_t = cudnnStatus_t(
-        4001,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_INTERNAL_ERROR_UNEXPECTED_VALUE: cudnnStatus_t = cudnnStatus_t(
-        4002,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_INTERNAL_ERROR_HOST_ALLOCATION_FAILED: cudnnStatus_t = cudnnStatus_t(
-        4003,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_INTERNAL_ERROR_DEVICE_ALLOCATION_FAILED: cudnnStatus_t = cudnnStatus_t(
-        4004,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_INTERNAL_ERROR_BAD_LAUNCH_PARAM: cudnnStatus_t = cudnnStatus_t(
-        4005,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_INTERNAL_ERROR_TEXTURE_CREATION_FAILED: cudnnStatus_t = cudnnStatus_t(
-        4006,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_EXECUTION_FAILED: cudnnStatus_t = cudnnStatus_t(5000);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_EXECUTION_FAILED_CUDA_DRIVER: cudnnStatus_t = cudnnStatus_t(
-        5001,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_EXECUTION_FAILED_CUBLAS: cudnnStatus_t = cudnnStatus_t(5002);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_EXECUTION_FAILED_CUDART: cudnnStatus_t = cudnnStatus_t(5003);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_EXECUTION_FAILED_CURAND: cudnnStatus_t = cudnnStatus_t(5004);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_ALLOC_FAILED: cudnnStatus_t = cudnnStatus_t(4003);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_INVALID_VALUE: cudnnStatus_t = cudnnStatus_t(2001);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_ARCH_MISMATCH: cudnnStatus_t = cudnnStatus_t(3007);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_MAPPING_ERROR: cudnnStatus_t = cudnnStatus_t(4006);
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_RUNTIME_PREREQUISITE_MISSING: cudnnStatus_t = cudnnStatus_t(
-        3008,
-    );
-}
-impl cudnnStatus_t {
-    pub const CUDNN_STATUS_VERSION_MISMATCH: cudnnStatus_t = cudnnStatus_t(1002);
-}
-#[repr(transparent)]
-#[must_use]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct cudnnStatus_t(pub ::core::ffi::c_uint);
 pub use super::cudnn::cudnnRuntimeTag_t;
 pub use super::cudnn::cudnnErrQueryMode_t;
 impl cudnnDataType_t {
@@ -314,6 +99,15 @@ impl cudnnDataType_t {
 }
 impl cudnnDataType_t {
     pub const CUDNN_DATA_FP4_E2M1: cudnnDataType_t = cudnnDataType_t(16);
+}
+impl cudnnDataType_t {
+    pub const CUDNN_DATA_INT4: cudnnDataType_t = cudnnDataType_t(17);
+}
+impl cudnnDataType_t {
+    pub const CUDNN_DATA_UINT4: cudnnDataType_t = cudnnDataType_t(18);
+}
+impl cudnnDataType_t {
+    pub const CUDNN_DATA_UINT32: cudnnDataType_t = cudnnDataType_t(19);
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -1231,6 +1025,11 @@ impl cudnnBackendAttributeName_t {
     );
 }
 impl cudnnBackendAttributeName_t {
+    pub const CUDNN_ATTR_REDUCTION_IS_DETERMINISTIC: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
+        1602,
+    );
+}
+impl cudnnBackendAttributeName_t {
     pub const CUDNN_ATTR_OPERATION_REDUCTION_XDESC: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
         1610,
     );
@@ -1621,6 +1420,81 @@ impl cudnnBackendAttributeName_t {
     );
 }
 impl cudnnBackendAttributeName_t {
+    pub const CUDNN_ATTR_OPERATION_EXPAND_BAND_MATRIX_XDESC: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
+        2250,
+    );
+}
+impl cudnnBackendAttributeName_t {
+    pub const CUDNN_ATTR_OPERATION_EXPAND_BAND_MATRIX_YDESC: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
+        2251,
+    );
+}
+impl cudnnBackendAttributeName_t {
+    pub const CUDNN_ATTR_OPERATION_EXPAND_BAND_MATRIX_LOWER_BANDWIDTH: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
+        2252,
+    );
+}
+impl cudnnBackendAttributeName_t {
+    pub const CUDNN_ATTR_OPERATION_EXPAND_BAND_MATRIX_UPPER_BANDWIDTH: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
+        2253,
+    );
+}
+impl cudnnBackendAttributeName_t {
+    pub const CUDNN_ATTR_OPERATION_EXPAND_BAND_MATRIX_AXIS: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
+        2254,
+    );
+}
+impl cudnnBackendAttributeName_t {
+    pub const CUDNN_ATTR_OPERATION_EXPAND_BAND_MATRIX_PAD_VALUE: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
+        2255,
+    );
+}
+impl cudnnBackendAttributeName_t {
+    pub const CUDNN_ATTR_OPERATION_EXPAND_BAND_MATRIX_KV_TOKEN_OFFSET_DESC: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
+        2256,
+    );
+}
+impl cudnnBackendAttributeName_t {
+    pub const CUDNN_ATTR_OPERATION_EXPAND_BAND_MATRIX_SPECULATIVE_MASK_DESC: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
+        2257,
+    );
+}
+impl cudnnBackendAttributeName_t {
+    pub const CUDNN_ATTR_OPERATION_CONTRACT_BAND_MATRIX_XDESC: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
+        2270,
+    );
+}
+impl cudnnBackendAttributeName_t {
+    pub const CUDNN_ATTR_OPERATION_CONTRACT_BAND_MATRIX_YDESC: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
+        2271,
+    );
+}
+impl cudnnBackendAttributeName_t {
+    pub const CUDNN_ATTR_OPERATION_CONTRACT_BAND_MATRIX_LOWER_BANDWIDTH: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
+        2272,
+    );
+}
+impl cudnnBackendAttributeName_t {
+    pub const CUDNN_ATTR_OPERATION_CONTRACT_BAND_MATRIX_UPPER_BANDWIDTH: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
+        2273,
+    );
+}
+impl cudnnBackendAttributeName_t {
+    pub const CUDNN_ATTR_OPERATION_CONTRACT_BAND_MATRIX_AXIS: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
+        2274,
+    );
+}
+impl cudnnBackendAttributeName_t {
+    pub const CUDNN_ATTR_OPERATION_CONTRACT_BAND_MATRIX_PAD_VALUE: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
+        2275,
+    );
+}
+impl cudnnBackendAttributeName_t {
+    pub const CUDNN_ATTR_OPERATION_CONTRACT_BAND_MAX_TOKEN_VALUE: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
+        2276,
+    );
+}
+impl cudnnBackendAttributeName_t {
     pub const CUDNN_ATTR_RNG_DISTRIBUTION: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
         2300,
     );
@@ -1681,6 +1555,11 @@ impl cudnnBackendAttributeName_t {
     );
 }
 impl cudnnBackendAttributeName_t {
+    pub const CUDNN_ATTR_KERNEL_CACHE_JSON_REPRESENTATION: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
+        2402,
+    );
+}
+impl cudnnBackendAttributeName_t {
     pub const CUDNN_ATTR_OPERATION_BLOCK_SCALE_QUANTIZE_XDESC: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
         2500,
     );
@@ -1731,6 +1610,11 @@ impl cudnnBackendAttributeName_t {
     );
 }
 impl cudnnBackendAttributeName_t {
+    pub const CUDNN_ATTR_OPERATION_BLOCK_SCALE_DEQUANTIZE_NEG_SCALE: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
+        2605,
+    );
+}
+impl cudnnBackendAttributeName_t {
     pub const CUDNN_ATTR_DEVICEPROP_DEVICE_ID: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
         2700,
     );
@@ -1743,6 +1627,36 @@ impl cudnnBackendAttributeName_t {
 impl cudnnBackendAttributeName_t {
     pub const CUDNN_ATTR_DEVICEPROP_JSON_REPRESENTATION: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
         2702,
+    );
+}
+impl cudnnBackendAttributeName_t {
+    pub const CUDNN_ATTR_OPERATION_SDPA_FWD_QDESC: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
+        2800,
+    );
+}
+impl cudnnBackendAttributeName_t {
+    pub const CUDNN_ATTR_OPERATION_SDPA_FWD_KDESC: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
+        2801,
+    );
+}
+impl cudnnBackendAttributeName_t {
+    pub const CUDNN_ATTR_OPERATION_SDPA_FWD_VDESC: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
+        2802,
+    );
+}
+impl cudnnBackendAttributeName_t {
+    pub const CUDNN_ATTR_OPERATION_SDPA_FWD_ODESC: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
+        2803,
+    );
+}
+impl cudnnBackendAttributeName_t {
+    pub const CUDNN_ATTR_OPERATION_SDPA_FWD_STATSDESC: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
+        2804,
+    );
+}
+impl cudnnBackendAttributeName_t {
+    pub const CUDNN_ATTR_OPERATION_SDPA_FWD_SCALEDESC: cudnnBackendAttributeName_t = cudnnBackendAttributeName_t(
+        2805,
     );
 }
 #[repr(transparent)]
@@ -1942,6 +1856,21 @@ impl cudnnBackendDescriptorType_t {
 impl cudnnBackendDescriptorType_t {
     pub const CUDNN_BACKEND_DEVICEPROP_DESCRIPTOR: cudnnBackendDescriptorType_t = cudnnBackendDescriptorType_t(
         38,
+    );
+}
+impl cudnnBackendDescriptorType_t {
+    pub const CUDNN_BACKEND_OPERATION_EXPAND_BAND_MATRIX_DESCRIPTOR: cudnnBackendDescriptorType_t = cudnnBackendDescriptorType_t(
+        39,
+    );
+}
+impl cudnnBackendDescriptorType_t {
+    pub const CUDNN_BACKEND_OPERATION_CONTRACT_BAND_MATRIX_DESCRIPTOR: cudnnBackendDescriptorType_t = cudnnBackendDescriptorType_t(
+        40,
+    );
+}
+impl cudnnBackendDescriptorType_t {
+    pub const CUDNN_BACKEND_OPERATION_SDPA_FWD_DESCRIPTOR: cudnnBackendDescriptorType_t = cudnnBackendDescriptorType_t(
+        41,
     );
 }
 #[repr(transparent)]
@@ -2402,3 +2331,327 @@ pub struct cudnnConvolutionBwdFilterAlgoPerfStruct {
     pub reserved: [::core::ffi::c_int; 3usize],
 }
 pub type cudnnConvolutionBwdFilterAlgoPerf_t = cudnnConvolutionBwdFilterAlgoPerfStruct;
+impl cudnnError_t {
+    pub const r#NOT_INITIALIZED: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(1001)
+    });
+    pub const r#SUBLIBRARY_VERSION_MISMATCH: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(1002)
+    });
+    pub const r#SERIALIZATION_VERSION_MISMATCH: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(1003)
+    });
+    pub const r#DEPRECATED: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(1004)
+    });
+    pub const r#LICENSE_ERROR: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(1005)
+    });
+    pub const r#RUNTIME_IN_PROGRESS: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(1006)
+    });
+    pub const r#RUNTIME_FP_OVERFLOW: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(1007)
+    });
+    pub const r#SUBLIBRARY_LOADING_FAILED: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(1008)
+    });
+    pub const r#BAD_PARAM: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(2000)
+    });
+    pub const r#BAD_PARAM_NULL_POINTER: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(2002)
+    });
+    pub const r#BAD_PARAM_MISALIGNED_POINTER: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(2003)
+    });
+    pub const r#BAD_PARAM_NOT_FINALIZED: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(2004)
+    });
+    pub const r#BAD_PARAM_OUT_OF_BOUND: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(2005)
+    });
+    pub const r#BAD_PARAM_SIZE_INSUFFICIENT: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(2006)
+    });
+    pub const r#BAD_PARAM_STREAM_MISMATCH: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(2007)
+    });
+    pub const r#BAD_PARAM_SHAPE_MISMATCH: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(2008)
+    });
+    pub const r#BAD_PARAM_DUPLICATED_ENTRIES: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(2009)
+    });
+    pub const r#BAD_PARAM_ATTRIBUTE_TYPE: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(2010)
+    });
+    pub const r#BAD_PARAM_CUDA_GRAPH_MISMATCH: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(2011)
+    });
+    pub const r#BAD_PARAM_DESCRIPTOR_TYPE: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(2012)
+    });
+    pub const r#NOT_SUPPORTED: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(3000)
+    });
+    pub const r#NOT_SUPPORTED_GRAPH_PATTERN: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(3001)
+    });
+    pub const r#NOT_SUPPORTED_SHAPE: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(3002)
+    });
+    pub const r#NOT_SUPPORTED_DATA_TYPE: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(3003)
+    });
+    pub const r#NOT_SUPPORTED_LAYOUT: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(3004)
+    });
+    pub const r#NOT_SUPPORTED_INCOMPATIBLE_CUDA_DRIVER: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(3005)
+    });
+    pub const r#NOT_SUPPORTED_INCOMPATIBLE_CUDART: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(3006)
+    });
+    pub const r#NOT_SUPPORTED_ARCH_MISMATCH: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(3007)
+    });
+    pub const r#NOT_SUPPORTED_RUNTIME_PREREQUISITE_MISSING: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(3008)
+    });
+    pub const r#NOT_SUPPORTED_SUBLIBRARY_UNAVAILABLE: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(3009)
+    });
+    pub const r#NOT_SUPPORTED_SHARED_MEMORY_INSUFFICIENT: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(3010)
+    });
+    pub const r#NOT_SUPPORTED_PADDING: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(3011)
+    });
+    pub const r#NOT_SUPPORTED_BAD_LAUNCH_PARAM: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(3012)
+    });
+    pub const r#NOT_SUPPORTED_CUDA_GRAPH_NATIVE_API: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(3013)
+    });
+    pub const r#INTERNAL_ERROR: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(4000)
+    });
+    pub const r#INTERNAL_ERROR_COMPILATION_FAILED: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(4001)
+    });
+    pub const r#INTERNAL_ERROR_UNEXPECTED_VALUE: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(4002)
+    });
+    pub const r#INTERNAL_ERROR_HOST_ALLOCATION_FAILED: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(4003)
+    });
+    pub const r#INTERNAL_ERROR_DEVICE_ALLOCATION_FAILED: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(4004)
+    });
+    pub const r#INTERNAL_ERROR_BAD_LAUNCH_PARAM: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(4005)
+    });
+    pub const r#INTERNAL_ERROR_TEXTURE_CREATION_FAILED: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(4006)
+    });
+    pub const r#EXECUTION_FAILED: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(5000)
+    });
+    pub const r#EXECUTION_FAILED_CUDA_DRIVER: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(5001)
+    });
+    pub const r#EXECUTION_FAILED_CUBLAS: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(5002)
+    });
+    pub const r#EXECUTION_FAILED_CUDART: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(5003)
+    });
+    pub const r#EXECUTION_FAILED_CURAND: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(5004)
+    });
+    pub const r#ALLOC_FAILED: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(4003)
+    });
+    pub const r#INVALID_VALUE: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(2001)
+    });
+    pub const r#ARCH_MISMATCH: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(3007)
+    });
+    pub const r#MAPPING_ERROR: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(4006)
+    });
+    pub const r#RUNTIME_PREREQUISITE_MISSING: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(3008)
+    });
+    pub const r#VERSION_MISMATCH: cudnnError_t = cudnnError_t(unsafe {
+        ::core::num::NonZeroU32::new_unchecked(1002)
+    });
+}
+#[repr(transparent)]
+#[derive(Debug, Hash, Copy, Clone, PartialEq, Eq)]
+pub struct cudnnError_t(pub ::core::num::NonZeroU32);
+pub trait cudnnStatus_tConsts {
+    const SUCCESS: cudnnStatus_t = cudnnStatus_t::Ok(());
+    const ERROR_NOT_INITIALIZED: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#NOT_INITIALIZED,
+    );
+    const ERROR_SUBLIBRARY_VERSION_MISMATCH: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#SUBLIBRARY_VERSION_MISMATCH,
+    );
+    const ERROR_SERIALIZATION_VERSION_MISMATCH: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#SERIALIZATION_VERSION_MISMATCH,
+    );
+    const ERROR_DEPRECATED: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#DEPRECATED,
+    );
+    const ERROR_LICENSE_ERROR: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#LICENSE_ERROR,
+    );
+    const ERROR_RUNTIME_IN_PROGRESS: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#RUNTIME_IN_PROGRESS,
+    );
+    const ERROR_RUNTIME_FP_OVERFLOW: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#RUNTIME_FP_OVERFLOW,
+    );
+    const ERROR_SUBLIBRARY_LOADING_FAILED: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#SUBLIBRARY_LOADING_FAILED,
+    );
+    const ERROR_BAD_PARAM: cudnnStatus_t = cudnnStatus_t::Err(cudnnError_t::r#BAD_PARAM);
+    const ERROR_BAD_PARAM_NULL_POINTER: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#BAD_PARAM_NULL_POINTER,
+    );
+    const ERROR_BAD_PARAM_MISALIGNED_POINTER: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#BAD_PARAM_MISALIGNED_POINTER,
+    );
+    const ERROR_BAD_PARAM_NOT_FINALIZED: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#BAD_PARAM_NOT_FINALIZED,
+    );
+    const ERROR_BAD_PARAM_OUT_OF_BOUND: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#BAD_PARAM_OUT_OF_BOUND,
+    );
+    const ERROR_BAD_PARAM_SIZE_INSUFFICIENT: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#BAD_PARAM_SIZE_INSUFFICIENT,
+    );
+    const ERROR_BAD_PARAM_STREAM_MISMATCH: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#BAD_PARAM_STREAM_MISMATCH,
+    );
+    const ERROR_BAD_PARAM_SHAPE_MISMATCH: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#BAD_PARAM_SHAPE_MISMATCH,
+    );
+    const ERROR_BAD_PARAM_DUPLICATED_ENTRIES: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#BAD_PARAM_DUPLICATED_ENTRIES,
+    );
+    const ERROR_BAD_PARAM_ATTRIBUTE_TYPE: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#BAD_PARAM_ATTRIBUTE_TYPE,
+    );
+    const ERROR_BAD_PARAM_CUDA_GRAPH_MISMATCH: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#BAD_PARAM_CUDA_GRAPH_MISMATCH,
+    );
+    const ERROR_BAD_PARAM_DESCRIPTOR_TYPE: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#BAD_PARAM_DESCRIPTOR_TYPE,
+    );
+    const ERROR_NOT_SUPPORTED: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#NOT_SUPPORTED,
+    );
+    const ERROR_NOT_SUPPORTED_GRAPH_PATTERN: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#NOT_SUPPORTED_GRAPH_PATTERN,
+    );
+    const ERROR_NOT_SUPPORTED_SHAPE: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#NOT_SUPPORTED_SHAPE,
+    );
+    const ERROR_NOT_SUPPORTED_DATA_TYPE: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#NOT_SUPPORTED_DATA_TYPE,
+    );
+    const ERROR_NOT_SUPPORTED_LAYOUT: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#NOT_SUPPORTED_LAYOUT,
+    );
+    const ERROR_NOT_SUPPORTED_INCOMPATIBLE_CUDA_DRIVER: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#NOT_SUPPORTED_INCOMPATIBLE_CUDA_DRIVER,
+    );
+    const ERROR_NOT_SUPPORTED_INCOMPATIBLE_CUDART: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#NOT_SUPPORTED_INCOMPATIBLE_CUDART,
+    );
+    const ERROR_NOT_SUPPORTED_ARCH_MISMATCH: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#NOT_SUPPORTED_ARCH_MISMATCH,
+    );
+    const ERROR_NOT_SUPPORTED_RUNTIME_PREREQUISITE_MISSING: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#NOT_SUPPORTED_RUNTIME_PREREQUISITE_MISSING,
+    );
+    const ERROR_NOT_SUPPORTED_SUBLIBRARY_UNAVAILABLE: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#NOT_SUPPORTED_SUBLIBRARY_UNAVAILABLE,
+    );
+    const ERROR_NOT_SUPPORTED_SHARED_MEMORY_INSUFFICIENT: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#NOT_SUPPORTED_SHARED_MEMORY_INSUFFICIENT,
+    );
+    const ERROR_NOT_SUPPORTED_PADDING: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#NOT_SUPPORTED_PADDING,
+    );
+    const ERROR_NOT_SUPPORTED_BAD_LAUNCH_PARAM: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#NOT_SUPPORTED_BAD_LAUNCH_PARAM,
+    );
+    const ERROR_NOT_SUPPORTED_CUDA_GRAPH_NATIVE_API: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#NOT_SUPPORTED_CUDA_GRAPH_NATIVE_API,
+    );
+    const ERROR_INTERNAL_ERROR: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#INTERNAL_ERROR,
+    );
+    const ERROR_INTERNAL_ERROR_COMPILATION_FAILED: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#INTERNAL_ERROR_COMPILATION_FAILED,
+    );
+    const ERROR_INTERNAL_ERROR_UNEXPECTED_VALUE: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#INTERNAL_ERROR_UNEXPECTED_VALUE,
+    );
+    const ERROR_INTERNAL_ERROR_HOST_ALLOCATION_FAILED: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#INTERNAL_ERROR_HOST_ALLOCATION_FAILED,
+    );
+    const ERROR_INTERNAL_ERROR_DEVICE_ALLOCATION_FAILED: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#INTERNAL_ERROR_DEVICE_ALLOCATION_FAILED,
+    );
+    const ERROR_INTERNAL_ERROR_BAD_LAUNCH_PARAM: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#INTERNAL_ERROR_BAD_LAUNCH_PARAM,
+    );
+    const ERROR_INTERNAL_ERROR_TEXTURE_CREATION_FAILED: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#INTERNAL_ERROR_TEXTURE_CREATION_FAILED,
+    );
+    const ERROR_EXECUTION_FAILED: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#EXECUTION_FAILED,
+    );
+    const ERROR_EXECUTION_FAILED_CUDA_DRIVER: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#EXECUTION_FAILED_CUDA_DRIVER,
+    );
+    const ERROR_EXECUTION_FAILED_CUBLAS: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#EXECUTION_FAILED_CUBLAS,
+    );
+    const ERROR_EXECUTION_FAILED_CUDART: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#EXECUTION_FAILED_CUDART,
+    );
+    const ERROR_EXECUTION_FAILED_CURAND: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#EXECUTION_FAILED_CURAND,
+    );
+    const ERROR_ALLOC_FAILED: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#ALLOC_FAILED,
+    );
+    const ERROR_INVALID_VALUE: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#INVALID_VALUE,
+    );
+    const ERROR_ARCH_MISMATCH: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#ARCH_MISMATCH,
+    );
+    const ERROR_MAPPING_ERROR: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#MAPPING_ERROR,
+    );
+    const ERROR_RUNTIME_PREREQUISITE_MISSING: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#RUNTIME_PREREQUISITE_MISSING,
+    );
+    const ERROR_VERSION_MISMATCH: cudnnStatus_t = cudnnStatus_t::Err(
+        cudnnError_t::r#VERSION_MISMATCH,
+    );
+}
+impl cudnnStatus_tConsts for cudnnStatus_t {}
+#[must_use]
+pub type cudnnStatus_t = ::core::result::Result<(), cudnnError_t>;
+const _: fn() = || {
+    let _ = std::mem::transmute::<cudnnStatus_t, u32>;
+};

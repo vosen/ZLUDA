@@ -77,6 +77,16 @@ extern "system" {
         handle: cuda_types::cublas::cublasHandle_t,
         smCountTarget: ::core::ffi::c_int,
     ) -> cuda_types::cublas::cublasStatus_t;
+    #[must_use]
+    fn cublasGetEmulationStrategy(
+        handle: cuda_types::cublas::cublasHandle_t,
+        emulationStrategy: *mut cuda_types::cublas::cublasEmulationStrategy_t,
+    ) -> cuda_types::cublas::cublasStatus_t;
+    #[must_use]
+    fn cublasSetEmulationStrategy(
+        handle: cuda_types::cublas::cublasHandle_t,
+        emulationStrategy: cuda_types::cublas::cublasEmulationStrategy_t,
+    ) -> cuda_types::cublas::cublasStatus_t;
     fn cublasGetStatusName(
         status: cuda_types::cublas::cublasStatus_t,
     ) -> *const ::core::ffi::c_char;

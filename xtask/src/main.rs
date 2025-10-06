@@ -246,9 +246,9 @@ mod os {
     use flate2::Compression;
     use std::{
         fs::{self, File},
+        io::Write,
         path::PathBuf,
     };
-    use tar::Header;
 
     pub fn make_symlinks(
         target_directory: &std::path::PathBuf,
@@ -269,25 +269,25 @@ mod os {
     }
 
     pub(crate) fn zip(target_dir: PathBuf, profile: String, projects: Vec<crate::Project>) {
-        let tar_gz =
+        let mut tar_gz =
             File::create(format!("{}/{profile}/zluda.tar.gz", target_dir.display())).unwrap();
-        let enc = GzEncoder::new(tar_gz, Compression::default());
+        let enc = GzEncoder::new(&mut tar_gz, Compression::default());
         let mut tar = tar::Builder::new(enc);
+        // Leads to broken tar archives on WSL
+        tar.sparse(false);
+        tar.follow_symlinks(false);
         for project in projects.iter() {
             let file_name = project.file_name();
             let mut file =
                 File::open(format!("{}/{profile}/{file_name}", target_dir.display())).unwrap();
             tar.append_file(format!("zluda/{file_name}"), &mut file)
                 .unwrap();
-            for (source, full_path, target) in project.symlinks(&target_dir, &profile, &file_name) {
-                let mut header = Header::new_gnu();
-                let meta = fs::symlink_metadata(&full_path).unwrap();
-                header.set_metadata(&meta);
-                tar.append_link(&mut header, format!("zluda/{source}"), target)
+            for (source, full_path, _) in project.symlinks(&target_dir, &profile, &file_name) {
+                tar.append_path_with_name(&full_path, format!("zluda/{source}"))
                     .unwrap();
             }
         }
-        tar.finish().unwrap();
+        tar.into_inner().unwrap().finish().unwrap().flush().unwrap();
     }
 }
 

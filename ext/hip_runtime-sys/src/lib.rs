@@ -101,6 +101,8 @@ pub const hipEventDisableTiming: u32 = 2;
 pub const hipEventInterprocess: u32 = 4;
 pub const hipEventRecordDefault: u32 = 0;
 pub const hipEventRecordExternal: u32 = 1;
+pub const hipEventWaitDefault: u32 = 0;
+pub const hipEventWaitExternal: u32 = 1;
 pub const hipEventDisableSystemFence: u32 = 536870912;
 pub const hipEventReleaseToDevice: u32 = 1073741824;
 pub const hipEventReleaseToSystem: u32 = 2147483648;
@@ -5758,15 +5760,21 @@ extern "C" {
     #[must_use]
     /** @brief Make the specified compute stream wait for an event
 
- @param[in] stream stream to make wait.
- @param[in] event event to wait on
- @param[in] flags control operation [must be 0]
+ @param[in] stream  Stream to make wait
+ @param[in] event  Event to wait on
+ @param[in] flags  Parameters to control the operation
 
- @returns #hipSuccess, #hipErrorInvalidHandle
+ @returns #hipSuccess, #hipErrorInvalidHandle, #hipErrorInvalidValue,
+ #hipErrorStreamCaptureIsolation
 
  This function inserts a wait operation into the specified stream.
  All future work submitted to @p stream will wait until @p event reports completion before
  beginning execution.
+
+ Flags include:
+   hipEventWaitDefault: Default event creation flag.
+   hipEventWaitExternal: Wait is captured in the graph as an external event node when
+                           performing stream capture
 
  This function only waits for commands in the current stream to complete.  Notably, this function
  does not implicitly wait for commands in the default stream to complete, even if the specified

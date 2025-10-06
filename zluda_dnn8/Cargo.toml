@@ -1,18 +1,18 @@
 [package]
-name = "zluda_sparse"
+name = "zluda_dnn8"
 version = "0.0.0"
 edition = "2021"
 
 [lib]
 crate-type = ["cdylib"]
-name = "cusparse"
+name = "cudnn64_8"
 
 [dependencies]
 cuda_macros = { path = "../cuda_macros" }
 cuda_types = { path = "../cuda_types" }
+zluda_dnn = { path = "../zluda_dnn" }
 
 [package.metadata.zluda]
 linux_symlinks = [
-    "libcusparse.so.12",
-    "libcusparse.so.13",
+    "libcudnn.so.8",
 ]
