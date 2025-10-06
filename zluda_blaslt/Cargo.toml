@@ -18,4 +18,5 @@ zluda_common = { path = "../zluda_common" }
 linux_symlinks = [
     "libcublasLt.so",
     "libcublasLt.so.12",
+    "libcublasLt.so.13",
 ]

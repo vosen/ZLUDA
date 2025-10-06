@@ -514,6 +514,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Trap {} => self.emit_trap(),
             ast::Instruction::Tanh { data, arguments } => self.emit_tanh(data, arguments),
             ast::Instruction::CpAsync { data, arguments } => self.emit_cp_async(data, arguments),
+            ast::Instruction::Copysign { data, arguments } => self.emit_copysign(data, arguments),
             ast::Instruction::CpAsyncCommitGroup {} => Ok(()), // nop
             ast::Instruction::CpAsyncWaitGroup { .. } => Ok(()), // nop
             ast::Instruction::CpAsyncWaitAll { .. } => Ok(()), // nop
@@ -2870,6 +2871,26 @@ impl<'a> MethodEmitContext<'a> {
     fn emit_trap(&mut self) -> Result<(), TranslateError> {
         self.emit_intrinsic(c"llvm.trap", None, None, vec![])?;
         unsafe { LLVMBuildUnreachable(self.builder) };
+        Ok(())
+    }
+
+    fn emit_copysign(
+        &mut self,
+        type_: ast::ScalarType,
+        arguments: ast::CopysignArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let src1 = self.resolver.value(arguments.src1)?;
+        let src2 = self.resolver.value(arguments.src2)?;
+        let intrinsic = format!("llvm.copysign.{}\0", LLVMTypeDisplay(type_));
+        self.emit_intrinsic(
+            unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
+            Some(arguments.dst),
+            Some(&type_.into()),
+            vec![
+                (src2, get_scalar_type(self.context, type_)),
+                (src1, get_scalar_type(self.context, type_)),
+            ],
+        )?;
         Ok(())
     }
 

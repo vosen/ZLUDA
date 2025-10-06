@@ -12,11 +12,11 @@ pub use super::cuda::libraryPropertyType;
 pub type cudaGraphExecUpdateResultInfo_st = super::cuda::CUgraphExecUpdateResultInfo_st;
 pub type cudaAsyncNotificationType = super::cuda::CUasyncNotificationType_enum;
 pub type cudaGraph_t = super::cuda::CUgraph;
-pub const CUBLAS_VER_MAJOR: u32 = 12;
-pub const CUBLAS_VER_MINOR: u32 = 8;
-pub const CUBLAS_VER_PATCH: u32 = 4;
-pub const CUBLAS_VER_BUILD: u32 = 1;
-pub const CUBLAS_VERSION: u32 = 120804;
+pub const CUBLAS_VER_MAJOR: u32 = 13;
+pub const CUBLAS_VER_MINOR: u32 = 0;
+pub const CUBLAS_VER_PATCH: u32 = 2;
+pub const CUBLAS_VER_BUILD: u32 = 14;
+pub const CUBLAS_VERSION: u32 = 130002;
 impl cublasFillMode_t {
     pub const CUBLAS_FILL_MODE_LOWER: cublasFillMode_t = cublasFillMode_t(0);
 }
@@ -215,6 +215,9 @@ impl cublasGemmAlgo_t {
 impl cublasGemmAlgo_t {
     pub const CUBLAS_GEMM_ALGO15_TENSOR_OP: cublasGemmAlgo_t = cublasGemmAlgo_t(115);
 }
+impl cublasGemmAlgo_t {
+    pub const CUBLAS_GEMM_AUTOTUNE: cublasGemmAlgo_t = cublasGemmAlgo_t(999);
+}
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct cublasGemmAlgo_t(pub ::core::ffi::c_int);
@@ -229,6 +232,9 @@ impl cublasMath_t {
 }
 impl cublasMath_t {
     pub const CUBLAS_TF32_TENSOR_OP_MATH: cublasMath_t = cublasMath_t(3);
+}
+impl cublasMath_t {
+    pub const CUBLAS_FP32_EMULATED_BF16X9_MATH: cublasMath_t = cublasMath_t(4);
 }
 impl cublasMath_t {
     pub const CUBLAS_MATH_DISALLOW_REDUCED_PRECISION_REDUCTION: cublasMath_t = cublasMath_t(
@@ -265,6 +271,11 @@ impl cublasComputeType_t {
     );
 }
 impl cublasComputeType_t {
+    pub const CUBLAS_COMPUTE_32F_EMULATED_16BFX9: cublasComputeType_t = cublasComputeType_t(
+        78,
+    );
+}
+impl cublasComputeType_t {
     pub const CUBLAS_COMPUTE_64F: cublasComputeType_t = cublasComputeType_t(70);
 }
 impl cublasComputeType_t {
@@ -279,6 +290,24 @@ impl cublasComputeType_t {
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct cublasComputeType_t(pub ::core::ffi::c_uint);
+impl cublasEmulationStrategy_t {
+    pub const CUBLAS_EMULATION_STRATEGY_DEFAULT: cublasEmulationStrategy_t = cublasEmulationStrategy_t(
+        0,
+    );
+}
+impl cublasEmulationStrategy_t {
+    pub const CUBLAS_EMULATION_STRATEGY_PERFORMANT: cublasEmulationStrategy_t = cublasEmulationStrategy_t(
+        1,
+    );
+}
+impl cublasEmulationStrategy_t {
+    pub const CUBLAS_EMULATION_STRATEGY_EAGER: cublasEmulationStrategy_t = cublasEmulationStrategy_t(
+        2,
+    );
+}
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct cublasEmulationStrategy_t(pub ::core::ffi::c_uint);
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct cublasContext {

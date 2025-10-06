@@ -22,5 +22,6 @@ cglue = "0.3.5"
 [package.metadata.zluda]
 linux_symlinks = [
     "trace/libcublas.so",
-    "trace/libcublas.so.12"
+    "trace/libcublas.so.12",
+    "trace/libcublas.so.13"
 ]

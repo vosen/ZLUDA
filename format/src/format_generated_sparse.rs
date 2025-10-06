@@ -28962,6 +28962,9 @@ impl crate::CudaDisplay for cuda_types::cusparse::cusparseSpMVAlg_t {
             &cuda_types::cusparse::cusparseSpMVAlg_t::CUSPARSE_SPMV_SELL_ALG1 => {
                 writer.write_all(stringify!(CUSPARSE_SPMV_SELL_ALG1).as_bytes())
             }
+            &cuda_types::cusparse::cusparseSpMVAlg_t::CUSPARSE_SPMV_BSR_ALG1 => {
+                writer.write_all(stringify!(CUSPARSE_SPMV_BSR_ALG1).as_bytes())
+            }
             _ => write!(writer, "{}", self.0),
         }
     }

@@ -1,6 +1,6 @@
-FROM nvidia/cuda:12.9.1-base-ubuntu24.04
+FROM nvidia/cuda:13.0.1-base-ubuntu24.04
 
-RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+RUN DEBIAN_FRONTEND=noninteractive apt update -y && DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
     wget \
     build-essential \
     cmake \
@@ -18,38 +18,34 @@ RUN wget https://apt.llvm.org/llvm.sh && \
     ./llvm.sh ${LLVM_VERSION}
 
 # Feel free to change to a newer version if you have a newer verison on your host
-ARG CUDA_PKG_VERSION=12-9
+ARG CUDA_PKG_VERSION=13-0
 # Docker <-> host  driver version compatiblity is newer host <-> older docker
-# We don't care about a specific driver version, so pick oldest 5XX compatible
-ARG CUDA_DRIVER=570
-# It used to be possible to install cudnn8 and cudnn9 side-by-side, but now cudnn9 explicitly
-# conflicts with cudnn8, we will resolve it later if needed
-# RUN wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/libcudnn8_8.9.7.29-1+cuda12.2_amd64.deb && \
-#     wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/libcudnn8-dev_8.9.7.29-1+cuda12.2_amd64.deb && \
-#     dpkg -i libcudnn8_8.9.7.29-1+cuda12.2_amd64.deb libcudnn8-dev_8.9.7.29-1+cuda12.2_amd64.deb && \
-#     rm libcudnn8_8.9.7.29-1+cuda12.2_amd64.deb libcudnn8-dev_8.9.7.29-1+cuda12.2_amd64.deb
-RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+# Driver 580+ is required for CUDA 13
+ARG CUDA_DRIVER=580
+RUN wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/libcudnn8-dev_8.9.7.29-1+cuda12.2_amd64.deb && \
+    dpkg-deb -R libcudnn8-dev_8.9.7.29-1+cuda12.2_amd64.deb /opt && \
+    rm libcudnn8-dev_8.9.7.29-1+cuda12.2_amd64.deb
+RUN DEBIAN_FRONTEND=noninteractive apt update -y && DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
     # CUDA headers need it for interop
     libgl-dev libegl-dev libvdpau-dev \
-    nvidia-utils-${CUDA_DRIVER} \
+    nvidia-headless-no-dkms-${CUDA_DRIVER}-open \
     cuda-cudart-dev-${CUDA_PKG_VERSION} \
     cuda-nvml-dev-${CUDA_PKG_VERSION} \
     cuda-cudart-${CUDA_PKG_VERSION} \
     cuda-profiler-api-${CUDA_PKG_VERSION} \
     cuda-nvcc-${CUDA_PKG_VERSION} \
-    # libcudnn8-dev \
     cudnn9-cuda-${CUDA_PKG_VERSION} \
     libcufft-dev-${CUDA_PKG_VERSION} \
     libcublas-dev-${CUDA_PKG_VERSION} \
     libcusparse-dev-${CUDA_PKG_VERSION}
 
-ARG ROCM_VERSION=6.4.3
+ARG ROCM_VERSION=6.4.4
 RUN mkdir --parents --mode=0755 /etc/apt/keyrings && \
     wget https://repo.radeon.com/rocm/rocm.gpg.key -O - | \
     gpg --dearmor | tee /etc/apt/keyrings/rocm.gpg > /dev/null && \
     echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/${ROCM_VERSION} noble main" > /etc/apt/sources.list.d/rocm.list && \
     echo 'Package: *\nPin: release o=repo.radeon.com\nPin-Priority: 600' > /etc/apt/preferences.d/rocm-pin-600 && \
-    DEBIAN_FRONTEND=noninteractive apt update -y && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    DEBIAN_FRONTEND=noninteractive apt update -y && DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
     rocminfo \
     rocm-gdb \
     rocm-smi-lib amd-smi-lib \

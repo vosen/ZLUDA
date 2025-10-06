@@ -3936,6 +3936,14 @@ derive_parser!(
     .blayout: MatrixLayout = {.col};
     .ctype: ScalarType = {.f16, .f32};
     .dtype: ScalarType = {.f16, .f32};
+
+    copysign.type  d, a, b => {
+        ast::Instruction::Copysign {
+            data: type_,
+            arguments: CopysignArgs { dst: d, src1: a, src2: b, },
+        }
+    }
+    .type: ScalarType = { .f32, .f64 };
 );
 
 #[cfg(test)]

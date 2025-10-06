@@ -14,4 +14,5 @@ cuda_types = { path = "../cuda_types" }
 [package.metadata.zluda]
 linux_symlinks = [
     "libcufft.so.11",
+    "libcufft.so.12",
 ]

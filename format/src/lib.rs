@@ -377,17 +377,6 @@ impl CudaDisplay for CUstreamBatchMemOpParams {
     }
 }
 
-impl CudaDisplay for CUcheckpointRestoreArgs_st {
-    fn write(
-        &self,
-        fn_name: &'static str,
-        index: usize,
-        writer: &mut (impl std::io::Write + ?Sized),
-    ) -> std::io::Result<()> {
-        CudaDisplay::write(&self.reserved, fn_name, index, writer)
-    }
-}
-
 impl CudaDisplay for CUcheckpointUnlockArgs_st {
     fn write(
         &self,
@@ -1644,6 +1633,125 @@ impl crate::CudaDisplay for cuda_types::nvml::nvmlVgpuSchedulerGetState_st {
         } else {
             crate::CudaDisplay::write(&unsafe { self.schedulerParams.vgpuSchedData } , "", 0, writer)?;
         }
+        writer.write_all(b" }")
+    }
+}
+
+impl crate::CudaDisplay for cuda_types::nvml::nvmlUUID_v1_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(version), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.version, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(type_), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.type_, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(value), ": ").as_bytes())?;
+        if self.type_ == cuda_types::nvml::nvmlUUIDType_t::NVML_UUID_TYPE_ASCII.0  {
+            writer.write_all(&unsafe { mem::transmute::<_, [u8;41]>( self.value.str_ )}[..])?
+        } else if self.type_ == cuda_types::nvml::nvmlUUIDType_t::NVML_UUID_TYPE_BINARY.0 {
+            crate::CudaDisplay::write(& cuda_types::cuda::CUuuid { bytes: unsafe { self.value.bytes } }, "", 0, writer)?
+        } else {
+            crate::CudaDisplay::write(&unsafe { mem::transmute::<_, [u8; 41]>(self.value) }, "", 0, writer)?
+        }
+        writer.write_all(b" }")
+    }
+}
+
+impl crate::CudaDisplay for cuda_types::nvml::nvmlVgpuSchedulerLogInfo_v1_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(version), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.version, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(engineId), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.engineId, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(schedulerPolicy), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.schedulerPolicy, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(arrMode), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.arrMode, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(schedulerParams), ": ").as_bytes())?;
+        if self.arrMode == cuda_types::nvml::NVML_VGPU_SCHEDULER_ARR_DISABLE {
+            crate::CudaDisplay::write(&unsafe { self.schedulerParams.vgpuSchedData } , "", 0, writer)?;
+        } else {
+            crate::CudaDisplay::write(&unsafe { self.schedulerParams.vgpuSchedDataWithARR }, "", 0, writer)?;
+        }
+        writer.write_all(concat!(", ", stringify!(entriesCount), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.entriesCount, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(logEntries), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.logEntries, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
+
+impl crate::CudaDisplay for cuda_types::nvml::nvmlVgpuSchedulerState_v1_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(version), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.version, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(engineId), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.engineId, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(schedulerPolicy), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.schedulerPolicy, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(enableARRMode), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.enableARRMode, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(schedulerParams), ": ").as_bytes())?;
+        if self.enableARRMode == 0 {
+            crate::CudaDisplay::write(&unsafe { self.schedulerParams.vgpuSchedData } , "", 0, writer)?;
+        } else {
+            crate::CudaDisplay::write(&unsafe { self.schedulerParams.vgpuSchedDataWithARR }, "", 0, writer)?;
+        }
+        writer.write_all(b" }")
+    }
+}
+
+impl crate::CudaDisplay for cuda_types::nvml::nvmlVgpuSchedulerStateInfo_v1_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(version), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.version, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(engineId), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.engineId, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(schedulerPolicy), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.schedulerPolicy, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(arrMode), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.arrMode, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(schedulerParams), ": ").as_bytes())?;
+        if self.arrMode == cuda_types::nvml::NVML_VGPU_SCHEDULER_ARR_DISABLE {
+            crate::CudaDisplay::write(&unsafe { self.schedulerParams.vgpuSchedData } , "", 0, writer)?;
+        } else {
+            crate::CudaDisplay::write(&unsafe { self.schedulerParams.vgpuSchedDataWithARR }, "", 0, writer)?;
+        }
+        writer.write_all(b" }")
+    }
+}
+
+impl crate::CudaDisplay for cuda_types::nvml::nvmlPRMTLV_v1_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(concat!("{ ", stringify!(dataSize), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.dataSize, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(status), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&self.status, "", 0, writer)?;
+        writer.write_all(concat!(", ", stringify!(__bindgen_anon_1), ": ").as_bytes())?;
+        crate::CudaDisplay::write(&unsafe { mem::transmute::<_, [u8; 496]>(self.__bindgen_anon_1) }[..], "", 0, writer)?;
         writer.write_all(b" }")
     }
 }

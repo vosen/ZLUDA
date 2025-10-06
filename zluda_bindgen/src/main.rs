@@ -13,13 +13,14 @@ use syn::{
 
 // Source: https://developer.nvidia.com/cuda-toolkit-archive
 static KNOWN_CUDA_VERSIONS: &[&'static str] = &[
-    "12.8.1", "12.8.0", "12.6.3", "12.6.2", "12.6.1", "12.6.0", "12.5.1", "12.5.0", "12.4.1",
-    "12.4.0", "12.3.2", "12.3.1", "12.3.0", "12.2.2", "12.2.1", "12.2.0", "12.1.1", "12.1.0",
-    "12.0.1", "12.0.0", "11.8.0", "11.7.1", "11.7.0", "11.6.2", "11.6.1", "11.6.0", "11.5.2",
-    "11.5.1", "11.5.0", "11.4.4", "11.4.3", "11.4.2", "11.4.1", "11.4.0", "11.3.1", "11.3.0",
-    "11.2.2", "11.2.1", "11.2.0", "11.1.1", "11.1.0", "11.0.3", "11.0.2", "11.0.1", "11.0.0",
-    "10.2", "10.1", "10.0", "9.2", "9.1", "9.0", "8.0", "7.5", "7.0", "6.5", "6.0", "5.5", "5.0",
-    "4.2", "4.1", "4.0", "3.2", "3.1", "3.0", "2.3", "2.2", "2.1", "2.0", "1.1", "1.0",
+    "13.0.0", "12.9.1", "12.9.0", "12.8.1", "12.8.0", "12.6.3", "12.6.2", "12.6.1", "12.6.0",
+    "12.5.1", "12.5.0", "12.4.1", "12.4.0", "12.3.2", "12.3.1", "12.3.0", "12.2.2", "12.2.1",
+    "12.2.0", "12.1.1", "12.1.0", "12.0.1", "12.0.0", "11.8.0", "11.7.1", "11.7.0", "11.6.2",
+    "11.6.1", "11.6.0", "11.5.2", "11.5.1", "11.5.0", "11.4.4", "11.4.3", "11.4.2", "11.4.1",
+    "11.4.0", "11.3.1", "11.3.0", "11.2.2", "11.2.1", "11.2.0", "11.1.1", "11.1.0", "11.0.3",
+    "11.0.2", "11.0.1", "11.0.0", "10.2", "10.1", "10.0", "9.2", "9.1", "9.0", "8.0", "7.5", "7.0",
+    "6.5", "6.0", "5.5", "5.0", "4.2", "4.1", "4.0", "3.2", "3.1", "3.0", "2.3", "2.2", "2.1",
+    "2.0", "1.1", "1.0",
 ];
 
 fn main() {
@@ -104,7 +105,7 @@ fn generate_process_address_table(crate_root: &PathBuf, mut cuda_fns: Vec<Ident>
                         Err(cuda_types::cuda::CUerror::NOT_FOUND) => {
                             continue;
                         }
-                        Err(e) => panic!("{}", e.0)
+                        Err(e) => panic!("{:?}/{}/{}: {}", symbol, version, flag.0, e.0)
                     }
                     if status != cuda_types::cuda::CUdriverProcAddressQueryResult::CU_GET_PROC_ADDRESS_SUCCESS {
                         continue;
@@ -280,7 +281,7 @@ fn generate_cudnn(crate_root: &PathBuf) {
     let result_options = ConvertIntoRustResultOptions {
         type_: "cudnnStatus_t",
         underlying_type: "cudnnStatus_t",
-        new_error_type: "cudnnError_",
+        new_error_type: "cudnnError_t",
         error_prefix: ("CUDNN_STATUS_", "ERROR_"),
         success: ("CUDNN_STATUS_SUCCESS", "SUCCESS"),
         hip_types: vec![],
@@ -290,13 +291,17 @@ fn generate_cudnn(crate_root: &PathBuf) {
     let mut current_dir = PathBuf::from(file!());
     current_dir.pop();
     let cudnn8 = new_builder()
-        .header("/usr/include/x86_64-linux-gnu/cudnn_v8.h")
+        // Normally cudnn8 headers conflict with cudnn9 headers, but in our devcontainer
+        // cudnn8 is extracted (without installing) to /opt
+        .header("/opt/usr/include/x86_64-linux-gnu/cudnn_v8.h")
         .allowlist_type("^cudnn.*")
         .allowlist_function("^cudnn.*")
         .allowlist_var("^CUDNN_.*")
         .must_use_type("cudnnStatus_t")
+        .constified_enum("cudnnStatus_t")
         .allowlist_recursively(false)
         .clang_args([
+            "-I/opt/usr/include/x86_64-linux-gnu",
             "-I/usr/local/cuda/include",
             &format!("-I{}/../build/cudnn_v8", current_dir.display()),
         ])
@@ -306,6 +311,7 @@ fn generate_cudnn(crate_root: &PathBuf) {
     let cudnn8_module: syn::File = syn::parse_str(&cudnn8).unwrap();
     let cudnn8_types = generate_types_library_impl(Some(&result_options), &cudnn8_module);
     merge_types(
+        &result_options,
         &crate_root,
         &["..", "cuda_types", "src", "cudnn.rs"],
         cudnn9_types,
@@ -345,6 +351,7 @@ fn generate_cudnn(crate_root: &PathBuf) {
 // - if the cudnn9 type is purely additive over cudnn8 then it goes into the
 //   shared (and is re-exported by both)
 fn merge_types(
+    converter: &ConvertIntoRustResultOptions,
     output: &PathBuf,
     cudnn_path: &[&str],
     cudnn9_types: syn::File,
@@ -352,7 +359,8 @@ fn merge_types(
     cudnn8_types: syn::File,
     cudnn8_path: &[&str],
 ) {
-    let cudnn_enums = merge_enums(&cudnn9_types, &cudnn8_types);
+    let underlying_type = Ident::new(converter.underlying_type, Span::call_site());
+    let cudnn_enums = merge_enums(&underlying_type, &cudnn9_types, &cudnn8_types);
     let conflicting_types = get_conflicting_structs(&cudnn9_types, &cudnn8_types, cudnn_enums);
     write_common_cudnn_types(output, cudnn_path, &cudnn9_types, &conflicting_types);
     write_cudnn8_types(output, cudnn8_path, &cudnn8_types, &conflicting_types);
@@ -403,6 +411,7 @@ fn write_cudnn9_types(
         },
         Item::Use(use_) => Some(parse_quote!(#use_)),
         Item::Type(type_) => Some(parse_quote!(#type_)),
+        Item::Trait(trait_) => Some(parse_quote!(#trait_)),
         _ => unimplemented!(),
     });
     let module: syn::File = parse_quote! {
@@ -465,6 +474,7 @@ fn write_cudnn8_types(
         },
         Item::Use(use_) => Some(parse_quote!(#use_)),
         Item::Type(type_) => Some(parse_quote!(#type_)),
+        Item::Trait(trait_) => Some(parse_quote!(#trait_)),
         _ => unimplemented!(),
     });
     let module: syn::File = parse_quote! {
@@ -472,7 +482,59 @@ fn write_cudnn8_types(
     };
     let mut output = output.clone();
     output.extend(cudnn8_path);
-    let text = prettyplease::unparse(&module);
+    let mut text = prettyplease::unparse(&module);
+    text.push_str(
+        "
+impl From<crate::cudnn9::cudnnError_t> for cudnnError_t {
+    fn from(err: crate::cudnn9::cudnnError_t) -> Self {
+        match err {
+            crate::cudnn9::cudnnError_t::NOT_INITIALIZED => {
+                crate::cudnn8::cudnnError_t::NOT_INITIALIZED
+            }
+            crate::cudnn9::cudnnError_t::ALLOC_FAILED => {
+                crate::cudnn8::cudnnError_t::ALLOC_FAILED
+            }
+            crate::cudnn9::cudnnError_t::BAD_PARAM => {
+                crate::cudnn8::cudnnError_t::BAD_PARAM
+            }
+            crate::cudnn9::cudnnError_t::INTERNAL_ERROR => {
+                crate::cudnn8::cudnnError_t::INTERNAL_ERROR
+            }
+            crate::cudnn9::cudnnError_t::INVALID_VALUE => {
+                crate::cudnn8::cudnnError_t::INVALID_VALUE
+            }
+            crate::cudnn9::cudnnError_t::ARCH_MISMATCH => {
+                crate::cudnn8::cudnnError_t::ARCH_MISMATCH
+            }
+            crate::cudnn9::cudnnError_t::MAPPING_ERROR => {
+                crate::cudnn8::cudnnError_t::MAPPING_ERROR
+            }
+            crate::cudnn9::cudnnError_t::EXECUTION_FAILED => {
+                crate::cudnn8::cudnnError_t::EXECUTION_FAILED
+            }
+            crate::cudnn9::cudnnError_t::NOT_SUPPORTED => {
+                crate::cudnn8::cudnnError_t::NOT_SUPPORTED
+            }
+            crate::cudnn9::cudnnError_t::LICENSE_ERROR => {
+                crate::cudnn8::cudnnError_t::LICENSE_ERROR
+            }
+            crate::cudnn9::cudnnError_t::RUNTIME_PREREQUISITE_MISSING => {
+                crate::cudnn8::cudnnError_t::RUNTIME_PREREQUISITE_MISSING
+            }
+            crate::cudnn9::cudnnError_t::RUNTIME_IN_PROGRESS => {
+                crate::cudnn8::cudnnError_t::RUNTIME_IN_PROGRESS
+            }
+            crate::cudnn9::cudnnError_t::RUNTIME_FP_OVERFLOW => {
+                crate::cudnn8::cudnnError_t::RUNTIME_FP_OVERFLOW
+            }
+            crate::cudnn9::cudnnError_t::VERSION_MISMATCH => {
+                crate::cudnn8::cudnnError_t::VERSION_MISMATCH
+            }
+            _ => crate::cudnn8::cudnnError_t::INTERNAL_ERROR,
+        }
+    }
+}",
+    );
     write_rust_to_file(output, &text)
 }
 
@@ -571,10 +633,11 @@ fn type_to_ident<'a>(ty: &'a syn::Type) -> &'a syn::Ident {
 }
 
 fn merge_enums<'a>(
+    result_type: &'a Ident,
     cudnn9_types: &'a syn::File,
     cudnn8_types: &'a syn::File,
 ) -> FxHashMap<&'a Ident, CudnnEnumMergeResult> {
-    let result = {
+    let mut result = {
         let enums8 = get_enums(cudnn8_types);
         let enums9 = get_enums(cudnn9_types);
         enums8
@@ -599,6 +662,7 @@ fn merge_enums<'a>(
             })
             .collect::<FxHashMap<_, _>>()
     };
+    result.insert(result_type, CudnnEnumMergeResult::Conflict);
     result
 }
 
@@ -618,19 +682,24 @@ fn get_enums<'a>(
     let mut enums = FxHashMap::default();
     for item in cudnn_module.items.iter() {
         match item {
-            Item::Impl(ref impl_) => match &*impl_.self_ty {
-                Type::Path(path) => {
-                    let constant = match impl_.items[0] {
-                        syn::ImplItem::Const(ref impl_item_const) => impl_item_const,
-                        _ => unimplemented!(),
-                    };
-                    enums
-                        .entry(&path.path.segments[0].ident)
-                        .or_insert(FxHashSet::default())
-                        .insert(constant);
+            Item::Impl(ref impl_) => {
+                if impl_.trait_.is_some() {
+                    continue;
                 }
-                _ => unimplemented!(),
-            },
+                match &*impl_.self_ty {
+                    Type::Path(path) => {
+                        let constant = match impl_.items[0] {
+                            syn::ImplItem::Const(ref impl_item_const) => impl_item_const,
+                            _ => unimplemented!(),
+                        };
+                        enums
+                            .entry(&path.path.segments[0].ident)
+                            .or_insert(FxHashSet::default())
+                            .insert(constant);
+                    }
+                    _ => unimplemented!(),
+                }
+            }
             _ => {}
         }
     }
@@ -1588,14 +1657,16 @@ fn generate_display_perflib(
         "nvmlVgpuInstanceUtilizationInfo_v1_t",
         "nvmlFieldValue_st",
         "nvmlVgpuSchedulerSetState_st",
+        "nvmlVgpuSchedulerState_v1_t",
         "nvmlVgpuSchedulerLog_st",
         "nvmlVgpuSchedulerGetState_st",
+        "nvmlVgpuSchedulerStateInfo_v1_t",
+        "nvmlVgpuSchedulerLogInfo_v1_t",
+        "nvmlUUID_v1_t",
+        "nvmlPRMTLV_v1_t",
     ];
-    let ignore_functions = [];
-    let count_selectors = [
-        ("cudnnBackendSetAttribute", 4, 3),
-        ("cudnnBackendGetAttribute", 5, 4),
-    ];
+    let ignore_functions = ["cudnnBackendGetAttribute", "cudnnBackendSetAttribute"];
+    let count_selectors = [];
     let mut derive_state = DeriveDisplayState::new(
         &ignore_types,
         types_crate,

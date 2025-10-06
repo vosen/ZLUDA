@@ -736,6 +736,15 @@ ptx_parser_macros::generate_instruction_type!(
                     type: { data.ctype() },
                 }
             }
+        },
+        Copysign {
+            type: Type::Scalar(data.clone()),
+            data: ScalarType,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+            }
         }
     }
 );

@@ -3426,8 +3426,13 @@ impl cublasLtMatmulStages_t {
     );
 }
 impl cublasLtMatmulStages_t {
-    pub const CUBLASLT_MATMUL_STAGES_END: cublasLtMatmulStages_t = cublasLtMatmulStages_t(
+    pub const CUBLASLT_MATMUL_STAGES_768xAUTO: cublasLtMatmulStages_t = cublasLtMatmulStages_t(
         38,
+    );
+}
+impl cublasLtMatmulStages_t {
+    pub const CUBLASLT_MATMUL_STAGES_END: cublasLtMatmulStages_t = cublasLtMatmulStages_t(
+        39,
     );
 }
 #[repr(transparent)]
@@ -3793,34 +3798,56 @@ impl cublasLtMatmulInnerShape_t {
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct cublasLtMatmulInnerShape_t(pub ::core::ffi::c_uint);
 impl cublasLtMatmulMatrixScale_t {
-    /// Scaling factors are single precision scalars applied to the whole tensor
+    /// Scaling factors are single precision scalars applied to the whole tensor.
     pub const CUBLASLT_MATMUL_MATRIX_SCALE_SCALAR_32F: cublasLtMatmulMatrixScale_t = cublasLtMatmulMatrixScale_t(
         0,
     );
 }
 impl cublasLtMatmulMatrixScale_t {
     /** Scaling factors are tensors that contain a dedicated scaling factor stored as an 8-bit CUDA_R_8F_UE4M3 value for
-each 16-element block in the innermost dimension of the corresponding data tensor*/
+ each 16-element block in the innermost dimension of the corresponding data tensor.*/
     pub const CUBLASLT_MATMUL_MATRIX_SCALE_VEC16_UE4M3: cublasLtMatmulMatrixScale_t = cublasLtMatmulMatrixScale_t(
         1,
     );
 }
 impl cublasLtMatmulMatrixScale_t {
     /** Same as above, except that scaling factor tensor elements have type CUDA_R_8F_UE8M0 and the block size is 32
-elements*/
+ elements.*/
     pub const CUBLASLT_MATMUL_MATRIX_SCALE_VEC32_UE8M0: cublasLtMatmulMatrixScale_t = cublasLtMatmulMatrixScale_t(
         2,
     );
 }
 impl cublasLtMatmulMatrixScale_t {
-    /** Same as above, except that scaling factor tensor elements have type CUDA_R_8F_UE8M0 and the block size is 32
-elements*/
-    pub const CUBLASLT_MATMUL_MATRIX_SCALE_END: cublasLtMatmulMatrixScale_t = cublasLtMatmulMatrixScale_t(
+    /** Scaling factors are vectors of CUDA_R_32F values. This mode is only applicable to matrices A and B, in which case
+ the vectors are expected to have M and N elements respectively, and each (i, j)-th element of product of A and B is
+ multiplied by i-th element of A scale and j-th element of B scale.*/
+    pub const CUBLASLT_MATMUL_MATRIX_SCALE_OUTER_VEC_32F: cublasLtMatmulMatrixScale_t = cublasLtMatmulMatrixScale_t(
         3,
     );
 }
+impl cublasLtMatmulMatrixScale_t {
+    /** Scaling factors are tensors that contain a dedicated CUDA_R_32F scaling factor for each 128-element block in the
+ innermost dimension of the corresponding data tensor.*/
+    pub const CUBLASLT_MATMUL_MATRIX_SCALE_VEC128_32F: cublasLtMatmulMatrixScale_t = cublasLtMatmulMatrixScale_t(
+        4,
+    );
+}
+impl cublasLtMatmulMatrixScale_t {
+    /** Scaling factors are tensors that contain a dedicated CUDA_R_32F scaling factor for each 128x128-element block in
+ the the corresponding data tensor.*/
+    pub const CUBLASLT_MATMUL_MATRIX_SCALE_BLK128x128_32F: cublasLtMatmulMatrixScale_t = cublasLtMatmulMatrixScale_t(
+        5,
+    );
+}
+impl cublasLtMatmulMatrixScale_t {
+    /** Scaling factors are tensors that contain a dedicated CUDA_R_32F scaling factor for each 128x128-element block in
+ the the corresponding data tensor.*/
+    pub const CUBLASLT_MATMUL_MATRIX_SCALE_END: cublasLtMatmulMatrixScale_t = cublasLtMatmulMatrixScale_t(
+        6,
+    );
+}
 #[repr(transparent)]
-/// Scaling mode for per-matrix scaling
+/// Scaling mode for per-matrix scaling. See documentation for layout information.
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct cublasLtMatmulMatrixScale_t(pub ::core::ffi::c_uint);
 impl cublasLtPointerMode_t {
@@ -3932,6 +3959,25 @@ impl cublasLtOrder_t {
 /// Enum for data ordering
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct cublasLtOrder_t(pub ::core::ffi::c_uint);
+impl cublasLtBatchMode_t {
+    /** Strided
+
+ The matrices of each instance of the batch are located at fixed offsets in number of elements from their locations
+ in the previous instance.*/
+    pub const CUBLASLT_BATCH_MODE_STRIDED: cublasLtBatchMode_t = cublasLtBatchMode_t(0);
+}
+impl cublasLtBatchMode_t {
+    /** Pointer array
+
+ The address of the matrix of each instance of the batch are read from arrays of pointers.*/
+    pub const CUBLASLT_BATCH_MODE_POINTER_ARRAY: cublasLtBatchMode_t = cublasLtBatchMode_t(
+        1,
+    );
+}
+#[repr(transparent)]
+/// Enum for batch mode
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct cublasLtBatchMode_t(pub ::core::ffi::c_uint);
 impl cublasLtMatrixLayoutAttribute_t {
     /** Data type, see cudaDataType.
 
@@ -3985,7 +4031,7 @@ impl cublasLtMatrixLayoutAttribute_t {
 impl cublasLtMatrixLayoutAttribute_t {
     /** Number of matmul operations to perform in the batch.
 
- See also CUBLASLT_ALGO_CAP_STRIDED_BATCH_SUPPORT
+ See also CUBLASLT_ALGO_CAP_STRIDED_BATCH_SUPPORT and CUBLASLT_ALGO_CAP_POINTER_ARRAY_BATCH_SUPPORT
 
  int32_t, default: 1*/
     pub const CUBLASLT_MATRIX_LAYOUT_BATCH_COUNT: cublasLtMatrixLayoutAttribute_t = cublasLtMatrixLayoutAttribute_t(
@@ -4017,6 +4063,14 @@ impl cublasLtMatrixLayoutAttribute_t {
  in memory in each element)*/
     pub const CUBLASLT_MATRIX_LAYOUT_PLANE_OFFSET: cublasLtMatrixLayoutAttribute_t = cublasLtMatrixLayoutAttribute_t(
         7,
+    );
+}
+impl cublasLtMatrixLayoutAttribute_t {
+    /** Batch mode.
+
+ uint32_t, default: 0 - 0 means that batch mode is CUBLASLT_BATCH_MODE_STRIDED.*/
+    pub const CUBLASLT_MATRIX_LAYOUT_BATCH_MODE: cublasLtMatrixLayoutAttribute_t = cublasLtMatrixLayoutAttribute_t(
+        8,
     );
 }
 #[repr(transparent)]
@@ -4351,38 +4405,6 @@ impl cublasLtMatmulDescAttributes_t {
  int32_t based on cudaDataType, default: -1*/
     pub const CUBLASLT_MATMUL_DESC_BIAS_DATA_TYPE: cublasLtMatmulDescAttributes_t = cublasLtMatmulDescAttributes_t(
         26,
-    );
-}
-impl cublasLtMatmulDescAttributes_t {
-    /** EXPERIMENTAL, DEPRECATED: Number of atomic synchronization chunks in the row dimension of the output matrix D.
-
- int32_t, default 0 (atomic synchronization disabled)*/
-    pub const CUBLASLT_MATMUL_DESC_ATOMIC_SYNC_NUM_CHUNKS_D_ROWS: cublasLtMatmulDescAttributes_t = cublasLtMatmulDescAttributes_t(
-        27,
-    );
-}
-impl cublasLtMatmulDescAttributes_t {
-    /** EXPERIMENTAL, DEPRECATED: Number of atomic synchronization chunks in the column dimension of the output matrix D.
-
- int32_t, default 0 (atomic synchronization disabled)*/
-    pub const CUBLASLT_MATMUL_DESC_ATOMIC_SYNC_NUM_CHUNKS_D_COLS: cublasLtMatmulDescAttributes_t = cublasLtMatmulDescAttributes_t(
-        28,
-    );
-}
-impl cublasLtMatmulDescAttributes_t {
-    /** EXPERIMENTAL: Pointer to a device array of input atomic counters consumed by a matmul.
-
- int32_t *, default: NULL*/
-    pub const CUBLASLT_MATMUL_DESC_ATOMIC_SYNC_IN_COUNTERS_POINTER: cublasLtMatmulDescAttributes_t = cublasLtMatmulDescAttributes_t(
-        29,
-    );
-}
-impl cublasLtMatmulDescAttributes_t {
-    /** EXPERIMENTAL: Pointer to a device array of output atomic counters produced by a matmul.
-
- int32_t *, default: NULL*/
-    pub const CUBLASLT_MATMUL_DESC_ATOMIC_SYNC_OUT_COUNTERS_POINTER: cublasLtMatmulDescAttributes_t = cublasLtMatmulDescAttributes_t(
-        30,
     );
 }
 impl cublasLtMatmulDescAttributes_t {
@@ -4890,7 +4912,7 @@ impl cublasLtMatmulAlgoCapAttributes_t {
     );
 }
 impl cublasLtMatmulAlgoCapAttributes_t {
-    /** whether algorithm supports custom (not COL or ROW memory order), see cublasLtOrder_t
+    /** describes if the algorithm supports custom (not COL or ROW memory order), see cublasLtOrder_t
 
  int32_t 0 means only COL and ROW memory order is allowed, non-zero means that algo might have different
  requirements;*/
@@ -4978,11 +5000,19 @@ impl cublasLtMatmulAlgoCapAttributes_t {
     );
 }
 impl cublasLtMatmulAlgoCapAttributes_t {
-    /** EXPERIMENTAL: support for synchronization via atomic counters
+    /** support pointer array batch
+
+ int32_t, 0 means no support, supported otherwise*/
+    pub const CUBLASLT_ALGO_CAP_POINTER_ARRAY_BATCH_SUPPORT: cublasLtMatmulAlgoCapAttributes_t = cublasLtMatmulAlgoCapAttributes_t(
+        21,
+    );
+}
+impl cublasLtMatmulAlgoCapAttributes_t {
+    /** describes if the algorithm supports floating point emulation
 
  int32_t*/
-    pub const CUBLASLT_ALGO_CAP_ATOMIC_SYNC: cublasLtMatmulAlgoCapAttributes_t = cublasLtMatmulAlgoCapAttributes_t(
-        20,
+    pub const CUBLASLT_ALGO_CAP_FLOATING_POINT_EMULATION_SUPPORT: cublasLtMatmulAlgoCapAttributes_t = cublasLtMatmulAlgoCapAttributes_t(
+        22,
     );
 }
 #[repr(transparent)]

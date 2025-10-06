@@ -8,7 +8,11 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnHandle_t {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 pub fn write_cudnnGetVersion(
@@ -25,300 +29,6 @@ pub fn write_cudnnGetCudartVersion(
     writer: &mut (impl std::io::Write + ?Sized),
 ) -> std::io::Result<()> {
     writer.write_all(b"()")
-}
-impl crate::CudaDisplay for cuda_types::cudnn9::cudnnStatus_t {
-    fn write(
-        &self,
-        _fn_name: &'static str,
-        _index: usize,
-        writer: &mut (impl std::io::Write + ?Sized),
-    ) -> std::io::Result<()> {
-        match self {
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_SUCCESS => {
-                writer.write_all(stringify!(CUDNN_STATUS_SUCCESS).as_bytes())
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_NOT_INITIALIZED => {
-                writer.write_all(stringify!(CUDNN_STATUS_NOT_INITIALIZED).as_bytes())
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_SUBLIBRARY_VERSION_MISMATCH => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_SUBLIBRARY_VERSION_MISMATCH).as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_SERIALIZATION_VERSION_MISMATCH => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_SERIALIZATION_VERSION_MISMATCH)
-                            .as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_DEPRECATED => {
-                writer.write_all(stringify!(CUDNN_STATUS_DEPRECATED).as_bytes())
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_LICENSE_ERROR => {
-                writer.write_all(stringify!(CUDNN_STATUS_LICENSE_ERROR).as_bytes())
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_RUNTIME_IN_PROGRESS => {
-                writer.write_all(stringify!(CUDNN_STATUS_RUNTIME_IN_PROGRESS).as_bytes())
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_RUNTIME_FP_OVERFLOW => {
-                writer.write_all(stringify!(CUDNN_STATUS_RUNTIME_FP_OVERFLOW).as_bytes())
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_SUBLIBRARY_LOADING_FAILED => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_SUBLIBRARY_LOADING_FAILED).as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_BAD_PARAM => {
-                writer.write_all(stringify!(CUDNN_STATUS_BAD_PARAM).as_bytes())
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_BAD_PARAM_NULL_POINTER => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_BAD_PARAM_NULL_POINTER).as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_BAD_PARAM_MISALIGNED_POINTER => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_BAD_PARAM_MISALIGNED_POINTER).as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_BAD_PARAM_NOT_FINALIZED => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_BAD_PARAM_NOT_FINALIZED).as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_BAD_PARAM_OUT_OF_BOUND => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_BAD_PARAM_OUT_OF_BOUND).as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_BAD_PARAM_SIZE_INSUFFICIENT => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_BAD_PARAM_SIZE_INSUFFICIENT).as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_BAD_PARAM_STREAM_MISMATCH => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_BAD_PARAM_STREAM_MISMATCH).as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_BAD_PARAM_SHAPE_MISMATCH => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_BAD_PARAM_SHAPE_MISMATCH).as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_BAD_PARAM_DUPLICATED_ENTRIES => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_BAD_PARAM_DUPLICATED_ENTRIES).as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_BAD_PARAM_ATTRIBUTE_TYPE => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_BAD_PARAM_ATTRIBUTE_TYPE).as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_BAD_PARAM_CUDA_GRAPH_MISMATCH => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_BAD_PARAM_CUDA_GRAPH_MISMATCH).as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_BAD_PARAM_DESCRIPTOR_TYPE => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_BAD_PARAM_DESCRIPTOR_TYPE).as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_NOT_SUPPORTED => {
-                writer.write_all(stringify!(CUDNN_STATUS_NOT_SUPPORTED).as_bytes())
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_NOT_SUPPORTED_GRAPH_PATTERN => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_NOT_SUPPORTED_GRAPH_PATTERN).as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_NOT_SUPPORTED_SHAPE => {
-                writer.write_all(stringify!(CUDNN_STATUS_NOT_SUPPORTED_SHAPE).as_bytes())
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_NOT_SUPPORTED_DATA_TYPE => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_NOT_SUPPORTED_DATA_TYPE).as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_NOT_SUPPORTED_LAYOUT => {
-                writer
-                    .write_all(stringify!(CUDNN_STATUS_NOT_SUPPORTED_LAYOUT).as_bytes())
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_NOT_SUPPORTED_INCOMPATIBLE_CUDA_DRIVER => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_NOT_SUPPORTED_INCOMPATIBLE_CUDA_DRIVER)
-                            .as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_NOT_SUPPORTED_INCOMPATIBLE_CUDART => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_NOT_SUPPORTED_INCOMPATIBLE_CUDART)
-                            .as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_NOT_SUPPORTED_ARCH_MISMATCH => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_NOT_SUPPORTED_ARCH_MISMATCH).as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_NOT_SUPPORTED_RUNTIME_PREREQUISITE_MISSING => {
-                writer
-                    .write_all(
-                        stringify!(
-                            CUDNN_STATUS_NOT_SUPPORTED_RUNTIME_PREREQUISITE_MISSING
-                        )
-                            .as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_NOT_SUPPORTED_SUBLIBRARY_UNAVAILABLE => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_NOT_SUPPORTED_SUBLIBRARY_UNAVAILABLE)
-                            .as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_NOT_SUPPORTED_SHARED_MEMORY_INSUFFICIENT => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_NOT_SUPPORTED_SHARED_MEMORY_INSUFFICIENT)
-                            .as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_NOT_SUPPORTED_PADDING => {
-                writer
-                    .write_all(stringify!(CUDNN_STATUS_NOT_SUPPORTED_PADDING).as_bytes())
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_NOT_SUPPORTED_BAD_LAUNCH_PARAM => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_NOT_SUPPORTED_BAD_LAUNCH_PARAM)
-                            .as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_NOT_SUPPORTED_CUDA_GRAPH_NATIVE_API => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_NOT_SUPPORTED_CUDA_GRAPH_NATIVE_API)
-                            .as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_INTERNAL_ERROR => {
-                writer.write_all(stringify!(CUDNN_STATUS_INTERNAL_ERROR).as_bytes())
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_INTERNAL_ERROR_COMPILATION_FAILED => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_INTERNAL_ERROR_COMPILATION_FAILED)
-                            .as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_INTERNAL_ERROR_UNEXPECTED_VALUE => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_INTERNAL_ERROR_UNEXPECTED_VALUE)
-                            .as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_INTERNAL_ERROR_HOST_ALLOCATION_FAILED => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_INTERNAL_ERROR_HOST_ALLOCATION_FAILED)
-                            .as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_INTERNAL_ERROR_DEVICE_ALLOCATION_FAILED => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_INTERNAL_ERROR_DEVICE_ALLOCATION_FAILED)
-                            .as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_INTERNAL_ERROR_BAD_LAUNCH_PARAM => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_INTERNAL_ERROR_BAD_LAUNCH_PARAM)
-                            .as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_INTERNAL_ERROR_TEXTURE_CREATION_FAILED => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_INTERNAL_ERROR_TEXTURE_CREATION_FAILED)
-                            .as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_EXECUTION_FAILED => {
-                writer.write_all(stringify!(CUDNN_STATUS_EXECUTION_FAILED).as_bytes())
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_EXECUTION_FAILED_CUDA_DRIVER => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_EXECUTION_FAILED_CUDA_DRIVER).as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_EXECUTION_FAILED_CUBLAS => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_EXECUTION_FAILED_CUBLAS).as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_EXECUTION_FAILED_CUDART => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_EXECUTION_FAILED_CUDART).as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_EXECUTION_FAILED_CURAND => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_EXECUTION_FAILED_CURAND).as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_ALLOC_FAILED => {
-                writer.write_all(stringify!(CUDNN_STATUS_ALLOC_FAILED).as_bytes())
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE => {
-                writer.write_all(stringify!(CUDNN_STATUS_INVALID_VALUE).as_bytes())
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_ARCH_MISMATCH => {
-                writer.write_all(stringify!(CUDNN_STATUS_ARCH_MISMATCH).as_bytes())
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_MAPPING_ERROR => {
-                writer.write_all(stringify!(CUDNN_STATUS_MAPPING_ERROR).as_bytes())
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_RUNTIME_PREREQUISITE_MISSING => {
-                writer
-                    .write_all(
-                        stringify!(CUDNN_STATUS_RUNTIME_PREREQUISITE_MISSING).as_bytes(),
-                    )
-            }
-            &cuda_types::cudnn9::cudnnStatus_t::CUDNN_STATUS_VERSION_MISMATCH => {
-                writer.write_all(stringify!(CUDNN_STATUS_VERSION_MISMATCH).as_bytes())
-            }
-            _ => write!(writer, "{}", self.0),
-        }
-    }
 }
 pub fn write_cudnnGetErrorString(
     writer: &mut (impl std::io::Write + ?Sized),
@@ -514,6 +224,15 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnDataType_t {
             }
             &cuda_types::cudnn9::cudnnDataType_t::CUDNN_DATA_FP4_E2M1 => {
                 writer.write_all(stringify!(CUDNN_DATA_FP4_E2M1).as_bytes())
+            }
+            &cuda_types::cudnn9::cudnnDataType_t::CUDNN_DATA_INT4 => {
+                writer.write_all(stringify!(CUDNN_DATA_INT4).as_bytes())
+            }
+            &cuda_types::cudnn9::cudnnDataType_t::CUDNN_DATA_UINT4 => {
+                writer.write_all(stringify!(CUDNN_DATA_UINT4).as_bytes())
+            }
+            &cuda_types::cudnn9::cudnnDataType_t::CUDNN_DATA_UINT32 => {
+                writer.write_all(stringify!(CUDNN_DATA_UINT32).as_bytes())
             }
             _ => write!(writer, "{}", self.0),
         }
@@ -1860,6 +1579,12 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnBackendAttributeName_t {
             &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_REDUCTION_COMP_TYPE => {
                 writer.write_all(stringify!(CUDNN_ATTR_REDUCTION_COMP_TYPE).as_bytes())
             }
+            &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_REDUCTION_IS_DETERMINISTIC => {
+                writer
+                    .write_all(
+                        stringify!(CUDNN_ATTR_REDUCTION_IS_DETERMINISTIC).as_bytes(),
+                    )
+            }
             &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_OPERATION_REDUCTION_XDESC => {
                 writer
                     .write_all(
@@ -2310,6 +2035,123 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnBackendAttributeName_t {
                 writer
                     .write_all(stringify!(CUDNN_ATTR_OPERATION_RESHAPE_YDESC).as_bytes())
             }
+            &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_OPERATION_EXPAND_BAND_MATRIX_XDESC => {
+                writer
+                    .write_all(
+                        stringify!(CUDNN_ATTR_OPERATION_EXPAND_BAND_MATRIX_XDESC)
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_OPERATION_EXPAND_BAND_MATRIX_YDESC => {
+                writer
+                    .write_all(
+                        stringify!(CUDNN_ATTR_OPERATION_EXPAND_BAND_MATRIX_YDESC)
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_OPERATION_EXPAND_BAND_MATRIX_LOWER_BANDWIDTH => {
+                writer
+                    .write_all(
+                        stringify!(
+                            CUDNN_ATTR_OPERATION_EXPAND_BAND_MATRIX_LOWER_BANDWIDTH
+                        )
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_OPERATION_EXPAND_BAND_MATRIX_UPPER_BANDWIDTH => {
+                writer
+                    .write_all(
+                        stringify!(
+                            CUDNN_ATTR_OPERATION_EXPAND_BAND_MATRIX_UPPER_BANDWIDTH
+                        )
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_OPERATION_EXPAND_BAND_MATRIX_AXIS => {
+                writer
+                    .write_all(
+                        stringify!(CUDNN_ATTR_OPERATION_EXPAND_BAND_MATRIX_AXIS)
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_OPERATION_EXPAND_BAND_MATRIX_PAD_VALUE => {
+                writer
+                    .write_all(
+                        stringify!(CUDNN_ATTR_OPERATION_EXPAND_BAND_MATRIX_PAD_VALUE)
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_OPERATION_EXPAND_BAND_MATRIX_KV_TOKEN_OFFSET_DESC => {
+                writer
+                    .write_all(
+                        stringify!(
+                            CUDNN_ATTR_OPERATION_EXPAND_BAND_MATRIX_KV_TOKEN_OFFSET_DESC
+                        )
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_OPERATION_EXPAND_BAND_MATRIX_SPECULATIVE_MASK_DESC => {
+                writer
+                    .write_all(
+                        stringify!(
+                            CUDNN_ATTR_OPERATION_EXPAND_BAND_MATRIX_SPECULATIVE_MASK_DESC
+                        )
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_OPERATION_CONTRACT_BAND_MATRIX_XDESC => {
+                writer
+                    .write_all(
+                        stringify!(CUDNN_ATTR_OPERATION_CONTRACT_BAND_MATRIX_XDESC)
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_OPERATION_CONTRACT_BAND_MATRIX_YDESC => {
+                writer
+                    .write_all(
+                        stringify!(CUDNN_ATTR_OPERATION_CONTRACT_BAND_MATRIX_YDESC)
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_OPERATION_CONTRACT_BAND_MATRIX_LOWER_BANDWIDTH => {
+                writer
+                    .write_all(
+                        stringify!(
+                            CUDNN_ATTR_OPERATION_CONTRACT_BAND_MATRIX_LOWER_BANDWIDTH
+                        )
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_OPERATION_CONTRACT_BAND_MATRIX_UPPER_BANDWIDTH => {
+                writer
+                    .write_all(
+                        stringify!(
+                            CUDNN_ATTR_OPERATION_CONTRACT_BAND_MATRIX_UPPER_BANDWIDTH
+                        )
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_OPERATION_CONTRACT_BAND_MATRIX_AXIS => {
+                writer
+                    .write_all(
+                        stringify!(CUDNN_ATTR_OPERATION_CONTRACT_BAND_MATRIX_AXIS)
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_OPERATION_CONTRACT_BAND_MATRIX_PAD_VALUE => {
+                writer
+                    .write_all(
+                        stringify!(CUDNN_ATTR_OPERATION_CONTRACT_BAND_MATRIX_PAD_VALUE)
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_OPERATION_CONTRACT_BAND_MAX_TOKEN_VALUE => {
+                writer
+                    .write_all(
+                        stringify!(CUDNN_ATTR_OPERATION_CONTRACT_BAND_MAX_TOKEN_VALUE)
+                            .as_bytes(),
+                    )
+            }
             &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_RNG_DISTRIBUTION => {
                 writer.write_all(stringify!(CUDNN_ATTR_RNG_DISTRIBUTION).as_bytes())
             }
@@ -2366,6 +2208,13 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnBackendAttributeName_t {
                 writer
                     .write_all(
                         stringify!(CUDNN_ATTR_KERNEL_CACHE_IS_ENGINECFG_KERNEL_CACHED)
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_KERNEL_CACHE_JSON_REPRESENTATION => {
+                writer
+                    .write_all(
+                        stringify!(CUDNN_ATTR_KERNEL_CACHE_JSON_REPRESENTATION)
                             .as_bytes(),
                     )
             }
@@ -2443,6 +2292,13 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnBackendAttributeName_t {
                             .as_bytes(),
                     )
             }
+            &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_OPERATION_BLOCK_SCALE_DEQUANTIZE_NEG_SCALE => {
+                writer
+                    .write_all(
+                        stringify!(CUDNN_ATTR_OPERATION_BLOCK_SCALE_DEQUANTIZE_NEG_SCALE)
+                            .as_bytes(),
+                    )
+            }
             &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_DEVICEPROP_DEVICE_ID => {
                 writer.write_all(stringify!(CUDNN_ATTR_DEVICEPROP_DEVICE_ID).as_bytes())
             }
@@ -2453,6 +2309,42 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnBackendAttributeName_t {
                 writer
                     .write_all(
                         stringify!(CUDNN_ATTR_DEVICEPROP_JSON_REPRESENTATION).as_bytes(),
+                    )
+            }
+            &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_OPERATION_SDPA_FWD_QDESC => {
+                writer
+                    .write_all(
+                        stringify!(CUDNN_ATTR_OPERATION_SDPA_FWD_QDESC).as_bytes(),
+                    )
+            }
+            &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_OPERATION_SDPA_FWD_KDESC => {
+                writer
+                    .write_all(
+                        stringify!(CUDNN_ATTR_OPERATION_SDPA_FWD_KDESC).as_bytes(),
+                    )
+            }
+            &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_OPERATION_SDPA_FWD_VDESC => {
+                writer
+                    .write_all(
+                        stringify!(CUDNN_ATTR_OPERATION_SDPA_FWD_VDESC).as_bytes(),
+                    )
+            }
+            &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_OPERATION_SDPA_FWD_ODESC => {
+                writer
+                    .write_all(
+                        stringify!(CUDNN_ATTR_OPERATION_SDPA_FWD_ODESC).as_bytes(),
+                    )
+            }
+            &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_OPERATION_SDPA_FWD_STATSDESC => {
+                writer
+                    .write_all(
+                        stringify!(CUDNN_ATTR_OPERATION_SDPA_FWD_STATSDESC).as_bytes(),
+                    )
+            }
+            &cuda_types::cudnn9::cudnnBackendAttributeName_t::CUDNN_ATTR_OPERATION_SDPA_FWD_SCALEDESC => {
+                writer
+                    .write_all(
+                        stringify!(CUDNN_ATTR_OPERATION_SDPA_FWD_SCALEDESC).as_bytes(),
                     )
             }
             _ => write!(writer, "{}", self.0),
@@ -2809,6 +2701,29 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnBackendDescriptorType_t {
                 writer
                     .write_all(
                         stringify!(CUDNN_BACKEND_DEVICEPROP_DESCRIPTOR).as_bytes(),
+                    )
+            }
+            &cuda_types::cudnn9::cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_EXPAND_BAND_MATRIX_DESCRIPTOR => {
+                writer
+                    .write_all(
+                        stringify!(CUDNN_BACKEND_OPERATION_EXPAND_BAND_MATRIX_DESCRIPTOR)
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::cudnn9::cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONTRACT_BAND_MATRIX_DESCRIPTOR => {
+                writer
+                    .write_all(
+                        stringify!(
+                            CUDNN_BACKEND_OPERATION_CONTRACT_BAND_MATRIX_DESCRIPTOR
+                        )
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::cudnn9::cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_SDPA_FWD_DESCRIPTOR => {
+                writer
+                    .write_all(
+                        stringify!(CUDNN_BACKEND_OPERATION_SDPA_FWD_DESCRIPTOR)
+                            .as_bytes(),
                     )
             }
             _ => write!(writer, "{}", self.0),
@@ -3382,7 +3297,11 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnTensorDescriptor_t {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cudnn9::cudnnPoolingDescriptor_t {
@@ -3392,7 +3311,11 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnPoolingDescriptor_t {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cudnn9::cudnnFilterDescriptor_t {
@@ -3402,7 +3325,11 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnFilterDescriptor_t {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cudnn9::cudnnLRNDescriptor_t {
@@ -3412,7 +3339,11 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnLRNDescriptor_t {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cudnn9::cudnnActivationDescriptor_t {
@@ -3422,7 +3353,11 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnActivationDescriptor_t {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cudnn9::cudnnSpatialTransformerDescriptor_t {
@@ -3432,7 +3367,11 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnSpatialTransformerDescripto
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cudnn9::cudnnOpTensorDescriptor_t {
@@ -3442,7 +3381,11 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnOpTensorDescriptor_t {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cudnn9::cudnnReduceTensorDescriptor_t {
@@ -3452,7 +3395,11 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnReduceTensorDescriptor_t {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cudnn9::cudnnCTCLossDescriptor_t {
@@ -3462,7 +3409,11 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnCTCLossDescriptor_t {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cudnn9::cudnnTensorTransformDescriptor_t {
@@ -3472,7 +3423,11 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnTensorTransformDescriptor_t
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cudnn9::cudnnDeterminism_t {
@@ -6944,7 +6899,11 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnDropoutDescriptor_t {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 pub fn write_cudnnCreateDropoutDescriptor(
@@ -10301,7 +10260,11 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnRNNDescriptor_t {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cudnn9::cudnnRNNDataDescriptor_t {
@@ -10311,7 +10274,11 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnRNNDataDescriptor_t {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 pub fn write_cudnnCreateRNNDescriptor(
@@ -11080,7 +11047,11 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnSeqDataDescriptor_t {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 pub fn write_cudnnCreateSeqDataDescriptor(
@@ -11270,7 +11241,11 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnAttnDescriptor_t {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 pub fn write_cudnnCreateAttnDescriptor(
@@ -13217,7 +13192,11 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnConvolutionDescriptor_t {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cudnn9::cudnnConvolutionFwdAlgoPerfStruct {
@@ -15321,7 +15300,11 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnFusedOpsConstParamPack_t {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cudnn9::cudnnFusedOpsVariantParamPack_t {
@@ -15331,7 +15314,11 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnFusedOpsVariantParamPack_t 
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cudnn9::cudnnFusedOpsPlan_t {
@@ -15341,7 +15328,11 @@ impl crate::CudaDisplay for cuda_types::cudnn9::cudnnFusedOpsPlan_t {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 impl crate::CudaDisplay for cuda_types::cudnn9::cudnnFusedOps_t {
@@ -16575,4 +16566,252 @@ pub fn write_cudnnFusedOpsExecute(
     writer.write_all(concat!(stringify!(varPack), ": ").as_bytes())?;
     crate::CudaDisplay::write(&varPack, "cudnnFusedOpsExecute", arg_idx, writer)?;
     writer.write_all(b")")
+}
+impl crate::CudaDisplay for cuda_types::cudnn9::cudnnStatus_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        match self {
+            Ok(()) => writer.write_all(b"CUDNN_STATUS_SUCCESS"),
+            Err(err) => {
+                match err.0.get() {
+                    1001 => writer.write_all("CUDNN_STATUS_NOT_INITIALIZED".as_bytes()),
+                    1002 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_SUBLIBRARY_VERSION_MISMATCH".as_bytes(),
+                            )
+                    }
+                    1003 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_SERIALIZATION_VERSION_MISMATCH".as_bytes(),
+                            )
+                    }
+                    1004 => writer.write_all("CUDNN_STATUS_DEPRECATED".as_bytes()),
+                    1005 => writer.write_all("CUDNN_STATUS_LICENSE_ERROR".as_bytes()),
+                    1006 => {
+                        writer.write_all("CUDNN_STATUS_RUNTIME_IN_PROGRESS".as_bytes())
+                    }
+                    1007 => {
+                        writer.write_all("CUDNN_STATUS_RUNTIME_FP_OVERFLOW".as_bytes())
+                    }
+                    1008 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_SUBLIBRARY_LOADING_FAILED".as_bytes(),
+                            )
+                    }
+                    2000 => writer.write_all("CUDNN_STATUS_BAD_PARAM".as_bytes()),
+                    2002 => {
+                        writer
+                            .write_all("CUDNN_STATUS_BAD_PARAM_NULL_POINTER".as_bytes())
+                    }
+                    2003 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_BAD_PARAM_MISALIGNED_POINTER".as_bytes(),
+                            )
+                    }
+                    2004 => {
+                        writer
+                            .write_all("CUDNN_STATUS_BAD_PARAM_NOT_FINALIZED".as_bytes())
+                    }
+                    2005 => {
+                        writer
+                            .write_all("CUDNN_STATUS_BAD_PARAM_OUT_OF_BOUND".as_bytes())
+                    }
+                    2006 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_BAD_PARAM_SIZE_INSUFFICIENT".as_bytes(),
+                            )
+                    }
+                    2007 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_BAD_PARAM_STREAM_MISMATCH".as_bytes(),
+                            )
+                    }
+                    2008 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_BAD_PARAM_SHAPE_MISMATCH".as_bytes(),
+                            )
+                    }
+                    2009 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_BAD_PARAM_DUPLICATED_ENTRIES".as_bytes(),
+                            )
+                    }
+                    2010 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_BAD_PARAM_ATTRIBUTE_TYPE".as_bytes(),
+                            )
+                    }
+                    2011 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_BAD_PARAM_CUDA_GRAPH_MISMATCH".as_bytes(),
+                            )
+                    }
+                    2012 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_BAD_PARAM_DESCRIPTOR_TYPE".as_bytes(),
+                            )
+                    }
+                    3000 => writer.write_all("CUDNN_STATUS_NOT_SUPPORTED".as_bytes()),
+                    3001 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_NOT_SUPPORTED_GRAPH_PATTERN".as_bytes(),
+                            )
+                    }
+                    3002 => {
+                        writer.write_all("CUDNN_STATUS_NOT_SUPPORTED_SHAPE".as_bytes())
+                    }
+                    3003 => {
+                        writer
+                            .write_all("CUDNN_STATUS_NOT_SUPPORTED_DATA_TYPE".as_bytes())
+                    }
+                    3004 => {
+                        writer.write_all("CUDNN_STATUS_NOT_SUPPORTED_LAYOUT".as_bytes())
+                    }
+                    3005 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_NOT_SUPPORTED_INCOMPATIBLE_CUDA_DRIVER"
+                                    .as_bytes(),
+                            )
+                    }
+                    3006 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_NOT_SUPPORTED_INCOMPATIBLE_CUDART".as_bytes(),
+                            )
+                    }
+                    3007 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_NOT_SUPPORTED_ARCH_MISMATCH".as_bytes(),
+                            )
+                    }
+                    3008 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_NOT_SUPPORTED_RUNTIME_PREREQUISITE_MISSING"
+                                    .as_bytes(),
+                            )
+                    }
+                    3009 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_NOT_SUPPORTED_SUBLIBRARY_UNAVAILABLE"
+                                    .as_bytes(),
+                            )
+                    }
+                    3010 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_NOT_SUPPORTED_SHARED_MEMORY_INSUFFICIENT"
+                                    .as_bytes(),
+                            )
+                    }
+                    3011 => {
+                        writer.write_all("CUDNN_STATUS_NOT_SUPPORTED_PADDING".as_bytes())
+                    }
+                    3012 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_NOT_SUPPORTED_BAD_LAUNCH_PARAM".as_bytes(),
+                            )
+                    }
+                    3013 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_NOT_SUPPORTED_CUDA_GRAPH_NATIVE_API"
+                                    .as_bytes(),
+                            )
+                    }
+                    4000 => writer.write_all("CUDNN_STATUS_INTERNAL_ERROR".as_bytes()),
+                    4001 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_INTERNAL_ERROR_COMPILATION_FAILED".as_bytes(),
+                            )
+                    }
+                    4002 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_INTERNAL_ERROR_UNEXPECTED_VALUE".as_bytes(),
+                            )
+                    }
+                    4003 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_INTERNAL_ERROR_HOST_ALLOCATION_FAILED"
+                                    .as_bytes(),
+                            )
+                    }
+                    4004 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_INTERNAL_ERROR_DEVICE_ALLOCATION_FAILED"
+                                    .as_bytes(),
+                            )
+                    }
+                    4005 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_INTERNAL_ERROR_BAD_LAUNCH_PARAM".as_bytes(),
+                            )
+                    }
+                    4006 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_INTERNAL_ERROR_TEXTURE_CREATION_FAILED"
+                                    .as_bytes(),
+                            )
+                    }
+                    5000 => writer.write_all("CUDNN_STATUS_EXECUTION_FAILED".as_bytes()),
+                    5001 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_EXECUTION_FAILED_CUDA_DRIVER".as_bytes(),
+                            )
+                    }
+                    5002 => {
+                        writer
+                            .write_all("CUDNN_STATUS_EXECUTION_FAILED_CUBLAS".as_bytes())
+                    }
+                    5003 => {
+                        writer
+                            .write_all("CUDNN_STATUS_EXECUTION_FAILED_CUDART".as_bytes())
+                    }
+                    5004 => {
+                        writer
+                            .write_all("CUDNN_STATUS_EXECUTION_FAILED_CURAND".as_bytes())
+                    }
+                    4003 => writer.write_all("CUDNN_STATUS_ALLOC_FAILED".as_bytes()),
+                    2001 => writer.write_all("CUDNN_STATUS_INVALID_VALUE".as_bytes()),
+                    3007 => writer.write_all("CUDNN_STATUS_ARCH_MISMATCH".as_bytes()),
+                    4006 => writer.write_all("CUDNN_STATUS_MAPPING_ERROR".as_bytes()),
+                    3008 => {
+                        writer
+                            .write_all(
+                                "CUDNN_STATUS_RUNTIME_PREREQUISITE_MISSING".as_bytes(),
+                            )
+                    }
+                    1002 => writer.write_all("CUDNN_STATUS_VERSION_MISMATCH".as_bytes()),
+                    err => write!(writer, "{}", err),
+                }
+            }
+        }
+    }
 }

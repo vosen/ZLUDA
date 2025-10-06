@@ -4,15 +4,8 @@ version = "0.0.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib"]
-name = "cudnn64_9"
 
 [dependencies]
 cuda_macros = { path = "../cuda_macros" }
 cuda_types = { path = "../cuda_types" }
-
-[package.metadata.zluda]
-linux_symlinks = [
-    "libcudnn.so",
-    "libcudnn.so.9",
-]
+zluda_common = { path = "../zluda_common" }

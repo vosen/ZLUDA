@@ -1856,7 +1856,8 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::ReduxSync { .. }
         | ast::Instruction::GridDepControl { .. }
         | ast::Instruction::LdMatrix { .. }
-        | ast::Instruction::Mma { .. } => InstructionModes::none(),
+        | ast::Instruction::Mma { .. }
+        | ast::Instruction::Copysign { .. } => InstructionModes::none(),
         ast::Instruction::Add {
             data: ast::ArithDetails::Integer(_),
             ..

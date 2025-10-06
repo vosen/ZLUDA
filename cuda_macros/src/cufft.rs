@@ -316,6 +316,14 @@ extern "system" {
         cbType: cuda_types::cufft::cufftXtCallbackType,
         sharedSize: usize,
     ) -> cuda_types::cufft::cufftResult;
+    fn cufftXtSetJITCallback(
+        plan: cuda_types::cufft::cufftHandle,
+        lto_callback_symbol_name: *const ::core::ffi::c_char,
+        lto_callback_fatbin: *const ::core::ffi::c_void,
+        lto_callback_fatbin_size: usize,
+        type_: cuda_types::cufft::cufftXtCallbackType,
+        caller_info: *mut *mut ::core::ffi::c_void,
+    ) -> cuda_types::cufft::cufftResult;
     fn cufftXtMakePlanMany(
         plan: cuda_types::cufft::cufftHandle,
         rank: ::core::ffi::c_int,

@@ -97,6 +97,30 @@ impl ZludaObject for Context {
     }
 }
 
+// This type is used in lieu of Option<&Context> because of trait coherence rules.
+// We can't implement FromCuda for Option<&T> in this crate because Option<T> is defined in the standard library.
+pub(crate) enum MaybeContextRef<'a> {
+    None,
+    Some(&'a Context),
+}
+
+impl<'a>
+    zluda_common::FromCuda<
+        'a,
+        <Context as ZludaObject>::CudaHandle,
+        <Context as ZludaObject>::Error,
+    > for MaybeContextRef<'a>
+{
+    fn from_cuda(
+        handle: &'a <Context as ZludaObject>::CudaHandle,
+    ) -> Result<MaybeContextRef<'a>, <Context as ZludaObject>::Error> {
+        match zluda_common::as_ref(handle) {
+            Some(ctx) => Ok(MaybeContextRef::Some(ctx.as_result()?)),
+            None => Ok(MaybeContextRef::None),
+        }
+    }
+}
+
 pub(crate) fn get_current_device() -> Result<hipDevice_t, CUerror> {
     STACK.with(|stack| {
         stack
@@ -171,9 +195,19 @@ pub(crate) fn get_current(pctx: &mut CUcontext) -> CUresult {
 }
 
 pub(crate) fn get_device(dev: &mut hipDevice_t) -> CUresult {
-    let cu_ctx = get_current_context()?;
-    let ctx: &Context = FromCuda::<_, CUerror>::from_cuda(&cu_ctx)?;
-    *dev = ctx.device;
+    get_device_v2(dev, MaybeContextRef::None)
+}
+
+pub(crate) fn get_device_v2(dev: &mut hipDevice_t, ctx: MaybeContextRef) -> CUresult {
+    let device = match ctx {
+        MaybeContextRef::Some(ctx) => ctx.device,
+        MaybeContextRef::None => {
+            let cu_ctx: CUcontext = get_current_context()?;
+            let ctx: &Context = FromCuda::<_, CUerror>::from_cuda(&cu_ctx)?;
+            ctx.device
+        }
+    };
+    *dev = device;
     Ok(())
 }
 
