@@ -107,7 +107,6 @@ pub(crate) fn get_attribute(
             *pi = 0;
             return Ok(());
         }
-        
         | CUdevice_attribute::CU_DEVICE_ATTRIBUTE_NUMA_ID => {
             *pi = -1;
             return Ok(());
