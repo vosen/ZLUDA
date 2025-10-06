@@ -270,7 +270,7 @@ mod os {
 
     pub(crate) fn zip(target_dir: PathBuf, profile: String, projects: Vec<crate::Project>) {
         let mut tar_gz =
-            File::create(format!("{}/{profile}/zluda.tar", target_dir.display())).unwrap();
+            File::create(format!("{}/{profile}/zluda.tar.gz", target_dir.display())).unwrap();
         let enc = GzEncoder::new(&mut tar_gz, Compression::default());
         let mut tar = tar::Builder::new(enc);
         // Leads to broken tar archives on WSL
