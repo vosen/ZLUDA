@@ -10,6 +10,7 @@ use dark_api::fatbin::{Fatbin, FatbinError, FatbinFile, FatbinSubmodule};
 use hip_runtime_sys::*;
 use hipblaslt_sys::*;
 use rocblas_sys::*;
+use miopen_sys::*;
 use std::{
     ffi::{c_void, CStr},
     mem::{self, ManuallyDrop, MaybeUninit},
@@ -45,6 +46,11 @@ impl CudaErrorType for nvmlError_t {
 impl CudaErrorType for cudnn9::cudnnError_t {
     const INVALID_VALUE: Self = Self::INVALID_VALUE;
     const NOT_SUPPORTED: Self = Self::NOT_SUPPORTED;
+}
+
+impl CudaErrorType for miopen_sys::miopenError_t {
+    const INVALID_VALUE: Self = Self::InvalidValue;
+    const NOT_SUPPORTED: Self = Self::NotImplemented;
 }
 
 /// Used to try to convert CUDA API values into our internal representation.
@@ -209,7 +215,8 @@ from_cuda_transmute!(
     CUkernel => hipFunction_t,
     cublasLtMatmulDesc_t => hipblasLtMatmulDesc_t,
     cublasLtMatmulPreference_t => hipblasLtMatmulPreference_t,
-    cublasLtMatrixLayout_t => hipblasLtMatrixLayout_t
+    cublasLtMatrixLayout_t => hipblasLtMatrixLayout_t,
+    cudnn9::cudnnHandle_t => miopenHandle_t
 );
 
 impl<'a, E: CudaErrorType> FromCuda<'a, CUlimit, E> for hipLimit_t {
