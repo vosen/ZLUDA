@@ -1,55 +1,55 @@
-define amdgpu_kernel void @setp_gt(ptr addrspace(4) byref(i64) %"42", ptr addrspace(4) byref(i64) %"43") #0 {
-  %"44" = alloca i64, align 8, addrspace(5)
-  %"45" = alloca i64, align 8, addrspace(5)
-  %"46" = alloca float, align 4, addrspace(5)
-  %"47" = alloca float, align 4, addrspace(5)
-  %"48" = alloca float, align 4, addrspace(5)
-  %"49" = alloca i1, align 1, addrspace(5)
+define amdgpu_kernel void @setp_gt(ptr addrspace(4) byref(i64) %"45", ptr addrspace(4) byref(i64) %"46") #0 {
+  %"47" = alloca i64, align 8, addrspace(5)
+  %"48" = alloca i64, align 8, addrspace(5)
+  %"49" = alloca float, align 4, addrspace(5)
+  %"50" = alloca float, align 4, addrspace(5)
+  %"51" = alloca float, align 4, addrspace(5)
+  %"52" = alloca i1, align 1, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
-  br label %"41"
+  br label %"44"
 
-"41":                                             ; preds = %1
-  %"50" = load i64, ptr addrspace(4) %"42", align 8
-  store i64 %"50", ptr addrspace(5) %"44", align 8
-  %"51" = load i64, ptr addrspace(4) %"43", align 8
-  store i64 %"51", ptr addrspace(5) %"45", align 8
-  %"53" = load i64, ptr addrspace(5) %"44", align 8
-  %"67" = inttoptr i64 %"53" to ptr
-  %"52" = load float, ptr %"67", align 4
-  store float %"52", ptr addrspace(5) %"46", align 4
-  %"54" = load i64, ptr addrspace(5) %"44", align 8
-  %"68" = inttoptr i64 %"54" to ptr
-  %"40" = getelementptr inbounds i8, ptr %"68", i64 4
-  %"55" = load float, ptr %"40", align 4
-  store float %"55", ptr addrspace(5) %"47", align 4
-  %"57" = load float, ptr addrspace(5) %"46", align 4
-  %"58" = load float, ptr addrspace(5) %"47", align 4
-  %2 = fcmp ogt float %"57", %"58"
-  store i1 %2, ptr addrspace(5) %"49", align 1
-  %"59" = load i1, ptr addrspace(5) %"49", align 1
-  br i1 %"59", label %"17", label %"18"
+"44":                                             ; preds = %1
+  %2 = load i64, ptr addrspace(4) %"45", align 8
+  store i64 %2, ptr addrspace(5) %"47", align 8
+  %3 = load i64, ptr addrspace(4) %"46", align 8
+  store i64 %3, ptr addrspace(5) %"48", align 8
+  %4 = load i64, ptr addrspace(5) %"47", align 8
+  %"70" = inttoptr i64 %4 to ptr
+  %5 = load float, ptr %"70", align 4
+  store float %5, ptr addrspace(5) %"49", align 4
+  %6 = load i64, ptr addrspace(5) %"47", align 8
+  %"71" = inttoptr i64 %6 to ptr
+  %"43" = getelementptr inbounds i8, ptr %"71", i64 4
+  %7 = load float, ptr %"43", align 4
+  store float %7, ptr addrspace(5) %"50", align 4
+  %8 = load float, ptr addrspace(5) %"49", align 4
+  %9 = load float, ptr addrspace(5) %"50", align 4
+  %10 = fcmp ogt float %8, %9
+  store i1 %10, ptr addrspace(5) %"52", align 1
+  %11 = load i1, ptr addrspace(5) %"52", align 1
+  br i1 %11, label %"18", label %"19"
 
-"17":                                             ; preds = %"41"
-  %"61" = load float, ptr addrspace(5) %"46", align 4
-  store float %"61", ptr addrspace(5) %"48", align 4
-  br label %"18"
+"18":                                             ; preds = %"44"
+  %12 = load float, ptr addrspace(5) %"49", align 4
+  store float %12, ptr addrspace(5) %"51", align 4
+  br label %"19"
 
-"18":                                             ; preds = %"17", %"41"
-  %"62" = load i1, ptr addrspace(5) %"49", align 1
-  br i1 %"62", label %"20", label %"19"
+"19":                                             ; preds = %"18", %"44"
+  %13 = load i1, ptr addrspace(5) %"52", align 1
+  br i1 %13, label %"21", label %"20"
 
-"19":                                             ; preds = %"18"
-  %"64" = load float, ptr addrspace(5) %"47", align 4
-  store float %"64", ptr addrspace(5) %"48", align 4
-  br label %"20"
+"20":                                             ; preds = %"19"
+  %14 = load float, ptr addrspace(5) %"50", align 4
+  store float %14, ptr addrspace(5) %"51", align 4
+  br label %"21"
 
-"20":                                             ; preds = %"19", %"18"
-  %"65" = load i64, ptr addrspace(5) %"45", align 8
-  %"66" = load float, ptr addrspace(5) %"48", align 4
-  %"69" = inttoptr i64 %"65" to ptr
-  store float %"66", ptr %"69", align 4
+"21":                                             ; preds = %"20", %"19"
+  %15 = load i64, ptr addrspace(5) %"48", align 8
+  %16 = load float, ptr addrspace(5) %"51", align 4
+  %"72" = inttoptr i64 %15 to ptr
+  store float %16, ptr %"72", align 4
   ret void
 }
 

@@ -1,46 +1,46 @@
-define amdgpu_kernel void @fma_bf16x2(ptr addrspace(4) byref(i64) %"39", ptr addrspace(4) byref(i64) %"40") #0 {
-  %"41" = alloca i64, align 8, addrspace(5)
-  %"42" = alloca i64, align 8, addrspace(5)
-  %"43" = alloca i32, align 4, addrspace(5)
-  %"44" = alloca i32, align 4, addrspace(5)
-  %"45" = alloca i32, align 4, addrspace(5)
+define amdgpu_kernel void @fma_bf16x2(ptr addrspace(4) byref(i64) %"42", ptr addrspace(4) byref(i64) %"43") #0 {
+  %"44" = alloca i64, align 8, addrspace(5)
+  %"45" = alloca i64, align 8, addrspace(5)
+  %"46" = alloca i32, align 4, addrspace(5)
+  %"47" = alloca i32, align 4, addrspace(5)
+  %"48" = alloca i32, align 4, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
-  br label %"38"
+  br label %"41"
 
-"38":                                             ; preds = %1
-  %"46" = load i64, ptr addrspace(4) %"39", align 8
-  store i64 %"46", ptr addrspace(5) %"41", align 8
-  %"47" = load i64, ptr addrspace(4) %"40", align 8
-  store i64 %"47", ptr addrspace(5) %"42", align 8
-  %"49" = load i64, ptr addrspace(5) %"41", align 8
-  %"60" = inttoptr i64 %"49" to ptr
-  %"48" = load i32, ptr %"60", align 4
-  store i32 %"48", ptr addrspace(5) %"43", align 4
-  %"50" = load i64, ptr addrspace(5) %"41", align 8
-  %"61" = inttoptr i64 %"50" to ptr
-  %"35" = getelementptr inbounds i8, ptr %"61", i64 4
-  %"51" = load i32, ptr %"35", align 4
-  store i32 %"51", ptr addrspace(5) %"44", align 4
-  %"52" = load i64, ptr addrspace(5) %"41", align 8
-  %"62" = inttoptr i64 %"52" to ptr
-  %"37" = getelementptr inbounds i8, ptr %"62", i64 8
-  %"53" = load i32, ptr %"37", align 4
-  store i32 %"53", ptr addrspace(5) %"45", align 4
-  %"55" = load i32, ptr addrspace(5) %"43", align 4
-  %"56" = load i32, ptr addrspace(5) %"44", align 4
-  %"57" = load i32, ptr addrspace(5) %"45", align 4
-  %"64" = bitcast i32 %"55" to <2 x bfloat>
-  %"65" = bitcast i32 %"56" to <2 x bfloat>
-  %"66" = bitcast i32 %"57" to <2 x bfloat>
-  %"63" = call <2 x bfloat> @llvm.fma.v2bf16(<2 x bfloat> %"64", <2 x bfloat> %"65", <2 x bfloat> %"66")
-  %"54" = bitcast <2 x bfloat> %"63" to i32
-  store i32 %"54", ptr addrspace(5) %"43", align 4
-  %"58" = load i64, ptr addrspace(5) %"42", align 8
-  %"59" = load i32, ptr addrspace(5) %"43", align 4
-  %"67" = inttoptr i64 %"58" to ptr
-  store i32 %"59", ptr %"67", align 4
+"41":                                             ; preds = %1
+  %2 = load i64, ptr addrspace(4) %"42", align 8
+  store i64 %2, ptr addrspace(5) %"44", align 8
+  %3 = load i64, ptr addrspace(4) %"43", align 8
+  store i64 %3, ptr addrspace(5) %"45", align 8
+  %4 = load i64, ptr addrspace(5) %"44", align 8
+  %"63" = inttoptr i64 %4 to ptr
+  %5 = load i32, ptr %"63", align 4
+  store i32 %5, ptr addrspace(5) %"46", align 4
+  %6 = load i64, ptr addrspace(5) %"44", align 8
+  %"64" = inttoptr i64 %6 to ptr
+  %"38" = getelementptr inbounds i8, ptr %"64", i64 4
+  %7 = load i32, ptr %"38", align 4
+  store i32 %7, ptr addrspace(5) %"47", align 4
+  %8 = load i64, ptr addrspace(5) %"44", align 8
+  %"65" = inttoptr i64 %8 to ptr
+  %"40" = getelementptr inbounds i8, ptr %"65", i64 8
+  %9 = load i32, ptr %"40", align 4
+  store i32 %9, ptr addrspace(5) %"48", align 4
+  %10 = load i32, ptr addrspace(5) %"46", align 4
+  %11 = load i32, ptr addrspace(5) %"47", align 4
+  %12 = load i32, ptr addrspace(5) %"48", align 4
+  %"67" = bitcast i32 %10 to <2 x bfloat>
+  %"68" = bitcast i32 %11 to <2 x bfloat>
+  %"69" = bitcast i32 %12 to <2 x bfloat>
+  %"66" = call <2 x bfloat> @llvm.fma.v2bf16(<2 x bfloat> %"67", <2 x bfloat> %"68", <2 x bfloat> %"69")
+  %"57" = bitcast <2 x bfloat> %"66" to i32
+  store i32 %"57", ptr addrspace(5) %"46", align 4
+  %13 = load i64, ptr addrspace(5) %"45", align 8
+  %14 = load i32, ptr addrspace(5) %"46", align 4
+  %"70" = inttoptr i64 %13 to ptr
+  store i32 %14, ptr %"70", align 4
   ret void
 }
 

@@ -1,30 +1,30 @@
-define amdgpu_kernel void @cvt_rni_u16_f32(ptr addrspace(4) byref(i64) %"34", ptr addrspace(4) byref(i64) %"35") #0 {
-  %"36" = alloca i64, align 8, addrspace(5)
-  %"37" = alloca i64, align 8, addrspace(5)
-  %"38" = alloca float, align 4, addrspace(5)
-  %"39" = alloca i16, align 2, addrspace(5)
+define amdgpu_kernel void @cvt_rni_u16_f32(ptr addrspace(4) byref(i64) %"37", ptr addrspace(4) byref(i64) %"38") #0 {
+  %"39" = alloca i64, align 8, addrspace(5)
+  %"40" = alloca i64, align 8, addrspace(5)
+  %"41" = alloca float, align 4, addrspace(5)
+  %"42" = alloca i16, align 2, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
-  br label %"33"
+  br label %"36"
 
-"33":                                             ; preds = %1
-  %"40" = load i64, ptr addrspace(4) %"34", align 8
-  store i64 %"40", ptr addrspace(5) %"36", align 8
-  %"41" = load i64, ptr addrspace(4) %"35", align 8
-  store i64 %"41", ptr addrspace(5) %"37", align 8
-  %"43" = load i64, ptr addrspace(5) %"36", align 8
-  %"48" = inttoptr i64 %"43" to ptr addrspace(1)
-  %"42" = load float, ptr addrspace(1) %"48", align 4
-  store float %"42", ptr addrspace(5) %"38", align 4
-  %"45" = load float, ptr addrspace(5) %"38", align 4
-  %2 = call float @llvm.roundeven.f32(float %"45")
-  %"44" = call i16 @llvm.fptoui.sat.i16.f32(float %2)
-  store i16 %"44", ptr addrspace(5) %"39", align 2
-  %"46" = load i64, ptr addrspace(5) %"37", align 8
-  %"47" = load i16, ptr addrspace(5) %"39", align 2
-  %"49" = inttoptr i64 %"46" to ptr
-  store i16 %"47", ptr %"49", align 2
+"36":                                             ; preds = %1
+  %2 = load i64, ptr addrspace(4) %"37", align 8
+  store i64 %2, ptr addrspace(5) %"39", align 8
+  %3 = load i64, ptr addrspace(4) %"38", align 8
+  store i64 %3, ptr addrspace(5) %"40", align 8
+  %4 = load i64, ptr addrspace(5) %"39", align 8
+  %"51" = inttoptr i64 %4 to ptr addrspace(1)
+  %5 = load float, ptr addrspace(1) %"51", align 4
+  store float %5, ptr addrspace(5) %"41", align 4
+  %6 = load float, ptr addrspace(5) %"41", align 4
+  %7 = call float @llvm.roundeven.f32(float %6)
+  %"47" = call i16 @llvm.fptoui.sat.i16.f32(float %7)
+  store i16 %"47", ptr addrspace(5) %"42", align 2
+  %8 = load i64, ptr addrspace(5) %"40", align 8
+  %9 = load i16, ptr addrspace(5) %"42", align 2
+  %"52" = inttoptr i64 %8 to ptr
+  store i16 %9, ptr %"52", align 2
   ret void
 }
 
