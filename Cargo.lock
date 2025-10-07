@@ -432,6 +432,7 @@ dependencies = [
  "cuda_macros",
  "hip_runtime-sys",
  "hipblaslt-sys",
+ "miopen-sys",
  "rocblas-sys",
  "rocm_smi-sys",
 ]
@@ -2259,6 +2260,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "miopen-sys"
+version = "0.0.0"
+dependencies = [
+ "hip_runtime-sys",
+]
+
+[[package]]
 name = "ndarray"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3771,6 +3779,7 @@ dependencies = [
  "dark_api",
  "hip_runtime-sys",
  "hipblaslt-sys",
+ "miopen-sys",
  "rocblas-sys",
 ]
 
@@ -3780,6 +3789,7 @@ version = "0.0.0"
 dependencies = [
  "cuda_macros",
  "cuda_types",
+ "miopen-sys",
  "zluda_common",
 ]
 

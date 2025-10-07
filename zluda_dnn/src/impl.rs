@@ -1,4 +1,6 @@
 use cuda_types::cudnn9::*;
+use miopen_sys::*;
+
 #[cfg(debug_assertions)]
 pub(crate) fn unimplemented() -> cudnnStatus_t {
     unimplemented!()
@@ -22,12 +24,12 @@ pub(crate) fn get_last_error_string(_message: *mut ::core::ffi::c_char, _max_siz
     todo!()
 }
 
-pub(crate) fn create(_handle: *mut cudnnHandle_t) -> cudnnStatus_t {
-    Ok(())
+pub(crate) fn create(handle: &mut miopenHandle_t) -> miopenStatus_t {
+    unsafe { miopenCreate(handle) }
 }
 
-pub(crate) fn destroy(_handle: cudnnHandle_t) -> cudnnStatus_t {
-    Ok(())
+pub(crate) fn destroy(handle: miopenHandle_t) -> miopenStatus_t {
+    unsafe { miopenDestroy(handle) }
 }
 
 pub mod dnn8 {
