@@ -9,4 +9,5 @@ cuda_types = { path = "../cuda_types" }
 hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
 rocblas-sys = { path = "../ext/rocblas-sys" }
 hipblaslt-sys = { path = "../ext/hipblaslt-sys" }
+miopen-sys = { path = "../ext/miopen-sys" }
 dark_api = { path = "../dark_api" }

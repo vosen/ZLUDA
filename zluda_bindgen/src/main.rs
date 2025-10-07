@@ -35,6 +35,7 @@ fn main() {
         &["..", "ext", "hipblaslt-sys", "src", "lib.rs"],
     );
     generate_rocm_smi(&crate_root, &["..", "ext", "rocm_smi-sys", "src", "lib.rs"]);
+    generate_miopen(&crate_root, &["..", "ext", "miopen-sys", "src", "lib.rs"]);
     let cuda_functions = generate_cuda(&crate_root);
     generate_process_address_table(&crate_root, cuda_functions);
     generate_ml(&crate_root);
@@ -43,6 +44,91 @@ fn main() {
     generate_cufft(&crate_root);
     generate_cusparse(&crate_root);
     generate_cudnn(&crate_root);
+}
+
+fn generate_miopen(output: &PathBuf, path: &[&'static str]) {
+    let miopen_header = new_builder()
+        .header("/opt/rocm/include/miopen/miopen.h")
+        .allowlist_type("^miopen.*")
+        .allowlist_function("^miopen.*")
+        .allowlist_var("^MIOPEN_.*")
+        .must_use_type("miopenStatus_t")
+        .constified_enum("miopenStatus_t")
+        .new_type_alias("^miopenHandle$")
+        .new_type_alias("^miopenFusionOpDescriptor_t$")
+        .new_type_alias("^miopenTensorDescriptor_t$")
+        .new_type_alias("^miopenSeqTensorDescriptor_t$")
+        .new_type_alias("^miopenConvolutionDescriptor_t$")
+        .new_type_alias("^miopenPoolingDescriptor_t$")
+        .new_type_alias("^miopenLRNDescriptor_t$")
+        .new_type_alias("^miopenActivationDescriptor_t$")
+        .new_type_alias("^miopenRNNDescriptor_t$")
+        .new_type_alias("^miopenCTCLossDescriptor_t$")
+        .new_type_alias("^miopenDropoutDescriptor_t$")
+        .new_type_alias("^miopenReduceTensorDescriptor_t$")
+        .new_type_alias("^miopenMhaDescriptor_t$")
+        .new_type_alias("^miopenSoftmaxDescriptor_t$")
+        .new_type_alias("^miopenFusionPlanDescriptor_t$")
+        .new_type_alias("^miopenOperatorDescriptor_t$")
+        .new_type_alias("^miopenOperatorArgs_t$")
+        .new_type_alias("^miopenProblem_t$")
+        .new_type_alias("^miopenFindOptions_t$")
+        .new_type_alias("^miopenSolution_t$")
+        .clang_args(["-I/opt/rocm/include", "-D__HIP_PLATFORM_AMD__", "-xc++"])
+        .generate()
+        .unwrap()
+        .to_string();
+    let mut module: syn::File = syn::parse_str(&miopen_header).unwrap();
+    remove_type(&mut module, "hipStream_t");
+    remove_type(&mut module, "ihipStream_t");
+    let result_options = ConvertIntoRustResultOptions {
+        type_: "miopenStatus_t",
+        underlying_type: "miopenStatus_t",
+        new_error_type: "miopenError_t",
+        error_prefix: ("miopenStatus", "Error"),
+        success: ("miopenStatusSuccess", "Success"),
+        hip_types: vec![],
+    };
+    let mut converter = ConvertIntoRustResult::new(result_options);
+    module.items = converter
+        .convert(module.items)
+        .map(|item| match item {
+            Item::ForeignMod(mut extern_) => {
+                extern_.attrs.push(
+                    parse_quote!(#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]),
+                );
+                Item::ForeignMod(extern_)
+            }
+            item => item,
+        })
+        .collect();
+    converter.flush(&mut module.items);
+    add_send_sync(&mut module.items, &["miopenHandle"]);
+    add_send_sync(&mut module.items, &["miopenFusionOpDescriptor_t"]);
+    add_send_sync(&mut module.items, &["miopenTensorDescriptor_t"]);
+    add_send_sync(&mut module.items, &["miopenSeqTensorDescriptor_t"]);
+    add_send_sync(&mut module.items, &["miopenConvolutionDescriptor_t"]);
+    add_send_sync(&mut module.items, &["miopenPoolingDescriptor_t"]);
+    add_send_sync(&mut module.items, &["miopenLRNDescriptor_t"]);
+    add_send_sync(&mut module.items, &["miopenActivationDescriptor_t"]);
+    add_send_sync(&mut module.items, &["miopenRNNDescriptor_t"]);
+    add_send_sync(&mut module.items, &["miopenCTCLossDescriptor_t"]);
+    add_send_sync(&mut module.items, &["miopenDropoutDescriptor_t"]);
+    add_send_sync(&mut module.items, &["miopenReduceTensorDescriptor_t"]);
+    add_send_sync(&mut module.items, &["miopenMhaDescriptor_t"]);
+    add_send_sync(&mut module.items, &["miopenSoftmaxDescriptor_t"]);
+    add_send_sync(&mut module.items, &["miopenFusionPlanDescriptor_t"]);
+    add_send_sync(&mut module.items, &["miopenOperatorDescriptor_t"]);
+    add_send_sync(&mut module.items, &["miopenOperatorArgs_t"]);
+    add_send_sync(&mut module.items, &["miopenProblem_t"]);
+    add_send_sync(&mut module.items, &["miopenFindOptions_t"]);
+    add_send_sync(&mut module.items, &["miopenSolution_t"]);
+    let mut output = output.clone();
+    output.extend(path);
+    write_rust_to_file(
+        output,
+        &prettyplease::unparse(&module).replace("hipStream_t", "hip_runtime_sys::hipStream_t"),
+    )
 }
 
 fn generate_process_address_table(crate_root: &PathBuf, mut cuda_fns: Vec<Ident>) {
@@ -419,7 +505,24 @@ fn write_cudnn9_types(
     };
     let mut output = output.clone();
     output.extend(cudnn9_path);
-    let text = prettyplease::unparse(&module);
+    let mut text = prettyplease::unparse(&module);
+    text.push_str(
+        "
+impl From<miopen_sys::miopenError_t> for cudnnError_t {
+    fn from(error: miopen_sys::miopenError_t) -> Self {
+        match error {
+            miopen_sys::miopenError_t::NotInitialized => cudnnError_t::NOT_INITIALIZED,
+            miopen_sys::miopenError_t::InvalidValue => cudnnError_t::INVALID_VALUE,
+            miopen_sys::miopenError_t::BadParm => cudnnError_t::BAD_PARAM,
+            miopen_sys::miopenError_t::AllocFailed => cudnnError_t::ALLOC_FAILED,
+            miopen_sys::miopenError_t::InternalError => cudnnError_t::INTERNAL_ERROR,
+            miopen_sys::miopenError_t::NotImplemented | miopen_sys::miopenError_t::UnsupportedOp => cudnnError_t::NOT_SUPPORTED,
+            miopen_sys::miopenError_t::VersionMismatch => cudnnError_t::VERSION_MISMATCH,
+            _ => cudnnError_t::INTERNAL_ERROR,
+        }
+    }
+}"
+    );
     write_rust_to_file(output, &text)
 }
 
@@ -531,6 +634,20 @@ impl From<crate::cudnn9::cudnnError_t> for cudnnError_t {
                 crate::cudnn8::cudnnError_t::VERSION_MISMATCH
             }
             _ => crate::cudnn8::cudnnError_t::INTERNAL_ERROR,
+        }
+    }
+}
+impl From<miopen_sys::miopenError_t> for cudnnError_t {
+    fn from(error: miopen_sys::miopenError_t) -> Self {
+        match error {
+            miopen_sys::miopenError_t::NotInitialized => cudnnError_t::NOT_INITIALIZED,
+            miopen_sys::miopenError_t::InvalidValue => cudnnError_t::INVALID_VALUE,
+            miopen_sys::miopenError_t::BadParm => cudnnError_t::BAD_PARAM,
+            miopen_sys::miopenError_t::AllocFailed => cudnnError_t::ALLOC_FAILED,
+            miopen_sys::miopenError_t::InternalError => cudnnError_t::INTERNAL_ERROR,
+            miopen_sys::miopenError_t::NotImplemented | miopen_sys::miopenError_t::UnsupportedOp => cudnnError_t::NOT_SUPPORTED,
+            miopen_sys::miopenError_t::VersionMismatch => cudnnError_t::VERSION_MISMATCH,
+            _ => cudnnError_t::INTERNAL_ERROR,
         }
     }
 }",

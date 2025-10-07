@@ -9,3 +9,4 @@ edition = "2021"
 cuda_macros = { path = "../cuda_macros" }
 cuda_types = { path = "../cuda_types" }
 zluda_common = { path = "../zluda_common" }
+miopen-sys = { path = "../ext/miopen-sys" }

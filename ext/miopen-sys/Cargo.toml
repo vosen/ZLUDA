@@ -1,0 +1,9 @@
+[package]
+name = "miopen-sys"
+version = "0.0.0"
+edition = "2021"
+
+[lib]
+
+[dependencies]
+hip_runtime-sys = { version = "0.0.0", path = "../hip_runtime-sys" }

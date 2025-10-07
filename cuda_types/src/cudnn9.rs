@@ -2655,3 +2655,17 @@ pub type cudnnStatus_t = ::core::result::Result<(), cudnnError_t>;
 const _: fn() = || {
     let _ = std::mem::transmute::<cudnnStatus_t, u32>;
 };
+impl From<miopen_sys::miopenError_t> for cudnnError_t {
+    fn from(error: miopen_sys::miopenError_t) -> Self {
+        match error {
+            miopen_sys::miopenError_t::NotInitialized => cudnnError_t::NOT_INITIALIZED,
+            miopen_sys::miopenError_t::InvalidValue => cudnnError_t::INVALID_VALUE,
+            miopen_sys::miopenError_t::BadParm => cudnnError_t::BAD_PARAM,
+            miopen_sys::miopenError_t::AllocFailed => cudnnError_t::ALLOC_FAILED,
+            miopen_sys::miopenError_t::InternalError => cudnnError_t::INTERNAL_ERROR,
+            miopen_sys::miopenError_t::NotImplemented | miopen_sys::miopenError_t::UnsupportedOp => cudnnError_t::NOT_SUPPORTED,
+            miopen_sys::miopenError_t::VersionMismatch => cudnnError_t::VERSION_MISMATCH,
+            _ => cudnnError_t::INTERNAL_ERROR,
+        }
+    }
+}
