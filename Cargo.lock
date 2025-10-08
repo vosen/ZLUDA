@@ -3789,6 +3789,7 @@ version = "0.0.0"
 dependencies = [
  "cuda_macros",
  "cuda_types",
+ "hip_runtime-sys",
  "miopen-sys",
  "zluda_common",
 ]

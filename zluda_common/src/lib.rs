@@ -196,7 +196,9 @@ from_cuda_nop!(
     CUfunction_attribute,
     CUgraphExecUpdateResultInfo,
     *mut cudnn9::cudnnHandle_t,
-    cudnn9::cudnnHandle_t
+    cudnn9::cudnnHandle_t,
+    cudnn9::cudnnMathType_t,
+    cudnn9::cudnnConvolutionFwdAlgoPerfStruct
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,
@@ -216,7 +218,9 @@ from_cuda_transmute!(
     cublasLtMatmulDesc_t => hipblasLtMatmulDesc_t,
     cublasLtMatmulPreference_t => hipblasLtMatmulPreference_t,
     cublasLtMatrixLayout_t => hipblasLtMatrixLayout_t,
-    cudnn9::cudnnHandle_t => miopenHandle_t
+    cudnn9::cudnnTensorDescriptor_t => miopenTensorDescriptor_t,
+    cudnn9::cudnnFilterDescriptor_t => miopenTensorDescriptor_t,
+    cudnn9::cudnnConvolutionDescriptor_t => miopenConvolutionDescriptor_t
 );
 
 impl<'a, E: CudaErrorType> FromCuda<'a, CUlimit, E> for hipLimit_t {
@@ -582,6 +586,53 @@ impl<'a, E: CudaErrorType> FromCuda<'a, *mut cublasLtMatmulHeuristicResult_t, E>
             Some(x) => Ok(x),
             None => Err(E::INVALID_VALUE),
         }
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cudnn9::cudnnTensorFormat_t, E> for miopenTensorLayout_t {
+    fn from_cuda(format: &'a cudnn9::cudnnTensorFormat_t) -> Result<Self, E> {
+        Ok(match *format {
+            cudnn9::cudnnTensorFormat_t::CUDNN_TENSOR_NCHW => {
+                miopenTensorLayout_t::miopenTensorNCHW
+            }
+            cudnn9::cudnnTensorFormat_t::CUDNN_TENSOR_NHWC => {
+                miopenTensorLayout_t::miopenTensorNHWC
+            }
+            cudnn9::cudnnTensorFormat_t::CUDNN_TENSOR_NCHW_VECT_C => {
+                miopenTensorLayout_t::miopenTensorNCHWc4
+            }
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cudnn9::cudnnDataType_t, E> for miopenDataType_t {
+    fn from_cuda(format: &'a cudnn9::cudnnDataType_t) -> Result<Self, E> {
+        Ok(match *format {
+            cudnn9::cudnnDataType_t::CUDNN_DATA_HALF => miopenDataType_t::miopenHalf,
+            cudnn9::cudnnDataType_t::CUDNN_DATA_FLOAT => miopenDataType_t::miopenFloat,
+            cudnn9::cudnnDataType_t::CUDNN_DATA_INT32 => miopenDataType_t::miopenInt32,
+            cudnn9::cudnnDataType_t::CUDNN_DATA_INT8 => miopenDataType_t::miopenInt8,
+            cudnn9::cudnnDataType_t::CUDNN_DATA_BFLOAT16 => miopenDataType_t::miopenBFloat16,
+            cudnn9::cudnnDataType_t::CUDNN_DATA_DOUBLE => miopenDataType_t::miopenDouble,
+            cudnn9::cudnnDataType_t::CUDNN_DATA_FP8_E4M3 => miopenDataType_t::miopenFloat8,
+            cudnn9::cudnnDataType_t::CUDNN_DATA_FP8_E5M2 => miopenDataType_t::miopenBFloat8,
+            cudnn9::cudnnDataType_t::CUDNN_DATA_INT64 => miopenDataType_t::miopenInt64,
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cudnn9::cudnnConvolutionMode_t, E>
+    for miopenConvolutionMode_t
+{
+    fn from_cuda(format: &'a cudnn9::cudnnConvolutionMode_t) -> Result<Self, E> {
+        Ok(match *format {
+            cudnn9::cudnnConvolutionMode_t::CUDNN_CROSS_CORRELATION => {
+                miopenConvolutionMode_t::miopenConvolution
+            }
+            _ => return Err(E::NOT_SUPPORTED),
+        })
     }
 }
 
