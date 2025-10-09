@@ -38,6 +38,36 @@ pub(crate) fn copy_hto_d_v2(
     unsafe { hipMemcpyHtoD(dst_device, src_host.cast_mut(), byte_count) }
 }
 
+pub(crate) fn copy_hto_d_v2_ptds(
+    dst_device: hipDeviceptr_t,
+    src_host: *const ::core::ffi::c_void,
+    byte_count: usize,
+) -> hipError_t {
+    unsafe {
+        hipMemcpy_spt(
+            dst_device.0.cast(),
+            src_host.cast_mut(),
+            byte_count,
+            hipMemcpyKind::hipMemcpyHostToDevice,
+        )
+    }
+}
+
+pub(crate) fn copy_dto_h_v2_ptds(
+    dst_host: *mut ::core::ffi::c_void,
+    src_device: hipDeviceptr_t,
+    byte_count: usize,
+) -> hipError_t {
+    unsafe {
+        hipMemcpy_spt(
+            dst_host.cast(),
+            src_device.0.cast(),
+            byte_count,
+            hipMemcpyKind::hipMemcpyDeviceToHost,
+        )
+    }
+}
+
 pub(crate) fn get_address_range_v2(
     pbase: *mut hipDeviceptr_t,
     psize: *mut usize,
