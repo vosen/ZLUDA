@@ -89,6 +89,7 @@ dual_function_declarations! {
         cudnnGetLastErrorString
     ],
     implemented <= [
+        cudnnConvolutionForward,
         cudnnCreate,
         cudnnCreateConvolutionDescriptor,
         cudnnCreateFilterDescriptor,

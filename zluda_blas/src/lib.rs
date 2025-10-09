@@ -50,6 +50,7 @@ cuda_macros::cublas_function_declarations!(
             cublasDestroy_v2,
             cublasGemmEx,
             cublasGetMathMode,
+            cublasHgemm,
             cublasSetMathMode,
             cublasSetStream_v2,
             cublasSetWorkspace_v2,

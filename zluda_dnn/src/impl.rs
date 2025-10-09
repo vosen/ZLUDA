@@ -1,12 +1,13 @@
 use cuda_types::cudnn9::*;
 use hip_runtime_sys::*;
 use miopen_sys::*;
+use rustc_hash::FxHashMap;
 use std::{mem, sync::Mutex};
 use zluda_common::{from_cuda_object, ZludaObject};
 
 pub(crate) struct Context {
     base: miopenHandle_t,
-    search_workspace: Mutex<SearchWorkspace>,
+    search_workspace: Mutex<ContextCache>,
 }
 
 from_cuda_object!(Context);
@@ -15,11 +16,14 @@ impl Context {
     fn new(base: miopenHandle_t) -> Self {
         Self {
             base,
-            search_workspace: Mutex::new(SearchWorkspace {
-                size: 0,
-                search_space: std::ptr::null_mut(),
-                fake_tensor_size: 0,
-                fake_tensor: std::ptr::null_mut(),
+            search_workspace: Mutex::new(ContextCache {
+                cache: FxHashMap::default(),
+                scratchpad: SearchScratchpad {
+                    size: 0,
+                    search_space: std::ptr::null_mut(),
+                    fake_tensor_size: 0,
+                    fake_tensor: std::ptr::null_mut(),
+                },
             }),
         }
     }
@@ -34,14 +38,14 @@ impl ZludaObject for Context {
     fn drop_checked(&mut self) -> Result<(), cudnnError_t> {
         let result1 = unsafe { miopenDestroy(self.base) }.map_err(Into::into);
         let (result2, result3) = if let Ok(search_workspace) = self.search_workspace.get_mut() {
-            let result2 = if !search_workspace.search_space.is_null() {
-                unsafe { hipFree(search_workspace.search_space) }
+            let result2 = if !search_workspace.scratchpad.search_space.is_null() {
+                unsafe { hipFree(search_workspace.scratchpad.search_space) }
                     .map_err(|_| cudnnError_t::INTERNAL_ERROR)
             } else {
                 Ok(())
             };
-            let result3 = if !search_workspace.fake_tensor.is_null() {
-                unsafe { hipFree(search_workspace.fake_tensor) }
+            let result3 = if !search_workspace.scratchpad.fake_tensor.is_null() {
+                unsafe { hipFree(search_workspace.scratchpad.fake_tensor) }
                     .map_err(|_| cudnnError_t::INTERNAL_ERROR)
             } else {
                 Ok(())
@@ -54,14 +58,19 @@ impl ZludaObject for Context {
     }
 }
 
-struct SearchWorkspace {
+struct ContextCache {
+    cache: FxHashMap<ConvolutionOpCacheKey, miopenConvAlgoPerf_t>,
+    scratchpad: SearchScratchpad,
+}
+
+struct SearchScratchpad {
     size: usize,
     search_space: *mut ::std::os::raw::c_void,
     fake_tensor_size: usize,
     fake_tensor: *mut ::std::os::raw::c_void,
 }
 
-impl SearchWorkspace {
+impl SearchScratchpad {
     unsafe fn reallocate_max_tensor(
         &mut self,
         a: miopenTensorDescriptor_t,
@@ -86,8 +95,8 @@ impl SearchWorkspace {
     }
 }
 
-unsafe impl Send for SearchWorkspace {}
-unsafe impl Sync for SearchWorkspace {}
+unsafe impl Send for ContextCache {}
+unsafe impl Sync for ContextCache {}
 
 #[cfg(debug_assertions)]
 pub(crate) fn unimplemented() -> cudnnStatus_t {
@@ -213,12 +222,12 @@ pub(crate) unsafe fn get_convolution_forward_algorithm_v7(
     if requested_algo_count <= 0 {
         return Err(miopenError_t::BadParm);
     }
-    let search_result =
-        get_convolution_forward_algorithm_v7_impl(handle, x_desc, w_desc, conv_desc, y_desc)?;
-    match search_result {
-        Some(result) => {
+    let miopen_result =
+        get_or_search_convolution_forward_algorithm(handle, x_desc, w_desc, conv_desc, y_desc)?;
+    match miopen_result {
+        Some(miopen_result) => {
             *returned_algo_count = 1;
-            *perf_results = result;
+            *perf_results = algo_perf_to_cudnn(miopen_result);
         }
         None => {
             *returned_algo_count = 0;
@@ -227,37 +236,72 @@ pub(crate) unsafe fn get_convolution_forward_algorithm_v7(
     Ok(())
 }
 
-unsafe fn get_convolution_forward_algorithm_v7_impl(
+unsafe fn get_or_search_convolution_forward_algorithm(
     handle: &Context,
     x_desc: miopenTensorDescriptor_t,
     w_desc: miopenTensorDescriptor_t,
     conv_desc: miopenConvolutionDescriptor_t,
     y_desc: miopenTensorDescriptor_t,
-) -> Result<Option<cudnnConvolutionFwdAlgoPerf_t>, miopenError_t> {
+) -> Result<Option<miopenConvAlgoPerf_t>, miopenError_t> {
+    let miopen_result = {
+        let mut search_workspace = handle
+            .search_workspace
+            .lock()
+            .map_err(|_| miopenError_t::UnknownError)?;
+        let search_workspace = &mut *search_workspace;
+        let cache_key = ConvolutionOpCacheKey::new(x_desc, w_desc, conv_desc, y_desc)?;
+        let scratchpad = &mut search_workspace.scratchpad;
+        let cache = &mut search_workspace.cache;
+        match cache.entry(cache_key) {
+            std::collections::hash_map::Entry::Occupied(occupied_entry) => {
+                Some(occupied_entry.get().clone())
+            }
+            std::collections::hash_map::Entry::Vacant(vacant_entry) => {
+                search_convolution_forward_algorithm(
+                    handle.base,
+                    scratchpad,
+                    x_desc,
+                    w_desc,
+                    conv_desc,
+                    y_desc,
+                )?
+                .map(|x| vacant_entry.insert(x).clone())
+            }
+        }
+    };
+    Ok(miopen_result)
+}
+
+unsafe fn search_convolution_forward_algorithm(
+    handle: miopenHandle_t,
+    scratchpad: &mut SearchScratchpad,
+    x_desc: miopenTensorDescriptor_t,
+    w_desc: miopenTensorDescriptor_t,
+    conv_desc: miopenConvolutionDescriptor_t,
+    y_desc: miopenTensorDescriptor_t,
+) -> Result<Option<miopenConvAlgoPerf_t>, miopenError_t> {
     let mut required_search_workspace_size = 0;
     miopenConvolutionForwardGetWorkSpaceSize(
-        handle.base,
+        handle,
         w_desc,
         x_desc,
         conv_desc,
         y_desc,
         &mut required_search_workspace_size,
     )?;
-    let mut workspace = handle.search_workspace.lock().unwrap();
-    let workspace = &mut *workspace;
-    if required_search_workspace_size > workspace.size {
-        let old_ptr = workspace.search_space;
-        workspace.size = 0;
+    if required_search_workspace_size > scratchpad.size {
+        let old_ptr = scratchpad.search_space;
+        scratchpad.size = 0;
         hipFree(old_ptr).map_err(|_| miopenError_t::AllocFailed)?;
-        hipMalloc(&mut workspace.search_space, required_search_workspace_size)
+        hipMalloc(&mut scratchpad.search_space, required_search_workspace_size)
             .map_err(|_| miopenError_t::AllocFailed)?;
-        workspace.size = required_search_workspace_size;
+        scratchpad.size = required_search_workspace_size;
     }
-    let fake_tensor = workspace.reallocate_max_tensor(w_desc, x_desc, y_desc)?;
+    let fake_tensor = scratchpad.reallocate_max_tensor(w_desc, x_desc, y_desc)?;
     let mut algo_count = 0;
     let mut perf_result = mem::zeroed();
     miopenFindConvolutionForwardAlgorithm(
-        handle.base,
+        handle,
         x_desc,
         fake_tensor,
         w_desc,
@@ -268,14 +312,110 @@ unsafe fn get_convolution_forward_algorithm_v7_impl(
         1,
         &mut algo_count,
         &mut perf_result,
-        workspace.search_space,
-        workspace.size,
-        true,
+        scratchpad.search_space,
+        scratchpad.size,
+        false,
     )?;
     if algo_count == 0 {
         Ok(None)
     } else {
-        Ok(Some(algo_perf_to_cudnn(perf_result)))
+        Ok(Some(perf_result))
+    }
+}
+
+#[derive(PartialEq, Eq, Hash)]
+struct ConvolutionOpCacheKey {
+    x: TensorCacheKey,
+    w: TensorCacheKey,
+    conv: ConvolutionDescriptorCacheKey,
+    y: TensorCacheKey,
+}
+
+impl ConvolutionOpCacheKey {
+    fn new(
+        x_desc: miopenTensorDescriptor_t,
+        w_desc: miopenTensorDescriptor_t,
+        conv_desc: miopenConvolutionDescriptor_t,
+        y_desc: miopenTensorDescriptor_t,
+    ) -> Result<Self, miopenError_t> {
+        Ok(Self {
+            x: TensorCacheKey::new(x_desc)?,
+            w: TensorCacheKey::new(w_desc)?,
+            conv: ConvolutionDescriptorCacheKey::new(conv_desc)?,
+            y: TensorCacheKey::new(y_desc)?,
+        })
+    }
+}
+
+#[derive(PartialEq, Eq, Hash)]
+struct TensorCacheKey {
+    data_type: miopenDataType_t,
+    dimensions: [i32; 5],
+    strides: [i32; 5],
+}
+
+impl TensorCacheKey {
+    fn new(desc: miopenTensorDescriptor_t) -> Result<Self, miopenError_t> {
+        let mut data_type = unsafe { mem::zeroed() };
+        let mut dimensions = [0; 5];
+        let mut strides = [0; 5];
+        unsafe {
+            miopenGetTensorDescriptor(
+                desc,
+                &mut data_type,
+                dimensions.as_mut_ptr(),
+                strides.as_mut_ptr(),
+            )?;
+        }
+        Ok(Self {
+            data_type,
+            dimensions,
+            strides,
+        })
+    }
+}
+
+#[derive(PartialEq, Eq, Hash)]
+struct ConvolutionDescriptorCacheKey {
+    mode: miopenConvolutionMode_t,
+    pad_h: i32,
+    pad_w: i32,
+    stride_h: i32,
+    stride_w: i32,
+    dilation_h: i32,
+    dilation_w: i32,
+}
+
+impl ConvolutionDescriptorCacheKey {
+    fn new(desc: miopenConvolutionDescriptor_t) -> Result<Self, miopenError_t> {
+        let mut mode = unsafe { mem::zeroed() };
+        let mut pad_h = 0;
+        let mut pad_w = 0;
+        let mut stride_h = 0;
+        let mut stride_w = 0;
+        let mut dilation_h = 0;
+        let mut dilation_w = 0;
+        unsafe {
+            miopenGetConvolutionDescriptor(
+                desc,
+                &mut mode,
+                &mut pad_h,
+                &mut pad_w,
+                &mut stride_h,
+                &mut stride_w,
+                &mut dilation_h,
+                &mut dilation_w,
+            )?;
+        }
+        Ok(Self {
+            mode,
+            pad_h,
+            pad_w,
+            stride_h,
+            stride_w,
+            dilation_h,
+            dilation_w,
+        })
     }
 }
 
@@ -321,13 +461,48 @@ pub(crate) unsafe fn get_convolution_forward_workspace_size(
     _algo: miopenConvFwdAlgorithm_t,
     size_in_bytes: &mut usize,
 ) -> miopenStatus_t {
-    miopenConvolutionForwardGetWorkSpaceSize(
+    let algo =
+        get_or_search_convolution_forward_algorithm(handle, x_desc, w_desc, conv_desc, y_desc)?
+            .ok_or(miopenError_t::UnsupportedOp)?;
+    *size_in_bytes = algo.memory;
+    Ok(())
+}
+
+pub(crate) unsafe fn convolution_forward(
+    handle: &Context,
+    alpha: *const ::std::os::raw::c_void,
+    x_desc: miopenTensorDescriptor_t,
+    x: *const ::std::os::raw::c_void,
+    w_desc: miopenTensorDescriptor_t,
+    w: *const ::std::os::raw::c_void,
+    conv_desc: miopenConvolutionDescriptor_t,
+    _algo: miopenConvFwdAlgorithm_t,
+    workspace: *mut ::std::os::raw::c_void,
+    workspace_size_in_bytes: usize,
+    beta: *const ::std::os::raw::c_void,
+    y_desc: miopenTensorDescriptor_t,
+    y: *mut ::std::os::raw::c_void,
+) -> miopenStatus_t {
+    // We don't allow users to select their own algorithm
+    // because they might select algorithm that is not supported by miopen for this configuration
+    // and there's no way to ask miopen to fall back to another algorithm
+    let algo =
+        get_or_search_convolution_forward_algorithm(handle, x_desc, w_desc, conv_desc, y_desc)?
+            .ok_or(miopenError_t::UnsupportedOp)?;
+    miopenConvolutionForward(
         handle.base,
+        alpha,
         x_desc,
+        x,
         w_desc,
+        w,
         conv_desc,
+        algo.__bindgen_anon_1.fwd_algo,
+        beta,
         y_desc,
-        size_in_bytes,
+        y,
+        workspace,
+        workspace_size_in_bytes,
     )
 }
 

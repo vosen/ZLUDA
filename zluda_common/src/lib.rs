@@ -198,7 +198,9 @@ from_cuda_nop!(
     *mut cudnn9::cudnnHandle_t,
     cudnn9::cudnnHandle_t,
     cudnn9::cudnnMathType_t,
-    cudnn9::cudnnConvolutionFwdAlgoPerfStruct
+    cudnn9::cudnnConvolutionFwdAlgoPerfStruct,
+    *mut cuda_types::cublas::__half,
+    *const cuda_types::cublas::__half
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,
