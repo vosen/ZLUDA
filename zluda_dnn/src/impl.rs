@@ -28,21 +28,21 @@ impl Context {
 impl ZludaObject for Context {
     const COOKIE: usize = 0x575f48767c76029a;
 
-    type Error = miopenError_t;
+    type Error = cudnnError_t;
     type CudaHandle = cudnnHandle_t;
 
-    fn drop_checked(&mut self) -> Result<(), miopenError_t> {
-        let result1 = unsafe { miopenDestroy(self.base) };
+    fn drop_checked(&mut self) -> Result<(), cudnnError_t> {
+        let result1 = unsafe { miopenDestroy(self.base) }.map_err(Into::into);
         let (result2, result3) = if let Ok(search_workspace) = self.search_workspace.get_mut() {
             let result2 = if !search_workspace.search_space.is_null() {
                 unsafe { hipFree(search_workspace.search_space) }
-                    .map_err(|_| miopenError_t::UnknownError)
+                    .map_err(|_| cudnnError_t::INTERNAL_ERROR)
             } else {
                 Ok(())
             };
             let result3 = if !search_workspace.fake_tensor.is_null() {
                 unsafe { hipFree(search_workspace.fake_tensor) }
-                    .map_err(|_| miopenError_t::UnknownError)
+                    .map_err(|_| cudnnError_t::INTERNAL_ERROR)
             } else {
                 Ok(())
             };
@@ -119,8 +119,9 @@ pub(crate) unsafe fn create(handle: &mut cudnnHandle_t) -> miopenStatus_t {
     Ok(())
 }
 
-pub(crate) fn destroy(handle: cudnnHandle_t) -> miopenStatus_t {
-    zluda_common::drop_checked::<Context>(handle)
+pub(crate) fn destroy(handle: cudnnHandle_t) -> cudnnStatus_t {
+    zluda_common::drop_checked::<Context>(handle)?;
+    Ok(())
 }
 
 pub(crate) fn create_tensor_descriptor(
@@ -311,6 +312,25 @@ unsafe fn algo_to_cudnn(result: &miopenConvAlgoPerf_t) -> cudnnConvolutionFwdAlg
     }
 }
 
+pub(crate) unsafe fn get_convolution_forward_workspace_size(
+    handle: &Context,
+    x_desc: miopenTensorDescriptor_t,
+    w_desc: miopenTensorDescriptor_t,
+    conv_desc: miopenConvolutionDescriptor_t,
+    y_desc: miopenTensorDescriptor_t,
+    _algo: miopenConvFwdAlgorithm_t,
+    size_in_bytes: &mut usize,
+) -> miopenStatus_t {
+    miopenConvolutionForwardGetWorkSpaceSize(
+        handle.base,
+        x_desc,
+        w_desc,
+        conv_desc,
+        y_desc,
+        size_in_bytes,
+    )
+}
+
 pub mod dnn8 {
     use cuda_types::cudnn8::*;
     use std::mem;
@@ -466,12 +486,9 @@ pub mod dnn8 {
 
 pub mod dnn9 {
     use cuda_types::cudnn9::*;
-    use miopen_sys::miopenError_t;
     use zluda_common::FromCuda;
 
-    pub(crate) fn get_error_string(
-        _status: cuda_types::cudnn9::cudnnStatus_t,
-    ) -> *const ::core::ffi::c_char {
+    pub(crate) fn get_error_string(_status: cudnnStatus_t) -> *const ::core::ffi::c_char {
         todo!()
     }
 
@@ -486,14 +503,14 @@ pub mod dnn9 {
         perf_results: *mut cudnnConvolutionFwdAlgoPerf_t,
     ) -> Result<(), cudnnError_t> {
         super::get_convolution_forward_algorithm_v7(
-            FromCuda::<_, miopenError_t>::from_cuda(&handle)?,
-            FromCuda::<_, cuda_types::cudnn9::cudnnError_t>::from_cuda(&x_desc)?,
-            FromCuda::<_, cuda_types::cudnn9::cudnnError_t>::from_cuda(&w_desc)?,
-            FromCuda::<_, cuda_types::cudnn9::cudnnError_t>::from_cuda(&conv_desc)?,
-            FromCuda::<_, cuda_types::cudnn9::cudnnError_t>::from_cuda(&y_desc)?,
+            FromCuda::<_, cudnnError_t>::from_cuda(&handle)?,
+            FromCuda::<_, cudnnError_t>::from_cuda(&x_desc)?,
+            FromCuda::<_, cudnnError_t>::from_cuda(&w_desc)?,
+            FromCuda::<_, cudnnError_t>::from_cuda(&conv_desc)?,
+            FromCuda::<_, cudnnError_t>::from_cuda(&y_desc)?,
             requested_algo_count,
-            FromCuda::<_, cuda_types::cudnn9::cudnnError_t>::from_cuda(&returned_algo_count)?,
-            FromCuda::<_, cuda_types::cudnn9::cudnnError_t>::from_cuda(&perf_results)?,
+            FromCuda::<_, cudnnError_t>::from_cuda(&returned_algo_count)?,
+            FromCuda::<_, cudnnError_t>::from_cuda(&perf_results)?,
         )?;
         Ok(())
     }

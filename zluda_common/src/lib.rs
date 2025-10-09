@@ -636,6 +636,43 @@ impl<'a, E: CudaErrorType> FromCuda<'a, cudnn9::cudnnConvolutionMode_t, E>
     }
 }
 
+impl<'a, E: CudaErrorType> FromCuda<'a, cudnn9::cudnnConvolutionFwdAlgo_t, E>
+    for miopenConvFwdAlgorithm_t
+{
+    fn from_cuda(format: &'a cudnn9::cudnnConvolutionFwdAlgo_t) -> Result<Self, E> {
+        Ok(match *format {
+            cudnn9::cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_GEMM => {
+                miopenConvFwdAlgorithm_t::miopenConvolutionFwdAlgoImplicitGEMM
+            }
+            cudnn9::cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM => {
+                // No direct MIOpen equivalent; map to closest available
+                miopenConvFwdAlgorithm_t::miopenConvolutionFwdAlgoImplicitGEMM
+            }
+            cudnn9::cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_GEMM => {
+                miopenConvFwdAlgorithm_t::miopenConvolutionFwdAlgoGEMM
+            }
+            cudnn9::cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_DIRECT => {
+                miopenConvFwdAlgorithm_t::miopenConvolutionFwdAlgoDirect
+            }
+            cudnn9::cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_FFT => {
+                miopenConvFwdAlgorithm_t::miopenConvolutionFwdAlgoFFT
+            }
+            cudnn9::cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_FFT_TILING => {
+                // No direct MIOpen equivalent; map to FFT variant
+                miopenConvFwdAlgorithm_t::miopenConvolutionFwdAlgoFFT
+            }
+            cudnn9::cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD => {
+                miopenConvFwdAlgorithm_t::miopenConvolutionFwdAlgoWinograd
+            }
+            cudnn9::cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD_NONFUSED => {
+                // No direct MIOpen equivalent; map to Winograd variant
+                miopenConvFwdAlgorithm_t::miopenConvolutionFwdAlgoWinograd
+            }
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
+
 /// Represents an object that can be sent across the API boundary.
 ///
 /// Some CUDA calls operate on an opaque handle. For example, `cuModuleLoadData` will load a

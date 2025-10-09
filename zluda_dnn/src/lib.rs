@@ -94,6 +94,7 @@ dual_function_declarations! {
         cudnnCreateFilterDescriptor,
         cudnnCreateTensorDescriptor,
         cudnnDestroy,
+        cudnnGetConvolutionForwardWorkspaceSize,
         cudnnSetConvolution2dDescriptor,
         cudnnSetConvolutionMathType,
         cudnnSetFilter4dDescriptor,
