@@ -401,6 +401,56 @@ impl ResolvedControlFlowGraph {
         f32_rounding_kernels: &FxHashMap<SpirvWord, RoundingMode>,
         f16f64_rounding_kernels: &FxHashMap<SpirvWord, RoundingMode>,
     ) -> Result<Self, TranslateError> {
+        fn get_exit_mode_from_dependencies<T: Eq + PartialEq + Copy + Default>(
+            cfg: &ControlFlowGraph,
+            kernels: &FxHashMap<SpirvWord, T>,
+            index: NodeIndex,
+            getter: &mut impl FnMut(&Node) -> Mode<T>,
+            exit_cache: &mut std::collections::HashMap<
+                NodeIndex,
+                Resolved<T>,
+                rustc_hash::FxBuildHasher,
+            >,
+            unknown: &mut std::collections::HashSet<NodeIndex, rustc_hash::FxBuildHasher>,
+        ) -> Option<Resolved<T>> {
+            unknown.insert(index);
+            let mode = cfg
+                .graph
+                .neighbors_directed(index, Direction::Incoming)
+                .try_fold(None, |prevailing_mode: Option<T>, predecessor| {
+                    if unknown.contains(&predecessor) {
+                        return ControlFlow::Continue(prevailing_mode);
+                    }
+                    let mode = get_exit_mode(
+                        cfg,
+                        kernels,
+                        predecessor,
+                        &cfg.graph[predecessor],
+                        getter,
+                        exit_cache,
+                        unknown,
+                    );
+                    match (prevailing_mode, mode) {
+                        (_, None) => {
+                            return ControlFlow::Continue(prevailing_mode);
+                        }
+                        (_, Some(Resolved::Conflict)) => ControlFlow::Break(()),
+                        (None, Some(Resolved::Value(x))) => ControlFlow::Continue(Some(x)),
+                        (Some(prevailing_mode), Some(Resolved::Value(x))) => {
+                            if prevailing_mode == x {
+                                ControlFlow::Continue(Some(prevailing_mode))
+                            } else {
+                                ControlFlow::Break(())
+                            }
+                        }
+                    }
+                });
+            match mode {
+                ControlFlow::Break(_) => Some(Resolved::Conflict),
+                ControlFlow::Continue(None) => None,
+                ControlFlow::Continue(Some(x)) => Some(Resolved::Value(x)),
+            }
+        }
         fn get_exit_mode<T: Eq + PartialEq + Copy + Default>(
             cfg: &ControlFlowGraph,
             kernels: &FxHashMap<SpirvWord, T>,
@@ -420,47 +470,10 @@ impl ResolvedControlFlowGraph {
                     if let Some(mode) = exit_cache.get(&index) {
                         return Some(*mode);
                     }
-                    unknown.insert(index);
-                    let mode = cfg
-                        .graph
-                        .neighbors_directed(index, Direction::Incoming)
-                        .try_fold(None, |prevailing_mode: Option<T>, predecessor| {
-                            if unknown.contains(&predecessor) {
-                                return ControlFlow::Continue(prevailing_mode);
-                            }
-                            let mode = get_exit_mode(
-                                cfg,
-                                kernels,
-                                predecessor,
-                                &cfg.graph[predecessor],
-                                getter,
-                                exit_cache,
-                                unknown,
-                            );
-                            match (prevailing_mode, mode) {
-                                (_, None) => {
-                                    return ControlFlow::Continue(prevailing_mode);
-                                }
-                                (_, Some(Resolved::Conflict)) => {
-                                    ControlFlow::Break(Resolved::<T>::Conflict)
-                                }
-                                (None, Some(Resolved::Value(x))) => ControlFlow::Continue(Some(x)),
-                                (Some(prevailing_mode), Some(Resolved::Value(x))) => {
-                                    if prevailing_mode == x {
-                                        ControlFlow::Continue(Some(prevailing_mode))
-                                    } else {
-                                        ControlFlow::Break(Resolved::<T>::Conflict)
-                                    }
-                                }
-                            }
-                        });
-                    let result = match mode {
-                        ControlFlow::Break(x) => x,
-                        ControlFlow::Continue(None) => {
-                            return None;
-                        }
-                        ControlFlow::Continue(Some(x)) => Resolved::Value(x),
-                    };
+                    let result = get_exit_mode_from_dependencies(
+                        cfg, kernels, index, getter, exit_cache, unknown,
+                    );
+                    let result = unwrap_some_or!(result, return None);
                     exit_cache.insert(index, result);
                     unknown.remove(&index);
                     result
@@ -476,7 +489,7 @@ impl ResolvedControlFlowGraph {
             getter: &mut impl FnMut(&Node) -> Mode<T>,
             exit_cache: &mut FxHashMap<NodeIndex, Resolved<T>>,
             unknown: &mut FxHashSet<NodeIndex>,
-        ) -> Resolved<T> {
+        ) -> Result<Resolved<T>, TranslateError> {
             let mode = getter(node);
             let entry = match mode.entry {
                 Some(ExtendedMode::Entry(kernel)) => {
@@ -485,53 +498,15 @@ impl ResolvedControlFlowGraph {
                 Some(ExtendedMode::BasicBlock(bb)) => Resolved::Value(bb),
                 None => {
                     unknown.clear();
-                    unknown.insert(index);
-                    let mode = cfg
-                        .graph
-                        .neighbors_directed(index, Direction::Incoming)
-                        .try_fold(None, |prevailing_mode: Option<T>, predecessor| {
-                            if unknown.contains(&predecessor) {
-                                return ControlFlow::Continue(prevailing_mode);
-                            }
-                            let mode = get_exit_mode(
-                                cfg,
-                                kernels,
-                                predecessor,
-                                &cfg.graph[predecessor],
-                                getter,
-                                exit_cache,
-                                unknown,
-                            );
-                            match (prevailing_mode, mode) {
-                                (_, None) => {
-                                    return ControlFlow::Continue(prevailing_mode);
-                                }
-                                (_, Some(Resolved::Conflict)) => {
-                                    ControlFlow::Break(Resolved::<T>::Conflict)
-                                }
-                                (None, Some(Resolved::Value(x))) => ControlFlow::Continue(Some(x)),
-                                (Some(prevailing_mode), Some(Resolved::Value(x))) => {
-                                    if prevailing_mode == x {
-                                        ControlFlow::Continue(Some(prevailing_mode))
-                                    } else {
-                                        ControlFlow::Break(Resolved::<T>::Conflict)
-                                    }
-                                }
-                            }
-                        });
-                    let result = match mode {
-                        ControlFlow::Break(x) => x,
-                        ControlFlow::Continue(None) => {
-                            panic!("Should never happen for {:?}", index)
-                        }
-                        ControlFlow::Continue(Some(x)) => Resolved::Value(x),
-                    };
-                    result
+                    let result = get_exit_mode_from_dependencies(
+                        cfg, kernels, index, getter, exit_cache, unknown,
+                    );
+                    unwrap_some_or!(result, return Err(error_unreachable()))
                 }
             };
-            entry
+            Ok(entry)
         }
-        fn resolve_node_impl(
+        fn resolve_node(
             cfg: &ControlFlowGraph,
             f32_denormal_kernels: &FxHashMap<SpirvWord, DenormalMode>,
             f16f64_denormal_kernels: &FxHashMap<SpirvWord, DenormalMode>,
@@ -554,7 +529,7 @@ impl ResolvedControlFlowGraph {
                 &mut |node| node.denormal_f32,
                 denormal_f32_cache,
                 visited,
-            );
+            )?;
             let denormal_f32_exit = match node.denormal_f32.exit {
                 Some(ExtendedMode::BasicBlock(bb)) => Resolved::Value(bb),
                 Some(ExtendedMode::Entry(_)) | None => denormal_f32_entry,
@@ -568,7 +543,7 @@ impl ResolvedControlFlowGraph {
                 &mut |node| node.denormal_f16f64,
                 denormal_f16f64_cache,
                 visited,
-            );
+            )?;
             let denormal_f16f64_exit = match node.denormal_f16f64.exit {
                 Some(ExtendedMode::BasicBlock(bb)) => Resolved::Value(bb),
                 Some(ExtendedMode::Entry(_)) | None => denormal_f16f64_entry,
@@ -582,7 +557,7 @@ impl ResolvedControlFlowGraph {
                 &mut |node| node.rounding_f32,
                 rounding_f32_cache,
                 visited,
-            );
+            )?;
             let rounding_f32_exit = match node.rounding_f32.exit {
                 Some(ExtendedMode::BasicBlock(bb)) => Resolved::Value(bb),
                 Some(ExtendedMode::Entry(_)) | None => rounding_f32_entry,
@@ -596,7 +571,7 @@ impl ResolvedControlFlowGraph {
                 &mut |node| node.rounding_f16f64,
                 rounding_f16f64_cache,
                 visited,
-            );
+            )?;
             let rounding_f16f64_exit = match node.rounding_f16f64.exit {
                 Some(ExtendedMode::BasicBlock(bb)) => Resolved::Value(bb),
                 Some(ExtendedMode::Entry(_)) | None => rounding_f16f64_entry,
@@ -621,17 +596,7 @@ impl ResolvedControlFlowGraph {
                 },
             })
         }
-        let mut error = false;
-        // {
-        //     use std::io::Write;
-        //     let mut file = std::fs::File::create("/slowhome/andrzej/dev/zluda/graph.dot").unwrap();
-        //     write!(
-        //         &mut file,
-        //         "{:?}",
-        //         petgraph::dot::Dot::with_config(&cfg.graph, &[petgraph::dot::Config::EdgeNoLabel]),
-        //     )
-        //     .unwrap();
-        // }
+        let mut error = None;
         let mut visited = FxHashSet::default();
         let mut denormal_f32_cache = FxHashMap::default();
         let mut denormal_f16f64_cache = FxHashMap::default();
@@ -639,7 +604,7 @@ impl ResolvedControlFlowGraph {
         let mut rounding_f16f64_cache = FxHashMap::default();
         let graph = cfg.graph.map(
             |index, node| {
-                resolve_node_impl(
+                let maybe_node = resolve_node(
                     &cfg,
                     f32_denormal_kernels,
                     f16f64_denormal_kernels,
@@ -652,13 +617,37 @@ impl ResolvedControlFlowGraph {
                     &mut denormal_f16f64_cache,
                     &mut rounding_f32_cache,
                     &mut rounding_f16f64_cache,
-                )
-                .unwrap()
+                );
+                match maybe_node {
+                    Ok(node) => node,
+                    Err(e) => {
+                        error = Some(e);
+                        ResolvedNode {
+                            label: node.label,
+                            denormal_f32: ResolvedMode {
+                                entry: Resolved::Conflict,
+                                exit: Resolved::Conflict,
+                            },
+                            denormal_f16f64: ResolvedMode {
+                                entry: Resolved::Conflict,
+                                exit: Resolved::Conflict,
+                            },
+                            rounding_f32: ResolvedMode {
+                                entry: Resolved::Conflict,
+                                exit: Resolved::Conflict,
+                            },
+                            rounding_f16f64: ResolvedMode {
+                                entry: Resolved::Conflict,
+                                exit: Resolved::Conflict,
+                            },
+                        }
+                    }
+                }
             },
             |_, ()| (),
         );
-        if error {
-            Err(error_unreachable())
+        if let Some(error) = error {
+            Err(error)
         } else {
             Ok(Self {
                 basic_blocks: cfg.basic_blocks,
