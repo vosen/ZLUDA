@@ -7,9 +7,6 @@ use super::SpirvWord;
 use super::Statement;
 use super::TranslateError;
 use crate::pass::error_unreachable;
-use microlp::OptimizationDirection;
-use microlp::Problem;
-use microlp::Variable;
 use petgraph::graph::NodeIndex;
 use petgraph::visit::IntoNodeReferences;
 use petgraph::Direction;
@@ -740,9 +737,22 @@ pub(crate) fn run<'input>(
     flat_resolver: &mut GlobalStringIdentResolver2<'input>,
     directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
 ) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
+    let mut start = std::time::Instant::now();
     let cfg = create_control_flow_graph(&directives)?;
+    let duration = start.elapsed();
+    println!(
+        "    Subpass \"create_control_flow_graph\" took {:?}",
+        duration
+    );
+    let mut start = std::time::Instant::now();
     let (denormal_f32, denormal_f16f64, rounding_f32, rounding_f16f64) =
         compute_minimal_mode_insertions(&cfg);
+    let duration = start.elapsed();
+    println!(
+        "    Subpass \"compute_minimal_mode_insertions\" took {:?}",
+        duration
+    );
+    let mut start = std::time::Instant::now();
     let temp = compute_full_mode_insertions(
         flat_resolver,
         &directives,
@@ -752,7 +762,19 @@ pub(crate) fn run<'input>(
         rounding_f32,
         rounding_f16f64,
     )?;
-    apply_global_mode_controls(directives, temp)
+    let duration = start.elapsed();
+    println!(
+        "    Subpass \"compute_full_mode_insertions\" took {:?}",
+        duration
+    );
+    let mut start = std::time::Instant::now();
+    let result = apply_global_mode_controls(directives, temp);
+    let duration = start.elapsed();
+    println!(
+        "    Subpass \"apply_global_mode_controls\" took {:?}",
+        duration
+    );
+    result
 }
 
 // For every basic block this pass computes:
@@ -778,7 +800,6 @@ fn compute_full_mode_insertions(
     rounding_f32: MandatoryModeInsertions<RoundingMode>,
     rounding_f16f64: MandatoryModeInsertions<RoundingMode>,
 ) -> Result<FullModeInsertion, TranslateError> {
-    let start = std::time::Instant::now();
     let cfg = ResolvedControlFlowGraph::new(
         cfg,
         &denormal_f32.kernels,
@@ -786,11 +807,6 @@ fn compute_full_mode_insertions(
         &rounding_f32.kernels,
         &rounding_f16f64.kernels,
     )?;
-    let duration = start.elapsed();
-    println!(
-        "    Pass \"compute_full_mode_insertions::new\" took {:?}",
-        duration
-    );
     join_modes(
         flat_resolver,
         directives,
@@ -819,10 +835,17 @@ fn compute_minimal_mode_insertions(
     MandatoryModeInsertions<RoundingMode>,
     MandatoryModeInsertions<RoundingMode>,
 ) {
+    let start = std::time::Instant::now();
     let rounding_f32 = compute_single_mode_insertions(cfg, |node| node.rounding_f32);
     let denormal_f32 = compute_single_mode_insertions(cfg, |node| node.denormal_f32);
     let denormal_f16f64 = compute_single_mode_insertions(cfg, |node| node.denormal_f16f64);
     let rounding_f16f64 = compute_single_mode_insertions(cfg, |node| node.rounding_f16f64);
+    let duration = start.elapsed();
+    println!(
+        "        Subsubpass \"compute_single_mode_insertions\" took {:?}",
+        duration
+    );
+    let start = std::time::Instant::now();
     let denormal_f32 =
         optimize_mode_insertions::<DenormalMode, { DenormalMode::COUNT }>(denormal_f32);
     let denormal_f16f64 =
@@ -831,6 +854,11 @@ fn compute_minimal_mode_insertions(
         optimize_mode_insertions::<RoundingMode, { RoundingMode::COUNT }>(rounding_f32);
     let rounding_f16f64: MandatoryModeInsertions<RoundingMode> =
         optimize_mode_insertions::<RoundingMode, { RoundingMode::COUNT }>(rounding_f16f64);
+    let duration = start.elapsed();
+    println!(
+        "        Subsubpass \"optimize_mode_insertions\" took {:?}",
+        duration
+    );
     (denormal_f32, denormal_f16f64, rounding_f32, rounding_f16f64)
 }
 
@@ -1768,7 +1796,7 @@ fn optimize_mode_insertions<
 >(
     partial: PartialModeInsertion<T>,
 ) -> MandatoryModeInsertions<T> {
-    let mut problem = Problem::new(OptimizationDirection::Maximize);
+    let mut problem = highs::RowProblem::default();
     let mut kernel_modes = FxHashMap::default();
     let basic_block_variables = partial
         .bb_maybe_insert_mode
@@ -1782,13 +1810,22 @@ fn optimize_mode_insertions<
                         .or_insert_with(|| one_of::<N>(&mut problem));
                     kernel_modes[value.into()]
                 })
-                .collect::<Vec<Variable>>();
+                .collect::<Vec<highs::Col>>();
             let bb = and(&mut problem, &*modes);
             (basic_block, bb)
         })
         .collect::<Vec<_>>();
     // TODO: add fallback on Error
-    let solution = problem.solve().unwrap();
+    let mut solver = problem.optimise(highs::Sense::Maximise);
+    solver.make_quiet();
+    // Takes minutes for a problem that is solved sub-second
+    solver.set_option("presolve", "off");
+    // Experimentally, the fastest mode, simplex with simplex_strategy = 0 is slightly slower
+    solver.set_option("solver", "pdlp");
+    solver.set_option("parallel", "off");
+    solver.set_option("threads", 1);
+    let solved_model = solver.solve();
+    let solution = solved_model.get_solution();
     let mut basic_blocks = partial.bb_must_insert_mode;
     for (basic_block, variable) in basic_block_variables {
         if solution[variable] < 0.5 {
@@ -1810,30 +1847,22 @@ fn optimize_mode_insertions<
     }
 }
 
-fn and(problem: &mut Problem, variables: &[Variable]) -> Variable {
-    let result = problem.add_binary_var(1.0);
-    for var in variables {
-        problem.add_constraint(
-            &[(result, 1.0), (*var, -1.0)],
-            microlp::ComparisonOp::Le,
-            0.0,
-        );
+fn and(problem: &mut highs::RowProblem, variables: &[highs::Col]) -> highs::Col {
+    let result = problem.add_integer_column(1.0, 0..=1);
+    for var in variables.iter().copied() {
+        problem.add_row(..=0, &[(result, 1.0), (var, -1.0)]);
     }
-    problem.add_constraint(
+    let variables = variables.to_vec();
+    problem.add_row(
+        -(variables.len() as i32 - 1)..,
         iter::once((result, 1.0)).chain(variables.iter().map(|var| (*var, -1.0))),
-        microlp::ComparisonOp::Ge,
-        -((variables.len() - 1) as f64),
     );
     result
 }
 
-fn one_of<const N: usize>(problem: &mut Problem) -> [Variable; N] {
-    let result = std::array::from_fn(|_| problem.add_binary_var(0.0));
-    problem.add_constraint(
-        result.into_iter().map(|var| (var, 1.0)),
-        microlp::ComparisonOp::Eq,
-        1.0,
-    );
+fn one_of<const N: usize>(problem: &mut highs::RowProblem) -> [highs::Col; N] {
+    let result = std::array::from_fn(|_| problem.add_integer_column(0.0, 0..=1));
+    problem.add_row(1.0..=1.0, result.into_iter().map(|var| (var, 1.0)));
     result
 }
 
