@@ -7,6 +7,7 @@ use super::SpirvWord;
 use super::Statement;
 use super::TranslateError;
 use crate::pass::error_unreachable;
+use highs::HighsStatus;
 use petgraph::graph::NodeIndex;
 use petgraph::visit::IntoNodeReferences;
 use petgraph::Direction;
@@ -746,7 +747,7 @@ pub(crate) fn run<'input>(
     );
     let mut start = std::time::Instant::now();
     let (denormal_f32, denormal_f16f64, rounding_f32, rounding_f16f64) =
-        compute_minimal_mode_insertions(&cfg);
+        compute_minimal_mode_insertions(&cfg)?;
     let duration = start.elapsed();
     println!(
         "    Subpass \"compute_minimal_mode_insertions\" took {:?}",
@@ -829,12 +830,15 @@ fn compute_full_mode_insertions(
 //   pass should use default value
 fn compute_minimal_mode_insertions(
     cfg: &ControlFlowGraph,
-) -> (
-    MandatoryModeInsertions<DenormalMode>,
-    MandatoryModeInsertions<DenormalMode>,
-    MandatoryModeInsertions<RoundingMode>,
-    MandatoryModeInsertions<RoundingMode>,
-) {
+) -> Result<
+    (
+        MandatoryModeInsertions<DenormalMode>,
+        MandatoryModeInsertions<DenormalMode>,
+        MandatoryModeInsertions<RoundingMode>,
+        MandatoryModeInsertions<RoundingMode>,
+    ),
+    TranslateError,
+> {
     let start = std::time::Instant::now();
     let rounding_f32 = compute_single_mode_insertions(cfg, |node| node.rounding_f32);
     let denormal_f32 = compute_single_mode_insertions(cfg, |node| node.denormal_f32);
@@ -847,19 +851,23 @@ fn compute_minimal_mode_insertions(
     );
     let start = std::time::Instant::now();
     let denormal_f32 =
-        optimize_mode_insertions::<DenormalMode, { DenormalMode::COUNT }>(denormal_f32);
+        optimize_mode_insertions::<DenormalMode, { DenormalMode::COUNT }>(denormal_f32)
+            .map_err(|_| error_unreachable())?;
     let denormal_f16f64 =
-        optimize_mode_insertions::<DenormalMode, { DenormalMode::COUNT }>(denormal_f16f64);
+        optimize_mode_insertions::<DenormalMode, { DenormalMode::COUNT }>(denormal_f16f64)
+            .map_err(|_| error_unreachable())?;
     let rounding_f32 =
-        optimize_mode_insertions::<RoundingMode, { RoundingMode::COUNT }>(rounding_f32);
+        optimize_mode_insertions::<RoundingMode, { RoundingMode::COUNT }>(rounding_f32)
+            .map_err(|_| error_unreachable())?;
     let rounding_f16f64: MandatoryModeInsertions<RoundingMode> =
-        optimize_mode_insertions::<RoundingMode, { RoundingMode::COUNT }>(rounding_f16f64);
+        optimize_mode_insertions::<RoundingMode, { RoundingMode::COUNT }>(rounding_f16f64)
+            .map_err(|_| error_unreachable())?;
     let duration = start.elapsed();
     println!(
         "        Subsubpass \"optimize_mode_insertions\" took {:?}",
         duration
     );
-    (denormal_f32, denormal_f16f64, rounding_f32, rounding_f16f64)
+    Ok((denormal_f32, denormal_f16f64, rounding_f32, rounding_f16f64))
 }
 
 // This function creates control flow graph for the whole module. This control
@@ -1795,7 +1803,7 @@ fn optimize_mode_insertions<
     const N: usize,
 >(
     partial: PartialModeInsertion<T>,
-) -> MandatoryModeInsertions<T> {
+) -> Result<MandatoryModeInsertions<T>, HighsStatus> {
     let mut problem = highs::RowProblem::default();
     let mut kernel_modes = FxHashMap::default();
     let basic_block_variables = partial
@@ -1816,7 +1824,7 @@ fn optimize_mode_insertions<
         })
         .collect::<Vec<_>>();
     // TODO: add fallback on Error
-    let mut solver = problem.optimise(highs::Sense::Maximise);
+    let mut solver = problem.try_optimise(highs::Sense::Maximise)?;
     solver.make_quiet();
     // Takes minutes for a problem that is solved sub-second
     solver.set_option("presolve", "off");
@@ -1824,7 +1832,7 @@ fn optimize_mode_insertions<
     solver.set_option("solver", "pdlp");
     solver.set_option("parallel", "off");
     solver.set_option("threads", 1);
-    let solved_model = solver.solve();
+    let solved_model = solver.try_solve()?;
     let solution = solved_model.get_solution();
     let mut basic_blocks = partial.bb_must_insert_mode;
     for (basic_block, variable) in basic_block_variables {
@@ -1841,10 +1849,10 @@ fn optimize_mode_insertions<
             }
         }
     }
-    MandatoryModeInsertions {
+    Ok(MandatoryModeInsertions {
         basic_blocks,
         kernels,
-    }
+    })
 }
 
 fn and(problem: &mut highs::RowProblem, variables: &[highs::Col]) -> highs::Col {
