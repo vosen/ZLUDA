@@ -9,6 +9,7 @@ members = [
     "dark_api",
     "detours-sys",
     "ext/amd_comgr-sys",
+    "ext/highs-sys",
     "ext/hip_runtime-sys",
     "ext/hipblaslt-sys",
     "ext/miopen-sys",
@@ -55,3 +56,6 @@ lto = true
 
 [profile.dev.package.xtask]
 opt-level = 2
+
+[patch.crates-io]
+highs-sys = { path = "ext/highs-sys" }

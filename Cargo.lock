@@ -1804,11 +1804,10 @@ dependencies = [
 [[package]]
 name = "highs-sys"
 version = "1.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "908a51a57402b0616cf0026c0e7bf908cbee7bac13bd45778ba4f2e2ac6bb6db"
 dependencies = [
  "bindgen 0.71.1",
  "cmake",
+ "pkg-config",
 ]
 
 [[package]]

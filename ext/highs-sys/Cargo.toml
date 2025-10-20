@@ -1,0 +1,25 @@
+[package]
+name = "highs-sys"
+version = "1.11.0"
+authors = ["Ophir LOJKINE"]
+edition = "2018"
+description = "Rust binding for the HiGHS linear programming solver. See http://highs.dev."
+license = "MIT"
+repository = "https://github.com/rust-or/highs-sys"
+keywords = ["linear-programming", "optimization", "math", "solver"]
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+[build-dependencies]
+bindgen = "0.71.1"
+cmake = { version = "0.1.49", optional = true }
+pkg-config = { version = "0.3.27", optional = true }
+
+[features]
+default = ["build", "highs_release"]
+discover = ["dep:pkg-config"]
+build = ["dep:cmake"]
+highs_release = []
+ninja = []
+libz = []
