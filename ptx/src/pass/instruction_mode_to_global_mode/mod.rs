@@ -810,17 +810,10 @@ fn compute_minimal_mode_insertions(
     ),
     TranslateError,
 > {
-    let start = std::time::Instant::now();
     let rounding_f32 = compute_single_mode_insertions(cfg, |node| node.rounding_f32)?;
     let denormal_f32 = compute_single_mode_insertions(cfg, |node| node.denormal_f32)?;
     let denormal_f16f64 = compute_single_mode_insertions(cfg, |node| node.denormal_f16f64)?;
     let rounding_f16f64 = compute_single_mode_insertions(cfg, |node| node.rounding_f16f64)?;
-    let duration = start.elapsed();
-    println!(
-        "        Subsubpass \"compute_single_mode_insertions\" took {:?}",
-        duration
-    );
-    let start = std::time::Instant::now();
     let denormal_f32 =
         optimize_mode_insertions::<DenormalMode, { DenormalMode::COUNT }>(denormal_f32)
             .map_err(|_| error_unreachable())?;
@@ -833,11 +826,6 @@ fn compute_minimal_mode_insertions(
     let rounding_f16f64: MandatoryModeInsertions<RoundingMode> =
         optimize_mode_insertions::<RoundingMode, { RoundingMode::COUNT }>(rounding_f16f64)
             .map_err(|_| error_unreachable())?;
-    let duration = start.elapsed();
-    println!(
-        "        Subsubpass \"optimize_mode_insertions\" took {:?}",
-        duration
-    );
     Ok((denormal_f32, denormal_f16f64, rounding_f32, rounding_f16f64))
 }
 
