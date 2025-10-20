@@ -1,7 +1,8 @@
 use std::env;
-// use std::path::Path;
 
 /*
+use std::path::Path;
+
 fn generate_bindings<'a>(include_paths: impl Iterator<Item = &'a Path>) {
     // The bindgen::Builder is the main entry point
     // to bindgen, and lets you build up options for
@@ -17,6 +18,7 @@ fn generate_bindings<'a>(include_paths: impl Iterator<Item = &'a Path>) {
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        .allowlist_function("^Highs.*")
         // Finish the builder and generate the bindings.
         .generate()
         // Unwrap the Result and panic on failure.
@@ -47,8 +49,8 @@ fn build() -> bool {
         .define("ZLIB", if cfg!(feature = "libz") { "ON" } else { "OFF" })
         .build();
 
-    // let include_path = dst.join("include").join("highs");
-    // generate_bindings(Some(include_path.as_path()).into_iter());
+    //let include_path = dst.join("include").join("highs");
+    //generate_bindings(Some(include_path.as_path()).into_iter());
 
     println!("cargo:rustc-link-search=native={}/lib", dst.display());
     println!("cargo:rustc-link-search=native={}/lib64", dst.display());
