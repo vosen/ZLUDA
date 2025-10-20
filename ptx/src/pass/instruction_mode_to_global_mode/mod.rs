@@ -15,7 +15,6 @@ use petgraph::Graph;
 use ptx_parser as ast;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
-use std::hash::Hash;
 use std::iter;
 use std::mem;
 use std::ops::ControlFlow;
@@ -404,12 +403,8 @@ impl ResolvedControlFlowGraph {
             kernels: &FxHashMap<SpirvWord, T>,
             index: NodeIndex,
             getter: &mut impl FnMut(&Node) -> Mode<T>,
-            exit_cache: &mut std::collections::HashMap<
-                NodeIndex,
-                Resolved<T>,
-                rustc_hash::FxBuildHasher,
-            >,
-            unknown: &mut std::collections::HashSet<NodeIndex, rustc_hash::FxBuildHasher>,
+            exit_cache: &mut FxHashMap<NodeIndex, Resolved<T>>,
+            unknown: &mut FxHashSet<NodeIndex>,
         ) -> Option<Resolved<T>> {
             unknown.insert(index);
             let mode = cfg
@@ -738,22 +733,9 @@ pub(crate) fn run<'input>(
     flat_resolver: &mut GlobalStringIdentResolver2<'input>,
     directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
 ) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
-    let mut start = std::time::Instant::now();
     let cfg = create_control_flow_graph(&directives)?;
-    let duration = start.elapsed();
-    println!(
-        "    Subpass \"create_control_flow_graph\" took {:?}",
-        duration
-    );
-    let mut start = std::time::Instant::now();
     let (denormal_f32, denormal_f16f64, rounding_f32, rounding_f16f64) =
         compute_minimal_mode_insertions(&cfg)?;
-    let duration = start.elapsed();
-    println!(
-        "    Subpass \"compute_minimal_mode_insertions\" took {:?}",
-        duration
-    );
-    let mut start = std::time::Instant::now();
     let temp = compute_full_mode_insertions(
         flat_resolver,
         &directives,
@@ -763,18 +745,7 @@ pub(crate) fn run<'input>(
         rounding_f32,
         rounding_f16f64,
     )?;
-    let duration = start.elapsed();
-    println!(
-        "    Subpass \"compute_full_mode_insertions\" took {:?}",
-        duration
-    );
-    let mut start = std::time::Instant::now();
     let result = apply_global_mode_controls(directives, temp);
-    let duration = start.elapsed();
-    println!(
-        "    Subpass \"apply_global_mode_controls\" took {:?}",
-        duration
-    );
     result
 }
 
@@ -840,10 +811,10 @@ fn compute_minimal_mode_insertions(
     TranslateError,
 > {
     let start = std::time::Instant::now();
-    let rounding_f32 = compute_single_mode_insertions(cfg, |node| node.rounding_f32);
-    let denormal_f32 = compute_single_mode_insertions(cfg, |node| node.denormal_f32);
-    let denormal_f16f64 = compute_single_mode_insertions(cfg, |node| node.denormal_f16f64);
-    let rounding_f16f64 = compute_single_mode_insertions(cfg, |node| node.rounding_f16f64);
+    let rounding_f32 = compute_single_mode_insertions(cfg, |node| node.rounding_f32)?;
+    let denormal_f32 = compute_single_mode_insertions(cfg, |node| node.denormal_f32)?;
+    let denormal_f16f64 = compute_single_mode_insertions(cfg, |node| node.denormal_f16f64)?;
+    let rounding_f16f64 = compute_single_mode_insertions(cfg, |node| node.rounding_f16f64)?;
     let duration = start.elapsed();
     println!(
         "        Subsubpass \"compute_single_mode_insertions\" took {:?}",
@@ -853,7 +824,7 @@ fn compute_minimal_mode_insertions(
     let denormal_f32 =
         optimize_mode_insertions::<DenormalMode, { DenormalMode::COUNT }>(denormal_f32)
             .map_err(|_| error_unreachable())?;
-    let denormal_f16f64 =
+    let denormal_f16f64: MandatoryModeInsertions<DenormalMode> =
         optimize_mode_insertions::<DenormalMode, { DenormalMode::COUNT }>(denormal_f16f64)
             .map_err(|_| error_unreachable())?;
     let rounding_f32 =
@@ -1729,15 +1700,56 @@ impl<'a> Drop for BasicBlockState<'a> {
 }
 
 fn compute_single_mode_insertions<T: Copy + Eq>(
-    graph: &ControlFlowGraph,
+    cfg: &ControlFlowGraph,
     mut getter: impl FnMut(&Node) -> Mode<T>,
-) -> PartialModeInsertion<T> {
-    let mut must_insert_mode = FxHashSet::<SpirvWord>::default();
+) -> Result<PartialModeInsertion<T>, TranslateError> {
+    fn get_exit_mode_reachability<T: Copy + Eq>(
+        cfg: &ControlFlowGraph,
+        getter: &mut impl FnMut(&Node) -> Mode<T>,
+        index: NodeIndex,
+        exit_cache: &mut FxHashMap<NodeIndex, ModeReachability<T>>,
+        visited: &mut FxHashSet<NodeIndex>,
+    ) -> Option<ModeReachability<T>> {
+        if let Some(mode) = getter(cfg.graph.node_weight(index).unwrap()).exit {
+            return Some(match mode {
+                ExtendedMode::BasicBlock(value) => {
+                    ModeReachability::Value(Some(value), FxHashSet::default())
+                }
+                ExtendedMode::Entry(id) => {
+                    ModeReachability::Value(None, FxHashSet::from_iter(iter::once(id)))
+                }
+            });
+        }
+        if let Some(cached) = exit_cache.get(&index) {
+            return Some(cached.clone());
+        }
+        if !visited.insert(index) {
+            return None;
+        }
+        let mode = cfg
+            .graph
+            .neighbors_directed(index, Direction::Incoming)
+            .try_fold(ModeReachability::empty(), |old_mode, predecessor| {
+                if visited.contains(&predecessor) {
+                    return ControlFlow::Continue(old_mode);
+                }
+                let new_mode =
+                    get_exit_mode_reachability(cfg, getter, predecessor, exit_cache, visited);
+                old_mode.fold(new_mode)
+            });
+        let result = match mode {
+            ControlFlow::Continue(m) => m,
+            ControlFlow::Break(m) => m,
+        };
+        exit_cache.insert(index, result.clone());
+        Some(result)
+    }
+    let mut must_insert_mode: std::collections::HashSet<SpirvWord, rustc_hash::FxBuildHasher> =
+        FxHashSet::<SpirvWord>::default();
     let mut maybe_insert_mode = FxHashMap::default();
-    let mut remaining = graph
+    let mut remaining = cfg
         .graph
         .node_references()
-        .rev()
         .filter_map(|(index, node)| {
             getter(node)
                 .entry
@@ -1749,45 +1761,85 @@ fn compute_single_mode_insertions<T: Copy + Eq>(
                 .flatten()
         })
         .collect::<Vec<_>>();
-    'next_basic_block: while let Some((index, node_id, expected_mode)) = remaining.pop() {
-        let mut to_visit =
-            UniqueVec::new(graph.graph.neighbors_directed(index, Direction::Incoming));
-        let mut visited = FxHashSet::default();
-        while let Some(current) = to_visit.pop() {
-            if !visited.insert(current) {
-                continue;
-            }
-            let exit_mode = getter(graph.graph.node_weight(current).unwrap()).exit;
-            match exit_mode {
-                None => {
-                    for predecessor in graph.graph.neighbors_directed(current, Direction::Incoming)
-                    {
-                        if !visited.contains(&predecessor) {
-                            to_visit.push(predecessor);
-                        }
-                    }
-                }
-                Some(ExtendedMode::BasicBlock(mode)) => {
-                    if mode != expected_mode {
-                        maybe_insert_mode.remove(&node_id);
-                        must_insert_mode.insert(node_id);
-                        continue 'next_basic_block;
-                    }
-                }
-                Some(ExtendedMode::Entry(kernel)) => match maybe_insert_mode.entry(node_id) {
-                    std::collections::hash_map::Entry::Vacant(entry) => {
-                        entry.insert((expected_mode, iter::once(kernel).collect::<FxHashSet<_>>()));
-                    }
-                    std::collections::hash_map::Entry::Occupied(mut entry) => {
-                        entry.get_mut().1.insert(kernel);
-                    }
+    let mut exit_cache = FxHashMap::default();
+    let mut visited = FxHashSet::default();
+    while let Some((index, node_id, expected_mode)) = remaining.pop() {
+        visited.clear();
+        let folded_mode = cfg
+            .graph
+            .neighbors_directed(index, Direction::Incoming)
+            .try_fold(
+                ModeReachability::from_value(expected_mode),
+                |old_mode, predecessor| {
+                    let new_mode = get_exit_mode_reachability(
+                        cfg,
+                        &mut getter,
+                        predecessor,
+                        &mut exit_cache,
+                        &mut visited,
+                    );
+                    old_mode.fold(new_mode)
                 },
+            );
+        let result = match folded_mode {
+            ControlFlow::Continue(m) => m,
+            ControlFlow::Break(m) => m,
+        };
+        match result {
+            ModeReachability::Conflict => {
+                must_insert_mode.insert(node_id);
+            }
+            ModeReachability::Value(None, _) => {
+                return Err(error_unreachable());
+            }
+            ModeReachability::Value(Some(value), reachable_kernels) => {
+                maybe_insert_mode.insert(node_id, (value, reachable_kernels));
             }
         }
     }
-    PartialModeInsertion {
+    Ok(PartialModeInsertion {
         bb_must_insert_mode: must_insert_mode,
         bb_maybe_insert_mode: maybe_insert_mode,
+    })
+}
+
+#[derive(Clone)]
+enum ModeReachability<T> {
+    Conflict,
+    Value(Option<T>, FxHashSet<SpirvWord>),
+}
+
+impl<T: PartialEq + Eq + Copy> ModeReachability<T> {
+    fn fold(self, other: Option<Self>) -> ControlFlow<Self, Self> {
+        let other = match other {
+            Some(x) => x,
+            None => return ControlFlow::Continue(self),
+        };
+        match (self, other) {
+            (_, ModeReachability::Conflict) => ControlFlow::Break(ModeReachability::Conflict),
+            (ModeReachability::Conflict, _) => ControlFlow::Break(ModeReachability::Conflict),
+            (
+                ModeReachability::Value(old_value, mut old_kernels),
+                ModeReachability::Value(new_value, new_kernels),
+            ) => match (old_value, new_value) {
+                (Some(x), Some(y)) if x != y => ControlFlow::Break(ModeReachability::Conflict),
+                _ => {
+                    old_kernels.extend(new_kernels);
+                    ControlFlow::Continue(ModeReachability::Value(
+                        old_value.or(new_value),
+                        old_kernels,
+                    ))
+                }
+            },
+        }
+    }
+
+    fn empty() -> Self {
+        ModeReachability::Value(None, FxHashSet::default())
+    }
+
+    fn from_value(t: T) -> Self {
+        ModeReachability::Value(Some(t), FxHashSet::default())
     }
 }
 
@@ -1885,44 +1937,6 @@ struct MandatoryModeInsertions<T> {
 enum ExtendedMode<T: Eq + PartialEq> {
     BasicBlock(T),
     Entry(SpirvWord),
-}
-
-struct UniqueVec<T: Copy + Eq + Hash> {
-    set: FxHashSet<T>,
-    vec: Vec<T>,
-}
-
-impl<T: Copy + Eq + Hash> UniqueVec<T> {
-    fn new(iter: impl Iterator<Item = T>) -> Self {
-        let mut set = FxHashSet::default();
-        let mut vec = Vec::new();
-        for item in iter {
-            if set.contains(&item) {
-                continue;
-            }
-            set.insert(item);
-            vec.push(item);
-        }
-        Self { set, vec }
-    }
-
-    fn pop(&mut self) -> Option<T> {
-        if let Some(t) = self.vec.pop() {
-            assert!(self.set.remove(&t));
-            Some(t)
-        } else {
-            None
-        }
-    }
-
-    fn push(&mut self, t: T) -> bool {
-        if self.set.insert(t) {
-            self.vec.push(t);
-            true
-        } else {
-            false
-        }
-    }
 }
 
 fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
