@@ -1687,7 +1687,7 @@ impl<'a> Drop for BasicBlockState<'a> {
     }
 }
 
-fn compute_single_mode_insertions<T: Copy + Eq>(
+fn compute_single_mode_insertions<T: Copy + Eq + std::fmt::Debug>(
     cfg: &ControlFlowGraph,
     mut getter: impl FnMut(&Node) -> Mode<T>,
 ) -> Result<PartialModeInsertion<T>, TranslateError> {
@@ -1789,6 +1789,44 @@ fn compute_single_mode_insertions<T: Copy + Eq>(
                 }
             }
         }
+    }
+    {
+        use std::io::Write;
+        let mut graph_dot = std::fs::File::create("/tmp/graph.dot").unwrap();
+        writeln!(
+            &mut graph_dot,
+            "{:?}",
+            petgraph::dot::Dot::with_config(&cfg.graph, &[petgraph::dot::Config::EdgeNoLabel])
+        );
+    }
+    {
+        use std::io::Write;
+        let mut must_insert_mode = must_insert_mode.iter().copied().collect::<Vec<_>>();
+        must_insert_mode.sort_unstable();
+        let must_insert_mode = must_insert_mode
+            .into_iter()
+            .map(|x| x.0.to_string())
+            .collect::<Vec<_>>();
+        let must_insert_mode = must_insert_mode.join("\n");
+        let mut must_insert_file = std::fs::File::create("/tmp/must_insert_mode.txt").unwrap();
+        must_insert_file
+            .write_all(must_insert_mode.as_bytes())
+            .unwrap();
+    }
+    {
+        use std::io::Write;
+        let maybe_insert_mode = maybe_insert_mode.clone();
+        let mut maybe_insert_mode = maybe_insert_mode.iter().collect::<Vec<_>>();
+        maybe_insert_mode.sort_unstable_by_key(|(x, _)| *x);
+        let maybe_insert_mode = maybe_insert_mode
+            .into_iter()
+            .map(|(x, (val, kernels))| format!("{} => {:?} => {:?}", x, val, kernels))
+            .collect::<Vec<_>>();
+        let maybe_insert_mode = maybe_insert_mode.join("\n");
+        let mut maybe_insert_files = std::fs::File::create("/tmp/maybe_insert_mode.txt").unwrap();
+        maybe_insert_files
+            .write_all(maybe_insert_mode.as_bytes())
+            .unwrap();
     }
     Ok(PartialModeInsertion {
         bb_must_insert_mode: must_insert_mode,
