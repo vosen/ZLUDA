@@ -1781,7 +1781,12 @@ fn compute_single_mode_insertions<T: Copy + Eq>(
                 return Err(error_unreachable());
             }
             ModeReachability::Value(Some(value), reachable_kernels) => {
-                maybe_insert_mode.insert(node_id, (value, reachable_kernels));
+                if value != expected_mode {
+                    return Err(error_unreachable());
+                }
+                if !reachable_kernels.is_empty() {
+                    maybe_insert_mode.insert(node_id, (value, reachable_kernels));
+                }
             }
         }
     }
