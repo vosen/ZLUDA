@@ -7,14 +7,22 @@ use super::SpirvWord;
 use super::Statement;
 use super::TranslateError;
 use crate::pass::error_unreachable;
+use fixedbitset::FixedBitSet;
 use highs::HighsStatus;
 use petgraph::graph::NodeIndex;
+use petgraph::visit::GraphBase;
+use petgraph::visit::GraphRef;
+use petgraph::visit::IntoNeighbors;
+use petgraph::visit::IntoNodeIdentifiers;
 use petgraph::visit::IntoNodeReferences;
+use petgraph::visit::NodeIndexable;
+use petgraph::visit::Reversed;
 use petgraph::Direction;
 use petgraph::Graph;
 use ptx_parser as ast;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
+use std::f64::consts::E;
 use std::iter;
 use std::mem;
 use std::ops::ControlFlow;
@@ -810,10 +818,12 @@ fn compute_minimal_mode_insertions(
     ),
     TranslateError,
 > {
-    let rounding_f32 = compute_single_mode_insertions(cfg, |node| node.rounding_f32)?;
-    let denormal_f32 = compute_single_mode_insertions(cfg, |node| node.denormal_f32)?;
-    let denormal_f16f64 = compute_single_mode_insertions(cfg, |node| node.denormal_f16f64)?;
-    let rounding_f16f64 = compute_single_mode_insertions(cfg, |node| node.rounding_f16f64)?;
+    // SCC of a graph is the same as SCC of the transposed (edge direction reversed) graph
+    let scc = SccGraph::new(&cfg.graph);
+    let rounding_f32 = compute_single_mode_insertions(cfg, &scc, |node| node.rounding_f32)?;
+    let denormal_f32 = compute_single_mode_insertions(cfg, &scc, |node| node.denormal_f32)?;
+    let denormal_f16f64 = compute_single_mode_insertions(cfg, &scc, |node| node.denormal_f16f64)?;
+    let rounding_f16f64 = compute_single_mode_insertions(cfg, &scc, |node| node.rounding_f16f64)?;
     let denormal_f32 =
         optimize_mode_insertions::<DenormalMode, { DenormalMode::COUNT }>(denormal_f32)
             .map_err(|_| error_unreachable())?;
@@ -827,6 +837,28 @@ fn compute_minimal_mode_insertions(
         optimize_mode_insertions::<RoundingMode, { RoundingMode::COUNT }>(rounding_f16f64)
             .map_err(|_| error_unreachable())?;
     Ok((denormal_f32, denormal_f16f64, rounding_f32, rounding_f16f64))
+}
+
+fn build_scc(graph: &Graph<Node, ()>) -> Graph<Vec<NodeIndex>, ()> {
+    use petgraph::visit::EdgeRef;
+    let mut workspace = petgraph::algo::TarjanScc::new();
+    let mut sccs = Vec::new();
+    workspace.run(graph, |scc| {
+        sccs.push(scc.into_iter().copied().collect::<Vec<_>>())
+    });
+    let mut new_graph = Graph::from_edges(graph.edge_references().filter_map(|edge| {
+        let from_scc = workspace.node_component_index(graph, edge.source());
+        let to_scc = workspace.node_component_index(graph, edge.target());
+        if from_scc != to_scc {
+            Some((from_scc as u32, to_scc as u32))
+        } else {
+            None
+        }
+    }));
+    for (scc_index, scc) in sccs.drain(..).enumerate() {
+        new_graph[NodeIndex::new(scc_index)] = scc;
+    }
+    new_graph
 }
 
 // This function creates control flow graph for the whole module. This control
@@ -1687,10 +1719,126 @@ impl<'a> Drop for BasicBlockState<'a> {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct SccNodeIndex(u32);
+
+impl SccNodeIndex {
+    fn usize(self) -> usize {
+        self.0 as usize
+    }
+}
+
+impl Into<usize> for SccNodeIndex {
+    fn into(self) -> usize {
+        self.0 as usize
+    }
+}
+
+struct SccGraph<'a> {
+    source_graph: &'a Graph<Node, ()>,
+    scc_graph: Graph<Vec<NodeIndex>, (), petgraph::Directed>,
+    workspace: petgraph::algo::TarjanScc<NodeIndex>,
+}
+
+impl<'this> SccGraph<'this> {
+    fn new(source_graph: &'this Graph<Node, ()>) -> SccGraph<'this> {
+        use petgraph::visit::EdgeRef;
+        let mut workspace = petgraph::algo::TarjanScc::new();
+        let mut sccs = Vec::new();
+        workspace.run(source_graph, |scc| {
+            sccs.push(scc.into_iter().copied().collect::<Vec<_>>())
+        });
+        let mut scc_graph = Graph::from_edges(source_graph.edge_references().filter_map(|edge| {
+            let from_scc = workspace.node_component_index(source_graph, edge.source());
+            let to_scc = workspace.node_component_index(source_graph, edge.target());
+            if from_scc != to_scc {
+                Some((from_scc as u32, to_scc as u32))
+            } else {
+                None
+            }
+        }));
+        for (scc_index, scc) in sccs.drain(..).enumerate() {
+            scc_graph[NodeIndex::new(scc_index)] = scc;
+        }
+        Self {
+            scc_graph,
+            source_graph,
+            workspace,
+        }
+    }
+
+    fn node_count(&self) -> usize {
+        self.scc_graph.node_count()
+    }
+
+    fn component(&self, index: NodeIndex) -> SccNodeIndex {
+        SccNodeIndex(
+            self.workspace
+                .node_component_index(self.source_graph, index) as u32,
+        )
+    }
+
+    fn propagate(
+        &self,
+        scc_roots: impl Iterator<Item = SccNodeIndex>,
+        mut merge: impl FnMut(SccNodeIndex, SccNodeIndex) -> bool,
+    ) {
+        for scc_root in scc_roots {
+            let mut to_visit = self
+                .scc_graph
+                .neighbors_directed(NodeIndex::new(scc_root.0 as usize), Direction::Outgoing)
+                .filter(|&successor| merge(scc_root, SccNodeIndex(successor.index() as u32)))
+                .collect::<Vec<_>>();
+            while let Some(scc_index) = to_visit.pop() {
+                for successor in self
+                    .scc_graph
+                    .neighbors_directed(scc_index, Direction::Outgoing)
+                {
+                    if merge(
+                        SccNodeIndex(scc_index.index() as u32),
+                        SccNodeIndex(successor.index() as u32),
+                    ) {
+                        to_visit.push(successor);
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn compute_single_mode_insertions<T: Copy + Eq + std::fmt::Debug>(
     cfg: &ControlFlowGraph,
-    mut getter: impl FnMut(&Node) -> Mode<T>,
+    scc: &SccGraph,
+    mut get_mode: impl FnMut(&Node) -> Mode<T>,
 ) -> Result<PartialModeInsertion<T>, TranslateError> {
+    let mut entries = cfg
+        .entry_points
+        .iter()
+        .enumerate()
+        .map(|(i, (compiler_id, _))| (*compiler_id, i))
+        .collect::<FxHashMap<_, _>>();
+    let mut state = vec![ModeReachability::<T>::empty(entries.len()); scc.node_count()];
+    let mut roots = FxHashSet::default();
+    for (index, node) in cfg.graph.node_references() {
+        let mode = get_mode(node);
+        if let Some(exit_mode) = mode.exit {
+            state[scc.component(index).usize()].fold_from(&ModeReachability::from_mode(
+                entries.len(),
+                &entries,
+                exit_mode,
+            ));
+        }
+        if mode.entry.is_some() {
+            roots.insert(scc.component(index));
+        }
+    }
+    scc.propagate(roots.iter().copied(), |from, to| {
+        let [from_state, to_state] = state.get_disjoint_mut([from.usize(), to.usize()]).unwrap();
+        to_state.fold_from(from_state)
+    });
+    dbg!(state);
+    todo!()
+    /*
     fn get_exit_mode_reachability<T: Copy + Eq>(
         cfg: &ControlFlowGraph,
         getter: &mut impl FnMut(&Node) -> Mode<T>,
@@ -1732,14 +1880,45 @@ fn compute_single_mode_insertions<T: Copy + Eq + std::fmt::Debug>(
         exit_cache.insert(index, result.clone());
         Some(result)
     }
-    let mut must_insert_mode: std::collections::HashSet<SpirvWord, rustc_hash::FxBuildHasher> =
-        FxHashSet::<SpirvWord>::default();
+    /*
+    let mut to_check = Vec::new();
+    cfg.graph.edge_references()
+    for (scc_index, component) in scc.iter().enumerate() {
+        let mut specific_mode = None;
+        let mut kernel_modes = FxHashSet::default();
+        // Look for edges outsides of SCC
+        for &node_index in component {
+            let node = cfg.graph.node_weight(node_index).unwrap();
+            let mode = get_mode(node);
+            if let Some(ExtendedMode::Entry(_)) = mode.entry {
+                to_check.push((node_index, SccIndex(scc_index as u32)));
+            }
+            match mode.exit {
+                Some(ExtendedMode::BasicBlock(value)) => {
+                    if let Some(old_value) = specific_mode {
+                        if old_value != value {
+                            specific_mode = None;
+                        }
+                    } else {
+                        specific_mode = Some(value);
+                    }
+                }
+                Some(ExtendedMode::Entry(id)) => {
+                    kernel_modes.insert(id);
+                }
+                None => {}
+            }
+        }
+    }
+     */
+
+    let mut must_insert_mode = FxHashSet::default();
     let mut maybe_insert_mode = FxHashMap::default();
     let mut remaining = cfg
         .graph
         .node_references()
         .filter_map(|(index, node)| {
-            getter(node)
+            get_mode(node)
                 .entry
                 .as_ref()
                 .map(|mode| match mode {
@@ -1761,7 +1940,7 @@ fn compute_single_mode_insertions<T: Copy + Eq + std::fmt::Debug>(
                 |old_mode, predecessor| {
                     let new_mode = get_exit_mode_reachability(
                         cfg,
-                        &mut getter,
+                        &mut get_mode,
                         predecessor,
                         &mut exit_cache,
                         &mut visited,
@@ -1832,45 +2011,75 @@ fn compute_single_mode_insertions<T: Copy + Eq + std::fmt::Debug>(
         bb_must_insert_mode: must_insert_mode,
         bb_maybe_insert_mode: maybe_insert_mode,
     })
+     */
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum ModeReachability<T> {
     Conflict,
-    Value(Option<T>, FxHashSet<SpirvWord>),
+    Value(Option<T>, FixedBitSet),
 }
 
 impl<T: PartialEq + Eq + Copy> ModeReachability<T> {
     fn fold(self, other: Option<Self>) -> ControlFlow<Self, Self> {
-        let other = match other {
-            Some(x) => x,
-            None => return ControlFlow::Continue(self),
-        };
-        match (self, other) {
-            (_, ModeReachability::Conflict) => ControlFlow::Break(ModeReachability::Conflict),
-            (ModeReachability::Conflict, _) => ControlFlow::Break(ModeReachability::Conflict),
+        todo!()
+    }
+
+    fn fold_from(&mut self, other: &Self) -> bool {
+        match (mem::replace(self, ModeReachability::Conflict), other) {
+            (ModeReachability::Conflict, _) => false,
+            (_, ModeReachability::Conflict) => {
+                *self = ModeReachability::Conflict;
+                true
+            }
             (
                 ModeReachability::Value(old_value, mut old_kernels),
                 ModeReachability::Value(new_value, new_kernels),
             ) => match (old_value, new_value) {
-                (Some(x), Some(y)) if x != y => ControlFlow::Break(ModeReachability::Conflict),
+                (Some(x), Some(y)) if x != *y => {
+                    *self = ModeReachability::Conflict;
+                    false
+                }
                 _ => {
-                    old_kernels.extend(new_kernels);
-                    ControlFlow::Continue(ModeReachability::Value(
-                        old_value.or(new_value),
-                        old_kernels,
-                    ))
+                    if old_value == *new_value && old_kernels == *new_kernels {
+                        false
+                    } else {
+                        old_kernels.union_with(new_kernels);
+                        *self = ModeReachability::Value(old_value.or(*new_value), old_kernels);
+                        true
+                    }
                 }
             },
         }
     }
 
-    fn empty() -> Self {
-        ModeReachability::Value(None, FxHashSet::default())
+    fn fold_from_owned(&mut self, other: Self) -> bool {
+        todo!()
     }
 
-    fn from_value(t: T) -> Self {
-        ModeReachability::Value(Some(t), FxHashSet::default())
+    fn empty(bit_set_size: usize) -> Self {
+        ModeReachability::Value(None, FixedBitSet::with_capacity(bit_set_size))
+    }
+
+    fn from_value(bit_set_size: usize, t: T) -> Self {
+        ModeReachability::Value(Some(t), FixedBitSet::with_capacity(bit_set_size))
+    }
+
+    fn from_mode(
+        bit_set_size: usize,
+        entry_map: &FxHashMap<SpirvWord, usize>,
+        mode: ExtendedMode<T>,
+    ) -> Self {
+        match mode {
+            ExtendedMode::BasicBlock(value) => {
+                ModeReachability::Value(Some(value), FixedBitSet::with_capacity(bit_set_size))
+            }
+            ExtendedMode::Entry(id) => {
+                let mut bit_set = FixedBitSet::with_capacity(bit_set_size);
+                bit_set.set(entry_map[&id], true);
+                ModeReachability::Value(None, bit_set)
+            }
+        }
     }
 }
 

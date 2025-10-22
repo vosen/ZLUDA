@@ -22,6 +22,7 @@ highs = "1.12.0"
 int-enum = "1.1"
 unwrap_or = "1.0.1"
 smallvec = "1.15.1"
+fixedbitset = "0.5"
 
 [dev-dependencies]
 hip_runtime-sys = { path = "../ext/hip_runtime-sys" }

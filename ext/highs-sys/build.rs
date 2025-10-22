@@ -69,7 +69,7 @@ fn build() -> bool {
     } else if linux || mingw {
         println!("cargo:rustc-link-lib=dylib=stdc++");
     }
-    println!("cargo:rerun-if-changed=../HiGHS/src/interfaces/highs_c_api.h");
+    println!("cargo:rerun-if-changed=../HiGHS/highs/interfaces/highs_c_api.h");
 
     true
 }
