@@ -2718,9 +2718,6 @@ impl<'a> MethodEmitContext<'a> {
         let b = self.resolver.value(arguments.src2)?;
         let c = self.resolver.value(arguments.src3)?;
 
-        // TODO: maybe try to unify these into a single intrinsic, or at least one that's more
-        // self-explanatory
-
         self.emit_intrinsic(
             c"llvm.zluda.mma.m16n8k16",
             Some(arguments.dst),
