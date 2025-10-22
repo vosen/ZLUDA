@@ -1,0 +1,74 @@
+.version 7.0
+.target sm_80
+.address_size 64
+
+.visible .entry mma_m16n8k16_f32_bf16_bf16_f32_2x(
+    .param .u64 output
+)
+{
+    .reg .u64       out_addr;
+    .reg .u64       out_index;
+    .reg .u32       thread_id;
+
+    .reg .f32       in<8>;
+
+    .reg .b32       a0a1, a2a3, a4a5, a6a7;
+    .reg .b32       b0b1, b2b3, b4b5, b6b7;
+    .reg .f32       d<8>;
+
+    ld.param.u64    out_addr, [output];
+    mov.u32         thread_id, %tid.x;
+
+    cvt.rn.f32.u32  in0, thread_id;
+    mul.f32         in0, in0, 0f41000000; // 8.0
+    add.f32         in1, in0, 0f3f800000; // 1.0
+    add.f32         in2, in0, 0f40000000; // 2.0
+    add.f32         in3, in0, 0f40400000; // 3.0
+    add.f32         in4, in0, 0f40800000; // 4.0
+    add.f32         in5, in0, 0f40a00000; // 5.0
+    add.f32         in6, in0, 0f40c00000; // 6.0
+    add.f32         in7, in0, 0f40e00000; // 7.0
+
+    // Shared A matrix for both mma operations
+    cvt.rn.bf16x2.f32  a0a1, in0, in1;
+    cvt.rn.bf16x2.f32  a2a3, in2, in3;
+    cvt.rn.bf16x2.f32  a4a5, in4, in5;
+    cvt.rn.bf16x2.f32  a6a7, in6, in7;
+
+    // First B matrix
+    cvt.rn.bf16x2.f32  b0b1, in0, in1;
+    cvt.rn.bf16x2.f32  b2b3, in2, in3;
+
+    // Second B matrix (different from first)
+    cvt.rn.bf16x2.f32  b4b5, in4, in5;
+    cvt.rn.bf16x2.f32  b6b7, in6, in7;
+
+    // First mma operation: D1 = A * B1 + C1
+    mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32
+    {d0, d1, d2, d3},
+    {a0a1, a2a3, a4a5, a6a7},
+    {b0b1, b2b3},
+    {in0, in1, in2, in3};
+
+    // Second mma operation: D2 = A * B2 + C2
+    mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32
+    {d4, d5, d6, d7},
+    {a0a1, a2a3, a4a5, a6a7},
+    {b4b5, b6b7},
+    {in4, in5, in6, in7};
+
+    // Store results from both mma operations
+    cvt.u64.u32     out_index, thread_id;
+    mul.lo.u64      out_index, out_index, 32;
+    add.u64         out_addr, out_addr, out_index;
+    st.f32          [out_addr], d0;
+    st.f32          [out_addr+4], d1;
+    st.f32          [out_addr+8], d2;
+    st.f32          [out_addr+12], d3;
+    st.f32          [out_addr+16], d4;
+    st.f32          [out_addr+20], d5;
+    st.f32          [out_addr+24], d6;
+    st.f32          [out_addr+28], d7;
+
+    ret;
+}
