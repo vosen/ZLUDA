@@ -10,19 +10,12 @@ use crate::pass::error_unreachable;
 use fixedbitset::FixedBitSet;
 use highs::HighsStatus;
 use petgraph::graph::NodeIndex;
-use petgraph::visit::GraphBase;
-use petgraph::visit::GraphRef;
-use petgraph::visit::IntoNeighbors;
-use petgraph::visit::IntoNodeIdentifiers;
 use petgraph::visit::IntoNodeReferences;
-use petgraph::visit::NodeIndexable;
-use petgraph::visit::Reversed;
 use petgraph::Direction;
 use petgraph::Graph;
 use ptx_parser as ast;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
-use std::f64::consts::E;
 use std::iter;
 use std::mem;
 use std::ops::ControlFlow;
@@ -818,47 +811,23 @@ fn compute_minimal_mode_insertions(
     ),
     TranslateError,
 > {
-    // SCC of a graph is the same as SCC of the transposed (edge direction reversed) graph
-    let scc = SccGraph::new(&cfg.graph);
-    let rounding_f32 = compute_single_mode_insertions(cfg, &scc, |node| node.rounding_f32)?;
-    let denormal_f32 = compute_single_mode_insertions(cfg, &scc, |node| node.denormal_f32)?;
-    let denormal_f16f64 = compute_single_mode_insertions(cfg, &scc, |node| node.denormal_f16f64)?;
-    let rounding_f16f64 = compute_single_mode_insertions(cfg, &scc, |node| node.rounding_f16f64)?;
+    let rounding_f32 = compute_single_mode_insertions(cfg, |node| node.rounding_f32)?;
+    let denormal_f32 = compute_single_mode_insertions(cfg, |node| node.denormal_f32)?;
+    let denormal_f16f64 = compute_single_mode_insertions(cfg, |node| node.denormal_f16f64)?;
+    let rounding_f16f64 = compute_single_mode_insertions(cfg, |node| node.rounding_f16f64)?;
     let denormal_f32 =
         optimize_mode_insertions::<DenormalMode, { DenormalMode::COUNT }>(denormal_f32)
             .map_err(|_| error_unreachable())?;
-    let denormal_f16f64: MandatoryModeInsertions<DenormalMode> =
+    let denormal_f16f64 =
         optimize_mode_insertions::<DenormalMode, { DenormalMode::COUNT }>(denormal_f16f64)
             .map_err(|_| error_unreachable())?;
     let rounding_f32 =
         optimize_mode_insertions::<RoundingMode, { RoundingMode::COUNT }>(rounding_f32)
             .map_err(|_| error_unreachable())?;
-    let rounding_f16f64: MandatoryModeInsertions<RoundingMode> =
+    let rounding_f16f64 =
         optimize_mode_insertions::<RoundingMode, { RoundingMode::COUNT }>(rounding_f16f64)
             .map_err(|_| error_unreachable())?;
     Ok((denormal_f32, denormal_f16f64, rounding_f32, rounding_f16f64))
-}
-
-fn build_scc(graph: &Graph<Node, ()>) -> Graph<Vec<NodeIndex>, ()> {
-    use petgraph::visit::EdgeRef;
-    let mut workspace = petgraph::algo::TarjanScc::new();
-    let mut sccs = Vec::new();
-    workspace.run(graph, |scc| {
-        sccs.push(scc.into_iter().copied().collect::<Vec<_>>())
-    });
-    let mut new_graph = Graph::from_edges(graph.edge_references().filter_map(|edge| {
-        let from_scc = workspace.node_component_index(graph, edge.source());
-        let to_scc = workspace.node_component_index(graph, edge.target());
-        if from_scc != to_scc {
-            Some((from_scc as u32, to_scc as u32))
-        } else {
-            None
-        }
-    }));
-    for (scc_index, scc) in sccs.drain(..).enumerate() {
-        new_graph[NodeIndex::new(scc_index)] = scc;
-    }
-    new_graph
 }
 
 // This function creates control flow graph for the whole module. This control
@@ -1719,99 +1688,11 @@ impl<'a> Drop for BasicBlockState<'a> {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct SccNodeIndex(u32);
-
-impl SccNodeIndex {
-    fn usize(self) -> usize {
-        self.0 as usize
-    }
-}
-
-impl Into<usize> for SccNodeIndex {
-    fn into(self) -> usize {
-        self.0 as usize
-    }
-}
-
-struct SccGraph<'a> {
-    source_graph: &'a Graph<Node, ()>,
-    scc_graph: Graph<Vec<NodeIndex>, (), petgraph::Directed>,
-    workspace: petgraph::algo::TarjanScc<NodeIndex>,
-}
-
-impl<'this> SccGraph<'this> {
-    fn new(source_graph: &'this Graph<Node, ()>) -> SccGraph<'this> {
-        use petgraph::visit::EdgeRef;
-        let mut workspace = petgraph::algo::TarjanScc::new();
-        let mut sccs = Vec::new();
-        workspace.run(source_graph, |scc| {
-            sccs.push(scc.into_iter().copied().collect::<Vec<_>>())
-        });
-        let mut scc_graph = Graph::from_edges(source_graph.edge_references().filter_map(|edge| {
-            let from_scc = workspace.node_component_index(source_graph, edge.source());
-            let to_scc = workspace.node_component_index(source_graph, edge.target());
-            if from_scc != to_scc {
-                Some((from_scc as u32, to_scc as u32))
-            } else {
-                None
-            }
-        }));
-        for (scc_index, scc) in sccs.drain(..).enumerate() {
-            scc_graph[NodeIndex::new(scc_index)] = scc;
-        }
-        Self {
-            scc_graph,
-            source_graph,
-            workspace,
-        }
-    }
-
-    fn node_count(&self) -> usize {
-        self.scc_graph.node_count()
-    }
-
-    fn component(&self, index: NodeIndex) -> SccNodeIndex {
-        SccNodeIndex(
-            self.workspace
-                .node_component_index(self.source_graph, index) as u32,
-        )
-    }
-
-    fn propagate(
-        &self,
-        scc_roots: impl Iterator<Item = SccNodeIndex>,
-        mut merge: impl FnMut(SccNodeIndex, SccNodeIndex) -> bool,
-    ) {
-        for scc_root in scc_roots {
-            let mut to_visit = self
-                .scc_graph
-                .neighbors_directed(NodeIndex::new(scc_root.0 as usize), Direction::Outgoing)
-                .filter(|&successor| merge(scc_root, SccNodeIndex(successor.index() as u32)))
-                .collect::<Vec<_>>();
-            while let Some(scc_index) = to_visit.pop() {
-                for successor in self
-                    .scc_graph
-                    .neighbors_directed(scc_index, Direction::Outgoing)
-                {
-                    if merge(
-                        SccNodeIndex(scc_index.index() as u32),
-                        SccNodeIndex(successor.index() as u32),
-                    ) {
-                        to_visit.push(successor);
-                    }
-                }
-            }
-        }
-    }
-}
-
 fn compute_single_mode_insertions<T: Copy + Eq + std::fmt::Debug>(
     cfg: &ControlFlowGraph,
-    _scc: &SccGraph,
     mut get_mode: impl FnMut(&Node) -> Mode<T>,
 ) -> Result<PartialModeInsertion<T>, TranslateError> {
-    let mut kernel_ids = cfg
+    let kernel_ids = cfg
         .entry_points
         .iter()
         .enumerate()
@@ -1829,231 +1710,30 @@ fn compute_single_mode_insertions<T: Copy + Eq + std::fmt::Debug>(
                 (Some(entry_mode), Some(exit_mode)) => {
                     propagation_state[index.index()] =
                         PropagationState::from_mode(&kernel_ids, entry_mode, exit_mode);
-                    Some(index)
+                    Some(Ok(index))
                 }
                 (None, None) => None,
-                _ => unreachable!(),
+                _ => Some(Err(error_unreachable())),
             }
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, _>>()?;
     while let Some(current) = roots.pop() {
         for next in cfg.graph.neighbors_directed(current, Direction::Outgoing) {
             if current.index() == next.index() {
-                if propagation_state[current.index()].fold_from_self(kernel_ids.len()) {
+                if propagation_state[current.index()].merge_with_self(kernel_ids.len()) {
                     roots.push(current);
                 }
             } else {
                 let [current_state, next_state] = propagation_state
                     .get_disjoint_mut([current.index(), next.index()])
-                    .unwrap();
-                if next_state.fold_from(current_state, kernel_ids.len()) {
+                    .map_err(|_| error_unreachable())?;
+                if next_state.merge_from(current_state, kernel_ids.len()) {
                     roots.push(next);
                 }
             }
         }
     }
-    /*
-    let mut entries = cfg
-        .entry_points
-        .iter()
-        .enumerate()
-        .map(|(i, (compiler_id, _))| (*compiler_id, i))
-        .collect::<FxHashMap<_, _>>();
-    let mut roots = FxHashSet::default();
-    for (index, node) in cfg.graph.node_references() {
-        let mode = get_mode(node);
-        if let Some(exit_mode) = mode.exit {
-            state[scc.component(index).usize()].fold_from(&ModeReachability::from_mode(
-                entries.len(),
-                &entries,
-                exit_mode,
-            ));
-        }
-        if mode.entry.is_some() {
-            roots.insert(scc.component(index));
-        }
-    }
-    scc.propagate(roots.iter().copied(), |from, to| {
-        let [from_state, to_state] = state.get_disjoint_mut([from.usize(), to.usize()]).unwrap();
-        to_state.fold_from(from_state)
-    });
-    dbg!(state);
-     */
-    todo!()
-    /*
-    fn get_exit_mode_reachability<T: Copy + Eq>(
-        cfg: &ControlFlowGraph,
-        getter: &mut impl FnMut(&Node) -> Mode<T>,
-        index: NodeIndex,
-        exit_cache: &mut FxHashMap<NodeIndex, ModeReachability<T>>,
-        visited: &mut FxHashSet<NodeIndex>,
-    ) -> Option<ModeReachability<T>> {
-        if let Some(mode) = getter(cfg.graph.node_weight(index).unwrap()).exit {
-            return Some(match mode {
-                ExtendedMode::BasicBlock(value) => {
-                    ModeReachability::Value(Some(value), FxHashSet::default())
-                }
-                ExtendedMode::Entry(id) => {
-                    ModeReachability::Value(None, FxHashSet::from_iter(iter::once(id)))
-                }
-            });
-        }
-        if let Some(cached) = exit_cache.get(&index) {
-            return Some(cached.clone());
-        }
-        if !visited.insert(index) {
-            return None;
-        }
-        let mode = cfg
-            .graph
-            .neighbors_directed(index, Direction::Incoming)
-            .try_fold(ModeReachability::empty(), |old_mode, predecessor| {
-                if visited.contains(&predecessor) {
-                    return ControlFlow::Continue(old_mode);
-                }
-                let new_mode =
-                    get_exit_mode_reachability(cfg, getter, predecessor, exit_cache, visited);
-                old_mode.fold(new_mode)
-            });
-        let result = match mode {
-            ControlFlow::Continue(m) => m,
-            ControlFlow::Break(m) => m,
-        };
-        exit_cache.insert(index, result.clone());
-        Some(result)
-    }
-    /*
-    let mut to_check = Vec::new();
-    cfg.graph.edge_references()
-    for (scc_index, component) in scc.iter().enumerate() {
-        let mut specific_mode = None;
-        let mut kernel_modes = FxHashSet::default();
-        // Look for edges outsides of SCC
-        for &node_index in component {
-            let node = cfg.graph.node_weight(node_index).unwrap();
-            let mode = get_mode(node);
-            if let Some(ExtendedMode::Entry(_)) = mode.entry {
-                to_check.push((node_index, SccIndex(scc_index as u32)));
-            }
-            match mode.exit {
-                Some(ExtendedMode::BasicBlock(value)) => {
-                    if let Some(old_value) = specific_mode {
-                        if old_value != value {
-                            specific_mode = None;
-                        }
-                    } else {
-                        specific_mode = Some(value);
-                    }
-                }
-                Some(ExtendedMode::Entry(id)) => {
-                    kernel_modes.insert(id);
-                }
-                None => {}
-            }
-        }
-    }
-     */
-
-    let mut must_insert_mode = FxHashSet::default();
-    let mut maybe_insert_mode = FxHashMap::default();
-    let mut remaining = cfg
-        .graph
-        .node_references()
-        .filter_map(|(index, node)| {
-            get_mode(node)
-                .entry
-                .as_ref()
-                .map(|mode| match mode {
-                    ExtendedMode::BasicBlock(mode) => Some((index, node.label, *mode)),
-                    ExtendedMode::Entry(_) => None,
-                })
-                .flatten()
-        })
-        .collect::<Vec<_>>();
-    let mut exit_cache = FxHashMap::default();
-    let mut visited = FxHashSet::default();
-    while let Some((index, node_id, expected_mode)) = remaining.pop() {
-        visited.clear();
-        let folded_mode = cfg
-            .graph
-            .neighbors_directed(index, Direction::Incoming)
-            .try_fold(
-                ModeReachability::from_value(expected_mode),
-                |old_mode, predecessor| {
-                    let new_mode = get_exit_mode_reachability(
-                        cfg,
-                        &mut get_mode,
-                        predecessor,
-                        &mut exit_cache,
-                        &mut visited,
-                    );
-                    old_mode.fold(new_mode)
-                },
-            );
-        let result = match folded_mode {
-            ControlFlow::Continue(m) => m,
-            ControlFlow::Break(m) => m,
-        };
-        match result {
-            ModeReachability::Conflict => {
-                must_insert_mode.insert(node_id);
-            }
-            ModeReachability::Value(None, _) => {
-                return Err(error_unreachable());
-            }
-            ModeReachability::Value(Some(value), reachable_kernels) => {
-                if value != expected_mode {
-                    return Err(error_unreachable());
-                }
-                if !reachable_kernels.is_empty() {
-                    maybe_insert_mode.insert(node_id, (value, reachable_kernels));
-                }
-            }
-        }
-    }
-    {
-        use std::io::Write;
-        let mut graph_dot = std::fs::File::create("/tmp/graph.dot").unwrap();
-        writeln!(
-            &mut graph_dot,
-            "{:?}",
-            petgraph::dot::Dot::with_config(&cfg.graph, &[petgraph::dot::Config::EdgeNoLabel])
-        );
-    }
-    {
-        use std::io::Write;
-        let mut must_insert_mode = must_insert_mode.iter().copied().collect::<Vec<_>>();
-        must_insert_mode.sort_unstable();
-        let must_insert_mode = must_insert_mode
-            .into_iter()
-            .map(|x| x.0.to_string())
-            .collect::<Vec<_>>();
-        let must_insert_mode = must_insert_mode.join("\n");
-        let mut must_insert_file = std::fs::File::create("/tmp/must_insert_mode.txt").unwrap();
-        must_insert_file
-            .write_all(must_insert_mode.as_bytes())
-            .unwrap();
-    }
-    {
-        use std::io::Write;
-        let maybe_insert_mode = maybe_insert_mode.clone();
-        let mut maybe_insert_mode = maybe_insert_mode.iter().collect::<Vec<_>>();
-        maybe_insert_mode.sort_unstable_by_key(|(x, _)| *x);
-        let maybe_insert_mode = maybe_insert_mode
-            .into_iter()
-            .map(|(x, (val, kernels))| format!("{} => {:?} => {:?}", x, val, kernels))
-            .collect::<Vec<_>>();
-        let maybe_insert_mode = maybe_insert_mode.join("\n");
-        let mut maybe_insert_files = std::fs::File::create("/tmp/maybe_insert_mode.txt").unwrap();
-        maybe_insert_files
-            .write_all(maybe_insert_mode.as_bytes())
-            .unwrap();
-    }
-    Ok(PartialModeInsertion {
-        bb_must_insert_mode: must_insert_mode,
-        bb_maybe_insert_mode: maybe_insert_mode,
-    })
-     */
+    PartialModeInsertion::new(cfg, kernel_ids, propagation_state)
 }
 
 #[derive(Eq, PartialEq, Clone, Debug)]
@@ -2127,11 +1807,7 @@ impl<T: PartialEq + Eq + Copy> PropagationState<T> {
         }
     }
 
-    fn fold(self, other: Option<Self>) -> ControlFlow<Self, Self> {
-        todo!()
-    }
-
-    fn fold_from_self(&mut self, kernel_count: usize) -> bool {
+    fn merge_with_self(&mut self, kernel_count: usize) -> bool {
         match self {
             PropagationState::Fixed { entry, exit } => match entry {
                 ComputedValue::Conflict => false,
@@ -2159,7 +1835,7 @@ impl<T: PartialEq + Eq + Copy> PropagationState<T> {
         }
     }
 
-    fn fold_from(&mut self, from: &Self, kernel_count: usize) -> bool {
+    fn merge_from(&mut self, from: &Self, kernel_count: usize) -> bool {
         let (self_ref, can_propagate) = self.get_entry();
         let this = mem::replace(self_ref, ComputedValue::Conflict);
         let (this, is_different) = match (this, from.get_exit()) {
@@ -2178,114 +1854,126 @@ impl<T: PartialEq + Eq + Copy> PropagationState<T> {
         };
         *self_ref = this;
         is_different
-        /*
-        let (this, is_different) = match (mem::replace(self, PropagationState::empty()), from) {
-            (PropagationState::Propagated(RecipientValue::Conflict), _) => (
-                PropagationState::Propagated(RecipientValue::Conflict),
-                false,
-            ),
-            (
-                PropagationState::Propagated(RecipientValue::Value(..)),
-                PropagationState::Propagated(RecipientValue::Conflict),
-            ) => (PropagationState::Propagated(RecipientValue::Conflict), true),
-            (
-                PropagationState::Fixed {
-                    entry: RootEntryValue::Value(_),
-                    exit,
-                },
-                PropagationState::Propagated(RecipientValue::Conflict),
-            ) => (
-                PropagationState::Fixed {
-                    entry: RootEntryValue::Conflict,
-                    exit,
-                },
-                true,
-            ),
-            (
-                PropagationState::Propagated(RecipientValue::Value(value, mut kernels)),
-                PropagationState::Propagated(RecipientValue::Value(other_value, other_kernels)),
-            ) => {
-                let new_value = value.or(*other_value);
-                if &kernels != other_kernels && new_value != value {
-                    kernels.grow(kernel_count);
-                    kernels.union_with(other_kernels);
-                    (
-                        PropagationState::Propagated(RecipientValue::Value(new_value, kernels)),
-                        true,
-                    )
-                } else {
-                    (
-                        PropagationState::Propagated(RecipientValue::Value(value, kernels)),
-                        false,
-                    )
-                }
-            }
-            (
-                PropagationState::Propagated(RecipientValue::Value(value, mut kernels)),
-                PropagationState::Fixed { exit, .. },
-            ) => match exit {
-                RootExitValue::Value(new_value) => match value {
-                    Some(old_value) => {
-                        if old_value != *new_value {
-                            (PropagationState::Propagated(RecipientValue::Conflict), true)
-                        } else {
-                            (
-                                PropagationState::Propagated(RecipientValue::Value(value, kernels)),
-                                false,
-                            )
-                        }
-                    }
-                    None => (
-                        PropagationState::Propagated(RecipientValue::Value(
-                            Some(*new_value),
-                            kernels,
-                        )),
-                        true,
-                    ),
-                },
-                RootExitValue::Entry(other_kernels) => {
-                    if &kernels != other_kernels {
-                        kernels.grow(kernel_count);
-                        kernels.union_with(other_kernels);
-                        (
-                            PropagationState::Propagated(RecipientValue::Value(value, kernels)),
-                            true,
-                        )
-                    } else {
-                        (
-                            PropagationState::Propagated(RecipientValue::Value(value, kernels)),
-                            false,
-                        )
-                    }
-                }
-            },
-            (
-                PropagationState::Fixed {
-                    entry: RootEntryValue::Conflict,
-                    exit,
-                },
-                _,
-            ) => (
-                PropagationState::Fixed {
-                    entry: RootEntryValue::Conflict,
-                    exit,
-                },
-                false,
-            ),
-            (PropagationState::Fixed { entry, .. }, PropagationState::Propagated(other_value)) => {
-                todo!()
-            }
-        };
-        *self = this;
-        is_different
-         */
     }
 }
 
-#[derive(Debug)]
 struct PartialModeInsertion<T> {
     bb_must_insert_mode: FxHashSet<SpirvWord>,
-    bb_maybe_insert_mode: FxHashMap<SpirvWord, (T, FxHashSet<SpirvWord>)>,
+    bb_maybe_insert_mode: PotentialModeInsertionsDueToKernelMode<T>,
+}
+
+impl<T: PartialEq + Eq + Copy> PartialModeInsertion<T> {
+    fn new(
+        cfg: &ControlFlowGraph,
+        kernel_map: FxHashMap<SpirvWord, usize>,
+        state: Vec<PropagationState<T>>,
+    ) -> Result<Self, TranslateError> {
+        let mut reverse_kernel_map = vec![SpirvWord(u32::MAX); kernel_map.len()];
+        for (kernel_id, kernel_index) in kernel_map {
+            reverse_kernel_map[kernel_index] = kernel_id;
+        }
+        let mut bb_must_insert_mode = FxHashSet::default();
+        let mut fast_mode_from_kernels = Some(FxHashMap::default());
+        let mut slow_mode_from_kernels = FxHashMap::default();
+        for (node_index, bb_state) in state.into_iter().enumerate() {
+            if let PropagationState::Fixed {
+                entry: ComputedValue::Conflict,
+                ..
+            } = bb_state
+            {
+                let bb_id = cfg
+                    .graph
+                    .node_weight(NodeIndex::new(node_index))
+                    .ok_or_else(error_unreachable)?
+                    .label;
+                if !cfg.entry_points.contains_key(&bb_id) {
+                    bb_must_insert_mode.insert(bb_id);
+                }
+            }
+            if let PropagationState::Fixed {
+                entry: ComputedValue::Value(value, kernels),
+                ..
+            } = bb_state
+            {
+                let value = value.ok_or_else(error_unreachable)?;
+                let node_id = cfg
+                    .graph
+                    .node_weight(NodeIndex::new(node_index))
+                    .ok_or_else(error_unreachable)?
+                    .label;
+                let (_, slow_kernels_source) = slow_mode_from_kernels
+                    .entry(node_id)
+                    .or_insert((value, FxHashSet::default()));
+                for kernel_index in kernels.into_ones() {
+                    let kernel_id = reverse_kernel_map[kernel_index];
+                    if let Some(fast_mode_ref) = &mut fast_mode_from_kernels {
+                        let old_value = fast_mode_ref.insert(kernel_id, value);
+                        if let Some(old_value) = old_value {
+                            if old_value != value {
+                                fast_mode_from_kernels = None;
+                            }
+                        }
+                    }
+                    slow_kernels_source.insert(kernel_id);
+                }
+            }
+        }
+        Ok(PartialModeInsertion {
+            bb_must_insert_mode,
+            bb_maybe_insert_mode: match fast_mode_from_kernels {
+                Some(modes) => PotentialModeInsertionsDueToKernelMode::QuickMode(modes),
+                None => PotentialModeInsertionsDueToKernelMode::SlowMode(slow_mode_from_kernels),
+            },
+        })
+    }
+}
+
+// After computing conflicts in modes we have a set of basic blocks whose modes depend on the modes
+// of kernels.
+// Consider an example for mode that can have value "true" or "false" and a simple control flow
+// graph with kernel basic blocks `k0` and `k1` and a single non-kernel basic block `bb`,
+// `bb` has mode "true" and kernel modes are undecided, `bb` is reachable from both `k0` and `k1`:
+// ┌────┐
+// │ k0 │─────┐
+// └────┘     │
+//            ▼
+//         ┌──────────┐
+//         │ bb: true │
+//         └──────────┘
+//            ▲
+// ┌────┐     │
+// │ k1 │─────┘
+// └────┘
+// In this case, if either k0 and k1 have mode "false", then we need to insert an instruction to
+// set global mode to "true" at the start of basic block `bb`.
+// In the next step we want to pick modes for the kernels in the control flow graph that will
+// minimize the number of such insertions. This structure holds all the data necessary to resolve
+// the problem
+enum PotentialModeInsertionsDueToKernelMode<T> {
+    // This is the simplest case: we know that if each kernel has a specific mode then no insertions
+    // are necessary. We can just pick those modes for each kernel
+    QuickMode(FxHashMap<SpirvWord, T>),
+    // This is the most general case that covers potential conflicts. E.g. consider this example:
+    // ┌────┐
+    // │ k0 │──────────────────────┐
+    // └────┘                      │
+    //                             ▼
+    //                       ┌───────────┐
+    //                       │ bb0: true │
+    //                       └───────────┘
+    //                             ▲
+    // ┌────┐                      │
+    // │ k1 │──────────────────────┘
+    // └────┘     │
+    //            │         ┌────────────┐
+    //            ├────────>│ bb1: false │
+    //            │         └────────────┘
+    //            │         ┌────────────┐
+    //            └────────>│ bb2: false │
+    //                      └────────────┘
+    // In this case there is no way to pick modes for `k0` and `k1` that would avoid insertions
+    // altogether.
+    SlowMode(FxHashMap<SpirvWord, (T, FxHashSet<SpirvWord>)>),
 }
 
 // Only returns kernel mode insertions if a kernel is relevant to the optimization problem
@@ -2295,10 +1983,20 @@ fn optimize_mode_insertions<
 >(
     partial: PartialModeInsertion<T>,
 ) -> Result<MandatoryModeInsertions<T>, HighsStatus> {
+    let bb_maybe_insert_mode = match partial.bb_maybe_insert_mode {
+        PotentialModeInsertionsDueToKernelMode::QuickMode(modes) => {
+            dbg!(&partial.bb_must_insert_mode);
+            dbg!(&modes);
+            return Ok(MandatoryModeInsertions {
+                basic_blocks: partial.bb_must_insert_mode,
+                kernels: modes,
+            });
+        }
+        PotentialModeInsertionsDueToKernelMode::SlowMode(slow_modes) => slow_modes,
+    };
     let mut problem = highs::RowProblem::default();
     let mut kernel_modes = FxHashMap::default();
-    let basic_block_variables = partial
-        .bb_maybe_insert_mode
+    let basic_block_variables = bb_maybe_insert_mode
         .into_iter()
         .map(|(basic_block, (value, entry_points))| {
             let modes = entry_points
