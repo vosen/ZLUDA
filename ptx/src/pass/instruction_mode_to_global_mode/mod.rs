@@ -1720,14 +1720,14 @@ fn compute_single_mode_insertions<T: Copy + Eq + std::fmt::Debug>(
     while let Some(current) = roots.pop() {
         for next in cfg.graph.neighbors_directed(current, Direction::Outgoing) {
             if current.index() == next.index() {
-                if propagation_state[current.index()].merge_with_self(kernel_ids.len()) {
+                if propagation_state[current.index()].merge_with_self(kernel_ids.len())? {
                     roots.push(current);
                 }
             } else {
                 let [current_state, next_state] = propagation_state
                     .get_disjoint_mut([current.index(), next.index()])
                     .map_err(|_| error_unreachable())?;
-                if next_state.merge_from(current_state, kernel_ids.len()) {
+                if next_state.merge_from(current_state, kernel_ids.len())? {
                     roots.push(next);
                 }
             }
@@ -1750,7 +1750,7 @@ enum ComputedValue<T> {
 enum PropagationState<T> {
     // This basic block sets a mode, hence its mode at the exit is independent from its predecessors
     Fixed {
-        entry: ComputedValue<T>,
+        entry: Option<ComputedValue<T>>, // None if it is a kernel basic block
         exit: RootExitValue<T>,
     },
     // This basic block does not set mode, hence its mode at the exit is propagated from its predecessors
@@ -1759,12 +1759,15 @@ enum PropagationState<T> {
 }
 
 impl<T: Copy> PropagationState<T> {
-    fn get_entry(&mut self) -> (&mut ComputedValue<T>, bool) {
-        match self {
-            PropagationState::Fixed { entry, .. } => (entry, false),
+    fn get_entry(&mut self) -> Result<(&mut ComputedValue<T>, bool), TranslateError> {
+        Ok(match self {
+            PropagationState::Fixed { entry, .. } => {
+                (entry.as_mut().ok_or_else(error_unreachable)?, false)
+            }
             PropagationState::Propagated(entry) => (entry, true),
-        }
+        })
     }
+
     fn get_exit(&self) -> Option<(Option<T>, &FixedBitSet)> {
         static EMPTY_BITSET: FixedBitSet = FixedBitSet::new();
         match self {
@@ -1791,7 +1794,7 @@ impl<T: PartialEq + Eq + Copy> PropagationState<T> {
         match entry_mode {
             ExtendedMode::BasicBlock(entry_mode) => match exit_mode {
                 ExtendedMode::BasicBlock(exit_mode) => PropagationState::Fixed {
-                    entry: ComputedValue::Value(Some(entry_mode), FixedBitSet::new()),
+                    entry: Some(ComputedValue::Value(Some(entry_mode), FixedBitSet::new())),
                     exit: RootExitValue::Value(exit_mode),
                 },
                 _ => unreachable!(),
@@ -1800,18 +1803,19 @@ impl<T: PartialEq + Eq + Copy> PropagationState<T> {
                 let mut bit_set = FixedBitSet::with_capacity(kernel_map.len());
                 bit_set.set(kernel_map[&id], true);
                 PropagationState::Fixed {
-                    entry: ComputedValue::Conflict, // technically incorrect, but impossible to reach it
+                    entry: None,
                     exit: RootExitValue::Entry(bit_set),
                 }
             }
         }
     }
 
-    fn merge_with_self(&mut self, kernel_count: usize) -> bool {
-        match self {
+    fn merge_with_self(&mut self, kernel_count: usize) -> Result<bool, TranslateError> {
+        Ok(match self {
             PropagationState::Fixed { entry, exit } => match entry {
-                ComputedValue::Conflict => false,
-                ComputedValue::Value(value, kernels) => match exit {
+                None => return Err(error_unreachable()),
+                Some(ComputedValue::Conflict) => false,
+                Some(ComputedValue::Value(value, kernels)) => match exit {
                     RootExitValue::Value(new_value) => {
                         if *value != Some(*new_value) {
                             *value = Some(*new_value);
@@ -1832,11 +1836,11 @@ impl<T: PartialEq + Eq + Copy> PropagationState<T> {
                 },
             },
             PropagationState::Propagated(_) => false,
-        }
+        })
     }
 
-    fn merge_from(&mut self, from: &Self, kernel_count: usize) -> bool {
-        let (self_ref, can_propagate) = self.get_entry();
+    fn merge_from(&mut self, from: &Self, kernel_count: usize) -> Result<bool, TranslateError> {
+        let (self_ref, can_propagate) = self.get_entry()?;
         let this = mem::replace(self_ref, ComputedValue::Conflict);
         let (this, is_different) = match (this, from.get_exit()) {
             (ComputedValue::Conflict, _) => (ComputedValue::Conflict, false),
@@ -1853,7 +1857,7 @@ impl<T: PartialEq + Eq + Copy> PropagationState<T> {
             }
         };
         *self_ref = this;
-        is_different
+        Ok(is_different)
     }
 }
 
@@ -1877,7 +1881,7 @@ impl<T: PartialEq + Eq + Copy> PartialModeInsertion<T> {
         let mut slow_mode_from_kernels = FxHashMap::default();
         for (node_index, bb_state) in state.into_iter().enumerate() {
             if let PropagationState::Fixed {
-                entry: ComputedValue::Conflict,
+                entry: Some(ComputedValue::Conflict),
                 ..
             } = bb_state
             {
@@ -1886,12 +1890,10 @@ impl<T: PartialEq + Eq + Copy> PartialModeInsertion<T> {
                     .node_weight(NodeIndex::new(node_index))
                     .ok_or_else(error_unreachable)?
                     .label;
-                if !cfg.entry_points.contains_key(&bb_id) {
-                    bb_must_insert_mode.insert(bb_id);
-                }
+                bb_must_insert_mode.insert(bb_id);
             }
             if let PropagationState::Fixed {
-                entry: ComputedValue::Value(value, kernels),
+                entry: Some(ComputedValue::Value(value, kernels)),
                 ..
             } = bb_state
             {
@@ -1934,15 +1936,15 @@ impl<T: PartialEq + Eq + Copy> PartialModeInsertion<T> {
 // graph with kernel basic blocks `k0` and `k1` and a single non-kernel basic block `bb`,
 // `bb` has mode "true" and kernel modes are undecided, `bb` is reachable from both `k0` and `k1`:
 // ┌────┐
-// │ k0 │─────┐
-// └────┘     │
-//            ▼
+// │ k0 │──────┐
+// └────┘      │
+//             ▼
 //         ┌──────────┐
 //         │ bb: true │
 //         └──────────┘
-//            ▲
-// ┌────┐     │
-// │ k1 │─────┘
+//             ▲
+// ┌────┐      │
+// │ k1 │──────┘
 // └────┘
 // In this case, if either k0 and k1 have mode "false", then we need to insert an instruction to
 // set global mode to "true" at the start of basic block `bb`.
@@ -1965,12 +1967,12 @@ enum PotentialModeInsertionsDueToKernelMode<T> {
     // ┌────┐                      │
     // │ k1 │──────────────────────┘
     // └────┘     │
-    //            │         ┌────────────┐
-    //            ├────────>│ bb1: false │
-    //            │         └────────────┘
-    //            │         ┌────────────┐
-    //            └────────>│ bb2: false │
-    //                      └────────────┘
+    //            │          ┌────────────┐
+    //            ├─────────>│ bb1: false │
+    //            │          └────────────┘
+    //            │          ┌────────────┐
+    //            └─────────>│ bb2: false │
+    //                       └────────────┘
     // In this case there is no way to pick modes for `k0` and `k1` that would avoid insertions
     // altogether.
     SlowMode(FxHashMap<SpirvWord, (T, FxHashSet<SpirvWord>)>),
@@ -1985,8 +1987,6 @@ fn optimize_mode_insertions<
 ) -> Result<MandatoryModeInsertions<T>, HighsStatus> {
     let bb_maybe_insert_mode = match partial.bb_maybe_insert_mode {
         PotentialModeInsertionsDueToKernelMode::QuickMode(modes) => {
-            dbg!(&partial.bb_must_insert_mode);
-            dbg!(&modes);
             return Ok(MandatoryModeInsertions {
                 basic_blocks: partial.bb_must_insert_mode,
                 kernels: modes,
