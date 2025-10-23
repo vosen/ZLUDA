@@ -1750,10 +1750,12 @@ enum ComputedValue<T> {
 enum PropagationState<T> {
     // This basic block sets a mode, hence its mode at the exit is independent from its predecessors
     Fixed {
-        entry: Option<ComputedValue<T>>, // None if it is a kernel basic block
+        // None if it is a kernel basic block, if we enter kernel it means that a function calls
+        // into a kernel directly, which is impossible
+        entry: Option<ComputedValue<T>>,
         exit: RootExitValue<T>,
     },
-    // This basic block does not set mode, hence its mode at the exit is propagated from its predecessors
+    // This basic block does not set mode, hence its mode is the sum of modes from its predecessors
     // It is None at the start, before we start propagating values
     Propagated(ComputedValue<T>),
 }
@@ -2012,7 +2014,6 @@ fn optimize_mode_insertions<
             (basic_block, bb)
         })
         .collect::<Vec<_>>();
-    // TODO: add fallback on Error
     let mut solver = problem.try_optimise(highs::Sense::Maximise)?;
     solver.make_quiet();
     // Takes minutes for a problem that is solved sub-second
