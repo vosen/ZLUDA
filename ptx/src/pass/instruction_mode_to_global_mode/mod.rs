@@ -1808,16 +1808,57 @@ impl<'this> SccGraph<'this> {
 
 fn compute_single_mode_insertions<T: Copy + Eq + std::fmt::Debug>(
     cfg: &ControlFlowGraph,
-    scc: &SccGraph,
+    _scc: &SccGraph,
     mut get_mode: impl FnMut(&Node) -> Mode<T>,
 ) -> Result<PartialModeInsertion<T>, TranslateError> {
+    let mut kernel_ids = cfg
+        .entry_points
+        .iter()
+        .enumerate()
+        .map(|(i, (compiler_id, _))| (*compiler_id, i))
+        .collect::<FxHashMap<_, _>>();
+    let mut propagation_state = (0..cfg.graph.node_count())
+        .map(|_| PropagationState::<T>::empty())
+        .collect::<Vec<_>>();
+    let mut roots = cfg
+        .graph
+        .node_references()
+        .filter_map(|(index, node)| {
+            let mode = get_mode(node);
+            match (mode.entry, mode.exit) {
+                (Some(entry_mode), Some(exit_mode)) => {
+                    propagation_state[index.index()] =
+                        PropagationState::from_mode(&kernel_ids, entry_mode, exit_mode);
+                    Some(index)
+                }
+                (None, None) => None,
+                _ => unreachable!(),
+            }
+        })
+        .collect::<Vec<_>>();
+    while let Some(current) = roots.pop() {
+        for next in cfg.graph.neighbors_directed(current, Direction::Outgoing) {
+            if current.index() == next.index() {
+                if propagation_state[current.index()].fold_from_self(kernel_ids.len()) {
+                    roots.push(current);
+                }
+            } else {
+                let [current_state, next_state] = propagation_state
+                    .get_disjoint_mut([current.index(), next.index()])
+                    .unwrap();
+                if next_state.fold_from(current_state, kernel_ids.len()) {
+                    roots.push(next);
+                }
+            }
+        }
+    }
+    /*
     let mut entries = cfg
         .entry_points
         .iter()
         .enumerate()
         .map(|(i, (compiler_id, _))| (*compiler_id, i))
         .collect::<FxHashMap<_, _>>();
-    let mut state = vec![ModeReachability::<T>::empty(entries.len()); scc.node_count()];
     let mut roots = FxHashSet::default();
     for (index, node) in cfg.graph.node_references() {
         let mode = get_mode(node);
@@ -1837,6 +1878,7 @@ fn compute_single_mode_insertions<T: Copy + Eq + std::fmt::Debug>(
         to_state.fold_from(from_state)
     });
     dbg!(state);
+     */
     todo!()
     /*
     fn get_exit_mode_reachability<T: Copy + Eq>(
@@ -2014,72 +2056,229 @@ fn compute_single_mode_insertions<T: Copy + Eq + std::fmt::Debug>(
      */
 }
 
-#[derive(Clone, Debug)]
-enum ModeReachability<T> {
+#[derive(Eq, PartialEq, Clone, Debug)]
+enum RootExitValue<T> {
+    Value(T),
+    Entry(FixedBitSet),
+}
+
+enum ComputedValue<T> {
     Conflict,
     Value(Option<T>, FixedBitSet),
 }
 
-impl<T: PartialEq + Eq + Copy> ModeReachability<T> {
+enum PropagationState<T> {
+    // This basic block sets a mode, hence its mode at the exit is independent from its predecessors
+    Fixed {
+        entry: ComputedValue<T>,
+        exit: RootExitValue<T>,
+    },
+    // This basic block does not set mode, hence its mode at the exit is propagated from its predecessors
+    // It is None at the start, before we start propagating values
+    Propagated(ComputedValue<T>),
+}
+
+impl<T: Copy> PropagationState<T> {
+    fn get_entry(&mut self) -> (&mut ComputedValue<T>, bool) {
+        match self {
+            PropagationState::Fixed { entry, .. } => (entry, false),
+            PropagationState::Propagated(entry) => (entry, true),
+        }
+    }
+    fn get_exit(&self) -> Option<(Option<T>, &FixedBitSet)> {
+        static EMPTY_BITSET: FixedBitSet = FixedBitSet::new();
+        match self {
+            PropagationState::Fixed { exit, .. } => match exit {
+                RootExitValue::Value(v) => Some((Some(*v), &EMPTY_BITSET)),
+                RootExitValue::Entry(kernels) => Some((None, kernels)),
+            },
+            PropagationState::Propagated(ComputedValue::Conflict) => None,
+            PropagationState::Propagated(ComputedValue::Value(v, kernels)) => Some((*v, kernels)),
+        }
+    }
+}
+
+impl<T: PartialEq + Eq + Copy> PropagationState<T> {
+    fn empty() -> Self {
+        PropagationState::Propagated(ComputedValue::Value(None, FixedBitSet::new()))
+    }
+
+    fn from_mode(
+        kernel_map: &FxHashMap<SpirvWord, usize>,
+        entry_mode: ExtendedMode<T>,
+        exit_mode: ExtendedMode<T>,
+    ) -> Self {
+        match entry_mode {
+            ExtendedMode::BasicBlock(entry_mode) => match exit_mode {
+                ExtendedMode::BasicBlock(exit_mode) => PropagationState::Fixed {
+                    entry: ComputedValue::Value(Some(entry_mode), FixedBitSet::new()),
+                    exit: RootExitValue::Value(exit_mode),
+                },
+                _ => unreachable!(),
+            },
+            ExtendedMode::Entry(id) => {
+                let mut bit_set = FixedBitSet::with_capacity(kernel_map.len());
+                bit_set.set(kernel_map[&id], true);
+                PropagationState::Fixed {
+                    entry: ComputedValue::Conflict, // technically incorrect, but impossible to reach it
+                    exit: RootExitValue::Entry(bit_set),
+                }
+            }
+        }
+    }
+
     fn fold(self, other: Option<Self>) -> ControlFlow<Self, Self> {
         todo!()
     }
 
-    fn fold_from(&mut self, other: &Self) -> bool {
-        match (mem::replace(self, ModeReachability::Conflict), other) {
-            (ModeReachability::Conflict, _) => false,
-            (_, ModeReachability::Conflict) => {
-                *self = ModeReachability::Conflict;
-                true
+    fn fold_from_self(&mut self, kernel_count: usize) -> bool {
+        match self {
+            PropagationState::Fixed { entry, exit } => match entry {
+                ComputedValue::Conflict => false,
+                ComputedValue::Value(value, kernels) => match exit {
+                    RootExitValue::Value(new_value) => {
+                        if *value != Some(*new_value) {
+                            *value = Some(*new_value);
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    RootExitValue::Entry(other_kernels) => {
+                        if kernels != other_kernels {
+                            kernels.grow(kernel_count);
+                            kernels.union_with(other_kernels);
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                },
+            },
+            PropagationState::Propagated(_) => false,
+        }
+    }
+
+    fn fold_from(&mut self, from: &Self, kernel_count: usize) -> bool {
+        let (self_ref, can_propagate) = self.get_entry();
+        let this = mem::replace(self_ref, ComputedValue::Conflict);
+        let (this, is_different) = match (this, from.get_exit()) {
+            (ComputedValue::Conflict, _) => (ComputedValue::Conflict, false),
+            (ComputedValue::Value(..), None) => (ComputedValue::Conflict, can_propagate),
+            (ComputedValue::Value(value, mut kernels), Some((other_value, other_kernels))) => {
+                let new_value = value.or(other_value);
+                if new_value != value || &kernels != other_kernels {
+                    kernels.grow(kernel_count);
+                    kernels.union_with(other_kernels);
+                    (ComputedValue::Value(new_value, kernels), can_propagate)
+                } else {
+                    (ComputedValue::Value(value, kernels), false)
+                }
+            }
+        };
+        *self_ref = this;
+        is_different
+        /*
+        let (this, is_different) = match (mem::replace(self, PropagationState::empty()), from) {
+            (PropagationState::Propagated(RecipientValue::Conflict), _) => (
+                PropagationState::Propagated(RecipientValue::Conflict),
+                false,
+            ),
+            (
+                PropagationState::Propagated(RecipientValue::Value(..)),
+                PropagationState::Propagated(RecipientValue::Conflict),
+            ) => (PropagationState::Propagated(RecipientValue::Conflict), true),
+            (
+                PropagationState::Fixed {
+                    entry: RootEntryValue::Value(_),
+                    exit,
+                },
+                PropagationState::Propagated(RecipientValue::Conflict),
+            ) => (
+                PropagationState::Fixed {
+                    entry: RootEntryValue::Conflict,
+                    exit,
+                },
+                true,
+            ),
+            (
+                PropagationState::Propagated(RecipientValue::Value(value, mut kernels)),
+                PropagationState::Propagated(RecipientValue::Value(other_value, other_kernels)),
+            ) => {
+                let new_value = value.or(*other_value);
+                if &kernels != other_kernels && new_value != value {
+                    kernels.grow(kernel_count);
+                    kernels.union_with(other_kernels);
+                    (
+                        PropagationState::Propagated(RecipientValue::Value(new_value, kernels)),
+                        true,
+                    )
+                } else {
+                    (
+                        PropagationState::Propagated(RecipientValue::Value(value, kernels)),
+                        false,
+                    )
+                }
             }
             (
-                ModeReachability::Value(old_value, mut old_kernels),
-                ModeReachability::Value(new_value, new_kernels),
-            ) => match (old_value, new_value) {
-                (Some(x), Some(y)) if x != *y => {
-                    *self = ModeReachability::Conflict;
-                    false
-                }
-                _ => {
-                    if old_value == *new_value && old_kernels == *new_kernels {
-                        false
+                PropagationState::Propagated(RecipientValue::Value(value, mut kernels)),
+                PropagationState::Fixed { exit, .. },
+            ) => match exit {
+                RootExitValue::Value(new_value) => match value {
+                    Some(old_value) => {
+                        if old_value != *new_value {
+                            (PropagationState::Propagated(RecipientValue::Conflict), true)
+                        } else {
+                            (
+                                PropagationState::Propagated(RecipientValue::Value(value, kernels)),
+                                false,
+                            )
+                        }
+                    }
+                    None => (
+                        PropagationState::Propagated(RecipientValue::Value(
+                            Some(*new_value),
+                            kernels,
+                        )),
+                        true,
+                    ),
+                },
+                RootExitValue::Entry(other_kernels) => {
+                    if &kernels != other_kernels {
+                        kernels.grow(kernel_count);
+                        kernels.union_with(other_kernels);
+                        (
+                            PropagationState::Propagated(RecipientValue::Value(value, kernels)),
+                            true,
+                        )
                     } else {
-                        old_kernels.union_with(new_kernels);
-                        *self = ModeReachability::Value(old_value.or(*new_value), old_kernels);
-                        true
+                        (
+                            PropagationState::Propagated(RecipientValue::Value(value, kernels)),
+                            false,
+                        )
                     }
                 }
             },
-        }
-    }
-
-    fn fold_from_owned(&mut self, other: Self) -> bool {
-        todo!()
-    }
-
-    fn empty(bit_set_size: usize) -> Self {
-        ModeReachability::Value(None, FixedBitSet::with_capacity(bit_set_size))
-    }
-
-    fn from_value(bit_set_size: usize, t: T) -> Self {
-        ModeReachability::Value(Some(t), FixedBitSet::with_capacity(bit_set_size))
-    }
-
-    fn from_mode(
-        bit_set_size: usize,
-        entry_map: &FxHashMap<SpirvWord, usize>,
-        mode: ExtendedMode<T>,
-    ) -> Self {
-        match mode {
-            ExtendedMode::BasicBlock(value) => {
-                ModeReachability::Value(Some(value), FixedBitSet::with_capacity(bit_set_size))
+            (
+                PropagationState::Fixed {
+                    entry: RootEntryValue::Conflict,
+                    exit,
+                },
+                _,
+            ) => (
+                PropagationState::Fixed {
+                    entry: RootEntryValue::Conflict,
+                    exit,
+                },
+                false,
+            ),
+            (PropagationState::Fixed { entry, .. }, PropagationState::Propagated(other_value)) => {
+                todo!()
             }
-            ExtendedMode::Entry(id) => {
-                let mut bit_set = FixedBitSet::with_capacity(bit_set_size);
-                bit_set.set(entry_map[&id], true);
-                ModeReachability::Value(None, bit_set)
-            }
-        }
+        };
+        *self = this;
+        is_different
+         */
     }
 }
 
