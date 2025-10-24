@@ -26,7 +26,6 @@ fixedbitset = "0.5"
 
 [dev-dependencies]
 hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
-comgr = { path = "../comgr" }
 cuda_types = { path = "../cuda_types" }
 cuda_macros = { path = "../cuda_macros" }
 tempfile = "3"

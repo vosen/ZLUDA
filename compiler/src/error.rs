@@ -11,7 +11,7 @@ pub enum CompilerError {
     #[error(transparent)]
     Libloading(#[from] libloading::Error),
     #[error(transparent)]
-    ComgrError(#[from] comgr::Error),
+    LLVMError(#[from] llvm_zluda::compile::LLVMError),
     #[error(transparent)]
     IoError(#[from] io::Error),
     #[error(transparent)]

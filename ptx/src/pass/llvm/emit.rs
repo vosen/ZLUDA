@@ -29,6 +29,8 @@ use std::{i8, ptr, u64};
 
 use super::*;
 use crate::pass::*;
+use llvm_zluda::utils as llvm;
+use llvm_zluda::utils::Context;
 use llvm_zluda::{core::*, *};
 use llvm_zluda::{prelude::*, LLVMZludaBuildAtomicRMW};
 use llvm_zluda::{LLVMCallConv, LLVMZludaBuildAlloca};

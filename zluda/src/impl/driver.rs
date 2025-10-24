@@ -1,5 +1,4 @@
 use crate::r#impl::{self, context, device, function};
-use comgr::Comgr;
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
 use std::{
@@ -17,8 +16,6 @@ mod os;
 
 pub(crate) struct GlobalState {
     pub devices: Vec<Device>,
-    pub comgr: Comgr,
-    pub comgr_clang_version: String,
     pub cache_path: Option<String>,
     pub allocations: Mutex<Allocations>,
     pub should_zero_allocations: bool,
@@ -93,14 +90,9 @@ pub(crate) fn global_state() -> Result<&'static GlobalState, CUerror> {
         .get_or_init(|| {
             let mut device_count = 0;
             unsafe { hipGetDeviceCount(&mut device_count) }?;
-            let comgr = Comgr::new().map_err(|_| CUerror::UNKNOWN)?;
-            let comgr_clang_version =
-                comgr::get_clang_version(&comgr).map_err(|_| CUerror::UNKNOWN)?;
             let allocations = Mutex::new(Allocations::new());
             Ok(GlobalState {
                 should_zero_allocations: should_zero_allocations().unwrap_or(false),
-                comgr,
-                comgr_clang_version,
                 allocations,
                 devices: (0..device_count)
                     .map(|i| {

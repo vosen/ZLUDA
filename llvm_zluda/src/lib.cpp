@@ -4,7 +4,15 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Type.h>
 #include <llvm/IR/Instructions.h>
+#include <lld/Common/Driver.h>
+#include <lld/Common/CommonLinkerContext.h>
+#include <llvm/Support/raw_ostream.h>
 #pragma GCC diagnostic pop
+
+#include <mutex>
+
+// Declare that we want to use the ELF driver
+LLD_HAS_DRIVER(elf)
 
 using namespace llvm;
 
@@ -113,22 +121,6 @@ static AtomicOrdering mapFromLLVMOrdering(LLVMAtomicOrdering Ordering)
 
 typedef unsigned LLVMFastMathFlags;
 
-enum
-{
-    LLVMFastMathAllowReassoc = (1 << 0),
-    LLVMFastMathNoNaNs = (1 << 1),
-    LLVMFastMathNoInfs = (1 << 2),
-    LLVMFastMathNoSignedZeros = (1 << 3),
-    LLVMFastMathAllowReciprocal = (1 << 4),
-    LLVMFastMathAllowContract = (1 << 5),
-    LLVMFastMathApproxFunc = (1 << 6),
-    LLVMFastMathNone = 0,
-    LLVMFastMathAll = LLVMFastMathAllowReassoc | LLVMFastMathNoNaNs |
-                      LLVMFastMathNoInfs | LLVMFastMathNoSignedZeros |
-                      LLVMFastMathAllowReciprocal | LLVMFastMathAllowContract |
-                      LLVMFastMathApproxFunc,
-};
-
 static FastMathFlags mapFromLLVMFastMathFlags(LLVMFastMathFlags FMF)
 {
     FastMathFlags NewFMF;
@@ -199,7 +191,7 @@ void LLVMZludaBuildFence(LLVMBuilderRef B, LLVMAtomicOrdering Ordering,
 void LLVMZludaSetAtomic(
     LLVMValueRef AtomicInst,
     LLVMAtomicOrdering Ordering,
-    char * SSID)
+    char *SSID)
 {
     auto inst = unwrap(AtomicInst);
     if (LoadInst *LI = dyn_cast<LoadInst>(inst))
@@ -214,6 +206,49 @@ void LLVMZludaSetAtomic(
     {
         llvm_unreachable("Invalid instruction type for LLVMZludaSetAtomic");
     }
+}
+
+std::mutex lld_mutex;
+
+int LLVMZludaLinkWithLLD(const char *input_path, const char *output_path, char **ErrorMessage)
+{
+    std::vector<const char *> args;
+    args.push_back("ld.lld");
+    args.push_back("-shared");
+    args.push_back(input_path);
+    args.push_back("-o");
+    args.push_back(output_path);
+    args.push_back("--threads=1");
+
+    std::string log_out_str;
+    std::string log_err_str;
+    llvm::raw_string_ostream log_out(log_out_str);
+    llvm::raw_string_ostream log_err(log_err_str);
+
+    // We don't want to leak memory as ZLUDA is running, so we destroy the linker context after every call, and wrap the invocation in a mutex.
+    std::lock_guard<std::mutex> guard(lld_mutex);
+    lld::Result result = lld::lldMain(args, log_out, log_err,
+                                      {{lld::Gnu, &lld::elf::link}});
+
+    lld::CommonLinkerContext::destroy();
+
+    if (result.retCode != 0)
+    {
+        if (ErrorMessage)
+        {
+            if (!log_err_str.empty())
+            {
+                *ErrorMessage = strdup(log_err_str.c_str());
+            }
+            else
+            {
+                *ErrorMessage = strdup("LLD linking failed with unknown error");
+            }
+        }
+        return result.retCode;
+    }
+
+    return 0;
 }
 
 LLVM_C_EXTERN_C_END
