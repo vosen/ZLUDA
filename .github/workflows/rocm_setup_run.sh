@@ -13,7 +13,9 @@ echo deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.c
 echo -e 'Package: *\nPin: release o=repo.radeon.com\nPin-Priority: 600' \
     | tee /etc/apt/preferences.d/rocm-pin-600
 DEBIAN_FRONTEND=noninteractive apt update -y
-DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends amdgpu-dkms hip-runtime-amd
+# rocm-smi-lib shouldn't be necessary, but somehow ptx tests started linking to it.
+# Result of Rust 1.90 linker change?
+DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends amdgpu-dkms hip-runtime-amd rocm-smi-lib
 echo 'export PATH="$PATH:/opt/rocm/bin"' |  tee /etc/profile.d/rocm.sh
 echo "/opt/rocm/lib" | tee /etc/ld.so.conf.d/rocm.conf
 ldconfig
