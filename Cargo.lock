@@ -2546,6 +2546,7 @@ dependencies = [
  "comgr",
  "cuda_macros",
  "cuda_types",
+ "fixedbitset",
  "half",
  "highs",
  "hip_runtime-sys",

@@ -1648,14 +1648,14 @@ fn compute_single_mode_insertions<T: Copy + Eq + std::fmt::Debug>(
     while let Some(current) = roots.pop() {
         for next in cfg.graph.neighbors_directed(current, Direction::Outgoing) {
             if current.index() == next.index() {
-                if propagation_state[current.index()].merge_with_self(kernel_ids.len())? {
+                if propagation_state[current.index()].merge_with_self()? {
                     roots.push(current);
                 }
             } else {
                 let [current_state, next_state] = propagation_state
                     .get_disjoint_mut([current.index(), next.index()])
                     .map_err(|_| error_unreachable())?;
-                if next_state.merge_from(current_state, kernel_ids.len())? {
+                if next_state.merge_from(current_state)? {
                     roots.push(next);
                 }
             }
@@ -1673,6 +1673,61 @@ enum RootExitValue<T> {
 enum ComputedValue<T> {
     Conflict,
     Value(Option<T>, FixedBitSet),
+}
+
+impl<T: PartialEq + Eq + Copy> ComputedValue<T> {
+    fn merge_with(self, from: Option<(Option<T>, &FixedBitSet)>) -> (Self, bool) {
+        fn merge_kernels(mut kernels: FixedBitSet, other: &FixedBitSet) -> FixedBitSet {
+            kernels.union_with(other);
+            kernels
+        }
+        match (self, from) {
+            (ComputedValue::Conflict, _) => (ComputedValue::Conflict, false),
+            (ComputedValue::Value(..), None) => (ComputedValue::Conflict, true),
+            (ComputedValue::Value(value, kernels), Some((other_value, other_kernels))) => {
+                match (value, other_value) {
+                    (Some(value), Some(other_value)) => {
+                        return if value != other_value {
+                            (ComputedValue::Conflict, true)
+                        } else {
+                            if &kernels != other_kernels {
+                                (
+                                    ComputedValue::Value(
+                                        Some(value),
+                                        merge_kernels(kernels, other_kernels),
+                                    ),
+                                    true,
+                                )
+                            } else {
+                                (ComputedValue::Value(Some(value), kernels), false)
+                            }
+                        }
+                    }
+                    (Some(value), None) => (
+                        ComputedValue::Value(Some(value), merge_kernels(kernels, other_kernels)),
+                        true,
+                    ),
+                    (None, Some(other_value)) => (
+                        ComputedValue::Value(
+                            Some(other_value),
+                            merge_kernels(kernels, other_kernels),
+                        ),
+                        true,
+                    ),
+                    (None, None) => {
+                        if &kernels != other_kernels {
+                            (
+                                ComputedValue::Value(None, merge_kernels(kernels, other_kernels)),
+                                true,
+                            )
+                        } else {
+                            (ComputedValue::Value(None, kernels), false)
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 enum PropagationState<T> {
@@ -1740,12 +1795,12 @@ impl<T: PartialEq + Eq + Copy> PropagationState<T> {
         }
     }
 
-    fn merge_with_self(&mut self, kernel_count: usize) -> Result<bool, TranslateError> {
+    fn merge_with_self(&mut self) -> Result<bool, TranslateError> {
         Ok(match self {
             PropagationState::Fixed { entry, exit } => match entry {
                 None => return Err(error_unreachable()),
                 Some(ComputedValue::Conflict) => false,
-                Some(ComputedValue::Value(value, kernels)) => match exit {
+                Some(ComputedValue::Value(value, _)) => match exit {
                     RootExitValue::Value(new_value) => {
                         if *value != Some(*new_value) {
                             *value = Some(*new_value);
@@ -1754,40 +1809,19 @@ impl<T: PartialEq + Eq + Copy> PropagationState<T> {
                             false
                         }
                     }
-                    RootExitValue::Entry(other_kernels) => {
-                        if kernels != other_kernels {
-                            kernels.grow(kernel_count);
-                            kernels.union_with(other_kernels);
-                            true
-                        } else {
-                            false
-                        }
-                    }
+                    RootExitValue::Entry(_) => return Err(error_unreachable()),
                 },
             },
             PropagationState::Propagated(_) => false,
         })
     }
 
-    fn merge_from(&mut self, from: &Self, kernel_count: usize) -> Result<bool, TranslateError> {
+    fn merge_from(&mut self, from: &Self) -> Result<bool, TranslateError> {
         let (self_ref, can_propagate) = self.get_entry()?;
         let this = mem::replace(self_ref, ComputedValue::Conflict);
-        let (this, is_different) = match (this, from.get_exit()) {
-            (ComputedValue::Conflict, _) => (ComputedValue::Conflict, false),
-            (ComputedValue::Value(..), None) => (ComputedValue::Conflict, can_propagate),
-            (ComputedValue::Value(value, mut kernels), Some((other_value, other_kernels))) => {
-                let new_value = value.or(other_value);
-                if new_value != value || &kernels != other_kernels {
-                    kernels.grow(kernel_count);
-                    kernels.union_with(other_kernels);
-                    (ComputedValue::Value(new_value, kernels), can_propagate)
-                } else {
-                    (ComputedValue::Value(value, kernels), false)
-                }
-            }
-        };
+        let (this, is_different) = this.merge_with(from.get_exit());
         *self_ref = this;
-        Ok(is_different)
+        Ok(is_different && can_propagate)
     }
 }
 
