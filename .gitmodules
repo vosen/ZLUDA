@@ -3,3 +3,7 @@
 	url = https://github.com/llvm/llvm-project
 	branch = release/17.x
 	shallow = true
+[submodule "ext/HiGHS"]
+	path = ext/HiGHS
+	url = https://github.com/ERGO-Code/HiGHS.git
+	shallow = true

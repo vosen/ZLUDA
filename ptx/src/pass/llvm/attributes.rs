@@ -12,8 +12,10 @@ pub(crate) fn run(
 
     emit_attribute(context, &module, "clock_rate", attributes.clock_rate)?;
 
-    if let Err(err) = module.verify() {
-        panic!("{:?}", err);
+    if cfg!(debug_assertions) {
+        if let Err(err) = module.verify() {
+            panic!("{:?}", err);
+        }
     }
 
     Ok(module)
