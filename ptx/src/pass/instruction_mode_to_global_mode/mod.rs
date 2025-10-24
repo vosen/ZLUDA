@@ -697,10 +697,10 @@ fn compute_minimal_mode_insertions(
     ),
     TranslateError,
 > {
-    let rounding_f32 = compute_single_mode_insertions(cfg, |node| node.rounding_f32)?;
-    let denormal_f32 = compute_single_mode_insertions(cfg, |node| node.denormal_f32)?;
-    let denormal_f16f64 = compute_single_mode_insertions(cfg, |node| node.denormal_f16f64)?;
-    let rounding_f16f64 = compute_single_mode_insertions(cfg, |node| node.rounding_f16f64)?;
+    let rounding_f32 = compute_single_mode_insertions(cfg, |node| node.rounding_f32, false)?;
+    let denormal_f32 = compute_single_mode_insertions(cfg, |node| node.denormal_f32, false)?;
+    let denormal_f16f64 = compute_single_mode_insertions(cfg, |node| node.denormal_f16f64, false)?;
+    let rounding_f16f64 = compute_single_mode_insertions(cfg, |node| node.rounding_f16f64, false)?;
     let denormal_f32 =
         optimize_mode_insertions::<DenormalMode, { DenormalMode::COUNT }>(denormal_f32)
             .map_err(|_| error_unreachable())?;
@@ -1619,6 +1619,7 @@ impl<'a> Drop for BasicBlockState<'a> {
 fn compute_single_mode_insertions<T: Copy + Eq + std::fmt::Debug>(
     cfg: &ControlFlowGraph,
     mut get_mode: impl FnMut(&Node) -> Mode<T>,
+    force_slow_mode_result: bool,
 ) -> Result<PartialModeInsertion<T>, TranslateError> {
     let kernel_ids = cfg
         .entry_points
@@ -1661,7 +1662,7 @@ fn compute_single_mode_insertions<T: Copy + Eq + std::fmt::Debug>(
             }
         }
     }
-    PartialModeInsertion::new(cfg, kernel_ids, propagation_state)
+    PartialModeInsertion::new(cfg, kernel_ids, propagation_state, force_slow_mode_result)
 }
 
 #[derive(Eq, PartialEq, Clone, Debug)]
@@ -1670,6 +1671,7 @@ enum RootExitValue<T> {
     Entry(FixedBitSet),
 }
 
+#[derive(Debug)]
 enum ComputedValue<T> {
     Conflict,
     Value(Option<T>, FixedBitSet),
@@ -1730,6 +1732,7 @@ impl<T: PartialEq + Eq + Copy> ComputedValue<T> {
     }
 }
 
+#[derive(Debug)]
 enum PropagationState<T> {
     // This basic block sets a mode, hence its mode at the exit is independent from its predecessors
     Fixed {
@@ -1832,11 +1835,12 @@ struct PartialModeInsertion<T> {
     kernel_propagation_lookup: Vec<SpirvWord>,
 }
 
-impl<T: PartialEq + Eq + Copy> PartialModeInsertion<T> {
+impl<T: PartialEq + Eq + Copy + std::fmt::Debug> PartialModeInsertion<T> {
     fn new(
         cfg: &ControlFlowGraph,
         kernel_map: FxHashMap<SpirvWord, usize>,
         propagation_state: Vec<PropagationState<T>>,
+        force_slow_mode_result: bool, // for testing purpose only
     ) -> Result<Self, TranslateError> {
         let mut reverse_kernel_map = vec![SpirvWord(u32::MAX); kernel_map.len()];
         for (kernel_id, kernel_index) in kernel_map {
@@ -1863,6 +1867,9 @@ impl<T: PartialEq + Eq + Copy> PartialModeInsertion<T> {
                 ..
             } = bb_state
             {
+                if kernels.is_empty() {
+                    continue;
+                }
                 let value = value.ok_or_else(error_unreachable)?;
                 let node_id = cfg
                     .graph
@@ -1886,13 +1893,16 @@ impl<T: PartialEq + Eq + Copy> PartialModeInsertion<T> {
                 }
             }
         }
+        let bb_maybe_insert_mode = match fast_mode_from_kernels {
+            Some(modes) if !force_slow_mode_result => {
+                PotentialModeInsertionsDueToKernelMode::QuickMode(modes)
+            }
+            _ => PotentialModeInsertionsDueToKernelMode::SlowMode(slow_mode_from_kernels),
+        };
         Ok(PartialModeInsertion {
             propagation_state,
             bb_must_insert_mode,
-            bb_maybe_insert_mode: match fast_mode_from_kernels {
-                Some(modes) => PotentialModeInsertionsDueToKernelMode::QuickMode(modes),
-                None => PotentialModeInsertionsDueToKernelMode::SlowMode(slow_mode_from_kernels),
-            },
+            bb_maybe_insert_mode,
             kernel_propagation_lookup: reverse_kernel_map,
         })
     }
