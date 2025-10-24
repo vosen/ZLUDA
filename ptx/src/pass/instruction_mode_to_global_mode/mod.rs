@@ -16,6 +16,7 @@ use petgraph::Graph;
 use ptx_parser as ast;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
+use std::collections::VecDeque;
 use std::iter;
 use std::mem;
 use std::ops::ControlFlow;
@@ -399,7 +400,7 @@ impl ResolvedControlFlowGraph {
             mode: &Mode<T>,
         ) -> Result<ResolvedMode<T>, TranslateError> {
             let entry = match mode.entry {
-                Some(ExtendedMode::Entry(kernel)) => {
+                Some(ExtendedMode::Kernel(kernel)) => {
                     Resolved::Value(modes.kernels.get(&kernel).copied().unwrap_or_default())
                 }
                 Some(ExtendedMode::BasicBlock(bb)) => Resolved::Value(bb),
@@ -443,7 +444,7 @@ impl ResolvedControlFlowGraph {
             };
             let exit = match mode.entry {
                 Some(ExtendedMode::BasicBlock(bb)) => Resolved::Value(bb),
-                Some(ExtendedMode::Entry(_)) | None => entry,
+                Some(ExtendedMode::Kernel(_)) | None => entry,
             };
             Ok(ResolvedMode { entry, exit })
         }
@@ -556,8 +557,8 @@ impl<T: Eq + PartialEq> Mode<T> {
 
     fn entry(label: SpirvWord) -> Self {
         Self {
-            entry: Some(ExtendedMode::Entry(label)),
-            exit: Some(ExtendedMode::Entry(label)),
+            entry: Some(ExtendedMode::Kernel(label)),
+            exit: Some(ExtendedMode::Kernel(label)),
         }
     }
 }
@@ -1630,34 +1631,36 @@ fn compute_single_mode_insertions<T: Copy + Eq + std::fmt::Debug>(
     let mut propagation_state = (0..cfg.graph.node_count())
         .map(|_| PropagationState::<T>::empty())
         .collect::<Vec<_>>();
-    let mut roots = cfg
-        .graph
-        .node_references()
-        .filter_map(|(index, node)| {
-            let mode = get_mode(node);
-            match (mode.entry, mode.exit) {
-                (Some(entry_mode), Some(exit_mode)) => {
-                    propagation_state[index.index()] =
-                        PropagationState::from_mode(&kernel_ids, entry_mode, exit_mode);
-                    Some(Ok(index))
+    let mut roots = VecDeque::new();
+    for (index, node) in cfg.graph.node_references() {
+        let mode = get_mode(node);
+        match (mode.entry, mode.exit) {
+            (Some(entry_mode), Some(exit_mode)) => {
+                let is_kernel = matches!(entry_mode, ExtendedMode::Kernel(_));
+                propagation_state[index.index()] =
+                    PropagationState::from_mode(&kernel_ids, entry_mode, exit_mode);
+                if is_kernel {
+                    roots.push_back(index);
+                } else {
+                    roots.push_front(index);
                 }
-                (None, None) => None,
-                _ => Some(Err(error_unreachable())),
             }
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    while let Some(current) = roots.pop() {
+            (None, None) => {}
+            _ => return Err(error_unreachable()),
+        }
+    }
+    while let Some(current) = roots.pop_back() {
         for next in cfg.graph.neighbors_directed(current, Direction::Outgoing) {
             if current.index() == next.index() {
                 if propagation_state[current.index()].merge_with_self()? {
-                    roots.push(current);
+                    roots.push_front(current);
                 }
             } else {
                 let [current_state, next_state] = propagation_state
                     .get_disjoint_mut([current.index(), next.index()])
                     .map_err(|_| error_unreachable())?;
                 if next_state.merge_from(current_state)? {
-                    roots.push(next);
+                    roots.push_front(next);
                 }
             }
         }
@@ -1787,7 +1790,7 @@ impl<T: PartialEq + Eq + Copy> PropagationState<T> {
                 },
                 _ => unreachable!(),
             },
-            ExtendedMode::Entry(id) => {
+            ExtendedMode::Kernel(id) => {
                 let mut bit_set = FixedBitSet::with_capacity(kernel_map.len());
                 bit_set.set(kernel_map[&id], true);
                 PropagationState::Fixed {
@@ -2056,7 +2059,7 @@ struct MandatoryModeInsertions<T> {
 #[derive(Debug)]
 enum ExtendedMode<T: Eq + PartialEq> {
     BasicBlock(T),
-    Entry(SpirvWord),
+    Kernel(SpirvWord),
 }
 
 fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
