@@ -633,8 +633,7 @@ pub(crate) fn run<'input>(
         rounding_f32,
         rounding_f16f64,
     )?;
-    let result = apply_global_mode_controls(directives, temp);
-    result
+    apply_global_mode_controls(directives, temp)
 }
 
 // For every basic block this pass computes:
