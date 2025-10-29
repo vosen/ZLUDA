@@ -399,7 +399,6 @@ impl std::fmt::Debug for ResolvedControlFlowGraph {
     }
 }
 
-
 impl ResolvedControlFlowGraph {
     // This function merges previously computed information about conflicts and
     // mandatory insertion points
@@ -423,13 +422,23 @@ impl ResolvedControlFlowGraph {
                 None => match &modes.propagation_state[node.index()] {
                     PropagationState::Fixed { entry, .. } => match entry {
                         None => return Err(error_unreachable()),
-                        Some(ComputedValue::Conflict) => Resolved::Conflict,
+                        Some(ComputedValue::Conflict) => {
+                            if node.index() == 105 {
+                                eprintln!("CONFLICT1");
+                            }
+                            Resolved::Conflict
+                        }
                         Some(ComputedValue::Value(value, _)) => {
                             Resolved::Value(value.ok_or_else(error_unreachable)?)
                         }
                     },
                     PropagationState::Propagated(computed_value) => match computed_value {
-                        ComputedValue::Conflict => Resolved::Conflict,
+                        ComputedValue::Conflict => {
+                            if node.index() == 105 {
+                                eprintln!("CONFLICT2");
+                            }
+                            Resolved::Conflict
+                        }
                         ComputedValue::Value(value, kernels) => match value {
                             Some(value) => Resolved::Value(*value),
                             None => {
@@ -451,7 +460,12 @@ impl ResolvedControlFlowGraph {
                                 match mode {
                                     ControlFlow::Continue(Some(value)) => Resolved::Value(value),
                                     ControlFlow::Continue(None) => return Err(error_unreachable()),
-                                    ControlFlow::Break(()) => Resolved::Conflict,
+                                    ControlFlow::Break(()) => {
+                                        if node.index() == 105 {
+                                            eprintln!("CONFLICT3");
+                                        }
+                                        Resolved::Conflict
+                                    }
                                 }
                             }
                         },
@@ -473,6 +487,9 @@ impl ResolvedControlFlowGraph {
             node: &Node,
         ) -> Result<ResolvedNode, TranslateError> {
             let denormal_f32 = resolve_mode(f32_denormal_modes, index, &node.denormal_f32)?;
+            if index.index() == 105 {
+                dbg!(&denormal_f32);
+            }
             let denormal_f16f64 =
                 resolve_mode(f16f64_denormal_modes, index, &node.denormal_f16f64)?;
             let rounding_f32 = resolve_mode(f32_rounding_modes, index, &node.rounding_f32)?;
@@ -579,8 +596,7 @@ impl<T: Eq + PartialEq> Mode<T> {
     }
 }
 
-#[derive(Debug)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 struct ResolvedMode<T> {
     entry: Resolved<T>,
     exit: Resolved<T>,
@@ -684,7 +700,7 @@ fn compute_full_mode_insertions(
         &rounding_f32,
         &rounding_f16f64,
     )?;
-    dbg!(&cfg);
+    dbg!(cfg.graph.node_weight(NodeIndex::new(105)));
     join_modes(
         flat_resolver,
         directives,
