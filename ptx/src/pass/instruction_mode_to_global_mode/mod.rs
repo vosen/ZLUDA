@@ -385,6 +385,21 @@ struct ResolvedControlFlowGraph {
     graph: Graph<ResolvedNode, ()>,
 }
 
+impl std::fmt::Debug for ResolvedControlFlowGraph {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut basic_blocks = self.basic_blocks.iter().collect::<Vec<_>>();
+        basic_blocks.sort_unstable_by_key(|k| *k);
+        let mut functions_rets = self.functions_rets.iter().collect::<Vec<_>>();
+        functions_rets.sort_unstable_by_key(|(k, _)| *k);
+        f.debug_struct("ResolvedControlFlowGraph")
+            .field("basic_blocks", &basic_blocks)
+            .field("functions_rets", &functions_rets)
+            .field("propagation_state", &self.graph)
+            .finish()
+    }
+}
+
+
 impl ResolvedControlFlowGraph {
     // This function merges previously computed information about conflicts and
     // mandatory insertion points
@@ -564,6 +579,7 @@ impl<T: Eq + PartialEq> Mode<T> {
     }
 }
 
+#[derive(Debug)]
 #[derive(Copy, Clone)]
 struct ResolvedMode<T> {
     entry: Resolved<T>,
@@ -580,6 +596,7 @@ struct Node {
     rounding_f16f64: Mode<RoundingMode>,
 }
 
+#[derive(Debug)]
 struct ResolvedNode {
     label: SpirvWord,
     denormal_f32: ResolvedMode<DenormalMode>,
@@ -625,7 +642,6 @@ pub(crate) fn run<'input>(
     let cfg = create_control_flow_graph(&directives)?;
     let (denormal_f32, denormal_f16f64, rounding_f32, rounding_f16f64) =
         compute_minimal_mode_insertions(&cfg)?;
-    dbg!(&denormal_f32);
     let temp = compute_full_mode_insertions(
         flat_resolver,
         &directives,
@@ -668,6 +684,7 @@ fn compute_full_mode_insertions(
         &rounding_f32,
         &rounding_f16f64,
     )?;
+    dbg!(&cfg);
     join_modes(
         flat_resolver,
         directives,
@@ -2069,7 +2086,7 @@ struct MandatoryModeInsertions<T> {
     kernel_propagation_lookup: Vec<SpirvWord>,
 }
 
-impl<T:std::fmt::Debug> std::fmt::Debug for MandatoryModeInsertions<T> {
+impl<T: std::fmt::Debug> std::fmt::Debug for MandatoryModeInsertions<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let mut basic_blocks = self.basic_blocks.iter().collect::<Vec<_>>();
         basic_blocks.sort_unstable_by_key(|k| *k);
