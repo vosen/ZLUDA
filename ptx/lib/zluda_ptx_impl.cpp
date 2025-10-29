@@ -15,6 +15,9 @@
 
 typedef _Float16 half16 __attribute__((ext_vector_type(16)));
 typedef float    float8 __attribute__((ext_vector_type(8)));
+typedef __bf16    bf16x2 __attribute__((ext_vector_type(2)));
+typedef __bf16    bf16x4 __attribute__((ext_vector_type(4)));
+typedef __bf16    bf16x8 __attribute__((ext_vector_type(8)));
 
 #define FUNC(NAME) __device__ __attribute__((retain)) __zluda_ptx_impl_##NAME
 #define FUNC_CALL(NAME) __zluda_ptx_impl_##NAME
@@ -779,7 +782,7 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
         return d_out;
     }
 
-    float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg) {
+    float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32_2)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg) {
         // Reshuffle from Nvidia-like register layout to AMD layout:
         half16  aFrag = shuffle_a(a_reg);
         half16  bFrag = shuffle_b(b_reg);
@@ -862,5 +865,103 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
         // to write SSA passes
         // Use https://github.com/ROCm/llvm-project/blob/99a81d16b9d811cadd420190bed16981a0a57bc6/llvm/lib/Transforms/Utils/AMDGPUEmitPrintf.cpp#L426
         return -1;
+    }
+
+    float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg) {
+        bf16x8 a_frag = std::bit_cast<bf16x8>(a_reg);
+        float a0 = float(a_frag[0]);
+        float a1 = float(a_frag[1]);
+        float a2 = float(a_frag[2]);
+        float a3 = float(a_frag[3]);
+        float a4 = float(a_frag[4]);
+        float a5 = float(a_frag[5]);
+        float a6 = float(a_frag[6]);
+        float a7 = float(a_frag[7]);
+        bf16x4 b_frag = std::bit_cast<bf16x4>(b_reg);
+        float b0 = float(b_frag[0]);
+        float b1 = float(b_frag[1]);
+        float b2 = float(b_frag[2]);
+        float b3 = float(b_frag[3]);
+        float c0 = c_reg[0];
+        float c1 = c_reg[1];
+        float c2 = c_reg[2];
+        float c3 = c_reg[3];
+        float d0 = std::fma(a0, b0, c0);
+        d0 = std::fma(a1, b1, d0);
+        {
+            uint32_t a0_copy = std::bit_cast<uint32_t>(a0);
+            uint32_t a1_copy = std::bit_cast<uint32_t>(a1);
+            uint32_t b0_copy = std::bit_cast<uint32_t>(b0);
+            uint32_t b1_copy = std::bit_cast<uint32_t>(b1);
+            float a0 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a0_copy, 1));
+            float a1 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a1_copy, 1));
+            float b0 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b0_copy, 1));
+            float b1 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b1_copy, 1));
+            d0 = std::fma(a0, b0, d0);
+            d0 = std::fma(a1, b1, d0);
+        }
+        {
+            uint32_t a0_copy = std::bit_cast<uint32_t>(a0);
+            uint32_t a1_copy = std::bit_cast<uint32_t>(a1);
+            uint32_t b0_copy = std::bit_cast<uint32_t>(b0);
+            uint32_t b1_copy = std::bit_cast<uint32_t>(b1);
+            float a0 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a0_copy, 2));
+            float a1 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a1_copy, 2));
+            float b0 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b0_copy, 2));
+            float b1 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b1_copy, 2));
+            d0 = std::fma(a0, b0, d0);
+            d0 = std::fma(a1, b1, d0);
+        }
+        {
+            uint32_t a0_copy = std::bit_cast<uint32_t>(a0);
+            uint32_t a1_copy = std::bit_cast<uint32_t>(a1);
+            uint32_t b0_copy = std::bit_cast<uint32_t>(b0);
+            uint32_t b1_copy = std::bit_cast<uint32_t>(b1);
+            float a0 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a0_copy, 3));
+            float a1 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a1_copy, 3));
+            float b0 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b0_copy, 3));
+            float b1 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b1_copy, 3));
+            d0 = std::fma(a0, b0, d0);
+            d0 = std::fma(a1, b1, d0);
+        }
+        d0 = std::fma(a4, b2, d0);
+        d0 = std::fma(a5, b3, d0);
+        {
+            uint32_t a4_copy = std::bit_cast<uint32_t>(a4);
+            uint32_t a5_copy = std::bit_cast<uint32_t>(a5);
+            uint32_t b2_copy = std::bit_cast<uint32_t>(b2);
+            uint32_t b3_copy = std::bit_cast<uint32_t>(b3);
+            float a4 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a4_copy, 1));
+            float a5 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a5_copy, 1));
+            float b2 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b2_copy, 1));
+            float b3 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b3_copy, 1));
+            d0 = std::fma(a4, b2, d0);
+            d0 = std::fma(a5, b3, d0);
+        }
+        {
+            uint32_t a4_copy = std::bit_cast<uint32_t>(a4);
+            uint32_t a5_copy = std::bit_cast<uint32_t>(a5);
+            uint32_t b2_copy = std::bit_cast<uint32_t>(b2);
+            uint32_t b3_copy = std::bit_cast<uint32_t>(b3);
+            float a4 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a4_copy, 2));
+            float a5 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a5_copy, 2));
+            float b2 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b2_copy, 2));
+            float b3 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b3_copy, 2));
+            d0 = std::fma(a4, b2, d0);
+            d0 = std::fma(a5, b3, d0);
+        }
+        {
+            uint32_t a4_copy = std::bit_cast<uint32_t>(a4);
+            uint32_t a5_copy = std::bit_cast<uint32_t>(a5);
+            uint32_t b2_copy = std::bit_cast<uint32_t>(b2);
+            uint32_t b3_copy = std::bit_cast<uint32_t>(b3);
+            float a4 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a4_copy, 3));
+            float a5 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a5_copy, 3));
+            float b2 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b2_copy, 3));
+            float b3 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b3_copy, 3));
+            d0 = std::fma(a4, b2, d0);
+            d0 = std::fma(a5, b3, d0);
+        }
+        return float4::Native_vec_ { d0, c1, c2, c3 };
     }
 }
