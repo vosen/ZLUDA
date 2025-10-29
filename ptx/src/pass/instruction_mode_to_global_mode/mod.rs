@@ -625,6 +625,7 @@ pub(crate) fn run<'input>(
     let cfg = create_control_flow_graph(&directives)?;
     let (denormal_f32, denormal_f16f64, rounding_f32, rounding_f16f64) =
         compute_minimal_mode_insertions(&cfg)?;
+    dbg!(&denormal_f32);
     let temp = compute_full_mode_insertions(
         flat_resolver,
         &directives,
@@ -634,7 +635,6 @@ pub(crate) fn run<'input>(
         rounding_f32,
         rounding_f16f64,
     )?;
-    dbg!(&temp);
     apply_global_mode_controls(directives, temp)
 }
 
@@ -898,10 +898,22 @@ fn join_modes(
     })
 }
 
-#[derive(Debug)]
 struct FullModeInsertion {
     basic_blocks: FxHashMap<SpirvWord, FullBasicBlockEntryState>,
     functions_exit_modes: FxHashMap<SpirvWord, ResolvedInstructionModes>,
+}
+
+impl std::fmt::Debug for FullModeInsertion {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut basic_blocks = self.basic_blocks.iter().collect::<Vec<_>>();
+        basic_blocks.sort_unstable_by_key(|(k, _)| *k);
+        let mut functions_exit_modes = self.functions_exit_modes.iter().collect::<Vec<_>>();
+        functions_exit_modes.sort_unstable_by_key(|(k, _)| *k);
+        f.debug_struct("FullModeInsertion")
+            .field("basic_blocks", &basic_blocks)
+            .field("functions_exit_modes", &functions_exit_modes)
+            .finish()
+    }
 }
 
 #[derive(Debug)]
@@ -911,17 +923,13 @@ struct FullBasicBlockEntryState {
     rounding: BasicBlockEntryState<RoundingMode>,
 }
 
-
-#[derive(Debug)]
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 struct BasicBlockEntryState<T> {
     prologue: Option<SpirvWord>,
     twin_mode: TwinMode<Resolved<T>>,
 }
 
-
-#[derive(Debug)]
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 struct TwinMode<T> {
     f32: T,
     f16f64: T,
@@ -1299,8 +1307,7 @@ fn redirect_jump_impl(
     Ok(())
 }
 
-#[derive(Debug)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 enum Resolved<T> {
     Conflict,
     Value(T),
@@ -2060,6 +2067,21 @@ struct MandatoryModeInsertions<T> {
     kernels: FxHashMap<SpirvWord, T>,
     propagation_state: Vec<PropagationState<T>>,
     kernel_propagation_lookup: Vec<SpirvWord>,
+}
+
+impl<T:std::fmt::Debug> std::fmt::Debug for MandatoryModeInsertions<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut basic_blocks = self.basic_blocks.iter().collect::<Vec<_>>();
+        basic_blocks.sort_unstable_by_key(|k| *k);
+        let mut kernels = self.kernels.iter().collect::<Vec<_>>();
+        kernels.sort_unstable_by_key(|(k, _)| *k);
+        f.debug_struct("MandatoryModeInsertions")
+            .field("basic_blocks", &basic_blocks)
+            .field("kernels", &kernels)
+            .field("propagation_state", &self.propagation_state)
+            .field("kernel_propagation_lookup", &self.kernel_propagation_lookup)
+            .finish()
+    }
 }
 
 #[derive(Eq, PartialEq, Clone, Copy)]
