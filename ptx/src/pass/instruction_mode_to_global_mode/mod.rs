@@ -108,6 +108,7 @@ struct InstructionModes {
     rounding_f16f64: Option<RoundingMode>,
 }
 
+#[derive(Debug)]
 struct ResolvedInstructionModes {
     denormal_f32: Resolved<bool>,
     denormal_f16f64: Resolved<bool>,
@@ -633,6 +634,7 @@ pub(crate) fn run<'input>(
         rounding_f32,
         rounding_f16f64,
     )?;
+    dbg!(&temp);
     apply_global_mode_controls(directives, temp)
 }
 
@@ -896,23 +898,29 @@ fn join_modes(
     })
 }
 
+#[derive(Debug)]
 struct FullModeInsertion {
     basic_blocks: FxHashMap<SpirvWord, FullBasicBlockEntryState>,
     functions_exit_modes: FxHashMap<SpirvWord, ResolvedInstructionModes>,
 }
 
+#[derive(Debug)]
 struct FullBasicBlockEntryState {
     dual_prologue: Option<SpirvWord>,
     denormal: BasicBlockEntryState<DenormalMode>,
     rounding: BasicBlockEntryState<RoundingMode>,
 }
 
+
+#[derive(Debug)]
 #[derive(Clone, Copy)]
 struct BasicBlockEntryState<T> {
     prologue: Option<SpirvWord>,
     twin_mode: TwinMode<Resolved<T>>,
 }
 
+
+#[derive(Debug)]
 #[derive(Clone, Copy)]
 struct TwinMode<T> {
     f32: T,
@@ -1291,6 +1299,7 @@ fn redirect_jump_impl(
     Ok(())
 }
 
+#[derive(Debug)]
 #[derive(Copy, Clone)]
 enum Resolved<T> {
     Conflict,
