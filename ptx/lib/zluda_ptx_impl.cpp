@@ -893,10 +893,10 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
             uint32_t a1_copy = std::bit_cast<uint32_t>(a1);
             uint32_t b0_copy = std::bit_cast<uint32_t>(b0);
             uint32_t b1_copy = std::bit_cast<uint32_t>(b1);
-            float a0 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a0_copy, 1));
-            float a1 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a1_copy, 1));
-            float b0 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b0_copy, 1));
-            float b1 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b1_copy, 1));
+            float a0 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a0_copy, 0b100'111'110'101'000'011'010'001));
+            float a1 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a1_copy, 0b100'111'110'101'000'011'010'001));
+            float b0 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b0_copy, 0b100'111'110'101'000'011'010'001));
+            float b1 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b1_copy, 0b100'111'110'101'000'011'010'001));
             d0 = std::fma(a0, b0, d0);
             d0 = std::fma(a1, b1, d0);
         }
