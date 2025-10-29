@@ -394,7 +394,7 @@ impl std::fmt::Debug for ResolvedControlFlowGraph {
         f.debug_struct("ResolvedControlFlowGraph")
             .field("basic_blocks", &basic_blocks)
             .field("functions_rets", &functions_rets)
-            .field("propagation_state", &self.graph)
+            .field("graph", &self.graph)
             .finish()
     }
 }
