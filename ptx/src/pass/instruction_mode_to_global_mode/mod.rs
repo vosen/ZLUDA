@@ -19,11 +19,12 @@ use rustc_hash::FxHashSet;
 use std::collections::VecDeque;
 use std::iter;
 use std::mem;
-use strum::EnumCount;
-use strum_macros::{EnumCount, VariantArray};
+use strum::VariantArray;
 use unwrap_or::unwrap_some_or;
 
-#[derive(Default, PartialEq, Eq, Clone, Copy, Debug, VariantArray, EnumCount)]
+#[derive(
+    Default, PartialEq, Eq, Clone, Copy, Debug, strum_macros::VariantArray, strum_macros::EnumCount,
+)]
 enum DenormalMode {
     #[default]
     FlushToZero,
@@ -59,7 +60,9 @@ impl Into<usize> for DenormalMode {
     }
 }
 
-#[derive(Default, PartialEq, Eq, Clone, Copy, Debug, VariantArray, EnumCount)]
+#[derive(
+    Default, PartialEq, Eq, Clone, Copy, Debug, strum_macros::VariantArray, strum_macros::EnumCount,
+)]
 enum RoundingMode {
     #[default]
     NearestEven,
@@ -393,7 +396,7 @@ impl ResolvedControlFlowGraph {
         f32_rounding_modes: &MandatoryModeInsertions<RoundingMode>,
         f16f64_rounding_modes: &MandatoryModeInsertions<RoundingMode>,
     ) -> Result<Self, TranslateError> {
-        fn resolve_mode<T: Eq + PartialEq + Copy + Default + strum::VariantArray + Into<usize>>(
+        fn resolve_mode<T: Eq + PartialEq + Copy + Default + VariantArray + Into<usize>>(
             modes: &MandatoryModeInsertions<T>,
             node: NodeIndex,
             mode: &Mode<T>,
@@ -516,7 +519,7 @@ impl ResolvedControlFlowGraph {
     }
 }
 
-fn resolve_fast<T: Copy + strum::VariantArray + Into<usize>>(
+fn resolve_fast<T: Copy + VariantArray + Into<usize>>(
     modes: &MandatoryModeInsertions<T>,
     value: &Option<T>,
     kernels: &FixedBitSet,
@@ -541,7 +544,7 @@ fn resolve_fast<T: Copy + strum::VariantArray + Into<usize>>(
     })
 }
 
-fn from_kernel_modes_overlap<T: Copy + strum::VariantArray + Into<usize>>(
+fn from_kernel_modes_overlap<T: Copy + VariantArray + Into<usize>>(
     input_kernels: &FixedBitSet,
     modes: &MandatoryModeInsertions<T>,
 ) -> Result<Resolved<T>, TranslateError> {
@@ -719,6 +722,7 @@ fn compute_minimal_mode_insertions(
     ),
     TranslateError,
 > {
+    use strum::EnumCount;
     let rounding_f32 = compute_single_mode_insertions(cfg, |node| node.rounding_f32, false)?;
     let denormal_f32 = compute_single_mode_insertions(cfg, |node| node.denormal_f32, false)?;
     let denormal_f16f64 = compute_single_mode_insertions(cfg, |node| node.denormal_f16f64, false)?;
@@ -1638,7 +1642,7 @@ impl<'a> Drop for BasicBlockState<'a> {
 // that have an exit value and propagate it to all the outgoing neighbors until
 // there's nothing more to propagate. While it sounds expensive, in practice it
 // converges quickly enough
-fn compute_single_mode_insertions<T: Copy + Eq + strum::VariantArray + Into<usize>>(
+fn compute_single_mode_insertions<T: Copy + Eq + VariantArray + Into<usize>>(
     cfg: &ControlFlowGraph,
     mut get_mode: impl FnMut(&Node) -> Mode<T>,
     force_slow_mode_result: bool,
@@ -1856,7 +1860,7 @@ struct PartialModeInsertion<T> {
     propagation_state: Vec<PropagationState<T>>,
 }
 
-impl<T: PartialEq + Eq + Copy + strum::VariantArray + Into<usize>> PartialModeInsertion<T> {
+impl<T: PartialEq + Eq + Copy + VariantArray + Into<usize>> PartialModeInsertion<T> {
     fn new(
         cfg: &ControlFlowGraph,
         kernel_map: FxHashMap<SpirvWord, usize>,
@@ -1931,7 +1935,7 @@ impl<T: PartialEq + Eq + Copy + strum::VariantArray + Into<usize>> PartialModeIn
     }
 }
 
-fn fast_modes_get_bitset<T: Copy + strum::VariantArray + Into<usize>>(
+fn fast_modes_get_bitset<T: Copy + VariantArray + Into<usize>>(
     kernel_map: &FxHashMap<SpirvWord, usize>,
     modes: &FxHashMap<SpirvWord, T>,
 ) -> Vec<FixedBitSet> {
@@ -1995,13 +1999,7 @@ enum PotentialModeInsertionsDueToKernelMode<T> {
 
 // Only returns kernel mode insertions if a kernel is relevant to the optimization problem
 fn optimize_mode_insertions<
-    T: Copy
-        + Into<usize>
-        + strum::VariantArray
-        + strum::EnumCount
-        + Into<usize>
-        + std::fmt::Debug
-        + Default,
+    T: Copy + Into<usize> + VariantArray + Into<usize> + Default,
     const N: usize,
 >(
     partial: PartialModeInsertion<T>,
