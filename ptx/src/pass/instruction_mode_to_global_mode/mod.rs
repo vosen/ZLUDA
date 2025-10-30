@@ -1642,7 +1642,7 @@ impl<'a> Drop for BasicBlockState<'a> {
 // that have an exit value and propagate it to all the outgoing neighbors until
 // there's nothing more to propagate. While it sounds expensive, in practice it
 // converges quickly enough
-fn compute_single_mode_insertions<T: Copy + Eq + VariantArray + Into<usize>>(
+fn compute_single_mode_insertions<T: Copy + Eq + VariantArray + Into<usize> + Default>(
     cfg: &ControlFlowGraph,
     mut get_mode: impl FnMut(&Node) -> Mode<T>,
     force_slow_mode_result: bool,
@@ -1860,7 +1860,7 @@ struct PartialModeInsertion<T> {
     propagation_state: Vec<PropagationState<T>>,
 }
 
-impl<T: PartialEq + Eq + Copy + VariantArray + Into<usize>> PartialModeInsertion<T> {
+impl<T: PartialEq + Eq + Copy + VariantArray + Into<usize> + Default> PartialModeInsertion<T> {
     fn new(
         cfg: &ControlFlowGraph,
         kernel_map: FxHashMap<SpirvWord, usize>,
@@ -1935,13 +1935,14 @@ impl<T: PartialEq + Eq + Copy + VariantArray + Into<usize>> PartialModeInsertion
     }
 }
 
-fn fast_modes_get_bitset<T: Copy + VariantArray + Into<usize>>(
+fn fast_modes_get_bitset<T: Default + Copy + VariantArray + Into<usize>>(
     kernel_map: &FxHashMap<SpirvWord, usize>,
     modes: &FxHashMap<SpirvWord, T>,
 ) -> Vec<FixedBitSet> {
     let mut result = vec![FixedBitSet::with_capacity(kernel_map.len()); T::VARIANTS.len()];
-    for (kernel_id, mode) in modes.iter() {
-        result[(*mode).into()].set(kernel_map[kernel_id], true);
+    for (kernel, kernel_index) in kernel_map.iter() {
+        let mode = modes.get(kernel).copied().unwrap_or_default();
+        result[mode.into()].set(*kernel_index, true);
     }
     result
 }
