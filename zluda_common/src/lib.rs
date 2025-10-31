@@ -158,6 +158,8 @@ from_cuda_nop!(
     *const f32,
     *mut f32,
     *const ::core::ffi::c_void,
+    *const *const ::core::ffi::c_void,
+    *const *mut ::core::ffi::c_void,
     *const ::core::ffi::c_char,
     *mut ::core::ffi::c_void,
     *mut *mut ::core::ffi::c_void,
