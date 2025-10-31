@@ -1710,6 +1710,20 @@ impl<T: PartialEq + Eq + Copy> ComputedValue<T> {
             kernels.union_with(other);
             kernels
         }
+        fn merge_checked<T>(
+            value: Option<T>,
+            kernels: FixedBitSet,
+            other_kernels: &FixedBitSet,
+        ) -> (ComputedValue<T>, bool) {
+            if &kernels != other_kernels {
+                (
+                    ComputedValue::Value(value, merge_kernels(kernels, other_kernels)),
+                    true,
+                )
+            } else {
+                (ComputedValue::Value(value, kernels), false)
+            }
+        }
         match (self, from) {
             (ComputedValue::Conflict, _) => (ComputedValue::Conflict, false),
             (ComputedValue::Value(..), None) => (ComputedValue::Conflict, true),
@@ -1719,23 +1733,10 @@ impl<T: PartialEq + Eq + Copy> ComputedValue<T> {
                         return if value != other_value {
                             (ComputedValue::Conflict, true)
                         } else {
-                            if &kernels != other_kernels {
-                                (
-                                    ComputedValue::Value(
-                                        Some(value),
-                                        merge_kernels(kernels, other_kernels),
-                                    ),
-                                    true,
-                                )
-                            } else {
-                                (ComputedValue::Value(Some(value), kernels), false)
-                            }
+                            merge_checked(Some(value), kernels, other_kernels)
                         }
                     }
-                    (Some(value), None) => (
-                        ComputedValue::Value(Some(value), merge_kernels(kernels, other_kernels)),
-                        true,
-                    ),
+                    (Some(value), None) => merge_checked(Some(value), kernels, other_kernels),
                     (None, Some(other_value)) => (
                         ComputedValue::Value(
                             Some(other_value),
@@ -1743,16 +1744,7 @@ impl<T: PartialEq + Eq + Copy> ComputedValue<T> {
                         ),
                         true,
                     ),
-                    (None, None) => {
-                        if &kernels != other_kernels {
-                            (
-                                ComputedValue::Value(None, merge_kernels(kernels, other_kernels)),
-                                true,
-                            )
-                        } else {
-                            (ComputedValue::Value(None, kernels), false)
-                        }
-                    }
+                    (None, None) => merge_checked(None, kernels, other_kernels),
                 }
             }
         }
@@ -1830,14 +1822,20 @@ impl<T: PartialEq + Eq + Copy> PropagationState<T> {
                 None => return Err(error_unreachable()),
                 Some(ComputedValue::Conflict) => false,
                 Some(ComputedValue::Value(value, _)) => match exit {
-                    RootExitValue::Value(new_value) => {
-                        if *value != Some(*new_value) {
+                    RootExitValue::Value(new_value) => match value {
+                        None => {
                             *value = Some(*new_value);
                             true
-                        } else {
-                            false
                         }
-                    }
+                        Some(old_value) => {
+                            if *old_value != *new_value {
+                                *entry = Some(ComputedValue::Conflict);
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                    },
                     RootExitValue::Entry(_) => return Err(error_unreachable()),
                 },
             },
