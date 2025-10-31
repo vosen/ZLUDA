@@ -31,8 +31,8 @@ fn unwrap_slow_mode<T>(
     x: &PotentialModeInsertionsDueToKernelMode<T>,
 ) -> &FxHashMap<SpirvWord, (T, FxHashSet<SpirvWord>)> {
     match x {
-        PotentialModeInsertionsDueToKernelMode::QuickMode(_) => panic!(),
-        PotentialModeInsertionsDueToKernelMode::SlowMode(x) => x,
+        PotentialModeInsertionsDueToKernelMode::QuickMode(..) => panic!(),
+        PotentialModeInsertionsDueToKernelMode::SlowMode(x, _) => x,
     }
 }
 
