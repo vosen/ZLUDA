@@ -868,6 +868,8 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
     }
 
     float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg) {
+        uint8_t laneid = uint8_t(FUNC_CALL(sreg_laneid)());
+        uint8_t quad_index = laneid % 4;
         bf16x8 a_frag = std::bit_cast<bf16x8>(a_reg);
         float a0 = float(a_frag[0]);
         float a1 = float(a_frag[1]);
@@ -886,79 +888,101 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
         float c1 = c_reg[1];
         float c2 = c_reg[2];
         float c3 = c_reg[3];
-        float d0 = std::fma(a0, b0, c0);
-        d0 = std::fma(a1, b1, d0);
+        uint8_t column_start = quad_index * 8;
+        float d0;
         {
-            uint32_t a0_copy = std::bit_cast<uint32_t>(a0);
-            uint32_t a1_copy = std::bit_cast<uint32_t>(a1);
-            uint32_t b0_copy = std::bit_cast<uint32_t>(b0);
-            uint32_t b1_copy = std::bit_cast<uint32_t>(b1);
-            float a0 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a0_copy, 0b100'111'110'101'000'011'010'001));
-            float a1 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a1_copy, 0b100'111'110'101'000'011'010'001));
-            float b0 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b0_copy, 0b100'111'110'101'000'011'010'001));
-            float b1 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b1_copy, 0b100'111'110'101'000'011'010'001));
+            int32_t b0_copy = std::bit_cast<int32_t>(b0);
+            int32_t b1_copy = std::bit_cast<int32_t>(b1);
+            uint8_t quad_source = (laneid + 0) % 4;
+            float b0 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b0_copy));
+            float b1 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b1_copy));
+            d0 = std::fma(a0, b0, c0);
+            d0 = std::fma(a1, b1, d0);
+        }
+        {
+            int32_t a0_copy = std::bit_cast<int32_t>(a0);
+            int32_t a1_copy = std::bit_cast<int32_t>(a1);
+            int32_t b0_copy = std::bit_cast<int32_t>(b0);
+            int32_t b1_copy = std::bit_cast<int32_t>(b1);
+            float a0 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(a0_copy, 0b00'11'10'01, 0xf, 0xf,1));
+            float a1 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(a1_copy, 0b00'11'10'01, 0xf, 0xf,1));
+            uint8_t quad_source = (laneid + 1) % 4;
+            float b0 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b0_copy));
+            float b1 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b1_copy));
             d0 = std::fma(a0, b0, d0);
             d0 = std::fma(a1, b1, d0);
         }
         {
-            uint32_t a0_copy = std::bit_cast<uint32_t>(a0);
-            uint32_t a1_copy = std::bit_cast<uint32_t>(a1);
-            uint32_t b0_copy = std::bit_cast<uint32_t>(b0);
-            uint32_t b1_copy = std::bit_cast<uint32_t>(b1);
-            float a0 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a0_copy, 2));
-            float a1 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a1_copy, 2));
-            float b0 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b0_copy, 2));
-            float b1 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b1_copy, 2));
+            int32_t a0_copy = std::bit_cast<int32_t>(a0);
+            int32_t a1_copy = std::bit_cast<int32_t>(a1);
+            int32_t b0_copy = std::bit_cast<int32_t>(b0);
+            int32_t b1_copy = std::bit_cast<int32_t>(b1);
+            float a0 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(a0_copy, 0b01'00'11'10, 0xf, 0xf,1));
+            float a1 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(a1_copy, 0b01'00'11'10, 0xf, 0xf,1));
+            uint8_t quad_source = (laneid + 2) % 4;
+            float b0 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b0_copy));
+            float b1 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b1_copy));
             d0 = std::fma(a0, b0, d0);
             d0 = std::fma(a1, b1, d0);
         }
         {
-            uint32_t a0_copy = std::bit_cast<uint32_t>(a0);
-            uint32_t a1_copy = std::bit_cast<uint32_t>(a1);
-            uint32_t b0_copy = std::bit_cast<uint32_t>(b0);
-            uint32_t b1_copy = std::bit_cast<uint32_t>(b1);
-            float a0 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a0_copy, 3));
-            float a1 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a1_copy, 3));
-            float b0 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b0_copy, 3));
-            float b1 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b1_copy, 3));
+            int32_t a0_copy = std::bit_cast<int32_t>(a0);
+            int32_t a1_copy = std::bit_cast<int32_t>(a1);
+            int32_t b0_copy = std::bit_cast<int32_t>(b0);
+            int32_t b1_copy = std::bit_cast<int32_t>(b1);
+            float a0 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(a0_copy, 0b10'01'00'11, 0xf, 0xf,1));
+            float a1 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(a1_copy, 0b10'01'00'11, 0xf, 0xf,1));
+            uint8_t quad_source = (laneid + 3) % 4;
+            float b0 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b0_copy));
+            float b1 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b1_copy));
             d0 = std::fma(a0, b0, d0);
             d0 = std::fma(a1, b1, d0);
         }
-        d0 = std::fma(a4, b2, d0);
-        d0 = std::fma(a5, b3, d0);
         {
-            uint32_t a4_copy = std::bit_cast<uint32_t>(a4);
-            uint32_t a5_copy = std::bit_cast<uint32_t>(a5);
-            uint32_t b2_copy = std::bit_cast<uint32_t>(b2);
-            uint32_t b3_copy = std::bit_cast<uint32_t>(b3);
-            float a4 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a4_copy, 1));
-            float a5 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a5_copy, 1));
-            float b2 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b2_copy, 1));
-            float b3 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b3_copy, 1));
+            int32_t b2_copy = std::bit_cast<int32_t>(b2);
+            int32_t b3_copy = std::bit_cast<int32_t>(b3);
+            uint8_t quad_source = (laneid + 0) % 4;
+            float b0 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b2_copy));
+            float b1 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b3_copy));
+            d0 = std::fma(a4, b0, d0);
+            d0 = std::fma(a5, b1, d0);
+        }
+        {
+            int32_t a4_copy = std::bit_cast<int32_t>(a4);
+            int32_t a5_copy = std::bit_cast<int32_t>(a5);
+            int32_t b2_copy = std::bit_cast<int32_t>(b2);
+            int32_t b3_copy = std::bit_cast<int32_t>(b3);
+            float a4 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(a4_copy, 0b00'11'10'01, 0xf, 0xf,1));
+            float a5 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(a5_copy, 0b00'11'10'01, 0xf, 0xf,1));
+            uint8_t quad_source = (laneid + 1) % 4;
+            float b2 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b2_copy));
+            float b3 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b3_copy));
             d0 = std::fma(a4, b2, d0);
             d0 = std::fma(a5, b3, d0);
         }
         {
-            uint32_t a4_copy = std::bit_cast<uint32_t>(a4);
-            uint32_t a5_copy = std::bit_cast<uint32_t>(a5);
-            uint32_t b2_copy = std::bit_cast<uint32_t>(b2);
-            uint32_t b3_copy = std::bit_cast<uint32_t>(b3);
-            float a4 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a4_copy, 2));
-            float a5 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a5_copy, 2));
-            float b2 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b2_copy, 2));
-            float b3 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b3_copy, 2));
+            int32_t a4_copy = std::bit_cast<int32_t>(a4);
+            int32_t a5_copy = std::bit_cast<int32_t>(a5);
+            int32_t b2_copy = std::bit_cast<int32_t>(b2);
+            int32_t b3_copy = std::bit_cast<int32_t>(b3);
+            float a4 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(a4_copy, 0b01'00'11'10, 0xf, 0xf,1));
+            float a5 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(a5_copy, 0b01'00'11'10, 0xf, 0xf,1));
+            uint8_t quad_source = (laneid + 2) % 4;
+            float b2 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b2_copy));
+            float b3 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b3_copy));
             d0 = std::fma(a4, b2, d0);
             d0 = std::fma(a5, b3, d0);
         }
         {
-            uint32_t a4_copy = std::bit_cast<uint32_t>(a4);
-            uint32_t a5_copy = std::bit_cast<uint32_t>(a5);
-            uint32_t b2_copy = std::bit_cast<uint32_t>(b2);
-            uint32_t b3_copy = std::bit_cast<uint32_t>(b3);
-            float a4 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a4_copy, 3));
-            float a5 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(a5_copy, 3));
-            float b2 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b2_copy, 3));
-            float b3 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp8(b3_copy, 3));
+            int32_t a4_copy = std::bit_cast<int32_t>(a4);
+            int32_t a5_copy = std::bit_cast<int32_t>(a5);
+            int32_t b2_copy = std::bit_cast<int32_t>(b2);
+            int32_t b3_copy = std::bit_cast<int32_t>(b3);
+            float a4 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(a4_copy, 0b10'01'00'11, 0xf, 0xf,1));
+            float a5 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(a5_copy, 0b10'01'00'11, 0xf, 0xf,1));
+            uint8_t quad_source = (laneid + 3) % 4;
+            float b2 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b2_copy));
+            float b3 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b3_copy));
             d0 = std::fma(a4, b2, d0);
             d0 = std::fma(a5, b3, d0);
         }
