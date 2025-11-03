@@ -867,125 +867,138 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
         return -1;
     }
 
-    float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg) {
+    float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
+    {
         uint8_t laneid = uint8_t(FUNC_CALL(sreg_laneid)());
         uint8_t quad_index = laneid % 4;
         bf16x8 a_frag = std::bit_cast<bf16x8>(a_reg);
-        float a0 = float(a_frag[0]);
-        float a1 = float(a_frag[1]);
-        float a2 = float(a_frag[2]);
-        float a3 = float(a_frag[3]);
-        float a4 = float(a_frag[4]);
-        float a5 = float(a_frag[5]);
-        float a6 = float(a_frag[6]);
-        float a7 = float(a_frag[7]);
+        const float a0 = float(a_frag[0]);
+        const float a1 = float(a_frag[1]);
+        const float a2 = float(a_frag[2]);
+        const float a3 = float(a_frag[3]);
+        const float a4 = float(a_frag[4]);
+        const float a5 = float(a_frag[5]);
+        const float a6 = float(a_frag[6]);
+        const float a7 = float(a_frag[7]);
         bf16x4 b_frag = std::bit_cast<bf16x4>(b_reg);
-        float b0 = float(b_frag[0]);
-        float b1 = float(b_frag[1]);
-        float b2 = float(b_frag[2]);
-        float b3 = float(b_frag[3]);
-        float c0 = c_reg[0];
-        float c1 = c_reg[1];
-        float c2 = c_reg[2];
-        float c3 = c_reg[3];
-        uint8_t column_start = quad_index * 8;
-        float d0;
+        const float b0 = float(b_frag[0]);
+        const float b1 = float(b_frag[1]);
+        const float b2 = float(b_frag[2]);
+        const float b3 = float(b_frag[3]);
+        const float c0 = c_reg[0];
+        const float c1 = c_reg[1];
+        const float c2 = c_reg[2];
+        const float c3 = c_reg[3];
+        uint8_t left_column_start = quad_index * 8;
+        uint8_t right_column_start = left_column_start + 4;
+        float upper_row[16];
+        float lower_row[16];
+        float left_column[16];
+        float right_column[16];
         {
-            int32_t b0_copy = std::bit_cast<int32_t>(b0);
-            int32_t b1_copy = std::bit_cast<int32_t>(b1);
             uint8_t quad_source = (laneid + 0) % 4;
-            float b0 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b0_copy));
-            float b1 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b1_copy));
-            d0 = std::fma(a0, b0, c0);
-            d0 = std::fma(a1, b1, d0);
+            upper_row[0] = a0;
+            upper_row[1] = a1;
+            lower_row[0] = a2;
+            lower_row[1] = a3;
+            left_column[0] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b0)));
+            left_column[1] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b1)));
+            right_column[0] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((right_column_start + quad_source) << 2, std::bit_cast<int32_t>(b0)));
+            right_column[1] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((right_column_start + quad_source) << 2, std::bit_cast<int32_t>(b1)));
         }
         {
-            int32_t a0_copy = std::bit_cast<int32_t>(a0);
-            int32_t a1_copy = std::bit_cast<int32_t>(a1);
-            int32_t b0_copy = std::bit_cast<int32_t>(b0);
-            int32_t b1_copy = std::bit_cast<int32_t>(b1);
-            float a0 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(a0_copy, 0b00'11'10'01, 0xf, 0xf,1));
-            float a1 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(a1_copy, 0b00'11'10'01, 0xf, 0xf,1));
             uint8_t quad_source = (laneid + 1) % 4;
-            float b0 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b0_copy));
-            float b1 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b1_copy));
-            d0 = std::fma(a0, b0, d0);
-            d0 = std::fma(a1, b1, d0);
+            upper_row[2] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a0), 0b00'11'10'01, 0xf, 0xf,1));
+            upper_row[3] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a1), 0b00'11'10'01, 0xf, 0xf,1));
+            lower_row[2] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a2), 0b00'11'10'01, 0xf, 0xf,1));
+            lower_row[3] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a3), 0b00'11'10'01, 0xf, 0xf,1));
+            left_column[2] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b0)));
+            left_column[3] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b1)));
+            right_column[2] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((right_column_start + quad_source) << 2, std::bit_cast<int32_t>(b0)));
+            right_column[3] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((right_column_start + quad_source) << 2, std::bit_cast<int32_t>(b1)));
         }
         {
-            int32_t a0_copy = std::bit_cast<int32_t>(a0);
-            int32_t a1_copy = std::bit_cast<int32_t>(a1);
-            int32_t b0_copy = std::bit_cast<int32_t>(b0);
-            int32_t b1_copy = std::bit_cast<int32_t>(b1);
-            float a0 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(a0_copy, 0b01'00'11'10, 0xf, 0xf,1));
-            float a1 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(a1_copy, 0b01'00'11'10, 0xf, 0xf,1));
             uint8_t quad_source = (laneid + 2) % 4;
-            float b0 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b0_copy));
-            float b1 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b1_copy));
-            d0 = std::fma(a0, b0, d0);
-            d0 = std::fma(a1, b1, d0);
+            upper_row[4] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a0), 0b01'00'11'10, 0xf, 0xf,1));
+            upper_row[5] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a1), 0b01'00'11'10, 0xf, 0xf,1));
+            lower_row[4] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a2), 0b01'00'11'10, 0xf, 0xf,1));
+            lower_row[5] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a3), 0b01'00'11'10, 0xf, 0xf,1));
+            left_column[4] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b0)));
+            left_column[5] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b1)));
+            right_column[4] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((right_column_start + quad_source) << 2, std::bit_cast<int32_t>(b0)));
+            right_column[5] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((right_column_start + quad_source) << 2, std::bit_cast<int32_t>(b1)));
         }
         {
-            int32_t a0_copy = std::bit_cast<int32_t>(a0);
-            int32_t a1_copy = std::bit_cast<int32_t>(a1);
-            int32_t b0_copy = std::bit_cast<int32_t>(b0);
-            int32_t b1_copy = std::bit_cast<int32_t>(b1);
-            float a0 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(a0_copy, 0b10'01'00'11, 0xf, 0xf,1));
-            float a1 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(a1_copy, 0b10'01'00'11, 0xf, 0xf,1));
             uint8_t quad_source = (laneid + 3) % 4;
-            float b0 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b0_copy));
-            float b1 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b1_copy));
-            d0 = std::fma(a0, b0, d0);
-            d0 = std::fma(a1, b1, d0);
+            upper_row[6] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a0), 0b10'01'00'11, 0xf, 0xf,1));
+            upper_row[7] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a1), 0b10'01'00'11, 0xf, 0xf,1));
+            lower_row[6] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a2), 0b10'01'00'11, 0xf, 0xf,1));
+            lower_row[7] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a3), 0b10'01'00'11, 0xf, 0xf,1));
+            left_column[6] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b0)));
+            left_column[7] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b1)));
+            right_column[6] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((right_column_start + quad_source) << 2, std::bit_cast<int32_t>(b0)));
+            right_column[7] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((right_column_start + quad_source) << 2, std::bit_cast<int32_t>(b1)));
         }
         {
-            int32_t b2_copy = std::bit_cast<int32_t>(b2);
-            int32_t b3_copy = std::bit_cast<int32_t>(b3);
             uint8_t quad_source = (laneid + 0) % 4;
-            float b0 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b2_copy));
-            float b1 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b3_copy));
-            d0 = std::fma(a4, b0, d0);
-            d0 = std::fma(a5, b1, d0);
+            upper_row[8] = a4;
+            upper_row[9] = a5;
+            lower_row[8] = a6;
+            lower_row[9] = a7;
+            left_column[8] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b2)));
+            left_column[9] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b3)));
+            right_column[8] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((right_column_start + quad_source) << 2, std::bit_cast<int32_t>(b2)));
+            right_column[9] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((right_column_start + quad_source) << 2, std::bit_cast<int32_t>(b3)));
         }
         {
-            int32_t a4_copy = std::bit_cast<int32_t>(a4);
-            int32_t a5_copy = std::bit_cast<int32_t>(a5);
-            int32_t b2_copy = std::bit_cast<int32_t>(b2);
-            int32_t b3_copy = std::bit_cast<int32_t>(b3);
-            float a4 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(a4_copy, 0b00'11'10'01, 0xf, 0xf,1));
-            float a5 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(a5_copy, 0b00'11'10'01, 0xf, 0xf,1));
             uint8_t quad_source = (laneid + 1) % 4;
-            float b2 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b2_copy));
-            float b3 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b3_copy));
-            d0 = std::fma(a4, b2, d0);
-            d0 = std::fma(a5, b3, d0);
+            upper_row[10] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a4), 0b00'11'10'01, 0xf, 0xf,1));
+            upper_row[11] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a5), 0b00'11'10'01, 0xf, 0xf,1));
+            lower_row[10] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a6), 0b00'11'10'01, 0xf, 0xf,1));
+            lower_row[11] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a7), 0b00'11'10'01, 0xf, 0xf,1));
+            left_column[10] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b2)));
+            left_column[11] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b3)));
+            right_column[10] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((right_column_start + quad_source) << 2, std::bit_cast<int32_t>(b2)));
+            right_column[11] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((right_column_start + quad_source) << 2, std::bit_cast<int32_t>(b3)));
         }
         {
-            int32_t a4_copy = std::bit_cast<int32_t>(a4);
-            int32_t a5_copy = std::bit_cast<int32_t>(a5);
-            int32_t b2_copy = std::bit_cast<int32_t>(b2);
-            int32_t b3_copy = std::bit_cast<int32_t>(b3);
-            float a4 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(a4_copy, 0b01'00'11'10, 0xf, 0xf,1));
-            float a5 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(a5_copy, 0b01'00'11'10, 0xf, 0xf,1));
             uint8_t quad_source = (laneid + 2) % 4;
-            float b2 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b2_copy));
-            float b3 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b3_copy));
-            d0 = std::fma(a4, b2, d0);
-            d0 = std::fma(a5, b3, d0);
+            upper_row[12] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a4), 0b01'00'11'10, 0xf, 0xf,1));
+            upper_row[13] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a5), 0b01'00'11'10, 0xf, 0xf,1));
+            lower_row[12] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a6), 0b01'00'11'10, 0xf, 0xf,1));
+            lower_row[13] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a7), 0b01'00'11'10, 0xf, 0xf,1));
+            left_column[12] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b2)));
+            left_column[13] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b3)));
+            right_column[12] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((right_column_start + quad_source) << 2, std::bit_cast<int32_t>(b2)));
+            right_column[13] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((right_column_start + quad_source) << 2, std::bit_cast<int32_t>(b3)));
         }
         {
-            int32_t a4_copy = std::bit_cast<int32_t>(a4);
-            int32_t a5_copy = std::bit_cast<int32_t>(a5);
-            int32_t b2_copy = std::bit_cast<int32_t>(b2);
-            int32_t b3_copy = std::bit_cast<int32_t>(b3);
-            float a4 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(a4_copy, 0b10'01'00'11, 0xf, 0xf,1));
-            float a5 = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(a5_copy, 0b10'01'00'11, 0xf, 0xf,1));
             uint8_t quad_source = (laneid + 3) % 4;
-            float b2 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b2_copy));
-            float b3 = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((column_start + quad_source) << 2, b3_copy));
-            d0 = std::fma(a4, b2, d0);
-            d0 = std::fma(a5, b3, d0);
+            upper_row[14] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a4), 0b10'01'00'11, 0xf, 0xf,1));
+            upper_row[15] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a5), 0b10'01'00'11, 0xf, 0xf,1));
+            lower_row[14] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a6), 0b10'01'00'11, 0xf, 0xf,1));
+            lower_row[15] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a7), 0b10'01'00'11, 0xf, 0xf,1));
+            left_column[14] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b2)));
+            left_column[15] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b3)));
+            right_column[14] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((right_column_start + quad_source) << 2, std::bit_cast<int32_t>(b2)));
+            right_column[15] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((right_column_start + quad_source) << 2, std::bit_cast<int32_t>(b3)));
         }
-        return float4::Native_vec_ { d0, c1, c2, c3 };
+        float d0 = c0;
+        for(int i = 0; i < 16; i++) {
+            d0 = std::fma(upper_row[i], left_column[i], d0);
+        }
+        float d1 = c1;
+        for(int i = 0; i < 16; i++) {
+            d1 = std::fma(upper_row[i], right_column[i], d1);
+        }
+        float d2 = c2;
+        for(int i = 0; i < 16; i++) {
+            d2 = std::fma(lower_row[i], left_column[i], d2);
+        }
+        float d3 = c3;
+        for(int i = 0; i < 16; i++) {
+            d3 = std::fma(lower_row[i], right_column[i], d3);
+        }
+        return float4::Native_vec_ { d0, d1, d2, d3 };
     }
 }
