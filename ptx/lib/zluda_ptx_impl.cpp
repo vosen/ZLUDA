@@ -15,6 +15,9 @@
 
 typedef _Float16 half16 __attribute__((ext_vector_type(16)));
 typedef float float8 __attribute__((ext_vector_type(8)));
+typedef _Float16 f16x2 __attribute__((ext_vector_type(2)));
+typedef _Float16 f16x4 __attribute__((ext_vector_type(4)));
+typedef _Float16 f16x8 __attribute__((ext_vector_type(8)));
 typedef __bf16 bf16x2 __attribute__((ext_vector_type(2)));
 typedef __bf16 bf16x4 __attribute__((ext_vector_type(4)));
 typedef __bf16 bf16x8 __attribute__((ext_vector_type(8)));
@@ -25,43 +28,6 @@ typedef __bf16 bf16x8 __attribute__((ext_vector_type(8)));
 #define DECLARE_ATTR(TYPE, NAME)                                        \
     extern "C" __attribute__((constant)) CONSTANT_SPACE TYPE ATTR(NAME) \
     __device__
-
-// Template function because DPP mask must be a compile time constant
-template <const int DPP_MASK>
-__device__ static void mma_load_blocks(float upper_row[16], float lower_row[16], float left_column[16], float right_column[16],
-                                       int index, int left_column_start,
-                                       uint8_t quad_index,
-                                       float a0, float a1, float a2, float a3,
-                                       float b0, float b1)
-{
-    uint8_t laneid = uint8_t(__lane_id());
-    uint8_t quad_source = (laneid + quad_index) % 4;
-    upper_row[index] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a0), DPP_MASK, 0xf, 0xf, 1));
-    upper_row[index + 1] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a1), DPP_MASK, 0xf, 0xf, 1));
-    lower_row[index] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a2), DPP_MASK, 0xf, 0xf, 1));
-    lower_row[index + 1] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a3), DPP_MASK, 0xf, 0xf, 1));
-    left_column[index] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b0)));
-    left_column[index + 1] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b1)));
-    right_column[index] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + 4 + quad_source) << 2, std::bit_cast<int32_t>(b0)));
-    right_column[index + 1] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + 4 + quad_source) << 2, std::bit_cast<int32_t>(b1)));
-}
-
-__device__ static void mma_load_blocks_no_row(float upper_row[16], float lower_row[16], float left_column[16], float right_column[16],
-                                              int index, int left_column_start,
-                                              float a0, float a1, float a2, float a3,
-                                              float b0, float b1)
-{
-    uint8_t laneid = uint8_t(__lane_id());
-    uint8_t quad_source = laneid % 4;
-    upper_row[index] = a0;
-    upper_row[index + 1] = a1;
-    lower_row[index] = a2;
-    lower_row[index + 1] = a3;
-    left_column[index] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b0)));
-    left_column[index + 1] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b1)));
-    right_column[index] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + 4 + quad_source) << 2, std::bit_cast<int32_t>(b0)));
-    right_column[index + 1] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + 4 + quad_source) << 2, std::bit_cast<int32_t>(b1)));
-}
 
 extern "C"
 {
@@ -680,192 +646,6 @@ extern "C"
         return uint4::Native_vec_{x0, x1, x2, x3};
     }
 
-    static inline __device__ _Float16 top16_as_fp16(uint32_t value)
-    {
-        uint16_t half_bits = static_cast<uint16_t>((value >> 16) & 0xFFFF);
-        return *reinterpret_cast<_Float16 *>(&half_bits);
-    }
-    static inline __device__ _Float16 bottom16_as_fp16(uint32_t value)
-    {
-        uint16_t half_bits = static_cast<uint16_t>(value & 0xFFFF);
-        return *reinterpret_cast<_Float16 *>(&half_bits);
-    }
-
-    static inline __device__ float bpermute_lane(int lane, float x)
-    {
-        return __hip_ds_bpermutef(4 * lane, x);
-    }
-    static inline __device__ uint32_t bpermute_lane(int lane, uint32_t x)
-    {
-        return __hip_ds_bpermute(4 * lane, x);
-    }
-
-    static __device__ half16 shuffle_a(uint4::Native_vec_ a_reg)
-    {
-        const unsigned lIdx = threadIdx.x;
-        const int lane = lIdx % 16; // Lanes 0-15 (the other 16 lanes are a duplicate in w32 mode)
-        half16 aFrag;
-
-        for (int vGPR = 0; vGPR < 8; ++vGPR)
-        {
-            int cudaChunk = (vGPR / 4) * 2; // will be 0 or 2
-            int cudaTID = (vGPR % 4 + lane * 4) % 32;
-            uint32_t reg0, reg1;
-            // Select the two consecutive elements from a_reg:
-            if (cudaChunk == 0)
-            {
-                reg0 = a_reg.x;
-                reg1 = a_reg.y;
-            }
-            else
-            { // cudaChunk==2
-                reg0 = a_reg.z;
-                reg1 = a_reg.w;
-            }
-            uint32_t a_tmp0 = bpermute_lane(cudaTID, reg0);
-            uint32_t a_tmp1 = bpermute_lane(cudaTID, reg1);
-            uint32_t a_Frag_reg = (lane < 8) ? a_tmp0 : a_tmp1;
-            aFrag[2 * vGPR] = bottom16_as_fp16(a_Frag_reg);
-            aFrag[2 * vGPR + 1] = top16_as_fp16(a_Frag_reg);
-        }
-        return aFrag;
-    }
-
-    static __device__ half16 shuffle_b(uint2::Native_vec_ b_reg)
-    {
-        const unsigned lIdx = threadIdx.x;
-        const int lane = lIdx % 16;
-        half16 bFrag;
-
-        for (int vGPR = 0; vGPR < 8; ++vGPR)
-        {
-            int cudaChunk = vGPR / 4; // will be 0 or 1
-            int cudaTID = vGPR % 4 + (lane * 4) % 64;
-            uint32_t reg = (cudaChunk == 0) ? b_reg.x : b_reg.y;
-            uint32_t b_Frag_reg = bpermute_lane(cudaTID, reg);
-            if (lane < 8)
-            {
-                bFrag[2 * vGPR] = bottom16_as_fp16(b_Frag_reg);
-                bFrag[2 * vGPR + 1] = top16_as_fp16(b_Frag_reg);
-            }
-            else
-            {
-                bFrag[2 * vGPR] = 0.0f;
-                bFrag[2 * vGPR + 1] = 0.0f;
-            }
-        }
-        return bFrag;
-    }
-
-    static __device__ float8 shuffle_c(float4::Native_vec_ c_reg)
-    {
-        const int lIdx = (int)threadIdx.x;
-        float8 cFrag;
-
-        // Loop over the eight vector GPRs.
-        for (int vGPR = 0; vGPR < 8; ++vGPR)
-        {
-            int cudaChunk = (vGPR / 4) * 2; // will be 0 or 2: selects which pair of components to use.
-            int lIdx8 = (lIdx < 8) ? lIdx : lIdx - 8;
-            int cudaTID = (vGPR % 4) * 8 + lIdx8 / 2;
-            float ctmp0, ctmp1;
-
-            if (cudaChunk == 0)
-            {
-                ctmp0 = bpermute_lane(cudaTID, c_reg.x);
-                ctmp1 = bpermute_lane(cudaTID, c_reg.y);
-            }
-            else
-            { // cudaChunk == 2
-                ctmp0 = bpermute_lane(cudaTID, c_reg.z);
-                ctmp1 = bpermute_lane(cudaTID, c_reg.w);
-            }
-
-            // Select one of the two values based on the thread index's LSB.
-            cFrag[vGPR] = (lIdx & 1) ? ctmp1 : ctmp0;
-
-            // Zero out for specific thread indices.
-            if ((lIdx > 7 && lIdx < 16) || (lIdx > 23 && lIdx < 32))
-                cFrag[vGPR] = 0.0f;
-        }
-        return cFrag;
-    }
-
-    static inline __device__ float4::Native_vec_ shuffle_d(float8 dFrag)
-    {
-        const int lIdx = (int)threadIdx.x;
-        float4::Native_vec_ d_out;
-
-        for (int cChunk = 0; cChunk < 4; ++cChunk)
-        {
-            int r_vGPR = (cChunk / 2) * 4;
-            int add8 = (lIdx & 0x4) ? 8 : 0;
-            int r_lIdx = (cChunk % 2) + (lIdx % 8) * 2 + add8;
-            float d_tmp0 = bpermute_lane(r_lIdx, dFrag[r_vGPR]);
-            float d_tmp1 = bpermute_lane(r_lIdx, dFrag[r_vGPR + 1]);
-            float d_tmp2 = bpermute_lane(r_lIdx, dFrag[r_vGPR + 2]);
-            float d_tmp3 = bpermute_lane(r_lIdx, dFrag[r_vGPR + 3]);
-            float val;
-            if (lIdx < 8)
-            {
-                val = d_tmp0;
-            }
-            else if (lIdx < 16)
-            {
-                val = d_tmp1;
-            }
-            else if (lIdx < 24)
-            {
-                val = d_tmp2;
-            }
-            else
-            {
-                val = d_tmp3;
-            }
-            if (cChunk == 0)
-                d_out.x = val;
-            else if (cChunk == 1)
-                d_out.y = val;
-            else if (cChunk == 2)
-                d_out.z = val;
-            else
-                d_out.w = val;
-        }
-        return d_out;
-    }
-
-    float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_f16_f16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
-    {
-        // Reshuffle from Nvidia-like register layout to AMD layout:
-        half16 aFrag = shuffle_a(a_reg);
-        half16 bFrag = shuffle_b(b_reg);
-        float8 cFrag = shuffle_c(c_reg);
-
-        // Call the (built‐in) 16x16 MMA instruction. It returns a float8.
-        float8 dFrag = __builtin_amdgcn_wmma_f32_16x16x16_f16_w32(aFrag, bFrag, cFrag);
-
-        // Unshuffle back into Nvidia expected float4 result
-        float4::Native_vec_ d_out = shuffle_d(dFrag);
-
-        return d_out;
-    }
-
-    float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32_2)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
-    {
-        // Reshuffle from Nvidia-like register layout to AMD layout:
-        half16 aFrag = shuffle_a(a_reg);
-        half16 bFrag = shuffle_b(b_reg);
-        float8 cFrag = shuffle_c(c_reg);
-
-        // Call the (built‐in) 16x16 MMA instruction. It returns a float8.
-        float8 dFrag = __builtin_amdgcn_wmma_f32_16x16x16_bf16_w32(aFrag, bFrag, cFrag);
-
-        // Unshuffle back into Nvidia expected float4 result
-        float4::Native_vec_ d_out = shuffle_d(dFrag);
-
-        return d_out;
-    }
-
     struct byte4
     {
         union
@@ -944,6 +724,117 @@ extern "C"
             result = std::fma(row[i], column[i], result);
         }
         return result;
+    }
+}
+
+// Template function because DPP mask must be a compile time constant
+template <const int DPP_MASK>
+__device__ static void mma_load_blocks(float upper_row[16], float lower_row[16], float left_column[16], float right_column[16],
+                                       int index, int left_column_start,
+                                       uint8_t quad_index,
+                                       float a0, float a1, float a2, float a3,
+                                       float b0, float b1)
+{
+    uint8_t laneid = uint8_t(__lane_id());
+    uint8_t quad_source = (laneid + quad_index) % 4;
+    upper_row[index] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a0), DPP_MASK, 0xf, 0xf, 1));
+    upper_row[index + 1] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a1), DPP_MASK, 0xf, 0xf, 1));
+    lower_row[index] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a2), DPP_MASK, 0xf, 0xf, 1));
+    lower_row[index + 1] = std::bit_cast<float>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a3), DPP_MASK, 0xf, 0xf, 1));
+    left_column[index] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b0)));
+    left_column[index + 1] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b1)));
+    right_column[index] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + 4 + quad_source) << 2, std::bit_cast<int32_t>(b0)));
+    right_column[index + 1] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + 4 + quad_source) << 2, std::bit_cast<int32_t>(b1)));
+}
+
+__device__ static void mma_load_blocks_no_row(float upper_row[16], float lower_row[16], float left_column[16], float right_column[16],
+                                              int index, int left_column_start,
+                                              float a0, float a1, float a2, float a3,
+                                              float b0, float b1)
+{
+    uint8_t laneid = uint8_t(__lane_id());
+    uint8_t quad_source = laneid % 4;
+    upper_row[index] = a0;
+    upper_row[index + 1] = a1;
+    lower_row[index] = a2;
+    lower_row[index + 1] = a3;
+    left_column[index] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b0)));
+    left_column[index + 1] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b1)));
+    right_column[index] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + 4 + quad_source) << 2, std::bit_cast<int32_t>(b0)));
+    right_column[index + 1] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + 4 + quad_source) << 2, std::bit_cast<int32_t>(b1)));
+}
+
+extern "C" {
+    float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_f16_f16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
+    {
+        uint8_t laneid = uint8_t(FUNC_CALL(sreg_laneid)());
+        uint8_t quad_index = laneid % 4;
+        f16x8 a_frag = std::bit_cast<f16x8>(a_reg);
+        const float a0 = float(a_frag[0]);
+        const float a1 = float(a_frag[1]);
+        const float a2 = float(a_frag[2]);
+        const float a3 = float(a_frag[3]);
+        const float a4 = float(a_frag[4]);
+        const float a5 = float(a_frag[5]);
+        const float a6 = float(a_frag[6]);
+        const float a7 = float(a_frag[7]);
+        f16x4 b_frag = std::bit_cast<f16x4>(b_reg);
+        const float b0 = float(b_frag[0]);
+        const float b1 = float(b_frag[1]);
+        const float b2 = float(b_frag[2]);
+        const float b3 = float(b_frag[3]);
+        const float c0 = c_reg[0];
+        const float c1 = c_reg[1];
+        const float c2 = c_reg[2];
+        const float c3 = c_reg[3];
+        uint8_t left_column_start = quad_index * 8;
+        float upper_row[16];
+        float lower_row[16];
+        float left_column[16];
+        float right_column[16];
+        mma_load_blocks_no_row(upper_row, lower_row, left_column, right_column,
+                               0, left_column_start,
+                               a0, a1, a2, a3,
+                               b0, b1);
+        mma_load_blocks<0b00'11'10'01>(upper_row, lower_row, left_column, right_column,
+                                       2, left_column_start,
+                                       1,
+                                       a0, a1, a2, a3,
+                                       b0, b1);
+        mma_load_blocks<0b01'00'11'10>(upper_row, lower_row, left_column, right_column,
+                                       4, left_column_start,
+                                       2,
+                                       a0, a1, a2, a3,
+                                       b0, b1);
+        mma_load_blocks<0b10'01'00'11>(upper_row, lower_row, left_column, right_column,
+                                       6, left_column_start,
+                                       3,
+                                       a0, a1, a2, a3,
+                                       b0, b1);
+        mma_load_blocks_no_row(upper_row, lower_row, left_column, right_column,
+                               8, left_column_start,
+                               a4, a5, a6, a7,
+                               b2, b3);
+        mma_load_blocks<0b00'11'10'01>(upper_row, lower_row, left_column, right_column,
+                                       10, left_column_start,
+                                       1,
+                                       a4, a5, a6, a7,
+                                       b2, b3);
+        mma_load_blocks<0b01'00'11'10>(upper_row, lower_row, left_column, right_column,
+                                       12, left_column_start,
+                                       2,
+                                       a4, a5, a6, a7,
+                                       b2, b3);
+        mma_load_blocks<0b10'01'00'11>(upper_row, lower_row, left_column, right_column,
+                                       14, left_column_start,
+                                       3,
+                                       a4, a5, a6, a7,
+                                       b2, b3);
+        float d0 = dot_product(c0, upper_row, left_column);
+        float d1 = dot_product(c1, upper_row, right_column);
+        float d2 = dot_product(c2, lower_row, left_column);
+        float d3 = dot_product(c3, lower_row, right_column);
+        return float4::Native_vec_{d0, d1, d2, d3};
     }
 
     float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
