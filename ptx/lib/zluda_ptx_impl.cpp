@@ -764,12 +764,12 @@ __device__ static void mma_load_blocks_no_row(float upper_row[16], float lower_r
     right_column[index + 1] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + 4 + quad_source) << 2, std::bit_cast<int32_t>(b1)));
 }
 
-extern "C" {
-    float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_f16_f16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
-    {
+template<typename Tx8, typename Tx4>
+__device__ float4::Native_vec_ mma_sync_aligned_m16n8k16_row_col_f32_x16_impl(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
+{
         uint8_t laneid = uint8_t(FUNC_CALL(sreg_laneid)());
         uint8_t quad_index = laneid % 4;
-        f16x8 a_frag = std::bit_cast<f16x8>(a_reg);
+        Tx8 a_frag = std::bit_cast<Tx8>(a_reg);
         const float a0 = float(a_frag[0]);
         const float a1 = float(a_frag[1]);
         const float a2 = float(a_frag[2]);
@@ -778,7 +778,7 @@ extern "C" {
         const float a5 = float(a_frag[5]);
         const float a6 = float(a_frag[6]);
         const float a7 = float(a_frag[7]);
-        f16x4 b_frag = std::bit_cast<f16x4>(b_reg);
+        Tx4 b_frag = std::bit_cast<Tx4>(b_reg);
         const float b0 = float(b_frag[0]);
         const float b1 = float(b_frag[1]);
         const float b2 = float(b_frag[2]);
@@ -835,77 +835,16 @@ extern "C" {
         float d2 = dot_product(c2, lower_row, left_column);
         float d3 = dot_product(c3, lower_row, right_column);
         return float4::Native_vec_{d0, d1, d2, d3};
+}
+
+extern "C" {
+    float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_f16_f16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
+    {
+        return mma_sync_aligned_m16n8k16_row_col_f32_x16_impl<f16x8, f16x4>(a_reg, b_reg, c_reg);
     }
 
     float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
     {
-        uint8_t laneid = uint8_t(FUNC_CALL(sreg_laneid)());
-        uint8_t quad_index = laneid % 4;
-        bf16x8 a_frag = std::bit_cast<bf16x8>(a_reg);
-        const float a0 = float(a_frag[0]);
-        const float a1 = float(a_frag[1]);
-        const float a2 = float(a_frag[2]);
-        const float a3 = float(a_frag[3]);
-        const float a4 = float(a_frag[4]);
-        const float a5 = float(a_frag[5]);
-        const float a6 = float(a_frag[6]);
-        const float a7 = float(a_frag[7]);
-        bf16x4 b_frag = std::bit_cast<bf16x4>(b_reg);
-        const float b0 = float(b_frag[0]);
-        const float b1 = float(b_frag[1]);
-        const float b2 = float(b_frag[2]);
-        const float b3 = float(b_frag[3]);
-        const float c0 = c_reg[0];
-        const float c1 = c_reg[1];
-        const float c2 = c_reg[2];
-        const float c3 = c_reg[3];
-        uint8_t left_column_start = quad_index * 8;
-        float upper_row[16];
-        float lower_row[16];
-        float left_column[16];
-        float right_column[16];
-        mma_load_blocks_no_row(upper_row, lower_row, left_column, right_column,
-                               0, left_column_start,
-                               a0, a1, a2, a3,
-                               b0, b1);
-        mma_load_blocks<0b00'11'10'01>(upper_row, lower_row, left_column, right_column,
-                                       2, left_column_start,
-                                       1,
-                                       a0, a1, a2, a3,
-                                       b0, b1);
-        mma_load_blocks<0b01'00'11'10>(upper_row, lower_row, left_column, right_column,
-                                       4, left_column_start,
-                                       2,
-                                       a0, a1, a2, a3,
-                                       b0, b1);
-        mma_load_blocks<0b10'01'00'11>(upper_row, lower_row, left_column, right_column,
-                                       6, left_column_start,
-                                       3,
-                                       a0, a1, a2, a3,
-                                       b0, b1);
-        mma_load_blocks_no_row(upper_row, lower_row, left_column, right_column,
-                               8, left_column_start,
-                               a4, a5, a6, a7,
-                               b2, b3);
-        mma_load_blocks<0b00'11'10'01>(upper_row, lower_row, left_column, right_column,
-                                       10, left_column_start,
-                                       1,
-                                       a4, a5, a6, a7,
-                                       b2, b3);
-        mma_load_blocks<0b01'00'11'10>(upper_row, lower_row, left_column, right_column,
-                                       12, left_column_start,
-                                       2,
-                                       a4, a5, a6, a7,
-                                       b2, b3);
-        mma_load_blocks<0b10'01'00'11>(upper_row, lower_row, left_column, right_column,
-                                       14, left_column_start,
-                                       3,
-                                       a4, a5, a6, a7,
-                                       b2, b3);
-        float d0 = dot_product(c0, upper_row, left_column);
-        float d1 = dot_product(c1, upper_row, right_column);
-        float d2 = dot_product(c2, lower_row, left_column);
-        float d3 = dot_product(c3, lower_row, right_column);
-        return float4::Native_vec_{d0, d1, d2, d3};
+        return mma_sync_aligned_m16n8k16_row_col_f32_x16_impl<bf16x8, bf16x4>(a_reg, b_reg, c_reg);
     }
 }
