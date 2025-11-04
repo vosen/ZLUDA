@@ -902,16 +902,8 @@ fn test_hip_assert<
     block_dim_x: u32,
 ) -> Result<(), Box<dyn error::Error>> {
     let ast = ptx_parser::parse_module_checked(ptx_text).unwrap();
-    let llvm_ir = pass::to_llvm_module(
-        ast,
-        pass::Attributes {
-            clock_rate: 2124000,
-        },
-        |_| {},
-    )
-    .unwrap();
     let name = CString::new(name)?;
-    let result = run_hip(name.as_c_str(), llvm_ir, input, output, block_dim_x)
+    let result = run_hip(name.as_c_str(), ast, input, output, block_dim_x)
         .map_err(|err| DisplayError { err })?;
     assert_eq!(result.as_slice(), output);
     Ok(())
@@ -927,6 +919,7 @@ fn test_llvm_assert(
         ast,
         pass::Attributes {
             clock_rate: 2124000,
+            gfx_version: 1010,
         },
         |_| {},
     )
@@ -1098,7 +1091,7 @@ static CUDA: std::sync::LazyLock<DynamicCuda> =
 
 fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Default>(
     name: &CStr,
-    module: pass::Module,
+    ast: ptx_parser::Module,
     input: Option<&[Input]>,
     output: &[Output],
     block_dim_x: u32,
@@ -1113,11 +1106,26 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
         unsafe { hipStreamCreate(&mut stream) }.unwrap();
         let mut dev_props = unsafe { mem::zeroed() };
         unsafe { hipGetDevicePropertiesR0600(&mut dev_props, dev) }.unwrap();
+        let gcn_arch_name = unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) }
+            .to_str()
+            .unwrap();
+        let gfx_version = gcn_arch_name
+            .strip_prefix("gfx")
+            .unwrap()
+            .parse::<u32>()
+            .unwrap();
+        let module = pass::to_llvm_module(
+            ast,
+            pass::Attributes {
+                clock_rate: 2124000,
+                gfx_version,
+            },
+            |_| {},
+        )
+        .unwrap();
         let elf_module = comgr::compile_bitcode(
             &comgr,
-            unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) }
-                .to_str()
-                .unwrap(),
+            gcn_arch_name,
             &*module.llvm_ir.write_bitcode_to_memory(),
             module.linked_bitcode(),
             &*module.attributes_ir.write_bitcode_to_memory(),

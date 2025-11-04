@@ -68,8 +68,13 @@ pub(crate) fn load_hip_module(library: CodeLibraryRef) -> Result<hipModule_t, CU
     } else {
         maybe_ptx.unwrap_or_else(|_| Cow::Borrowed(EMPTY_PTX))
     };
+    // TODO: get this information on initialization
     let hip_properties = get_hip_properties()?;
     let gcn_arch = get_gcn_arch(&hip_properties)?;
+    let gfx_version = match gcn_arch.strip_prefix("gfx").unwrap().parse::<u32>() {
+        Ok(v) => v,
+        Err(_) => return Err(CUerror::UNKNOWN),
+    };
     let attributes = ExtraCacheAttributes {
         clock_rate: hip_properties.clockRate as u32,
         is_debug: cfg!(debug_assertions),
@@ -84,6 +89,7 @@ pub(crate) fn load_hip_module(library: CodeLibraryRef) -> Result<hipModule_t, CU
         compile_from_ptx_and_cache(
             &global_state.comgr,
             gcn_arch,
+            gfx_version,
             attributes,
             &text,
             &mut cache_with_key,
@@ -145,6 +151,7 @@ fn load_cached_binary(
 fn compile_from_ptx_and_cache(
     comgr: &comgr::Comgr,
     gcn_arch: &str,
+    gfx_version: u32,
     attributes: ExtraCacheAttributes,
     text: &str,
     cache_with_key: &mut Option<(zluda_cache::ModuleCache, zluda_cache::ModuleKey)>,
@@ -158,6 +165,7 @@ fn compile_from_ptx_and_cache(
         ast,
         ptx::Attributes {
             clock_rate: attributes.clock_rate,
+            gfx_version,
         },
         |_| {},
     )

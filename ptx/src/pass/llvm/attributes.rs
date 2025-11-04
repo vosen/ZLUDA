@@ -11,6 +11,7 @@ pub(crate) fn run(
     let module = llvm::Module::new(context, LLVM_UNNAMED);
 
     emit_attribute(context, &module, "clock_rate", attributes.clock_rate)?;
+    emit_attribute(context, &module, "gfx_version", attributes.gfx_version)?;
 
     if cfg!(debug_assertions) {
         if let Err(err) = module.verify() {
