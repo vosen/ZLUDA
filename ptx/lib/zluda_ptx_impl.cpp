@@ -747,24 +747,33 @@ __device__ static void mma_load_blocks(float upper_row[16], float lower_row[16],
     right_column[index + 1] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + 4 + quad_source) << 2, std::bit_cast<int32_t>(b1)));
 }
 
+template<typename Tx2>
 __device__ static void mma_load_blocks_no_row(float upper_row[16], float lower_row[16], float left_column[16], float right_column[16],
                                               int index, int left_column_start,
-                                              float a0, float a1, float a2, float a3,
-                                              float b0, float b1)
+                                              uint32_t a0a1, uint32_t a2a3,
+                                              uint32_t b0b1)
 {
+    Tx2 a0a1_fragment = std::bit_cast<Tx2>(a0a1);
+    float a0 = float(a0a1_fragment[0]);
+    float a1 = float(a0a1_fragment[1]);
+    Tx2 a2a3_fragment = std::bit_cast<Tx2>(a2a3);
+    float a2 = float(a2a3_fragment[0]);
+    float a3 = float(a2a3_fragment[1]);
     uint8_t laneid = uint8_t(__lane_id());
     uint8_t quad_source = laneid % 4;
     upper_row[index] = a0;
     upper_row[index + 1] = a1;
     lower_row[index] = a2;
     lower_row[index + 1] = a3;
-    left_column[index] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b0)));
-    left_column[index + 1] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b1)));
-    right_column[index] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + 4 + quad_source) << 2, std::bit_cast<int32_t>(b0)));
-    right_column[index + 1] = std::bit_cast<float>(__builtin_amdgcn_ds_bpermute((left_column_start + 4 + quad_source) << 2, std::bit_cast<int32_t>(b1)));
+    Tx2 left_column_fragment = std::bit_cast<Tx2>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b0b1)));
+    left_column[index] = left_column_fragment[0];
+    left_column[index + 1] = left_column_fragment[1];
+    Tx2 right_column_fragment = std::bit_cast<Tx2>(__builtin_amdgcn_ds_bpermute((left_column_start + 4 + quad_source) << 2, std::bit_cast<int32_t>(b0b1)));
+    right_column[index] = right_column_fragment[0];
+    right_column[index + 1] = right_column_fragment[1];
 }
 
-template<typename Tx8, typename Tx4>
+template<typename Tx2, typename Tx4, typename Tx8>
 __device__ float4::Native_vec_ mma_sync_aligned_m16n8k16_row_col_f32_x16_impl(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
 {
         uint8_t laneid = uint8_t(FUNC_CALL(sreg_laneid)());
@@ -792,10 +801,10 @@ __device__ float4::Native_vec_ mma_sync_aligned_m16n8k16_row_col_f32_x16_impl(ui
         float lower_row[16];
         float left_column[16];
         float right_column[16];
-        mma_load_blocks_no_row(upper_row, lower_row, left_column, right_column,
+        mma_load_blocks_no_row<Tx2>(upper_row, lower_row, left_column, right_column,
                                0, left_column_start,
-                               a0, a1, a2, a3,
-                               b0, b1);
+                               a_reg[0], a_reg[1],
+                               b_reg[0]);
         mma_load_blocks<0b00'11'10'01>(upper_row, lower_row, left_column, right_column,
                                        2, left_column_start,
                                        1,
@@ -811,10 +820,10 @@ __device__ float4::Native_vec_ mma_sync_aligned_m16n8k16_row_col_f32_x16_impl(ui
                                        3,
                                        a0, a1, a2, a3,
                                        b0, b1);
-        mma_load_blocks_no_row(upper_row, lower_row, left_column, right_column,
+        mma_load_blocks_no_row<Tx2>(upper_row, lower_row, left_column, right_column,
                                8, left_column_start,
-                               a4, a5, a6, a7,
-                               b2, b3);
+                               a_reg[2], a_reg[3],
+                               b_reg[1]);
         mma_load_blocks<0b00'11'10'01>(upper_row, lower_row, left_column, right_column,
                                        10, left_column_start,
                                        1,
@@ -840,11 +849,11 @@ __device__ float4::Native_vec_ mma_sync_aligned_m16n8k16_row_col_f32_x16_impl(ui
 extern "C" {
     float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_f16_f16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
     {
-        return mma_sync_aligned_m16n8k16_row_col_f32_x16_impl<f16x8, f16x4>(a_reg, b_reg, c_reg);
+        return mma_sync_aligned_m16n8k16_row_col_f32_x16_impl<f16x2, f16x4, f16x8>(a_reg, b_reg, c_reg);
     }
 
     float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
     {
-        return mma_sync_aligned_m16n8k16_row_col_f32_x16_impl<bf16x8, bf16x4>(a_reg, b_reg, c_reg);
+        return mma_sync_aligned_m16n8k16_row_col_f32_x16_impl<bf16x2, bf16x4, bf16x8>(a_reg, b_reg, c_reg);
     }
 }
