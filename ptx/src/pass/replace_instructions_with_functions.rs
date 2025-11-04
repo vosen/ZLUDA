@@ -356,13 +356,13 @@ fn run_instruction<'input>(
                 ast::MmaDetails {
                     alayout,
                     blayout,
-                    dtype_scalar,
-                    atype_scalar,
-                    btype_scalar,
-                    ctype_scalar,
+                    cd_type_scalar,
+                    ab_type_scalar,
                 },
             ..
         } => {
+            let cd_type_name = scalar_to_ptx_name(cd_type_scalar);
+            let ab_type_name = scalar_to_ptx_name(ab_type_scalar);
             let name = format!(
                 "mma_sync_aligned_m16n8k16_{}_{}_{}_{}_{}_{}",
                 match alayout {
@@ -373,10 +373,10 @@ fn run_instruction<'input>(
                     ast::MatrixLayout::Row => "row",
                     ast::MatrixLayout::Col => "col",
                 },
-                scalar_to_ptx_name(dtype_scalar),
-                scalar_to_ptx_name(atype_scalar),
-                scalar_to_ptx_name(btype_scalar),
-                scalar_to_ptx_name(ctype_scalar),
+                cd_type_name,
+                ab_type_name,
+                ab_type_name,
+                cd_type_name,
             );
             to_call(resolver, fn_declarations, name.into(), i)?
         }

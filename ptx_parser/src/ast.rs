@@ -2418,10 +2418,8 @@ pub struct ReduxSyncData {
 pub struct MmaDetails {
     pub alayout: MatrixLayout,
     pub blayout: MatrixLayout,
-    pub dtype_scalar: ScalarType,
-    pub atype_scalar: ScalarType,
-    pub btype_scalar: ScalarType,
-    pub ctype_scalar: ScalarType,
+    pub cd_type_scalar: ScalarType,
+    pub ab_type_scalar: ScalarType,
 }
 
 impl MmaDetails {
