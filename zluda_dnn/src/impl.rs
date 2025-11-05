@@ -506,6 +506,20 @@ pub(crate) unsafe fn convolution_forward(
     )
 }
 
+pub(crate) unsafe fn destroy_convolution_descriptor(
+    conv_desc: miopenConvolutionDescriptor_t,
+) -> miopenStatus_t {
+    miopenDestroyConvolutionDescriptor(conv_desc)
+}
+
+pub(crate) unsafe fn destroy_filter_descriptor(desc: miopenTensorDescriptor_t) -> miopenStatus_t {
+    miopenDestroyTensorDescriptor(desc)
+}
+
+pub(crate) unsafe fn destroy_tensor_descriptor(desc: miopenTensorDescriptor_t) -> miopenStatus_t {
+    miopenDestroyTensorDescriptor(desc)
+}
+
 pub mod dnn8 {
     use cuda_types::cudnn8::*;
     use std::mem;
