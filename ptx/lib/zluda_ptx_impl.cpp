@@ -722,40 +722,42 @@ extern "C"
 }
 
 template <typename T>
-__device__ static float dot_product(float initial_value, T row[16], T column[16])
+__device__ static float dot_product(float initial_value, T row[8], T column[8]);
+
+template <>
+__device__ float dot_product<bf16x2>(float initial_value, bf16x2 row[8], bf16x2 column[8])
 {
     float result = initial_value;
-    for (int i = 0; i < 16; i++)
+    for (int i = 0; i < 8; i++)
     {
-        result = std::fma(row[i], column[i], result);
+            result = std::fma(float(row[i].x), float(column[i].x), result);
+            result = std::fma(float(row[i].y), float(column[i].y), result);
     }
     return result;
 }
 
 template <>
-__device__ float dot_product<f16>(float initial_value, f16 row[16], f16 column[16])
+__device__ float dot_product<f16x2>(float initial_value, f16x2 row[8], f16x2 column[8])
 {
     float result = initial_value;
     for (int i = 0; i < 8; i++)
     {
         if (ATTR(GFX_VERSION) >= 1030)
         {
-            f16x2 row_pair = {row[i * 2], row[i * 2 + 1]};
-            f16x2 column_pair = {column[i * 2], column[i * 2 + 1]};
-            result = __builtin_amdgcn_fdot2(row_pair, column_pair, result, false);
+            result = __builtin_amdgcn_fdot2(row[i], column[i], result, false);
         }
         else
         {
-            result = std::fma(float(row[i * 2]), float(column[i * 2]), result);
-            result = std::fma(float(row[i * 2 + 1]), float(column[i * 2 + 1]), result);
+            result = std::fma(float(row[i].x), float(column[i].x), result);
+            result = std::fma(float(row[i].y), float(column[i].y), result);
         }
     }
     return result;
 }
 
 // Template function because DPP mask must be a compile time constant
-template <typename T, typename Tx2, const int DPP_MASK>
-__device__ static void mma_load_rowcol(T upper_row[16], T lower_row[16], T left_column[16], T right_column[16],
+template <typename T, const int DPP_MASK>
+__device__ static void mma_load_rowcol(T upper_row[8], T lower_row[8], T left_column[8], T right_column[8],
                                        int index, int left_column_start,
                                        uint8_t quad_index,
                                        uint32_t a0a1, uint32_t a2a3,
@@ -763,47 +765,27 @@ __device__ static void mma_load_rowcol(T upper_row[16], T lower_row[16], T left_
 {
     uint8_t laneid = uint8_t(__lane_id());
     uint8_t quad_source = (laneid + quad_index) % 4;
-    Tx2 a0a1_from_another_thread = std::bit_cast<Tx2>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a0a1), DPP_MASK, 0xf, 0xf, 1));
-    upper_row[index] = a0a1_from_another_thread[0];
-    upper_row[index + 1] = a0a1_from_another_thread[1];
-    Tx2 a2a3_from_another_thread = std::bit_cast<Tx2>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a2a3), DPP_MASK, 0xf, 0xf, 1));
-    lower_row[index] = a2a3_from_another_thread[0];
-    lower_row[index + 1] = a2a3_from_another_thread[1];
-    Tx2 left_column_fragment = std::bit_cast<Tx2>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b0b1)));
-    left_column[index] = left_column_fragment[0];
-    left_column[index + 1] = left_column_fragment[1];
-    Tx2 right_column_fragment = std::bit_cast<Tx2>(__builtin_amdgcn_ds_bpermute((left_column_start + 4 + quad_source) << 2, std::bit_cast<int32_t>(b0b1)));
-    right_column[index] = right_column_fragment[0];
-    right_column[index + 1] = right_column_fragment[1];
+    upper_row[index] = std::bit_cast<T>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a0a1), DPP_MASK, 0xf, 0xf, 1));
+    lower_row[index] = std::bit_cast<T>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a2a3), DPP_MASK, 0xf, 0xf, 1));
+    left_column[index] = std::bit_cast<T>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b0b1)));
+    right_column[index] = std::bit_cast<T>(__builtin_amdgcn_ds_bpermute((left_column_start + 4 + quad_source) << 2, std::bit_cast<int32_t>(b0b1)));
 }
 
-template <typename T, typename Tx2>
+template <typename T>
 __device__ static void mma_load_col(T upper_row[16], T lower_row[16], T left_column[16], T right_column[16],
                                     int index, int left_column_start,
                                     uint32_t a0a1, uint32_t a2a3,
                                     uint32_t b0b1)
 {
-    Tx2 a0a1_fragment = std::bit_cast<Tx2>(a0a1);
-    T a0 = a0a1_fragment[0];
-    T a1 = a0a1_fragment[1];
-    Tx2 a2a3_fragment = std::bit_cast<Tx2>(a2a3);
-    T a2 = a2a3_fragment[0];
-    T a3 = a2a3_fragment[1];
     uint8_t laneid = uint8_t(__lane_id());
     uint8_t quad_source = laneid % 4;
-    upper_row[index] = a0;
-    upper_row[index + 1] = a1;
-    lower_row[index] = a2;
-    lower_row[index + 1] = a3;
-    Tx2 left_column_fragment = std::bit_cast<Tx2>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b0b1)));
-    left_column[index] = left_column_fragment[0];
-    left_column[index + 1] = left_column_fragment[1];
-    Tx2 right_column_fragment = std::bit_cast<Tx2>(__builtin_amdgcn_ds_bpermute((left_column_start + 4 + quad_source) << 2, std::bit_cast<int32_t>(b0b1)));
-    right_column[index] = right_column_fragment[0];
-    right_column[index + 1] = right_column_fragment[1];
+    upper_row[index] = std::bit_cast<T>(a0a1);
+    lower_row[index] = std::bit_cast<T>(a2a3);
+    left_column[index] = std::bit_cast<T>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b0b1)));
+    right_column[index] = std::bit_cast<T>(__builtin_amdgcn_ds_bpermute((left_column_start + 4 + quad_source) << 2, std::bit_cast<int32_t>(b0b1)));
 }
 
-template <typename T, typename Tx2>
+template <typename T>
 __device__ float4::Native_vec_ mma_sync_aligned_m16n8k16_row_col_f32_x16_impl(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
 {
     uint8_t laneid = uint8_t(FUNC_CALL(sreg_laneid)());
@@ -813,52 +795,52 @@ __device__ float4::Native_vec_ mma_sync_aligned_m16n8k16_row_col_f32_x16_impl(ui
     const float c2 = c_reg[2];
     const float c3 = c_reg[3];
     uint8_t left_column_start = quad_index * 8;
-    T upper_row[16];
-    T lower_row[16];
-    T left_column[16];
-    T right_column[16];
-    mma_load_col<T, Tx2>(upper_row, lower_row, left_column, right_column,
-                         0, left_column_start,
-                         a_reg[0], a_reg[1],
-                         b_reg[0]);
-    mma_load_rowcol<T, Tx2, 0b00'11'10'01>(upper_row, lower_row, left_column, right_column,
-                                           2, left_column_start,
-                                           1,
-                                           a_reg[0], a_reg[1],
-                                           b_reg[0]);
-    mma_load_rowcol<T, Tx2, 0b01'00'11'10>(upper_row, lower_row, left_column, right_column,
-                                           4, left_column_start,
-                                           2,
-                                           a_reg[0], a_reg[1],
-                                           b_reg[0]);
-    mma_load_rowcol<T, Tx2, 0b10'01'00'11>(upper_row, lower_row, left_column, right_column,
-                                           6, left_column_start,
-                                           3,
-                                           a_reg[0], a_reg[1],
-                                           b_reg[0]);
-    mma_load_col<T, Tx2>(upper_row, lower_row, left_column, right_column,
-                         8, left_column_start,
-                         a_reg[2], a_reg[3],
-                         b_reg[1]);
-    mma_load_rowcol<T, Tx2, 0b00'11'10'01>(upper_row, lower_row, left_column, right_column,
-                                           10, left_column_start,
-                                           1,
-                                           a_reg[2], a_reg[3],
-                                           b_reg[1]);
-    mma_load_rowcol<T, Tx2, 0b01'00'11'10>(upper_row, lower_row, left_column, right_column,
-                                           12, left_column_start,
-                                           2,
-                                           a_reg[2], a_reg[3],
-                                           b_reg[1]);
-    mma_load_rowcol<T, Tx2, 0b10'01'00'11>(upper_row, lower_row, left_column, right_column,
-                                           14, left_column_start,
-                                           3,
-                                           a_reg[2], a_reg[3],
-                                           b_reg[1]);
-    float d0 = dot_product(c0, upper_row, left_column);
-    float d1 = dot_product(c1, upper_row, right_column);
-    float d2 = dot_product(c2, lower_row, left_column);
-    float d3 = dot_product(c3, lower_row, right_column);
+    T upper_row[8];
+    T lower_row[8];
+    T left_column[8];
+    T right_column[8];
+    mma_load_col<T>(upper_row, lower_row, left_column, right_column,
+                    0, left_column_start,
+                    a_reg[0], a_reg[1],
+                    b_reg[0]);
+    mma_load_rowcol<T, 0b00'11'10'01>(upper_row, lower_row, left_column, right_column,
+                                      1, left_column_start,
+                                      1,
+                                      a_reg[0], a_reg[1],
+                                      b_reg[0]);
+    mma_load_rowcol<T, 0b01'00'11'10>(upper_row, lower_row, left_column, right_column,
+                                      2, left_column_start,
+                                      2,
+                                      a_reg[0], a_reg[1],
+                                      b_reg[0]);
+    mma_load_rowcol<T, 0b10'01'00'11>(upper_row, lower_row, left_column, right_column,
+                                      3, left_column_start,
+                                      3,
+                                      a_reg[0], a_reg[1],
+                                      b_reg[0]);
+    mma_load_col<T>(upper_row, lower_row, left_column, right_column,
+                    4, left_column_start,
+                    a_reg[2], a_reg[3],
+                    b_reg[1]);
+    mma_load_rowcol<T, 0b00'11'10'01>(upper_row, lower_row, left_column, right_column,
+                                      5, left_column_start,
+                                      1,
+                                      a_reg[2], a_reg[3],
+                                      b_reg[1]);
+    mma_load_rowcol<T, 0b01'00'11'10>(upper_row, lower_row, left_column, right_column,
+                                      6, left_column_start,
+                                      2,
+                                      a_reg[2], a_reg[3],
+                                      b_reg[1]);
+    mma_load_rowcol<T, 0b10'01'00'11>(upper_row, lower_row, left_column, right_column,
+                                      7, left_column_start,
+                                      3,
+                                      a_reg[2], a_reg[3],
+                                      b_reg[1]);
+    float d0 = dot_product<T>(c0, upper_row, left_column);
+    float d1 = dot_product<T>(c1, upper_row, right_column);
+    float d2 = dot_product<T>(c2, lower_row, left_column);
+    float d3 = dot_product<T>(c3, lower_row, right_column);
     return float4::Native_vec_{d0, d1, d2, d3};
 }
 
@@ -866,11 +848,16 @@ extern "C"
 {
     float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_f16_f16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
     {
-        return mma_sync_aligned_m16n8k16_row_col_f32_x16_impl<f16, f16x2>(a_reg, b_reg, c_reg);
+        return mma_sync_aligned_m16n8k16_row_col_f32_x16_impl<f16x2>(a_reg, b_reg, c_reg);
     }
 
     float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
     {
-        return mma_sync_aligned_m16n8k16_row_col_f32_x16_impl<bf16, bf16x2>(a_reg, b_reg, c_reg);
+        return mma_sync_aligned_m16n8k16_row_col_f32_x16_impl<bf16x2>(a_reg, b_reg, c_reg);
+    }
+
+    uint4::Native_vec_ FUNC(mma_sync_aligned_m16n8k32_row_col_s32_s8_s8_s32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, uint4::Native_vec_ c_reg)
+    {
+        return {0, 0, 0, 0};
     }
 }

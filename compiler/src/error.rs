@@ -8,7 +8,9 @@ use std::str::Utf8Error;
 pub enum CompilerError {
     #[error("HIP error code: {0:?}")]
     HipError(u32),
-    #[error("Unrecognized AMDGPU GFX version: {0:?}, expected format: gfxABCD where ABCD is a number")]
+    #[error(
+        "Unrecognized AMDGPU GFX version: {0:?}, expected format: gfxABCD where ABCD is a number"
+    )]
     UnknownGfxVersion(String),
     #[error(transparent)]
     Libloading(#[from] libloading::Error),

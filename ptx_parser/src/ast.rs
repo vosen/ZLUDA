@@ -2424,7 +2424,11 @@ pub struct MmaDetails {
 
 impl MmaDetails {
     pub fn dtype(&self) -> Type {
-        Type::Vector(4, ScalarType::F32)
+        if self.cd_type_scalar.kind() == ScalarKind::Float {
+            Type::Vector(4, ScalarType::F32)
+        } else {
+            Type::Vector(4, ScalarType::U32)
+        }
     }
     pub fn atype(&self) -> Type {
         Type::Vector(4, ScalarType::U32)
@@ -2433,6 +2437,10 @@ impl MmaDetails {
         Type::Vector(2, ScalarType::U32)
     }
     pub fn ctype(&self) -> Type {
-        Type::Vector(4, ScalarType::F32)
+        if self.cd_type_scalar.kind() == ScalarKind::Float {
+            Type::Vector(4, ScalarType::F32)
+        } else {
+            Type::Vector(4, ScalarType::U32)
+        }
     }
 }

@@ -3943,6 +3943,18 @@ derive_parser!(
         }
     }
 
+    mma.sync.aligned.m16n8k32.alayout.blayout.s32.s8.s8.s32 d, a, b, c => {
+        Instruction::Mma {
+            data: MmaDetails {
+                alayout,
+                blayout,
+                cd_type_scalar: ScalarType::S32,
+                ab_type_scalar: ScalarType::S8,
+            },
+            arguments: MmaArgs { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+
     .alayout: MatrixLayout = {.row};
     .blayout: MatrixLayout = {.col};
 
