@@ -114,7 +114,11 @@ test_ptx!(setp_leu, [1f32, f32::NAN], [1f32]);
 test_ptx!(bra, [10u64], [11u64]);
 test_ptx!(not, [0u64], [u64::max_value()]);
 test_ptx!(shl, [11u64], [44u64]);
-test_ptx!(cvt_pack, [-257i32, 257i32, -130436883i32], [2968322303u32, 2968354943]);
+test_ptx!(
+    cvt_pack,
+    [-257i32, 257i32, -130436883i32],
+    [2968322303u32, 2968354943]
+);
 test_ptx!(cvt_sat_s_u, [-1i32], [0i32]);
 test_ptx!(cvta, [3.0f32], [3.0f32]);
 test_ptx!(block, [1u64], [2u64]);
