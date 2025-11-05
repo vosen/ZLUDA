@@ -149,6 +149,7 @@ cuda_macros::cuda_function_declarations!(
             cuModuleGetGlobal_v2,
             cuModuleGetLoadingMode,
             cuModuleLoadData,
+            cuModuleLoadFatBinary,
             cuModuleUnload,
             cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags,
             cuPointerGetAttribute,
