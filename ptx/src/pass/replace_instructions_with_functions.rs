@@ -363,8 +363,13 @@ fn run_instruction<'input>(
         } => {
             let cd_type_name = scalar_to_ptx_name(cd_type_scalar);
             let ab_type_name = scalar_to_ptx_name(ab_type_scalar);
+            let dimensions = if cd_type_scalar.kind() == ast::ScalarKind::Float {
+                "m16n8k16"
+            } else {
+                "m16n8k32"
+            };
             let name = format!(
-                "mma_sync_aligned_m16n8k16_{}_{}_{}_{}_{}_{}",
+                "mma_sync_aligned_{dimensions}_{}_{}_{cd_type_name}_{ab_type_name}_{ab_type_name}_{cd_type_name}",
                 match alayout {
                     ast::MatrixLayout::Row => "row",
                     ast::MatrixLayout::Col => "col",
@@ -372,11 +377,7 @@ fn run_instruction<'input>(
                 match blayout {
                     ast::MatrixLayout::Row => "row",
                     ast::MatrixLayout::Col => "col",
-                },
-                cd_type_name,
-                ab_type_name,
-                ab_type_name,
-                cd_type_name,
+                }
             );
             to_call(resolver, fn_declarations, name.into(), i)?
         }

@@ -23,6 +23,7 @@ typedef __bf16 bf16;
 typedef __bf16 bf16x2 __attribute__((ext_vector_type(2)));
 typedef __bf16 bf16x4 __attribute__((ext_vector_type(4)));
 typedef __bf16 bf16x8 __attribute__((ext_vector_type(8)));
+typedef int8_t s8x4 __attribute__((ext_vector_type(4)));
 
 #define FUNC(NAME) __device__ __attribute__((retain)) __zluda_ptx_impl_##NAME
 #define FUNC_CALL(NAME) __zluda_ptx_impl_##NAME
@@ -721,11 +722,25 @@ extern "C"
     }
 }
 
-template <typename T>
-__device__ static float dot_product(float initial_value, T row[8], T column[8]);
+template <typename Acc, typename T>
+__device__ static Acc dot_product(Acc initial_value, T row[8], T column[8]);
 
 template <>
-__device__ float dot_product<bf16x2>(float initial_value, bf16x2 row[8], bf16x2 column[8])
+__device__ int32_t dot_product<int32_t, s8x4>(int32_t initial_value, s8x4 row[8], s8x4 column[8])
+{
+    int32_t result = initial_value;
+    for (int i = 0; i < 8; i++)
+    {
+            result += row[i].x * column[i].x;
+            result += row[i].y * column[i].y;
+            result += row[i].z * column[i].z;
+            result += row[i].w * column[i].w;
+    }
+    return result;
+}
+
+template <>
+__device__ float dot_product<float, bf16x2>(float initial_value, bf16x2 row[8], bf16x2 column[8])
 {
     float result = initial_value;
     for (int i = 0; i < 8; i++)
@@ -737,7 +752,7 @@ __device__ float dot_product<bf16x2>(float initial_value, bf16x2 row[8], bf16x2 
 }
 
 template <>
-__device__ float dot_product<f16x2>(float initial_value, f16x2 row[8], f16x2 column[8])
+__device__ float dot_product<float, f16x2>(float initial_value, f16x2 row[8], f16x2 column[8])
 {
     float result = initial_value;
     for (int i = 0; i < 8; i++)
@@ -785,15 +800,15 @@ __device__ static void mma_load_col(T upper_row[16], T lower_row[16], T left_col
     right_column[index] = std::bit_cast<T>(__builtin_amdgcn_ds_bpermute((left_column_start + 4 + quad_source) << 2, std::bit_cast<int32_t>(b0b1)));
 }
 
-template <typename T>
-__device__ float4::Native_vec_ mma_sync_aligned_m16n8k16_row_col_f32_x16_impl(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
+template <typename Acc, typename T>
+__device__ HIP_vector_base<Acc, 4> mma_sync_aligned_m16n8k16_row_col_f32_x16_impl(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, HIP_vector_base<Acc, 4> c_reg)
 {
     uint8_t laneid = uint8_t(FUNC_CALL(sreg_laneid)());
     uint8_t quad_index = laneid % 4;
-    const float c0 = c_reg[0];
-    const float c1 = c_reg[1];
-    const float c2 = c_reg[2];
-    const float c3 = c_reg[3];
+    const Acc c0 = c_reg.x;
+    const Acc c1 = c_reg.y;
+    const Acc c2 = c_reg.z;
+    const Acc c3 = c_reg.w;
     uint8_t left_column_start = quad_index * 8;
     T upper_row[8];
     T lower_row[8];
@@ -837,27 +852,27 @@ __device__ float4::Native_vec_ mma_sync_aligned_m16n8k16_row_col_f32_x16_impl(ui
                                       3,
                                       a_reg[2], a_reg[3],
                                       b_reg[1]);
-    float d0 = dot_product<T>(c0, upper_row, left_column);
-    float d1 = dot_product<T>(c1, upper_row, right_column);
-    float d2 = dot_product<T>(c2, lower_row, left_column);
-    float d3 = dot_product<T>(c3, lower_row, right_column);
-    return float4::Native_vec_{d0, d1, d2, d3};
+    Acc d0 = dot_product<Acc, T>(c0, upper_row, left_column);
+    Acc d1 = dot_product<Acc, T>(c1, upper_row, right_column);
+    Acc d2 = dot_product<Acc, T>(c2, lower_row, left_column);
+    Acc d3 = dot_product<Acc, T>(c3, lower_row, right_column);
+    return {d0, d1, d2, d3};
 }
 
 extern "C"
 {
     float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_f16_f16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
     {
-        return mma_sync_aligned_m16n8k16_row_col_f32_x16_impl<f16x2>(a_reg, b_reg, c_reg);
+        return mma_sync_aligned_m16n8k16_row_col_f32_x16_impl<float, f16x2>(a_reg, b_reg, HIP_vector_base<float, 4>(c_reg.x, c_reg.y, c_reg.z, c_reg.w)).data;
     }
 
     float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
     {
-        return mma_sync_aligned_m16n8k16_row_col_f32_x16_impl<bf16x2>(a_reg, b_reg, c_reg);
+        return mma_sync_aligned_m16n8k16_row_col_f32_x16_impl<float, bf16x2>(a_reg, b_reg, HIP_vector_base<float, 4>(c_reg.x, c_reg.y, c_reg.z, c_reg.w)).data;
     }
 
     uint4::Native_vec_ FUNC(mma_sync_aligned_m16n8k32_row_col_s32_s8_s8_s32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, uint4::Native_vec_ c_reg)
     {
-        return {0, 0, 0, 0};
+        return std::bit_cast<uint4::Native_vec_>(mma_sync_aligned_m16n8k16_row_col_f32_x16_impl<int32_t, s8x4>(a_reg, b_reg, std::bit_cast<HIP_vector_base<int32_t, 4>>(c_reg)));
     }
 }
