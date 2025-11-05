@@ -2464,14 +2464,14 @@ derive_parser!(
     // cvt.frnd2{.relu}{.satfinite}.f16.f32       d, a;
     // cvt.frnd2{.relu}{.satfinite}.f16x2.f32     d, a, b;
     // cvt.frnd2{.relu}{.satfinite}.bf16.f32      d, a;
-    cvt.frnd2{.relu}{.satfinite}.bf16x2.f32    d, a, b => {
+    cvt.frnd2{.relu}{.satfinite}.x2_to_type.x2_from_type    d, a {, b} => {
         if relu || satfinite {
             state.errors.push(PtxError::Todo);
         }
-        let data = ast::CvtDetails::new(&mut state.errors, Some(frnd2), false, false, ScalarType::BF16x2, ScalarType::F32);
+        let data = ast::CvtDetails::new(&mut state.errors, Some(frnd2), false, false, x2_to_type, x2_from_type);
         ast::Instruction::Cvt {
             data,
-            arguments:  ast::CvtArgs { dst: d, src: a, src2: Some(b) }
+            arguments:  ast::CvtArgs { dst: d, src: a, src2: b }
         }
     }
     // cvt.rna{.satfinite}.tf32.f32               d, a;
@@ -2487,6 +2487,7 @@ derive_parser!(
         }
     }
     // cvt.rn.satfinite{.relu}.f8x2type.f16x2     d, a;
+    /*
     cvt.rn{.relu}.f16x2.f8x2type              d, a => {
         if relu {
             state.errors.push(PtxError::Todo);
@@ -2497,6 +2498,7 @@ derive_parser!(
             arguments: ast::CvtArgs { dst: d, src: a, src2: None }
         }
     }
+    */
 
     .ifrnd: RawRoundingMode =   { .rn,  .rz,  .rm,  .rp,  .rni, .rzi, .rmi, .rpi };
     .frnd2: RawRoundingMode =   { .rn,  .rz };
@@ -2507,7 +2509,9 @@ derive_parser!(
     .atype: ScalarType =        { .u8,   .u16, .u32, .u64,
                                   .s8,   .s16, .s32, .s64,
                                   .bf16, .f16, .f32, .f64 };
-    .f8x2type: ScalarType =     { .e4m3x2, .e5m2x2 };
+    .f8x2type: ScalarType =         { .e4m3x2, .e5m2x2 };
+    .x2_to_type: ScalarType =      { .f16x2, .bf16x2 };
+    .x2_from_type: ScalarType =    { .e4m3x2, .e5m2x2, .f32 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cvt-pack
     cvt.pack.sat.convertType.s32.b32        d, a, b, c => {
