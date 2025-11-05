@@ -242,6 +242,27 @@ ptx_parser_macros::generate_instruction_type!(
                 },
             }
         },
+        CvtPack {
+            data: ScalarType,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::U32) },
+                },
+                src1: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::S32) },
+                },
+                src2: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::S32) },
+                },
+                src3: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::B32) },
+                }
+            }
+        },
         Cvta {
             data: CvtaDetails,
             type: { Type::Scalar(ScalarType::B64) },
@@ -1167,6 +1188,10 @@ impl ScalarType {
             ScalarType::B128 => 16,
             ScalarType::Pred => 1,
         }
+    }
+
+    pub fn bit_size(self) -> u8 {
+        self.layout().size() as u8 * 8u8
     }
 
     pub fn layout(self) -> Layout {

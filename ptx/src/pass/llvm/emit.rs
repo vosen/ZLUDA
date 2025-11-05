@@ -483,6 +483,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Bra { arguments } => self.emit_bra(arguments),
             ast::Instruction::Call { data, arguments } => self.emit_call(data, arguments),
             ast::Instruction::Cvt { data, arguments } => self.emit_cvt(data, arguments),
+            ast::Instruction::CvtPack { data, arguments } => self.emit_cvt_pack(data, arguments),
             ast::Instruction::Shf { data, arguments } => self.emit_shf(data, arguments),
             ast::Instruction::Shr { data, arguments } => self.emit_shr(data, arguments),
             ast::Instruction::Shl { data, arguments } => self.emit_shl(data, arguments),
@@ -1700,13 +1701,81 @@ impl<'a> MethodEmitContext<'a> {
         Ok(())
     }
 
+    fn emit_cvt_pack(
+        &mut self,
+        type_: ast::ScalarType,
+        arguments: ast::CvtPackArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let mut src1_saturated =
+            self.emit_saturate_integer(ast::ScalarType::S32, type_, arguments.src1)?;
+        let mut src2_saturated =
+            self.emit_saturate_integer(ast::ScalarType::S32, type_, arguments.src2)?;
+        let dest_ty = get_scalar_type(self.context, ast::ScalarType::U32);
+        if type_.kind() == ast::ScalarKind::Signed {
+            let type_llvm = get_scalar_type(self.context, type_);
+            let src1_truncated = unsafe {
+                LLVMBuildTrunc(
+                    self.builder,
+                    src1_saturated,
+                    type_llvm,
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            };
+            src1_saturated = unsafe {
+                LLVMBuildZExt(self.builder, src1_truncated, dest_ty, LLVM_UNNAMED.as_ptr())
+            };
+            let src2_truncated = unsafe {
+                LLVMBuildTrunc(
+                    self.builder,
+                    src2_saturated,
+                    type_llvm,
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            };
+            src2_saturated = unsafe {
+                LLVMBuildZExt(self.builder, src2_truncated, dest_ty, LLVM_UNNAMED.as_ptr())
+            };
+        }
+        // result is 32 bit integer packed {src3, src1, src2}
+        let input_bit_size = type_.bit_size();
+        let src1_shifted = unsafe {
+            LLVMBuildShl(
+                self.builder,
+                src1_saturated,
+                LLVMConstInt(dest_ty, input_bit_size as u64, 0),
+                LLVM_UNNAMED.as_ptr(),
+            )
+        };
+        let src3 = self.resolver.value(arguments.src3)?;
+        let src3_shifted = unsafe {
+            LLVMBuildShl(
+                self.builder,
+                src3,
+                LLVMConstInt(dest_ty, input_bit_size as u64 * 2, 0),
+                LLVM_UNNAMED.as_ptr(),
+            )
+        };
+        let src1_src2 = unsafe {
+            LLVMBuildOr(
+                self.builder,
+                src1_shifted,
+                src2_saturated,
+                LLVM_UNNAMED.as_ptr(),
+            )
+        };
+        self.resolver.with_result(arguments.dst, |dst| unsafe {
+            LLVMBuildOr(self.builder, src1_src2, src3_shifted, dst)
+        });
+        Ok(())
+    }
+
     fn emit_cvt_unsigned_to_signed_sat(
         &mut self,
         from: ptx_parser::ScalarType,
         to: ptx_parser::ScalarType,
         arguments: ptx_parser::CvtArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        let clamped = self.emit_saturate_integer(from, to, &arguments)?;
+        let clamped = self.emit_saturate_integer(from, to, arguments.src)?;
         let resize_fn = if to.layout().size() >= from.layout().size() {
             LLVMBuildSExtOrBitCast
         } else {
@@ -1723,7 +1792,7 @@ impl<'a> MethodEmitContext<'a> {
         &mut self,
         from: ptx_parser::ScalarType,
         to: ptx_parser::ScalarType,
-        arguments: &ptx_parser::CvtArgs<SpirvWord>,
+        src: SpirvWord,
     ) -> Result<LLVMValueRef, TranslateError> {
         let from_llvm = get_scalar_type(self.context, from);
         match from.kind() {
@@ -1745,10 +1814,7 @@ impl<'a> MethodEmitContext<'a> {
                     unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
                     None,
                     Some(&from.into()),
-                    vec![
-                        (self.resolver.value(arguments.src)?, from_llvm),
-                        (max, from_llvm),
-                    ],
+                    vec![(self.resolver.value(src)?, from_llvm), (max, from_llvm)],
                 )?;
                 Ok(clamped)
             }
@@ -1781,10 +1847,7 @@ impl<'a> MethodEmitContext<'a> {
                     unsafe { CStr::from_bytes_with_nul_unchecked(max_intrinsic.as_bytes()) },
                     None,
                     Some(&from.into()),
-                    vec![
-                        (self.resolver.value(arguments.src)?, from_llvm),
-                        (min, from_llvm),
-                    ],
+                    vec![(self.resolver.value(src)?, from_llvm), (min, from_llvm)],
                 )?;
                 let clamped = self.emit_intrinsic(
                     unsafe { CStr::from_bytes_with_nul_unchecked(min_intrinsic.as_bytes()) },
@@ -1804,7 +1867,7 @@ impl<'a> MethodEmitContext<'a> {
         to: ptx_parser::ScalarType,
         arguments: ptx_parser::CvtArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        let clamped = self.emit_saturate_integer(from, to, &arguments)?;
+        let clamped = self.emit_saturate_integer(from, to, arguments.src)?;
         let resize_fn = if to.layout().size() >= from.layout().size() {
             LLVMBuildZExtOrBitCast
         } else {

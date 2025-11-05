@@ -2508,6 +2508,17 @@ derive_parser!(
                                   .s8,   .s16, .s32, .s64,
                                   .bf16, .f16, .f32, .f64 };
     .f8x2type: ScalarType =     { .e4m3x2, .e5m2x2 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cvt-pack
+    cvt.pack.sat.convertType.s32.b32        d, a, b, c => {
+        ast::Instruction::CvtPack {
+            data: converttype,
+            arguments: ast::CvtPackArgs { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+
+    .convertType: ScalarType = { .u8, .s8 };
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-shl
     shl.type d, a, b => {
         ast::Instruction::Shl { data: type_, arguments: ShlArgs { dst: d, src1: a, src2: b } }

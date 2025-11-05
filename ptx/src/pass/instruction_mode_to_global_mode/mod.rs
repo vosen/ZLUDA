@@ -2141,6 +2141,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::BarWarp { .. }
         | ast::Instruction::Bar { .. }
         | ast::Instruction::BarRed { .. }
+        | ast::Instruction::CvtPack { .. }
         | ast::Instruction::Cvta { .. }
         | ast::Instruction::Atom { .. }
         | ast::Instruction::Mul24 { .. }
