@@ -71,7 +71,11 @@ pub(crate) fn load_hip_module(library: CodeLibraryRef) -> Result<hipModule_t, CU
     // TODO: get this information on initialization
     let hip_properties = get_hip_properties()?;
     let gcn_arch = get_gcn_arch(&hip_properties)?;
-    let gfx_version = match gcn_arch.strip_prefix("gfx").unwrap().parse::<u32>() {
+    let gfx_version = match gcn_arch
+        .strip_prefix("gfx")
+        .ok_or(CUerror::UNKNOWN)?
+        .parse::<u32>()
+    {
         Ok(v) => v,
         Err(_) => return Err(CUerror::UNKNOWN),
     };
