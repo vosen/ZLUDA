@@ -2464,14 +2464,14 @@ derive_parser!(
     // cvt.frnd2{.relu}{.satfinite}.f16.f32       d, a;
     // cvt.frnd2{.relu}{.satfinite}.f16x2.f32     d, a, b;
     // cvt.frnd2{.relu}{.satfinite}.bf16.f32      d, a;
-    cvt.frnd2{.relu}{.satfinite}.x2_to_type.x2_from_type    d, a, b => {
+    cvt.frnd2{.relu}{.satfinite}.x2_to_type.x2_from_type    d, a {, b} => {
         if relu || satfinite {
             state.errors.push(PtxError::Todo);
         }
         let data = ast::CvtDetails::new(&mut state.errors, Some(frnd2), false, false, x2_to_type, x2_from_type);
         ast::Instruction::Cvt {
             data,
-            arguments:  ast::CvtArgs { dst: d, src: a, src2: Some(b) }
+            arguments:  ast::CvtArgs { dst: d, src: a, src2: b }
         }
     }
     // cvt.rna{.satfinite}.tf32.f32               d, a;
