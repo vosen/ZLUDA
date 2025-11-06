@@ -185,6 +185,11 @@ test_ptx!(
     [0x40004040, 0x40404080, 0x40A04040],
     [0x41304170]
 );
+test_ptx!(
+    fma_f16x2,
+    [0x40004040, 0x40404080, 0x40A04040],
+    [1183860456u32]
+);
 test_ptx!(shared_variable, [513u64], [513u64]);
 test_ptx!(shared_ptr_32, [513u64], [513u64]);
 test_ptx!(atom_cas, [91u32, 91u32], [91u32, 100u32]);
