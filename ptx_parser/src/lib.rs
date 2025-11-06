@@ -1878,6 +1878,9 @@ derive_parser!(
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum MatrixLayout { }
 
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
+    pub enum CacheLevel { }
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
     mov{.vec}.type  d, a => {
         Instruction::Mov {
@@ -3959,6 +3962,17 @@ derive_parser!(
         }
     }
     .type: ScalarType = { .f32, .f64 };
+
+    prefetch{.space}.level [a] => {
+        let space = space.unwrap_or(StateSpace::Generic);
+        ast::Instruction::Prefetch {
+            data: PrefetchData { space, level, },
+            arguments: PrefetchArgs { src: a }
+        }
+    }
+
+    .space: StateSpace =    { .global, .local };
+    .level: CacheLevel =    { .L1, .L2 };
 );
 
 #[cfg(test)]

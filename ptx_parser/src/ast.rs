@@ -3,7 +3,7 @@ use super::{
     StateSpace, VectorPrefix,
 };
 use crate::{
-    FunnelShiftMode, MatrixLayout, MatrixNumber, MatrixShape, Mul24Control, PtxError,
+    CacheLevel, FunnelShiftMode, MatrixLayout, MatrixNumber, MatrixShape, Mul24Control, PtxError,
     PtxParserState, Reduction, ShiftDirection, ShuffleMode, VoteMode,
 };
 use bitflags::bitflags;
@@ -765,6 +765,18 @@ ptx_parser_macros::generate_instruction_type!(
                 dst: T,
                 src1: T,
                 src2: T,
+            }
+        },
+        Prefetch {
+            type: !,
+            data: PrefetchData,
+            arguments<T>: {
+                src: {
+                    repr: T,
+                    type: Type::from(ScalarType::B8),
+                    space: { data.space },
+                    relaxed_type_check: true
+                }
             }
         }
     }
@@ -2465,4 +2477,9 @@ impl MmaDetails {
     pub fn ctype(&self) -> Type {
         Type::Vector(4, ScalarType::F32)
     }
+}
+
+pub struct PrefetchData {
+    pub space: StateSpace,
+    pub level: CacheLevel,
 }
