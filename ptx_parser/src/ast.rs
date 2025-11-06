@@ -2028,6 +2028,7 @@ pub enum CvtMode {
         is_integer_rounding: bool,
         flush_to_zero: Option<bool>,
         saturate: bool,
+        relu: bool,
     },
     FPRound {
         integer_rounding: Option<RoundingMode>,
@@ -2060,6 +2061,7 @@ impl CvtDetails {
         rnd: Option<RawRoundingMode>,
         ftz: bool,
         saturate: bool,
+        relu: bool,
         dst: ScalarType,
         src: ScalarType,
     ) -> Self {
@@ -2104,6 +2106,7 @@ impl CvtDetails {
                         is_integer_rounding,
                         flush_to_zero,
                         saturate,
+                        relu,
                     }
                 }
                 Ordering::Equal => CvtMode::FPRound {

@@ -1667,6 +1667,10 @@ impl<'a> MethodEmitContext<'a> {
             }
         };
         let src = self.resolver.value(arguments.src)?;
+        let emit_relu = matches!(
+            data.mode,
+            ptx_parser::CvtMode::FPTruncate { relu: true, .. }
+        );
         if let Some(src2) = arguments.src2 {
             let packed_type = get_scalar_type(
                 self.context,
@@ -1675,11 +1679,25 @@ impl<'a> MethodEmitContext<'a> {
                     .ok_or_else(|| error_mismatched_type())?,
             );
             let src2 = self.resolver.value(src2)?;
+            let mut src_result =
+                unsafe { llvm_fn(self.builder, src, packed_type, LLVM_UNNAMED.as_ptr()) };
+            let mut src2_result =
+                unsafe { llvm_fn(self.builder, src2, packed_type, LLVM_UNNAMED.as_ptr()) };
+            if emit_relu {
+                src_result = self.emit_relu(
+                    data.to.packed_type().ok_or_else(error_unreachable)?,
+                    src_result,
+                )?;
+                src2_result = self.emit_relu(
+                    data.to.packed_type().ok_or_else(error_unreachable)?,
+                    src2_result,
+                )?;
+            }
             let vec = unsafe {
                 LLVMBuildInsertElement(
                     self.builder,
                     LLVMGetPoison(dst_type),
-                    llvm_fn(self.builder, src, packed_type, LLVM_UNNAMED.as_ptr()),
+                    src_result,
                     LLVMConstInt(LLVMInt32TypeInContext(self.context), 1, false as i32),
                     LLVM_UNNAMED.as_ptr(),
                 )
@@ -1688,17 +1706,35 @@ impl<'a> MethodEmitContext<'a> {
                 LLVMBuildInsertElement(
                     self.builder,
                     vec,
-                    llvm_fn(self.builder, src2, packed_type, LLVM_UNNAMED.as_ptr()),
+                    src2_result,
                     LLVMConstInt(LLVMInt32TypeInContext(self.context), 0, false as i32),
                     dst,
                 )
-            })
+            });
         } else {
-            self.resolver.with_result(arguments.dst, |dst| unsafe {
-                llvm_fn(self.builder, src, dst_type, dst)
-            })
+            let mut result = unsafe { llvm_fn(self.builder, src, dst_type, LLVM_UNNAMED.as_ptr()) };
+            if emit_relu {
+                result = self.emit_relu(data.to, result)?;
+            }
+            self.resolver.register(arguments.dst, result);
         };
         Ok(())
+    }
+
+    fn emit_relu(
+        &mut self,
+        type_: ast::ScalarType,
+        src: LLVMValueRef,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        let llvm_type = get_scalar_type(self.context, type_);
+        let zero = unsafe { LLVMConstNull(llvm_type) };
+        let intrinsic = format!("llvm.maximum.{}\0", LLVMTypeDisplay(type_));
+        self.emit_intrinsic(
+            unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
+            None,
+            Some(&type_.into()),
+            vec![(src, llvm_type), (zero, llvm_type)],
+        )
     }
 
     fn emit_cvt_pack(

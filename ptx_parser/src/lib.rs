@@ -2455,7 +2455,7 @@ derive_parser!(
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt
     cvt{.ifrnd}{.ftz}{.sat}.dtype.atype         d, a => {
-        let data = ast::CvtDetails::new(&mut state.errors, ifrnd, ftz, sat, dtype, atype);
+        let data = ast::CvtDetails::new(&mut state.errors, ifrnd, ftz, sat, false, dtype, atype);
         let arguments = ast::CvtArgs { dst: d, src: a, src2: None };
         ast::Instruction::Cvt {
             data, arguments
@@ -2465,10 +2465,10 @@ derive_parser!(
     // cvt.frnd2{.relu}{.satfinite}.f16x2.f32     d, a, b;
     // cvt.frnd2{.relu}{.satfinite}.bf16.f32      d, a;
     cvt.frnd2{.relu}{.satfinite}.x2_to_type.x2_from_type    d, a {, b} => {
-        if relu || satfinite {
+        if satfinite {
             state.errors.push(PtxError::Todo);
         }
-        let data = ast::CvtDetails::new(&mut state.errors, Some(frnd2), false, false, x2_to_type, x2_from_type);
+        let data = ast::CvtDetails::new(&mut state.errors, Some(frnd2), false, false, relu, x2_to_type, x2_from_type);
         ast::Instruction::Cvt {
             data,
             arguments:  ast::CvtArgs { dst: d, src: a, src2: b }
@@ -2480,7 +2480,7 @@ derive_parser!(
         if relu {
             state.errors.push(PtxError::Todo);
         }
-        let data = ast::CvtDetails::new(&mut state.errors, Some(rn), false, false, f8x2type, ScalarType::F32);
+        let data = ast::CvtDetails::new(&mut state.errors, Some(rn), false, false, false, f8x2type, ScalarType::F32);
         ast::Instruction::Cvt {
             data,
             arguments: ast::CvtArgs { dst: d, src: a, src2: Some(b) }
