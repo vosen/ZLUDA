@@ -376,6 +376,18 @@ test_ptx!(
     [-1.0f32, 1.0f32, 3.14, f32::NEG_INFINITY],
     [15360u32, 1112014848]
 );
+test_ptx!(
+    set_f16,
+    [
+        half::f16::NAN,
+        half::f16::NAN,
+        half::f16::from_f32(3.14),
+        half::f16::NEG_INFINITY,
+        half::f16::from_f32(-0.0),
+        half::f16::from_f32(0.0)
+    ],
+    [4294967295u32, 65535]
+);
 
 test_ptx!(assertfail);
 // TODO: not yet supported

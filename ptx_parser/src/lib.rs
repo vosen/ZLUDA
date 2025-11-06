@@ -2366,6 +2366,19 @@ derive_parser!(
             arguments: SetArgs { dst: d, src1: a, src2: b }
         }
     }
+
+    set.CmpOp{.ftz}.u32.f16x2         d, a, b => {
+        let base = ast::SetpData::try_parse(state, cmpop, ftz, ScalarType::F16x2);
+        let data = ast::SetData {
+            base,
+            dtype: ScalarType::U32
+        };
+        ast::Instruction::Set {
+            data,
+            arguments: SetArgs { dst: d, src1: a, src2: b }
+        }
+    }
+
     set.CmpOp.BoolOp{.ftz}.dtype.stype  d, a, b, {!}c => {
         let (negate_src3, c) = c;
         let base = ast::SetpData::try_parse(state, cmpop, ftz, stype);
@@ -2388,7 +2401,7 @@ derive_parser!(
                                   .equ, .neu, .ltu, .leu, .gtu, .geu, .num, .nan }; // float-only
     .BoolOp: SetpBoolPostOp = { .and, .or, .xor };
     .dtype: ScalarType = { .u32, .s32, .f32 };
-    .stype: ScalarType = { .b16, .b32, .b64, .u16, .u32, .u64, .s16, .s32, .s64, .f32, .f64 };
+    .stype: ScalarType = { .b16, .b32, .b64, .u16, .u32, .u64, .s16, .s32, .s64, .f16, .f32, .f64 };
 
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions-setp

@@ -1753,6 +1753,7 @@ pub struct SetData {
     pub base: SetpData,
 }
 
+#[derive(Copy, Clone)]
 pub struct SetpData {
     pub type_: ScalarType,
     pub flush_to_zero: Option<bool>,
