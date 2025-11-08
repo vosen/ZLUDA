@@ -2,7 +2,7 @@ use cuda_types::cudnn9::*;
 use hip_runtime_sys::*;
 use miopen_sys::*;
 use rustc_hash::FxHashMap;
-use std::{mem, sync::Mutex};
+use std::{collections::VecDeque, mem, ptr, sync::Mutex};
 use zluda_common::{from_cuda_object, ZludaObject};
 
 pub(crate) struct Context {
@@ -17,6 +17,7 @@ impl Context {
         Self {
             base,
             search_workspace: Mutex::new(ContextCache {
+                beta_buffer_cache: BetaBuffersQueue::new(),
                 cache: FxHashMap::default(),
                 scratchpad: SearchScratchpad {
                     size: 0,
@@ -59,8 +60,95 @@ impl ZludaObject for Context {
 }
 
 struct ContextCache {
+    beta_buffer_cache: BetaBuffersQueue,
     cache: FxHashMap<ConvolutionOpCacheKey, miopenConvAlgoPerf_t>,
     scratchpad: SearchScratchpad,
+}
+
+struct BetaBuffersQueue {
+    buffers: VecDeque<BetaBuffer>,
+}
+
+impl BetaBuffersQueue {
+    fn new() -> Self {
+        Self {
+            buffers: VecDeque::new(),
+        }
+    }
+
+    fn scavange_buffer(&mut self, size: usize) -> Result<Option<BetaBuffer>, hipErrorCode_t> {
+        let mut result = None;
+        let mut err = None;
+        while let Some(buffer) = self.buffers.pop_front() {
+            match unsafe { hipEventQuery(buffer.free) } {
+                hipError_t::ErrorNotReady => {
+                    self.buffers.push_front(buffer);
+                }
+                hipError_t::Success => {
+                    if buffer.size >= size && result.is_none() {
+                        result = Some(buffer);
+                    }
+                }
+                Err(err_code) => {
+                    err = Some(err_code);
+                }
+            }
+        }
+        match err {
+            Some(err_code) => Err(err_code),
+            None => Ok(result),
+        }
+    }
+
+    fn with_buffer(
+        &mut self,
+        size: usize,
+        fn_: impl FnOnce(*mut ::std::os::raw::c_void) -> Result<(), miopenError_t>,
+    ) -> Result<hipEvent_t, miopenError_t> {
+        let buffer = self
+            .scavange_buffer(size)
+            .map_err(|_| miopenError_t::InternalError)?;
+        let buffer = match buffer {
+            Some(buffer) => buffer,
+            None => unsafe { BetaBuffer::new(size)? },
+        };
+        fn_(buffer.data)?;
+        let event = buffer.free;
+        self.buffers.push_back(buffer);
+        Ok(event)
+    }
+}
+
+struct BetaBuffer {
+    size: usize,
+    data: *mut ::std::os::raw::c_void,
+    free: hipEvent_t,
+}
+
+impl BetaBuffer {
+    unsafe fn new(size: usize) -> Result<Self, miopenError_t> {
+        let mut free = std::ptr::null_mut();
+        hipEventCreateWithFlags(
+            &mut free,
+            hipEventDisableTiming | hipEventDisableSystemFence,
+        )
+        .map_err(|_| miopenError_t::InternalError)?;
+        let mut data = std::ptr::null_mut();
+        hipMalloc(&mut data, size).map_err(|_| miopenError_t::InternalError)?;
+        Ok(Self { size, data, free })
+    }
+
+    unsafe fn drop_checked(&mut self) -> Result<(), miopenError_t> {
+        let result1 = hipFree(self.data).map_err(|_| miopenError_t::InternalError);
+        let result2 = hipEventDestroy(self.free).map_err(|_| miopenError_t::InternalError);
+        result1.and(result2)
+    }
+}
+
+impl Drop for BetaBuffer {
+    fn drop(&mut self) {
+        unsafe { self.drop_checked().ok() };
+    }
 }
 
 struct SearchScratchpad {
@@ -154,19 +242,15 @@ pub(crate) unsafe fn set_tensor4d_descriptor(
     h: ::std::os::raw::c_int,
     w: ::std::os::raw::c_int,
 ) -> miopenStatus_t {
-    let (lens, len) = match format {
-        miopenTensorLayout_t::miopenTensorNCHW => {
-            let lens = [n, c, h, w, 0];
-            (lens, 4)
-        }
-        miopenTensorLayout_t::miopenTensorNHWC => {
-            let lens = [n, h, w, c, 0];
-            (lens, 4)
-        }
-        // TODO: I'm not sure how to convert miopenTensorLayout_t::miopenTensorNCHWc4
-        _ => return miopenStatus_t::ErrorNotImplemented,
-    };
-    miopenSetNdTensorDescriptorWithLayout(tensor_desc, data_type, format, lens.as_ptr(), len)
+    // Even if the layout is NHWC, miopenSetNdTensorDescriptorWithLayout still expects NCHW order
+    let lens = [n, c, h, w];
+    miopenSetNdTensorDescriptorWithLayout(
+        tensor_desc,
+        data_type,
+        format,
+        lens.as_ptr(),
+        lens.len() as i32,
+    )
 }
 
 pub(crate) unsafe fn set_filter4d_descriptor(
@@ -289,7 +373,7 @@ unsafe fn search_convolution_forward_algorithm(
         y_desc,
         &mut required_search_workspace_size,
     )?;
-    if required_search_workspace_size > scratchpad.size {
+        if required_search_workspace_size > scratchpad.size {
         let old_ptr = scratchpad.search_space;
         scratchpad.size = 0;
         hipFree(old_ptr).map_err(|_| miopenError_t::AllocFailed)?;
@@ -489,6 +573,34 @@ pub(crate) unsafe fn convolution_forward(
     let algo =
         get_or_search_convolution_forward_algorithm(handle, x_desc, w_desc, conv_desc, y_desc)?
             .ok_or(miopenError_t::UnsupportedOp)?;
+    if algo.memory > workspace_size_in_bytes {
+        return miopenStatus_t::ErrorInvalidValue;
+    }
+    let mut type_ = mem::zeroed();
+    miopenGetTensorDescriptor(y_desc, &mut type_, ptr::null_mut(), ptr::null_mut())?;
+    let beta_value = if type_ == miopenDataType_t::miopenDouble {
+        *beta.cast::<f64>()
+    } else {
+        *beta.cast::<f32>() as f64
+    };
+    let y_copy = if beta_value != 0.0 {
+        let mut y_size = 0;
+        miopenGetTensorNumBytes(y_desc, &mut y_size)?;
+        let mut mutable = handle
+            .search_workspace
+            .lock()
+            .map_err(|_| miopenError_t::UnknownError)?;
+        let event = mutable
+            .beta_buffer_cache
+            .with_buffer(y_size, |temp_buffer| {
+                hipMemcpyDtoD(hipDeviceptr_t(temp_buffer), hipDeviceptr_t(y), y_size)
+                    .map_err(|_| miopenError_t::InternalError)
+            })?;
+        Some((mutable, event))
+    } else {
+        None
+    };
+    let zero = 0u64;
     miopenConvolutionForward(
         handle.base,
         alpha,
@@ -498,12 +610,31 @@ pub(crate) unsafe fn convolution_forward(
         w,
         conv_desc,
         algo.__bindgen_anon_1.fwd_algo,
-        beta,
+        std::ptr::from_ref(&zero).cast(),
         y_desc,
         y,
         workspace,
         workspace_size_in_bytes,
-    )
+    )?;
+    if let Some((drop_guard, event)) = y_copy {
+        let one = 1.0f32;
+        miopenOpTensor(
+            handle.base,
+            miopenTensorOp_t::miopenTensorOpAdd,
+            beta,
+            y_desc,
+            ptr::null_mut(),
+            std::ptr::from_ref(&one).cast(),
+            y_desc,
+            y,
+            std::ptr::from_ref(&zero).cast(),
+            y_desc,
+            y,
+        )?;
+        hipFreeAsync(ptr::null_mut(), hipStream_t(ptr::null_mut())).unwrap();
+        drop(drop_guard);
+    }
+    Ok(())
 }
 
 pub(crate) unsafe fn destroy_convolution_descriptor(
