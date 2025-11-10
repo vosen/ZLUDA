@@ -2418,15 +2418,17 @@ pub struct ReduxSyncData {
 pub struct MmaDetails {
     pub alayout: MatrixLayout,
     pub blayout: MatrixLayout,
-    pub dtype_scalar: ScalarType,
-    pub atype_scalar: ScalarType,
-    pub btype_scalar: ScalarType,
-    pub ctype_scalar: ScalarType,
+    pub cd_type_scalar: ScalarType,
+    pub ab_type_scalar: ScalarType,
 }
 
 impl MmaDetails {
     pub fn dtype(&self) -> Type {
-        Type::Vector(4, ScalarType::F32)
+        if self.cd_type_scalar.kind() == ScalarKind::Float {
+            Type::Vector(4, ScalarType::F32)
+        } else {
+            Type::Vector(4, ScalarType::U32)
+        }
     }
     pub fn atype(&self) -> Type {
         Type::Vector(4, ScalarType::U32)
@@ -2435,6 +2437,10 @@ impl MmaDetails {
         Type::Vector(2, ScalarType::U32)
     }
     pub fn ctype(&self) -> Type {
-        Type::Vector(4, ScalarType::F32)
+        if self.cd_type_scalar.kind() == ScalarKind::Float {
+            Type::Vector(4, ScalarType::F32)
+        } else {
+            Type::Vector(4, ScalarType::U32)
+        }
     }
 }
