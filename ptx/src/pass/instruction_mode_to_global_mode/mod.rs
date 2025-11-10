@@ -7,9 +7,8 @@ use super::SpirvWord;
 use super::Statement;
 use super::TranslateError;
 use crate::pass::error_unreachable;
-use microlp::OptimizationDirection;
-use microlp::Problem;
-use microlp::Variable;
+use fixedbitset::FixedBitSet;
+use highs::HighsStatus;
 use petgraph::graph::NodeIndex;
 use petgraph::visit::IntoNodeReferences;
 use petgraph::Direction;
@@ -17,14 +16,15 @@ use petgraph::Graph;
 use ptx_parser as ast;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
-use std::hash::Hash;
+use std::collections::VecDeque;
 use std::iter;
 use std::mem;
-use strum::EnumCount;
-use strum_macros::{EnumCount, VariantArray};
+use strum::VariantArray;
 use unwrap_or::unwrap_some_or;
 
-#[derive(Default, PartialEq, Eq, Clone, Copy, Debug, VariantArray, EnumCount)]
+#[derive(
+    Default, PartialEq, Eq, Clone, Copy, Debug, strum_macros::VariantArray, strum_macros::EnumCount,
+)]
 enum DenormalMode {
     #[default]
     FlushToZero,
@@ -60,7 +60,9 @@ impl Into<usize> for DenormalMode {
     }
 }
 
-#[derive(Default, PartialEq, Eq, Clone, Copy, Debug, VariantArray, EnumCount)]
+#[derive(
+    Default, PartialEq, Eq, Clone, Copy, Debug, strum_macros::VariantArray, strum_macros::EnumCount,
+)]
 enum RoundingMode {
     #[default]
     NearestEven,
@@ -385,123 +387,61 @@ struct ResolvedControlFlowGraph {
 }
 
 impl ResolvedControlFlowGraph {
-    // This function takes the initial control flow graph. Initial control flow
-    // graph only has mode values for basic blocks if any instruction in the
-    // given basic block requires a mode. All the other basic blocks have no
-    // value. This pass resolved the values for all basic blocks. If a basic
-    // block sets no value then and there are multiple incoming edges from
-    // basic block with different values then the value is set to a special
-    // value "Conflict".
-    // After this pass every basic block either has a concrete value or "Conflict"
+    // This function merges previously computed information about conflicts and
+    // mandatory insertion points
     fn new(
         cfg: ControlFlowGraph,
-        f32_denormal_kernels: &FxHashMap<SpirvWord, DenormalMode>,
-        f16f64_denormal_kernels: &FxHashMap<SpirvWord, DenormalMode>,
-        f32_rounding_kernels: &FxHashMap<SpirvWord, RoundingMode>,
-        f16f64_rounding_kernels: &FxHashMap<SpirvWord, RoundingMode>,
+        f32_denormal_modes: &MandatoryModeInsertions<DenormalMode>,
+        f16f64_denormal_modes: &MandatoryModeInsertions<DenormalMode>,
+        f32_rounding_modes: &MandatoryModeInsertions<RoundingMode>,
+        f16f64_rounding_modes: &MandatoryModeInsertions<RoundingMode>,
     ) -> Result<Self, TranslateError> {
-        fn get_incoming_mode<T: Eq + PartialEq + Copy + Default>(
-            cfg: &ControlFlowGraph,
-            kernels: &FxHashMap<SpirvWord, T>,
+        fn resolve_mode<T: Eq + PartialEq + Copy + Default + VariantArray + Into<usize>>(
+            modes: &MandatoryModeInsertions<T>,
             node: NodeIndex,
-            mut exit_getter: impl FnMut(&Node) -> Option<ExtendedMode<T>>,
-        ) -> Result<Resolved<T>, TranslateError> {
-            let mut mode: Option<T> = None;
-            let mut visited = iter::once(node).collect::<FxHashSet<_>>();
-            let mut to_visit = cfg
-                .graph
-                .neighbors_directed(node, Direction::Incoming)
-                .map(|x| x)
-                .collect::<Vec<_>>();
-            while let Some(node) = to_visit.pop() {
-                if !visited.insert(node) {
-                    continue;
-                }
-                let node_data = &cfg.graph[node];
-                match (mode, exit_getter(node_data)) {
-                    (_, None) => {
-                        for next in cfg.graph.neighbors_directed(node, Direction::Incoming) {
-                            if !visited.contains(&next) {
-                                to_visit.push(next);
-                            }
-                        }
-                    }
-                    (existing_mode, Some(new_mode)) => {
-                        let new_mode = match new_mode {
-                            ExtendedMode::BasicBlock(new_mode) => new_mode,
-                            ExtendedMode::Entry(kernel) => {
-                                kernels.get(&kernel).copied().unwrap_or_default()
-                            }
-                        };
-                        if let Some(existing_mode) = existing_mode {
-                            if existing_mode != new_mode {
-                                return Ok(Resolved::Conflict);
-                            }
-                        }
-                        mode = Some(new_mode);
-                    }
-                }
-            }
-            // This should happen only for orphaned basic blocks
-            mode.map(Resolved::Value).ok_or_else(error_unreachable)
-        }
-        fn resolve_mode<T: Eq + PartialEq + Copy + Default>(
-            cfg: &ControlFlowGraph,
-            kernels: &FxHashMap<SpirvWord, T>,
-            node: NodeIndex,
-            exit_getter: impl FnMut(&Node) -> Option<ExtendedMode<T>>,
             mode: &Mode<T>,
         ) -> Result<ResolvedMode<T>, TranslateError> {
             let entry = match mode.entry {
-                Some(ExtendedMode::Entry(kernel)) => {
-                    Resolved::Value(kernels.get(&kernel).copied().unwrap_or_default())
+                Some(ExtendedMode::Kernel(kernel)) => {
+                    Resolved::Value(modes.kernels.get(&kernel).copied().unwrap_or_default())
                 }
                 Some(ExtendedMode::BasicBlock(bb)) => Resolved::Value(bb),
-                None => get_incoming_mode(cfg, kernels, node, exit_getter)?,
+                None => match &modes.propagation_state[node.index()] {
+                    PropagationState::Fixed { entry, .. } => match entry {
+                        None => return Err(error_unreachable()),
+                        Some(ComputedValue::Conflict) => Resolved::Conflict,
+                        Some(ComputedValue::Value(value, _)) => {
+                            Resolved::Value(value.ok_or_else(error_unreachable)?)
+                        }
+                    },
+                    PropagationState::Propagated(computed_value) => match computed_value {
+                        ComputedValue::Conflict => Resolved::Conflict,
+                        ComputedValue::Value(value, kernels) => {
+                            resolve_fast(modes, value, kernels)?
+                        }
+                    },
+                },
             };
             let exit = match mode.entry {
                 Some(ExtendedMode::BasicBlock(bb)) => Resolved::Value(bb),
-                Some(ExtendedMode::Entry(_)) | None => entry,
+                Some(ExtendedMode::Kernel(_)) | None => entry,
             };
             Ok(ResolvedMode { entry, exit })
         }
         fn resolve_node_impl(
-            cfg: &ControlFlowGraph,
-            f32_denormal_kernels: &FxHashMap<SpirvWord, DenormalMode>,
-            f16f64_denormal_kernels: &FxHashMap<SpirvWord, DenormalMode>,
-            f32_rounding_kernels: &FxHashMap<SpirvWord, RoundingMode>,
-            f16f64_rounding_kernels: &FxHashMap<SpirvWord, RoundingMode>,
+            f32_denormal_modes: &MandatoryModeInsertions<DenormalMode>,
+            f16f64_denormal_modes: &MandatoryModeInsertions<DenormalMode>,
+            f32_rounding_modes: &MandatoryModeInsertions<RoundingMode>,
+            f16f64_rounding_modes: &MandatoryModeInsertions<RoundingMode>,
             index: NodeIndex,
             node: &Node,
         ) -> Result<ResolvedNode, TranslateError> {
-            let denormal_f32 = resolve_mode(
-                cfg,
-                f32_denormal_kernels,
-                index,
-                |node| node.denormal_f32.exit,
-                &node.denormal_f32,
-            )?;
-            let denormal_f16f64 = resolve_mode(
-                cfg,
-                f16f64_denormal_kernels,
-                index,
-                |node| node.denormal_f16f64.exit,
-                &node.denormal_f16f64,
-            )?;
-            let rounding_f32 = resolve_mode(
-                cfg,
-                f32_rounding_kernels,
-                index,
-                |node| node.rounding_f32.exit,
-                &node.rounding_f32,
-            )?;
-            let rounding_f16f64 = resolve_mode(
-                cfg,
-                f16f64_rounding_kernels,
-                index,
-                |node| node.rounding_f16f64.exit,
-                &node.rounding_f16f64,
-            )?;
+            let denormal_f32 = resolve_mode(f32_denormal_modes, index, &node.denormal_f32)?;
+            let denormal_f16f64 =
+                resolve_mode(f16f64_denormal_modes, index, &node.denormal_f16f64)?;
+            let rounding_f32 = resolve_mode(f32_rounding_modes, index, &node.rounding_f32)?;
+            let rounding_f16f64 =
+                resolve_mode(f16f64_rounding_modes, index, &node.rounding_f16f64)?;
             Ok(ResolvedNode {
                 label: node.label,
                 denormal_f32,
@@ -511,21 +451,19 @@ impl ResolvedControlFlowGraph {
             })
         }
         fn resolve_node(
-            cfg: &ControlFlowGraph,
-            f32_denormal_kernels: &FxHashMap<SpirvWord, DenormalMode>,
-            f16f64_denormal_kernels: &FxHashMap<SpirvWord, DenormalMode>,
-            f32_rounding_kernels: &FxHashMap<SpirvWord, RoundingMode>,
-            f16f64_rounding_kernels: &FxHashMap<SpirvWord, RoundingMode>,
+            f32_denormal_modes: &MandatoryModeInsertions<DenormalMode>,
+            f16f64_denormal_modes: &MandatoryModeInsertions<DenormalMode>,
+            f32_rounding_modes: &MandatoryModeInsertions<RoundingMode>,
+            f16f64_rounding_modes: &MandatoryModeInsertions<RoundingMode>,
             index: NodeIndex,
             node: &Node,
             error: &mut bool,
         ) -> ResolvedNode {
             match resolve_node_impl(
-                cfg,
-                f32_denormal_kernels,
-                f16f64_denormal_kernels,
-                f32_rounding_kernels,
-                f16f64_rounding_kernels,
+                f32_denormal_modes,
+                f16f64_denormal_modes,
+                f32_rounding_modes,
+                f16f64_rounding_modes,
                 index,
                 node,
             ) {
@@ -558,11 +496,10 @@ impl ResolvedControlFlowGraph {
         let graph = cfg.graph.map(
             |index, node| {
                 resolve_node(
-                    &cfg,
-                    f32_denormal_kernels,
-                    f16f64_denormal_kernels,
-                    f32_rounding_kernels,
-                    f16f64_rounding_kernels,
+                    f32_denormal_modes,
+                    f16f64_denormal_modes,
+                    f32_rounding_modes,
+                    f16f64_rounding_modes,
                     index,
                     node,
                     &mut error,
@@ -582,9 +519,55 @@ impl ResolvedControlFlowGraph {
     }
 }
 
+fn resolve_fast<T: Copy + VariantArray + Into<usize>>(
+    modes: &MandatoryModeInsertions<T>,
+    value: &Option<T>,
+    kernels: &FixedBitSet,
+) -> Result<Resolved<T>, TranslateError> {
+    Ok(if kernels.is_empty() {
+        Resolved::Value(value.ok_or_else(error_unreachable)?)
+    } else {
+        match value {
+            None => from_kernel_modes_overlap(kernels, modes)?,
+            Some(x) => {
+                let index: usize = (*x).into();
+                if kernels
+                    .difference(&modes.kernel_bitmaps[index])
+                    .any(|_| true)
+                {
+                    Resolved::Conflict
+                } else {
+                    Resolved::Value(*x)
+                }
+            }
+        }
+    })
+}
+
+fn from_kernel_modes_overlap<T: Copy + VariantArray + Into<usize>>(
+    input_kernels: &FixedBitSet,
+    modes: &MandatoryModeInsertions<T>,
+) -> Result<Resolved<T>, TranslateError> {
+    // FixedBitSet::len() is a different function that returns bit count
+    let input_kernels_count = input_kernels.count_ones(..);
+    for mode in T::VARIANTS.iter().copied() {
+        let mode_bitmap = &modes.kernel_bitmaps[mode.into()];
+        if mode_bitmap.is_empty() {
+            continue;
+        }
+        let intersection_size = input_kernels.intersection_count(mode_bitmap);
+        if intersection_size == 0 {
+            continue;
+        } else if intersection_size == input_kernels_count {
+            return Ok(Resolved::Value(mode));
+        } else {
+            return Ok(Resolved::Conflict);
+        }
+    }
+    Err(error_unreachable())
+}
+
 #[derive(Clone, Copy)]
-//#[cfg_attr(test, derive(Debug))]
-#[derive(Debug)]
 struct Mode<T: Eq + PartialEq> {
     entry: Option<ExtendedMode<T>>,
     exit: Option<ExtendedMode<T>>,
@@ -600,8 +583,8 @@ impl<T: Eq + PartialEq> Mode<T> {
 
     fn entry(label: SpirvWord) -> Self {
         Self {
-            entry: Some(ExtendedMode::Entry(label)),
-            exit: Some(ExtendedMode::Entry(label)),
+            entry: Some(ExtendedMode::Kernel(label)),
+            exit: Some(ExtendedMode::Kernel(label)),
         }
     }
 }
@@ -613,7 +596,6 @@ struct ResolvedMode<T> {
 }
 
 //#[cfg_attr(test, derive(Debug))]
-#[derive(Debug)]
 struct Node {
     label: SpirvWord,
     denormal_f32: Mode<DenormalMode>,
@@ -666,7 +648,7 @@ pub(crate) fn run<'input>(
 ) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
     let cfg = create_control_flow_graph(&directives)?;
     let (denormal_f32, denormal_f16f64, rounding_f32, rounding_f16f64) =
-        compute_minimal_mode_insertions(&cfg);
+        compute_minimal_mode_insertions(&cfg)?;
     let temp = compute_full_mode_insertions(
         flat_resolver,
         &directives,
@@ -704,10 +686,10 @@ fn compute_full_mode_insertions(
 ) -> Result<FullModeInsertion, TranslateError> {
     let cfg = ResolvedControlFlowGraph::new(
         cfg,
-        &denormal_f32.kernels,
-        &denormal_f16f64.kernels,
-        &rounding_f32.kernels,
-        &rounding_f16f64.kernels,
+        &denormal_f32,
+        &denormal_f16f64,
+        &rounding_f32,
+        &rounding_f16f64,
     )?;
     join_modes(
         flat_resolver,
@@ -731,25 +713,33 @@ fn compute_full_mode_insertions(
 //   pass should use default value
 fn compute_minimal_mode_insertions(
     cfg: &ControlFlowGraph,
-) -> (
-    MandatoryModeInsertions<DenormalMode>,
-    MandatoryModeInsertions<DenormalMode>,
-    MandatoryModeInsertions<RoundingMode>,
-    MandatoryModeInsertions<RoundingMode>,
-) {
-    let rounding_f32 = compute_single_mode_insertions(cfg, |node| node.rounding_f32);
-    let denormal_f32 = compute_single_mode_insertions(cfg, |node| node.denormal_f32);
-    let denormal_f16f64 = compute_single_mode_insertions(cfg, |node| node.denormal_f16f64);
-    let rounding_f16f64 = compute_single_mode_insertions(cfg, |node| node.rounding_f16f64);
+) -> Result<
+    (
+        MandatoryModeInsertions<DenormalMode>,
+        MandatoryModeInsertions<DenormalMode>,
+        MandatoryModeInsertions<RoundingMode>,
+        MandatoryModeInsertions<RoundingMode>,
+    ),
+    TranslateError,
+> {
+    use strum::EnumCount;
+    let rounding_f32 = compute_single_mode_insertions(cfg, |node| node.rounding_f32, false)?;
+    let denormal_f32 = compute_single_mode_insertions(cfg, |node| node.denormal_f32, false)?;
+    let denormal_f16f64 = compute_single_mode_insertions(cfg, |node| node.denormal_f16f64, false)?;
+    let rounding_f16f64 = compute_single_mode_insertions(cfg, |node| node.rounding_f16f64, false)?;
     let denormal_f32 =
-        optimize_mode_insertions::<DenormalMode, { DenormalMode::COUNT }>(denormal_f32);
+        optimize_mode_insertions::<DenormalMode, { DenormalMode::COUNT }>(denormal_f32)
+            .map_err(|_| error_unreachable())?;
     let denormal_f16f64 =
-        optimize_mode_insertions::<DenormalMode, { DenormalMode::COUNT }>(denormal_f16f64);
+        optimize_mode_insertions::<DenormalMode, { DenormalMode::COUNT }>(denormal_f16f64)
+            .map_err(|_| error_unreachable())?;
     let rounding_f32 =
-        optimize_mode_insertions::<RoundingMode, { RoundingMode::COUNT }>(rounding_f32);
-    let rounding_f16f64: MandatoryModeInsertions<RoundingMode> =
-        optimize_mode_insertions::<RoundingMode, { RoundingMode::COUNT }>(rounding_f16f64);
-    (denormal_f32, denormal_f16f64, rounding_f32, rounding_f16f64)
+        optimize_mode_insertions::<RoundingMode, { RoundingMode::COUNT }>(rounding_f32)
+            .map_err(|_| error_unreachable())?;
+    let rounding_f16f64 =
+        optimize_mode_insertions::<RoundingMode, { RoundingMode::COUNT }>(rounding_f16f64)
+            .map_err(|_| error_unreachable())?;
+    Ok((denormal_f32, denormal_f16f64, rounding_f32, rounding_f16f64))
 }
 
 // This function creates control flow graph for the whole module. This control
@@ -1610,86 +1600,425 @@ impl<'a> Drop for BasicBlockState<'a> {
     }
 }
 
-fn compute_single_mode_insertions<T: Copy + Eq>(
-    graph: &ControlFlowGraph,
-    mut getter: impl FnMut(&Node) -> Mode<T>,
-) -> PartialModeInsertion<T> {
-    let mut must_insert_mode = FxHashSet::<SpirvWord>::default();
-    let mut maybe_insert_mode = FxHashMap::default();
-    let mut remaining = graph
-        .graph
-        .node_references()
-        .rev()
-        .filter_map(|(index, node)| {
-            getter(node)
-                .entry
-                .as_ref()
-                .map(|mode| match mode {
-                    ExtendedMode::BasicBlock(mode) => Some((index, node.label, *mode)),
-                    ExtendedMode::Entry(_) => None,
-                })
-                .flatten()
-        })
+// For every basic block this function computes two pieces of information:
+// * Is this basic block have a conflict at entry (i.e. different modes from
+//   different predecessors) and will certainly require inserting a
+//   mode instruction?
+// * Does this basic block value has a value that can lead to a conflict if we
+//   pick a different mode in one of its preceding kernels
+// Computing this is surprisingly difficult and here's a list of approaches that
+// __failed__:
+// * Simply traversing all the predecessors and merging their modes - it works
+//   fine, but gets really slow on large modules (megabytes of PTX code)
+// * Traversing all the predecessors but caching intermediate results - it
+//   does not work too well, because you can't really cache intermediates.
+//   Consider a graph like this:
+//            ┌─────┐    ┌─────┐   ┌─────┐
+//            │  D  │<───┤  C  │   │  Z  │
+//            └─────┘    └─────┘   └─────┘
+//               ▲          │         │
+//               │          ▼         ▼
+//               │       ┌──────────────┐
+//               └───────┤      B       │
+//                       └──────────────┘
+//                              │
+//                              ▼
+//                           ┌─────┐
+//                           │  A  │
+//                           └─────┘
+//   Imagine we start at A and we are visiting predecessors depth-first with
+//   particular order being A->B->C->D. Now from D we can't visit B again,
+//   because we have to avoid cycles, we can't know whether B's value depends on
+//   Z or not. This kills cachability completely
+// * Computing strongly-connected components does not seem to help much either.
+//   It neatly gets rid of cycles, but we still have a fairly large graph (half
+//   as many nodes as the original) and you still need to do whatever expensive
+//   computations you had to be within each component. In a component, each
+//   node is reachable from every other node, but that does not mean the value
+//   of every node is relevant to every node. Consider a simple graph like this:
+//   A -> B -> C. If B has a fixed exit value, then C's value does not depend on
+//   A at all.
+// Current solution is to simply propagate values. We start with all basic block
+// that have an exit value and propagate it to all the outgoing neighbors until
+// there's nothing more to propagate. While it sounds expensive, in practice it
+// converges quickly enough
+fn compute_single_mode_insertions<T: Copy + Eq + VariantArray + Into<usize> + Default>(
+    cfg: &ControlFlowGraph,
+    mut get_mode: impl FnMut(&Node) -> Mode<T>,
+    force_slow_mode_result: bool,
+) -> Result<PartialModeInsertion<T>, TranslateError> {
+    let kernel_ids = cfg
+        .entry_points
+        .iter()
+        .enumerate()
+        .map(|(i, (compiler_id, _))| (*compiler_id, i))
+        .collect::<FxHashMap<_, _>>();
+    let mut propagation_state = (0..cfg.graph.node_count())
+        .map(|_| PropagationState::<T>::empty())
         .collect::<Vec<_>>();
-    'next_basic_block: while let Some((index, node_id, expected_mode)) = remaining.pop() {
-        let mut to_visit =
-            UniqueVec::new(graph.graph.neighbors_directed(index, Direction::Incoming));
-        let mut visited = FxHashSet::default();
-        while let Some(current) = to_visit.pop() {
-            if !visited.insert(current) {
-                continue;
+    let mut roots = VecDeque::new();
+    for (index, node) in cfg.graph.node_references() {
+        let mode = get_mode(node);
+        match (mode.entry, mode.exit) {
+            (Some(entry_mode), Some(exit_mode)) => {
+                let is_kernel = matches!(entry_mode, ExtendedMode::Kernel(_));
+                propagation_state[index.index()] =
+                    PropagationState::from_mode(&kernel_ids, entry_mode, exit_mode);
+                if is_kernel {
+                    roots.push_back(index);
+                } else {
+                    roots.push_front(index);
+                }
             }
-            let exit_mode = getter(graph.graph.node_weight(current).unwrap()).exit;
-            match exit_mode {
-                None => {
-                    for predecessor in graph.graph.neighbors_directed(current, Direction::Incoming)
-                    {
-                        if !visited.contains(&predecessor) {
-                            to_visit.push(predecessor);
-                        }
-                    }
+            (None, None) => {}
+            _ => return Err(error_unreachable()),
+        }
+    }
+    while let Some(current) = roots.pop_back() {
+        for next in cfg.graph.neighbors_directed(current, Direction::Outgoing) {
+            if current.index() == next.index() {
+                if propagation_state[current.index()].merge_with_self()? {
+                    roots.push_front(current);
                 }
-                Some(ExtendedMode::BasicBlock(mode)) => {
-                    if mode != expected_mode {
-                        maybe_insert_mode.remove(&node_id);
-                        must_insert_mode.insert(node_id);
-                        continue 'next_basic_block;
-                    }
+            } else {
+                let [current_state, next_state] = propagation_state
+                    .get_disjoint_mut([current.index(), next.index()])
+                    .map_err(|_| error_unreachable())?;
+                if next_state.merge_from(current_state)? {
+                    roots.push_front(next);
                 }
-                Some(ExtendedMode::Entry(kernel)) => match maybe_insert_mode.entry(node_id) {
-                    std::collections::hash_map::Entry::Vacant(entry) => {
-                        entry.insert((expected_mode, iter::once(kernel).collect::<FxHashSet<_>>()));
-                    }
-                    std::collections::hash_map::Entry::Occupied(mut entry) => {
-                        entry.get_mut().1.insert(kernel);
-                    }
-                },
             }
         }
     }
-    PartialModeInsertion {
-        bb_must_insert_mode: must_insert_mode,
-        bb_maybe_insert_mode: maybe_insert_mode,
+    PartialModeInsertion::new(cfg, kernel_ids, propagation_state, force_slow_mode_result)
+}
+
+#[derive(Eq, PartialEq, Clone)]
+enum RootExitValue<T> {
+    Value(T),
+    Entry(FixedBitSet),
+}
+
+enum ComputedValue<T> {
+    Conflict,
+    Value(Option<T>, FixedBitSet),
+}
+
+impl<T: PartialEq + Eq + Copy> ComputedValue<T> {
+    fn merge_with(self, from: Option<(Option<T>, &FixedBitSet)>) -> (Self, bool) {
+        fn merge_kernels(mut kernels: FixedBitSet, other: &FixedBitSet) -> FixedBitSet {
+            kernels.union_with(other);
+            kernels
+        }
+        fn merge_checked<T>(
+            value: Option<T>,
+            kernels: FixedBitSet,
+            other_kernels: &FixedBitSet,
+        ) -> (ComputedValue<T>, bool) {
+            if &kernels != other_kernels {
+                (
+                    ComputedValue::Value(value, merge_kernels(kernels, other_kernels)),
+                    true,
+                )
+            } else {
+                (ComputedValue::Value(value, kernels), false)
+            }
+        }
+        match (self, from) {
+            (ComputedValue::Conflict, _) => (ComputedValue::Conflict, false),
+            (ComputedValue::Value(..), None) => (ComputedValue::Conflict, true),
+            (ComputedValue::Value(value, kernels), Some((other_value, other_kernels))) => {
+                match (value, other_value) {
+                    (Some(value), Some(other_value)) => {
+                        return if value != other_value {
+                            (ComputedValue::Conflict, true)
+                        } else {
+                            merge_checked(Some(value), kernels, other_kernels)
+                        }
+                    }
+                    (Some(value), None) => merge_checked(Some(value), kernels, other_kernels),
+                    (None, Some(other_value)) => (
+                        ComputedValue::Value(
+                            Some(other_value),
+                            merge_kernels(kernels, other_kernels),
+                        ),
+                        true,
+                    ),
+                    (None, None) => merge_checked(None, kernels, other_kernels),
+                }
+            }
+        }
     }
 }
 
-#[derive(Debug)]
+enum PropagationState<T> {
+    // This basic block sets a mode, hence its mode at the exit is independent from its predecessors
+    Fixed {
+        // None if it is a kernel basic block, if we enter kernel it means that a function calls
+        // into a kernel directly, which is impossible
+        entry: Option<ComputedValue<T>>,
+        exit: RootExitValue<T>,
+    },
+    // This basic block does not set mode, hence its mode is the sum of modes from its predecessors
+    // It is None at the start, before we start propagating values
+    Propagated(ComputedValue<T>),
+}
+
+impl<T: Copy> PropagationState<T> {
+    fn get_entry(&mut self) -> Result<(&mut ComputedValue<T>, bool), TranslateError> {
+        Ok(match self {
+            PropagationState::Fixed { entry, .. } => {
+                (entry.as_mut().ok_or_else(error_unreachable)?, false)
+            }
+            PropagationState::Propagated(entry) => (entry, true),
+        })
+    }
+
+    fn get_exit(&self) -> Option<(Option<T>, &FixedBitSet)> {
+        static EMPTY_BITSET: FixedBitSet = FixedBitSet::new();
+        match self {
+            PropagationState::Fixed { exit, .. } => match exit {
+                RootExitValue::Value(v) => Some((Some(*v), &EMPTY_BITSET)),
+                RootExitValue::Entry(kernels) => Some((None, kernels)),
+            },
+            PropagationState::Propagated(ComputedValue::Conflict) => None,
+            PropagationState::Propagated(ComputedValue::Value(v, kernels)) => Some((*v, kernels)),
+        }
+    }
+}
+
+impl<T: PartialEq + Eq + Copy> PropagationState<T> {
+    fn empty() -> Self {
+        PropagationState::Propagated(ComputedValue::Value(None, FixedBitSet::new()))
+    }
+
+    fn from_mode(
+        kernel_map: &FxHashMap<SpirvWord, usize>,
+        entry_mode: ExtendedMode<T>,
+        exit_mode: ExtendedMode<T>,
+    ) -> Self {
+        match entry_mode {
+            ExtendedMode::BasicBlock(entry_mode) => match exit_mode {
+                ExtendedMode::BasicBlock(exit_mode) => PropagationState::Fixed {
+                    entry: Some(ComputedValue::Value(Some(entry_mode), FixedBitSet::new())),
+                    exit: RootExitValue::Value(exit_mode),
+                },
+                _ => unreachable!(),
+            },
+            ExtendedMode::Kernel(id) => {
+                let mut bit_set = FixedBitSet::with_capacity(kernel_map.len());
+                bit_set.set(kernel_map[&id], true);
+                PropagationState::Fixed {
+                    entry: None,
+                    exit: RootExitValue::Entry(bit_set),
+                }
+            }
+        }
+    }
+
+    fn merge_with_self(&mut self) -> Result<bool, TranslateError> {
+        Ok(match self {
+            PropagationState::Fixed { entry, exit } => match entry {
+                None => return Err(error_unreachable()),
+                Some(ComputedValue::Conflict) => false,
+                Some(ComputedValue::Value(value, _)) => match exit {
+                    RootExitValue::Value(new_value) => match value {
+                        None => {
+                            *value = Some(*new_value);
+                            true
+                        }
+                        Some(old_value) => {
+                            if *old_value != *new_value {
+                                *entry = Some(ComputedValue::Conflict);
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                    },
+                    RootExitValue::Entry(_) => return Err(error_unreachable()),
+                },
+            },
+            PropagationState::Propagated(_) => false,
+        })
+    }
+
+    fn merge_from(&mut self, from: &Self) -> Result<bool, TranslateError> {
+        let (self_ref, can_propagate) = self.get_entry()?;
+        let this = mem::replace(self_ref, ComputedValue::Conflict);
+        let (this, is_different) = this.merge_with(from.get_exit());
+        *self_ref = this;
+        Ok(is_different && can_propagate)
+    }
+}
+
 struct PartialModeInsertion<T> {
     bb_must_insert_mode: FxHashSet<SpirvWord>,
-    bb_maybe_insert_mode: FxHashMap<SpirvWord, (T, FxHashSet<SpirvWord>)>,
+    bb_maybe_insert_mode: PotentialModeInsertionsDueToKernelMode<T>,
+    propagation_state: Vec<PropagationState<T>>,
+}
+
+impl<T: PartialEq + Eq + Copy + VariantArray + Into<usize> + Default> PartialModeInsertion<T> {
+    fn new(
+        cfg: &ControlFlowGraph,
+        kernel_map: FxHashMap<SpirvWord, usize>,
+        propagation_state: Vec<PropagationState<T>>,
+        force_slow_mode_result: bool, // for testing purpose only
+    ) -> Result<Self, TranslateError> {
+        let mut reverse_kernel_map = vec![SpirvWord(u32::MAX); kernel_map.len()];
+        for (kernel_id, kernel_index) in kernel_map.iter() {
+            reverse_kernel_map[*kernel_index] = *kernel_id;
+        }
+        let mut bb_must_insert_mode = FxHashSet::default();
+        let mut fast_mode_from_kernels = Some(FxHashMap::default());
+        let mut slow_mode_from_kernels = FxHashMap::default();
+        for (node_index, bb_state) in propagation_state.iter().enumerate() {
+            if let PropagationState::Fixed {
+                entry: Some(ComputedValue::Conflict),
+                ..
+            } = bb_state
+            {
+                let bb_id = cfg
+                    .graph
+                    .node_weight(NodeIndex::new(node_index))
+                    .ok_or_else(error_unreachable)?
+                    .label;
+                bb_must_insert_mode.insert(bb_id);
+            }
+            if let PropagationState::Fixed {
+                entry: Some(ComputedValue::Value(value, kernels)),
+                ..
+            } = bb_state
+            {
+                if kernels.is_empty() {
+                    continue;
+                }
+                let value = value.ok_or_else(error_unreachable)?;
+                let node_id = cfg
+                    .graph
+                    .node_weight(NodeIndex::new(node_index))
+                    .ok_or_else(error_unreachable)?
+                    .label;
+                let (_, slow_kernels_source) = slow_mode_from_kernels
+                    .entry(node_id)
+                    .or_insert((value, FxHashSet::default()));
+                for kernel_index in kernels.ones() {
+                    let kernel_id = reverse_kernel_map[kernel_index];
+                    if let Some(fast_mode_ref) = &mut fast_mode_from_kernels {
+                        let old_value = fast_mode_ref.insert(kernel_id, value);
+                        if let Some(old_value) = old_value {
+                            if old_value != value {
+                                fast_mode_from_kernels = None;
+                            }
+                        }
+                    }
+                    slow_kernels_source.insert(kernel_id);
+                }
+            }
+        }
+        let bb_maybe_insert_mode = match fast_mode_from_kernels {
+            Some(modes) if !force_slow_mode_result => {
+                let kernel_bitmaps = fast_modes_get_bitset(&kernel_map, &modes);
+                PotentialModeInsertionsDueToKernelMode::QuickMode(modes, kernel_bitmaps)
+            }
+            _ => {
+                PotentialModeInsertionsDueToKernelMode::SlowMode(slow_mode_from_kernels, kernel_map)
+            }
+        };
+        Ok(PartialModeInsertion {
+            propagation_state,
+            bb_must_insert_mode,
+            bb_maybe_insert_mode,
+        })
+    }
+}
+
+fn fast_modes_get_bitset<T: Default + Copy + VariantArray + Into<usize>>(
+    kernel_map: &FxHashMap<SpirvWord, usize>,
+    modes: &FxHashMap<SpirvWord, T>,
+) -> Vec<FixedBitSet> {
+    let mut result = vec![FixedBitSet::with_capacity(kernel_map.len()); T::VARIANTS.len()];
+    for (kernel, kernel_index) in kernel_map.iter() {
+        let mode = modes.get(kernel).copied().unwrap_or_default();
+        result[mode.into()].set(*kernel_index, true);
+    }
+    result
+}
+
+// After computing conflicts in modes we have a set of basic blocks whose modes depend on the modes
+// of kernels.
+// Consider an example for mode that can have value "true" or "false" and a simple control flow
+// graph with kernel basic blocks `k0` and `k1` and a single non-kernel basic block `bb`,
+// `bb` has mode "true" and kernel modes are undecided, `bb` is reachable from both `k0` and `k1`:
+// ┌────┐
+// │ k0 │──────┐
+// └────┘      │
+//             ▼
+//         ┌──────────┐
+//         │ bb: true │
+//         └──────────┘
+//             ▲
+// ┌────┐      │
+// │ k1 │──────┘
+// └────┘
+// In this case, if either k0 and k1 have mode "false", then we need to insert an instruction to
+// set global mode to "true" at the start of basic block `bb`.
+// In the next step we want to pick modes for the kernels in the control flow graph that will
+// minimize the number of such insertions. This structure holds all the data necessary to resolve
+// the problem
+enum PotentialModeInsertionsDueToKernelMode<T> {
+    // This is the simplest case: we know that if each kernel has a specific mode then no insertions
+    // are necessary. We can just pick those modes for each kernel
+    QuickMode(FxHashMap<SpirvWord, T>, Vec<FixedBitSet>),
+    // This is the most general case that covers potential conflicts. E.g. consider this example:
+    // ┌────┐
+    // │ k0 │──────────────────────┐
+    // └────┘                      │
+    //                             ▼
+    //                       ┌───────────┐
+    //                       │ bb0: true │
+    //                       └───────────┘
+    //                             ▲
+    // ┌────┐                      │
+    // │ k1 │──────────────────────┘
+    // └────┘     │
+    //            │          ┌────────────┐
+    //            ├─────────>│ bb1: false │
+    //            │          └────────────┘
+    //            │          ┌────────────┐
+    //            └─────────>│ bb2: false │
+    //                       └────────────┘
+    // In this case there is no way to pick modes for `k0` and `k1` that would avoid insertions
+    // altogether.
+    SlowMode(
+        FxHashMap<SpirvWord, (T, FxHashSet<SpirvWord>)>,
+        FxHashMap<SpirvWord, usize>,
+    ),
 }
 
 // Only returns kernel mode insertions if a kernel is relevant to the optimization problem
 fn optimize_mode_insertions<
-    T: Copy + Into<usize> + strum::VariantArray + std::fmt::Debug + Default,
+    T: Copy + Into<usize> + VariantArray + Into<usize> + Default,
     const N: usize,
 >(
     partial: PartialModeInsertion<T>,
-) -> MandatoryModeInsertions<T> {
-    let mut problem = Problem::new(OptimizationDirection::Maximize);
+) -> Result<MandatoryModeInsertions<T>, HighsStatus> {
+    let (bb_maybe_insert_mode, kernel_map) = match partial.bb_maybe_insert_mode {
+        PotentialModeInsertionsDueToKernelMode::QuickMode(modes, kernel_bitmaps) => {
+            return Ok(MandatoryModeInsertions {
+                basic_blocks: partial.bb_must_insert_mode,
+                kernels: modes,
+                propagation_state: partial.propagation_state,
+                kernel_bitmaps,
+            });
+        }
+        PotentialModeInsertionsDueToKernelMode::SlowMode(slow_modes, kernel_map) => {
+            (slow_modes, kernel_map)
+        }
+    };
+    let mut problem = highs::RowProblem::default();
     let mut kernel_modes = FxHashMap::default();
-    let basic_block_variables = partial
-        .bb_maybe_insert_mode
+    let basic_block_variables = bb_maybe_insert_mode
         .into_iter()
         .map(|(basic_block, (value, entry_points))| {
             let modes = entry_points
@@ -1700,13 +2029,21 @@ fn optimize_mode_insertions<
                         .or_insert_with(|| one_of::<N>(&mut problem));
                     kernel_modes[value.into()]
                 })
-                .collect::<Vec<Variable>>();
+                .collect::<Vec<highs::Col>>();
             let bb = and(&mut problem, &*modes);
             (basic_block, bb)
         })
         .collect::<Vec<_>>();
-    // TODO: add fallback on Error
-    let solution = problem.solve().unwrap();
+    let mut solver = problem.try_optimise(highs::Sense::Maximise)?;
+    solver.make_quiet();
+    // Takes minutes for a problem that is solved sub-second
+    solver.set_option("presolve", "off");
+    // Experimentally, the fastest mode, simplex with simplex_strategy = 0 is slightly slower
+    solver.set_option("solver", "pdlp");
+    solver.set_option("parallel", "off");
+    solver.set_option("threads", 1);
+    let solved_model = solver.try_solve()?;
+    let solution = solved_model.get_solution();
     let mut basic_blocks = partial.bb_must_insert_mode;
     for (basic_block, variable) in basic_block_variables {
         if solution[variable] < 0.5 {
@@ -1722,88 +2059,45 @@ fn optimize_mode_insertions<
             }
         }
     }
-    MandatoryModeInsertions {
+    let kernel_bitmaps = fast_modes_get_bitset(&kernel_map, &kernels);
+    Ok(MandatoryModeInsertions {
         basic_blocks,
         kernels,
-    }
+        kernel_bitmaps,
+        propagation_state: partial.propagation_state,
+    })
 }
 
-fn and(problem: &mut Problem, variables: &[Variable]) -> Variable {
-    let result = problem.add_binary_var(1.0);
-    for var in variables {
-        problem.add_constraint(
-            &[(result, 1.0), (*var, -1.0)],
-            microlp::ComparisonOp::Le,
-            0.0,
-        );
+fn and(problem: &mut highs::RowProblem, variables: &[highs::Col]) -> highs::Col {
+    let result = problem.add_integer_column(1.0, 0..=1);
+    for var in variables.iter().copied() {
+        problem.add_row(..=0, &[(result, 1.0), (var, -1.0)]);
     }
-    problem.add_constraint(
+    let variables = variables.to_vec();
+    problem.add_row(
+        -(variables.len() as i32 - 1)..,
         iter::once((result, 1.0)).chain(variables.iter().map(|var| (*var, -1.0))),
-        microlp::ComparisonOp::Ge,
-        -((variables.len() - 1) as f64),
     );
     result
 }
 
-fn one_of<const N: usize>(problem: &mut Problem) -> [Variable; N] {
-    let result = std::array::from_fn(|_| problem.add_binary_var(0.0));
-    problem.add_constraint(
-        result.into_iter().map(|var| (var, 1.0)),
-        microlp::ComparisonOp::Eq,
-        1.0,
-    );
+fn one_of<const N: usize>(problem: &mut highs::RowProblem) -> [highs::Col; N] {
+    let result = std::array::from_fn(|_| problem.add_integer_column(0.0, 0..=1));
+    problem.add_row(1.0..=1.0, result.into_iter().map(|var| (var, 1.0)));
     result
 }
 
 struct MandatoryModeInsertions<T> {
     basic_blocks: FxHashSet<SpirvWord>,
     kernels: FxHashMap<SpirvWord, T>,
+    propagation_state: Vec<PropagationState<T>>,
+    kernel_bitmaps: Vec<FixedBitSet>,
 }
-
 #[derive(Eq, PartialEq, Clone, Copy)]
 //#[cfg_attr(test, derive(Debug))]
-#[derive(Debug)]
 enum ExtendedMode<T: Eq + PartialEq> {
     BasicBlock(T),
-    Entry(SpirvWord),
-}
-
-struct UniqueVec<T: Copy + Eq + Hash> {
-    set: FxHashSet<T>,
-    vec: Vec<T>,
-}
-
-impl<T: Copy + Eq + Hash> UniqueVec<T> {
-    fn new(iter: impl Iterator<Item = T>) -> Self {
-        let mut set = FxHashSet::default();
-        let mut vec = Vec::new();
-        for item in iter {
-            if set.contains(&item) {
-                continue;
-            }
-            set.insert(item);
-            vec.push(item);
-        }
-        Self { set, vec }
-    }
-
-    fn pop(&mut self) -> Option<T> {
-        if let Some(t) = self.vec.pop() {
-            assert!(self.set.remove(&t));
-            Some(t)
-        } else {
-            None
-        }
-    }
-
-    fn push(&mut self, t: T) -> bool {
-        if self.set.insert(t) {
-            self.vec.push(t);
-            true
-        } else {
-            false
-        }
-    }
+    Kernel(SpirvWord),
 }
 
 fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {

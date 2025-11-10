@@ -71,8 +71,10 @@ pub(crate) fn run<'input>(
             Directive2::Method(method) => emit_ctx.emit_method(method)?,
         }
     }
-    if let Err(err) = module.verify() {
-        panic!("{:?}", err);
+    if cfg!(debug_assertions) {
+        if let Err(err) = module.verify() {
+            panic!("{:?}", err);
+        }
     }
     Ok(module)
 }

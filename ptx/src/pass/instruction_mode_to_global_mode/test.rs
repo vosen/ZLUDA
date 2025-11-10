@@ -27,6 +27,15 @@ fn preserve() -> InstructionModes {
     }
 }
 
+fn unwrap_slow_mode<T>(
+    x: &PotentialModeInsertionsDueToKernelMode<T>,
+) -> &FxHashMap<SpirvWord, (T, FxHashSet<SpirvWord>)> {
+    match x {
+        PotentialModeInsertionsDueToKernelMode::QuickMode(..) => panic!(),
+        PotentialModeInsertionsDueToKernelMode::SlowMode(x, _) => x,
+    }
+}
+
 #[test]
 fn transitive_mixed() {
     let mut graph = ControlFlowGraph::new();
@@ -43,15 +52,19 @@ fn transitive_mixed() {
     graph.add_jump(empty, false2_id);
     let false2_ = graph.get_or_add_basic_block(false2_id);
     graph.set_modes(false2_, ftz(), ftz());
-    let partial_result = super::compute_single_mode_insertions(&graph, |node| node.denormal_f32);
+    let partial_result =
+        super::compute_single_mode_insertions(&graph, |node| node.denormal_f32, true).unwrap();
     assert_eq!(partial_result.bb_must_insert_mode.len(), 0);
-    assert_eq!(partial_result.bb_maybe_insert_mode.len(), 1);
+    let kernel_insert_mode = unwrap_slow_mode(&partial_result.bb_maybe_insert_mode);
+    dbg!(kernel_insert_mode.keys());
+    assert_eq!(kernel_insert_mode.len(), 1);
     assert_eq!(
-        partial_result.bb_maybe_insert_mode[&false_id],
+        kernel_insert_mode[&false_id],
         (DenormalMode::FlushToZero, iter::once(entry_id).collect())
     );
 
-    let result = optimize_mode_insertions::<DenormalMode, { DenormalMode::COUNT }>(partial_result);
+    let result =
+        optimize_mode_insertions::<DenormalMode, { DenormalMode::COUNT }>(partial_result).unwrap();
     assert_eq!(result.basic_blocks.len(), 0);
     assert_eq!(result.kernels.len(), 1);
     assert_eq!(result.kernels[&entry_id], DenormalMode::FlushToZero);
@@ -73,16 +86,19 @@ fn transitive_change_twice() {
     graph.add_jump(empty, true_id);
     let true_ = graph.get_or_add_basic_block(true_id);
     graph.set_modes(true_, preserve(), preserve());
-    let partial_result = super::compute_single_mode_insertions(&graph, |node| node.denormal_f32);
+    let partial_result =
+        super::compute_single_mode_insertions(&graph, |node| node.denormal_f32, true).unwrap();
     assert_eq!(partial_result.bb_must_insert_mode.len(), 1);
     assert!(partial_result.bb_must_insert_mode.contains(&true_id));
-    assert_eq!(partial_result.bb_maybe_insert_mode.len(), 1);
+    let kernel_insert_mode = unwrap_slow_mode(&partial_result.bb_maybe_insert_mode);
+    assert_eq!(kernel_insert_mode.len(), 1);
     assert_eq!(
-        partial_result.bb_maybe_insert_mode[&false_id],
+        kernel_insert_mode[&false_id],
         (DenormalMode::FlushToZero, iter::once(entry_id).collect())
     );
 
-    let result = optimize_mode_insertions::<DenormalMode, { DenormalMode::COUNT }>(partial_result);
+    let result =
+        optimize_mode_insertions::<DenormalMode, { DenormalMode::COUNT }>(partial_result).unwrap();
     assert_eq!(result.basic_blocks, iter::once(true_id).collect());
     assert_eq!(result.kernels.len(), 1);
     assert_eq!(result.kernels[&entry_id], DenormalMode::FlushToZero);
@@ -100,15 +116,18 @@ fn transitive_change() {
     graph.add_jump(empty, true_id);
     let true_ = graph.get_or_add_basic_block(true_id);
     graph.set_modes(true_, preserve(), preserve());
-    let partial_result = super::compute_single_mode_insertions(&graph, |node| node.denormal_f32);
+    let partial_result =
+        super::compute_single_mode_insertions(&graph, |node| node.denormal_f32, true).unwrap();
     assert_eq!(partial_result.bb_must_insert_mode.len(), 0);
-    assert_eq!(partial_result.bb_maybe_insert_mode.len(), 1);
+    let kernel_insert_mode = unwrap_slow_mode(&partial_result.bb_maybe_insert_mode);
+    assert_eq!(kernel_insert_mode.len(), 1);
     assert_eq!(
-        partial_result.bb_maybe_insert_mode[&true_id],
+        kernel_insert_mode[&true_id],
         (DenormalMode::Preserve, iter::once(entry_id).collect())
     );
 
-    let result = optimize_mode_insertions::<DenormalMode, { DenormalMode::COUNT }>(partial_result);
+    let result =
+        optimize_mode_insertions::<DenormalMode, { DenormalMode::COUNT }>(partial_result).unwrap();
     assert_eq!(result.basic_blocks.len(), 0);
     assert_eq!(result.kernels.len(), 1);
     assert_eq!(result.kernels[&entry_id], DenormalMode::Preserve);
@@ -143,19 +162,22 @@ fn codependency() {
     //    "{:?}",
     //    petgraph::dot::Dot::with_config(&graph.graph, &[petgraph::dot::Config::EdgeNoLabel])
     //);
-    let partial_result = super::compute_single_mode_insertions(&graph, |node| node.denormal_f32);
+    let partial_result =
+        super::compute_single_mode_insertions(&graph, |node| node.denormal_f32, true).unwrap();
     assert_eq!(partial_result.bb_must_insert_mode.len(), 0);
-    assert_eq!(partial_result.bb_maybe_insert_mode.len(), 2);
+    let kernel_insert_mode = unwrap_slow_mode(&partial_result.bb_maybe_insert_mode);
+    assert_eq!(kernel_insert_mode.len(), 2);
     assert_eq!(
-        partial_result.bb_maybe_insert_mode[&left_f_id],
+        kernel_insert_mode[&left_f_id],
         (DenormalMode::FlushToZero, iter::once(entry_id).collect())
     );
     assert_eq!(
-        partial_result.bb_maybe_insert_mode[&right_f_id],
+        kernel_insert_mode[&right_f_id],
         (DenormalMode::FlushToZero, iter::once(entry_id).collect())
     );
 
-    let result = optimize_mode_insertions::<DenormalMode, { DenormalMode::COUNT }>(partial_result);
+    let result =
+        optimize_mode_insertions::<DenormalMode, { DenormalMode::COUNT }>(partial_result).unwrap();
     assert_eq!(result.basic_blocks.len(), 0);
     assert_eq!(result.kernels.len(), 1);
     assert_eq!(result.kernels[&entry_id], DenormalMode::FlushToZero);
