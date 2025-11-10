@@ -89,13 +89,12 @@ impl TemporaryBufferAllocator {
     fn scavange_or_allocate_buffer(&mut self, size: usize) -> Result<BetaBuffer, hipErrorCode_t> {
         let mut result = None;
         let mut err = None;
-        let mut update_buffer_if_biggest = |mut buffer: BetaBuffer| {
+        let mut update_buffer_if_biggest = |buffer: BetaBuffer| {
             if result
                 .as_ref()
                 .map(|b: &BetaBuffer| buffer.size > b.size)
                 .unwrap_or(true)
             {
-                buffer.free = None;
                 result = Some(buffer);
             }
         };
