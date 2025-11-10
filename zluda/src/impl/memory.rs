@@ -13,7 +13,6 @@ pub(crate) unsafe fn alloc_v2(dptr: &mut hipDeviceptr_t, bytesize: usize) -> CUr
     add_allocation(dptr.0, bytesize, context)?;
     let mut status = mem::zeroed();
     hipStreamIsCapturing(hipStream_t(ptr::null_mut()), &mut status)?;
-    // TODO: parametrize for non-Geekbench
     if global.should_zero_allocations
         && status == hipStreamCaptureStatus::hipStreamCaptureStatusNone
     {
