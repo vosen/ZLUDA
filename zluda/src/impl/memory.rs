@@ -1,16 +1,22 @@
-use crate::r#impl::{context, driver};
+use crate::r#impl::{
+    context,
+    driver::{self, global_state},
+};
 use cuda_types::cuda::{CUerror, CUresult, CUresultConsts};
 use hip_runtime_sys::*;
 use std::{mem, ptr};
 
 pub(crate) unsafe fn alloc_v2(dptr: &mut hipDeviceptr_t, bytesize: usize) -> CUresult {
+    let global = global_state()?;
     let context = context::get_current_context()?;
     hipMalloc(ptr::from_mut(dptr).cast(), bytesize)?;
     add_allocation(dptr.0, bytesize, context)?;
     let mut status = mem::zeroed();
     hipStreamIsCapturing(hipStream_t(ptr::null_mut()), &mut status)?;
     // TODO: parametrize for non-Geekbench
-    if status != hipStreamCaptureStatus::hipStreamCaptureStatusNone {
+    if global.should_zero_allocations
+        && status == hipStreamCaptureStatus::hipStreamCaptureStatusNone
+    {
         hipMemsetD8(*dptr, 0, bytesize)?;
     }
     Ok(())
