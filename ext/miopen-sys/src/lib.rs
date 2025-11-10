@@ -41,12 +41,12 @@ pub const MIOPEN_NDEBUG: u32 = 0;
 pub const MIOPEN_ALLOC_BUFFERS: u32 = 0;
 pub const MIOPEN_ROCBLAS_VERSION_MAJOR: u32 = 4;
 pub const MIOPEN_ROCBLAS_VERSION_MINOR: u32 = 4;
-pub const MIOPEN_ROCBLAS_VERSION_PATCH: u32 = 0;
-pub const MIOPEN_ROCBLAS_VERSION_FLAT: u32 = 4004000;
+pub const MIOPEN_ROCBLAS_VERSION_PATCH: u32 = 1;
+pub const MIOPEN_ROCBLAS_VERSION_FLAT: u32 = 4004001;
 pub const MIOPEN_HIPBLASLT_VERSION_MAJOR: u32 = 0;
 pub const MIOPEN_HIPBLASLT_VERSION_MINOR: u32 = 12;
-pub const MIOPEN_HIPBLASLT_VERSION_PATCH: u32 = 0;
-pub const MIOPEN_HIPBLASLT_VERSION_FLAT: u32 = 12000;
+pub const MIOPEN_HIPBLASLT_VERSION_PATCH: u32 = 1;
+pub const MIOPEN_HIPBLASLT_VERSION_FLAT: u32 = 12001;
 pub const MIOPEN_GOLDEN_DB_VERSION: u32 = 21;
 pub const MIOPEN_API_VERSION_REDUCE_TENSOR: u32 = 1;
 pub type miopenAcceleratorQueue_t = hip_runtime_sys::hipStream_t;
@@ -55,7 +55,22 @@ pub type miopenAcceleratorQueue_t = hip_runtime_sys::hipStream_t;
 pub struct miopenHandle {
     pub _address: u8,
 }
-pub type miopenHandle_t = *mut miopenHandle;
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct miopenHandle_t(pub *mut miopenHandle);
+impl miopenF8RoundingMode_t {
+    pub const miopenF8RoundingModeStandard: miopenF8RoundingMode_t = miopenF8RoundingMode_t(
+        0,
+    );
+}
+impl miopenF8RoundingMode_t {
+    pub const miopenF8RoundingModeStochastic: miopenF8RoundingMode_t = miopenF8RoundingMode_t(
+        1,
+    );
+}
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct miopenF8RoundingMode_t(pub ::core::ffi::c_uint);
 #[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
 extern "C" {
     /** @brief Get character string for an error code.
@@ -362,6 +377,12 @@ impl miopenDataType_t {
     pub const miopenDouble: miopenDataType_t = miopenDataType_t(6);
 }
 impl miopenDataType_t {
+    pub const miopenFloat8: miopenDataType_t = miopenDataType_t(7);
+}
+impl miopenDataType_t {
+    pub const miopenBFloat8: miopenDataType_t = miopenDataType_t(8);
+}
+impl miopenDataType_t {
     pub const miopenInt64: miopenDataType_t = miopenDataType_t(9);
 }
 #[repr(transparent)]
@@ -551,6 +572,37 @@ impl miopenLRNMode_t {
  Local Response Normalization layer mode*/
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct miopenLRNMode_t(pub ::core::ffi::c_uint);
+impl miopenNormMode_t {
+    ///< initialized to ones for weights and zeros for biases
+    pub const MIOPEN_ELEMENTWISE_AFFINE: miopenNormMode_t = miopenNormMode_t(0);
+}
+impl miopenNormMode_t {
+    pub const MIOPEN_WEIGHT_BIAS: miopenNormMode_t = miopenNormMode_t(1);
+}
+impl miopenNormMode_t {
+    pub const MIOPEN_ELEMENTWISE_AFFINE_FUSED_ADD: miopenNormMode_t = miopenNormMode_t(
+        2,
+    );
+}
+impl miopenNormMode_t {
+    /**< learnable weights and biases of the module of shape
+normalized_shape in addlayernorm*/
+    pub const MIOPEN_WEIGHT_BIAS_FUSED_ADD: miopenNormMode_t = miopenNormMode_t(3);
+}
+impl miopenNormMode_t {
+    pub const MIOPEN_ELEMENTWISE_AFFINE_T5: miopenNormMode_t = miopenNormMode_t(4);
+}
+impl miopenNormMode_t {
+    /**< learnable weights and biases of the module of shape
+normalized_shape in t5layernorm*/
+    pub const MIOPEN_WEIGHT_BIAS_T5: miopenNormMode_t = miopenNormMode_t(5);
+}
+#[repr(transparent)]
+/** @ingroup layernorm
+ @enum miopenNormMode_t
+ LayerNorm mode*/
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct miopenNormMode_t(pub ::core::ffi::c_uint);
 impl miopenBatchNormMode_t {
     ///< Element-wise normalization for fully connected layer
     pub const miopenBNPerActivation: miopenBatchNormMode_t = miopenBatchNormMode_t(0);
@@ -768,6 +820,11 @@ impl miopenConvolutionAttrib_t {
         1,
     );
 }
+impl miopenConvolutionAttrib_t {
+    pub const MIOPEN_CONVOLUTION_ATTRIB_FP8_ROUNDING_MODE: miopenConvolutionAttrib_t = miopenConvolutionAttrib_t(
+        2,
+    );
+}
 #[repr(transparent)]
 /** @ingroup convolutions
   @enum miopenConvolutionAttrib_t
@@ -945,6 +1002,34 @@ extern "C" {
         nbDims: ::core::ffi::c_int,
         dimsA: *const ::core::ffi::c_int,
         stridesA: *const ::core::ffi::c_int,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /// @copydoc miopenSetTensorDescriptor()
+    pub fn miopenSetTensorDescriptorV2(
+        tensorDesc: miopenTensorDescriptor_t,
+        dataType: miopenDataType_t,
+        nbDims: ::core::ffi::c_int,
+        dimsA: *const usize,
+        stridesA: *const usize,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Set the tensor cast type
+
+  For tensors where the cast_type attribute is set, the tensor elements would be converted to the
+ target type before the target operation is applied. Currently, only supported for convolution
+ operations targeting the FP8 datatype
+
+  @param tensorDesc Tensor descriptor type (input)
+  @param cast_type  MIOpen datatype (input)*/
+    pub fn miopenSetTensorCastType(
+        tensorDesc: miopenTensorDescriptor_t,
+        cast_type: miopenDataType_t,
     ) -> miopenStatus_t;
 }
 #[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
@@ -3100,6 +3185,43 @@ extern "C" {
 #[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
+    #[doc = " @addtogroup layernorm\n\n  @{\n/\n/*! @brief Execute a layernorm forward layer\n\n @param handle         MIOpen handle (input)\n @param mode           LayerNorm mode (input)\n @param xDesc          Tensor descriptor for data input tensor x (input)\n @param x              Data tensor x (input)\n @param weightDesc     Tensor descriptor for data input tensor weight (input)\n @param weight         Data tensor weight (input)\n @param biasDesc       Tensor descriptor for data input tensor bias (input)\n @param bias           Data tensor bias (input)\n @param epsilon        Value to stablize inverse variance calculation (input)\n @param normalized_dim Nomalized dimensions in the input array (input)\n @param yDesc          Tensor descriptor for output data tensor y (input)\n @param y              Data tensor y (output)\n @param meanDesc       Tensor descriptor for output data tensor mean (input)\n @param mean           Data tensor mean (output)\n @param rstdDesc       Tensor descriptor for output data tensor rstd (input)\n @param rstd           Data tensor rstd (output)\n @return               miopenStatus_t"]
+    pub fn miopenLayerNormForward(
+        handle: miopenHandle_t,
+        mode: miopenNormMode_t,
+        xDesc: miopenTensorDescriptor_t,
+        x: *const ::core::ffi::c_void,
+        weightDesc: miopenTensorDescriptor_t,
+        weight: *const ::core::ffi::c_void,
+        biasDesc: miopenTensorDescriptor_t,
+        bias: *const ::core::ffi::c_void,
+        epsilon: f32,
+        normalized_dim: i32,
+        yDesc: miopenTensorDescriptor_t,
+        y: *mut ::core::ffi::c_void,
+        meanDesc: miopenTensorDescriptor_t,
+        mean: *mut ::core::ffi::c_void,
+        rstdDesc: miopenTensorDescriptor_t,
+        rstd: *mut ::core::ffi::c_void,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    #[doc = " @addtogroup cat\n\n  @{\n/\n/*! @brief Execute a cat forward layer\n\n @param handle         MIOpen handle (input)\n @param xCount         Number of input tensor x (input)\n @param xDescs         Tensor descriptor of input tensor x (input)\n @param xs             Source data tensor x (input)\n @param yDesc          Tensor descriptor of output tensor y (input)\n @param y              Data tensor y (output)\n @param dim            Concatenation dimension (input)\n @return               miopenStatus_t"]
+    pub fn miopenCatForward(
+        handle: miopenHandle_t,
+        xCount: i32,
+        xDescs: *const miopenTensorDescriptor_t,
+        xs: *const *const ::core::ffi::c_void,
+        yDesc: miopenTensorDescriptor_t,
+        y: *mut ::core::ffi::c_void,
+        dim: i32,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
     /** @brief Derive tensor for gamma and beta from input tensor descriptor
 
  This function takes the input tensor descriptor and outputs a derived tensor for the
@@ -3587,6 +3709,52 @@ extern "C" {
  @return            miopenStatus_t*/
     pub fn miopenDestroyActivationDescriptor(
         activDesc: miopenActivationDescriptor_t,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Execute a GLU forward layer
+
+ @param handle                   MIOpen handle (input)
+ @param inputDesc                Tensor descriptor for input tensor (input)
+ @param input                    Input tensor (input)
+ @param outputDesc               Tensor descriptor for output tensor (input)
+ @param output                   Output tensor (output)
+ @param dim                      Dimension to split the input (input)
+ @return                         miopenStatus_t*/
+    pub fn miopenGLUForward(
+        handle: miopenHandle_t,
+        inputDesc: miopenTensorDescriptor_t,
+        input: *const ::core::ffi::c_void,
+        outputDesc: miopenTensorDescriptor_t,
+        output: *mut ::core::ffi::c_void,
+        dim: u32,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Execute a GLU backward layer
+
+ @param handle                   MIOpen handle (input)
+ @param inputDesc                Tensor descriptor for input tensor (input)
+ @param input                    Input tensor (input)
+ @param outputGradDesc           Tensor descriptor for delta output tensor (input)
+ @param outputGrad               Delta output tensor (input)
+ @param inputGradDesc            Tensor descriptor for delta input tensor (input)
+ @param inputGrad                Delta input tensor (output)
+ @param dim                      Dimension to split the input (input)
+ @return                         miopenStatus_t*/
+    pub fn miopenGLUBackward(
+        handle: miopenHandle_t,
+        inputDesc: miopenTensorDescriptor_t,
+        input: *const ::core::ffi::c_void,
+        outputGradDesc: miopenTensorDescriptor_t,
+        outputGrad: *const ::core::ffi::c_void,
+        inputGradDesc: miopenTensorDescriptor_t,
+        inputGrad: *mut ::core::ffi::c_void,
+        dim: u32,
     ) -> miopenStatus_t;
 }
 #[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
@@ -6313,6 +6481,11 @@ impl miopenProblemDirection_t {
         2,
     );
 }
+impl miopenProblemDirection_t {
+    pub const miopenProblemDirectionInference: miopenProblemDirection_t = miopenProblemDirection_t(
+        4,
+    );
+}
 #[repr(transparent)]
 /** @enum miopenProblemDirection_t
  Directions of miopen operation.*/
@@ -6486,6 +6659,125 @@ impl miopenTensorArgumentId_t {
     );
 }
 impl miopenTensorArgumentId_t {
+    pub const miopenTensorActivationX: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
+        37,
+    );
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenTensorActivationY: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
+        38,
+    );
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenTensorActivationDX: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
+        39,
+    );
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenTensorActivationDY: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
+        40,
+    );
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenTensorBiasX: miopenTensorArgumentId_t = miopenTensorArgumentId_t(41);
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenTensorBiasY: miopenTensorArgumentId_t = miopenTensorArgumentId_t(42);
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenTensorBias: miopenTensorArgumentId_t = miopenTensorArgumentId_t(43);
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenTensorSoftmaxX: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
+        44,
+    );
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenTensorSoftmaxY: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
+        45,
+    );
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenTensorSoftmaxDX: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
+        46,
+    );
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenTensorSoftmaxDY: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
+        47,
+    );
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenTensorBatchnormX: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
+        48,
+    );
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenTensorBatchnormY: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
+        49,
+    );
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenTensorBatchnormRunningMean: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
+        50,
+    );
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenTensorBatchnormRunningVariance: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
+        51,
+    );
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenTensorBatchnormSavedMean: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
+        52,
+    );
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenTensorBatchnormSavedVariance: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
+        53,
+    );
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenTensorBatchnormScale: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
+        54,
+    );
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenTensorBatchnormScaleDiff: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
+        55,
+    );
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenTensorBatchnormEstimatedMean: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
+        56,
+    );
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenTensorBatchnormEstimatedVariance: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
+        57,
+    );
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenTensorBatchnormBias: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
+        58,
+    );
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenTensorBatchnormBiasDiff: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
+        59,
+    );
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenTensorBatchnormDX: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
+        60,
+    );
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenTensorBatchnormDY: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
+        61,
+    );
+}
+impl miopenTensorArgumentId_t {
     pub const miopenTensorArgumentIsScalar: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
         2147483648,
     );
@@ -6493,6 +6785,16 @@ impl miopenTensorArgumentId_t {
 impl miopenTensorArgumentId_t {
     pub const miopenTensorMhaMask: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
         2147483649,
+    );
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenScalarBatchnormExpAvgFactor: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
+        2147483650,
+    );
+}
+impl miopenTensorArgumentId_t {
+    pub const miopenScalarBatchnormEpsilon: miopenTensorArgumentId_t = miopenTensorArgumentId_t(
+        2147483651,
     );
 }
 #[repr(transparent)]
@@ -6941,6 +7243,3107 @@ extern "C" {
         result: *mut miopenConvAlgorithm_t,
     ) -> miopenStatus_t;
 }
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Initializes a problem object describing an activation operation.
+ @note As of now there is no way to actually get any solution for this kind of problems.
+
+ @param problem      Pointer to the problem to initialize
+ @param operatorDesc Descriptor of the operator to be used
+ @param direction    Direction of the operation
+ @return             miopenStatus_t*/
+    pub fn miopenCreateActivationProblem(
+        problem: *mut miopenProblem_t,
+        operatorDesc: miopenActivationDescriptor_t,
+        direction: miopenProblemDirection_t,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Initializes a problem object describing an activation operation.
+ @note As of now there is no way to actually get any solution for this kind of problems.
+
+ @param problem   Pointer to the problem to initialize
+ @param mode      Batchnorm mode
+ @param direction Direction of the operation
+ @return          miopenStatus_t*/
+    pub fn miopenCreateBatchnormProblem(
+        problem: *mut miopenProblem_t,
+        mode: miopenBatchNormMode_t,
+        runningMeanVariance: bool,
+        direction: miopenProblemDirection_t,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Fuse two problems into a single one. Problems can be either regular, or fused. No
+ problems are disposed in the process, so the problem2 should be destroyed manually if it is not
+ needed anymore.
+ @details
+ miopenProblem_t problem = makeSomeProblem1();\n
+ miopenProblem_t problem2 = makeSomeProblem2();\n
+ miopenProblem_t problem3 = makeSomeProblem3();\n
+ miopenFuseProblems(problem, problem2);\n
+ // Now problem contains {problem1, problem2}\n
+ miopenFuseProblems(problem, problem3);\n
+ // Now problem contains {problem1, problem2, problem3}\n
+ miopenDestroyProblem(problem2);\n
+ miopenDestroyProblem(problem3);
+ @note As of now there is no way to actually get any solution for this kind of problem.
+
+ @param problem1     The first problem to fuse. The result would be stored here.
+ @param problem2     The second problem to fuse.
+ @return             miopenStatus_t*/
+    pub fn miopenFuseProblems(
+        problem1: miopenProblem_t,
+        problem2: miopenProblem_t,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Initializes a problem object describing an bias operation.
+ @note As of now there is no way to actually get any solution for this kind of problems.
+
+ @param problem        Pointer to the problem to initialize
+ @param direction      Direction of the operation
+ @return               miopenStatus_t*/
+    pub fn miopenCreateBiasProblem(
+        problem: *mut miopenProblem_t,
+        direction: miopenProblemDirection_t,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Initializes a problem object describing a softmax operation.
+
+ @param problem      Pointer to the problem to initialize
+ @param operatorDesc Descriptor of the operator to be used
+ @param direction    Direction of the operation
+ @return             miopenStatus_t*/
+    pub fn miopenCreateSoftmaxProblem(
+        problem: *mut miopenProblem_t,
+        operatorDesc: miopenSoftmaxDescriptor_t,
+        direction: miopenProblemDirection_t,
+    ) -> miopenStatus_t;
+}
+impl miopenReduceCalculationNanPropagation_t {
+    ///< does not propagate Nan number
+    pub const MIOPEN_REDUCE_CALCULATION_NOT_PROPAGATE_NAN: miopenReduceCalculationNanPropagation_t = miopenReduceCalculationNanPropagation_t(
+        0,
+    );
+}
+impl miopenReduceCalculationNanPropagation_t {
+    pub const MIOPEN_REDUCE_CALCULATION_PROPAGATE_NAN: miopenReduceCalculationNanPropagation_t = miopenReduceCalculationNanPropagation_t(
+        1,
+    );
+}
+#[repr(transparent)]
+/** @ingroup ReduceCalculation
+ @enum miopenReduceCalculationNanPropagation_t
+ Nan numbers propagation modes for reduce calculation*/
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct miopenReduceCalculationNanPropagation_t(pub ::core::ffi::c_uint);
+impl miopenReduceCalculationOp_t {
+    pub const MIOPEN_REDUCE_CALCULATION_PROD: miopenReduceCalculationOp_t = miopenReduceCalculationOp_t(
+        1,
+    );
+}
+impl miopenReduceCalculationOp_t {
+    pub const MIOPEN_REDUCE_CALCULATION_SUM: miopenReduceCalculationOp_t = miopenReduceCalculationOp_t(
+        2,
+    );
+}
+#[repr(transparent)]
+/** @enum miopenReduceCalculationOp_t
+ Reduction Calculation operation types*/
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct miopenReduceCalculationOp_t(pub ::core::ffi::c_uint);
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Helper function to query the minimum workspace size required by the ReduceTensor call
+
+ @param [in]   handle                   MIOpen Handle
+ @param [in]   xDesc                    Tensor descriptor for data input tensor x
+ @param [in]   dim                      Dimension to calculation.
+ @param [in]   yDesc                    Tensor descriptor for output data tensor y
+ @param [out]  sizeInBytes              Pointer to data to return the minimum workspace size
+ @return                                miopenStatus_t*/
+    pub fn miopenGetReduceCalculationWorkspaceSize(
+        handle: miopenHandle_t,
+        xDesc: miopenTensorDescriptor_t,
+        dim: i32,
+        reduceCalculationOp: miopenReduceCalculationOp_t,
+        reduceDesc: miopenTensorDescriptor_t,
+        sizeInBytes: *mut usize,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Execute a reducecalculation forward layer
+
+ @param [in]   handle                   MIOpen handle
+ @param [in]   nanPropagation           Nan number propagation mode
+ @param [in]   workspace                Address of the allocated workspace data
+ @param [in]   workspaceSizeInBytes     Size in bytes of the allocated workspace data
+ @param [in]   xDesc                    Tensor descriptor for data input tensor x
+ @param [in]   x                        Data tensor x
+ @param [in]   dim                      Dimension to calculation.
+ @param [in]   yDesc                    Tensor descriptor for output data tensor y
+ @param [out]  y                        Data tensor y
+ @return                                miopenStatus_t*/
+    pub fn miopenReduceCalculationForward(
+        handle: miopenHandle_t,
+        nanPropagation: miopenReduceCalculationNanPropagation_t,
+        workspace: *mut ::core::ffi::c_void,
+        workspaceSizeInBytes: usize,
+        xDesc: miopenTensorDescriptor_t,
+        x: *const ::core::ffi::c_void,
+        dim: i32,
+        reduceCalculationOp: miopenReduceCalculationOp_t,
+        reduceDesc: miopenTensorDescriptor_t,
+        y: *mut ::core::ffi::c_void,
+    ) -> miopenStatus_t;
+}
+impl miopenReduceExtremeOp_t {
+    pub const MIOPEN_REDUCE_EXTREME_ARGMIN: miopenReduceExtremeOp_t = miopenReduceExtremeOp_t(
+        1,
+    );
+}
+impl miopenReduceExtremeOp_t {
+    pub const MIOPEN_REDUCE_EXTREME_ARGMAX: miopenReduceExtremeOp_t = miopenReduceExtremeOp_t(
+        2,
+    );
+}
+impl miopenReduceExtremeOp_t {
+    pub const MIOPEN_REDUCE_EXTREME_MIN: miopenReduceExtremeOp_t = miopenReduceExtremeOp_t(
+        3,
+    );
+}
+impl miopenReduceExtremeOp_t {
+    pub const MIOPEN_REDUCE_EXTREME_MAX: miopenReduceExtremeOp_t = miopenReduceExtremeOp_t(
+        4,
+    );
+}
+#[repr(transparent)]
+/** @ingroup ReduceExtreme
+ @enum miopenReduceExtremeOp_t
+ Reduction Extreme operation types*/
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct miopenReduceExtremeOp_t(pub ::core::ffi::c_uint);
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Find the the extreme (minimum, maximum) value and index of a tensor across Dimension.
+
+ @param handle                   MIOpen handle (input)
+ @param xDesc                    Tensor descriptor for data input tensor x (input)
+ @param x                        Data tensor x (input)
+ @param dim                      Dimension to reduce argmax. (input)
+ @param reduceExtremeOp          Enumerant specifying the operation used by ReduceExtreme (input)
+ @param yDesc                    Tensor descriptor for reduce data tensor y (input)
+ @param y                        Data tensor y (output)
+ @param indiceDesc               Tensor descriptor for reduce data tensor indice only int32_t
+ (input)
+ @param indice                   Data tensor indice (output)
+ @return                         miopenStatus_t*/
+    pub fn miopenReduceExtremeForward(
+        handle: miopenHandle_t,
+        xDesc: miopenTensorDescriptor_t,
+        x: *const ::core::ffi::c_void,
+        dim: i32,
+        reduceExtremeOp: miopenReduceExtremeOp_t,
+        yDesc: miopenTensorDescriptor_t,
+        y: *mut ::core::ffi::c_void,
+        indiceDesc: miopenTensorDescriptor_t,
+        indice: *mut ::core::ffi::c_void,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    #[doc = " @addtogroup groupnorm\n\n  @{\n/\n/*! @brief Execute a groupnorm forward layer\n\n @param handle         MIOpen handle (input)\n @param mode           GroupNorm mode (input)\n @param xDesc          Tensor descriptor for data input tensor x (input)\n @param x              Data tensor x (input)\n @param weightDesc     Tensor descriptor for data input tensor weight (input)\n @param weight         Data tensor weight (input)\n @param biasDesc       Tensor descriptor for data input tensor bias (input)\n @param bias           Data tensor bias (input)\n @param num_groups     nNmber of groups to separate the channels into (input)\n @param epsilon        Value to stablize inverse variance calculation (input)\n @param yDesc          Tensor descriptor for output data tensor y (input)\n @param y              Data tensor y (output)\n @param meanDesc       Tensor descriptor for output data tensor mean (input)\n @param mean           Data tensor mean (output)\n @param rstdDesc       Tensor descriptor for output data tensor rstd (input)\n @param rstd           Data tensor rstd (output)\n @return               miopenStatus_t"]
+    pub fn miopenGroupNormForward(
+        handle: miopenHandle_t,
+        mode: miopenNormMode_t,
+        xDesc: miopenTensorDescriptor_t,
+        x: *const ::core::ffi::c_void,
+        weightDesc: miopenTensorDescriptor_t,
+        weight: *const ::core::ffi::c_void,
+        biasDesc: miopenTensorDescriptor_t,
+        bias: *const ::core::ffi::c_void,
+        num_groups: u64,
+        epsilon: f32,
+        yDesc: miopenTensorDescriptor_t,
+        y: *mut ::core::ffi::c_void,
+        meanDesc: miopenTensorDescriptor_t,
+        mean: *mut ::core::ffi::c_void,
+        rstdDesc: miopenTensorDescriptor_t,
+        rstd: *mut ::core::ffi::c_void,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    #[doc = " @addtogroup layernorm\n\n  @{\n/\n/*! @brief Execute a add and layernorm forward layer\n\n @param handle         MIOpen handle (input)\n @param mode           LayerNorm mode (input)\n @param xDesc          Tensor descriptor for data input tensor x (input)\n @param x              Data tensor x (input)\n @param x2Desc         Tensor descriptor for data input tensor x2 (input)\n @param x2             Data tensor x2 (input)\n @param weightDesc     Tensor descriptor for data input tensor weight (input)\n @param weight         Data tensor weight (input)\n @param biasDesc       Tensor descriptor for data input tensor bias (input)\n @param bias           Data tensor bias (input)\n @param epsilon        Value to stablize inverse variance calculation (input)\n @param normalized_dim Nomalized dimensions in the input array (input)\n @param yDesc          Tensor descriptor for output data tensor y (input)\n @param y              Data tensor y (output)\n @param meanDesc       Tensor descriptor for output data tensor mean (input)\n @param mean           Data tensor mean (output)\n @param rstdDesc       Tensor descriptor for output data tensor rstd (input)\n @param rstd           Data tensor rstd (output)\n @return               miopenStatus_t"]
+    pub fn miopenAddLayerNormForward(
+        handle: miopenHandle_t,
+        mode: miopenNormMode_t,
+        xDesc: miopenTensorDescriptor_t,
+        x: *const ::core::ffi::c_void,
+        x2Desc: miopenTensorDescriptor_t,
+        x2: *const ::core::ffi::c_void,
+        weightDesc: miopenTensorDescriptor_t,
+        weight: *const ::core::ffi::c_void,
+        biasDesc: miopenTensorDescriptor_t,
+        bias: *const ::core::ffi::c_void,
+        epsilon: f32,
+        normalized_dim: i32,
+        yDesc: miopenTensorDescriptor_t,
+        y: *mut ::core::ffi::c_void,
+        meanDesc: miopenTensorDescriptor_t,
+        mean: *mut ::core::ffi::c_void,
+        rstdDesc: miopenTensorDescriptor_t,
+        rstd: *mut ::core::ffi::c_void,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    #[doc = " @addtogroup layernorm\n\n  @{\n/\n/*! @brief Execute a T5layernorm forward layer\n\n @param handle         MIOpen handle (input)\n @param mode           LayerNorm mode (input)\n @param xDesc          Tensor descriptor for data input tensor x (input)\n @param x              Data tensor x (input)\n @param weightDesc     Tensor descriptor for data input tensor weight (input)\n @param weight         Data tensor weight (input)\n @param epsilon        Value to stablize inverse variance calculation (input)\n @param yDesc          Tensor descriptor for output data tensor y (input)\n @param y              Data tensor y (output)\n @param rstdDesc       Tensor descriptor for output data tensor rstd (input)\n @param rstd           Data tensor rstd (output)\n @return               miopenStatus_t"]
+    pub fn miopenT5LayerNormForward(
+        handle: miopenHandle_t,
+        mode: miopenNormMode_t,
+        xDesc: miopenTensorDescriptor_t,
+        x: *const ::core::ffi::c_void,
+        weightDesc: miopenTensorDescriptor_t,
+        weight: *const ::core::ffi::c_void,
+        epsilon: f32,
+        yDesc: miopenTensorDescriptor_t,
+        y: *mut ::core::ffi::c_void,
+        rstdDesc: miopenTensorDescriptor_t,
+        rstd: *mut ::core::ffi::c_void,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Helper function to query the minimum workspace size required by the T5layernorm backward
+ call
+
+ @param handle                   MIOpen Handle (input)
+ @param mode                     LayerNorm mode (input)
+ @param dyDesc                   Tensor descriptor for data input tensor dy (input)
+ @param xDesc                    Tensor descriptor for data input tensor x (input)
+ @param weightDesc               Tensor descriptor for data input tensor weight (input)
+ @param rstdDesc                 Tensor descriptor for data input tensor rstd (input)
+ @param dxDesc                   Tensor descriptor for output data tensor dx (input)
+ @param dwDesc                   Tensor descriptor for output data tensor dw (input)
+ @param sizeInBytes              Pointer to data to return the minimum workspace size
+ @return                         miopenStatus_t*/
+    pub fn miopenGetT5LayerNormBackwardWorkspaceSize(
+        handle: miopenHandle_t,
+        mode: miopenNormMode_t,
+        dyDesc: miopenTensorDescriptor_t,
+        xDesc: miopenTensorDescriptor_t,
+        weightDesc: miopenTensorDescriptor_t,
+        rstdDesc: miopenTensorDescriptor_t,
+        dxDesc: miopenTensorDescriptor_t,
+        dwDesc: miopenTensorDescriptor_t,
+        sizeInBytes: *mut usize,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Execute a T5layernorm backward layer
+
+ @param handle                   MIOpen handle (input)
+ @param mode                     LayerNorm mode (input)
+ @param workspace                Address of the allocated workspace data (input)
+ @param workspaceSizeInBytes     Size in bytes of the allocated workspace data (input)
+ @param dyDesc                   Tensor descriptor for data input tensor dy (input)
+ @param dy                       Data tensor dy (input)
+ @param xDesc                    Tensor descriptor for output data tensor x (input)
+ @param x                        Data tensor x (input)
+ @param weightDesc               Tensor descriptor for data input tensor weight (input)
+ @param weight                   Data tensor weight (input)
+ @param rstdDesc                 Tensor descriptor for output data tensor rstd (input)
+ @param rstd                     Data tensor rstd (output)
+ @param dxDesc                   Tensor descriptor for output data tensor dx (input)
+ @param dx                       Data tensor dx (output)
+ @param dwDesc                   Tensor descriptor for output data tensor dw (input)
+ @param dw                       Data tensor dw (output)
+ @return                         miopenStatus_t*/
+    pub fn miopenT5LayerNormBackward(
+        handle: miopenHandle_t,
+        mode: miopenNormMode_t,
+        workspace: *mut ::core::ffi::c_void,
+        workspaceSizeInBytes: usize,
+        dyDesc: miopenTensorDescriptor_t,
+        dy: *const ::core::ffi::c_void,
+        xDesc: miopenTensorDescriptor_t,
+        x: *const ::core::ffi::c_void,
+        weightDesc: miopenTensorDescriptor_t,
+        weight: *const ::core::ffi::c_void,
+        rstdDesc: miopenTensorDescriptor_t,
+        rstd: *const ::core::ffi::c_void,
+        dxDesc: miopenTensorDescriptor_t,
+        dx: *mut ::core::ffi::c_void,
+        dwDesc: miopenTensorDescriptor_t,
+        dw: *mut ::core::ffi::c_void,
+    ) -> miopenStatus_t;
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_CONVOLUTION_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        0,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_ENGINE_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        1,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_ENGINECFG_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        2,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_ENGINEHEUR_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        3,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        4,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_INTERMEDIATE_INFO_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        5,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_KNOB_CHOICE_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        6,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_KNOB_INFO_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        7,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_LAYOUT_INFO_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        8,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_MATMUL_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        9,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_OPERATION_CONCAT_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        10,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        11,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        12,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        13,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_OPERATION_GEN_STATS_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        14,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_OPERATION_MATMUL_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        15,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_OPERATION_NORM_BACKWARD_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        16,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_OPERATION_NORM_FORWARD_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        17,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        18,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        19,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_OPERATION_RESAMPLE_BWD_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        20,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_OPERATION_RESAMPLE_FWD_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        21,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_OPERATION_RESHAPE_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        22,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_OPERATION_RNG_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        23,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_OPERATION_SIGNAL_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        24,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_OPERATIONGRAPH_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        25,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_POINTWISE_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        26,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_REDUCTION_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        27,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_RESAMPLE_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        28,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_RNG_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        29,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_TENSOR_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        30,
+    );
+}
+impl miopenBackendDescriptorType_t {
+    pub const MIOPEN_BACKEND_VARIANT_PACK_DESCRIPTOR: miopenBackendDescriptorType_t = miopenBackendDescriptorType_t(
+        31,
+    );
+}
+#[repr(transparent)]
+/** @brief Descriptor type
+
+ An enumerated type that indicates the type of backend descriptors. Users create a backend
+ descriptor of a particular type by passing a value from this enumerate to the
+ miopenBackendCreateDescriptor() function.*/
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct miopenBackendDescriptorType_t(pub ::core::ffi::c_uint);
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_POINTWISE_MODE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        0,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_POINTWISE_MATH_PREC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_POINTWISE_NAN_PROPAGATION: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_POINTWISE_RELU_LOWER_CLIP: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        3,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_POINTWISE_RELU_UPPER_CLIP: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        4,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_POINTWISE_RELU_LOWER_CLIP_SLOPE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        5,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_POINTWISE_ELU_ALPHA: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        6,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_POINTWISE_SOFTPLUS_BETA: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        7,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_POINTWISE_SWISH_BETA: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        8,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_POINTWISE_AXIS: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        9,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_CONVOLUTION_COMP_TYPE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        100,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_CONVOLUTION_CONV_MODE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        101,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_CONVOLUTION_DILATIONS: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        102,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_CONVOLUTION_FILTER_STRIDES: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        103,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_CONVOLUTION_POST_PADDINGS: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        104,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_CONVOLUTION_PRE_PADDINGS: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        105,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_CONVOLUTION_SPATIAL_DIMS: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        106,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_ENGINEHEUR_MODE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        200,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_ENGINEHEUR_OPERATION_GRAPH: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        201,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_ENGINEHEUR_RESULTS: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        202,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_ENGINEHEUR_SM_COUNT_TARGET: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        203,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_ENGINECFG_ENGINE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        300,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_ENGINECFG_INTERMEDIATE_INFO: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        301,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_ENGINECFG_KNOB_CHOICES: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        302,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_EXECUTION_PLAN_HANDLE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        400,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_EXECUTION_PLAN_ENGINE_CONFIG: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        401,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_EXECUTION_PLAN_WORKSPACE_SIZE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        402,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_EXECUTION_PLAN_COMPUTED_INTERMEDIATE_UIDS: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        403,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_EXECUTION_PLAN_RUN_ONLY_INTERMEDIATE_UIDS: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        404,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_EXECUTION_PLAN_JSON_REPRESENTATION: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        405,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_INTERMEDIATE_INFO_UNIQUE_ID: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        500,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_INTERMEDIATE_INFO_SIZE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        501,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_INTERMEDIATE_INFO_DEPENDENT_DATA_UIDS: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        502,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_INTERMEDIATE_INFO_DEPENDENT_ATTRIBUTES: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        503,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_KNOB_CHOICE_KNOB_TYPE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        600,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_KNOB_CHOICE_KNOB_VALUE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        601,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_CONVOLUTION_FORWARD_ALPHA: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        700,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_CONVOLUTION_FORWARD_BETA: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        701,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_CONVOLUTION_FORWARD_CONV_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        702,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_CONVOLUTION_FORWARD_W: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        703,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_CONVOLUTION_FORWARD_X: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        704,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_CONVOLUTION_FORWARD_Y: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        705,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_ALPHA: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        706,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_BETA: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        707,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_CONV_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        708,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_W: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        709,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_DX: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        710,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_DY: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        711,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_ALPHA: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        712,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_BETA: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        713,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_CONV_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        714,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_DW: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        715,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_X: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        716,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_DY: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        717,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_POINTWISE_PW_DESCRIPTOR: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        750,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_POINTWISE_XDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        751,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_POINTWISE_BDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        752,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_POINTWISE_YDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        753,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_POINTWISE_ALPHA1: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        754,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_POINTWISE_ALPHA2: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        755,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_POINTWISE_DXDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        756,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_POINTWISE_DYDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        757,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_POINTWISE_TDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        758,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_GENSTATS_MODE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        770,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_GENSTATS_MATH_PREC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        771,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_GENSTATS_XDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        772,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_GENSTATS_SUMDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        773,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_GENSTATS_SQSUMDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        774,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_FINALIZE_STATS_MODE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        780,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_FINALIZE_MATH_PREC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        781,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_FINALIZE_Y_SUM_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        782,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_FINALIZE_Y_SQ_SUM_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        783,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_FINALIZE_SCALE_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        784,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_FINALIZE_BIAS_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        785,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_FINALIZE_PREV_RUNNING_MEAN_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        786,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_FINALIZE_PREV_RUNNING_VAR_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        787,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_FINALIZE_UPDATED_RUNNING_MEAN_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        788,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_FINALIZE_UPDATED_RUNNING_VAR_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        789,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_FINALIZE_SAVED_MEAN_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        790,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_FINALIZE_SAVED_INV_STD_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        791,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_FINALIZE_EQ_SCALE_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        792,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_FINALIZE_EQ_BIAS_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        793,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_FINALIZE_ACCUM_COUNT_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        794,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_FINALIZE_EPSILON_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        795,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_FINALIZE_EXP_AVERATE_FACTOR_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        796,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATIONGRAPH_HANDLE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        800,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATIONGRAPH_OPS: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        801,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATIONGRAPH_ENGINE_GLOBAL_COUNT: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        802,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_TENSOR_BYTE_ALIGNMENT: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        900,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_TENSOR_DATA_TYPE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        901,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_TENSOR_DIMENSIONS: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        902,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_TENSOR_STRIDES: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        903,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_TENSOR_VECTOR_COUNT: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        904,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_TENSOR_VECTORIZED_DIMENSION: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        905,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_TENSOR_UNIQUE_ID: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        906,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_TENSOR_IS_VIRTUAL: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        907,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_TENSOR_IS_BY_VALUE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        908,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_TENSOR_REORDERING_MODE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        909,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_TENSOR_RAGGED_OFFSET_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        910,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_VARIANT_PACK_UNIQUE_IDS: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1000,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_VARIANT_PACK_DATA_POINTERS: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1001,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_VARIANT_PACK_INTERMEDIATES: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1002,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_VARIANT_PACK_WORKSPACE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1003,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_LAYOUT_INFO_TENSOR_UID: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1100,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_LAYOUT_INFO_TYPES: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1101,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_KNOB_INFO_TYPE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1200,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_KNOB_INFO_MAXIMUM_VALUE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1201,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_KNOB_INFO_MINIMUM_VALUE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1202,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_KNOB_INFO_STRIDE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1203,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_ENGINE_OPERATION_GRAPH: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1300,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_ENGINE_GLOBAL_INDEX: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1301,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_ENGINE_KNOB_INFO: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1302,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_ENGINE_NUMERICAL_NOTE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1303,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_ENGINE_LAYOUT_INFO: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1304,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_ENGINE_BEHAVIOR_NOTE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1305,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_ENGINE_SM_COUNT_TARGET: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1306,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_MATMUL_COMP_TYPE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1500,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_MATMUL_PADDING_VALUE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1501,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_MATMUL_ADESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1520,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_MATMUL_BDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1521,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_MATMUL_CDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1522,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_MATMUL_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1523,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_MATMUL_IRREGULARLY_STRIDED_BATCH_COUNT: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1524,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_MATMUL_GEMM_M_OVERRIDE_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1525,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_MATMUL_GEMM_N_OVERRIDE_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1526,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_MATMUL_GEMM_K_OVERRIDE_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1527,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_REDUCTION_OPERATOR: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1600,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_REDUCTION_COMP_TYPE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1601,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_REDUCTION_XDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1610,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_REDUCTION_YDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1611,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_REDUCTION_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1612,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_BWD_WEIGHTS_MATH_PREC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1620,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_BWD_WEIGHTS_MEAN_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1621,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_BWD_WEIGHTS_INVSTD_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1622,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_BWD_WEIGHTS_BN_SCALE_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1623,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_BWD_WEIGHTS_X_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1624,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_BWD_WEIGHTS_DY_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1625,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_BWD_WEIGHTS_DBN_SCALE_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1626,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_BWD_WEIGHTS_DBN_BIAS_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1627,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_BWD_WEIGHTS_EQ_DY_SCALE_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1628,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_BWD_WEIGHTS_EQ_X_SCALE_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1629,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_BN_BWD_WEIGHTS_EQ_BIAS: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1630,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_RESAMPLE_MODE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1700,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_RESAMPLE_COMP_TYPE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1701,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_RESAMPLE_SPATIAL_DIMS: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1702,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_RESAMPLE_POST_PADDINGS: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1703,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_RESAMPLE_PRE_PADDINGS: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1704,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_RESAMPLE_STRIDES: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1705,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_RESAMPLE_WINDOW_DIMS: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1706,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_RESAMPLE_NAN_PROPAGATION: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1707,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_RESAMPLE_PADDING_MODE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1708,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_RESAMPLE_FWD_XDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1710,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_RESAMPLE_FWD_YDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1711,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_RESAMPLE_FWD_IDXDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1712,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_RESAMPLE_FWD_ALPHA: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1713,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_RESAMPLE_FWD_BETA: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1714,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_RESAMPLE_FWD_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1716,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_RESAMPLE_BWD_DXDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1720,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_RESAMPLE_BWD_DYDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1721,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_RESAMPLE_BWD_IDXDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1722,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_RESAMPLE_BWD_ALPHA: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1723,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_RESAMPLE_BWD_BETA: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1724,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_RESAMPLE_BWD_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1725,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_RESAMPLE_BWD_XDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1726,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_RESAMPLE_BWD_YDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1727,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_CONCAT_AXIS: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1800,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_CONCAT_INPUT_DESCS: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1801,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_CONCAT_INPLACE_INDEX: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1802,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_CONCAT_OUTPUT_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1803,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_SIGNAL_MODE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1900,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_SIGNAL_FLAGDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1901,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_SIGNAL_VALUE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1902,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_SIGNAL_XDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1903,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_SIGNAL_YDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        1904,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_FWD_MODE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2000,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_FWD_PHASE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2001,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_FWD_XDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2002,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_FWD_MEAN_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2003,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_FWD_INV_VARIANCE_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2004,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_FWD_SCALE_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2005,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_FWD_BIAS_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2006,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_FWD_EPSILON_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2007,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_FWD_EXP_AVG_FACTOR_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2008,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_FWD_INPUT_RUNNING_MEAN_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2009,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_FWD_INPUT_RUNNING_VAR_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2010,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_FWD_OUTPUT_RUNNING_MEAN_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2011,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_FWD_OUTPUT_RUNNING_VAR_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2012,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_FWD_YDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2013,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_FWD_PEER_STAT_DESCS: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2014,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_BWD_MODE: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2100,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_BWD_XDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2101,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_BWD_MEAN_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2102,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_BWD_INV_VARIANCE_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2103,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_BWD_DYDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2104,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_BWD_SCALE_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2105,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_BWD_EPSILON_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2106,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_BWD_DSCALE_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2107,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_BWD_DBIAS_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2108,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_BWD_DXDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2109,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_NORM_BWD_PEER_STAT_DESCS: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2110,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_RESHAPE_XDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2200,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_RESHAPE_YDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2201,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_RNG_DISTRIBUTION: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2300,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_RNG_NORMAL_DIST_MEAN: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2301,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_RNG_NORMAL_DIST_STANDARD_DEVIATION: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2302,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_RNG_UNIFORM_DIST_MAXIMUM: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2303,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_RNG_UNIFORM_DIST_MINIMUM: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2304,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_RNG_BERNOULLI_DIST_PROBABILITY: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2305,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_RNG_YDESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2310,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_RNG_SEED: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2311,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_RNG_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2312,
+    );
+}
+impl miopenBackendAttributeName_t {
+    pub const MIOPEN_ATTR_OPERATION_RNG_OFFSET_DESC: miopenBackendAttributeName_t = miopenBackendAttributeName_t(
+        2313,
+    );
+}
+#[repr(transparent)]
+/** @brief Backend Descriptor's Attribute
+
+ An enumerated type that indicates the backend descriptor attributes
+ that can be set or get using miopenBackendSetAttribute() and miopenBackendGetAttribute()
+ functions. The backend descriptor to which an attribute belongs is
+ identified by the prefix of the attribute name.*/
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct miopenBackendAttributeName_t(pub ::core::ffi::c_uint);
+impl miopenBackendAttributeType_t {
+    ///< miopenHandle_t
+    pub const MIOPEN_TYPE_HANDLE: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        0,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< miopenDataType_t
+    pub const MIOPEN_TYPE_DATA_TYPE: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        1,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< bool
+    pub const MIOPEN_TYPE_BOOLEAN: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        2,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< int64_t
+    pub const MIOPEN_TYPE_INT64: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        3,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< float
+    pub const MIOPEN_TYPE_FLOAT: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        4,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< double
+    pub const MIOPEN_TYPE_DOUBLE: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        5,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< void *
+    pub const MIOPEN_TYPE_VOID_PTR: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        6,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< miopenConvolutionMode_t
+    pub const MIOPEN_TYPE_CONVOLUTION_MODE: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        7,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< miopenBackendHeurMode_t
+    pub const MIOPEN_TYPE_HEUR_MODE: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        8,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< miopenBackendKnobType_t
+    pub const MIOPEN_TYPE_KNOB_TYPE: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        9,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< miopenNanPropagation_t
+    pub const MIOPEN_TYPE_NAN_PROPOGATION: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        10,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< miopenBackendNumericalNote_t
+    pub const MIOPEN_TYPE_NUMERICAL_NOTE: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        11,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< miopenBackendLayoutType_t
+    pub const MIOPEN_TYPE_LAYOUT_TYPE: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        12,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< miopenBackendAttributeName_t
+    pub const MIOPEN_TYPE_ATTRIB_NAME: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        13,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< miopenPointwiseMode_t
+    pub const MIOPEN_TYPE_POINTWISE_MODE: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        14,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< miopenBackendDescriptor_t
+    pub const MIOPEN_TYPE_BACKEND_DESCRIPTOR: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        15,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< miopenGenStatsMode_t
+    pub const MIOPEN_TYPE_GENSTATS_MODE: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        16,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< miopenBnFinalizeStatsMode_t
+    pub const MIOPEN_TYPE_BN_FINALIZE_STATS_MODE: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        17,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< miopenReduceTensorOp_t
+    pub const MIOPEN_TYPE_REDUCTION_OPERATOR_TYPE: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        18,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< miopenBackendBehaviorNote_t
+    pub const MIOPEN_TYPE_BEHAVIOR_NOTE: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        19,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< miopenBackendTensorReordering_t
+    pub const MIOPEN_TYPE_TENSOR_REORDERING_MODE: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        20,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< miopenResampleMode_t
+    pub const MIOPEN_TYPE_RESAMPLE_MODE: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        21,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< miopenPaddingMode_t
+    pub const MIOPEN_TYPE_PADDING_MODE: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        22,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< int32_t
+    pub const MIOPEN_TYPE_INT32: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        23,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< char
+    pub const MIOPEN_TYPE_CHAR: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        24,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< miopenSignalMode_t
+    pub const MIOPEN_TYPE_SIGNAL_MODE: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        25,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< miopenFraction_t
+    pub const MIOPEN_TYPE_FRACTION: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        26,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< miopenBackendNormMode_t
+    pub const MIOPEN_TYPE_NORM_MODE: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        27,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< miopenBackendNormFwdPhase_t
+    pub const MIOPEN_TYPE_NORM_FWD_PHASE: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        28,
+    );
+}
+impl miopenBackendAttributeType_t {
+    ///< miopenRngDistribution_t
+    pub const MIOPEN_TYPE_RNG_DISTRIBUTION: miopenBackendAttributeType_t = miopenBackendAttributeType_t(
+        29,
+    );
+}
+#[repr(transparent)]
+/** @brief Data type of an attribute of a backend descriptor
+
+ Specifies the data type of an attribute of a backend descriptor.
+ It is used to specify the type of data pointed to by the
+ void *arrayOfElements argument of miopenBackendSetAttribute()
+ and miopenBackendGetAttribute()*/
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct miopenBackendAttributeType_t(pub ::core::ffi::c_uint);
+impl miopenPointwiseMode_t {
+    /// A pointwise addition between two tensors is computed.
+    pub const MIOPEN_POINTWISE_ADD: miopenPointwiseMode_t = miopenPointwiseMode_t(0);
+}
+impl miopenPointwiseMode_t {
+    /** A pointwise addition between the first tensor and the square of the second tensor is
+computed.*/
+    pub const MIOPEN_POINTWISE_ADD_SQUARE: miopenPointwiseMode_t = miopenPointwiseMode_t(
+        1,
+    );
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise true division of the first tensor by second tensor is computed.
+    pub const MIOPEN_POINTWISE_DIV: miopenPointwiseMode_t = miopenPointwiseMode_t(2);
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise maximum is taken between two tensors.
+    pub const MIOPEN_POINTWISE_MAX: miopenPointwiseMode_t = miopenPointwiseMode_t(3);
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise minimum is taken between two tensors.
+    pub const MIOPEN_POINTWISE_MIN: miopenPointwiseMode_t = miopenPointwiseMode_t(4);
+}
+impl miopenPointwiseMode_t {
+    /** A pointwise floating-point remainder of the first tensor’s division by the second tensor is
+computed.*/
+    pub const MIOPEN_POINTWISE_MOD: miopenPointwiseMode_t = miopenPointwiseMode_t(5);
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise multiplication between two tensors is computed.
+    pub const MIOPEN_POINTWISE_MUL: miopenPointwiseMode_t = miopenPointwiseMode_t(6);
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise value from the first tensor to the power of the second tensor is computed.
+    pub const MIOPEN_POINTWISE_POW: miopenPointwiseMode_t = miopenPointwiseMode_t(7);
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise subtraction between two tensors is computed.
+    pub const MIOPEN_POINTWISE_SUB: miopenPointwiseMode_t = miopenPointwiseMode_t(8);
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise absolute value of the input tensor is computed.
+    pub const MIOPEN_POINTWISE_ABS: miopenPointwiseMode_t = miopenPointwiseMode_t(9);
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise ceiling of the input tensor is computed.
+    pub const MIOPEN_POINTWISE_CEIL: miopenPointwiseMode_t = miopenPointwiseMode_t(10);
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise trigonometric cosine of the input tensor is computed.
+    pub const MIOPEN_POINTWISE_COS: miopenPointwiseMode_t = miopenPointwiseMode_t(11);
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise exponential of the input tensor is computed.
+    pub const MIOPEN_POINTWISE_EXP: miopenPointwiseMode_t = miopenPointwiseMode_t(12);
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise floor of the input tensor is computed.
+    pub const MIOPEN_POINTWISE_FLOOR: miopenPointwiseMode_t = miopenPointwiseMode_t(13);
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise natural logarithm of the input tensor is computed.
+    pub const MIOPEN_POINTWISE_LOG: miopenPointwiseMode_t = miopenPointwiseMode_t(14);
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise numerical negative of the input tensor is computed.
+    pub const MIOPEN_POINTWISE_NEG: miopenPointwiseMode_t = miopenPointwiseMode_t(15);
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise reciprocal of the square root of the input tensor is computed.
+    pub const MIOPEN_POINTWISE_RSQRT: miopenPointwiseMode_t = miopenPointwiseMode_t(16);
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise trigonometric sine of the input tensor is computed.
+    pub const MIOPEN_POINTWISE_SIN: miopenPointwiseMode_t = miopenPointwiseMode_t(17);
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise square root of the input tensor is computed.
+    pub const MIOPEN_POINTWISE_SQRT: miopenPointwiseMode_t = miopenPointwiseMode_t(18);
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise trigonometric tangent of the input tensor is computed.
+    pub const MIOPEN_POINTWISE_TAN: miopenPointwiseMode_t = miopenPointwiseMode_t(19);
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise Error Function is computed.
+    pub const MIOPEN_POINTWISE_ERF: miopenPointwiseMode_t = miopenPointwiseMode_t(20);
+}
+impl miopenPointwiseMode_t {
+    /** No computation is performed. As with other pointwise modes, this mode provides implicit
+conversions by specifying the data type of the input tensor as one type, and the data type of
+the output tensor as another.*/
+    pub const MIOPEN_POINTWISE_IDENTITY: miopenPointwiseMode_t = miopenPointwiseMode_t(
+        21,
+    );
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise rectified linear activation function of the input tensor is computed.
+    pub const MIOPEN_POINTWISE_RELU_FWD: miopenPointwiseMode_t = miopenPointwiseMode_t(
+        22,
+    );
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise tanh activation function of the input tensor is computed.
+    pub const MIOPEN_POINTWISE_TANH_FWD: miopenPointwiseMode_t = miopenPointwiseMode_t(
+        23,
+    );
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise sigmoid activation function of the input tensor is computed.
+    pub const MIOPEN_POINTWISE_SIGMOID_FWD: miopenPointwiseMode_t = miopenPointwiseMode_t(
+        24,
+    );
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise Exponential Linear Unit activation function of the input tensor is computed.
+    pub const MIOPEN_POINTWISE_ELU_FWD: miopenPointwiseMode_t = miopenPointwiseMode_t(
+        25,
+    );
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise Gaussian Error Linear Unit activation function of the input tensor is computed.
+    pub const MIOPEN_POINTWISE_GELU_FWD: miopenPointwiseMode_t = miopenPointwiseMode_t(
+        26,
+    );
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise softplus activation function of the input tensor is computed.
+    pub const MIOPEN_POINTWISE_SOFTPLUS_FWD: miopenPointwiseMode_t = miopenPointwiseMode_t(
+        27,
+    );
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise swish activation function of the input tensor is computed.
+    pub const MIOPEN_POINTWISE_SWISH_FWD: miopenPointwiseMode_t = miopenPointwiseMode_t(
+        28,
+    );
+}
+impl miopenPointwiseMode_t {
+    /** A pointwise tanh approximation of the Gaussian Error Linear Unit activation function of the
+input tensor is computed. The tanh GELU approximation is computed as \f$0.5x\left(
+1+\tanh\left[ \sqrt{2/\pi}\left( x+0.044715x^{3} \right) \right] \right)\f$*/
+    pub const MIOPEN_POINTWISE_GELU_APPROX_TANH_FWD: miopenPointwiseMode_t = miopenPointwiseMode_t(
+        29,
+    );
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise first derivative of rectified linear activation of the input tensor is computed.
+    pub const MIOPEN_POINTWISE_RELU_BWD: miopenPointwiseMode_t = miopenPointwiseMode_t(
+        30,
+    );
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise first derivative of tanh activation of the input tensor is computed.
+    pub const MIOPEN_POINTWISE_TANH_BWD: miopenPointwiseMode_t = miopenPointwiseMode_t(
+        31,
+    );
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise first derivative of sigmoid activation of the input tensor is computed.
+    pub const MIOPEN_POINTWISE_SIGMOID_BWD: miopenPointwiseMode_t = miopenPointwiseMode_t(
+        32,
+    );
+}
+impl miopenPointwiseMode_t {
+    /** A pointwise first derivative of Exponential Linear Unit activation of the input tensor is
+computed.*/
+    pub const MIOPEN_POINTWISE_ELU_BWD: miopenPointwiseMode_t = miopenPointwiseMode_t(
+        33,
+    );
+}
+impl miopenPointwiseMode_t {
+    /** A pointwise first derivative of Gaussian Error Linear Unit activation of the input tensor is
+computed.*/
+    pub const MIOPEN_POINTWISE_GELU_BWD: miopenPointwiseMode_t = miopenPointwiseMode_t(
+        34,
+    );
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise first derivative of softplus activation of the input tensor is computed.
+    pub const MIOPEN_POINTWISE_SOFTPLUS_BWD: miopenPointwiseMode_t = miopenPointwiseMode_t(
+        35,
+    );
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise first derivative of swish activation of the input tensor is computed.
+    pub const MIOPEN_POINTWISE_SWISH_BWD: miopenPointwiseMode_t = miopenPointwiseMode_t(
+        36,
+    );
+}
+impl miopenPointwiseMode_t {
+    /** A pointwise first derivative of the tanh approximation of the Gaussian Error Linear Unit
+activation of the input tensor is computed. This is computed as \f$0.5\left( 1+\tanh\left(
+b\left( x+cx^{3} \right) \right)+bxsech^{2}\left( b\left( cx^{3}+x \right) \right)\left(
+3cx^{2}+1 \right)dy \right)\f$ where \f$b\f$ is \f$\sqrt{2/\pi}\f$ and \f$c\f$ is
+\f$0.044715\f$*/
+    pub const MIOPEN_POINTWISE_GELU_APPROX_TANH_BWD: miopenPointwiseMode_t = miopenPointwiseMode_t(
+        37,
+    );
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise truth value of the first tensor equal to the second tensor is computed.
+    pub const MIOPEN_POINTWISE_CMP_EQ: miopenPointwiseMode_t = miopenPointwiseMode_t(38);
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise truth value of the first tensor not equal to the second tensor is computed.
+    pub const MIOPEN_POINTWISE_CMP_NEQ: miopenPointwiseMode_t = miopenPointwiseMode_t(
+        39,
+    );
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise truth value of the first tensor greater than the second tensor is computed.
+    pub const MIOPEN_POINTWISE_CMP_GT: miopenPointwiseMode_t = miopenPointwiseMode_t(40);
+}
+impl miopenPointwiseMode_t {
+    /** A pointwise truth value of the first tensor greater than equal to the second tensor is
+computed.*/
+    pub const MIOPEN_POINTWISE_CMP_GE: miopenPointwiseMode_t = miopenPointwiseMode_t(41);
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise truth value of the first tensor less than the second tensor is computed.
+    pub const MIOPEN_POINTWISE_CMP_LT: miopenPointwiseMode_t = miopenPointwiseMode_t(42);
+}
+impl miopenPointwiseMode_t {
+    /** A pointwise truth value of the first tensor less than equal to the second tensor is
+computed.*/
+    pub const MIOPEN_POINTWISE_CMP_LE: miopenPointwiseMode_t = miopenPointwiseMode_t(43);
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise truth value of the first tensor logical AND second tensor is computed.
+    pub const MIOPEN_POINTWISE_LOGICAL_AND: miopenPointwiseMode_t = miopenPointwiseMode_t(
+        44,
+    );
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise truth value of the first tensor logical OR second tensor is computed.
+    pub const MIOPEN_POINTWISE_LOGICAL_OR: miopenPointwiseMode_t = miopenPointwiseMode_t(
+        45,
+    );
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise truth value of input tensors logical NOT is computed.
+    pub const MIOPEN_POINTWISE_LOGICAL_NOT: miopenPointwiseMode_t = miopenPointwiseMode_t(
+        46,
+    );
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise index value of the input tensor is generated along a given axis.
+    pub const MIOPEN_POINTWISE_GEN_INDEX: miopenPointwiseMode_t = miopenPointwiseMode_t(
+        47,
+    );
+}
+impl miopenPointwiseMode_t {
+    /// A pointwise value is selected amongst two input tensors based on a given predicate tensor.
+    pub const MIOPEN_POINTWISE_BINARY_SELECT: miopenPointwiseMode_t = miopenPointwiseMode_t(
+        48,
+    );
+}
+impl miopenPointwiseMode_t {
+    /** A pointwise reciprocal of the input tensor is computed. In other words, for every element x
+in the input tensor, 1/x is computed.*/
+    pub const MIOPEN_POINTWISE_RECIPROCAL: miopenPointwiseMode_t = miopenPointwiseMode_t(
+        49,
+    );
+}
+#[repr(transparent)]
+/** @brief Intended poinwise math operation for a pointwise operation descriptor
+
+ An enumerated type to indicate the intended pointwise math operation in the backend pointwise
+ operation descriptor*/
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct miopenPointwiseMode_t(pub ::core::ffi::c_uint);
+impl miopenRngDistribution_t {
+    pub const MIOPEN_RNG_DISTRIBUTION_BERNOULLI: miopenRngDistribution_t = miopenRngDistribution_t(
+        0,
+    );
+}
+impl miopenRngDistribution_t {
+    pub const MIOPEN_RNG_DISTRIBUTION_UNIFORM: miopenRngDistribution_t = miopenRngDistribution_t(
+        1,
+    );
+}
+impl miopenRngDistribution_t {
+    pub const MIOPEN_RNG_DISTRIBUTION_NORMAL: miopenRngDistribution_t = miopenRngDistribution_t(
+        2,
+    );
+}
+#[repr(transparent)]
+/** @brief Distribution for random number generation
+
+ An enumerated type to indicate the distribution to be used in the backend Rng (random number
+ generator) operation.*/
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct miopenRngDistribution_t(pub ::core::ffi::c_uint);
+impl miopenAlphaBetaCase_t {
+    pub const DEFAULT: miopenAlphaBetaCase_t = miopenAlphaBetaCase_t(0);
+}
+impl miopenAlphaBetaCase_t {
+    pub const SCALE: miopenAlphaBetaCase_t = miopenAlphaBetaCase_t(1);
+}
+impl miopenAlphaBetaCase_t {
+    pub const BILINEAR: miopenAlphaBetaCase_t = miopenAlphaBetaCase_t(2);
+}
+impl miopenAlphaBetaCase_t {
+    pub const ERROR_STATE: miopenAlphaBetaCase_t = miopenAlphaBetaCase_t(3);
+}
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct miopenAlphaBetaCase_t(pub ::core::ffi::c_uint);
+impl miopenBackendHeurMode_t {
+    pub const MIOPEN_HEUR_MODE_INSTANT: miopenBackendHeurMode_t = miopenBackendHeurMode_t(
+        0,
+    );
+}
+impl miopenBackendHeurMode_t {
+    pub const MIOPEN_HEUR_MODE_B: miopenBackendHeurMode_t = miopenBackendHeurMode_t(1);
+}
+impl miopenBackendHeurMode_t {
+    pub const MIOPEN_HEUR_MODE_FALLBACK: miopenBackendHeurMode_t = miopenBackendHeurMode_t(
+        2,
+    );
+}
+impl miopenBackendHeurMode_t {
+    pub const MIOPEN_HEUR_MODE_A: miopenBackendHeurMode_t = miopenBackendHeurMode_t(3);
+}
+impl miopenBackendHeurMode_t {
+    pub const MIOPEN_HEUR_MODES_COUNT: miopenBackendHeurMode_t = miopenBackendHeurMode_t(
+        4,
+    );
+}
+#[repr(transparent)]
+/** @brief Operation mode of CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR
+
+  An enumerated type to indicate the operation mode of a CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR*/
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct miopenBackendHeurMode_t(pub ::core::ffi::c_uint);
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct miopenBackendDescriptor {
+    pub _address: u8,
+}
+pub type miopenBackendDescriptor_t = *mut miopenBackendDescriptor;
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Creates a backend descriptor
+
+ Allocates memory for a given descriptorType at the location pointed
+ by the descriptor
+
+ @param [in]   descriptorType  One among the enumerated miopenBackendDescriptorType_t
+ @param [out]  descriptor      Pointer to a descriptor
+
+ @retval  miopenStatusSuccess        The creation was successful
+ @retval  miopenStatusUnsupportedOp  Creating a descriptor of a given type is not supported
+ @retval  miopenStatusAllocFailed    The memory allocation failed
+ @retval  miopenStatusUnknownError   The error information was not gathered*/
+    pub fn miopenBackendCreateDescriptor(
+        descriptorType: miopenBackendDescriptorType_t,
+        descriptor: *mut miopenBackendDescriptor_t,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Sets an attribute of a descriptor
+
+ This function sets an attribute of a descriptor to values provided as a pointer.
+ Returns miopenStatusUnsupportedOp if the descriptor is already
+ successfully finalized using miopenBackendFinalize().
+
+ @param  [in]  descriptor       Instance of miopenBackendDescriptor_t whose attribute is being set
+ @param  [in]  attributeName    The name of the attribute being set on the descriptor
+ @param  [in]  attributeType    The type of attribute
+ @param  [in]  elementCount     Number of elements being set
+ @param  [in]  arrayOfElements  The starting location for an array from where to read the values
+                                from. The elements of the array are expected to be of the datatype
+                                of the attributeType. The datatype of the attributeType is listed
+                                in the mapping table of miopenBackendAttributeType_t.
+
+ @retval  miopenStatusSuccess         The attributeName was set to the descriptor
+ @retval  miopenStatusNotInitialized  The backend descriptor pointed to by the descriptor is
+                                      already in the finalized state
+ @retval  miopenStatusBadParm         The function is called with arguments that correspond to
+                                      invalid values. Some examples include:
+                                      * attributeName is not a settable attribute of descriptor.
+                                      * attributeType is incorrect for this attributeName.
+                                      * elemCount value is unexpected.
+                                      * arrayOfElements contains values invalid for the
+                                        attributeType.
+ @retval  miopenStatusUnsupportedOp  The values to which the attributes are being set are not
+                                     supported by the current version
+ @retval  miopenStatusUnknownError   The error information was not gathered*/
+    pub fn miopenBackendSetAttribute(
+        descriptor: miopenBackendDescriptor_t,
+        attributeName: miopenBackendAttributeName_t,
+        attributeType: miopenBackendAttributeType_t,
+        elementCount: i64,
+        arrayOfElements: *mut ::core::ffi::c_void,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Finalizes a backend descriptor
+
+ Finalizes the memory pointed to by the descriptor. The type of finalization is done depending on
+ the descriptorType argument with which the descriptor was created using
+ miopenBackendCreateDescriptor() or initialized using miopenBackendInitialize().
+
+ @param  [in]  descriptor  Instance of miopenBackendDescriptor_t to finalize
+
+ @retval  miopenStatusSuccess        The descriptor was finalized successfully
+ @retval  miopenStatusBadParm        Invalid descriptor attribute values or combination thereof is
+                                     encountered
+ @retval  miopenStatusUnsupportedOp  Descriptor attribute values or combinations therefore not
+                                     supported by the current version
+ @retval  miopenStatusInternalError  Some internal errors are encountered
+ @retval  miopenStatusUnknownError   The error information was not gathered*/
+    pub fn miopenBackendFinalize(
+        descriptor: miopenBackendDescriptor_t,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Retrieves backend descriptor's attribute
+
+ This function retrieves the values of an attribute of a descriptor. attributeName is the name of
+ the attribute whose value is requested. attributeType is the type of attribute.
+ requestsedElementCount is the number of elements to be potentially retrieved. The number of
+ elements for the requested attribute is stored in elementCount. The retrieved values are stored
+ in arrayOfElements. When the attribute is expected to have a single value, arrayOfElements can be
+ pointer to the output value. This function will return miopenStatusNotInitialized if the
+ descriptor has not been successfully finalized using miopenBackendFinalize()
+
+ @param  [in]   descriptor             Instance of miopenBackendDescriptor_t whose attribute to
+                                       retrieve
+ @param  [in]   attributeName          The name of the attribute being get from the descriptor
+ @param  [in]   attributeType          The type of attribute
+ @param  [in]   requestedElementCount  Number of elements to output to arrayOfElements
+ @param  [out]  elementCount           Output pointer for the number of elements the descriptor
+                                       attribute has. Note that miopenBackendGetAttribute() will
+                                       only write the least of this and requestedElementCount
+                                       elements to arrayOfElements
+ @param  [out]  arrayOfElements        Array of elements of the datatype of the attributeType. The
+                                       data type of the attributeType is listed in the mapping
+                                       table of miopenBackendAttributeType_t
+
+ @retval  miopenStatusSuccess         The attributeName was retrieved from the descriptor
+                                      successfully
+ @retval  miopenStatusBadParm         One or more invalid or inconsistent argument values were
+                                      encountered. Some examples include:
+                                      * attributeName is not a valid attribute for the descriptor.
+                                      * attributeType is not one of the valid types for the
+                                        attribute.
+ @retval  miopenStatusNotInitialized  The descriptor has not been successfully finalized using
+                                      miopenBackendFinalize()
+ @retval  miopenStatusUnknownError    The error information was not gathered*/
+    pub fn miopenBackendGetAttribute(
+        descriptor: miopenBackendDescriptor_t,
+        attributeName: miopenBackendAttributeName_t,
+        attributeType: miopenBackendAttributeType_t,
+        requestedElementCount: i64,
+        elementCount: *mut i64,
+        arrayOfElements: *mut ::core::ffi::c_void,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Executes a graph
+
+ Executes the given Engine Configuration Plan on the VariantPack and the finalized ExecutionPlan
+ on the data. The data and the working space are encapsulated in the VariantPack
+
+ @param  [in]  handle         An instance of miopenHandle_t
+ @param  [in]  executionPlan  Descriptor of the finalized ExecutionPlan
+ @param  [in]  variantPack    Descriptor of the finalized VariantPack consisting of:
+                              * Data pointer for each non-virtual pointer of the operation set in
+                                the execution plan.
+                              * Pointer to user-allocated workspace in global memory at least as
+                              large as the size queried
+
+ @retval  miopenStatusSuccess        The ExecutionPlan was executed successfully
+ @retval  miopenStatusBadParm        An incorrect or inconsistent value is encountered. For
+                                     example, a required data pointer is invalid
+ @retval  miopenStatusInternalError  Some internal errors were encountered
+ @retval  miopenStatusUnknownError   The error information was not gathered*/
+    pub fn miopenBackendExecute(
+        handle: miopenHandle_t,
+        executionPlan: miopenBackendDescriptor_t,
+        variantPack: miopenBackendDescriptor_t,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Destroys an instance of miopenBackendDescriptor_t
+
+ Destroys instances of miopenBackendDescriptor_t that were previously created using
+ miopenBackendCreateDescriptor(). The value pointed by the descriptor will be undefined after the
+ memory is free and done.
+
+ **Undefined Behavior** if the descriptor was altered between the 'Create' and 'Destroy
+ Descriptor'
+
+ @param  [in]  descriptor  Instance of miopenBackendDescriptor_t previously created by
+                           miopenBackendCreateDescriptor()
+
+ @retval  miopenStatusSuccess       The memory was destroyed successfully
+ @retval  miopenStatusAllocFailed   The destruction of memory failed
+ @retval  miopenStatusUnknownError  The error information was not gathered*/
+    pub fn miopenBackendDestroyDescriptor(
+        descriptor: miopenBackendDescriptor_t,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Repurposes an instance of miopenBackendDescriptor_t
+
+ Repurposes a pre-allocated memory pointed to by a descriptor of size sizeInByte to a backend
+ descriptor of type descriptorType. The finalized state of the descriptor is set to false.
+
+ @param  [in]  descriptor      Instance of miopenBackendDescriptor_t to be initialized
+ @param  [in]  descriptorType  Enumerated value for the type miopenBackendDescriptorType_t
+ @param  [in]  sizeInBytes     Size of memory pointed to by descriptor
+
+ @retval  miopenStatusSuccess       The memory was initialized successfully
+ @retval  miopenStatusBadParm       An invalid or inconsistent argument value is encountered. Some
+                                    examples include:
+                                    * descriptor is a nullptr
+                                    * sizeInBytes is less than the size required by the descriptor
+                                      type
+ @retval  miopenStatusUnknownError  The error information was not gathered*/
+    pub fn miopenBackendInitialize(
+        descriptor: miopenBackendDescriptor_t,
+        descriptorType: miopenBackendDescriptorType_t,
+        sizeInBytes: usize,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    #[doc = " @addtogroup SGD\n\n  @{\n/\n/*! @brief Perform Fused Adam optimization for a single tensor (Adaptive Moment Estimation).\n\n This function implements the Fused Adam optimization algorithm. Adam, short for Adaptive Moment\n Estimation, extends the RMSProp optimizer. It combines the advantages of AdaGrad and RMSProp by\n adaptively adjusting learning rates for each parameter using the first and second moments of\n gradients. Fused Adam optimization efficiently combines multiple operations into a single kernel,\n reducing memory access overhead and improving performance.\n\n Additionally, Fused Adam can be utilized in both adam w and Automatic Mixed Precision (AMP),\n enabling accelerated model training and reduced memory consumption. AMP supports FP16\n computation, optimizing model calculations using a mixture of FP32 and FP16 precision to enhance\n training speed. When utilizing AMP, FoundInf, ScaleGrad, and step tensors should be employed. In\n AMP mode, the execution of Adam is determined based on the FoundInf value. State Step accepts\n both int values and int tensors. If a Step tensor is employed, the step received as an int is\n disregarded, and if Adam is executed, the step tensor is incremented by 1.\n\n @code\n // Execute Adam\n miopenFusedAdam(handle,\n                 paramDesc,\n                 param,\n                 gradDesc,\n                 grad,\n                 expAvgDesc,\n                 expAvg,\n                 expAvgSqDesc,\n                 expAvgSq,\n                 NULL,     // Unused maxExpAvgSqDesc because amsgrad is false\n                 NULL,\n                 NULL,     // Unused stateStep Tensor because use step integer argument\n                 NULL,\n                 step,\n                 lr,\n                 beta1,\n                 beta2,\n                 weight_decay,\n                 eps,\n                 false,    // amsgrad\n                 false,    // maximize\n                 false,    // adamw\n                 NULL,     // Unused gradScale Tensor because not amp\n                 NULL,\n                 NULL,     // Unused foundInf Tensor because not amp\n                 NULL);\n\n // Execute AdamW\n miopenFusedAdam(handle,\n                 paramDesc,\n                 param,\n                 gradDesc,\n                 grad,\n                 expAvgDesc,\n                 expAvg,\n                 expAvgSqDesc,\n                 expAvgSq,\n                 NULL,     // Unused maxExpAvgSqDesc because amsgrad is false\n                 NULL,\n                 NULL,     // Unused stateStep Tensor because use step integer argument\n                 NULL,\n                 step,\n                 lr,\n                 beta1,\n                 beta2,\n                 weight_decay,\n                 eps,\n                 false,    // amsgrad\n                 false,    // maximize\n                 true,     // adamw\n                 NULL,     // Unused gradScale Tensor because not amp\n                 NULL,\n                 NULL,     // Unused foundInf Tensor because not amp\n                 NULL);\n\n // Execute AMP Adam\n miopenFusedAdam(handle,\n                 paramDesc,\n                 param,\n                 gradDesc,\n                 grad,\n                 expAvgDesc,\n                 expAvg,\n                 expAvgSqDesc,\n                 expAvgSq,\n                 NULL,     // Unused maxExpAvgSqDesc because amsgrad is false\n                 NULL,\n                 stateStepDesc,\n                 stateStep,\n                 -1,       // Ignore step value because stateStep Tensor is used\n                 lr,\n                 beta1,\n                 beta2,\n                 weight_decay,\n                 eps,\n                 false,    // amsgrad\n                 false,    // maximize\n                 false,    // adamw\n                 gradScaleDesc,\n                 gradScale,\n                 foundInfDesc,\n                 foundInf);\n @endcode\n\n @param handle              MIOpen handle (input)\n @param paramDesc           Tensor descriptor for the input parameter tensor (input)\n @param param               Input parameter tensor (input)\n @param gradDesc            Tensor descriptor for the input gradient tensor (input)\n @param grad                Input gradient tensor (input)\n @param expAvgDesc          Tensor descriptor for the input exponential moving average tensor\n                            (input)\n @param expAvg              Input exponential moving average tensor (input)\n @param expAvgSqDesc        Tensor descriptor for the input exponential moving average squared\n                            tensor (input)\n @param expAvgSq            Input exponential moving average squared tensor (input)\n @param maxExpAvgSqDesc     Tensor descriptor for the input maximum exponential moving average\n                            squared tensor. Used when amsgrad is true (input, optional)\n @param maxExpAvgSq         Input maximum exponential moving average squared tensor. Used when\n                            amsgrad is true (input, optional)\n @param stateStepDesc       Tensor descriptor for the input state step tensor (input)\n @param stateStep           Input state step tensor (input)\n @param state_step          Input state step. used when the step tensor is null (input)\n @param lr                  Learning rate (input)\n @param beta1               Coefficient used for computing the first moment running average of\n                            gradient (input)\n @param beta2               Coefficient used for computing the second moment running average of\n                            gradient (input)\n @param weight_decay        Weight decay (input)\n @param eps                 Term added to the denominator to improve numerical stability (input)\n @param amsgrad             Flag indicating whether to use the AMSGrad variant of Adam (input)\n @param maximize            Flag indicating whether to maximize the objective with respect to the\n                            parameters (input)\n @param adamw               If true, the operation becomes AdamW (input)\n @param gradScaleDesc       Tensor descriptor for the input grad scale tensor (input, optional)\n @param gradScale           Input grad scale tensor (input, optional)\n @param foundInfDesc        Tensor descriptor for the input found inf tensor (input, optional)\n @param foundInf            Tensor indicating the presence of inf or NaN in gradients. If true,\n                            skips operation and step update (input, optional)\n @return                    miopenStatus_t"]
+    pub fn miopenFusedAdam(
+        handle: miopenHandle_t,
+        paramDesc: miopenTensorDescriptor_t,
+        param: *mut ::core::ffi::c_void,
+        gradDesc: miopenTensorDescriptor_t,
+        grad: *const ::core::ffi::c_void,
+        expAvgDesc: miopenTensorDescriptor_t,
+        expAvg: *mut ::core::ffi::c_void,
+        expAvgSqDesc: miopenTensorDescriptor_t,
+        expAvgSq: *mut ::core::ffi::c_void,
+        maxExpAvgSqDesc: miopenTensorDescriptor_t,
+        maxExpAvgSq: *mut ::core::ffi::c_void,
+        stateStepDesc: miopenTensorDescriptor_t,
+        stateStep: *mut ::core::ffi::c_void,
+        state_step: ::core::ffi::c_uint,
+        lr: f32,
+        beta1: f32,
+        beta2: f32,
+        weight_decay: f32,
+        eps: f32,
+        amsgrad: bool,
+        maximize: bool,
+        adamw: bool,
+        gradScaleDesc: miopenTensorDescriptor_t,
+        gradScale: *const ::core::ffi::c_void,
+        foundInfDesc: miopenTensorDescriptor_t,
+        foundInf: *const ::core::ffi::c_void,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Execute single tensor Adam optimization and receive the result in a separate output
+ tensor.
+
+ This function is equivalent to miopenFusedAdam but receives the result in a separate output
+ tensor.
+ @see miopenFusedAdam
+
+ @code
+ // Execute Adam
+ miopenFusedAdamWithOutput(handle,
+                           paramInDesc,
+                           paramIn,
+                           paramOutDesc,
+                           paramOut,
+                           NULL,   // Unused paramOutFloat16 tensor because is not amp
+                           NULL,
+                           gradInDesc,
+                           gradIn,
+                           expAvgInDesc,
+                           expAvgIn,
+                           expAvgOutDesc,
+                           expAvgOut,
+                           expAvgInSqDesc,
+                           expAvgSqIn,
+                           expAvgSqOutDesc,
+                           expAvgSqOut,
+                           NULL,   // Unused maxExpAvgSqIn tensor because amsgrad is false
+                           NULL,
+                           NULL,   // Unused maxExpAvgSqOut tensor because amsgrad is false
+                           NULL,
+                           NULL,   // Unused stateStepIn tensor because use step integer argument
+                           NULL,
+                           NULL,   // Unused stateStepOut tensor because use step integer argument
+                           NULL,
+                           step,
+                           lr,
+                           beta1,
+                           beta2,
+                           weight_decay,
+                           eps,
+                           false,  // amsgrad
+                           false,  // maximize
+                           false,  // adamw
+                           NULL,   // Unused gradScale Tensor because not amp
+                           NULL,
+                           NULL,   // Unused foundInf Tensor because not amp
+                           NULL);
+
+ // Execute Amp Adam
+ miopenFusedAdamWithOutput(handle,
+                           paramInDesc,
+                           paramIn,
+                           paramOutDesc,
+                           paramOut,
+                           paramOutFloat16Desc,  // paramOutFloat16 tensor is optional in amp
+                           paramOutFloat16,
+                           gradInDesc,
+                           gradIn,
+                           expAvgInDesc,
+                           expAvgIn,
+                           expAvgOutDesc,
+                           expAvgOut,
+                           expAvgInSqDesc,
+                           expAvgSqIn,
+                           expAvgSqIn,
+                           expAvgSqOutDesc,
+                           expAvgSqOut,
+                           NULL,         // Unused maxExpAvgSqIn tensor because amsgrad is false
+                           NULL,
+                           NULL,         // Unused maxExpAvgSqOut tensor because amsgrad is false
+                           NULL,
+                           stateStepInDesc,
+                           stateStepIn,
+                           stateStepOutDesc,
+                           stateStepOut
+                           -1,           // Ignore step value because stateStep Tensor is used
+                           lr, beta1, beta2, weight_decay, eps,
+                           false,        // amsgrad
+                           false,        // maximize
+                           false,        // adamw
+                           gradScaleDesc,
+                           gradScale,
+                           foundInfDesc,
+                           foundInf);
+ @endcode
+
+ @param handle              MIOpen handle (input)
+ @param paramInDesc         Tensor descriptor for the input parameter tensor (input)
+ @param paramIn             Input parameter tensor (input)
+ @param paramOutDesc        Tensor descriptor for the output parameter tensor (input)
+ @param paramOut            Output parameter tensor (output)
+ @param paramOutFloat16Desc Tensor descriptor for the output parameter tensor float16 (input,
+                            optional)
+ @param paramOutFloat16     Output parameter tensor (output, optional)
+ @param gradInDesc          Tensor descriptor for the input gradient tensor (input)
+ @param gradIn              Input gradient tensor (input)
+ @param expAvgInDesc        Tensor descriptor for the input exponential moving average tensor
+                            (input)
+ @param expAvgIn            Input exponential moving average tensor (input)
+ @param expAvgOutDesc       Tensor descriptor for the output exponential moving average tensor
+                            (input)
+ @param expAvgOut           Output exponential moving average tensor (output)
+ @param expAvgSqInDesc      Tensor descriptor for the input exponential moving average squared
+                            tensor (input)
+ @param expAvgSqIn          Input exponential moving average squared tensor (input)
+ @param expAvgSqOutDesc     Tensor descriptor for the output exponential moving average squared
+                            tensor (input)
+ @param expAvgSqOut         Output exponential moving average squared tensor (output)
+ @param maxExpAvgSqInDesc   Tensor descriptor for the input maximum exponential moving average
+                            squared tensor. Used when amsgrad is true (input, optional)
+ @param maxExpAvgSqIn       Input maximum exponential moving average squared tensor. Used when
+                            amsgrad is true (input, optional)
+ @param maxExpAvgSqOutDesc  Tensor descriptor for the output maximum exponential moving average
+                            squared tensor. Used when amsgrad is true (input, optional)
+ @param maxExpAvgSqOut      Output maximum exponential moving average squared tensor. Used when
+                            amsgrad is true (output, optional)
+ @param stateStepInDesc     Tensor descriptor for the input state step tensor (input, optional)
+ @param stateStepIn         Input state step tensor (input, optional)
+ @param stateStepOutDesc    Tensor descriptor for the output state step tensor (input, optional)
+ @param stateStepOut        Output state step tensor that stores the updated step value. (output,
+                            optional)
+ @param state_step          Input state step, It is used when the step tensor is null. (input)
+ @param lr                  Learning rate (input)
+ @param beta1               Coefficient used for computing the first moment running average of
+                            gradient (input)
+ @param beta2               Coefficient used for computing the second moment running average of
+                            gradient (input)
+ @param weight_decay        Weight decay (input)
+ @param eps                 Term added to the denominator to improve numerical stability (input)
+ @param amsgrad             Flag indicating whether to use the AMSGrad variant of Adam (input)
+ @param maximize            Flag indicating whether to maximize the objective with respect to the
+                            parameters (input)
+ @param adamw               If it is true, the operation becomes AdamW (input)
+ @param gradScaleDesc       Tensor descriptor for the input grad scale tensor (input, optional)
+ @param gradScale           Input grad scale tensor (input, optional)
+ @param foundInfDesc        Tensor descriptor for the input found inf tensor (input, optional)
+ @param foundInf            Tensor indicating presence of inf or nan in gradients. If true, skips
+                            operation and step update. (input, optional)
+ @return                    miopenStatus_t*/
+    pub fn miopenFusedAdamWithOutput(
+        handle: miopenHandle_t,
+        paramInDesc: miopenTensorDescriptor_t,
+        paramIn: *mut ::core::ffi::c_void,
+        paramOutDesc: miopenTensorDescriptor_t,
+        paramOut: *mut ::core::ffi::c_void,
+        paramOutFloat16Desc: miopenTensorDescriptor_t,
+        paramOutFloat16: *mut ::core::ffi::c_void,
+        gradInDesc: miopenTensorDescriptor_t,
+        gradIn: *const ::core::ffi::c_void,
+        expAvgInDesc: miopenTensorDescriptor_t,
+        expAvgIn: *mut ::core::ffi::c_void,
+        expAvgOutDesc: miopenTensorDescriptor_t,
+        expAvgOut: *mut ::core::ffi::c_void,
+        expAvgSqInDesc: miopenTensorDescriptor_t,
+        expAvgSqIn: *mut ::core::ffi::c_void,
+        expAvgSqOutDesc: miopenTensorDescriptor_t,
+        expAvgSqOut: *mut ::core::ffi::c_void,
+        maxExpAvgSqInDesc: miopenTensorDescriptor_t,
+        maxExpAvgSqIn: *mut ::core::ffi::c_void,
+        maxExpAvgSqOutDesc: miopenTensorDescriptor_t,
+        maxExpAvgSqOut: *mut ::core::ffi::c_void,
+        stateStepInDesc: miopenTensorDescriptor_t,
+        stateStepIn: *mut ::core::ffi::c_void,
+        stateStepOutDesc: miopenTensorDescriptor_t,
+        stateStepOut: *mut ::core::ffi::c_void,
+        state_step: ::core::ffi::c_uint,
+        lr: f32,
+        beta1: f32,
+        beta2: f32,
+        weight_decay: f32,
+        eps: f32,
+        amsgrad: bool,
+        maximize: bool,
+        adamw: bool,
+        gradScaleDesc: miopenTensorDescriptor_t,
+        gradScale: *const ::core::ffi::c_void,
+        foundInfDesc: miopenTensorDescriptor_t,
+        foundInf: *const ::core::ffi::c_void,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    #[doc = " @addtogroup SGD\n\n  @{\n/\n/*! @brief Implements Adam algorithm with weight decay fix as introduced in\n <a href=\"https://arxiv.org/abs/1711.05101\">Decoupled Weight Decay Regularization</a>.\n This is the fused kernel version of AdamW included in the Hugging Face Transformers module.\n\n @see miopenFusedAdam\n\n @code\n // Execute Adam\n miopenTransformersAdamW(handle,\n                         paramDesc,\n                         param,\n                         gradDesc,\n                         grad,\n                         expAvgDesc,\n                         expAvg,\n                         expAvgSqDesc,\n                         expAvgSq,\n                         NULL,     // Unused stateStep Tensor because use step integer argument\n                         NULL,\n                         step,\n                         lr,\n                         beta1,\n                         beta2,\n                         weight_decay,\n                         eps,\n                         true,     // correct_bias\n                         NULL,     // Unused gradScale Tensor because not amp\n                         NULL,\n                         NULL,     // Unused foundInf Tensor because not amp\n                         NULL);\n\n // Execute AMP Adam\n miopenTransformersAdamW(handle,\n                         paramDesc,\n                         param,\n                         gradDesc,\n                         grad,\n                         expAvgDesc,\n                         expAvg,\n                         expAvgSqDesc,\n                         expAvgSq,\n                         stateStepDesc,\n                         stateStep,\n                         -1,       // Ignore step value because stateStep Tensor is used\n                         lr,\n                         beta1,\n                         beta2,\n                         weight_decay,\n                         eps,\n                         true,     // correct_bias\n                         gradScaleDesc,\n                         gradScale,\n                         foundInfDesc,\n                         foundInf);\n @endcode\n\n @param handle              MIOpen handle (input)\n @param paramDesc           Tensor descriptor for the input parameter tensor (input)\n @param param               Input parameter tensor (input)\n @param gradDesc            Tensor descriptor for the input gradient tensor (input)\n @param grad                Input gradient tensor (input)\n @param expAvgDesc          Tensor descriptor for the input exponential moving average tensor\n                            (input)\n @param expAvg              Input exponential moving average tensor (input)\n @param expAvgSqDesc        Tensor descriptor for the input exponential moving average squared\n                            tensor (input)\n @param expAvgSq            Input exponential moving average squared tensor (input)\n @param stateStepDesc       Tensor descriptor for the input state step tensor (input)\n @param stateStep           Input state step tensor (input)\n @param state_step          Input state step. used when the step tensor is null (input)\n @param lr                  Learning rate (input)\n @param beta1               Coefficient used for computing the first moment running average of\n                            gradient (input)\n @param beta2               Coefficient used for computing the second moment running average of\n                            gradient (input)\n @param weight_decay        Weight decay (input)\n @param eps                 Term added to the denominator to improve numerical stability (input)\n @param correct_bias        Whether or not to correct bias in Adam (for instance, in Bert TF\n                            repository they use False).\n @param gradScaleDesc       Tensor descriptor for the input grad scale tensor (input, optional)\n @param gradScale           Input grad scale tensor (input, optional)\n @param foundInfDesc        Tensor descriptor for the input found inf tensor (input, optional)\n @param foundInf            Tensor indicating the presence of inf or NaN in gradients. If true,\n                            skips operation and step update (input, optional)\n @return                    miopenStatus_t"]
+    pub fn miopenTransformersAdamW(
+        handle: miopenHandle_t,
+        paramDesc: miopenTensorDescriptor_t,
+        param: *mut ::core::ffi::c_void,
+        gradDesc: miopenTensorDescriptor_t,
+        grad: *const ::core::ffi::c_void,
+        expAvgDesc: miopenTensorDescriptor_t,
+        expAvg: *mut ::core::ffi::c_void,
+        expAvgSqDesc: miopenTensorDescriptor_t,
+        expAvgSq: *mut ::core::ffi::c_void,
+        stateStepDesc: miopenTensorDescriptor_t,
+        stateStep: *mut ::core::ffi::c_void,
+        state_step: ::core::ffi::c_uint,
+        lr: f32,
+        beta1: f32,
+        beta2: f32,
+        weight_decay: f32,
+        eps: f32,
+        correct_bias: bool,
+        gradScaleDesc: miopenTensorDescriptor_t,
+        gradScale: *const ::core::ffi::c_void,
+        foundInfDesc: miopenTensorDescriptor_t,
+        foundInf: *const ::core::ffi::c_void,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Execute single tensor Adam optimization and receive the result in a separate output
+ tensor.
+
+ This function is equivalent to miopenTransformersAdam but receives the result in a separate
+ output tensor.
+ @see miopenTransformersAdamW
+ @see miopenFusedAdamWithOutput
+
+ @code
+ // Execute Adam
+ miopenTransformersAdamWWithOutput(handle,
+                                   paramInDesc,
+                                   paramIn,
+                                   paramOutDesc,
+                                   paramOut,
+                                   NULL,   // Unused paramOutFloat16 tensor because is not amp
+                                   NULL,
+                                   gradInDesc,
+                                   gradIn,
+                                   expAvgInDesc,
+                                   expAvgIn,
+                                   expAvgOutDesc,
+                                   expAvgOut,
+                                   expAvgInSqDesc,
+                                   expAvgSqIn,
+                                   expAvgSqOutDesc,
+                                   expAvgSqOut,
+                                   NULL,   // Unused stateStepIn tensor because use step int
+                                   NULL,
+                                   NULL,   // Unused stateStepOut tensor because use step int
+                                   NULL,
+                                   step,
+                                   lr,
+                                   beta1,
+                                   beta2,
+                                   weight_decay,
+                                   eps,
+                                   -1,     // step_size
+                                   true,   // correct_bias
+                                   NULL,   // Unused gradScale Tensor because not amp
+                                   NULL,
+                                   NULL,   // Unused foundInf Tensor because not amp
+                                   NULL);
+
+ // Execute Amp Adam
+ miopenTransformersAdamWWithOutput(handle,
+                                   paramInDesc,
+                                   paramIn,
+                                   paramOutDesc,
+                                   paramOut,
+                                   paramOutFloat16Desc,  // optional in amp
+                                   paramOutFloat16,
+                                   gradInDesc,
+                                   gradIn,
+                                   expAvgInDesc,
+                                   expAvgIn,
+                                   expAvgOutDesc,
+                                   expAvgOut,
+                                   expAvgInSqDesc,
+                                   expAvgSqIn,
+                                   expAvgSqIn,
+                                   expAvgSqOutDesc,
+                                   expAvgSqOut,
+                                   stateStepInDesc,
+                                   stateStepIn,
+                                   stateStepOutDesc,
+                                   stateStepOut
+                                   -1,   // Ignore step value because stateStep Tensor is used
+                                   lr,
+                                   beta1,
+                                   beta2,
+                                   weight_decay,
+                                   eps,
+                                   -1,   // step_size
+                                   true, // correct_bias
+                                   NULL, // Unused gradScale Tensor because not amp
+                                   NULL,
+                                   NULL, // Unused foundInf Tensor because not amp
+                                   NULL);
+ @endcode
+
+ @param handle              MIOpen handle (input)
+ @param paramInDesc         Tensor descriptor for the input parameter tensor (input)
+ @param paramIn             Input parameter tensor (input)
+ @param paramOutDesc        Tensor descriptor for the output parameter tensor (input)
+ @param paramOut            Output parameter tensor (output)
+ @param paramOutFloat16Desc Tensor descriptor for the output parameter tensor float16 (input,
+                            optional)
+ @param paramOutFloat16     Output parameter tensor (output, optional)
+ @param gradInDesc          Tensor descriptor for the input gradient tensor (input)
+ @param gradIn              Input gradient tensor (input)
+ @param expAvgInDesc        Tensor descriptor for the input exponential moving average tensor
+                            (input)
+ @param expAvgIn            Input exponential moving average tensor (input)
+ @param expAvgOutDesc       Tensor descriptor for the output exponential moving average tensor
+                            (input)
+ @param expAvgOut           Output exponential moving average tensor (output)
+ @param expAvgSqInDesc      Tensor descriptor for the input exponential moving average squared
+                            tensor (input)
+ @param expAvgSqIn          Input exponential moving average squared tensor (input)
+ @param expAvgSqOutDesc     Tensor descriptor for the output exponential moving average squared
+                            tensor (input)
+ @param expAvgSqOut         Output exponential moving average squared tensor (output)
+ @param stateStepInDesc     Tensor descriptor for the input state step tensor (input, optional)
+ @param stateStepIn         Input state step tensor (input, optional)
+ @param stateStepOutDesc    Tensor descriptor for the output state step tensor (input, optional)
+ @param stateStepOut        Output state step tensor that stores the updated step value. (output,
+                            optional)
+ @param state_step          Input state step, It is used when the step tensor is null. (input)
+ @param lr                  Learning rate (input)
+ @param beta1               Coefficient used for computing the first moment running average of
+                            gradient (input)
+ @param beta2               Coefficient used for computing the second moment running average of
+                            gradient (input)
+ @param weight_decay        Weight decay (input)
+ @param eps                 Term added to the denominator to improve numerical stability (input)
+ @param step_size           Pre-calculated step_size, used for performance enhancement (input)
+ @param correct_bias        Whether or not to correct bias in Adam (for instance, in Bert TF
+                            repository they use False) (input)
+ @param gradScaleDesc       Tensor descriptor for the input grad scale tensor (input, optional)
+ @param gradScale           Input grad scale tensor (input, optional)
+ @param foundInfDesc        Tensor descriptor for the input found inf tensor (input, optional)
+ @param foundInf            Tensor indicating presence of inf or nan in gradients. If true, skips
+                            operation and step update. (input, optional)
+ @return                    miopenStatus_t*/
+    pub fn miopenTransformersAdamWWithOutput(
+        handle: miopenHandle_t,
+        paramInDesc: miopenTensorDescriptor_t,
+        paramIn: *mut ::core::ffi::c_void,
+        paramOutDesc: miopenTensorDescriptor_t,
+        paramOut: *mut ::core::ffi::c_void,
+        paramOutFloat16Desc: miopenTensorDescriptor_t,
+        paramOutFloat16: *mut ::core::ffi::c_void,
+        gradInDesc: miopenTensorDescriptor_t,
+        gradIn: *const ::core::ffi::c_void,
+        expAvgInDesc: miopenTensorDescriptor_t,
+        expAvgIn: *mut ::core::ffi::c_void,
+        expAvgOutDesc: miopenTensorDescriptor_t,
+        expAvgOut: *mut ::core::ffi::c_void,
+        expAvgSqInDesc: miopenTensorDescriptor_t,
+        expAvgSqIn: *mut ::core::ffi::c_void,
+        expAvgSqOutDesc: miopenTensorDescriptor_t,
+        expAvgSqOut: *mut ::core::ffi::c_void,
+        stateStepInDesc: miopenTensorDescriptor_t,
+        stateStepIn: *mut ::core::ffi::c_void,
+        stateStepOutDesc: miopenTensorDescriptor_t,
+        stateStepOut: *mut ::core::ffi::c_void,
+        state_step: ::core::ffi::c_uint,
+        lr: f32,
+        beta1: f32,
+        beta2: f32,
+        weight_decay: f32,
+        eps: f32,
+        step_size: f32,
+        correct_bias: bool,
+        gradScaleDesc: miopenTensorDescriptor_t,
+        gradScale: *const ::core::ffi::c_void,
+        foundInfDesc: miopenTensorDescriptor_t,
+        foundInf: *const ::core::ffi::c_void,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    #[doc = " @addtogroup getitem\n\n  @{\n/\n/*! @brief Helper function to query the minimum workspace size required by the getitem call\n\n @param [in]   handle                  MIOpen Handle\n @param [in]   indexCount              Number of input tensor indexs\n @param [in]   indexDescs              Tensor descriptor of input tensor indexs\n @param [out]  sizeInBytes             Pointer to data to return the minimum workspace size\n @return                        miopenStatus_t"]
+    pub fn miopenGetGetitemWorkspaceSize(
+        handle: miopenHandle_t,
+        indexCount: u32,
+        indexDescs: *const miopenTensorDescriptor_t,
+        sizeInBytes: *mut usize,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Execute a getitem backward layer
+
+ Backward of getitem for tensor indexing, slicing, masking.
+
+ @param [in]   handle                  MIOpen handle
+ @param [in]   workspace               Address of the allocated workspace data
+ @param [in]   workspaceSizeInBytes    Size in bytes of the allocated workspace data
+ @param [in]   dyDesc                  Tensor descriptor of input tensor dy
+ @param [in]   dy                      Source data tensor dy
+ @param [in]   indexCount              Number of input tensor indexs
+ @param [in]   indexDescs              Tensor descriptor of input tensor indexs(All indexs same
+ size)
+ @param [in]   indexs                  Source data tensor indexs
+ @param [in]   dxDesc                  Tensor descriptor of output tensor dx
+ @param [out]  dx                      Data tensor dx(It must be initialized to 0)
+ @param [in]   errorDesc               Tensor descriptor of output tensor error
+ @param [out]  error                   Data tensor error(It must be initialized to 0)
+ @param [in]   dimCount                Number of dimensions
+ @param [in]   dims                    Dimensions
+ @param [in]   sliceCount              Number of slices
+ @param [in]   slices                  Slices
+ @param [in]   offset                  Offset of output tensor dx
+ @return                               miopenStatus_t*/
+    pub fn miopenGetitemBackward(
+        handle: miopenHandle_t,
+        workspace: *mut ::core::ffi::c_void,
+        workspaceSizeInBytes: usize,
+        dyDesc: miopenTensorDescriptor_t,
+        dy: *const ::core::ffi::c_void,
+        indexCount: u32,
+        indexDescs: *const miopenTensorDescriptor_t,
+        indexs: *const *const ::core::ffi::c_void,
+        dxDesc: miopenTensorDescriptor_t,
+        dx: *mut ::core::ffi::c_void,
+        errorDesc: miopenTensorDescriptor_t,
+        error: *mut ::core::ffi::c_void,
+        dimCount: u32,
+        dims: *const i32,
+        sliceCount: u32,
+        slices: *const i32,
+        offset: u32,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    #[doc = " @addtogroup RotaryPositionalEmbeddings\n\n  @{\n/\n/*! @brief Execute a rope forward layer\n\n @param [in]   handle         MIOpen handle\n @param [in]   xDesc          Tensor descriptor for data input tensor x\n @param [in]   x              Data tensor x\n @param [in]   cosDesc        Tensor descriptor for data input tensor cos\n @param [in]   cos            Data tensor cos\n @param [in]   sinDesc        Tensor descriptor for data input tensor sin\n @param [in]   sin            Data tensor sin\n @param [in]   yDesc          Tensor descriptor for output data tensor y\n @param [out]  y              Data tensor y\n @return                      miopenStatus_t"]
+    pub fn miopenRoPEForward(
+        handle: miopenHandle_t,
+        xDesc: miopenTensorDescriptor_t,
+        x: *const ::core::ffi::c_void,
+        cosDesc: miopenTensorDescriptor_t,
+        cos: *const ::core::ffi::c_void,
+        sinDesc: miopenTensorDescriptor_t,
+        sin: *const ::core::ffi::c_void,
+        yDesc: miopenTensorDescriptor_t,
+        y: *mut ::core::ffi::c_void,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Execute a rope backward layer
+
+ @param [in]   handle         MIOpen handle
+ @param [in]   dyDesc         Tensor descriptor for data input tensor dy
+ @param [in]   dy             Data tensor dy
+ @param [in]   cosDesc        Tensor descriptor for output data tensor cos
+ @param [in]   cos            Data tensor cos
+ @param [in]   sinDesc        Tensor descriptor for data input tensor sin
+ @param [in]   sin            Data tensor sin
+ @param [in]   dxDesc         Tensor descriptor for output data tensor dx
+ @param [out]  dx             Data tensor dx
+ @return                      miopenStatus_t*/
+    pub fn miopenRoPEBackward(
+        handle: miopenHandle_t,
+        dyDesc: miopenTensorDescriptor_t,
+        dy: *const ::core::ffi::c_void,
+        cosDesc: miopenTensorDescriptor_t,
+        cos: *const ::core::ffi::c_void,
+        sinDesc: miopenTensorDescriptor_t,
+        sin: *const ::core::ffi::c_void,
+        dxDesc: miopenTensorDescriptor_t,
+        dx: *mut ::core::ffi::c_void,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Execute a Kthvalue forward layer
+
+ @param handle                   MIOpen handle (input)
+ @param inputDesc                Tensor descriptor for input tensor (input)
+ @param input                    Data tensor input (input)
+ @param outputDesc               Tensor descriptor for output tensor (input)
+ @param output                   Data tensor output (output)
+ @param indices                  Data tensor indices (output)
+ @param indicesDesc              Tensor descriptor for indices tensor (input)
+ @param k                        The k-th smallest element(input)
+ @param dim                      The dimension to find the kth value along (Default = -1)(input)
+ @param keepDim                  Whether the output tensor has dim retained or not (Default =
+ false)(input)
+ @return                         miopenStatus_t*/
+    pub fn miopenKthvalueForward(
+        handle: miopenHandle_t,
+        inputDesc: miopenTensorDescriptor_t,
+        input: *const ::core::ffi::c_void,
+        outputDesc: miopenTensorDescriptor_t,
+        output: *mut ::core::ffi::c_void,
+        indicesDesc: miopenTensorDescriptor_t,
+        indices: *mut usize,
+        k: usize,
+        dim: i32,
+        keepDim: bool,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Helper function to query the minimum workspace size required by the PReLU backward call
+
+ @param handle                   MIOpen Handle (input)
+ @param inputDesc                Tensor descriptor for input tensor (input)
+ @param weightDesc               Tensor descriptor for weight tensor (input)
+ @param sizeInBytes              Pointer to data to return the minimum workspace size
+ @return                         miopenStatus_t*/
+    pub fn miopenGetPReLUBackwardWorkspaceSize(
+        handle: miopenHandle_t,
+        inputDesc: miopenTensorDescriptor_t,
+        weightDesc: miopenTensorDescriptor_t,
+        sizeInBytes: *mut usize,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Execute a PReLU backward layer
+
+ @param handle                   MIOpen handle (input)
+ @param workspace                Address of the allocated workspace data (input)
+ @param workspaceSizeInBytes     Size in bytes of the allocated workspace data (input)
+ @param inputDesc                Tensor descriptor for input tensor (input)
+ @param input                    Data tensor input (input)
+ @param weightDesc               Tensor descriptor for weight tensor (input)
+ @param weight                   Data tensor weight (input)
+ @param doutputDesc              Tensor descriptor for output gradient (input)
+ @param doutput                  Gradient of output (input)
+ @param dinputDesc               Tensor descriptor for input gradient (input)
+ @param dinput                   Gradient of input (output)
+ @param dweightDesc              Tensor descriptor for weight gradient (input)
+ @param dweight                  Gradient of weight (output)*/
+    pub fn miopenPReLUBackward(
+        handle: miopenHandle_t,
+        workspace: *mut ::core::ffi::c_void,
+        workspaceSizeInBytes: usize,
+        inputDesc: miopenTensorDescriptor_t,
+        input: *const ::core::ffi::c_void,
+        weightDesc: miopenTensorDescriptor_t,
+        weight: *const ::core::ffi::c_void,
+        doutputDesc: miopenTensorDescriptor_t,
+        doutput: *const ::core::ffi::c_void,
+        dinputDesc: miopenTensorDescriptor_t,
+        dinput: *mut ::core::ffi::c_void,
+        dweightDesc: miopenTensorDescriptor_t,
+        dweight: *mut ::core::ffi::c_void,
+    ) -> miopenStatus_t;
+}
+impl miopenLossReductionMode_t {
+    ///< output tensor elements are not reduced
+    pub const MIOPEN_LOSS_REDUCTION_NONE: miopenLossReductionMode_t = miopenLossReductionMode_t(
+        0,
+    );
+}
+impl miopenLossReductionMode_t {
+    ///< output tensor elements are summed up
+    pub const MIOPEN_LOSS_REDUCTION_SUM: miopenLossReductionMode_t = miopenLossReductionMode_t(
+        1,
+    );
+}
+impl miopenLossReductionMode_t {
+    /**< output tensor elements are summed up and divided with total
+number of elements to get mean value*/
+    pub const MIOPEN_LOSS_REDUCTION_MEAN: miopenLossReductionMode_t = miopenLossReductionMode_t(
+        2,
+    );
+}
+#[repr(transparent)]
+/** @ingroup LossFunction
+ @enum miopenLossReductionMode_t
+ Reduction mode for loss function*/
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct miopenLossReductionMode_t(pub ::core::ffi::c_uint);
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Helper function to query the minimum workspace size required by the
+SoftMarginLossForward call
+
+ @param [in]  handle              MIOpen Handle
+ @param [in]  inputDesc           Tensor descriptor for input tensor
+ @param [in]  targetDesc          Tensor descriptor for target tensor
+ @param [in]  outputDesc          Tensor descriptor for output tensor
+  @param [in]  reduction           Reduction mode (sum, mean). For none reduction we don't need to
+use this function
+ @param [out] sizeInBytes         Pointer to data to return the minimum workspace size
+ @return                          miopenStatus_t*/
+    pub fn miopenGetSoftMarginLossForwardWorkspaceSize(
+        handle: miopenHandle_t,
+        inputDesc: miopenTensorDescriptor_t,
+        targetDesc: miopenTensorDescriptor_t,
+        outputDesc: miopenTensorDescriptor_t,
+        reduction: miopenLossReductionMode_t,
+        sizeInBytes: *mut usize,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Execute a SoftMarginLoss forward layer
+
+ @param [in]  handle                  MIOpen handle
+ @param [in]  inputDesc               Tensor descriptor for input tensor
+ @param [in]  input                   Data tensor input
+ @param [in]  targetDesc              Tensor descriptor for target tensor
+ @param [in]  target                  Data tensor target
+ @param [in]  outputDesc              Tensor descriptor for output tensor
+ @param [out] output                  Data tensor output
+ @param [in]  reduction               Reduction mode. If reduction mode is mean or sum, you must
+ provide param workspace and workspaceSizeInBytes. Call
+ miopenGetSoftMarginLossForwardWorkspaceSize to get workspaceSizeInBytes
+ @param [in]  workspace               Address of the allocated workspace data (Default = null)
+ @param [in]  workspaceSizeInBytes    Size in bytes of the allocated workspace data (Default = 0)
+ @return                              miopenStatus_t*/
+    pub fn miopenSoftMarginLossForward(
+        handle: miopenHandle_t,
+        inputDesc: miopenTensorDescriptor_t,
+        input: *const ::core::ffi::c_void,
+        targetDesc: miopenTensorDescriptor_t,
+        target: *const ::core::ffi::c_void,
+        outputDesc: miopenTensorDescriptor_t,
+        output: *mut ::core::ffi::c_void,
+        reduction: miopenLossReductionMode_t,
+        workspace: *mut ::core::ffi::c_void,
+        workspaceSizeInBytes: usize,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Execute a SoftMarginLoss backward layer
+
+ @param [in]  handle                  MIOpen handle
+ @param [in]  inputDesc               Tensor descriptor for input tensor
+ @param [in]  input                   Data tensor input
+ @param [in]  targetDesc              Tensor descriptor for target tensor
+ @param [in]  target                  Data tensor target
+ @param [in]  doutputDesc             Tensor descriptor for output gradient
+ @param [in]  doutput                 Output gradient
+ @param [in]  dinputDesc              Tensor descriptor for input gradient
+ @param [out] dinput                  Input gradient
+ @param [in]  reduction               Reduction mode (none, sum, mean)
+ @return                              miopenStatus_t*/
+    pub fn miopenSoftMarginLossBackward(
+        handle: miopenHandle_t,
+        inputDesc: miopenTensorDescriptor_t,
+        input: *const ::core::ffi::c_void,
+        targetDesc: miopenTensorDescriptor_t,
+        target: *const ::core::ffi::c_void,
+        doutputDesc: miopenTensorDescriptor_t,
+        doutput: *const ::core::ffi::c_void,
+        dinputDesc: miopenTensorDescriptor_t,
+        dinput: *mut ::core::ffi::c_void,
+        reduction: miopenLossReductionMode_t,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Helper function to query the minimum workspace size required by the
+MultiMarginLossForward call
+
+ @param [in]  handle              MIOpen Handle
+ @param [in]  inputDesc           Tensor descriptor for input tensor (N, C) where N is the batch
+size and C is the number of classes
+ @param [in]  targetDesc          Tensor descriptor for target tensor, must have shape (N). Each
+value is between 0 and C - 1
+ @param [in]  weightDesc          Tensor descriptor for weight tensor. It is a manual rescaling
+weight given to each class. It has to be a Tensor of size C
+ @param [in]  outputDesc          Tensor descriptor for output tensor. If reduction is 'none,
+then it must have shape (N). Otherwise, it is a scalar
+ @param [in]  p                   Has a default value of 1. The only supported values are 1 and 2
+ @param [in]  margin              Has a default value of 1
+ @param [in]  reduction           Reduction mode (sum, mean)
+ @param [out] sizeInBytes         Pointer to data to return the minimum workspace size
+ @return                          miopenStatus_t*/
+    pub fn miopenGetMultiMarginLossForwardWorkspaceSize(
+        handle: miopenHandle_t,
+        inputDesc: miopenTensorDescriptor_t,
+        targetDesc: miopenTensorDescriptor_t,
+        weightDesc: miopenTensorDescriptor_t,
+        outputDesc: miopenTensorDescriptor_t,
+        p: ::core::ffi::c_long,
+        margin: f32,
+        reduction: miopenLossReductionMode_t,
+        sizeInBytes: *mut usize,
+    ) -> miopenStatus_t;
+}
+#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+extern "C" {
+    #[must_use]
+    /** @brief Execute a MultiMarginLoss forward layer
+
+ @param [in]  handle                  MIOpen handle
+ @param [in]  inputDesc               Tensor descriptor for input tensor (N, C) where N is the
+batch size and C is the number of classes.
+ @param [in]  input                   Data tensor input
+ @param [in]  targetDesc              Tensor descriptor for target tensor, must have shape (N).
+Each value is between 0 and C - 1
+ @param [in]  target                  Data tensor target
+ @param [in]  weightDesc              Tensor descriptor for weight tensor. It is a manual
+rescaling weight given to each class. It has to be a Tensor of size C
+ @param [in]  weight                  Data tensor weight
+ @param [in]  outputDesc              Tensor descriptor for output tensor. If reduction is 'none,
+then it must have shape (N). Otherwise, it is a scalar.
+ @param [out] output                  Data tensor output
+ @param [in]  p                       Has a default value of 1. The only supported values are 1
+and 2
+ @param [in]  margin                  Has a default value of 1
+ @param [in]  reduction               Reduction mode. If reduction mode is mean or sum, you must
+ provide param workspace and workspaceSizeInBytes. Call
+ miopenGetMultiMarginLossForwardWorkspaceSize to get workspaceSizeInBytes
+ @param [in]  workspace               Address of the allocated workspace data. Set = nullptr if
+reduction = 'none'
+ @param [in]  workspaceSizeInBytes    Size in bytes of the allocated workspace data. Set = 0 if
+reduction = 'none
+ @return                              miopenStatus_t*/
+    pub fn miopenMultiMarginLossForward(
+        handle: miopenHandle_t,
+        inputDesc: miopenTensorDescriptor_t,
+        input: *const ::core::ffi::c_void,
+        targetDesc: miopenTensorDescriptor_t,
+        target: *const ::core::ffi::c_void,
+        weightDesc: miopenTensorDescriptor_t,
+        weight: *const ::core::ffi::c_void,
+        outputDesc: miopenTensorDescriptor_t,
+        output: *mut ::core::ffi::c_void,
+        p: ::core::ffi::c_long,
+        margin: f32,
+        reduction: miopenLossReductionMode_t,
+        workspace: *mut ::core::ffi::c_void,
+        workspaceSizeInBytes: usize,
+    ) -> miopenStatus_t;
+}
 impl miopenError_t {
     pub const r#NotInitialized: miopenError_t = miopenError_t(unsafe {
         ::core::num::NonZeroU32::new_unchecked(1)
@@ -7013,8 +10416,8 @@ pub type miopenStatus_t = ::core::result::Result<(), miopenError_t>;
 const _: fn() = || {
     let _ = std::mem::transmute::<miopenStatus_t, u32>;
 };
-unsafe impl Send for miopenHandle {}
-unsafe impl Sync for miopenHandle {}
+unsafe impl Send for miopenHandle_t {}
+unsafe impl Sync for miopenHandle_t {}
 unsafe impl Send for miopenFusionOpDescriptor_t {}
 unsafe impl Sync for miopenFusionOpDescriptor_t {}
 unsafe impl Send for miopenTensorDescriptor_t {}

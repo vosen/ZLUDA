@@ -211,3 +211,7 @@ pub(crate) fn get_loading_mode(mode: &mut cuda_types::cuda::CUmoduleLoadingMode)
     *mode = cuda_types::cuda::CUmoduleLoadingMode::CU_MODULE_LAZY_LOADING;
     Ok(())
 }
+
+pub(crate) fn load_fat_binary(module: &mut CUmodule, image: &std::ffi::c_void) -> CUresult {
+    load_data(module, image)
+}

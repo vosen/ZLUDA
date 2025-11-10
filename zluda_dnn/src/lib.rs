@@ -79,7 +79,8 @@ macro_rules! dual_function_declarations {
 dual_function_declarations! {
     unimplemented,
     (implemented_dnn8|implemented_dnn9) <= [
-        cudnnGetErrorString
+        cudnnGetErrorString,
+        cudnnGetConvolutionForwardAlgorithm_v7
     ],
     implemented_no_conversion <= [
         cudnnGetVersion,
@@ -88,7 +89,19 @@ dual_function_declarations! {
         cudnnGetLastErrorString
     ],
     implemented <= [
+        cudnnConvolutionForward,
         cudnnCreate,
-        cudnnDestroy
+        cudnnCreateConvolutionDescriptor,
+        cudnnCreateFilterDescriptor,
+        cudnnCreateTensorDescriptor,
+        cudnnDestroy,
+        cudnnDestroyConvolutionDescriptor,
+        cudnnDestroyFilterDescriptor,
+        cudnnDestroyTensorDescriptor,
+        cudnnGetConvolutionForwardWorkspaceSize,
+        cudnnSetConvolution2dDescriptor,
+        cudnnSetConvolutionMathType,
+        cudnnSetFilter4dDescriptor,
+        cudnnSetTensor4dDescriptor
     ]
 }

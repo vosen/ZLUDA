@@ -21,6 +21,7 @@ pub(crate) struct GlobalState {
     pub comgr_clang_version: String,
     pub cache_path: Option<String>,
     pub allocations: Mutex<Allocations>,
+    pub should_zero_allocations: bool,
 }
 
 pub(crate) struct Allocations {
@@ -97,6 +98,7 @@ pub(crate) fn global_state() -> Result<&'static GlobalState, CUerror> {
                 comgr::get_clang_version(&comgr).map_err(|_| CUerror::UNKNOWN)?;
             let allocations = Mutex::new(Allocations::new());
             Ok(GlobalState {
+                should_zero_allocations: should_zero_allocations().unwrap_or(false),
                 comgr,
                 comgr_clang_version,
                 allocations,
@@ -119,6 +121,17 @@ pub(crate) fn global_state() -> Result<&'static GlobalState, CUerror> {
         })
         .as_ref()
         .map_err(|e| *e)
+}
+
+fn should_zero_allocations() -> Option<bool> {
+    let current_exe_path = std::env::current_exe().ok()?;
+    let current_exe_file = current_exe_path.file_name()?;
+    let current_exe_file = current_exe_file.to_str()?.to_ascii_lowercase();
+    Some(
+        current_exe_file.contains("geekbench")
+            || current_exe_file.starts_with("train_gpt")
+            || current_exe_file.starts_with("test_gpt"),
+    )
 }
 
 pub(crate) fn init(flags: ::core::ffi::c_uint) -> CUresult {

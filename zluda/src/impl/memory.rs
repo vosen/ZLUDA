@@ -1,16 +1,21 @@
-use crate::r#impl::{context, driver};
+use crate::r#impl::{
+    context,
+    driver::{self, global_state},
+};
 use cuda_types::cuda::{CUerror, CUresult, CUresultConsts};
 use hip_runtime_sys::*;
 use std::{mem, ptr};
 
 pub(crate) unsafe fn alloc_v2(dptr: &mut hipDeviceptr_t, bytesize: usize) -> CUresult {
+    let global = global_state()?;
     let context = context::get_current_context()?;
     hipMalloc(ptr::from_mut(dptr).cast(), bytesize)?;
     add_allocation(dptr.0, bytesize, context)?;
     let mut status = mem::zeroed();
     hipStreamIsCapturing(hipStream_t(ptr::null_mut()), &mut status)?;
-    // TODO: parametrize for non-Geekbench
-    if status != hipStreamCaptureStatus::hipStreamCaptureStatusNone {
+    if global.should_zero_allocations
+        && status == hipStreamCaptureStatus::hipStreamCaptureStatusNone
+    {
         hipMemsetD8(*dptr, 0, bytesize)?;
     }
     Ok(())
@@ -36,6 +41,36 @@ pub(crate) fn copy_hto_d_v2(
     byte_count: usize,
 ) -> hipError_t {
     unsafe { hipMemcpyHtoD(dst_device, src_host.cast_mut(), byte_count) }
+}
+
+pub(crate) fn copy_hto_d_v2_ptds(
+    dst_device: hipDeviceptr_t,
+    src_host: *const ::core::ffi::c_void,
+    byte_count: usize,
+) -> hipError_t {
+    unsafe {
+        hipMemcpy_spt(
+            dst_device.0.cast(),
+            src_host.cast_mut(),
+            byte_count,
+            hipMemcpyKind::hipMemcpyHostToDevice,
+        )
+    }
+}
+
+pub(crate) fn copy_dto_h_v2_ptds(
+    dst_host: *mut ::core::ffi::c_void,
+    src_device: hipDeviceptr_t,
+    byte_count: usize,
+) -> hipError_t {
+    unsafe {
+        hipMemcpy_spt(
+            dst_host.cast(),
+            src_device.0.cast(),
+            byte_count,
+            hipMemcpyKind::hipMemcpyDeviceToHost,
+        )
+    }
 }
 
 pub(crate) fn get_address_range_v2(

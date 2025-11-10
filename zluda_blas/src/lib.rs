@@ -52,6 +52,7 @@ cuda_macros::cublas_function_declarations!(
             cublasGemmEx,
             cublasGemmStridedBatchedEx,
             cublasGetMathMode,
+            cublasHgemm,
             cublasSetMathMode,
             cublasSetStream_v2,
             cublasSetWorkspace_v2,
