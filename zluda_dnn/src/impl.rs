@@ -17,14 +17,8 @@ impl Context {
         Self {
             base,
             search_workspace: Mutex::new(ContextCache {
-                beta_buffer_cache: BetaBuffersQueue::new(),
-                cache: FxHashMap::default(),
-                scratchpad: SearchScratchpad {
-                    size: 0,
-                    search_space: std::ptr::null_mut(),
-                    fake_tensor_size: 0,
-                    fake_tensor: std::ptr::null_mut(),
-                },
+                beta_buffer_cache: TemporaryBufferAllocator::new(),
+                algo_cache: FxHashMap::default(),
             }),
         }
     }
@@ -38,153 +32,162 @@ impl ZludaObject for Context {
 
     fn drop_checked(&mut self) -> Result<(), cudnnError_t> {
         let result1 = unsafe { miopenDestroy(self.base) }.map_err(Into::into);
-        let (result2, result3) = if let Ok(search_workspace) = self.search_workspace.get_mut() {
-            let result2 = if !search_workspace.scratchpad.search_space.is_null() {
-                unsafe { hipFree(search_workspace.scratchpad.search_space) }
-                    .map_err(|_| cudnnError_t::INTERNAL_ERROR)
-            } else {
-                Ok(())
-            };
-            let result3 = if !search_workspace.scratchpad.fake_tensor.is_null() {
-                unsafe { hipFree(search_workspace.scratchpad.fake_tensor) }
-                    .map_err(|_| cudnnError_t::INTERNAL_ERROR)
-            } else {
-                Ok(())
-            };
-            (result2, result3)
+        let result2 = if let Ok(search_workspace) = self.search_workspace.get_mut() {
+            search_workspace
+                .drop_checked()
+                .map_err(|_| cudnnError_t::INTERNAL_ERROR)
         } else {
-            (Ok(()), Ok(()))
+            Ok(())
         };
-        result1.and(result2).and(result3)
+        result1.and(result2)
     }
 }
 
 struct ContextCache {
-    beta_buffer_cache: BetaBuffersQueue,
-    cache: FxHashMap<ConvolutionOpCacheKey, miopenConvAlgoPerf_t>,
-    scratchpad: SearchScratchpad,
+    beta_buffer_cache: TemporaryBufferAllocator,
+    algo_cache: FxHashMap<ConvolutionOpCacheKey, miopenConvAlgoPerf_t>,
 }
 
-struct BetaBuffersQueue {
+impl ContextCache {
+    fn drop_checked(&mut self) -> Result<(), hipErrorCode_t> {
+        let mut err = None;
+        while let Some(mut buffer) = self.beta_buffer_cache.buffers.pop_front() {
+            if let Err(e) = buffer.drop_checked() {
+                err = Some(e);
+            }
+        }
+        err.map_or(Ok(()), Err)
+    }
+}
+
+unsafe impl Send for ContextCache {}
+unsafe impl Sync for ContextCache {}
+
+// At various point of the execution we need temporary buffers to hold device
+// data to support various MIOpen workarounds.
+// Normally, their use does not overlap, but it's still possible.
+struct TemporaryBufferAllocator {
     buffers: VecDeque<BetaBuffer>,
 }
 
-impl BetaBuffersQueue {
+impl TemporaryBufferAllocator {
     fn new() -> Self {
         Self {
             buffers: VecDeque::new(),
         }
     }
 
-    fn scavange_buffer(&mut self, size: usize) -> Result<Option<BetaBuffer>, hipErrorCode_t> {
+    fn get_or_allocate(&mut self, size: usize) -> Result<&BetaBuffer, hipErrorCode_t> {
+        let mut buffer = self.scavange_or_allocate_buffer(size)?;
+        if let Some(event) = buffer.free.take() {
+            unsafe { hipEventDestroy(event) }.ok();
+        }
+        self.buffers.push_front(buffer);
+        Ok(&self.buffers.front().unwrap())
+    }
+
+    fn scavange_or_allocate_buffer(&mut self, size: usize) -> Result<BetaBuffer, hipErrorCode_t> {
         let mut result = None;
         let mut err = None;
+        let mut update_buffer_if_biggest = |mut buffer: BetaBuffer| {
+            if result
+                .as_ref()
+                .map(|b: &BetaBuffer| buffer.size > b.size)
+                .unwrap_or(true)
+            {
+                buffer.free = None;
+                result = Some(buffer);
+            }
+        };
         while let Some(buffer) = self.buffers.pop_front() {
-            match unsafe { hipEventQuery(buffer.free) } {
-                hipError_t::ErrorNotReady => {
-                    self.buffers.push_front(buffer);
+            match buffer.free {
+                None => {
+                    update_buffer_if_biggest(buffer);
                 }
-                hipError_t::Success => {
-                    if buffer.size >= size && result.is_none() {
-                        result = Some(buffer);
+                Some(event) => match unsafe { hipEventQuery(event) } {
+                    hipError_t::ErrorNotReady => {
+                        self.buffers.push_front(buffer);
+                        break;
                     }
-                }
-                Err(err_code) => {
-                    err = Some(err_code);
-                }
+                    hipError_t::Success => {
+                        update_buffer_if_biggest(buffer);
+                    }
+                    Err(err_code) => {
+                        err = Some(err_code);
+                        break;
+                    }
+                },
             }
         }
         match err {
             Some(err_code) => Err(err_code),
-            None => Ok(result),
+            None => match result {
+                Some(buffer) if buffer.size >= size => Ok(buffer),
+                _ => Ok(BetaBuffer::new(size)?),
+            },
         }
     }
 
-    fn with_buffer(
+    fn with_async_buffer(
         &mut self,
         size: usize,
+        stream: hipStream_t,
         fn_: impl FnOnce(*mut ::std::os::raw::c_void) -> Result<(), miopenError_t>,
-    ) -> Result<hipEvent_t, miopenError_t> {
-        let buffer = self
-            .scavange_buffer(size)
+    ) -> Result<(), miopenError_t> {
+        let mut buffer = self
+            .scavange_or_allocate_buffer(size)
             .map_err(|_| miopenError_t::InternalError)?;
-        let buffer = match buffer {
-            Some(buffer) => buffer,
-            None => unsafe { BetaBuffer::new(size)? },
-        };
+        if buffer.free.is_none() {
+            let mut event = std::ptr::null_mut();
+            unsafe {
+                hipEventCreateWithFlags(
+                    &mut event,
+                    hipEventDisableTiming | hipEventDisableSystemFence,
+                )
+                .map_err(|_| miopenError_t::InternalError)?
+            };
+            buffer.free = Some(event);
+        }
         fn_(buffer.data)?;
-        let event = buffer.free;
+        unsafe { hipEventRecord(buffer.free.unwrap(), stream) }
+            .map_err(|_| miopenError_t::InternalError)?;
         self.buffers.push_back(buffer);
-        Ok(event)
+        Ok(())
     }
 }
 
 struct BetaBuffer {
     size: usize,
     data: *mut ::std::os::raw::c_void,
-    free: hipEvent_t,
+    free: Option<hipEvent_t>,
 }
 
 impl BetaBuffer {
-    unsafe fn new(size: usize) -> Result<Self, miopenError_t> {
-        let mut free = std::ptr::null_mut();
-        hipEventCreateWithFlags(
-            &mut free,
-            hipEventDisableTiming | hipEventDisableSystemFence,
-        )
-        .map_err(|_| miopenError_t::InternalError)?;
+    fn new(size: usize) -> Result<Self, hipErrorCode_t> {
         let mut data = std::ptr::null_mut();
-        hipMalloc(&mut data, size).map_err(|_| miopenError_t::InternalError)?;
-        Ok(Self { size, data, free })
+        unsafe { hipMalloc(&mut data, size)? };
+        Ok(Self {
+            size,
+            data,
+            free: None,
+        })
     }
 
-    unsafe fn drop_checked(&mut self) -> Result<(), miopenError_t> {
-        let result1 = hipFree(self.data).map_err(|_| miopenError_t::InternalError);
-        let result2 = hipEventDestroy(self.free).map_err(|_| miopenError_t::InternalError);
+    fn drop_checked(&mut self) -> Result<(), hipErrorCode_t> {
+        let result1 = unsafe { hipFree(self.data) };
+        let result2 = self
+            .free
+            .map(|e| unsafe { hipEventDestroy(e) })
+            .unwrap_or(Ok(()));
         result1.and(result2)
     }
 }
 
 impl Drop for BetaBuffer {
     fn drop(&mut self) {
-        unsafe { self.drop_checked().ok() };
+        self.drop_checked().ok();
     }
 }
-
-struct SearchScratchpad {
-    size: usize,
-    search_space: *mut ::std::os::raw::c_void,
-    fake_tensor_size: usize,
-    fake_tensor: *mut ::std::os::raw::c_void,
-}
-
-impl SearchScratchpad {
-    unsafe fn reallocate_max_tensor(
-        &mut self,
-        a: miopenTensorDescriptor_t,
-        b: miopenTensorDescriptor_t,
-        c: miopenTensorDescriptor_t,
-    ) -> Result<*mut ::std::os::raw::c_void, miopenError_t> {
-        let mut a_size = 0;
-        miopenGetTensorNumBytes(a, &mut a_size)?;
-        let mut b_size = 0;
-        miopenGetTensorNumBytes(b, &mut b_size)?;
-        let mut c_size = 0;
-        miopenGetTensorNumBytes(c, &mut c_size)?;
-        let max_tensor = a_size.max(b_size).max(c_size);
-        if max_tensor > self.fake_tensor_size {
-            let old_ptr = self.fake_tensor;
-            self.fake_tensor_size = 0;
-            hipFree(old_ptr).map_err(|_| miopenError_t::AllocFailed)?;
-            hipMalloc(&mut self.fake_tensor, max_tensor).map_err(|_| miopenError_t::AllocFailed)?;
-            self.fake_tensor_size = max_tensor;
-        }
-        Ok(self.fake_tensor)
-    }
-}
-
-unsafe impl Send for ContextCache {}
-unsafe impl Sync for ContextCache {}
 
 #[cfg(debug_assertions)]
 pub(crate) fn unimplemented() -> cudnnStatus_t {
@@ -334,8 +337,8 @@ unsafe fn get_or_search_convolution_forward_algorithm(
             .map_err(|_| miopenError_t::UnknownError)?;
         let search_workspace = &mut *search_workspace;
         let cache_key = ConvolutionOpCacheKey::new(x_desc, w_desc, conv_desc, y_desc)?;
-        let scratchpad = &mut search_workspace.scratchpad;
-        let cache = &mut search_workspace.cache;
+        let scratchpad = &mut search_workspace.beta_buffer_cache;
+        let cache = &mut search_workspace.algo_cache;
         match cache.entry(cache_key) {
             std::collections::hash_map::Entry::Occupied(occupied_entry) => {
                 Some(occupied_entry.get().clone())
@@ -358,12 +361,17 @@ unsafe fn get_or_search_convolution_forward_algorithm(
 
 unsafe fn search_convolution_forward_algorithm(
     handle: miopenHandle_t,
-    scratchpad: &mut SearchScratchpad,
+    scratchpad: &mut TemporaryBufferAllocator,
     x_desc: miopenTensorDescriptor_t,
     w_desc: miopenTensorDescriptor_t,
     conv_desc: miopenConvolutionDescriptor_t,
     y_desc: miopenTensorDescriptor_t,
 ) -> Result<Option<miopenConvAlgoPerf_t>, miopenError_t> {
+    fn get_tensor_size(desc: miopenTensorDescriptor_t) -> Result<usize, miopenError_t> {
+        let mut size_in_bytes = 0;
+        unsafe { miopenGetTensorNumBytes(desc, &mut size_in_bytes)? };
+        Ok(size_in_bytes)
+    }
     let mut required_search_workspace_size = 0;
     miopenConvolutionForwardGetWorkSpaceSize(
         handle,
@@ -373,31 +381,32 @@ unsafe fn search_convolution_forward_algorithm(
         y_desc,
         &mut required_search_workspace_size,
     )?;
-        if required_search_workspace_size > scratchpad.size {
-        let old_ptr = scratchpad.search_space;
-        scratchpad.size = 0;
-        hipFree(old_ptr).map_err(|_| miopenError_t::AllocFailed)?;
-        hipMalloc(&mut scratchpad.search_space, required_search_workspace_size)
-            .map_err(|_| miopenError_t::AllocFailed)?;
-        scratchpad.size = required_search_workspace_size;
-    }
-    let fake_tensor = scratchpad.reallocate_max_tensor(w_desc, x_desc, y_desc)?;
+    let w_size = get_tensor_size(w_desc)?;
+    let x_size = get_tensor_size(x_desc)?;
+    let y_size = get_tensor_size(y_desc)?;
+    let fake_buffer_size = required_search_workspace_size
+        .max(w_size)
+        .max(x_size)
+        .max(y_size);
+    let fake_tensor = scratchpad
+        .get_or_allocate(fake_buffer_size)
+        .map_err(|_| miopenError_t::AllocFailed)?;
     let mut algo_count = 0;
     let mut perf_result = mem::zeroed();
     miopenFindConvolutionForwardAlgorithm(
         handle,
         x_desc,
-        fake_tensor,
+        fake_tensor.data,
         w_desc,
-        fake_tensor,
+        fake_tensor.data,
         conv_desc,
         y_desc,
-        fake_tensor,
+        fake_tensor.data,
         1,
         &mut algo_count,
         &mut perf_result,
-        scratchpad.search_space,
-        scratchpad.size,
+        fake_tensor.data,
+        required_search_workspace_size,
         false,
     )?;
     if algo_count == 0 {
@@ -567,6 +576,41 @@ pub(crate) unsafe fn convolution_forward(
     y_desc: miopenTensorDescriptor_t,
     y: *mut ::std::os::raw::c_void,
 ) -> miopenStatus_t {
+    let do_convolution = |algo, pre_op_buffer| {
+        let zero = 0u64;
+        miopenConvolutionForward(
+            handle.base,
+            alpha,
+            x_desc,
+            x,
+            w_desc,
+            w,
+            conv_desc,
+            algo,
+            std::ptr::from_ref(&zero).cast(),
+            y_desc,
+            y,
+            workspace,
+            workspace_size_in_bytes,
+        )?;
+        if let Some(pre_op_buffer) = pre_op_buffer {
+            let one = 1.0f32;
+            miopenOpTensor(
+                handle.base,
+                miopenTensorOp_t::miopenTensorOpAdd,
+                beta,
+                y_desc,
+                pre_op_buffer,
+                std::ptr::from_ref(&one).cast(),
+                y_desc,
+                y,
+                std::ptr::from_ref(&zero).cast(),
+                y_desc,
+                y,
+            )?;
+        }
+        Ok(())
+    };
     // We don't allow users to select their own algorithm
     // because they might select algorithm that is not supported by miopen for this configuration
     // and there's no way to ask miopen to fall back to another algorithm
@@ -583,58 +627,30 @@ pub(crate) unsafe fn convolution_forward(
     } else {
         *beta.cast::<f32>() as f64
     };
-    let y_copy = if beta_value != 0.0 {
+    if beta_value != 0.0 {
         let mut y_size = 0;
         miopenGetTensorNumBytes(y_desc, &mut y_size)?;
         let mut mutable = handle
             .search_workspace
             .lock()
             .map_err(|_| miopenError_t::UnknownError)?;
-        let event = mutable
-            .beta_buffer_cache
-            .with_buffer(y_size, |temp_buffer| {
-                hipMemcpyDtoD(hipDeviceptr_t(temp_buffer), hipDeviceptr_t(y), y_size)
-                    .map_err(|_| miopenError_t::InternalError)
-            })?;
-        Some((mutable, event))
+        mutable.beta_buffer_cache.with_async_buffer(
+            y_size,
+            hipStream_t(ptr::null_mut()),
+            |temp_buffer| {
+                hipMemcpyDtoDAsync(
+                    hipDeviceptr_t(temp_buffer),
+                    hipDeviceptr_t(y),
+                    y_size,
+                    hipStream_t(ptr::null_mut()),
+                )
+                .map_err(|_| miopenError_t::InternalError)?;
+                do_convolution(algo.__bindgen_anon_1.fwd_algo, Some(temp_buffer))
+            },
+        )
     } else {
-        None
-    };
-    let zero = 0u64;
-    miopenConvolutionForward(
-        handle.base,
-        alpha,
-        x_desc,
-        x,
-        w_desc,
-        w,
-        conv_desc,
-        algo.__bindgen_anon_1.fwd_algo,
-        std::ptr::from_ref(&zero).cast(),
-        y_desc,
-        y,
-        workspace,
-        workspace_size_in_bytes,
-    )?;
-    if let Some((drop_guard, event)) = y_copy {
-        let one = 1.0f32;
-        miopenOpTensor(
-            handle.base,
-            miopenTensorOp_t::miopenTensorOpAdd,
-            beta,
-            y_desc,
-            ptr::null_mut(),
-            std::ptr::from_ref(&one).cast(),
-            y_desc,
-            y,
-            std::ptr::from_ref(&zero).cast(),
-            y_desc,
-            y,
-        )?;
-        hipFreeAsync(ptr::null_mut(), hipStream_t(ptr::null_mut())).unwrap();
-        drop(drop_guard);
+        do_convolution(algo.__bindgen_anon_1.fwd_algo, None)
     }
-    Ok(())
 }
 
 pub(crate) unsafe fn destroy_convolution_descriptor(
