@@ -92,8 +92,7 @@ fn main_core() -> Result<(), CompilerError> {
         &llvm.linked_bitcode,
         llvm.attributes,
         Some(&compiler_hook),
-    )
-    .map_err(|msg| CompilerError::LLVMError(msg))?;
+    )?;
     report_pass_time("compile_bitcode", &mut start);
 
     Ok(())

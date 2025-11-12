@@ -18,44 +18,15 @@ use std::ffi::{CStr, CString};
 use std::fs;
 use tempfile::NamedTempFile;
 
-const OCKL_MODULE: &'static [u8] = include_bytes!("device-libs/ockl.bc");
-const OCML_MODULE: &'static [u8] = include_bytes!("device-libs/ocml.bc");
+const OCKL_MODULE: &[u8] = include_bytes!("device-libs/ockl.bc");
+const OCML_MODULE: &[u8] = include_bytes!("device-libs/ocml.bc");
 
 // https://llvm.org/docs/AMDGPUUsage.html#address-spaces
 const CONSTANT_ADDRESS_SPACE: u32 = 4;
 
-#[derive(Debug)]
-pub enum LLVMError {
-    Message(Message),
-    Static(&'static str),
-}
-
-impl std::fmt::Display for LLVMError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            LLVMError::Message(message) => write!(f, "{}", message),
-            LLVMError::Static(s) => write!(f, "{}", s),
-        }
-    }
-}
-
-impl std::error::Error for LLVMError {}
-
-impl From<&'static str> for LLVMError {
-    fn from(value: &'static str) -> Self {
-        Self::Static(value)
-    }
-}
-
-impl From<Message> for LLVMError {
-    fn from(value: Message) -> Self {
-        Self::Message(value)
-    }
-}
-
-fn load_module(ctx: &Context, bc: &[u8], name: &std::ffi::CStr) -> Result<Module, LLVMError> {
+fn load_module(ctx: &Context, bc: &[u8], name: &std::ffi::CStr) -> Result<Module, String> {
     let module = Module::try_from_bitcode(ctx, bc, Some(name))
-        .ok_or(LLVMError::Static("Failed to parse bitcode"))?;
+        .ok_or(("Failed to parse bitcode").to_string())?;
     module.verify()?;
     Ok(module)
 }
@@ -77,7 +48,14 @@ fn add_constant(context: &Context, module: &Module, name: &CStr, attribute: u32)
     unsafe { LLVMSetGlobalConstant(global, 1) };
 }
 
-fn create_oclc_constants(ctx: &Context, gcn_arch: &str) -> Result<Module, LLVMError> {
+fn path_to_cstring(path: &std::path::Path) -> Result<CString, String> {
+    let path_str = path
+        .to_str()
+        .ok_or(("path is not valid as str").to_string())?;
+    CString::new(path_str).map_err(|_| ("path includes invalid null byte").to_string())
+}
+
+fn create_oclc_constants(ctx: &Context, gcn_arch: &str) -> Result<Module, String> {
     // TODO: move the higher level Module struct from ptx and others here and use them
     let module = Module::new(ctx, c"oclc_constants");
 
@@ -94,7 +72,7 @@ fn create_oclc_constants(ctx: &Context, gcn_arch: &str) -> Result<Module, LLVMEr
         gcn_arch
             .replace("gfx", "")
             .parse()
-            .map_err(|_| LLVMError::Static("could not get ISA version from gcn_arch"))?,
+            .map_err(|_| ("could not get ISA version from gcn_arch").to_string())?,
     );
 
     // used by ocml
@@ -111,7 +89,7 @@ pub fn compile(
     ptx_impl: &[u8],
     attributes: Module,
     compiler_hook: Option<&dyn Fn(&Vec<u8>, String)>,
-) -> Result<Vec<u8>, LLVMError> {
+) -> Result<Vec<u8>, String> {
     let common_options = vec![
         // Uncomment for LLVM debug
         //c"-debug",
@@ -175,17 +153,15 @@ pub fn compile(
     }
 
     let triple = c"amdgcn-amd-amdhsa";
-    let cpu =
-        std::ffi::CString::new(gcn_arch).map_err(|_| LLVMError::Static("invalid gcn_arch"))?;
+    let cpu = std::ffi::CString::new(gcn_arch).map_err(|_| ("invalid gcn_arch").to_string())?;
     let features = c"-wavefrontsize64,+cumode";
 
     let mut target = unsafe { std::mem::zeroed() };
     let mut err = std::ptr::null_mut();
     let status = unsafe { LLVMGetTargetFromTriple(triple.as_ptr(), &mut target, &mut err) };
     if status != 0 {
-        return Err(LLVMError::from(Message::new(unsafe {
-            CStr::from_ptr(err)
-        })));
+        let message = Message::new(unsafe { CStr::from_ptr(err) });
+        return Err(message.to_str().to_string());
     }
 
     let target_machine = TargetMachine::new(
@@ -210,10 +186,8 @@ pub fn compile(
 
     if !error.is_null() {
         let err_msg = unsafe { llvm_sys::error::LLVMGetErrorMessage(error) };
-        let result = Err(LLVMError::from(Message::new(unsafe {
-            CStr::from_ptr(err_msg)
-        })));
-        return result;
+        let message = Message::new(unsafe { CStr::from_ptr(err_msg) });
+        return Err(message.to_str().to_string());
     }
 
     if let Some(hook) = compiler_hook {
@@ -239,17 +213,17 @@ pub fn compile(
     }
 
     let object_path = NamedTempFile::with_prefix("zluda.o")
-        .map_err(|_| LLVMError::Static("Failed to create temporary file"))?
+        .map_err(|_| ("Failed to create temporary file").to_string())?
         .into_temp_path();
     let executable_path = NamedTempFile::with_prefix("zluda.elf")
-        .map_err(|_| LLVMError::Static("Failed to create temporary file"))?
+        .map_err(|_| ("Failed to create temporary file").to_string())?
         .into_temp_path();
 
     fs::write(&object_path, &object_file)
-        .map_err(|_| LLVMError::Static("Failed to write object file"))?;
+        .map_err(|_| ("Failed to write object file").to_string())?;
 
-    let object_path_cstr = CString::new(object_path.to_str().unwrap()).unwrap();
-    let executable_path_cstr = CString::new(executable_path.to_str().unwrap()).unwrap();
+    let object_path_cstr = path_to_cstring(&object_path)?;
+    let executable_path_cstr = path_to_cstring(&executable_path)?;
 
     let mut err = std::ptr::null_mut();
     let result = unsafe {
@@ -260,13 +234,12 @@ pub fn compile(
         )
     };
     if result != 0 {
-        return Err(LLVMError::from(Message::new(unsafe {
-            CStr::from_ptr(err)
-        })));
+        let message = Message::new(unsafe { CStr::from_ptr(err) });
+        return Err(message.to_str().to_string());
     }
 
-    let executable = fs::read(&executable_path)
-        .map_err(|_| LLVMError::Static("Failed to read executable file"))?;
+    let executable =
+        fs::read(&executable_path).map_err(|_| ("Failed to read executable file").to_string())?;
 
     if let Some(hook) = compiler_hook {
         // Run compiler hook for final executable

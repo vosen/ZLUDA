@@ -70,7 +70,7 @@ impl Module {
         self.0
     }
 
-    pub fn verify(&self) -> Result<(), Message> {
+    pub fn verify(&self) -> Result<(), String> {
         let mut err = ptr::null_mut();
         let error = unsafe {
             LLVMVerifyModule(
@@ -80,7 +80,8 @@ impl Module {
             )
         };
         if error == 1 && err != ptr::null_mut() {
-            Err(Message(unsafe { CStr::from_ptr(err) }))
+            let message = Message(unsafe { CStr::from_ptr(err) });
+            Err(message.to_str().to_owned())
         } else {
             Ok(())
         }
@@ -216,7 +217,7 @@ impl TargetMachine {
         &self,
         module: &Module,
         file_type: LLVMCodeGenFileType,
-    ) -> Result<MemoryBuffer, Message> {
+    ) -> Result<MemoryBuffer, String> {
         let mut buffer = unsafe { mem::zeroed() };
         let mut err = ptr::null_mut();
         let status = unsafe {
@@ -229,7 +230,8 @@ impl TargetMachine {
             )
         };
         if status != 0 {
-            Err(Message(unsafe { CStr::from_ptr(err) }))
+            let message = Message(unsafe { CStr::from_ptr(err) });
+            Err(message.to_str().to_owned())
         } else {
             Ok(MemoryBuffer(buffer))
         }

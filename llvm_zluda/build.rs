@@ -37,7 +37,7 @@ fn main() {
         .define("LLVM_OPTIMIZED_TABLEGEN", "ON")
         //.define("LLVM_USE_LINKER", "lld")
         .define("LLVM_TARGETS_TO_BUILD", "AMDGPU")
-        .define("LLVM_ENABLE_PROJECTS", "llvm;clang;lld");
+        .define("LLVM_ENABLE_PROJECTS", "llvm;lld");
     cmake.build_target("llvm-config");
     let llvm_dir = cmake.build();
     for c in COMPONENTS {
