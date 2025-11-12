@@ -2,9 +2,9 @@
 
 pub use llvm_sys::*;
 
+pub mod compile;
 mod ffi;
 pub mod utils;
-pub mod compile;
 
 pub use ffi::*;
 
