@@ -916,14 +916,14 @@ extern "C"
         std::tie(v5, v7) = select_registers_for_permlane(laneid, lower_regs, upper_regs, 9);
 
         // Do permlane operations to finalize shuffle:
-        v0 = __builtin_amdgcn_permlanex16(v0, v0, 0xeca86420, 0xfdb97531, true, true);
-        v1 = __builtin_amdgcn_permlanex16(v1, v1, 0xfdb97531, 0x0eca8642, true, true);
-        v2 = __builtin_amdgcn_permlanex16(v2, v2, 0xeca86420, 0xfdb97531, true, true);
-        v3 = __builtin_amdgcn_permlanex16(v3, v3, 0xfdb97531, 0x0eca8642, true, true);
-        v4 = __builtin_amdgcn_permlanex16(v4, v4, 0x6420eca8, 0x7531fdb9, true, true);
-        v5 = __builtin_amdgcn_permlanex16(v5, v5, 0x7531fdb9, 0x6420eca8, true, true);
-        v6 = __builtin_amdgcn_permlanex16(v6, v6, 0x6420eca8, 0x7531fdb9, true, true);
-        v7 = __builtin_amdgcn_permlanex16(v7, v7, 0x7531fdb9, 0x6420eca8, true, true);
+        v0 = __builtin_amdgcn_permlane16(v0, v0, 0xeca86420, 0xfdb97531, true, true);
+        v1 = __builtin_amdgcn_permlane16(v1, v1, 0xfdb97531, 0x0eca8642, true, true);
+        v2 = __builtin_amdgcn_permlane16(v2, v2, 0xeca86420, 0xfdb97531, true, true);
+        v3 = __builtin_amdgcn_permlane16(v3, v3, 0xfdb97531, 0x0eca8642, true, true);
+        v4 = __builtin_amdgcn_permlane16(v4, v4, 0x6420eca8, 0x7531fdb9, true, true);
+        v5 = __builtin_amdgcn_permlane16(v5, v5, 0x7531fdb9, 0x6420eca8, true, true);
+        v6 = __builtin_amdgcn_permlane16(v6, v6, 0x6420eca8, 0x7531fdb9, true, true);
+        v7 = __builtin_amdgcn_permlane16(v7, v7, 0x7531fdb9, 0x6420eca8, true, true);
 
         return float8{
             std::bit_cast<float>(v0),
