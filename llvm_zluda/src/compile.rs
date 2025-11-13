@@ -56,7 +56,6 @@ fn path_to_cstring(path: &std::path::Path) -> Result<CString, String> {
 }
 
 fn create_oclc_constants(ctx: &Context, gcn_arch: &str) -> Result<Module, String> {
-    // TODO: move the higher level Module struct from ptx and others here and use them
     let module = Module::new(ctx, c"oclc_constants");
 
     // used by ockl
