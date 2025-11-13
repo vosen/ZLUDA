@@ -1,5 +1,5 @@
 use bpaf::{choice, construct, pure, Bpaf, Parser};
-use std::{ffi::OsString, path::PathBuf};
+use std::{ffi::OsString, os::windows::ffi::OsStrExt, path::PathBuf};
 
 /// Launch an application and redirect its CUDA calls
 #[derive(Debug, Clone, Bpaf)]
@@ -15,6 +15,19 @@ pub struct Arguments {
     /// Arguments to the executable
     #[bpaf(positional("ARGS"))]
     pub args: Vec<OsString>,
+}
+
+impl Arguments {
+    pub fn command_line_zero_terminated(&self) -> Vec<u16> {
+        let mut cmdline = Vec::with_capacity(1 + self.exe.len());
+        cmdline.extend(self.exe.encode_wide());
+        cmdline.push(' ' as u16);
+        for arg in self.args.iter() {
+            cmdline.extend(arg.encode_wide());
+        }
+        cmdline.push(0);
+        cmdline
+    }
 }
 
 #[derive(Clone, Debug)]

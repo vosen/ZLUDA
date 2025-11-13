@@ -2,7 +2,6 @@
 
 use std::error;
 use std::fmt;
-use std::ptr;
 
 mod c {
     use std::ffi::c_void;
@@ -21,20 +20,6 @@ mod c {
     pub const FORMAT_MESSAGE_FROM_HMODULE: DWORD = 0x00000800;
     pub const FORMAT_MESSAGE_FROM_SYSTEM: DWORD = 0x00001000;
     pub const FORMAT_MESSAGE_IGNORE_INSERTS: DWORD = 0x00000200;
-
-    extern "system" {
-        pub fn GetLastError() -> DWORD;
-        pub fn GetModuleHandleW(lpModuleName: LPCWSTR) -> HMODULE;
-        pub fn FormatMessageW(
-            flags: DWORD,
-            lpSrc: LPVOID,
-            msgId: DWORD,
-            langId: DWORD,
-            buf: LPWSTR,
-            nsize: DWORD,
-            args: *const c_void,
-        ) -> DWORD;
-    }
 }
 
 macro_rules! last_ident {
@@ -43,24 +28,6 @@ macro_rules! last_ident {
     };
     ($start:ident, $($cont:ident),+) => {
         last_ident!($($cont),+)
-    };
-}
-
-macro_rules! os_call {
-    ($($path:ident)::+ ($($args:expr),*), $success:expr) => {
-        {
-            let result = unsafe{ $($path)::+ ($($args),*) };
-            if !($success)(result) {
-                let name = last_ident!($($path),+);
-                let err_code = $crate::win::errno();
-                Err($crate::win::OsError{
-                    function: name,
-                    error_code: err_code as u32,
-                    message: $crate::win::error_string(err_code)
-                })?;
-            }
-            result
-        }
     };
 }
 
@@ -83,55 +50,48 @@ impl error::Error for OsError {
     }
 }
 
-pub fn errno() -> i32 {
-    unsafe { c::GetLastError() as i32 }
-}
-
 /// Gets a detailed string description for the given error number.
 pub fn error_string(mut errnum: i32) -> String {
-    // This value is calculated from the macro
-    // MAKELANGID(LANG_SYSTEM_DEFAULT, SUBLANG_SYS_DEFAULT)
-    let langId = 0x0800 as c::DWORD;
+    pub fn errno() -> i32 {
+        unsafe { windows::Win32::Foundation::GetLastError() }.0 as i32
+    }
 
     let mut buf = [0 as c::WCHAR; 2048];
 
     unsafe {
-        let mut module = ptr::null_mut();
+        let mut module = None;
         let mut flags = 0;
 
         // NTSTATUS errors may be encoded as HRESULT, which may returned from
         // GetLastError. For more information about Windows error codes, see
-        // `[MS-ERREF]`: https://msdn.microsoft.com/en-us/library/cc231198.aspx
+        // `[MS-ERREF]`: https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-erref/0642cb2f-2075-4469-918c-4441e69c548a
         if (errnum & c::FACILITY_NT_BIT as i32) != 0 {
             // format according to https://support.microsoft.com/en-us/help/259693
-            const NTDLL_DLL: &[u16] = &[
-                'N' as _, 'T' as _, 'D' as _, 'L' as _, 'L' as _, '.' as _, 'D' as _, 'L' as _,
-                'L' as _, 0,
-            ];
-            module = c::GetModuleHandleW(NTDLL_DLL.as_ptr());
+            const NTDLL_DLL: windows::core::PCWSTR = windows::core::w!("NTDLL.DLL");
+            let temp_module = windows::Win32::System::LibraryLoader::GetModuleHandleW(NTDLL_DLL);
 
-            if module != ptr::null_mut() {
+            if !temp_module.is_err() {
+                module = Some(temp_module.unwrap_unchecked().0.cast_const());
                 errnum ^= c::FACILITY_NT_BIT as i32;
                 flags = c::FORMAT_MESSAGE_FROM_HMODULE;
             }
         }
 
-        let res = c::FormatMessageW(
-            flags | c::FORMAT_MESSAGE_FROM_SYSTEM | c::FORMAT_MESSAGE_IGNORE_INSERTS,
+        let res = windows::Win32::System::Diagnostics::Debug::FormatMessageW(
+            windows::Win32::System::Diagnostics::Debug::FORMAT_MESSAGE_OPTIONS(
+                flags | c::FORMAT_MESSAGE_FROM_SYSTEM | c::FORMAT_MESSAGE_IGNORE_INSERTS,
+            ),
             module,
-            errnum as c::DWORD,
-            langId,
-            buf.as_mut_ptr(),
-            buf.len() as c::DWORD,
-            ptr::null(),
+            errnum as u32,
+            0,
+            windows_core::PWSTR(buf.as_mut_ptr()),
+            buf.len() as u32,
+            None,
         ) as usize;
         if res == 0 {
-            // Sometimes FormatMessageW can fail e.g., system doesn't like langId,
+            // Sometimes FormatMessageW can fail e.g., system doesn't like 0 as langId,
             let fm_err = errno();
-            return format!(
-                "OS Error {} (FormatMessageW() returned error {})",
-                errnum, fm_err
-            );
+            return format!("OS Error {errnum} (FormatMessageW() returned error {fm_err})");
         }
 
         match String::from_utf16(&buf[..res]) {

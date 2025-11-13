@@ -1,33 +1,65 @@
-use argh::FromArgs;
-use bpaf::{OptionParser, Parser};
-use mem::size_of_val;
-use std::env;
-use std::os::windows;
-use std::os::windows::ffi::OsStrExt;
-use std::{error::Error, process};
-use std::{fs, io, ptr};
-use std::{mem, path::PathBuf};
-use tempfile::TempDir;
-use winapi::um::processenv::SearchPathW;
-use winapi::um::winbase::{INFINITE, WAIT_FAILED};
-use winapi::um::{
-    jobapi2::{AssignProcessToJobObject, SetInformationJobObject},
-    processthreadsapi::{GetExitCodeProcess, ResumeThread},
-    synchapi::WaitForSingleObject,
-    winbase::CreateJobObjectA,
-    winnt::{
-        JobObjectExtendedLimitInformation, HANDLE, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
-        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-    },
+use crate::args;
+use crate::args::{Arguments, LibraryWithPath};
+use bpaf::Parser;
+use std::error::Error;
+use std::ffi::CString;
+use std::path::PathBuf;
+use std::{env, mem, ptr};
+use windows::Win32::Foundation::HANDLE;
+use windows::Win32::System::JobObjects::{
+    AssignProcessToJobObject, JobObjectExtendedLimitInformation, SetInformationJobObject,
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
 };
 use zluda_windows::LibraryInfo;
 
-use crate::args::{self, Arguments, LibraryWithPath};
+macro_rules! detours_call {
+    ($($path:ident)::+ ($($args:expr),*)) => {
+        {
+            let result = unsafe{ $($path)::+ ($($args),*) };
+            if result == 0 {
+                let name = last_ident!($($path),+);
+                let err_code = unsafe { ::windows::Win32::Foundation::GetLastError() };
+                Err($crate::win::OsError{
+                    function: name,
+                    error_code: err_code.0,
+                    message: $crate::win::error_string(err_code.0 as i32)
+                })?;
+            }
+            result
+        }
+    };
+}
 
 pub fn main_impl() -> Result<(), Box<dyn Error>> {
     let args = args::arguments().run();
     let injection_env = InjectionConfig::new(args.clone())?;
-    dbg!(injection_env);
+    let mut command_line = args.command_line_zero_terminated();
+    let mut startup_info = unsafe { mem::zeroed::<detours_sys::_STARTUPINFOW>() };
+    let mut proc_info = unsafe { mem::zeroed::<detours_sys::_PROCESS_INFORMATION>() };
+    let dlls_to_inject = injection_env.get_injection_paths_zero_terminated()?;
+    let mut dll_to_inject_pointers = dlls_to_inject
+        .iter()
+        .map(|p| p.as_ptr())
+        .collect::<Vec<_>>();
+    detours_call! {
+        detours_sys::DetourCreateProcessWithDllsW(
+            ptr::null(),
+            command_line.as_mut_ptr(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+            0,
+            0,
+            ptr::null_mut(),
+            ptr::null(),
+            std::ptr::from_mut(&mut startup_info),
+            std::ptr::from_mut(&mut proc_info),
+            dll_to_inject_pointers.len() as u32,
+            dll_to_inject_pointers.as_mut_ptr(),
+            Option::None
+        )
+    };
+    kill_child_on_process_exit(proc_info.hProcess)?;
+    injection_env.copy_payloads_to_process(proc_info.hProcess)?;
     todo!()
     /*
     let raw_args = argh::from_env::<ProgramArguments>();
@@ -96,6 +128,25 @@ struct InjectionConfig {
 }
 
 impl InjectionConfig {
+    fn get_injection_paths_zero_terminated(&self) -> Result<Vec<CString>, Box<dyn Error>> {
+        self.dll_paths
+            .iter()
+            .map(|lib| {
+                let path_utf16 = lib.path.as_os_str().to_str().ok_or_else(|| {
+                    let err: Box<dyn Error> = format!(
+                        "Failed to convert path {:?} to UTF-8 string",
+                        lib.path.as_os_str()
+                    )
+                    .into();
+                    err
+                })?;
+                Ok::<_, Box<dyn Error>>(unsafe {
+                    CString::from_vec_unchecked(path_utf16.as_bytes().to_vec())
+                })
+            })
+            .collect::<Result<Vec<CString>, _>>()
+    }
+
     fn new(args: Arguments) -> Result<Self, Box<dyn Error>> {
         match args.paths {
             args::ConfigSet::Custom(libs) => Self::custom(libs),
@@ -251,6 +302,65 @@ impl InjectionConfig {
         trace_dir.push("trace");
         Ok(trace_dir)
     }
+
+    fn copy_payloads_to_process(
+        self,
+        h_process: *mut std::ffi::c_void,
+    ) -> Result<(), Box<dyn Error>> {
+        for LibraryWithPath { library, path } in self.dll_paths {
+            let path = path.to_str().ok_or_else(|| {
+                let err: Box<dyn Error> = format!(
+                    "Failed to convert path {:?} to UTF-8 string",
+                    path.as_os_str()
+                )
+                .into();
+                err
+            })?;
+            let mut path = path.to_string();
+            detours_call! {
+                detours_sys::DetourCopyPayloadToProcess(
+                    h_process,
+                    std::ptr::from_ref(&library.guid).cast(),
+                    path.as_mut_ptr().cast(),
+                    path.len() as u32
+                )
+            };
+        }
+        Ok(())
+    }
+}
+
+fn kill_child_on_process_exit(child: detours_sys::HANDLE) -> Result<(), Box<dyn Error>> {
+    let job_handle = unsafe { windows::Win32::System::JobObjects::CreateJobObjectA(None, None) }?;
+    let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+    info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    unsafe {
+        SetInformationJobObject(
+            job_handle,
+            JobObjectExtendedLimitInformation,
+            &mut info as *mut _ as *mut _,
+            size_of_val(&info) as u32,
+        )
+    }?;
+    unsafe { AssignProcessToJobObject(job_handle, HANDLE(child)) }?;
+    Ok(())
+    /*
+    let job_handle = os_call!(CreateJobObjectA(ptr::null_mut(), ptr::null()), |x| x
+        != ptr::null_mut());
+    let mut info = unsafe { mem::zeroed::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() };
+    info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    os_call!(
+        SetInformationJobObject(
+            job_handle,
+            JobObjectExtendedLimitInformation,
+            &mut info as *mut _ as *mut _,
+            size_of_val(&info) as u32
+        ),
+        |x| x != 0
+    );
+    os_call!(AssignProcessToJobObject(job_handle, child), |x| x != 0);
+    Ok(())
+     */
 }
 
 /*
