@@ -1,5 +1,3 @@
-declare hidden <4 x float> @__zluda_ptx_impl_mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32(<4 x i32>, <2 x i32>, <4 x float>) #0
-
 declare hidden i32 @__zluda_ptx_impl_sreg_tid(i8) #0
 
 define amdgpu_kernel void @mma_m16n8k16_f32_bf16_bf16_f32(ptr addrspace(4) byref(i64) %"76") #1 {
@@ -132,7 +130,7 @@ define amdgpu_kernel void @mma_m16n8k16_f32_bf16_bf16_f32(ptr addrspace(4) byref
   %57 = insertelement <4 x float> %56, float %53, i8 1
   %58 = insertelement <4 x float> %57, float %54, i8 2
   %"65" = insertelement <4 x float> %58, float %55, i8 3
-  %"62" = call <4 x float> @__zluda_ptx_impl_mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32(<4 x i32> %"63", <2 x i32> %"64", <4 x float> %"65")
+  %"62" = call <4 x float> @llvm.zluda.mma.m16n8k16(<4 x i32> %"63", <2 x i32> %"64", <4 x float> %"65")
   %"146" = extractelement <4 x float> %"62", i8 0
   %"147" = extractelement <4 x float> %"62", i8 1
   %"148" = extractelement <4 x float> %"62", i8 2
@@ -172,6 +170,8 @@ define amdgpu_kernel void @mma_m16n8k16_f32_bf16_bf16_f32(ptr addrspace(4) byref
   store float %70, ptr %"72", align 4
   ret void
 }
+
+declare <4 x float> @llvm.zluda.mma.m16n8k16(<4 x i32>, <2 x i32>, <4 x float>)
 
 attributes #0 = { "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="dynamic" "denormal-fp-math-f32"="dynamic" "no-trapping-math"="true" "uniform-work-group-size"="true" }
 attributes #1 = { "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="ieee" "denormal-fp-math-f32"="ieee" "no-trapping-math"="true" "uniform-work-group-size"="true" }
