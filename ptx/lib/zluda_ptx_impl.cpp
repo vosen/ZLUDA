@@ -757,7 +757,7 @@ extern "C"
         uint32_t upper_regs[4],
         uint32_t rotation)
     {
-        uint32_t rotated_half_lane_id = (laneid + rotation) % 16;
+        uint32_t rotated_half_lane_id = (laneid + 16 - rotation) % 16;
         bool rotated_half_lower_half = rotated_half_lane_id < 8;
         if (rotated_half_lower_half)
         {
@@ -802,12 +802,11 @@ extern "C"
         // (8, 9)  (8, 11)  (8, 13)  (8, 15)  (9, 9)  (9, 11)  (9, 13)  (9, 15)  (10, 9)  (10, 11)  (10, 13)  (10, 15)  (11, 9)  (11, 11)  (11, 13)  (11, 15)  (12, 9)  (12, 11)  (12, 13)  (12, 15)  (13, 9)  (13, 11)  (13, 13)  (13, 15)  (14, 9)  (14, 11)  (14, 13)  (14, 15)  (15, 9)  (15, 11)  (15, 13)  (15, 15)
         // We could do all the manipulations with ds_bpermutes, but RDNA
         // documentation says "It uses LDS hardware", which to me implies that
-        // it does reduce LDS bandwidth for real LDS instructions. MMA operations
-        // usually follow loads from LDS and precede stores to LDS, so we
-        // do need all the LDS bandwidth we can get
-        // That's why this function avoids ds_bpermute.
-
-        // Approximate cost table (measured on RDNA3 using a crappy benchmark):
+        // it does reduce available LDS bandwidth for real LDS instructions.
+        // Typically, MMA operations follow loads from LDS and precede stores
+        // to LDS, so we do need all the LDS bandwidth we can get. Additionally,
+        // ds_bpermute has lower throughput than v_permlane(x) or dpp
+        // Approximate throughput table (measured on RDNA3 using a crappy benchmark):
         // * v_permlanex16_b32 ~ 2.5 cycles
         // * ds_bpermute_b32 ~ 6 cycles
         // * v_mov_b32_dpp (unfolded) ~ 3 cycles
