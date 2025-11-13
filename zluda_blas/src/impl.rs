@@ -50,8 +50,21 @@ pub(crate) fn get_status_name(_status: cublasStatus_t) -> *const ::core::ffi::c_
     todo!()
 }
 
-pub(crate) fn get_status_string(_status: cublasStatus_t) -> *const ::core::ffi::c_char {
-    todo!()
+pub(crate) fn get_status_string(status: cublasStatus_t) -> *const ::core::ffi::c_char {
+    match status {
+        cublasStatus_t::SUCCESS => "CUBLAS_STATUS_SUCCESS\0",
+        cublasStatus_t::ERROR_NOT_INITIALIZED => "CUBLAS_STATUS_NOT_INITIALIZED\0",
+        cublasStatus_t::ERROR_ALLOC_FAILED => "CUBLAS_STATUS_ALLOC_FAILED\0",
+        cublasStatus_t::ERROR_INVALID_VALUE => "CUBLAS_STATUS_INVALID_VALUE\0",
+        cublasStatus_t::ERROR_ARCH_MISMATCH => "CUBLAS_STATUS_ARCH_MISMATCH\0",
+        cublasStatus_t::ERROR_MAPPING_ERROR => "CUBLAS_STATUS_MAPPING_ERROR\0",
+        cublasStatus_t::ERROR_EXECUTION_FAILED => "CUBLAS_STATUS_EXECUTION_FAILED\0",
+        cublasStatus_t::ERROR_INTERNAL_ERROR => "CUBLAS_STATUS_INTERNAL_ERROR\0",
+        cublasStatus_t::ERROR_NOT_SUPPORTED => "CUBLAS_STATUS_NOT_SUPPORTED\0",
+        cublasStatus_t::ERROR_LICENSE_ERROR => "CUBLAS_STATUS_LICENSE_ERROR\0",
+        _ => "CUBLAS_STATUS_UNKNOWN\0",
+    }
+    .as_ptr() as *const ::core::ffi::c_char
 }
 
 pub(crate) fn xerbla(_sr_name: *const ::core::ffi::c_char, _info: ::core::ffi::c_int) -> () {
@@ -217,6 +230,149 @@ pub(crate) unsafe fn gemm_ex(
         compute_type,
         algo,
         0,
+        0,
+    )
+}
+
+pub(crate) unsafe fn hgemm(
+    handle: &Handle,
+    transa: rocblas_operation,
+    transb: rocblas_operation,
+    m: ::core::ffi::c_int,
+    n: ::core::ffi::c_int,
+    k: ::core::ffi::c_int,
+    alpha: *const cuda_types::cublas::__half,
+    a: *const cuda_types::cublas::__half,
+    lda: ::core::ffi::c_int,
+    b: *const cuda_types::cublas::__half,
+    ldb: ::core::ffi::c_int,
+    beta: *const cuda_types::cublas::__half,
+    c: *mut cuda_types::cublas::__half,
+    ldc: ::core::ffi::c_int,
+) -> rocblas_status {
+    rocblas_hgemm(
+        handle.handle,
+        transa,
+        transb,
+        m,
+        n,
+        k,
+        alpha.cast(),
+        a.cast(),
+        lda,
+        b.cast(),
+        ldb,
+        beta.cast(),
+        c.cast(),
+        ldc,
+    )
+}
+
+pub(crate) unsafe fn gemm_batched_ex(
+    handle: &Handle,
+    transa: rocblas_operation,
+    transb: rocblas_operation,
+    m: ::core::ffi::c_int,
+    n: ::core::ffi::c_int,
+    k: ::core::ffi::c_int,
+    alpha: *const ::core::ffi::c_void,
+    a_array: *const *const ::core::ffi::c_void,
+    a_type: rocblas_datatype,
+    lda: ::core::ffi::c_int,
+    b_array: *const *const ::core::ffi::c_void,
+    b_type: rocblas_datatype,
+    ldb: ::core::ffi::c_int,
+    beta: *const ::core::ffi::c_void,
+    c_array: *const *mut ::core::ffi::c_void,
+    c_type: rocblas_datatype,
+    ldc: ::core::ffi::c_int,
+    batch_count: ::core::ffi::c_int,
+    compute_type: rocblas_datatype,
+    algo: rocblas_gemm_algo,
+) -> rocblas_status {
+    rocblas_gemm_batched_ex(
+        handle.handle,
+        transa,
+        transb,
+        m,
+        n,
+        k,
+        alpha,
+        a_array.cast(),
+        a_type,
+        lda,
+        b_array.cast(),
+        b_type,
+        ldb,
+        beta,
+        c_array.cast(),
+        c_type,
+        ldc,
+        c_array.cast_mut().cast(),
+        c_type,
+        ldc,
+        batch_count,
+        compute_type,
+        algo,
+        -1,
+        0,
+    )
+}
+
+pub(crate) unsafe fn gemm_strided_batched_ex(
+    handle: &Handle,
+    transa: rocblas_operation,
+    transb: rocblas_operation,
+    m: ::core::ffi::c_int,
+    n: ::core::ffi::c_int,
+    k: ::core::ffi::c_int,
+    alpha: *const ::core::ffi::c_void,
+    a: *const ::core::ffi::c_void,
+    a_type: rocblas_datatype,
+    lda: ::core::ffi::c_int,
+    stride_a: ::core::ffi::c_longlong,
+    b: *const ::core::ffi::c_void,
+    b_type: rocblas_datatype,
+    ldb: ::core::ffi::c_int,
+    stride_b: ::core::ffi::c_longlong,
+    beta: *const ::core::ffi::c_void,
+    c: *mut ::core::ffi::c_void,
+    c_type: rocblas_datatype,
+    ldc: ::core::ffi::c_int,
+    stride_c: ::core::ffi::c_longlong,
+    batch_count: ::core::ffi::c_int,
+    compute_type: rocblas_datatype,
+    algo: rocblas_gemm_algo,
+) -> rocblas_status {
+    rocblas_gemm_strided_batched_ex(
+        handle.handle,
+        transa,
+        transb,
+        m,
+        n,
+        k,
+        alpha,
+        a,
+        a_type,
+        lda,
+        stride_a,
+        b,
+        b_type,
+        ldb,
+        stride_b,
+        beta,
+        c,
+        c_type,
+        ldc,
+        stride_c,
+        c,
+        c_type,
+        ldc,
+        stride_c,
+        batch_count,
+        compute_type,
+        algo,
+        -1,
         0,
     )
 }
